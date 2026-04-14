@@ -302,22 +302,32 @@ Deno.serve(async (req) => {
     if (cotacao.telefone1_solicitante) {
       const telefoneNormalizado = cotacao.telefone1_solicitante.replace(/\D/g, '');
       const agora = new Date().toISOString();
+
+      // Tentar ambas as variantes: com e sem DDI 55
+      const variantes = [telefoneNormalizado];
+      if (telefoneNormalizado.startsWith('55') && telefoneNormalizado.length >= 12) {
+        variantes.push(telefoneNormalizado.substring(2));
+      } else {
+        variantes.push('55' + telefoneNormalizado);
+      }
+      console.log(`[delete-cotacao] Variantes de telefone para reset: ${variantes.join(', ')}`);
+
       await adminClient
         .from('agente_ia_contatos')
         .update({ status: 'novo', dados_cotacao: null, resetado_em: agora })
-        .eq('telefone', telefoneNormalizado);
+        .in('telefone', variantes);
       console.log(`[delete-cotacao] Contato IA resetado com marco de corte: ${agora}`);
 
-      // 10.2 Cancelar itens pendentes na fila de IA para este telefone
+      // 10.2 Cancelar itens pendentes na fila de IA para este telefone (ambas variantes)
       const { data: filaItems } = await adminClient
         .from('whatsapp_fila_ia')
         .update({ status: 'cancelado', erro: 'Cotação excluída, fila invalidada', processed_at: agora })
         .in('status', ['pendente', 'erro', 'processando'])
-        .eq('telefone', telefoneNormalizado)
+        .in('telefone', variantes)
         .select('id');
       
       if (filaItems?.length) {
-        console.log(`[delete-cotacao] ${filaItems.length} itens da fila IA cancelados para ${telefoneNormalizado}`);
+        console.log(`[delete-cotacao] ${filaItems.length} itens da fila IA cancelados para ${variantes.join(', ')}`);
       }
     }
 
