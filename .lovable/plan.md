@@ -1,159 +1,55 @@
-<final-text>## Plano definitivo para parar o loop da IA no WhatsApp
 
-### O que eu encontrei
-O problema não é só “memória da IA”. Há uma falha estrutural em camadas diferentes do fluxo.
+## Plano: Alinhar motor de cotacao do agente IA com o motor do frontend
 
-**Evidências encontradas:**
-1. **O contato do Vinícius está hoje como `em_conversa` e com `dados_cotacao = null`.**  
-   Isso significa que o reset anterior foi “consumido” e a condição atual de reset (`status === 'novo' && !dados_cotacao`) já não está mais ativa.
+### Problemas encontrados
 
-2. **Existem várias mensagens de saída repetidas para o mesmo telefone sem mensagens de entrada correspondentes no período.**  
-   No banco, para `5521992593830`, aparecem respostas da IA às `16:19`, `16:23` e `16:29`, mas **sem entradas do usuário registradas nesse mesmo intervalo**.  
-   Isso indica que o backend está **reprocessando/delegando a mesma conversa mais de uma vez**, não apenas “lembrando”.
+O agente IA (`agente-consultor-ia`) tem sua propria implementacao simplificada do motor de elegibilidade (`checkRulesSimple`, linhas 1466-1513) que **diverge significativamente** do motor real do frontend (`checkRuleAgainstVehicle` + `checkAllRules` em `useEntityEligibilityRules.ts`). Isso causa planos incorretos na cotacao gerada pela IA.
 
-3. **O código atual não tem proteção forte contra duplicidade por `message_id`.**  
-   Nos webhooks (`whatsapp-webhook` / `whatsapp-meta-webhook`) e no processador de fila (`processar-fila-ia`), a mesma mensagem pode voltar a acionar o agente se o evento chegar duplicado, for reenfileirado ou for reexecutado sinteticamente.
+#### Divergencias criticas:
 
-4. **O reset atual limpa só `agente_ia_contatos`, mas não corta a origem do reprocessamento.**  
-   Se existir webhook duplicado, replay, ou item antigo/pendente em fila, o agente volta a ser acionado e muda o contato para `em_conversa` novamente.
+| Aspecto | Frontend (`checkRuleAgainstVehicle`) | Agente (`checkRulesSimple`) |
+|---|---|---|
+| **rule_mode (include/exclude)** | Respeita `rule_mode` — inverte logica para `exclude` | **Ignora completamente** — trata tudo como whitelist |
+| **regiao** | Compara por UUID (`regiaoId`) E por slug | Compara apenas por `regiaoId` via `regioes_permitidas` |
+| **tipo_uso** | Usa `cfg.tipos \|\| cfg.values` | Usa `cfg.tipos_permitidos` (chave errada) |
+| **combustivel** | Usa `cfg.combustiveis \|\| cfg.values` | Usa `cfg.combustiveis_permitidos` (chave errada) |
+| **fipe_range** | Usa `cfg.min` / `cfg.max` + rule_mode | Usa `cfg.fipe_min` / `cfg.fipe_max` (chaves erradas) |
+| **ano_range** | Usa `cfg.min` / `cfg.max` + rule_mode | Usa `cfg.ano_min` / `cfg.ano_max` (chaves erradas) |
+| **marca_modelo** | Logica completa com `findModelEligibility`, status aceito/limitado/negado | **Ignorado** (retorna true sempre) |
+| **tipo_placa** | Avalia com logica include/exclude | **Nao existe** |
+| **categoria_veiculo** | Avalia com logica include/exclude | **Nao existe** |
+| **fipe_range com faixas** | Coberturas/beneficios usam `faixas[]` com `de/ate/valor` | Funciona (mesmo formato) |
+| **Filtragem de coberturas/beneficios** | Remove individualmente os inelegiveis e recalcula preco | Nao filtra — inclui todos no preco |
+| **Sobrescrita plano→componente** | Regras do plano sobrescrevem tipos iguais nos componentes | Nao implementado |
 
-5. **Há um erro de implementação anterior que precisa ser limpo:** foi criada uma migration com `UPDATE` pontual para um telefone específico. Isso não deve ficar em migration permanente.
+#### Consequencias:
+1. **Planos incorretos**: Planos que deviam ser bloqueados aparecem (ex: regras de regiao/uso ignoradas por chaves erradas)
+2. **Precos errados**: Coberturas/beneficios inelegiveis nao sao removidos, inflando o valor
+3. **Planos faltando**: Regras `include` podem bloquear planos que deveriam passar (pois rule_mode e ignorado)
 
-### Conclusão
-Os erros se acumularam porque cada correção anterior tratou um sintoma isolado:
-- limpar `dados_cotacao`
-- limpar histórico
-- restaurar planos
+### Correcao
 
-Mas o defeito real está em **3 pontos ao mesmo tempo**:
+**Arquivo unico: `supabase/functions/agente-consultor-ia/index.ts`**
 
-```text
-Entrada WhatsApp -> Webhook/Fila -> Agente -> Histórico/Estado
-                     sem dedupe       responde   reset incompleto
-```
+1. **Substituir `checkRulesSimple` por `checkRuleAgainstVehicle` + `checkAllRules`** — portar a logica completa do frontend, incluindo:
+   - Suporte a `rule_mode` (include/exclude)
+   - Chaves corretas: `cfg.tipos`, `cfg.values`, `cfg.regioes`, `cfg.combustiveis`, `cfg.min`, `cfg.max`
+   - Suporte a `marca_modelo` com `findModelEligibility`
+   - Suporte a `tipo_placa` e `categoria_veiculo`
 
-Enquanto não houver **idempotência + corte real de contexto + limpeza de fila**, a IA pode continuar repetindo saudações e retomando conversas antigas.
+2. **Adicionar filtragem individual de coberturas/beneficios** no `executarCalculoCotacao`:
+   - Antes de somar valores, filtrar coberturas e beneficios por suas regras individuais
+   - Implementar sobrescrita de tipos do plano sobre componentes
+   - Descartar plano se todas as coberturas core forem removidas
 
----
+3. **Corrigir `vehicleCtx`** para incluir `tipoPlaca` quando aplicavel
 
-## Correção que eu vou aplicar
+4. **Adicionar valor adicional (5.50) apenas apos calculo base** — ja esta correto, manter
 
-### 1. Bloquear processamento duplicado por `message_id`
-**Arquivos:**
-- `supabase/functions/whatsapp-webhook/index.ts`
-- `supabase/functions/whatsapp-meta-webhook/index.ts`
-- `supabase/functions/processar-fila-ia/index.ts`
+### Resultado esperado
+- O agente IA gera cotacoes com os mesmos planos e valores que o formulario do vendedor
+- Regras de elegibilidade sao respeitadas identicamente em ambos os motores
+- Coberturas/beneficios inelegiveis sao removidos antes do calculo de preco
 
-**Mudança:**
-- Antes de delegar para o agente, verificar se aquela mensagem de entrada (`message_id`) já foi registrada/processada.
-- Se já existir, **ignorar silenciosamente**.
-- No processador da fila, impedir reprocessamento do mesmo item/mensagem.
-
-**Objetivo:** parar respostas repetidas causadas por eventos duplicados ou replay interno.
-
----
-
-### 2. Tornar o reset realmente definitivo
-**Arquivos:**
-- `supabase/functions/delete-cotacao/index.ts`
-- `supabase/functions/agente-consultor-ia/index.ts`
-- migration nova
-
-**Mudança:**
-Adicionar um marcador persistente de corte de contexto, por exemplo:
-- `resetado_em` ou `ignorar_historico_ate`
-
-Ao excluir a cotação:
-- resetar `status`
-- limpar `dados_cotacao`
-- gravar esse timestamp de reset
-
-No agente:
-- ignorar qualquer histórico anterior a esse marco
-- ignorar mensagens/fila anteriores ao reset
-
-**Objetivo:** o lead volta a começar do zero mesmo que haja mensagens antigas no banco.
-
----
-
-### 3. Cancelar fila pendente do telefone ao excluir cotação
-**Arquivos:**
-- `supabase/functions/delete-cotacao/index.ts`
-- possivelmente migration para status de cancelamento/ignoradas
-
-**Mudança:**
-Ao excluir a cotação, também invalidar itens pendentes da `whatsapp_fila_ia` daquele telefone.
-
-**Objetivo:** evitar que uma mensagem antiga seja processada depois do reset.
-
----
-
-### 4. Parar de usar histórico “sujo” para iniciar conversa
-**Arquivo:**
-- `supabase/functions/agente-consultor-ia/index.ts`
-
-**Mudança:**
-- montar histórico apenas com mensagens posteriores ao marco de reset
-- usar explicitamente `isPrimeiraMensagem` no prompt/comportamento
-- evitar que o agente cumprimente de novo se a mesma mensagem for reprocessada
-- não deixar “assistants old messages” puxarem a conversa anterior
-
-**Objetivo:** impedir saudação duplicada e retomada indevida.
-
----
-
-### 5. Remover a migration errada criada antes
-**Arquivo a limpar/substituir:**
-- `supabase/migrations/20260414162637_94369bb7-af75-4d63-9cc1-1dc757140a64.sql`
-
-**Mudança:**
-- remover essa alteração pontual do histórico de migrations
-- fazer qualquer reset operacional diretamente no banco/função, não em migration fixa
-
-**Objetivo:** evitar sujeira técnica e efeitos colaterais futuros.
-
----
-
-## Validação após a correção
-Vou validar em sequência:
-
-1. Excluir a cotação do Vinícius
-2. Confirmar no banco:
-   - contato resetado
-   - `dados_cotacao = null`
-   - marco de reset gravado
-   - fila antiga invalidada
-3. Enviar **uma** nova mensagem de teste
-4. Confirmar:
-   - só **1** entrada registrada
-   - só **1** delegação ao agente
-   - só **1** resposta de saída
-   - nenhuma repetição de saudação
-5. Revisar logs das edge functions envolvidas
-
----
-
-## Arquivos envolvidos
-- `supabase/functions/agente-consultor-ia/index.ts`
-- `supabase/functions/delete-cotacao/index.ts`
-- `supabase/functions/whatsapp-webhook/index.ts`
-- `supabase/functions/whatsapp-meta-webhook/index.ts`
-- `supabase/functions/processar-fila-ia/index.ts`
-- `supabase/migrations/...` (nova migration de reset/idempotência)
-- limpeza da migration incorreta anterior
-
----
-
-## Resultado esperado
-Depois dessa correção, o comportamento ficará assim:
-
-```text
-cotação excluída
--> contato resetado
--> histórico antigo cortado
--> fila antiga invalidada
--> mensagem duplicada ignorada por message_id
--> próxima mensagem do lead inicia 1 conversa nova, 1 resposta única
-```
-
-Isso ataca a causa raiz do loop, em vez de só esconder o sintoma.</final-text>
+### Deploy
+Redesployar `agente-consultor-ia` apos as alteracoes.
