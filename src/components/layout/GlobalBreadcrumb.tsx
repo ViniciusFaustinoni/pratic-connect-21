@@ -146,6 +146,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/diretoria/usuarios': { label: 'Usuários' },
   '/diretoria/logs': { label: 'Logs de Auditoria' },
   '/diretoria/relatorios': { label: 'Relatórios' },
+  '/diretoria/aprovacoes': { label: 'Aprovações' },
   
   // Oficinas
   '/oficinas': { label: 'Oficinas' },
