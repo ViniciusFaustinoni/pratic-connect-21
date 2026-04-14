@@ -2899,7 +2899,20 @@ serve(async (req) => {
     // ============================================
     const messageData = data.message;
     const messageId = data.key.id;
-    
+
+    // DEDUP: verificar se message_id já foi processado
+    if (messageId) {
+      const { data: msgExistente } = await supabase
+        .from("whatsapp_mensagens")
+        .select("id")
+        .eq("message_id", messageId)
+        .maybeSingle();
+      
+      if (msgExistente) {
+        console.log(`[whatsapp-webhook] ⚠ Mensagem duplicada ignorada: ${messageId}`);
+        return new Response(JSON.stringify({ ok: true, ignored: "duplicada", message_id: messageId }), { headers: corsHeaders });
+      }
+    }
     // Tipos de mensagem suportados pela Evolution API
     const tipoMensagem = {
       texto: messageData?.conversation || messageData?.extendedTextMessage?.text,
