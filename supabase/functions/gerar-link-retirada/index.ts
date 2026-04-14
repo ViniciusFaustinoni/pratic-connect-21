@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
       const oficinaInfo = oficina ? `${oficina.nome_fantasia || oficina.razao_social} — ${oficina.logradouro || ''}, ${oficina.numero || ''}, ${oficina.bairro || ''}, ${oficina.cidade || ''}/${oficina.estado || ''}` : '';
 
       // Determinar URL base
-      const siteUrl = Deno.env.get('SITE_URL') || 'https://pratic-connect-21.lovable.app';
+      const siteUrl = Deno.env.get('SITE_URL') || 'https://app.praticcar.org';
       const link = `${siteUrl}/retirada/${token}`;
 
       // Correção 3: Agendar envio com 30min de delay via sinistro_contatos_agendados

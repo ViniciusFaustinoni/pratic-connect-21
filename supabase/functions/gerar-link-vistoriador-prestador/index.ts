@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
         .eq('id', instalacao_id)
     }
 
-    const baseUrl = 'https://pratic-connect-21.lovable.app'
+    const baseUrl = 'https://app.praticcar.org'
     const url = `${baseUrl}/vistoria-prestador/${linkToken}`
 
     // ── AÇÃO 2: WhatsApp ──

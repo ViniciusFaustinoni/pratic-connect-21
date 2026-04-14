@@ -1417,7 +1417,7 @@ async function executarRegistroCotacao(supabase: any, supabaseUrl: string, servi
   await supabase.from("leads").update({ cotacao_id: cotacao.id }).eq("id", leadId);
 
   // Gerar link público
-  const linkCotacao = `https://pratic-connect-21.lovable.app/cotacao/${cotacao.token_publico}`;
+  const linkCotacao = `https://app.praticcar.org/cotacao/${cotacao.token_publico}`;
 
   const mensagemLink = `Olá ${nome_cliente || ""}! 😊\n\nSua cotação personalizada de proteção veicular está pronta!\n\n🔗 Acesse aqui: ${linkCotacao}\n\n_PRATICCAR Proteção Veicular - Proteção 360_ 🛡️`;
   await enviarWhatsApp(supabaseUrl, serviceKey, telefoneLead, mensagemLink);

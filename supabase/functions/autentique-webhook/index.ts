@@ -729,7 +729,7 @@ serve(async (req) => {
                     .limit(1)
                     .single();
 
-                  const appUrl = Deno.env.get("APP_PUBLIC_URL") || "https://pratic-connect-21.lovable.app";
+                  const appUrl = Deno.env.get("APP_PUBLIC_URL") || "https://app.praticcar.org";
                   const linkPagamento = linkAtivo?.token
                     ? `${appUrl}/evento/${linkAtivo.token}`
                     : `https://www.asaas.com/c/${cobrancaAsaasId}`;

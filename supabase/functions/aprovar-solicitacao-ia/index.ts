@@ -318,7 +318,7 @@ serve(async (req) => {
         if (associadoSin) {
           const telefoneSin = associadoSin.whatsapp || associadoSin.telefone;
           if (telefoneSin) {
-            const SITE_URL = Deno.env.get("SITE_URL") || "https://pratic-connect-21.lovable.app";
+            const SITE_URL = Deno.env.get("SITE_URL") || "https://app.praticcar.org";
             const linkUrl = tokenEvento ? `${SITE_URL}/evento/${tokenEvento}` : null;
 
             // Buscar dados do veículo e plano para calcular coparticipação

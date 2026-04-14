@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
       )
     }
 
-    const baseUrl = 'https://pratic-connect-21.lovable.app'
+    const baseUrl = 'https://app.praticcar.org'
     const url = `${baseUrl}/prestador/instalacao/${link.token}`
 
     // Montar endereço

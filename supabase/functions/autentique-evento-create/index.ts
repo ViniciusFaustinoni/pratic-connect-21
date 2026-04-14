@@ -233,7 +233,7 @@ serve(async (req) => {
     <div class="header">
       <div class="header-gradient"></div>
       <div class="header-logo-area">
-        <img src="https://pratic-connect-21.lovable.app/logos/logo-full-light.png" alt="Logo PraticCar" onerror="this.style.display='none'" />
+        <img src="https://app.praticcar.org/logos/logo-full-light.png" alt="Logo PraticCar" onerror="this.style.display='none'" />
       </div>
       <div class="header-empresa">
         ${empresaConfig.razao_social || empresaConfig.nome || 'ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR'}<br>
@@ -269,7 +269,7 @@ serve(async (req) => {
     <div class="header">
       <div class="header-gradient"></div>
       <div class="header-logo-area">
-        <img src="https://pratic-connect-21.lovable.app/logos/logo-full-light.png" alt="Logo PraticCar" onerror="this.style.display='none'" />
+        <img src="https://app.praticcar.org/logos/logo-full-light.png" alt="Logo PraticCar" onerror="this.style.display='none'" />
       </div>
       <div class="header-empresa">
         ${empresaConfig.razao_social || empresaConfig.nome || 'ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR'}<br>
