@@ -543,10 +543,10 @@ export default function AgenteConsultorIA() {
         </p>
       </div>
 
-      <Tabs defaultValue="planos" className="w-full">
+      <Tabs defaultValue="linhas" className="w-full">
         <TabsList className="w-full justify-start">
-          <TabsTrigger value="planos" className="gap-1.5">
-            <Settings className="h-3.5 w-3.5" /> Planos
+          <TabsTrigger value="linhas" className="gap-1.5">
+            <Settings className="h-3.5 w-3.5" /> Linhas de Produto
           </TabsTrigger>
           <TabsTrigger value="comportamento" className="gap-1.5">
             <Bot className="h-3.5 w-3.5" /> Comportamento
@@ -559,7 +559,7 @@ export default function AgenteConsultorIA() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="planos"><AbaPlanos /></TabsContent>
+        <TabsContent value="linhas"><AbaLinhas /></TabsContent>
         <TabsContent value="comportamento"><AbaComportamento /></TabsContent>
         <TabsContent value="contatos"><AbaContatos /></TabsContent>
         <TabsContent value="landing"><AbaLandingPage /></TabsContent>
