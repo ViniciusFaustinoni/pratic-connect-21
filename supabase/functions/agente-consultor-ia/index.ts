@@ -1549,6 +1549,7 @@ function normalizeCombustivel(raw: string | undefined | null): string {
   return lower;
 }
 
+function findModelEligibilityServer(
   ruleConfig: any,
   ctx: VehicleContextServer
 ): { status: string; coberturaFipe: number } | null {
