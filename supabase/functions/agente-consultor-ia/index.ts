@@ -1489,53 +1489,136 @@ async function executarRegistroCotacao(supabase: any, supabaseUrl: string, servi
 // HELPERS
 // ============================================================
 
-function checkRulesSimple(rules: any[], ctx: any): boolean {
-  for (const rule of rules) {
-    if (!rule.is_active) continue;
-    const config = rule.rule_config || {};
+// ============================================================
+// MOTOR DE ELEGIBILIDADE (port completo do frontend)
+// Suporta: rule_mode (include/exclude), todas as rule_types
+// ============================================================
 
-    switch (rule.rule_type) {
-      case "tipo_uso": {
-        const tipos = config.tipos_permitidos || [];
-        if (tipos.length > 0 && !tipos.includes(ctx.tipoUso)) return false;
-        break;
-      }
-      case "regiao": {
-        const regioes = config.regioes_permitidas || [];
-        if (regioes.length > 0 && ctx.regiaoId && !regioes.includes(ctx.regiaoId)) return false;
-        break;
-      }
-      case "combustivel": {
-        const combustiveis = config.combustiveis_permitidos || [];
-        const ctxComb = (ctx.combustivel || "").toLowerCase();
-        const normMap: Record<string, string> = {
-          "flex": "gasolina",
-          "álcool": "gasolina",
-          "gasolina/álcool": "gasolina",
-          "flex/gasolina": "gasolina",
-        };
-        const ctxNorm = normMap[ctxComb] || ctxComb;
-        if (combustiveis.length > 0 && !combustiveis.includes(ctxNorm)) return false;
-        break;
-      }
-      case "fipe_range": {
-        const fipeMin = config.fipe_min || 0;
-        const fipeMax = config.fipe_max || Infinity;
-        if (ctx.valorFipe < fipeMin || ctx.valorFipe > fipeMax) return false;
-        break;
-      }
-      case "ano_range": {
-        const anoMin = config.ano_min || 0;
-        const anoMax = config.ano_max || 9999;
-        if (ctx.anoVeiculo < anoMin || ctx.anoVeiculo > anoMax) return false;
-        break;
-      }
-      case "marca_modelo": {
-        break;
-      }
+interface VehicleContextServer {
+  valorFipe: number;
+  anoVeiculo: number;
+  categoriaVeiculo?: string;
+  regiao?: string;
+  regiaoId?: string;
+  marca?: string;
+  modelo?: string;
+  versao?: string;
+  tipoUso?: string;
+  combustivel?: string;
+  tipoPlaca?: string;
+}
+
+function findModelEligibilityServer(
+  ruleConfig: any,
+  ctx: VehicleContextServer
+): { status: string; coberturaFipe: number } | null {
+  const modelos = ruleConfig?.modelos || [];
+  if (!Array.isArray(modelos) || modelos.length === 0) return null;
+
+  for (const entry of modelos) {
+    if (typeof entry !== 'object' || !entry.status) continue;
+
+    const ctxMarca = (ctx.marca || '').toUpperCase();
+    const entryMarca = (entry.marca || '').toUpperCase();
+    const marcaOk = !entryMarca || ctxMarca.includes(entryMarca) || entryMarca.includes(ctxMarca);
+
+    const ctxModelo = (ctx.modelo || '').toUpperCase();
+    const entryModelo = (entry.modelo || '').toUpperCase();
+    const modeloWildcard = ['TODOS', 'QUALQUER', 'ALL', ''].includes(entryModelo);
+    const modeloOk = modeloWildcard || ctxModelo.includes(entryModelo) || entryModelo.includes(ctxModelo);
+    if (!marcaOk || !modeloOk) continue;
+
+    if (entry.ano_min != null && ctx.anoVeiculo < entry.ano_min) continue;
+    if (entry.ano_max != null && ctx.anoVeiculo > entry.ano_max) continue;
+
+    if (entry.combustivel && entry.combustivel !== 'qualquer') {
+      if ((ctx.combustivel || '').toLowerCase() !== entry.combustivel.toLowerCase()) continue;
     }
+
+    return {
+      status: entry.status,
+      coberturaFipe: entry.cobertura_fipe ?? 100,
+    };
   }
-  return true;
+  return null;
+}
+
+function checkRuleAgainstVehicleServer(rule: any, ctx: VehicleContextServer): boolean {
+  const cfg = rule.rule_config || {};
+  const isInclude = rule.rule_mode === 'include';
+
+  switch (rule.rule_type) {
+    case 'fipe_range':
+    case 'fipe_eligibility': {
+      const inRange = ctx.valorFipe >= (cfg.min || 0) && ctx.valorFipe <= (cfg.max || Infinity);
+      return isInclude ? inRange : !inRange;
+    }
+    case 'ano_range': {
+      const inRange = ctx.anoVeiculo >= (cfg.min || 0) && ctx.anoVeiculo <= (cfg.max || 9999);
+      return isInclude ? inRange : !inRange;
+    }
+    case 'categoria_veiculo': {
+      const cats: string[] = cfg.categorias || cfg.values || [];
+      if (cats.length === 0) return true;
+      const match = !!ctx.categoriaVeiculo && cats.some((c: string) => c.toLowerCase() === ctx.categoriaVeiculo!.toLowerCase());
+      return isInclude ? match : !match;
+    }
+    case 'regiao': {
+      const regioes: string[] = cfg.regioes || cfg.values || [];
+      if (regioes.length === 0) return true;
+      const matchById = !!ctx.regiaoId && regioes.some((r: string) => r === ctx.regiaoId);
+      const matchBySlug = !!ctx.regiao && regioes.some((r: string) => r.toLowerCase() === ctx.regiao!.toLowerCase());
+      const match = matchById || matchBySlug;
+      return isInclude ? match : !match;
+    }
+    case 'marca_modelo': {
+      const modelosArr = cfg.modelos || [];
+      if (modelosArr.length > 0 && typeof modelosArr[0] === 'object' && 'status' in modelosArr[0]) {
+        const match = findModelEligibilityServer(cfg, ctx);
+        if (!match) return !isInclude;
+        if (match.status === 'negado') return false;
+        return true;
+      }
+      const marcaMatch = !cfg.marca || (ctx.marca || '').toUpperCase().includes(cfg.marca.toUpperCase());
+      const legacyModelos: string[] = modelosArr;
+      let modeloMatch: boolean;
+      if (legacyModelos.length > 0) {
+        modeloMatch = legacyModelos.some((m: string) => (ctx.modelo || '').toUpperCase().includes(m.toUpperCase()));
+      } else {
+        modeloMatch = !cfg.modelo || (ctx.modelo || '').toUpperCase().includes(cfg.modelo.toUpperCase());
+      }
+      const versaoMatch = !cfg.versao || (ctx.versao || '').toUpperCase().includes(cfg.versao.toUpperCase());
+      const match2 = marcaMatch && (legacyModelos.length > 0 ? modeloMatch : (modeloMatch && versaoMatch));
+      return isInclude ? match2 : !match2;
+    }
+    case 'tipo_uso': {
+      const tipos: string[] = cfg.tipos || cfg.values || [];
+      if (tipos.length === 0) return true;
+      const match = !!ctx.tipoUso && tipos.some((t: string) => t.toLowerCase() === ctx.tipoUso!.toLowerCase());
+      return isInclude ? match : !match;
+    }
+    case 'combustivel': {
+      const combs: string[] = cfg.combustiveis || cfg.values || [];
+      if (combs.length === 0) return true;
+      const match = !!ctx.combustivel && combs.some((c: string) => c.toLowerCase() === ctx.combustivel!.toLowerCase());
+      return isInclude ? match : !match;
+    }
+    case 'tipo_placa': {
+      const placas: string[] = cfg.tipos || cfg.values || cfg.categorias || [];
+      if (placas.length === 0) return true;
+      if (!ctx.tipoPlaca) return isInclude ? false : true;
+      const match = placas.some((p: string) => p.toLowerCase() === ctx.tipoPlaca!.toLowerCase());
+      return isInclude ? match : !match;
+    }
+    default:
+      return true;
+  }
+}
+
+function checkAllRulesServer(rules: any[], ctx: VehicleContextServer): boolean {
+  const activeRules = rules.filter((r: any) => r.is_active);
+  if (activeRules.length === 0) return true;
+  return activeRules.every((r: any) => checkRuleAgainstVehicleServer(r, ctx));
 }
 
 async function enviarWhatsApp(supabaseUrl: string, serviceKey: string, telefone: string, mensagem: string) {
