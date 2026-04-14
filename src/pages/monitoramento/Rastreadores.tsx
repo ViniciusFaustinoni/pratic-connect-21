@@ -87,9 +87,9 @@ export default function Rastreadores() {
   const currentPage = filters.page ?? 1;
   const { data: metricas, isLoading: isLoadingMetricas } = useRastreadoresMetricas();
   const { data: plataformasLabels } = usePlataformasLabels();
-  const { isDiretor, isDesenvolvedor, canManageEquipeEstoque } = usePermissions();
+  const { isDiretor, isDesenvolvedor, isCoordenadorMonitoramento, canManageEquipeEstoque } = usePermissions();
 
-  const canManagePlataformas = isDiretor || isDesenvolvedor;
+  const canManagePlataformas = isDiretor || isDesenvolvedor || isCoordenadorMonitoramento;
 
   useEffect(() => {
     localStorage.setItem('rastreadores-view-mode', viewMode);
