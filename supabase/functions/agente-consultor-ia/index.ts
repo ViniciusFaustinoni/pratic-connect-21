@@ -1526,7 +1526,28 @@ interface VehicleContextServer {
   tipoPlaca?: string;
 }
 
-function findModelEligibilityServer(
+/**
+ * Normaliza o combustível vindo da FIPE (ex: "Alcool / Gasolina") para o padrão do sistema.
+ */
+function normalizeCombustivel(raw: string | undefined | null): string {
+  if (!raw) return 'gasolina';
+  const lower = raw.toLowerCase().trim();
+  
+  // Compound fuels → flex
+  if ((lower.includes('alcool') || lower.includes('etanol') || lower.includes('álcool')) && lower.includes('gasolina')) return 'flex';
+  if (lower.includes('flex')) return 'flex';
+  
+  // Single fuels
+  if (lower.includes('diesel')) return 'diesel';
+  if (lower.includes('eletric') || lower.includes('elétric')) return 'eletrico';
+  if (lower.includes('hibrid') || lower.includes('híbrid')) return 'hibrido';
+  if (lower.includes('gnv') || lower.includes('gás')) return 'gnv';
+  if (lower.includes('etanol') || lower.includes('alcool') || lower.includes('álcool')) return 'etanol';
+  if (lower.includes('gasolina')) return 'gasolina';
+  
+  return lower;
+}
+
   ruleConfig: any,
   ctx: VehicleContextServer
 ): { status: string; coberturaFipe: number } | null {
