@@ -114,7 +114,7 @@ export default function AprovacoesFipeMenor() {
       {/* Section tabs */}
       <Tabs value={section} onValueChange={(v) => { setSection(v as SectionTab); setTab('pendente'); }}>
         <TooltipProvider delayDuration={200}>
-          <TabsList>
+          <TabsList className="overflow-visible">
             <TabsTrigger value="fipe_menor" className="gap-1.5">
               <TrendingDown className="h-4 w-4" />
               FIPE Menor
@@ -122,7 +122,7 @@ export default function AprovacoesFipeMenor() {
                 <TooltipTrigger asChild>
                   <HelpCircle className="h-3 w-3 text-muted-foreground" />
                 </TooltipTrigger>
-                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                <TooltipContent side="bottom" sideOffset={8} className="max-w-xs text-xs z-50">
                   Solicitações para enquadrar veículos em faixa FIPE inferior à original, reduzindo o valor mensal
                 </TooltipContent>
               </Tooltip>
@@ -134,7 +134,7 @@ export default function AprovacoesFipeMenor() {
                 <TooltipTrigger asChild>
                   <HelpCircle className="h-3 w-3 text-muted-foreground" />
                 </TooltipTrigger>
-                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                <TooltipContent side="bottom" sideOffset={8} className="max-w-xs text-xs z-50">
                   Veículos com FIPE acima do limite permitido pelo plano que precisam de autorização especial
                 </TooltipContent>
               </Tooltip>
@@ -146,7 +146,7 @@ export default function AprovacoesFipeMenor() {
                 <TooltipTrigger asChild>
                   <HelpCircle className="h-3 w-3 text-muted-foreground" />
                 </TooltipTrigger>
-                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                <TooltipContent side="bottom" sideOffset={8} className="max-w-xs text-xs z-50">
                   Veículos fora da whitelist de aceitação do plano que necessitam aprovação manual para inclusão
                 </TooltipContent>
               </Tooltip>
@@ -158,7 +158,7 @@ export default function AprovacoesFipeMenor() {
                 <TooltipTrigger asChild>
                   <HelpCircle className="h-3 w-3 text-muted-foreground" />
                 </TooltipTrigger>
-                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                <TooltipContent side="bottom" sideOffset={8} className="max-w-xs text-xs z-50">
                   Veículos com FIPE acima do limite que necessitam aprovação da diretoria (dupla aprovação)
                 </TooltipContent>
               </Tooltip>
