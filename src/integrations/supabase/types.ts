@@ -914,6 +914,7 @@ export type Database = {
           dados_cotacao: Json | null
           id: string
           nome: string | null
+          resetado_em: string | null
           status: string | null
           telefone: string
           ultima_interacao: string | null
@@ -923,6 +924,7 @@ export type Database = {
           dados_cotacao?: Json | null
           id?: string
           nome?: string | null
+          resetado_em?: string | null
           status?: string | null
           telefone: string
           ultima_interacao?: string | null
@@ -932,6 +934,7 @@ export type Database = {
           dados_cotacao?: Json | null
           id?: string
           nome?: string | null
+          resetado_em?: string | null
           status?: string | null
           telefone?: string
           ultima_interacao?: string | null
