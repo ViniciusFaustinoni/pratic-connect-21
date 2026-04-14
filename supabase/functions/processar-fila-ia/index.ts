@@ -39,6 +39,24 @@ Deno.serve(async (req) => {
     let erros = 0;
 
     for (const item of itens) {
+      // Verificar se o contato foi resetado depois que o item foi enfileirado
+      const telLimpoCheck = item.telefone.replace(/\D/g, "");
+      const { data: contatoCheck } = await supabase
+        .from("agente_ia_contatos")
+        .select("resetado_em")
+        .eq("telefone", telLimpoCheck)
+        .maybeSingle();
+
+      if (contatoCheck?.resetado_em && new Date(contatoCheck.resetado_em) > new Date(item.created_at)) {
+        // Item foi criado antes do reset — invalidar
+        await supabase
+          .from("whatsapp_fila_ia")
+          .update({ status: "cancelado", erro: "Invalidado por reset de contato", processed_at: new Date().toISOString() })
+          .eq("id", item.id);
+        console.log(`[processar-fila-ia] Item ${item.id} invalidado (anterior ao reset)`);
+        continue;
+      }
+
       // Marcar como processando
       await supabase
         .from("whatsapp_fila_ia")
