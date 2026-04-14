@@ -1,30 +1,50 @@
+<final-text>Revisei os logs mais recentes da conversa do Vinícius Faustinoni e o problema ficou claro.
 
+Diagnóstico
+- Às 15:25:46 o agente chamou `registrar_cotacao` para o telefone `5521992593830`, com a placa `LTB4J74`.
+- Mesmo assim, não foi criada nenhuma linha nova em `leads` nem em `cotacoes`.
+- Depois disso, o contato ficou preso entre `dados_cliente_coletados` e `aguardando_vencimento_resposta`, então o agente voltou a perguntar o vencimento e entrou no loop.
 
-## Plano: Corrigir conversao de fuso horario no agente-consultor-ia
+Causas encontradas
+1. `supabase/functions/agente-consultor-ia/index.ts` está usando um schema antigo no momento de gerar a cotação:
+   - tenta inserir em `leads` com a coluna `status`, mas essa coluna não existe;
+   - tenta inserir em `cotacoes_publicas` com colunas que não existem nesse banco (`dia_vencimento`, `tipo_instalacao`, `valor_adicional`, `valor_adesao`, `email_solicitante`, `dados_cotacao`);
+   - o fluxo público atual do app usa `cotacoes` com `token_publico`, não `cotacoes_publicas` com `token`.
 
-### Problema
-A formula de conversao de fuso horario na linha 208 esta **invertida**. Em servidores UTC (onde `getTimezoneOffset()` retorna 0), o calculo resulta em:
+2. O estado local `dadosCotacao` não é atualizado após todas as tool calls.
+   - após `consultar_placa` e `calcular_cotacao`, o banco é atualizado, mas a variável em memória não;
+   - isso facilita perda de `regiao`, `uso_app` e `planos_calculados`, deixando o agente sem contexto suficiente para concluir.
 
-```text
-brasilia = agora + (0 - (-180)) * 60000
-         = agora + 3 horas  (UTC+3, ERRADO)
-```
+Plano de correção
+1. Corrigir `registrar_cotacao` em `supabase/functions/agente-consultor-ia/index.ts`
+   - parar de usar `cotacoes_publicas`;
+   - criar a cotação na tabela `cotacoes`;
+   - gerar `token_publico` e `numero` no padrão já usado pelo app;
+   - salvar os campos corretos da cotação: veículo, FIPE, região, uso, `dia_vencimento`, `nome_solicitante`, `telefone1_solicitante`, `email_solicitante`, `valor_adesao`, `valor_adicional`, `tipo_instalacao`;
+   - gerar o link com `/cotacao/${token_publico}`.
 
-O correto seria UTC-3. Entao as 12:17 BRT (15:17 UTC), o codigo calcula 18:17, que cai fora do horario comercial (08-18h), e a IA responde com a mensagem de fora de horario ao inves de processar a conversa.
+2. Corrigir criação/atualização do lead
+   - usar as colunas reais da tabela `leads`, com `etapa`/`ativo` em vez de `status`;
+   - aproveitar para salvar placa, marca, modelo, ano e valor FIPE no lead.
 
-### Correcao
+3. Blindar o estado da conversa
+   - criar um helper para persistir `dados_cotacao` sempre com merge;
+   - atualizar também a variável `dadosCotacao` em memória após cada etapa;
+   - aplicar isso em `consultar_placa`, `calcular_cotacao`, `salvar_dados_cliente`, `obter_opcoes_vencimento` e `registrar_cotacao`.
 
-**Arquivo: `supabase/functions/agente-consultor-ia/index.ts`** (linhas 205-208)
+4. Evitar novo loop
+   - antes de registrar a cotação, combinar os argumentos da IA com o `dadosCotacao` persistido;
+   - se faltar algum dado crítico, retornar erro estruturado sem reiniciar a conversa;
+   - ao concluir com sucesso, salvar `etapa: "cotacao_enviada"` no contato.
 
-Substituir a formula complexa por calculo direto:
+Validação após a implementação
+- reproduzir o fluxo do Vinícius;
+- escolher o vencimento;
+- verificar criação do lead;
+- verificar criação da cotação em `cotacoes`;
+- verificar envio do link no WhatsApp;
+- confirmar que o estado final fica como `cotacao_enviada`;
+- confirmar que o agente não volta a perguntar vencimento.
 
-```typescript
-const agora = new Date();
-const brasilia = new Date(agora.getTime() - 3 * 60 * 60 * 1000);
-```
-
-Remove as variaveis `brasiliaOffset` e `localOffset` que causam a inversao.
-
-### Deploy
-Redeployar a edge function `agente-consultor-ia`.
-
+Detalhe técnico importante
+- O estado atual salvo do contato contém `placa`, `marca`, `modelo`, `valor_fipe`, `email`, `nome` e `opcoes_vencimento`, mas está sem `regiao`, `uso_app` e `planos_calculados`, o que confirma perda de contexto além do erro de persistência da cotação.</final-text>
