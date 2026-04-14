@@ -854,6 +854,20 @@ serve(async (req) => {
               const tiposPermitidos = ["text", "image", "document", "audio", "video", "template"];
               const tipoNormalizado = tiposPermitidos.includes(msg.type) ? msg.type : "text";
 
+              // DEDUP: verificar se message_id já foi processado
+              if (msg.id) {
+                const { data: msgExistente } = await supabase
+                  .from("whatsapp_mensagens")
+                  .select("id")
+                  .eq("message_id", msg.id)
+                  .maybeSingle();
+                
+                if (msgExistente) {
+                  console.log(`[whatsapp-meta-webhook] ⚠ Mensagem duplicada ignorada: ${msg.id}`);
+                  continue;
+                }
+              }
+
               // Registrar no banco (sempre, mesmo se processado)
               const { error: insertError } = await supabase.from("whatsapp_mensagens").insert({
                 telefone,
