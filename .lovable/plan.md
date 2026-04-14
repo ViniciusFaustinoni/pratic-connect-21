@@ -1,83 +1,36 @@
 
-Objetivo: corrigir a causa real da alucinação observada nos logs, para que a IA use os dados corretos da placa/FIPE.
 
-Diagnóstico confirmado pelos últimos logs:
-- `whatsapp-webhook` recebeu `Ltb4j74` e encaminhou corretamente para o agente.
-- `agente-consultor-ia` chamou a tool `consultar_placa`.
-- `plate-lookup` retornou com sucesso os dados corretos:
-  - Marca: `Toyota`
-  - Modelo: `corolla Xei Flex`
-  - Ano: `2013/2014`
-  - FIPE: `72122`
-- Portanto, o problema não está na consulta da FIPE API.
-- O bug está no mapeamento dentro de `supabase/functions/agente-consultor-ia/index.ts`: a função `executarConsultaPlaca` espera campos no topo do JSON (`data.marca`, `data.modelo`, `data.valor_fipe`), mas a `plate-lookup` devolve os dados em:
-  - `data.vehicleData`
-  - `data.fipeData`
+## Plano: Corrigir listagem de linhas no Agente Consultor IA
 
-Impacto do bug:
-- O tool result enviado ao modelo fica sem `marca`, `modelo`, `ano` e `valor_fipe` corretos.
-- Com o resultado incompleto, o modelo “preenche” sozinho e alucina veículo/FIPE.
+### Causa raiz
+A query na aba "Linhas de Produto" solicita a coluna `description` que **nao existe** na tabela `product_lines`. Isso retorna erro 400 do PostgREST, e a UI mostra "Nenhuma linha de produto ativa encontrada".
 
-Implementação proposta:
-1. Corrigir `executarConsultaPlaca` para ler a resposta real da `plate-lookup`
-   - `marca` ← `data.vehicleData?.marca`
-   - `modelo` ← `data.vehicleData?.modelo`
-   - `ano` ← extrair ano-modelo numérico de `data.vehicleData?.ano`
-   - `combustivel` ← `data.vehicleData?.combustivel`
-   - `valor_fipe` ← `data.fipeData?.valor`
-   - `cor` ← `data.vehicleData?.cor`
-   - opcionalmente incluir `placa_consultada`, `marca_modelo`, `tipo_veiculo`
+Erro exato do servidor:
+```
+{"code":"42703","message":"column product_lines.description does not exist"}
+```
 
-2. Normalizar o retorno da tool para o modelo
-   - Entregar um objeto simples e explícito, por exemplo:
-     ```json
-     {
-       "success": true,
-       "placa": "LTB4J74",
-       "marca": "Toyota",
-       "modelo": "Corolla XEi Flex",
-       "ano_modelo": 2014,
-       "ano_texto": "2013/2014",
-       "combustivel": "Alcool / Gasolina",
-       "valor_fipe": 72122,
-       "cor": "Azul"
-     }
-     ```
-   - Isso reduz ambiguidade e diminui muito a chance de alucinação.
+### Solucao
 
-3. Reforçar a resposta da tool no prompt contextual
-   - Manter o aviso “DADOS OFICIAIS”.
-   - Complementar dizendo que, se algum campo vier ausente, a IA deve dizer que precisa confirmar manualmente, e não completar por conta própria.
+**Arquivo: `src/pages/configuracoes/AgenteConsultorIA.tsx`**
 
-4. Adicionar logs defensivos no `agente-consultor-ia`
-   - Logar o payload bruto resumido retornado por `plate-lookup`
-   - Logar o objeto normalizado final enviado ao modelo
-   - Isso permitirá validar rapidamente se o problema foi resolvido em produção.
+1. Remover `description` da query SELECT (a coluna nao existe na tabela)
+2. Remover o cast `(supabase as any)` — a tabela ja esta nos types
+3. Ajustar referencia a `linha.description` no template para nao quebrar
 
-5. Validar o cenário com a mesma placa do incidente
-   - Reexecutar o fluxo com `LTB4J74`
-   - Confirmar que a resposta menciona Toyota Corolla/FIPE correta e não outro veículo
+Tambem, conforme solicitado pelo usuario:
+4. Remover o filtro/flag `disponivel_agente` como pre-requisito — todas as linhas ativas devem aparecer automaticamente para atribuicao
+5. O toggle `disponivel_agente` continua existindo para o usuario marcar quais linhas o agente deve usar, mas a listagem nao depende dele para aparecer
 
-Arquivos a ajustar:
-- `supabase/functions/agente-consultor-ia/index.ts`
+### Mudanca na query
+```typescript
+// ANTES (erro - coluna description nao existe)
+.select('id, name, slug, description, icon, color, is_active, disponivel_agente, agente_descricao')
 
-Detalhe técnico importante:
-- Hoje a `plate-lookup` retorna neste formato:
-  ```text
-  {
-    success: true,
-    extractedPlate,
-    vehicleData: { marca, modelo, ano, combustivel, cor, ... },
-    fipeData: { codigo, valor, mesReferencia }
-  }
-  ```
-- Mas `executarConsultaPlaca` está lendo como se fosse:
-  ```text
-  { marca, modelo, ano, combustivel, valor_fipe, cor }
-  ```
-- Essa incompatibilidade é a causa direta do erro visto no print e nos logs.
+// DEPOIS
+.select('id, name, slug, icon, color, is_active, disponivel_agente, agente_descricao')
+```
 
-Critério de sucesso:
-- Ao informar uma placa válida, a IA deve sempre responder usando exatamente os dados retornados por `plate-lookup`.
-- Se a consulta falhar, a IA deve pedir os dados manualmente.
-- A IA não deve mais citar veículo ou FIPE diferentes dos retornados pela API.
+### Arquivo alterado
+- `src/pages/configuracoes/AgenteConsultorIA.tsx`
+
