@@ -488,7 +488,7 @@ ${contato?.nome || "Não informado ainda"}`;
           type: "function",
           function: {
             name: "calcular_cotacao",
-            description: "Calcula os preços dos planos disponíveis para o veículo. Retorna uma lista de planos com valores mensais.",
+            description: "Calcula os planos disponíveis para o veículo. Retorna a QUANTIDADE de planos elegíveis. NÃO mostre valores ao cliente.",
             parameters: {
               type: "object",
               properties: {
@@ -508,13 +508,25 @@ ${contato?.nome || "Não informado ainda"}`;
         {
           type: "function",
           function: {
+            name: "obter_opcoes_vencimento",
+            description: "Retorna as opções de dia de vencimento disponíveis para o cliente escolher. Chame ANTES de registrar a cotação.",
+            parameters: {
+              type: "object",
+              properties: {},
+              required: [],
+            },
+          },
+        },
+        {
+          type: "function",
+          function: {
             name: "registrar_cotacao",
-            description: "Registra a cotação no sistema e gera um link público para o cliente. Também pode enviar por WhatsApp.",
+            description: "Registra a cotação no sistema e gera um link público para o cliente acessar os planos e valores.",
             parameters: {
               type: "object",
               properties: {
                 nome_cliente: { type: "string", description: "Nome completo do cliente" },
-                telefone_cliente: { type: "string", description: "Telefone do cliente" },
+                email_cliente: { type: "string", description: "Email do cliente para receber a cotação" },
                 placa: { type: "string", description: "Placa do veículo" },
                 marca: { type: "string", description: "Marca do veículo" },
                 modelo: { type: "string", description: "Modelo do veículo" },
@@ -522,20 +534,22 @@ ${contato?.nome || "Não informado ainda"}`;
                 combustivel: { type: "string", description: "Combustível do veículo" },
                 valor_fipe: { type: "number", description: "Valor FIPE" },
                 regiao: { type: "string", description: "Região" },
+                dia_vencimento: { type: "number", description: "Dia do mês para vencimento das mensalidades" },
+                tipo_instalacao: { type: "string", description: "Tipo de instalação do rastreador: rota ou base" },
                 planos_calculados: {
                   type: "array",
                   items: {
                     type: "object",
                     properties: {
+                      plano_id: { type: "string" },
                       nome: { type: "string" },
                       valor_mensal: { type: "number" },
                     },
                   },
-                  description: "Lista de planos com valores calculados",
+                  description: "Lista de planos com valores calculados (uso interno)",
                 },
-                enviar_whatsapp: { type: "boolean", description: "Se deve enviar a cotação por WhatsApp" },
               },
-              required: ["nome_cliente", "telefone_cliente", "valor_fipe"],
+              required: ["nome_cliente", "email_cliente", "valor_fipe", "dia_vencimento"],
             },
           },
         },
