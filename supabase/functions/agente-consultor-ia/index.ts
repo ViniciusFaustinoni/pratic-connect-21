@@ -194,39 +194,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ---- 5. VERIFICAR HORÁRIO COMERCIAL (apenas para leads) ----
-    if (!isDiretor && !isAssociado) {
-      let horarioConfig: { dias: string[]; inicio: string; fim: string } | null = null;
-      try {
-        horarioConfig = JSON.parse(config.horario_comercial || "null");
-      } catch { /* ignore */ }
-
-      if (horarioConfig) {
-        const agora = new Date();
-        const brasilia = new Date(agora.getTime() - 3 * 60 * 60 * 1000);
-
-        const diasSemana = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
-        const diaAtual = diasSemana[brasilia.getDay()];
-        const horaAtual = brasilia.getHours() * 100 + brasilia.getMinutes();
-
-        const [inicioH, inicioM] = (horarioConfig.inicio || "08:00").split(":").map(Number);
-        const [fimH, fimM] = (horarioConfig.fim || "18:00").split(":").map(Number);
-        const inicioNum = inicioH * 100 + inicioM;
-        const fimNum = fimH * 100 + fimM;
-
-        const dentroHorario = horarioConfig.dias.includes(diaAtual) && horaAtual >= inicioNum && horaAtual < fimNum;
-
-        if (!dentroHorario) {
-          if (responderFora && msgForaHorario) {
-            await enviarWhatsApp(supabaseUrl, serviceKey, telefone, msgForaHorario);
-          }
-          return new Response(
-            JSON.stringify({ success: true, fora_horario: true }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-      }
-    }
+    // ---- 5. HORÁRIO COMERCIAL DESATIVADO - Agente funciona 24h ----
 
     // ---- 6. BUSCAR HISTÓRICO DE CONVERSA ----
     const duasHorasAtras = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
