@@ -215,7 +215,13 @@ Deno.serve(async (req) => {
         content: m.mensagem,
       }));
 
-    const isPrimeiraMensagem = !contatoExistente;
+    const foiResetado = contatoExistente && contato?.status === 'novo' && !contato?.dados_cotacao;
+    const isPrimeiraMensagem = !contatoExistente || foiResetado;
+
+    if (foiResetado) {
+      historicoFormatado.length = 0;
+      console.log(`[agente-consultor-ia] Contato resetado detectado, limpando histórico de mensagens`);
+    }
 
     // ---- 6B. CARREGAR ESTADO DO FLUXO (dados_cotacao) ----
     let dadosCotacao = contato?.dados_cotacao || null;
