@@ -1219,14 +1219,25 @@ async function executarCalculoCotacao(supabase: any, args: any) {
 
     valorMensal = Math.round(valorMensal * 100) / 100;
 
+    // Montar lista de nomes de coberturas e benefícios para exibição pública
+    const coberturasNomes = coberturasDoPlano
+      .map((pc: any) => pc.coberturas?.nome)
+      .filter(Boolean);
+    const beneficiosNomes = beneficiosDoPlano
+      .map((pb: any) => pb.benefits?.name)
+      .filter(Boolean);
+
     resultados.push({
       plano_id: plano.id,
       nome: plano.nome,
+      codigo: plano.codigo || null,
       linha: plano.product_lines?.name || plano.linha,
+      nivel: plano.nivel || null,
       valor_mensal: valorMensal,
       valor_adesao: 0,
       cobertura_fipe: plano.cobertura_fipe || 100,
       destaque: plano.destaque || false,
+      coberturas: [...coberturasNomes, ...beneficiosNomes],
     });
   }
 
@@ -1343,9 +1354,22 @@ async function executarRegistroCotacao(supabase: any, supabaseUrl: string, servi
   }
   const tokenPublico = tokenParts.join("");
 
-  // Calcular valor_total_mensal do primeiro plano
+  // Calcular valor_total_mensal do primeiro plano e mapear para formato do frontend
   const primeiroPlano = planos_calculados?.[0];
   const valorMensal = primeiroPlano?.valor_mensal || 0;
+  const planoIdPrincipal = primeiroPlano?.plano_id || null;
+
+  // Mapear planos para o formato esperado pelo frontend (planos_comparacao)
+  const planosComparacao = (planos_calculados || []).map((p: any) => ({
+    id: p.plano_id,
+    nome: p.nome,
+    codigo: p.codigo || null,
+    valorMensal: p.valor_mensal,
+    valorAdesao: 0,
+    coberturas: p.coberturas || [],
+    destaque: p.destaque || false,
+    nivel: p.nivel || null,
+  }));
 
   const { data: cotacao, error: cotacaoErr } = await supabase
     .from("cotacoes")
@@ -1353,6 +1377,7 @@ async function executarRegistroCotacao(supabase: any, supabaseUrl: string, servi
       numero,
       token_publico: tokenPublico,
       lead_id: leadId,
+      plano_id: planoIdPrincipal,
       veiculo_marca: marca || null,
       veiculo_modelo: modelo || null,
       veiculo_ano: ano || null,
@@ -1361,17 +1386,24 @@ async function executarRegistroCotacao(supabase: any, supabaseUrl: string, servi
       valor_fipe: valor_fipe,
       regiao: regiao || "rj",
       uso_aplicativo: args.uso_app || false,
-      valor_cota: 0,
+      valor_cota: valorMensal,
       taxa_administrativa: 0,
       valor_rastreamento: 0,
       valor_adesao: 0,
       valor_adicional: 5.50,
       valor_total_mensal: valorMensal,
+      dia_vencimento: dia_vencimento,
       nome_solicitante: nome_cliente || null,
       email_solicitante: email_cliente || null,
       telefone1_solicitante: telefoneLead,
       status: "enviada",
-      dados_extras: { planos: planos_calculados, origem: "agente_ia", adesao_isenta: true, valor_adicional: 5.50, dia_vencimento: dia_vencimento },
+      dados_extras: {
+        planos_comparacao: planosComparacao,
+        origem: "agente_ia",
+        adesao_isenta: true,
+        valor_adicional: 5.50,
+        dia_vencimento: dia_vencimento,
+      },
     })
     .select("id, token_publico")
     .single();
