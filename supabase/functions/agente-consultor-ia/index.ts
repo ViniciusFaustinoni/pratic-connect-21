@@ -431,10 +431,15 @@ Siga exatamente esta sequência:
 5. Pergunte a REGIÃO (estado/cidade)
 6. Use a ferramenta calcular_cotacao (internamente — NÃO mostre valores ao cliente)
 7. Diga algo como: "Vou preparar sua cotação personalizada com as melhores opções! E lembrando: a adesão sai GRATUITA pra você! 🎉"
-8. Use a ferramenta obter_opcoes_vencimento e ofereça APENAS as duas datas retornadas pela ferramenta. NÃO invente datas. NÃO ofereça outras opções além das retornadas.
-9. Pergunte o EMAIL do cliente (para receber a cotação)
-10. Pergunte o NOME COMPLETO do cliente
-11. Registre a cotação com a ferramenta registrar_cotacao e envie o link
+8. Peça o EMAIL e o NOME COMPLETO do cliente (pode ser na mesma mensagem)
+9. Quando o cliente responder com email e nome, CHAME a ferramenta salvar_dados_cliente IMEDIATAMENTE
+10. Use a ferramenta obter_opcoes_vencimento e ofereça APENAS as duas datas retornadas. NÃO invente datas.
+11. Após o cliente escolher a data, CHAME registrar_cotacao IMEDIATAMENTE e envie o link
+
+## REGRA CRÍTICA — GERAR COTAÇÃO (NUNCA IGNORE)
+Quando você JÁ tem: placa, veículo, região, uso_app, email, nome e dia de vencimento,
+CHAME registrar_cotacao IMEDIATAMENTE. NÃO faça mais perguntas. NÃO repita dados já coletados.
+Se os dados já estão no ESTADO ATUAL DO FLUXO, USE-OS. Não peça novamente.
 
 ## APÓS ENVIO DO LINK
 - Após enviar o link da cotação, aguarde e envie um resumo contendo:
@@ -501,9 +506,9 @@ ${contato?.nome || "Não informado ainda"}`;
         const etapaInstrucoes: Record<string, string> = {
           "aguardando_confirmacao": "PRÓXIMO PASSO: Confirme os dados do veículo com o cliente e depois pergunte se usa para aplicativo.",
           "aguardando_regiao": "PRÓXIMO PASSO: Pergunte a região (estado) do cliente.",
-          "aguardando_vencimento": `PRÓXIMO PASSO: Pergunte a data de vencimento. Ofereça APENAS dia ${dadosCotacao.opcoes_vencimento?.[0] || "?"} ou dia ${dadosCotacao.opcoes_vencimento?.[1] || "?"}. NÃO ofereça outras datas.`,
-          "aguardando_email": "PRÓXIMO PASSO: Pergunte o email do cliente.",
-          "aguardando_nome": "PRÓXIMO PASSO: Pergunte o nome completo do cliente.",
+          "aguardando_vencimento": `PRÓXIMO PASSO: Peça o EMAIL e NOME COMPLETO do cliente. Após receber, CHAME salvar_dados_cliente.`,
+          "dados_cliente_coletados": `PRÓXIMO PASSO: Pergunte a data de vencimento usando obter_opcoes_vencimento. Ofereça APENAS as 2 opções retornadas.`,
+          "aguardando_vencimento_resposta": `PRÓXIMO PASSO: O cliente deve escolher entre dia ${dadosCotacao.opcoes_vencimento?.[0] || "?"} ou dia ${dadosCotacao.opcoes_vencimento?.[1] || "?"}. Após escolher, CHAME registrar_cotacao IMEDIATAMENTE com TODOS os dados do estado.`,
           "cotacao_enviada": "A cotação JÁ foi enviada. Esteja disponível para dúvidas.",
         };
         
@@ -593,6 +598,21 @@ ${contato?.nome || "Não informado ainda"}`;
                 },
               },
               required: ["nome_cliente", "email_cliente", "valor_fipe", "dia_vencimento"],
+            },
+          },
+        },
+        {
+          type: "function",
+          function: {
+            name: "salvar_dados_cliente",
+            description: "Salva o nome e email do cliente no sistema. CHAME IMEDIATAMENTE após o cliente informar email e nome. NÃO prossiga sem chamar esta ferramenta.",
+            parameters: {
+              type: "object",
+              properties: {
+                nome_cliente: { type: "string", description: "Nome completo do cliente" },
+                email_cliente: { type: "string", description: "Email do cliente" },
+              },
+              required: ["nome_cliente", "email_cliente"],
             },
           },
         },
@@ -719,11 +739,12 @@ ${contato?.nome || "Não informado ainda"}`;
               if (toolResult.success) {
                 const novoEstado = {
                   ...(dadosCotacao || {}),
-                  etapa: "aguardando_vencimento",
+                  etapa: "aguardando_vencimento_resposta",
                   opcoes_vencimento: toolResult.opcoes,
                 };
                 await supabase.from("agente_ia_contatos").update({ dados_cotacao: novoEstado }).eq("id", contato.id);
-                console.log(`[agente-consultor-ia] Estado salvo: opcoes_vencimento=${toolResult.opcoes}`);
+                dadosCotacao = novoEstado;
+                console.log(`[agente-consultor-ia] Estado salvo: aguardando_vencimento_resposta, opcoes=${toolResult.opcoes}`);
               }
             } else if (fnName === "registrar_cotacao") {
               toolResult = await executarRegistroCotacao(supabase, supabaseUrl, serviceKey, args, telLimpo, contato);
@@ -740,6 +761,17 @@ ${contato?.nome || "Não informado ainda"}`;
                 await supabase.from("agente_ia_contatos").update({ dados_cotacao: novoEstado }).eq("id", contato.id);
                 console.log(`[agente-consultor-ia] Estado salvo: cotacao_enviada`);
               }
+            } else if (fnName === "salvar_dados_cliente") {
+              const novoEstado = {
+                ...(dadosCotacao || {}),
+                etapa: "dados_cliente_coletados",
+                email: args.email_cliente,
+                nome: args.nome_cliente,
+              };
+              await supabase.from("agente_ia_contatos").update({ dados_cotacao: novoEstado, nome: args.nome_cliente }).eq("id", contato.id);
+              dadosCotacao = novoEstado;
+              console.log(`[agente-consultor-ia] Estado salvo: dados_cliente_coletados (nome=${args.nome_cliente}, email=${args.email_cliente})`);
+              toolResult = { success: true, instrucao: "Dados do cliente salvos com sucesso. Agora CHAME obter_opcoes_vencimento para oferecer as datas de vencimento disponíveis." };
             } else if (fnName === "gerar_relatorio") {
               toolResult = await executarGerarRelatorio(supabase, args);
             } else {
