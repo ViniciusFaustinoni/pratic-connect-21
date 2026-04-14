@@ -202,26 +202,9 @@ export default function Cotacoes() {
     });
   }, [cotacoes, search, statusFilter, mesFilter, dataFilter, consultorFilter, filtroOrfas]);
 
-  // Ordenação inteligente
+  // Ordenação cronológica — mais recentes primeiro
   const sortedCotacoes = useMemo(() => {
     return [...filteredCotacoes].sort((a, b) => {
-      // Prioridade 1: Sem lead vinculado
-      if (!a.lead_id && b.lead_id) return -1;
-      if (a.lead_id && !b.lead_id) return 1;
-      
-      // Prioridade 2: Por status
-      const statusOrder: Record<string, number> = {
-        rascunho: 1,
-        enviada: 2,
-        visualizada: 3,
-        aceita: 4,
-        recusada: 5,
-        expirada: 6,
-      };
-      const statusDiff = (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99);
-      if (statusDiff !== 0) return statusDiff;
-      
-      // Prioridade 3: Mais recentes primeiro
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
   }, [filteredCotacoes]);
