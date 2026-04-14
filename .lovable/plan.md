@@ -1,21 +1,26 @@
 
 
-## Plano: Permitir coordenador de monitoramento gerir Locais de Instalacao
+## Plano: Permitir Coordenador de Monitoramento gerir Locais de Instalação
 
 ### Problema
-A aba "Locais Instalacao" na pagina de Rastreadores so aparece para diretores e desenvolvedores (`canManagePlataformas = isDiretor || isDesenvolvedor`). O coordenador de monitoramento nao ve essa aba.
+A variável `canManagePlataformas` na linha 92 de `Rastreadores.tsx` controla a visibilidade das abas "Plataformas" e "Locais Instalação", mas só inclui `isDiretor || isDesenvolvedor`. O Coordenador de Monitoramento não tem acesso.
 
-### Correcao
+### Correção
 
 **Arquivo: `src/pages/monitoramento/Rastreadores.tsx`**
 
-Linha 90-92: Adicionar `isCoordenadorMonitoramento` ao destructuring do `usePermissions()` e incluir na condicao:
-
+1. Linha 90 — adicionar `isCoordenadorMonitoramento` ao destructuring:
 ```typescript
 const { isDiretor, isDesenvolvedor, isCoordenadorMonitoramento, canManageEquipeEstoque } = usePermissions();
+```
 
+2. Linha 92 — incluir na condição:
+```typescript
 const canManagePlataformas = isDiretor || isDesenvolvedor || isCoordenadorMonitoramento;
 ```
 
-Isso fara as abas "Plataformas" e "Locais Instalacao" aparecerem para o coordenador de monitoramento. Se apenas "Locais Instalacao" deve ser visivel (sem "Plataformas"), sera necessario separar as permissoes em duas variaveis distintas.
+Isso dará acesso às abas "Plataformas" e "Locais Instalação" para o coordenador de monitoramento, permitindo o CRUD completo (criar, ativar/desativar) que já existe no componente `GerenciarLocaisInstalacao`.
+
+### Nota sobre RLS
+O componente `GerenciarLocaisInstalacao` usa `supabase.from('locais_instalacao').insert(...)` e `.update(...)`. As policies RLS dessa tabela precisam permitir INSERT/UPDATE para o role `coordenador_monitoramento`. Se já houver policies permissivas para `authenticated` ou para esse role, nenhuma migration é necessária. Caso contrário, será criada uma migration adicionando as policies adequadas. Verificarei isso durante a implementação.
 
