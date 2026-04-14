@@ -24,6 +24,7 @@ import {
 // ─── Tab 1: Linhas de Produto do Agente ───────────────────────────────────
 function AbaLinhas() {
   const queryClient = useQueryClient();
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
 
   const { data: linhas, isLoading } = useQuery({
     queryKey: ['linhas-agente-ia'],
@@ -52,6 +53,34 @@ function AbaLinhas() {
     },
     onError: () => toast.error('Erro ao atualizar linha'),
   });
+
+  const gerarDescricaoIA = async (linhaId: string) => {
+    setGeneratingId(linhaId);
+    try {
+      const { data, error } = await supabase.functions.invoke('gerar-descricao-linha', {
+        body: { product_line_id: linhaId },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      const descricao = data.descricao;
+      if (!descricao) throw new Error('Nenhuma descrição gerada');
+
+      // Save to DB
+      await supabase
+        .from('product_lines')
+        .update({ agente_descricao: descricao })
+        .eq('id', linhaId);
+
+      queryClient.invalidateQueries({ queryKey: ['linhas-agente-ia'] });
+      toast.success('Descrição gerada com IA e salva!');
+    } catch (err: any) {
+      console.error('Erro ao gerar descrição:', err);
+      toast.error(err.message || 'Erro ao gerar descrição com IA');
+    } finally {
+      setGeneratingId(null);
+    }
+  };
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
@@ -85,17 +114,33 @@ function AbaLinhas() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div>
-              <Label className="text-xs text-muted-foreground">Descrição para o Agente IA</Label>
+              <div className="flex items-center justify-between mb-1">
+                <Label className="text-xs text-muted-foreground">Descrição para o Agente IA</Label>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs gap-1.5"
+                  disabled={generatingId === linha.id}
+                  onClick={() => gerarDescricaoIA(linha.id)}
+                >
+                  {generatingId === linha.id ? (
+                    <><Loader2 className="h-3 w-3 animate-spin" /> Gerando...</>
+                  ) : (
+                    <><Sparkles className="h-3 w-3" /> Gerar com IA</>
+                  )}
+                </Button>
+              </div>
               <Textarea
                 placeholder="Como o agente deve descrever esta linha de proteção ao cliente..."
                 defaultValue={linha.agente_descricao ?? ''}
+                key={linha.agente_descricao ?? ''}
                 onBlur={(e) => {
                   if (e.target.value !== (linha.agente_descricao ?? '')) {
                     updateLinha.mutate({ id: linha.id, field: 'agente_descricao', value: e.target.value });
                   }
                 }}
                 className="mt-1 text-sm"
-                rows={2}
+                rows={3}
               />
             </div>
             <div className="flex items-center gap-2">
