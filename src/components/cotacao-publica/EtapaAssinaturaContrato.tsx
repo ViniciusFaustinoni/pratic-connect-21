@@ -770,6 +770,16 @@ export function EtapaAssinaturaContrato({
         </CardHeader>
 
         <CardContent className="pt-6 space-y-6">
+          {/* Mensagem destaque */}
+          <div className="text-center py-4 px-3">
+            <div className="inline-flex items-center gap-2 mb-2">
+              <Mail className="h-6 w-6 text-primary animate-bounce" />
+            </div>
+            <p className="text-2xl md:text-3xl font-bold text-primary leading-tight">
+              Seu contrato está no seu e-mail para assinatura!
+            </p>
+          </div>
+
           {/* Informações do signatário */}
           <div className="bg-muted/30 rounded-lg p-4 space-y-2">
             <div className="flex items-center justify-between text-sm">
