@@ -386,6 +386,14 @@ Quando for a primeira mensagem do contato, use esta apresentação como base (ad
 ## LINHAS DE PROTEÇÃO DISPONÍVEIS
 ${linhasTexto}
 
+## REGRA CRÍTICA SOBRE DADOS DO VEÍCULO
+- NUNCA invente ou adivinhe dados do veículo (marca, modelo, ano, valor FIPE)
+- SOMENTE use os dados retornados pela ferramenta consultar_placa
+- Se a ferramenta retornar erro, peça os dados manualmente ao cliente
+- NUNCA "chute" baseado na placa — SEMPRE aguarde o resultado da ferramenta
+- Se o resultado da ferramenta disser marca "Toyota" e modelo "Corolla", use EXATAMENTE esses dados
+- IGNORAR qualquer "conhecimento prévio" sobre placas — confie APENAS no resultado da ferramenta
+
 ## REGRA ABSOLUTA SOBRE PREÇOS
 - NUNCA informe valor de cobertura individual. Sempre informe o VALOR TOTAL DO PLANO por mês.
 - NUNCA invente preços. Se não calculou via ferramenta, diga que precisa dos dados do veículo.
@@ -395,7 +403,7 @@ ${linhasTexto}
 Siga exatamente esta sequência:
 1. Cumprimente e pergunte a PLACA do veículo
 2. Use a ferramenta consultar_placa para obter os dados automaticamente
-3. Confirme os dados do veículo com o cliente
+3. Confirme os dados do veículo com o cliente (USE EXATAMENTE os dados retornados pela ferramenta)
 4. Pergunte: "O veículo é usado para aplicativo (Uber, 99, etc.)?"
 5. Pergunte a REGIÃO (estado/cidade)
 6. Use a ferramenta calcular_cotacao com todos os dados coletados
@@ -607,10 +615,16 @@ ${contato?.nome || "Não informado ainda"}`;
             toolResult = { error: err.message || "Erro ao executar ferramenta" };
           }
 
+          // Reforçar dados oficiais para consultar_placa
+          let toolContent = JSON.stringify(toolResult);
+          if (fnName === "consultar_placa" && toolResult && !toolResult.error) {
+            toolContent = `⚠️ DADOS OFICIAIS DA CONSULTA DE PLACA - USE APENAS ESTES DADOS, NÃO INVENTE:\n${toolContent}`;
+          }
+
           currentMessages.push({
             role: "tool",
             tool_call_id: toolCall.id,
-            content: JSON.stringify(toolResult),
+            content: toolContent,
           });
         }
 
