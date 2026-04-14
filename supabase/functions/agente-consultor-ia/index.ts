@@ -615,10 +615,16 @@ ${contato?.nome || "Não informado ainda"}`;
             toolResult = { error: err.message || "Erro ao executar ferramenta" };
           }
 
+          // Reforçar dados oficiais para consultar_placa
+          let toolContent = JSON.stringify(toolResult);
+          if (fnName === "consultar_placa" && toolResult && !toolResult.error) {
+            toolContent = `⚠️ DADOS OFICIAIS DA CONSULTA DE PLACA - USE APENAS ESTES DADOS, NÃO INVENTE:\n${toolContent}`;
+          }
+
           currentMessages.push({
             role: "tool",
             tool_call_id: toolCall.id,
-            content: JSON.stringify(toolResult),
+            content: toolContent,
           });
         }
 
