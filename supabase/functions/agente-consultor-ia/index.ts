@@ -252,7 +252,7 @@ Deno.serve(async (req) => {
     const isPrimeiraMensagem = !contatoExistente;
 
     // ---- 6B. CARREGAR ESTADO DO FLUXO (dados_cotacao) ----
-    const dadosCotacao = contato?.dados_cotacao || null;
+    let dadosCotacao = contato?.dados_cotacao || null;
 
     // ---- 7. MONTAR SYSTEM PROMPT + TOOLS (condicional) ----
     let systemPrompt: string;
