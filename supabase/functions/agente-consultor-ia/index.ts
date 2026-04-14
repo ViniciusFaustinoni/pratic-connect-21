@@ -1181,15 +1181,31 @@ async function executarCalculoCotacao(supabase: any, args: any) {
 }
 
 // ============================================================
+// TOOL: obter_opcoes_vencimento
+// ============================================================
+function executarObterOpcoesVencimento() {
+  const diaHoje = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" })).getDate();
+  let opcoes: [number, number];
+  if (diaHoje >= 30 || diaHoje <= 4) opcoes = [5, 10];
+  else if (diaHoje <= 9) opcoes = [10, 15];
+  else if (diaHoje <= 14) opcoes = [15, 20];
+  else if (diaHoje <= 19) opcoes = [20, 25];
+  else if (diaHoje <= 24) opcoes = [25, 30];
+  else opcoes = [30, 5];
+  console.log(`[tool:obter_opcoes_vencimento] diaHoje=${diaHoje} opcoes=${opcoes}`);
+  return { success: true, opcoes, mensagem: `Dia ${opcoes[0]} ou dia ${opcoes[1]}` };
+}
+
+// ============================================================
 // TOOL: registrar_cotacao
 // ============================================================
 async function executarRegistroCotacao(supabase: any, supabaseUrl: string, serviceKey: string, args: any, telLimpo: string, contato: any) {
-  const { nome_cliente, telefone_cliente, placa, marca, modelo, ano, combustivel, valor_fipe, regiao, planos_calculados, enviar_whatsapp } = args;
+  const { nome_cliente, email_cliente, placa, marca, modelo, ano, combustivel, valor_fipe, regiao, dia_vencimento, tipo_instalacao, planos_calculados } = args;
 
-  console.log(`[tool:registrar_cotacao] Registrando cotação para ${nome_cliente} - ${placa}`);
+  console.log(`[tool:registrar_cotacao] Registrando cotação para ${nome_cliente} - ${placa} - email=${email_cliente} venc=${dia_vencimento} inst=${tipo_instalacao}`);
 
-  // Criar ou buscar lead
-  const telefoneLead = (telefone_cliente || telLimpo).replace(/\D/g, "");
+  // Usar telefone da conversa (não pedir ao lead)
+  const telefoneLead = telLimpo;
   let leadId: string | null = null;
 
   const { data: leadExistente } = await supabase
@@ -1200,12 +1216,17 @@ async function executarRegistroCotacao(supabase: any, supabaseUrl: string, servi
 
   if (leadExistente) {
     leadId = leadExistente.id;
+    // Atualizar email se disponível
+    if (email_cliente) {
+      await supabase.from("leads").update({ email: email_cliente }).eq("id", leadId);
+    }
   } else {
     const { data: novoLead } = await supabase
       .from("leads")
       .insert({
         nome: nome_cliente || "Lead via Agente IA",
         telefone: telefoneLead,
+        email: email_cliente || null,
         origem: "agente_ia",
         status: "novo",
       })
@@ -1218,7 +1239,7 @@ async function executarRegistroCotacao(supabase: any, supabaseUrl: string, servi
     return { success: false, error: "Erro ao criar lead" };
   }
 
-  // Criar cotação pública
+  // Criar cotação pública — adesão sempre isenta, valor adicional fixo 5.50
   const { data: cotacao, error: cotacaoErr } = await supabase
     .from("cotacoes_publicas")
     .insert({
@@ -1231,7 +1252,12 @@ async function executarRegistroCotacao(supabase: any, supabaseUrl: string, servi
       valor_fipe: valor_fipe,
       regiao: regiao || "rj",
       status: "aguardando",
-      dados_cotacao: { planos: planos_calculados, origem: "agente_ia" },
+      dia_vencimento: dia_vencimento || 10,
+      tipo_instalacao: tipo_instalacao || "rota",
+      valor_adicional: 5.50,
+      valor_adesao: 0,
+      email_solicitante: email_cliente || null,
+      dados_cotacao: { planos: planos_calculados, origem: "agente_ia", adesao_isenta: true, valor_adicional: 5.50 },
     })
     .select("id, token")
     .single();
@@ -1249,23 +1275,31 @@ async function executarRegistroCotacao(supabase: any, supabaseUrl: string, servi
 
   const linkCotacao = `${supabaseUrl.replace('.supabase.co', '.lovable.app')}/cotacao/${cotacao.token}`;
 
-  // Enviar por WhatsApp se solicitado
-  if (enviar_whatsapp && planos_calculados?.length > 0) {
-    const mensagemCotacao = `Olá ${nome_cliente || ""}! 😊\n\nSegue sua cotação de proteção veicular para o *${marca} ${modelo} ${ano}*:\n\n` +
-      planos_calculados.map((p: any) =>
-        `✅ *${p.nome}*: R$ ${p.valor_mensal?.toFixed(2)}/mês`
-      ).join("\n") +
-      `\n\nAcesse o link para mais detalhes:\n${linkCotacao}\n\n_PRATICCAR Proteção Veicular - Proteção 360_ 🛡️`;
+  // Enviar link da cotação por WhatsApp
+  const mensagemLink = `Olá ${nome_cliente || ""}! 😊\n\nSua cotação personalizada de proteção veicular está pronta!\n\n🔗 Acesse aqui: ${linkCotacao}\n\n_PRATICCAR Proteção Veicular - Proteção 360_ 🛡️`;
+  await enviarWhatsApp(supabaseUrl, serviceKey, telefoneLead, mensagemLink);
 
-    await enviarWhatsApp(supabaseUrl, serviceKey, telefoneLead, mensagemCotacao);
-  }
+  // Aguardar 10 segundos e enviar resumo
+  await new Promise(r => setTimeout(r, 10000));
+
+  const qtdPlanos = planos_calculados?.length || 0;
+  const mensagemResumo = `📋 *Resumo da sua cotação:*\n\n` +
+    `🚗 Veículo: *${marca || ""} ${modelo || ""} ${ano || ""}*\n` +
+    `📍 Região: *${regiao || ""}*\n` +
+    `📦 ${qtdPlanos} opção(ões) de plano disponíveis\n` +
+    `🎉 Adesão: *ISENTA*\n` +
+    `📅 Vencimento: dia *${dia_vencimento || ""}*\n` +
+    `🔧 Instalação: *${tipo_instalacao === "base" ? "Na base" : "Rota (vamos até você)"}*\n\n` +
+    `Estou à disposição para qualquer dúvida! 😊`;
+  await enviarWhatsApp(supabaseUrl, serviceKey, telefoneLead, mensagemResumo);
 
   return {
     success: true,
     cotacao_id: cotacao.id,
     token: cotacao.token,
     link: linkCotacao,
-    mensagem: `Cotação registrada com sucesso! Link: ${linkCotacao}`,
+    mensagem: `Cotação registrada e enviada com sucesso! Link: ${linkCotacao}`,
+    resumo_enviado: true,
   };
 }
 
