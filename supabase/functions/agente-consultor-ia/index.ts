@@ -1081,7 +1081,7 @@ async function executarConsultaPlaca(supabaseUrl: string, serviceKey: string, pl
     modelo: vd.modelo || data.modelo || null,
     ano_modelo: anoModelo,
     ano_texto: anoTexto,
-    combustivel: vd.combustivel || data.combustivel || "gasolina",
+    combustivel: normalizeCombustivel(vd.combustivel || data.combustivel),
     valor_fipe: fd.valor || data.valor_fipe || null,
     cor: vd.cor || data.cor || null,
   };
@@ -1096,9 +1096,10 @@ async function executarConsultaPlaca(supabaseUrl: string, serviceKey: string, pl
 // TOOL: calcular_cotacao
 // ============================================================
 async function executarCalculoCotacao(supabase: any, args: any) {
-  const { valor_fipe, marca, modelo, ano, combustivel = "gasolina", regiao = "rj", uso_app = false } = args;
+  const { valor_fipe, marca, modelo, ano, regiao = "rj", uso_app = false } = args;
+  const combustivel = normalizeCombustivel(args.combustivel);
 
-  console.log(`[tool:calcular_cotacao] FIPE=${valor_fipe} regiao=${regiao} app=${uso_app} combustivel=${combustivel}`);
+  console.log(`[tool:calcular_cotacao] FIPE=${valor_fipe} regiao=${regiao} app=${uso_app} combustivel=${combustivel} (raw=${args.combustivel})`);
 
   const { data: planos, error: planosErr } = await supabase
     .from("planos")
@@ -1129,10 +1130,28 @@ async function executarCalculoCotacao(supabase: any, args: any) {
     .select("plano_id, benefit_id, benefits:benefit_id (name, preco_sugerido)")
     .in("plano_id", planoIds);
 
-  const { data: allRules } = await supabase
-    .from("entity_eligibility_rules")
-    .select("*")
-    .eq("is_active", true);
+  // Paginated fetch to handle 7000+ rules (Supabase default limit = 1000)
+  let allRules: any[] = [];
+  {
+    const PAGE_SIZE = 1000;
+    let offset = 0;
+    let hasMore = true;
+    while (hasMore) {
+      const { data: page, error: pageErr } = await supabase
+        .from("entity_eligibility_rules")
+        .select("*")
+        .eq("is_active", true)
+        .range(offset, offset + PAGE_SIZE - 1);
+      if (pageErr || !page || page.length === 0) {
+        hasMore = false;
+      } else {
+        allRules = allRules.concat(page);
+        offset += PAGE_SIZE;
+        if (page.length < PAGE_SIZE) hasMore = false;
+      }
+    }
+    console.log(`[tool:calcular_cotacao] Total regras de elegibilidade carregadas: ${allRules.length}`);
+  }
 
   const { data: regioes } = await supabase.from("regioes").select("id, codigo, nome").eq("ativa", true);
   const regiaoSlug = regiao.toLowerCase();
@@ -1506,6 +1525,28 @@ interface VehicleContextServer {
   tipoUso?: string;
   combustivel?: string;
   tipoPlaca?: string;
+}
+
+/**
+ * Normaliza o combustível vindo da FIPE (ex: "Alcool / Gasolina") para o padrão do sistema.
+ */
+function normalizeCombustivel(raw: string | undefined | null): string {
+  if (!raw) return 'gasolina';
+  const lower = raw.toLowerCase().trim();
+  
+  // Compound fuels → flex
+  if ((lower.includes('alcool') || lower.includes('etanol') || lower.includes('álcool')) && lower.includes('gasolina')) return 'flex';
+  if (lower.includes('flex')) return 'flex';
+  
+  // Single fuels
+  if (lower.includes('diesel')) return 'diesel';
+  if (lower.includes('eletric') || lower.includes('elétric')) return 'eletrico';
+  if (lower.includes('hibrid') || lower.includes('híbrid')) return 'hibrido';
+  if (lower.includes('gnv') || lower.includes('gás')) return 'gnv';
+  if (lower.includes('etanol') || lower.includes('alcool') || lower.includes('álcool')) return 'etanol';
+  if (lower.includes('gasolina')) return 'gasolina';
+  
+  return lower;
 }
 
 function findModelEligibilityServer(
