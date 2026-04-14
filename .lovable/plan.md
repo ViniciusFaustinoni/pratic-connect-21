@@ -1,45 +1,43 @@
 
 
-## Plano: Agente "Vinicius" com reconhecimento de diretores e envio de relatórios
+## Plano: Agente reconhecer associados e informar numero de atendimento
 
-### Contexto
-O agente consultor IA precisa:
-1. Ter o nome padrão **"Vinicius"** (em vez de "Maya")
-2. **Reconhecer diretores** pelo telefone (cruzando com `profiles.telefone`/`profiles.whatsapp` + `user_roles.role = 'diretor'`)
-3. Quando um diretor entrar em contato, mudar o comportamento: em vez de fluxo de vendas, oferecer **relatórios do sistema** (dados da `view_dashboard_diretoria`, totais de cotações, leads, sinistros, associados, etc.)
+### Problema
+Quando um associado (ativo, base antiga ou novo) entra em contato via WhatsApp, o agente "Vinicius" tenta iniciar fluxo de venda/cotacao. Deveria reconhecer que ja e associado e informar o numero correto de atendimento (conectado na Meta API).
 
-### Alterações
+### Alteracoes
 
-**1. Edge Function `agente-consultor-ia/index.ts`**
+**Edge Function `agente-consultor-ia/index.ts`**
 
-- **Nome padrão**: alterar fallback de `"Maya"` para `"Vinicius"` (linha 87)
-- **Detectar diretor**: após buscar/criar contato, cruzar `telLimpo` contra `profiles.telefone` e `profiles.whatsapp` → buscar `user_roles` para verificar se é `diretor`
-- **System prompt condicional**: se for diretor, usar um prompt diferente que oferece relatórios do sistema em vez do fluxo de cotação
-- **Nova tool `gerar_relatorio`**: consulta `view_dashboard_diretoria` e tabelas relevantes (contagem de associados, cotações pendentes, sinistros abertos, leads do mês) e retorna texto formatado
-- **Fluxo para diretores**:
-  1. Reconhecer pelo nome do perfil: "Olá, [nome]! Sou o Vinicius. Como posso ajudar?"
-  2. Oferecer opções: relatório geral, cotações pendentes, status de sinistros, leads do mês
-  3. Usar tool `gerar_relatorio` para buscar dados reais e formatar resposta
+Apos a deteccao de diretor (secao 4), adicionar deteccao de associado:
 
-**2. Tool `gerar_relatorio` — dados disponíveis**
+1. **Buscar na tabela `associados`** usando `telLimpo` e variantes contra `telefone` e `whatsapp`
+2. Se encontrar, marcar `isAssociado = true` e guardar nome e status
+3. **Buscar numero de atendimento Meta**: consultar `whatsapp_meta_config` (ativo = true) para obter o `phone_number_id`, e complementar buscando o numero real do sender via `whatsapp-get-sender` (ownerJid da Evolution) ou formatar o phone_number_id da Meta
+4. **System prompt condicional para associados**: nao vender, nao fazer cotacao. Apenas:
+   - Reconhecer pelo nome: "Ola, [nome]! Sou o Vinicius da PRATICCAR"
+   - Informar que para atendimento, deve entrar em contato pelo numero conectado na Meta (numero de atendimento principal)
+   - Pode tirar duvidas simples sobre a associacao
 
-Consultas que o relatório pode fazer:
-- `view_dashboard_diretoria` → KPIs gerais (associados ativos, inadimplentes, receita, despesas, sinistros, leads, conversões)
-- `cotacoes_publicas` com status pendente → cotações aguardando
-- `associados` com filtros → totais por status
-- `leads` do mês → conversão e origem
-
-O diretor pode pedir relatórios específicos como "quantos leads tivemos este mês?" ou "me dê um resumo geral".
-
-### Arquivos editados
-- `supabase/functions/agente-consultor-ia/index.ts` — nome Vinicius, detecção de diretor, tool `gerar_relatorio`, system prompt condicional
-
-### Detalhes técnicos
-
-A detecção de diretor usa:
-```sql
-profiles (telefone ou whatsapp = telLimpo) → user_id → user_roles (role = 'diretor')
+### Prioridade de deteccao
+```text
+telefone recebido
+  └─ e diretor? → fluxo diretoria
+  └─ e associado? → informar numero de atendimento (NAO vender)
+  └─ lead → fluxo de vendas/cotacao
 ```
 
-O system prompt para diretores instrui o agente a nunca executar fluxo de vendas e a oferecer proativamente dados do sistema. As tools de cotação continuam disponíveis apenas no prompt de vendas (leads normais).
+### Detalhes tecnicos
+
+A busca de associado usa:
+```sql
+SELECT nome, status, telefone, whatsapp FROM associados
+WHERE telefone IN (variantes) OR whatsapp IN (variantes)
+LIMIT 1
+```
+
+Para obter o numero de atendimento, buscar na `whatsapp_meta_config` o `phone_number_id` e fazer lookup via Graph API (`GET /v21.0/{phone_number_id}`) para obter o `display_phone_number`, ou usar o numero da instancia Evolution (`whatsapp_instancias.telefone`). Fallback: buscar via `whatsapp-get-sender`.
+
+### Arquivos editados
+- `supabase/functions/agente-consultor-ia/index.ts` — adicionar deteccao de associado entre diretor e lead, system prompt especifico, busca do numero de atendimento
 
