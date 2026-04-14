@@ -198,7 +198,10 @@ Deno.serve(async (req) => {
 
     // ---- 6. BUSCAR HISTÓRICO DE CONVERSA ----
     const resetTimestamp = contato?.resetado_em || null;
-    const foiResetado = contatoExistente && contato?.status === 'novo' && !contato?.dados_cotacao;
+    const foiResetado = contatoExistente && (
+      (contato?.status === 'novo' && !contato?.dados_cotacao) ||
+      (contato?.resetado_em && !contato?.dados_cotacao)
+    );
     const isPrimeiraMensagem = !contatoExistente || foiResetado;
 
     // Usar o marco de reset como limite inferior do histórico (se existir)
