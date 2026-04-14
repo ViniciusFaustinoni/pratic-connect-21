@@ -1,33 +1,32 @@
 
 
-## Plano: Mover "Alto Valor" e "Diretoria" para o menu Diretoria
+## Diagnóstico
 
-### Contexto
-As abas "Alto Valor" e "Diretoria" na pagina de Aprovacoes em Vendas (`/vendas/aprovacoes-fipe`) tratam de aprovacoes que sao responsabilidade exclusiva de diretores. Devem ser movidas para a pagina de Aprovacoes da Diretoria (`/diretoria/aprovacoes`).
+O problema tem duas causas:
 
-### Alteracoes
+1. **`scope: "/"` nos manifests PWA** — Ambos os manifests (`manifest-associado.json` e `manifest-profissional.json`) definem `"scope": "/"`, fazendo com que qualquer link do mesmo domínio (ex: `/cotacao/...`, `/acompanhar/...`) abra **dentro da PWA** em vez de no navegador externo.
 
-**1. Expandir `/diretoria/aprovacoes` (AprovacoesDiretoria.tsx)**
-- Adicionar sistema de abas com 3 secoes: "Alto Valor", "Elegibilidade" (se pertinente) e "Diretoria" (dupla aprovacao)
-- A aba "Alto Valor" reutiliza os hooks `useAprovacoesFipeLimite`, `useAprovarFipeLimite`, `useRecusarFipeLimite` e renderiza os cards de aprovacao/recusa (copiar logica de renderizacao do AprovacoesFipeMenor.tsx)
-- A aba "Diretoria" ja usa `PainelAprovacoesDiretoria` — manter como esta
-- KPIs no topo (pendentes, aprovados, recusados) devem considerar ambas as fontes
+2. **`navigateFallbackAllowlist` restritiva no Service Worker** — O Workbox só serve `index.html` como fallback para rotas `/instalador` e `/app`. Quando o usuário navega para `/cotacao/...` ou `/acompanhar/...` dentro da PWA, o SW não faz fallback, e a rota falha com React error #300.
 
-**2. Limpar `/vendas/aprovacoes-fipe` (AprovacoesFipeMenor.tsx)**
-- Remover as abas "Alto Valor" e "Diretoria"
-- Manter apenas "FIPE Menor" e "Elegibilidade"
-- Atualizar o type `SectionTab` para `'fipe_menor' | 'elegibilidade'`
-- Remover imports e hooks de `useAprovacoesFipeLimite` e `PainelAprovacoesDiretoria`
-- Atualizar subtitulo da pagina
+## Plano
 
-**3. Breadcrumb (GlobalBreadcrumb.tsx)**
-- Adicionar entrada `/diretoria/aprovacoes: { label: 'Aprovacoes' }`
+### 1. Restringir `scope` nos manifests
 
-**4. Sidebar (AppSidebar.tsx)**
-- Ja possui o item "Aprovacoes" em `/diretoria/aprovacoes` — nenhuma alteracao necessaria
+- `public/manifest-associado.json`: mudar `"scope": "/"` para `"scope": "/app/"`
+- `public/manifest-profissional.json`: mudar `"scope": "/"` para `"scope": "/instalador/"`
+
+Isso faz com que links fora do escopo (como `/cotacao/...`, `/acompanhar/...`) abram automaticamente no navegador do sistema, não dentro da PWA.
+
+### 2. Expandir `navigateFallbackAllowlist` no Workbox
+
+Em `vite.config.ts`, adicionar rotas públicas ao allowlist para que, caso o usuário ainda consiga navegar para elas, o SW sirva o `index.html` corretamente:
+
+```
+navigateFallbackAllowlist: [/^\/instalador/, /^\/app/, /^\/cotacao/, /^\/acompanhar/]
+```
 
 ### Arquivos editados
-- `src/pages/diretoria/AprovacoesDiretoria.tsx` — expandir com abas Alto Valor + Diretoria
-- `src/pages/vendas/AprovacoesFipeMenor.tsx` — remover abas Alto Valor e Diretoria
-- `src/components/layout/GlobalBreadcrumb.tsx` — adicionar breadcrumb da diretoria
+- `public/manifest-associado.json`
+- `public/manifest-profissional.json`
+- `vite.config.ts`
 
