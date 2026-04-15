@@ -1,43 +1,46 @@
 
 
-## Plano: Incluir o dia de hoje na agenda presencial da base
+## Plano: Mostrar vistorias (especialmente de base) no Calendário de Monitoramento
 
 ### Problema
-A linha 48 de `AgendamentoBase.tsx` usa `addDays(new Date(), 1)` -- sempre começa em **amanhã**, impedindo agendamentos para hoje. Para atendimento presencial na base, o associado deveria poder marcar para hoje caso ainda haja horários futuros disponíveis.
+O calendário (`CalendarioInstalacoes.tsx`) busca **apenas instalações** via `useInstalacoes`. Vistorias agendadas na base (ou em campo) não aparecem — o calendário ignora completamente a tabela `vistorias`.
 
-### Correção
+### Solução
+Adicionar uma query de vistorias ao calendário, exibindo-as com badges diferenciados ao lado das instalações.
 
-**Arquivo: `src/components/cotacao-publica/AgendamentoBase.tsx`**
+### Alterações
 
-1. **Linha 48** -- Mudar para começar em `hoje` (offset 0):
+**Arquivo: `src/pages/monitoramento/CalendarioInstalacoes.tsx`**
+
+1. **Renomear** o título para "Calendário de Serviços" (ou "Instalações e Vistorias") para refletir que agora mostra ambos.
+
+2. **Adicionar query de vistorias** no mesmo período do mês:
 ```typescript
-let currentDate = addDays(new Date(), weekOffset * 7); // Começa hoje
+const { data: vistoriasRaw } = useQuery({
+  queryKey: ['vistorias-calendario', mesKey],
+  queryFn: async () => {
+    const { data } = await supabase
+      .from('vistorias')
+      .select('id, status, data_agendada, local_vistoria, modalidade, associado:associados(nome), veiculo:veiculos(placa)')
+      .gte('data_agendada', primeiroDiaStr)
+      .lte('data_agendada', ultimoDiaStr)
+      .in('status', ['pendente','agendada','em_rota','em_andamento','em_analise','aprovada'])
+      .eq('tipo', 'entrada');
+    return data || [];
+  }
+});
 ```
 
-2. **Filtrar slots passados quando for hoje** (dentro de `slotsHorario`, linhas 61-88):
-   - Após gerar os slots, se `dataSelecionada` for hoje, remover horários que já passaram (comparando com a hora atual de Brasilia + margem de 30min para preparação).
+3. **Agrupar vistorias por data** no mesmo `useMemo`, separando por `local_vistoria` (base vs cliente/campo).
 
-```typescript
-// Após gerar slots[], filtrar horários passados se for hoje
-const agora = new Date();
-const isHoje = dataSelecionada && 
-  format(dataSelecionada, 'yyyy-MM-dd') === format(agora, 'yyyy-MM-dd');
+4. **Renderizar badges de vistoria** com cor diferente (ex: roxo/indigo para base, teal para campo), mostrando o label "Base" ou "Campo" e a placa do veículo.
 
-if (isHoje) {
-  const horaAtual = agora.getHours();
-  const minAtual = agora.getMinutes();
-  // Filtrar slots que já passaram (margem de 30min)
-  return slots.filter(slot => {
-    const [h, m] = slot.split(':').map(Number);
-    return (h * 60 + m) > (horaAtual * 60 + minAtual + 30);
-  });
-}
-```
+5. **Atualizar legenda** para incluir ícone de vistoria base e campo.
 
-3. **Se todos os horários de hoje já expiraram**, esconder o dia ou exibir um indicador visual de "lotado/expirado" (similar ao que `AgendamentoVistoria.tsx` já faz na linha 406-410).
+6. **Badge contador por dia**: quando há vistorias base no dia, mostrar um badge "🏢 N vistorias" no canto da célula do calendário.
 
 ### Resultado
-- Hoje aparece como primeira opção na agenda
-- Apenas horários futuros (com 30min de margem) ficam selecionáveis
-- Se não sobrou nenhum horário hoje, o dia aparece desabilitado com indicação clara
+- Vistorias agendadas na base aparecem no calendário com badge visual distinto
+- Coordenador pode ver de relance quantas vistorias presenciais na base estão marcadas por dia
+- Ao clicar no dia, pode navegar para a fila de vistorias filtrada por data
 
