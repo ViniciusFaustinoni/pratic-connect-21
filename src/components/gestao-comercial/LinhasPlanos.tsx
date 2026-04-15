@@ -335,28 +335,29 @@ function useDeleteLinha() {
 
   return useMutation({
     mutationFn: async (id: string) => {
+      // Optimistic: remove from cache immediately
+      queryClient.setQueryData(['linhas_com_planos_clean'], (old: any[] | undefined) =>
+        (old || []).filter((l: any) => l.id !== id)
+      );
+
       const { data: planos } = await supabase.from('planos').select('id').eq('product_line_id', id);
 
       for (const plano of planos || []) {
-        // Collect cobertura IDs and benefit IDs for this plan
         const { data: pcLinks } = await supabase.from('planos_coberturas').select('cobertura_id').eq('plano_id', plano.id);
         const coberturaIds = (pcLinks || []).map((l) => l.cobertura_id);
 
         const { data: pbLinks } = await supabase.from('planos_beneficios').select('benefit_id').eq('plano_id', plano.id);
         const benefitIds = (pbLinks || []).map((l) => l.benefit_id);
 
-        // Delete join tables
         await supabase.from('planos_coberturas').delete().eq('plano_id', plano.id);
         await supabase.from('planos_beneficios').delete().eq('plano_id', plano.id);
         await supabase.from('entity_eligibility_rules' as any).delete().eq('entity_type', 'plano').eq('entity_id', plano.id);
 
-        // Delete coberturas + their rules
         if (coberturaIds.length > 0) {
           await supabase.from('entity_eligibility_rules' as any).delete().eq('entity_type', 'cobertura').in('entity_id', coberturaIds);
           await supabase.from('coberturas').delete().in('id', coberturaIds);
         }
 
-        // Delete benefits + their rules + exclusions
         if (benefitIds.length > 0) {
           await supabase.from('entity_eligibility_rules' as any).delete().eq('entity_type', 'beneficio').in('entity_id', benefitIds);
           await supabase.from('benefit_category_exclusions').delete().in('benefit_id', benefitIds);
@@ -368,7 +369,6 @@ function useDeleteLinha() {
         await supabase.from('planos').delete().in('id', planos.map((plano) => plano.id));
       }
 
-      // Delete line-level eligibility rules
       await supabase.from('entity_eligibility_rules' as any).delete().eq('entity_type', 'linha').eq('entity_id', id);
 
       const { error } = await supabase.from('product_lines').delete().eq('id', id);
@@ -378,7 +378,10 @@ function useDeleteLinha() {
       queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
       toast.success('Linha excluída com todos os planos, coberturas e benefícios');
     },
-    onError: (error: Error) => toast.error(`Erro ao excluir linha: ${error.message}`),
+    onError: (error: Error) => {
+      queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
+      toast.error(`Erro ao excluir linha: ${error.message}`);
+    },
   });
 }
 
@@ -387,6 +390,14 @@ function useDeletePlano() {
 
   return useMutation({
     mutationFn: async (id: string) => {
+      // Optimistic: remove plan from cache immediately
+      queryClient.setQueryData(['linhas_com_planos_clean'], (old: any[] | undefined) =>
+        (old || []).map((line: any) => ({
+          ...line,
+          plans: (line.plans || []).filter((p: any) => p.id !== id),
+        }))
+      );
+
       await supabase.from('planos_coberturas').delete().eq('plano_id', id);
       await supabase.from('planos_beneficios').delete().eq('plano_id', id);
       await supabase.from('entity_eligibility_rules' as any).delete().eq('entity_type', 'plano').eq('entity_id', id);
@@ -398,7 +409,10 @@ function useDeletePlano() {
       queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
       toast.success('Plano excluído');
     },
-    onError: (error: Error) => toast.error(`Erro ao excluir plano: ${error.message}`),
+    onError: (error: Error) => {
+      queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
+      toast.error(`Erro ao excluir plano: ${error.message}`);
+    },
   });
 }
 
