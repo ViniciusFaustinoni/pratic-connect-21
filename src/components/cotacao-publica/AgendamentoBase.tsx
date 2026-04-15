@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { format, addDays } from 'date-fns';
+import { format, addDays, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { MapPin, Clock, Calendar, Check, ChevronLeft, ChevronRight, Building2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -45,7 +45,7 @@ export function AgendamentoBase({
   // Gerar próximos 7 dias úteis a partir do offset (incluindo sábados)
   const diasDisponiveis = useMemo(() => {
     const dias: Date[] = [];
-    let currentDate = addDays(new Date(), 1 + weekOffset * 7); // Começa amanhã
+    let currentDate = addDays(new Date(), weekOffset * 7); // Começa hoje
     
     while (dias.length < 7) {
       if (!isDomingo(currentDate)) { // Só bloqueia domingo
@@ -57,7 +57,7 @@ export function AgendamentoBase({
     return dias;
   }, [weekOffset]);
 
-  // Gerar slots de horário (considerando horário reduzido no sábado)
+  // Gerar slots de horário (considerando horário reduzido no sábado e filtrando passados se for hoje)
   const slotsHorario = useMemo(() => {
     if (!configBase?.base_horario_inicio || !configBase?.base_horario_fim) {
       return [];
@@ -82,6 +82,16 @@ export function AgendamentoBase({
         minuto = 0;
         hora += 1;
       }
+    }
+
+    // Se for hoje, filtrar horários que já passaram (margem de 30min)
+    if (dataSelecionada && isToday(dataSelecionada)) {
+      const agora = new Date();
+      const minutosAgora = agora.getHours() * 60 + agora.getMinutes();
+      return slots.filter(slot => {
+        const [h, m] = slot.split(':').map(Number);
+        return (h * 60 + m) > (minutosAgora + 30);
+      });
     }
 
     return slots;
@@ -183,18 +193,35 @@ export function AgendamentoBase({
         <div className="grid grid-cols-5 gap-2">
           {diasDisponiveis.slice(0, 5).map((dia) => {
             const isSelected = dataSelecionada && format(dataSelecionada, 'yyyy-MM-dd') === format(dia, 'yyyy-MM-dd');
+            
+            // Verificar se é hoje e se todos os horários já expiraram
+            const isDiaHoje = isToday(dia);
+            let hojeExpirado = false;
+            if (isDiaHoje && configBase?.base_horario_inicio && configBase?.base_horario_fim) {
+              const agora = new Date();
+              const minutosAgora = agora.getHours() * 60 + agora.getMinutes();
+              const [hFim] = configBase.base_horario_fim.split(':').map(Number);
+              const horaFimEfetiva = isSabado(dia) ? Math.min(hFim, 13) : hFim;
+              // Se hora atual + 30min já passou do último slot, hoje está expirado
+              hojeExpirado = (minutosAgora + 30) >= (horaFimEfetiva * 60);
+            }
+            
             return (
                 <button
                 key={dia.toISOString()}
                 onClick={() => {
+                  if (hojeExpirado) return;
                   setDataSelecionada(dia);
                   setHorarioSelecionado(null);
                 }}
+                disabled={hojeExpirado}
                 className={cn(
                   "flex flex-col items-center p-2 rounded-lg border transition-all text-center",
-                  isSelected
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "border-border bg-card text-card-foreground hover:border-primary/50 hover:bg-muted/50"
+                  hojeExpirado
+                    ? "bg-muted text-muted-foreground cursor-not-allowed opacity-50"
+                    : isSelected
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border bg-card text-card-foreground hover:border-primary/50 hover:bg-muted/50"
                 )}
               >
                 <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -206,6 +233,9 @@ export function AgendamentoBase({
                 <span className="text-[10px] text-muted-foreground">
                   {format(dia, 'MMM', { locale: ptBR })}
                 </span>
+                {hojeExpirado && (
+                  <span className="text-[9px] text-destructive font-medium">Encerrado</span>
+                )}
               </button>
             );
           })}
