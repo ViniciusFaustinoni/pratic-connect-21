@@ -1,20 +1,28 @@
 
 
-## Plano: Corrigir erro "value too long" ao duplicar linha
+## Plano: Correção em massa da carência de Vidros e Faróis
 
-### Problema
-
-O slug gerado na duplicação (`${lineData.slug}-copia-${Date.now()}`) ultrapassa o limite de 50 caracteres da coluna `slug` em `product_lines`. Ex: `lancamento-copia-1713218895123` = 31 chars, mas slugs originais mais longos facilmente excedem 50.
+### Situação atual
+| Estado | Quantidade |
+|--------|-----------|
+| Correto (120 dias, liberação) | 194 |
+| Carência desativada | 16 |
+| 118 dias (erro de digitação) | 3 |
+| 0 dias | 1 |
+| **Total a corrigir** | **20** |
 
 ### Correção
 
-**Arquivo: `src/hooks/usePlansAdmin.ts`** — linha 1068
+Executar um único UPDATE via ferramenta de inserção/atualização no banco:
 
-Truncar o slug para caber em 50 caracteres:
-
-```typescript
-slug: `${lineData.slug.slice(0, 30)}-${Date.now().toString(36)}`,
+```sql
+UPDATE benefits
+SET carencia_ativa = true,
+    carencia_dias = 120,
+    carencia_tipo = 'liberacao'
+WHERE (name ILIKE '%vidro%farol%' OR name ILIKE '%vidros%far%')
+  AND (carencia_ativa = false OR carencia_dias != 120 OR carencia_tipo != 'liberacao' OR carencia_dias IS NULL);
 ```
 
-Usar `Date.now().toString(36)` (base36, ~8 chars) em vez de decimal (~13 chars), e limitar o slug original a 30 chars, garantindo que o resultado nunca exceda 50.
+Isso corrige os 20 registros sem alterar os 194 já corretos. Nenhuma mudança de código é necessária.
 
