@@ -37,6 +37,7 @@ interface VistoriaCalendario {
 export default function CalendarioInstalacoesPage() {
   const navigate = useNavigate();
   const [mesAtual, setMesAtual] = useState(new Date());
+  const [diaSelecionado, setDiaSelecionado] = useState<string | null>(null);
 
   // Calcular primeiro e último dia do mês para filtrar
   const primeiroDia = new Date(mesAtual.getFullYear(), mesAtual.getMonth(), 1);
@@ -335,7 +336,7 @@ export default function CalendarioInstalacoesPage() {
               return (
                 <div
                   key={index}
-                  onClick={() => navigate(`/monitoramento/instalacoes?data=${dataStr}`)}
+                  onClick={() => setDiaSelecionado(dataStr)}
                   className={cn(
                     'min-h-[100px] p-2 border-b border-r cursor-pointer transition-colors hover:bg-muted/50',
                     !dia.mesAtual && 'bg-muted/30 text-muted-foreground',

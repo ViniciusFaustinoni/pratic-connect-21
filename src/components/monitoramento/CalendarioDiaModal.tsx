@@ -68,8 +68,7 @@ export function CalendarioDiaModal({ open, onClose, data }: CalendarioDiaModalPr
       const { data: rows, error } = await supabase
         .from('instalacoes')
         .select('id, status, data_agendada, periodo, associados(nome), veiculos(placa), instalador:profiles!instalacoes_instalador_responsavel_id_fkey(nome)')
-        .eq('data_agendada', data)
-        .in('status', ['pendente', 'agendada', 'em_rota', 'em_andamento', 'concluida', 'cancelada']);
+        .eq('data_agendada', data);
       if (error) throw error;
       return rows || [];
     },
