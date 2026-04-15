@@ -416,6 +416,12 @@ Siga exatamente esta sequência:
 10. Use a ferramenta obter_opcoes_vencimento e ofereça APENAS as duas datas retornadas. NÃO invente datas.
 11. Após o cliente escolher a data, CHAME registrar_cotacao IMEDIATAMENTE e envie o link
 
+## REGRA ABSOLUTA SOBRE VENCIMENTO
+NUNCA mencione ou sugira datas de vencimento por conta própria.
+Você SÓ pode oferecer datas de vencimento APÓS chamar obter_opcoes_vencimento e receber o resultado.
+Se o cliente perguntar sobre vencimento antes da hora, diga que vai verificar as opções disponíveis.
+NÃO invente "dia 10", "dia 15", "dia 20" ou qualquer data. SEMPRE use a ferramenta primeiro.
+
 ## REGRA CRÍTICA — GERAR COTAÇÃO (NUNCA IGNORE)
 Quando você JÁ tem: placa, veículo, região, uso_app, email, nome e dia de vencimento,
 CHAME registrar_cotacao IMEDIATAMENTE. NÃO faça mais perguntas. NÃO repita dados já coletados.
@@ -486,8 +492,8 @@ ${contato?.nome || "Não informado ainda"}`;
         const etapaInstrucoes: Record<string, string> = {
           "aguardando_confirmacao": "PRÓXIMO PASSO: Confirme os dados do veículo com o cliente e depois pergunte se usa para aplicativo.",
           "aguardando_regiao": "PRÓXIMO PASSO: Pergunte a região (estado) do cliente.",
-          "aguardando_vencimento": `PRÓXIMO PASSO: Peça o EMAIL e NOME COMPLETO do cliente. Após receber, CHAME salvar_dados_cliente.`,
-          "dados_cliente_coletados": `PRÓXIMO PASSO: Pergunte a data de vencimento usando obter_opcoes_vencimento. Ofereça APENAS as 2 opções retornadas.`,
+          "aguardando_vencimento": `PRÓXIMO PASSO: Peça APENAS o EMAIL e NOME COMPLETO do cliente. NÃO mencione vencimento, NÃO invente datas, NÃO pergunte sobre vencimento nesta etapa. Após receber nome e email, CHAME salvar_dados_cliente IMEDIATAMENTE e AGUARDE a próxima mensagem.`,
+          "dados_cliente_coletados": `PRÓXIMO PASSO: CHAME obter_opcoes_vencimento AGORA. Depois, ofereça APENAS as 2 opções retornadas ao cliente. NÃO invente datas. NÃO chame registrar_cotacao ainda — espere o cliente escolher.`,
           "aguardando_vencimento_resposta": `PRÓXIMO PASSO: O cliente deve escolher entre dia ${dadosCotacao.opcoes_vencimento?.[0] || "?"} ou dia ${dadosCotacao.opcoes_vencimento?.[1] || "?"}. Após escolher, CHAME registrar_cotacao IMEDIATAMENTE com TODOS os dados do estado.`,
           "cotacao_enviada": "A cotação JÁ foi enviada. Esteja disponível para dúvidas.",
         };
@@ -564,18 +570,6 @@ ${contato?.nome || "Não informado ainda"}`;
                 valor_fipe: { type: "number", description: "Valor FIPE" },
                 regiao: { type: "string", description: "Região" },
                 dia_vencimento: { type: "number", description: "Dia do mês para vencimento das mensalidades" },
-                planos_calculados: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      plano_id: { type: "string" },
-                      nome: { type: "string" },
-                      valor_mensal: { type: "number" },
-                    },
-                  },
-                  description: "Lista de planos com valores calculados (uso interno)",
-                },
               },
               required: ["nome_cliente", "email_cliente", "valor_fipe", "dia_vencimento"],
             },
@@ -719,6 +713,15 @@ ${contato?.nome || "Não informado ainda"}`;
                 console.log(`[agente-consultor-ia] Nenhum plano encontrado — NÃO avançando etapa`);
               }
             } else if (fnName === "registrar_cotacao") {
+              // Guardrail: só permite registrar_cotacao se estiver na etapa correta
+              const etapaAtual = dadosCotacao?.etapa;
+              if (etapaAtual !== "aguardando_vencimento_resposta" && etapaAtual !== "dados_cliente_coletados") {
+                console.log(`[agente-consultor-ia] BLOQUEADO: registrar_cotacao chamado na etapa "${etapaAtual}" — rejeitando`);
+                toolResult = { 
+                  success: false, 
+                  error: "ERRO: Não é possível registrar cotação agora. Siga o fluxo: primeiro salvar_dados_cliente, depois obter_opcoes_vencimento, aguarde a resposta do cliente escolhendo o dia de vencimento, e SÓ ENTÃO chame registrar_cotacao." 
+                };
+              } else {
               // Merge args da IA com dadosCotacao persistido para não perder dados
               const mergedArgs = { ...args };
               if (dadosCotacao) {
@@ -731,11 +734,9 @@ ${contato?.nome || "Não informado ainda"}`;
                 if (!mergedArgs.regiao && dadosCotacao.regiao) mergedArgs.regiao = dadosCotacao.regiao;
                 if (!mergedArgs.nome_cliente && dadosCotacao.nome) mergedArgs.nome_cliente = dadosCotacao.nome;
                 if (!mergedArgs.email_cliente && dadosCotacao.email) mergedArgs.email_cliente = dadosCotacao.email;
-                // CRITICAL FIX: empty array [] is truthy in JS, so check length too
-                if ((!mergedArgs.planos_calculados || mergedArgs.planos_calculados.length === 0) && dadosCotacao.planos_calculados?.length > 0) {
-                  mergedArgs.planos_calculados = dadosCotacao.planos_calculados;
-                  console.log(`[agente-consultor-ia] Planos restaurados do estado: ${dadosCotacao.planos_calculados.length} planos`);
-                }
+                // ALWAYS use planos from state — never trust what the AI passes
+                mergedArgs.planos_calculados = dadosCotacao.planos_calculados || [];
+                console.log(`[agente-consultor-ia] Planos SEMPRE do estado: ${mergedArgs.planos_calculados.length} planos`);
               }
               toolResult = await executarRegistroCotacao(supabase, supabaseUrl, serviceKey, mergedArgs, telLimpo, contato);
               if (toolResult.success) {
@@ -751,6 +752,7 @@ ${contato?.nome || "Não informado ainda"}`;
                 dadosCotacao = novoEstado;
                 console.log(`[agente-consultor-ia] Estado salvo+sync: cotacao_enviada`);
               }
+              } // end guardrail else
             } else if (fnName === "salvar_dados_cliente") {
               const novoEstado = {
                 ...(dadosCotacao || {}),
