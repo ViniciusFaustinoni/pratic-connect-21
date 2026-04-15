@@ -416,6 +416,12 @@ export default function CalendarioInstalacoesPage() {
           </div>
         </CardContent>
       </Card>
+
+      <CalendarioDiaModal
+        open={!!diaSelecionado}
+        onClose={() => setDiaSelecionado(null)}
+        data={diaSelecionado || ''}
+      />
     </div>
   );
 }
