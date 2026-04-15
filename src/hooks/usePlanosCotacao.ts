@@ -175,15 +175,24 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     staleTime: 1000 * 60 * 5,
   });
 
-  // Buscar coberturas vinculadas aos planos (para cálculo de preço)
+  // Buscar coberturas vinculadas aos planos (para cálculo de preço) - paginado para superar limite de 1000 rows
   const { data: planoCoberturasData, isLoading: planoCoberturasLoading } = useQuery({
     queryKey: ['planos_coberturas_pricing'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('planos_coberturas')
-        .select('plano_id, cobertura_id, coberturas:cobertura_id (nome, valor)');
-      if (error) throw error;
-      return data;
+      const PAGE_SIZE = 1000;
+      let allData: any[] = [];
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from('planos_coberturas')
+          .select('plano_id, cobertura_id, coberturas:cobertura_id (nome, valor)')
+          .range(from, from + PAGE_SIZE - 1);
+        if (error) throw error;
+        allData = allData.concat(data || []);
+        if (!data || data.length < PAGE_SIZE) break;
+        from += PAGE_SIZE;
+      }
+      return allData;
     },
     staleTime: 1000 * 60 * 5,
   });
