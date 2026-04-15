@@ -108,6 +108,7 @@ export function useSaveRule() {
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ['entity_eligibility_rules', vars.entity_type, vars.entity_id] });
       queryClient.invalidateQueries({ queryKey: ['entity_eligibility_rules', 'all'] });
+      queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
       toast.success('Regra adicionada');
     },
     onError: () => toast.error('Erro ao salvar regra'),
@@ -126,6 +127,7 @@ export function useUpdateRule() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entity_eligibility_rules'] });
+      queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
       toast.success('Regra atualizada');
     },
     onError: () => toast.error('Erro ao atualizar regra'),
@@ -144,6 +146,7 @@ export function useDeleteRule() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entity_eligibility_rules'] });
+      queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
       toast.success('Regra removida');
     },
     onError: () => toast.error('Erro ao remover regra'),
