@@ -1065,7 +1065,7 @@ export function useDuplicateProductLine() {
         .insert({
           ...lineData,
           name: nome || (sufixo ? `${lineData.name}${sufixo}` : `${lineData.name} (cópia)`),
-          slug: `${lineData.slug}-copia-${Date.now()}`,
+          slug: `${lineData.slug.slice(0, 30)}-${Date.now().toString(36)}`,
           is_active: false,
           vehicle_type: tipoVeiculo || lineData.vehicle_type,
         })

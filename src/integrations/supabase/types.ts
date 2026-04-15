@@ -18493,7 +18493,7 @@ export type Database = {
           {
             foreignKeyName: "planos_coberturas_cobertura_id_fkey"
             columns: ["cobertura_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "coberturas"
             referencedColumns: ["id"]
           },
