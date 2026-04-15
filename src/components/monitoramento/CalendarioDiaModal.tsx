@@ -55,8 +55,9 @@ export function CalendarioDiaModal({ open, onClose, data }: CalendarioDiaModalPr
   const [tecnicoSelecionado, setTecnicoSelecionado] = useState<string>('');
 
   const hoje = format(new Date(), 'yyyy-MM-dd');
-  const dataFutura = isAfter(parseISO(data), startOfDay(new Date()));
-  const dataFormatada = format(parseISO(data), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+  const parsedData = data ? parseISO(data) : new Date();
+  const dataFutura = data ? isAfter(parsedData, startOfDay(new Date())) : false;
+  const dataFormatada = data ? format(parsedData, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : '';
 
   // --- Queries ---
 
