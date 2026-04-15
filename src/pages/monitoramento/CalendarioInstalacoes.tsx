@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { CalendarioDiaModal } from '@/components/monitoramento/CalendarioDiaModal';
 import { useInstalacoes } from '@/hooks/useInstalacoes';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
