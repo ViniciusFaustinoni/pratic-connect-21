@@ -1307,11 +1307,14 @@ export function useDuplicateProductLine() {
         }
       }
 
-      await Promise.all([
-        allNewPB.length > 0 ? supabase.from('planos_beneficios').insert(allNewPB) : Promise.resolve(),
-        allNewBenefitRules.length > 0 ? supabase.from('entity_eligibility_rules').insert(allNewBenefitRules) : Promise.resolve(),
-        allNewBenefitExcl.length > 0 ? supabase.from('benefit_category_exclusions').insert(allNewBenefitExcl) : Promise.resolve(),
+      const [pbRes, brRes, exRes] = await Promise.all([
+        allNewPB.length > 0 ? supabase.from('planos_beneficios').insert(allNewPB) : Promise.resolve(null),
+        allNewBenefitRules.length > 0 ? supabase.from('entity_eligibility_rules').insert(allNewBenefitRules) : Promise.resolve(null),
+        allNewBenefitExcl.length > 0 ? supabase.from('benefit_category_exclusions').insert(allNewBenefitExcl) : Promise.resolve(null),
       ]);
+      if (pbRes?.error) throw pbRes.error;
+      if (brRes?.error) throw brRes.error;
+      if (exRes?.error) throw exRes.error;
 
       // 8. Batch-clone ALL coverages
       const cobsToInsert: any[] = [];
@@ -1380,10 +1383,12 @@ export function useDuplicateProductLine() {
         allNewCobRules.push(...final);
       }
 
-      await Promise.all([
-        allNewPC.length > 0 ? supabase.from('planos_coberturas').insert(allNewPC) : Promise.resolve(),
-        allNewCobRules.length > 0 ? supabase.from('entity_eligibility_rules').insert(allNewCobRules) : Promise.resolve(),
+      const [pcRes, crRes] = await Promise.all([
+        allNewPC.length > 0 ? supabase.from('planos_coberturas').insert(allNewPC) : Promise.resolve(null),
+        allNewCobRules.length > 0 ? supabase.from('entity_eligibility_rules').insert(allNewCobRules) : Promise.resolve(null),
       ]);
+      if (pcRes?.error) throw pcRes.error;
+      if (crRes?.error) throw crRes.error;
 
       return createdLine;
     },

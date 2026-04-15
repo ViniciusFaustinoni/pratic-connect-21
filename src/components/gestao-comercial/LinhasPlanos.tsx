@@ -229,30 +229,39 @@ function useLinhasComPlanos() {
       let planRulesMapRef = new Map<string, EligibilityRule[]>();
 
       if (planoIds.length > 0) {
-        const { data: coberturas } = await supabase
-          .from('planos_coberturas')
-          .select('plano_id, cobertura_id, coberturas(id, nome, valor)')
-          .in('plano_id', planoIds);
+        // Fetch coberturas in chunks to avoid 1000-row limit
+        const CHUNK_SIZE = 80;
+        for (let i = 0; i < planoIds.length; i += CHUNK_SIZE) {
+          const chunk = planoIds.slice(i, i + CHUNK_SIZE);
+          const { data: coberturas } = await supabase
+            .from('planos_coberturas')
+            .select('plano_id, cobertura_id, coberturas(id, nome, valor)')
+            .in('plano_id', chunk);
 
-        for (const c of coberturas || []) {
-          const cob = c.coberturas as any;
-          if (!cob) continue;
-          const list = coberturasMap.get(c.plano_id) || [];
-          list.push({ id: cob.id, nome: cob.nome, valor: cob.valor || 0, rules: [] });
-          coberturasMap.set(c.plano_id, list);
+          for (const c of coberturas || []) {
+            const cob = c.coberturas as any;
+            if (!cob) continue;
+            const list = coberturasMap.get(c.plano_id) || [];
+            list.push({ id: cob.id, nome: cob.nome, valor: cob.valor || 0, rules: [] });
+            coberturasMap.set(c.plano_id, list);
+          }
         }
 
-        const { data: beneficios } = await supabase
-          .from('planos_beneficios')
-          .select('plano_id, benefit_id, benefits:benefit_id(id, name, preco_sugerido)')
-          .in('plano_id', planoIds);
+        // Fetch beneficios in chunks to avoid 1000-row limit
+        for (let i = 0; i < planoIds.length; i += CHUNK_SIZE) {
+          const chunk = planoIds.slice(i, i + CHUNK_SIZE);
+          const { data: beneficios } = await supabase
+            .from('planos_beneficios')
+            .select('plano_id, benefit_id, benefits:benefit_id(id, name, preco_sugerido)')
+            .in('plano_id', chunk);
 
-        for (const b of beneficios || []) {
-          const ben = b.benefits as any;
-          if (!ben) continue;
-          const list = beneficiosMap.get(b.plano_id) || [];
-          list.push({ id: ben.id, name: ben.name, preco_sugerido: ben.preco_sugerido || 0, rules: [] });
-          beneficiosMap.set(b.plano_id, list);
+          for (const b of beneficios || []) {
+            const ben = b.benefits as any;
+            if (!ben) continue;
+            const list = beneficiosMap.get(b.plano_id) || [];
+            list.push({ id: ben.id, name: ben.name, preco_sugerido: ben.preco_sugerido || 0, rules: [] });
+            beneficiosMap.set(b.plano_id, list);
+          }
         }
 
         // Collect all entity IDs for rules fetch (coberturas + beneficios + planos)
