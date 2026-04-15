@@ -1,11 +1,13 @@
 import { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useInstalacoes } from '@/hooks/useInstalacoes';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Building2, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { STATUS_INSTALACAO_COLORS } from '@/types/monitoramento';
 
@@ -21,6 +23,16 @@ interface DiaCalendario {
   mesAtual: boolean;
 }
 
+interface VistoriaCalendario {
+  id: string;
+  status: string;
+  data_agendada: string;
+  local_vistoria: string | null;
+  modalidade: string | null;
+  associado_nome: string | null;
+  veiculo_placa: string | null;
+}
+
 export default function CalendarioInstalacoesPage() {
   const navigate = useNavigate();
   const [mesAtual, setMesAtual] = useState(new Date());
@@ -28,14 +40,96 @@ export default function CalendarioInstalacoesPage() {
   // Calcular primeiro e último dia do mês para filtrar
   const primeiroDia = new Date(mesAtual.getFullYear(), mesAtual.getMonth(), 1);
   const ultimoDia = new Date(mesAtual.getFullYear(), mesAtual.getMonth() + 1, 0);
+  const primeiroDiaStr = primeiroDia.toISOString().split('T')[0];
+  const ultimoDiaStr = ultimoDia.toISOString().split('T')[0];
 
   const { data, isLoading } = useInstalacoes({
-    data_inicio: primeiroDia.toISOString().split('T')[0],
-    data_fim: ultimoDia.toISOString().split('T')[0],
+    data_inicio: primeiroDiaStr,
+    data_fim: ultimoDiaStr,
+  });
+
+  // Query de vistorias do mês
+  const mesKey = `${mesAtual.getFullYear()}-${mesAtual.getMonth()}`;
+  const { data: vistoriasRaw, isLoading: isLoadingVistorias } = useQuery({
+    queryKey: ['vistorias-calendario', mesKey],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('vistorias')
+        .select('id, status, data_agendada, local_vistoria, modalidade, associado:associados(nome), veiculo:veiculos(placa)')
+        .gte('data_agendada', primeiroDiaStr)
+        .lte('data_agendada', ultimoDiaStr + 'T23:59:59')
+        .in('status', ['pendente', 'agendada', 'em_rota', 'em_andamento', 'em_analise', 'aprovada']);
+      if (error) throw error;
+      return data || [];
+    }
+  });
+
+  // Query de agendamentos_base do mês
+  const { data: agendamentosBaseRaw, isLoading: isLoadingAgBase } = useQuery({
+    queryKey: ['agendamentos-base-calendario', mesKey],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('agendamentos_base')
+        .select('id, status, data_agendada, horario, cliente_nome, veiculo_placa, vistoria_id')
+        .gte('data_agendada', primeiroDiaStr)
+        .lte('data_agendada', ultimoDiaStr);
+      if (error) throw error;
+      return data || [];
+    }
   });
 
   // Normalizar dados: hook retorna array diretamente quando sem paginação
   const instalacoes = Array.isArray(data) ? data : (data?.instalacoes || []);
+
+  // Normalizar vistorias
+  const vistorias: VistoriaCalendario[] = useMemo(() => {
+    if (!vistoriasRaw) return [];
+    return vistoriasRaw.map((v: any) => ({
+      id: v.id,
+      status: v.status,
+      data_agendada: v.data_agendada ? v.data_agendada.split('T')[0] : '',
+      local_vistoria: v.local_vistoria,
+      modalidade: v.modalidade,
+      associado_nome: v.associado?.nome || null,
+      veiculo_placa: v.veiculo?.placa || null,
+    }));
+  }, [vistoriasRaw]);
+
+  // Normalizar agendamentos base como vistorias "base"
+  const vistoriasBase: VistoriaCalendario[] = useMemo(() => {
+    if (!agendamentosBaseRaw) return [];
+    return agendamentosBaseRaw.map((ab: any) => ({
+      id: ab.id,
+      status: ab.status || 'agendado',
+      data_agendada: ab.data_agendada,
+      local_vistoria: 'base',
+      modalidade: 'presencial',
+      associado_nome: ab.cliente_nome,
+      veiculo_placa: ab.veiculo_placa,
+    }));
+  }, [agendamentosBaseRaw]);
+
+  // Combinar vistorias + agendamentos_base
+  const todasVistorias = useMemo(() => [...vistorias, ...vistoriasBase], [vistorias, vistoriasBase]);
+
+  // Agrupar vistorias por data e tipo (base vs campo)
+  const vistoriasPorData = useMemo(() => {
+    const map = new Map<string, { base: VistoriaCalendario[]; campo: VistoriaCalendario[] }>();
+    todasVistorias.forEach((v) => {
+      if (!v.data_agendada) return;
+      const dataStr = v.data_agendada.split('T')[0];
+      if (!map.has(dataStr)) {
+        map.set(dataStr, { base: [], campo: [] });
+      }
+      const grupo = map.get(dataStr)!;
+      if (v.local_vistoria === 'base') {
+        grupo.base.push(v);
+      } else {
+        grupo.campo.push(v);
+      }
+    });
+    return map;
+  }, [todasVistorias]);
 
   // Agrupar instalações por data E período
   const instalacoesPorData = useMemo(() => {
@@ -63,10 +157,8 @@ export default function CalendarioInstalacoesPage() {
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
 
-    // Primeiro dia da semana do mês
     const primeiroDiaSemana = primeiroDia.getDay();
 
-    // Adicionar dias do mês anterior para completar a semana
     for (let i = primeiroDiaSemana - 1; i >= 0; i--) {
       const data = new Date(primeiroDia);
       data.setDate(data.getDate() - i - 1);
@@ -77,7 +169,6 @@ export default function CalendarioInstalacoesPage() {
       });
     }
 
-    // Adicionar dias do mês atual
     for (let dia = 1; dia <= ultimoDia.getDate(); dia++) {
       const data = new Date(mesAtual.getFullYear(), mesAtual.getMonth(), dia);
       dias.push({
@@ -87,8 +178,7 @@ export default function CalendarioInstalacoesPage() {
       });
     }
 
-    // Completar última semana com dias do próximo mês
-    const diasRestantes = 42 - dias.length; // 6 semanas * 7 dias
+    const diasRestantes = 42 - dias.length;
     for (let i = 1; i <= diasRestantes; i++) {
       const data = new Date(ultimoDia);
       data.setDate(data.getDate() + i);
@@ -110,7 +200,7 @@ export default function CalendarioInstalacoesPage() {
     setMesAtual(new Date());
   };
 
-  if (isLoading) {
+  if (isLoading || isLoadingVistorias || isLoadingAgBase) {
     return (
       <div className="p-6 space-y-4">
         <Skeleton className="h-10 w-64" />
@@ -133,8 +223,8 @@ export default function CalendarioInstalacoesPage() {
       {/* HEADER */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Calendário de Instalações</h1>
-          <p className="text-muted-foreground">Visualize as instalações agendadas por dia</p>
+          <h1 className="text-2xl font-bold tracking-tight">Calendário de Serviços</h1>
+          <p className="text-muted-foreground">Instalações e vistorias agendadas por dia</p>
         </div>
         <Button variant="outline" onClick={() => navigate('/monitoramento/instalacoes')}>
           Ver Lista
@@ -181,6 +271,9 @@ export default function CalendarioInstalacoesPage() {
               const dataStr = dia.data.toISOString().split('T')[0];
               const instalacoesDia = instalacoesPorData.get(dataStr) || { manha: [], tarde: [], noite: [] };
               const temInstalacoes = instalacoesDia.manha.length > 0 || instalacoesDia.tarde.length > 0 || instalacoesDia.noite.length > 0;
+              
+              const vistoriasDia = vistoriasPorData.get(dataStr) || { base: [], campo: [] };
+              const temVistorias = vistoriasDia.base.length > 0 || vistoriasDia.campo.length > 0;
 
               const renderPeriodo = (items: typeof instalacoes, label: string, emoji: string) => {
                 if (items.length === 0) return null;
@@ -206,6 +299,38 @@ export default function CalendarioInstalacoesPage() {
                 );
               };
 
+              const renderVistoriasGrupo = (items: VistoriaCalendario[], label: string, isBase: boolean) => {
+                if (items.length === 0) return null;
+                return (
+                  <div className="space-y-0.5">
+                    <span className={cn(
+                      'text-[10px] font-medium flex items-center gap-0.5',
+                      isBase ? 'text-indigo-600 dark:text-indigo-400' : 'text-teal-600 dark:text-teal-400'
+                    )}>
+                      {isBase ? <Building2 className="h-2.5 w-2.5" /> : <MapPin className="h-2.5 w-2.5" />}
+                      {label} ({items.length})
+                    </span>
+                    {items.slice(0, 2).map((v) => (
+                      <Badge
+                        key={v.id}
+                        variant="secondary"
+                        className={cn(
+                          'w-full justify-start truncate text-xs font-normal',
+                          isBase
+                            ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300'
+                            : 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300'
+                        )}
+                      >
+                        {v.veiculo_placa || v.associado_nome?.split(' ')[0] || 'Vistoria'}
+                      </Badge>
+                    ))}
+                    {items.length > 2 && (
+                      <span className="text-[10px] text-muted-foreground">+{items.length - 2}</span>
+                    )}
+                  </div>
+                );
+              };
+
               return (
                 <div
                   key={index}
@@ -217,22 +342,32 @@ export default function CalendarioInstalacoesPage() {
                     index % 7 === 6 && 'border-r-0'
                   )}
                 >
-                  {/* Número do dia */}
-                  <span
-                    className={cn(
-                      'inline-flex h-7 w-7 items-center justify-center rounded-full text-sm',
-                      dia.diaAtual && 'bg-primary text-primary-foreground font-medium'
+                  {/* Número do dia + badges de contagem */}
+                  <div className="flex items-start justify-between">
+                    <span
+                      className={cn(
+                        'inline-flex h-7 w-7 items-center justify-center rounded-full text-sm',
+                        dia.diaAtual && 'bg-primary text-primary-foreground font-medium'
+                      )}
+                    >
+                      {dia.data.getDate()}
+                    </span>
+                    {vistoriasDia.base.length > 0 && (
+                      <span className="inline-flex items-center gap-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 dark:text-indigo-300">
+                        <Building2 className="h-2.5 w-2.5" />
+                        {vistoriasDia.base.length}
+                      </span>
                     )}
-                  >
-                    {dia.data.getDate()}
-                  </span>
+                  </div>
 
                   {/* Instalações do dia - agrupadas por período */}
-                  {temInstalacoes && (
+                  {(temInstalacoes || temVistorias) && (
                     <div className="mt-1 space-y-1.5">
                       {renderPeriodo(instalacoesDia.manha, 'Manhã', '☀️')}
                       {renderPeriodo(instalacoesDia.tarde, 'Tarde', '🌅')}
                       {renderPeriodo(instalacoesDia.noite, 'Noite', '🌙')}
+                      {renderVistoriasGrupo(vistoriasDia.base, 'Base', true)}
+                      {renderVistoriasGrupo(vistoriasDia.campo, 'Campo', false)}
                     </div>
                   )}
                 </div>
@@ -266,6 +401,15 @@ export default function CalendarioInstalacoesPage() {
             <div className="flex items-center gap-1">
               <span className="h-3 w-3 rounded-full bg-destructive" />
               <span>Cancelada</span>
+            </div>
+            <span className="mx-2 text-muted-foreground">|</span>
+            <div className="flex items-center gap-1">
+              <Building2 className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span>Vistoria Base</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <MapPin className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+              <span>Vistoria Campo</span>
             </div>
           </div>
         </CardContent>
