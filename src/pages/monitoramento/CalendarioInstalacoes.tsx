@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { CalendarioDiaModal } from '@/components/monitoramento/CalendarioDiaModal';
 import { useInstalacoes } from '@/hooks/useInstalacoes';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -36,6 +37,7 @@ interface VistoriaCalendario {
 export default function CalendarioInstalacoesPage() {
   const navigate = useNavigate();
   const [mesAtual, setMesAtual] = useState(new Date());
+  const [diaSelecionado, setDiaSelecionado] = useState<string | null>(null);
 
   // Calcular primeiro e último dia do mês para filtrar
   const primeiroDia = new Date(mesAtual.getFullYear(), mesAtual.getMonth(), 1);
@@ -334,7 +336,7 @@ export default function CalendarioInstalacoesPage() {
               return (
                 <div
                   key={index}
-                  onClick={() => navigate(`/monitoramento/instalacoes?data=${dataStr}`)}
+                  onClick={() => setDiaSelecionado(dataStr)}
                   className={cn(
                     'min-h-[100px] p-2 border-b border-r cursor-pointer transition-colors hover:bg-muted/50',
                     !dia.mesAtual && 'bg-muted/30 text-muted-foreground',
@@ -414,6 +416,12 @@ export default function CalendarioInstalacoesPage() {
           </div>
         </CardContent>
       </Card>
+
+      <CalendarioDiaModal
+        open={!!diaSelecionado}
+        onClose={() => setDiaSelecionado(null)}
+        data={diaSelecionado || ''}
+      />
     </div>
   );
 }
