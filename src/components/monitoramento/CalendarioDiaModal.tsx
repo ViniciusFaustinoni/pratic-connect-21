@@ -333,7 +333,7 @@ export function CalendarioDiaModal({ open, onClose, data }: CalendarioDiaModalPr
                               <SelectTrigger className="flex-1">
                                 <SelectValue placeholder="Selecione o técnico base..." />
                               </SelectTrigger>
-                              <SelectContent>
+                              <SelectContent position="popper" className="z-[1300]" sideOffset={4}>
                                 {tecnicosBaseAtivos.map((t: any) => (
                                   <SelectItem key={t.id} value={t.id}>
                                     {t.nome}
