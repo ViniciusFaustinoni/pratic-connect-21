@@ -1109,7 +1109,7 @@ export function useDuplicateProductLine() {
       // Helper: fetch paginated rules in chunks of 500 to avoid Supabase 1000-row limit
       const fetchRulesChunked = async (entityType: string, ids: string[]) => {
         if (ids.length === 0) return [] as any[];
-        const CHUNK = 500;
+        const CHUNK = 150; // Was 500; each entity has ~5 rules, so 150 × 5 = 750 rows, safely under 1000 limit
         const promises: Promise<any>[] = [];
         for (let i = 0; i < ids.length; i += CHUNK) {
           const chunk = ids.slice(i, i + CHUNK);
