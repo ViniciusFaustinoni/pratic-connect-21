@@ -530,7 +530,7 @@ ${contato?.nome || "Não informado ainda"}`;
                 uso_app: { type: "boolean", description: "Se o veículo é usado para aplicativo (Uber, 99, etc.)" },
                 placa: { type: "string", description: "Placa do veículo" },
               },
-              required: ["valor_fipe", "regiao"],
+              required: ["valor_fipe", "regiao", "ano"],
             },
           },
         },
@@ -700,8 +700,11 @@ ${contato?.nome || "Não informado ainda"}`;
                 console.log(`[agente-consultor-ia] Estado salvo+sync: aguardando_confirmacao`);
               }
             } else if (fnName === "calcular_cotacao") {
+              // Correção 2: Merge ano do estado se a IA não passou
+              if (!args.ano && dadosCotacao?.ano) args.ano = dadosCotacao.ano;
               toolResult = await executarCalculoCotacao(supabase, args);
-              if (toolResult.success) {
+              // Correção 3: Só avança se encontrou planos
+              if (toolResult.success && toolResult.planos?.length > 0) {
                 const novoEstado = {
                   ...(dadosCotacao || {}),
                   etapa: "aguardando_vencimento",
@@ -711,7 +714,9 @@ ${contato?.nome || "Não informado ainda"}`;
                 };
                 await supabase.from("agente_ia_contatos").update({ dados_cotacao: novoEstado }).eq("id", contato.id);
                 dadosCotacao = novoEstado;
-                console.log(`[agente-consultor-ia] Estado salvo+sync: aguardando_vencimento`);
+                console.log(`[agente-consultor-ia] Estado salvo+sync: aguardando_vencimento (${toolResult.planos.length} planos)`);
+              } else {
+                console.log(`[agente-consultor-ia] Nenhum plano encontrado — NÃO avançando etapa`);
               }
             } else if (fnName === "registrar_cotacao") {
               // Merge args da IA com dadosCotacao persistido para não perder dados
@@ -1220,7 +1225,35 @@ async function executarCalculoCotacao(supabase: any, args: any) {
       ? rules.filter((r: any) => r.entity_type === "linha" && r.entity_id === productLineId && r.is_active)
       : [];
 
-    if (!checkAllRulesServer(linhaRules, vehicleCtx) || !checkAllRulesServer(planoRules, vehicleCtx)) {
+    // Correção 1: Alinhar com frontend — separar marca_modelo e ano_range da avaliação da linha
+    const planoHasMarcaModelo = planoRules.some((r: any) => r.rule_type === 'marca_modelo');
+    const planoHasAnoRange = planoRules.some((r: any) => r.rule_type === 'ano_range');
+
+    // Filtrar regras que serão avaliadas separadamente
+    let linhaRulesFiltered = linhaRules.filter((r: any) => {
+      if (r.rule_type === 'marca_modelo') return false; // sempre avaliar separadamente
+      if (r.rule_type === 'ano_range' && planoHasAnoRange) return false; // sobrescrito pelo plano
+      return true;
+    });
+
+    // Avaliar regras genéricas da linha (sem marca_modelo)
+    if (!checkAllRulesServer(linhaRulesFiltered, vehicleCtx)) {
+      continue;
+    }
+
+    // Avaliar marca_modelo da linha separadamente (se não sobrescrita pelo plano)
+    if (!planoHasMarcaModelo) {
+      const linhaMarcaModeloRule = linhaRules.find((r: any) => r.rule_type === 'marca_modelo');
+      if (linhaMarcaModeloRule) {
+        const match = findModelEligibilityServer(linhaMarcaModeloRule.rule_config, vehicleCtx);
+        // null = modelo não listado = aceito (passa pela regra geral de ano)
+        // Só bloqueia se explicitamente negado
+        if (match && match.status === 'negado') continue;
+      }
+    }
+
+    // Avaliar regras do plano normalmente
+    if (!checkAllRulesServer(planoRules, vehicleCtx)) {
       continue;
     }
 
