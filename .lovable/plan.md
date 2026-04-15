@@ -1,23 +1,20 @@
 
 
-## Plano: Aumentar altura do modal de elegibilidade no mobile
+## Plano: Corrigir erro "value too long" ao duplicar linha
 
 ### Problema
 
-O `DialogContent` base já tem `max-h-[90vh]` e `overflow-y-auto`. O `EligibilityRulesEditor` sobrescreve com `max-h-[85vh]`, o que na verdade **reduz** a altura disponível. No mobile (390px), isso corta conteúdo.
+O slug gerado na duplicação (`${lineData.slug}-copia-${Date.now()}`) ultrapassa o limite de 50 caracteres da coluna `slug` em `product_lines`. Ex: `lancamento-copia-1713218895123` = 31 chars, mas slugs originais mais longos facilmente excedem 50.
 
 ### Correção
 
-**Arquivo: `src/components/admin/planos/EligibilityRulesEditor.tsx`** — linha 301
+**Arquivo: `src/hooks/usePlansAdmin.ts`** — linha 1068
 
-Trocar `max-h-[85vh]` por `max-h-[calc(100vh-2rem)]` para usar praticamente toda a altura da tela no mobile:
+Truncar o slug para caber em 50 caracteres:
 
-```tsx
-<DialogContent 
-  className="max-w-lg max-h-[calc(100vh-2rem)] overflow-y-auto" 
-  onPointerDownOutside={(e) => e.preventDefault()}
->
+```typescript
+slug: `${lineData.slug.slice(0, 30)}-${Date.now().toString(36)}`,
 ```
 
-Isso garante que o modal ocupe até `100vh - 32px`, dando espaço suficiente para todo o formulário (tipo de regra, modo, campos de valor, botão salvar) ser acessível via scroll.
+Usar `Date.now().toString(36)` (base36, ~8 chars) em vez de decimal (~13 chars), e limitar o slug original a 30 chars, garantindo que o resultado nunca exceda 50.
 
