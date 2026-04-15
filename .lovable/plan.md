@@ -1,24 +1,23 @@
 
 
-## Plano: Corrigir overflow do modal de elegibilidade e dropdown no mobile
+## Plano: Aumentar altura do modal de elegibilidade no mobile
 
 ### Problema
 
-O `DialogContent` do modal de elegibilidade (`EligibilityRulesEditor.tsx`) não tem scroll nem altura adequada no mobile (390px viewport), cortando o conteúdo. O `SelectContent` do dropdown "Tipo de Regra" também sofre clipping dentro do modal.
+O `DialogContent` base já tem `max-h-[90vh]` e `overflow-y-auto`. O `EligibilityRulesEditor` sobrescreve com `max-h-[85vh]`, o que na verdade **reduz** a altura disponível. No mobile (390px), isso corta conteúdo.
 
 ### Correção
 
-**Arquivo: `src/components/admin/planos/EligibilityRulesEditor.tsx`**
+**Arquivo: `src/components/admin/planos/EligibilityRulesEditor.tsx`** — linha 301
 
-1. **Linha 301** — Adicionar `max-h-[85vh] overflow-y-auto` ao `DialogContent` para garantir scroll interno no mobile:
+Trocar `max-h-[85vh]` por `max-h-[calc(100vh-2rem)]` para usar praticamente toda a altura da tela no mobile:
+
 ```tsx
-<DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+<DialogContent 
+  className="max-w-lg max-h-[calc(100vh-2rem)] overflow-y-auto" 
+  onPointerDownOutside={(e) => e.preventDefault()}
+>
 ```
 
-2. **Linha 314** — Adicionar `position="popper"` e `z-[1300]` ao `SelectContent` para evitar clipping pelo overflow do modal:
-```tsx
-<SelectContent position="popper" className="z-[1300]" sideOffset={4}>
-```
-
-3. Adicionar `onPointerDownOutside={(e) => e.preventDefault()}` ao `DialogContent` para evitar que interações com o Select fechem o modal.
+Isso garante que o modal ocupe até `100vh - 32px`, dando espaço suficiente para todo o formulário (tipo de regra, modo, campos de valor, botão salvar) ser acessível via scroll.
 
