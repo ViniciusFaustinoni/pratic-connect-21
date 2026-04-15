@@ -752,6 +752,7 @@ ${contato?.nome || "Não informado ainda"}`;
                 dadosCotacao = novoEstado;
                 console.log(`[agente-consultor-ia] Estado salvo+sync: cotacao_enviada`);
               }
+              } // end guardrail else
             } else if (fnName === "salvar_dados_cliente") {
               const novoEstado = {
                 ...(dadosCotacao || {}),
