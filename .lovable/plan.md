@@ -1,47 +1,22 @@
 
 
-## Plano: Corrigir limite de 1000 linhas nas queries de coberturas/benefícios
+## Plano: Remover carência de todas as coberturas (manter apenas em Vidros e Faróis)
 
-### Problema
-
-A query da UI (`useLinhasComPlanos`) busca `planos_coberturas` e `planos_beneficios` para **todos os 303 planos de uma vez**, mas o Supabase retorna no máximo **1000 linhas por padrão**. Existem **2385 coberturas** e **1458 benefícios** — a maioria é truncada silenciosamente. Planos que ficam fora das primeiras 1000 linhas aparecem com "0 cob. 0 ben."
-
-A lógica de duplicação (`useDuplicateProductLine`) também não verifica erros em vários `insert()` batch, podendo falhar silenciosamente.
+### Situação atual
+| Entidade | Com carência ativa | Ação |
+|----------|-------------------|------|
+| Coberturas (100% FIPE) | 814 registros | **Desativar** |
+| Benefícios (Vidros e Faróis) | 214 registros | Manter como está |
 
 ### Correção
 
-**Arquivo: `src/components/gestao-comercial/LinhasPlanos.tsx`** — `useLinhasComPlanos`
+Executar um único UPDATE na tabela `coberturas`:
 
-Paginar as queries de `planos_coberturas` e `planos_beneficios` em chunks de IDs (como já é feito para `entity_eligibility_rules`):
-
-```typescript
-// Coberturas: fetch in chunks to avoid 1000-row limit
-const CHUNK = 80;
-for (let i = 0; i < planoIds.length; i += CHUNK) {
-  const chunk = planoIds.slice(i, i + CHUNK);
-  const { data } = await supabase
-    .from('planos_coberturas')
-    .select('plano_id, cobertura_id, coberturas(id, nome, valor)')
-    .in('plano_id', chunk);
-  // process...
-}
-// Same pattern for planos_beneficios
+```sql
+UPDATE coberturas
+SET carencia_ativa = false
+WHERE carencia_ativa = true;
 ```
 
-**Arquivo: `src/hooks/usePlansAdmin.ts`** — `useDuplicateProductLine`
-
-Adicionar verificação de erro nos `Promise.all` das linhas 1310-1314 e 1383-1386:
-
-```typescript
-const [pbRes, brRes, exRes] = await Promise.all([...]);
-if (pbRes?.error) throw pbRes.error;
-if (brRes?.error) throw brRes.error;
-// etc.
-```
-
-### Resumo das mudanças
-| Arquivo | Mudança |
-|---------|---------|
-| `LinhasPlanos.tsx` | Paginar queries de coberturas e benefícios em chunks |
-| `usePlansAdmin.ts` | Adicionar tratamento de erro nos batch inserts da duplicação |
+Isso desativa a carência de liberação de 120 dias em todas as 814 coberturas, sem afetar os benefícios "Vidros e Faróis" (que ficam na tabela `benefits`). Nenhuma mudança de código é necessária.
 
