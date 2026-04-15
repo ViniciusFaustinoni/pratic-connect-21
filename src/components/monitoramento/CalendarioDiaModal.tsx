@@ -199,7 +199,7 @@ export function CalendarioDiaModal({ open, onClose, data }: CalendarioDiaModalPr
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" onPointerDownOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg">
             📅 Tarefas do dia {dataFormatada}
