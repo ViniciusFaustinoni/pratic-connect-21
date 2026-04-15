@@ -298,7 +298,7 @@ function AddRuleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto" onPointerDownOutside={(e) => e.preventDefault()}>
+      <DialogContent className="max-w-lg max-h-[calc(100vh-2rem)] overflow-y-auto" onPointerDownOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Editar Regra de Elegibilidade' : 'Adicionar Regra de Elegibilidade'}</DialogTitle>
         </DialogHeader>
