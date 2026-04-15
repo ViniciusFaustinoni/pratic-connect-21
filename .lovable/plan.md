@@ -1,60 +1,43 @@
 
 
-## Plano: Corrigir reset do contato IA após exclusão de cotação
+## Plano: Incluir o dia de hoje na agenda presencial da base
 
 ### Problema
-Ao excluir uma cotação, a IA continua a conversa anterior em vez de reiniciar o fluxo. O screenshot mostra a IA retomando de onde parou (perguntando dia 10 ou 20 com datas erradas).
+A linha 48 de `AgendamentoBase.tsx` usa `addDays(new Date(), 1)` -- sempre começa em **amanhã**, impedindo agendamentos para hoje. Para atendimento presencial na base, o associado deveria poder marcar para hoje caso ainda haja horários futuros disponíveis.
 
-### Causa raiz
-O `delete-cotacao` (linha 302-308) faz reset do contato usando `.eq('telefone', telefoneNormalizado)`, mas há um **mismatch de formato de telefone**:
+### Correção
 
-- `agente_ia_contatos.telefone` armazena `telLimpo` que pode ser `"21999999999"` (sem DDI) ou `"5521999999999"` (com DDI)
-- `cotacao.telefone1_solicitante` pode estar em formato diferente
-- Se os formatos não coincidem, o `UPDATE` não encontra o registro e o reset **falha silenciosamente**
+**Arquivo: `src/components/cotacao-publica/AgendamentoBase.tsx`**
 
-Além disso, mesmo quando o telefone coincide, o histórico de mensagens WhatsApp anterior ao reset pode "vazar" se o `limiteHistorico` (linha 205-207) não filtrar corretamente as mensagens enviadas pela própria IA segundos antes da exclusão.
+1. **Linha 48** -- Mudar para começar em `hoje` (offset 0):
+```typescript
+let currentDate = addDays(new Date(), weekOffset * 7); // Começa hoje
+```
 
-### Correções
-
-**1. `supabase/functions/delete-cotacao/index.ts` (linhas 302-309)**
-Buscar o contato usando TODAS as variantes do telefone (com e sem DDI 55), garantindo o match:
+2. **Filtrar slots passados quando for hoje** (dentro de `slotsHorario`, linhas 61-88):
+   - Após gerar os slots, se `dataSelecionada` for hoje, remover horários que já passaram (comparando com a hora atual de Brasilia + margem de 30min para preparação).
 
 ```typescript
-const telefoneNormalizado = cotacao.telefone1_solicitante.replace(/\D/g, '');
-const agora = new Date().toISOString();
+// Após gerar slots[], filtrar horários passados se for hoje
+const agora = new Date();
+const isHoje = dataSelecionada && 
+  format(dataSelecionada, 'yyyy-MM-dd') === format(agora, 'yyyy-MM-dd');
 
-// Tentar ambas as variantes: com e sem DDI
-const variantes = [telefoneNormalizado];
-if (telefoneNormalizado.startsWith('55') && telefoneNormalizado.length >= 12) {
-  variantes.push(telefoneNormalizado.substring(2));
-} else {
-  variantes.push('55' + telefoneNormalizado);
+if (isHoje) {
+  const horaAtual = agora.getHours();
+  const minAtual = agora.getMinutes();
+  // Filtrar slots que já passaram (margem de 30min)
+  return slots.filter(slot => {
+    const [h, m] = slot.split(':').map(Number);
+    return (h * 60 + m) > (horaAtual * 60 + minAtual + 30);
+  });
 }
-
-await adminClient
-  .from('agente_ia_contatos')
-  .update({ status: 'novo', dados_cotacao: null, resetado_em: agora })
-  .in('telefone', variantes);
 ```
 
-Aplicar a mesma lógica de variantes ao cancelamento da fila IA (linhas 312-317).
+3. **Se todos os horários de hoje já expiraram**, esconder o dia ou exibir um indicador visual de "lotado/expirado" (similar ao que `AgendamentoVistoria.tsx` já faz na linha 406-410).
 
-**2. `supabase/functions/agente-consultor-ia/index.ts` (linhas 200-229)**
-Reforçar o reset: além de checar `status === 'novo' && !dados_cotacao`, verificar também se `resetado_em` existe e é recente (< 24h). Isso cobre edge cases onde o status pode ter mudado entre o reset e a próxima mensagem:
-
-```typescript
-const foiResetado = contatoExistente && (
-  (contato?.status === 'novo' && !contato?.dados_cotacao) ||
-  (contato?.resetado_em && !contato?.dados_cotacao)
-);
-```
-
-**3. Redeploy das duas Edge Functions**
-- `delete-cotacao`
-- `agente-consultor-ia`
-
-### Resultado esperado
-- Ao excluir uma cotação, o contato IA será sempre encontrado independentemente do formato do telefone
-- A IA reiniciará do zero na próxima mensagem, sem contexto da conversa anterior
-- As datas de vencimento serão as corretas (correção anterior já deployada)
+### Resultado
+- Hoje aparece como primeira opção na agenda
+- Apenas horários futuros (com 30min de margem) ficam selecionáveis
+- Se não sobrou nenhum horário hoje, o dia aparece desabilitado com indicação clara
 
