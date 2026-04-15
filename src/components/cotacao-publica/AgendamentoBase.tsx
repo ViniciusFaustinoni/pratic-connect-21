@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { format, addDays } from 'date-fns';
+import { format, addDays, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { MapPin, Clock, Calendar, Check, ChevronLeft, ChevronRight, Building2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -45,7 +45,7 @@ export function AgendamentoBase({
   // Gerar próximos 7 dias úteis a partir do offset (incluindo sábados)
   const diasDisponiveis = useMemo(() => {
     const dias: Date[] = [];
-    let currentDate = addDays(new Date(), 1 + weekOffset * 7); // Começa amanhã
+    let currentDate = addDays(new Date(), weekOffset * 7); // Começa hoje
     
     while (dias.length < 7) {
       if (!isDomingo(currentDate)) { // Só bloqueia domingo
@@ -57,7 +57,7 @@ export function AgendamentoBase({
     return dias;
   }, [weekOffset]);
 
-  // Gerar slots de horário (considerando horário reduzido no sábado)
+  // Gerar slots de horário (considerando horário reduzido no sábado e filtrando passados se for hoje)
   const slotsHorario = useMemo(() => {
     if (!configBase?.base_horario_inicio || !configBase?.base_horario_fim) {
       return [];
@@ -82,6 +82,16 @@ export function AgendamentoBase({
         minuto = 0;
         hora += 1;
       }
+    }
+
+    // Se for hoje, filtrar horários que já passaram (margem de 30min)
+    if (dataSelecionada && isToday(dataSelecionada)) {
+      const agora = new Date();
+      const minutosAgora = agora.getHours() * 60 + agora.getMinutes();
+      return slots.filter(slot => {
+        const [h, m] = slot.split(':').map(Number);
+        return (h * 60 + m) > (minutosAgora + 30);
+      });
     }
 
     return slots;
