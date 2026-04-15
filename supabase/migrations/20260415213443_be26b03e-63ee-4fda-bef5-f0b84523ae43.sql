@@ -1,0 +1,1 @@
+UPDATE coberturas SET carencia_ativa = false WHERE carencia_ativa = true;
