@@ -600,8 +600,12 @@ export function LinhasPlanos() {
                                           {plano.badge_text}
                                         </Badge>
                                       ) : null}
-                                      {plano.plan_rules?.length > 0 && <RuleBadges rules={plano.plan_rules} />}
                                     </div>
+                                    {plano.plan_rules?.length > 0 && (
+                                      <div className="mt-1">
+                                        <RuleBadges rules={plano.plan_rules} />
+                                      </div>
+                                    )}
                                   </div>
 
                                   <div className="hidden sm:flex items-center gap-4 text-xs text-muted-foreground shrink-0">
