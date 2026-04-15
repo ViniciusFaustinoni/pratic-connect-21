@@ -1126,7 +1126,7 @@ export function useDuplicateProductLine() {
 
       const fetchExclusionsChunked = async (ids: string[]) => {
         if (ids.length === 0) return [] as any[];
-        const CHUNK = 500;
+        const CHUNK = 150; // Was 500; safely under 1000 row limit
         const promises: Promise<any>[] = [];
         for (let i = 0; i < ids.length; i += CHUNK) {
           const chunk = ids.slice(i, i + CHUNK);
