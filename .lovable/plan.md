@@ -1,20 +1,24 @@
 
 
-## Plano: Corrigir overflow do dropdown no modal do calendário
+## Plano: Corrigir overflow do modal de elegibilidade e dropdown no mobile
 
 ### Problema
 
-O `SelectContent` do Radix UI abre como um popover posicionado dentro do `DialogContent`, que tem `overflow-y: auto`. Isso causa o dropdown ser cortado ou transbordar visualmente.
+O `DialogContent` do modal de elegibilidade (`EligibilityRulesEditor.tsx`) não tem scroll nem altura adequada no mobile (390px viewport), cortando o conteúdo. O `SelectContent` do dropdown "Tipo de Regra" também sofre clipping dentro do modal.
 
 ### Correção
 
-**Arquivo: `src/components/monitoramento/CalendarioDiaModal.tsx`** — linha 336
+**Arquivo: `src/components/admin/planos/EligibilityRulesEditor.tsx`**
 
-Adicionar `position="popper"` e `sideOffset` ao `SelectContent`, e usar o portal para renderizar fora do modal:
-
+1. **Linha 301** — Adicionar `max-h-[85vh] overflow-y-auto` ao `DialogContent` para garantir scroll interno no mobile:
 ```tsx
-<SelectContent position="popper" className="z-[1200]" sideOffset={4}>
+<DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
 ```
 
-O `z-[1200]` garante que fique acima do Dialog (z-[1100]). O `position="popper"` faz o Radix usar posicionamento de popover em vez de tentar alinhar inline, evitando o clipping pelo `overflow-y: auto` do modal.
+2. **Linha 314** — Adicionar `position="popper"` e `z-[1300]` ao `SelectContent` para evitar clipping pelo overflow do modal:
+```tsx
+<SelectContent position="popper" className="z-[1300]" sideOffset={4}>
+```
+
+3. Adicionar `onPointerDownOutside={(e) => e.preventDefault()}` ao `DialogContent` para evitar que interações com o Select fechem o modal.
 
