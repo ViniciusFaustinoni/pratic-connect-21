@@ -1,51 +1,46 @@
 
 ## Diagnóstico
 
-Wallace foi atribuído a uma tarefa via mapa de monitoramento, mas ao abrir no app dele aparece "Vistoria não encontrada".
+No popup do mapa aparece "Agendada: 16/04/2026" mas a vistoria foi agendada para **17/04/2026** (sexta-feira), conforme tela de confirmação mostrada ao cliente.
 
-### Hipótese principal
+### Causa provável
 
-A tela do app do técnico (provável `ExecutarVistoria` ou `VistoriaDetalhes`) busca diretamente na tabela `vistorias` por ID. Mas a atribuição feita no mapa pode ter:
-
-1. Criado/atualizado apenas o `servicos` (e/ou `agendamentos_base`), sem registro correspondente em `vistorias`; **OU**
-2. Passado o ID do `servico` no link/rota, enquanto a tela espera ID de `vistoria`; **OU**
-3. RLS na tabela `vistorias` que filtra por `vistoriador_id = auth.uid()` mas o vínculo foi feito em outra tabela (`servicos.vistoriador_id`), então o select volta vazio → `.maybeSingle()` retorna null → "não encontrada".
+Bug clássico de **timezone**: a data vem do banco como string `2026-04-17` (DATE puro, sem hora), mas em algum ponto está sendo convertida via `new Date("2026-04-17")` que o JavaScript interpreta como **UTC meia-noite**. Ao formatar no fuso de Brasília (UTC-3), volta como `2026-04-16 21:00`, exibindo dia 16.
 
 ### Investigação necessária
 
-1. Identificar a rota/tela do app do técnico que mostra esse erro (busca por "Vistoria não encontrada" no código).
-2. Ver qual ID a rota recebe e em qual tabela faz a query.
-3. Conferir como `MapaVistoriasContent.tsx` persiste a atribuição (qual edge/mutation, qual tabela atualiza).
-4. Checar RLS de `vistorias` para o role `vistoriador`/`profissional`.
-5. Validar no banco se existe registro em `vistorias` para a tarefa do Wallace, ou só em `servicos`.
+1. Localizar no `MapaVistoriasContent.tsx` onde a data agendada é formatada para o popup (provável `format(new Date(v.data_agendada), 'dd/MM/yyyy')`).
+2. Conferir como o campo é exposto na query/hook que alimenta o mapa.
+3. Verificar se o mesmo padrão ocorre em outros locais: card lateral, modal de confirmação, lista de "outras tarefas", toast de atribuição.
 
-## Plano de correção (a refinar após investigação)
+## Correção
 
-### Cenário A — falta registro em `vistorias`
-Garantir que a edge/mutation de atribuição via mapa cria/atualiza também a `vistorias` (ou que a tela do técnico use `servicos` como fonte unificada).
+### Helper utilitário
+Criar/usar um formatador seguro para datas DATE puras:
 
-### Cenário B — ID errado na rota
-Ajustar `MapaVistoriasContent.tsx` (ou notificação/link enviado ao técnico) para usar o ID correto que a tela espera.
+```ts
+// src/lib/date-utils.ts
+export const formatDataAgendada = (data?: string | null) => {
+  if (!data) return '';
+  // Trata "YYYY-MM-DD" como data local, sem timezone
+  const [y, m, d] = data.split('T')[0].split('-').map(Number);
+  return `${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}/${y}`;
+};
+```
 
-### Cenário C — RLS bloqueando
-Atualizar a policy de SELECT em `vistorias` para também permitir leitura quando o profissional está vinculado via `servicos.vistoriador_id` correspondente, OU corrigir a atribuição para preencher `vistorias.vistoriador_id` direto.
+Ou usar `parseISO` + `format` do `date-fns` apenas se a string contiver hora; para DATE puro, o split manual é mais confiável.
 
-### UX
-- Trocar a mensagem genérica "Vistoria não encontrada" por algo mais útil quando o problema for permissão/vínculo (ex: "Você não tem acesso a esta tarefa" + botão para voltar à lista de tarefas atuais).
-- Adicionar log/console claro com o ID consultado para facilitar debug futuro.
-
-## Arquivos prováveis
-
-- `src/pages/...` ou `src/components/vistorias/Executar*` (tela do técnico).
-- `src/components/mapa/MapaVistoriasContent.tsx` (lógica de atribuição via drag).
-- Edge function de atribuição (provável `atribuir-servico` ou similar).
-- Migration nova de RLS, se for o caso.
+### Aplicar nos pontos afetados
+Substituir todas as ocorrências de formatação direta de `data_agendada` (e variantes como `vistoria_data_agendada`, `agendado_para`) no:
+- `src/components/mapa/MapaVistoriasContent.tsx` (popup, lista lateral, modais, toasts)
+- Outros componentes onde o mesmo bug pode estar (calendário de monitoramento, lista de vistorias, cards de cotação) — busca dirigida por `new Date(.*data_agendada` e `format(.*data_agendada`.
 
 ## Não vou mexer
 
-- Lógica de vagas, ETA, drag-and-drop (já corrigido).
-- Outras telas do app do técnico que já funcionam.
+- Schema do banco / tipo da coluna (mantém `DATE`).
+- Datas que já vêm como `timestamp` com hora (essas usam o fuso corretamente).
+- Lógica de filtro por período no `useVistoriasEvento` (já usa `format(hoje, 'yyyy-MM-dd')` corretamente).
 
 ## Resultado
 
-Wallace consegue abrir e iniciar a tarefa atribuída via mapa direto do app dele, sem erro "Vistoria não encontrada". Mensagens de erro futuras ficam mais informativas.
+A vistoria da Kelly aparece como "Agendada: 17/04/2026" em todos os locais (popup, lista, modais), batendo com a data confirmada ao cliente. Bug de timezone fica blindado por helper centralizado.
