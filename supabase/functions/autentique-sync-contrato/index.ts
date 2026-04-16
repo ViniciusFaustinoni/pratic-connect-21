@@ -650,9 +650,14 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        atualizado: false, 
-        mensagem: "Documento ainda não foi assinado",
+        atualizado: biometricStatus !== null, 
+        mensagem: biometricStatus === "review" 
+          ? "Assinatura em revisão biométrica pelo Autentique. Aguardando aprovação manual."
+          : biometricStatus === "rejected"
+          ? "Biometria rejeitada pelo Autentique. Será necessário reenviar o termo."
+          : "Documento ainda não foi assinado",
         status: overallStatus,
+        biometric_status: biometricStatus,
         autentique_url: autentiqueUrlFinal
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
