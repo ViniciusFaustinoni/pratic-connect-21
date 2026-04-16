@@ -76,7 +76,8 @@ Deno.serve(async (req) => {
             key: {
               remoteJid: `${telLimpo}@s.whatsapp.net`,
               fromMe: false,
-              id: item.message_id || `meta_queue_${Date.now()}`,
+              // Usar id único de fila para escapar do dedup do whatsapp-webhook
+              id: `queue_${item.id}`,
             },
             message:
               item.tipo_msg === "location" && item.latitude && item.longitude
