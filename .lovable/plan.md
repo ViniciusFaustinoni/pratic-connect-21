@@ -1,59 +1,71 @@
 
 
-## Diagnóstico — Scroll cortado no Safari iOS
+## Diagnóstico — Por que o sistema não detectou a assinatura
 
-### Causa raiz
+### Causa raiz (confirmada via API Autentique)
 
-O modal `CotacaoFormDialog` (e o `DialogContent` base do shadcn) usa `max-h-[90vh]`. No **Safari iOS**, a unidade `vh` é calculada com base no **viewport máximo** (sem barra de URL e sem barra inferior de navegação). Quando essas barras estão visíveis, `90vh` é **maior que a área realmente visível**, fazendo com que:
+Consultei o documento da Camilly diretamente na API do Autentique. A resposta mostra:
 
-1. O rodapé sticky com o botão "Criar Cotação" fica **escondido atrás da barra inferior do Safari**.
-2. Mesmo rolando até o fim, os últimos campos (Data de Vencimento, botão de submit) ficam cortados.
-3. O comportamento NÃO ocorre em Chrome desktop, Android, ou após a barra do Safari recolher — por isso parece intermitente.
+```
+signatures[1]:
+  name: CAMILLY VITÓRIA CALIXTO CARNEIRO
+  action: SIGN
+  viewed: 2026-04-16T17:12:54Z   ✓ visualizou
+  signed: null                    ✗ NÃO assinado (oficialmente)
+  verifications: [{ type: PF_FACIAL, verified_at: null }]   ⏳ biometria pendente
+  biometric_approved: null
+  biometric_rejected: null
+```
 
-A screenshot enviada confirma: o card "Data de Vencimento" está sendo cortado pela barra inferior do Safari (ícones de voltar/avançar/compartilhar).
+A Camilly **completou o fluxo de assinatura no celular** (incluindo a selfie), mas o algoritmo de **biometria facial (`PF_FACIAL`)** do Autentique **não conseguiu confirmar a identidade dela com confiança suficiente** e jogou a assinatura em **modo de revisão manual** — o que gerou exatamente a tela que ela viu: *"Aguarde a verificação. Sua assinatura foi realizada com sucesso, o criador do documento foi notificado e precisará verificar a sua assinatura manualmente."*
 
-### Solução — usar `dvh` (dynamic viewport height) com fallback
+Enquanto um administrador da conta Autentique não aprovar manualmente em `painel.autentique.com.br`:
+- `signed.created_at` permanece `null` na API GraphQL
+- o webhook `signature.accepted` **não é disparado**
+- o sync polling vê apenas `viewed`, nunca `signed`
+- por isso o sistema continua mostrando "visualizado", e está **tecnicamente correto**
 
-`dvh` (dynamic viewport height) é a unidade CSS criada exatamente para resolver esse caso: ela se ajusta dinamicamente quando as barras do Safari aparecem/recolhem. Suportada no iOS Safari 15.4+ (cobre 99% dos iPhones em uso).
+**Não é bug do sistema** — é o fluxo desenhado do Autentique para casos de biometria duvidosa, e está alinhado com a política `mem://integrations/autentique/signature-credits-policy` e `mem://features/contracts/autentique-signing-flow-v7`.
 
-**Estratégia**: aplicar `dvh` apenas quando suportado, mantendo `vh` como fallback para navegadores antigos. Isso **não afeta Chrome/Firefox/Edge desktop nem Android**, que já tratam `vh` corretamente — eles simplesmente também passam a usar `dvh` sem nenhuma mudança visual.
+### O que precisa ser feito (duas frentes)
 
-### Mudanças propostas (mínimas e cirúrgicas)
+**Frente A — Operacional (imediato, para destravar a Camilly):**
 
-**1. `src/components/ui/dialog.tsx`** — `DialogContent` base:
-- Trocar `max-h-[90vh]` por `max-h-[90dvh]` com fallback via classe arbitrária Tailwind: `max-h-[90vh] max-h-[90dvh]` (a segunda regra sobrescreve quando suportada).
+1. Acessar `https://painel.autentique.com.br` com a conta admin da PraticCar
+2. Abrir o documento `Termo de Afiliação CTR-20260416171135-2RI0GS - CAMILLY VITÓRIA CALIXTO CARNEIRO`
+3. Revisar a foto/selfie capturada da Camilly comparando com a CNH/RG dela
+4. **Se for ela mesma:** aprovar manualmente a verificação biométrica → o Autentique então marca como `signed`, dispara o webhook, e o nosso sistema atualiza automaticamente em segundos
+5. **Se houver dúvida:** reenviar o termo para nova assinatura (a Camilly refaz a selfie em melhor iluminação)
 
-**2. `src/components/cotacoes/CotacaoFormDialog.tsx`** — `DialogContent` específico (linha 1352):
-- Trocar `max-h-[90vh]` por `max-h-[90dvh]` com fallback.
-- Adicionar `[&]:max-h-[100dvh]` em telas mobile (`max-sm:`) para usar quase toda a altura disponível em telas pequenas, dando mais espaço para scroll.
+**Frente B — Melhoria de produto (para evitar reincidência e dar visibilidade):**
 
-**3. Footer sticky (linha 2492)** — garantir que fica **acima** da área inferior do iOS:
-- Adicionar `pb-[env(safe-area-inset-bottom)]` no rodapé sticky usando arbitrary value: `pb-[max(0.75rem,env(safe-area-inset-bottom))]`. Isso reserva espaço para a barra inferior em iPhones com notch.
+Atualmente o sistema **não tem como saber** que uma assinatura está travada em revisão manual de biometria — ele apenas vê "viewed" e fica em loop de polling. Proponho 3 melhorias:
 
-**4. Scroll suave no iOS** — no container `overflow-y-auto` (linha 1365):
-- Adicionar `[-webkit-overflow-scrolling:touch]` para garantir scroll com momentum no iOS (já é padrão em Safari moderno, mas reforça consistência).
-- Adicionar `overscroll-contain` para evitar que o scroll do modal "vaze" para a página de fundo.
+1. **Detectar estado "biometria em revisão" no `autentique-sync-contrato`**
+   Adicionar leitura dos campos `verifications.verified_at`, `biometric_approved` e `biometric_rejected` na query GraphQL. Quando `viewed != null && signed == null && verifications[PF_FACIAL].verified_at == null` por mais de **15 minutos**, marcar `autentique_status = 'biometric_review'` no contrato.
 
-### Por que isso não afeta outros dispositivos
+2. **UI: badge e alerta no painel de contratos**
+   No card do contrato (admin) e na tela pública de acompanhamento (`/cotacao/:token`), exibir aviso laranja quando `autentique_status = 'biometric_review'`:
+   *"Assinatura em revisão biométrica pelo Autentique. Um administrador precisa aprovar manualmente em painel.autentique.com.br. Tempo médio: 1h útil."*
+   Botão direto para `https://painel.autentique.com.br/documentos/{autentique_documento_id}` (apenas para roles admin/diretor).
 
-- `dvh` em desktop (Chrome/Firefox/Edge/Safari macOS) = idêntico a `vh` (não há barras dinâmicas).
-- `env(safe-area-inset-bottom)` em telas sem notch = `0px` (zero efeito).
-- `overscroll-contain` é não destrutivo — apenas previne scroll-chaining indesejado.
-- `-webkit-overflow-scrolling: touch` é uma propriedade vendor-prefix ignorada por outros navegadores.
+3. **Notificação automática para a diretoria**
+   Quando o sync detectar `biometric_review` pela primeira vez, criar uma notificação interna (`notificacoes`) para os diretores com link direto para aprovar no painel Autentique. Evita que o cliente fique horas esperando sem ninguém saber.
 
-### Arquivos tocados
+### Arquivos afetados (Frente B)
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/components/ui/dialog.tsx` | `max-h-[90vh]` → `max-h-[90vh] max-h-[90dvh]` |
-| `src/components/cotacoes/CotacaoFormDialog.tsx` | DialogContent: `max-h-[90dvh]` + safe-area no footer + `overscroll-contain` no scroll |
+| `supabase/functions/autentique-sync-contrato/index.ts` | Ampliar query GraphQL com `verifications` e `biometric_*`; adicionar lógica para status `biometric_review` |
+| `supabase/functions/autentique-webhook/index.ts` | Tratar evento `signature.updated` quando contém `biometric_rejected` |
+| `src/hooks/useAutentiqueStatusPublico.ts` | Expor novo campo `biometric_status` |
+| `src/pages/AcompanharContratacao.tsx` (ou similar do fluxo público) | Banner laranja quando em revisão biométrica |
+| `src/components/contratos/ContratoCard.tsx` (admin) | Badge "Biometria em revisão" + botão direto Autentique |
+| Novo: nenhuma migração de banco — o campo `autentique_status` já existe |
 
-**Nenhuma alteração em lógica, hooks, dados ou outros componentes.**
+### Ação imediata recomendada
 
-### Verificação pós-correção
+**Antes de implementar a Frente B**, resolva a Frente A para a Camilly (pode levar 1 minuto): acesse `painel.autentique.com.br` com a conta admin, aprove a biometria dela e o sistema atualizará tudo sozinho via webhook.
 
-Pelo Safari no iPhone, abrir uma cotação no painel ou cotador público (`app.praticcar.org`) e confirmar:
-- Botão "Criar Cotação" sempre visível acima da barra inferior do Safari.
-- Scroll chega até o fim sem cortar "Data de Vencimento".
-- Em Chrome desktop e Android, comportamento idêntico ao atual (sem regressão).
+**Quer que eu implemente a Frente B agora?** São ~4 arquivos editados, sem migração de banco, e cobre 100% dos casos futuros de biometria travada.
 
