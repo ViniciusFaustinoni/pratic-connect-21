@@ -8,9 +8,23 @@ export function useDeleteBaseAntiga(tipo: 'associado' | 'veiculo') {
   return useMutation({
     mutationFn: async (id: string) => {
       if (tipo === 'veiculo') {
+        // Desvincular rastreador do veículo (volta para estoque)
+        const { error: rErr } = await supabase
+          .from('rastreadores')
+          .update({ veiculo_id: null, status: 'estoque' })
+          .eq('veiculo_id', id);
+        if (rErr) throw rErr;
+
         const { error } = await supabase.from('veiculos').delete().eq('id', id);
         if (error) throw error;
       } else {
+        // Desvincular rastreadores do associado (volta para estoque)
+        const { error: rErr } = await supabase
+          .from('rastreadores')
+          .update({ associado_id: null, veiculo_id: null, status: 'estoque' })
+          .eq('associado_id', id);
+        if (rErr) throw rErr;
+
         // Delete vehicles first (substituicoes are cleaned by CASCADE)
         const { error: vErr } = await supabase
           .from('veiculos')
