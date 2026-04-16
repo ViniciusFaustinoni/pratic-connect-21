@@ -279,7 +279,7 @@ export function checkRuleAgainstVehicle(rule: EligibilityRule, ctx: VehicleConte
       return isInclude ? match2 : !match2;
     }
     case 'tipo_uso': {
-      const tipos: string[] = cfg.tipos || cfg.values || [];
+      const tipos: string[] = cfg.tipos || cfg.values || cfg.tipos_uso || [];
       if (tipos.length === 0) return true;
       const match = !!ctx.tipoUso && tipos.some(t => t.toLowerCase() === ctx.tipoUso!.toLowerCase());
       return isInclude ? match : !match;

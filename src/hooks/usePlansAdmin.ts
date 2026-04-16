@@ -342,7 +342,7 @@ function applyBulkRuleOverrides(
       entity_type: entityType,
       rule_type: 'tipo_uso',
       rule_mode: 'include',
-      rule_config: { tipos_uso: [overrides.tipoUso] },
+      rule_config: { values: [overrides.tipoUso] },
       is_active: true,
     });
   }
