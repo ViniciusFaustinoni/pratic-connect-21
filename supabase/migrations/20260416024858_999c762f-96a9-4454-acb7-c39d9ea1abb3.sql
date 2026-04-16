@@ -1,0 +1,1 @@
+UPDATE configuracoes SET valor = '50' WHERE chave = 'taxa_adesao_minimo_volante_interno';
