@@ -24,6 +24,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getHojeBrasilia } from '@/lib/date-utils';
 import { ModalResumoDia } from '@/components/vistoriador/ModalResumoDia';
+import { FilaBaseSection } from '@/components/instalador/FilaBaseSection';
 
 export default function InstaladorHome() {
   // Realtime: receber tarefas instantaneamente
@@ -170,9 +171,11 @@ export default function InstaladorHome() {
           )
         )}
 
-        {/* Conteúdo Principal: Tarefa Atual ou Botão Iniciar */}
+        {/* Conteúdo Principal: Tarefa Atual ou Botão Iniciar / Fila Base */}
         {tarefaAtual ? (
           <TarefaAtualCard tarefa={tarefaAtual} />
+        ) : isVistoriadorBase ? (
+          <FilaBaseSection />
         ) : (
           <BotaoIniciarServico />
         )}
