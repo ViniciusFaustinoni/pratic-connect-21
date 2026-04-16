@@ -1865,12 +1865,24 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 </SelectContent>
               </Select>
               
-              {/* Alerta quando aplicativo é selecionado */}
+              {/* Alerta quando aplicativo é selecionado — cota dinâmica do plano */}
               {(usoVeiculo.toLowerCase().includes('aplicativo') || usoVeiculo.toLowerCase().includes('app')) && (
                 <Alert className="border-primary/50 bg-primary/5">
                   <Info className="h-4 w-4 text-primary" />
                   <AlertDescription className="text-sm">
-                    Categoria APP: cota de participação será 8% (mínimo R$ 3.000).
+                    {planosSelecionados[0] ? (
+                      <>
+                        Categoria APP{tipoVeiculoDetectado === 'moto' ? ' (moto)' : ''}: cota de participação{' '}
+                        <strong>{planosSelecionados[0].cotaPercentual}%</strong>
+                        {planosSelecionados[0].cotaMinima > 0 && (
+                          <> (mínimo R$ {planosSelecionados[0].cotaMinima.toLocaleString('pt-BR')})</>
+                        )}.
+                      </>
+                    ) : tipoVeiculoDetectado === 'moto' ? (
+                      <>Categoria APP (moto): cota de participação <strong>10%</strong> (mínimo R$ 1.500).</>
+                    ) : (
+                      <>Categoria APP: cota de participação <strong>8%</strong> (mínimo R$ 3.000).</>
+                    )}
                   </AlertDescription>
                 </Alert>
               )}
