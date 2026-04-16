@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ReguladorGuard } from './ReguladorGuard';
+import { SyncStatusBanner } from '@/components/profissional/SyncStatusBanner';
 import logoFullDark from '@/assets/logos/logo-full-dark.png';
 
 const NAV_ITEMS = [
@@ -51,6 +52,7 @@ export function ReguladorLayout() {
   return (
     <ReguladorGuard>
       <div className="h-dvh bg-muted/30">
+        <SyncStatusBanner />
         <div className="max-w-md mx-auto border-x border-border h-dvh bg-background flex flex-col relative overflow-hidden">
           {/* Header */}
           <header className="sticky top-0 z-50 bg-slate-800 shadow-sm border-b border-slate-700">

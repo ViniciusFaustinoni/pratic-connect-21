@@ -21,6 +21,7 @@ import { useTarefaAtual } from '@/hooks/useTarefaAtual';
 import { toast } from 'sonner';
 import { PWAInstallPromptProfissional } from '@/components/pwa/PWAInstallPromptProfissional';
 import { PushNotificationBanner } from './PushNotificationBanner';
+import { SyncStatusBanner } from '@/components/profissional/SyncStatusBanner';
 import { useAppResume } from '@/hooks/useAppResume';
 import { AlmocoBloqueioOverlay } from '@/components/vistoriador/AlmocoBloqueioOverlay';
 import logoFullDark from '@/assets/logos/logo-full-dark.png';
