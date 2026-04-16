@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { EscolhaLocalVistoria } from '@/components/cotacao-publica/EscolhaLocalVistoria';
+import { EscolhaBase } from '@/components/cotacao-publica/EscolhaBase';
 import { AgendamentoBase } from '@/components/cotacao-publica/AgendamentoBase';
 import { AgendamentoCotacao } from '@/components/cotacao-publica/AgendamentoCotacao';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -30,7 +31,7 @@ interface StepVistoriaProps {
 }
 
 type VistoriaStatus = 'pendente' | 'agendada' | 'em_analise' | 'aprovada' | 'reprovada';
-type ModoVistoria = 'escolha' | 'autovistoria' | 'escolha-local' | 'agendada-cliente' | 'agendada-base';
+type ModoVistoria = 'escolha' | 'autovistoria' | 'escolha-local' | 'agendada-cliente' | 'escolha-base' | 'agendada-base';
 
 export function StepVistoria({
   associadoId,
@@ -45,6 +46,7 @@ export function StepVistoria({
   const [dispensaConfirmada, setDispensaConfirmada] = useState(false);
   const [dispensaSolicitada, setDispensaSolicitada] = useState(false);
   const [modo, setModo] = useState<ModoVistoria>('escolha');
+  const [oficinaIdSelecionada, setOficinaIdSelecionada] = useState<string>('');
 
   // Fetch dispensa config
   const { data: dispensaConfig } = useQuery({
@@ -381,9 +383,27 @@ export function StepVistoria({
                       if (local === 'cliente') {
                         setModo('agendada-cliente');
                       } else {
-                        setModo('agendada-base');
+                        setModo('escolha-base');
                       }
                     }}
+                  />
+                </motion.div>
+              )}
+
+              {/* Escolha da base */}
+              {modo === 'escolha-base' && (
+                <motion.div
+                  key="escolha-base"
+                  initial={{ opacity: 0, x: 50 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -50 }}
+                >
+                  <EscolhaBase
+                    onEscolher={(oficinaId) => {
+                      setOficinaIdSelecionada(oficinaId);
+                      setModo('agendada-base');
+                    }}
+                    onVoltar={() => setModo('escolha-local')}
                   />
                 </motion.div>
               )}
@@ -398,11 +418,12 @@ export function StepVistoria({
                 >
                   <AgendamentoBase
                     cotacaoId={substituicaoId || ''}
+                    oficinaId={oficinaIdSelecionada}
                     clienteNome={dadosNovoVeiculo.modelo || ''}
                     veiculoPlaca={dadosNovoVeiculo.placa}
                     veiculoDescricao={dadosNovoVeiculo.modelo ? `${dadosNovoVeiculo.modelo} ${dadosNovoVeiculo.ano_modelo || ''}` : undefined}
                     onAgendado={handleAgendamentoConfirmado}
-                    onVoltar={() => setModo('escolha-local')}
+                    onVoltar={() => setModo('escolha-base')}
                   />
                 </motion.div>
               )}
