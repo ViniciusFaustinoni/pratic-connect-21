@@ -1,68 +1,42 @@
 
 
-## Entendimento
+## Problema
 
-Quando um técnico **conclui** uma tarefa (base ou rota), ela deve:
+Na "Lista de Instalações" e no popup do mapa, a placa da Kelly Cristina aparece como `0KM321B3` — o **placeholder técnico** que o sistema gera para veículos 0km (vide `src/lib/placa-utils.ts`). Esse valor nunca deve ser exibido ao usuário; deveria ser substituído por **"0KM (sem placa)"** via `formatPlacaExibicao()`.
 
-1. **Sumir do mapa de atribuições** (`/monitoramento/mapa`).
-2. **Não contar** no tooltip/contador da base (se for base).
-3. **Sumir do calendário** da base.
-4. **Continuar visível apenas em Serviços de Campo** (`/monitoramento/vistorias-instalacoes-mon`) como histórico (já filtra por status).
-
-Tarefas **em andamento** (`em_rota`, `em_andamento`) continuam visíveis no mapa/calendário — só some quando vira `concluida`/`finalizada`.
+O popup do mapa (segunda imagem) já está exibindo corretamente "0KM (sem placa)" no título com o badge "0KM" amarelo. O problema está na **Lista de Instalações** (primeira imagem) que renderiza o valor cru do banco.
 
 ## Investigação necessária
 
-1. `useVistoriasMapa` (`view_vistorias_mapa`) — confirmar se a view já filtra `status` ou traz tudo.
-2. Hook que alimenta o tooltip/contador da base (provavelmente `useAgendamentosBase` ou similar).
-3. `CalendarioBaseModal` / `CalendarioDiaModal` — qual hook usam.
-4. Hook de instalações no mapa (`useInstalacoesMapa` ou similar).
-5. Confirmar nomes exatos dos status finais (`concluida`, `finalizada`, `cancelada`?).
+1. Localizar o componente "Lista de Instalações" (provavelmente em `/monitoramento/mapa` aba Instalações ou em página dedicada).
+2. Confirmar se está renderizando `instalacao.placa` direto sem passar por `formatPlacaExibicao()`.
+3. Buscar outros lugares que ainda exibem placa crua (tabelas de vistorias, agendamentos, etc.).
 
 ## Plano
 
-### 1) Filtro de status na origem (mapa)
+### 1) Aplicar `formatPlacaExibicao()` na Lista de Instalações
 
-Adicionar filtro `.not('status', 'in', '(concluida,finalizada,cancelada)')` em:
-- `useVistoriasMapa` (vistorias do mapa).
-- Hook equivalente de instalações no mapa.
-- Hook de retiradas/encaixes no mapa (se existirem).
+Trocar `{placa}` por `{formatPlacaExibicao(placa)}` no componente da lista. Isso fará o `0KM321B3` virar `0KM (sem placa)` automaticamente.
 
-Manter `agendada`, `confirmada`, `em_rota`, `em_andamento`, `pendente`.
+### 2) Adicionar badge "0KM" visual (opcional, alinhar com popup)
 
-### 2) Contador da base (tooltip)
+Para consistência visual com o popup do mapa, exibir o badge amarelo "0KM" ao lado do texto quando `isPlacaPlaceholder(placa)` for true.
 
-Hook que alimenta o badge "X serviços" no ícone da base — aplicar mesmo filtro de status. Concluídas não entram na contagem.
+### 3) Varredura por outros pontos cegos
 
-### 3) Calendário da base
+Buscar no código (`grep` por `\.placa` em componentes de exibição) onde a placa é renderizada sem passar pelo helper. Lugares prováveis:
+- Tabelas de agendamentos
+- Cards de vistoria
+- Históricos de associado
+- Tooltips/labels de pinos no mapa (se houver)
 
-`CalendarioBaseModal` / `CalendarioDiaModal` — mesmo filtro. Concluídas somem da fila; em andamento permanecem.
+Aplicar `formatPlacaExibicao()` em todos.
 
-### 4) Realtime
+### 4) Sem mudança de banco
 
-Quando status muda para `concluida`, o realtime já existente (`useServicosRealtime`, etc.) invalida as queries → o pino some automaticamente do mapa em tempo real.
-
-### 5) Serviços de Campo (não muda)
-
-`/monitoramento/vistorias-instalacoes-mon` já mostra todas (incluindo concluídas) com filtros próprios — funciona como histórico. **Sem alteração.**
-
-### 6) Aba Atribuição Manual
-
-A aba `Atribuição Manual` já filtra por serviços não atribuídos/pendentes — confirmar que concluídas não aparecem (provavelmente já não aparecem, mas validar).
-
-## Arquivos prováveis
-
-- `src/hooks/useVistoriasMapa.ts`
-- `src/hooks/useInstalacoesMapa.ts` (ou similar)
-- `src/hooks/useAgendamentosBase.ts` (ou similar)
-- Hooks de calendário da base
-- View `view_vistorias_mapa` no banco (talvez precise ajuste, talvez não)
+O placeholder no banco é correto e necessário (constraint NOT NULL/UNIQUE). Mudança é puramente de **camada de apresentação**.
 
 ## Resultado
 
-- Mapa mostra apenas tarefas **ativas** (agendadas + em andamento).
-- Tooltip da base conta só ativas.
-- Calendário da base mostra só ativas.
-- Serviços de Campo mantém histórico completo.
-- Realtime: ao concluir, pino some na hora.
+Lista de Instalações passa a mostrar **"0KM (sem placa)"** com badge "0KM" amarelo (igual ao popup do mapa). Demais telas que ainda exibem placa crua de 0km também são corrigidas.
 
