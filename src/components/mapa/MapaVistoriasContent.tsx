@@ -205,7 +205,7 @@ export function MapaVistoriasContent() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('agendamentos_base')
-        .select('id, status, data_agendada, horario, cliente_nome, veiculo_placa')
+        .select('id, status, data_agendada, horario, cliente_nome, veiculo_placa, oficina_id')
         .eq('data_agendada', hojeStr)
         .not('status', 'in', '("concluida","cancelado","cancelada")');
       if (error) throw error;
@@ -213,6 +213,17 @@ export function MapaVistoriasContent() {
     },
     staleTime: 30_000,
   });
+
+  // Group pendentes by oficina_id
+  const pendentesPorBase = useMemo(() => {
+    const map = new Map<string, number>();
+    (agendamentosBaseHoje || []).forEach((ag: any) => {
+      if (ag.oficina_id) {
+        map.set(ag.oficina_id, (map.get(ag.oficina_id) || 0) + 1);
+      }
+    });
+    return map;
+  }, [agendamentosBaseHoje]);
 
   const baseModalState = useState<{ open: boolean; data: string }>({ open: false, data: hojeStr });
   const [baseModal, setBaseModal] = baseModalState;
