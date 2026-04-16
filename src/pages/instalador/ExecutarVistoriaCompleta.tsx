@@ -64,6 +64,9 @@ export default function ExecutarVistoriaCompleta() {
   const aprovarVeiculo = useAprovarVeiculoVistoria();
   const recusarVeiculo = useRecusarVeiculoVistoria();
   const salvarRascunho = useSalvarRascunhoVistoriaCompleta();
+  const online = useOnlineStatus();
+  const offlineQueue = useUploadVistoriaOffline((vistoriaPorServicoQuery.data || vistoriaPorInstalacaoQuery.data)?.id);
+
 
   // Estado
   const [uploadingFoto, setUploadingFoto] = useState<string | null>(null);
