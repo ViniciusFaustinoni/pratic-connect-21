@@ -600,6 +600,11 @@ export default function ExecutarVistoriaCompleta() {
             {!videoEnviado && 'Envie o vídeo 360°.'}
           </p>
         )}
+        {offlineQueue.totalPendentes > 0 && (
+          <p className="mt-2 text-center text-xs text-blue-300">
+            ☁️ {offlineQueue.totalPendentes} mídia(s) ainda serão enviadas em segundo plano quando a internet voltar.
+          </p>
+        )}
       </footer>
 
       {/* Modais */}
