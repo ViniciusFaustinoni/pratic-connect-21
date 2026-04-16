@@ -1026,6 +1026,12 @@ export function MapaVistoriasContent() {
     return (
       <>
         {renderDialogs()}
+        <CalendarioDiaModal
+          open={baseModal.open}
+          onClose={() => setBaseModal({ ...baseModal, open: false })}
+          data={baseModal.data}
+          abaInicial="base"
+        />
         <div className="relative h-full flex flex-col">
           <div className="flex-1 rounded-lg overflow-hidden relative">
             {renderMapa()}
@@ -1058,6 +1064,12 @@ export function MapaVistoriasContent() {
   return (
     <>
       {renderDialogs()}
+      <CalendarioDiaModal
+        open={baseModal.open}
+        onClose={() => setBaseModal({ ...baseModal, open: false })}
+        data={baseModal.data}
+        abaInicial="base"
+      />
       <div className="flex h-full gap-4">
         <Card className={cn(
           "flex-shrink-0 flex flex-col overflow-hidden transition-all duration-300",
