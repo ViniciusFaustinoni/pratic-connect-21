@@ -892,8 +892,8 @@ export function MapaVistoriasContent() {
                       onClick={async () => {
                         const fnName = p.origem_tabela === 'vistoria' ? 'gerar-link-vistoriador-prestador' : 'gerar-link-prestador';
                         const payload = p.origem_tabela === 'vistoria'
-                          ? { vistoria_id: p.instalacao_id, vistoriador_prestador_id: p.prestador_id }
-                          : { instalacao_id: p.instalacao_id, prestador_id: p.prestador_id };
+                          ? { instalacao_id: p.instalacao_id, vistoriador_prestador_id: p.prestador_id, reenviar: true }
+                          : { instalacao_id: p.instalacao_id, vistoriador_prestador_id: p.prestador_id, reenviar: true };
                         const { error } = await supabase.functions.invoke(fnName, { body: payload });
                         if (error) toast.error('Erro ao reenviar link');
                         else toast.success('Link reenviado via WhatsApp');

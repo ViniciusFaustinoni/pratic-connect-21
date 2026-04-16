@@ -37,7 +37,7 @@ async function buscarLinksAtivos(tabela: 'vistoria_prestador_links' | 'instalaca
       ${prestadorFk},
       instalacao_id,
       instalacoes:instalacao_id (
-        id, latitude, longitude,
+        id, endereco_latitude, endereco_longitude,
         veiculos:veiculo_id ( placa ),
         associados:associado_id ( nome, telefone )
       )
@@ -83,8 +83,8 @@ async function buscarLinksAtivos(tabela: 'vistoria_prestador_links' | 'instalaca
       longitude: r.longitude,
       localizacao_atualizada_em: r.localizacao_atualizada_em,
       instalacao_id: r.instalacao_id,
-      destino_lat: inst?.latitude || null,
-      destino_lng: inst?.longitude || null,
+      destino_lat: inst?.endereco_latitude ? Number(inst.endereco_latitude) : null,
+      destino_lng: inst?.endereco_longitude ? Number(inst.endereco_longitude) : null,
       associado_nome: inst?.associados?.nome || null,
       associado_telefone: inst?.associados?.telefone || null,
       veiculo_placa: inst?.veiculos?.placa || null,
