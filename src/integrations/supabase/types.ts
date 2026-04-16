@@ -783,6 +783,7 @@ export type Database = {
           id: string
           instalacao_id: string | null
           observacoes: string | null
+          oficina_id: string | null
           status: string | null
           updated_at: string | null
           veiculo_descricao: string | null
@@ -801,6 +802,7 @@ export type Database = {
           id?: string
           instalacao_id?: string | null
           observacoes?: string | null
+          oficina_id?: string | null
           status?: string | null
           updated_at?: string | null
           veiculo_descricao?: string | null
@@ -819,6 +821,7 @@ export type Database = {
           id?: string
           instalacao_id?: string | null
           observacoes?: string | null
+          oficina_id?: string | null
           status?: string | null
           updated_at?: string | null
           veiculo_descricao?: string | null
@@ -867,6 +870,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_acompanhamento"
             referencedColumns: ["instalacao_id"]
+          },
+          {
+            foreignKeyName: "agendamentos_base_oficina_id_fkey"
+            columns: ["oficina_id"]
+            isOneToOne: false
+            referencedRelation: "oficinas"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "agendamentos_base_vistoria_id_fkey"
