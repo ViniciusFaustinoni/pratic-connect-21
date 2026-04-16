@@ -190,7 +190,7 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
   });
 
   const criarAcesso = form.watch('criarAcesso');
-  const regioesValue = form.watch('regioes');
+  
   const tipoVistoriador = form.watch('tipoVistoriador');
 
   // Resetar form quando modal abre/fecha ou profissional muda
@@ -234,14 +234,6 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
     setLoadingCep(false);
   };
 
-  const toggleRegiao = (value: string) => {
-    const current = regioesValue || [];
-    if (current.includes(value)) {
-      form.setValue('regioes', current.filter(r => r !== value));
-    } else {
-      form.setValue('regioes', [...current, value]);
-    }
-  };
 
   const handleAlterarEmail = async () => {
     if (!profissional?.userId || !novoEmail) return;
