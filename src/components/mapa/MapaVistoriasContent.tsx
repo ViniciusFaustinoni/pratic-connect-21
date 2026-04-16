@@ -196,6 +196,26 @@ export function MapaVistoriasContent() {
   const desatribuirMutation = useDesatribuirServico();
   const enviarConfirmacaoMutation = useEnviarConfirmacaoWhatsApp();
   const { isDiretor, isCoordenadorMonitoramento, isAnalistaMonitoramento, isAdminMaster, isDesenvolvedor } = usePermissions();
+  const { data: basesPratic } = useBasesPratic();
+
+  // Base pendentes do dia
+  const hojeStr = format(new Date(), 'yyyy-MM-dd');
+  const { data: agendamentosBaseHoje } = useQuery({
+    queryKey: ['mapa-base-pendentes', hojeStr],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('agendamentos_base')
+        .select('id, status, data_agendada, horario, cliente_nome, veiculo_placa')
+        .eq('data_agendada', hojeStr)
+        .not('status', 'in', '("concluida","cancelado","cancelada")');
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 30_000,
+  });
+
+  const baseModalState = useState<{ open: boolean; data: string }>({ open: false, data: hojeStr });
+  const [baseModal, setBaseModal] = baseModalState;
 
   const podeCancelarAtribuicao = isDiretor || isCoordenadorMonitoramento || isAnalistaMonitoramento || isAdminMaster || isDesenvolvedor;
 
