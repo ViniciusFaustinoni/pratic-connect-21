@@ -438,7 +438,8 @@ export function MapaVistoriasContent() {
       ) : (
         <div className="space-y-2">
           {vistoriasFiltradas.map((v) => {
-            const color = getCorPorStatus(v.status, v.confirmacao_whatsapp, v.permite_encaixe);
+            const isFutura = isFuturaFn(v.data_agendada);
+            const color = getCorPorStatus(v.status, v.confirmacao_whatsapp, v.permite_encaixe, isFutura);
             const hojeNorm = new Date();
             hojeNorm.setHours(0, 0, 0, 0);
             const isAtrasada = v.data_agendada
@@ -448,6 +449,7 @@ export function MapaVistoriasContent() {
             const canAssign = !!atribuicaoManualAtiva && !isRealizada && !!v.latitude && !!v.servico_id_unificado;
             const isSelected = servicoParaAtribuir?.id === v.id;
             const canSendConfirmation = podeEnviarConfirmacao(v);
+            const ordemNum = ordemCronologica.get(v.id) || 0;
 
             return (
               <div
