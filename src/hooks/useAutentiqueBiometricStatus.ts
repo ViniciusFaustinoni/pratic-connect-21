@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase as publicSupabase } from '@/integrations/supabase/client';
+import { publicSupabase } from '@/integrations/supabase/publicClient';
 
 interface BiometricStatusResult {
   biometric_status: 'review' | 'rejected' | null;
