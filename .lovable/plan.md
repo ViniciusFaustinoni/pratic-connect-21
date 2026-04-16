@@ -1,68 +1,47 @@
 
-## Diagnóstico
+## Plano: estender vistoria offline-first para vistoriadores comuns
 
-A autovistoria pública (etapa 4 do fluxo de cotação para Yamaha NMAX 160 — moto) está pedindo fotos de **carro** (frente, traseira, laterais, motor, painel, etc.) em vez do conjunto correto de **moto** (frente, traseira, laterais, painel, chassi, motor, hodômetro).
+### Diagnóstico
+A infra offline (Dexie + `useSyncQueue` + banner + tela de sincronização) já está pronta e suporta `origem: 'instalador'`. Falta só plugar nos componentes de captura do fluxo do vistoriador comum, que hoje fazem upload direto pro Supabase Storage.
 
-### Investigação necessária
+### Investigação necessária (na próxima rodada)
+1. Localizar `ExecutarVistoriaCompleta.tsx` (vistoriador base + agendada — paridade pela memória `inspection-workflow-parity`).
+2. Identificar como hoje as fotos/vídeo são capturados e enviados (provável `useUploadVistoria` ou similar chamando `supabase.storage.upload` direto).
+3. Verificar se `InstaladorLayout` já tem `<SyncStatusBanner />` (foi adicionado na rodada anterior — confirmar) e se a rota `/instalador/sincronizacao` está ativa.
 
-Preciso confirmar (na próxima rodada com permissão de leitura):
+### Mudanças
 
-1. **Componente da autovistoria pública** — provável `src/pages/cotacao/Autovistoria*.tsx` ou similar dentro do fluxo `/cotacao/:token`.
-2. **Definição dos slots de fotos** — onde está hardcoded a lista (`frente`, `traseira`, `lateral_esquerda`, etc.). Suspeita: array fixo sem branch por categoria do veículo.
-3. **Fonte da categoria do veículo no contexto público** — se o token de cotação carrega `tipo_veiculo` / `categoria` / `tipoPlaca` (memória `vehicle-context-plate-type-sync-v2` diz que `tipoPlaca` é a fonte de verdade).
-4. **Comparar com o app do regulador/instalador** — `VistoriaEventoMidias.tsx` e `ExecutarVistoriaCompleta.tsx` já tratam moto vs carro? Se sim, reaproveitar a mesma lista.
+**1. Refatorar captura de fotos do vistoriador**
+- Trocar upload direto por `enfileirarMidia({ origem: 'instalador', tipo: 'foto', slot, blob })`.
+- Mostrar preview a partir do blob local quando a URL do servidor ainda não existir (mesmo padrão do `VistoriaEventoMidias.tsx`).
+- Botão "Refazer" remove da fila local antes de capturar de novo.
 
-### Causa provável
+**2. Refatorar captura de vídeo**
+- Idem para o slot `'360'` (ou nome usado no fluxo do vistoriador).
 
-O componente da autovistoria pública usa um array fixo de slots de carro, sem ler `categoria === 'moto'` do contexto da cotação para alternar para o conjunto de moto.
+**3. Combinar fotos do servidor + previews locais**
+- Helper `fotoUrl(i)` igual ao já feito para o regulador: prioriza URL do servidor, cai pro `URL.createObjectURL(blob)` da fila.
 
-## Correção planejada
+**4. Botão "Finalizar vistoria"**
+- Permitir prosseguir mesmo com itens na fila (já implementado no banner global).
+- Mensagem de aviso: "X mídias ainda serão enviadas em segundo plano".
 
-### 1. Identificar a categoria no fluxo público
-- Ler `categoria` / `tipoPlaca` do payload da cotação (`cotacoes.dados_veiculo` ou `marcas_modelos.categoria`) já presente no contexto da página pública.
+**5. Confirmar fluxo no `useSyncQueue`**
+- Já trata `origem === 'instalador'` via Storage direto + bucket `vistoria-fotos`/`vistoria-videos`. Validar que o path bate com o que o resto do app espera ler depois.
 
-### 2. Definir conjuntos de fotos por categoria
-Centralizar em `src/lib/vistoria/slotsFotos.ts` (novo):
+**6. Edge function / persistência final**
+- Quando todas as mídias do `vistoria_id` chegarem no Storage, atualizar `vistorias` (ou tabela equivalente do vistoriador) com as URLs. Fazer isso via trigger no Storage **ou** via `enfileirarVistoria` no Dexie disparando uma chamada final ao endpoint de finalização quando a fila esvazia. Decidir após ver o código atual.
 
-```ts
-export const SLOTS_CARRO = [
-  'frente', 'traseira', 'lateral_esquerda', 'lateral_direita',
-  'painel', 'hodometro', 'motor', 'chassi', 'pneus', 'documento'
-];
+### Arquivos prováveis
+- `src/components/instalador/ExecutarVistoriaCompleta.tsx` (ou pasta `vistoriador/`)
+- `src/components/instalador/FotoCapture.tsx` e `VideoCapture.tsx` (já existem — usados pelo regulador)
+- Hook de upload atual (a localizar — provável `useVistoriaUpload` ou similar)
+- Possível ajuste em edge function de finalização para aceitar `client_id` por mídia
 
-export const SLOTS_MOTO = [
-  'frente', 'traseira', 'lateral_esquerda', 'lateral_direita',
-  'painel_hodometro', 'chassi', 'motor', 'documento'
-];
+### Não vou mexer
+- Schema Dexie (já suporta).
+- `useSyncQueue` (já suporta `origem: 'instalador'`).
+- Banner global e tela `/instalador/sincronizacao` (já criados).
 
-export function getSlotsFotos(categoria: 'carro' | 'moto') {
-  return categoria === 'moto' ? SLOTS_MOTO : SLOTS_CARRO;
-}
-```
-
-### 3. Refatorar componentes que listam slots
-- Componente da autovistoria pública (a confirmar nome): trocar array fixo pela função.
-- `VistoriaEventoMidias.tsx` e equivalente do instalador: usar a mesma função para garantir paridade (memória `inspection-workflow-parity`).
-- Vídeo 360º: igual para os dois.
-
-### 4. Labels amigáveis
-Mapa `LABELS_SLOT` com nomes em PT-BR já adaptados ("Painel/Hodômetro" para moto vs "Painel" + "Hodômetro" separados para carro).
-
-### 5. Validação
-- Abrir cotação de moto (NMAX): deve listar 8 slots de moto.
-- Abrir cotação de carro: deve listar 10 slots de carro.
-- Conferir nas três entradas: público (autovistoria), regulador, instalador.
-
-## Arquivos a editar (estimado)
-- **Novo**: `src/lib/vistoria/slotsFotos.ts`
-- Componente público da autovistoria (a localizar — provável `src/pages/cotacao/VistoriaPublicaPage.tsx` ou `AutovistoriaPublicaPage.tsx`)
-- `src/components/regulador/VistoriaEventoMidias.tsx` (ajustar para usar helper)
-- Equivalente do instalador, se houver duplicação
-
-## Não vou mexer
-- Lógica de upload offline (já implementada na rodada anterior — só consome a lista de slots).
-- Edge functions de salvamento (aceitam qualquer slot).
-- Cálculo de preço/cotação.
-
-## Resultado esperado
-Cotação de moto na etapa de autovistoria mostra apenas as fotos pertinentes a moto (sem "motor frontal", "porta-malas" etc.), idêntico ao que o vistoriador presencial vê. Carros continuam com o conjunto completo. Zero impacto no resto do fluxo.
+### Resultado
+Vistoriador comum (base + agendada) completa vistoria sem internet exatamente como o regulador faz hoje: fotos/vídeo persistidos no IndexedDB, sincronização automática quando voltar online, mesmo banner, mesma tela de pendências.
