@@ -72,6 +72,7 @@ import { useConfigLimitesVeiculo } from '@/hooks/useConfigLimitesVeiculo';
 import { useFipeMenorAtivo } from '@/hooks/useFipeMenorAtivo';
 import { useConfigDuplaAprovacao } from '@/hooks/useAprovacoesFipeDiretoria';
 import { useTabelasPreco } from '@/hooks/usePlanos';
+import { obterFaixaFipeAtual, obterFaixaFipeAnterior, somarCoberturasPorValorFipe } from '@/utils/fipeFaixa';
 import { useLead } from '@/hooks/useLeads';
 import { useFipe, type PlateResult, type FipeMarca, type FipeModelo, type FipeAno } from '@/hooks/useFipe';
 import { useVendedores } from '@/hooks/useVendedores';
@@ -385,16 +386,39 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     modelo: modeloResolvido || undefined,
   });
 
-  // Buscar todas as faixas de preço para calcular elegibilidade FIPE menor
+  // Buscar todas as faixas de preço (LEGADO — apenas fallback p/ catálogo antigo)
   const { data: todasFaixas = [] } = useTabelasPreco();
 
-  // Calcular elegibilidade FIPE menor
+  // Vínculos plano↔cobertura (necessário para resolver faixa pelo plano)
+  // (allEligibilityRules já declarado acima)
+  const { data: planoCoberturasMap = [] } = useQuery({
+    queryKey: ['planos_coberturas', 'faixa_display'],
+    queryFn: async () => {
+      const PAGE_SIZE = 1000;
+      let allData: { plano_id: string; cobertura_id: string }[] = [];
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from('planos_coberturas')
+          .select('plano_id, cobertura_id')
+          .range(from, from + PAGE_SIZE - 1);
+        if (error) throw error;
+        allData = allData.concat((data || []) as any);
+        if (!data || data.length < PAGE_SIZE) break;
+        from += PAGE_SIZE;
+      }
+      return allData;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // Calcular elegibilidade FIPE menor (usa entity_eligibility_rules, com fallback p/ tabela legada)
   const fipeMenorInfo = useMemo(() => {
-    if (!valorFipe || valorFipe <= 0 || planosSelecionados.length === 0 || todasFaixas.length === 0) {
+    if (!valorFipe || valorFipe <= 0 || planosSelecionados.length === 0) {
       return null;
     }
 
-    // Bloquear FIPE menor para veículos com valor FIPE <= limite mínimo (padrão R$ 30.000)
+    // Bloquear FIPE menor para veículos com valor FIPE <= limite mínimo
     if (valorFipe <= fipeMenorLimiteMinimo) {
       return null;
     }
@@ -402,7 +426,34 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     const plano = planosSelecionados[0];
     const valorReduzido = valorFipe * 0.99;
 
-    // Encontrar faixa atual do veículo
+    // === MOTOR MODERNO: derivar faixas das regras fipe_range ===
+    const faixaAtualRule = obterFaixaFipeAtual(plano?.id, planoCoberturasMap, allEligibilityRules as any, valorFipe);
+    const faixaInferiorRule = obterFaixaFipeAnterior(plano?.id, planoCoberturasMap, allEligibilityRules as any, valorFipe);
+
+    if (faixaAtualRule && faixaInferiorRule) {
+      const mensalAtual = somarCoberturasPorValorFipe(plano.id, planoCoberturasMap, allEligibilityRules as any, valorFipe);
+      const mensalInferior = somarCoberturasPorValorFipe(
+        plano.id,
+        planoCoberturasMap,
+        allEligibilityRules as any,
+        // valor "alvo" qualquer dentro da faixa inferior
+        Math.max(0, faixaInferiorRule.de + 0.01)
+      );
+
+      const elegivel = valorReduzido < faixaAtualRule.de;
+
+      return {
+        elegivel,
+        valorReduzido,
+        faixaAtual: { min: faixaAtualRule.de, max: faixaAtualRule.ate - 0.01, mensal: mensalAtual },
+        faixaInferior: { min: faixaInferiorRule.de, max: faixaInferiorRule.ate - 0.01, mensal: mensalInferior },
+        economia: mensalAtual - mensalInferior,
+      };
+    }
+
+    // === FALLBACK LEGADO (catálogo antigo sem regras fipe_range) ===
+    if (todasFaixas.length === 0) return null;
+
     const matchingFaixas = todasFaixas.filter(f => valorFipe >= f.fipe_min && valorFipe <= f.fipe_max);
     const linhaSlugPlano = plano?.linha || null;
     const faixaAtual = (linhaSlugPlano ? matchingFaixas.find(f => f.linha_slug === linhaSlugPlano) : null)
@@ -410,7 +461,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
     if (!faixaAtual) return null;
 
-    // Encontrar faixa inferior (onde fipe_max < faixaAtual.fipe_min)
     const faixasInferiores = todasFaixas
       .filter(f => f.fipe_max < faixaAtual.fipe_min && f.linha_slug === faixaAtual.linha_slug && f.regiao === faixaAtual.regiao && f.tipo_uso === faixaAtual.tipo_uso)
       .sort((a, b) => b.fipe_max - a.fipe_max);
@@ -418,7 +468,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     const faixaInferior = faixasInferiores[0];
     if (!faixaInferior) return null;
 
-    // Verificar elegibilidade: valor reduzido deve caber na faixa inferior
     const elegivel = valorReduzido <= faixaInferior.fipe_max;
 
     return {
@@ -428,18 +477,31 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       faixaInferior: { min: faixaInferior.fipe_min, max: faixaInferior.fipe_max, mensal: faixaInferior.valor_mensal },
       economia: faixaAtual.valor_mensal - faixaInferior.valor_mensal,
     };
-  }, [valorFipe, planosSelecionados, todasFaixas, fipeMenorLimiteMinimo]);
+  }, [valorFipe, planosSelecionados, todasFaixas, fipeMenorLimiteMinimo, planoCoberturasMap, allEligibilityRules]);
 
-  // Faixa de preço atual onde o FIPE se enquadra (filtra pela linha do plano selecionado)
+  // Faixa de preço atual onde o FIPE se enquadra
+  // FONTE: entity_eligibility_rules (motor moderno). Fallback: tabelas_preco_mensalidade (legado)
   const faixaAtualFipe = useMemo(() => {
-    if (!valorFipe || valorFipe <= 0 || todasFaixas.length === 0) return null;
+    if (!valorFipe || valorFipe <= 0) return null;
+
+    // Tenta motor moderno primeiro — usa o primeiro plano selecionado, ou o primeiro plano calculado
+    const planoRef = planosSelecionados[0] || planosCalculados[0];
+    if (planoRef?.id) {
+      const faixa = obterFaixaFipeAtual(planoRef.id, planoCoberturasMap, allEligibilityRules as any, valorFipe);
+      if (faixa) {
+        return { min: faixa.de, max: faixa.ate - 0.01 };
+      }
+    }
+
+    // Fallback: tabela legada
+    if (todasFaixas.length === 0) return null;
     const matching = todasFaixas.filter(f => valorFipe >= f.fipe_min && valorFipe <= f.fipe_max);
     if (matching.length === 0) return null;
     const linhaPlano = planosSelecionados[0]?.linha || null;
     const preferred = linhaPlano ? matching.find(f => f.linha_slug === linhaPlano) : null;
     const faixa = preferred || matching.sort((a, b) => (b.fipe_max - b.fipe_min) - (a.fipe_max - a.fipe_min))[0];
     return { min: faixa.fipe_min, max: faixa.fipe_max };
-  }, [valorFipe, todasFaixas, planosSelecionados]);
+  }, [valorFipe, todasFaixas, planosSelecionados, planosCalculados, planoCoberturasMap, allEligibilityRules]);
   // Marcas aceitas de motos
   const { data: marcasAceitasMotos } = useMarcasAceitasMotos();
 
