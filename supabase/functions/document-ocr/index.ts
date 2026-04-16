@@ -80,6 +80,11 @@ nome, cpf (XXX.XXX.XXX-XX - PRIORIDADE MÁXIMA), rg, numero_registro (11 dígito
 
 ### RG
 nome, rg, cpf (se presente), data_nascimento, data_expedicao
+- NOME: extrair EXCLUSIVAMENTE do campo "NOME" que fica na parte superior do documento, logo abaixo do cabeçalho institucional. Este é o nome do titular do documento.
+- NÃO confundir com nomes de autoridades, presidentes do DETRAN, ou assinaturas oficiais impressas no rodapé do documento (ex: "PRESIDENTE DO DETRAN").
+- FILIAÇÃO: campos "FILIAÇÃO" contêm nomes dos pais — NÃO são o nome do titular.
+- RG: campo "REGISTRO GERAL" — extrair o número com pontuação.
+- CPF: pode estar presente no verso ou na frente. Formato XXX.XXX.XXX-XX.
 
 ### CRLV
 placa (ABC1234/ABC1D23), renavam (11 dígitos), chassi (17 chars), marca, modelo, ano_fabricacao (int), ano_modelo (int), cor (campo "COR"/"COR PREDOMINANTE" - leia literalmente), combustivel, motor, nome_proprietario, blindado (bool)
