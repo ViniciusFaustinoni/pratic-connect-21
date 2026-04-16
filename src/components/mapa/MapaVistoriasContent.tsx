@@ -63,11 +63,13 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useEnviarConfirmacaoWhatsApp } from "@/hooks/useEnviarConfirmacaoWhatsApp";
 import { useBasesPratic } from "@/hooks/useBasesPratic";
 import { usePrestadoresAtivosMapa } from "@/hooks/usePrestadoresAtivosMapa";
+import { useAlocacoesDiaHoje } from "@/hooks/useAlocacoesDiaHoje";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { CalendarioDiaModal } from "@/components/monitoramento/CalendarioDiaModal";
 import { formatPlacaExibicao, isPlacaPlaceholder } from "@/lib/placa-utils";
 import { ReagendarTarefaDialog } from "@/components/mapa/ReagendarTarefaDialog";
+import { AlocarVistoriadorDialog } from "@/components/mapa/AlocarVistoriadorDialog";
 
 const COR_REALIZADA = '#10B981';
 const COR_A_REALIZAR = '#EF4444';
@@ -270,8 +272,10 @@ export function MapaVistoriasContent() {
   const podeReagendar = isDiretor || isCoordenadorMonitoramento || isAnalistaMonitoramento || isAdminMaster || isDesenvolvedor;
 
   const vistoriadoresEmServico = useMemo(() => {
-    return vistoriadores?.filter(v => v.em_servico && v.latitude && v.longitude) || [];
-  }, [vistoriadores]);
+    return (vistoriadores || []).filter(
+      v => v.em_servico && v.latitude && v.longitude && !idsProfBase.has(v.vistoriador_id)
+    );
+  }, [vistoriadores, idsProfBase]);
 
   const vistoriasFiltradas = useMemo(() => {
     if (!vistorias) return [];
