@@ -1,80 +1,93 @@
 
 ## Diagnóstico
 
-Hoje a alocação `rota | base` existe na tabela `alocacoes_diarias`, mas:
+A Kelly respondeu "Sim" via WhatsApp (Meta), mas o sistema:
 
-1. É definida apenas via **EscalaDiaPanel / PlantaoDiaModal** (na aba "Equipe" da gestão), não direto pelo coordenador no mapa de monitoramento.
-2. Não há **vínculo com qual base** o técnico fica fixo (`base_id` não existe em `alocacoes_diarias`).
-3. No mapa de monitoramento (`MapaVistoriasContent.tsx`), técnicos em modo base **continuam sendo plotados** pelas coordenadas de `vistoriadores_localizacao` e ficam **arrastáveis** (drag-and-drop), permitindo atribuição errada de tarefas de rota.
-4. Vistorias de base (`agendamentos_base`) podem ser atribuídas a qualquer técnico, sem checar se ele é base daquela oficina.
-5. Ao clicar no ícone da base no mapa, hoje só abre o `CalendarioDiaModal` com a fila — **não mostra quem é o vistoriador fixo da base**.
+1. **Não atualizou** `confirmacoes_agendamento` (continua `status='enviada'`, `resposta_cliente=null`).
+2. **Não atualizou** `servicos.confirmacao_whatsapp` (continua `null`).
+3. **Não respondeu** à Kelly via IA confirmando o recebimento.
+4. **Não atualizou** o pino no mapa.
 
-## Plano
+### Causa raiz (3 bugs encadeados)
 
-### 1) Schema (migration)
+**BUG A — `whatsapp-meta-webhook` referencia colunas inexistentes**
+O código tenta gravar em `confirmacoes_agendamento.telefone_formatado`, `intencao_detectada`, `respondido_em`, `resposta_associado`. A tabela real tem: `telefone`, `resposta_cliente`, `resposta_recebida_em`. Resultado: o `.update()` falha silenciosamente OU o `.select(...).or('telefone_formatado.in.(...)')` retorna 400 e o fluxo cai fora.
 
-Adicionar coluna `base_id uuid references oficinas(id)` em `alocacoes_diarias`. Constraint: obrigatório quando `tipo_alocacao = 'base'` (via trigger de validação, não CHECK), e a oficina referenciada precisa ter `is_base_pratic = true`.
+**BUG B — Mensagem entra na `whatsapp_fila_ia` em vez de processar confirmação**
+O `whatsapp-meta-webhook`, ao detectar associado ativo, **enfileira** na `whatsapp_fila_ia` para o agente IA (Maya) e nunca chama `processarRespostaConfirmacaoMeta` — porque a checagem de confirmação pendente é feita ANTES, mas com query quebrada (BUG A). Resultado: a Kelly cai no fluxo padrão da IA Maya.
 
-RLS: garantir que coordenador de monitoramento e diretor têm INSERT/UPDATE em `alocacoes_diarias`.
+**BUG C — Dedup mata o reprocessamento**
+O `processar-fila-ia` invoca `whatsapp-webhook` com o **mesmo `message_id`** original (linha 79). O `whatsapp-webhook` (linha 2904-2914) faz dedup por `message_id` e descarta. Confirmação nunca chega ao bloco que faria o trabalho.
 
-### 2) Hook `useAlocacoesDiaHoje`
+**BUG D — Resposta IA não foi disparada**
+Como o item caiu no fluxo de associado ativo (após dedup falhar), o agente Maya deveria responder. Mas a Maya não tem prompt/ferramenta para reconhecer "Sim isolado" como confirmação de agendamento — ela responde como dúvida ou fica em silêncio.
 
-Novo hook que retorna mapa `profissional_id → { tipo_alocacao, base_id }` para o dia atual, consumido pelo `MapaVistoriasContent` e pelo painel de equipe. Realtime sobre `alocacoes_diarias`.
+## Plano de correção
 
-### 3) Mapa de monitoramento — aba Equipe
+### 1) Corrigir `whatsapp-meta-webhook` (alinhar com schema real)
 
-No popup de cada vistoriador (em `Mapa.tsx` aba `equipe`), adicionar:
-- Seletor **Tipo: Rota / Base** (para coordenador/diretor).
-- Quando "Base" selecionado → segundo combo **"Em qual base?"** (lista `useBasesPratic`).
-- Botão "Salvar" → upsert em `alocacoes_diarias` (data=hoje).
+- Trocar `telefone_formatado` por apenas `telefone` na busca.
+- Trocar campos de UPDATE: `resposta_associado → resposta_cliente`, `respondido_em → resposta_recebida_em`, remover `intencao_detectada` (ou criar coluna se quiser histórico).
+- Trocar `status="sucesso"` por `status="confirmada"` (alinhar com whatsapp-webhook Evolution).
+- Trocar `confirmacao_whatsapp: true` (boolean) por `'confirmada'` (string) — coluna é text.
+- Trocar `confirmacao_whatsapp_em` por `confirmado_via_whatsapp_em`.
 
-### 4) Mapa de atribuições — esconder técnicos base
+### 2) Garantir que o webhook Meta processa confirmação ANTES da fila IA
 
-Em `MapaVistoriasContent.tsx`:
-- Filtrar `vistoriadoresEmServico` para **não renderizar** Markers de quem está em modo base hoje.
-- Bloquear drag-and-drop deles (já não aparecem; também blindar lógica de `handleTecnicoDragEnd` para ignorar).
-- Vistorias de **rota** sendo arrastadas não podem ser atribuídas a técnico base — `handleTaskDragEnd` filtra técnicos base.
+Reordenar: PRIMEIRO checar confirmação pendente (com query corrigida) → se achar, processar e retornar. SÓ DEPOIS enfileirar para Maya.
 
-### 5) Ícone da base mostra vistoriador fixo
+### 3) Disparar push + invalidação realtime do mapa
 
-No popup do Marker da base (linha ~1022-1051), adicionar seção:
-- "Vistoriador fixo hoje: **Nome**" com badge verde "Em base".
-- Se houver mais de um, lista todos.
-- Botão "Reatribuir" abre dialog para trocar técnico daquela base.
+Após confirmar:
+- `servicos.confirmacao_whatsapp = 'confirmada'` + `confirmado_via_whatsapp_em = now()` → realtime já atualiza o mapa (a tabela `servicos` tem realtime habilitado).
+- Push para vistoriador atribuído (já existe lógica em `whatsapp-webhook`).
+- Atualizar `confirmacoes_agendamento` → realtime para popups que escutam.
 
-### 6) Atribuição manual de vistorias de base
+### 4) Resposta natural via IA
 
-No `useAtribuirServicoManual` (ramo `isBase`):
-- Antes de atribuir, validar que o `profissional_id` está alocado como **base na mesma `oficina_id`** do `agendamentos_base`. Se não, rejeitar com mensagem clara.
+Em vez de string fixa, gerar resposta humanizada via Lovable AI Gateway (mesmo modelo já usado no projeto). Conteúdo: agradecer pelo nome, lembrar dia/hora/endereço, dizer que técnico será designado.
 
-Na lista de técnicos disponíveis para drag/atribuição de vistoria base, mostrar **apenas** quem é base daquela oficina.
+Fallback determinístico se IA falhar (mantém string atual `"✅ Agendamento *confirmado*..."`).
 
-### 7) `useFilaBaseHoje`
+### 5) Blindar `processar-fila-ia` contra dedup
 
-Filtrar `disponiveis` adicionalmente por `oficina_id == base_id_do_profissional` quando o profissional for base. Garante que cada técnico base só vê fila da sua oficina.
+Quando o item da fila for marcado como **resposta de confirmação**, NÃO reprocessar via `whatsapp-webhook` (já tratado pelo Meta direto). Marcar `status='concluido'` na fila e seguir.
 
-### 8) `EscalaDiaPanel` / `PlantaoDiaModal`
+Alternativa mais simples: passar `_skip_dedup: true` no payload sintético quando vier da fila E o `processar-fila-ia` ler isso para pular dedup. Adicionar bypass no `whatsapp-webhook`.
 
-Adicionar coluna/campo "Base" ao lado do toggle Rota/Base — combo de oficinas (`useBasesPratic`) habilitado quando tipo = "base". Persistir `base_id` no upsert.
+Vou pela alternativa simples: adicionar flag `_from_queue` (já existe!) ao bypass de dedup, OU usar `message_id` diferente (`queue_<id>`) quando reenviar.
+
+### 6) Mapa — pino reflete confirmação
+
+Verificar `MapaVistoriasContent.tsx`:
+- Pino muda de cor/badge quando `confirmacao_whatsapp = 'confirmada'`.
+- Popup mostra "✅ Confirmado via WhatsApp" em vez de só "Status: agendada".
+
+Se faltar, adicionar badge no popup e cor diferenciada no marker.
+
+### 7) Bug colateral de timezone no popup
+
+O popup mostrou "Agendada: 16/04/2026" mas o serviço é `2026-04-18`. Verificar se `MapaVistoriasContent.tsx` está usando o helper `formatDateBR` corrigido anteriormente. Se ainda usar `new Date(string)` direto, trocar.
 
 ## Arquivos a tocar
 
-- **Migration nova**: coluna `base_id` + trigger de validação + (se preciso) policies RLS.
-- `src/hooks/useAlocacaoDiaria.ts` — expor `baseId`.
-- `src/hooks/useAlocacoesDiaHoje.ts` (novo) — mapa para o dia.
-- `src/hooks/useFilaBaseHoje.ts` — filtrar por `oficina_id`.
-- `src/hooks/useAtribuicaoManual.ts` — validar base na atribuição.
-- `src/pages/monitoramento/Mapa.tsx` — popup vistoriador (aba Equipe) com seletor.
-- `src/components/mapa/MapaVistoriasContent.tsx` — esconder técnicos base, popup da base mostrar fixo, filtros drag.
-- `src/components/equipe/EscalaDiaPanel.tsx` + `PlantaoDiaModal.tsx` — campo `base_id`.
+- `supabase/functions/whatsapp-meta-webhook/index.ts` — fix colunas + ordenar checagem confirmação + IA.
+- `supabase/functions/processar-fila-ia/index.ts` — usar `message_id` único no reenvio (ex.: `queue_<itemId>`) para evitar dedup.
+- `supabase/functions/whatsapp-webhook/index.ts` — opcional: pular dedup quando `_from_queue=true` e checar confirmação primeiro.
+- `src/components/mapa/MapaVistoriasContent.tsx` — badge "Confirmado via WhatsApp" + cor do pino + corrigir formato de data se necessário.
+- (opcional) Adicionar coluna `intencao_detectada text` em `confirmacoes_agendamento` para auditoria.
 
 ## Não vou mexer
 
-- Lógica de execução de vistoria (`ExecutarVistoriaCompleta`).
-- Reagendamento manual (já implementado).
-- Aba Atribuições funciona igual para técnicos de rota.
-- `useIniciarServico` (já valida proximidade base via outro caminho).
+- Schema da tabela `servicos`.
+- Fluxo de envio inicial (`enviar-confirmacao-manual`).
+- Lógica do agente Vinicius.
+- Dedup global do `whatsapp-webhook` (mantém para outros fluxos).
 
 ## Resultado
 
-Coordenador de monitoramento abre o mapa, clica num técnico → muda para **Base** → escolhe **qual base** → técnico desaparece do mapa de atribuições. Ao clicar no ícone da base, vê **quem é o fixo**. Vistorias da base só podem ser atribuídas a técnicos daquela base. Técnicos base não recebem mais drag-and-drop nem aparecem como destino possível para tarefas de rota.
+Quando qualquer associado responder "Sim" (ou variantes) à mensagem de confirmação:
+1. Meta-webhook reconhece imediatamente, atualiza `confirmacoes_agendamento` e `servicos`.
+2. Cliente recebe resposta amigável da IA: *"Perfeito, Kelly! ✅ Sua presença está confirmada para sábado 18/04 às 09h..."*.
+3. Pino no mapa muda de cor + badge "✅ Confirmado via WhatsApp" aparece no popup, em tempo real.
+4. Vistoriador atribuído (se houver) recebe push notification.
