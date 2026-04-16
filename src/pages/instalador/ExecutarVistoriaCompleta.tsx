@@ -27,6 +27,8 @@ import {
   useUploadVideo360,
   useUploadFotoVistoriaCompleta 
 } from '@/hooks/useVistoriaCompleta';
+import { useUploadVistoriaOffline } from '@/hooks/useUploadVistoriaOffline';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { 
   agruparFotosPorCategoriaCompleta, 
   TOTAL_FOTOS_OBRIGATORIAS,
