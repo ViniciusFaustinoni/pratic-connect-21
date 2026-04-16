@@ -18,18 +18,20 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   Calculator, Car, MapPin, Fuel, Percent, MessageSquare,
-  Copy, Check, AlertTriangle, Loader2, Shield,
+  Copy, Check, AlertTriangle, Loader2, Shield, Bike, Info,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatarMoeda } from '@/utils/format';
 import {
   useCotacaoAvancada,
-  usePlanosParaCotacao,
   useAdicionaisDisponiveis,
   calcularCotacaoDinamica,
   type DadosCotacaoAvancada,
   type ResultadoCotacaoDinamica,
+  type PlanoOpcaoCotacao,
 } from '@/hooks/useCotacaoAvancada';
+import { usePlanosCotacao, type PlanoCotacao } from '@/hooks/usePlanosCotacao';
+import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 
 // ============================================
 // TIPOS
@@ -57,6 +59,26 @@ interface QuoteCalculatorModalProps {
 }
 
 // ============================================
+// ADAPTER: PlanoCotacao (unificado) → PlanoOpcaoCotacao (legado)
+// ============================================
+
+function adaptarPlano(p: PlanoCotacao): PlanoOpcaoCotacao {
+  return {
+    id: p.id,
+    codigo: p.codigo || '',
+    nome: p.nome,
+    valor_cota: p.valorCota || 0,
+    taxa_administrativa: p.taxaAdministrativa || 0,
+    valor_assistencia: p.valorAssistencia || 0,
+    valor_rastreamento: p.valorRastreamento || 0,
+    valor_adesao: p.valorAdesao || 0,
+    taxa_aplicativo: 0,
+    mensalidade_total: p.valorMensal,
+    valor_desagio: p.valorDesagio,
+  };
+}
+
+// ============================================
 // COMPONENTE PRINCIPAL
 // ============================================
 
@@ -78,8 +100,22 @@ export function QuoteCalculatorModal({
   const [planoSelecionadoId, setPlanoSelecionadoId] = useState<string>('');
   const [adicionaisSelecionadosIds, setAdicionaisSelecionadosIds] = useState<string[]>([]);
 
-  // ========== DADOS DO BANCO ==========
-  const { data: planos = [], isLoading: loadingPlanos } = usePlanosParaCotacao(valorFipe, usoAplicativo);
+  // ========== DETECÇÃO TIPO VEÍCULO ==========
+  const { tipoVeiculo } = useDetectarTipoVeiculo(lead?.veiculo_marca, lead?.veiculo_modelo);
+
+  // ========== MOTOR UNIFICADO ==========
+  const { planos: planosUnificados, isLoading: loadingPlanos } = usePlanosCotacao({
+    valorFipe,
+    regiao: 'rj',
+    combustivel: combustivel.toLowerCase(),
+    anoVeiculo: lead?.veiculo_ano,
+    tipoVeiculo,
+    usoApp: usoAplicativo,
+    marca: lead?.veiculo_marca,
+    modelo: lead?.veiculo_modelo,
+  });
+
+  const planos = useMemo(() => planosUnificados.map(adaptarPlano), [planosUnificados]);
   const { data: adicionais = [] } = useAdicionaisDisponiveis();
 
   // ========== EFEITOS ==========
@@ -98,6 +134,7 @@ export function QuoteCalculatorModal({
 
   // ========== CÁLCULO ==========
   const planoSelecionado = planos.find(p => p.id === planoSelecionadoId);
+  const planoSelecionadoUnificado = planosUnificados.find(p => p.id === planoSelecionadoId);
 
   const cotacao = useMemo((): ResultadoCotacaoDinamica | null => {
     if (!planoSelecionado || !valorFipe || valorFipe <= 0) return null;
@@ -176,6 +213,7 @@ export function QuoteCalculatorModal({
     .join(' ') || 'Veículo não informado';
 
   const isDiesel = combustivel.toLowerCase().includes('diesel');
+  const isMoto = tipoVeiculo === 'moto';
 
   // ========== RENDER ==========
   return (
@@ -185,6 +223,11 @@ export function QuoteCalculatorModal({
           <div className="flex items-center gap-2">
             <Calculator className="h-5 w-5 text-primary" />
             <DialogTitle>Calculadora de Cotação</DialogTitle>
+            {isMoto && (
+              <Badge variant="secondary" className="ml-2 gap-1">
+                <Bike className="h-3 w-3" /> Moto
+              </Badge>
+            )}
           </div>
           {lead?.nome && (
             <p className="text-sm text-muted-foreground">Cliente: {lead.nome}</p>
@@ -199,7 +242,7 @@ export function QuoteCalculatorModal({
               <Card>
                 <CardHeader className="py-3">
                   <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    <Car className="h-4 w-4" />
+                    {isMoto ? <Bike className="h-4 w-4" /> : <Car className="h-4 w-4" />}
                     Dados do Veículo
                   </CardTitle>
                 </CardHeader>
@@ -270,6 +313,20 @@ export function QuoteCalculatorModal({
                       Uso para aplicativo (Uber, 99, etc)
                     </Label>
                   </div>
+
+                  {/* Aviso dinâmico de cota: lê do plano selecionado */}
+                  {usoAplicativo && planoSelecionadoUnificado && (
+                    <Alert className="border-primary/50 bg-primary/5 py-2">
+                      <Info className="h-3 w-3 text-primary" />
+                      <AlertDescription className="text-xs">
+                        Categoria APP{isMoto ? ' (moto)' : ''}: cota de participação{' '}
+                        <strong>{planoSelecionadoUnificado.cotaPercentual}%</strong>
+                        {planoSelecionadoUnificado.cotaMinima > 0 && (
+                          <> (mínimo {formatarMoeda(planoSelecionadoUnificado.cotaMinima)})</>
+                        )}.
+                      </AlertDescription>
+                    </Alert>
+                  )}
                 </CardContent>
               </Card>
 
@@ -290,7 +347,7 @@ export function QuoteCalculatorModal({
                   ) : planos.length === 0 ? (
                     <div className="text-center py-4 text-muted-foreground text-sm">
                       {valorFipe > 0
-                        ? 'Nenhum plano disponível para este valor FIPE'
+                        ? `Nenhum plano disponível para esta faixa FIPE${isMoto ? ' (moto)' : ''}`
                         : 'Informe o valor FIPE para ver os planos'}
                     </div>
                   ) : (
@@ -372,10 +429,12 @@ export function QuoteCalculatorModal({
 
                       {/* Composição */}
                       <div className="space-y-1 text-sm text-muted-foreground">
-                        <div className="flex justify-between">
-                          <span>Cota:</span>
-                          <span>{formatarMoeda(cotacao.plano.valor_cota)}</span>
-                        </div>
+                        {planoSelecionadoUnificado && (
+                          <div className="flex justify-between">
+                            <span>Cota de participação:</span>
+                            <span>{planoSelecionadoUnificado.cota}</span>
+                          </div>
+                        )}
                         {cotacao.plano.taxa_administrativa > 0 && (
                           <div className="flex justify-between">
                             <span>Taxa administrativa:</span>
