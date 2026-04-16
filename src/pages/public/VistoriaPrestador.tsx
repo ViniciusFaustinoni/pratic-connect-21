@@ -4,10 +4,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2, Lock, CheckCircle, MapPin, Calendar, User, Car, Hash, Cpu } from 'lucide-react';
+import { Loader2, Lock, CheckCircle, MapPin, Calendar, User, Car, Hash, Cpu, Navigation as NavIcon, ThumbsUp, ThumbsDown, PlayCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { ChecklistItem, type ChecklistStatus } from '@/components/instalador/ChecklistItem';
 import { VistoriaFotoSequencial } from '@/components/vistorias/VistoriaFotoSequencial';
 
@@ -145,22 +146,79 @@ export default function VistoriaPrestador() {
     }
   }, [link]);
 
-  // ── Auto-mark as em_execucao on first load ──
+  // ── Captura de geolocalização contínua enquanto o link está aberto ──
   useEffect(() => {
-    if (link?.status === 'aguardando' && token) {
-      publicSupabase
-        .from('vistoria_prestador_links' as any)
-        .update({
-          status: 'em_execucao',
-          chegada_em: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('token', token)
-        .then(() => {
-          queryClient.invalidateQueries({ queryKey: ['vistoria-prestador-link', token] });
-        });
-    }
-  }, [link?.status, token]);
+    if (!token || !link) return;
+    if (link.status === 'concluida' || link.status === 'cancelada') return;
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+
+    let lastSent = 0;
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const now = Date.now();
+        if (now - lastSent < 25_000) return; // throttle ~30s
+        lastSent = now;
+        publicSupabase
+          .from('vistoria_prestador_links' as any)
+          .update({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            precisao_metros: pos.coords.accuracy,
+            localizacao_atualizada_em: new Date().toISOString(),
+          })
+          .eq('token', token)
+          .then(() => {});
+      },
+      (err) => console.warn('[VistoriaPrestador] geolocation error', err),
+      { enableHighAccuracy: true, maximumAge: 15_000, timeout: 20_000 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [token, link?.status, link?.id]);
+
+  // ── Transição de ciclo de vida ──
+  const [recusaMotivo, setRecusaMotivo] = useState('');
+  const [showRecusarDialog, setShowRecusarDialog] = useState(false);
+  const transicionarStatus = useCallback(async (
+    novoStatus: 'aceito' | 'em_rota' | 'em_execucao',
+  ) => {
+    if (!token) return;
+    const stamp = new Date().toISOString();
+    const fieldStamp =
+      novoStatus === 'aceito' ? 'aceito_em' :
+      novoStatus === 'em_rota' ? 'em_rota_em' :
+      'iniciada_em';
+    const payload: any = {
+      status: novoStatus,
+      [fieldStamp]: stamp,
+      updated_at: stamp,
+    };
+    if (novoStatus === 'em_execucao') payload.chegada_em = stamp;
+    const { error } = await publicSupabase
+      .from('vistoria_prestador_links' as any)
+      .update(payload)
+      .eq('token', token);
+    if (error) { toast.error('Erro ao atualizar status'); return; }
+    queryClient.invalidateQueries({ queryKey: ['vistoria-prestador-link', token] });
+  }, [token, queryClient]);
+
+  const recusarTarefa = useCallback(async () => {
+    if (!token) return;
+    const stamp = new Date().toISOString();
+    const { error } = await publicSupabase
+      .from('vistoria_prestador_links' as any)
+      .update({
+        status: 'cancelada',
+        recusado_em: stamp,
+        recusa_motivo: recusaMotivo || null,
+        updated_at: stamp,
+      })
+      .eq('token', token);
+    if (error) { toast.error('Erro ao recusar'); return; }
+    setShowRecusarDialog(false);
+    queryClient.invalidateQueries({ queryKey: ['vistoria-prestador-link', token] });
+    toast.success('Tarefa recusada');
+  }, [token, recusaMotivo, queryClient]);
 
   // ── Auto-save checklist ──
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
@@ -408,7 +466,75 @@ export default function VistoriaPrestador() {
           </Card>
         )}
 
-        {/* ── Seção 3: Checklist de Vistoria ── */}
+        {/* ── Cards de ciclo de vida (antes de em_execucao) ── */}
+        {link.status === 'aguardando' && (
+          <Card className="border-amber-200 bg-amber-50 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base text-amber-900">Nova tarefa recebida</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-amber-800">
+                Você recebeu uma nova tarefa de vistoria. Confirme se aceita realizá-la.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  className="h-12 bg-green-600 hover:bg-green-700 text-white"
+                  onClick={() => transicionarStatus('aceito')}
+                >
+                  <ThumbsUp className="h-4 w-4 mr-2" />Aceitar
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-12 border-red-300 text-red-700 hover:bg-red-50"
+                  onClick={() => setShowRecusarDialog(true)}
+                >
+                  <ThumbsDown className="h-4 w-4 mr-2" />Recusar
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {link.status === 'aceito' && (
+          <Card className="border-blue-200 bg-blue-50 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base text-blue-900">Tarefa aceita</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-blue-800">
+                Quando estiver a caminho do local da vistoria, toque em "Iniciar Rota". Sua localização será compartilhada com o coordenador.
+              </p>
+              <Button
+                className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={() => transicionarStatus('em_rota')}
+              >
+                <NavIcon className="h-4 w-4 mr-2" />Iniciar Rota
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {link.status === 'em_rota' && (
+          <Card className="border-purple-200 bg-purple-50 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base text-purple-900">Em rota até o local</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-purple-800">
+                Ao chegar no local, toque em "Cheguei / Iniciar Vistoria" para liberar o checklist e as fotos.
+              </p>
+              <Button
+                className="w-full h-12 bg-purple-600 hover:bg-purple-700 text-white"
+                onClick={() => transicionarStatus('em_execucao')}
+              >
+                <PlayCircle className="h-4 w-4 mr-2" />Cheguei / Iniciar Vistoria
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ── Seção 3: Checklist de Vistoria (apenas em execução) ── */}
+        {link.status === 'em_execucao' && (<>
         <Card className="border-slate-200 shadow-sm">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -471,10 +597,12 @@ export default function VistoriaPrestador() {
             />
           </CardContent>
         </Card>
+        </>)}
 
       </div>
 
-      {/* ── Botão fixo no rodapé ── */}
+      {/* ── Botão fixo no rodapé (apenas em execução) ── */}
+      {link.status === 'em_execucao' && (
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 z-50">
         <div className="max-w-lg mx-auto">
           <Button
@@ -497,6 +625,34 @@ export default function VistoriaPrestador() {
           )}
         </div>
       </div>
+      )}
+
+      {/* ── Modal de recusa ── */}
+      <AlertDialog open={showRecusarDialog} onOpenChange={setShowRecusarDialog}>
+        <AlertDialogContent className="max-w-sm mx-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Recusar tarefa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Informe o motivo (opcional). O coordenador será avisado.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            placeholder="Motivo da recusa..."
+            value={recusaMotivo}
+            onChange={(e) => setRecusaMotivo(e.target.value)}
+            className="min-h-[80px]"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={recusarTarefa}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Confirmar Recusa
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Modal de confirmação ── */}
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>

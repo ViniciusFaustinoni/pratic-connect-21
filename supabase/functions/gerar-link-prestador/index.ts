@@ -104,17 +104,16 @@ Deno.serve(async (req) => {
         await supabase.functions.invoke('whatsapp-send-text', {
           body: {
             telefone: telefoneFormatado,
-            template_nome: 'prestador_nova_instalacao_v1',
+            template_nome: 'prestador_nova_tarefa_v1',
             variaveis: {
               '1': nomePrestador,
-              '2': nomeAssociado,
+              '2': `Instalação — ${nomeAssociado}`,
               '3': instalacao.cidade || 'município',
-              '4': endereco,
-              '5': dataAgendada,
-              '6': url,
+              '4': url,
             },
             // Fallback message caso template não aprovado
             mensagem_fallback: `Olá ${nomePrestador}! Nova instalação em ${instalacao.cidade || 'município'}.\n\nAssociado: ${nomeAssociado}\nEndereço: ${endereco}\nData: ${dataAgendada}\n\nAcesse os detalhes e confirme pelo link:\n${url}`,
+            allow_text: true,
           },
         })
       } catch (whatsErr) {
