@@ -1,40 +1,46 @@
 
+
 ## Problema
 
-Cotação rápida no dashboard mostra "Nenhum plano disponível para faixa R$ 20.882" para uma **Honda Titan 160** (moto, uso APP/Uber). Deveria aparecer Advanced e Advanced+ da linha de motos.
+A tabela `chat_solicitacoes_ia` tem uma política de INSERT que só permite **associados** criarem solicitações (verifica se `associado_id` pertence ao `auth.uid()`). Quando um vendedor ou funcionário tenta criar uma solicitação de troca de titularidade pelo painel, o RLS bloqueia o INSERT.
 
-Também há mensagem "Categoria APP: cota de participação será 8% (mínimo R$ 3.000)" — mas a regra para **motos APP** segundo o usuário é **10% mínimo R$ 1.500** (regra de carros, não motos).
+**Política atual (INSERT):**
+```sql
+with_check: associado_id IN (SELECT id FROM associados WHERE user_id = auth.uid())
+```
 
-## Investigação necessária (vou fazer durante exploração)
+Isso foi pensado para o chatbot do associado, não para o painel interno.
 
-1. Conferir no banco se existem planos Advanced/Advanced+ ativos na linha **Motos** com faixa FIPE cobrindo R$ 20.882, e se há `entity_eligibility_rules` que filtrem por marca/modelo Honda Titan ou por categoria APP.
-2. Conferir o componente `CotacaoRapida` (dashboard) — entender como ele consulta planos, se passa `tipo_veiculo=moto` e `categoria=app` corretamente, e se respeita a hierarquia de elegibilidade unificada.
-3. Conferir a regra "Categoria APP: 8% mínimo R$ 3.000" — onde está definida e se é específica para carros (Uber) ou se está sendo aplicada erroneamente para motos.
-4. Confirmar regra de cota de participação para motos APP (10% mínimo R$ 1.500 conforme `mem://business/rules/consultant-manual-v12`).
+## Correção
 
-## Plano de correção (a confirmar após investigação)
+Uma **migração SQL** que adiciona uma nova política de INSERT para funcionários autorizados:
 
-### Hipótese principal: filtro de elegibilidade ou categoria APP excluindo motos
+```sql
+CREATE POLICY "Funcionarios podem criar solicitacoes"
+ON public.chat_solicitacoes_ia
+FOR INSERT
+TO authenticated
+WITH CHECK (
+  has_role(auth.uid(), 'diretor'::app_role)
+  OR has_role(auth.uid(), 'gerente'::app_role)
+  OR has_role(auth.uid(), 'vendedor_interno'::app_role)
+  OR has_role(auth.uid(), 'vendedor_externo'::app_role)
+  OR has_role(auth.uid(), 'analista_eventos'::app_role)
+  OR has_role(auth.uid(), 'coordenador_monitoramento'::app_role)
+);
+```
 
-**A.** Se planos motos Advanced/Advanced+ existem mas não cobrem faixa 18-21k → ajustar `entity_eligibility_rules` (sem código).
+Nenhuma alteração de código é necessária — o `TrocaTitularidadeDialog.tsx` já grava `criado_por: user.id` corretamente.
 
-**B.** Se a `CotacaoRapida` está aplicando regra APP de carro para motos → corrigir o componente para:
-- Detectar `tipo_veiculo === 'moto'` antes de aplicar a mensagem/cálculo de participação
-- Para motos APP: exibir "Cota 10% do FIPE, mínimo R$ 1.500" (e não 8%/R$ 3.000)
-- Para carros APP: manter 8%/R$ 3.000
+## Fluxo completo de Troca de Titularidade
 
-**C.** Se o filtro por categoria está excluindo motos (ex: `categoria_app` só aceita carros) → ajustar a query de planos para incluir motos elegíveis.
+1. **Vendedor/Funcionário** abre o dialog no painel do associado → preenche dados do novo titular → clica "Solicitar Troca"
+2. Insert em `chat_solicitacoes_ia` com `tipo='troca_titularidade'`, `status='pendente'`
+3. **Diretor** aprova em `/diretoria/solicitacoes` → status muda para `aprovada`
+4. Sistema cria novo associado com os dados do novo titular, transfere veículo, gera contrato com `tipo_entrada='troca_titularidade'`
 
-### Arquivos prováveis a tocar
+## Escopo
 
-- `src/components/dashboard/CotacaoRapida.tsx` (ou similar)
-- Hook de cálculo de cota de participação
-- Possível ajuste em `entity_eligibility_rules` via migração se faltar regra para Motos APP
+- 1 migração SQL (nova RLS policy)
+- 0 arquivos de código alterados
 
-## Verificação pós-correção
-
-Logar como `admin@teste.com / 123456789`, no dashboard usar Cotação Rápida com:
-- Tipo: Moto
-- Categoria: APP/Uber
-- FIPE: R$ 20.882
-- Esperar: Advanced (R$ 218,70) + Advanced+ (R$ 238,70), mensagem de participação "10% mínimo R$ 1.500", e nota de rastreador obrigatório.
