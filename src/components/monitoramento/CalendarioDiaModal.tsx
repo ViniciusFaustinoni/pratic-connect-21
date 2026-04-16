@@ -52,6 +52,7 @@ const STATUS_BADGE_CLASSES: Record<string, string> = {
 export function CalendarioDiaModal({ open, onClose, data }: CalendarioDiaModalProps) {
   const queryClient = useQueryClient();
   const [anteciparId, setAnteciparId] = useState<string | null>(null);
+  const [atribuirId, setAtribuirId] = useState<string | null>(null);
   const [tecnicoSelecionado, setTecnicoSelecionado] = useState<string>('');
 
   const hoje = format(new Date(), 'yyyy-MM-dd');
