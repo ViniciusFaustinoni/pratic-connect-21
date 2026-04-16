@@ -35,7 +35,7 @@ import {
 import { CpfInput, TelefoneInput, CepInput } from '@/components/inputs/MaskedInputs';
 import { buscarCep } from '@/lib/cep';
 import { validateCPF } from '@/lib/validations';
-import { REGIOES_ATENDIMENTO } from '@/types/monitoramento';
+import { MunicipiosPicker } from '@/components/monitoramento/MunicipiosPicker';
 
 // ============================================
 // TIPOS
@@ -535,36 +535,20 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
                 Configurações de Trabalho
               </h3>
               
-              {/* Regiões de atuação */}
+              {/* Municípios de atuação */}
               <FormField
                 control={form.control}
                 name="regioes"
-                render={() => (
+                render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Regiões de atuação (opcional)</FormLabel>
                     <FormDescription className="text-xs">
                       Deixe em branco para atender todas as regiões
                     </FormDescription>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
-                      {REGIOES_ATENDIMENTO.map((regiao) => (
-                        <div
-                          key={regiao.value}
-                          className="flex items-center space-x-2"
-                        >
-                          <Checkbox
-                            id={`regiao-${regiao.value}`}
-                            checked={regioesValue?.includes(regiao.value)}
-                            onCheckedChange={() => toggleRegiao(regiao.value)}
-                          />
-                          <label
-                            htmlFor={`regiao-${regiao.value}`}
-                            className="text-sm cursor-pointer"
-                          >
-                            {regiao.label}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
+                    <MunicipiosPicker
+                      value={field.value || []}
+                      onChange={(v) => form.setValue('regioes', v)}
+                      label="Municípios de Atuação (opcional)"
+                    />
                     <FormMessage />
                   </FormItem>
                 )}
