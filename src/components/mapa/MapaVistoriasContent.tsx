@@ -65,12 +65,14 @@ const COR_NAO_CONFIRMADO = '#F97316'; // Orange
 const COR_CONFIRMADO = '#10B981'; // Green
 const COR_AGUARDANDO = '#EAB308'; // Yellow
 const COR_EM_EXECUCAO = '#3B82F6'; // Blue
+const COR_FUTURA = '#94A3B8'; // Slate/gray-blue for future tasks
 const STATUS_REALIZADOS = ['concluida', 'aprovada', 'reprovada', 'em_analise'];
 const STATUS_EM_EXECUCAO = ['em_andamento', 'em_rota'];
 
-function getCorPorStatus(status: string, confirmacao_whatsapp?: string | null, permite_encaixe?: boolean): string {
+function getCorPorStatus(status: string, confirmacao_whatsapp?: string | null, permite_encaixe?: boolean, isFutura?: boolean): string {
   if (STATUS_EM_EXECUCAO.includes(status)) return COR_EM_EXECUCAO;
   if (STATUS_REALIZADOS.includes(status)) return COR_REALIZADA;
+  if (isFutura) return COR_FUTURA;
   if (permite_encaixe) return COR_A_REALIZAR;
   if (confirmacao_whatsapp === 'confirmada') return COR_CONFIRMADO;
   if (confirmacao_whatsapp?.startsWith('aguardando')) return COR_AGUARDANDO;
@@ -212,15 +214,7 @@ export function MapaVistoriasContent() {
     if (!vistorias) return [];
     return vistorias.filter((v) => {
       if (!v.data_agendada) return false;
-      const dateStr = v.data_agendada.split('T')[0];
-      const dataVistoria = new Date(dateStr + 'T00:00:00');
-      const hojeNorm = new Date(hoje);
-      hojeNorm.setHours(0, 0, 0, 0);
-      const isHoje = isSameDay(dataVistoria, hojeNorm);
-      const isAtrasada = dataVistoria < hojeNorm && v.status !== 'concluida' && v.status !== 'cancelada';
-      const isEncaixe = v.permite_encaixe === true;
-      if (!isHoje && !isAtrasada && !isEncaixe) return false;
-
+      // Show ALL scheduled tasks (not just today)
       if (filtroBusca) {
         const termo = filtroBusca.toLowerCase();
         const placa = v.veiculo_placa?.toLowerCase() || "";
@@ -230,7 +224,29 @@ export function MapaVistoriasContent() {
       }
       return true;
     });
-  }, [vistorias, hoje, filtroBusca]);
+  }, [vistorias, filtroBusca]);
+
+  // Chronological index map for tooltip numbering
+  const ordemCronologica = useMemo(() => {
+    const sorted = [...(vistoriasFiltradas || [])].sort((a, b) => {
+      const dtA = new Date(`${a.data_agendada}T${a.horario_agendado || '00:00'}`);
+      const dtB = new Date(`${b.data_agendada}T${b.horario_agendado || '00:00'}`);
+      return dtA.getTime() - dtB.getTime();
+    });
+    const map = new Map<string, number>();
+    sorted.forEach((v, i) => map.set(v.id, i + 1));
+    return map;
+  }, [vistoriasFiltradas]);
+
+  // Helper to check if a task is future
+  const isFuturaFn = useCallback((dataAgendada: string | null) => {
+    if (!dataAgendada) return false;
+    const dateStr = dataAgendada.split('T')[0];
+    const dataVistoria = new Date(dateStr + 'T00:00:00');
+    const hojeNorm = new Date();
+    hojeNorm.setHours(0, 0, 0, 0);
+    return isAfter(dataVistoria, hojeNorm);
+  }, []);
 
   const vistoriasComCoordenadas = useMemo(() => {
     return vistoriasFiltradas.filter((v) => v.latitude && v.longitude);
@@ -428,7 +444,7 @@ export function MapaVistoriasContent() {
               ? new Date(v.data_agendada + 'T00:00:00') < hojeNorm && v.status !== 'concluida' && v.status !== 'cancelada'
               : false;
             const isRealizada = STATUS_REALIZADOS.includes(v.status);
-            const canAssign = !!atribuicaoManualAtiva && !v.vistoriador_id && !isRealizada && !!v.latitude && !!v.servico_id_unificado;
+            const canAssign = !!atribuicaoManualAtiva && !isRealizada && !!v.latitude && !!v.servico_id_unificado;
             const isSelected = servicoParaAtribuir?.id === v.id;
             const canSendConfirmation = podeEnviarConfirmacao(v);
 
@@ -509,7 +525,7 @@ export function MapaVistoriasContent() {
                             iniciarAtribuicao(v);
                           }
                         }}
-                        title={isSelected ? "Cancelar atribuição" : "Atribuir a um técnico"}
+                        title={isSelected ? "Cancelar atribuição" : v.vistoriador_id ? "Reatribuir a outro técnico" : "Atribuir a um técnico"}
                       >
                         {isSelected ? <XIcon className="h-4 w-4" /> : <MousePointerClick className="h-4 w-4" />}
                       </Button>
@@ -653,12 +669,12 @@ export function MapaVistoriasContent() {
                         <Send className="h-3 w-3" />Enviar Confirmação
                       </button>
                     )}
-                    {atribuicaoManualAtiva && !v.vistoriador_id && !isRealizada && !!v.servico_id_unificado && (
+                    {atribuicaoManualAtiva && !isRealizada && !!v.servico_id_unificado && (
                       <button
                         onClick={() => iniciarAtribuicao(v)}
                         className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 text-white rounded text-xs hover:bg-amber-600"
                       >
-                        <MousePointerClick className="h-3 w-3" />Atribuir
+                        <MousePointerClick className="h-3 w-3" />{v.vistoriador_id ? 'Reatribuir' : 'Atribuir'}
                       </button>
                     )}
                     {v.associado_telefone && (
@@ -709,7 +725,7 @@ export function MapaVistoriasContent() {
               
               // Find nearest unassigned service within 5km
               const servicosNaoAtribuidos = vistoriasComCoordenadas.filter(v =>
-                !v.vistoriador_id && !STATUS_REALIZADOS.includes(v.status) && v.latitude && v.longitude && !!v.servico_id_unificado
+                !STATUS_REALIZADOS.includes(v.status) && v.latitude && v.longitude && !!v.servico_id_unificado
               );
               
               let melhorServico: VistoriaMapa | null = null;
