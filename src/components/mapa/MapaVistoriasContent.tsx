@@ -584,21 +584,24 @@ export function MapaVistoriasContent() {
       {/* Marcadores de vistorias */}
       {vistoriasComCoordenadas.map((v) => {
         const isEmExecucao = STATUS_EM_EXECUCAO.includes(v.status);
-        const markerColor = getCorPorStatus(v.status, v.confirmacao_whatsapp, v.permite_encaixe);
+        const isFutura = isFuturaFn(v.data_agendada);
+        const markerColor = getCorPorStatus(v.status, v.confirmacao_whatsapp, v.permite_encaixe, isFutura);
         const isRealizada = STATUS_REALIZADOS.includes(v.status);
         const isSelectedForAssign = servicoParaAtribuir?.id === v.id;
-        const tooltipColor = isEmExecucao ? COR_EM_EXECUCAO : getTooltipColor(v.confirmacao_whatsapp, v.permite_encaixe);
+        const tooltipColor = isEmExecucao ? COR_EM_EXECUCAO : isFutura ? COR_FUTURA : getTooltipColor(v.confirmacao_whatsapp, v.permite_encaixe);
         const periodoStr = getPeriodoLabel(v.periodo);
         const dataLabel = safeFormat(v.data_agendada ? v.data_agendada + 'T00:00:00' : null, "dd/MM");
+        const ordemNum = ordemCronologica.get(v.id) || 0;
+        const horarioLabel = v.horario_agendado ? v.horario_agendado.slice(0, 5) : periodoStr;
         
         // Tooltip text: show execution time if em_andamento
         let tooltipText: string;
         if (isEmExecucao) {
           const updatedDate = safeParseDate(v.horario_agendado ? `${v.data_agendada}T${v.horario_agendado}` : null) || safeParseDate(v.data_agendada);
           const tempoDecorrido = updatedDate ? formatDistanceToNow(updatedDate, { locale: ptBR }) : '';
-          tooltipText = `🔧 ${tempoDecorrido ? `há ${tempoDecorrido}` : 'Em execução'}`;
+          tooltipText = `#${ordemNum} · 🔧 ${tempoDecorrido ? `há ${tempoDecorrido}` : 'Em execução'}`;
         } else {
-          tooltipText = [dataLabel, periodoStr].filter(Boolean).join(' ');
+          tooltipText = `#${ordemNum} · ${[dataLabel, horarioLabel].filter(Boolean).join(' ')}`;
         }
 
         return (
