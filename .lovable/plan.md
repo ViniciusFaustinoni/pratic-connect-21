@@ -2,66 +2,45 @@
 
 ## Diagnóstico
 
-A **Cotação Rápida** mostra "Faixa enquadrada: R$ 0,00 – R$ 20.000,00" para a moto Yamaha XTZ250 (FIPE R$ 18.976), o que está errado segundo o Guia V11 (faixas de moto vão de 3 em 3 mil — a faixa correta seria R$ 18.000,01 – R$ 21.000,00).
+A tela "Linhas e Planos" em `src/components/gestao-comercial/LinhasPlanos.tsx` mostra **"0 cob."** para vários planos da regional SP (ex.: Select Exclusive Diesel, Select One, etc.), mas **no banco esses planos têm 9 coberturas e 7-8 benefícios cadastrados corretamente**.
 
-Causa raiz, comprovada no banco:
+Causa raiz comprovada por SQL:
 
-1. O texto "Faixa enquadrada" em `src/components/cotacoes/CotacaoFormDialog.tsx` (linhas 433–442 e 1732–1736) lê da tabela **legada** `tabelas_preco_mensalidade` via `useTabelasPreco()`.
-2. Essa tabela tem só 2 baldes amplos: `0 → 20.000` e `20.000,01 → 40.000`. Por isso o R$ 18.976 cai em "0 a 20.000".
-3. O **motor de cotação real** (`usePlanosCotacao` → `entity_eligibility_rules` com `rule_type='fipe_range'`) já está correto: as coberturas Advanced (motos) usam `intervalo: 3000, min: 0, max: 51000`. Os preços dos planos exibidos (Advanced R$ 218,70 / Advanced + R$ 238,70) saem desse motor — o que está errado é só o rótulo da faixa.
-4. Memória do projeto reforça: `tabelas_preco_mensalidade` é **deprecated** e não deve ser fonte de verdade.
+1. `useLinhasComPlanos()` busca `planos_coberturas` em chunks de 80 plano_ids por vez (linhas 233-247).
+2. O PostgREST (Supabase) tem **limite default de 1.000 linhas por query**.
+3. Total de `planos_coberturas` no projeto: **2.241 linhas** distribuídas em 287 planos.
+4. Quando um chunk de 80 planos cai numa região com média ≥ 12-13 coberturas/plano (ex.: Lançamento + Select com 9 coberturas + extras), o resultado pode ultrapassar 1.000 linhas e o PostgREST **corta silenciosamente**.
+5. Os planos cortados ficam sem entrada no `coberturasMap` → exibem `coberturas_count: 0` na UI.
+6. O mesmo acontece com `planos_beneficios` (linhas 251-265) e `entity_eligibility_rules` (linhas 274-285), agravando o problema.
 
-Conclusão: cálculo de preço está correto. O que precisa mudar é a **fonte da exibição da faixa**, passando a derivar de `entity_eligibility_rules` (mesma fonte do motor).
+A imagem do usuário mostra exatamente isso: planos legítimos com "0 cob." enquanto o SQL prova que têm 9.
 
 ## Mudanças
 
-### 1. `src/components/cotacoes/CotacaoFormDialog.tsx`
+### 1. `src/components/gestao-comercial/LinhasPlanos.tsx` — função `useLinhasComPlanos`
 
-- Substituir a derivação de `faixaAtualFipe` (linhas 433–442) para parar de usar `useTabelasPreco()` e passar a usar as regras `fipe_range` de `useAllEligibilityRules()` (já carregadas no hook `usePlanosCotacao`).
-- Lógica nova:
-  - Tomar o primeiro plano selecionado (ou o primeiro plano calculado).
-  - Pegar suas coberturas (via `planos_coberturas`).
-  - Para cada cobertura com regra `fipe_range`, encontrar a faixa que contém `valorFipe` (`de ≤ valor < ate`).
-  - Se houver várias coberturas (carro/moto), elas têm o mesmo `intervalo`/`min`/`max` por linha, então qualquer uma serve.
-  - Resultado: `{ min: faixa.de, max: faixa.ate - 0.01 }` para exibir como "Faixa enquadrada".
-- Fallback: se não houver regra `fipe_range` (catálogo antigo), manter o cálculo atual como fallback silencioso.
-- Remover `useTabelasPreco` deste componente caso não seja mais necessário em outro lugar (`fipeMenorInfo` também usa — ver passo 2).
+- **Reduzir tamanho de chunk** de 80 → 30 planos por requisição (margem segura: 30 × 15 cobs ≈ 450 linhas, bem abaixo de 1.000).
+- **Adicionar `.range(0, 9999)` ou `.limit(10000)` explícito** em todas as queries paginadas (`planos_coberturas`, `planos_beneficios`, `entity_eligibility_rules`) para garantir que mesmo com chunks maiores não haja corte silencioso.
+- **Reduzir chunk de `entity_eligibility_rules`** de 100 → 50 entidades.
+- Adicionar log de aviso (apenas em dev) caso o número de linhas retornadas em algum chunk se aproxime do limite, para facilitar diagnóstico futuro.
 
-### 2. `fipeMenorInfo` (mesmo arquivo, linhas 391–431)
+### 2. Validação após aplicar
 
-- A lógica de "FIPE menor" também usa `tabelas_preco_mensalidade` para detectar faixa atual e faixa inferior.
-- Substituir pela mesma fonte (`fipe_range` em `entity_eligibility_rules`):
-  - Faixa atual = faixa onde `valorFipe` se enquadra.
-  - Faixa inferior = faixa imediatamente abaixo no array `faixas`.
-  - Diferença de mensalidade = soma das coberturas do plano calculadas em cada faixa (já existe util similar em `usePlanosCotacao` linhas 388–417).
-
-### 3. Helper compartilhado
-
-Criar `src/utils/fipeFaixa.ts` com:
-- `obterFaixaFipeAtual(planoCoberturas, allEligibilityRules, valorFipe)` → `{ de, ate, intervalo } | null`
-- `obterFaixaFipeAnterior(...)` → mesma assinatura
-- Reutilizado por `CotacaoFormDialog` e por `usePlanosCotacao` (futuro, sem mudar comportamento).
-
-### 4. Testes manuais (após aplicar)
-
-- Cotação Rápida → moto Yamaha XTZ250 2015/2016 com FIPE R$ 18.976 deve mostrar:
-  - "Faixa enquadrada: R$ 18.000,01 – R$ 21.000,00"
-  - Planos Advanced (R$ 218,70) e Advanced + (R$ 238,70) — sem regressão.
-- Cotação de carro com FIPE R$ 47.000 deve mostrar faixa de 5 em 5 mil (ex.: "R$ 45.000,01 – R$ 50.000,00").
-- Lógica FIPE menor deve continuar oferecendo redução quando aplicável.
+- Recarregar a tela "Gestão Comercial → Linhas e Planos".
+- Verificar que `Select Exclusive Diesel - Deságio 70% - SP`, `Select Exclusive Passeio - SP`, `Select One - Passeio - SP`, `Select Premium - SP` etc. agora mostram "9 cob." em vez de "0 cob.".
+- Conferir que valor mensal e listas expandidas voltam a popular corretamente.
 
 ## Arquivos a editar
 
-- `src/components/cotacoes/CotacaoFormDialog.tsx` (faixa exibida + FIPE menor)
-- `src/utils/fipeFaixa.ts` (novo helper)
+- `src/components/gestao-comercial/LinhasPlanos.tsx` (apenas a função `useLinhasComPlanos`, linhas 206-330)
 
 ## Não vou mexer
 
-- `usePlanosCotacao` (motor já correto).
-- `entity_eligibility_rules` (dados já configurados com `intervalo: 3000` para Advanced moto).
-- Tabela legada `tabelas_preco_mensalidade` (não tocar — apenas parar de ler dela neste componente).
+- Banco de dados (`planos_coberturas`, `planos_beneficios`) — os dados estão íntegros.
+- Lógica de cotação/preço (já lê via outra query e não sofre o corte).
+- Outras telas de gestão.
 
 ## Resultado esperado
 
-A "Faixa enquadrada" passa a refletir a tabela real do Guia V11 (3 em 3 mil para motos, 5 em 5 mil para carros), sincronizada com o motor de preço. O bug visual desaparece sem alterar nenhum valor de mensalidade.
+A tela "Linhas e Planos" passa a mostrar a contagem real de coberturas e benefícios para todos os 287 planos visíveis, eliminando o falso "0 cob." causado pelo limite de paginação do PostgREST.
 
