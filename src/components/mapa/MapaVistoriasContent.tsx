@@ -467,12 +467,19 @@ export function MapaVistoriasContent() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className="text-xs font-bold text-muted-foreground">#{ordemNum}</span>
                       <span className="font-semibold text-sm truncate">{v.veiculo_placa || "Sem placa"}</span>
                       <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200">
                         {TIPO_VISTORIA_LABELS[v.tipo_vistoria as keyof typeof TIPO_VISTORIA_LABELS] || v.tipo_vistoria}
                       </Badge>
+                      <Badge variant="outline" className="text-xs">
+                        {safeFormat(v.data_agendada, "dd/MM")} {v.horario_agendado ? v.horario_agendado.slice(0, 5) : getPeriodoLabel(v.periodo)}
+                      </Badge>
                       {isAtrasada && (
                         <Badge variant="outline" className="text-xs bg-orange-100 text-orange-700 border-orange-300">Atrasada</Badge>
+                      )}
+                      {isFutura && (
+                        <Badge variant="outline" className="text-xs bg-slate-100 text-slate-600 border-slate-300">Futura</Badge>
                       )}
                       {v.permite_encaixe && (
                         <Badge variant="outline" className="text-xs bg-purple-100 text-purple-700 border-purple-300">Encaixe</Badge>
