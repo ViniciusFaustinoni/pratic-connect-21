@@ -152,6 +152,44 @@ export function CalendarioDiaModal({ open, onClose, data }: CalendarioDiaModalPr
         })
         .eq('id', id);
       if (error) throw error;
+
+      // Send WhatsApp notification
+      const { data: baseData } = await supabase
+        .from('agendamentos_base')
+        .select('id, cliente_nome, veiculo_placa, data_agendada, horario')
+        .eq('id', id)
+        .maybeSingle();
+
+      const { data: profissional } = await supabase
+        .from('profiles')
+        .select('telefone, whatsapp, nome')
+        .eq('id', tecnicoId)
+        .maybeSingle();
+
+      if (profissional?.telefone || profissional?.whatsapp) {
+        try {
+          const telefone = (profissional.whatsapp || profissional.telefone || '').replace(/\D/g, '');
+          await supabase.functions.invoke('whatsapp-send-text', {
+            body: {
+              telefone,
+              mensagem: `Nova tarefa atribuída: Vistoria Base - ${baseData?.cliente_nome || 'Cliente'}`,
+              template_name: 'servico_atribuido_v1',
+              template_params: [
+                profissional.nome?.split(' ')[0] || 'Técnico',
+                'Vistoria Base',
+                `${baseData?.cliente_nome || 'Cliente'} - ${baseData?.veiculo_placa || ''}`,
+                'Base - Sede',
+                baseData?.data_agendada || '',
+                baseData?.horario || 'A definir',
+              ],
+              referencia_tipo: 'agendamento_base',
+              referencia_id: id,
+            },
+          });
+        } catch (e) {
+          console.error('Erro ao enviar WhatsApp:', e);
+        }
+      }
     },
     onSuccess: () => {
       toast.success('Técnico atribuído com sucesso!');
@@ -159,6 +197,7 @@ export function CalendarioDiaModal({ open, onClose, data }: CalendarioDiaModalPr
       setTecnicoSelecionado('');
       queryClient.invalidateQueries({ queryKey: ['calendario-dia-base'] });
       queryClient.invalidateQueries({ queryKey: ['agendamentos-base-calendario'] });
+      queryClient.invalidateQueries({ queryKey: ['tarefa-atual-servico'] });
     },
     onError: () => {
       toast.error('Erro ao atribuir técnico');
