@@ -198,6 +198,7 @@ export function MapaVistoriasContent() {
   const enviarConfirmacaoMutation = useEnviarConfirmacaoWhatsApp();
   const { isDiretor, isCoordenadorMonitoramento, isAnalistaMonitoramento, isAdminMaster, isDesenvolvedor } = usePermissions();
   const { data: basesPratic } = useBasesPratic();
+  const { data: prestadoresAtivos } = usePrestadoresAtivosMapa();
 
   // Base pendentes do dia
   const hojeStr = format(new Date(), 'yyyy-MM-dd');
