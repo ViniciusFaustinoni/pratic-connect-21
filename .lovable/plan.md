@@ -1,33 +1,31 @@
 
 
-## Plano: Corrigir Extração de Nome no OCR de RG
+## Plano: Incluir Vistorias Base na Aba de Atribuição Manual
 
 ### Problema
+A aba "Atribuição Manual" em Serviços de Campo busca apenas da tabela `servicos` (instalações e vistorias agendadas). Vistorias do tipo **base** (`agendamentos_base`) não aparecem na lista de serviços pendentes, impossibilitando sua atribuição manual.
 
-O prompt do OCR para documentos RG (linha 82 de `document-ocr/index.ts`) tem instruções mínimas: apenas lista os campos sem orientação sobre onde extraí-los. O modelo de IA confunde o nome do titular com:
-- A assinatura do presidente do DETRAN no rodapé (ex: "ADOLPHO KONDER HOMEM DE CARVALHO FILHO")
-- Nomes de autoridades impressos no documento
+### Mudanças
 
-### Correção
+#### 1. `src/hooks/useAtribuicaoManual.ts` — `useServicosParaAtribuir`
+- Adicionar query paralela à tabela `agendamentos_base` filtrando por `atendido_por IS NULL` e `status` pendente (`agendado`), com `data_agendada >= hoje`.
+- Normalizar os resultados de `agendamentos_base` para o mesmo formato dos serviços (`id`, `tipo: 'vistoria_base'`, `data_agendada`, `hora_agendada`, `associado: { nome }`, `veiculo: { placa }`, `bairro`, etc.), usando os campos `cliente_nome`, `veiculo_placa`, `horario`.
+- Mesclar ambas as listas ordenadas por data.
 
-Expandir a seção `### RG` no `systemPrompt` (linha 81-82) com instruções explícitas:
+#### 2. `src/hooks/useAtribuicaoManual.ts` — `useAtribuirServicoManual`
+- Detectar se o `servicoId` pertence a `agendamentos_base` (via flag `isBase` no data do draggable).
+- Se for base: fazer `update` em `agendamentos_base` setando `atendido_por` e `status: 'confirmado'` ao invés de atualizar `servicos`.
+- Manter log de atribuição e notificação WhatsApp.
 
-```
-### RG
-nome, rg, cpf (se presente), data_nascimento, data_expedicao
-- NOME: extrair EXCLUSIVAMENTE do campo "NOME" que fica na parte superior do documento, logo abaixo do cabeçalho institucional. Este é o nome do titular do documento.
-- NÃO confundir com nomes de autoridades, presidentes do DETRAN, ou assinaturas oficiais impressas no rodapé do documento (ex: "PRESIDENTE DO DETRAN").
-- FILIAÇÃO: campos "FILIAÇÃO" contêm nomes dos pais — NÃO são o nome do titular.
-- RG: campo "REGISTRO GERAL" — extrair o número com pontuação.
-- CPF: pode estar presente no verso ou na frente. Formato XXX.XXX.XXX-XX.
-```
+#### 3. `src/components/monitoramento/AtribuicaoManualTab.tsx`
+- Adicionar `"vistoria_base"` ao filtro de tipos no `Select` (novo item "Vistorias Base").
+- Ajustar `getTipoLabel`, `getTipoBadgeClass`, `getTipoIcon` para o novo tipo.
+- Passar flag `isBase: true` no data do draggable para itens de `agendamentos_base`.
 
-### Arquivo alterado
+### Arquivos
 
-| Arquivo | Mudança |
-|---------|---------|
-| `supabase/functions/document-ocr/index.ts` | Expandir instruções da seção RG no systemPrompt (linha 82) |
-
-### Deploy
-A edge function precisa ser redeployada após a alteração.
+| Arquivo | Ação |
+|---------|------|
+| `src/hooks/useAtribuicaoManual.ts` | Adicionar query `agendamentos_base` + merge; ajustar mutation |
+| `src/components/monitoramento/AtribuicaoManualTab.tsx` | Adicionar tipo base no filtro e helpers visuais |
 
