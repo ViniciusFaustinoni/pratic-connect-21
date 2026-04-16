@@ -258,6 +258,17 @@ export function MapaVistoriasContent() {
     profissionalNome: string | null;
   } | null>(null);
 
+  // Reagendar manual state
+  const [reagendarState, setReagendarState] = useState<{
+    servicoId: string;
+    placa: string | null;
+    associadoNome: string | null;
+    dataAtual: string | null;
+    horaAtual: string | null;
+  } | null>(null);
+
+  const podeReagendar = isDiretor || isCoordenadorMonitoramento || isAnalistaMonitoramento || isAdminMaster || isDesenvolvedor;
+
   const vistoriadoresEmServico = useMemo(() => {
     return vistoriadores?.filter(v => v.em_servico && v.latitude && v.longitude) || [];
   }, [vistoriadores]);
