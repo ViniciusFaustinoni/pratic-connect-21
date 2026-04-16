@@ -1236,6 +1236,19 @@ export function MapaVistoriasContent() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Reagendamento manual */}
+      <ReagendarTarefaDialog
+        open={!!reagendarState}
+        onOpenChange={(open) => !open && setReagendarState(null)}
+        servicoId={reagendarState?.servicoId || null}
+        resumo={{
+          placa: reagendarState?.placa,
+          associadoNome: reagendarState?.associadoNome,
+          dataAtual: reagendarState?.dataAtual,
+          horaAtual: reagendarState?.horaAtual,
+        }}
+      />
     </>
   );
 
