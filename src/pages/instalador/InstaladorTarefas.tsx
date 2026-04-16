@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { useTarefaAtual, useTarefasHistorico } from '@/hooks/useTarefaAtual';
 import { useEncaixesUrgentes } from '@/hooks/useEncaixesUrgentes';
+import { useAlocacaoDiaria } from '@/hooks/useAlocacaoDiaria';
+import { useFilaBaseHoje } from '@/hooks/useFilaBaseHoje';
 import { TipoServico, TIPO_SERVICO_LABELS, isInstalacao } from '@/hooks/useServicos';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,12 +16,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TarefaAtualCard } from '@/components/vistoriador/TarefaAtualCard';
 import { BotaoIniciarServico } from '@/components/vistoriador/BotaoIniciarServico';
 import { EncaixeUrgenteCard } from '@/components/vistoriador/EncaixeUrgenteCard';
+import { FilaBaseSection } from '@/components/instalador/FilaBaseSection';
+import { Building2 } from 'lucide-react';
 
 export default function InstaladorTarefas() {
   const navigate = useNavigate();
   const { data: tarefaAtual, isLoading: isLoadingAtual } = useTarefaAtual();
   const { data: historico, isLoading: isLoadingHistorico } = useTarefasHistorico();
   const { data: encaixesUrgentes = [], isLoading: isLoadingEncaixes } = useEncaixesUrgentes();
+  const { isBase } = useAlocacaoDiaria();
+  const { data: filaBase } = useFilaBaseHoje(isBase);
+  const filaBaseCount = (filaBase?.disponiveis.length || 0) + (filaBase?.minhas.length || 0);
 
   // Separar tarefas de hoje do histórico
   const { tarefasHoje, tarefasHistorico } = useMemo(() => {
