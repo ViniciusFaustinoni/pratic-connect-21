@@ -1,50 +1,80 @@
 
 ## Diagnóstico
 
-No popup do card da tarefa no mapa de monitoramento (`MapaVistoriasContent.tsx`), o coordenador hoje só tem: **Enviar Confirmação**, **WhatsApp** e **Google Maps**. Falta um botão para **reagendar** manualmente data/hora da vistoria.
+Hoje a alocação `rota | base` existe na tabela `alocacoes_diarias`, mas:
 
-## Investigação necessária (próxima rodada)
+1. É definida apenas via **EscalaDiaPanel / PlantaoDiaModal** (na aba "Equipe" da gestão), não direto pelo coordenador no mapa de monitoramento.
+2. Não há **vínculo com qual base** o técnico fica fixo (`base_id` não existe em `alocacoes_diarias`).
+3. No mapa de monitoramento (`MapaVistoriasContent.tsx`), técnicos em modo base **continuam sendo plotados** pelas coordenadas de `vistoriadores_localizacao` e ficam **arrastáveis** (drag-and-drop), permitindo atribuição errada de tarefas de rota.
+4. Vistorias de base (`agendamentos_base`) podem ser atribuídas a qualquer técnico, sem checar se ele é base daquela oficina.
+5. Ao clicar no ícone da base no mapa, hoje só abre o `CalendarioDiaModal` com a fila — **não mostra quem é o vistoriador fixo da base**.
 
-1. Confirmar estrutura do popup em `src/components/mapa/MapaVistoriasContent.tsx` — onde ficam os botões.
-2. Identificar tabela alvo da reagendamento: `agendamentos_base` (data + hora_inicio/hora_fim) e/ou `vistorias.data_agendada` + `hora_agendada`.
-3. Verificar se já existe modal/hook de reagendamento reaproveitável (ex: em `src/components/vistorias/`, `useReagendarVistoria`, fluxo do associado).
-4. Conferir permissão: `canMonitoring` / role "Coordenador de Monitoramento" (memória `monitoring-coordinator-permissions`).
-5. Checar se é preciso disparar WhatsApp de confirmação após reagendar (memória `automated-assignment-and-confirmation-logic`).
+## Plano
 
-## Plano de implementação
+### 1) Schema (migration)
 
-### 1) Botão "Reagendar" no popup
-Em `MapaVistoriasContent.tsx`, adicionar botão (ícone `CalendarClock`, variante outline) ao lado dos demais — só visível para quem tem permissão de monitoramento/coordenador.
+Adicionar coluna `base_id uuid references oficinas(id)` em `alocacoes_diarias`. Constraint: obrigatório quando `tipo_alocacao = 'base'` (via trigger de validação, não CHECK), e a oficina referenciada precisa ter `is_base_pratic = true`.
 
-### 2) Modal `ReagendarTarefaDialog`
-Novo componente `src/components/mapa/ReagendarTarefaDialog.tsx`:
-- Mostra dados atuais (associado, veículo, data/hora atual).
-- Campos: nova data (input date), nova hora (select de slots ou input time), motivo (textarea opcional).
-- Validação: data >= hoje, hora dentro do horário comercial.
-- Botão "Confirmar reagendamento".
+RLS: garantir que coordenador de monitoramento e diretor têm INSERT/UPDATE em `alocacoes_diarias`.
 
-### 3) Hook `useReagendarTarefa`
-Mutation que:
-- Atualiza `agendamentos_base` (data, hora_inicio, hora_fim) **OU** `vistorias` (data_agendada, hora_agendada) conforme origem da tarefa.
-- Atualiza `servicos.data_agendada`/`hora_agendada` se houver vínculo.
-- Registra log em `servicos_atribuicoes_log` (ou tabela equivalente) com tipo `reagendamento_manual`, autor, motivo.
-- Invalida queries: `mapa-vistorias`, `vistorias`, `agendamentos-base`, `fila-base-hoje`.
-- Toast de sucesso + opção de disparar WhatsApp de reconfirmação ao associado.
+### 2) Hook `useAlocacoesDiaHoje`
 
-### 4) WhatsApp de reconfirmação (opcional, marcado por padrão)
-Reutilizar fluxo de `confirmação` já existente no popup, agora com a nova data/hora. Trigger via mesma edge function que o botão "Enviar Confirmação" usa.
+Novo hook que retorna mapa `profissional_id → { tipo_alocacao, base_id }` para o dia atual, consumido pelo `MapaVistoriasContent` e pelo painel de equipe. Realtime sobre `alocacoes_diarias`.
 
-### 5) Permissão / RLS
-- UI: ocultar botão para quem não é coordenador/diretor (usar hook de permissões existente).
-- RLS: garantir que role coordenador de monitoramento tem UPDATE em `agendamentos_base` e `vistorias` para os campos de data/hora. Se já tem (provável, pela memória), nada a fazer; senão, migration mínima.
+### 3) Mapa de monitoramento — aba Equipe
+
+No popup de cada vistoriador (em `Mapa.tsx` aba `equipe`), adicionar:
+- Seletor **Tipo: Rota / Base** (para coordenador/diretor).
+- Quando "Base" selecionado → segundo combo **"Em qual base?"** (lista `useBasesPratic`).
+- Botão "Salvar" → upsert em `alocacoes_diarias` (data=hoje).
+
+### 4) Mapa de atribuições — esconder técnicos base
+
+Em `MapaVistoriasContent.tsx`:
+- Filtrar `vistoriadoresEmServico` para **não renderizar** Markers de quem está em modo base hoje.
+- Bloquear drag-and-drop deles (já não aparecem; também blindar lógica de `handleTecnicoDragEnd` para ignorar).
+- Vistorias de **rota** sendo arrastadas não podem ser atribuídas a técnico base — `handleTaskDragEnd` filtra técnicos base.
+
+### 5) Ícone da base mostra vistoriador fixo
+
+No popup do Marker da base (linha ~1022-1051), adicionar seção:
+- "Vistoriador fixo hoje: **Nome**" com badge verde "Em base".
+- Se houver mais de um, lista todos.
+- Botão "Reatribuir" abre dialog para trocar técnico daquela base.
+
+### 6) Atribuição manual de vistorias de base
+
+No `useAtribuirServicoManual` (ramo `isBase`):
+- Antes de atribuir, validar que o `profissional_id` está alocado como **base na mesma `oficina_id`** do `agendamentos_base`. Se não, rejeitar com mensagem clara.
+
+Na lista de técnicos disponíveis para drag/atribuição de vistoria base, mostrar **apenas** quem é base daquela oficina.
+
+### 7) `useFilaBaseHoje`
+
+Filtrar `disponiveis` adicionalmente por `oficina_id == base_id_do_profissional` quando o profissional for base. Garante que cada técnico base só vê fila da sua oficina.
+
+### 8) `EscalaDiaPanel` / `PlantaoDiaModal`
+
+Adicionar coluna/campo "Base" ao lado do toggle Rota/Base — combo de oficinas (`useBasesPratic`) habilitado quando tipo = "base". Persistir `base_id` no upsert.
+
+## Arquivos a tocar
+
+- **Migration nova**: coluna `base_id` + trigger de validação + (se preciso) policies RLS.
+- `src/hooks/useAlocacaoDiaria.ts` — expor `baseId`.
+- `src/hooks/useAlocacoesDiaHoje.ts` (novo) — mapa para o dia.
+- `src/hooks/useFilaBaseHoje.ts` — filtrar por `oficina_id`.
+- `src/hooks/useAtribuicaoManual.ts` — validar base na atribuição.
+- `src/pages/monitoramento/Mapa.tsx` — popup vistoriador (aba Equipe) com seletor.
+- `src/components/mapa/MapaVistoriasContent.tsx` — esconder técnicos base, popup da base mostrar fixo, filtros drag.
+- `src/components/equipe/EscalaDiaPanel.tsx` + `PlantaoDiaModal.tsx` — campo `base_id`.
 
 ## Não vou mexer
 
-- Lógica de criação de vistoria/agendamento.
-- Fluxo de execução (`ExecutarVistoriaCompleta`).
-- Aba "Equipe" e fila de base.
-- Atribuição de técnico (drag-and-drop).
+- Lógica de execução de vistoria (`ExecutarVistoriaCompleta`).
+- Reagendamento manual (já implementado).
+- Aba Atribuições funciona igual para técnicos de rota.
+- `useIniciarServico` (já valida proximidade base via outro caminho).
 
 ## Resultado
 
-Coordenador clica num card de tarefa no mapa → vê novo botão **Reagendar** → escolhe nova data/hora + motivo → confirma → dados atualizados em todas as tabelas, log registrado, WhatsApp de reconfirmação enviado opcionalmente, mapa e listas refletindo na hora.
+Coordenador de monitoramento abre o mapa, clica num técnico → muda para **Base** → escolhe **qual base** → técnico desaparece do mapa de atribuições. Ao clicar no ícone da base, vê **quem é o fixo**. Vistorias da base só podem ser atribuídas a técnicos daquela base. Técnicos base não recebem mais drag-and-drop nem aparecem como destino possível para tarefas de rota.
