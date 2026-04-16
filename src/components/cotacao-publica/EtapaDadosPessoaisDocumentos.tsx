@@ -57,7 +57,7 @@ interface DadosExtraidos {
   valor_nota_fiscal?: string;
   numero_motor?: string;
   // Flag de origem do documento
-  origem_documento_veiculo?: 'crlv' | 'nota_fiscal_veiculo';
+  origem_documento_veiculo?: 'crlv' | 'nota_fiscal_veiculo' | 'atpv_e';
 }
 
 // Opções para selects
@@ -133,7 +133,7 @@ export function EtapaDadosPessoaisDocumentos({
 
   const temDocumentoPessoal = tiposIdentificados.includes('cnh') || tiposIdentificados.includes('rg');
   const temComprovante = tiposIdentificados.includes('comprovante_residencia');
-  const temCrlv = tiposIdentificados.includes('crlv') || tiposIdentificados.includes('nota_fiscal_veiculo');
+  const temCrlv = tiposIdentificados.includes('crlv') || tiposIdentificados.includes('nota_fiscal_veiculo') || tiposIdentificados.includes('atpv_e');
   
   // Verificar dados extraídos
   const cpfIlegivel = dadosExtraidos.cpf === 'ilegivel';
@@ -280,7 +280,26 @@ export function EtapaDadosPessoaisDocumentos({
           if (!isNaN(anoMod)) novosDados.veiculo_ano_modelo = anoMod;
         }
       }
-      
+
+      // De ATPV-e / CRV Digital: substituto do CRLV (veículos recém-adquiridos)
+      if (tipoDocumento === 'atpv_e') {
+        novosDados.origem_documento_veiculo = 'atpv_e';
+        if (dados.placa) novosDados.veiculo_placa = dados.placa;
+        if (dados.chassi) novosDados.veiculo_chassi = dados.chassi;
+        if (dados.renavam) novosDados.veiculo_renavam = dados.renavam;
+        if (dados.cor) novosDados.veiculo_cor = dados.cor;
+        if (dados.combustivel) novosDados.veiculo_combustivel = dados.combustivel;
+
+        if (dados.ano_fabricacao) {
+          const anoFab = parseInt(dados.ano_fabricacao);
+          if (!isNaN(anoFab)) novosDados.veiculo_ano_fabricacao = anoFab;
+        }
+        if (dados.ano_modelo) {
+          const anoMod = parseInt(dados.ano_modelo);
+          if (!isNaN(anoMod)) novosDados.veiculo_ano_modelo = anoMod;
+        }
+      }
+
       return novosDados;
     });
   }, []);
@@ -537,10 +556,15 @@ export function EtapaDadosPessoaisDocumentos({
               )}
             </div>
             <div className="flex-1">
-              <p className="text-sm font-medium">CRLV ou Nota Fiscal do Veículo</p>
+              <p className="text-sm font-medium">CRLV, Nota Fiscal ou ATPV-e do Veículo</p>
               {dadosExtraidos.origem_documento_veiculo === 'nota_fiscal_veiculo' && (
                 <Badge variant="outline" className="text-xs border-amber-500/30 text-amber-600 mt-1">
                   Nota Fiscal (substitui CRLV)
+                </Badge>
+              )}
+              {dadosExtraidos.origem_documento_veiculo === 'atpv_e' && (
+                <Badge variant="outline" className="text-xs border-amber-500/30 text-amber-600 mt-1">
+                  ATPV-e / CRV Digital (substitui CRLV)
                 </Badge>
               )}
               {temDadosVeiculo && (
@@ -638,9 +662,11 @@ export function EtapaDadosPessoaisDocumentos({
                     <Car className="h-4 w-4 text-success" />
                     <h4 className="font-medium text-sm">Dados do Veículo</h4>
                     <Badge variant="outline" className="text-xs border-success/30 text-success">
-                      {dadosExtraidos.origem_documento_veiculo === 'nota_fiscal_veiculo' 
-                        ? 'Extraído da Nota Fiscal' 
-                        : 'Extraído do CRLV'}
+                      {dadosExtraidos.origem_documento_veiculo === 'nota_fiscal_veiculo'
+                        ? 'Extraído da Nota Fiscal'
+                        : dadosExtraidos.origem_documento_veiculo === 'atpv_e'
+                          ? 'Extraído da ATPV-e / CRV Digital'
+                          : 'Extraído do CRLV'}
                     </Badge>
                   </div>
                   <div className="grid grid-cols-2 gap-3 text-sm">
@@ -764,7 +790,7 @@ export function EtapaDadosPessoaisDocumentos({
           {!podeAvancar && (
             <p className="text-center text-sm text-muted-foreground">
               {!temDocumentoPessoal && 'Envie CNH ou RG • '}
-              {!temCrlv && 'Envie CRLV ou Nota Fiscal • '}
+              {!temCrlv && 'Envie CRLV, Nota Fiscal ou ATPV-e • '}
               {!temComprovante && 'Envie Comprovante • '}
               {!temContato && 'Preencha e-mail e telefone'}
             </p>

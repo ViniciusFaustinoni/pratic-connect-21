@@ -97,6 +97,17 @@ Campos: valor_nota_fiscal (valor numérico da NF), chassi (17 chars), numero_mot
 - tipo_detectado deve ser "nota_fiscal_veiculo"
 - Este documento substitui o CRLV para veículos zero km ou recém-adquiridos
 
+### ATPV-e / CRV Digital (Autorização para Transferência de Propriedade de Veículo - Eletrônica)
+Detectar quando o documento for emitido pelo SENATRAN/DETRAN com título "AUTORIZAÇÃO PARA TRANSFERÊNCIA DE PROPRIEDADE DE VEÍCULO" ou "ATPV-e" / "CRV Digital" / "CRV-e". Geralmente contém QR Code, código de segurança, dados do veículo, dados do vendedor e dados do comprador.
+Campos: placa, renavam (11 dígitos), chassi (17 chars), marca, modelo, ano_fabricacao (int), ano_modelo (int), cor, combustivel,
+nome_comprador, cpf_comprador (XXX.XXX.XXX-XX), endereco_comprador (logradouro+numero), cidade_comprador, uf_comprador (2 letras), cep_comprador,
+nome_vendedor, cpf_cnpj_vendedor,
+valor_declarado_venda (numérico), data_emissao_crv (YYYY-MM-DD), data_venda (YYYY-MM-DD),
+numero_crv, codigo_seguranca_crv, numero_atpv
+- tipo_detectado deve ser "atpv_e"
+- Este documento SUBSTITUI o CRLV para veículos recém-adquiridos cujo CRLV ainda não foi emitido no nome do novo proprietário.
+- NÃO confundir com CRLV (que tem título "CERTIFICADO DE REGISTRO E LICENCIAMENTO DE VEÍCULO") nem com Nota Fiscal.
+
 ### Comprovante de Residência
 Aceitar: contas (água/luz/gás/telefone/internet), faturas/boletos, IPTU/IPVA, IRPF, extratos, contratos aluguel, escrituras.
 Campos: logradouro, numero, complemento, bairro, cidade, uf (2 letras), cep, nome_titular, tipo_comprovante ("conta_luz"|"conta_agua"|"conta_gas"|"conta_telefone"|"conta_internet"|"fatura_cartao"|"boleto_plano_saude"|"boleto_condominio"|"iptu"|"ipva"|"extrato_bancario"|"contrato_aluguel"|"outro"), data_emissao
@@ -113,7 +124,7 @@ Compare nome_titular com nomeEsperado:
 - CPF: XXX.XXX.XXX-XX. Datas: YYYY-MM-DD. Placa: formato antigo ou Mercosul.
 
 ## JSON de resposta:
-{"tipo_detectado":"cnh"|"rg"|"crlv"|"nota_fiscal_veiculo"|"comprovante_residencia"|"outro","sucesso":bool,"dados":{...},"legivel":bool,"valido":bool,"sugestao":"aprovar"|"reprovar"|"revisar","motivo":"...","confianca":0.0-1.0}`;
+{"tipo_detectado":"cnh"|"rg"|"crlv"|"nota_fiscal_veiculo"|"atpv_e"|"comprovante_residencia"|"outro","sucesso":bool,"dados":{...},"legivel":bool,"valido":bool,"sugestao":"aprovar"|"reprovar"|"revisar","motivo":"...","confianca":0.0-1.0}`;
 
 /**
  * Tenta reparar um JSON truncado pela IA (max_tokens atingido).
@@ -332,6 +343,7 @@ serve(async (req) => {
         comprovante_residencia: 'Comprovante de Residência',
         laudo_vistoria: 'Laudo de Vistoria',
         nota_fiscal_veiculo: 'Nota Fiscal de Veículo',
+        atpv_e: 'ATPV-e / CRV Digital (Autorização para Transferência de Propriedade de Veículo)',
       };
       const tipoLabel = tipoLabels[tipoEsperado] || tipoEsperado;
       userPrompt = `Este documento é um(a) ${tipoLabel}. Extraia todas as informações do tipo ${tipoEsperado}. Se o documento não corresponder ao tipo esperado, indique no campo motivo.`;
