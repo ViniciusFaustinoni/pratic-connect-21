@@ -1072,6 +1072,25 @@ export function useDuplicateProductLine() {
         .select().single();
       if (lineError) throw lineError;
 
+      // 1b. Copy line-level eligibility rules (marca_modelo, ano_range, etc.)
+      const { data: lineRules } = await supabase
+        .from('entity_eligibility_rules')
+        .select('*')
+        .eq('entity_id', id)
+        .eq('entity_type', 'linha');
+      
+      if (lineRules && lineRules.length > 0) {
+        const lineRulesToInsert = lineRules.map((r: any) => ({
+          entity_id: createdLine.id,
+          entity_type: 'linha' as const,
+          rule_type: r.rule_type,
+          rule_mode: r.rule_mode,
+          rule_config: r.rule_config,
+          is_active: r.is_active,
+        }));
+        await supabase.from('entity_eligibility_rules').insert(lineRulesToInsert);
+      }
+
       // 2. Fetch ALL plans at once
       const { data: plans } = await supabase
         .from('planos')
