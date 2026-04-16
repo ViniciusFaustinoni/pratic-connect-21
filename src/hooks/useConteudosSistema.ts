@@ -272,7 +272,7 @@ export function useTaxaAdesaoMinimoVolante() {
 }
 
 export function useTaxaAdesaoMinimoVolanteInterno() {
-  return useConfiguracaoNumero('taxa_adesao_minimo_volante_interno', 150);
+  return useConfiguracaoNumero('taxa_adesao_minimo_volante_interno', 50);
 }
 
 export function useTaxaAdesaoMinimoVolanteExterno() {
