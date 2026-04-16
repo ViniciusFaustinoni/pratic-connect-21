@@ -319,6 +319,9 @@ export function useAtribuirServicoManual() {
       qc.invalidateQueries({ queryKey: ['vistoriadores-localizacao-realtime'] });
       qc.invalidateQueries({ queryKey: ['calendario-dia-base'] });
       qc.invalidateQueries({ queryKey: ['tarefa-atual-servico'] });
+      // Hook principal usado pelo app do técnico (/instalador) para mostrar a tarefa
+      qc.invalidateQueries({ queryKey: ['tarefa-atual'] });
+      qc.invalidateQueries({ queryKey: ['servicos'] });
     },
     onError: (err: any) => {
       toast.error('Erro ao atribuir serviço: ' + (err.message || ''));

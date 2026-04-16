@@ -137,6 +137,9 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
       queryClient.invalidateQueries({ queryKey: ['agendamentos-base-calendario'] });
       queryClient.invalidateQueries({ queryKey: ['calendario-dia-instalacoes'] });
       queryClient.invalidateQueries({ queryKey: ['tarefa-atual-servico'] });
+      // Hook principal usado pelo app do técnico (/instalador) para mostrar a tarefa
+      queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
     },
     onError: () => {
       toast.error('Erro ao antecipar tarefa');
@@ -200,6 +203,9 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
       queryClient.invalidateQueries({ queryKey: ['calendario-dia-base'] });
       queryClient.invalidateQueries({ queryKey: ['agendamentos-base-calendario'] });
       queryClient.invalidateQueries({ queryKey: ['tarefa-atual-servico'] });
+      // Hook principal usado pelo app do técnico (/instalador) para mostrar a tarefa
+      queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
     },
     onError: () => {
       toast.error('Erro ao atribuir técnico');
