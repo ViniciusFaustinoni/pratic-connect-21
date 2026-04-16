@@ -229,14 +229,26 @@ function useLinhasComPlanos() {
       let planRulesMapRef = new Map<string, EligibilityRule[]>();
 
       if (planoIds.length > 0) {
-        // Fetch coberturas in chunks to avoid 1000-row limit
-        const CHUNK_SIZE = 80;
+        // Smaller chunks + explicit high range to avoid PostgREST 1000-row silent truncation.
+        // 30 planos × ~15 cobs = ~450 linhas (margem segura).
+        const CHUNK_SIZE = 30;
+        const PG_HARD_LIMIT = 9999;
+
+        const warnIfNearLimit = (label: string, count: number) => {
+          if (import.meta.env.DEV && count >= 950) {
+            console.warn(`[useLinhasComPlanos] ${label} retornou ${count} linhas — perto do limite de 1000. Reduza o CHUNK_SIZE.`);
+          }
+        };
+
         for (let i = 0; i < planoIds.length; i += CHUNK_SIZE) {
           const chunk = planoIds.slice(i, i + CHUNK_SIZE);
           const { data: coberturas } = await supabase
             .from('planos_coberturas')
             .select('plano_id, cobertura_id, coberturas(id, nome, valor)')
-            .in('plano_id', chunk);
+            .in('plano_id', chunk)
+            .range(0, PG_HARD_LIMIT);
+
+          warnIfNearLimit('planos_coberturas chunk', (coberturas || []).length);
 
           for (const c of coberturas || []) {
             const cob = c.coberturas as any;
@@ -247,13 +259,15 @@ function useLinhasComPlanos() {
           }
         }
 
-        // Fetch beneficios in chunks to avoid 1000-row limit
         for (let i = 0; i < planoIds.length; i += CHUNK_SIZE) {
           const chunk = planoIds.slice(i, i + CHUNK_SIZE);
           const { data: beneficios } = await supabase
             .from('planos_beneficios')
             .select('plano_id, benefit_id, benefits:benefit_id(id, name, preco_sugerido)')
-            .in('plano_id', chunk);
+            .in('plano_id', chunk)
+            .range(0, PG_HARD_LIMIT);
+
+          warnIfNearLimit('planos_beneficios chunk', (beneficios || []).length);
 
           for (const b of beneficios || []) {
             const ben = b.benefits as any;
@@ -272,15 +286,17 @@ function useLinhasComPlanos() {
         const allEntityIds = [...allCobIds, ...allBenIds, ...planoIds];
 
         if (allEntityIds.length > 0) {
-          const CHUNK = 100;
+          const RULES_CHUNK = 50;
           const allRules: EligibilityRule[] = [];
-          for (let i = 0; i < allEntityIds.length; i += CHUNK) {
-            const chunk = allEntityIds.slice(i, i + CHUNK);
+          for (let i = 0; i < allEntityIds.length; i += RULES_CHUNK) {
+            const chunk = allEntityIds.slice(i, i + RULES_CHUNK);
             const { data } = await supabase
               .from('entity_eligibility_rules')
               .select('*')
               .in('entity_id', chunk)
-              .eq('is_active', true);
+              .eq('is_active', true)
+              .range(0, PG_HARD_LIMIT);
+            warnIfNearLimit('entity_eligibility_rules chunk', (data || []).length);
             if (data) allRules.push(...(data as EligibilityRule[]));
           }
 
