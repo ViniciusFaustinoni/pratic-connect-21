@@ -15,18 +15,21 @@ import { ptBR } from 'date-fns/locale';
 import { TIPO_SERVICO_LABELS } from '@/hooks/useServicos';
 
 function getTipoLabel(tipo: string) {
+  if (tipo === 'vistoria_base') return 'Vistoria Base';
   return (TIPO_SERVICO_LABELS as Record<string, string>)[tipo] || tipo;
 }
 
 function getTipoBadgeClass(tipo: string) {
   if (tipo === 'instalacao') return 'border-blue-300 text-blue-700 dark:text-blue-300';
   if (tipo === 'revistoria') return 'border-teal-300 text-teal-700 dark:text-teal-300';
+  if (tipo === 'vistoria_base') return 'border-green-300 text-green-700 dark:text-green-300';
   return 'border-amber-300 text-amber-700 dark:text-amber-300';
 }
 
 function getTipoIcon(tipo: string) {
   if (tipo === 'instalacao') return <Wrench className="h-3 w-3 text-blue-500" />;
   if (tipo === 'revistoria') return <FileText className="h-3 w-3 text-teal-500" />;
+  if (tipo === 'vistoria_base') return <ClipboardCheck className="h-3 w-3 text-green-500" />;
   return <ClipboardCheck className="h-3 w-3 text-amber-500" />;
 }
 
@@ -232,6 +235,7 @@ export default function AtribuicaoManualTab() {
     atribuirMutation.mutate({
       servicoId: confirmDialog.servico.id,
       profissionalId: confirmDialog.vistoriadorId,
+      isBase: !!confirmDialog.servico.isBase,
     });
     setConfirmDialog(null);
   };
@@ -279,6 +283,7 @@ export default function AtribuicaoManualTab() {
                     <SelectItem value="todos">Todos os tipos</SelectItem>
                     <SelectItem value="instalacao">Instalações</SelectItem>
                     <SelectItem value="vistoria">Vistorias</SelectItem>
+                    <SelectItem value="vistoria_base">Vistorias Base</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
