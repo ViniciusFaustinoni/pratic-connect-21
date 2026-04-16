@@ -6,6 +6,7 @@ import { useRotaReal } from "@/hooks/useRotaReal";
 import L from "leaflet";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { formatDataAgendada } from "@/lib/date-utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
