@@ -20,7 +20,7 @@ import { ModalRecusaVeiculoComFotos } from '@/components/instalador/ModalRecusaV
 import { TemporizadorExecucao } from '@/components/vistoriador/TemporizadorExecucao';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { useVistoriaCompleta, useSalvarRascunhoVistoriaCompleta, DadosParciaisVistoria, useVistoriaCompletaPorServico } from '@/hooks/useVistorias';
+import { useVistoriaCompleta, useSalvarRascunhoVistoriaCompleta, DadosParciaisVistoria, useVistoriaCompletaPorServico, useVistoriaCompletaPorAgendamentoBase } from '@/hooks/useVistorias';
 import { 
   useAprovarVeiculoVistoria, 
   useRecusarVeiculoVistoria, 
