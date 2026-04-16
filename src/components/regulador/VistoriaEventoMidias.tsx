@@ -1,10 +1,13 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FotoCapture } from '@/components/instalador/FotoCapture';
 import { VideoCapture } from '@/components/instalador/VideoCapture';
-import { Loader2 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { CloudOff } from 'lucide-react';
+import { offlineDB, enfileirarMidia } from '@/lib/offline/db';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { useSyncQueue } from '@/hooks/useSyncQueue';
 import { toast } from 'sonner';
 
 interface VistoriaEventoMidiasProps {
@@ -24,92 +27,101 @@ export function VistoriaEventoMidias({
   onVideoChange,
   onProsseguir,
 }: VistoriaEventoMidiasProps) {
-  const [uploadingFoto, setUploadingFoto] = useState<number | null>(null);
-  const [uploadingVideo, setUploadingVideo] = useState(false);
-  const [fotosComErro, setFotosComErro] = useState<Set<number>>(new Set());
+  const online = useOnlineStatus();
+  const { forcarSync } = useSyncQueue();
 
-  const fotosPreenchidas = fotosUrls.filter(Boolean).length;
-  const todasMidias = fotosPreenchidas >= 10 && !!videoUrl;
+  // Mídias pendentes desta vistoria (live)
+  const pendentes = useLiveQuery(
+    () =>
+      offlineDB.midias_pendentes
+        .where('vistoria_id')
+        .equals(vistoriaId)
+        .toArray(),
+    [vistoriaId],
+    []
+  );
 
-  const uploadMidia = useCallback(async (file: File, tipo: 'foto' | 'video', index?: number) => {
-    const maxRetries = 3;
-    for (let tentativa = 1; tentativa <= maxRetries; tentativa++) {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) throw new Error('Sessão expirada');
+  // Previews offline a partir dos blobs locais
+  const [previewsLocais, setPreviewsLocais] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const novos: Record<string, string> = {};
+    pendentes?.forEach((m) => {
+      novos[`${m.tipo}-${m.slot}`] = URL.createObjectURL(m.blob);
+    });
+    setPreviewsLocais(novos);
+    return () => {
+      Object.values(novos).forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, [pendentes]);
 
-        const formData = new FormData();
-        formData.append('acao', 'salvar_midias');
-        formData.append('vistoria_id', vistoriaId);
-        formData.append('tipo', tipo);
-        formData.append('arquivo', file);
-        if (index !== undefined) {
-          formData.append('index', String(index + 1));
-        }
+  // Helpers para juntar URLs do servidor + previews locais
+  const fotoUrl = (i: number): string | undefined => {
+    if (fotosUrls[i]) return fotosUrls[i];
+    return previewsLocais[`foto-${i + 1}`];
+  };
+  const videoDisplay = videoUrl || previewsLocais['video-360'] || undefined;
 
-        const res = await fetch(
-          `https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/salvar-vistoria-regulador`,
-          {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${session.access_token}`,
-            },
-            body: formData,
-          }
-        );
+  const fotoEnfileiradaSemUrl = (i: number) =>
+    !fotosUrls[i] && !!previewsLocais[`foto-${i + 1}`];
+  const videoEnfileiradoSemUrl = !videoUrl && !!previewsLocais['video-360'];
 
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.error || `Erro ${res.status}`);
-        }
-
-        const result = await res.json();
-        return result.url;
-      } catch (err: any) {
-        console.error(`[Upload] Tentativa ${tentativa}/${maxRetries}:`, err);
-        if (tentativa === maxRetries) {
-          toast.error(`Falha no upload após ${maxRetries} tentativas`);
-          throw err;
-        }
-        await new Promise((r) => setTimeout(r, 1000 * tentativa));
-      }
-    }
-  }, [vistoriaId]);
+  const fotosPreenchidas =
+    fotosUrls.filter(Boolean).length +
+    Array.from({ length: 10 }).filter((_, i) => fotoEnfileiradaSemUrl(i)).length;
+  const temVideo = !!videoUrl || videoEnfileiradoSemUrl;
+  const todasMidias = fotosPreenchidas >= 10 && temVideo;
 
   const handleFotoCapture = useCallback(async (index: number, file: File) => {
-    setUploadingFoto(index);
-    setFotosComErro(prev => { const n = new Set(prev); n.delete(index); return n; });
     try {
-      const url = await uploadMidia(file, 'foto', index);
-      const novasFotos = [...fotosUrls];
-      novasFotos[index] = url;
-      onFotosChange(novasFotos);
-    } catch {
-      setFotosComErro(prev => new Set(prev).add(index));
-    } finally {
-      setUploadingFoto(null);
+      await enfileirarMidia({
+        vistoria_id: vistoriaId,
+        origem: 'regulador',
+        tipo: 'foto',
+        slot: index + 1,
+        blob: file,
+        mime: file.type,
+      });
+      if (online) forcarSync();
+      else toast.info('Sem internet — foto salva no celular, será enviada depois.');
+    } catch (err: any) {
+      toast.error(`Falha ao salvar foto: ${err.message}`);
     }
-  }, [fotosUrls, onFotosChange, uploadMidia]);
+  }, [vistoriaId, online, forcarSync]);
 
   const handleVideoCapture = useCallback(async (file: File) => {
-    setUploadingVideo(true);
     try {
-      const url = await uploadMidia(file, 'video');
-      onVideoChange(url);
-    } catch {
-      // toast already shown
-    } finally {
-      setUploadingVideo(false);
+      await enfileirarMidia({
+        vistoria_id: vistoriaId,
+        origem: 'regulador',
+        tipo: 'video',
+        slot: '360',
+        blob: file,
+        mime: file.type,
+      });
+      if (online) forcarSync();
+      else toast.info('Sem internet — vídeo salvo no celular, será enviado depois.');
+    } catch (err: any) {
+      toast.error(`Falha ao salvar vídeo: ${err.message}`);
     }
-  }, [onVideoChange, uploadMidia]);
+  }, [vistoriaId, online, forcarSync]);
+
+  // Conta uploads em fila desta vistoria
+  const filaPendente = pendentes?.length ?? 0;
 
   return (
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-base">Captura de Evidências</CardTitle>
         <p className="text-xs text-muted-foreground">
-          {fotosPreenchidas}/10 fotos • {videoUrl ? '1' : '0'}/1 vídeo
+          {fotosPreenchidas}/10 fotos • {temVideo ? '1' : '0'}/1 vídeo
+          {filaPendente > 0 && ` • ${filaPendente} aguardando envio`}
         </p>
+        {!online && (
+          <div className="mt-2 flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            <CloudOff className="h-4 w-4" />
+            Modo offline — fotos e vídeos serão enviados quando a internet voltar.
+          </div>
+        )}
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Grade de 10 fotos */}
@@ -122,9 +134,9 @@ export function VistoriaEventoMidias({
                 tipo={`foto-${i + 1}`}
                 label={`Foto ${i + 1}`}
                 obrigatoria
-                fotoUrl={fotosUrls[i] || undefined}
-                uploading={uploadingFoto === i}
-                hasError={fotosComErro.has(i)}
+                fotoUrl={fotoUrl(i)}
+                uploading={false}
+                hasError={false}
                 onCapture={(file) => handleFotoCapture(i, file)}
               />
             ))}
@@ -137,8 +149,9 @@ export function VistoriaEventoMidias({
           <VideoCapture
             onCapture={handleVideoCapture}
             onReset={() => onVideoChange(null)}
-            videoUrl={videoUrl || undefined}
-            uploading={uploadingVideo}
+            videoUrl={videoDisplay}
+            uploading={false}
+            confirmed={!!videoUrl}
             maxDuration={120}
             label="Vídeo do veículo (máx. 2 min)"
           />
@@ -156,6 +169,11 @@ export function VistoriaEventoMidias({
         {!todasMidias && (
           <p className="text-xs text-center text-muted-foreground">
             Preencha todas as 10 fotos e o vídeo para continuar
+          </p>
+        )}
+        {todasMidias && filaPendente > 0 && (
+          <p className="text-xs text-center text-amber-600">
+            ⚠️ Você pode prosseguir, mas {filaPendente} {filaPendente === 1 ? 'mídia ainda está' : 'mídias ainda estão'} sendo enviada{filaPendente === 1 ? '' : 's'} ao servidor.
           </p>
         )}
       </CardContent>
