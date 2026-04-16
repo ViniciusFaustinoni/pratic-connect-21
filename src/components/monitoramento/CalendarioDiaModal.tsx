@@ -19,6 +19,7 @@ interface CalendarioDiaModalProps {
   open: boolean;
   onClose: () => void;
   data: string; // yyyy-MM-dd
+  abaInicial?: 'rota' | 'base';
 }
 
 const STATUS_VISTORIA_LABEL: Record<string, string> = {
@@ -49,7 +50,7 @@ const STATUS_BADGE_CLASSES: Record<string, string> = {
   cancelada: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
 };
 
-export function CalendarioDiaModal({ open, onClose, data }: CalendarioDiaModalProps) {
+export function CalendarioDiaModal({ open, onClose, data, abaInicial }: CalendarioDiaModalProps) {
   const queryClient = useQueryClient();
   const [anteciparId, setAnteciparId] = useState<string | null>(null);
   const [atribuirId, setAtribuirId] = useState<string | null>(null);
@@ -276,7 +277,7 @@ export function CalendarioDiaModal({ open, onClose, data }: CalendarioDiaModalPr
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <Tabs defaultValue="rota" className="mt-2">
+          <Tabs defaultValue={abaInicial || "rota"} className="mt-2">
             <TabsList className="w-full">
               <TabsTrigger value="rota" className="flex-1 gap-1.5">
                 <MapPin className="h-4 w-4" />
