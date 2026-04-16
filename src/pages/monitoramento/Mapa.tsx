@@ -4,16 +4,25 @@ import L from "leaflet";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Phone,
   Users,
   User,
   GitBranchPlus,
+  MapPin,
+  Building2,
+  Settings2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { MapaVistoriasContent } from "@/components/mapa/MapaVistoriasContent";
 import { useVistoriadoresRealtime } from "@/hooks/useVistoriadoresRealtime";
 import { useConfigAtribuicaoManual } from "@/hooks/useAtribuicaoManual";
+import { useAlocacoesDiaHoje } from "@/hooks/useAlocacoesDiaHoje";
+import { useBasesPratic } from "@/hooks/useBasesPratic";
+import { usePermissions } from "@/hooks/usePermissions";
+import { AlocarVistoriadorDialog } from "@/components/mapa/AlocarVistoriadorDialog";
 import { createVistoriadorMarkerSvg, COR_VISTORIADOR, svgToDataUrl } from "@/lib/rota-colors";
 
 // Leaflet icon fix
