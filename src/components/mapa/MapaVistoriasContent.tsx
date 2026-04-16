@@ -877,11 +877,27 @@ export function MapaVistoriasContent() {
                       Atualizado: {formatDistanceToNow(new Date(p.localizacao_atualizada_em), { addSuffix: true, locale: ptBR })}
                     </p>
                   </div>
-                  {p.prestador_telefone && (
-                    <button onClick={() => abrirWhatsApp(p.prestador_telefone)} className="flex items-center justify-center gap-1 w-full px-3 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-700">
-                      <Phone className="h-3 w-3" />Contatar
+                  <div className="flex flex-col gap-1.5">
+                    {p.prestador_telefone && (
+                      <button onClick={() => abrirWhatsApp(p.prestador_telefone!)} className="flex items-center justify-center gap-1 w-full px-3 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-700">
+                        <Phone className="h-3 w-3" />Contatar
+                      </button>
+                    )}
+                    <button
+                      onClick={async () => {
+                        const fnName = p.origem_tabela === 'vistoria' ? 'gerar-link-vistoriador-prestador' : 'gerar-link-prestador';
+                        const payload = p.origem_tabela === 'vistoria'
+                          ? { vistoria_id: p.instalacao_id, vistoriador_prestador_id: p.prestador_id }
+                          : { instalacao_id: p.instalacao_id, prestador_id: p.prestador_id };
+                        const { error } = await supabase.functions.invoke(fnName, { body: payload });
+                        if (error) toast.error('Erro ao reenviar link');
+                        else toast.success('Link reenviado via WhatsApp');
+                      }}
+                      className="flex items-center justify-center gap-1 w-full px-3 py-1.5 bg-amber-500 text-white rounded text-xs hover:bg-amber-600"
+                    >
+                      <Send className="h-3 w-3" />Reenviar Link
                     </button>
-                  )}
+                  </div>
                 </div>
               </Popup>
             </Marker>
