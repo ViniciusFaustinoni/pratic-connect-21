@@ -20,7 +20,7 @@ import { ModalRecusaVeiculoComFotos } from '@/components/instalador/ModalRecusaV
 import { TemporizadorExecucao } from '@/components/vistoriador/TemporizadorExecucao';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { useVistoriaCompleta, useSalvarRascunhoVistoriaCompleta, DadosParciaisVistoria, useVistoriaCompletaPorServico } from '@/hooks/useVistorias';
+import { useVistoriaCompleta, useSalvarRascunhoVistoriaCompleta, DadosParciaisVistoria, useVistoriaCompletaPorServico, useVistoriaCompletaPorAgendamentoBase } from '@/hooks/useVistorias';
 import { 
   useAprovarVeiculoVistoria, 
   useRecusarVeiculoVistoria, 
@@ -52,10 +52,29 @@ export default function ExecutarVistoriaCompleta() {
   const vistoriaPorInstalacaoQuery = useVistoriaCompleta(
     !vistoriaPorServicoQuery.data && !vistoriaPorServicoQuery.isLoading ? routeId || null : null
   );
+  // 3) Fallback final: vistoria de base atribuída via mapa — o ID na rota é
+  //    `agendamentos_base.id`, e a vistoria real fica em `agendamentos_base.vistoria_id`.
+  const vistoriaPorAgendamentoBaseQuery = useVistoriaCompletaPorAgendamentoBase(
+    !vistoriaPorServicoQuery.data &&
+    !vistoriaPorServicoQuery.isLoading &&
+    !vistoriaPorInstalacaoQuery.data &&
+    !vistoriaPorInstalacaoQuery.isLoading
+      ? routeId || null
+      : null
+  );
 
-  const vistoria = vistoriaPorServicoQuery.data || vistoriaPorInstalacaoQuery.data;
-  const isLoading = vistoriaPorServicoQuery.isLoading || vistoriaPorInstalacaoQuery.isLoading;
-  const error = vistoriaPorServicoQuery.error || vistoriaPorInstalacaoQuery.error;
+  const vistoria =
+    vistoriaPorServicoQuery.data ||
+    vistoriaPorInstalacaoQuery.data ||
+    vistoriaPorAgendamentoBaseQuery.data;
+  const isLoading =
+    vistoriaPorServicoQuery.isLoading ||
+    vistoriaPorInstalacaoQuery.isLoading ||
+    vistoriaPorAgendamentoBaseQuery.isLoading;
+  const error =
+    vistoriaPorServicoQuery.error ||
+    vistoriaPorInstalacaoQuery.error ||
+    vistoriaPorAgendamentoBaseQuery.error;
   const instalacaoId = (vistoria as any)?.instalacao_id ?? routeId;
   const { data: fipeMinRastreador = 30000 } = useConfigFipeRastreador();
   const { data: fipeMinRastreadorMoto = 9000 } = useConfigFipeRastreadorMoto();
@@ -65,7 +84,9 @@ export default function ExecutarVistoriaCompleta() {
   const recusarVeiculo = useRecusarVeiculoVistoria();
   const salvarRascunho = useSalvarRascunhoVistoriaCompleta();
   const online = useOnlineStatus();
-  const offlineQueue = useUploadVistoriaOffline((vistoriaPorServicoQuery.data || vistoriaPorInstalacaoQuery.data)?.id);
+  const offlineQueue = useUploadVistoriaOffline(
+    (vistoriaPorServicoQuery.data || vistoriaPorInstalacaoQuery.data || vistoriaPorAgendamentoBaseQuery.data)?.id
+  );
 
 
   // Estado
@@ -339,11 +360,25 @@ export default function ExecutarVistoriaCompleta() {
   }
 
   if (error || !vistoria) {
+    if (typeof window !== 'undefined') {
+      console.warn('[ExecutarVistoriaCompleta] Vistoria não resolvida para id da rota:', routeId, {
+        servicoErr: vistoriaPorServicoQuery.error,
+        instalacaoErr: vistoriaPorInstalacaoQuery.error,
+        agendamentoBaseErr: vistoriaPorAgendamentoBaseQuery.error,
+      });
+    }
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-900 p-4">
         <AlertTriangle className="h-12 w-12 text-red-500" />
-        <p className="text-center text-slate-300">Vistoria não encontrada.</p>
-        <Button onClick={() => navigate('/vistoriador/tarefas')}>Voltar</Button>
+        <p className="text-center text-slate-300">
+          Não foi possível carregar esta tarefa.
+        </p>
+        <p className="text-center text-xs text-slate-500 max-w-sm">
+          A vistoria pode ainda estar sendo preparada pelo sistema, ou você
+          pode não ter acesso a esta tarefa específica. Volte para a lista
+          de tarefas e tente novamente.
+        </p>
+        <Button onClick={() => navigate('/vistoriador/tarefas')}>Voltar para tarefas</Button>
       </div>
     );
   }

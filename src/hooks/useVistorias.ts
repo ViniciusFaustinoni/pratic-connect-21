@@ -1039,3 +1039,80 @@ export function useVistoriaCompletaPorServico(servicoId: string | null) {
     enabled: !!servicoId,
   });
 }
+
+/**
+ * Hook fallback para resolver uma vistoria a partir do ID de um agendamento_base.
+ *
+ * Usado quando o app do técnico recebe uma tarefa do tipo `vistoria_base`
+ * (atribuída via mapa de monitoramento), cujo `tarefa.id` é o id da linha em
+ * `agendamentos_base` — não corresponde a nenhum `servicos.id` nem
+ * `instalacoes.id`. A vistoria real fica em `agendamentos_base.vistoria_id`.
+ */
+export function useVistoriaCompletaPorAgendamentoBase(agendamentoId: string | null) {
+  return useQuery({
+    queryKey: ['vistoria-completa-agendamento-base', agendamentoId],
+    queryFn: async () => {
+      if (!agendamentoId) return null;
+
+      const { data: agendamento, error: errAg } = await supabase
+        .from('agendamentos_base')
+        .select('id, vistoria_id, cotacao_id, atendido_por')
+        .eq('id', agendamentoId)
+        .maybeSingle();
+
+      if (errAg || !agendamento) return null;
+
+      // 1) Caminho preferido: vistoria já vinculada ao agendamento
+      if (agendamento.vistoria_id) {
+        const { data: vistoria } = await supabase
+          .from('vistorias')
+          .select(`
+            *,
+            veiculo:veiculos(
+              id, placa, chassi, marca, modelo,
+              ano_fabricacao, ano_modelo, cor,
+              associado:associados(id, nome, cpf, telefone)
+            ),
+            associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone),
+            vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
+            fotos:vistoria_fotos(*)
+          `)
+          .eq('id', agendamento.vistoria_id)
+          .maybeSingle();
+
+        if (vistoria) return vistoria;
+      }
+
+      // 2) Fallback: tentar resolver pela cotação
+      if (agendamento.cotacao_id) {
+        const { data: vistoriaCot } = await supabase
+          .from('vistorias')
+          .select(`
+            *,
+            veiculo:veiculos(
+              id, placa, chassi, marca, modelo,
+              ano_fabricacao, ano_modelo, cor,
+              associado:associados(id, nome, cpf, telefone)
+            ),
+            associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone),
+            vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
+            fotos:vistoria_fotos(*)
+          `)
+          .eq('cotacao_id', agendamento.cotacao_id)
+          .maybeSingle();
+
+        if (vistoriaCot) {
+          // Vincular ao agendamento para próximas leituras
+          await supabase
+            .from('agendamentos_base')
+            .update({ vistoria_id: vistoriaCot.id })
+            .eq('id', agendamento.id);
+          return vistoriaCot;
+        }
+      }
+
+      return null;
+    },
+    enabled: !!agendamentoId,
+  });
+}
