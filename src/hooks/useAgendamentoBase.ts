@@ -23,6 +23,7 @@ export interface AgendamentoBase {
   cotacao_id: string | null;
   instalacao_id: string | null;
   vistoria_id: string | null;
+  oficina_id: string | null;
   cliente_nome: string;
   cliente_telefone: string | null;
   cliente_email: string | null;
@@ -75,18 +76,24 @@ export function useConfiguracaoBase() {
   });
 }
 
-// Buscar horários ocupados para uma data
-export function useHorariosDisponiveis(data: string) {
+// Buscar horários ocupados para uma data e oficina específica
+export function useHorariosDisponiveis(data: string, oficinaId?: string) {
   return useQuery({
-    queryKey: ['horarios-base', data],
+    queryKey: ['horarios-base', data, oficinaId],
     queryFn: async () => {
       if (!data) return [];
 
-      const { data: agendamentos, error } = await publicSupabase
+      let q = publicSupabase
         .from('agendamentos_base')
         .select('horario')
         .eq('data_agendada', data)
         .in('status', ['agendado', 'confirmado']);
+
+      if (oficinaId) {
+        q = q.eq('oficina_id', oficinaId);
+      }
+
+      const { data: agendamentos, error } = await q;
 
       if (error) throw error;
       return agendamentos || [];
@@ -132,14 +139,21 @@ export function useCriarAgendamentoBase() {
       clienteEmail?: string;
       veiculoPlaca?: string;
       veiculoDescricao?: string;
+      oficinaId?: string;
     }) => {
-      // Verificar capacidade antes de inserir
-      const { data: existentes, error: checkError } = await publicSupabase
+      // Verificar capacidade antes de inserir (filtrado por oficina)
+      let checkQ = publicSupabase
         .from('agendamentos_base')
         .select('id')
         .eq('data_agendada', dados.dataAgendada)
         .eq('horario', dados.horario)
         .in('status', ['agendado', 'confirmado']);
+
+      if (dados.oficinaId) {
+        checkQ = checkQ.eq('oficina_id', dados.oficinaId);
+      }
+
+      const { data: existentes, error: checkError } = await checkQ;
 
       if (checkError) throw checkError;
 
@@ -168,6 +182,7 @@ export function useCriarAgendamentoBase() {
           cliente_email: dados.clienteEmail,
           veiculo_placa: dados.veiculoPlaca,
           veiculo_descricao: dados.veiculoDescricao,
+          oficina_id: dados.oficinaId || null,
           status: 'agendado',
         })
         .select()

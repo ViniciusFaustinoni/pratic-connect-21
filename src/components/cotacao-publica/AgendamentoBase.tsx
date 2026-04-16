@@ -8,11 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useConfiguracaoBase, useHorariosDisponiveis, useCriarAgendamentoBase } from '@/hooks/useAgendamentoBase';
+import { useOficina } from '@/hooks/useOficinas';
 import { cn } from '@/lib/utils';
 import { isDomingo, isSabado } from '@/data/autovistoriaConfig';
 
 interface AgendamentoBaseProps {
   cotacaoId: string;
+  oficinaId: string;
   clienteNome: string;
   clienteTelefone?: string;
   clienteEmail?: string;
@@ -24,6 +26,7 @@ interface AgendamentoBaseProps {
 
 export function AgendamentoBase({
   cotacaoId,
+  oficinaId,
   clienteNome,
   clienteTelefone,
   clienteEmail,
@@ -37,8 +40,10 @@ export function AgendamentoBase({
   const [weekOffset, setWeekOffset] = useState(0);
 
   const { data: configBase, isLoading: loadingConfig } = useConfiguracaoBase();
+  const { data: oficina, isLoading: loadingOficina } = useOficina(oficinaId);
   const { data: horarios, isLoading: loadingHorarios } = useHorariosDisponiveis(
-    dataSelecionada ? format(dataSelecionada, 'yyyy-MM-dd') : ''
+    dataSelecionada ? format(dataSelecionada, 'yyyy-MM-dd') : '',
+    oficinaId
   );
   const criarAgendamento = useCriarAgendamentoBase();
 
@@ -105,9 +110,12 @@ export function AgendamentoBase({
     return { disponivel: ocupados < capacidade, ocupados };
   };
 
-  const enderecoCompleto = configBase?.base_logradouro 
-    ? `${configBase.base_logradouro}${configBase.base_numero ? `, ${configBase.base_numero}` : ''} - ${configBase.base_bairro || ''} - ${configBase.base_cidade || ''}/${configBase.base_uf || ''}`
-    : 'Endereço não configurado';
+  const nomeBase = oficina?.nome_fantasia || oficina?.razao_social || 'Base PRATIC';
+  const enderecoCompleto = oficina?.logradouro 
+    ? `${oficina.logradouro}${oficina.numero ? `, ${oficina.numero}` : ''} - ${oficina.bairro || ''} - ${oficina.cidade || ''}/${oficina.estado || ''}`
+    : configBase?.base_logradouro 
+      ? `${configBase.base_logradouro}${configBase.base_numero ? `, ${configBase.base_numero}` : ''} - ${configBase.base_bairro || ''} - ${configBase.base_cidade || ''}/${configBase.base_uf || ''}`
+      : 'Endereço não configurado';
 
   const handleConfirmar = async () => {
     if (!dataSelecionada || !horarioSelecionado) return;
@@ -121,12 +129,13 @@ export function AgendamentoBase({
       clienteEmail,
       veiculoPlaca,
       veiculoDescricao,
+      oficinaId,
     });
 
     onAgendado();
   };
 
-  if (loadingConfig) {
+  if (loadingConfig || loadingOficina) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-24 w-full" />
@@ -145,7 +154,7 @@ export function AgendamentoBase({
               <Building2 className="h-5 w-5 text-orange-600" />
             </div>
             <div className="flex-1">
-              <h3 className="font-semibold text-sm">Base PRATIC</h3>
+              <h3 className="font-semibold text-sm">{nomeBase}</h3>
               <div className="flex items-start gap-1.5 mt-1 text-sm text-muted-foreground">
                 <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
                 <span>{enderecoCompleto}</span>
