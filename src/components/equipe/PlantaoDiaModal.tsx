@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useBasesPratic } from '@/hooks/useBasesPratic';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -16,6 +17,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
 interface Alocacao {
@@ -23,6 +31,12 @@ interface Alocacao {
   profissional_id: string;
   data: string;
   tipo_alocacao: 'rota' | 'base';
+  base_id?: string | null;
+}
+
+interface EstadoLocal {
+  tipo: 'rota' | 'base';
+  base_id: string | null;
 }
 
 interface Props {
@@ -36,7 +50,8 @@ interface Props {
 export function PlantaoDiaModal({ open, onOpenChange, data, profissionais, alocacoesExistentes }: Props) {
   const { profile } = useAuth();
   const queryClient = useQueryClient();
-  const [alocacoes, setAlocacoes] = useState<Record<string, 'rota' | 'base'>>({});
+  const { data: bases = [] } = useBasesPratic();
+  const [alocacoes, setAlocacoes] = useState<Record<string, EstadoLocal>>({});
   const [hasChanges, setHasChanges] = useState(false);
 
   const dataFormatada = format(data, 'yyyy-MM-dd');
@@ -44,9 +59,12 @@ export function PlantaoDiaModal({ open, onOpenChange, data, profissionais, aloca
 
   useEffect(() => {
     if (open) {
-      const initial: Record<string, 'rota' | 'base'> = {};
+      const initial: Record<string, EstadoLocal> = {};
       alocacoesExistentes.forEach(a => {
-        initial[a.profissional_id] = a.tipo_alocacao as 'rota' | 'base';
+        initial[a.profissional_id] = {
+          tipo: a.tipo_alocacao as 'rota' | 'base',
+          base_id: a.base_id ?? null,
+        };
       });
       setAlocacoes(initial);
       setHasChanges(false);
@@ -55,16 +73,36 @@ export function PlantaoDiaModal({ open, onOpenChange, data, profissionais, aloca
 
   const toggleAlocacao = (profId: string) => {
     setAlocacoes(prev => {
-      const current = prev[profId] || 'rota';
-      return { ...prev, [profId]: current === 'rota' ? 'base' : 'rota' };
+      const current = prev[profId]?.tipo || 'rota';
+      const novoTipo = current === 'rota' ? 'base' : 'rota';
+      return {
+        ...prev,
+        [profId]: {
+          tipo: novoTipo,
+          base_id: novoTipo === 'base' ? (prev[profId]?.base_id || null) : null,
+        },
+      };
     });
     setHasChanges(true);
   };
 
+  const setBase = (profId: string, baseId: string) => {
+    setAlocacoes(prev => ({
+      ...prev,
+      [profId]: { tipo: 'base', base_id: baseId },
+    }));
+    setHasChanges(true);
+  };
+
   const definirTodos = (tipo: 'rota' | 'base') => {
-    const newAlocacoes: Record<string, 'rota' | 'base'> = {};
-    profissionais.forEach(p => { newAlocacoes[p.id] = tipo; });
-    setAlocacoes(newAlocacoes);
+    const novo: Record<string, EstadoLocal> = {};
+    profissionais.forEach(p => {
+      novo[p.id] = {
+        tipo,
+        base_id: tipo === 'base' ? (alocacoes[p.id]?.base_id || null) : null,
+      };
+    });
+    setAlocacoes(novo);
     setHasChanges(true);
   };
 
@@ -72,10 +110,17 @@ export function PlantaoDiaModal({ open, onOpenChange, data, profissionais, aloca
     mutationFn: async () => {
       if (!profile?.id) throw new Error('Não autenticado');
 
-      const upserts = Object.entries(alocacoes).map(([profissionalId, tipo]) => ({
+      const entries = Object.entries(alocacoes);
+      const incompletos = entries.filter(([, v]) => v.tipo === 'base' && !v.base_id);
+      if (incompletos.length > 0) {
+        throw new Error('Selecione a base para todos os profissionais marcados como Base.');
+      }
+
+      const upserts = entries.map(([profissionalId, v]) => ({
         profissional_id: profissionalId,
         data: dataFormatada,
-        tipo_alocacao: tipo,
+        tipo_alocacao: v.tipo,
+        base_id: v.tipo === 'base' ? v.base_id : null,
         definido_por: profile.id,
         updated_at: new Date().toISOString(),
       }));
@@ -94,6 +139,7 @@ export function PlantaoDiaModal({ open, onOpenChange, data, profissionais, aloca
       queryClient.invalidateQueries({ queryKey: ['plantoes-mes'] });
       queryClient.invalidateQueries({ queryKey: ['alocacao-diaria'] });
       queryClient.invalidateQueries({ queryKey: ['escala-dia'] });
+      queryClient.invalidateQueries({ queryKey: ['alocacoes-dia'] });
       onOpenChange(false);
     },
     onError: (error) => {
@@ -101,8 +147,8 @@ export function PlantaoDiaModal({ open, onOpenChange, data, profissionais, aloca
     },
   });
 
-  const countRota = Object.values(alocacoes).filter(v => v === 'rota').length;
-  const countBase = Object.values(alocacoes).filter(v => v === 'base').length;
+  const countRota = Object.values(alocacoes).filter(v => v.tipo === 'rota').length;
+  const countBase = Object.values(alocacoes).filter(v => v.tipo === 'base').length;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -116,7 +162,6 @@ export function PlantaoDiaModal({ open, onOpenChange, data, profissionais, aloca
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Ações em massa */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-xs">
               <Badge variant="outline" className="gap-1">
@@ -136,7 +181,6 @@ export function PlantaoDiaModal({ open, onOpenChange, data, profissionais, aloca
             </div>
           </div>
 
-          {/* Lista de profissionais */}
           {profissionais.length === 0 ? (
             <p className="text-center text-muted-foreground py-4 text-sm">
               Nenhum vistoriador cadastrado.
@@ -144,40 +188,66 @@ export function PlantaoDiaModal({ open, onOpenChange, data, profissionais, aloca
           ) : (
             <div className="space-y-2 max-h-[400px] overflow-y-auto">
               {profissionais.map(prof => {
-                const tipo = alocacoes[prof.id] || null;
+                const estado = alocacoes[prof.id];
+                const tipo = estado?.tipo || null;
                 const isBase = tipo === 'base';
 
                 return (
                   <div
                     key={prof.id}
-                    className="flex items-center justify-between rounded-lg border p-3 hover:bg-accent/50 transition-colors"
+                    className="rounded-lg border p-3 hover:bg-accent/50 transition-colors space-y-2"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                        {prof.nome.charAt(0).toUpperCase()}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                          {prof.nome.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="font-medium text-sm">{prof.nome}</span>
                       </div>
-                      <span className="font-medium text-sm">{prof.nome}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className={cn(
-                        "text-xs font-medium",
-                        isBase ? "text-amber-600 dark:text-amber-400" : tipo === 'rota' ? "text-blue-600 dark:text-blue-400" : "text-muted-foreground"
-                      )}>
-                        {isBase ? 'Base' : tipo === 'rota' ? 'Rota' : '—'}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <MapPin className={cn("h-3.5 w-3.5", !isBase ? "text-blue-500" : "text-muted-foreground/40")} />
-                        <Switch checked={isBase} onCheckedChange={() => toggleAlocacao(prof.id)} />
-                        <Building2 className={cn("h-3.5 w-3.5", isBase ? "text-amber-500" : "text-muted-foreground/40")} />
+                      <div className="flex items-center gap-3">
+                        <span className={cn(
+                          "text-xs font-medium",
+                          isBase ? "text-amber-600 dark:text-amber-400" : tipo === 'rota' ? "text-blue-600 dark:text-blue-400" : "text-muted-foreground"
+                        )}>
+                          {isBase ? 'Base' : tipo === 'rota' ? 'Rota' : '—'}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <MapPin className={cn("h-3.5 w-3.5", !isBase ? "text-blue-500" : "text-muted-foreground/40")} />
+                          <Switch checked={isBase} onCheckedChange={() => toggleAlocacao(prof.id)} />
+                          <Building2 className={cn("h-3.5 w-3.5", isBase ? "text-amber-500" : "text-muted-foreground/40")} />
+                        </div>
                       </div>
                     </div>
+                    {isBase && (
+                      <div className="pl-11">
+                        <Select
+                          value={estado?.base_id || ''}
+                          onValueChange={(v) => setBase(prof.id, v)}
+                        >
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue placeholder="Selecione a base..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {bases.length === 0 && (
+                              <div className="p-2 text-xs text-muted-foreground">
+                                Nenhuma base cadastrada
+                              </div>
+                            )}
+                            {bases.map((b) => (
+                              <SelectItem key={b.id} value={b.id}>
+                                {b.nome_fantasia || b.razao_social}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
           )}
 
-          {/* Salvar */}
           {hasChanges && (
             <Button
               onClick={() => salvarMutation.mutate()}
