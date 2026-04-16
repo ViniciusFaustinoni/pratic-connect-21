@@ -807,6 +807,55 @@ export function MapaVistoriasContent() {
           </Marker>
         );
       })}
+
+      {/* Bases Pratic com contagem de pendentes */}
+      {(basesPratic || []).map((base) => {
+        const pendentes = agendamentosBaseHoje?.length || 0;
+        const hasPendentes = pendentes > 0;
+        const baseIcon = L.divIcon({
+          html: `
+            <div style="position:relative;cursor:pointer;">
+              ${hasPendentes ? '<div style="position:absolute;inset:-4px;border-radius:50%;background:rgba(139,92,246,0.3);animation:ping 1.5s cubic-bezier(0,0,0.2,1) infinite;"></div>' : ''}
+              <div style="width:40px;height:40px;border-radius:50%;background:${hasPendentes ? '#8B5CF6' : '#94A3B8'};display:flex;align-items:center;justify-content:center;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3);opacity:${hasPendentes ? 1 : 0.6};">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg>
+              </div>
+              ${hasPendentes ? `<div style="position:absolute;top:-6px;right:-6px;background:#EF4444;border-radius:50%;min-width:20px;height:20px;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.3);padding:0 4px;">
+                <span style="color:white;font-size:11px;font-weight:700;line-height:1;">${pendentes}</span>
+              </div>` : ''}
+            </div>
+            <style>@keyframes ping{75%,100%{transform:scale(2);opacity:0}}</style>
+          `,
+          className: 'base-pratic-icon',
+          iconSize: [40, 40],
+          iconAnchor: [20, 20],
+          popupAnchor: [0, -20],
+        });
+
+        return (
+          <Marker
+            key={`base-${base.id}`}
+            position={[base.latitude, base.longitude]}
+            icon={baseIcon}
+            eventHandlers={{
+              click: () => setBaseModal({ open: true, data: hojeStr }),
+            }}
+          >
+            <Tooltip permanent direction="bottom" offset={[0, 16]} className="custom-tooltip-clean">
+              <span style={{
+                backgroundColor: hasPendentes ? '#8B5CF6' : '#94A3B8',
+                color: 'white',
+                padding: '1px 6px',
+                borderRadius: '3px',
+                fontSize: '10px',
+                fontWeight: 600,
+                whiteSpace: 'nowrap',
+              }}>
+                🏢 {base.nome_fantasia || base.razao_social}
+              </span>
+            </Tooltip>
+          </Marker>
+        );
+      })}
     </MapContainer>
   );
 
