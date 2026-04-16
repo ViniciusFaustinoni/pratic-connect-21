@@ -953,6 +953,7 @@ export type Database = {
       }
       alocacoes_diarias: {
         Row: {
+          base_id: string | null
           created_at: string
           data: string
           definido_por: string | null
@@ -963,6 +964,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          base_id?: string | null
           created_at?: string
           data: string
           definido_por?: string | null
@@ -973,6 +975,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          base_id?: string | null
           created_at?: string
           data?: string
           definido_por?: string | null
@@ -983,6 +986,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "alocacoes_diarias_base_id_fkey"
+            columns: ["base_id"]
+            isOneToOne: false
+            referencedRelation: "oficinas"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "alocacoes_diarias_definido_por_fkey"
             columns: ["definido_por"]
