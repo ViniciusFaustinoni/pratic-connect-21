@@ -295,7 +295,7 @@ export default function Dashboard() {
 
   // Se é APENAS instalador/vistoriador (sem perfis de gestão), redirecionar
   useEffect(() => {
-    if (isInstaladorVistoriadorOnly) {
+    if (isInstaladorVistoriadorOnly && location.pathname !== '/instalador') {
       navigate('/instalador', { replace: true });
     }
   }, [isInstaladorVistoriadorOnly, navigate]);

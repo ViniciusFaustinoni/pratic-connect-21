@@ -89,7 +89,9 @@ export default function Auth() {
   useEffect(() => {
     if (!authLoading && user && profile) {
       const redirectTo = stateFrom || getRedirectUrl();
-      navigate(redirectTo, { replace: true });
+      if (location.pathname !== redirectTo) {
+        navigate(redirectTo, { replace: true });
+      }
     }
   }, [user, profile, authLoading, navigate, stateFrom, getRedirectUrl]);
 
