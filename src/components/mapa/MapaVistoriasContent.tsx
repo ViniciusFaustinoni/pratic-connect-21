@@ -64,6 +64,7 @@ import { usePrestadoresAtivosMapa } from "@/hooks/usePrestadoresAtivosMapa";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { CalendarioDiaModal } from "@/components/monitoramento/CalendarioDiaModal";
+import { formatPlacaExibicao, isPlacaPlaceholder } from "@/lib/placa-utils";
 
 const COR_REALIZADA = '#10B981';
 const COR_A_REALIZAR = '#EF4444';
@@ -442,7 +443,7 @@ export function MapaVistoriasContent() {
         servicoId,
         profissionalId: profissional.vistoriador_id,
       });
-      toast.success(`Tarefa ${servicos[0]?.veiculo_placa || ''} atribuída a ${profissional.vistoriador_nome}`);
+      toast.success(`Tarefa ${formatPlacaExibicao(servicos[0]?.veiculo_placa, '')} atribuída a ${profissional.vistoriador_nome}`);
     } catch {
       // mutation handles error toast
     }
@@ -546,7 +547,10 @@ export function MapaVistoriasContent() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="text-xs font-bold text-muted-foreground">#{ordemNum}</span>
-                      <span className="font-semibold text-sm truncate">{v.veiculo_placa || "Sem placa"}</span>
+                      <span className="font-semibold text-sm truncate">{formatPlacaExibicao(v.veiculo_placa)}</span>
+                      {isPlacaPlaceholder(v.veiculo_placa) && (
+                        <Badge variant="outline" className="text-[10px] h-4 bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800">0KM</Badge>
+                      )}
                       <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200">
                         {TIPO_VISTORIA_LABELS[v.tipo_vistoria as keyof typeof TIPO_VISTORIA_LABELS] || v.tipo_vistoria}
                       </Badge>
@@ -718,7 +722,12 @@ export function MapaVistoriasContent() {
             <Popup>
               <div className="min-w-[200px]">
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-bold text-sm">{v.veiculo_placa || "Sem placa"}</h3>
+                  <h3 className="font-bold text-sm flex items-center gap-1.5">
+                    {formatPlacaExibicao(v.veiculo_placa)}
+                    {isPlacaPlaceholder(v.veiculo_placa) && (
+                      <span className="text-[9px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 rounded px-1 py-0.5">0KM</span>
+                    )}
+                  </h3>
                   <span className="text-xs px-2 py-0.5 rounded text-white" style={{ backgroundColor: markerColor }}>
                     {isEmExecucao ? "Em Execução" : isRealizada ? "Realizada" : v.permite_encaixe ? "Encaixe" : v.confirmacao_whatsapp === 'confirmada' ? "Confirmado" : "A Realizar"}
                   </span>
@@ -774,7 +783,7 @@ export function MapaVistoriasContent() {
                       <button
                         onClick={() => setCancelConfirmation({
                           servicoId: v.servico_id_unificado!,
-                          servicoPlaca: v.veiculo_placa,
+                          servicoPlaca: formatPlacaExibicao(v.veiculo_placa),
                           profissionalNome: v.vistoriador_nome,
                         })}
                         className="flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white rounded text-xs hover:bg-red-700"
@@ -853,7 +862,7 @@ export function MapaVistoriasContent() {
                       {tarefasDoTecnico.map((t, idx) => (
                         <p key={t.id} className="text-xs text-muted-foreground flex items-center gap-1">
                           <span className="font-mono">{idx + 1}.</span>
-                          <span className="font-semibold">{t.veiculo_placa || '---'}</span>
+                          <span className="font-semibold">{formatPlacaExibicao(t.veiculo_placa, '---')}</span>
                           <span>· {safeFormat(t.data_agendada, 'dd/MM')} {t.horario_agendado ? t.horario_agendado.slice(0, 5) : getPeriodoLabel(t.periodo)}</span>
                         </p>
                       ))}
@@ -903,7 +912,7 @@ export function MapaVistoriasContent() {
                 popupContent={
                   <div className="text-xs">
                     <p className="font-semibold">{p.prestador_nome} (Prestador)</p>
-                    <p className="text-muted-foreground">→ {p.veiculo_placa || 'Local'}</p>
+                    <p className="text-muted-foreground">→ {formatPlacaExibicao(p.veiculo_placa, 'Local')}</p>
                   </div>
                 }
               />
@@ -922,7 +931,7 @@ export function MapaVistoriasContent() {
                       {p.status === 'em_execucao' ? 'Em Execução' : p.status === 'em_rota' ? 'Em Rota' : 'Aceito'}
                     </p>
                     {p.associado_nome && <p><strong>Associado:</strong> {p.associado_nome}</p>}
-                    {p.veiculo_placa && <p><strong>Placa:</strong> {p.veiculo_placa}</p>}
+                    {p.veiculo_placa && <p><strong>Placa:</strong> {formatPlacaExibicao(p.veiculo_placa)}</p>}
                     <p className="text-muted-foreground">
                       Atualizado: {formatDistanceToNow(new Date(p.localizacao_atualizada_em), { addSuffix: true, locale: ptBR })}
                     </p>
@@ -1124,14 +1133,14 @@ export function MapaVistoriasContent() {
             <AlertDialogDescription asChild>
               <div className="space-y-3">
                 <p>
-                  Deseja atribuir <strong>{assignConfirmation?.servicos[0]?.veiculo_placa || 'tarefa'}</strong> ao técnico{' '}
+                  Deseja atribuir <strong>{formatPlacaExibicao(assignConfirmation?.servicos[0]?.veiculo_placa, 'tarefa')}</strong> ao técnico{' '}
                   <strong>{assignConfirmation?.profissional.vistoriador_nome}</strong>?
                 </p>
                 {assignConfirmation && (
                   <div className="bg-muted/50 rounded-md p-2 space-y-1">
                     {assignConfirmation.servicos.map((s) => (
                       <div key={s.id} className="flex items-center gap-2 text-xs">
-                        <span className="font-semibold">{s.veiculo_placa || 'Sem placa'}</span>
+                        <span className="font-semibold">{formatPlacaExibicao(s.veiculo_placa)}</span>
                         <span className="text-muted-foreground">
                           · {safeFormat(s.data_agendada, 'dd/MM')} {s.horario_agendado ? s.horario_agendado.slice(0, 5) : getPeriodoLabel(s.periodo)}
                         </span>
@@ -1154,7 +1163,7 @@ export function MapaVistoriasContent() {
                       <div className="space-y-0.5">
                         {currentTasks.slice(0, 5).map((t, idx) => (
                           <p key={t.id} className="text-xs text-muted-foreground">
-                            {idx + 1}. {t.veiculo_placa || '---'} · {safeFormat(t.data_agendada, 'dd/MM')} {t.horario_agendado ? t.horario_agendado.slice(0, 5) : ''}
+                            {idx + 1}. {formatPlacaExibicao(t.veiculo_placa, '---')} · {safeFormat(t.data_agendada, 'dd/MM')} {t.horario_agendado ? t.horario_agendado.slice(0, 5) : ''}
                           </p>
                         ))}
                         {currentTasks.length > 5 && (
