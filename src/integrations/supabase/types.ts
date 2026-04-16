@@ -13665,40 +13665,67 @@ export type Database = {
       }
       instalacao_prestador_links: {
         Row: {
+          aceito_em: string | null
           chegada_em: string | null
           concluida_em: string | null
           created_at: string | null
+          em_rota_em: string | null
           expires_at: string
           foto_comprovante_url: string | null
           id: string
+          iniciada_em: string | null
           instalacao_id: string
+          latitude: number | null
+          localizacao_atualizada_em: string | null
+          longitude: number | null
+          precisao_metros: number | null
           prestador_id: string
+          recusa_motivo: string | null
+          recusado_em: string | null
           status: string
           token: string
           updated_at: string | null
         }
         Insert: {
+          aceito_em?: string | null
           chegada_em?: string | null
           concluida_em?: string | null
           created_at?: string | null
+          em_rota_em?: string | null
           expires_at?: string
           foto_comprovante_url?: string | null
           id?: string
+          iniciada_em?: string | null
           instalacao_id: string
+          latitude?: number | null
+          localizacao_atualizada_em?: string | null
+          longitude?: number | null
+          precisao_metros?: number | null
           prestador_id: string
+          recusa_motivo?: string | null
+          recusado_em?: string | null
           status?: string
           token?: string
           updated_at?: string | null
         }
         Update: {
+          aceito_em?: string | null
           chegada_em?: string | null
           concluida_em?: string | null
           created_at?: string | null
+          em_rota_em?: string | null
           expires_at?: string
           foto_comprovante_url?: string | null
           id?: string
+          iniciada_em?: string | null
           instalacao_id?: string
+          latitude?: number | null
+          localizacao_atualizada_em?: string | null
+          longitude?: number | null
+          precisao_metros?: number | null
           prestador_id?: string
+          recusa_motivo?: string | null
+          recusado_em?: string | null
           status?: string
           token?: string
           updated_at?: string | null
@@ -26940,16 +26967,25 @@ export type Database = {
       }
       vistoria_prestador_links: {
         Row: {
+          aceito_em: string | null
           assinatura_url: string | null
           atribuido_por: string | null
           checklist_data: Json | null
           chegada_em: string | null
           concluida_em: string | null
           created_at: string
+          em_rota_em: string | null
           foto_comprovante_url: string | null
           fotos_vistoria: Json | null
           id: string
+          iniciada_em: string | null
           instalacao_id: string
+          latitude: number | null
+          localizacao_atualizada_em: string | null
+          longitude: number | null
+          precisao_metros: number | null
+          recusa_motivo: string | null
+          recusado_em: string | null
           status: string
           token: string
           updated_at: string
@@ -26959,16 +26995,25 @@ export type Database = {
           whatsapp_erro: string | null
         }
         Insert: {
+          aceito_em?: string | null
           assinatura_url?: string | null
           atribuido_por?: string | null
           checklist_data?: Json | null
           chegada_em?: string | null
           concluida_em?: string | null
           created_at?: string
+          em_rota_em?: string | null
           foto_comprovante_url?: string | null
           fotos_vistoria?: Json | null
           id?: string
+          iniciada_em?: string | null
           instalacao_id: string
+          latitude?: number | null
+          localizacao_atualizada_em?: string | null
+          longitude?: number | null
+          precisao_metros?: number | null
+          recusa_motivo?: string | null
+          recusado_em?: string | null
           status?: string
           token?: string
           updated_at?: string
@@ -26978,16 +27023,25 @@ export type Database = {
           whatsapp_erro?: string | null
         }
         Update: {
+          aceito_em?: string | null
           assinatura_url?: string | null
           atribuido_por?: string | null
           checklist_data?: Json | null
           chegada_em?: string | null
           concluida_em?: string | null
           created_at?: string
+          em_rota_em?: string | null
           foto_comprovante_url?: string | null
           fotos_vistoria?: Json | null
           id?: string
+          iniciada_em?: string | null
           instalacao_id?: string
+          latitude?: number | null
+          localizacao_atualizada_em?: string | null
+          longitude?: number | null
+          precisao_metros?: number | null
+          recusa_motivo?: string | null
+          recusado_em?: string | null
           status?: string
           token?: string
           updated_at?: string
