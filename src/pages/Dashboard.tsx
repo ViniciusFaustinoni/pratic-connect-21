@@ -289,6 +289,7 @@ function QuickActions() {
 // ============================================
 export default function Dashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const { profile } = useAuth();
   const { isAnalistaCadastroOnly, isAnalistaEventosOnly, isCoordenadorMonitoramentoOnly, isAnalistaMonitoramentoOnly, isCoordenadorMonitoramento, isAnalistaMonitoramento, isInstaladorVistoriador, isInstaladorVistoriadorOnly, isVistoriadorBase, isGerencia, isDiretor, isDesenvolvedor, isAdminMaster, isVendedorOnly, userId } = usePermissions();
