@@ -279,7 +279,7 @@ serve(async (req) => {
     const documentId = contrato.autentique_documento_id;
     console.log("[autentique-sync-contrato] Consultando Autentique para documento:", documentId);
 
-    // Query expandida para capturar mais campos de status
+    // Query expandida para capturar mais campos de status (incluindo biometria)
     const query = `
       query GetDocument($id: UUID!) {
         document(id: $id) {
@@ -297,6 +297,8 @@ serve(async (req) => {
             viewed { created_at }
             signed { created_at }
             rejected { created_at reason }
+            biometric_approved { created_at }
+            biometric_rejected { created_at }
             delivery_method
           }
           files {
@@ -365,20 +367,92 @@ serve(async (req) => {
     else if (anySignerRejected) overallStatus = "rejected";
     else if (anySignerViewed) overallStatus = "viewed";
 
+    // ═══ DETECTAR REVISÃO BIOMÉTRICA MANUAL (PF_FACIAL) ═══
+    // Cliente concluiu o fluxo (selfie) mas Autentique exige aprovação manual.
+    // Sinais: viewed=true, signed=null, biometric_approved=null, biometric_rejected=null
+    let biometricStatus: "review" | "rejected" | null = null;
+    const signersInBiometricReview = signersWithSignAction.filter((s: any) => {
+      const viewed = !!s.viewed?.created_at;
+      const signed = !!s.signed?.created_at;
+      const rejected = !!s.rejected?.created_at;
+      const bioApproved = !!s.biometric_approved?.created_at;
+      const bioRejected = !!s.biometric_rejected?.created_at;
+      return viewed && !signed && !rejected && !bioApproved && !bioRejected;
+    });
+    const anySignerBiometricRejected = signersWithSignAction.some(
+      (s: any) => !!s.biometric_rejected?.created_at,
+    );
+
+    if (anySignerBiometricRejected) {
+      biometricStatus = "rejected";
+    } else if (signersInBiometricReview.length > 0 && overallStatus === "viewed") {
+      const oldestView = signersInBiometricReview
+        .map((s: any) => new Date(s.viewed.created_at).getTime())
+        .reduce((a: number, b: number) => Math.min(a, b), Date.now());
+      const minutesSinceView = (Date.now() - oldestView) / 1000 / 60;
+      if (minutesSinceView >= 15) {
+        biometricStatus = "review";
+      }
+    }
+
     console.log("[autentique-sync-contrato] Status calculado:", {
       totalSignatures: signatures.length,
       signersWithSignAction: signersWithSignAction.length,
       allSignersSigned,
       anySignerSigned,
       overallStatus,
+      biometricStatus,
       signaturesDetail: signatures.map((s: any) => ({
         email: s.email,
         action: s.action?.name,
         viewed: !!s.viewed?.created_at,
         signed: !!s.signed?.created_at,
         rejected: !!s.rejected?.created_at,
+        biometric_approved: !!s.biometric_approved?.created_at,
+        biometric_rejected: !!s.biometric_rejected?.created_at,
       })),
     });
+
+    // Persistir e notificar diretoria quando entra em revisão biométrica
+    if (biometricStatus === "review" && contrato.autentique_status !== "biometric_review") {
+      console.log("[autentique-sync-contrato] ⚠ Marcando contrato em revisão biométrica");
+      await supabase
+        .from("contratos")
+        .update({ autentique_status: "biometric_review" })
+        .eq("id", contrato.id);
+
+      try {
+        const { data: diretores } = await supabase
+          .from("user_roles")
+          .select("user_id")
+          .in("role", ["diretor", "admin"]);
+
+        if (diretores && diretores.length > 0) {
+          const painelUrl = `https://painel.autentique.com.br/documentos/${documentId}`;
+          const notificacoes = diretores.map((d: any) => ({
+            user_id: d.user_id,
+            tipo: "contrato_biometria_revisao",
+            titulo: "Assinatura aguardando aprovação biométrica",
+            mensagem: `Contrato ${contrato.numero || contrato.id.slice(0, 8)} de ${signerName} está aguardando aprovação manual da biometria no painel Autentique.`,
+            link: painelUrl,
+            metadata: {
+              contrato_id: contrato.id,
+              autentique_documento_id: documentId,
+              signer_name: signerName,
+            },
+          }));
+          await supabase.from("notificacoes").insert(notificacoes);
+          console.log(`[autentique-sync-contrato] ✓ ${notificacoes.length} notificações enviadas`);
+        }
+      } catch (notifErr) {
+        console.error("[autentique-sync-contrato] Erro ao notificar diretores:", notifErr);
+      }
+    } else if (biometricStatus === "rejected" && contrato.autentique_status !== "biometric_rejected") {
+      await supabase
+        .from("contratos")
+        .update({ autentique_status: "biometric_rejected" })
+        .eq("id", contrato.id);
+    }
 
     // ========== Extrair link de assinatura do signatário SIGN ==========
     const signerForLink = signersWithSignAction[0] || signatures[0];
@@ -576,9 +650,14 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        atualizado: false, 
-        mensagem: "Documento ainda não foi assinado",
+        atualizado: biometricStatus !== null, 
+        mensagem: biometricStatus === "review" 
+          ? "Assinatura em revisão biométrica pelo Autentique. Aguardando aprovação manual."
+          : biometricStatus === "rejected"
+          ? "Biometria rejeitada pelo Autentique. Será necessário reenviar o termo."
+          : "Documento ainda não foi assinado",
         status: overallStatus,
+        biometric_status: biometricStatus,
         autentique_url: autentiqueUrlFinal
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }

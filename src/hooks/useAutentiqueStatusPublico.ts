@@ -106,7 +106,6 @@ export function useAutentiqueStatusPublico({
         queryClient.refetchQueries({ queryKey: ['contrato-publico', contratoToken] });
       }).catch((error) => {
         console.error('[useAutentiqueStatusPublico] Erro ao sincronizar:', error);
-        // Ainda assim invalidar queries
         queryClient.invalidateQueries({ queryKey: ['contrato-publico', contratoToken] });
       });
     }
