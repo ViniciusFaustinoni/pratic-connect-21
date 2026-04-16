@@ -131,6 +131,7 @@ export function InstaladorLayout() {
       )}
 
       <div className={cn("h-[100dvh] bg-muted/30", deveBloqueiarPorLocalizacao && "hidden")}>
+        <SyncStatusBanner />
         <div className="max-w-md mx-auto border-x border-border h-full bg-background flex flex-col overflow-hidden">
           
           {/* Header - hidden on execution routes */}
