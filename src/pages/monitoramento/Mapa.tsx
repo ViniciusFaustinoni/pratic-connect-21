@@ -4,16 +4,25 @@ import L from "leaflet";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Phone,
   Users,
   User,
   GitBranchPlus,
+  MapPin,
+  Building2,
+  Settings2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { MapaVistoriasContent } from "@/components/mapa/MapaVistoriasContent";
 import { useVistoriadoresRealtime } from "@/hooks/useVistoriadoresRealtime";
 import { useConfigAtribuicaoManual } from "@/hooks/useAtribuicaoManual";
+import { useAlocacoesDiaHoje } from "@/hooks/useAlocacoesDiaHoje";
+import { useBasesPratic } from "@/hooks/useBasesPratic";
+import { usePermissions } from "@/hooks/usePermissions";
+import { AlocarVistoriadorDialog } from "@/components/mapa/AlocarVistoriadorDialog";
 import { createVistoriadorMarkerSvg, COR_VISTORIADOR, svgToDataUrl } from "@/lib/rota-colors";
 
 // Leaflet icon fix
@@ -35,13 +44,33 @@ function getVistoriadorIconEquipe(color: string = COR_VISTORIADOR): L.Icon {
 
 export default function Mapa() {
   const [abaAtiva, setAbaAtiva] = useState<string>("atribuicoes");
+  const [alocarState, setAlocarState] = useState<{
+    profissionalId: string;
+    nome: string;
+    atual: { tipo_alocacao: 'rota' | 'base'; base_id: string | null } | null;
+  } | null>(null);
 
   const { data: atribuicaoManualAtiva } = useConfigAtribuicaoManual();
   const { data: vistoriadores } = useVistoriadoresRealtime();
+  const { data: alocacoesHoje = {} } = useAlocacoesDiaHoje();
+  const { data: bases = [] } = useBasesPratic();
+  const { isDiretor, isCoordenadorMonitoramento, isAdminMaster, isDesenvolvedor } = usePermissions();
+  const podeAlocar = isDiretor || isCoordenadorMonitoramento || isAdminMaster || isDesenvolvedor;
 
+  const idsProfBase = useMemo(() => {
+    const set = new Set<string>();
+    Object.values(alocacoesHoje).forEach((a: any) => {
+      if (a.tipo_alocacao === 'base') set.add(a.profissional_id);
+    });
+    return set;
+  }, [alocacoesHoje]);
+
+  // Esconder técnicos em modo BASE (eles ficam fixos e invisíveis no mapa)
   const vistoriadoresEmServico = useMemo(() => {
-    return vistoriadores?.filter(v => v.em_servico && v.latitude && v.longitude) || [];
-  }, [vistoriadores]);
+    return vistoriadores?.filter(
+      v => v.em_servico && v.latitude && v.longitude && !idsProfBase.has(v.vistoriador_id)
+    ) || [];
+  }, [vistoriadores, idsProfBase]);
 
   const abrirWhatsApp = (telefone: string | null) => {
     if (!telefone) { toast.error("Telefone não cadastrado"); return; }
@@ -55,10 +84,12 @@ export default function Mapa() {
     <MapContainer center={centroInicial} zoom={10} className="h-full w-full" style={{ height: "100%", width: "100%" }}>
       <TileLayer attribution='Tiles &copy; Esri' url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
       <TileLayer url="https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png" attribution="" />
-      {vistoriadoresEmServico.map((v) => (
+      {vistoriadoresEmServico.map((v) => {
+        const aloc = (alocacoesHoje as any)[v.vistoriador_id] || null;
+        return (
         <Marker key={`eq-${v.vistoriador_id}`} position={[v.latitude, v.longitude]} icon={getVistoriadorIconEquipe()}>
           <Popup>
-            <div className="min-w-[200px]">
+            <div className="min-w-[220px]">
               <div className="flex items-center gap-2 mb-2">
                 <User className="h-4 w-4 text-blue-600" />
                 <h3 className="font-bold text-sm">{v.vistoriador_nome}</h3>
@@ -84,16 +115,38 @@ export default function Mapa() {
                 <p className="text-muted-foreground">
                   Atualizado: {formatDistanceToNow(new Date(v.updated_at), { addSuffix: true, locale: ptBR })}
                 </p>
+                <p className="flex items-center gap-1 pt-1">
+                  <MapPin className="h-3 w-3 text-blue-500" />
+                  <span><strong>Alocação hoje:</strong> Rota</span>
+                  <Badge variant="outline" className="ml-auto text-[9px] h-4 bg-blue-50 text-blue-700 border-blue-200">
+                    Em rota
+                  </Badge>
+                </p>
               </div>
-              {v.telefone && (
-                <button onClick={() => abrirWhatsApp(v.telefone)} className="flex items-center justify-center gap-1 w-full px-3 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-700">
-                  <Phone className="h-3 w-3" />Contatar
-                </button>
-              )}
+              <div className="flex flex-col gap-1.5">
+                {v.telefone && (
+                  <button onClick={() => abrirWhatsApp(v.telefone)} className="flex items-center justify-center gap-1 w-full px-3 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-700">
+                    <Phone className="h-3 w-3" />Contatar
+                  </button>
+                )}
+                {podeAlocar && (
+                  <button
+                    onClick={() => setAlocarState({
+                      profissionalId: v.vistoriador_id,
+                      nome: v.vistoriador_nome,
+                      atual: aloc ? { tipo_alocacao: aloc.tipo_alocacao, base_id: aloc.base_id } : null,
+                    })}
+                    className="flex items-center justify-center gap-1 w-full px-3 py-1.5 bg-amber-600 text-white rounded text-xs hover:bg-amber-700"
+                  >
+                    <Settings2 className="h-3 w-3" />Alterar alocação (Rota/Base)
+                  </button>
+                )}
+              </div>
             </div>
           </Popup>
         </Marker>
-      ))}
+        );
+      })}
     </MapContainer>
   );
 

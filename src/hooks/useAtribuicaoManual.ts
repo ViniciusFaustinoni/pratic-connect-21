@@ -178,7 +178,31 @@ export function useAtribuirServicoManual() {
 
   return useMutation({
     mutationFn: async ({ servicoId, profissionalId, isBase }: { servicoId: string; profissionalId: string; isBase?: boolean }) => {
+      // Validação cross-cutting: se o profissional está alocado como BASE hoje,
+      // só pode receber vistorias de base da MESMA oficina.
+      const hojeStr = new Date().toISOString().split('T')[0];
+      const { data: alocacaoHoje } = await supabase
+        .from('alocacoes_diarias')
+        .select('tipo_alocacao, base_id')
+        .eq('profissional_id', profissionalId)
+        .eq('data', hojeStr)
+        .maybeSingle();
+
+      const profEhBase = alocacaoHoje?.tipo_alocacao === 'base';
+      const profBaseId = (alocacaoHoje as any)?.base_id ?? null;
+
       if (isBase) {
+        // Buscar oficina_id do agendamento para validar pareamento
+        const { data: agendData } = await supabase
+          .from('agendamentos_base')
+          .select('oficina_id, cliente_nome, veiculo_placa, data_agendada, horario')
+          .eq('id', servicoId)
+          .maybeSingle();
+
+        if (profEhBase && profBaseId && agendData?.oficina_id && agendData.oficina_id !== profBaseId) {
+          throw new Error('Este técnico está alocado em outra base. Atribua a um técnico da base correspondente.');
+        }
+
         // Update agendamentos_base
         const { error } = await supabase
           .from('agendamentos_base')
@@ -202,11 +226,7 @@ export function useAtribuirServicoManual() {
         if (logError) console.error('Erro ao registrar log:', logError);
 
         // Send WhatsApp notification to technician
-        const { data: baseData } = await supabase
-          .from('agendamentos_base')
-          .select('id, cliente_nome, veiculo_placa, data_agendada, horario')
-          .eq('id', servicoId)
-          .maybeSingle();
+        const baseData = agendData;
 
         const { data: profissional } = await supabase
           .from('profiles')
@@ -237,6 +257,11 @@ export function useAtribuirServicoManual() {
         }
 
         return { id: servicoId, tipo: 'vistoria_base' };
+      }
+
+      // SERVIÇO DE ROTA: técnico em modo BASE não pode receber rota
+      if (profEhBase) {
+        throw new Error('Este técnico está alocado em base hoje e não pode receber serviços de rota.');
       }
 
       // Update regular servico

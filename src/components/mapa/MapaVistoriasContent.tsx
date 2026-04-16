@@ -63,11 +63,13 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useEnviarConfirmacaoWhatsApp } from "@/hooks/useEnviarConfirmacaoWhatsApp";
 import { useBasesPratic } from "@/hooks/useBasesPratic";
 import { usePrestadoresAtivosMapa } from "@/hooks/usePrestadoresAtivosMapa";
+import { useAlocacoesDiaHoje } from "@/hooks/useAlocacoesDiaHoje";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { CalendarioDiaModal } from "@/components/monitoramento/CalendarioDiaModal";
 import { formatPlacaExibicao, isPlacaPlaceholder } from "@/lib/placa-utils";
 import { ReagendarTarefaDialog } from "@/components/mapa/ReagendarTarefaDialog";
+import { AlocarVistoriadorDialog } from "@/components/mapa/AlocarVistoriadorDialog";
 
 const COR_REALIZADA = '#10B981';
 const COR_A_REALIZAR = '#EF4444';
@@ -206,6 +208,33 @@ export function MapaVistoriasContent() {
   const { isDiretor, isCoordenadorMonitoramento, isAnalistaMonitoramento, isAdminMaster, isDesenvolvedor } = usePermissions();
   const { data: basesPratic } = useBasesPratic();
   const { data: prestadoresAtivos } = usePrestadoresAtivosMapa();
+  const { data: alocacoesHoje = {} } = useAlocacoesDiaHoje();
+
+  // IDs de profissionais alocados em base hoje (para esconder do mapa)
+  const idsProfBase = useMemo(() => {
+    const set = new Set<string>();
+    Object.values(alocacoesHoje).forEach((a: any) => {
+      if (a.tipo_alocacao === 'base') set.add(a.profissional_id);
+    });
+    return set;
+  }, [alocacoesHoje]);
+
+  // Mapa: base_id -> nomes dos vistoriadores fixos hoje
+  const fixosPorBase = useMemo(() => {
+    const map = new Map<string, { id: string; nome: string }[]>();
+    Object.values(alocacoesHoje).forEach((a: any) => {
+      if (a.tipo_alocacao === 'base' && a.base_id) {
+        const arr = map.get(a.base_id) || [];
+        const tec = vistoriadores?.find(v => v.vistoriador_id === a.profissional_id);
+        arr.push({
+          id: a.profissional_id,
+          nome: tec?.vistoriador_nome || 'Técnico',
+        });
+        map.set(a.base_id, arr);
+      }
+    });
+    return map;
+  }, [alocacoesHoje, vistoriadores]);
 
   // Base pendentes do dia
   const hojeStr = format(new Date(), 'yyyy-MM-dd');
@@ -270,8 +299,10 @@ export function MapaVistoriasContent() {
   const podeReagendar = isDiretor || isCoordenadorMonitoramento || isAnalistaMonitoramento || isAdminMaster || isDesenvolvedor;
 
   const vistoriadoresEmServico = useMemo(() => {
-    return vistoriadores?.filter(v => v.em_servico && v.latitude && v.longitude) || [];
-  }, [vistoriadores]);
+    return (vistoriadores || []).filter(
+      v => v.em_servico && v.latitude && v.longitude && !idsProfBase.has(v.vistoriador_id)
+    );
+  }, [vistoriadores, idsProfBase]);
 
   const vistoriasFiltradas = useMemo(() => {
     if (!vistorias) return [];
@@ -1019,20 +1050,13 @@ export function MapaVistoriasContent() {
           popupAnchor: [0, -20],
         });
 
+        const fixos = fixosPorBase.get(base.id) || [];
+
         return (
           <Marker
-            key={`base-${base.id}`}
+            key={`base-${base.id}-${fixos.length}`}
             position={[base.latitude, base.longitude]}
             icon={baseIcon}
-            eventHandlers={{
-              click: () => {
-                if (!hasPendentes) {
-                  toast.info("Nenhuma vistoria agendada para esta base");
-                  return;
-                }
-                setBaseModal({ open: true, data: hojeStr });
-              },
-            }}
           >
             <Tooltip permanent direction="bottom" offset={[0, 16]} className="custom-tooltip-clean">
               <span style={{
@@ -1047,6 +1071,53 @@ export function MapaVistoriasContent() {
                 🏢 {base.nome_fantasia || base.razao_social} {hasPendentes ? `(${pendentes})` : ''}
               </span>
             </Tooltip>
+            <Popup>
+              <div className="min-w-[220px]">
+                <div className="flex items-center gap-2 mb-2">
+                  <Building2 className="h-4 w-4" style={{ color: '#8B5CF6' }} />
+                  <h3 className="font-bold text-sm">{base.nome_fantasia || base.razao_social}</h3>
+                </div>
+
+                {/* Vistoriadores fixos hoje */}
+                <div className="mb-2 pb-2 border-b">
+                  <p className="text-xs font-semibold mb-1 text-amber-700">
+                    👤 Vistoriador{fixos.length !== 1 ? 'es' : ''} fixo{fixos.length !== 1 ? 's' : ''} hoje:
+                  </p>
+                  {fixos.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic">
+                      Nenhum técnico alocado nesta base hoje.
+                    </p>
+                  ) : (
+                    <div className="space-y-0.5">
+                      {fixos.map((f) => (
+                        <p key={f.id} className="text-xs flex items-center gap-1">
+                          <span className="inline-block w-2 h-2 rounded-full bg-amber-500" />
+                          <span className="font-medium">{f.nome}</span>
+                          <Badge variant="outline" className="ml-auto text-[9px] h-4 bg-amber-50 text-amber-700 border-amber-200">
+                            Em base
+                          </Badge>
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Vistorias do dia */}
+                <p className="text-xs mb-2">
+                  <strong>Vistorias hoje:</strong>{' '}
+                  <span className={hasPendentes ? 'text-purple-700 font-semibold' : 'text-muted-foreground'}>
+                    {pendentes} pendente{pendentes !== 1 ? 's' : ''}
+                  </span>
+                </p>
+
+                <button
+                  onClick={() => setBaseModal({ open: true, data: hojeStr })}
+                  className="flex items-center justify-center gap-1 w-full px-3 py-1.5 bg-purple-600 text-white rounded text-xs hover:bg-purple-700"
+                >
+                  <List className="h-3 w-3" />Ver fila do dia
+                </button>
+              </div>
+            </Popup>
           </Marker>
         );
       })}

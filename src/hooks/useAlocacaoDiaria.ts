@@ -11,6 +11,7 @@ interface AlocacaoDiaria {
   profissional_id: string;
   data: string;
   tipo_alocacao: TipoAlocacao;
+  base_id: string | null;
   definido_por: string | null;
   observacoes: string | null;
 }
@@ -65,6 +66,7 @@ export function useAlocacaoDiaria(profissionalId?: string) {
   return {
     alocacao: diaUtil ? null : data,
     tipoAlocacao: diaUtil ? null : (data?.tipo_alocacao as TipoAlocacao) || null,
+    baseId: diaUtil ? null : (data?.base_id ?? null),
     isBase: diaUtil ? false : data?.tipo_alocacao === 'base',
     isRota: diaUtil ? true : data?.tipo_alocacao === 'rota' || !data,
     isDiaUtil: diaUtil,
