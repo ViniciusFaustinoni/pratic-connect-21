@@ -135,6 +135,7 @@ export function CalendarioDiaModal({ open, onClose, data }: CalendarioDiaModalPr
       queryClient.invalidateQueries({ queryKey: ['calendario-dia-base'] });
       queryClient.invalidateQueries({ queryKey: ['agendamentos-base-calendario'] });
       queryClient.invalidateQueries({ queryKey: ['calendario-dia-instalacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['tarefa-atual-servico'] });
     },
     onError: () => {
       toast.error('Erro ao antecipar tarefa');
