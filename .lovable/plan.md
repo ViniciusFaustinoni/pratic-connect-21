@@ -1,58 +1,59 @@
 
 
-## Diagnóstico completo — Cotação Moto APP (Uber)
+## Diagnóstico — Scroll cortado no Safari iOS
 
-### O que está acontecendo
+### Causa raiz
 
-Os planos **Advanced Especial** e **Advanced Especial +** (passeio) têm regra `tipo_uso: [particular]` → são corretamente bloqueados quando o uso é APP/Uber.
+O modal `CotacaoFormDialog` (e o `DialogContent` base do shadcn) usa `max-h-[90vh]`. No **Safari iOS**, a unidade `vh` é calculada com base no **viewport máximo** (sem barra de URL e sem barra inferior de navegação). Quando essas barras estão visíveis, `90vh` é **maior que a área realmente visível**, fazendo com que:
 
-Os planos **Advanced Especial Aplicativo** e **Advanced Especial + Aplicativo** existem e estão ativos, **mas** há problemas de dados que impedem a exibição correta:
+1. O rodapé sticky com o botão "Criar Cotação" fica **escondido atrás da barra inferior do Safari**.
+2. Mesmo rolando até o fim, os últimos campos (Data de Vencimento, botão de submit) ficam cortados.
+3. O comportamento NÃO ocorre em Chrome desktop, Android, ou após a barra do Safari recolher — por isso parece intermitente.
 
-### Problemas encontrados no banco
+A screenshot enviada confirma: o card "Data de Vencimento" está sendo cortado pela barra inferior do Safari (ícones de voltar/avançar/compartilhar).
 
-| # | Problema | Onde | Impacto |
-|---|---------|------|---------|
-| 1 | **`tipo_uso` conflitante** no "Advanced Especial Aplicativo" | `entity_eligibility_rules` id `2be237da-...` | `tipos_uso: [particular]` contradiz `values: [aplicativo]`. O código lê `cfg.valores` → pega `[aplicativo]` → **funciona por acaso**, mas a config está errada e pode quebrar em qualquer refactor |
-| 2 | **Coberturas nomeadas "75% FIPE"** nos planos APP | Coberturas dos planos APP | Deveria ser "100% FIPE" segundo o requisito. O `cobertura_fipe` do plano está correto (100), mas o nome da cobertura induz erro ao cliente |
-| 3 | **Assistência 400km APP tem preço R$ 15,90** | Benefit `Assistência 24h 400km - Advanced Especial Aplicativo` | Deveria ser R$ 15,00 (como no plano passeio) para fechar R$ 218,70. Atualmente daria **R$ 219,60** |
-| 4 | **Cota de participação APP** não configurada | Planos APP têm `cota_participacao: null`, `cota_minima: null` | Vai cair no fallback global (6%, mín R$ 1.200). Deveria ser **10%, mín R$ 1.500** para motos APP |
-| 5 | **Sem override `planos_cotas_categoria`** para APP | Tabela `planos_cotas_categoria` | Os planos passeio têm override para categoria `moto` (6%, R$ 1.200), mas os APP não têm override para `aplicativo` com 10%/R$ 1.500 |
+### Solução — usar `dvh` (dynamic viewport height) com fallback
 
-### Ajustes necessários (todos são dados, não código)
+`dvh` (dynamic viewport height) é a unidade CSS criada exatamente para resolver esse caso: ela se ajusta dinamicamente quando as barras do Safari aparecem/recolhem. Suportada no iOS Safari 15.4+ (cobre 99% dos iPhones em uso).
 
-**1. Corrigir `tipo_uso` do "Advanced Especial Aplicativo":**
-```sql
-UPDATE entity_eligibility_rules 
-SET rule_config = '{"tipos_uso": ["aplicativo"], "values": ["aplicativo"]}'
-WHERE id = '2be237da-d9f8-4a7a-89c8-fbf955cfd5b1';
-```
+**Estratégia**: aplicar `dvh` apenas quando suportado, mantendo `vh` como fallback para navegadores antigos. Isso **não afeta Chrome/Firefox/Edge desktop nem Android**, que já tratam `vh` corretamente — eles simplesmente também passam a usar `dvh` sem nenhuma mudança visual.
 
-**2. Corrigir preço da Assistência 400km APP** (de R$ 15,90 para R$ 15,00):
-```sql
-UPDATE benefits SET preco_sugerido = 15.00 
-WHERE id = (SELECT benefit_id FROM planos_beneficios WHERE plano_id = '16b01086-4983-4f9d-8177-f98d021731a5' 
-  AND benefit_id IN (SELECT id FROM benefits WHERE name ILIKE '%Assistência 24h 400km%Advanced Especial Aplicativo%'));
-```
+### Mudanças propostas (mínimas e cirúrgicas)
 
-**3. Configurar cota APP (10%, mín R$ 1.500) nos planos APP:**
-```sql
--- Via planos_cotas_categoria para categoria 'aplicativo'
-INSERT INTO planos_cotas_categoria (plano_id, categoria_veiculo, cota_percentual, cota_minima_valor) VALUES
-('16b01086-4983-4f9d-8177-f98d021731a5', 'aplicativo', 10, 1500),
-('58a17bce-4362-4949-a68e-04f6592adde8', 'aplicativo', 10, 1500);
-```
+**1. `src/components/ui/dialog.tsx`** — `DialogContent` base:
+- Trocar `max-h-[90vh]` por `max-h-[90dvh]` com fallback via classe arbitrária Tailwind: `max-h-[90vh] max-h-[90dvh]` (a segunda regra sobrescreve quando suportada).
 
-**4. (Opcional) Renomear coberturas "75% FIPE" para "100% FIPE"** nos planos APP, se a cobertura real é 100%.
+**2. `src/components/cotacoes/CotacaoFormDialog.tsx`** — `DialogContent` específico (linha 1352):
+- Trocar `max-h-[90vh]` por `max-h-[90dvh]` com fallback.
+- Adicionar `[&]:max-h-[100dvh]` em telas mobile (`max-sm:`) para usar quase toda a altura disponível em telas pequenas, dando mais espaço para scroll.
 
-### Resultado esperado após os ajustes
+**3. Footer sticky (linha 2492)** — garantir que fica **acima** da área inferior do iOS:
+- Adicionar `pb-[env(safe-area-inset-bottom)]` no rodapé sticky usando arbitrary value: `pb-[max(0.75rem,env(safe-area-inset-bottom))]`. Isso reserva espaço para a barra inferior em iPhones com notch.
 
-Para Moto, Uber, FIPE R$ 20.882, região RJ:
-- **Advanced Especial Aplicativo** → R$ 218,70 (após correção do benefit)
-- **Advanced Especial + Aplicativo** → R$ 238,70 ✅
-- Cota: 10% do FIPE (mín R$ 1.500) → R$ 2.088,20
-- Rastreador obrigatório: sim (FIPE > R$ 9.000)
+**4. Scroll suave no iOS** — no container `overflow-y-auto` (linha 1365):
+- Adicionar `[-webkit-overflow-scrolling:touch]` para garantir scroll com momentum no iOS (já é padrão em Safari moderno, mas reforça consistência).
+- Adicionar `overscroll-contain` para evitar que o scroll do modal "vaze" para a página de fundo.
 
-### Escopo técnico
+### Por que isso não afeta outros dispositivos
 
-- 3-4 UPDATEs + 2 INSERTs no banco (via ferramenta de insert)
-- 0 arquivos de código alterados
+- `dvh` em desktop (Chrome/Firefox/Edge/Safari macOS) = idêntico a `vh` (não há barras dinâmicas).
+- `env(safe-area-inset-bottom)` em telas sem notch = `0px` (zero efeito).
+- `overscroll-contain` é não destrutivo — apenas previne scroll-chaining indesejado.
+- `-webkit-overflow-scrolling: touch` é uma propriedade vendor-prefix ignorada por outros navegadores.
+
+### Arquivos tocados
+
+| Arquivo | Mudança |
+|---------|---------|
+| `src/components/ui/dialog.tsx` | `max-h-[90vh]` → `max-h-[90vh] max-h-[90dvh]` |
+| `src/components/cotacoes/CotacaoFormDialog.tsx` | DialogContent: `max-h-[90dvh]` + safe-area no footer + `overscroll-contain` no scroll |
+
+**Nenhuma alteração em lógica, hooks, dados ou outros componentes.**
+
+### Verificação pós-correção
+
+Pelo Safari no iPhone, abrir uma cotação no painel ou cotador público (`app.praticcar.org`) e confirmar:
+- Botão "Criar Cotação" sempre visível acima da barra inferior do Safari.
+- Scroll chega até o fim sem cortar "Data de Vencimento".
+- Em Chrome desktop e Android, comportamento idêntico ao atual (sem regressão).
+
