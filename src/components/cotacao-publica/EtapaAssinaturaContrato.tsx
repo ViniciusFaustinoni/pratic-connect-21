@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { FileSignature, Loader2, AlertCircle, RefreshCw, CheckCircle2, Shield, Clock, Mail, ArrowRight, XCircle } from 'lucide-react';
+import { FileSignature, Loader2, AlertCircle, RefreshCw, CheckCircle2, Shield, Clock, Mail, ArrowRight, XCircle, ScanFace } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { Separator } from '@/components/ui/separator';
+import { useAutentiqueBiometricStatus } from '@/hooks/useAutentiqueBiometricStatus';
 
 
 interface EtapaAssinaturaContratoProps {
