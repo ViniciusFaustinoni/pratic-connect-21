@@ -24,6 +24,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getHojeBrasilia } from '@/lib/date-utils';
 import { ModalResumoDia } from '@/components/vistoriador/ModalResumoDia';
+import { FilaBaseSection } from '@/components/instalador/FilaBaseSection';
 
 export default function InstaladorHome() {
   // Realtime: receber tarefas instantaneamente
