@@ -34,6 +34,7 @@ import {
   InstalacaoFilters,
 } from '@/components/instalacoes';
 import { STATUS_INSTALACAO_LABELS, STATUS_INSTALACAO_COLORS, PERIODO_LABELS } from '@/types/database';
+import { formatPlacaExibicao, isPlacaPlaceholder } from '@/lib/placa-utils';
 
 export default function Instalacoes() {
   // Ativar realtime para atualizações automáticas
