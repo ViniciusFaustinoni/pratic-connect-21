@@ -821,7 +821,7 @@ export function MapaVistoriasContent() {
 
       {/* Bases Pratic com contagem de pendentes */}
       {(basesPratic || []).map((base) => {
-        const pendentes = agendamentosBaseHoje?.length || 0;
+        const pendentes = pendentesPorBase.get(base.id) || 0;
         const hasPendentes = pendentes > 0;
         const baseIcon = L.divIcon({
           html: `
@@ -861,7 +861,7 @@ export function MapaVistoriasContent() {
                 fontWeight: 600,
                 whiteSpace: 'nowrap',
               }}>
-                🏢 {base.nome_fantasia || base.razao_social}
+                🏢 {base.nome_fantasia || base.razao_social} {hasPendentes ? `(${pendentes})` : ''}
               </span>
             </Tooltip>
           </Marker>
