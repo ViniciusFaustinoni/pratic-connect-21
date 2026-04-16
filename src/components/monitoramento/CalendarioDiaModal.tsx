@@ -141,6 +141,30 @@ export function CalendarioDiaModal({ open, onClose, data }: CalendarioDiaModalPr
     },
   });
 
+  // --- Mutation: Atribuir técnico ---
+  const atribuirMutation = useMutation({
+    mutationFn: async ({ id, tecnicoId }: { id: string; tecnicoId: string }) => {
+      const { error } = await supabase
+        .from('agendamentos_base')
+        .update({
+          atendido_por: tecnicoId,
+          status: 'confirmado',
+        })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Técnico atribuído com sucesso!');
+      setAtribuirId(null);
+      setTecnicoSelecionado('');
+      queryClient.invalidateQueries({ queryKey: ['calendario-dia-base'] });
+      queryClient.invalidateQueries({ queryKey: ['agendamentos-base-calendario'] });
+    },
+    onError: () => {
+      toast.error('Erro ao atribuir técnico');
+    },
+  });
+
   // --- Rota items: instalações + vistorias campo ---
   const rotaItems = useMemo(() => {
     const items: Array<{
