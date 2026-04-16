@@ -1,62 +1,76 @@
 
 
-## Plano: Melhorar Fluxo Manual de Atribuição + Mapa com Todas as Datas
+## Plano: Fluxo Multi-Atribuição Manual (Sem Reatribuição)
 
-### Problemas identificados
+### Entendimento correto do requisito
 
-1. **Atribuição bloqueada quando já existe um profissional**: A condição `canAssign` em `MapaVistoriasContent.tsx` (linha 431) exige `!v.vistoriador_id` — ou seja, se já tem técnico, o botão "Atribuir" não aparece. O coordenador não pode reatribuir nem empilhar tarefas.
+O coordenador seleciona **várias tarefas SEM técnico** e depois clica em UM técnico para atribuir todas de uma vez. **Tarefas já atribuídas NÃO podem ser reatribuídas** por este fluxo — apenas desatribuídas (cancelar rota) e depois reatribuídas individualmente se necessário.
 
-2. **Mapa mostra apenas tarefas de HOJE + encaixes**: O filtro em `vistoriasFiltradas` (linhas 211-233) descarta tudo que não seja hoje, atrasado ou encaixe. Tarefas futuras não aparecem.
+### O que está errado hoje
 
-3. **Tooltips sem numeração cronológica**: Os tooltips mostram data/período mas sem número de ordem.
+1. **`canAssign` permite reatribuição** (linha 448): a condição atual não exige `!v.vistoriador_id`, permitindo que tarefas já atribuídas sejam reatribuídas. Isso contradiz o requisito.
+2. **Seleção única**: o state `servicoParaAtribuir` é um único `VistoriaMapa | null`. Só permite selecionar uma tarefa por vez.
+3. **Confirmação e mutação**: o diálogo e a mutação processam uma tarefa por vez.
+4. **Drag-and-drop**: o filtro na linha 739 também não exige `!v.vistoriador_id`.
 
-### Correções
+### Correções em `MapaVistoriasContent.tsx`
 
-#### 1. Permitir atribuição mesmo com técnico já atribuído (MapaVistoriasContent.tsx)
+#### 1. Restaurar restrição `!v.vistoriador_id` no `canAssign`
+Somente tarefas sem técnico podem receber o botão "Atribuir". Remover o texto "Reatribuir" do title.
 
-Remover a condição `!v.vistoriador_id` do `canAssign` (linha 431). Quando já tem profissional atribuído, o botão muda para "Reatribuir" e o fluxo funciona igual (selecionar técnico no mapa → confirmar).
+#### 2. Multi-seleção de tarefas
+- Trocar `servicoParaAtribuir: VistoriaMapa | null` por `servicosParaAtribuir: VistoriaMapa[]` (array).
+- O botão "Atribuir" adiciona/remove a tarefa do array (toggle).
+- A barra superior mostra: "Selecione um técnico para: **3 tarefas selecionadas** (placa1, placa2, placa3)".
+- Cancelar limpa o array inteiro.
 
-Mesma lógica no drag-and-drop do técnico (linha 711-712): remover filtro `!v.vistoriador_id` do `servicosNaoAtribuidos`.
+#### 3. Diálogo de confirmação multi-tarefa
+- Mostrar lista das tarefas selecionadas (placa + data + horário) e o técnico escolhido.
+- Texto: "Deseja atribuir **N tarefas** ao técnico **[nome]**?"
+- Listar cada tarefa com placa e horário.
 
-**Fluxo automático não é afetado** — essa mudança é apenas na UI do mapa de atribuições (manual).
+#### 4. Mutação em lote
+- Ao confirmar, chamar `atribuirMutation.mutate` sequencialmente para cada tarefa (usando `Promise.allSettled` para não travar em falha parcial).
+- Toast de sucesso: "N tarefas atribuídas com sucesso" ou "N de M atribuídas (X falharam)".
+- Limpar seleção após conclusão.
 
-#### 2. Mostrar TODAS as tarefas agendadas no mapa (MapaVistoriasContent.tsx)
+#### 5. Drag-and-drop: restaurar filtro `!v.vistoriador_id`
+Linha 739: adicionar `&& !v.vistoriador_id` no filtro para que o drag só encontre serviços sem técnico.
 
-Remover o filtro de "apenas hoje/atrasada/encaixe" do `vistoriasFiltradas`. Mostrar todas as tarefas com `data_agendada` (que a view já traz dos últimos 30 dias).
+#### 6. Popup do técnico com tarefas atribuídas
+Mostrar no popup do técnico (linhas 774-816) a lista de tarefas já atribuídas a ele (filtrar `vistoriasComCoordenadas` por `vistoriador_id === tecnico.vistoriador_id`), exibindo placa + horário. Isso ajuda o coordenador a ver a carga antes de empilhar mais.
 
-Diferenciar visualmente por data usando cores no pin:
-- **Hoje**: cores atuais (por status/confirmação)
-- **Futuras**: cor mais suave/transparente (ex: cinza-azulado `#94A3B8`) para não poluir
-- **Atrasadas**: laranja como já está
+#### 7. Mapa: todas as tarefas de todos os dias (já implementado)
+- Todas as tarefas agendadas com `data_agendada` já aparecem (filtro de "apenas hoje" já foi removido).
+- Cores diferenciadas: Hoje (por status), Futuras (`#94A3B8`), Atrasadas (laranja).
+- Tooltips numerados cronologicamente (`#N · dd/MM HH:mm`) — já implementado.
 
-#### 3. Tooltips numerados cronologicamente (MapaVistoriasContent.tsx)
+### Resumo visual do fluxo
 
-Adicionar numeração sequencial nos tooltips baseada na ordem cronológica (`data_agendada` + `horario_agendado`). Cada tooltip mostrará: `#N · dd/MM HH:mm` (ou `#N · dd/MM M/T` para período).
-
-Implementação:
-- Criar um `useMemo` que ordena todas as vistorias por data+hora e atribui um índice sequencial
-- No render do tooltip, usar esse índice: `#1 · 15/04 08:30`
-
-#### 4. Legenda atualizada (MapaVistoriasContent.tsx)
-
-Adicionar na legenda a nova cor para "Futuras" e explicar a numeração.
-
-#### 5. Hook useAtribuicaoManual — permitir atribuir serviço já atribuído
-
-O `useAtribuirServicoManual` já funciona para qualquer serviço (não valida se `profissional_id` é null). Nenhuma mudança necessária no hook.
-
-O `useServicosParaAtribuir` (usado na aba drag-and-drop) filtra `.is('profissional_id', null)` — manter assim, pois essa aba é para serviços PENDENTES. A aba do mapa é onde o coordenador reatribui.
-
-### Arquivos alterados
-
-| Arquivo | Mudança |
-|---------|---------|
-| `src/components/mapa/MapaVistoriasContent.tsx` | Remover filtro só-hoje, permitir atribuição com técnico existente, tooltips numerados, legenda atualizada |
+```text
+Coordenador abre mapa
+  → Vê TODAS as tarefas (hoje, futuras, atrasadas)
+  → Clica "Atribuir" em tarefa 1 (sem técnico) ✓ selecionada
+  → Clica "Atribuir" em tarefa 2 (sem técnico) ✓ selecionada
+  → Clica "Atribuir" em tarefa 3 (sem técnico) ✓ selecionada
+  → Barra: "3 tarefas selecionadas — clique no técnico"
+  → Clica no técnico no mapa
+  → Diálogo: "Atribuir 3 tarefas ao Técnico X?"
+     - Tarefa 1: ABC-1234 · 16/04 08:30
+     - Tarefa 2: DEF-5678 · 16/04 10:00
+     - Tarefa 3: GHI-9012 · 17/04 09:00
+  → Confirma → 3 mutações executadas → Toast "3 tarefas atribuídas"
+```
 
 ### O que NÃO muda
-
 - Fluxo automático de atribuição (edge functions)
-- Aba de Atribuição Manual (drag-and-drop) — continua mostrando apenas pendentes
-- Hook `useAtribuirServicoManual` — já suporta reatribuição
-- View `view_vistorias_mapa` — já traz dados dos últimos 30 dias
+- Hook `useAtribuirServicoManual` — já suporta qualquer serviço
+- Hook `useServicosParaAtribuir` (aba drag-and-drop) — continua filtrando `profissional_id IS NULL`
+- View `view_vistorias_mapa` — já traz 30 dias
+- Banco de dados — `servicos.profissional_id` é campo único, garantindo que uma tarefa só tem um técnico
+
+### Arquivo alterado
+| Arquivo | Mudança |
+|---------|---------|
+| `src/components/mapa/MapaVistoriasContent.tsx` | Multi-seleção, restaurar `!v.vistoriador_id`, confirmação em lote, popup do técnico com carga, drag-and-drop corrigido |
 
