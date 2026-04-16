@@ -934,7 +934,13 @@ export function MapaVistoriasContent() {
             position={[base.latitude, base.longitude]}
             icon={baseIcon}
             eventHandlers={{
-              click: () => setBaseModal({ open: true, data: hojeStr }),
+              click: () => {
+                if (!hasPendentes) {
+                  toast.info("Nenhuma vistoria agendada para esta base");
+                  return;
+                }
+                setBaseModal({ open: true, data: hojeStr });
+              },
             }}
           >
             <Tooltip permanent direction="bottom" offset={[0, 16]} className="custom-tooltip-clean">
