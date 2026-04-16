@@ -302,7 +302,6 @@ export function CalendarioDiaModal({ open, onClose, data }: CalendarioDiaModalPr
                 <p className="text-center text-muted-foreground py-8">Nenhum agendamento na base neste dia.</p>
               ) : (
                 (agendamentosBase as any[]).map((ag) => {
-                  const isAntecipar = anteciparId === ag.id;
                   return (
                     <Card key={ag.id} className="border">
                       <CardContent className="p-3">
