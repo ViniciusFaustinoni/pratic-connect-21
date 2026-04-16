@@ -208,7 +208,6 @@ export function MapaVistoriasContent() {
     return vistoriadores?.filter(v => v.em_servico && v.latitude && v.longitude) || [];
   }, [vistoriadores]);
 
-  const hoje = useMemo(() => new Date(), []);
 
   const vistoriasFiltradas = useMemo(() => {
     if (!vistorias) return [];
