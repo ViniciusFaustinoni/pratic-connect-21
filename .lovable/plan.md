@@ -1,39 +1,62 @@
 
 
-## Plano: Alterar mínimo de adesão para R$ 50 (CLT e Externo)
+## Plano: Melhorar Fluxo Manual de Atribuição + Mapa com Todas as Datas
 
-### Problema
+### Problemas identificados
 
-O mínimo de adesão para vendedor CLT (interno) está configurado como R$ 150, mas deveria ser R$ 50 — igual ao do vendedor externo. Isso causa o alerta vermelho da screenshot e **bloqueia o envio da cotação** quando o valor é menor que R$ 150.
+1. **Atribuição bloqueada quando já existe um profissional**: A condição `canAssign` em `MapaVistoriasContent.tsx` (linha 431) exige `!v.vistoriador_id` — ou seja, se já tem técnico, o botão "Atribuir" não aparece. O coordenador não pode reatribuir nem empilhar tarefas.
 
-### Estado atual no banco
+2. **Mapa mostra apenas tarefas de HOJE + encaixes**: O filtro em `vistoriasFiltradas` (linhas 211-233) descarta tudo que não seja hoje, atrasado ou encaixe. Tarefas futuras não aparecem.
 
-| Chave | Valor atual | Valor desejado |
-|-------|------------|----------------|
-| `taxa_adesao_minimo_volante_interno` | 150 | **50** |
-| `taxa_adesao_minimo_volante_externo` | 50 | 50 (já correto) |
-| `taxa_adesao_minimo_base` | 100 | 100 (sem alteração) |
+3. **Tooltips sem numeração cronológica**: Os tooltips mostram data/período mas sem número de ordem.
 
 ### Correções
 
-#### 1. Atualizar valor no banco (SQL migration)
+#### 1. Permitir atribuição mesmo com técnico já atribuído (MapaVistoriasContent.tsx)
 
-```sql
-UPDATE configuracoes 
-SET valor = '50' 
-WHERE chave = 'taxa_adesao_minimo_volante_interno';
-```
+Remover a condição `!v.vistoriador_id` do `canAssign` (linha 431). Quando já tem profissional atribuído, o botão muda para "Reatribuir" e o fluxo funciona igual (selecionar técnico no mapa → confirmar).
 
-#### 2. Atualizar defaults no código (3 arquivos)
+Mesma lógica no drag-and-drop do técnico (linha 711-712): remover filtro `!v.vistoriador_id` do `servicosNaoAtribuidos`.
 
-Alterar o fallback de `150` para `50` nos locais que usam o valor hardcoded como default:
+**Fluxo automático não é afetado** — essa mudança é apenas na UI do mapa de atribuições (manual).
 
-- **`src/hooks/useConteudosSistema.ts`** (linha 275): `useConfiguracaoNumero('taxa_adesao_minimo_volante_interno', 50)`
-- **`src/pages/vendas/Cotador.tsx`** (linha 253): `const { data: minimoVolanteInterno = 50 } = ...`
-- **`src/components/cotacoes/CotacaoFormDialog.tsx`** (linha 145): `const { data: minimoVolanteInterno = 50 } = ...`
-- **`src/components/gestao-comercial/RegrasVendaContent.tsx`** (linha 112): default de `'150'` para `'50'`
+#### 2. Mostrar TODAS as tarefas agendadas no mapa (MapaVistoriasContent.tsx)
 
-#### 3. Nenhuma lógica de cotação é afetada
+Remover o filtro de "apenas hoje/atrasada/encaixe" do `vistoriasFiltradas`. Mostrar todas as tarefas com `data_agendada` (que a view já traz dos últimos 30 dias).
 
-A validação de mínimo (`valorAdesaoCustom < minimoAdesaoConfig`) continua funcionando — apenas o threshold muda de 150 para 50. Todos os cenários (rota CLT, rota externo, base, isenta) permanecem intactos.
+Diferenciar visualmente por data usando cores no pin:
+- **Hoje**: cores atuais (por status/confirmação)
+- **Futuras**: cor mais suave/transparente (ex: cinza-azulado `#94A3B8`) para não poluir
+- **Atrasadas**: laranja como já está
+
+#### 3. Tooltips numerados cronologicamente (MapaVistoriasContent.tsx)
+
+Adicionar numeração sequencial nos tooltips baseada na ordem cronológica (`data_agendada` + `horario_agendado`). Cada tooltip mostrará: `#N · dd/MM HH:mm` (ou `#N · dd/MM M/T` para período).
+
+Implementação:
+- Criar um `useMemo` que ordena todas as vistorias por data+hora e atribui um índice sequencial
+- No render do tooltip, usar esse índice: `#1 · 15/04 08:30`
+
+#### 4. Legenda atualizada (MapaVistoriasContent.tsx)
+
+Adicionar na legenda a nova cor para "Futuras" e explicar a numeração.
+
+#### 5. Hook useAtribuicaoManual — permitir atribuir serviço já atribuído
+
+O `useAtribuirServicoManual` já funciona para qualquer serviço (não valida se `profissional_id` é null). Nenhuma mudança necessária no hook.
+
+O `useServicosParaAtribuir` (usado na aba drag-and-drop) filtra `.is('profissional_id', null)` — manter assim, pois essa aba é para serviços PENDENTES. A aba do mapa é onde o coordenador reatribui.
+
+### Arquivos alterados
+
+| Arquivo | Mudança |
+|---------|---------|
+| `src/components/mapa/MapaVistoriasContent.tsx` | Remover filtro só-hoje, permitir atribuição com técnico existente, tooltips numerados, legenda atualizada |
+
+### O que NÃO muda
+
+- Fluxo automático de atribuição (edge functions)
+- Aba de Atribuição Manual (drag-and-drop) — continua mostrando apenas pendentes
+- Hook `useAtribuirServicoManual` — já suporta reatribuição
+- View `view_vistorias_mapa` — já traz dados dos últimos 30 dias
 
