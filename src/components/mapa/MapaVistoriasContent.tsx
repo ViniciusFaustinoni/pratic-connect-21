@@ -254,10 +254,11 @@ export function MapaVistoriasContent() {
 
   const contadores = useMemo(() => {
     const realizadas = vistoriasComCoordenadas.filter(v => STATUS_REALIZADOS.includes(v.status)).length;
+    const futuras = vistoriasComCoordenadas.filter(v => isFuturaFn(v.data_agendada) && !STATUS_REALIZADOS.includes(v.status)).length;
     const aRealizar = vistoriasComCoordenadas.length - realizadas;
     const confirmados = vistoriasComCoordenadas.filter(v => v.confirmacao_whatsapp === 'confirmada').length;
-    const naoConfirmados = vistoriasComCoordenadas.filter(v => !STATUS_REALIZADOS.includes(v.status) && !v.permite_encaixe && !v.confirmacao_whatsapp).length;
-    return { realizadas, aRealizar, confirmados, naoConfirmados };
+    const naoConfirmados = vistoriasComCoordenadas.filter(v => !STATUS_REALIZADOS.includes(v.status) && !v.permite_encaixe && !v.confirmacao_whatsapp && !isFuturaFn(v.data_agendada)).length;
+    return { realizadas, aRealizar, confirmados, naoConfirmados, futuras };
   }, [vistoriasComCoordenadas]);
 
   const linhasDeRota = useMemo(() => {
