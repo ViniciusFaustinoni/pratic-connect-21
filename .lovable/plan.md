@@ -1,64 +1,76 @@
 
 
-## Plano: Paginar query de `planos_coberturas` no motor de cotação
+## Plano: Corrigir regras de linha faltantes + bug tipo_uso no motor
 
-### Problema encontrado
+### Causa raiz
 
-A query de `planos_coberturas` no motor de cotação (`usePlanosCotacao.ts`, linha 182) **não tem paginação**. Existem **2385 registros** na tabela, mas o Supabase retorna no máximo **1000 por padrão**. Resultado: **1385 coberturas são descartadas silenciosamente**.
+Dois problemas distintos causam diferenças entre RJ e SP/Lagos:
 
-Isso afeta **todas as linhas** (não apenas SP e Lagos), pois a ordenação por UUID distribui as perdas aleatoriamente. Cada plano tem 9 coberturas, mas na prática apenas 1-7 são retornadas, causando:
-- Preços **incorretamente menores** (coberturas faltam na soma)
-- Coberturas **não listadas** nos cards de cotação
+**Problema 1: Regras de LINHA não duplicadas**
 
-### Dados da auditoria completa
+A duplicação copiou regras de planos, coberturas e benefícios, mas **não copiou as regras de nível `linha`** (entity_type = 'linha'). As linhas SP e Lagos não têm `marca_modelo` nem `ano_range`, permitindo que veículos inelegíveis vejam planos que deveriam estar bloqueados.
 
-| Dimensão | SELECT orig | SELECT - SP | SELECT - Lagos | LANÇAMENTO orig | LANÇAMENTO - SP | LANÇAMENTO - Lagos |
-|----------|-------------|-------------|----------------|-----------------|-----------------|---------------------|
-| Planos | 37 | 37 | 37 | 37 | 37 | 37 |
-| Coberturas | 333 | 333 | 333 | 333 | 333 | 333 |
-| Benefícios | 213 | 213 | 213 | 213 | 213 | 213 |
-| Carência cob. | 0 | 0 | 0 | 0 | 0 | 0 |
-| Carência ben. (Vidros) | 29 | 29 | 29 | 29 | 29 | 29 |
-| Regras combustivel | 333 | 333 | 333 | 333 | 333 | 333 |
-| Regras fipe_range | 333 | 333 | 333 | 333 | 333 | 333 |
-| Regras fipe_eligibility | 73 | 73 | 73 | 73 | 73 | 73 |
-| Regras tipo_placa | 216 | 216 | 216 | 216 | 216 | 216 |
-| Regras tipo_uso | 332 | 332 | 332 | 332 | 332 | 332 |
-| Regras regiao | 333 | 333 | 333 | 333 | 333 | 333 |
+| Linha | marca_modelo | ano_range |
+|-------|-------------|-----------|
+| SELECT (RJ) | 80+ modelos aceitos | min 2005 |
+| LANÇAMENTO (RJ) | 21 modelos 2024+ | Nenhum |
+| ADVANCED (RJ) | Motos Honda/Yamaha/etc | min 2005 |
+| ESPECIAL (RJ) | 50+ modelos antigos | min 1994 |
+| **Todas SP/Lagos** | **Nenhum** | **Nenhum** |
 
-**Estrutura, regras de elegibilidade, carências e benefícios estão 100% pareados.** O único problema é a query de coberturas no motor de cotação.
+Impacto: Para LTB4J74 (Corolla 2014), LANÇAMENTO - SP mostra 19 planos quando deveria mostrar **0** (Corolla 2014 não está na whitelist de 2024+).
 
-### Correção
+**Problema 2: Campo `tipos_uso` ignorado pelo motor**
 
-**Arquivo:** `src/hooks/usePlanosCotacao.ts` (linhas 178-189)
+31 planos + 195 coberturas + 380 benefícios usam `rule_config: { tipos_uso: [...] }`, mas o motor lê apenas `cfg.tipos || cfg.values`. Isso permite que planos "Aplicativo" apareçam para "Particular" e vice-versa, em TODAS as regiões.
 
-Adicionar paginação na query de `planos_coberturas`, similar ao que já existe em `useAllEligibilityRules`:
+### Correções
+
+#### Parte 1: Copiar regras de linha para SP e Lagos (SQL migration)
+
+Para cada linha original (SELECT, LANÇAMENTO, ADVANCED, ESPECIAL), copiar suas regras `marca_modelo` e `ano_range` para as linhas SP e Lagos correspondentes, ajustando apenas o `entity_id`.
+
+São 8 regras a copiar (2 por linha original × 4 linhas — LANÇAMENTO não tem ano_range, então 7 regras no total × 2 destinos = 14 inserções).
+
+#### Parte 2: Fix tipo_uso no motor (código)
+
+**Arquivo:** `src/hooks/useEntityEligibilityRules.ts` (linha 282)
 
 ```typescript
-const { data: planoCoberturasData, isLoading: planoCoberturasLoading } = useQuery({
-  queryKey: ['planos_coberturas_pricing'],
-  queryFn: async () => {
-    const PAGE_SIZE = 1000;
-    let allData: any[] = [];
-    let from = 0;
-    while (true) {
-      const { data, error } = await supabase
-        .from('planos_coberturas')
-        .select('plano_id, cobertura_id, coberturas:cobertura_id (nome, valor)')
-        .range(from, from + PAGE_SIZE - 1);
-      if (error) throw error;
-      allData = allData.concat(data || []);
-      if (!data || data.length < PAGE_SIZE) break;
-      from += PAGE_SIZE;
-    }
-    return allData;
-  },
-  staleTime: 1000 * 60 * 5,
-});
+// De:
+const tipos: string[] = cfg.tipos || cfg.values || [];
+// Para:
+const tipos: string[] = cfg.tipos || cfg.values || cfg.tipos_uso || [];
 ```
 
-### Resultado esperado
-- Todas as 2385 coberturas serão carregadas (3 páginas de 1000)
-- Preços corretos para todas as linhas, incluindo SP e Lagos
-- Cards de cotação mostrarão todas as coberturas de cada plano
+#### Parte 3: Normalizar dados tipo_uso (SQL migration)
+
+Atualizar as 606 regras com `tipos_uso` sem `valores`/`tipos` para incluir o campo `valores` padronizado:
+
+```sql
+UPDATE entity_eligibility_rules
+SET rule_config = rule_config || jsonb_build_object('valores', rule_config->'tipos_uso')
+WHERE rule_type = 'tipo_uso'
+AND rule_config ? 'tipos_uso'
+AND NOT (rule_config ? 'tipos')
+AND NOT (rule_config ? 'values');
+```
+
+#### Parte 4: Fix salvamento admin (código)
+
+**Arquivo:** `src/hooks/usePlansAdmin.ts` — alterar gravação de regras tipo_uso para usar `tipos` em vez de `tipos_uso`.
+
+#### Parte 5: Fix duplicação para copiar regras de linha (código)
+
+**Arquivo:** `src/hooks/usePlansAdmin.ts` — na função de duplicação de linhas, adicionar cópia das `entity_eligibility_rules` da linha original.
+
+### Resumo
+
+| Ação | Escopo |
+|------|--------|
+| Copiar regras de linha | 14 regras inseridas |
+| Fix motor tipo_uso | 1 linha de código |
+| Normalizar dados | ~606 regras atualizadas |
+| Fix admin salvamento | 1 linha de código |
+| Fix duplicação futura | ~10 linhas de código |
 
