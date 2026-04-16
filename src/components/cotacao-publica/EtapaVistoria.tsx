@@ -5,6 +5,7 @@ import { Camera, Calendar, Smartphone, CheckCircle2, ArrowLeft } from 'lucide-re
 import { AutovistoriaCotacao } from './AutovistoriaCotacao';
 import { AgendamentoCotacao } from './AgendamentoCotacao';
 import { EscolhaLocalVistoria } from './EscolhaLocalVistoria';
+import { EscolhaBase } from './EscolhaBase';
 import { AgendamentoBase } from './AgendamentoBase';
 import type { TipoVeiculo } from '@/data/autovistoriaConfig';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -34,7 +35,7 @@ interface EtapaVistoriaProps {
   tipoVistoriaRealizada?: 'autovistoria' | 'agendada' | 'agendada_base';
 }
 
-type ModoVistoria = 'escolha' | 'escolha-local' | 'autovistoria' | 'agendada' | 'agendada-base';
+type ModoVistoria = 'escolha' | 'escolha-local' | 'autovistoria' | 'agendada' | 'escolha-base' | 'agendada-base';
 
 export function EtapaVistoria({ 
   cotacaoId, 

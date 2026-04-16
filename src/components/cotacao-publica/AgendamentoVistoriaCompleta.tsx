@@ -3,6 +3,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AgendamentoVistoria } from './AgendamentoVistoria';
 import { EscolhaLocalVistoria } from './EscolhaLocalVistoria';
+import { EscolhaBase } from './EscolhaBase';
 import { AgendamentoBase } from './AgendamentoBase';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -27,7 +28,7 @@ interface AgendamentoVistoriaCompletaProps {
   onConfirmar: () => void;
 }
 
-type ModoAgendamento = 'escolha' | 'cliente' | 'base';
+type ModoAgendamento = 'escolha' | 'cliente' | 'escolha-base' | 'base';
 
 export function AgendamentoVistoriaCompleta({ 
   cotacaoId, 
@@ -41,11 +42,11 @@ export function AgendamentoVistoriaCompleta({
   enderecoInicial,
   onConfirmar 
 }: AgendamentoVistoriaCompletaProps) {
-  // Se tipoInstalacao definido, pular direto para o modo correspondente
   const modoInicial: ModoAgendamento = tipoInstalacao === 'rota' ? 'cliente' 
-    : tipoInstalacao === 'base' ? 'base' 
+    : tipoInstalacao === 'base' ? 'escolha-base' 
     : 'escolha';
   const [modo, setModo] = useState<ModoAgendamento>(modoInicial);
+  const [oficinaIdSelecionada, setOficinaIdSelecionada] = useState<string>('');
 
   return (
     <AnimatePresence mode="wait">
@@ -57,7 +58,13 @@ export function AgendamentoVistoriaCompleta({
           exit={{ opacity: 0, y: -20 }}
         >
           <EscolhaLocalVistoria 
-            onEscolher={(local) => setModo(local)}
+            onEscolher={(local) => {
+              if (local === 'base') {
+                setModo('escolha-base');
+              } else {
+                setModo('cliente');
+              }
+            }}
             tipoInstalacao={tipoInstalacao}
           />
         </motion.div>
@@ -84,6 +91,23 @@ export function AgendamentoVistoriaCompleta({
         </motion.div>
       )}
 
+      {modo === 'escolha-base' && (
+        <motion.div
+          key="escolha-base"
+          initial={{ opacity: 0, x: 50 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -50 }}
+        >
+          <EscolhaBase
+            onEscolher={(oficinaId) => {
+              setOficinaIdSelecionada(oficinaId);
+              setModo('base');
+            }}
+            onVoltar={() => setModo('escolha')}
+          />
+        </motion.div>
+      )}
+
       {modo === 'base' && (
         <motion.div
           key="base"
@@ -93,13 +117,14 @@ export function AgendamentoVistoriaCompleta({
         >
           <AgendamentoBase
             cotacaoId={cotacaoId}
+            oficinaId={oficinaIdSelecionada}
             clienteNome={clienteNome}
             clienteTelefone={clienteTelefone}
             clienteEmail={clienteEmail}
             veiculoPlaca={veiculoPlaca}
             veiculoDescricao={veiculoDescricao}
             onAgendado={onConfirmar}
-            onVoltar={() => setModo('escolha')}
+            onVoltar={() => setModo('escolha-base')}
           />
         </motion.div>
       )}
