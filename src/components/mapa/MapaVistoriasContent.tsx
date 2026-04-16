@@ -175,10 +175,14 @@ function getPeriodoLabel(periodo?: string | null): string {
 
 function safeParseDate(dateStr: string | null | undefined): Date | null {
   if (!dateStr) return null;
-  // Para "YYYY-MM-DD" puro usa parser local (evita shift de timezone que troca o dia).
-  // Para strings com hora/timezone, mantém new Date padrão.
-  const apenasData = /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
-  const d = apenasData ? parseDataLocal(dateStr) : new Date(dateStr);
+  // Sempre que a string começar com "YYYY-MM-DD" tratamos como data local pura,
+  // ignorando o sufixo de hora/timezone que algumas views Postgres adicionam
+  // (ex: "2026-04-18 00:00:00+00" vira "2026-04-18" parseado como local midnight).
+  // Isso evita o shift de -1 dia em fusos negativos como Brasília (UTC-3).
+  if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+    return parseDataLocal(dateStr);
+  }
+  const d = new Date(dateStr);
   return d && !isNaN(d.getTime()) ? d : null;
 }
 
