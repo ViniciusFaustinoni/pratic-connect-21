@@ -48,6 +48,7 @@ import {
   ChevronRight,
   GripVertical,
   Building2,
+  CalendarClock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useVistoriasMapa, VistoriaMapa } from "@/hooks/useVistoriasMapa";
@@ -66,6 +67,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { CalendarioDiaModal } from "@/components/monitoramento/CalendarioDiaModal";
 import { formatPlacaExibicao, isPlacaPlaceholder } from "@/lib/placa-utils";
+import { ReagendarTarefaDialog } from "@/components/mapa/ReagendarTarefaDialog";
 
 const COR_REALIZADA = '#10B981';
 const COR_A_REALIZAR = '#EF4444';
@@ -255,6 +257,17 @@ export function MapaVistoriasContent() {
     servicoPlaca: string | null;
     profissionalNome: string | null;
   } | null>(null);
+
+  // Reagendar manual state
+  const [reagendarState, setReagendarState] = useState<{
+    servicoId: string;
+    placa: string | null;
+    associadoNome: string | null;
+    dataAtual: string | null;
+    horaAtual: string | null;
+  } | null>(null);
+
+  const podeReagendar = isDiretor || isCoordenadorMonitoramento || isAnalistaMonitoramento || isAdminMaster || isDesenvolvedor;
 
   const vistoriadoresEmServico = useMemo(() => {
     return vistoriadores?.filter(v => v.em_servico && v.latitude && v.longitude) || [];
@@ -783,6 +796,21 @@ export function MapaVistoriasContent() {
                     <button onClick={() => abrirGoogleMaps(v.latitude!, v.longitude!)} className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">
                       <Navigation className="h-3 w-3" />Google Maps
                     </button>
+                    {podeReagendar && !isRealizada && v.servico_id_unificado && (
+                      <button
+                        onClick={() => setReagendarState({
+                          servicoId: v.servico_id_unificado!,
+                          placa: formatPlacaExibicao(v.veiculo_placa),
+                          associadoNome: v.associado_nome,
+                          dataAtual: v.data_agendada,
+                          horaAtual: v.horario_agendado,
+                        })}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-amber-600 text-white rounded text-xs hover:bg-amber-700"
+                        title="Reagendar data/horário"
+                      >
+                        <CalendarClock className="h-3 w-3" />Reagendar
+                      </button>
+                    )}
                     {podeCancelarAtribuicao && v.vistoriador_id && !isRealizada && v.servico_id_unificado && (
                       <button
                         onClick={() => setCancelConfirmation({
@@ -1208,6 +1236,19 @@ export function MapaVistoriasContent() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Reagendamento manual */}
+      <ReagendarTarefaDialog
+        open={!!reagendarState}
+        onOpenChange={(open) => !open && setReagendarState(null)}
+        servicoId={reagendarState?.servicoId || null}
+        resumo={{
+          placa: reagendarState?.placa,
+          associadoNome: reagendarState?.associadoNome,
+          dataAtual: reagendarState?.dataAtual,
+          horaAtual: reagendarState?.horaAtual,
+        }}
+      />
     </>
   );
 
