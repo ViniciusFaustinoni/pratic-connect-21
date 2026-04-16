@@ -60,6 +60,7 @@ import { useDesatribuirServico } from "@/hooks/useDesatribuirServico";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useEnviarConfirmacaoWhatsApp } from "@/hooks/useEnviarConfirmacaoWhatsApp";
 import { useBasesPratic } from "@/hooks/useBasesPratic";
+import { usePrestadoresAtivosMapa } from "@/hooks/usePrestadoresAtivosMapa";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { CalendarioDiaModal } from "@/components/monitoramento/CalendarioDiaModal";
