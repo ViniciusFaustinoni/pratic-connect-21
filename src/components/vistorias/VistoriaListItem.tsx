@@ -4,6 +4,7 @@ import { Clock, RefreshCw, CheckCircle, XCircle, Car, User, Eye } from 'lucide-r
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Vistoria, VistoriaStatus } from '@/hooks/useVistorias';
+import { formatPlacaExibicao, isPlacaPlaceholder } from '@/lib/placa-utils';
 
 interface VistoriaListItemProps {
   vistoria: Vistoria;
@@ -57,9 +58,11 @@ export function VistoriaListItem({ vistoria, onClick }: VistoriaListItemProps) {
   const StatusIcon = config.icon;
 
   // Prioridade para placa: veículo vinculado > primeiro veículo do associado > "SEM PLACA"
-  const placa = vistoria.veiculo?.placa 
-    || vistoria.associado?.veiculos?.[0]?.placa 
-    || 'SEM PLACA';
+  const placaRaw = vistoria.veiculo?.placa
+    || vistoria.associado?.veiculos?.[0]?.placa
+    || null;
+  const placa = formatPlacaExibicao(placaRaw, 'SEM PLACA');
+  const isZeroKm = isPlacaPlaceholder(placaRaw);
 
   // Prioridade para nome: associado do veículo > associado direto > fallback
   const nomeAssociado = vistoria.veiculo?.associado?.nome 
@@ -88,6 +91,11 @@ export function VistoriaListItem({ vistoria, onClick }: VistoriaListItemProps) {
           <span className="font-mono font-semibold text-lg">
             {placa}
           </span>
+          {isZeroKm && (
+            <span className="text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 rounded px-1.5 py-0.5">
+              0KM
+            </span>
+          )}
         </div>
 
         {/* Cliente */}
