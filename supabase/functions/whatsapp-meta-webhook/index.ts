@@ -136,7 +136,7 @@ async function processarRespostaConfirmacaoMeta(
       // Buscar dados para resposta + push
       const { data: servico } = await supabase
         .from("servicos")
-        .select("profissional_id, hora_agendada, data_agendada, endereco_completo, associado:associados(nome)")
+        .select("profissional_id, hora_agendada, data_agendada, logradouro, bairro, cidade, associado:associados(nome)")
         .eq("id", confirmacao.servico_id)
         .maybeSingle();
 
@@ -148,7 +148,8 @@ async function processarRespostaConfirmacaoMeta(
           dataAg = `${d}/${m}/${y}`;
         }
         if (servico.hora_agendada) horaAg = String(servico.hora_agendada).slice(0, 5);
-        endAg = (servico as any).endereco_completo || null;
+        const partesEnd = [(servico as any).logradouro, (servico as any).bairro, (servico as any).cidade].filter(Boolean);
+        endAg = partesEnd.length ? partesEnd.join(", ") : null;
 
         // Push para vistoriador
         if (servico.profissional_id) {
