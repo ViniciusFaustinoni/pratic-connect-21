@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap } from "react-leaflet";
 import { RotaPolyline } from "@/components/mapa/RotaPolyline";
 import L from "leaflet";
-import { format, isSameDay, formatDistanceToNow } from "date-fns";
+import { format, isSameDay, isAfter, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -65,12 +65,14 @@ const COR_NAO_CONFIRMADO = '#F97316'; // Orange
 const COR_CONFIRMADO = '#10B981'; // Green
 const COR_AGUARDANDO = '#EAB308'; // Yellow
 const COR_EM_EXECUCAO = '#3B82F6'; // Blue
+const COR_FUTURA = '#94A3B8'; // Slate/gray-blue for future tasks
 const STATUS_REALIZADOS = ['concluida', 'aprovada', 'reprovada', 'em_analise'];
 const STATUS_EM_EXECUCAO = ['em_andamento', 'em_rota'];
 
-function getCorPorStatus(status: string, confirmacao_whatsapp?: string | null, permite_encaixe?: boolean): string {
+function getCorPorStatus(status: string, confirmacao_whatsapp?: string | null, permite_encaixe?: boolean, isFutura?: boolean): string {
   if (STATUS_EM_EXECUCAO.includes(status)) return COR_EM_EXECUCAO;
   if (STATUS_REALIZADOS.includes(status)) return COR_REALIZADA;
+  if (isFutura) return COR_FUTURA;
   if (permite_encaixe) return COR_A_REALIZAR;
   if (confirmacao_whatsapp === 'confirmada') return COR_CONFIRMADO;
   if (confirmacao_whatsapp?.startsWith('aguardando')) return COR_AGUARDANDO;
@@ -206,21 +208,12 @@ export function MapaVistoriasContent() {
     return vistoriadores?.filter(v => v.em_servico && v.latitude && v.longitude) || [];
   }, [vistoriadores]);
 
-  const hoje = useMemo(() => new Date(), []);
 
   const vistoriasFiltradas = useMemo(() => {
     if (!vistorias) return [];
     return vistorias.filter((v) => {
       if (!v.data_agendada) return false;
-      const dateStr = v.data_agendada.split('T')[0];
-      const dataVistoria = new Date(dateStr + 'T00:00:00');
-      const hojeNorm = new Date(hoje);
-      hojeNorm.setHours(0, 0, 0, 0);
-      const isHoje = isSameDay(dataVistoria, hojeNorm);
-      const isAtrasada = dataVistoria < hojeNorm && v.status !== 'concluida' && v.status !== 'cancelada';
-      const isEncaixe = v.permite_encaixe === true;
-      if (!isHoje && !isAtrasada && !isEncaixe) return false;
-
+      // Show ALL scheduled tasks (not just today)
       if (filtroBusca) {
         const termo = filtroBusca.toLowerCase();
         const placa = v.veiculo_placa?.toLowerCase() || "";
@@ -230,7 +223,29 @@ export function MapaVistoriasContent() {
       }
       return true;
     });
-  }, [vistorias, hoje, filtroBusca]);
+  }, [vistorias, filtroBusca]);
+
+  // Chronological index map for tooltip numbering
+  const ordemCronologica = useMemo(() => {
+    const sorted = [...(vistoriasFiltradas || [])].sort((a, b) => {
+      const dtA = new Date(`${a.data_agendada}T${a.horario_agendado || '00:00'}`);
+      const dtB = new Date(`${b.data_agendada}T${b.horario_agendado || '00:00'}`);
+      return dtA.getTime() - dtB.getTime();
+    });
+    const map = new Map<string, number>();
+    sorted.forEach((v, i) => map.set(v.id, i + 1));
+    return map;
+  }, [vistoriasFiltradas]);
+
+  // Helper to check if a task is future
+  const isFuturaFn = useCallback((dataAgendada: string | null) => {
+    if (!dataAgendada) return false;
+    const dateStr = dataAgendada.split('T')[0];
+    const dataVistoria = new Date(dateStr + 'T00:00:00');
+    const hojeNorm = new Date();
+    hojeNorm.setHours(0, 0, 0, 0);
+    return isAfter(dataVistoria, hojeNorm);
+  }, []);
 
   const vistoriasComCoordenadas = useMemo(() => {
     return vistoriasFiltradas.filter((v) => v.latitude && v.longitude);
@@ -238,10 +253,11 @@ export function MapaVistoriasContent() {
 
   const contadores = useMemo(() => {
     const realizadas = vistoriasComCoordenadas.filter(v => STATUS_REALIZADOS.includes(v.status)).length;
+    const futuras = vistoriasComCoordenadas.filter(v => isFuturaFn(v.data_agendada) && !STATUS_REALIZADOS.includes(v.status)).length;
     const aRealizar = vistoriasComCoordenadas.length - realizadas;
     const confirmados = vistoriasComCoordenadas.filter(v => v.confirmacao_whatsapp === 'confirmada').length;
-    const naoConfirmados = vistoriasComCoordenadas.filter(v => !STATUS_REALIZADOS.includes(v.status) && !v.permite_encaixe && !v.confirmacao_whatsapp).length;
-    return { realizadas, aRealizar, confirmados, naoConfirmados };
+    const naoConfirmados = vistoriasComCoordenadas.filter(v => !STATUS_REALIZADOS.includes(v.status) && !v.permite_encaixe && !v.confirmacao_whatsapp && !isFuturaFn(v.data_agendada)).length;
+    return { realizadas, aRealizar, confirmados, naoConfirmados, futuras };
   }, [vistoriasComCoordenadas]);
 
   const linhasDeRota = useMemo(() => {
@@ -421,16 +437,18 @@ export function MapaVistoriasContent() {
       ) : (
         <div className="space-y-2">
           {vistoriasFiltradas.map((v) => {
-            const color = getCorPorStatus(v.status, v.confirmacao_whatsapp, v.permite_encaixe);
+            const isFutura = isFuturaFn(v.data_agendada);
+            const color = getCorPorStatus(v.status, v.confirmacao_whatsapp, v.permite_encaixe, isFutura);
             const hojeNorm = new Date();
             hojeNorm.setHours(0, 0, 0, 0);
             const isAtrasada = v.data_agendada
               ? new Date(v.data_agendada + 'T00:00:00') < hojeNorm && v.status !== 'concluida' && v.status !== 'cancelada'
               : false;
             const isRealizada = STATUS_REALIZADOS.includes(v.status);
-            const canAssign = !!atribuicaoManualAtiva && !v.vistoriador_id && !isRealizada && !!v.latitude && !!v.servico_id_unificado;
+            const canAssign = !!atribuicaoManualAtiva && !isRealizada && !!v.latitude && !!v.servico_id_unificado;
             const isSelected = servicoParaAtribuir?.id === v.id;
             const canSendConfirmation = podeEnviarConfirmacao(v);
+            const ordemNum = ordemCronologica.get(v.id) || 0;
 
             return (
               <div
@@ -448,12 +466,19 @@ export function MapaVistoriasContent() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className="text-xs font-bold text-muted-foreground">#{ordemNum}</span>
                       <span className="font-semibold text-sm truncate">{v.veiculo_placa || "Sem placa"}</span>
                       <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200">
                         {TIPO_VISTORIA_LABELS[v.tipo_vistoria as keyof typeof TIPO_VISTORIA_LABELS] || v.tipo_vistoria}
                       </Badge>
+                      <Badge variant="outline" className="text-xs">
+                        {safeFormat(v.data_agendada, "dd/MM")} {v.horario_agendado ? v.horario_agendado.slice(0, 5) : getPeriodoLabel(v.periodo)}
+                      </Badge>
                       {isAtrasada && (
                         <Badge variant="outline" className="text-xs bg-orange-100 text-orange-700 border-orange-300">Atrasada</Badge>
+                      )}
+                      {isFutura && (
+                        <Badge variant="outline" className="text-xs bg-slate-100 text-slate-600 border-slate-300">Futura</Badge>
                       )}
                       {v.permite_encaixe && (
                         <Badge variant="outline" className="text-xs bg-purple-100 text-purple-700 border-purple-300">Encaixe</Badge>
@@ -509,7 +534,7 @@ export function MapaVistoriasContent() {
                             iniciarAtribuicao(v);
                           }
                         }}
-                        title={isSelected ? "Cancelar atribuição" : "Atribuir a um técnico"}
+                        title={isSelected ? "Cancelar atribuição" : v.vistoriador_id ? "Reatribuir a outro técnico" : "Atribuir a um técnico"}
                       >
                         {isSelected ? <XIcon className="h-4 w-4" /> : <MousePointerClick className="h-4 w-4" />}
                       </Button>
@@ -568,21 +593,24 @@ export function MapaVistoriasContent() {
       {/* Marcadores de vistorias */}
       {vistoriasComCoordenadas.map((v) => {
         const isEmExecucao = STATUS_EM_EXECUCAO.includes(v.status);
-        const markerColor = getCorPorStatus(v.status, v.confirmacao_whatsapp, v.permite_encaixe);
+        const isFutura = isFuturaFn(v.data_agendada);
+        const markerColor = getCorPorStatus(v.status, v.confirmacao_whatsapp, v.permite_encaixe, isFutura);
         const isRealizada = STATUS_REALIZADOS.includes(v.status);
         const isSelectedForAssign = servicoParaAtribuir?.id === v.id;
-        const tooltipColor = isEmExecucao ? COR_EM_EXECUCAO : getTooltipColor(v.confirmacao_whatsapp, v.permite_encaixe);
+        const tooltipColor = isEmExecucao ? COR_EM_EXECUCAO : isFutura ? COR_FUTURA : getTooltipColor(v.confirmacao_whatsapp, v.permite_encaixe);
         const periodoStr = getPeriodoLabel(v.periodo);
         const dataLabel = safeFormat(v.data_agendada ? v.data_agendada + 'T00:00:00' : null, "dd/MM");
+        const ordemNum = ordemCronologica.get(v.id) || 0;
+        const horarioLabel = v.horario_agendado ? v.horario_agendado.slice(0, 5) : periodoStr;
         
         // Tooltip text: show execution time if em_andamento
         let tooltipText: string;
         if (isEmExecucao) {
           const updatedDate = safeParseDate(v.horario_agendado ? `${v.data_agendada}T${v.horario_agendado}` : null) || safeParseDate(v.data_agendada);
           const tempoDecorrido = updatedDate ? formatDistanceToNow(updatedDate, { locale: ptBR }) : '';
-          tooltipText = `🔧 ${tempoDecorrido ? `há ${tempoDecorrido}` : 'Em execução'}`;
+          tooltipText = `#${ordemNum} · 🔧 ${tempoDecorrido ? `há ${tempoDecorrido}` : 'Em execução'}`;
         } else {
-          tooltipText = [dataLabel, periodoStr].filter(Boolean).join(' ');
+          tooltipText = `#${ordemNum} · ${[dataLabel, horarioLabel].filter(Boolean).join(' ')}`;
         }
 
         return (
@@ -653,12 +681,12 @@ export function MapaVistoriasContent() {
                         <Send className="h-3 w-3" />Enviar Confirmação
                       </button>
                     )}
-                    {atribuicaoManualAtiva && !v.vistoriador_id && !isRealizada && !!v.servico_id_unificado && (
+                    {atribuicaoManualAtiva && !isRealizada && !!v.servico_id_unificado && (
                       <button
                         onClick={() => iniciarAtribuicao(v)}
                         className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 text-white rounded text-xs hover:bg-amber-600"
                       >
-                        <MousePointerClick className="h-3 w-3" />Atribuir
+                        <MousePointerClick className="h-3 w-3" />{v.vistoriador_id ? 'Reatribuir' : 'Atribuir'}
                       </button>
                     )}
                     {v.associado_telefone && (
@@ -709,7 +737,7 @@ export function MapaVistoriasContent() {
               
               // Find nearest unassigned service within 5km
               const servicosNaoAtribuidos = vistoriasComCoordenadas.filter(v =>
-                !v.vistoriador_id && !STATUS_REALIZADOS.includes(v.status) && v.latitude && v.longitude && !!v.servico_id_unificado
+                !STATUS_REALIZADOS.includes(v.status) && v.latitude && v.longitude && !!v.servico_id_unificado
               );
               
               let melhorServico: VistoriaMapa | null = null;
@@ -830,6 +858,11 @@ export function MapaVistoriasContent() {
             <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: COR_A_REALIZAR }} />
             <span className="flex-1 text-left">A Realizar</span>
             <Badge variant="secondary" className="text-xs">{contadores.aRealizar}</Badge>
+          </div>
+          <div className="flex items-center gap-2 text-sm p-2 rounded-md">
+            <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: COR_FUTURA }} />
+            <span className="flex-1 text-left">Futuras</span>
+            <Badge variant="secondary" className="text-xs">{contadores.futuras}</Badge>
           </div>
           <div className="border-t my-2" />
           <div className="flex items-center gap-2 text-sm p-2 rounded-md bg-muted/50">
