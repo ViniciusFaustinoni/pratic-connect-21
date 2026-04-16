@@ -27,6 +27,8 @@ import {
   useUploadVideo360,
   useUploadFotoVistoriaCompleta 
 } from '@/hooks/useVistoriaCompleta';
+import { useUploadVistoriaOffline } from '@/hooks/useUploadVistoriaOffline';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { 
   agruparFotosPorCategoriaCompleta, 
   TOTAL_FOTOS_OBRIGATORIAS,
@@ -62,6 +64,9 @@ export default function ExecutarVistoriaCompleta() {
   const aprovarVeiculo = useAprovarVeiculoVistoria();
   const recusarVeiculo = useRecusarVeiculoVistoria();
   const salvarRascunho = useSalvarRascunhoVistoriaCompleta();
+  const online = useOnlineStatus();
+  const offlineQueue = useUploadVistoriaOffline((vistoriaPorServicoQuery.data || vistoriaPorInstalacaoQuery.data)?.id);
+
 
   // Estado
   const [uploadingFoto, setUploadingFoto] = useState<string | null>(null);
@@ -83,8 +88,20 @@ export default function ExecutarVistoriaCompleta() {
   const vistoriaId = vistoria?.id;
   const veiculo = vistoria?.veiculo;
   const associado = vistoria?.associado || vistoria?.veiculo?.associado;
-  const fotosEnviadas = vistoria?.fotos || [];
-  const video360Url = (vistoria as any)?.video_360_url;
+  const fotosServidor = vistoria?.fotos || [];
+  const video360UrlServidor = (vistoria as any)?.video_360_url;
+
+  // Combina fotos do servidor com previews locais (pendentes na fila)
+  const fotosEnviadas = useMemo(() => {
+    const map = new Map<string, { tipo: string; arquivo_url: string }>();
+    fotosServidor.forEach((f: any) => map.set(f.tipo, { tipo: f.tipo, arquivo_url: f.arquivo_url }));
+    Object.entries(offlineQueue.previewsFotos).forEach(([tipo, url]) => {
+      if (!map.has(tipo)) map.set(tipo, { tipo, arquivo_url: url });
+    });
+    return Array.from(map.values());
+  }, [fotosServidor, offlineQueue.previewsFotos]);
+
+  const video360Url = video360UrlServidor || offlineQueue.previewVideo;
 
   // ========== RESTAURAR DADOS SALVOS ==========
   useEffect(() => {
@@ -233,12 +250,19 @@ export default function ExecutarVistoriaCompleta() {
   // Handlers
   const handleUploadFoto = async (tipo: string, file: File, visivelCliente: boolean = true) => {
     if (!vistoriaId) return;
+    // Offline: enfileira direto
+    if (!online || !navigator.onLine) {
+      await offlineQueue.enfileirarFoto(tipo, file);
+      return;
+    }
     setUploadingFoto(tipo);
     try {
       await uploadFoto.mutateAsync({ vistoriaId, tipo, file, visivelCliente });
       toast.success('Foto enviada!');
-    } catch (e) {
-      toast.error('Erro ao enviar foto');
+    } catch (e: any) {
+      // Falha de rede → enfileira para reenvio automático
+      console.warn('[Vistoria] Upload falhou, enfileirando offline:', e?.message);
+      await offlineQueue.enfileirarFoto(tipo, file);
     } finally {
       setUploadingFoto(null);
     }
@@ -246,15 +270,21 @@ export default function ExecutarVistoriaCompleta() {
 
   const handleUploadVideo = async (file: File) => {
     if (!vistoriaId) return;
+    if (!online || !navigator.onLine) {
+      await offlineQueue.enfileirarVideo(file);
+      return;
+    }
     setUploadingVideo(true);
     try {
       await uploadVideo.mutateAsync({ vistoriaId, file });
-    } catch (e) {
-      toast.error('Erro ao enviar vídeo');
+    } catch (e: any) {
+      console.warn('[Vistoria] Upload de vídeo falhou, enfileirando offline:', e?.message);
+      await offlineQueue.enfileirarVideo(file);
     } finally {
       setUploadingVideo(false);
     }
   };
+
 
   const handleAprovar = async () => {
     if (!vistoriaId || !veiculo || !associado) return;
@@ -568,6 +598,11 @@ export default function ExecutarVistoriaCompleta() {
             {!conferenciaCompleta && 'Confirme os dados e hodômetro. '}
             {!todasFotosEnviadas && `📸 Tire todas as fotos obrigatórias (faltam ${TOTAL_FOTOS_OBRIGATORIAS - totalFotosEnviadas}). `}
             {!videoEnviado && 'Envie o vídeo 360°.'}
+          </p>
+        )}
+        {offlineQueue.totalPendentes > 0 && (
+          <p className="mt-2 text-center text-xs text-blue-300">
+            ☁️ {offlineQueue.totalPendentes} mídia(s) ainda serão enviadas em segundo plano quando a internet voltar.
           </p>
         )}
       </footer>
