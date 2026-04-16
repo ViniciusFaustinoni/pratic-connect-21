@@ -22,7 +22,9 @@ export function useServicosParaAtribuir() {
     queryKey: ['servicos-para-atribuir-manual'],
     queryFn: async () => {
       const hoje = new Date().toISOString().split('T')[0];
-      const { data, error } = await supabase
+
+      // Fetch regular services
+      const { data: servicos, error } = await supabase
         .from('servicos')
         .select(`
           id, tipo, data_agendada, hora_agendada, periodo, bairro, cidade, logradouro, numero,
@@ -37,7 +39,45 @@ export function useServicosParaAtribuir() {
         .order('hora_agendada', { ascending: true });
 
       if (error) throw error;
-      return data || [];
+
+      // Fetch base inspections without technician assigned
+      const { data: baseItems, error: baseError } = await supabase
+        .from('agendamentos_base')
+        .select('id, cliente_nome, cliente_telefone, veiculo_placa, veiculo_descricao, data_agendada, horario, status, observacoes')
+        .is('atendido_por', null)
+        .in('status', ['agendado', 'pendente'])
+        .gte('data_agendada', hoje)
+        .order('data_agendada', { ascending: true })
+        .order('horario', { ascending: true });
+
+      if (baseError) console.error('Erro ao buscar agendamentos_base:', baseError);
+
+      // Normalize base items to match service format
+      const baseNormalized = (baseItems || []).map(b => ({
+        id: b.id,
+        tipo: 'vistoria_base',
+        data_agendada: b.data_agendada,
+        hora_agendada: b.horario,
+        periodo: null,
+        bairro: null,
+        cidade: null,
+        logradouro: null,
+        numero: null,
+        permite_encaixe: false,
+        status: b.status,
+        associado: { id: null, nome: b.cliente_nome, telefone: b.cliente_telefone, whatsapp: null },
+        veiculo: { placa: b.veiculo_placa, marca: null, modelo: null },
+        isBase: true,
+      }));
+
+      // Merge and sort by date
+      const merged = [...(servicos || []), ...baseNormalized].sort((a, b) => {
+        const dateCompare = (a.data_agendada || '').localeCompare(b.data_agendada || '');
+        if (dateCompare !== 0) return dateCompare;
+        return (a.hora_agendada || '').localeCompare(b.hora_agendada || '');
+      });
+
+      return merged;
     },
     refetchInterval: 30000,
   });
@@ -137,8 +177,34 @@ export function useAtribuirServicoManual() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ servicoId, profissionalId }: { servicoId: string; profissionalId: string }) => {
-      // Update servico
+    mutationFn: async ({ servicoId, profissionalId, isBase }: { servicoId: string; profissionalId: string; isBase?: boolean }) => {
+      if (isBase) {
+        // Update agendamentos_base
+        const { error } = await supabase
+          .from('agendamentos_base')
+          .update({
+            atendido_por: profissionalId,
+            status: 'confirmado',
+          })
+          .eq('id', servicoId);
+
+        if (error) throw error;
+
+        // Log
+        const profileId = await getProfileId();
+        const { error: logError } = await supabase.from('servicos_atribuicoes_log').insert({
+          servico_id: servicoId,
+          profissional_id: profissionalId,
+          tipo_atribuicao: 'manual',
+          atribuido_por: profileId,
+          observacoes: 'Atribuição manual - vistoria base',
+        });
+        if (logError) console.error('Erro ao registrar log:', logError);
+
+        return { id: servicoId, tipo: 'vistoria_base' };
+      }
+
+      // Update regular servico
       const { error } = await supabase
         .from('servicos')
         .update({
@@ -149,7 +215,6 @@ export function useAtribuirServicoManual() {
 
       if (error) throw error;
 
-      // Registrar no log de atribuições usando profiles.id
       const profileId = await getProfileId();
       const { error: logError } = await supabase.from('servicos_atribuicoes_log').insert({
         servico_id: servicoId,
@@ -160,7 +225,6 @@ export function useAtribuirServicoManual() {
       });
       if (logError) console.error('Erro ao registrar log de atribuição:', logError);
 
-      // Get servico + profissional data for WhatsApp notification
       const { data: servico } = await supabase
         .from('servicos')
         .select(`
@@ -177,7 +241,6 @@ export function useAtribuirServicoManual() {
         .eq('id', profissionalId)
         .maybeSingle();
 
-      // Send WhatsApp template to vistoriador
       if (profissional?.telefone || profissional?.whatsapp) {
         try {
           const telefone = (profissional.whatsapp || profissional.telefone || '').replace(/\D/g, '');
@@ -216,6 +279,7 @@ export function useAtribuirServicoManual() {
       qc.invalidateQueries({ queryKey: ['vistoriadores-ativos-manual'] });
       qc.invalidateQueries({ queryKey: ['vistorias-mapa'] });
       qc.invalidateQueries({ queryKey: ['vistoriadores-localizacao-realtime'] });
+      qc.invalidateQueries({ queryKey: ['calendario-dia-base'] });
     },
     onError: (err: any) => {
       toast.error('Erro ao atribuir serviço: ' + (err.message || ''));
