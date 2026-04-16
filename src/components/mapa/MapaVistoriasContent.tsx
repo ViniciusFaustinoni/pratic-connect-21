@@ -245,7 +245,7 @@ export function MapaVistoriasContent() {
         .from('agendamentos_base')
         .select('id, status, data_agendada, horario, cliente_nome, veiculo_placa, oficina_id')
         .eq('data_agendada', hojeStr)
-        .not('status', 'in', '("concluida","cancelado","cancelada")');
+        .not('status', 'in', '("concluida","concluido","realizado","cancelado","cancelada")');
       if (error) throw error;
       return data || [];
     },

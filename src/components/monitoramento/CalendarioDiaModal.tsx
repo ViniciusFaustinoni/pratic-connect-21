@@ -63,7 +63,7 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
 
   // --- Queries ---
 
-  // Instalações do dia
+  // Instalações do dia (apenas ativas — concluídas viram histórico em Serviços de Campo)
   const { data: instalacoes = [], isLoading: loadingInst } = useQuery({
     queryKey: ['calendario-dia-instalacoes', data],
     enabled: open,
@@ -71,13 +71,14 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
       const { data: rows, error } = await supabase
         .from('instalacoes')
         .select('id, status, data_agendada, periodo, associados(nome), veiculos(placa), instalador:profiles!instalacoes_instalador_responsavel_id_fkey(nome)')
-        .eq('data_agendada', data);
+        .eq('data_agendada', data)
+        .in('status', ['agendada', 'em_rota', 'em_andamento', 'reagendada']);
       if (error) throw error;
       return rows || [];
     },
   });
 
-  // Vistorias de campo do dia
+  // Vistorias de campo do dia (apenas ativas)
   const { data: vistoriasCampo = [], isLoading: loadingVist } = useQuery({
     queryKey: ['calendario-dia-vistorias-campo', data],
     enabled: open,
@@ -88,13 +89,13 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
         .gte('data_agendada', data)
         .lte('data_agendada', data + 'T23:59:59')
         .neq('local_vistoria', 'base')
-        .in('status', ['pendente', 'agendada', 'em_rota', 'em_andamento', 'em_analise', 'aprovada', 'concluida']);
+        .in('status', ['pendente', 'agendada', 'em_rota', 'em_andamento']);
       if (error) throw error;
       return rows || [];
     },
   });
 
-  // Agendamentos base do dia
+  // Agendamentos base do dia (apenas ativos — concluídos/cancelados ficam só no histórico)
   const { data: agendamentosBase = [], isLoading: loadingBase } = useQuery({
     queryKey: ['calendario-dia-base', data],
     enabled: open,
@@ -103,6 +104,7 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
         .from('agendamentos_base')
         .select('id, status, data_agendada, horario, cliente_nome, veiculo_placa, veiculo_descricao, atendido_por, oficina_id, tecnico:profiles!agendamentos_base_atendido_por_fkey(nome), oficina:oficinas!agendamentos_base_oficina_id_fkey(nome_fantasia, razao_social)')
         .eq('data_agendada', data)
+        .not('status', 'in', '("concluida","concluido","realizado","cancelado","cancelada")')
         .order('horario');
       if (error) throw error;
       return rows || [];
