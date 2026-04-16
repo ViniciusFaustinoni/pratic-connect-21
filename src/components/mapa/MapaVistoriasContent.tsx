@@ -4,6 +4,7 @@ import { RotaPolyline } from "@/components/mapa/RotaPolyline";
 import L from "leaflet";
 import { format, isSameDay, isAfter, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { parseDataLocal } from "@/lib/date-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -170,8 +171,11 @@ function getPeriodoLabel(periodo?: string | null): string {
 
 function safeParseDate(dateStr: string | null | undefined): Date | null {
   if (!dateStr) return null;
-  const d = new Date(dateStr);
-  return isNaN(d.getTime()) ? null : d;
+  // Para "YYYY-MM-DD" puro usa parser local (evita shift de timezone que troca o dia).
+  // Para strings com hora/timezone, mantém new Date padrão.
+  const apenasData = /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
+  const d = apenasData ? parseDataLocal(dateStr) : new Date(dateStr);
+  return d && !isNaN(d.getTime()) ? d : null;
 }
 
 function safeFormat(dateStr: string | null | undefined, fmt: string): string {
