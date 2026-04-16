@@ -860,6 +860,11 @@ export function MapaVistoriasContent() {
             <span className="flex-1 text-left">A Realizar</span>
             <Badge variant="secondary" className="text-xs">{contadores.aRealizar}</Badge>
           </div>
+          <div className="flex items-center gap-2 text-sm p-2 rounded-md">
+            <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: COR_FUTURA }} />
+            <span className="flex-1 text-left">Futuras</span>
+            <Badge variant="secondary" className="text-xs">{contadores.futuras}</Badge>
+          </div>
           <div className="border-t my-2" />
           <div className="flex items-center gap-2 text-sm p-2 rounded-md bg-muted/50">
             <span className="w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center" style={{ backgroundColor: COR_VISTORIADOR }}>
