@@ -88,8 +88,20 @@ export default function ExecutarVistoriaCompleta() {
   const vistoriaId = vistoria?.id;
   const veiculo = vistoria?.veiculo;
   const associado = vistoria?.associado || vistoria?.veiculo?.associado;
-  const fotosEnviadas = vistoria?.fotos || [];
-  const video360Url = (vistoria as any)?.video_360_url;
+  const fotosServidor = vistoria?.fotos || [];
+  const video360UrlServidor = (vistoria as any)?.video_360_url;
+
+  // Combina fotos do servidor com previews locais (pendentes na fila)
+  const fotosEnviadas = useMemo(() => {
+    const map = new Map<string, { tipo: string; arquivo_url: string }>();
+    fotosServidor.forEach((f: any) => map.set(f.tipo, { tipo: f.tipo, arquivo_url: f.arquivo_url }));
+    Object.entries(offlineQueue.previewsFotos).forEach(([tipo, url]) => {
+      if (!map.has(tipo)) map.set(tipo, { tipo, arquivo_url: url });
+    });
+    return Array.from(map.values());
+  }, [fotosServidor, offlineQueue.previewsFotos]);
+
+  const video360Url = video360UrlServidor || offlineQueue.previewVideo;
 
   // ========== RESTAURAR DADOS SALVOS ==========
   useEffect(() => {
