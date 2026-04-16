@@ -1,54 +1,58 @@
 
 
-## Bug confirmado
+## Reinvestigando com a nova informação
 
-Reagendamento salvou corretamente no banco (`data_agendada = 2026-04-18`), mas o frontend exibe **17/04/2026** no popup do mapa e nos cards de tarefa. Clássico bug de timezone: `new Date("2026-04-18")` é interpretado como UTC midnight, e em fuso UTC-3 (Brasília) vira `2026-04-17 21:00`.
+Você está dizendo que o número `31 98429-6515` **nunca foi cadastrado** como WhatsApp. Só existe o `21 96412-8166` (telefone, que também é WhatsApp).
 
-## Investigação
+Isso muda o diagnóstico. Se o campo `whatsapp` no banco está com `31 98429-6515` e ninguém cadastrou esse número, então alguma coisa **gravou** esse valor lá. Preciso descobrir o quê.
 
-O projeto já tem o helper correto em `src/lib/date-utils.ts`:
-- `parseDataLocal("2026-04-18")` → Date local sem shift de TZ
-- `formatDataAgendada("2026-04-18")` → `"18/04/2026"`
+## Hipóteses a verificar
 
-O bug ocorre nos lugares onde a data DATE pura do Postgres (`data_agendada`) é formatada com `new Date(...)` direto, `format(new Date(data), ...)` do date-fns, ou `.toLocaleDateString()` sem parser local.
+1. **Webhook de entrada do WhatsApp sobrescrevendo o cadastro** — quando uma mensagem chega de um número, algum handler pode estar atualizando `associados.whatsapp` com o `from` da mensagem (lookup invertido por nome/CPF).
+2. **Importação SGA/Hinova** — o sync pode ter trazido o número errado de outra base.
+3. **Atualização manual via API externa** — `external-api-data-expansion` permite atualizar dados do associado.
+4. **Trigger ou função no banco** que copia ou normaliza telefone para whatsapp.
+5. **Confusão de associado** — o `associado_id` no `servicos` aponta para outra pessoa, e o "Adriano" que aparece é homônimo. Já confirmei que o nome bate, mas vale revisar CPF.
+6. **Histórico de auditoria** — ver quando o campo `whatsapp` foi gravado pela última vez e por qual fonte.
 
-Preciso varrer os componentes do mapa de monitoramento e popups/cards de tarefa para localizar todas as ocorrências e trocar por `parseDataLocal` / `formatDataAgendada`.
+## Plano de investigação (read-only)
 
-## Suspeitos prováveis
+### 1) Confirmar o estado atual e o histórico do registro
+- Reler `associados` do Adriano: `id`, `nome`, `cpf`, `telefone`, `whatsapp`, `created_at`, `updated_at`.
+- Verificar se existe tabela de auditoria (`audit_log`, `historico_associado`, etc.) com o histórico de mudança do campo `whatsapp`.
+- Conferir se o `servico` do reagendamento aponta mesmo para esse `associado_id`.
 
-- `src/components/mapa/*` — popups, tooltips, cards de tarefa
-- `src/components/monitoramento/*` — listas e calendário
-- `src/pages/monitoramento/*` — telas do mapa e calendário
-- Qualquer `format(new Date(servico.data_agendada), "dd/MM/yyyy")` ou `new Date(data).toLocaleDateString()`
+### 2) Procurar quem escreve em `associados.whatsapp`
+- `grep` por `\.update.*whatsapp` e `whatsapp:` em:
+  - Edge Functions (`supabase/functions/*`)
+  - Hooks de cadastro/edição (`src/hooks/*`)
+  - Webhooks WhatsApp (`whatsapp-webhook`, `evolution-webhook`, `meta-webhook`)
+  - Sync SGA (`sga-hinova-sync`)
+  - API externa (`external-api*`)
+- Identificar todos os pontos que podem ter sobrescrito o campo.
 
-## Plano
+### 3) Inspecionar triggers no Postgres
+- Listar triggers em `associados` para ver se algum normaliza/copia telefone.
 
-### 1) Mapear ocorrências
-`grep` por padrões problemáticos em componentes de exibição:
-- `new Date(.*data_agendada`
-- `format(new Date(`
-- `toLocaleDateString` sobre campo `data_*`
-- `parseISO` sobre DATE puro
+### 4) Logs recentes
+- Buscar nos logs das Edge Functions de webhook e sync por menções ao CPF/ID do Adriano nas últimas semanas, para datar quando o `31...` apareceu.
 
-### 2) Substituir por helpers existentes
-Trocar nas exibições por:
-- `formatDataAgendada(data)` quando só precisa exibir `dd/MM/yyyy`
-- `parseDataLocal(data)` quando precisa do objeto Date para `format(..., "EEEE dd/MM")` etc.
+### 5) Decidir a correção com base no achado
+Dependendo do culpado:
+- **Se for webhook** → adicionar guarda para nunca sobrescrever `whatsapp` automaticamente sem confirmação.
+- **Se for sync SGA** → revisar mapeamento de campo e priorizar o que já está cadastrado.
+- **Se for API externa** → exigir flag explícita para atualizar `whatsapp`.
+- **Se for trigger** → revisar a lógica.
+- Em paralelo: corrigir o cadastro do Adriano (mover `21...` para `whatsapp`, limpar `31...`).
 
-### 3) Pontos críticos a corrigir (mínimo)
-- Popup do mapa (campo "Data" na tarefa)
-- Card/tooltip da tarefa atribuída
-- Tooltip da base (contador + lista)
-- Calendário da base
-- Lista lateral de tarefas do dia
+## O que eu entrego ao final
 
-### 4) Não mexer no banco nem no hook de reagendamento
-O `useReagendarTarefa` já envia `yyyy-MM-dd` correto. O bug é puramente de **renderização** no frontend.
+- Causa raiz exata de quem gravou `31 98429-6515` no campo `whatsapp`.
+- Lista de todos os pontos do sistema capazes de sobrescrever esse campo.
+- Recomendação de correção (código + dado).
+- Guarda preventiva para não voltar a acontecer.
 
-### 5) Validação
-Após o fix, recarregar `/monitoramento/mapa` e confirmar que a tarefa da Kelly aparece como **18/04/2026** no popup, no card e no calendário.
+## Por que precisa do modo de execução
 
-## Resultado esperado
-
-Toda data DATE pura (`data_agendada`) renderiza no dia correto independentemente do fuso, eliminando o shift de -1 dia que aparece hoje em UTC-3.
+Em modo somente leitura eu já consigo ler banco, código e logs. A **correção** (código + UPDATE no cadastro) precisa de modo de edição. Aprovando este plano, sigo direto para a investigação completa e apresento as mudanças.
 
