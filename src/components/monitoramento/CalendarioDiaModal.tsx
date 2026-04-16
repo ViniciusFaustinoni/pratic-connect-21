@@ -101,7 +101,7 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
     queryFn: async () => {
       const { data: rows, error } = await supabase
         .from('agendamentos_base')
-        .select('id, status, data_agendada, horario, cliente_nome, veiculo_placa, veiculo_descricao, atendido_por, tecnico:profiles!agendamentos_base_atendido_por_fkey(nome)')
+        .select('id, status, data_agendada, horario, cliente_nome, veiculo_placa, veiculo_descricao, atendido_por, oficina_id, tecnico:profiles!agendamentos_base_atendido_por_fkey(nome), oficina:oficinas!agendamentos_base_oficina_id_fkey(nome_fantasia, razao_social)')
         .eq('data_agendada', data)
         .order('horario');
       if (error) throw error;
@@ -356,6 +356,12 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
                                 <Clock className="h-3 w-3" />
                                 {ag.horario}
                               </span>
+                              {(ag as any).oficina?.nome_fantasia || (ag as any).oficina?.razao_social ? (
+                                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  <Building2 className="h-3 w-3" />
+                                  {(ag as any).oficina.nome_fantasia || (ag as any).oficina.razao_social}
+                                </span>
+                              ) : null}
                             </div>
                             <div className="flex items-center gap-3 text-sm">
                               <span className="font-medium truncate">{ag.cliente_nome}</span>

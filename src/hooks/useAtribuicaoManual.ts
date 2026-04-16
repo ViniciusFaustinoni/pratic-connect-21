@@ -43,7 +43,7 @@ export function useServicosParaAtribuir() {
       // Fetch base inspections without technician assigned
       const { data: baseItems, error: baseError } = await supabase
         .from('agendamentos_base')
-        .select('id, cliente_nome, cliente_telefone, veiculo_placa, veiculo_descricao, data_agendada, horario, status, observacoes')
+        .select('id, cliente_nome, cliente_telefone, veiculo_placa, veiculo_descricao, data_agendada, horario, status, observacoes, oficina_id')
         .is('atendido_por', null)
         .in('status', ['agendado', 'pendente'])
         .gte('data_agendada', hoje)
