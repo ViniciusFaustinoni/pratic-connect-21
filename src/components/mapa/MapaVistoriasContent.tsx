@@ -47,6 +47,7 @@ import {
   ChevronRight,
   GripVertical,
   Building2,
+  Send,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useVistoriasMapa, VistoriaMapa } from "@/hooks/useVistoriasMapa";
