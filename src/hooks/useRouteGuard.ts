@@ -27,7 +27,7 @@ export function useRouteGuard() {
     // === Perfis operacionais — redirect dinâmico via app_roles_config ===
     if (isOnlyOperational(perfis)) {
       const redirectPath = getOperationalRedirectPath(perfis);
-      if (redirectPath && !location.pathname.startsWith(redirectPath)) {
+      if (redirectPath && !location.pathname.startsWith(redirectPath) && location.pathname !== redirectPath) {
         // Permitir rotas universais
         const isUniversal = ALWAYS_ALLOWED.some(path =>
           location.pathname === path || location.pathname.startsWith(path + '/')
@@ -58,7 +58,9 @@ export function useRouteGuard() {
         // Redirecionar para a primeira rota do primeiro módulo visível
         const firstModule = visibleModules.includes('dashboard') ? 'dashboard' : visibleModules[0];
         const firstRoute = MODULE_ROUTES[firstModule]?.[0] || '/dashboard';
-        navigate(firstRoute, { replace: true });
+        if (location.pathname !== firstRoute) {
+          navigate(firstRoute, { replace: true });
+        }
       }
     }
   }, [location.pathname, isOnlyOperational, getOperationalRedirectPath, perfis, visibleModules, isLoading, navigate]);

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -289,13 +289,14 @@ function QuickActions() {
 // ============================================
 export default function Dashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const { profile } = useAuth();
   const { isAnalistaCadastroOnly, isAnalistaEventosOnly, isCoordenadorMonitoramentoOnly, isAnalistaMonitoramentoOnly, isCoordenadorMonitoramento, isAnalistaMonitoramento, isInstaladorVistoriador, isInstaladorVistoriadorOnly, isVistoriadorBase, isGerencia, isDiretor, isDesenvolvedor, isAdminMaster, isVendedorOnly, userId } = usePermissions();
 
   // Se é APENAS instalador/vistoriador (sem perfis de gestão), redirecionar
   useEffect(() => {
-    if (isInstaladorVistoriadorOnly) {
+    if (isInstaladorVistoriadorOnly && location.pathname !== '/instalador') {
       navigate('/instalador', { replace: true });
     }
   }, [isInstaladorVistoriadorOnly, navigate]);
