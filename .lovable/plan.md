@@ -1,45 +1,32 @@
 
 
-## Plano: Corrigir Loop de `history.replaceState()` no Safari
+## Plano: Normalizar acentos na comparação de marca/modelo
 
 ### Problema
-
-O Safari limita `history.replaceState()` a 100 chamadas por 10 segundos. Após login, múltiplos hooks com `navigate(url, { replace: true })` disparam sem verificar se já estão na URL de destino, causando um loop infinito de redirecionamentos que o Error Boundary captura.
-
-### Causa Raiz
-
-Três pontos fazem `navigate(path, { replace: true })` sem verificar se `location.pathname` já é o destino:
-
-1. **`useRouteGuard.ts`** (linha 61) — redireciona para o primeiro módulo visível sem checar se já está lá. Se `visibleModules` muda de referência entre renders, o efeito re-executa e navega de novo.
-
-2. **`Auth.tsx`** (linha 92) — redireciona ao detectar `user + profile`, mas o componente pode re-renderizar antes de desmontar, disparando outra chamada.
-
-3. **`Dashboard.tsx`** (linha 299) — redireciona instaladores para `/instalador` sem verificar se já está nessa rota.
-
-No Chrome/Firefox, o replaceState é tolerado em volume. No Safari, o limite estrito causa o crash.
+A API FIPE retorna `CITROEN` (sem acento). As regras de elegibilidade cadastradas usam `CITROËN` (com trema). A comparação via `String.includes()` falha porque os caracteres são diferentes, bloqueando todos os planos para veículos Citroën (e potencialmente Peugeot com `PEUGEOT` vs acentos).
 
 ### Correção
 
-Adicionar guarda `if (location.pathname !== targetPath)` antes de cada `navigate({ replace: true })` nos três arquivos, garantindo que a navegação só ocorra se a rota atual for diferente do destino.
+**Arquivo:** `src/hooks/useEntityEligibilityRules.ts`
 
-#### 1. `src/hooks/useRouteGuard.ts`
-- Linha 36: Adicionar `&& location.pathname !== redirectPath` antes de navegar para o path operacional.
-- Linha 61: Adicionar `&& location.pathname !== firstRoute` antes de navegar para o primeiro módulo.
+Na função `findModelEligibility` (linhas 180-187), adicionar normalização de diacríticos antes da comparação:
 
-#### 2. `src/pages/Auth.tsx`
-- Linha 91-93: Calcular `redirectTo` e só navegar se `location.pathname !== redirectTo`.
+```typescript
+function removeDiacritics(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+```
 
-#### 3. `src/pages/Dashboard.tsx`
-- Linha 299: Adicionar `&& location.pathname !== '/instalador'` à condição do efeito.
+Aplicar em:
+- Linha 180: `const ctxMarca = removeDiacritics((ctx.marca || '').toUpperCase());`
+- Linha 181: `const entryMarca = removeDiacritics((entry.marca || '').toUpperCase());`
+- Linha 184: `const ctxModelo = removeDiacritics((ctx.modelo || '').toUpperCase());`
+- Linha 185: `const entryModelo = removeDiacritics((entry.modelo || '').toUpperCase());`
 
-### Arquivos
+Também aplicar no bloco legacy (linhas 269-275) para consistência.
 
-| Arquivo | Mudança |
-|---------|---------|
-| `src/hooks/useRouteGuard.ts` | Guardar navegação com check de pathname atual |
-| `src/pages/Auth.tsx` | Guardar navegação com check de pathname atual |
-| `src/pages/Dashboard.tsx` | Guardar navegação com check de pathname atual |
+Também corrigir na edge function `supabase/functions/_shared/eligibility-filter.ts` caso faça comparação de marca/modelo (verificar se aplica).
 
 ### Impacto
-Correção pontual sem mudança de comportamento — apenas evita chamar `navigate` quando já está no destino. Resolve o crash específico do Safari.
+Correção cirúrgica — só adiciona normalização Unicode antes de comparar strings. Resolve Citroën e qualquer outra marca com acentos.
 
