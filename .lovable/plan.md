@@ -1,71 +1,94 @@
+<final-text>Plano de correção urgente para que tarefas “tipo base” atribuídas/reatribuídas manualmente pelo calendário apareçam e sejam executáveis na tela do técnico.</final-text>
 
+## Diagnóstico confirmado
 
-## Diagnóstico — Por que o sistema não detectou a assinatura
+O problema urgente não está mais na criação do `servicos`. O banco já mostra a tarefa do Adriano materializada e atribuída ao Kleyton em `servicos`.
 
-### Causa raiz (confirmada via API Autentique)
+A regressão atual está em 2 pontos:
 
-Consultei o documento da Camilly diretamente na API do Autentique. A resposta mostra:
+1. **RPC quebrada**
+   - A migração `20260416160702_...` alterou `buscar_tarefa_atual_profissional` para incluir `agendamentos_base`.
+   - O `ORDER BY` usa `status` de forma ambígua dentro da função PL/pgSQL.
+   - Resultado: a RPC falha, e `useTarefaAtual()` não consegue carregar a tarefa do técnico.
 
-```
-signatures[1]:
-  name: CAMILLY VITÓRIA CALIXTO CARNEIRO
-  action: SIGN
-  viewed: 2026-04-16T17:12:54Z   ✓ visualizou
-  signed: null                    ✗ NÃO assinado (oficialmente)
-  verifications: [{ type: PF_FACIAL, verified_at: null }]   ⏳ biometria pendente
-  biometric_approved: null
-  biometric_rejected: null
-```
+2. **Mesmo corrigindo a SQL, o desenho atual ainda é incorreto**
+   - A RPC passou a retornar uma pseudo-tarefa de `agendamentos_base` (`tipo = 'vistoria_base'`, `id = agendamento_base.id`).
+   - Mas a tela do técnico executa ações em cima de **`servicos.id`**.
+   - Então “Iniciar rota”, “Iniciar tarefa” e navegação para execução quebram se a RPC devolver o item bruto da base em vez do serviço materializado.
 
-A Camilly **completou o fluxo de assinatura no celular** (incluindo a selfie), mas o algoritmo de **biometria facial (`PF_FACIAL`)** do Autentique **não conseguiu confirmar a identidade dela com confiança suficiente** e jogou a assinatura em **modo de revisão manual** — o que gerou exatamente a tela que ela viu: *"Aguarde a verificação. Sua assinatura foi realizada com sucesso, o criador do documento foi notificado e precisará verificar a sua assinatura manualmente."*
+## O que vou corrigir
 
-Enquanto um administrador da conta Autentique não aprovar manualmente em `painel.autentique.com.br`:
-- `signed.created_at` permanece `null` na API GraphQL
-- o webhook `signature.accepted` **não é disparado**
-- o sync polling vê apenas `viewed`, nunca `signed`
-- por isso o sistema continua mostrando "visualizado", e está **tecnicamente correto**
+### 1) Corrigir a RPC `buscar_tarefa_atual_profissional`
+Criar uma nova migração para:
 
-**Não é bug do sistema** — é o fluxo desenhado do Autentique para casos de biometria duvidosa, e está alinhado com a política `mem://integrations/autentique/signature-credits-policy` e `mem://features/contracts/autentique-signing-flow-v7`.
+- remover a ambiguidade do `ORDER BY`
+- parar de priorizar o registro cru de `agendamentos_base`
+- **sempre priorizar o `servicos` materializado** quando ele existir
+- manter fallback de base só se realmente não houver `servico` criado
 
-### O que precisa ser feito (duas frentes)
+Objetivo:
+- o app do técnico sempre recebe um item acionável, com `id` de `servicos`
 
-**Frente A — Operacional (imediato, para destravar a Camilly):**
+### 2) Endurecer o fluxo de atribuição/reatribuição no calendário
+Em `src/components/monitoramento/CalendarioDiaModal.tsx`:
 
-1. Acessar `https://painel.autentique.com.br` com a conta admin da PraticCar
-2. Abrir o documento `Termo de Afiliação CTR-20260416171135-2RI0GS - CAMILLY VITÓRIA CALIXTO CARNEIRO`
-3. Revisar a foto/selfie capturada da Camilly comparando com a CNH/RG dela
-4. **Se for ela mesma:** aprovar manualmente a verificação biométrica → o Autentique então marca como `signed`, dispara o webhook, e o nosso sistema atualiza automaticamente em segundos
-5. **Se houver dúvida:** reenviar o termo para nova assinatura (a Camilly refaz a selfie em melhor iluminação)
+- após atribuir ou reatribuir técnico na base, invalidar também `['tarefa-atual']`
+- manter as invalidações atuais
+- se necessário, forçar atualização do vínculo materializado (`vistorias`/`servicos`) para não depender só do trigger em cenários antigos
 
-**Frente B — Melhoria de produto (para evitar reincidência e dar visibilidade):**
+### 3) Endurecer o fluxo da aba de atribuição manual
+Em `src/hooks/useAtribuicaoManual.ts`:
 
-Atualmente o sistema **não tem como saber** que uma assinatura está travada em revisão manual de biometria — ele apenas vê "viewed" e fica em loop de polling. Proponho 3 melhorias:
+- aplicar a mesma invalidação de `['tarefa-atual']`
+- revisar o fluxo de base para garantir que a sincronização final atinja o `servicos` correto
 
-1. **Detectar estado "biometria em revisão" no `autentique-sync-contrato`**
-   Adicionar leitura dos campos `verifications.verified_at`, `biometric_approved` e `biometric_rejected` na query GraphQL. Quando `viewed != null && signed == null && verifications[PF_FACIAL].verified_at == null` por mais de **15 minutos**, marcar `autentique_status = 'biometric_review'` no contrato.
+### 4) Corrigir a tela de execução de vistoria para trabalhar com `servico_id`
+Hoje `TarefaAtualCard` navega usando `tarefa.id`, que no fluxo correto é `servicos.id`.
 
-2. **UI: badge e alerta no painel de contratos**
-   No card do contrato (admin) e na tela pública de acompanhamento (`/cotacao/:token`), exibir aviso laranja quando `autentique_status = 'biometric_review'`:
-   *"Assinatura em revisão biométrica pelo Autentique. Um administrador precisa aprovar manualmente em painel.autentique.com.br. Tempo médio: 1h útil."*
-   Botão direto para `https://painel.autentique.com.br/documentos/{autentique_documento_id}` (apenas para roles admin/diretor).
+Mas `src/pages/instalador/ExecutarVistoriaCompleta.tsx` ainda trata o parâmetro como `instalacaoId`.
 
-3. **Notificação automática para a diretoria**
-   Quando o sync detectar `biometric_review` pela primeira vez, criar uma notificação interna (`notificacoes`) para os diretores com link direto para aprovar no painel Autentique. Evita que o cliente fique horas esperando sem ninguém saber.
+Vou alinhar essa tela para usar o hook já existente baseado em serviço:
+- `useVistoriaCompletaPorServico(...)`
 
-### Arquivos afetados (Frente B)
+Assim a tarefa base não só aparece, mas também abre corretamente para execução.
 
-| Arquivo | Mudança |
-|---------|---------|
-| `supabase/functions/autentique-sync-contrato/index.ts` | Ampliar query GraphQL com `verifications` e `biometric_*`; adicionar lógica para status `biometric_review` |
-| `supabase/functions/autentique-webhook/index.ts` | Tratar evento `signature.updated` quando contém `biometric_rejected` |
-| `src/hooks/useAutentiqueStatusPublico.ts` | Expor novo campo `biometric_status` |
-| `src/pages/AcompanharContratacao.tsx` (ou similar do fluxo público) | Banner laranja quando em revisão biométrica |
-| `src/components/contratos/ContratoCard.tsx` (admin) | Badge "Biometria em revisão" + botão direto Autentique |
-| Novo: nenhuma migração de banco — o campo `autentique_status` já existe |
+## Arquivos envolvidos
 
-### Ação imediata recomendada
+- `supabase/migrations/<nova_migracao>.sql`
+- `src/components/monitoramento/CalendarioDiaModal.tsx`
+- `src/hooks/useAtribuicaoManual.ts`
+- `src/pages/instalador/ExecutarVistoriaCompleta.tsx`
 
-**Antes de implementar a Frente B**, resolva a Frente A para a Camilly (pode levar 1 minuto): acesse `painel.autentique.com.br` com a conta admin, aprove a biometria dela e o sistema atualizará tudo sozinho via webhook.
+## Resultado esperado
 
-**Quer que eu implemente a Frente B agora?** São ~4 arquivos editados, sem migração de banco, e cobre 100% dos casos futuros de biometria travada.
+Após a correção:
 
+- atribuir/reatribuir tarefa base no calendário do monitoramento
+- a tarefa aparece imediatamente no `/instalador`
+- também aparece em `/instalador/tarefas`
+- “Iniciar rota” funciona
+- abrir a execução da vistoria funciona
+- sem regressão para instalações e vistorias normais
+
+## Verificação que vou fazer depois da implementação
+
+1. Reatribuir novamente o caso do Adriano para o Kleyton
+2. Confirmar no banco:
+   - `agendamentos_base.atendido_por`
+   - `vistorias.vistoriador_id`
+   - `servicos.profissional_id`
+3. Entrar como técnico e validar:
+   - Home
+   - aba Tarefas
+   - iniciar rota
+   - abrir execução
+4. Revalidar rapidamente uma instalação normal para garantir que não houve impacto colateral
+
+## Observação técnica importante
+
+O trigger criado antes foi útil e continua necessário, mas **não é mais o gargalo principal**.
+O bloqueio urgente agora está na camada de leitura do app do técnico:
+- RPC quebrada
+- e retorno do registro errado (base crua em vez de `servicos`)
+
+A correção mais segura é atacar primeiro essa camada de leitura, e só complementar com endurecimento leve nas invalidações/sincronização.
