@@ -46,6 +46,7 @@ import {
   ChevronLeft,
   ChevronRight,
   GripVertical,
+  Building2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useVistoriasMapa, VistoriaMapa } from "@/hooks/useVistoriasMapa";
@@ -58,6 +59,10 @@ import { useConfigAtribuicaoManual, useAtribuirServicoManual } from "@/hooks/use
 import { useDesatribuirServico } from "@/hooks/useDesatribuirServico";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useEnviarConfirmacaoWhatsApp } from "@/hooks/useEnviarConfirmacaoWhatsApp";
+import { useBasesPratic } from "@/hooks/useBasesPratic";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { CalendarioDiaModal } from "@/components/monitoramento/CalendarioDiaModal";
 
 const COR_REALIZADA = '#10B981';
 const COR_A_REALIZAR = '#EF4444';
