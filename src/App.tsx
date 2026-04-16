@@ -345,6 +345,7 @@ const InstaladorPerfil = lazy(() => import("./pages/instalador/InstaladorPerfil"
 const ExecutarVistoriaCompleta = lazy(() => import("./pages/instalador/ExecutarVistoriaCompleta"));
 const ExecutarManutencao = lazy(() => import("./pages/instalador/ExecutarManutencao"));
 const ExecutarRetirada = lazy(() => import("./pages/instalador/ExecutarRetirada"));
+const SincronizacaoPage = lazy(() => import("./pages/profissional/SincronizacaoPage"));
 
 // Regulador
 const ReguladorHome = lazy(() => import("./pages/regulador/ReguladorHome"));
@@ -764,6 +765,7 @@ const App = () => (
               <Route path="/instalador/configuracoes" element={<InstaladorConfiguracoes />} />
               <Route path="/instalador/notificacoes" element={<InstaladorNotificacoes />} />
               <Route path="/instalador/ajuda" element={<InstaladorAjuda />} />
+              <Route path="/instalador/sincronizacao" element={<SincronizacaoPage />} />
             </Route>
             
             {/* Regulador App Routes */}
@@ -773,8 +775,9 @@ const App = () => (
               <Route path="/regulador/vistoria/:id" element={<ExecutarVistoriaEvento />} />
               <Route path="/regulador/oficina" element={<ReguladorOficina />} />
               <Route path="/regulador/perfil" element={<InstaladorPerfil />} />
+              <Route path="/regulador/sincronizacao" element={<SincronizacaoPage />} />
             </Route>
-
+            
             {/* Analista de Eventos Routes */}
             <Route element={<AnalistaEventosLayout />}>
               <Route path="/analista-eventos" element={<AnalistaEventosHome />} />
