@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { EscolhaLocalVistoria } from '@/components/cotacao-publica/EscolhaLocalVistoria';
+import { EscolhaBase } from '@/components/cotacao-publica/EscolhaBase';
 import { AgendamentoBase } from '@/components/cotacao-publica/AgendamentoBase';
 import { AgendamentoCotacao } from '@/components/cotacao-publica/AgendamentoCotacao';
 import { motion, AnimatePresence } from 'framer-motion';
