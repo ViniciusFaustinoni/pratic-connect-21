@@ -109,7 +109,7 @@ type TaxasConfig = Record<typeof TAXAS_CHAVES[number], string>;
 
 const TAXAS_DEFAULTS: TaxasConfig = {
   taxa_adesao_percentual_fipe: '1',
-  taxa_adesao_minimo_volante_interno: '150',
+  taxa_adesao_minimo_volante_interno: '50',
   taxa_adesao_minimo_volante_externo: '50',
   taxa_adesao_minimo_base: '100',
   taxa_repasse_volante: '50',
