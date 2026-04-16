@@ -915,6 +915,18 @@ export function MapaVistoriasContent() {
               {vistoriadoresEmServico.length}
             </Badge>
           </div>
+          <div
+            className="flex items-center gap-2 text-sm p-2 rounded-md bg-muted/50 cursor-pointer hover:bg-muted transition-colors"
+            onClick={() => setBaseModal({ open: true, data: hojeStr })}
+          >
+            <span className="w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center" style={{ backgroundColor: '#8B5CF6' }}>
+              <Building2 className="h-2.5 w-2.5 text-white" />
+            </span>
+            <span className="flex-1 text-left">Base Pratic</span>
+            <Badge variant="secondary" className="text-xs gap-1">
+              {agendamentosBaseHoje?.length || 0} pendentes
+            </Badge>
+          </div>
           {linhasDeRota.length > 0 && (
             <div className="flex items-center gap-2 text-sm p-2 rounded-md">
               <div className="w-4 h-0.5 flex-shrink-0" style={{ backgroundColor: COR_VISTORIADOR, borderStyle: 'dashed', borderWidth: '1px', borderColor: COR_VISTORIADOR }} />
