@@ -196,13 +196,42 @@ serve(async (req) => {
       longitude: finalLongitude
     });
 
-    // NÃO criar vistoria nem instalação aqui
-    // A instalação será criada em criar-instalacao-pos-pagamento após o pagamento ser confirmado
+    // NÃO criar vistoria nem instalação aqui (fluxo padrão).
+    // PORÉM: se o pagamento já foi confirmado antes do agendamento (cenário "agendou depois de pagar"),
+    // dispara a edge de criação de instalação para garantir que a vistoria apareça no calendário.
+    let instalacaoCriadaAgora = false;
+    try {
+      const { data: contratoPago } = await supabase
+        .from('contratos')
+        .select('id, adesao_paga')
+        .eq('cotacao_id', cotacaoId)
+        .eq('adesao_paga', true)
+        .maybeSingle();
+
+      if (contratoPago) {
+        console.log('[AgendarVistoriaPresencial] Pagamento já confirmado — disparando criar-instalacao-pos-pagamento');
+        const { data: invokeData, error: invokeError } = await supabase.functions.invoke(
+          'criar-instalacao-pos-pagamento',
+          { body: { cotacaoId } }
+        );
+        if (invokeError) {
+          console.error('[AgendarVistoriaPresencial] Erro ao invocar criar-instalacao-pos-pagamento:', invokeError);
+        } else {
+          instalacaoCriadaAgora = !!invokeData?.success;
+          console.log('[AgendarVistoriaPresencial] Resultado:', invokeData);
+        }
+      }
+    } catch (e) {
+      console.error('[AgendarVistoriaPresencial] Falha no disparo opcional de criação de instalação:', e);
+    }
 
     return new Response(JSON.stringify({
       success: true,
-      instalacaoId: null, // Será criada após pagamento
-      message: 'Agendamento salvo com sucesso. A instalação será criada após o pagamento.'
+      instalacaoId: null,
+      instalacaoCriadaAgora,
+      message: instalacaoCriadaAgora
+        ? 'Agendamento salvo e instalação criada com sucesso.'
+        : 'Agendamento salvo com sucesso. A instalação será criada após o pagamento.'
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
