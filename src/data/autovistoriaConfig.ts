@@ -103,6 +103,42 @@ export function getFotosAutovistoria(tipo: TipoVeiculo): FotoAutovistoria[] {
   return tipo === 'moto' ? FOTOS_AUTOVISTORIA_MOTO : FOTOS_AUTOVISTORIA_CARRO;
 }
 
+// ===== INSTRUÇÕES DE VÍDEO 360° POR TIPO DE VEÍCULO =====
+
+export interface InstrucaoVideo360 {
+  passo: number;
+  texto: string; // pode conter HTML/JSX simples — renderizar com dangerouslySetInnerHTML NÃO
+  destaque?: string; // parte em negrito
+}
+
+const INSTRUCOES_VIDEO_360_CARRO: InstrucaoVideo360[] = [
+  { passo: 1, texto: 'Comece filmando a', destaque: 'frente do veículo com a placa visível' },
+  { passo: 2, texto: 'Caminhe lentamente pela', destaque: 'lateral direita' },
+  { passo: 3, texto: 'Filme a', destaque: 'traseira com a placa visível' },
+  { passo: 4, texto: 'Continue pela', destaque: 'lateral esquerda até voltar à frente' },
+  { passo: 5, texto: 'Entre no veículo e filme o', destaque: 'interior: bancos, forração e teto' },
+  { passo: 6, texto: 'Ligue o veículo e filme o', destaque: 'painel ligado mostrando hodômetro e indicadores' },
+  { passo: 7, texto: 'Filme o', destaque: 'compartimento do motor com o capô aberto' },
+];
+
+const INSTRUCOES_VIDEO_360_MOTO: InstrucaoVideo360[] = [
+  { passo: 1, texto: 'Comece filmando a', destaque: 'frente da moto com a placa visível' },
+  { passo: 2, texto: 'Caminhe lentamente pela', destaque: 'lateral direita da moto' },
+  { passo: 3, texto: 'Filme a', destaque: 'traseira com a placa visível' },
+  { passo: 4, texto: 'Continue pela', destaque: 'lateral esquerda até voltar à frente' },
+  { passo: 5, texto: 'Ligue a moto e filme o', destaque: 'painel/hodômetro mostrando a quilometragem' },
+  { passo: 6, texto: 'Aproxime e filme o', destaque: 'número do chassi (geralmente no tubo do garfo dianteiro)' },
+  { passo: 7, texto: 'Filme o', destaque: 'motor mostrando o número gravado, se possível' },
+];
+
+export function getInstrucoesVideo360(tipo: TipoVeiculo): InstrucaoVideo360[] {
+  return tipo === 'moto' ? INSTRUCOES_VIDEO_360_MOTO : INSTRUCOES_VIDEO_360_CARRO;
+}
+
+export function getLabelVideo360(tipo: TipoVeiculo): string {
+  return tipo === 'moto' ? 'Vídeo 360° da Moto' : 'Vídeo 360° do Veículo';
+}
+
 // ===== CONFIGURAÇÃO DE PERÍODOS PARA VISTORIA PRESENCIAL =====
 
 // Tipos de período

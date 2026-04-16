@@ -17,7 +17,7 @@ import {
   Lightbulb,
   AlertTriangle,
 } from 'lucide-react';
-import { getFotosAutovistoria, type TipoVeiculo, type FotoAutovistoria } from '@/data/autovistoriaConfig';
+import { getFotosAutovistoria, getInstrucoesVideo360, getLabelVideo360, type TipoVeiculo, type FotoAutovistoria } from '@/data/autovistoriaConfig';
 import { useFotosCotacaoVistoria, useUploadFotoCotacaoVistoria, useFinalizarVistoriaCotacao } from '@/hooks/useCotacaoVistoria';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -295,34 +295,19 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
               Instruções de Gravação
             </h4>
             <ol className="space-y-2 text-sm text-muted-foreground">
-              <li className="flex items-start gap-2">
-                <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">1</span>
-                <span>Comece filmando a <strong className="text-foreground">frente do veículo com a placa visível</strong></span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">2</span>
-                <span>Caminhe lentamente pela <strong className="text-foreground">lateral direita</strong></span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">3</span>
-                <span>Filme a <strong className="text-foreground">traseira com a placa visível</strong></span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">4</span>
-                <span>Continue pela <strong className="text-foreground">lateral esquerda</strong> até voltar à frente</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">5</span>
-                <span>Entre no veículo e filme o <strong className="text-foreground">interior: bancos, forração e teto</strong></span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">6</span>
-                <span><strong className="text-foreground">Ligue o veículo</strong> e filme o <strong className="text-foreground">painel ligado</strong> mostrando hodômetro e indicadores</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">7</span>
-                <span>Filme o <strong className="text-foreground">compartimento do motor</strong> com o capô aberto</span>
-              </li>
+              {getInstrucoesVideo360(tipoVeiculo).map((item) => (
+                <li key={item.passo} className="flex items-start gap-2">
+                  <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">
+                    {item.passo}
+                  </span>
+                  <span>
+                    {item.texto}{' '}
+                    {item.destaque && (
+                      <strong className="text-foreground">{item.destaque}</strong>
+                    )}
+                  </span>
+                </li>
+              ))}
             </ol>
             <div className="flex items-center gap-2 pt-2 border-t border-border/50 text-xs text-muted-foreground">
               <AlertTriangle className="h-3 w-3 text-amber-500" />
@@ -337,7 +322,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
             uploading={uploadingVideo}
             confirmed={!!videoUrl}
             maxDuration={120}
-            label="Vídeo 360° do Veículo"
+            label={getLabelVideo360(tipoVeiculo)}
             cameraOnly={true}
           />
 
