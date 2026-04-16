@@ -360,11 +360,25 @@ export default function ExecutarVistoriaCompleta() {
   }
 
   if (error || !vistoria) {
+    if (typeof window !== 'undefined') {
+      console.warn('[ExecutarVistoriaCompleta] Vistoria não resolvida para id da rota:', routeId, {
+        servicoErr: vistoriaPorServicoQuery.error,
+        instalacaoErr: vistoriaPorInstalacaoQuery.error,
+        agendamentoBaseErr: vistoriaPorAgendamentoBaseQuery.error,
+      });
+    }
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-900 p-4">
         <AlertTriangle className="h-12 w-12 text-red-500" />
-        <p className="text-center text-slate-300">Vistoria não encontrada.</p>
-        <Button onClick={() => navigate('/vistoriador/tarefas')}>Voltar</Button>
+        <p className="text-center text-slate-300">
+          Não foi possível carregar esta tarefa.
+        </p>
+        <p className="text-center text-xs text-slate-500 max-w-sm">
+          A vistoria pode ainda estar sendo preparada pelo sistema, ou você
+          pode não ter acesso a esta tarefa específica. Volte para a lista
+          de tarefas e tente novamente.
+        </p>
+        <Button onClick={() => navigate('/vistoriador/tarefas')}>Voltar para tarefas</Button>
       </div>
     );
   }
