@@ -22935,36 +22935,46 @@ export type Database = {
       }
       servicos_atribuicoes_log: {
         Row: {
+          agendamento_base_id: string | null
           atribuido_por: string | null
           created_at: string | null
           distancia_km: number | null
           id: string
           observacoes: string | null
           profissional_id: string
-          servico_id: string
+          servico_id: string | null
           tipo_atribuicao: string
         }
         Insert: {
+          agendamento_base_id?: string | null
           atribuido_por?: string | null
           created_at?: string | null
           distancia_km?: number | null
           id?: string
           observacoes?: string | null
           profissional_id: string
-          servico_id: string
+          servico_id?: string | null
           tipo_atribuicao?: string
         }
         Update: {
+          agendamento_base_id?: string | null
           atribuido_por?: string | null
           created_at?: string | null
           distancia_km?: number | null
           id?: string
           observacoes?: string | null
           profissional_id?: string
-          servico_id?: string
+          servico_id?: string | null
           tipo_atribuicao?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "servicos_atribuicoes_log_agendamento_base_id_fkey"
+            columns: ["agendamento_base_id"]
+            isOneToOne: false
+            referencedRelation: "agendamentos_base"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "servicos_atribuicoes_log_atribuido_por_fkey"
             columns: ["atribuido_por"]
