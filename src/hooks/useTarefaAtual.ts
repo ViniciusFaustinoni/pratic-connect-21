@@ -27,6 +27,7 @@ export type { TarefaAtual };
 export function useTarefaAtual() {
   const { profile } = useAuth();
   const profissionalId = profile?.id;
+  const profileUserId = profile?.user_id;
   const previousTaskIdRef = useRef<string | null>(null);
   const hasShownAutoAssignToast = useRef(false);
 
@@ -35,10 +36,11 @@ export function useTarefaAtual() {
     queryFn: async (): Promise<(TarefaAtual & { confirmacao_whatsapp?: string | null; confirmado_via_whatsapp_em?: string | null }) | null> => {
       if (!profissionalId) return null;
 
-      // Verificar se a sessão auth ainda é do mesmo usuário (proteção contra session bleed)
+      // Proteção contra session bleed: comparar auth.uid() com profile.user_id
+      // (NÃO com profile.id, que é o PK interno e geralmente diferente do auth uid)
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user || user.id !== profissionalId) {
-        console.warn('[useTarefaAtual] Session mismatch detectado - user.id:', user?.id?.substring(0, 8), 'profile.id:', profissionalId?.substring(0, 8));
+      if (!user || (profileUserId && user.id !== profileUserId)) {
+        console.warn('[useTarefaAtual] Session mismatch - user.id:', user?.id?.substring(0, 8), 'profile.user_id:', profileUserId?.substring(0, 8));
         return null;
       }
 
