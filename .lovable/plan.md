@@ -1,54 +1,67 @@
 
 
-## Plano: aceitar ATPV-e / CRV digital no OCR público
+## Diagnóstico
 
-### O que é o documento da foto
-- É a **ATPV-e** (Autorização para Transferência de Propriedade de Veículo - Digital) emitida pelo SENATRAN/DETRAN.
-- Usada quando o veículo foi comprado recentemente e o CRLV ainda não foi emitido no nome do novo proprietário.
-- Contém todos os dados que precisamos: placa, RENAVAM, chassi, marca/modelo, ano fab/modelo, cor, dados do vendedor, dados do comprador (nome + CPF + endereço), valor declarado da venda.
+A **Cotação Rápida** mostra "Faixa enquadrada: R$ 0,00 – R$ 20.000,00" para a moto Yamaha XTZ250 (FIPE R$ 18.976), o que está errado segundo o Guia V11 (faixas de moto vão de 3 em 3 mil — a faixa correta seria R$ 18.000,01 – R$ 21.000,00).
 
-### Por que hoje não funciona
-- O `systemPrompt` do `supabase/functions/document-ocr/index.ts` só conhece 5 tipos: `cnh`, `rg`, `crlv`, `nota_fiscal_veiculo`, `comprovante_residencia`.
-- Documentos ATPV-e caem como `outro` e são rejeitados pelo fluxo público.
-- O frontend `EtapaDadosPessoaisDocumentos.tsx` só sabe extrair dados de `crlv` e `nota_fiscal_veiculo`.
+Causa raiz, comprovada no banco:
 
-### Mudanças
+1. O texto "Faixa enquadrada" em `src/components/cotacoes/CotacaoFormDialog.tsx` (linhas 433–442 e 1732–1736) lê da tabela **legada** `tabelas_preco_mensalidade` via `useTabelasPreco()`.
+2. Essa tabela tem só 2 baldes amplos: `0 → 20.000` e `20.000,01 → 40.000`. Por isso o R$ 18.976 cai em "0 a 20.000".
+3. O **motor de cotação real** (`usePlanosCotacao` → `entity_eligibility_rules` com `rule_type='fipe_range'`) já está correto: as coberturas Advanced (motos) usam `intervalo: 3000, min: 0, max: 51000`. Os preços dos planos exibidos (Advanced R$ 218,70 / Advanced + R$ 238,70) saem desse motor — o que está errado é só o rótulo da faixa.
+4. Memória do projeto reforça: `tabelas_preco_mensalidade` é **deprecated** e não deve ser fonte de verdade.
 
-**1) `supabase/functions/document-ocr/index.ts`** — adicionar reconhecimento da ATPV-e
-- Novo tipo: `atpv_e` (rotulado “ATPV-e / CRV Digital”).
-- Campos extraídos:
-  - `placa`, `renavam`, `chassi`, `marca`, `modelo`, `ano_fabricacao`, `ano_modelo`, `cor`
-  - `nome_comprador`, `cpf_comprador`, `endereco_comprador` (logradouro, cidade, uf, cep)
-  - `nome_vendedor`, `cpf_cnpj_vendedor`
-  - `valor_declarado_venda`, `data_emissao_crv`, `data_venda`
-  - `numero_crv`, `codigo_seguranca_crv`, `numero_atpv`
-- Regras: tratar como **substituto do CRLV** para fins de cotação (igual à Nota Fiscal).
-- Atualizar o enum do JSON de resposta para incluir `atpv_e`.
-- Atualizar `tipoLabels` para aceitar `atpv_e` quando enviado como `tipoEsperado`.
+Conclusão: cálculo de preço está correto. O que precisa mudar é a **fonte da exibição da faixa**, passando a derivar de `entity_eligibility_rules` (mesma fonte do motor).
 
-**2) `src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx`**
-- Tratar `atpv_e` como `crlv`/`nota_fiscal_veiculo` na flag `temCrlv`.
-- Adicionar bloco de extração análogo ao do CRLV: preencher `veiculo_placa`, `veiculo_chassi`, `veiculo_renavam`, `veiculo_cor`, `veiculo_ano_fabricacao`, `veiculo_ano_modelo`.
-- Atualizar `origem_documento_veiculo` para incluir `'atpv_e'`.
-- Mostrar badge “ATPV-e / CRV Digital (substitui CRLV)” na lista de documentos.
-- Atualizar texto: “Envie CRLV, Nota Fiscal ou ATPV-e”.
+## Mudanças
 
-**3) Pequenos ajustes de UI**
-- Mensagem de instrução do upload: “CRLV, Nota Fiscal ou ATPV-e (CRV Digital)”.
-- Manter o salvamento do arquivo no bucket com `tipo = 'crlv'` (não precisa migrar tabela), apenas registrar no metadado/observação que a origem é ATPV-e — evita migração de banco e mantém compatibilidade com dashboards existentes.
+### 1. `src/components/cotacoes/CotacaoFormDialog.tsx`
 
-### Arquivos a editar
-- `supabase/functions/document-ocr/index.ts`
-- `src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx`
+- Substituir a derivação de `faixaAtualFipe` (linhas 433–442) para parar de usar `useTabelasPreco()` e passar a usar as regras `fipe_range` de `useAllEligibilityRules()` (já carregadas no hook `usePlanosCotacao`).
+- Lógica nova:
+  - Tomar o primeiro plano selecionado (ou o primeiro plano calculado).
+  - Pegar suas coberturas (via `planos_coberturas`).
+  - Para cada cobertura com regra `fipe_range`, encontrar a faixa que contém `valorFipe` (`de ≤ valor < ate`).
+  - Se houver várias coberturas (carro/moto), elas têm o mesmo `intervalo`/`min`/`max` por linha, então qualquer uma serve.
+  - Resultado: `{ min: faixa.de, max: faixa.ate - 0.01 }` para exibir como "Faixa enquadrada".
+- Fallback: se não houver regra `fipe_range` (catálogo antigo), manter o cálculo atual como fallback silencioso.
+- Remover `useTabelasPreco` deste componente caso não seja mais necessário em outro lugar (`fipeMenorInfo` também usa — ver passo 2).
 
-### Não vou mexer (por segurança)
-- Schema do banco (`tipo_documento` enum) — ATPV-e será persistido como `crlv` com flag de origem, evitando migração arriscada.
-- Outras telas internas (cadastro, contratos) — fora do escopo do pedido (link público).
+### 2. `fipeMenorInfo` (mesmo arquivo, linhas 391–431)
 
-### Resultado esperado
-- No link público de contratação, o cliente pode enviar o ATPV-e/CRV digital e o sistema:
-  1. detecta automaticamente o tipo
-  2. extrai placa, chassi, renavam, marca, modelo, ano, cor
-  3. marca o requisito “CRLV ou Nota Fiscal” como cumprido
-  4. avança o fluxo normalmente
+- A lógica de "FIPE menor" também usa `tabelas_preco_mensalidade` para detectar faixa atual e faixa inferior.
+- Substituir pela mesma fonte (`fipe_range` em `entity_eligibility_rules`):
+  - Faixa atual = faixa onde `valorFipe` se enquadra.
+  - Faixa inferior = faixa imediatamente abaixo no array `faixas`.
+  - Diferença de mensalidade = soma das coberturas do plano calculadas em cada faixa (já existe util similar em `usePlanosCotacao` linhas 388–417).
+
+### 3. Helper compartilhado
+
+Criar `src/utils/fipeFaixa.ts` com:
+- `obterFaixaFipeAtual(planoCoberturas, allEligibilityRules, valorFipe)` → `{ de, ate, intervalo } | null`
+- `obterFaixaFipeAnterior(...)` → mesma assinatura
+- Reutilizado por `CotacaoFormDialog` e por `usePlanosCotacao` (futuro, sem mudar comportamento).
+
+### 4. Testes manuais (após aplicar)
+
+- Cotação Rápida → moto Yamaha XTZ250 2015/2016 com FIPE R$ 18.976 deve mostrar:
+  - "Faixa enquadrada: R$ 18.000,01 – R$ 21.000,00"
+  - Planos Advanced (R$ 218,70) e Advanced + (R$ 238,70) — sem regressão.
+- Cotação de carro com FIPE R$ 47.000 deve mostrar faixa de 5 em 5 mil (ex.: "R$ 45.000,01 – R$ 50.000,00").
+- Lógica FIPE menor deve continuar oferecendo redução quando aplicável.
+
+## Arquivos a editar
+
+- `src/components/cotacoes/CotacaoFormDialog.tsx` (faixa exibida + FIPE menor)
+- `src/utils/fipeFaixa.ts` (novo helper)
+
+## Não vou mexer
+
+- `usePlanosCotacao` (motor já correto).
+- `entity_eligibility_rules` (dados já configurados com `intervalo: 3000` para Advanced moto).
+- Tabela legada `tabelas_preco_mensalidade` (não tocar — apenas parar de ler dela neste componente).
+
+## Resultado esperado
+
+A "Faixa enquadrada" passa a refletir a tabela real do Guia V11 (3 em 3 mil para motos, 5 em 5 mil para carros), sincronizada com o motor de preço. O bug visual desaparece sem alterar nenhum valor de mensalidade.
 
