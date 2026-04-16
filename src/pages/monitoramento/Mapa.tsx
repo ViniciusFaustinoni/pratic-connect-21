@@ -44,13 +44,33 @@ function getVistoriadorIconEquipe(color: string = COR_VISTORIADOR): L.Icon {
 
 export default function Mapa() {
   const [abaAtiva, setAbaAtiva] = useState<string>("atribuicoes");
+  const [alocarState, setAlocarState] = useState<{
+    profissionalId: string;
+    nome: string;
+    atual: { tipo_alocacao: 'rota' | 'base'; base_id: string | null } | null;
+  } | null>(null);
 
   const { data: atribuicaoManualAtiva } = useConfigAtribuicaoManual();
   const { data: vistoriadores } = useVistoriadoresRealtime();
+  const { data: alocacoesHoje = {} } = useAlocacoesDiaHoje();
+  const { data: bases = [] } = useBasesPratic();
+  const { isDiretor, isCoordenadorMonitoramento, isAdminMaster, isDesenvolvedor } = usePermissions();
+  const podeAlocar = isDiretor || isCoordenadorMonitoramento || isAdminMaster || isDesenvolvedor;
 
+  const idsProfBase = useMemo(() => {
+    const set = new Set<string>();
+    Object.values(alocacoesHoje).forEach((a: any) => {
+      if (a.tipo_alocacao === 'base') set.add(a.profissional_id);
+    });
+    return set;
+  }, [alocacoesHoje]);
+
+  // Esconder técnicos em modo BASE (eles ficam fixos e invisíveis no mapa)
   const vistoriadoresEmServico = useMemo(() => {
-    return vistoriadores?.filter(v => v.em_servico && v.latitude && v.longitude) || [];
-  }, [vistoriadores]);
+    return vistoriadores?.filter(
+      v => v.em_servico && v.latitude && v.longitude && !idsProfBase.has(v.vistoriador_id)
+    ) || [];
+  }, [vistoriadores, idsProfBase]);
 
   const abrirWhatsApp = (telefone: string | null) => {
     if (!telefone) { toast.error("Telefone não cadastrado"); return; }
