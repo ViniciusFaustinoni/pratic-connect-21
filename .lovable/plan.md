@@ -1,37 +1,33 @@
 
 
-## Plano: Seletor de Municípios no Editor de Técnico Interno
+## Plano: Corrigir Extração de Nome no OCR de RG
 
 ### Problema
-O editor de técnico interno (`ProfissionalModal`) usa uma lista hardcoded de ~10 regiões genéricas (checkboxes simples como "São Paulo - Centro", "ABC Paulista"). O editor de prestador parceiro (`NovoPrestadorInstalacaoModal`) usa um seletor completo de municípios IBGE com busca, agrupamento por estado, e badges removíveis. O requisito é unificar o layout.
 
-### Mudanças
+O prompt do OCR para documentos RG (linha 82 de `document-ocr/index.ts`) tem instruções mínimas: apenas lista os campos sem orientação sobre onde extraí-los. O modelo de IA confunde o nome do titular com:
+- A assinatura do presidente do DETRAN no rodapé (ex: "ADOLPHO KONDER HOMEM DE CARVALHO FILHO")
+- Nomes de autoridades impressos no documento
 
-#### 1. Extrair componente reutilizável `MunicipiosPicker`
-Extrair a lógica do seletor de municípios de `NovoPrestadorInstalacaoModal` para um componente independente `src/components/monitoramento/MunicipiosPicker.tsx` que aceite:
-- `value: string[]` — municípios selecionados
-- `onChange: (v: string[]) => void`
-- Label opcional
+### Correção
 
-Conteúdo: query IBGE, agrupamento por UF, busca, badges, collapsible por estado — idêntico ao que já existe no modal de prestador.
+Expandir a seção `### RG` no `systemPrompt` (linha 81-82) com instruções explícitas:
 
-#### 2. Atualizar `ProfissionalModal`
-- Substituir o bloco de checkboxes de "Regiões de atuação" (linhas 538-571) pelo novo `MunicipiosPicker`.
-- O campo do form continua sendo `regioes` (array de strings), mas agora armazena valores no formato `"Cidade - UF"` (mesmo formato do prestador).
-- Atualizar o label para "Municípios de Atuação (opcional)".
+```
+### RG
+nome, rg, cpf (se presente), data_nascimento, data_expedicao
+- NOME: extrair EXCLUSIVAMENTE do campo "NOME" que fica na parte superior do documento, logo abaixo do cabeçalho institucional. Este é o nome do titular do documento.
+- NÃO confundir com nomes de autoridades, presidentes do DETRAN, ou assinaturas oficiais impressas no rodapé do documento (ex: "PRESIDENTE DO DETRAN").
+- FILIAÇÃO: campos "FILIAÇÃO" contêm nomes dos pais — NÃO são o nome do titular.
+- RG: campo "REGISTRO GERAL" — extrair o número com pontuação.
+- CPF: pode estar presente no verso ou na frente. Formato XXX.XXX.XXX-XX.
+```
 
-#### 3. Atualizar `NovoPrestadorInstalacaoModal`
-- Substituir a implementação inline pelo componente `MunicipiosPicker` extraído (sem mudança funcional).
+### Arquivo alterado
 
-#### 4. Salvar no campo correto
-- `Equipe.tsx` linha 82: `regioes_atendimento: data.regioes` — o campo já é `string[]` no banco, então aceita tanto os slugs antigos quanto os novos valores `"Cidade - UF"`. Nenhuma mudança no banco necessária.
-- O carregamento na edição (`profissional.regioes_atendimento`) já é passado como `regioes` — continuará funcionando.
+| Arquivo | Mudança |
+|---------|---------|
+| `supabase/functions/document-ocr/index.ts` | Expandir instruções da seção RG no systemPrompt (linha 82) |
 
-### Arquivos
-
-| Arquivo | Ação |
-|---------|------|
-| `src/components/monitoramento/MunicipiosPicker.tsx` | **Criar** — componente reutilizável |
-| `src/components/monitoramento/ProfissionalModal.tsx` | Substituir checkboxes por `MunicipiosPicker` |
-| `src/components/monitoramento/NovoPrestadorInstalacaoModal.tsx` | Usar `MunicipiosPicker` (refactor) |
+### Deploy
+A edge function precisa ser redeployada após a alteração.
 
