@@ -84,10 +84,12 @@ export default function Mapa() {
     <MapContainer center={centroInicial} zoom={10} className="h-full w-full" style={{ height: "100%", width: "100%" }}>
       <TileLayer attribution='Tiles &copy; Esri' url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
       <TileLayer url="https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png" attribution="" />
-      {vistoriadoresEmServico.map((v) => (
+      {vistoriadoresEmServico.map((v) => {
+        const aloc = (alocacoesHoje as any)[v.vistoriador_id] || null;
+        return (
         <Marker key={`eq-${v.vistoriador_id}`} position={[v.latitude, v.longitude]} icon={getVistoriadorIconEquipe()}>
           <Popup>
-            <div className="min-w-[200px]">
+            <div className="min-w-[220px]">
               <div className="flex items-center gap-2 mb-2">
                 <User className="h-4 w-4 text-blue-600" />
                 <h3 className="font-bold text-sm">{v.vistoriador_nome}</h3>
@@ -113,16 +115,38 @@ export default function Mapa() {
                 <p className="text-muted-foreground">
                   Atualizado: {formatDistanceToNow(new Date(v.updated_at), { addSuffix: true, locale: ptBR })}
                 </p>
+                <p className="flex items-center gap-1 pt-1">
+                  <MapPin className="h-3 w-3 text-blue-500" />
+                  <span><strong>Alocação hoje:</strong> Rota</span>
+                  <Badge variant="outline" className="ml-auto text-[9px] h-4 bg-blue-50 text-blue-700 border-blue-200">
+                    Em rota
+                  </Badge>
+                </p>
               </div>
-              {v.telefone && (
-                <button onClick={() => abrirWhatsApp(v.telefone)} className="flex items-center justify-center gap-1 w-full px-3 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-700">
-                  <Phone className="h-3 w-3" />Contatar
-                </button>
-              )}
+              <div className="flex flex-col gap-1.5">
+                {v.telefone && (
+                  <button onClick={() => abrirWhatsApp(v.telefone)} className="flex items-center justify-center gap-1 w-full px-3 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-700">
+                    <Phone className="h-3 w-3" />Contatar
+                  </button>
+                )}
+                {podeAlocar && (
+                  <button
+                    onClick={() => setAlocarState({
+                      profissionalId: v.vistoriador_id,
+                      nome: v.vistoriador_nome,
+                      atual: aloc ? { tipo_alocacao: aloc.tipo_alocacao, base_id: aloc.base_id } : null,
+                    })}
+                    className="flex items-center justify-center gap-1 w-full px-3 py-1.5 bg-amber-600 text-white rounded text-xs hover:bg-amber-700"
+                  >
+                    <Settings2 className="h-3 w-3" />Alterar alocação (Rota/Base)
+                  </button>
+                )}
+              </div>
             </div>
           </Popup>
         </Marker>
-      ))}
+        );
+      })}
     </MapContainer>
   );
 
