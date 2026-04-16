@@ -20,7 +20,7 @@ import { ModalRecusaVeiculoComFotos } from '@/components/instalador/ModalRecusaV
 import { TemporizadorExecucao } from '@/components/vistoriador/TemporizadorExecucao';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { useVistoriaCompleta, useSalvarRascunhoVistoriaCompleta, DadosParciaisVistoria } from '@/hooks/useVistorias';
+import { useVistoriaCompleta, useSalvarRascunhoVistoriaCompleta, DadosParciaisVistoria, useVistoriaCompletaPorServico } from '@/hooks/useVistorias';
 import { 
   useAprovarVeiculoVistoria, 
   useRecusarVeiculoVistoria, 
@@ -37,11 +37,24 @@ import {
 import { useConfigFipeRastreador, useConfigFipeRastreadorMoto, precisaRastreador } from '@/hooks/useConfigRastreador';
 
 export default function ExecutarVistoriaCompleta() {
-  const { id: instalacaoId } = useParams<{ id: string }>();
+  // A rota /instalador/vistoria/:id agora recebe o ID do SERVIÇO (servicos.id),
+  // vindo de useTarefaAtual/TarefaAtualCard. O hook resolve a vistoria associada
+  // (suporta tarefas materializadas a partir de agendamentos_base, instalações
+  // e cotações). Mantemos o nome `instalacaoId` por compat com o restante do arquivo.
+  const { id: routeId } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  // Hooks - busca por instalacao_id
-  const { data: vistoria, isLoading, error } = useVistoriaCompleta(instalacaoId || null);
+  // 1) Tenta resolver via serviço (caminho atual / fluxo base + reatribuição)
+  const vistoriaPorServicoQuery = useVistoriaCompletaPorServico(routeId || null);
+  // 2) Fallback: se o ID for um instalacao_id (rotas antigas), tenta o hook legado
+  const vistoriaPorInstalacaoQuery = useVistoriaCompleta(
+    !vistoriaPorServicoQuery.data && !vistoriaPorServicoQuery.isLoading ? routeId || null : null
+  );
+
+  const vistoria = vistoriaPorServicoQuery.data || vistoriaPorInstalacaoQuery.data;
+  const isLoading = vistoriaPorServicoQuery.isLoading || vistoriaPorInstalacaoQuery.isLoading;
+  const error = vistoriaPorServicoQuery.error || vistoriaPorInstalacaoQuery.error;
+  const instalacaoId = (vistoria as any)?.instalacao_id ?? routeId;
   const { data: fipeMinRastreador = 30000 } = useConfigFipeRastreador();
   const { data: fipeMinRastreadorMoto = 9000 } = useConfigFipeRastreadorMoto();
   const uploadFoto = useUploadFotoVistoriaCompleta();
