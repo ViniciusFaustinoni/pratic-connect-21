@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { getHojeBrasilia } from '@/lib/date-utils';
+import { useAlocacaoDiaria } from './useAlocacaoDiaria';
 
 export interface VistoriaBaseFila {
   id: string;
@@ -29,9 +30,11 @@ export interface VistoriaBaseFila {
  */
 export function useFilaBaseHoje(enabled: boolean = true) {
   const { profile } = useAuth();
+  const { alocacao, isBase } = useAlocacaoDiaria();
+  const baseId = (alocacao as any)?.base_id ?? null;
 
   return useQuery({
-    queryKey: ['fila-base-hoje', profile?.id],
+    queryKey: ['fila-base-hoje', profile?.id, baseId],
     enabled: enabled && !!profile?.id,
     refetchInterval: 30000,
     staleTime: 15000,
@@ -43,7 +46,7 @@ export function useFilaBaseHoje(enabled: boolean = true) {
 
       const hoje = format(getHojeBrasilia(), 'yyyy-MM-dd');
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('agendamentos_base')
         .select(
           'id, cliente_nome, cliente_telefone, veiculo_placa, veiculo_descricao, data_agendada, horario, status, observacoes, atendido_por, oficina_id'
@@ -51,6 +54,13 @@ export function useFilaBaseHoje(enabled: boolean = true) {
         .eq('data_agendada', hoje)
         .not('status', 'in', '("cancelado","concluido","realizado")')
         .order('horario', { ascending: true });
+
+      // Se o profissional é técnico de BASE, filtra apenas vistorias da sua base
+      if (isBase && baseId) {
+        query = query.eq('oficina_id', baseId);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('[useFilaBaseHoje] erro:', error);
