@@ -597,10 +597,12 @@ export default function VistoriaPrestador() {
             />
           </CardContent>
         </Card>
+        </>)}
 
       </div>
 
-      {/* ── Botão fixo no rodapé ── */}
+      {/* ── Botão fixo no rodapé (apenas em execução) ── */}
+      {link.status === 'em_execucao' && (
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 z-50">
         <div className="max-w-lg mx-auto">
           <Button
@@ -623,6 +625,34 @@ export default function VistoriaPrestador() {
           )}
         </div>
       </div>
+      )}
+
+      {/* ── Modal de recusa ── */}
+      <AlertDialog open={showRecusarDialog} onOpenChange={setShowRecusarDialog}>
+        <AlertDialogContent className="max-w-sm mx-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Recusar tarefa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Informe o motivo (opcional). O coordenador será avisado.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            placeholder="Motivo da recusa..."
+            value={recusaMotivo}
+            onChange={(e) => setRecusaMotivo(e.target.value)}
+            className="min-h-[80px]"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={recusarTarefa}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Confirmar Recusa
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Modal de confirmação ── */}
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
