@@ -225,10 +225,7 @@ export function useAtribuirServicoManual() {
                 template_params: [
                   profissional.nome?.split(' ')[0] || 'Técnico',
                   'Vistoria Base',
-                  `${baseData?.cliente_nome || 'Cliente'} - ${baseData?.veiculo_placa || ''}`,
-                  'Base - Sede',
-                  baseData?.data_agendada || '',
-                  baseData?.horario || 'A definir',
+                  `${baseData?.cliente_nome || 'Cliente'} - ${baseData?.veiculo_placa || ''} (${baseData?.data_agendada || ''} ${baseData?.horario || ''})`,
                 ],
                 referencia_tipo: 'agendamento_base',
                 referencia_id: servicoId,
@@ -295,10 +292,7 @@ export function useAtribuirServicoManual() {
               template_params: [
                 profissional.nome?.split(' ')[0] || 'Técnico',
                 servico?.tipo || 'Serviço',
-                `${assocData?.nome || 'Cliente'} - ${veicData?.placa || ''}`,
-                enderecoCompleto,
-                servico?.data_agendada || '',
-                servico?.hora_agendada || 'A definir',
+                `${assocData?.nome || 'Cliente'} - ${veicData?.placa || ''} | ${enderecoCompleto} | ${servico?.data_agendada || ''} ${servico?.hora_agendada || ''}`,
               ],
               referencia_tipo: 'servico',
               referencia_id: servicoId,
