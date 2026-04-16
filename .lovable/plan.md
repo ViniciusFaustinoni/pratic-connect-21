@@ -1,46 +1,58 @@
 
 
-## Problema
+## Diagnóstico completo — Cotação Moto APP (Uber)
 
-A tabela `chat_solicitacoes_ia` tem uma política de INSERT que só permite **associados** criarem solicitações (verifica se `associado_id` pertence ao `auth.uid()`). Quando um vendedor ou funcionário tenta criar uma solicitação de troca de titularidade pelo painel, o RLS bloqueia o INSERT.
+### O que está acontecendo
 
-**Política atual (INSERT):**
+Os planos **Advanced Especial** e **Advanced Especial +** (passeio) têm regra `tipo_uso: [particular]` → são corretamente bloqueados quando o uso é APP/Uber.
+
+Os planos **Advanced Especial Aplicativo** e **Advanced Especial + Aplicativo** existem e estão ativos, **mas** há problemas de dados que impedem a exibição correta:
+
+### Problemas encontrados no banco
+
+| # | Problema | Onde | Impacto |
+|---|---------|------|---------|
+| 1 | **`tipo_uso` conflitante** no "Advanced Especial Aplicativo" | `entity_eligibility_rules` id `2be237da-...` | `tipos_uso: [particular]` contradiz `values: [aplicativo]`. O código lê `cfg.valores` → pega `[aplicativo]` → **funciona por acaso**, mas a config está errada e pode quebrar em qualquer refactor |
+| 2 | **Coberturas nomeadas "75% FIPE"** nos planos APP | Coberturas dos planos APP | Deveria ser "100% FIPE" segundo o requisito. O `cobertura_fipe` do plano está correto (100), mas o nome da cobertura induz erro ao cliente |
+| 3 | **Assistência 400km APP tem preço R$ 15,90** | Benefit `Assistência 24h 400km - Advanced Especial Aplicativo` | Deveria ser R$ 15,00 (como no plano passeio) para fechar R$ 218,70. Atualmente daria **R$ 219,60** |
+| 4 | **Cota de participação APP** não configurada | Planos APP têm `cota_participacao: null`, `cota_minima: null` | Vai cair no fallback global (6%, mín R$ 1.200). Deveria ser **10%, mín R$ 1.500** para motos APP |
+| 5 | **Sem override `planos_cotas_categoria`** para APP | Tabela `planos_cotas_categoria` | Os planos passeio têm override para categoria `moto` (6%, R$ 1.200), mas os APP não têm override para `aplicativo` com 10%/R$ 1.500 |
+
+### Ajustes necessários (todos são dados, não código)
+
+**1. Corrigir `tipo_uso` do "Advanced Especial Aplicativo":**
 ```sql
-with_check: associado_id IN (SELECT id FROM associados WHERE user_id = auth.uid())
+UPDATE entity_eligibility_rules 
+SET rule_config = '{"tipos_uso": ["aplicativo"], "values": ["aplicativo"]}'
+WHERE id = '2be237da-d9f8-4a7a-89c8-fbf955cfd5b1';
 ```
 
-Isso foi pensado para o chatbot do associado, não para o painel interno.
-
-## Correção
-
-Uma **migração SQL** que adiciona uma nova política de INSERT para funcionários autorizados:
-
+**2. Corrigir preço da Assistência 400km APP** (de R$ 15,90 para R$ 15,00):
 ```sql
-CREATE POLICY "Funcionarios podem criar solicitacoes"
-ON public.chat_solicitacoes_ia
-FOR INSERT
-TO authenticated
-WITH CHECK (
-  has_role(auth.uid(), 'diretor'::app_role)
-  OR has_role(auth.uid(), 'gerente'::app_role)
-  OR has_role(auth.uid(), 'vendedor_interno'::app_role)
-  OR has_role(auth.uid(), 'vendedor_externo'::app_role)
-  OR has_role(auth.uid(), 'analista_eventos'::app_role)
-  OR has_role(auth.uid(), 'coordenador_monitoramento'::app_role)
-);
+UPDATE benefits SET preco_sugerido = 15.00 
+WHERE id = (SELECT benefit_id FROM planos_beneficios WHERE plano_id = '16b01086-4983-4f9d-8177-f98d021731a5' 
+  AND benefit_id IN (SELECT id FROM benefits WHERE name ILIKE '%Assistência 24h 400km%Advanced Especial Aplicativo%'));
 ```
 
-Nenhuma alteração de código é necessária — o `TrocaTitularidadeDialog.tsx` já grava `criado_por: user.id` corretamente.
+**3. Configurar cota APP (10%, mín R$ 1.500) nos planos APP:**
+```sql
+-- Via planos_cotas_categoria para categoria 'aplicativo'
+INSERT INTO planos_cotas_categoria (plano_id, categoria_veiculo, cota_percentual, cota_minima_valor) VALUES
+('16b01086-4983-4f9d-8177-f98d021731a5', 'aplicativo', 10, 1500),
+('58a17bce-4362-4949-a68e-04f6592adde8', 'aplicativo', 10, 1500);
+```
 
-## Fluxo completo de Troca de Titularidade
+**4. (Opcional) Renomear coberturas "75% FIPE" para "100% FIPE"** nos planos APP, se a cobertura real é 100%.
 
-1. **Vendedor/Funcionário** abre o dialog no painel do associado → preenche dados do novo titular → clica "Solicitar Troca"
-2. Insert em `chat_solicitacoes_ia` com `tipo='troca_titularidade'`, `status='pendente'`
-3. **Diretor** aprova em `/diretoria/solicitacoes` → status muda para `aprovada`
-4. Sistema cria novo associado com os dados do novo titular, transfere veículo, gera contrato com `tipo_entrada='troca_titularidade'`
+### Resultado esperado após os ajustes
 
-## Escopo
+Para Moto, Uber, FIPE R$ 20.882, região RJ:
+- **Advanced Especial Aplicativo** → R$ 218,70 (após correção do benefit)
+- **Advanced Especial + Aplicativo** → R$ 238,70 ✅
+- Cota: 10% do FIPE (mín R$ 1.500) → R$ 2.088,20
+- Rastreador obrigatório: sim (FIPE > R$ 9.000)
 
-- 1 migração SQL (nova RLS policy)
+### Escopo técnico
+
+- 3-4 UPDATEs + 2 INSERTs no banco (via ferramenta de insert)
 - 0 arquivos de código alterados
-
