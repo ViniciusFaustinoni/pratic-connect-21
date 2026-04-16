@@ -172,7 +172,7 @@ export function VistoriaEventoMidias({
           </p>
         )}
         {todasMidias && filaPendente > 0 && (
-          <p className="text-xs text-center text-amber-600">
+          <p className="text-xs text-center text-muted-foreground">
             ⚠️ Você pode prosseguir, mas {filaPendente} {filaPendente === 1 ? 'mídia ainda está' : 'mídias ainda estão'} sendo enviada{filaPendente === 1 ? '' : 's'} ao servidor.
           </p>
         )}
