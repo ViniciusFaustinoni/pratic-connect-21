@@ -46,17 +46,79 @@ async function uploadMidiaServidor(midia: MidiaPendente): Promise<string> {
     return json.url || '';
   }
 
-  // origem === 'instalador' — fluxo via storage direto (mantém compat com hooks existentes)
-  const ext = midia.tipo === 'video' ? 'webm' : 'jpg';
-  const path = `${midia.vistoria_id}/${midia.tipo}-${midia.slot}-${midia.id}.${ext}`;
-  const bucket = midia.tipo === 'video' ? 'vistoria-videos' : 'vistoria-fotos';
-  const { error } = await supabase.storage.from(bucket).upload(path, midia.blob, {
-    contentType: midia.mime,
-    upsert: true,
-  });
-  if (error) throw new Error(error.message);
-  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-  return data.publicUrl;
+  // origem === 'instalador' — fluxo via storage direto + persistência em vistoria_fotos / vistorias
+  if (midia.tipo === 'foto') {
+    // Slot = tipo da foto (ex.: 'frente', 'chassi', 'odometro')
+    const tipo = String(midia.slot);
+    const fileName = `${midia.vistoria_id}/${tipo}_${Date.now()}.jpg`;
+
+    // Buscar foto existente desse tipo para substituir
+    const { data: fotoExistente } = await supabase
+      .from('vistoria_fotos')
+      .select('id, arquivo_url')
+      .eq('vistoria_id', midia.vistoria_id)
+      .eq('tipo', tipo)
+      .maybeSingle();
+
+    const { error: upErr } = await supabase.storage
+      .from('vistoria-fotos')
+      .upload(fileName, midia.blob, { contentType: midia.mime, upsert: true });
+    if (upErr) throw new Error(upErr.message);
+
+    const { data: pub } = supabase.storage.from('vistoria-fotos').getPublicUrl(fileName);
+    const publicUrl = pub.publicUrl;
+
+    // Limpar foto antiga (se existir e for diferente)
+    if (fotoExistente) {
+      const partes = fotoExistente.arquivo_url.split('/vistoria-fotos/');
+      if (partes[1]) {
+        await supabase.storage.from('vistoria-fotos').remove([partes[1]]).catch(() => {});
+      }
+      await supabase.from('vistoria_fotos').delete().eq('id', fotoExistente.id);
+    }
+
+    const { error: insErr } = await supabase.from('vistoria_fotos').insert({
+      vistoria_id: midia.vistoria_id,
+      tipo,
+      arquivo_url: publicUrl,
+      visivel_cliente: true,
+    });
+    if (insErr) throw new Error(insErr.message);
+
+    return publicUrl;
+  }
+
+  // Vídeo do instalador
+  const fileName = `${midia.vistoria_id}/video_360_${Date.now()}.webm`;
+
+  // Apaga vídeo anterior se houver
+  const { data: vistoriaAtual } = await supabase
+    .from('vistorias')
+    .select('video_360_url')
+    .eq('id', midia.vistoria_id)
+    .maybeSingle();
+  if (vistoriaAtual?.video_360_url) {
+    const partes = vistoriaAtual.video_360_url.split('/vistoria-videos/');
+    if (partes[1]) {
+      await supabase.storage.from('vistoria-videos').remove([partes[1]]).catch(() => {});
+    }
+  }
+
+  const { error: upErr } = await supabase.storage
+    .from('vistoria-videos')
+    .upload(fileName, midia.blob, { contentType: midia.mime, upsert: true });
+  if (upErr) throw new Error(upErr.message);
+
+  const { data: pub } = supabase.storage.from('vistoria-videos').getPublicUrl(fileName);
+  const publicUrl = pub.publicUrl;
+
+  const { error: updErr } = await supabase
+    .from('vistorias')
+    .update({ video_360_url: publicUrl })
+    .eq('id', midia.vistoria_id);
+  if (updErr) throw new Error(updErr.message);
+
+  return publicUrl;
 }
 
 export interface SyncQueueState {
