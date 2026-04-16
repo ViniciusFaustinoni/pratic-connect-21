@@ -821,6 +821,74 @@ export function MapaVistoriasContent() {
         );
       })}
 
+      {/* Prestadores parceiros ativos (com localização) */}
+      {(prestadoresAtivos || []).map((p) => {
+        const corPrest = p.status === 'em_execucao' ? '#3B82F6' : p.status === 'em_rota' ? '#A855F7' : '#F59E0B';
+        const prestIcon = L.divIcon({
+          html: `
+            <div style="position:relative;">
+              <img src="${svgToDataUrl(createVistoriadorMarkerSvg(corPrest))}" width="36" height="36" />
+              <div style="position:absolute;top:-5px;right:-5px;background:#F59E0B;border-radius:50%;min-width:18px;height:18px;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.3);">
+                <span style="color:white;font-size:10px;font-weight:700;line-height:1;">P</span>
+              </div>
+            </div>
+          `,
+          className: 'prestador-icon',
+          iconSize: [36, 36],
+          iconAnchor: [18, 18],
+          popupAnchor: [0, -18],
+        });
+        const showRoute = (p.status === 'em_rota' || p.status === 'em_execucao') && p.destino_lat && p.destino_lng;
+        return (
+          <div key={`prest-wrap-${p.link_id}`}>
+            {showRoute && (
+              <RotaPolyline
+                origem={[p.latitude, p.longitude]}
+                destino={[p.destino_lat!, p.destino_lng!]}
+                cor={corPrest}
+                peso={4}
+                opacidade={0.7}
+                mostrarPopup
+                mostrarInfoOverlay
+                popupContent={
+                  <div className="text-xs">
+                    <p className="font-semibold">{p.prestador_nome} (Prestador)</p>
+                    <p className="text-muted-foreground">→ {p.veiculo_placa || 'Local'}</p>
+                  </div>
+                }
+              />
+            )}
+            <Marker position={[p.latitude, p.longitude]} icon={prestIcon}>
+              <Popup>
+                <div className="min-w-[200px]">
+                  <div className="flex items-center gap-2 mb-2">
+                    <User className="h-4 w-4" style={{ color: corPrest }} />
+                    <h3 className="font-bold text-sm">{p.prestador_nome}</h3>
+                    <span className="ml-auto bg-amber-500 text-white text-[10px] font-bold rounded px-1.5 py-0.5">PRESTADOR</span>
+                  </div>
+                  <div className="text-xs space-y-1 mb-2">
+                    <p style={{ color: corPrest }} className="font-semibold flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: corPrest }} />
+                      {p.status === 'em_execucao' ? 'Em Execução' : p.status === 'em_rota' ? 'Em Rota' : 'Aceito'}
+                    </p>
+                    {p.associado_nome && <p><strong>Associado:</strong> {p.associado_nome}</p>}
+                    {p.veiculo_placa && <p><strong>Placa:</strong> {p.veiculo_placa}</p>}
+                    <p className="text-muted-foreground">
+                      Atualizado: {formatDistanceToNow(new Date(p.localizacao_atualizada_em), { addSuffix: true, locale: ptBR })}
+                    </p>
+                  </div>
+                  {p.prestador_telefone && (
+                    <button onClick={() => abrirWhatsApp(p.prestador_telefone)} className="flex items-center justify-center gap-1 w-full px-3 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-700">
+                      <Phone className="h-3 w-3" />Contatar
+                    </button>
+                  )}
+                </div>
+              </Popup>
+            </Marker>
+          </div>
+        );
+      })}
+
       {/* Bases Pratic com contagem de pendentes */}
       {(basesPratic || []).map((base) => {
         const pendentes = pendentesPorBase.get(base.id) || 0;
@@ -926,6 +994,15 @@ export function MapaVistoriasContent() {
             <Badge variant="secondary" className="text-xs gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
               {vistoriadoresEmServico.length}
+            </Badge>
+          </div>
+          <div className="flex items-center gap-2 text-sm p-2 rounded-md bg-muted/50">
+            <span className="w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center bg-amber-500">
+              <User className="h-2.5 w-2.5 text-white" />
+            </span>
+            <span className="flex-1 text-left">Prestadores em campo</span>
+            <Badge variant="secondary" className="text-xs gap-1">
+              {prestadoresAtivos?.length || 0}
             </Badge>
           </div>
           <div
