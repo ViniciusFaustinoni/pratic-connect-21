@@ -759,11 +759,16 @@ export function MapaVistoriasContent() {
       {vistoriadoresEmServico.map((vistoriador) => {
         const tarefasDoTecnico = tarefasPorTecnico.get(vistoriador.vistoriador_id) || [];
         const taskCount = tarefasDoTecnico.length;
+        const corStatus =
+          vistoriador.status_operacional === 'em_andamento' ? '#F59E0B' :
+          vistoriador.status_operacional === 'em_rota' ? COR_VISTORIADOR :
+          vistoriador.status_operacional === 'em_contato' ? '#FCD34D' :
+          '#22C55E';
         return (
           <Marker
-            key={`vistoriador-${vistoriador.vistoriador_id}-${taskCount}`}
+            key={`vistoriador-${vistoriador.vistoriador_id}-${taskCount}-${vistoriador.status_operacional}`}
             position={[vistoriador.latitude, vistoriador.longitude]}
-            icon={getVistoriadorIconWithBadge(COR_VISTORIADOR, taskCount)}
+            icon={getVistoriadorIconWithBadge(corStatus, taskCount)}
           >
             <Popup>
               <div className="min-w-[200px]">
@@ -1009,14 +1014,16 @@ export function MapaVistoriasContent() {
           </div>
           <div className="border-t my-2" />
           <div className="flex items-center gap-2 text-sm p-2 rounded-md bg-muted/50">
-            <span className="w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center" style={{ backgroundColor: COR_VISTORIADOR }}>
-              <User className="h-2.5 w-2.5 text-white" />
+            <span className="flex gap-1 flex-shrink-0">
+              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: '#F59E0B' }} title="Realizando tarefa" />
+              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: COR_VISTORIADOR }} title="Em rota" />
+              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: '#22C55E' }} title="Disponível" />
             </span>
-            <span className="flex-1 text-left">Profissionais</span>
-            <Badge variant="secondary" className="text-xs gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-              {vistoriadoresEmServico.length}
-            </Badge>
+            <span className="flex-1 text-left text-xs">
+              Profissionais
+              <span className="block text-[10px] text-muted-foreground">Amarelo: executando · Azul: em rota · Verde: disponível</span>
+            </span>
+            <Badge variant="secondary" className="text-xs">{vistoriadoresEmServico.length}</Badge>
           </div>
           <div className="flex items-center gap-2 text-sm p-2 rounded-md bg-muted/50">
             <span className="w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center bg-amber-500">
