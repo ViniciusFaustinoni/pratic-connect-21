@@ -19,7 +19,7 @@ import { offlineDB, enfileirarMidia, removerMidia, type MidiaPendente } from '@/
  */
 export function useUploadVistoriaOffline(vistoriaId: string | undefined) {
   // Mídias pendentes desta vistoria
-  const pendentes = useLiveQuery<MidiaPendente[]>(
+  const pendentes = useLiveQuery(
     () => {
       if (!vistoriaId) return Promise.resolve([] as MidiaPendente[]);
       return offlineDB.midias_pendentes
@@ -27,9 +27,8 @@ export function useUploadVistoriaOffline(vistoriaId: string | undefined) {
         .equals(vistoriaId)
         .toArray();
     },
-    [vistoriaId],
-    []
-  );
+    [vistoriaId]
+  ) as MidiaPendente[] | undefined;
 
   const enfileirarFoto = useCallback(
     async (tipo: string, file: File | Blob) => {
