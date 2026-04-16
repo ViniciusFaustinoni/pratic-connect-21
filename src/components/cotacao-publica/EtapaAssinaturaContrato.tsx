@@ -60,6 +60,13 @@ export function EtapaAssinaturaContrato({
   const [aguardandoAprovacaoFipe, setAguardandoAprovacaoFipe] = useState(false);
   const [cotacaoRecusada, setCotacaoRecusada] = useState(false);
 
+  // ═══ Detectar revisão biométrica manual do Autentique ═══
+  // Ativo apenas enquanto aguardamos assinatura
+  const { biometric_status: biometricStatus } = useAutentiqueBiometricStatus(
+    contratoId,
+    etapaInterna === 'aguardando_assinatura',
+  );
+
   // ═══ Verificar se cotação está pendente de aprovação FIPE diretoria ═══
   useEffect(() => {
     const verificarAprovacao = async () => {
