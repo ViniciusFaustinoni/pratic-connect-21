@@ -59,6 +59,7 @@ function parseValorFipe(valor: string): number {
 // Função para fazer fetch com retry, timeout e fallback entre hosts
 async function fetchWithRetry(path: string, maxRetries = 3): Promise<Response> {
   let lastError: Error | null = null;
+  let _startTime = Date.now();
 
   // tentativa = retry; dentro de cada tentativa, percorremos os hosts
   for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -70,7 +71,7 @@ async function fetchWithRetry(path: string, maxRetries = 3): Promise<Response> {
       const timeout = setTimeout(() => controller.abort(), 8000);
 
       try {
-    const _startTime = Date.now();
+    _startTime = Date.now();
         const response = await fetch(url, {
           signal: controller.signal,
           headers: {
@@ -335,7 +336,7 @@ serve(async (req) => {
 
         if (!modeloEncontrado) {
           console.log(`Modelo não encontrado: ${modelo}`);
-          logEdgeFunction({ functionName: "fipe-lookup", plataforma: "fipe", operacao: "lookup", status: "sucesso", tempoMs: Date.now() - _startTime });
+          // log removed — _startTime not available in this scope
           return new Response(
             JSON.stringify({ success: false, found: false, error: 'Modelo não encontrado' }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
