@@ -23,7 +23,7 @@ import { toast } from 'sonner';
 import { syncCnhDataToAssociado } from '@/utils/syncCnhData';
 
 
-export type TipoDocumentoDetectado = 'cnh' | 'rg' | 'crlv' | 'nota_fiscal_veiculo' | 'comprovante_residencia' | 'outro';
+export type TipoDocumentoDetectado = 'cnh' | 'rg' | 'crlv' | 'nota_fiscal_veiculo' | 'atpv_e' | 'comprovante_residencia' | 'outro';
 
 export interface OcrResultadoUnificado {
   tipo_detectado: TipoDocumentoDetectado;
@@ -62,6 +62,7 @@ const tipoLabels: Record<TipoDocumentoDetectado, { label: string; icon: typeof F
   rg: { label: 'RG', icon: User },
   crlv: { label: 'CRLV', icon: Car },
   nota_fiscal_veiculo: { label: 'Nota Fiscal do Veículo', icon: FileText },
+  atpv_e: { label: 'ATPV-e / CRV Digital', icon: Car },
   comprovante_residencia: { label: 'Comprovante de Residência', icon: Home },
   outro: { label: 'Documento', icon: FileText },
 };
@@ -69,7 +70,7 @@ const tipoLabels: Record<TipoDocumentoDetectado, { label: string; icon: typeof F
 const documentosEsperados = [
   { tipo: 'cnh' as const, label: 'CNH ou RG', alternativa: 'rg' as const },
   { tipo: 'comprovante_residencia' as const, label: 'Comprovante de Residência' },
-  { tipo: 'crlv' as const, label: 'CRLV ou Nota Fiscal do Veículo', alternativa: 'nota_fiscal_veiculo' as const },
+  { tipo: 'crlv' as const, label: 'CRLV, Nota Fiscal ou ATPV-e (CRV Digital)', alternativa: 'nota_fiscal_veiculo' as const },
 ];
 
 const MIME_TYPE_MAP: Record<string, string> = {
