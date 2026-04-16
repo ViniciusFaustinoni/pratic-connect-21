@@ -21,6 +21,7 @@ import { useTarefaAtual } from '@/hooks/useTarefaAtual';
 import { toast } from 'sonner';
 import { PWAInstallPromptProfissional } from '@/components/pwa/PWAInstallPromptProfissional';
 import { PushNotificationBanner } from './PushNotificationBanner';
+import { SyncStatusBanner } from '@/components/profissional/SyncStatusBanner';
 import { useAppResume } from '@/hooks/useAppResume';
 import { AlmocoBloqueioOverlay } from '@/components/vistoriador/AlmocoBloqueioOverlay';
 import logoFullDark from '@/assets/logos/logo-full-dark.png';
@@ -130,6 +131,7 @@ export function InstaladorLayout() {
       )}
 
       <div className={cn("h-[100dvh] bg-muted/30", deveBloqueiarPorLocalizacao && "hidden")}>
+        <SyncStatusBanner />
         <div className="max-w-md mx-auto border-x border-border h-full bg-background flex flex-col overflow-hidden">
           
           {/* Header - hidden on execution routes */}

@@ -71,12 +71,31 @@ Deno.serve(async (req) => {
       const tipo = formData.get("tipo") as string;
       const index = formData.get("index") as string;
       const arquivo = formData.get("arquivo") as File;
+      const clientId = (formData.get("client_id") as string) || null;
 
       if (!arquivo || !tipo) {
         return new Response(
           JSON.stringify({ error: "arquivo e tipo são obrigatórios" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
+      }
+
+      // ===== Idempotência: se já recebemos esta mídia (mesmo client_id),
+      // devolve a URL existente sem reprocessar.
+      if (clientId) {
+        const { data: vistoriaAtual } = await supabase
+          .from("vistorias_evento")
+          .select("dados_vistoria")
+          .eq("id", vistoriaId)
+          .single();
+        const dvAtual = (vistoriaAtual?.dados_vistoria as any) || {};
+        const idemMap = (dvAtual.midias_idempotency as Record<string, string>) || {};
+        if (idemMap[clientId]) {
+          return new Response(
+            JSON.stringify({ success: true, url: idemMap[clientId], idempotent: true }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
       }
 
       const ext = tipo === "video" ? "webm" : "jpg";
@@ -113,6 +132,13 @@ Deno.serve(async (req) => {
         const idx = parseInt(index || "1") - 1;
         fotos[idx] = url;
         dadosAtuais.fotos_urls = fotos;
+      }
+
+      // Registra mapeamento de idempotência
+      if (clientId) {
+        const idemMap = (dadosAtuais.midias_idempotency as Record<string, string>) || {};
+        idemMap[clientId] = url;
+        dadosAtuais.midias_idempotency = idemMap;
       }
 
       await supabase
