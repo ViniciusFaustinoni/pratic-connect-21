@@ -4,10 +4,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2, Lock, CheckCircle, MapPin, Calendar, User, Car, Hash, Cpu } from 'lucide-react';
+import { Loader2, Lock, CheckCircle, MapPin, Calendar, User, Car, Hash, Cpu, Navigation as NavIcon, ThumbsUp, ThumbsDown, PlayCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { ChecklistItem, type ChecklistStatus } from '@/components/instalador/ChecklistItem';
 import { VistoriaFotoSequencial } from '@/components/vistorias/VistoriaFotoSequencial';
 
@@ -145,22 +146,79 @@ export default function VistoriaPrestador() {
     }
   }, [link]);
 
-  // ── Auto-mark as em_execucao on first load ──
+  // ── Captura de geolocalização contínua enquanto o link está aberto ──
   useEffect(() => {
-    if (link?.status === 'aguardando' && token) {
-      publicSupabase
-        .from('vistoria_prestador_links' as any)
-        .update({
-          status: 'em_execucao',
-          chegada_em: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('token', token)
-        .then(() => {
-          queryClient.invalidateQueries({ queryKey: ['vistoria-prestador-link', token] });
-        });
-    }
-  }, [link?.status, token]);
+    if (!token || !link) return;
+    if (link.status === 'concluida' || link.status === 'cancelada') return;
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+
+    let lastSent = 0;
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const now = Date.now();
+        if (now - lastSent < 25_000) return; // throttle ~30s
+        lastSent = now;
+        publicSupabase
+          .from('vistoria_prestador_links' as any)
+          .update({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            precisao_metros: pos.coords.accuracy,
+            localizacao_atualizada_em: new Date().toISOString(),
+          })
+          .eq('token', token)
+          .then(() => {});
+      },
+      (err) => console.warn('[VistoriaPrestador] geolocation error', err),
+      { enableHighAccuracy: true, maximumAge: 15_000, timeout: 20_000 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [token, link?.status, link?.id]);
+
+  // ── Transição de ciclo de vida ──
+  const [recusaMotivo, setRecusaMotivo] = useState('');
+  const [showRecusarDialog, setShowRecusarDialog] = useState(false);
+  const transicionarStatus = useCallback(async (
+    novoStatus: 'aceito' | 'em_rota' | 'em_execucao',
+  ) => {
+    if (!token) return;
+    const stamp = new Date().toISOString();
+    const fieldStamp =
+      novoStatus === 'aceito' ? 'aceito_em' :
+      novoStatus === 'em_rota' ? 'em_rota_em' :
+      'iniciada_em';
+    const payload: any = {
+      status: novoStatus,
+      [fieldStamp]: stamp,
+      updated_at: stamp,
+    };
+    if (novoStatus === 'em_execucao') payload.chegada_em = stamp;
+    const { error } = await publicSupabase
+      .from('vistoria_prestador_links' as any)
+      .update(payload)
+      .eq('token', token);
+    if (error) { toast.error('Erro ao atualizar status'); return; }
+    queryClient.invalidateQueries({ queryKey: ['vistoria-prestador-link', token] });
+  }, [token, queryClient]);
+
+  const recusarTarefa = useCallback(async () => {
+    if (!token) return;
+    const stamp = new Date().toISOString();
+    const { error } = await publicSupabase
+      .from('vistoria_prestador_links' as any)
+      .update({
+        status: 'cancelada',
+        recusado_em: stamp,
+        recusa_motivo: recusaMotivo || null,
+        updated_at: stamp,
+      })
+      .eq('token', token);
+    if (error) { toast.error('Erro ao recusar'); return; }
+    setShowRecusarDialog(false);
+    queryClient.invalidateQueries({ queryKey: ['vistoria-prestador-link', token] });
+    toast.success('Tarefa recusada');
+  }, [token, recusaMotivo, queryClient]);
 
   // ── Auto-save checklist ──
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
