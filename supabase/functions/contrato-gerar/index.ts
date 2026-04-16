@@ -624,6 +624,10 @@ serve(async (req) => {
       console.log('Novo associado criado:', associadoId);
 
       // Criar VEÍCULO vinculado ao novo associado (status em_analise)
+      // Suporta carros 0km (sem placa) usando placeholder
+      const placaLimpaNovo = cotacao.veiculo_placa?.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || null;
+      const placaParaInsertNovo = placaLimpaNovo || ('0KM' + crypto.randomUUID().replace(/-/g, '').slice(0, 5).toUpperCase());
+
       const categoriaFlagsNovo = {
         flag_placa_vermelha: cotacao.categoria === 'placa_vermelha',
         flag_ex_taxi: cotacao.categoria === 'ex_taxi',
@@ -636,7 +640,7 @@ serve(async (req) => {
         .from('veiculos')
         .insert({
           associado_id: associadoId,
-          placa: cotacao.veiculo_placa,
+          placa: placaParaInsertNovo,
           marca: cotacao.veiculo_marca,
           modelo: cotacao.veiculo_modelo,
           ano_fabricacao: cotacao.veiculo_ano_fabricacao || cotacao.veiculo_ano,
