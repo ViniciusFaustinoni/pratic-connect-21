@@ -190,16 +190,54 @@ export function useAtribuirServicoManual() {
 
         if (error) throw error;
 
-        // Log
+        // Log with agendamento_base_id instead of servico_id
         const profileId = await getProfileId();
         const { error: logError } = await supabase.from('servicos_atribuicoes_log').insert({
-          servico_id: servicoId,
+          agendamento_base_id: servicoId,
           profissional_id: profissionalId,
           tipo_atribuicao: 'manual',
           atribuido_por: profileId,
           observacoes: 'Atribuição manual - vistoria base',
-        });
+        } as any);
         if (logError) console.error('Erro ao registrar log:', logError);
+
+        // Send WhatsApp notification to technician
+        const { data: baseData } = await supabase
+          .from('agendamentos_base')
+          .select('id, cliente_nome, veiculo_placa, data_agendada, horario')
+          .eq('id', servicoId)
+          .maybeSingle();
+
+        const { data: profissional } = await supabase
+          .from('profiles')
+          .select('telefone, whatsapp, nome')
+          .eq('id', profissionalId)
+          .maybeSingle();
+
+        if (profissional?.telefone || profissional?.whatsapp) {
+          try {
+            const telefone = (profissional.whatsapp || profissional.telefone || '').replace(/\D/g, '');
+            await supabase.functions.invoke('whatsapp-send-text', {
+              body: {
+                telefone,
+                mensagem: `Nova tarefa atribuída: Vistoria Base - ${baseData?.cliente_nome || 'Cliente'}`,
+                template_name: 'servico_atribuido_v1',
+                template_params: [
+                  profissional.nome?.split(' ')[0] || 'Técnico',
+                  'Vistoria Base',
+                  `${baseData?.cliente_nome || 'Cliente'} - ${baseData?.veiculo_placa || ''}`,
+                  'Base - Sede',
+                  baseData?.data_agendada || '',
+                  baseData?.horario || 'A definir',
+                ],
+                referencia_tipo: 'agendamento_base',
+                referencia_id: servicoId,
+              },
+            });
+          } catch (e) {
+            console.error('Erro ao enviar WhatsApp vistoria base:', e);
+          }
+        }
 
         return { id: servicoId, tipo: 'vistoria_base' };
       }
@@ -280,6 +318,7 @@ export function useAtribuirServicoManual() {
       qc.invalidateQueries({ queryKey: ['vistorias-mapa'] });
       qc.invalidateQueries({ queryKey: ['vistoriadores-localizacao-realtime'] });
       qc.invalidateQueries({ queryKey: ['calendario-dia-base'] });
+      qc.invalidateQueries({ queryKey: ['tarefa-atual-servico'] });
     },
     onError: (err: any) => {
       toast.error('Erro ao atribuir serviço: ' + (err.message || ''));
