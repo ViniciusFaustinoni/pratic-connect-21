@@ -466,7 +466,75 @@ export default function VistoriaPrestador() {
           </Card>
         )}
 
-        {/* ── Seção 3: Checklist de Vistoria ── */}
+        {/* ── Cards de ciclo de vida (antes de em_execucao) ── */}
+        {link.status === 'aguardando' && (
+          <Card className="border-amber-200 bg-amber-50 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base text-amber-900">Nova tarefa recebida</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-amber-800">
+                Você recebeu uma nova tarefa de vistoria. Confirme se aceita realizá-la.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  className="h-12 bg-green-600 hover:bg-green-700 text-white"
+                  onClick={() => transicionarStatus('aceito')}
+                >
+                  <ThumbsUp className="h-4 w-4 mr-2" />Aceitar
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-12 border-red-300 text-red-700 hover:bg-red-50"
+                  onClick={() => setShowRecusarDialog(true)}
+                >
+                  <ThumbsDown className="h-4 w-4 mr-2" />Recusar
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {link.status === 'aceito' && (
+          <Card className="border-blue-200 bg-blue-50 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base text-blue-900">Tarefa aceita</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-blue-800">
+                Quando estiver a caminho do local da vistoria, toque em "Iniciar Rota". Sua localização será compartilhada com o coordenador.
+              </p>
+              <Button
+                className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={() => transicionarStatus('em_rota')}
+              >
+                <NavIcon className="h-4 w-4 mr-2" />Iniciar Rota
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {link.status === 'em_rota' && (
+          <Card className="border-purple-200 bg-purple-50 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base text-purple-900">Em rota até o local</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-purple-800">
+                Ao chegar no local, toque em "Cheguei / Iniciar Vistoria" para liberar o checklist e as fotos.
+              </p>
+              <Button
+                className="w-full h-12 bg-purple-600 hover:bg-purple-700 text-white"
+                onClick={() => transicionarStatus('em_execucao')}
+              >
+                <PlayCircle className="h-4 w-4 mr-2" />Cheguei / Iniciar Vistoria
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ── Seção 3: Checklist de Vistoria (apenas em execução) ── */}
+        {link.status === 'em_execucao' && (<>
         <Card className="border-slate-200 shadow-sm">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
