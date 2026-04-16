@@ -6,6 +6,7 @@ import { useRotaReal } from "@/hooks/useRotaReal";
 import L from "leaflet";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { formatDataAgendada } from "@/lib/date-utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -313,7 +314,7 @@ export function MapaMobileContent() {
                   <p><strong>Veículo:</strong> {tarefa.veiculo.marca} {tarefa.veiculo.modelo}</p>
                   {tarefa.data_agendada && (
                     <p>
-                      <strong>Agendada:</strong> {format(new Date(tarefa.data_agendada + 'T00:00:00'), "dd/MM/yyyy", { locale: ptBR })}
+                      <strong>Agendada:</strong> {formatDataAgendada(tarefa.data_agendada)}
                       {tarefa.hora_agendada && ` às ${tarefa.hora_agendada.slice(0, 5)}`}
                     </p>
                   )}
