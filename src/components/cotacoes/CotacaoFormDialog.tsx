@@ -72,6 +72,7 @@ import { useConfigLimitesVeiculo } from '@/hooks/useConfigLimitesVeiculo';
 import { useFipeMenorAtivo } from '@/hooks/useFipeMenorAtivo';
 import { useConfigDuplaAprovacao } from '@/hooks/useAprovacoesFipeDiretoria';
 import { useTabelasPreco } from '@/hooks/usePlanos';
+import { obterFaixaFipeAtual, obterFaixaFipeAnterior, somarCoberturasPorValorFipe } from '@/utils/fipeFaixa';
 import { useLead } from '@/hooks/useLeads';
 import { useFipe, type PlateResult, type FipeMarca, type FipeModelo, type FipeAno } from '@/hooks/useFipe';
 import { useVendedores } from '@/hooks/useVendedores';
