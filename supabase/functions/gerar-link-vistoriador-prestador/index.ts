@@ -181,10 +181,12 @@ _Dúvidas? Entre em contato com o coordenador._`
         const { error: wppErr } = await supabase.functions.invoke('whatsapp-send-text', {
           body: {
             telefone: telefoneFormatado,
-            template_nome: 'notificacao_geral_v1',
+            template_nome: 'prestador_nova_tarefa_v1',
             variaveis: {
               '1': prestador.nome,
-              '2': `Vistoria em ${instalacao.cidade}: ${veiculoDesc} (${placaVeiculo})`,
+              '2': `${veiculoDesc} (${placaVeiculo})`,
+              '3': instalacao.cidade || 'município',
+              '4': url,
             },
             mensagem_fallback: mensagem,
             allow_text: true,
