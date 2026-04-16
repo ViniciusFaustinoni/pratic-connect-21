@@ -1,43 +1,55 @@
 
 
-## Plano: Ícone Pulsante da Base Pratic no Mapa de Atribuições
+## Plano: Seleção de Base na Vistoria Tipo Base
 
-### Objetivo
-Exibir um ícone pulsante na posição de cada Base da Pratic no mapa de atribuições, mostrando a quantidade de vistorias base pendentes. Ao clicar, abre o modal de atribuição (`CalendarioDiaModal`) filtrado na aba "Base".
+### Problema
+Atualmente o fluxo de agendamento na base assume uma única base (dados da tabela `configuracoes`). Existem 2 bases cadastradas como `is_base_pratic=true` na tabela `oficinas`:
+- **Oficina Praticcar** — Duque de Caxias, RJ
+- **Auto GJ** — Realengo, Rio de Janeiro, RJ
+
+O campo `oficina_id` não existe em `agendamentos_base`, impossibilitando saber qual base o cliente escolheu.
 
 ### Mudanças
 
-#### 1. `src/components/mapa/MapaVistoriasContent.tsx`
+#### 1. Migration SQL
+- Adicionar coluna `oficina_id UUID REFERENCES oficinas(id)` em `agendamentos_base`
+- Atualizar os 2 registros existentes para apontar para a base de Duque de Caxias (`41ef21e6-8d8e-487f-b6b5-8b26e4653790`)
 
-- Importar `useBasesPratic` e `CalendarioDiaModal`
-- Adicionar query para contar agendamentos base pendentes do dia (status NOT IN concluida/cancelado) agrupados por base (usando coordenadas da oficina ou um campo de referência)
-- Criar um ícone DivIcon customizado com animação pulse CSS, formato circular com cor destacada (ex: roxo/azul) e badge com contagem
-- Para cada base Pratic com coordenadas, renderizar um `Marker` no mapa com:
-  - Ícone pulsante mostrando quantidade de vistorias base não concluídas do dia
-  - Tooltip com nome da base
-  - `onClick`: abre o `CalendarioDiaModal` na data de hoje, aba "Base"
-- Adicionar estado `baseModalOpen` e `baseModalData` para controlar abertura do modal
+#### 2. `src/components/cotacao-publica/AgendamentoBase.tsx`
+- Adicionar prop `oficinaId` (obrigatória)
+- Buscar dados da oficina selecionada via `useOficina(oficinaId)` para exibir nome e endereço no header (substituindo os dados da tabela `configuracoes`)
+- Passar `oficinaId` ao `useCriarAgendamentoBase`
 
-#### 2. Query de contagem
+#### 3. `src/components/cotacao-publica/AgendamentoVistoriaCompleta.tsx`
+- Adicionar etapa intermediária `escolha-base` entre a escolha de local e o agendamento
+- Nessa etapa, listar as bases disponíveis (via `useBasesPratic`) como cards clicáveis com nome, endereço e coordenadas
+- Ao selecionar, passar a `oficinaId` para `AgendamentoBase`
 
-- Buscar da tabela `agendamentos_base` onde `data_agendada = hoje` e `status NOT IN ('concluida', 'cancelado')` para obter a contagem de pendentes
-- A query será feita diretamente no componente (inline useQuery) para manter simplicidade
+#### 4. `src/hooks/useAgendamentoBase.ts`
+- Na mutation `useCriarAgendamentoBase`, incluir `oficina_id` no INSERT
+- Na query `useHorariosDisponiveis`, filtrar por `oficina_id` para que a capacidade seja per-base
+- Exportar a interface `AgendamentoBase` com o novo campo
 
-#### 3. Ícone visual
+#### 5. `src/components/mapa/MapaVistoriasContent.tsx`
+- Na query de pendentes do dia, incluir `oficina_id` no select
+- Agrupar contagem de pendentes por `oficina_id` para cada base no mapa
 
-- Círculo com borda pulsante (CSS `animate-ping` overlay)
-- Ícone `Building2` centralizado
-- Badge com número no canto superior direito
-- Se contagem = 0, ícone sem pulse e opacidade reduzida
+#### 6. `src/components/monitoramento/CalendarioDiaModal.tsx`
+- Na query de agendamentos base, incluir `oficina_id` e dados da oficina para exibição
+- Mostrar o nome da base ao lado de cada agendamento
 
-#### 4. `CalendarioDiaModal` — ajuste menor
-
-- Aceitar prop opcional `abaInicial` para abrir diretamente na aba "Base" quando chamado do mapa
+#### 7. `src/hooks/useAtribuicaoManual.ts`
+- Incluir `oficina_id` no select dos itens base para referência
 
 ### Arquivos
 
-| Arquivo | Ação |
+| Arquivo | Acao |
 |---------|------|
-| `src/components/mapa/MapaVistoriasContent.tsx` | Adicionar markers das bases + modal |
-| `src/components/monitoramento/CalendarioDiaModal.tsx` | Aceitar `abaInicial` prop |
+| Nova migration SQL | Adicionar `oficina_id`, atualizar registros existentes |
+| `src/components/cotacao-publica/AgendamentoVistoriaCompleta.tsx` | Etapa de seleção de base |
+| `src/components/cotacao-publica/AgendamentoBase.tsx` | Receber `oficinaId`, exibir dados da oficina |
+| `src/hooks/useAgendamentoBase.ts` | Incluir `oficina_id` em insert/queries |
+| `src/components/mapa/MapaVistoriasContent.tsx` | Agrupar pendentes por base |
+| `src/components/monitoramento/CalendarioDiaModal.tsx` | Mostrar nome da base |
+| `src/hooks/useAtribuicaoManual.ts` | Incluir `oficina_id` no select |
 
