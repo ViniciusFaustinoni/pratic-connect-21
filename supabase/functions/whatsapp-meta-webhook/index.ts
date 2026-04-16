@@ -48,6 +48,48 @@ function inferirIntencaoConfirmacao(texto: string): string {
 }
 
 /**
+ * Gera resposta humanizada via Lovable AI Gateway com fallback determinístico
+ */
+async function gerarRespostaConfirmacaoIA(
+  nomeCliente: string,
+  dataServico: string | null,
+  horaServico: string | null,
+  enderecoServico: string | null,
+): Promise<string> {
+  const fallback = `✅ Perfeito, ${nomeCliente.split(" ")[0]}! Sua presença está *confirmada*${dataServico ? ` para ${dataServico}` : ""}${horaServico ? ` às ${horaServico}` : ""}.\n\nNosso técnico será designado em breve e você receberá os detalhes por aqui. Qualquer dúvida, é só responder. 😊`;
+
+  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!apiKey) return fallback;
+
+  try {
+    const prompt = `Cliente: ${nomeCliente}\nDia: ${dataServico ?? "—"}\nHora: ${horaServico ?? "—"}\nEndereço: ${enderecoServico ?? "—"}\n\nGere uma mensagem CURTA (até 3 linhas), calorosa e em português do Brasil, agradecendo a confirmação, lembrando o dia e horário, dizendo que o técnico será designado e que ele receberá os detalhes em breve. Use o primeiro nome do cliente. Use 1-2 emojis apropriados. NÃO use markdown pesado, apenas asteriscos para negrito quando útil.`;
+
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "google/gemini-3-flash-preview",
+        messages: [
+          { role: "system", content: "Você é um atendente cordial da PRATICCAR confirmando agendamentos por WhatsApp." },
+          { role: "user", content: prompt },
+        ],
+      }),
+    });
+
+    if (!res.ok) {
+      console.warn(`[whatsapp-meta-webhook] IA Gateway respondeu ${res.status}, usando fallback`);
+      return fallback;
+    }
+    const data = await res.json();
+    const content = data?.choices?.[0]?.message?.content?.trim();
+    return content && content.length > 5 ? content : fallback;
+  } catch (e) {
+    console.error("[whatsapp-meta-webhook] Erro gerando IA:", e);
+    return fallback;
+  }
+}
+
+/**
  * Processa resposta de confirmação de agendamento recebida via Meta API
  */
 async function processarRespostaConfirmacaoMeta(
@@ -64,28 +106,70 @@ async function processarRespostaConfirmacaoMeta(
   const agora = new Date().toISOString();
 
   if (intencao === "CONFIRMADO") {
-    // Atualizar confirmação
-    await supabase
+    // Atualizar confirmação (schema real)
+    const { error: confErr } = await supabase
       .from("confirmacoes_agendamento")
       .update({
-        status: "sucesso",
-        resposta_associado: texto,
-        intencao_detectada: "CONFIRMADO",
-        respondido_em: agora,
-        updated_at: agora,
+        status: "confirmada",
+        resposta_cliente: texto,
+        resposta_recebida_em: agora,
       })
       .eq("id", confirmacao.id);
+    if (confErr) console.error("[whatsapp-meta-webhook] Erro update confirmacao:", confErr);
 
-    // Atualizar serviço
+    // Atualizar serviço (coluna text + nome correto)
+    let nomeCliente = "Cliente";
+    let dataAg: string | null = null;
+    let horaAg: string | null = null;
+    let endAg: string | null = null;
+
     if (confirmacao.servico_id) {
-      await supabase
+      const { error: servErr } = await supabase
         .from("servicos")
         .update({
-          confirmacao_whatsapp: true,
-          confirmacao_whatsapp_em: agora,
-          updated_at: agora,
+          confirmacao_whatsapp: "confirmada",
+          confirmado_via_whatsapp_em: agora,
         })
         .eq("id", confirmacao.servico_id);
+      if (servErr) console.error("[whatsapp-meta-webhook] Erro update servico:", servErr);
+
+      // Buscar dados para resposta + push
+      const { data: servico } = await supabase
+        .from("servicos")
+        .select("profissional_id, hora_agendada, data_agendada, logradouro, bairro, cidade, associado:associados(nome)")
+        .eq("id", confirmacao.servico_id)
+        .maybeSingle();
+
+      if (servico) {
+        const assoc = (servico as any).associado;
+        if (assoc?.nome) nomeCliente = assoc.nome;
+        if (servico.data_agendada) {
+          const [y, m, d] = String(servico.data_agendada).split("-");
+          dataAg = `${d}/${m}/${y}`;
+        }
+        if (servico.hora_agendada) horaAg = String(servico.hora_agendada).slice(0, 5);
+        const partesEnd = [(servico as any).logradouro, (servico as any).bairro, (servico as any).cidade].filter(Boolean);
+        endAg = partesEnd.length ? partesEnd.join(", ") : null;
+
+        // Push para vistoriador
+        if (servico.profissional_id) {
+          try {
+            await supabase.functions.invoke("send-push-profissional", {
+              body: {
+                profissional_id: servico.profissional_id,
+                notification: {
+                  title: "✅ Cliente Confirmou!",
+                  body: `${nomeCliente.split(" ")[0]} confirmou presença para ${horaAg || "hoje"}`,
+                  tag: `confirmacao-${confirmacao.servico_id}`,
+                  data: { servico_id: confirmacao.servico_id, action: "confirmacao_whatsapp" },
+                },
+              },
+            });
+          } catch (pushErr) {
+            console.error("[whatsapp-meta-webhook] Erro push:", pushErr);
+          }
+        }
+      }
 
       // Disparar atribuição automática
       try {
@@ -97,18 +181,15 @@ async function processarRespostaConfirmacaoMeta(
       } catch (_) { /* fire-and-forget */ }
     }
 
-    await enviarWhatsApp(supabaseUrl, serviceKey, telefone,
-      `✅ Agendamento *confirmado* com sucesso!\n\nNosso técnico será designado e você receberá os detalhes em breve. Obrigado! 😊`
-    );
+    const mensagem = await gerarRespostaConfirmacaoIA(nomeCliente, dataAg, horaAg, endAg);
+    await enviarWhatsApp(supabaseUrl, serviceKey, telefone, mensagem);
   } else if (intencao === "REAGENDAR") {
     await supabase
       .from("confirmacoes_agendamento")
       .update({
         status: "reagendando",
-        resposta_associado: texto,
-        intencao_detectada: "REAGENDAR",
-        respondido_em: agora,
-        updated_at: agora,
+        resposta_cliente: texto,
+        resposta_recebida_em: agora,
       })
       .eq("id", confirmacao.id);
 
@@ -119,11 +200,9 @@ async function processarRespostaConfirmacaoMeta(
     await supabase
       .from("confirmacoes_agendamento")
       .update({
-        status: "cancelado",
-        resposta_associado: texto,
-        intencao_detectada: "CANCELAR",
-        respondido_em: agora,
-        updated_at: agora,
+        status: "cancelada",
+        resposta_cliente: texto,
+        resposta_recebida_em: agora,
       })
       .eq("id", confirmacao.id);
 
@@ -131,13 +210,12 @@ async function processarRespostaConfirmacaoMeta(
       `❌ Agendamento cancelado conforme solicitado.\n\nSe precisar reagendar, entre em contato conosco. Estamos à disposição! 😊`
     );
   } else {
-    // DUVIDA - inserir na fila IA para resposta contextualizada
+    // DUVIDA - registrar resposta e pedir clarificação
     await supabase
       .from("confirmacoes_agendamento")
       .update({
-        resposta_associado: texto,
-        intencao_detectada: "DUVIDA",
-        updated_at: agora,
+        resposta_cliente: texto,
+        resposta_recebida_em: agora,
       })
       .eq("id", confirmacao.id);
 
@@ -177,7 +255,7 @@ async function processarMensagemUsuario(
       const { data: confirmacao } = await supabase
         .from("confirmacoes_agendamento")
         .select("*")
-        .or(`telefone.in.(${telefonesBusca.join(",")}),telefone_formatado.in.(${telefonesBusca.join(",")})`)
+        .in("telefone", telefonesBusca)
         .in("status", ["enviada", "reagendando", "aguardando_confirmacao_vespera", "aguardando_confirmacao_manha"])
         .order("created_at", { ascending: false })
         .limit(1)

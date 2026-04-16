@@ -796,6 +796,11 @@ export function MapaVistoriasContent() {
                   {!isRealizada && !v.permite_encaixe && !isEmExecucao && (
                     <p style={{ color: tooltipColor }}><strong>Confirmação:</strong> {getConfirmacaoLabel(v.confirmacao_whatsapp, v.permite_encaixe)}</p>
                   )}
+                  {v.confirmacao_whatsapp === 'confirmada' && !isRealizada && (
+                    <p className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-[10px] font-semibold border border-green-300">
+                      ✅ Confirmado via WhatsApp
+                    </p>
+                  )}
                   {v.vistoriador_nome ? (
                     <p><strong>Vistoriador:</strong> {v.vistoriador_nome}</p>
                   ) : (
