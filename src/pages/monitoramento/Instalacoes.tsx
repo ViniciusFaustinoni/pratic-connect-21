@@ -34,6 +34,7 @@ import {
   InstalacaoFilters,
 } from '@/components/instalacoes';
 import { STATUS_INSTALACAO_LABELS, STATUS_INSTALACAO_COLORS, PERIODO_LABELS } from '@/types/database';
+import { formatPlacaExibicao, isPlacaPlaceholder } from '@/lib/placa-utils';
 
 export default function Instalacoes() {
   // Ativar realtime para atualizações automáticas
@@ -203,9 +204,16 @@ export default function Instalacoes() {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col">
-                          <span className="font-mono text-sm bg-muted px-1.5 py-0.5 rounded w-fit">
-                            {instalacao.veiculos?.placa}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono text-sm bg-muted px-1.5 py-0.5 rounded w-fit">
+                              {formatPlacaExibicao(instalacao.veiculos?.placa)}
+                            </span>
+                            {isPlacaPlaceholder(instalacao.veiculos?.placa) && (
+                              <span className="text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 rounded px-1.5 py-0.5">
+                                0KM
+                              </span>
+                            )}
+                          </div>
                           <span className="text-xs text-muted-foreground">
                             {instalacao.veiculos?.marca} {instalacao.veiculos?.modelo}
                           </span>
