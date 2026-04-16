@@ -6,7 +6,7 @@ import { useBasesPratic } from '@/hooks/useBasesPratic';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
-import { MapPin, Building2, Save, Loader2 } from 'lucide-react';
+import { Building2, Save, Loader2, Info } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -35,7 +35,7 @@ interface Alocacao {
 }
 
 interface EstadoLocal {
-  tipo: 'rota' | 'base';
+  plantonista: boolean;
   base_id: string | null;
 }
 
@@ -47,11 +47,19 @@ interface Props {
   alocacoesExistentes: Alocacao[];
 }
 
+/**
+ * Modal de Plantão do Dia.
+ *
+ * Semântica unificada (abr/2025):
+ * - Estar marcado como plantonista = automaticamente tipo_alocacao='base' nesse dia.
+ * - Não estar marcado = sem registro em alocacoes_diarias (default = rota).
+ * - O sistema (mapa, atribuições) lê alocacoes_diarias e trata 'base' como base.
+ */
 export function PlantaoDiaModal({ open, onOpenChange, data, profissionais, alocacoesExistentes }: Props) {
   const { profile } = useAuth();
   const queryClient = useQueryClient();
   const { data: bases = [] } = useBasesPratic();
-  const [alocacoes, setAlocacoes] = useState<Record<string, EstadoLocal>>({});
+  const [estado, setEstado] = useState<Record<string, EstadoLocal>>({});
   const [hasChanges, setHasChanges] = useState(false);
 
   const dataFormatada = format(data, 'yyyy-MM-dd');
@@ -60,26 +68,35 @@ export function PlantaoDiaModal({ open, onOpenChange, data, profissionais, aloca
   useEffect(() => {
     if (open) {
       const initial: Record<string, EstadoLocal> = {};
-      alocacoesExistentes.forEach(a => {
-        initial[a.profissional_id] = {
-          tipo: a.tipo_alocacao as 'rota' | 'base',
-          base_id: a.base_id ?? null,
-        };
-      });
-      setAlocacoes(initial);
+      // Apenas alocações tipo 'base' contam como plantão
+      alocacoesExistentes
+        .filter(a => a.tipo_alocacao === 'base')
+        .forEach(a => {
+          initial[a.profissional_id] = {
+            plantonista: true,
+            base_id: a.base_id ?? null,
+          };
+        });
+      setEstado(initial);
       setHasChanges(false);
     }
   }, [open, alocacoesExistentes]);
 
-  const toggleAlocacao = (profId: string) => {
-    setAlocacoes(prev => {
-      const current = prev[profId]?.tipo || 'rota';
-      const novoTipo = current === 'rota' ? 'base' : 'rota';
+  const togglePlantonista = (profId: string) => {
+    setEstado(prev => {
+      const atual = prev[profId];
+      if (atual?.plantonista) {
+        // desmarca: remove do estado
+        const novo = { ...prev };
+        delete novo[profId];
+        return novo;
+      }
+      // marca: vira plantonista (base) — base padrão = primeira base se houver só uma
       return {
         ...prev,
         [profId]: {
-          tipo: novoTipo,
-          base_id: novoTipo === 'base' ? (prev[profId]?.base_id || null) : null,
+          plantonista: true,
+          base_id: bases.length === 1 ? bases[0].id : null,
         },
       };
     });
@@ -87,22 +104,27 @@ export function PlantaoDiaModal({ open, onOpenChange, data, profissionais, aloca
   };
 
   const setBase = (profId: string, baseId: string) => {
-    setAlocacoes(prev => ({
+    setEstado(prev => ({
       ...prev,
-      [profId]: { tipo: 'base', base_id: baseId },
+      [profId]: { plantonista: true, base_id: baseId },
     }));
     setHasChanges(true);
   };
 
-  const definirTodos = (tipo: 'rota' | 'base') => {
+  const marcarTodos = () => {
     const novo: Record<string, EstadoLocal> = {};
     profissionais.forEach(p => {
       novo[p.id] = {
-        tipo,
-        base_id: tipo === 'base' ? (alocacoes[p.id]?.base_id || null) : null,
+        plantonista: true,
+        base_id: estado[p.id]?.base_id ?? (bases.length === 1 ? bases[0].id : null),
       };
     });
-    setAlocacoes(novo);
+    setEstado(novo);
+    setHasChanges(true);
+  };
+
+  const limparTodos = () => {
+    setEstado({});
     setHasChanges(true);
   };
 
@@ -110,28 +132,45 @@ export function PlantaoDiaModal({ open, onOpenChange, data, profissionais, aloca
     mutationFn: async () => {
       if (!profile?.id) throw new Error('Não autenticado');
 
-      const entries = Object.entries(alocacoes);
-      const incompletos = entries.filter(([, v]) => v.tipo === 'base' && !v.base_id);
-      if (incompletos.length > 0) {
-        throw new Error('Selecione a base para todos os profissionais marcados como Base.');
+      const plantonistas = Object.entries(estado).filter(([, v]) => v.plantonista);
+      const semBase = plantonistas.filter(([, v]) => !v.base_id);
+      if (semBase.length > 0) {
+        throw new Error('Selecione a base para todos os plantonistas.');
       }
 
-      const upserts = entries.map(([profissionalId, v]) => ({
-        profissional_id: profissionalId,
-        data: dataFormatada,
-        tipo_alocacao: v.tipo,
-        base_id: v.tipo === 'base' ? v.base_id : null,
-        definido_por: profile.id,
-        updated_at: new Date().toISOString(),
-      }));
+      // Upsert dos plantonistas como tipo_alocacao='base'
+      if (plantonistas.length > 0) {
+        const upserts = plantonistas.map(([profissionalId, v]) => ({
+          profissional_id: profissionalId,
+          data: dataFormatada,
+          tipo_alocacao: 'base' as const,
+          base_id: v.base_id,
+          definido_por: profile.id,
+          observacoes: 'Plantão',
+          updated_at: new Date().toISOString(),
+        }));
 
-      if (upserts.length === 0) return;
+        const { error } = await supabase
+          .from('alocacoes_diarias')
+          .upsert(upserts, { onConflict: 'profissional_id,data' });
 
-      const { error } = await supabase
-        .from('alocacoes_diarias')
-        .upsert(upserts, { onConflict: 'profissional_id,data' });
+        if (error) throw error;
+      }
 
-      if (error) throw error;
+      // Remover alocações 'base' antigas que não estão mais marcadas como plantonista
+      const idsPlantonistasAtuais = plantonistas.map(([id]) => id);
+      const idsParaRemover = alocacoesExistentes
+        .filter(a => a.tipo_alocacao === 'base' && !idsPlantonistasAtuais.includes(a.profissional_id))
+        .map(a => a.id);
+
+      if (idsParaRemover.length > 0) {
+        const { error } = await supabase
+          .from('alocacoes_diarias')
+          .delete()
+          .in('id', idsParaRemover);
+
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       toast.success('Plantão salvo com sucesso!');
@@ -147,36 +186,39 @@ export function PlantaoDiaModal({ open, onOpenChange, data, profissionais, aloca
     },
   });
 
-  const countRota = Object.values(alocacoes).filter(v => v.tipo === 'rota').length;
-  const countBase = Object.values(alocacoes).filter(v => v.tipo === 'base').length;
+  const countPlantao = Object.values(estado).filter(v => v.plantonista).length;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5 text-primary" />
+            <Building2 className="h-5 w-5 text-amber-600" />
             Plantão do Dia
           </DialogTitle>
           <DialogDescription className="capitalize">{dataLabel}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
+          <div className="flex items-start gap-2 rounded-md border bg-muted/40 p-2.5 text-xs text-muted-foreground">
+            <Info className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+            <p>
+              Técnicos marcados como plantonistas são automaticamente tratados como
+              <strong className="text-foreground"> Base</strong> nesse dia: somem do mapa
+              de rota e recebem apenas vistorias da base selecionada.
+            </p>
+          </div>
+
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-xs">
-              <Badge variant="outline" className="gap-1">
-                <MapPin className="h-3 w-3" /> Rota: {countRota}
-              </Badge>
-              <Badge variant="outline" className="gap-1">
-                <Building2 className="h-3 w-3" /> Base: {countBase}
-              </Badge>
-            </div>
+            <Badge variant="outline" className="gap-1">
+              <Building2 className="h-3 w-3" /> Plantonistas: {countPlantao}
+            </Badge>
             <div className="flex items-center gap-1">
-              <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => definirTodos('rota')}>
-                Todos Rota
+              <Button variant="outline" size="sm" className="text-xs h-7" onClick={marcarTodos}>
+                Todos
               </Button>
-              <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => definirTodos('base')}>
-                Todos Base
+              <Button variant="outline" size="sm" className="text-xs h-7" onClick={limparTodos}>
+                Limpar
               </Button>
             </div>
           </div>
@@ -188,40 +230,42 @@ export function PlantaoDiaModal({ open, onOpenChange, data, profissionais, aloca
           ) : (
             <div className="space-y-2 max-h-[400px] overflow-y-auto">
               {profissionais.map(prof => {
-                const estado = alocacoes[prof.id];
-                const tipo = estado?.tipo || null;
-                const isBase = tipo === 'base';
+                const e = estado[prof.id];
+                const isPlantao = !!e?.plantonista;
 
                 return (
                   <div
                     key={prof.id}
-                    className="rounded-lg border p-3 hover:bg-accent/50 transition-colors space-y-2"
+                    className={cn(
+                      "rounded-lg border p-3 transition-colors space-y-2",
+                      isPlantao ? "border-amber-300 bg-amber-50/40 dark:bg-amber-950/20 dark:border-amber-800" : "hover:bg-accent/50"
+                    )}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
+                        <Checkbox
+                          id={`plantao-${prof.id}`}
+                          checked={isPlantao}
+                          onCheckedChange={() => togglePlantonista(prof.id)}
+                        />
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
                           {prof.nome.charAt(0).toUpperCase()}
                         </div>
-                        <span className="font-medium text-sm">{prof.nome}</span>
+                        <label htmlFor={`plantao-${prof.id}`} className="font-medium text-sm cursor-pointer">
+                          {prof.nome}
+                        </label>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <span className={cn(
-                          "text-xs font-medium",
-                          isBase ? "text-amber-600 dark:text-amber-400" : tipo === 'rota' ? "text-blue-600 dark:text-blue-400" : "text-muted-foreground"
-                        )}>
-                          {isBase ? 'Base' : tipo === 'rota' ? 'Rota' : '—'}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <MapPin className={cn("h-3.5 w-3.5", !isBase ? "text-blue-500" : "text-muted-foreground/40")} />
-                          <Switch checked={isBase} onCheckedChange={() => toggleAlocacao(prof.id)} />
-                          <Building2 className={cn("h-3.5 w-3.5", isBase ? "text-amber-500" : "text-muted-foreground/40")} />
-                        </div>
-                      </div>
+                      {isPlantao && (
+                        <Badge variant="outline" className="text-[10px] gap-1 text-amber-600 border-amber-300 bg-amber-50 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800">
+                          <Building2 className="h-2.5 w-2.5" />
+                          Base
+                        </Badge>
+                      )}
                     </div>
-                    {isBase && (
+                    {isPlantao && (
                       <div className="pl-11">
                         <Select
-                          value={estado?.base_id || ''}
+                          value={e?.base_id || ''}
                           onValueChange={(v) => setBase(prof.id, v)}
                         >
                           <SelectTrigger className="h-8 text-xs">
