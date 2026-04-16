@@ -1,67 +1,55 @@
 
-
 ## Diagnóstico
 
-A vistoria da Kelly **foi salva apenas em `cotacoes` (`vistoria_data_agendada=2026-04-17`)**, mas não criou registro em `vistorias`, `instalacoes`, nem `servicos`. Por isso não aparece no calendário de monitoramento.
+Na rota `/monitoramento/mapa` → aba "Atribuições", ao tentar arrastar um técnico (pin com ícone de pessoa) para uma vistoria/rota, o gesto de arrastar é capturado pelo Leaflet e move o **mapa inteiro** em vez de iniciar o drag-and-drop do técnico.
 
-### Por que aconteceu
+### Causa raiz (a confirmar na próxima rodada)
 
-A edge `agendar-vistoria-presencial` foi alterada para **NÃO criar mais a instalação** — ela só salva os campos `vistoria_*` na cotação e delega tudo para `criar-instalacao-pos-pagamento`, que só roda depois do pagamento confirmado.
+O Leaflet, por padrão, intercepta todos os eventos de mouse/touch dentro do container do mapa para permitir pan/zoom. Marcadores customizados que precisam suportar drag-and-drop HTML5 (ou bibliotecas como react-dnd/dnd-kit) precisam:
 
-No caso da Kelly:
-- Contrato `assinado`, `adesao_paga=true` ✅
-- Mas `criar-instalacao-pos-pagamento` **nunca foi chamado** para a cotação `c64ae336…` (zero logs).
+1. **Desabilitar a propagação de eventos do Leaflet** no marcador específico via `L.DomEvent.disableClickPropagation` + `L.DomEvent.disableScrollPropagation` no elemento HTML do marker.
+2. **Cancelar o drag do mapa** durante o início do drag do pin (`map.dragging.disable()` em `onDragStart` e `enable()` em `onDragEnd`).
+3. Ou usar a propriedade nativa `draggable: true` do `L.Marker` do Leaflet se for um drag dentro do próprio mapa — mas aqui o destino é um card de rota fora do mapa, então precisa ser HTML5 DnD ou lib externa.
 
-A edge tem 4 disparadores (frontend de pagamento, webhook Asaas e 2 caminhos do cron de reconciliação), e essa cotação caiu numa fresta entre eles — provavelmente o pagamento foi marcado por outro caminho (sga-hinova ou aprovação manual) que não dispara a edge.
+### Investigação necessária
 
-## Correção (duas frentes)
+1. Localizar o componente da aba "Atribuições" → `src/components/mapa/MapaVistoriasContent.tsx` (referenciado em `Mapa.tsx`).
+2. Identificar como os técnicos são renderizados (Marker do Leaflet com `divIcon` HTML? Camada DOM sobreposta?) e como o drag está implementado hoje (HTML5 nativo `draggable`? `react-dnd`? `dnd-kit`?).
+3. Verificar se já existe `L.DomEvent.disableClickPropagation` aplicado e se o `map.dragging` é controlado durante o drag.
+4. Conferir se o destino (card de rota onde solta o técnico) está dentro ou fora do container do mapa — afeta a estratégia.
 
-### 1) Recuperar a Kelly agora
-Disparar manualmente `criar-instalacao-pos-pagamento` para `cotacaoId = c64ae336-ae89-420a-b2bf-10ecf78abe8e` via `supabase.functions.invoke`. Como o `adesao_paga` já é `true`, vai criar a instalação + serviço + aparecer no calendário de 17/04.
+## Correção planejada
 
-### 2) Fechar a fresta para sempre
-Criar **trigger no banco** em `contratos` que, quando `adesao_paga` passa de `false` → `true` E a cotação vinculada tem `vistoria_data_agendada` E não existe instalação ainda, dispara `criar-instalacao-pos-pagamento` via `pg_net.http_post` (já usado no projeto). Assim, qualquer caminho que marque o pagamento (webhook, cron, SGA, manual, etc.) garante a criação da instalação.
+Depende da implementação atual, mas em geral:
 
-Pseudo-trigger:
-```sql
-CREATE OR REPLACE FUNCTION trg_disparar_criar_instalacao()
-RETURNS trigger AS $$
-BEGIN
-  IF NEW.adesao_paga = true AND COALESCE(OLD.adesao_paga,false) = false THEN
-    -- Verifica se cotação tem agendamento e ainda não tem instalação
-    IF EXISTS (
-      SELECT 1 FROM cotacoes c
-      WHERE c.id = NEW.cotacao_id
-        AND c.vistoria_data_agendada IS NOT NULL
-        AND NOT EXISTS (SELECT 1 FROM instalacoes i WHERE i.cotacao_id = c.id)
-    ) THEN
-      PERFORM net.http_post(
-        url := 'https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/criar-instalacao-pos-pagamento',
-        headers := jsonb_build_object('Content-Type','application/json','Authorization','Bearer '||<service_role>),
-        body   := jsonb_build_object('cotacaoId', NEW.cotacao_id)
-      );
-    END IF;
-  END IF;
-  RETURN NEW;
-END $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
-```
+### Se usa `L.Marker` + `divIcon` com HTML5 DnD
+- No `eventHandlers.add` do Marker, chamar `L.DomEvent.disableClickPropagation(marker.getElement())` e `L.DomEvent.disableScrollPropagation(...)`.
+- No `onDragStart` do elemento HTML interno, chamar `map.dragging.disable()`; no `onDragEnd`, `map.dragging.enable()`.
+- Garantir `pointer-events: auto` no ícone e `cursor: grab/grabbing`.
 
-### 3) Logging melhor (mínimo)
-Em `agendar-vistoria-presencial`, adicionar uma fila de retentativas (`fila_jobs` ou similar) caso o pagamento já esteja `true` no momento do agendamento — assim cobrimos também o caso "agendou depois de pagar".
+### Se usa `dnd-kit` ou `react-dnd`
+- Aplicar o sensor com `activationConstraint: { distance: 8 }` para distinguir clique de drag.
+- Bloquear `map.dragging` no `onDragStart` do listener da lib.
+- Usar `stopPropagation` no `onMouseDown` do handle de drag para o Leaflet não receber o evento.
 
-## Arquivos a editar
+### Melhoria de UX
+- Cursor `grab` no hover do pin do técnico, `grabbing` durante drag.
+- Feedback visual (sombra/escala) no card de rota quando o técnico for arrastado por cima.
+- Em mobile (touch), garantir que o gesto de drag do pin não conflita com pan do mapa — talvez exigir long-press para iniciar drag.
 
-- **Migration nova**: criar trigger `trg_disparar_criar_instalacao_pos_pagamento` na tabela `contratos`.
-- **Script único** (não código): invocar `criar-instalacao-pos-pagamento` para a cotação da Kelly.
-- (Opcional) `supabase/functions/agendar-vistoria-presencial/index.ts`: ao final, se cotação já tiver `adesao_paga=true`, chamar a edge de criação na hora.
+## Arquivos prováveis
+
+- `src/components/mapa/MapaVistoriasContent.tsx` (componente da aba Atribuições).
+- Componente do marker do técnico (provável `VistoriadorMarker.tsx` ou similar dentro de `src/components/mapa/`).
+- Componente do card de rota que recebe o drop.
+- Possível hook compartilhado de drag (`useTecnicoDragAndDrop` ou similar).
 
 ## Não vou mexer
 
-- Cálculo de vagas, geocodificação, lógica de comissão CC.
-- Demais paths que já chamam a edge.
+- Lógica de atribuição em si (edge function / mutation que persiste a atribuição).
+- Renderização da aba "Equipe" (não tem drag).
+- Mapa do instalador/regulador (rotas separadas).
 
 ## Resultado
 
-- Kelly aparece no calendário de 17/04 imediatamente após o disparo manual.
-- Daqui pra frente, qualquer cotação que tiver pagamento confirmado por **qualquer caminho** vai automaticamente criar a instalação/serviço e aparecer no calendário, sem depender do front lembrar de chamar a edge.
-
+Arrastar um técnico (segurar e mover o pin) inicia o DnD para os cards de rota, **sem mover o mapa**. Pan do mapa continua funcionando ao arrastar em qualquer outra área que não seja o pin do técnico. Funciona em desktop e mobile.
