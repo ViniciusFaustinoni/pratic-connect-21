@@ -759,11 +759,16 @@ export function MapaVistoriasContent() {
       {vistoriadoresEmServico.map((vistoriador) => {
         const tarefasDoTecnico = tarefasPorTecnico.get(vistoriador.vistoriador_id) || [];
         const taskCount = tarefasDoTecnico.length;
+        const corStatus =
+          vistoriador.status_operacional === 'em_andamento' ? '#F59E0B' :
+          vistoriador.status_operacional === 'em_rota' ? COR_VISTORIADOR :
+          vistoriador.status_operacional === 'em_contato' ? '#FCD34D' :
+          '#22C55E';
         return (
           <Marker
-            key={`vistoriador-${vistoriador.vistoriador_id}-${taskCount}`}
+            key={`vistoriador-${vistoriador.vistoriador_id}-${taskCount}-${vistoriador.status_operacional}`}
             position={[vistoriador.latitude, vistoriador.longitude]}
-            icon={getVistoriadorIconWithBadge(COR_VISTORIADOR, taskCount)}
+            icon={getVistoriadorIconWithBadge(corStatus, taskCount)}
           >
             <Popup>
               <div className="min-w-[200px]">
