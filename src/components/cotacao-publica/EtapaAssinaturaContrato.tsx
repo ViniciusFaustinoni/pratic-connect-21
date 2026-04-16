@@ -788,6 +788,58 @@ export function EtapaAssinaturaContrato({
             </p>
           </div>
 
+          {/* ═══ Banner: Revisão Biométrica Manual ═══ */}
+          {biometricStatus === 'review' && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <Alert className="border-warning/40 bg-warning/10">
+                <ScanFace className="h-5 w-5 text-warning" />
+                <AlertTitle className="text-warning font-semibold">
+                  Assinatura em revisão biométrica
+                </AlertTitle>
+                <AlertDescription className="text-foreground/80 space-y-2">
+                  <p className="text-sm">
+                    Recebemos sua selfie de assinatura, mas o Autentique solicitou uma{' '}
+                    <strong>aprovação manual da biometria</strong>. Isso acontece quando o
+                    sistema não reconhece o rosto com certeza absoluta — é uma camada extra
+                    de segurança.
+                  </p>
+                  <p className="text-sm">
+                    Nossa equipe foi notificada e fará a aprovação em breve. Tempo médio:{' '}
+                    <strong>até 1 hora útil</strong>. Você pode fechar esta página — assim
+                    que aprovado, enviaremos a confirmação por WhatsApp.
+                  </p>
+                </AlertDescription>
+              </Alert>
+            </motion.div>
+          )}
+
+          {biometricStatus === 'rejected' && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <Alert variant="destructive">
+                <XCircle className="h-5 w-5" />
+                <AlertTitle className="font-semibold">
+                  Biometria não aprovada
+                </AlertTitle>
+                <AlertDescription className="space-y-2">
+                  <p className="text-sm">
+                    O Autentique não conseguiu confirmar sua identidade pela selfie. Vamos
+                    reenviar o termo para você assinar novamente — atente-se a uma boa
+                    iluminação ao tirar a foto.
+                  </p>
+                  <p className="text-sm">
+                    Nossa equipe entrará em contato pelo WhatsApp em instantes.
+                  </p>
+                </AlertDescription>
+              </Alert>
+            </motion.div>
+          )}
+
           {/* Informações do signatário */}
           <div className="bg-muted/30 rounded-lg p-4 space-y-2">
             <div className="flex items-center justify-between text-sm">
