@@ -363,20 +363,38 @@ async function processarMensagemUsuario(
     console.log(`[whatsapp-meta-webhook] Tentando identificar por CPF: ${cpfLimpo}`);
     const { data: associadoPorCpf } = await supabase
       .from("associados")
-      .select("id, nome")
+      .select("id, nome, telefone, whatsapp")
       .eq("cpf", cpfLimpo)
       .eq("status", "ativo")
       .maybeSingle();
 
     if (associadoPorCpf) {
-      await supabase.from("associados").update({
-        whatsapp: telefone,
-        updated_at: new Date().toISOString(),
-      }).eq("id", associadoPorCpf.id);
+      const telNorm = (associadoPorCpf.telefone || "").replace(/\D/g, "");
+      const waNorm = (associadoPorCpf.whatsapp || "").replace(/\D/g, "");
+      const incomingNorm = telefone.replace(/\D/g, "");
+      const jaCadastrado =
+        incomingNorm === telNorm ||
+        incomingNorm === waNorm ||
+        incomingNorm === `55${telNorm}` ||
+        incomingNorm === `55${waNorm}` ||
+        telNorm === `55${incomingNorm}` ||
+        waNorm === `55${incomingNorm}`;
+
+      // Só preenche whatsapp se estiver vazio. NUNCA sobrescreve número existente
+      // (proteção contra cross-link de cadastro: outro número usando o mesmo CPF).
+      if (!waNorm) {
+        await supabase.from("associados").update({
+          whatsapp: telefone,
+          updated_at: new Date().toISOString(),
+        }).eq("id", associadoPorCpf.id);
+        console.log(`[whatsapp-meta-webhook] WhatsApp vinculado (vazio antes) ao associado ${associadoPorCpf.id}: ${telefone}`);
+      } else if (!jaCadastrado) {
+        console.warn(`[whatsapp-meta-webhook] BLOQUEADO sobrescrita de whatsapp do associado ${associadoPorCpf.id}. Atual=${waNorm} | Recebido=${incomingNorm}. Cadastro precisa de revisão manual.`);
+      }
 
       const primeiroNome = associadoPorCpf.nome.split(" ")[0];
       await enviarWhatsApp(supabaseUrl, serviceKey, telefone,
-        `Encontrei você, *${primeiroNome}*! 🎉\n\nSeu número foi vinculado ao seu cadastro. A partir de agora, posso te ajudar diretamente por aqui!\n\nComo posso te ajudar hoje? 😊`
+        `Encontrei você, *${primeiroNome}*! 🎉\n\nComo posso te ajudar hoje? 😊`
       );
       return;
     }
