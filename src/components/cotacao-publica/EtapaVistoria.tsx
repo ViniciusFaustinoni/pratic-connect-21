@@ -53,6 +53,7 @@ export function EtapaVistoria({
   tipoVistoriaRealizada 
 }: EtapaVistoriaProps) {
   const [modo, setModo] = useState<ModoVistoria>('escolha');
+  const [oficinaIdSelecionada, setOficinaIdSelecionada] = useState<string>('');
 
   const handleVoltarEscolha = () => {
     setModo('escolha');
@@ -216,10 +217,29 @@ export function EtapaVistoria({
               if (local === 'cliente') {
                 setModo('agendada');
               } else {
-                setModo('agendada-base');
+                setModo('escolha-base');
               }
             }}
             tipoInstalacao={tipoInstalacao}
+          />
+        </motion.div>
+      )}
+
+      {/* Escolha da base */}
+      {modo === 'escolha-base' && (
+        <motion.div
+          key="escolha-base"
+          initial={{ opacity: 0, x: 50 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -50 }}
+          transition={{ duration: 0.3 }}
+        >
+          <EscolhaBase
+            onEscolher={(oficinaId) => {
+              setOficinaIdSelecionada(oficinaId);
+              setModo('agendada-base');
+            }}
+            onVoltar={() => setModo(tipoInstalacao ? 'escolha' : 'escolha-local')}
           />
         </motion.div>
       )}
@@ -235,13 +255,14 @@ export function EtapaVistoria({
         >
           <AgendamentoBase
             cotacaoId={cotacaoId}
+            oficinaId={oficinaIdSelecionada}
             clienteNome={clienteNome}
             clienteTelefone={clienteTelefone}
             clienteEmail={clienteEmail}
             veiculoPlaca={veiculoPlaca}
             veiculoDescricao={veiculoDescricao}
             onAgendado={onComplete}
-            onVoltar={() => setModo(tipoInstalacao ? 'escolha' : 'escolha-local')}
+            onVoltar={() => setModo('escolha-base')}
           />
         </motion.div>
       )}
