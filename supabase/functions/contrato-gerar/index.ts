@@ -420,60 +420,72 @@ serve(async (req) => {
       }
       
       // CORREÇÃO: Buscar ou criar veículo para associado existente
-      const placaLimpa = cotacao.veiculo_placa?.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-      
+      // Suporta carros 0km (sem placa) usando placeholder
+      const placaLimpa = cotacao.veiculo_placa?.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || null;
+      const placaParaInsert = placaLimpa || ('0KM' + crypto.randomUUID().replace(/-/g, '').slice(0, 5).toUpperCase());
+
+      let veiculoExistente: { id: string } | null = null;
       if (placaLimpa) {
-        // Tentar encontrar veículo existente pela placa
-        const { data: veiculoExistente } = await supabase
+        const { data } = await supabase
           .from('veiculos')
           .select('id')
           .eq('placa', placaLimpa)
           .maybeSingle();
-        
-        if (veiculoExistente) {
-          veiculoId = veiculoExistente.id;
-          console.log('Veículo existente encontrado pela placa:', veiculoId);
-        } else {
-          // Criar novo veículo para associado existente
-          const categoriaFlags = {
-            flag_placa_vermelha: cotacao.categoria === 'placa_vermelha',
-            flag_ex_taxi: cotacao.categoria === 'ex_taxi',
-            flag_taxi_ativo: cotacao.categoria === 'taxi',
-            flag_chassi_remarcado: cotacao.categoria === 'chassi_remarcado',
-            flag_leilao: cotacao.categoria === 'leilao',
-            flag_ex_ressarcido: cotacao.categoria === 'ressarcimento_integral',
-          };
-          const { data: novoVeiculoExistente, error: veiculoExistenteError } = await supabase
-            .from('veiculos')
-            .insert({
-              associado_id: associadoId,
-              placa: placaLimpa,
-              marca: cotacao.veiculo_marca,
-              modelo: cotacao.veiculo_modelo,
-              ano_fabricacao: cotacao.veiculo_ano_fabricacao || cotacao.veiculo_ano,
-              ano_modelo: cotacao.veiculo_ano,
-              cor: cotacao.veiculo_cor || null,
-              combustivel: cotacao.veiculo_combustivel || null,
-              valor_fipe: cotacao.valor_fipe || null,
-              codigo_fipe: cotacao.codigo_fipe || null,
-              chassi: cotacao.veiculo_chassi || null,
-              renavam: cotacao.veiculo_renavam || null,
-              status: 'em_analise',
-              cobertura_roubo_furto: false,
-              cobertura_total: false,
-              ...categoriaFlags,
-            })
-            .select('id')
-            .single();
-          
-          if (veiculoExistenteError) {
-            console.error('Erro ao criar veículo para associado existente:', veiculoExistenteError);
-            throw new Error(`Falha ao criar veículo: ${veiculoExistenteError.message}`);
-          }
-          
-          veiculoId = novoVeiculoExistente.id;
-          console.log('Novo veículo criado para associado existente:', veiculoId);
+        veiculoExistente = data;
+      } else {
+        const { data } = await supabase
+          .from('veiculos')
+          .select('id')
+          .eq('associado_id', associadoId)
+          .eq('marca', cotacao.veiculo_marca)
+          .eq('modelo', cotacao.veiculo_modelo)
+          .ilike('placa', '0KM%')
+          .maybeSingle();
+        veiculoExistente = data;
+      }
+
+      if (veiculoExistente) {
+        veiculoId = veiculoExistente.id;
+        console.log('Veículo existente encontrado:', veiculoId);
+      } else {
+        const categoriaFlags = {
+          flag_placa_vermelha: cotacao.categoria === 'placa_vermelha',
+          flag_ex_taxi: cotacao.categoria === 'ex_taxi',
+          flag_taxi_ativo: cotacao.categoria === 'taxi',
+          flag_chassi_remarcado: cotacao.categoria === 'chassi_remarcado',
+          flag_leilao: cotacao.categoria === 'leilao',
+          flag_ex_ressarcido: cotacao.categoria === 'ressarcimento_integral',
+        };
+        const { data: novoVeiculoExistente, error: veiculoExistenteError } = await supabase
+          .from('veiculos')
+          .insert({
+            associado_id: associadoId,
+            placa: placaParaInsert,
+            marca: cotacao.veiculo_marca,
+            modelo: cotacao.veiculo_modelo,
+            ano_fabricacao: cotacao.veiculo_ano_fabricacao || cotacao.veiculo_ano,
+            ano_modelo: cotacao.veiculo_ano,
+            cor: cotacao.veiculo_cor || null,
+            combustivel: cotacao.veiculo_combustivel || null,
+            valor_fipe: cotacao.valor_fipe || null,
+            codigo_fipe: cotacao.codigo_fipe || null,
+            chassi: cotacao.veiculo_chassi || null,
+            renavam: cotacao.veiculo_renavam || null,
+            status: 'em_analise',
+            cobertura_roubo_furto: false,
+            cobertura_total: false,
+            ...categoriaFlags,
+          })
+          .select('id')
+          .single();
+
+        if (veiculoExistenteError) {
+          console.error('Erro ao criar veículo para associado existente:', veiculoExistenteError);
+          throw new Error(`Falha ao criar veículo: ${veiculoExistenteError.message}`);
         }
+
+        veiculoId = novoVeiculoExistente.id;
+        console.log('Novo veículo criado para associado existente:', veiculoId, 'placa:', placaParaInsert);
       }
     } else if (emailFinal) {
       const { data: byEmail } = await supabase
@@ -507,59 +519,72 @@ serve(async (req) => {
           }
         }
         
-        // CORREÇÃO: Buscar ou criar veículo para associado encontrado por email
-        const placaLimpa = cotacao.veiculo_placa?.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-        
-        if (placaLimpa) {
-          const { data: veiculoExistente } = await supabase
+        // CORREÇÃO: Buscar ou criar veículo (suporta 0km sem placa)
+        const placaLimpaEmail = cotacao.veiculo_placa?.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || null;
+        const placaParaInsertEmail = placaLimpaEmail || ('0KM' + crypto.randomUUID().replace(/-/g, '').slice(0, 5).toUpperCase());
+
+        let veiculoExistenteEmail: { id: string } | null = null;
+        if (placaLimpaEmail) {
+          const { data } = await supabase
             .from('veiculos')
             .select('id')
-            .eq('placa', placaLimpa)
+            .eq('placa', placaLimpaEmail)
             .maybeSingle();
-          
-          if (veiculoExistente) {
-            veiculoId = veiculoExistente.id;
-            console.log('Veículo existente encontrado pela placa:', veiculoId);
-          } else {
-            const categoriaFlagsEmail = {
-              flag_placa_vermelha: cotacao.categoria === 'placa_vermelha',
-              flag_ex_taxi: cotacao.categoria === 'ex_taxi',
-              flag_taxi_ativo: cotacao.categoria === 'taxi',
-              flag_chassi_remarcado: cotacao.categoria === 'chassi_remarcado',
-              flag_leilao: cotacao.categoria === 'leilao',
-              flag_ex_ressarcido: cotacao.categoria === 'ressarcimento_integral',
-            };
-            const { data: novoVeiculoEmail, error: veiculoEmailError } = await supabase
-              .from('veiculos')
-              .insert({
-                associado_id: associadoId,
-                placa: placaLimpa,
-                marca: cotacao.veiculo_marca,
-                modelo: cotacao.veiculo_modelo,
-                ano_fabricacao: cotacao.veiculo_ano_fabricacao || cotacao.veiculo_ano,
-                ano_modelo: cotacao.veiculo_ano,
-                cor: cotacao.veiculo_cor || null,
-                combustivel: cotacao.veiculo_combustivel || null,
-                valor_fipe: cotacao.valor_fipe || null,
-                codigo_fipe: cotacao.codigo_fipe || null,
-                chassi: cotacao.veiculo_chassi || null,
-                renavam: cotacao.veiculo_renavam || null,
-                status: 'em_analise',
-                cobertura_roubo_furto: false,
-                cobertura_total: false,
-                ...categoriaFlagsEmail,
-              })
-              .select('id')
-              .single();
-            
-            if (veiculoEmailError) {
-              console.error('Erro ao criar veículo para associado existente (email):', veiculoEmailError);
-              throw new Error(`Falha ao criar veículo: ${veiculoEmailError.message}`);
-            }
-            
-            veiculoId = novoVeiculoEmail.id;
-            console.log('Novo veículo criado para associado existente (email):', veiculoId);
+          veiculoExistenteEmail = data;
+        } else {
+          const { data } = await supabase
+            .from('veiculos')
+            .select('id')
+            .eq('associado_id', associadoId)
+            .eq('marca', cotacao.veiculo_marca)
+            .eq('modelo', cotacao.veiculo_modelo)
+            .ilike('placa', '0KM%')
+            .maybeSingle();
+          veiculoExistenteEmail = data;
+        }
+
+        if (veiculoExistenteEmail) {
+          veiculoId = veiculoExistenteEmail.id;
+          console.log('Veículo existente encontrado (email):', veiculoId);
+        } else {
+          const categoriaFlagsEmail = {
+            flag_placa_vermelha: cotacao.categoria === 'placa_vermelha',
+            flag_ex_taxi: cotacao.categoria === 'ex_taxi',
+            flag_taxi_ativo: cotacao.categoria === 'taxi',
+            flag_chassi_remarcado: cotacao.categoria === 'chassi_remarcado',
+            flag_leilao: cotacao.categoria === 'leilao',
+            flag_ex_ressarcido: cotacao.categoria === 'ressarcimento_integral',
+          };
+          const { data: novoVeiculoEmail, error: veiculoEmailError } = await supabase
+            .from('veiculos')
+            .insert({
+              associado_id: associadoId,
+              placa: placaParaInsertEmail,
+              marca: cotacao.veiculo_marca,
+              modelo: cotacao.veiculo_modelo,
+              ano_fabricacao: cotacao.veiculo_ano_fabricacao || cotacao.veiculo_ano,
+              ano_modelo: cotacao.veiculo_ano,
+              cor: cotacao.veiculo_cor || null,
+              combustivel: cotacao.veiculo_combustivel || null,
+              valor_fipe: cotacao.valor_fipe || null,
+              codigo_fipe: cotacao.codigo_fipe || null,
+              chassi: cotacao.veiculo_chassi || null,
+              renavam: cotacao.veiculo_renavam || null,
+              status: 'em_analise',
+              cobertura_roubo_furto: false,
+              cobertura_total: false,
+              ...categoriaFlagsEmail,
+            })
+            .select('id')
+            .single();
+
+          if (veiculoEmailError) {
+            console.error('Erro ao criar veículo para associado existente (email):', veiculoEmailError);
+            throw new Error(`Falha ao criar veículo: ${veiculoEmailError.message}`);
           }
+
+          veiculoId = novoVeiculoEmail.id;
+          console.log('Novo veículo criado para associado existente (email):', veiculoId, 'placa:', placaParaInsertEmail);
         }
       }
     }
@@ -599,6 +624,10 @@ serve(async (req) => {
       console.log('Novo associado criado:', associadoId);
 
       // Criar VEÍCULO vinculado ao novo associado (status em_analise)
+      // Suporta carros 0km (sem placa) usando placeholder
+      const placaLimpaNovo = cotacao.veiculo_placa?.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || null;
+      const placaParaInsertNovo = placaLimpaNovo || ('0KM' + crypto.randomUUID().replace(/-/g, '').slice(0, 5).toUpperCase());
+
       const categoriaFlagsNovo = {
         flag_placa_vermelha: cotacao.categoria === 'placa_vermelha',
         flag_ex_taxi: cotacao.categoria === 'ex_taxi',
@@ -611,7 +640,7 @@ serve(async (req) => {
         .from('veiculos')
         .insert({
           associado_id: associadoId,
-          placa: cotacao.veiculo_placa,
+          placa: placaParaInsertNovo,
           marca: cotacao.veiculo_marca,
           modelo: cotacao.veiculo_modelo,
           ano_fabricacao: cotacao.veiculo_ano_fabricacao || cotacao.veiculo_ano,

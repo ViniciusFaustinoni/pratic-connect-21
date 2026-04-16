@@ -127,40 +127,53 @@ serve(async (req) => {
       console.log('[CriarInstalacaoPosPagamento] skipPaymentCheck=true, pulando verificação de adesao_paga');
     }
 
-    // 3.1 CORREÇÃO: Garantir que veiculo_id existe, buscar pela placa se necessário
+    // 3.1 CORREÇÃO: Garantir que veiculo_id existe — fallback por placa OU por associado
     let veiculoIdFinal = contrato.veiculo_id;
 
     if (!veiculoIdFinal) {
-      console.log('[CriarInstalacaoPosPagamento] veiculo_id null no contrato, buscando pela placa...');
-      
-      // Buscar placa da cotação
+      console.log('[CriarInstalacaoPosPagamento] veiculo_id null no contrato, tentando recuperar...');
+
       const { data: cotacaoVeiculo } = await supabase
         .from('cotacoes')
-        .select('veiculo_placa')
+        .select('veiculo_placa, veiculo_marca, veiculo_modelo')
         .eq('id', cotacaoId)
         .single();
-      
+
+      // Tentativa 1: pela placa (se houver)
       if (cotacaoVeiculo?.veiculo_placa) {
         const placaLimpa = cotacaoVeiculo.veiculo_placa.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-        
         const { data: veiculo } = await supabase
           .from('veiculos')
           .select('id')
           .eq('placa', placaLimpa)
           .maybeSingle();
-        
         if (veiculo) {
           veiculoIdFinal = veiculo.id;
           console.log('[CriarInstalacaoPosPagamento] Veículo encontrado pela placa:', veiculoIdFinal);
-          
-          // Atualizar contrato com o veiculo_id correto
-          await supabase
-            .from('contratos')
-            .update({ veiculo_id: veiculoIdFinal })
-            .eq('id', contrato.id);
-          
-          console.log('[CriarInstalacaoPosPagamento] Contrato atualizado com veiculo_id');
         }
+      }
+
+      // Tentativa 2: pelo associado_id + marca/modelo (carros 0km / placeholder 0KM*)
+      if (!veiculoIdFinal && contrato.associado_id) {
+        const { data: veiculoPorAssociado } = await supabase
+          .from('veiculos')
+          .select('id')
+          .eq('associado_id', contrato.associado_id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (veiculoPorAssociado) {
+          veiculoIdFinal = veiculoPorAssociado.id;
+          console.log('[CriarInstalacaoPosPagamento] Veículo encontrado pelo associado_id:', veiculoIdFinal);
+        }
+      }
+
+      if (veiculoIdFinal) {
+        await supabase
+          .from('contratos')
+          .update({ veiculo_id: veiculoIdFinal })
+          .eq('id', contrato.id);
+        console.log('[CriarInstalacaoPosPagamento] Contrato atualizado com veiculo_id');
       }
     }
 
