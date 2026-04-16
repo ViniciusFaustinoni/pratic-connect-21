@@ -1,47 +1,54 @@
 
-## Plano: estender vistoria offline-first para vistoriadores comuns
+## Diagnóstico
 
-### Diagnóstico
-A infra offline (Dexie + `useSyncQueue` + banner + tela de sincronização) já está pronta e suporta `origem: 'instalador'`. Falta só plugar nos componentes de captura do fluxo do vistoriador comum, que hoje fazem upload direto pro Supabase Storage.
+Erro 400 ao atribuir um vistoriador a um agendamento de base (modal "Tarefas do dia" → aba Base → botão "Confirmar" no select do vistoriador).
 
-### Investigação necessária (na próxima rodada)
-1. Localizar `ExecutarVistoriaCompleta.tsx` (vistoriador base + agendada — paridade pela memória `inspection-workflow-parity`).
-2. Identificar como hoje as fotos/vídeo são capturados e enviados (provável `useUploadVistoria` ou similar chamando `supabase.storage.upload` direto).
-3. Verificar se `InstaladorLayout` já tem `<SyncStatusBanner />` (foi adicionado na rodada anterior — confirmar) e se a rota `/instalador/sincronizacao` está ativa.
+PATCH direto na tabela `agendamentos_base` está sendo rejeitado pelo PostgREST. Causas possíveis (a confirmar):
 
-### Mudanças
+1. **Coluna inexistente** no payload (ex.: front mandando `vistoriador_id` mas a coluna se chama `profissional_id`, `instalador_id` ou similar).
+2. **Política RLS** bloqueando UPDATE (usuário logado não tem permissão de escrita direta nessa tabela — deveria passar por RPC/edge function).
+3. **Constraint/Check** (FK inválida, enum status não aceito, NOT NULL violado).
+4. **Trigger BEFORE UPDATE** disparando `RAISE EXCEPTION`.
 
-**1. Refatorar captura de fotos do vistoriador**
-- Trocar upload direto por `enfileirarMidia({ origem: 'instalador', tipo: 'foto', slot, blob })`.
-- Mostrar preview a partir do blob local quando a URL do servidor ainda não existir (mesmo padrão do `VistoriaEventoMidias.tsx`).
-- Botão "Refazer" remove da fila local antes de capturar de novo.
+### Investigação na próxima rodada (com permissão)
+1. Localizar componente do modal "Tarefas do dia" → aba Base → handler do botão "Confirmar" (provável `src/components/monitoramento/CalendarioTarefas*.tsx` ou similar).
+2. Ver exatamente que payload o front envia no PATCH.
+3. Consultar via `supabase--read_query`:
+   - Schema de `agendamentos_base` (colunas, tipos, NOT NULL).
+   - RLS policies de UPDATE em `agendamentos_base`.
+   - Triggers em `agendamentos_base`.
+4. Buscar logs recentes do PostgREST/Edge para ver a mensagem de erro 400 detalhada (corpo da resposta tem `message`, `code`, `details`, `hint`).
+5. Comparar com o handler de "Reatribuir" (que funciona, segundo o print mostra outros itens já com vistoriador atribuído) — há um caminho que dá certo, então o que muda?
 
-**2. Refatorar captura de vídeo**
-- Idem para o slot `'360'` (ou nome usado no fluxo do vistoriador).
+## Correção planejada
 
-**3. Combinar fotos do servidor + previews locais**
-- Helper `fotoUrl(i)` igual ao já feito para o regulador: prioriza URL do servidor, cai pro `URL.createObjectURL(blob)` da fila.
+Depende da causa raiz, mas em geral:
 
-**4. Botão "Finalizar vistoria"**
-- Permitir prosseguir mesmo com itens na fila (já implementado no banner global).
-- Mensagem de aviso: "X mídias ainda serão enviadas em segundo plano".
+### Cenário A — Nome de coluna errado
+- Ajustar payload do PATCH para usar a coluna correta.
+- Tipar o update com o tipo gerado em `src/integrations/supabase/types.ts` para evitar reincidência.
 
-**5. Confirmar fluxo no `useSyncQueue`**
-- Já trata `origem === 'instalador'` via Storage direto + bucket `vistoria-fotos`/`vistoria-videos`. Validar que o path bate com o que o resto do app espera ler depois.
+### Cenário B — RLS bloqueando
+- Em vez de PATCH direto, rotear pela RPC/edge function que já é usada em outros pontos de atribuição (provavelmente `atribuir-servico` ou similar — memória `automated-assignment-and-confirmation-logic`).
+- Garantir que a função usa `SECURITY DEFINER` e valida que o usuário é coordenador/diretor.
 
-**6. Edge function / persistência final**
-- Quando todas as mídias do `vistoria_id` chegarem no Storage, atualizar `vistorias` (ou tabela equivalente do vistoriador) com as URLs. Fazer isso via trigger no Storage **ou** via `enfileirarVistoria` no Dexie disparando uma chamada final ao endpoint de finalização quando a fila esvazia. Decidir após ver o código atual.
+### Cenário C — Constraint/trigger
+- Incluir os campos obrigatórios que faltam (ex.: `atribuido_em`, `atribuido_por`, mudar `status` para `'agendado'` ou `'confirmado'`).
+- Se trigger exige condição prévia (ex.: vistoriador precisa estar disponível naquele horário), exibir erro tratado no front com `toast.error` legível em vez de "Erro ao atribuir técnico".
 
-### Arquivos prováveis
-- `src/components/instalador/ExecutarVistoriaCompleta.tsx` (ou pasta `vistoriador/`)
-- `src/components/instalador/FotoCapture.tsx` e `VideoCapture.tsx` (já existem — usados pelo regulador)
-- Hook de upload atual (a localizar — provável `useVistoriaUpload` ou similar)
-- Possível ajuste em edge function de finalização para aceitar `client_id` por mídia
+### Melhoria comum aos três cenários
+- Trocar o `toast.error('Erro ao atribuir técnico')` genérico por `toast.error(error.message)` para o usuário ver "violates RLS policy" ou "column X does not exist" e nós conseguirmos diagnosticar mais rápido.
+- Logar `error.code`, `error.details`, `error.hint` no console (já vem do PostgREST).
 
-### Não vou mexer
-- Schema Dexie (já suporta).
-- `useSyncQueue` (já suporta `origem: 'instalador'`).
-- Banner global e tela `/instalador/sincronizacao` (já criados).
+## Arquivos prováveis
+- Componente do modal de atribuição na rota `/monitoramento/calendario` (a localizar).
+- Hook que faz o PATCH (provável `useAtribuirAgendamentoBase` ou similar).
+- Possível edge function `atribuir-servico` para rotear quando RLS for o problema.
 
-### Resultado
-Vistoriador comum (base + agendada) completa vistoria sem internet exatamente como o regulador faz hoje: fotos/vídeo persistidos no IndexedDB, sincronização automática quando voltar online, mesmo banner, mesma tela de pendências.
+## Não vou mexer
+- Lógica do calendário em si (renderização, navegação por dias).
+- Fluxo de atribuição de rotas (aba "Rota") — só base.
+- Infra offline (não relacionada).
+
+## Resultado
+Botão "Confirmar" no select de vistoriador da aba "Base" passa a atribuir corretamente, com mensagem de erro útil quando houver bloqueio legítimo (ex.: vistoriador já tem outra tarefa no mesmo horário).
