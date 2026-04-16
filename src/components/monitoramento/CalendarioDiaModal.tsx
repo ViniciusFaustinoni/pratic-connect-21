@@ -141,8 +141,9 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
       queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
       queryClient.invalidateQueries({ queryKey: ['servicos'] });
     },
-    onError: () => {
-      toast.error('Erro ao antecipar tarefa');
+    onError: (error: any) => {
+      console.error('[antecipar] erro:', error);
+      toast.error(error?.message || 'Erro ao antecipar tarefa');
     },
   });
 
@@ -204,8 +205,9 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
       queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
       queryClient.invalidateQueries({ queryKey: ['servicos'] });
     },
-    onError: () => {
-      toast.error('Erro ao atribuir técnico');
+    onError: (error: any) => {
+      console.error('[atribuir] erro:', error);
+      toast.error(error?.message || 'Erro ao atribuir técnico');
     },
   });
 
