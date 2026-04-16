@@ -3497,20 +3497,36 @@ serve(async (req) => {
         
         if (associadoPorCpf) {
           if (associadoPorCpf.status === "ativo") {
-            // Vincular telefone ao associado ativo
-            await supabase
-              .from("associados")
-              .update({ whatsapp: telefone, updated_at: new Date().toISOString() })
-              .eq("id", associadoPorCpf.id);
-            
+            const telNorm = (associadoPorCpf.telefone || "").replace(/\D/g, "");
+            const waNorm = (associadoPorCpf.whatsapp || "").replace(/\D/g, "");
+            const incomingNorm = telefone.replace(/\D/g, "");
+            const jaCadastrado =
+              incomingNorm === telNorm ||
+              incomingNorm === waNorm ||
+              incomingNorm === `55${telNorm}` ||
+              incomingNorm === `55${waNorm}` ||
+              telNorm === `55${incomingNorm}` ||
+              waNorm === `55${incomingNorm}`;
+
+            // Só preenche whatsapp se estiver vazio. NUNCA sobrescreve número existente.
+            if (!waNorm) {
+              await supabase
+                .from("associados")
+                .update({ whatsapp: telefone, updated_at: new Date().toISOString() })
+                .eq("id", associadoPorCpf.id);
+              console.log(`[whatsapp-webhook] WhatsApp vinculado (vazio antes) ao associado ${associadoPorCpf.id}: ${telefone}`);
+            } else if (!jaCadastrado) {
+              console.warn(`[whatsapp-webhook] BLOQUEADO sobrescrita de whatsapp do associado ${associadoPorCpf.id}. Atual=${waNorm} | Recebido=${incomingNorm}. Cadastro precisa de revisão manual.`);
+            }
+
             const primeiroNome = associadoPorCpf.nome.split(' ')[0];
             await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone,
-              `Encontrei você, *${primeiroNome}*! 🎉\n\nSeu número foi vinculado ao seu cadastro. A partir de agora, posso te ajudar diretamente por aqui!\n\nComo posso te ajudar hoje? 😊`
+              `Encontrei você, *${primeiroNome}*! 🎉\n\nComo posso te ajudar hoje? 😊`
             );
-            
+
             await saveWhatsAppLog(supabase, instancia.id, telefone, `CPF identificado: ${cpfLimpo}`, "entrada", messageId);
-            await saveWhatsAppLog(supabase, instancia.id, telefone, `Associado vinculado: ${associadoPorCpf.nome}`, "saida");
-            
+            await saveWhatsAppLog(supabase, instancia.id, telefone, `Associado identificado: ${associadoPorCpf.nome}`, "saida");
+
             return new Response(JSON.stringify({ ok: true, cpf_linked: true, associado_id: associadoPorCpf.id }), { headers: corsHeaders });
           } else {
             // CPF encontrado mas não ativo → informar status
