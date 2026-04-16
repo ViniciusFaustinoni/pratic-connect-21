@@ -67,7 +67,7 @@ export default function InstaladorTarefas() {
     <div className="bg-slate-900">
       <div className="p-4 space-y-4">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <div>
             <h1 className="text-lg font-bold text-white flex items-center gap-2">
               <ClipboardList className="h-5 w-5 text-blue-400" />
@@ -77,11 +77,23 @@ export default function InstaladorTarefas() {
               Acompanhe suas atividades
             </p>
           </div>
+          {isBase && (
+            <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white border-0 shrink-0">
+              <Building2 className="h-3 w-3 mr-1" />
+              BASE hoje
+            </Badge>
+          )}
         </div>
 
         {/* Tabs */}
-        <Tabs defaultValue="atual" className="w-full">
+        <Tabs defaultValue={isBase ? 'base' : 'atual'} className="w-full">
           <TabsList className="w-full bg-slate-800 border border-slate-700">
+            {isBase && (
+              <TabsTrigger value="base" className="flex-1 data-[state=active]:bg-emerald-600">
+                <Building2 className="h-3 w-3 mr-1" />
+                Base ({filaBaseCount})
+              </TabsTrigger>
+            )}
             <TabsTrigger value="atual" className="flex-1 data-[state=active]:bg-blue-600">
               Atual
             </TabsTrigger>
@@ -98,6 +110,13 @@ export default function InstaladorTarefas() {
               Histórico
             </TabsTrigger>
           </TabsList>
+
+          {/* Tab: Base (somente quando alocado na base) */}
+          {isBase && (
+            <TabsContent value="base" className="mt-4 space-y-3">
+              <FilaBaseSection />
+            </TabsContent>
+          )}
 
           {/* Tab: Atual */}
           <TabsContent value="atual" className="mt-4 space-y-3">
