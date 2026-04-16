@@ -799,11 +799,21 @@ export function MapaVistoriasContent() {
           vistoriador.status_operacional === 'em_rota' ? COR_VISTORIADOR :
           vistoriador.status_operacional === 'em_contato' ? '#FCD34D' :
           '#22C55E';
+        const isTecnicoDraggable = !!atribuicaoManualAtiva;
         return (
           <Marker
-            key={`vistoriador-${vistoriador.vistoriador_id}-${taskCount}-${vistoriador.status_operacional}`}
+            key={`vistoriador-${vistoriador.vistoriador_id}-${taskCount}-${vistoriador.status_operacional}-${isTecnicoDraggable}`}
             position={[vistoriador.latitude, vistoriador.longitude]}
             icon={getVistoriadorIconWithBadge(corStatus, taskCount)}
+            draggable={isTecnicoDraggable}
+            eventHandlers={isTecnicoDraggable ? {
+              dragend: (e) => {
+                const marker = e.target as L.Marker;
+                const newPos = marker.getLatLng();
+                marker.setLatLng([vistoriador.latitude, vistoriador.longitude]);
+                handleTecnicoDragEnd(vistoriador, newPos);
+              },
+            } : undefined}
           >
             <Popup>
               <div className="min-w-[200px]">
