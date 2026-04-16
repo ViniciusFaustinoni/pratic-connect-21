@@ -334,25 +334,82 @@ export function CalendarioDiaModal({ open, onClose, data }: CalendarioDiaModalPr
                             )}
                           </div>
 
-                          {/* Botão Antecipar: só para tarefas futuras */}
-                          {dataFutura && ag.status !== 'cancelado' && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="shrink-0 gap-1"
-                              onClick={() => {
-                                setAnteciparId(isAntecipar ? null : ag.id);
-                                setTecnicoSelecionado('');
-                              }}
-                            >
-                              <CalendarClock className="h-3.5 w-3.5" />
-                              Antecipar
-                            </Button>
-                          )}
+                          {/* Botões de ação */}
+                          <div className="flex items-center gap-2 shrink-0">
+                            {/* Botão Atribuir: quando não tem técnico ou para reatribuir */}
+                            {ag.status !== 'cancelado' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="shrink-0 gap-1"
+                                onClick={() => {
+                                  const isActive = atribuirId === ag.id;
+                                  setAtribuirId(isActive ? null : ag.id);
+                                  setAnteciparId(null);
+                                  setTecnicoSelecionado(ag.atendido_por || '');
+                                }}
+                              >
+                                <User className="h-3.5 w-3.5" />
+                                {ag.tecnico?.nome ? 'Reatribuir' : 'Atribuir'}
+                              </Button>
+                            )}
+
+                            {/* Botão Antecipar: só para tarefas futuras */}
+                            {dataFutura && ag.status !== 'cancelado' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="shrink-0 gap-1"
+                                onClick={() => {
+                                  const isActive = anteciparId === ag.id;
+                                  setAnteciparId(isActive ? null : ag.id);
+                                  setAtribuirId(null);
+                                  setTecnicoSelecionado('');
+                                }}
+                              >
+                                <CalendarClock className="h-3.5 w-3.5" />
+                                Antecipar
+                              </Button>
+                            )}
+                          </div>
                         </div>
 
+                        {/* Select de técnico ao atribuir */}
+                        {atribuirId === ag.id && (
+                          <div className="mt-3 flex items-center gap-2 pt-3 border-t">
+                            <Select value={tecnicoSelecionado} onValueChange={setTecnicoSelecionado}>
+                              <SelectTrigger className="flex-1">
+                                <SelectValue placeholder="Selecione o técnico base..." />
+                              </SelectTrigger>
+                              <SelectContent position="popper" className="z-[1300]" sideOffset={4}>
+                                {tecnicosBaseAtivos.map((t: any) => (
+                                  <SelectItem key={t.id} value={t.id}>
+                                    {t.nome}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              size="sm"
+                              disabled={!tecnicoSelecionado || atribuirMutation.isPending}
+                              onClick={() =>
+                                atribuirMutation.mutate({ id: ag.id, tecnicoId: tecnicoSelecionado })
+                              }
+                            >
+                              {atribuirMutation.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <>
+                                  Confirmar
+                                  <ChevronRight className="h-4 w-4" />
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        )}
+
                         {/* Select de técnico ao antecipar */}
-                        {isAntecipar && (
+                        {anteciparId === ag.id && (
                           <div className="mt-3 flex items-center gap-2 pt-3 border-t">
                             <Select value={tecnicoSelecionado} onValueChange={setTecnicoSelecionado}>
                               <SelectTrigger className="flex-1">
