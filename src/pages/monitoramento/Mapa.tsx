@@ -170,10 +170,14 @@ export default function Mapa() {
         <TabsContent value="equipe" className="flex-1 mt-0">
           <div className="relative h-full rounded-lg overflow-hidden">
             {renderMapaEquipe()}
-            <div className="absolute top-4 right-4 z-[400] bg-background/95 backdrop-blur-sm rounded-lg border shadow-sm px-3 py-2">
+            <div className="absolute top-4 right-4 z-[400] bg-background/95 backdrop-blur-sm rounded-lg border shadow-sm px-3 py-2 space-y-1">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Users className="h-4 w-4 text-blue-600" />
-                <span>{vistoriadoresEmServico.length} em campo</span>
+                <span>{vistoriadoresEmServico.length} em rota</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Building2 className="h-4 w-4 text-amber-600" />
+                <span>{idsProfBase.size} em base</span>
               </div>
             </div>
           </div>
@@ -184,6 +188,15 @@ export default function Mapa() {
           <MapaVistoriasContent />
         </TabsContent>
       </Tabs>
+
+      {/* Dialog de alocação Rota/Base */}
+      <AlocarVistoriadorDialog
+        open={!!alocarState}
+        onOpenChange={(o) => { if (!o) setAlocarState(null); }}
+        profissionalId={alocarState?.profissionalId || null}
+        profissionalNome={alocarState?.nome || null}
+        alocacaoAtual={alocarState?.atual || null}
+      />
     </div>
   );
 }
