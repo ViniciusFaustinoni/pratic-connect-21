@@ -1,48 +1,40 @@
 
 ## Problema
 
-Erro 409: `update or delete on table "associados" violates foreign key constraint "rastreadores_associado_id_fkey" on table "rastreadores"`.
+Cotação rápida no dashboard mostra "Nenhum plano disponível para faixa R$ 20.882" para uma **Honda Titan 160** (moto, uso APP/Uber). Deveria aparecer Advanced e Advanced+ da linha de motos.
 
-O hook `useDeleteBaseAntiga` (associado) deleta `veiculos` antes de `associados`, mas **não deleta os `rastreadores`** vinculados ao associado. A FK `rastreadores.associado_id → associados.id` bloqueia a exclusão.
+Também há mensagem "Categoria APP: cota de participação será 8% (mínimo R$ 3.000)" — mas a regra para **motos APP** segundo o usuário é **10% mínimo R$ 1.500** (regra de carros, não motos).
 
-## Investigação rápida necessária
+## Investigação necessária (vou fazer durante exploração)
 
-Vou confirmar (na execução) com `supabase--read_query`:
-- FKs em `rastreadores` apontando para `associados` e `veiculos` (e qual a regra `ON DELETE`)
-- Se há rastreadores vinculados ao associado de SHT1E39
-- Outras possíveis FKs órfãs (cobrancas, contratos, etc.) — mas a mensagem é específica de `rastreadores`
+1. Conferir no banco se existem planos Advanced/Advanced+ ativos na linha **Motos** com faixa FIPE cobrindo R$ 20.882, e se há `entity_eligibility_rules` que filtrem por marca/modelo Honda Titan ou por categoria APP.
+2. Conferir o componente `CotacaoRapida` (dashboard) — entender como ele consulta planos, se passa `tipo_veiculo=moto` e `categoria=app` corretamente, e se respeita a hierarquia de elegibilidade unificada.
+3. Conferir a regra "Categoria APP: 8% mínimo R$ 3.000" — onde está definida e se é específica para carros (Uber) ou se está sendo aplicada erroneamente para motos.
+4. Confirmar regra de cota de participação para motos APP (10% mínimo R$ 1.500 conforme `mem://business/rules/consultant-manual-v12`).
 
-## Correção
+## Plano de correção (a confirmar após investigação)
 
-### `src/hooks/useDeleteBaseAntiga.ts`
+### Hipótese principal: filtro de elegibilidade ou categoria APP excluindo motos
 
-Antes de deletar `veiculos` e `associados`, **desvincular rastreadores** (não excluir o equipamento — ele volta para o estoque):
+**A.** Se planos motos Advanced/Advanced+ existem mas não cobrem faixa 18-21k → ajustar `entity_eligibility_rules` (sem código).
 
-```ts
-// 1. Desvincular rastreadores do associado (volta para estoque)
-await supabase
-  .from('rastreadores')
-  .update({ 
-    associado_id: null, 
-    veiculo_id: null, 
-    status: 'estoque' 
-  })
-  .eq('associado_id', id);
+**B.** Se a `CotacaoRapida` está aplicando regra APP de carro para motos → corrigir o componente para:
+- Detectar `tipo_veiculo === 'moto'` antes de aplicar a mensagem/cálculo de participação
+- Para motos APP: exibir "Cota 10% do FIPE, mínimo R$ 1.500" (e não 8%/R$ 3.000)
+- Para carros APP: manter 8%/R$ 3.000
 
-// 2. Para o caso 'veiculo', também desvincular rastreador desse veículo
-await supabase
-  .from('rastreadores')
-  .update({ veiculo_id: null, status: 'estoque' })
-  .eq('veiculo_id', id);
+**C.** Se o filtro por categoria está excluindo motos (ex: `categoria_app` só aceita carros) → ajustar a query de planos para incluir motos elegíveis.
 
-// 3. Depois deletar veículos e associado (fluxo atual)
-```
+### Arquivos prováveis a tocar
 
-Isso preserva o histórico do equipamento e libera a exclusão da base antiga (que é para registros legados sem operação real).
+- `src/components/dashboard/CotacaoRapida.tsx` (ou similar)
+- Hook de cálculo de cota de participação
+- Possível ajuste em `entity_eligibility_rules` via migração se faltar regra para Motos APP
 
 ## Verificação pós-correção
 
-Logar como `admin@teste.com` / `123456789`, abrir Base Antiga, buscar `SHT1E39`, excluir o associado **KAUA XAVIER DE SOUZA** e confirmar:
-- Toast de sucesso
-- Registro some da listagem
-- Sem erro 409 no console
+Logar como `admin@teste.com / 123456789`, no dashboard usar Cotação Rápida com:
+- Tipo: Moto
+- Categoria: APP/Uber
+- FIPE: R$ 20.882
+- Esperar: Advanced (R$ 218,70) + Advanced+ (R$ 238,70), mensagem de participação "10% mínimo R$ 1.500", e nota de rastreador obrigatório.
