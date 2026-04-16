@@ -81,10 +81,10 @@ function getCorPorStatus(status: string, confirmacao_whatsapp?: string | null, p
 }
 
 function getTooltipColor(confirmacao_whatsapp?: string | null, permite_encaixe?: boolean): string {
-  if (permite_encaixe) return '#6B7280'; // gray for encaixe
+  if (permite_encaixe) return '#6B7280';
   if (confirmacao_whatsapp === 'confirmada') return COR_CONFIRMADO;
   if (confirmacao_whatsapp?.startsWith('aguardando')) return COR_AGUARDANDO;
-  return '#9CA3AF'; // light gray = not sent
+  return '#9CA3AF';
 }
 
 const iconCache = new Map<string, L.Icon>();
@@ -187,14 +187,13 @@ export function MapaVistoriasContent() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [painelAberto, setPainelAberto] = useState(true);
 
-  // Click-to-assign state
-  const [servicoParaAtribuir, setServicoParaAtribuir] = useState<VistoriaMapa | null>(null);
+  // Multi-selection state: array of tasks to assign
+  const [servicosParaAtribuir, setServicosParaAtribuir] = useState<VistoriaMapa[]>([]);
 
-  // Assignment confirmation dialog
+  // Assignment confirmation dialog (now supports multiple tasks)
   const [assignConfirmation, setAssignConfirmation] = useState<{
-    servico: VistoriaMapa;
+    servicos: VistoriaMapa[];
     profissional: VistoriadorLocalizacao;
-    distanciaKm: number;
   } | null>(null);
 
   // Cancel confirmation state
@@ -204,16 +203,17 @@ export function MapaVistoriasContent() {
     profissionalNome: string | null;
   } | null>(null);
 
+  // Batch assignment in progress
+  const [atribuindoEmLote, setAtribuindoEmLote] = useState(false);
+
   const vistoriadoresEmServico = useMemo(() => {
     return vistoriadores?.filter(v => v.em_servico && v.latitude && v.longitude) || [];
   }, [vistoriadores]);
-
 
   const vistoriasFiltradas = useMemo(() => {
     if (!vistorias) return [];
     return vistorias.filter((v) => {
       if (!v.data_agendada) return false;
-      // Show ALL scheduled tasks (not just today)
       if (filtroBusca) {
         const termo = filtroBusca.toLowerCase();
         const placa = v.veiculo_placa?.toLowerCase() || "";
@@ -237,7 +237,6 @@ export function MapaVistoriasContent() {
     return map;
   }, [vistoriasFiltradas]);
 
-  // Helper to check if a task is future
   const isFuturaFn = useCallback((dataAgendada: string | null) => {
     if (!dataAgendada) return false;
     const dateStr = dataAgendada.split('T')[0];
@@ -258,6 +257,27 @@ export function MapaVistoriasContent() {
     const confirmados = vistoriasComCoordenadas.filter(v => v.confirmacao_whatsapp === 'confirmada').length;
     const naoConfirmados = vistoriasComCoordenadas.filter(v => !STATUS_REALIZADOS.includes(v.status) && !v.permite_encaixe && !v.confirmacao_whatsapp && !isFuturaFn(v.data_agendada)).length;
     return { realizadas, aRealizar, confirmados, naoConfirmados, futuras };
+  }, [vistoriasComCoordenadas]);
+
+  // Tasks assigned to each technician (for popup workload display)
+  const tarefasPorTecnico = useMemo(() => {
+    const map = new Map<string, VistoriaMapa[]>();
+    vistoriasComCoordenadas.forEach(v => {
+      if (v.vistoriador_id && !STATUS_REALIZADOS.includes(v.status)) {
+        const list = map.get(v.vistoriador_id) || [];
+        list.push(v);
+        map.set(v.vistoriador_id, list);
+      }
+    });
+    // Sort each technician's tasks chronologically
+    map.forEach((tasks, key) => {
+      tasks.sort((a, b) => {
+        const dtA = new Date(`${a.data_agendada}T${a.horario_agendado || '00:00'}`);
+        const dtB = new Date(`${b.data_agendada}T${b.horario_agendado || '00:00'}`);
+        return dtA.getTime() - dtB.getTime();
+      });
+    });
+    return map;
   }, [vistoriasComCoordenadas]);
 
   const linhasDeRota = useMemo(() => {
@@ -301,51 +321,67 @@ export function MapaVistoriasContent() {
     }
   };
 
-  const iniciarAtribuicao = useCallback((vistoria: VistoriaMapa) => {
+  // Toggle task in multi-selection
+  const toggleSelecaoAtribuicao = useCallback((vistoria: VistoriaMapa) => {
     if (!vistoria.servico_id_unificado) {
       toast.error('Este item não possui serviço vinculado para atribuição.');
       return;
     }
-    setServicoParaAtribuir(vistoria);
+    setServicosParaAtribuir(prev => {
+      const exists = prev.find(s => s.id === vistoria.id);
+      if (exists) {
+        return prev.filter(s => s.id !== vistoria.id);
+      } else {
+        return [...prev, vistoria];
+      }
+    });
     if (vistoria.latitude && vistoria.longitude) {
       setPosicaoSelecionada([vistoria.latitude, vistoria.longitude]);
     }
-    toast.info('Clique em um técnico no mapa para atribuir', { duration: 4000 });
   }, []);
 
   const cancelarModoAtribuicao = useCallback(() => {
-    setServicoParaAtribuir(null);
+    setServicosParaAtribuir([]);
   }, []);
 
   const handleTecnicoClick = useCallback((tecnico: VistoriadorLocalizacao) => {
-    if (!servicoParaAtribuir) return;
-    if (!servicoParaAtribuir.latitude || !servicoParaAtribuir.longitude) return;
-
-    const dist = distanciaKm(
-      tecnico.latitude, tecnico.longitude,
-      servicoParaAtribuir.latitude, servicoParaAtribuir.longitude
-    );
+    if (servicosParaAtribuir.length === 0) return;
 
     setAssignConfirmation({
-      servico: servicoParaAtribuir,
+      servicos: servicosParaAtribuir,
       profissional: tecnico,
-      distanciaKm: dist,
     });
-  }, [servicoParaAtribuir, distanciaKm]);
+  }, [servicosParaAtribuir]);
 
-  const confirmarAtribuicao = useCallback(() => {
+  const confirmarAtribuicao = useCallback(async () => {
     if (!assignConfirmation) return;
-    const servicoId = assignConfirmation.servico.servico_id_unificado;
-    if (!servicoId) {
-      toast.error('Serviço sem ID unificado, não é possível atribuir.');
-      return;
+    const { servicos, profissional } = assignConfirmation;
+    
+    setAtribuindoEmLote(true);
+    
+    const results = await Promise.allSettled(
+      servicos.map(s => {
+        const servicoId = s.servico_id_unificado;
+        if (!servicoId) return Promise.reject('Sem ID unificado');
+        return atribuirMutation.mutateAsync({
+          servicoId,
+          profissionalId: profissional.vistoriador_id,
+        });
+      })
+    );
+
+    const sucessos = results.filter(r => r.status === 'fulfilled').length;
+    const falhas = results.filter(r => r.status === 'rejected').length;
+
+    if (falhas === 0) {
+      toast.success(`${sucessos} tarefa${sucessos > 1 ? 's' : ''} atribuída${sucessos > 1 ? 's' : ''} com sucesso a ${profissional.vistoriador_nome}`);
+    } else {
+      toast.warning(`${sucessos} de ${servicos.length} atribuída${sucessos > 1 ? 's' : ''} (${falhas} falha${falhas > 1 ? 's' : ''})`);
     }
-    atribuirMutation.mutate({
-      servicoId,
-      profissionalId: assignConfirmation.profissional.vistoriador_id,
-    });
+
     setAssignConfirmation(null);
-    setServicoParaAtribuir(null);
+    setServicosParaAtribuir([]);
+    setAtribuindoEmLote(false);
   }, [assignConfirmation, atribuirMutation]);
 
   const confirmarCancelamento = useCallback(() => {
@@ -371,15 +407,22 @@ export function MapaVistoriasContent() {
 
   const centroInicial: [number, number] = [-22.9068, -43.1729];
 
+  // Check if a task is in the multi-selection
+  const isSelectedForAssign = useCallback((id: string) => {
+    return servicosParaAtribuir.some(s => s.id === id);
+  }, [servicosParaAtribuir]);
+
+  const modoAtribuicao = servicosParaAtribuir.length > 0;
+
   const renderAssignBar = () => {
-    if (!servicoParaAtribuir) return null;
+    if (!modoAtribuicao) return null;
+    const placas = servicosParaAtribuir.map(s => s.veiculo_placa || 'Sem placa').join(', ');
     return (
       <div className="absolute top-2 left-1/2 -translate-x-1/2 z-[500] bg-amber-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-3 text-sm font-medium max-w-[90%]">
         <MousePointerClick className="h-4 w-4 flex-shrink-0" />
         <span className="truncate">
-          Selecione um técnico para: <strong>{servicoParaAtribuir.veiculo_placa || 'Sem placa'}</strong>
-          {' — '}
-          {TIPO_VISTORIA_LABELS[servicoParaAtribuir.tipo_vistoria as keyof typeof TIPO_VISTORIA_LABELS] || servicoParaAtribuir.tipo_vistoria}
+          Selecione um técnico para: <strong>{servicosParaAtribuir.length} tarefa{servicosParaAtribuir.length > 1 ? 's' : ''}</strong>
+          {servicosParaAtribuir.length <= 3 && <> ({placas})</>}
         </span>
         <Button
           variant="ghost"
@@ -445,8 +488,9 @@ export function MapaVistoriasContent() {
               ? new Date(v.data_agendada + 'T00:00:00') < hojeNorm && v.status !== 'concluida' && v.status !== 'cancelada'
               : false;
             const isRealizada = STATUS_REALIZADOS.includes(v.status);
-            const canAssign = !!atribuicaoManualAtiva && !isRealizada && !!v.latitude && !!v.servico_id_unificado;
-            const isSelected = servicoParaAtribuir?.id === v.id;
+            // Only unassigned tasks can be selected for assignment
+            const canAssign = !!atribuicaoManualAtiva && !isRealizada && !v.vistoriador_id && !!v.latitude && !!v.servico_id_unificado;
+            const isSelected = isSelectedForAssign(v.id);
             const canSendConfirmation = podeEnviarConfirmacao(v);
             const ordemNum = ordemCronologica.get(v.id) || 0;
 
@@ -497,7 +541,6 @@ export function MapaVistoriasContent() {
                     ) : (
                       <p className="text-xs text-orange-600 mt-1">⚠️ Não atribuído</p>
                     )}
-                    {/* Confirmation status */}
                     {!isRealizada && !v.permite_encaixe && (
                       <p className={cn("text-xs mt-1 flex items-center gap-1", 
                         v.confirmacao_whatsapp === 'confirmada' ? 'text-green-600' :
@@ -528,15 +571,11 @@ export function MapaVistoriasContent() {
                         className={cn("h-8 w-8", isSelected && "bg-amber-500 hover:bg-amber-600")}
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (isSelected) {
-                            cancelarModoAtribuicao();
-                          } else {
-                            iniciarAtribuicao(v);
-                          }
+                          toggleSelecaoAtribuicao(v);
                         }}
-                        title={isSelected ? "Cancelar atribuição" : v.vistoriador_id ? "Reatribuir a outro técnico" : "Atribuir a um técnico"}
+                        title={isSelected ? "Remover da seleção" : "Selecionar para atribuição"}
                       >
-                        {isSelected ? <XIcon className="h-4 w-4" /> : <MousePointerClick className="h-4 w-4" />}
+                        {isSelected ? <CheckCircle2 className="h-4 w-4" /> : <MousePointerClick className="h-4 w-4" />}
                       </Button>
                     )}
                     {canSendConfirmation && (
@@ -596,14 +635,13 @@ export function MapaVistoriasContent() {
         const isFutura = isFuturaFn(v.data_agendada);
         const markerColor = getCorPorStatus(v.status, v.confirmacao_whatsapp, v.permite_encaixe, isFutura);
         const isRealizada = STATUS_REALIZADOS.includes(v.status);
-        const isSelectedForAssign = servicoParaAtribuir?.id === v.id;
+        const isSelForAssign = isSelectedForAssign(v.id);
         const tooltipColor = isEmExecucao ? COR_EM_EXECUCAO : isFutura ? COR_FUTURA : getTooltipColor(v.confirmacao_whatsapp, v.permite_encaixe);
         const periodoStr = getPeriodoLabel(v.periodo);
         const dataLabel = safeFormat(v.data_agendada ? v.data_agendada + 'T00:00:00' : null, "dd/MM");
         const ordemNum = ordemCronologica.get(v.id) || 0;
         const horarioLabel = v.horario_agendado ? v.horario_agendado.slice(0, 5) : periodoStr;
         
-        // Tooltip text: show execution time if em_andamento
         let tooltipText: string;
         if (isEmExecucao) {
           const updatedDate = safeParseDate(v.horario_agendado ? `${v.data_agendada}T${v.horario_agendado}` : null) || safeParseDate(v.data_agendada);
@@ -613,11 +651,14 @@ export function MapaVistoriasContent() {
           tooltipText = `#${ordemNum} · ${[dataLabel, horarioLabel].filter(Boolean).join(' ')}`;
         }
 
+        // Only unassigned tasks can be assigned from popup
+        const canAssignPopup = !!atribuicaoManualAtiva && !isRealizada && !v.vistoriador_id && !!v.servico_id_unificado;
+
         return (
           <Marker
-            key={`marker-${v.id}-${markerColor}-${isSelectedForAssign}`}
+            key={`marker-${v.id}-${markerColor}-${isSelForAssign}`}
             position={[v.latitude!, v.longitude!]}
-            icon={isSelectedForAssign ? getSelectedIcon(markerColor) : getColoredIcon(markerColor)}
+            icon={isSelForAssign ? getSelectedIcon(markerColor) : getColoredIcon(markerColor)}
           >
             {tooltipText && (
               <Tooltip
@@ -627,7 +668,7 @@ export function MapaVistoriasContent() {
                 className="custom-tooltip-clean"
               >
                 <span style={{
-                  backgroundColor: tooltipColor,
+                  backgroundColor: isSelForAssign ? COR_SELECIONADO : tooltipColor,
                   color: 'white',
                   padding: '1px 5px',
                   borderRadius: '3px',
@@ -635,7 +676,7 @@ export function MapaVistoriasContent() {
                   fontWeight: 600,
                   whiteSpace: 'nowrap',
                 }}>
-                  {tooltipText}
+                  {isSelForAssign ? `✓ ${tooltipText}` : tooltipText}
                 </span>
               </Tooltip>
             )}
@@ -643,8 +684,8 @@ export function MapaVistoriasContent() {
               <div className="min-w-[200px]">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="font-bold text-sm">{v.veiculo_placa || "Sem placa"}</h3>
-                  <span className="text-xs px-2 py-0.5 rounded text-white" style={{ backgroundColor: isSelectedForAssign ? COR_SELECIONADO : markerColor }}>
-                    {isSelectedForAssign ? "Selecionado" : isEmExecucao ? "Em Execução" : isRealizada ? "Realizada" : v.permite_encaixe ? "Encaixe" : v.confirmacao_whatsapp === 'confirmada' ? "Confirmado" : "A Realizar"}
+                  <span className="text-xs px-2 py-0.5 rounded text-white" style={{ backgroundColor: isSelForAssign ? COR_SELECIONADO : markerColor }}>
+                    {isSelForAssign ? "Selecionado" : isEmExecucao ? "Em Execução" : isRealizada ? "Realizada" : v.permite_encaixe ? "Encaixe" : v.confirmacao_whatsapp === 'confirmada' ? "Confirmado" : "A Realizar"}
                   </span>
                 </div>
                 <div className="text-xs space-y-1 mb-2">
@@ -669,7 +710,6 @@ export function MapaVistoriasContent() {
                     <p className="text-orange-600"><strong>Vistoriador:</strong> Não atribuído</p>
                   )}
                 </div>
-                {/* Hide action buttons when service is in execution */}
                 {!isEmExecucao && (
                   <div className="flex gap-2 flex-wrap">
                     {podeEnviarConfirmacao(v) && (
@@ -681,12 +721,18 @@ export function MapaVistoriasContent() {
                         <Send className="h-3 w-3" />Enviar Confirmação
                       </button>
                     )}
-                    {atribuicaoManualAtiva && !isRealizada && !!v.servico_id_unificado && (
+                    {canAssignPopup && (
                       <button
-                        onClick={() => iniciarAtribuicao(v)}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 text-white rounded text-xs hover:bg-amber-600"
+                        onClick={() => toggleSelecaoAtribuicao(v)}
+                        className={cn(
+                          "flex items-center gap-1 px-3 py-1.5 rounded text-xs",
+                          isSelForAssign
+                            ? "bg-amber-600 text-white hover:bg-amber-700"
+                            : "bg-amber-500 text-white hover:bg-amber-600"
+                        )}
                       >
-                        <MousePointerClick className="h-3 w-3" />{v.vistoriador_id ? 'Reatribuir' : 'Atribuir'}
+                        <MousePointerClick className="h-3 w-3" />
+                        {isSelForAssign ? 'Remover Seleção' : 'Selecionar p/ Atribuir'}
                       </button>
                     )}
                     {v.associado_telefone && (
@@ -718,104 +764,120 @@ export function MapaVistoriasContent() {
       })}
 
       {/* Vistoriadores */}
-      {vistoriadoresEmServico.map((vistoriador) => (
-        <Marker
-          key={`vistoriador-${vistoriador.vistoriador_id}`}
-          position={[vistoriador.latitude, vistoriador.longitude]}
-          icon={getVistoriadorIcon()}
-          draggable={!!atribuicaoManualAtiva}
-          eventHandlers={{
-            click: () => {
-              if (servicoParaAtribuir) {
-                handleTecnicoClick(vistoriador);
-              }
-            },
-            dragend: (e) => {
-              if (!atribuicaoManualAtiva) return;
-              const marker = e.target as L.Marker;
-              const newPos = marker.getLatLng();
-              
-              // Find nearest unassigned service within 5km
-              const servicosNaoAtribuidos = vistoriasComCoordenadas.filter(v =>
-                !STATUS_REALIZADOS.includes(v.status) && v.latitude && v.longitude && !!v.servico_id_unificado
-              );
-              
-              let melhorServico: VistoriaMapa | null = null;
-              let melhorDist = Infinity;
-              
-              for (const s of servicosNaoAtribuidos) {
-                const d = distanciaKm(newPos.lat, newPos.lng, s.latitude!, s.longitude!);
-                if (d < melhorDist) {
-                  melhorDist = d;
-                  melhorServico = s;
+      {vistoriadoresEmServico.map((vistoriador) => {
+        const tarefasDoTecnico = tarefasPorTecnico.get(vistoriador.vistoriador_id) || [];
+        return (
+          <Marker
+            key={`vistoriador-${vistoriador.vistoriador_id}`}
+            position={[vistoriador.latitude, vistoriador.longitude]}
+            icon={getVistoriadorIcon()}
+            draggable={!!atribuicaoManualAtiva}
+            eventHandlers={{
+              click: () => {
+                if (modoAtribuicao) {
+                  handleTecnicoClick(vistoriador);
                 }
-              }
-              
-              // Reset marker to original position
-              marker.setLatLng([vistoriador.latitude, vistoriador.longitude]);
-              
-              if (melhorServico && melhorDist <= 5) {
-                setAssignConfirmation({
-                  servico: melhorServico,
-                  profissional: vistoriador,
-                  distanciaKm: distanciaKm(
-                    vistoriador.latitude, vistoriador.longitude,
-                    melhorServico.latitude!, melhorServico.longitude!
-                  ),
-                });
-              } else if (melhorServico) {
-                toast.error(`Serviço mais próximo está a ${melhorDist.toFixed(1)} km. Solte mais perto do pin do serviço.`);
-              } else {
-                toast.error('Nenhum serviço pendente encontrado nesta região.');
-              }
-            },
-          }}
-        >
-          <Popup>
-            <div className="min-w-[180px]">
-              <div className="flex items-center gap-2 mb-2">
-                <User className="h-4 w-4 text-blue-600" />
-                <h3 className="font-bold text-sm">{vistoriador.vistoriador_nome}</h3>
-              </div>
-              {servicoParaAtribuir && (
-                <div className="mb-2 p-2 rounded bg-amber-50 border border-amber-200 text-xs text-amber-800">
-                  <button
-                    onClick={() => handleTecnicoClick(vistoriador)}
-                    className="w-full flex items-center justify-center gap-1 px-3 py-1.5 bg-amber-500 text-white rounded hover:bg-amber-600 font-medium"
-                  >
-                    <MousePointerClick className="h-3 w-3" />
-                    Atribuir {servicoParaAtribuir.veiculo_placa || 'serviço'}
-                  </button>
+              },
+              dragend: (e) => {
+                if (!atribuicaoManualAtiva) return;
+                const marker = e.target as L.Marker;
+                const newPos = marker.getLatLng();
+                
+                // Find nearest unassigned service within 5km
+                const servicosPendentes = vistoriasComCoordenadas.filter(v =>
+                  !STATUS_REALIZADOS.includes(v.status) && !v.vistoriador_id && v.latitude && v.longitude && !!v.servico_id_unificado
+                );
+                
+                let melhorServico: VistoriaMapa | null = null;
+                let melhorDist = Infinity;
+                
+                for (const s of servicosPendentes) {
+                  const d = distanciaKm(newPos.lat, newPos.lng, s.latitude!, s.longitude!);
+                  if (d < melhorDist) {
+                    melhorDist = d;
+                    melhorServico = s;
+                  }
+                }
+                
+                // Reset marker to original position
+                marker.setLatLng([vistoriador.latitude, vistoriador.longitude]);
+                
+                if (melhorServico && melhorDist <= 5) {
+                  setAssignConfirmation({
+                    servicos: [melhorServico],
+                    profissional: vistoriador,
+                  });
+                } else if (melhorServico) {
+                  toast.error(`Serviço mais próximo está a ${melhorDist.toFixed(1)} km. Solte mais perto do pin do serviço.`);
+                } else {
+                  toast.error('Nenhum serviço pendente (sem técnico) encontrado nesta região.');
+                }
+              },
+            }}
+          >
+            <Popup>
+              <div className="min-w-[200px]">
+                <div className="flex items-center gap-2 mb-2">
+                  <User className="h-4 w-4 text-blue-600" />
+                  <h3 className="font-bold text-sm">{vistoriador.vistoriador_nome}</h3>
                 </div>
-              )}
-              <div className="text-xs space-y-1 mb-2">
-                <p className={`flex items-center gap-1 ${
-                  vistoriador.status_operacional === 'em_andamento' ? 'text-blue-600' :
-                  vistoriador.status_operacional === 'em_rota' ? 'text-purple-600' :
-                  vistoriador.status_operacional === 'em_contato' ? 'text-amber-600' : 'text-green-600'
-                }`}>
-                  <span className={`w-2 h-2 rounded-full animate-pulse ${
-                    vistoriador.status_operacional === 'em_andamento' ? 'bg-blue-500' :
-                    vistoriador.status_operacional === 'em_rota' ? 'bg-purple-500' :
-                    vistoriador.status_operacional === 'em_contato' ? 'bg-amber-500' : 'bg-green-500'
-                  }`} />
-                  {vistoriador.status_operacional === 'em_andamento' ? 'Realizando Tarefa' :
-                   vistoriador.status_operacional === 'em_rota' ? 'Em Rota' :
-                   vistoriador.status_operacional === 'em_contato' ? 'Em Contato com Associado' : 'Aguardando Atribuição'}
-                </p>
-                <p className="text-muted-foreground">
-                  Atualizado: {safeParseDate(vistoriador.updated_at) ? formatDistanceToNow(safeParseDate(vistoriador.updated_at)!, { addSuffix: true, locale: ptBR }) : 'desconhecido'}
-                </p>
+                {modoAtribuicao && (
+                  <div className="mb-2 p-2 rounded bg-amber-50 border border-amber-200 text-xs text-amber-800">
+                    <button
+                      onClick={() => handleTecnicoClick(vistoriador)}
+                      className="w-full flex items-center justify-center gap-1 px-3 py-1.5 bg-amber-500 text-white rounded hover:bg-amber-600 font-medium"
+                    >
+                      <MousePointerClick className="h-3 w-3" />
+                      Atribuir {servicosParaAtribuir.length} tarefa{servicosParaAtribuir.length > 1 ? 's' : ''}
+                    </button>
+                  </div>
+                )}
+                <div className="text-xs space-y-1 mb-2">
+                  <p className={`flex items-center gap-1 ${
+                    vistoriador.status_operacional === 'em_andamento' ? 'text-blue-600' :
+                    vistoriador.status_operacional === 'em_rota' ? 'text-purple-600' :
+                    vistoriador.status_operacional === 'em_contato' ? 'text-amber-600' : 'text-green-600'
+                  }`}>
+                    <span className={`w-2 h-2 rounded-full animate-pulse ${
+                      vistoriador.status_operacional === 'em_andamento' ? 'bg-blue-500' :
+                      vistoriador.status_operacional === 'em_rota' ? 'bg-purple-500' :
+                      vistoriador.status_operacional === 'em_contato' ? 'bg-amber-500' : 'bg-green-500'
+                    }`} />
+                    {vistoriador.status_operacional === 'em_andamento' ? 'Realizando Tarefa' :
+                     vistoriador.status_operacional === 'em_rota' ? 'Em Rota' :
+                     vistoriador.status_operacional === 'em_contato' ? 'Em Contato com Associado' : 'Aguardando Atribuição'}
+                  </p>
+                  <p className="text-muted-foreground">
+                    Atualizado: {safeParseDate(vistoriador.updated_at) ? formatDistanceToNow(safeParseDate(vistoriador.updated_at)!, { addSuffix: true, locale: ptBR }) : 'desconhecido'}
+                  </p>
+                </div>
+                {/* Tarefas atribuídas ao técnico */}
+                {tarefasDoTecnico.length > 0 && (
+                  <div className="mb-2">
+                    <p className="text-xs font-semibold mb-1 text-blue-700">
+                      📋 {tarefasDoTecnico.length} tarefa{tarefasDoTecnico.length > 1 ? 's' : ''} pendente{tarefasDoTecnico.length > 1 ? 's' : ''}:
+                    </p>
+                    <div className="max-h-[120px] overflow-y-auto space-y-0.5">
+                      {tarefasDoTecnico.map((t, idx) => (
+                        <p key={t.id} className="text-xs text-muted-foreground flex items-center gap-1">
+                          <span className="font-mono">{idx + 1}.</span>
+                          <span className="font-semibold">{t.veiculo_placa || '---'}</span>
+                          <span>· {safeFormat(t.data_agendada, 'dd/MM')} {t.horario_agendado ? t.horario_agendado.slice(0, 5) : getPeriodoLabel(t.periodo)}</span>
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {vistoriador.telefone && (
+                  <button onClick={() => abrirWhatsApp(vistoriador.telefone)} className="flex items-center justify-center gap-1 w-full px-3 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-700">
+                    <Phone className="h-3 w-3" />Contatar
+                  </button>
+                )}
               </div>
-              {vistoriador.telefone && (
-                <button onClick={() => abrirWhatsApp(vistoriador.telefone)} className="flex items-center justify-center gap-1 w-full px-3 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-700">
-                  <Phone className="h-3 w-3" />Contatar
-                </button>
-              )}
-            </div>
-          </Popup>
-        </Marker>
-      ))}
+            </Popup>
+          </Marker>
+        );
+      })}
     </MapContainer>
   );
 
@@ -888,7 +950,7 @@ export function MapaVistoriasContent() {
               <div className="flex items-center gap-2 text-sm p-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
                 <MousePointerClick className="h-4 w-4 text-amber-600 flex-shrink-0" />
                 <span className="flex-1 text-left text-amber-700 dark:text-amber-400 text-xs">
-                  Arraste o técnico até o serviço ou clique em "Atribuir"
+                  Selecione tarefas e clique no técnico
                 </span>
               </div>
             </>
@@ -900,27 +962,40 @@ export function MapaVistoriasContent() {
 
   const renderDialogs = () => (
     <>
-      {/* Atribuição click-to-assign */}
+      {/* Atribuição em lote */}
       <AlertDialog open={!!assignConfirmation} onOpenChange={(open) => !open && setAssignConfirmation(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar Atribuição</AlertDialogTitle>
             <AlertDialogDescription asChild>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <p>
-                  Deseja atribuir o serviço <strong>{assignConfirmation?.servico.veiculo_placa || 'sem placa'}</strong> ao técnico{' '}
+                  Deseja atribuir <strong>{assignConfirmation?.servicos.length} tarefa{(assignConfirmation?.servicos.length || 0) > 1 ? 's' : ''}</strong> ao técnico{' '}
                   <strong>{assignConfirmation?.profissional.vistoriador_nome}</strong>?
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  Distância estimada: <strong>{assignConfirmation?.distanciaKm.toFixed(1)} km</strong> (linha reta)
-                </p>
+                {assignConfirmation && assignConfirmation.servicos.length > 0 && (
+                  <div className="bg-muted/50 rounded-md p-2 max-h-[200px] overflow-y-auto space-y-1">
+                    {assignConfirmation.servicos.map((s, idx) => (
+                      <div key={s.id} className="flex items-center gap-2 text-xs">
+                        <span className="font-mono font-bold text-muted-foreground">{idx + 1}.</span>
+                        <span className="font-semibold">{s.veiculo_placa || 'Sem placa'}</span>
+                        <span className="text-muted-foreground">
+                          · {safeFormat(s.data_agendada, 'dd/MM')} {s.horario_agendado ? s.horario_agendado.slice(0, 5) : getPeriodoLabel(s.periodo)}
+                        </span>
+                        <Badge variant="outline" className="text-[10px] h-4">
+                          {TIPO_VISTORIA_LABELS[s.tipo_vistoria as keyof typeof TIPO_VISTORIA_LABELS] || s.tipo_vistoria}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmarAtribuicao} disabled={atribuirMutation.isPending}>
-              {atribuirMutation.isPending ? 'Atribuindo...' : 'Confirmar Atribuição'}
+            <AlertDialogCancel disabled={atribuindoEmLote}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmarAtribuicao} disabled={atribuindoEmLote}>
+              {atribuindoEmLote ? 'Atribuindo...' : `Confirmar Atribuição (${assignConfirmation?.servicos.length || 0})`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -982,8 +1057,6 @@ export function MapaVistoriasContent() {
     );
   }
 
-
-
   return (
     <>
       {renderDialogs()}
@@ -1020,7 +1093,7 @@ export function MapaVistoriasContent() {
             <div className="flex items-center gap-2">
               {atribuicaoManualAtiva ? (
                 <Badge variant="outline" className="gap-1.5 text-xs text-amber-600 border-amber-300">
-                  <MousePointerClick className="h-3 w-3" />Manual — Arraste ou clique
+                  <MousePointerClick className="h-3 w-3" />Manual — Selecione tarefas
                 </Badge>
               ) : (
                 <Badge variant="outline" className="gap-1.5 text-xs text-green-600 border-green-300">
