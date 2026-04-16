@@ -1,54 +1,67 @@
 
+
 ## Diagnóstico
 
-Erro 400 ao atribuir um vistoriador a um agendamento de base (modal "Tarefas do dia" → aba Base → botão "Confirmar" no select do vistoriador).
+A vistoria da Kelly **foi salva apenas em `cotacoes` (`vistoria_data_agendada=2026-04-17`)**, mas não criou registro em `vistorias`, `instalacoes`, nem `servicos`. Por isso não aparece no calendário de monitoramento.
 
-PATCH direto na tabela `agendamentos_base` está sendo rejeitado pelo PostgREST. Causas possíveis (a confirmar):
+### Por que aconteceu
 
-1. **Coluna inexistente** no payload (ex.: front mandando `vistoriador_id` mas a coluna se chama `profissional_id`, `instalador_id` ou similar).
-2. **Política RLS** bloqueando UPDATE (usuário logado não tem permissão de escrita direta nessa tabela — deveria passar por RPC/edge function).
-3. **Constraint/Check** (FK inválida, enum status não aceito, NOT NULL violado).
-4. **Trigger BEFORE UPDATE** disparando `RAISE EXCEPTION`.
+A edge `agendar-vistoria-presencial` foi alterada para **NÃO criar mais a instalação** — ela só salva os campos `vistoria_*` na cotação e delega tudo para `criar-instalacao-pos-pagamento`, que só roda depois do pagamento confirmado.
 
-### Investigação na próxima rodada (com permissão)
-1. Localizar componente do modal "Tarefas do dia" → aba Base → handler do botão "Confirmar" (provável `src/components/monitoramento/CalendarioTarefas*.tsx` ou similar).
-2. Ver exatamente que payload o front envia no PATCH.
-3. Consultar via `supabase--read_query`:
-   - Schema de `agendamentos_base` (colunas, tipos, NOT NULL).
-   - RLS policies de UPDATE em `agendamentos_base`.
-   - Triggers em `agendamentos_base`.
-4. Buscar logs recentes do PostgREST/Edge para ver a mensagem de erro 400 detalhada (corpo da resposta tem `message`, `code`, `details`, `hint`).
-5. Comparar com o handler de "Reatribuir" (que funciona, segundo o print mostra outros itens já com vistoriador atribuído) — há um caminho que dá certo, então o que muda?
+No caso da Kelly:
+- Contrato `assinado`, `adesao_paga=true` ✅
+- Mas `criar-instalacao-pos-pagamento` **nunca foi chamado** para a cotação `c64ae336…` (zero logs).
 
-## Correção planejada
+A edge tem 4 disparadores (frontend de pagamento, webhook Asaas e 2 caminhos do cron de reconciliação), e essa cotação caiu numa fresta entre eles — provavelmente o pagamento foi marcado por outro caminho (sga-hinova ou aprovação manual) que não dispara a edge.
 
-Depende da causa raiz, mas em geral:
+## Correção (duas frentes)
 
-### Cenário A — Nome de coluna errado
-- Ajustar payload do PATCH para usar a coluna correta.
-- Tipar o update com o tipo gerado em `src/integrations/supabase/types.ts` para evitar reincidência.
+### 1) Recuperar a Kelly agora
+Disparar manualmente `criar-instalacao-pos-pagamento` para `cotacaoId = c64ae336-ae89-420a-b2bf-10ecf78abe8e` via `supabase.functions.invoke`. Como o `adesao_paga` já é `true`, vai criar a instalação + serviço + aparecer no calendário de 17/04.
 
-### Cenário B — RLS bloqueando
-- Em vez de PATCH direto, rotear pela RPC/edge function que já é usada em outros pontos de atribuição (provavelmente `atribuir-servico` ou similar — memória `automated-assignment-and-confirmation-logic`).
-- Garantir que a função usa `SECURITY DEFINER` e valida que o usuário é coordenador/diretor.
+### 2) Fechar a fresta para sempre
+Criar **trigger no banco** em `contratos` que, quando `adesao_paga` passa de `false` → `true` E a cotação vinculada tem `vistoria_data_agendada` E não existe instalação ainda, dispara `criar-instalacao-pos-pagamento` via `pg_net.http_post` (já usado no projeto). Assim, qualquer caminho que marque o pagamento (webhook, cron, SGA, manual, etc.) garante a criação da instalação.
 
-### Cenário C — Constraint/trigger
-- Incluir os campos obrigatórios que faltam (ex.: `atribuido_em`, `atribuido_por`, mudar `status` para `'agendado'` ou `'confirmado'`).
-- Se trigger exige condição prévia (ex.: vistoriador precisa estar disponível naquele horário), exibir erro tratado no front com `toast.error` legível em vez de "Erro ao atribuir técnico".
+Pseudo-trigger:
+```sql
+CREATE OR REPLACE FUNCTION trg_disparar_criar_instalacao()
+RETURNS trigger AS $$
+BEGIN
+  IF NEW.adesao_paga = true AND COALESCE(OLD.adesao_paga,false) = false THEN
+    -- Verifica se cotação tem agendamento e ainda não tem instalação
+    IF EXISTS (
+      SELECT 1 FROM cotacoes c
+      WHERE c.id = NEW.cotacao_id
+        AND c.vistoria_data_agendada IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM instalacoes i WHERE i.cotacao_id = c.id)
+    ) THEN
+      PERFORM net.http_post(
+        url := 'https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/criar-instalacao-pos-pagamento',
+        headers := jsonb_build_object('Content-Type','application/json','Authorization','Bearer '||<service_role>),
+        body   := jsonb_build_object('cotacaoId', NEW.cotacao_id)
+      );
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+```
 
-### Melhoria comum aos três cenários
-- Trocar o `toast.error('Erro ao atribuir técnico')` genérico por `toast.error(error.message)` para o usuário ver "violates RLS policy" ou "column X does not exist" e nós conseguirmos diagnosticar mais rápido.
-- Logar `error.code`, `error.details`, `error.hint` no console (já vem do PostgREST).
+### 3) Logging melhor (mínimo)
+Em `agendar-vistoria-presencial`, adicionar uma fila de retentativas (`fila_jobs` ou similar) caso o pagamento já esteja `true` no momento do agendamento — assim cobrimos também o caso "agendou depois de pagar".
 
-## Arquivos prováveis
-- Componente do modal de atribuição na rota `/monitoramento/calendario` (a localizar).
-- Hook que faz o PATCH (provável `useAtribuirAgendamentoBase` ou similar).
-- Possível edge function `atribuir-servico` para rotear quando RLS for o problema.
+## Arquivos a editar
+
+- **Migration nova**: criar trigger `trg_disparar_criar_instalacao_pos_pagamento` na tabela `contratos`.
+- **Script único** (não código): invocar `criar-instalacao-pos-pagamento` para a cotação da Kelly.
+- (Opcional) `supabase/functions/agendar-vistoria-presencial/index.ts`: ao final, se cotação já tiver `adesao_paga=true`, chamar a edge de criação na hora.
 
 ## Não vou mexer
-- Lógica do calendário em si (renderização, navegação por dias).
-- Fluxo de atribuição de rotas (aba "Rota") — só base.
-- Infra offline (não relacionada).
+
+- Cálculo de vagas, geocodificação, lógica de comissão CC.
+- Demais paths que já chamam a edge.
 
 ## Resultado
-Botão "Confirmar" no select de vistoriador da aba "Base" passa a atribuir corretamente, com mensagem de erro útil quando houver bloqueio legítimo (ex.: vistoriador já tem outra tarefa no mesmo horário).
+
+- Kelly aparece no calendário de 17/04 imediatamente após o disparo manual.
+- Daqui pra frente, qualquer cotação que tiver pagamento confirmado por **qualquer caminho** vai automaticamente criar a instalação/serviço e aparecer no calendário, sem depender do front lembrar de chamar a edge.
+
