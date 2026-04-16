@@ -279,7 +279,7 @@ serve(async (req) => {
     const documentId = contrato.autentique_documento_id;
     console.log("[autentique-sync-contrato] Consultando Autentique para documento:", documentId);
 
-    // Query expandida para capturar mais campos de status
+    // Query expandida para capturar mais campos de status (incluindo biometria)
     const query = `
       query GetDocument($id: UUID!) {
         document(id: $id) {
@@ -297,6 +297,8 @@ serve(async (req) => {
             viewed { created_at }
             signed { created_at }
             rejected { created_at reason }
+            biometric_approved { created_at }
+            biometric_rejected { created_at }
             delivery_method
           }
           files {
