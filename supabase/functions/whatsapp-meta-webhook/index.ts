@@ -254,7 +254,7 @@ async function processarMensagemUsuario(
       const { data: confirmacao } = await supabase
         .from("confirmacoes_agendamento")
         .select("*")
-        .or(`telefone.in.(${telefonesBusca.join(",")}),telefone_formatado.in.(${telefonesBusca.join(",")})`)
+        .in("telefone", telefonesBusca)
         .in("status", ["enviada", "reagendando", "aguardando_confirmacao_vespera", "aguardando_confirmacao_manha"])
         .order("created_at", { ascending: false })
         .limit(1)
