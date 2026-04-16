@@ -250,12 +250,19 @@ export default function ExecutarVistoriaCompleta() {
   // Handlers
   const handleUploadFoto = async (tipo: string, file: File, visivelCliente: boolean = true) => {
     if (!vistoriaId) return;
+    // Offline: enfileira direto
+    if (!online || !navigator.onLine) {
+      await offlineQueue.enfileirarFoto(tipo, file);
+      return;
+    }
     setUploadingFoto(tipo);
     try {
       await uploadFoto.mutateAsync({ vistoriaId, tipo, file, visivelCliente });
       toast.success('Foto enviada!');
-    } catch (e) {
-      toast.error('Erro ao enviar foto');
+    } catch (e: any) {
+      // Falha de rede → enfileira para reenvio automático
+      console.warn('[Vistoria] Upload falhou, enfileirando offline:', e?.message);
+      await offlineQueue.enfileirarFoto(tipo, file);
     } finally {
       setUploadingFoto(null);
     }
@@ -263,15 +270,21 @@ export default function ExecutarVistoriaCompleta() {
 
   const handleUploadVideo = async (file: File) => {
     if (!vistoriaId) return;
+    if (!online || !navigator.onLine) {
+      await offlineQueue.enfileirarVideo(file);
+      return;
+    }
     setUploadingVideo(true);
     try {
       await uploadVideo.mutateAsync({ vistoriaId, file });
-    } catch (e) {
-      toast.error('Erro ao enviar vídeo');
+    } catch (e: any) {
+      console.warn('[Vistoria] Upload de vídeo falhou, enfileirando offline:', e?.message);
+      await offlineQueue.enfileirarVideo(file);
     } finally {
       setUploadingVideo(false);
     }
   };
+
 
   const handleAprovar = async () => {
     if (!vistoriaId || !veiculo || !associado) return;
