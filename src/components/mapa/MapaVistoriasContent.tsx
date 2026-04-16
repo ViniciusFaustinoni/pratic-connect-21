@@ -208,6 +208,33 @@ export function MapaVistoriasContent() {
   const { isDiretor, isCoordenadorMonitoramento, isAnalistaMonitoramento, isAdminMaster, isDesenvolvedor } = usePermissions();
   const { data: basesPratic } = useBasesPratic();
   const { data: prestadoresAtivos } = usePrestadoresAtivosMapa();
+  const { data: alocacoesHoje = {} } = useAlocacoesDiaHoje();
+
+  // IDs de profissionais alocados em base hoje (para esconder do mapa)
+  const idsProfBase = useMemo(() => {
+    const set = new Set<string>();
+    Object.values(alocacoesHoje).forEach((a: any) => {
+      if (a.tipo_alocacao === 'base') set.add(a.profissional_id);
+    });
+    return set;
+  }, [alocacoesHoje]);
+
+  // Mapa: base_id -> nomes dos vistoriadores fixos hoje
+  const fixosPorBase = useMemo(() => {
+    const map = new Map<string, { id: string; nome: string }[]>();
+    Object.values(alocacoesHoje).forEach((a: any) => {
+      if (a.tipo_alocacao === 'base' && a.base_id) {
+        const arr = map.get(a.base_id) || [];
+        const tec = vistoriadores?.find(v => v.vistoriador_id === a.profissional_id);
+        arr.push({
+          id: a.profissional_id,
+          nome: tec?.vistoriador_nome || 'Técnico',
+        });
+        map.set(a.base_id, arr);
+      }
+    });
+    return map;
+  }, [alocacoesHoje, vistoriadores]);
 
   // Base pendentes do dia
   const hojeStr = format(new Date(), 'yyyy-MM-dd');
