@@ -1,56 +1,51 @@
 
 ## Diagnóstico
 
-A placa `0KM321B3` mostrada no popup do mapa não é uma placa real — é um **placeholder técnico** gerado automaticamente quando o veículo é 0km (sem placa cadastrada).
+Wallace foi atribuído a uma tarefa via mapa de monitoramento, mas ao abrir no app dele aparece "Vistoria não encontrada".
 
-### De onde vem
+### Hipótese principal
 
-Quando recuperamos a vistoria da Kelly (e em qualquer fluxo de carro 0km), as edges `contrato-gerar` e o script de recovery inserem na tabela `veiculos` uma placa fake no formato `0KM` + 5 caracteres aleatórios, porque a coluna `placa` é NOT NULL/UNIQUE. Esse valor vaza para:
+A tela do app do técnico (provável `ExecutarVistoria` ou `VistoriaDetalhes`) busca diretamente na tabela `vistorias` por ID. Mas a atribuição feita no mapa pode ter:
 
-1. `MapaVistoriasContent.tsx` — popup do pin (`v.veiculo_placa || "Sem placa"`), lista lateral, tooltip, modal de confirmação de atribuição, modal de cancelamento, lista de "outras tarefas do técnico".
-2. Provavelmente também aparece em outras telas (vistorias, calendário, serviços de campo, sinistros) que leem `veiculo_placa` direto.
+1. Criado/atualizado apenas o `servicos` (e/ou `agendamentos_base`), sem registro correspondente em `vistorias`; **OU**
+2. Passado o ID do `servico` no link/rota, enquanto a tela espera ID de `vistoria`; **OU**
+3. RLS na tabela `vistorias` que filtra por `vistoriador_id = auth.uid()` mas o vínculo foi feito em outra tabela (`servicos.vistoriador_id`), então o select volta vazio → `.maybeSingle()` retorna null → "não encontrada".
 
-A condição `v.veiculo_placa || "Sem placa"` não detecta o placeholder porque ele é uma string válida (`0KM321B3`).
+### Investigação necessária
 
-## Correção
+1. Identificar a rota/tela do app do técnico que mostra esse erro (busca por "Vistoria não encontrada" no código).
+2. Ver qual ID a rota recebe e em qual tabela faz a query.
+3. Conferir como `MapaVistoriasContent.tsx` persiste a atribuição (qual edge/mutation, qual tabela atualiza).
+4. Checar RLS de `vistorias` para o role `vistoriador`/`profissional`.
+5. Validar no banco se existe registro em `vistorias` para a tarefa do Wallace, ou só em `servicos`.
 
-### 1) Helper utilitário central
-Criar `src/lib/placa-utils.ts` com:
-```ts
-export const isPlacaPlaceholder = (placa?: string | null) => 
-  !!placa && /^0KM[A-Z0-9]{5}$/i.test(placa);
+## Plano de correção (a refinar após investigação)
 
-export const formatPlacaExibicao = (placa?: string | null, fallback = '0KM (sem placa)') =>
-  !placa || isPlacaPlaceholder(placa) ? fallback : placa.toUpperCase();
-```
+### Cenário A — falta registro em `vistorias`
+Garantir que a edge/mutation de atribuição via mapa cria/atualiza também a `vistorias` (ou que a tela do técnico use `servicos` como fonte unificada).
 
-### 2) Aplicar em `MapaVistoriasContent.tsx`
-Trocar todas as ~10 ocorrências de `v.veiculo_placa || "Sem placa"` (e variantes) por `formatPlacaExibicao(v.veiculo_placa)`. Locais:
-- Popup do pin de vistoria (linha 721)
-- Card lateral da lista (linha 549)
-- Toast de atribuição (linha 445)
-- Modal de confirmação de atribuição (linhas 1127, 1134)
-- Lista "outras tarefas" (linhas 856, 1157)
-- Popup de prestador (linhas 906, 925)
-- Cancelamento (linha 777 — passar placa formatada para o modal)
+### Cenário B — ID errado na rota
+Ajustar `MapaVistoriasContent.tsx` (ou notificação/link enviado ao técnico) para usar o ID correto que a tela espera.
 
-Filtro de busca (linha 264) **não muda** — buscar pelo placeholder ainda funciona internamente caso necessário.
+### Cenário C — RLS bloqueando
+Atualizar a policy de SELECT em `vistorias` para também permitir leitura quando o profissional está vinculado via `servicos.vistoriador_id` correspondente, OU corrigir a atribuição para preencher `vistorias.vistoriador_id` direto.
 
-### 3) Aplicar em outros pontos críticos (busca rápida)
-Aplicar o helper em telas onde a placa é exibida ao usuário final:
-- `src/components/vistorias/VistoriaListItem.tsx`
-- `src/components/cotacoes/CotacaoCard.tsx` e `CotacaoDetalhesModal.tsx`
-- Qualquer outro `veiculo_placa` ou `veiculo?.placa` em componentes de UI (uma busca dirigida vai mostrar — restringir a componentes visuais, não a queries/filtros).
+### UX
+- Trocar a mensagem genérica "Vistoria não encontrada" por algo mais útil quando o problema for permissão/vínculo (ex: "Você não tem acesso a esta tarefa" + botão para voltar à lista de tarefas atuais).
+- Adicionar log/console claro com o ID consultado para facilitar debug futuro.
 
-### 4) Badge "0km" opcional
-Quando `isPlacaPlaceholder(v.veiculo_placa)` for true, exibir um pequeno badge "0KM" ao lado do fallback no popup e no card, para deixar claro ao operador que é um carro zero — ajuda o vistoriador em campo a saber que vai chegar e o veículo não terá placa ainda.
+## Arquivos prováveis
+
+- `src/pages/...` ou `src/components/vistorias/Executar*` (tela do técnico).
+- `src/components/mapa/MapaVistoriasContent.tsx` (lógica de atribuição via drag).
+- Edge function de atribuição (provável `atribuir-servico` ou similar).
+- Migration nova de RLS, se for o caso.
 
 ## Não vou mexer
 
-- Schema do banco (manter o placeholder na coluna `placa` para satisfazer NOT NULL/UNIQUE).
-- Edges (`contrato-gerar`, `criar-instalacao-pos-pagamento`) — a geração do placeholder continua igual, só camuflamos na UI.
-- Lógica de busca/filtro interna (continua usando o valor real).
+- Lógica de vagas, ETA, drag-and-drop (já corrigido).
+- Outras telas do app do técnico que já funcionam.
 
 ## Resultado
 
-No popup da Kelly (e em qualquer carro 0km) o usuário vai ver `0KM (sem placa)` em vez de `0KM321B3`, com badge opcional "0KM". Os dados internos ficam intactos para vínculos, RLS e queries.
+Wallace consegue abrir e iniciar a tarefa atribuída via mapa direto do app dele, sem erro "Vistoria não encontrada". Mensagens de erro futuras ficam mais informativas.
