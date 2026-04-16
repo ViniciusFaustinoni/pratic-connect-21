@@ -1,93 +1,66 @@
 
-## Diagnóstico
 
-A Kelly respondeu "Sim" via WhatsApp (Meta), mas o sistema:
+## Entendimento
 
-1. **Não atualizou** `confirmacoes_agendamento` (continua `status='enviada'`, `resposta_cliente=null`).
-2. **Não atualizou** `servicos.confirmacao_whatsapp` (continua `null`).
-3. **Não respondeu** à Kelly via IA confirmando o recebimento.
-4. **Não atualizou** o pino no mapa.
+Você quer unificar a gestão de plantões (que hoje vive em `/monitoramento/equipe` via `EscalaDiaPanel`/`PlantaoDiaModal`) dentro do **calendário do mapa de monitoramento** (`/monitoramento/mapa`), eliminando a aba `/monitoramento/equipe` que não está no sidebar.
 
-### Causa raiz (3 bugs encadeados)
+A regra: **plantonista = técnico tipo Base naquele dia**, com horários idênticos aos slots de agendamento da base (manhã/tarde já configurados em `agendamentos_base`).
 
-**BUG A — `whatsapp-meta-webhook` referencia colunas inexistentes**
-O código tenta gravar em `confirmacoes_agendamento.telefone_formatado`, `intencao_detectada`, `respondido_em`, `resposta_associado`. A tabela real tem: `telefone`, `resposta_cliente`, `resposta_recebida_em`. Resultado: o `.update()` falha silenciosamente OU o `.select(...).or('telefone_formatado.in.(...)')` retorna 400 e o fluxo cai fora.
+## Onde está hoje (rastreamento)
 
-**BUG B — Mensagem entra na `whatsapp_fila_ia` em vez de processar confirmação**
-O `whatsapp-meta-webhook`, ao detectar associado ativo, **enfileira** na `whatsapp_fila_ia` para o agente IA (Maya) e nunca chama `processarRespostaConfirmacaoMeta` — porque a checagem de confirmação pendente é feita ANTES, mas com query quebrada (BUG A). Resultado: a Kelly cai no fluxo padrão da IA Maya.
+- `EscalaDiaPanel.tsx` + `PlantaoDiaModal.tsx` — em `/monitoramento/equipe` (rota órfã, fora do sidebar).
+- Dados gravados em `alocacoes_diarias` (`tipo_alocacao`, `base_id`, `data`).
+- Mapa (`/monitoramento/mapa`) já lê `alocacoes_diarias` via `useAlocacoesDiaHoje` para esconder técnicos base.
+- Calendário do mapa: `CalendarioBaseModal` / `CalendarioDiaModal` (abrem ao clicar no ícone da base) — hoje só mostram fila de vistorias.
 
-**BUG C — Dedup mata o reprocessamento**
-O `processar-fila-ia` invoca `whatsapp-webhook` com o **mesmo `message_id`** original (linha 79). O `whatsapp-webhook` (linha 2904-2914) faz dedup por `message_id` e descarta. Confirmação nunca chega ao bloco que faria o trabalho.
+## Investigação rápida (próxima rodada)
 
-**BUG D — Resposta IA não foi disparada**
-Como o item caiu no fluxo de associado ativo (após dedup falhar), o agente Maya deveria responder. Mas a Maya não tem prompt/ferramenta para reconhecer "Sim isolado" como confirmação de agendamento — ela responde como dúvida ou fica em silêncio.
+1. Confirmar componentes do calendário no mapa (`CalendarioBaseModal`, `CalendarioDiaModal`) e se há um calendário "macro" multi-dia.
+2. Verificar slots de horário usados em `agendamentos_base` (manhã/tarde fixos? configuráveis?).
+3. Listar todas as referências a `EscalaDiaPanel`/`PlantaoDiaModal` para remover com segurança.
+4. Conferir se há rota `/monitoramento/equipe` no router e se é referenciada em algum link interno.
 
-## Plano de correção
+## Plano
 
-### 1) Corrigir `whatsapp-meta-webhook` (alinhar com schema real)
+### 1) Novo "Gestor de Plantões" dentro do calendário da base
 
-- Trocar `telefone_formatado` por apenas `telefone` na busca.
-- Trocar campos de UPDATE: `resposta_associado → resposta_cliente`, `respondido_em → resposta_recebida_em`, remover `intencao_detectada` (ou criar coluna se quiser histórico).
-- Trocar `status="sucesso"` por `status="confirmada"` (alinhar com whatsapp-webhook Evolution).
-- Trocar `confirmacao_whatsapp: true` (boolean) por `'confirmada'` (string) — coluna é text.
-- Trocar `confirmacao_whatsapp_em` por `confirmado_via_whatsapp_em`.
+No popup do ícone da base no mapa, adicionar botão **"Gerenciar plantões"** que abre um modal-calendário mensal:
 
-### 2) Garantir que o webhook Meta processa confirmação ANTES da fila IA
+- Grid de dias do mês (4-5 semanas).
+- Em cada dia: lista de slots de horário (mesmos do agendamento de base — manhã/tarde) com chips de técnicos plantonistas.
+- Clicar num slot → seletor de profissionais → ao salvar, faz upsert em `alocacoes_diarias` com `tipo_alocacao='base'`, `base_id=<base do calendário>`, `data=<dia>`.
 
-Reordenar: PRIMEIRO checar confirmação pendente (com query corrigida) → se achar, processar e retornar. SÓ DEPOIS enfileirar para Maya.
+### 2) Plantão multi-dia (recorrência simples)
 
-### 3) Disparar push + invalidação realtime do mapa
+Botão "Definir plantão recorrente": escolhe técnico + dias da semana + período (de/até) → loop de upserts em `alocacoes_diarias`.
 
-Após confirmar:
-- `servicos.confirmacao_whatsapp = 'confirmada'` + `confirmado_via_whatsapp_em = now()` → realtime já atualiza o mapa (a tabela `servicos` tem realtime habilitado).
-- Push para vistoriador atribuído (já existe lógica em `whatsapp-webhook`).
-- Atualizar `confirmacoes_agendamento` → realtime para popups que escutam.
+### 3) Auto-marca como Base
 
-### 4) Resposta natural via IA
+Toda gravação no novo gestor força `tipo_alocacao='base'` + `base_id`. Não precisa o coordenador escolher tipo — é implícito por estar no calendário daquela base.
 
-Em vez de string fixa, gerar resposta humanizada via Lovable AI Gateway (mesmo modelo já usado no projeto). Conteúdo: agradecer pelo nome, lembrar dia/hora/endereço, dizer que técnico será designado.
+### 4) Aba Equipe do mapa continua funcionando
 
-Fallback determinístico se IA falhar (mantém string atual `"✅ Agendamento *confirmado*..."`).
+O toggle Rota/Base manual no popup do vistoriador (aba Equipe) continua existindo para sobrescrever pontualmente o plantão (ex: técnico de rota cobrindo base de última hora).
 
-### 5) Blindar `processar-fila-ia` contra dedup
+### 5) Remover rota órfã `/monitoramento/equipe`
 
-Quando o item da fila for marcado como **resposta de confirmação**, NÃO reprocessar via `whatsapp-webhook` (já tratado pelo Meta direto). Marcar `status='concluido'` na fila e seguir.
+- Apagar `EscalaDiaPanel.tsx` e `PlantaoDiaModal.tsx` (lógica migra para o novo componente).
+- Remover rota do router.
+- Remover qualquer link que aponte para ela.
 
-Alternativa mais simples: passar `_skip_dedup: true` no payload sintético quando vier da fila E o `processar-fila-ia` ler isso para pular dedup. Adicionar bypass no `whatsapp-webhook`.
+### 6) Hook novo `usePlantoesBaseMes(baseId, mes)`
 
-Vou pela alternativa simples: adicionar flag `_from_queue` (já existe!) ao bypass de dedup, OU usar `message_id` diferente (`queue_<id>`) quando reenviar.
+Retorna mapa `data → slot → profissionais[]` para renderizar o calendário. Usa `alocacoes_diarias` filtrando por `base_id` e mês.
 
-### 6) Mapa — pino reflete confirmação
+### 7) Slots de horário
 
-Verificar `MapaVistoriasContent.tsx`:
-- Pino muda de cor/badge quando `confirmacao_whatsapp = 'confirmada'`.
-- Popup mostra "✅ Confirmado via WhatsApp" em vez de só "Status: agendada".
+Reaproveitar a constante de slots já usada em `agendamentos_base` (provavelmente `['manha', 'tarde']` ou horários fixos tipo `08:00`, `13:00`). Se hoje não há associação técnico↔slot na `alocacoes_diarias`, adicionar coluna opcional `slot text` na migration (se você quiser granularidade por turno; senão, plantão é do dia inteiro).
 
-Se faltar, adicionar badge no popup e cor diferenciada no marker.
+## Pergunta-chave antes de codar
 
-### 7) Bug colateral de timezone no popup
-
-O popup mostrou "Agendada: 16/04/2026" mas o serviço é `2026-04-18`. Verificar se `MapaVistoriasContent.tsx` está usando o helper `formatDateBR` corrigido anteriormente. Se ainda usar `new Date(string)` direto, trocar.
-
-## Arquivos a tocar
-
-- `supabase/functions/whatsapp-meta-webhook/index.ts` — fix colunas + ordenar checagem confirmação + IA.
-- `supabase/functions/processar-fila-ia/index.ts` — usar `message_id` único no reenvio (ex.: `queue_<itemId>`) para evitar dedup.
-- `supabase/functions/whatsapp-webhook/index.ts` — opcional: pular dedup quando `_from_queue=true` e checar confirmação primeiro.
-- `src/components/mapa/MapaVistoriasContent.tsx` — badge "Confirmado via WhatsApp" + cor do pino + corrigir formato de data se necessário.
-- (opcional) Adicionar coluna `intencao_detectada text` em `confirmacoes_agendamento` para auditoria.
-
-## Não vou mexer
-
-- Schema da tabela `servicos`.
-- Fluxo de envio inicial (`enviar-confirmacao-manual`).
-- Lógica do agente Vinicius.
-- Dedup global do `whatsapp-webhook` (mantém para outros fluxos).
+Plantão deve ter **granularidade por slot** (técnico A na manhã, técnico B na tarde) ou **dia inteiro** (técnico cobre o dia todo da base)?
 
 ## Resultado
 
-Quando qualquer associado responder "Sim" (ou variantes) à mensagem de confirmação:
-1. Meta-webhook reconhece imediatamente, atualiza `confirmacoes_agendamento` e `servicos`.
-2. Cliente recebe resposta amigável da IA: *"Perfeito, Kelly! ✅ Sua presença está confirmada para sábado 18/04 às 09h..."*.
-3. Pino no mapa muda de cor + badge "✅ Confirmado via WhatsApp" aparece no popup, em tempo real.
-4. Vistoriador atribuído (se houver) recebe push notification.
+`/monitoramento/equipe` deixa de existir. No mapa, clicar na base → "Gerenciar plantões" → calendário mensal com slots iguais ao agendamento. Cada técnico colocado num dia/slot vira automaticamente Base naquele dia, somindo do mapa de rota e recebendo só vistorias daquela base.
+
