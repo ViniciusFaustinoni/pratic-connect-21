@@ -391,6 +391,41 @@ export function MapaVistoriasContent() {
     }
   }, [vistoriadoresEmServico, distanciaKm]);
 
+  // Handle technician drag-end: find nearest unassigned task
+  const handleTecnicoDragEnd = useCallback((profissional: VistoriadorLocalizacao, newLatLng: L.LatLng) => {
+    const tarefasDisponiveis = vistoriasComCoordenadas.filter(v =>
+      !v.vistoriador_id
+      && !STATUS_REALIZADOS.includes(v.status)
+      && !!v.servico_id_unificado
+      && !!v.latitude
+      && !!v.longitude
+    );
+
+    if (tarefasDisponiveis.length === 0) {
+      toast.error('Nenhuma tarefa disponível para atribuir.');
+      return;
+    }
+
+    let melhorTarefa: VistoriaMapa | null = null;
+    let melhorDist = Infinity;
+    for (const t of tarefasDisponiveis) {
+      const d = distanciaKm(newLatLng.lat, newLatLng.lng, t.latitude!, t.longitude!);
+      if (d < melhorDist) {
+        melhorDist = d;
+        melhorTarefa = t;
+      }
+    }
+
+    if (melhorTarefa && melhorDist <= 5) {
+      setAssignConfirmation({
+        servicos: [melhorTarefa],
+        profissional,
+      });
+    } else if (melhorTarefa) {
+      toast.error(`Tarefa mais próxima está a ${melhorDist.toFixed(1)} km. Solte mais perto do ícone da tarefa.`);
+    }
+  }, [vistoriasComCoordenadas, distanciaKm]);
+
   const confirmarAtribuicao = useCallback(async () => {
     if (!assignConfirmation) return;
     const { servicos, profissional } = assignConfirmation;
