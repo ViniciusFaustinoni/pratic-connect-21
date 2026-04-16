@@ -389,10 +389,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // Buscar todas as faixas de preço (LEGADO — apenas fallback p/ catálogo antigo)
   const { data: todasFaixas = [] } = useTabelasPreco();
 
-  // Regras de elegibilidade unificadas (motor moderno — fonte de verdade das faixas)
-  const { data: allEligibilityRules = [] } = useAllEligibilityRules();
-
   // Vínculos plano↔cobertura (necessário para resolver faixa pelo plano)
+  // (allEligibilityRules já declarado acima)
   const { data: planoCoberturasMap = [] } = useQuery({
     queryKey: ['planos_coberturas', 'faixa_display'],
     queryFn: async () => {
