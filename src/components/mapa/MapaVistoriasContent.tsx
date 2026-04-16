@@ -796,6 +796,21 @@ export function MapaVistoriasContent() {
                     <button onClick={() => abrirGoogleMaps(v.latitude!, v.longitude!)} className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">
                       <Navigation className="h-3 w-3" />Google Maps
                     </button>
+                    {podeReagendar && !isRealizada && v.servico_id_unificado && (
+                      <button
+                        onClick={() => setReagendarState({
+                          servicoId: v.servico_id_unificado!,
+                          placa: formatPlacaExibicao(v.veiculo_placa),
+                          associadoNome: v.associado_nome,
+                          dataAtual: v.data_agendada,
+                          horaAtual: v.horario_agendado,
+                        })}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-amber-600 text-white rounded text-xs hover:bg-amber-700"
+                        title="Reagendar data/horário"
+                      >
+                        <CalendarClock className="h-3 w-3" />Reagendar
+                      </button>
+                    )}
                     {podeCancelarAtribuicao && v.vistoriador_id && !isRealizada && v.servico_id_unificado && (
                       <button
                         onClick={() => setCancelConfirmation({
