@@ -170,9 +170,11 @@ export default function InstaladorHome() {
           )
         )}
 
-        {/* Conteúdo Principal: Tarefa Atual ou Botão Iniciar */}
+        {/* Conteúdo Principal: Tarefa Atual ou Botão Iniciar / Fila Base */}
         {tarefaAtual ? (
           <TarefaAtualCard tarefa={tarefaAtual} />
+        ) : isVistoriadorBase ? (
+          <FilaBaseSection />
         ) : (
           <BotaoIniciarServico />
         )}
