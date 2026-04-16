@@ -167,6 +167,10 @@ export interface ModelEligibilityResult {
  * that uses the new modelos array format (with per-item status).
  * Returns null if no matching entry is found.
  */
+function removeDiacritics(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
 export function findModelEligibility(
   rule: Pick<EligibilityRule, 'rule_config'>,
   ctx: VehicleContext
@@ -177,12 +181,12 @@ export function findModelEligibility(
   for (const entry of modelos) {
     if (typeof entry !== 'object' || !entry.status) continue;
 
-    const ctxMarca = (ctx.marca || '').toUpperCase();
-    const entryMarca = (entry.marca || '').toUpperCase();
+    const ctxMarca = removeDiacritics((ctx.marca || '').toUpperCase());
+    const entryMarca = removeDiacritics((entry.marca || '').toUpperCase());
     const marcaOk = !entryMarca || ctxMarca.includes(entryMarca) || entryMarca.includes(ctxMarca);
 
-    const ctxModelo = (ctx.modelo || '').toUpperCase();
-    const entryModelo = (entry.modelo || '').toUpperCase();
+    const ctxModelo = removeDiacritics((ctx.modelo || '').toUpperCase());
+    const entryModelo = removeDiacritics((entry.modelo || '').toUpperCase());
     const modeloWildcard = ['TODOS', 'QUALQUER', 'ALL', ''].includes(entryModelo);
     const modeloOk = modeloWildcard || ctxModelo.includes(entryModelo) || entryModelo.includes(ctxModelo);
     if (!marcaOk || !modeloOk) continue;
@@ -266,13 +270,13 @@ export function checkRuleAgainstVehicle(rule: EligibilityRule, ctx: VehicleConte
         return true;
       }
       // Legacy format: modelos as string array or single marca/modelo
-      const marcaMatch = !cfg.marca || (ctx.marca || '').toUpperCase().includes(cfg.marca.toUpperCase());
+      const marcaMatch = !cfg.marca || removeDiacritics((ctx.marca || '').toUpperCase()).includes(removeDiacritics(cfg.marca.toUpperCase()));
       const legacyModelos: string[] = modelosArr;
       let modeloMatch: boolean;
       if (legacyModelos.length > 0) {
-        modeloMatch = legacyModelos.some((m: string) => (ctx.modelo || '').toUpperCase().includes(m.toUpperCase()));
+        modeloMatch = legacyModelos.some((m: string) => removeDiacritics((ctx.modelo || '').toUpperCase()).includes(removeDiacritics(m.toUpperCase())));
       } else {
-        modeloMatch = !cfg.modelo || (ctx.modelo || '').toUpperCase().includes(cfg.modelo.toUpperCase());
+        modeloMatch = !cfg.modelo || removeDiacritics((ctx.modelo || '').toUpperCase()).includes(removeDiacritics(cfg.modelo.toUpperCase()));
       }
       const versaoMatch = !cfg.versao || (ctx.versao || '').toUpperCase().includes(cfg.versao.toUpperCase());
       const match2 = marcaMatch && (legacyModelos.length > 0 ? modeloMatch : (modeloMatch && versaoMatch));
