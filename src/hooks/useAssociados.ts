@@ -137,13 +137,41 @@ export function useAssociados({ filters, pagination, enabled = true }: UseAssoci
         query = query.lte('data_adesao', filters.data_adesao_fim);
       }
 
-      // Busca por nome, CPF ou email
+      // Busca por nome, CPF, email, telefone ou placa
       if (filters?.search) {
-        const searchTerm = filters.search.replace(/\D/g, '');
-        if (searchTerm.length === 11) {
-          query = query.eq('cpf', searchTerm);
+        const raw = filters.search.trim();
+        const digits = raw.replace(/\D/g, '');
+        if (digits.length === 11) {
+          // CPF completo
+          query = query.eq('cpf', digits);
         } else {
-          query = query.or(`nome.ilike.%${filters.search}%,email.ilike.%${filters.search}%`);
+          // Busca por placa: filtrar associados que têm veículo com a placa
+          const placaUpper = raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
+          let associadoIdsByPlaca: string[] = [];
+          if (placaUpper.length >= 4 && placaUpper.length <= 7) {
+            const { data: veics } = await supabase
+              .from('veiculos')
+              .select('associado_id')
+              .ilike('placa', `%${placaUpper}%`)
+              .not('associado_id', 'is', null)
+              .limit(500);
+            associadoIdsByPlaca = (veics || [])
+              .map((v: any) => v.associado_id)
+              .filter(Boolean);
+          }
+
+          const orParts = [
+            `nome.ilike.%${raw}%`,
+            `email.ilike.%${raw}%`,
+          ];
+          if (digits.length >= 4) {
+            orParts.push(`cpf.ilike.%${digits}%`);
+            orParts.push(`telefone.ilike.%${digits}%`);
+          }
+          if (associadoIdsByPlaca.length > 0) {
+            orParts.push(`id.in.(${associadoIdsByPlaca.join(',')})`);
+          }
+          query = query.or(orParts.join(','));
         }
       }
 
