@@ -245,32 +245,36 @@ export function EtapaDadosAssociado({
           </div>
         </div>
 
-        <Separator />
+        {podeAtribuirVendedor && (
+          <>
+            <Separator />
 
-        {/* Consultor Responsável */}
-        <div className="space-y-2">
-          <Label htmlFor="consultor">
-            Consultor Responsável <span className="text-destructive">*</span>
-          </Label>
-          <Select value={consultorId} onValueChange={setConsultorId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione o consultor" />
-            </SelectTrigger>
-            <SelectContent>
-              {isLoadingVendedores ? (
-                <SelectItem value="loading" disabled>
-                  Carregando...
-                </SelectItem>
-              ) : (
-                vendedores.map((vendedor) => (
-                  <SelectItem key={vendedor.user_id} value={vendedor.user_id}>
-                    {vendedor.nome}
-                  </SelectItem>
-                ))
-              )}
-            </SelectContent>
-          </Select>
-        </div>
+            {/* Consultor Responsável (apenas para liderança) */}
+            <div className="space-y-2">
+              <Label htmlFor="consultor">
+                Consultor Responsável <span className="text-destructive">*</span>
+              </Label>
+              <Select value={consultorId} onValueChange={setConsultorId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o consultor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {isLoadingVendedores ? (
+                    <SelectItem value="loading" disabled>
+                      Carregando...
+                    </SelectItem>
+                  ) : (
+                    vendedores.map((vendedor) => (
+                      <SelectItem key={vendedor.user_id} value={vendedor.user_id}>
+                        {vendedor.nome}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        )}
 
         <Separator />
 
