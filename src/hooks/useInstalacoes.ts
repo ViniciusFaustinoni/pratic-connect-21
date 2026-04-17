@@ -117,6 +117,7 @@ export function useInstalacoes(filtersOrParams?: InstalacaoFilters | UseInstalac
 
   return useQuery({
     queryKey: ['instalacoes', filters, pagination],
+    refetchOnMount: 'always',
     queryFn: async () => {
       let query = supabase
         .from('instalacoes')
@@ -255,6 +256,7 @@ export function useInstalacao(id: string | undefined) {
 export function useInstalacoesContagem(data?: string) {
   return useQuery({
     queryKey: ['instalacoes-contagem', data],
+    refetchOnMount: 'always',
     queryFn: async () => {
       const hoje = data || new Date().toISOString().split('T')[0];
 
