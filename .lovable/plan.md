@@ -1,39 +1,70 @@
 
 
-## Causa raiz
+## Confirmação da causa raiz — Calculadora não responde ao "Calcular"
 
-A página de lista de usuários foi consolidada em `/configuracoes/usuarios-acessos` (ver `App.tsx` linha 692). A rota antiga `/configuracoes/usuarios` foi removida do router, mas o `UsuarioForm.tsx` ainda navega para ela em 3 pontos:
+Reli `src/components/planos/CalculadoraPreco.tsx` linha por linha para confirmar.
+<lov-tool-use id="toolu_vrtx_01HgKWuRm3i8mFdX6Kg9euw1" name="code--view" integration-id="code" data="{\"file_path\": \"src/components/planos/CalculadoraPreco.tsx\", \"lines\": \"1-260\"}">
+</lov-tool-use>
 
-- **Linha 482** — `onSuccess` do mutation: após criar/editar, `navigate('/configuracoes/usuarios')` → 404.
-- **Linha 523** — botão "voltar" (seta no header) → 404.
-- **Linha 839** — botão "Cancelar" → 404.
+<lov-tool-use id="toolu_vrtx_018hx5VZ56yr7g9k4oS5Nvuh" name="code--view" integration-id="code" data="{\"file_path\": \"src/components/planos/CalculadoraPreco.tsx\", \"lines\": \"60-260\"}">
+</lov-tool-use>
+Causa raiz confirmada. Linhas 78, 110, 123, 181, 211, 228 — `useRef` em vez de `useState`. Refs não disparam re-render, então o hook `usePlanosCotacao` nunca é re-chamado com `valorFipe` real.
 
-O toast "Usuário atualizado!" aparece (mutation OK) e logo em seguida cai no NotFound (visível no print 2).
+<lov-plan>
+
+## Causa raiz (confirmada)
+
+`src/components/planos/CalculadoraPreco.tsx`:
+
+- **Linha 78**: `const jaCalculouRef = useRef(false);`
+- **Linha 110**: `valorFipe: temFipe && jaCalculouRef.current ? fipeNumerico : 0`
+- **Linha 181** (`handleCalcular`): `jaCalculouRef.current = true;`
+- **Linha 228** (`showResults`): `jaCalculouRef.current && temFipe && ...`
+
+**Refs não disparam re-render.** Sequência ao clicar "Calcular":
+1. `handleCalcular` muda `jaCalculouRef.current` para `true`.
+2. Se `fipeNumerico >= fipeMinimo`, faz `setFipeBloqueado(false)` — mas como já era `false`, **React faz bail-out e não re-renderiza**.
+3. `usePlanosCotacao` continua sendo chamado com `valorFipe: 0` (valor da renderização anterior).
+4. `showResults` continua `false`.
+5. **Tela não muda. Botão parece morto.**
+
+(Se o FIPE fosse abaixo do mínimo, o `setFipeBloqueado(true)` dispara re-render e o alerta apareceria — mas no caso normal, nada.)
+
+Fix secundário: linha 88 não normaliza `r.codigo` com `.toLowerCase()` como os demais consumidores (`EtapaCriteriosCotacao`). Risco de mismatch se o banco devolver código maiúsculo.
 
 ## Correção
 
-Em `src/pages/configuracoes/UsuarioForm.tsx`, trocar as 3 ocorrências de:
+**1. Trocar `useRef` por `useState`** em `src/components/planos/CalculadoraPreco.tsx`:
+
+- L78: `const [jaCalculou, setJaCalculou] = useState(false);`
+- L110: `valorFipe: temFipe && jaCalculou ? fipeNumerico : 0`
+- L123: `if (jaCalculou && temFipe) {`
+- L181: `setJaCalculou(true);`
+- L211: `setJaCalculou(false);`
+- L228: `const showResults = jaCalculou && temFipe && !fipeBloqueado && planosCalculados.length > 0;`
+- (verificar L635 também, mencionada na análise anterior)
+
+**2. Padronizar região** (L88):
 ```ts
-navigate('/configuracoes/usuarios')
+const REGIOES = useMemo(
+  () => (regioesDb || []).map(r => ({ value: r.codigo.toLowerCase(), label: r.nome })),
+  [regioesDb]
+);
 ```
-por:
-```ts
-navigate('/configuracoes/usuarios-acessos')
-```
 
-## Auditoria adicional
+## Não mexer
 
-`src/pages/configuracoes/UsuariosAcessos.tsx` linhas 307, 436, 493 e `Vendedores.tsx` linha 81 e `VendedorHistorico.tsx` linha 146 navegam para `/configuracoes/usuarios/novo` e `/configuracoes/usuarios/:id`. **Essas rotas existem** (App.tsx 693-694) — apontam para `UsuarioForm`. Não precisam ser alteradas.
-
-A única rota quebrada é a lista (`/configuracoes/usuarios` sem sufixo).
+- `usePlanosCotacao`, `consultarPlaca`, `handleValorChange`, layout dos cards de resultado.
 
 ## Validação
 
-1. Editar um usuário existente e clicar "Salvar alterações" → deve voltar pra `/configuracoes/usuarios-acessos` com a lista (sem 404).
-2. Criar um novo usuário → mesmo comportamento.
-3. Clicar em "Cancelar" ou na seta de voltar → mesmo comportamento.
+1. Comercial → Planos e Benefícios → Calculadora.
+2. Pela placa `Q005C17` → Consultar → Calcular → lista de planos aparece.
+3. Modo "Digitar FIPE" → preencher → Calcular → lista aparece.
+4. FIPE abaixo do mínimo → alerta aparece (regressão).
+5. Limpar → estado inicial.
 
 ## Resultado
 
-Fim do 404 pós-criação/edição de usuário. Fluxo retorna pra lista correta.
+Botão "Calcular" passa a renderizar os planos. Sem regressão no alerta de FIPE mínimo nem no fluxo de placa.
 
