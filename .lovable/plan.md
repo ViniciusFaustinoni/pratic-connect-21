@@ -1,70 +1,51 @@
 
 
-## Confirmação da causa raiz — Calculadora não responde ao "Calcular"
+## Causa raiz
 
-Reli `src/components/planos/CalculadoraPreco.tsx` linha por linha para confirmar.
-<lov-tool-use id="toolu_vrtx_01HgKWuRm3i8mFdX6Kg9euw1" name="code--view" integration-id="code" data="{\"file_path\": \"src/components/planos/CalculadoraPreco.tsx\", \"lines\": \"1-260\"}">
-</lov-tool-use>
+No fluxo público (`EtapaVistoria.tsx`), quando o usuário clica em "Agendar Vistoria Presencial", a lógica das **linhas 159–168** decide para onde ir baseando-se em `tipoInstalacao`:
 
-<lov-tool-use id="toolu_vrtx_018hx5VZ56yr7g9k4oS5Nvuh" name="code--view" integration-id="code" data="{\"file_path\": \"src/components/planos/CalculadoraPreco.tsx\", \"lines\": \"60-260\"}">
-</lov-tool-use>
-Causa raiz confirmada. Linhas 78, 110, 123, 181, 211, 228 — `useRef` em vez de `useState`. Refs não disparam re-render, então o hook `usePlanosCotacao` nunca é re-chamado com `valorFipe` real.
+```ts
+if (tipoInstalacao === 'rota')      setModo('agendada');        // pula escolha de base
+else if (tipoInstalacao === 'base') setModo('agendada-base');   // ❌ pula escolha de qual base!
+else                                 setModo('escolha-local');
+```
 
-<lov-plan>
+Quando o consultor pré-define `tipoInstalacao = 'base'`, o código **pula direto para `agendada-base`**, mas `oficinaIdSelecionada` está vazio (`''`). O `AgendamentoBase` então cai no fallback da linha 113–118 (`useOficina('')` retorna nada → usa `configBase`) e mostra "Base PRATIC" com endereço da Av. Brigadeiro Lima e Silva (config global), sem deixar o usuário escolher entre as bases reais cadastradas (Oficina Praticcar / Auto GJ).
 
-## Causa raiz (confirmada)
+Quando o usuário clica "Voltar" a partir dessa tela, o handler é `setModo('escolha-base')` (linha 265) — e aí sim aparece a tela correta com as 2 bases. Daí o sintoma: o `EscolhaBase` existe e funciona, mas **só é alcançado pelo botão Voltar**, nunca no fluxo direto.
 
-`src/components/planos/CalculadoraPreco.tsx`:
-
-- **Linha 78**: `const jaCalculouRef = useRef(false);`
-- **Linha 110**: `valorFipe: temFipe && jaCalculouRef.current ? fipeNumerico : 0`
-- **Linha 181** (`handleCalcular`): `jaCalculouRef.current = true;`
-- **Linha 228** (`showResults`): `jaCalculouRef.current && temFipe && ...`
-
-**Refs não disparam re-render.** Sequência ao clicar "Calcular":
-1. `handleCalcular` muda `jaCalculouRef.current` para `true`.
-2. Se `fipeNumerico >= fipeMinimo`, faz `setFipeBloqueado(false)` — mas como já era `false`, **React faz bail-out e não re-renderiza**.
-3. `usePlanosCotacao` continua sendo chamado com `valorFipe: 0` (valor da renderização anterior).
-4. `showResults` continua `false`.
-5. **Tela não muda. Botão parece morto.**
-
-(Se o FIPE fosse abaixo do mínimo, o `setFipeBloqueado(true)` dispara re-render e o alerta apareceria — mas no caso normal, nada.)
-
-Fix secundário: linha 88 não normaliza `r.codigo` com `.toLowerCase()` como os demais consumidores (`EtapaCriteriosCotacao`). Risco de mismatch se o banco devolver código maiúsculo.
+Mesmo bug existe em `AgendamentoVistoriaCompleta.tsx` linhas 45–47: `tipoInstalacao === 'base' ? 'escolha-base'` — esse arquivo **acerta** (vai para `escolha-base`). O divergente é o `EtapaVistoria.tsx`.
 
 ## Correção
 
-**1. Trocar `useRef` por `useState`** em `src/components/planos/CalculadoraPreco.tsx`:
+**`src/components/cotacao-publica/EtapaVistoria.tsx`** — linha 164:
 
-- L78: `const [jaCalculou, setJaCalculou] = useState(false);`
-- L110: `valorFipe: temFipe && jaCalculou ? fipeNumerico : 0`
-- L123: `if (jaCalculou && temFipe) {`
-- L181: `setJaCalculou(true);`
-- L211: `setJaCalculou(false);`
-- L228: `const showResults = jaCalculou && temFipe && !fipeBloqueado && planosCalculados.length > 0;`
-- (verificar L635 também, mencionada na análise anterior)
-
-**2. Padronizar região** (L88):
-```ts
-const REGIOES = useMemo(
-  () => (regioesDb || []).map(r => ({ value: r.codigo.toLowerCase(), label: r.nome })),
-  [regioesDb]
-);
+```diff
+  } else if (tipoInstalacao === 'base') {
+-   setModo('agendada-base');
++   setModo('escolha-base');
+  }
 ```
 
-## Não mexer
+E ajustar o "Voltar" da `escolha-base` (linha 242) para refletir corretamente: quando `tipoInstalacao === 'base'` o passo anterior é `escolha` (não `escolha-local`, que é pulado). Já está correto: `setModo(tipoInstalacao ? 'escolha' : 'escolha-local')` ✓.
 
-- `usePlanosCotacao`, `consultarPlaca`, `handleValorChange`, layout dos cards de resultado.
+## Auditoria
+
+- `AgendamentoVistoriaCompleta.tsx` (usado pós-autovistoria): já direciona corretamente para `escolha-base`. Sem mudança.
+- `EscolhaLocalVistoria.tsx`: filtra opções por `tipoInstalacao` corretamente. Sem mudança.
+- Quando há 1 só base cadastrada, o `EscolhaBase` ainda renderiza ela como cartão clicável — UX consistente, sem auto-skip (intencional).
 
 ## Validação
 
-1. Comercial → Planos e Benefícios → Calculadora.
-2. Pela placa `Q005C17` → Consultar → Calcular → lista de planos aparece.
-3. Modo "Digitar FIPE" → preencher → Calcular → lista aparece.
-4. FIPE abaixo do mínimo → alerta aparece (regressão).
-5. Limpar → estado inicial.
+1. Link público com cotação onde consultor marcou `tipo_instalacao = 'base'`.
+2. Etapa Vistoria → "Agendar Vistoria Presencial" → deve cair em **"Escolha a base"** com as 2 unidades (Oficina Praticcar e Auto GJ), **não** direto na agenda.
+3. Selecionar base → tela de horários da base escolhida (endereço bate com a base clicada).
+4. Botão Voltar da agenda → volta para "Escolha a base".
+5. Botão Voltar de "Escolha a base" → volta para a tela inicial de tipo de vistoria (autovistoria/agendar).
+6. Cotação sem `tipo_instalacao` definido: mantém fluxo `escolha-local` → escolha-base → agenda.
+7. Cotação com `tipo_instalacao = 'rota'`: vai direto para agenda no endereço do cliente (inalterado).
 
 ## Resultado
 
-Botão "Calcular" passa a renderizar os planos. Sem regressão no alerta de FIPE mínimo nem no fluxo de placa.
+Usuário sempre vê a lista de bases disponíveis antes dos horários, eliminando a seleção automática indevida da Base PRATIC global.
 
