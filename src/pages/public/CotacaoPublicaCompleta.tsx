@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { formatarMoeda } from '@/utils/format';
 import { VideoCapture } from '@/components/instalador/VideoCapture';
+import { InAppBrowserBanner } from '@/components/shared/InAppBrowserBanner';
 import { FOTOS_VISTORIA_COMPLETA } from '@/data/vistoriaConfigCompleta';
 import { useConfigFipeRastreador, useConfigFipeRastreadorMoto, precisaRastreador } from '@/hooks/useConfigRastreador';
 
