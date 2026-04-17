@@ -1,70 +1,39 @@
 
 
-## O que aconteceu com a proposta LSP3E65 (CTR-20260417124855-MF0CWF)
+## Causa raiz
 
-**Cliente:** WILLIAM DO CARMO DA SILVA — Honda XRE 300, placa LSP3E65
+Existem **dois fluxos** de criação de cotação e cada um trata o consultor de modo diferente:
 
-### Linha do tempo real (do banco)
-
-| Hora (17/04) | Evento |
-|---|---|
-| 12:48:55 | Contrato criado a partir da cotação COT-20260417-093916772-294 |
-| 12:49:03 | Status `rascunho → pendente_assinatura` (envio Autentique) |
-| 13:35:58 | Cliente visualizou o documento |
-| 13:38:42 | Cliente assinou (Autentique, e-mail williamsilvacarmoo@gmail.com) |
-| **17:55:22** | **Diretor aprovou a proposta** (`aprovado_em`, `aprovado_por=37beadcf...`) |
-| 17:55:23 | Status `assinado → ativo` |
-
-### Estado atual no banco
-
-- `contratos.status = ativo` ✅
-- `autentique_status = signed` ✅
-- `aprovado_em = 17:55:22` ✅
-- `data_ativacao = 17:55:22` ✅
-- `adesao_paga = true` ✅
-- Associado `b10ad945-...` está `ativo` ✅
-- Veículo `LSP3E65` está `ativo` ✅
-
-**Conclusão: a aprovação foi processada com sucesso. O cadastro está concluído. Não houve falha no backend.**
-
-### O que o usuário viu (e por que parece "travada")
-
-A tela de Aprovação Final (`PropostaApprovalStepper`, etapa 3) só renderiza os botões "Aprovar Proposta / Solicitar Documentos / Reprovar" quando `podeAprovar === true`.
-
-`podeAprovar` é definido em `src/pages/cadastro/PropostaAnalise.tsx` linha 85:
+### Fluxo A — `CotacaoFormDialog.tsx` (modal em `/vendas/cotacoes`)
+**Já está correto.** Linha 181:
 ```ts
-const podeAprovar = proposta?.status === 'assinado' && !proposta?.tem_documento_pendente;
+const podeAtribuirVendedor = isDiretor || isGerente || isSupervisor;
 ```
+O bloco "Consultor Responsável" (linhas 2304–2344) só renderiza para liderança. Vendedor comum não vê o dropdown e o `vendedor_id` é gravado automaticamente como `userId || user?.id` (linha 1305–1307). ✅
 
-Como o contrato já está `ativo` (não `assinado`), os botões somem — **mas a tela não exibe nenhuma mensagem dizendo "já aprovado"**. Resultado visual: Resumo mostra tudo "Concluído" mas não aparece nenhuma ação. Parece travado.
+### Fluxo B — `EtapaDadosAssociado.tsx` (wizard `/vendas/cotacao`) ❌
+**Bug aqui.** Linhas 237–260 renderizam o `<Select>` de Consultor **incondicionalmente**, sem checar permissão. Pior: `consultorId` inicia como `''` (Cotacao.tsx linha 73) e o botão "Avançar" exige seleção (linha 88: `consultorId !== ''`), forçando o vendedor logado a se auto-selecionar manualmente — inclusive podendo escolher outro vendedor.
 
-Provável fluxo do usuário: clicou em "Aprovar Proposta" às 17:55, aprovação processou, mas a navegação automática (`navigate('/cadastro/propostas')`) não ocorreu por algum motivo (clique no Voltar do navegador, refresh, ou o `setShowConfirmAprovar(false)` que disparou um re-render), e ele ficou na URL detalhada vendo um estado pós-aprovação sem feedback.
+## Correção
 
-### Correção proposta (UX)
+**Arquivo único:** `src/components/cotacao/EtapaDadosAssociado.tsx`
 
-Em `src/pages/cadastro/PropostaAnalise.tsx` + `PropostaApprovalStepper.tsx`:
+1. Importar `useAuth` e `usePermissions`.
+2. Calcular `podeAtribuirVendedor = isDiretor || isGerente || isSupervisor` (mesma regra do CotacaoFormDialog para manter paridade).
+3. Em `useEffect` ao montar: se `!podeAtribuirVendedor && !consultorId && user?.id`, chamar `setConsultorId(user.id)` automaticamente.
+4. Renderizar o bloco do `<Select>` (linhas 237–260 + `<Separator />` da 235) **somente quando `podeAtribuirVendedor === true`**.
+5. Para liderança, manter o dropdown atual (mas pré-selecionar com `user.id` como default, para reduzir cliques — eles ainda podem trocar).
 
-1. Quando `proposta.status === 'ativo'` (já aprovado), exibir um **banner verde de sucesso** no topo:
-   > "Proposta já aprovada em 17/04/2026 às 17:55 por [Aprovador]. Cadastro concluído."
-   
-   Com botão **"Ver associado"** (vai para `/cadastro/associados/{associado_id}`) e **"Voltar para lista"**.
+Lógica de validação `canProceed` continua funcionando (consultorId estará preenchido automaticamente).
 
-2. No stepper (etapa 3), substituir os botões de ação por uma mensagem de estado final quando `status === 'ativo'`, `cancelado` ou `reprovado` — em vez de simplesmente esconder os botões.
+## Validação
 
-3. Garantir que `useProposta` redirecione automaticamente para a lista quando o status não for mais `assinado` (opcional — pode fazer apenas o item 1 para manter rastreabilidade).
+1. Login como vendedor (`vendedor_clt` ou `vendedor_externo`) → `/vendas/cotacao` → Etapa 1 não mostra dropdown de Consultor; ao avançar, cotação é gravada com `vendedor_id = userId` do logado.
+2. Login como diretor/gerente/supervisor → dropdown aparece, pré-selecionado com o próprio usuário, podendo trocar.
+3. Modal `CotacaoFormDialog` em `/vendas/cotacoes` → comportamento inalterado (já correto).
+4. Conferir `cotacoes.vendedor_id` no banco após criação por vendedor: deve ser o `auth.uid()` do criador.
 
-### Arquivos a editar
+## Resultado
 
-- `src/pages/cadastro/PropostaAnalise.tsx` — adicionar banner de "já aprovado" + buscar nome de quem aprovou.
-- `src/components/cadastro/proposta/PropostaApprovalStepper.tsx` — exibir estado final quando `!podeAprovar` por motivo de já estar aprovado/reprovado/cancelado.
-
-### Validação
-
-1. Abrir `/cadastro/propostas/d96300ef-9c49-4b3b-9e14-47197098ccbc` → deve mostrar banner verde "Proposta aprovada em 17/04 17:55" com botão para ver o associado.
-2. Abrir uma proposta ainda `assinado` → fluxo normal de aprovação inalterado.
-3. Após aprovar uma proposta nova, navegação para próxima/lista continua funcionando.
-
-### Resultado
-
-A "proposta LSP3E65" **não tem problema** — está aprovada e o associado está ativo. O bug é puramente visual: a tela de análise não comunica o estado pós-aprovação quando o usuário volta a ela.
+Vendedores deixam de ver e selecionar consultor — sistema atribui automaticamente. Liderança mantém controle total para reatribuir.
 
