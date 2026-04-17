@@ -389,6 +389,7 @@ export default function UsuarioForm() {
       perfis: usuario.roles || [], regioes_atendimento: usuario.regioes_atendimento || [],
       capacidade_diaria: usuario.capacidade_diaria || 10,
       grade_comissao_id: userGrade || '',
+      agencia_forma_recebimento: ((usuario as any).agencia_forma_recebimento === 'em_maos' ? 'em_maos' : 'comissao') as 'comissao' | 'em_maos',
     };
     setFormData((prev) => {
       const same = prev.nome === next.nome && prev.email === next.email &&
@@ -400,7 +401,8 @@ export default function UsuarioForm() {
         prev.perfis.every((p, i) => p === next.perfis[i]) &&
         prev.regioes_atendimento.length === next.regioes_atendimento.length &&
         prev.capacidade_diaria === next.capacidade_diaria &&
-        prev.grade_comissao_id === next.grade_comissao_id;
+        prev.grade_comissao_id === next.grade_comissao_id &&
+        prev.agencia_forma_recebimento === next.agencia_forma_recebimento;
       return same ? prev : next;
     });
   }, [usuario, userGrade]);
@@ -428,6 +430,7 @@ export default function UsuarioForm() {
           profileUpdate.razao_social = formData.razao_social;
           profileUpdate.nome_fantasia = formData.nome_fantasia;
           profileUpdate.cpf = null;
+          profileUpdate.agencia_forma_recebimento = formData.agencia_forma_recebimento;
         } else {
           profileUpdate.cpf = formData.cpf;
           profileUpdate.cnpj = null;
