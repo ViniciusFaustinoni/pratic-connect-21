@@ -2,45 +2,55 @@
 
 ## Bug
 
-Quando técnico de **base** recebe vistoria atribuída (veículo já está fisicamente na oficina), o card "Tarefa Atual" exige contato prévio com o associado para liberar o botão **Iniciar Tarefa**. Isso não faz sentido — o cliente já entregou o veículo.
+`ExecutarVistoriaCompleta.tsx` mostra "4/31 fotos" para uma **moto** (deveria ser 10) e bloqueia o botão **Aprovar** porque exige 31 fotos. A detecção do tipo até funciona para montar as categorias, mas o **contador total** e a **validação** usam a constante hardcoded `TOTAL_FOTOS_OBRIGATORIAS` (calculada só para automóvel = 31).
 
-A regra de "ligar antes de iniciar percurso" só serve para serviços **externos** (técnico vai até o endereço do cliente).
+Evidência (screenshot): "Foto 8 de 10 — 10/10 enviadas" no carrossel (lista correta de moto), mas o cabeçalho diz "4/31 fotos" e o botão Aprovar fica desabilitado com aviso "faltam 27".
 
 ## Causa
 
-`src/components/vistoriador/TarefaAtualCard.tsx` (linhas 503–533) bloqueia incondicionalmente:
+`src/pages/instalador/ExecutarVistoriaCompleta.tsx`:
 
-```tsx
-{isAgendada ? (
-  <>
-    {!contatoRealizado && <aviso amarelo />}
-    <Button disabled={... || !contatoRealizado}>Iniciar Tarefa</Button>
-  </>
-)
-```
+- Linha 34: importa `TOTAL_FOTOS_OBRIGATORIAS` (constante global = 31, ignora tipo).
+- Linha 258–263: `totalFotosEnviadas` filtra `FOTOS_VISTORIA_COMPLETA` (lista de carro), não usa `getFotosByTipoVeiculo(tipoVeiculoDetectado)`.
+- Linha 267: `todasFotosEnviadas = totalFotosEnviadas >= TOTAL_FOTOS_OBRIGATORIAS` — sempre exige 31.
+- Linhas 492 e 634: exibem `TOTAL_FOTOS_OBRIGATORIAS` direto na UI.
 
-O campo `tarefa.local_vistoria` já indica o local (`'base'` ou `'cliente'`), mas não é consultado aqui.
+`tipoVeiculoDetectado` (linha 222) já existe e está correto — só não é propagado para o cálculo de total.
 
 ## Correção
 
-### 1) `src/components/vistoriador/TarefaAtualCard.tsx`
-- Derivar `isNaBase = tarefa.local_vistoria === 'base'`.
-- Quando `isNaBase` for true:
-  - **Ocultar** o aviso amarelo "Entre em contato com o associado antes de iniciar o percurso".
-  - **Remover** `!contatoRealizado` da condição `disabled` do botão Iniciar Tarefa.
-  - Trocar o texto do botão (opcional) ou manter "Iniciar Tarefa" — o usuário não pediu, mantenho igual.
-- Não mexer em nada quando `local_vistoria === 'cliente'` (fluxo externo permanece exigindo contato).
+### Único arquivo: `src/pages/instalador/ExecutarVistoriaCompleta.tsx`
 
-### 2) Não mexer
-- `useRegistrarContato`, banco, RPCs: continuam iguais. O técnico ainda pode registrar contato manualmente se quiser (botões WhatsApp/Ligação seguem funcionando).
-- Não toco no fluxo de "Em Rota" / "Em Andamento".
+1. Trocar import: remover `TOTAL_FOTOS_OBRIGATORIAS` e `FOTOS_VISTORIA_COMPLETA`; adicionar `getTotalFotosObrigatorias` e `getFotosFiltradas`.
+2. Derivar dinâmico:
+   ```ts
+   const totalFotosObrigatorias = useMemo(
+     () => getTotalFotosObrigatorias(tipoVeiculoDetectado),
+     [tipoVeiculoDetectado]
+   );
+   ```
+3. Reescrever `totalFotosEnviadas` para filtrar pela lista do tipo correto:
+   ```ts
+   const fotosObrigatoriasDoTipo = useMemo(
+     () => getFotosFiltradas(tipoVeiculoDetectado, false),
+     [tipoVeiculoDetectado]
+   );
+   const totalFotosEnviadas = useMemo(
+     () => fotosObrigatoriasDoTipo.filter(f => fotosMap[f.id]).length,
+     [fotosObrigatoriasDoTipo, fotosMap]
+   );
+   ```
+4. Substituir todas as ocorrências de `TOTAL_FOTOS_OBRIGATORIAS` por `totalFotosObrigatorias` (linhas 267, 492, 497, 634).
+
+Não mexer em: detecção de tipo (já correta), categorias, upload, RPC, banco. Mesmo padrão já consolidado em `InstaladorChecklist.tsx`.
 
 ## Validação
 
-1. Logar como técnico de base com vistoria atribuída onde `local_vistoria='base'` → botão **Iniciar Tarefa** habilitado direto, sem aviso amarelo.
-2. Logar como técnico volante com `local_vistoria='cliente'` → comportamento atual preservado (exige contato).
+1. Abrir vistoria de moto → cabeçalho deve mostrar `X/10 fotos` (não `/31`).
+2. Após enviar as 10 fotos + vídeo + conferência → botão **Aprovar** habilita.
+3. Vistoria de carro → mantém `X/31` (regressão zero).
 
-## Resultado esperado
+## Resultado
 
-Vistorias na base fluem sem fricção; vistorias externas continuam protegidas pelo gate de contato prévio.
+Técnico consegue finalizar vistoria de moto com 10 fotos (e qualquer outra contagem específica de tipo). Comportamento de carro inalterado.
 
