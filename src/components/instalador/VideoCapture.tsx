@@ -323,9 +323,6 @@ export function VideoCapture({
                 </>
               )}
             </div>
-            <span className="text-xs text-slate-500">
-              Máximo {formatTime(maxDuration)}
-            </span>
           </div>
         )}
       </div>
@@ -333,10 +330,6 @@ export function VideoCapture({
       {error && (
         <p className="text-center text-sm text-red-400">{error}</p>
       )}
-
-      <p className="text-center text-xs text-slate-500">
-        Inicie pelo chassi e faça uma volta completa de 360° no veículo
-      </p>
     </div>
   );
 }
