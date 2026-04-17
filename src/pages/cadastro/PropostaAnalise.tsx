@@ -387,6 +387,22 @@ export default function PropostaAnalise() {
         </div>
       )}
 
+      {/* Banner: aguardando execução da vistoria/instalação (analista pode revisar docs mas não aprovar) */}
+      {!isFinalizada && aguardandoExecucao && (
+        <div className="rounded-lg border-2 border-info/40 bg-info/10 p-4">
+          <div className="flex items-start gap-3">
+            <ClipboardCheck className="h-5 w-5 text-info mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <p className="font-semibold text-info">Análise documental disponível</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Você pode revisar documentos e contrato agora. A <strong>aprovação final</strong> será liberada após a execução da vistoria/instalação agendada.
+                Em seguida, o monitoramento dará o <strong>segundo check</strong> para liberar a Proteção 360 e o app do associado.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {podeAtivarSoftruck && (
         <div className="rounded-lg border-2 border-warning/30 bg-warning/10 p-4 space-y-3">
           <div className="flex items-start gap-3">
