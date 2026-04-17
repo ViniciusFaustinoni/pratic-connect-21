@@ -18,6 +18,7 @@ import {
   ZoomIn,
   CheckCircle,
   Image as ImageIcon,
+  AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -26,6 +27,63 @@ import type { VistoriaFotoInfo } from '@/hooks/usePropostasPendentes';
 import { DocumentosSolicitadosCard, type DocumentoSolicitadoEnviado } from '@/components/cadastro/DocumentosSolicitadosCard';
 
 const isVideoTipo = (tipo?: string | null) => tipo?.startsWith('video');
+
+// Placeholder para mídias quebradas (0 bytes / 404 / formato não suportado)
+function MidiaQuebrada({ label, className }: { label?: string; className?: string }) {
+  return (
+    <div className={cn(
+      "w-full h-full flex flex-col items-center justify-center gap-1 bg-destructive/10 text-destructive text-center p-2",
+      className
+    )}>
+      <AlertTriangle className="h-5 w-5" />
+      <span className="text-[10px] font-medium leading-tight">Arquivo corrompido</span>
+      {label && <span className="text-[9px] opacity-70 truncate max-w-full">{label}</span>}
+    </div>
+  );
+}
+
+function ImgComFallback({ src, alt, className }: { src: string; alt: string; className?: string }) {
+  const [erro, setErro] = useState(false);
+  if (erro) return <MidiaQuebrada label={alt} className={className} />;
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      loading="lazy"
+      onError={() => setErro(true)}
+    />
+  );
+}
+
+function VideoComFallback({ src, className, controls, autoPlay, muted, preload, playsInline }: {
+  src: string;
+  className?: string;
+  controls?: boolean;
+  autoPlay?: boolean;
+  muted?: boolean;
+  preload?: string;
+  playsInline?: boolean;
+}) {
+  const [erro, setErro] = useState(false);
+  if (erro) return <MidiaQuebrada label="vídeo" className={className} />;
+  // Detecta extensão pra type hint, mas sempre oferece os 2 sources
+  const isMp4 = /\.mp4(\?|$)/i.test(src);
+  return (
+    <video
+      className={className}
+      controls={controls}
+      autoPlay={autoPlay}
+      muted={muted}
+      preload={preload as any}
+      playsInline={playsInline}
+      onError={() => setErro(true)}
+    >
+      <source src={src} type={isMp4 ? 'video/mp4' : 'video/webm'} />
+      <source src={src} type={isMp4 ? 'video/webm' : 'video/mp4'} />
+    </video>
+  );
+}
 
 interface PropostaMidiaGridProps {
   video360Url?: string | null;
