@@ -479,7 +479,7 @@ export default function UsuarioForm() {
       setGradeError(false);
       toast.success(isEditing ? 'Usuário atualizado!' : 'Usuário criado!');
       queryClient.invalidateQueries({ queryKey: ['usuarios'] });
-      navigate('/configuracoes/usuarios');
+      navigate('/configuracoes/usuarios-acessos');
     },
     onError: (error: any) => {
       const errorMessage = error.message || 'Erro ao salvar usuário';
@@ -520,7 +520,7 @@ export default function UsuarioForm() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/configuracoes/usuarios')}>
+        <Button variant="ghost" size="icon" onClick={() => navigate('/configuracoes/usuarios-acessos')}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div>
@@ -836,7 +836,7 @@ export default function UsuarioForm() {
                 {saveUser.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
                 {isEditing ? 'Salvar alterações' : 'Criar usuário'}
               </Button>
-              <Button type="button" variant="outline" onClick={() => navigate('/configuracoes/usuarios')} className="w-full">
+              <Button type="button" variant="outline" onClick={() => navigate('/configuracoes/usuarios-acessos')} className="w-full">
                 Cancelar
               </Button>
             </div>
