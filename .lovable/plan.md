@@ -1,77 +1,59 @@
 
 
-## Causa raiz das falhas do OCR
+## Escopo
 
-Investiguei `supabase/functions/document-ocr/index.ts` (828 linhas) e o PDF de CNH que você anexou. Há **5 causas distintas** de falha, em ordem de impacto:
+Dois fixes cirúrgicos em `src/components/monitoramento/CalendarioDiaModal.tsx`. Sem refatorar a fonte de dados (continuamos lendo `vistorias`, `instalacoes`, `agendamentos_base` como hoje).
 
-### 1) Extração de texto nativo do PDF está quebrada (impacto MÁXIMO)
-A função `extractTextFromPDFBuffer` (linha 774) faz um regex `/\(([^)]*)\)/g` no buffer **bruto**, sem descomprimir streams. Mas o PDF da CNH Digital que você enviou usa `/Filter /FlateDecode` — todo o texto está **comprimido em zlib**. O regex retorna lixo binário ou ~0 caracteres úteis.
+## Fix 1 — Aba Base/Rota refletir `local_vistoria` real
 
-Resultado: a checagem `if (pdfText && pdfText.length > 50)` (linha 414) **quase sempre falha**, e o "TEXTO EXTRAÍDO DO PDF" que serviria de fonte primária para CPF/nome **nunca é injetado** no prompt. O sistema vira 100% dependente da leitura visual do Gemini, que erra dígitos parecidos (3↔8, 5↔6, 0↔8).
+**Causa**: o modal divide itens por **tabela de origem** (`agendamentos_base` → Base, `vistorias` + `instalacoes` → Rota). A vistoria da Laiane aparece em Base porque existe um espelho em `agendamentos_base`, mas no banco principal `local_vistoria='cliente'`.
 
-Foi exatamente o que aconteceu no seu print: CRLV leu tudo (o sistema acertou placa/renavam/chassi por sorte), mas CPF da CNH falhou.
+**Correção**: na query de `agendamentos_base` (linha 99–112), trazer também `vistoria_id` e a `local_vistoria` da vistoria vinculada via join. Filtrar fora qualquer agendamento_base cuja vistoria associada tenha `local_vistoria = 'cliente'` — esses pertencem à aba Rota e já são carregados pela query de `vistoriasCampo`.
 
-### 2) Modelo escolhido é fraco para texto pequeno
-Linha 262: `OCR_MODEL = 'google/gemini-2.5-flash-image'`. Esse modelo é otimizado para **geração/edição de imagens**, não para leitura precisa de texto. O modelo correto para OCR é `google/gemini-2.5-flash` (ou `pro` para máxima precisão). O retry usa `gemini-2.5-pro` — e por isso o retry costuma acertar quando o primeiro falha.
+```ts
+.select('..., vistoria_id, vistoria:vistorias!agendamentos_base_vistoria_id_fkey(local_vistoria)')
+// no useMemo: filtrar onde row.vistoria?.local_vistoria === 'cliente'
+```
 
-### 3) Imagens não são pré-processadas
-O arquivo é enviado em base64 cru. Sem:
-- Conversão de PDF→imagem (PDFs são enviados como `application/pdf` pra um modelo de visão, nem todos os providers entendem bem PDF multipágina via base64)
-- Upscale para fotos baixa resolução (CPFs em fontes pequenas viram pixels borrados)
-- Correção de orientação / contraste
+Resultado: Laiane some de "Base", aparece em "Rota". Renan/Adriano (`local_vistoria='base'`) continuam em Base.
 
-### 4) Temperatura > 0 no primeiro passo
-Linha 468: `temperature: 0.1`. Para OCR (tarefa determinística), o ideal é `0`. Pequenas variações já induzem alucinação em dígitos ambíguos.
+## Fix 2 — Badge de execução substituindo "Confirmado"
 
-### 5) Sem retry para outros campos além de CPF
-Toda a lógica de "segunda tentativa com modelo melhor" (linhas 577–752) só existe para **CPF de CNH**. Se a IA errar placa, chassi, renavam, nome em comprovante, validade da CNH, etc. — não há retry, não há validação. O erro passa silenciosamente como "100% confiança" (que aliás é hardcoded em `_CONFIDENCE_` → `0.95`, linha 529 — a "confiança" exibida na UI **é fake**).
+**Causa**: a UI mostra `STATUS_VISTORIA_LABEL[status]` cru. `confirmado` em `agendamentos_base` significa só "técnico atribuído + WhatsApp enviado", não execução.
 
----
+**Correção**: criar uma função `getStatusExecucao(item)` que retorna o status efetivo:
 
-## Plano de correção
+| Condição (em ordem) | Badge | Cor |
+|---|---|---|
+| `concluida_em` preenchido OU status ∈ {concluida, realizado, aprovada} | **Concluída** | verde |
+| status ∈ {nao_compareceu, faltou} | **Não compareceu** | vermelho |
+| `iniciada_em` preenchido OU status ∈ {em_andamento, em_rota} | **Em andamento** | âmbar |
+| status = `cancelada/cancelado` | **Cancelada** | vermelho |
+| data_agendada < hoje E nenhum dos acima | **Não realizada** | vermelho-claro |
+| status = `confirmado` E sem técnico (`atendido_por`/`profissional_id` null) | **Sem técnico** | laranja |
+| status = `confirmado` com técnico | **Agendada** | azul |
+| default | label atual | atual |
 
-### Arquivo único: `supabase/functions/document-ocr/index.ts`
+Para itens da aba Base que não trazem `iniciada_em`/`concluida_em` (a tabela `agendamentos_base` não tem esses campos), buscar via join com `vistorias` (já adicionado no Fix 1): `vistoria:vistorias(local_vistoria, status, iniciada_em, concluida_em)`.
 
-**A) Corrigir extração nativa de PDF** (resolve 70% dos casos)
-- Substituir `extractTextFromPDFBuffer` por uso de `pdfjs-dist` via esm.sh (`https://esm.sh/pdfjs-dist@4`) — descomprime FlateDecode e extrai texto real página a página.
-- Fallback: se pdfjs falhar (PDF escaneado puro), continuar com OCR visual.
-- Quando texto nativo existir e contiver CPF/placa/renavam válidos por checksum, **usar como fonte primária** e só consultar a IA pra confirmar layout/tipo.
+Aplicar o mesmo helper em ambas as abas (Rota e Base) para ficar consistente.
 
-**B) Trocar o modelo padrão**
-- `OCR_MODEL` → `google/gemini-2.5-flash` (não `-image`).
-- Manter `gemini-2.5-pro` no retry.
-- `temperature: 0` em ambos.
+## Não mexer
 
-**C) Validação por checksum + retry para todos os campos críticos**
-Generalizar o padrão do CPF para:
-- **Placa** (regex ABC1234 ou ABC1D23)
-- **Renavam** (11 dígitos + dígito verificador — algoritmo módulo 11)
-- **Chassi** (17 chars, sem I/O/Q)
-- **CPF** (já existe)
-- **CNPJ** (módulo 11)
+- `RotaCalendario.tsx`, `MapaVistoriasContent.tsx`, mutations de antecipar/atribuir, esquema de banco. A correção é puramente apresentacional + um filtro extra.
+- Não migramos a fonte de dados de `vistorias`/`agendamentos_base` para `servicos` (fora de escopo, alto risco).
 
-Se algum campo extraído falhar na validação → retry automático com `gemini-2.5-pro` + tool calling estruturado (mesmo padrão atual do CPF).
+## Validação
 
-**D) Confiança real, não fake**
-Remover o hack `_CONFIDENCE_ → 0.95` (linhas 135 e 529). Calcular confiança a partir de:
-- Quantos campos passaram em validação por checksum (peso alto)
-- Se veio do texto nativo do PDF (peso máximo) ou só visual (peso médio)
-- Quantos campos vieram `null`/`ilegivel`
+1. Abrir calendário no dia **16/04/2026**:
+   - Laiane (RKL2G70) deve aparecer em **Rota** (não em Base) com badge **Não realizada**.
+   - Adriano (RKO4F90) em **Base** com badge **Não compareceu**.
+   - Renan (PZS6D39) em **Base** com badge **Sem técnico** (e `Não realizada` se já passou do horário — usar a regra de não realizada como prioridade quando data < hoje).
+2. Abrir um dia futuro com agendamento confirmado e técnico: badge **Agendada** (azul).
+3. Abrir um dia com vistoria realmente concluída: badge **Concluída** (verde).
 
-**E) Pré-processamento leve de imagem** (apenas se A–D não forem suficientes)
-- Para imagens (não PDFs): se `< 1000px` no maior lado, pedir upscale via Gemini antes do OCR. Skip para simplicidade na primeira iteração; entrará só se A–D ainda deixar lacunas.
+## Resultado
 
-### Não mexer
-- Estrutura de buckets, autenticação opcional, prompt principal (só pequenos ajustes), UI consumer, fluxo público de envio.
-
-### Validação
-1. Subir o **mesmo PDF de CNH Digital** que você anexou → CPF deve vir correto na 1ª tentativa (texto nativo).
-2. Subir CNH em **foto borrada** → cair no retry visual com pro, ainda acertar ou retornar `ilegivel` (não inventar).
-3. Subir CRLV em foto → placa/renavam/chassi validados por checksum.
-4. Comprovante de residência → titularidade conforme hoje.
-
-### Resultado esperado
-- PDFs nativos (CNH Digital, CRLV-e, ATPV-e, faturas digitais): **~99% de acerto**, leitura instantânea via texto nativo, sem custo de IA visual no primeiro passo.
-- Fotos: aumento de acerto significativo via modelo correto + retry universal + checksum.
-- Confiança exibida passa a refletir realidade.
+- Aba Base/Rota passa a refletir o `local_vistoria` real do banco.
+- Badges deixam de mentir sobre execução; diretor vê de relance o que aconteceu de fato.
 
