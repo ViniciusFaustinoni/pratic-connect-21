@@ -670,6 +670,28 @@ export function AgendarManutencaoUnificadoModal({
                         className="w-32"
                       />
                     </div>
+
+                    {/* Indicador de geocoding */}
+                    {logradouro && numero && (
+                      <div className="flex items-center gap-2 text-xs">
+                        {geocodificando ? (
+                          <>
+                            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                            <span className="text-muted-foreground">Localizando endereço no mapa...</span>
+                          </>
+                        ) : latGeo && lngGeo ? (
+                          <>
+                            <MapPin className="h-3 w-3 text-emerald-600" />
+                            <span className="text-emerald-700">Endereço localizado — aparecerá no mapa</span>
+                          </>
+                        ) : (
+                          <>
+                            <Info className="h-3 w-3 text-amber-600" />
+                            <span className="text-amber-700">Sem coordenadas — pode não aparecer no mapa de atribuição</span>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -677,15 +699,21 @@ export function AgendarManutencaoUnificadoModal({
 
             {/* Técnico */}
             <div className="space-y-2">
-              <Label>Técnico Responsável *</Label>
+              <Label>Técnico Responsável</Label>
               <Select
                 value={profissionalId}
                 onValueChange={setProfissionalId}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione o técnico..." />
+                  <SelectValue placeholder="Selecione o técnico ou deixe para atribuir depois..." />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="__sem__">
+                    <div className="flex flex-col">
+                      <span className="font-medium">Atribuir depois (no mapa)</span>
+                      <span className="text-xs text-muted-foreground">Tarefa entra na fila de atribuição</span>
+                    </div>
+                  </SelectItem>
                   {loadingEquipe ? (
                     <div className="p-2 text-center">
                       <Loader2 className="h-4 w-4 animate-spin mx-auto" />
@@ -703,6 +731,54 @@ export function AgendarManutencaoUnificadoModal({
                   )}
                 </SelectContent>
               </Select>
+
+              {/* Banner explicativo quando "atribuir depois" */}
+              {semTecnico && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900 p-3 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+                    <div className="text-xs text-blue-900 dark:text-blue-100 space-y-1">
+                      <p className="font-medium">Como funciona sem técnico atribuído:</p>
+                      <ul className="space-y-0.5 list-disc list-inside">
+                        <li>
+                          <strong>Na base:</strong> aparece em <strong>Serviços de Campo</strong> para o coordenador atribuir.
+                        </li>
+                        <li>
+                          <strong>Em rota:</strong> aparece como pin no <strong>Mapa</strong> — basta arrastar até um técnico em campo (modo "Atribuição Manual").
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs gap-1"
+                      onClick={() => {
+                        navigate('/monitoramento/mapa');
+                        onOpenChange(false);
+                      }}
+                    >
+                      <MapIcon className="h-3 w-3" />
+                      Abrir Mapa
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs gap-1"
+                      onClick={() => {
+                        navigate('/diretoria/vistorias-instalacoes');
+                        onOpenChange(false);
+                      }}
+                    >
+                      <Wrench className="h-3 w-3" />
+                      Serviços de Campo
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Opções */}
