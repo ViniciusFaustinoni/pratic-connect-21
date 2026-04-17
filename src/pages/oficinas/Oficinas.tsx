@@ -40,7 +40,7 @@ export default function Oficinas() {
             <Upload className="mr-2 h-4 w-4" />
             Importar
           </Button>
-          <Button onClick={() => setFormOpen(true)}>
+          <Button onClick={() => { setSelectedOficina(null); setFormOpen(true); }}>
             <Plus className="mr-2 h-4 w-4" />
             Nova Oficina
           </Button>
@@ -110,7 +110,10 @@ export default function Oficinas() {
             <Card
               key={oficina.id}
               className="cursor-pointer transition-shadow hover:shadow-md"
-              onClick={() => setSelectedOficina(oficina)}
+              onClick={() => {
+                setSelectedOficina(oficina);
+                setFormOpen(true);
+              }}
             >
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">
@@ -175,11 +178,13 @@ export default function Oficinas() {
         </div>
       )}
 
-      <OficinaFormDialog open={formOpen} onOpenChange={setFormOpen} />
-      <OficinaDetailDrawer
-        oficina={selectedOficina}
-        open={!!selectedOficina}
-        onOpenChange={(open) => !open && setSelectedOficina(null)}
+      <OficinaFormDialog
+        open={formOpen}
+        onOpenChange={(open) => {
+          setFormOpen(open);
+          if (!open) setSelectedOficina(null);
+        }}
+        oficina={selectedOficina ?? undefined}
       />
       <ImportarOficinasDialog
         open={importOpen}
