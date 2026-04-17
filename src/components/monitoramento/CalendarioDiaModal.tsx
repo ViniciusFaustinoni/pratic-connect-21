@@ -50,6 +50,101 @@ const STATUS_BADGE_CLASSES: Record<string, string> = {
   cancelada: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
 };
 
+// Badge de execução: o que de fato aconteceu, não apenas confirmação WhatsApp.
+type ExecucaoBadge = { label: string; className: string };
+
+function getStatusExecucao(item: {
+  status?: string | null;
+  iniciada_em?: string | null;
+  concluida_em?: string | null;
+  data_agendada?: string | null;
+  tecnicoAtribuido?: boolean;
+  // Para itens de agendamentos_base, podem vir do join com vistorias
+  vistoriaStatus?: string | null;
+  vistoriaIniciadaEm?: string | null;
+  vistoriaConcluidaEm?: string | null;
+}): ExecucaoBadge {
+  const status = (item.status || '').toLowerCase();
+  const vStatus = (item.vistoriaStatus || '').toLowerCase();
+  const concluidaEm = item.concluida_em || item.vistoriaConcluidaEm;
+  const iniciadaEm = item.iniciada_em || item.vistoriaIniciadaEm;
+
+  const concluidaStatuses = ['concluida', 'concluido', 'realizado', 'aprovada'];
+  const naoCompareceuStatuses = ['nao_compareceu', 'faltou'];
+  const emAndamentoStatuses = ['em_andamento', 'em_rota'];
+  const canceladaStatuses = ['cancelada', 'cancelado'];
+
+  // 1) Concluída
+  if (concluidaEm || concluidaStatuses.includes(status) || concluidaStatuses.includes(vStatus)) {
+    return {
+      label: 'Concluída',
+      className: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
+    };
+  }
+
+  // 2) Não compareceu
+  if (naoCompareceuStatuses.includes(status) || naoCompareceuStatuses.includes(vStatus)) {
+    return {
+      label: 'Não compareceu',
+      className: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
+    };
+  }
+
+  // 3) Em andamento
+  if (iniciadaEm || emAndamentoStatuses.includes(status) || emAndamentoStatuses.includes(vStatus)) {
+    return {
+      label: 'Em andamento',
+      className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300',
+    };
+  }
+
+  // 4) Cancelada
+  if (canceladaStatuses.includes(status) || canceladaStatuses.includes(vStatus)) {
+    return {
+      label: 'Cancelada',
+      className: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
+    };
+  }
+
+  // 5) Não realizada (data passada e nenhum dos acima)
+  const hojeStr = format(new Date(), 'yyyy-MM-dd');
+  const dataItem = (item.data_agendada || '').slice(0, 10);
+  if (dataItem && dataItem < hojeStr) {
+    if (status === 'confirmado' && !item.tecnicoAtribuido) {
+      return {
+        label: 'Sem técnico',
+        className: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300',
+      };
+    }
+    return {
+      label: 'Não realizada',
+      className: 'bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300',
+    };
+  }
+
+  // 6) Sem técnico (futuro/hoje)
+  if (status === 'confirmado' && !item.tecnicoAtribuido) {
+    return {
+      label: 'Sem técnico',
+      className: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300',
+    };
+  }
+
+  // 7) Agendada (confirmado com técnico)
+  if (status === 'confirmado') {
+    return {
+      label: 'Agendada',
+      className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',
+    };
+  }
+
+  // 8) Default: usar label cru
+  return {
+    label: STATUS_VISTORIA_LABEL[status] || status || '—',
+    className: STATUS_BADGE_CLASSES[status] || 'bg-muted text-muted-foreground',
+  };
+}
+
 export function CalendarioDiaModal({ open, onClose, data, abaInicial }: CalendarioDiaModalProps) {
   const queryClient = useQueryClient();
   const [anteciparId, setAnteciparId] = useState<string | null>(null);
@@ -63,53 +158,62 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
 
   // --- Queries ---
 
-  // Instalações do dia (apenas ativas — concluídas viram histórico em Serviços de Campo)
+  // Instalações do dia (todos status — para mostrar histórico de execução real)
   const { data: instalacoes = [], isLoading: loadingInst } = useQuery({
     queryKey: ['calendario-dia-instalacoes', data],
     enabled: open,
     queryFn: async () => {
       const { data: rows, error } = await supabase
         .from('instalacoes')
-        .select('id, status, data_agendada, periodo, associados(nome), veiculos(placa), instalador:profiles!instalacoes_instalador_responsavel_id_fkey(nome)')
-        .eq('data_agendada', data)
-        .in('status', ['agendada', 'em_rota', 'em_andamento', 'reagendada']);
+        .select('id, status, data_agendada, periodo, iniciada_em, concluida_em, associados(nome), veiculos(placa), instalador:profiles!instalacoes_instalador_responsavel_id_fkey(nome)')
+        .eq('data_agendada', data);
       if (error) throw error;
       return rows || [];
     },
   });
 
-  // Vistorias de campo do dia (apenas ativas)
+  // Vistorias de campo do dia (todos status; filtra base via local_vistoria)
   const { data: vistoriasCampo = [], isLoading: loadingVist } = useQuery({
     queryKey: ['calendario-dia-vistorias-campo', data],
     enabled: open,
     queryFn: async () => {
       const { data: rows, error } = await supabase
         .from('vistorias')
-        .select('id, status, data_agendada, local_vistoria, modalidade, associado:associados(nome), veiculo:veiculos(placa), tecnico:profiles!vistorias_tecnico_id_fkey(nome)')
+        .select('id, status, data_agendada, local_vistoria, modalidade, iniciada_em, concluida_em, associado:associados(nome), veiculo:veiculos(placa), tecnico:profiles!vistorias_tecnico_id_fkey(nome)')
         .gte('data_agendada', data)
         .lte('data_agendada', data + 'T23:59:59')
-        .neq('local_vistoria', 'base')
-        .in('status', ['pendente', 'agendada', 'em_rota', 'em_andamento']);
+        .neq('local_vistoria', 'base');
       if (error) throw error;
       return rows || [];
     },
   });
 
-  // Agendamentos base do dia (apenas ativos — concluídos/cancelados ficam só no histórico)
-  const { data: agendamentosBase = [], isLoading: loadingBase } = useQuery({
+  // Agendamentos base do dia (todos status — para refletir execução real)
+  // Inclui join com vistoria para obter local_vistoria + iniciada_em/concluida_em
+  const { data: agendamentosBaseRaw = [], isLoading: loadingBase } = useQuery({
     queryKey: ['calendario-dia-base', data],
     enabled: open,
     queryFn: async () => {
       const { data: rows, error } = await supabase
         .from('agendamentos_base')
-        .select('id, status, data_agendada, horario, cliente_nome, veiculo_placa, veiculo_descricao, atendido_por, oficina_id, tecnico:profiles!agendamentos_base_atendido_por_fkey(nome), oficina:oficinas!agendamentos_base_oficina_id_fkey(nome_fantasia, razao_social)')
+        .select('id, status, data_agendada, horario, cliente_nome, veiculo_placa, veiculo_descricao, atendido_por, oficina_id, vistoria_id, tecnico:profiles!agendamentos_base_atendido_por_fkey(nome), oficina:oficinas!agendamentos_base_oficina_id_fkey(nome_fantasia, razao_social), vistoria:vistorias!agendamentos_base_vistoria_id_fkey(local_vistoria, status, iniciada_em, concluida_em)')
         .eq('data_agendada', data)
-        .not('status', 'in', '("concluida","concluido","realizado","cancelado","cancelada")')
         .order('horario');
       if (error) throw error;
       return rows || [];
     },
   });
+
+  // Filtra agendamentos_base cuja vistoria associada é local_vistoria='cliente' (pertencem à Rota)
+  const agendamentosBase = useMemo(
+    () =>
+      (agendamentosBaseRaw as any[]).filter((row) => {
+        const lv = row?.vistoria?.local_vistoria;
+        return lv !== 'cliente';
+      }),
+    [agendamentosBaseRaw]
+  );
+
 
   // Técnicos base ativos
   const { data: profissionais = [] } = useProfissionaisEquipe();
@@ -222,7 +326,11 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
       placa: string;
       associado: string;
       tecnico: string;
+      tecnicoAtribuido: boolean;
       periodo: string;
+      data_agendada: string;
+      iniciada_em: string | null;
+      concluida_em: string | null;
     }> = [];
 
     (instalacoes as any[]).forEach((inst) => {
@@ -233,7 +341,11 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
         placa: inst.veiculos?.placa || '—',
         associado: inst.associados?.nome || '—',
         tecnico: inst.instalador?.nome || 'Não atribuído',
+        tecnicoAtribuido: !!inst.instalador?.nome,
         periodo: inst.periodo || 'manha',
+        data_agendada: inst.data_agendada,
+        iniciada_em: inst.iniciada_em || null,
+        concluida_em: inst.concluida_em || null,
       });
     });
 
@@ -245,12 +357,17 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
         placa: v.veiculo?.placa || '—',
         associado: v.associado?.nome || '—',
         tecnico: v.tecnico?.nome || 'Não atribuído',
+        tecnicoAtribuido: !!v.tecnico?.nome,
         periodo: 'manha', // vistorias campo don't have periodo
+        data_agendada: v.data_agendada,
+        iniciada_em: v.iniciada_em || null,
+        concluida_em: v.concluida_em || null,
       });
     });
 
     return items;
   }, [instalacoes, vistoriasCampo]);
+
 
   // Group rota by period
   const rotaPorPeriodo = useMemo(() => {
@@ -315,9 +432,16 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
                             <CardContent className="p-3 flex items-center justify-between gap-3">
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-1">
-                                  <Badge className={cn('text-xs', STATUS_BADGE_CLASSES[item.status] || 'bg-muted')}>
-                                    {STATUS_VISTORIA_LABEL[item.status] || item.status}
-                                  </Badge>
+                                  {(() => {
+                                    const exec = getStatusExecucao({
+                                      status: item.status,
+                                      iniciada_em: item.iniciada_em,
+                                      concluida_em: item.concluida_em,
+                                      data_agendada: item.data_agendada,
+                                      tecnicoAtribuido: item.tecnicoAtribuido,
+                                    });
+                                    return <Badge className={cn('text-xs', exec.className)}>{exec.label}</Badge>;
+                                  })()}
                                   <span className="text-xs text-muted-foreground">
                                     {item.tipo === 'instalacao' ? 'Instalação' : 'Vistoria Campo'}
                                   </span>
@@ -356,9 +480,17 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
                         <div className="flex items-center justify-between gap-3">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
-                              <Badge className={cn('text-xs', STATUS_BADGE_CLASSES[ag.status] || 'bg-muted')}>
-                                {STATUS_VISTORIA_LABEL[ag.status] || ag.status}
-                              </Badge>
+                              {(() => {
+                                const exec = getStatusExecucao({
+                                  status: ag.status,
+                                  data_agendada: ag.data_agendada,
+                                  tecnicoAtribuido: !!ag.atendido_por,
+                                  vistoriaStatus: ag.vistoria?.status,
+                                  vistoriaIniciadaEm: ag.vistoria?.iniciada_em,
+                                  vistoriaConcluidaEm: ag.vistoria?.concluida_em,
+                                });
+                                return <Badge className={cn('text-xs', exec.className)}>{exec.label}</Badge>;
+                              })()}
                               <span className="flex items-center gap-1 text-xs text-muted-foreground">
                                 <Clock className="h-3 w-3" />
                                 {ag.horario}
