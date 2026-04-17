@@ -1128,7 +1128,8 @@ export function useProposta(contratoId: string | undefined) {
             atendido_por_profile:profiles!agendamentos_base_atendido_por_fkey(nome)
           `)
           .eq('cotacao_id', contrato.cotacao_id)
-          .eq('status', 'realizado')
+          .in('status', ['agendado', 'realizado'])
+          .order('data_agendada', { ascending: false })
           .limit(1)
           .maybeSingle();
         
@@ -1143,8 +1144,21 @@ export function useProposta(contratoId: string | undefined) {
         }
       }
 
+      // Determinar estágio para o analista (mesma lógica da listagem)
+      const temAutovistoriaProp = vistoria && vistoria.fotos && vistoria.fotos.length > 0;
+      const temVistoriaBaseRealizadaProp = vistoriaBaseInfo?.status === 'realizado';
+      let tipoEtapaAnaliseSingle: TipoEtapaAnalise | null = null;
+      if (instalacaoInfo) {
+        tipoEtapaAnaliseSingle = 'instalacao_concluida';
+      } else if (temAutovistoriaProp || temVistoriaBaseRealizadaProp) {
+        tipoEtapaAnaliseSingle = 'vistoria_concluida';
+      } else if (instalacaoAgendada || vistoriaBaseInfo?.status === 'agendado') {
+        tipoEtapaAnaliseSingle = 'agendamento_confirmado';
+      }
+
       const result: PropostaPendente = {
         ...contrato,
+        tipo_etapa_analise: tipoEtapaAnaliseSingle,
         associado,
         plano,
         plano_nome: planoNome,
