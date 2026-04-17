@@ -264,6 +264,8 @@ export function AgendarManutencaoUnificadoModal({
       setBairro('');
       setCidade('');
       setUf('');
+      setLatGeo(null);
+      setLngGeo(null);
     }
   }, [open]);
 
@@ -277,8 +279,12 @@ export function AgendarManutencaoUnificadoModal({
     }
   }, [dataAgendada, periodo, periodosDisponiveis]);
 
+  // Profissional efetivo: '__sem__' equivale a "atribuir depois" → null
+  const profissionalEfetivo = profissionalId && profissionalId !== '__sem__' ? profissionalId : null;
+  const semTecnico = !profissionalEfetivo;
+
   const handleSubmit = async () => {
-    if (!rastreadorCompleto || !motivo || !dataAgendada || !profissionalId || !periodo) return;
+    if (!rastreadorCompleto || !motivo || !dataAgendada || !periodo) return;
 
     // Montar endereço final
     let enderecoFinal = '';
@@ -298,11 +304,13 @@ export function AgendarManutencaoUnificadoModal({
       periodo: periodo as Periodo,
       localTipo,
       localEndereco: localTipo === 'rota' ? enderecoFinal : undefined,
-      profissionalId,
+      profissionalId: profissionalEfetivo,
       permiteEncaixe,
       notificarWhatsApp,
       enderecoAlternativo: localTipo === 'rota' && tipoEndereco === 'outro' ? {
         logradouro, numero, bairro, cidade, uf, cep: cep.replace(/\D/g, ''),
+        latitude: latGeo,
+        longitude: lngGeo,
       } : undefined,
     });
 
@@ -316,7 +324,8 @@ export function AgendarManutencaoUnificadoModal({
       : (cep.replace(/\D/g, '').length === 8 && logradouro && numero)
   );
 
-  const isValid = motivo && dataAgendada && periodo && profissionalId && enderecoValido;
+  // Técnico não é mais obrigatório — pode ficar para atribuir depois
+  const isValid = motivo && dataAgendada && periodo && enderecoValido;
   const profissionais = equipe || [];
 
   if (!rastreador) return null;
