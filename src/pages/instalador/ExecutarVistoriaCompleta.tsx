@@ -31,10 +31,10 @@ import { useUploadVistoriaOffline } from '@/hooks/useUploadVistoriaOffline';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { 
   agruparFotosPorCategoriaCompleta, 
-  TOTAL_FOTOS_OBRIGATORIAS,
-  FOTOS_VISTORIA_COMPLETA,
   agruparFotosFiltradas,
-  detectarTipoVeiculo
+  detectarTipoVeiculo,
+  getTotalFotosObrigatorias,
+  getFotosFiltradas
 } from '@/data/vistoriaConfigCompleta';
 import { useConfigFipeRastreador, useConfigFipeRastreadorMoto, precisaRastreador } from '@/hooks/useConfigRastreador';
 
@@ -254,17 +254,25 @@ export default function ExecutarVistoriaCompleta() {
     return counts;
   }, [categorias, fotosMap]);
 
-  // Total de fotos enviadas (excluindo instalação que é opcional)
-  const totalFotosEnviadas = useMemo(() => {
-    return FOTOS_VISTORIA_COMPLETA
-      .filter(f => f.categoria !== 'instalacao')
-      .filter(f => fotosMap[f.id])
-      .length;
-  }, [fotosMap]);
+  // Total de fotos obrigatórias e enviadas — dinâmico por tipo de veículo
+  const totalFotosObrigatorias = useMemo(
+    () => getTotalFotosObrigatorias(tipoVeiculoDetectado),
+    [tipoVeiculoDetectado]
+  );
+
+  const fotosObrigatoriasDoTipo = useMemo(
+    () => getFotosFiltradas(tipoVeiculoDetectado, false),
+    [tipoVeiculoDetectado]
+  );
+
+  const totalFotosEnviadas = useMemo(
+    () => fotosObrigatoriasDoTipo.filter(f => fotosMap[f.id]).length,
+    [fotosObrigatoriasDoTipo, fotosMap]
+  );
 
   // Validação
   const conferenciaCompleta = Object.values(conferencia).every(Boolean) && hodometro.length > 0;
-  const todasFotosEnviadas = totalFotosEnviadas >= TOTAL_FOTOS_OBRIGATORIAS;
+  const todasFotosEnviadas = totalFotosEnviadas >= totalFotosObrigatorias;
   const videoEnviado = !!video360Url;
   const podeAprovar = conferenciaCompleta && todasFotosEnviadas && videoEnviado;
 
@@ -489,12 +497,12 @@ export default function ExecutarVistoriaCompleta() {
       <div className="flex-shrink-0 border-b border-slate-700 bg-slate-800 px-4 py-2">
         <div className="flex items-center justify-between text-xs">
           <span className="text-slate-400">Progresso:</span>
-          <span className="font-medium text-white">{totalFotosEnviadas}/{TOTAL_FOTOS_OBRIGATORIAS} fotos</span>
+          <span className="font-medium text-white">{totalFotosEnviadas}/{totalFotosObrigatorias} fotos</span>
         </div>
         <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-700">
           <div 
             className="h-full bg-blue-500 transition-all"
-            style={{ width: `${(totalFotosEnviadas / TOTAL_FOTOS_OBRIGATORIAS) * 100}%` }}
+            style={{ width: `${(totalFotosEnviadas / totalFotosObrigatorias) * 100}%` }}
           />
         </div>
       </div>
@@ -631,7 +639,7 @@ export default function ExecutarVistoriaCompleta() {
         {(!podeAprovar || !todasFotosEnviadas) && (
           <p className="mt-2 text-center text-xs text-amber-400">
             {!conferenciaCompleta && 'Confirme os dados e hodômetro. '}
-            {!todasFotosEnviadas && `📸 Tire todas as fotos obrigatórias (faltam ${TOTAL_FOTOS_OBRIGATORIAS - totalFotosEnviadas}). `}
+            {!todasFotosEnviadas && `📸 Tire todas as fotos obrigatórias (faltam ${totalFotosObrigatorias - totalFotosEnviadas}). `}
             {!videoEnviado && 'Envie o vídeo 360°.'}
           </p>
         )}
