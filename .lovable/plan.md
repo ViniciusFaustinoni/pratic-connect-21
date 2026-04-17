@@ -1,71 +1,33 @@
 
 
-## Resumo do que muda
+## Diagnóstico
 
-Adicionar em agências um **modo de recebimento**:
-- **Via Comissão** (padrão atual): tudo continua como hoje (ASAAS, adesão, cobranças).
-- **Em Mãos** (novo): contrato segue normalmente (status, cobertura, instalação), **mas sem gerar cobrança de adesão no ASAAS nem exigir pagamento do associado**. O valor da venda é apenas registrado para cálculo/relatório.
+As KPIs estão zeradas no preview, mas **no banco existem 9.519 associados visíveis ao diretor** (9.496 ativos + 23 pendente vistoria). O código atual (`useAssociadosContagem` em `src/hooks/useAssociados.ts` linhas 249-285) está correto — faz count puro por status, sem filtro de origem. A RLS `is_funcionario(auth.uid())` libera tudo para staff e o usuário de teste tem `tipo='funcionario'` + role `diretor`.
 
-## Quem pode mudar
-Diretor (regra já usada em outros toggles sensíveis). Alteração feita na tela de edição de usuário tipo Agência.
+### Por que está zerado na tela
 
-## Mudanças
-
-### 1. Banco (migration)
-- `profiles`: nova coluna `agencia_forma_recebimento text default 'comissao'` com check `in ('comissao','em_maos')`. Só tem efeito quando `tipo='agencia'`.
-- `contratos`: nova coluna `adesao_isenta_agencia boolean default false` — marca contratos vendidos por agência em modo "em mãos" (para relatórios/auditoria e para pular ASAAS).
-
-### 2. Edge function `asaas-cobranca-adesao`
-No início, depois de buscar o contrato, verificar se o vendedor é agência em modo `em_maos`:
-```ts
-const { data: contrato } = supabase.from('contratos')
-  .select('vendedor_id, cotacao:cotacoes(vendedor_id)').eq('id', contratoId).single();
-const vendedorId = contrato.vendedor_id ?? contrato.cotacao?.vendedor_id;
-if (vendedorId) {
-  const { data: vendedor } = supabase.from('profiles')
-    .select('tipo, agencia_forma_recebimento').eq('user_id', vendedorId).maybeSingle();
-  if (vendedor?.tipo === 'agencia' && vendedor.agencia_forma_recebimento === 'em_maos') {
-    // marcar contrato como isento e pago, criar instalação, retornar sucesso sem chamar ASAAS
-    await supabase.from('contratos').update({
-      adesao_isenta_agencia: true,
-      adesao_paga: true,
-      adesao_paga_em: new Date().toISOString(),
-    }).eq('id', contratoId);
-    return jsonResponse({ success: true, isento: true, agencia_em_maos: true });
-  }
-}
+O último deploy falhou — exatamente o erro que você colou agora:
 ```
-(Reutiliza exatamente o mesmo caminho de "adesão zerada" que já existe no front — `EtapaPagamentoCotacao.tsx` linha 217-251.)
+dist upload failed: generate R2 credentials ... Client.Timeout
+```
 
-### 3. Fluxo público `EtapaPagamentoCotacao.tsx`
-Antes de abrir a tela de cobrança, consultar (via `publicSupabase`) se o contrato já tem `adesao_isenta_agencia=true` OU detectar pelo `vendedor_id` da cotação. Se sim, seguir o mesmo branch de adesão zerada: marca pago, dispara `criar-instalacao-pos-pagamento` com `skipPaymentCheck:true`, mostra tela de sucesso ("Sua adesão foi confirmada pela agência responsável") e avança.
+Então o navegador ainda está carregando a **versão antiga** do bundle, que tinha `.eq('origem_cadastro', 'interno')` nas queries. Como **100% dos 9.496 ativos são `api_externa`** (vindos da base Hinova), o filtro antigo zera tudo. Os 23 `interno` que aparecem no banco estão em `pendente_vistoria`, e o status `pendente_vistoria` nem é contado nas cards da tela — por isso "Em Análise = 0" também.
 
-### 4. UI de edição de Agência (`UsuarioForm.tsx` / `UsuarioEditar.tsx`)
-Quando `tipo === 'agencia'` e usuário logado é diretor, mostrar RadioGroup:
-- ( ) Recebe via Comissão (padrão)
-- ( ) Recebe em Mãos (adesão não é cobrada do associado)
+Conclusão: **o código já está corrigido, falta apenas o build subir**.
 
-Texto explicativo abaixo: *"Em 'Recebe em Mãos', o sistema registra o valor da venda normalmente, mas não gera cobrança de adesão no ASAAS — a agência é responsável por receber diretamente do associado."*
+## Ação
 
-### 5. Indicadores visuais
-- Card da cotação/contrato: badge "Adesão Direta c/ Agência" quando `adesao_isenta_agencia=true` (em vez de "Paga"/"Pendente").
-- Painel da agência: mostrar o modo atual em destaque.
+Não há edição de código para fazer. Plano:
 
-### 6. Comissão
-A grade de comissão atual da agência continua funcionando igual — o valor da venda é computado normalmente (contrato tem `valor_mensal`, `valor_adesao` etc.). O que muda é apenas a **não-geração** da cobrança de adesão no ASAAS. Se a política futura for não pagar comissão sobre adesão em modo "em mãos", isso fica para outra iteração.
+1. **Republicar**: usar o botão "Publish". O erro anterior foi timeout transitório do Cloudflare R2, não do código. Uma nova tentativa normalmente sobe.
+2. **Após o build subir**, no preview: forçar hard-refresh (Ctrl+Shift+R ou abrir aba anônima). Os hooks já têm `refetchOnMount: 'always'` adicionados na última iteração, então o cache do React Query também será quebrado.
+3. **Validar**: Total Geral deve mostrar ~9.519, Ativos ~9.496, e a busca por "WILLIAM" / placa "LSP3E65" deve retornar resultados.
 
-## Validação
+## Se após republicar ainda ficar zerado
 
-1. Logar como diretor → editar uma agência existente → alternar para "Recebe em Mãos" → salvar.
-2. Criar cotação com essa agência como vendedor → finalizar fluxo público até a etapa de pagamento.
-3. Resultado esperado: tela de pagamento exibe "Adesão confirmada pela agência" (sem PIX/boleto), contrato vai para `ativo`, instalação é agendada, associado fica ativo.
-4. Comparar com outra cotação de agência em modo "Comissão" → fluxo ASAAS normal.
-5. Relatório financeiro: contratos "em mãos" aparecem com flag visível.
+Aí sim é outro problema. Coisas a investigar (só se o sintoma persistir):
+- Se existe Service Worker agressivo mantendo bundle em cache → desregistrar em DevTools → Application → Service Workers.
+- Se a contagem `head:true` sem `*` está sendo bloqueada por alguma policy de coluna → testar alterar `select('*', {count:'exact',head:true})` para `select('id',{count:'exact',head:true})`.
 
-## Arquivos a editar
-- Migration SQL (nova)
-- `supabase/functions/asaas-cobranca-adesao/index.ts`
-- `src/components/cotacao-publica/EtapaPagamentoCotacao.tsx`
-- `src/pages/configuracoes/UsuarioForm.tsx` (ou `UsuarioEditar.tsx`, confirmar qual é usada para agência)
-- `src/components/cotacoes/CotacaoCard.tsx` e `src/pages/vendas/ContratoDetalhe.tsx` (badge visual)
+Mas isso só se o republish não resolver. Neste momento, **só republicar**.
 
