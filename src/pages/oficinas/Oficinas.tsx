@@ -40,7 +40,7 @@ export default function Oficinas() {
             <Upload className="mr-2 h-4 w-4" />
             Importar
           </Button>
-          <Button onClick={() => setFormOpen(true)}>
+          <Button onClick={() => { setSelectedOficina(null); setFormOpen(true); }}>
             <Plus className="mr-2 h-4 w-4" />
             Nova Oficina
           </Button>
