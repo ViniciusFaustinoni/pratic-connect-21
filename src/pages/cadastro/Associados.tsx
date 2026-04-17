@@ -168,61 +168,41 @@ export default function Associados() {
     sheetFilters.periodo ? true : false,
   ].filter(Boolean).length;
 
-  // Filter associados
+  // Filtro server-side: search/status/plano/cidade já aplicados pelo hook.
+  // Aqui aplicamos apenas o filtro de período (que não está no servidor) sobre a página atual.
   const filteredAssociados = useMemo(() => {
     if (!associados) return [];
-    
-    return associados.filter((associado) => {
-      const searchLower = search.toLowerCase();
-      const matchesSearch = !search || 
-        associado.nome.toLowerCase().includes(searchLower) ||
-        associado.cpf.includes(search) ||
-        associado.telefone.includes(search) ||
-        associado.veiculos?.some(v => v.placa.toLowerCase().includes(searchLower));
-      
-      const statusList = sheetFilters.status || (statusFilter !== 'all' ? [statusFilter] : null);
-      const matchesStatus = !statusList || statusList.includes(associado.status as StatusAssociado);
-      
-      const planoId = sheetFilters.plano_id || (planoFilter !== 'all' ? planoFilter : null);
-      const matchesPlano = !planoId || associado.plano_id === planoId;
-      
-      const cidadeVal = sheetFilters.cidade || (cidadeFilter !== 'all' ? cidadeFilter : null);
-      const matchesCidade = !cidadeVal || associado.cidade === cidadeVal;
-      
-      let matchesPeriodo = true;
-      if (sheetFilters.periodo && associado.data_adesao) {
-        const hoje = new Date();
-        const dataAdesao = new Date(associado.data_adesao);
-        let dataLimite: Date;
-        
-        switch (sheetFilters.periodo) {
-          case 'ultimo_mes':
-            dataLimite = new Date(hoje.getFullYear(), hoje.getMonth() - 1, hoje.getDate());
-            break;
-          case 'ultimos_3_meses':
-            dataLimite = new Date(hoje.getFullYear(), hoje.getMonth() - 3, hoje.getDate());
-            break;
-          case 'ultimo_ano':
-            dataLimite = new Date(hoje.getFullYear() - 1, hoje.getMonth(), hoje.getDate());
-            break;
-          default:
-            dataLimite = new Date(0);
-        }
-        matchesPeriodo = dataAdesao >= dataLimite;
-      }
-      
-      return matchesSearch && matchesStatus && matchesPlano && matchesCidade && matchesPeriodo;
-    });
-  }, [associados, search, statusFilter, planoFilter, cidadeFilter, sheetFilters]);
 
-  // Pagination
-  const totalPages = Math.ceil(filteredAssociados.length / pageSize);
-  const paginatedAssociados = filteredAssociados.slice(
-    (page - 1) * pageSize,
-    page * pageSize
-  );
-  const startIndex = (page - 1) * pageSize + 1;
-  const endIndex = Math.min(page * pageSize, filteredAssociados.length);
+    if (!sheetFilters.periodo) return associados;
+
+    return associados.filter((associado) => {
+      if (!associado.data_adesao) return false;
+      const hoje = new Date();
+      const dataAdesao = new Date(associado.data_adesao);
+      let dataLimite: Date;
+
+      switch (sheetFilters.periodo) {
+        case 'ultimo_mes':
+          dataLimite = new Date(hoje.getFullYear(), hoje.getMonth() - 1, hoje.getDate());
+          break;
+        case 'ultimos_3_meses':
+          dataLimite = new Date(hoje.getFullYear(), hoje.getMonth() - 3, hoje.getDate());
+          break;
+        case 'ultimo_ano':
+          dataLimite = new Date(hoje.getFullYear() - 1, hoje.getMonth(), hoje.getDate());
+          break;
+        default:
+          dataLimite = new Date(0);
+      }
+      return dataAdesao >= dataLimite;
+    });
+  }, [associados, sheetFilters.periodo]);
+
+  // Pagination — vem do servidor
+  const totalPages = serverTotalPages;
+  const paginatedAssociados = filteredAssociados;
+  const startIndex = serverTotal === 0 ? 0 : (page - 1) * pageSize + 1;
+  const endIndex = Math.min(page * pageSize, serverTotal);
 
   // Reset page when filters change
   const handleFilterChange = (setter: (value: string) => void, value: string) => {
