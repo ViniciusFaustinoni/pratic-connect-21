@@ -109,8 +109,13 @@ export function AgendarManutencaoUnificadoModal({
   const [cidade, setCidade] = useState('');
   const [uf, setUf] = useState('');
   const [buscandoCep, setBuscandoCep] = useState(false);
+  // Coordenadas geocodificadas para endereço alternativo
+  const [latGeo, setLatGeo] = useState<number | null>(null);
+  const [lngGeo, setLngGeo] = useState<number | null>(null);
+  const [geocodificando, setGeocodificando] = useState(false);
 
   // Hooks
+  const navigate = useNavigate();
   const { data: equipe, isLoading: loadingEquipe } = useProfissionaisEquipe();
   const abrirEAgendarMutation = useAbrirEAgendarManutencao();
   const { isDiretor, isCoordenadorMonitoramento, isAnalistaMonitoramento } = usePermissions();
@@ -200,6 +205,10 @@ export function AgendarManutencaoUnificadoModal({
       setCep(`${cepLimpo.slice(0, 5)}-${cepLimpo.slice(5, 8)}`);
     }
     
+    // Resetar coordenadas ao mudar CEP
+    setLatGeo(null);
+    setLngGeo(null);
+    
     if (cepLimpo.length === 8) {
       setBuscandoCep(true);
       const endereco = await buscarCep(cepLimpo);
@@ -212,6 +221,30 @@ export function AgendarManutencaoUnificadoModal({
       setBuscandoCep(false);
     }
   };
+
+  // Geocodificar endereço alternativo quando logradouro+numero+cidade estiverem preenchidos
+  // Necessário para o pin aparecer no mapa de atribuição
+  useEffect(() => {
+    if (tipoEndereco !== 'outro' || localTipo !== 'rota') return;
+    if (!logradouro || !numero || !cidade) return;
+    
+    const handler = setTimeout(async () => {
+      setGeocodificando(true);
+      try {
+        const coords = await obterCoordenadasEndereco({
+          logradouro, numero, bairro, cidade, uf, cep: cep.replace(/\D/g, ''),
+        });
+        setLatGeo(coords.latitude);
+        setLngGeo(coords.longitude);
+      } catch (e) {
+        console.error('[AgendarManutencao] Erro geocoding:', e);
+      } finally {
+        setGeocodificando(false);
+      }
+    }, 600);
+    
+    return () => clearTimeout(handler);
+  }, [tipoEndereco, localTipo, logradouro, numero, bairro, cidade, uf, cep]);
 
   // Limpar ao fechar
   useEffect(() => {
