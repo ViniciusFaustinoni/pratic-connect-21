@@ -771,9 +771,9 @@ export function EtapaAssinaturaContrato({
           <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-primary/10 flex items-center justify-center">
             <FileSignature className="h-7 w-7 text-primary" />
           </div>
-          <CardTitle className="text-xl">Assinatura Digital do Contrato</CardTitle>
+          <CardTitle className="text-xl">Assinatura Digital da Proposta de Filiação</CardTitle>
           <CardDescription>
-            Contrato {contratoNumero && <span className="font-medium text-foreground">{contratoNumero}</span>}
+            Proposta de Filiação {contratoNumero && <span className="font-medium text-foreground">{contratoNumero}</span>}
           </CardDescription>
         </CardHeader>
 
@@ -784,7 +784,7 @@ export function EtapaAssinaturaContrato({
               <Mail className="h-8 w-8 text-white animate-bounce" />
             </div>
             <p className="text-3xl md:text-4xl font-extrabold text-white uppercase leading-tight animate-pulse">
-              SEU CONTRATO ESTÁ NO SEU E-MAIL PARA ASSINATURA!
+              SUA PROPOSTA DE FILIAÇÃO ESTÁ NO SEU E-MAIL PARA ASSINATURA!
             </p>
           </div>
 
