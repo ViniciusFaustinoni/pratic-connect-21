@@ -254,9 +254,9 @@ export function useAssociadosContagem() {
       const statuses = ['em_analise', 'aprovado', 'documentacao_pendente', 'aguardando_instalacao', 'ativo', 'inadimplente', 'suspenso', 'cancelado', 'bloqueado'] as const;
 
       const [totalRes, ...statusRes] = await Promise.all([
-        supabase.from('associados').select('*', { count: 'exact', head: true }),
+        supabase.from('associados').select('id', { count: 'exact', head: true }),
         ...statuses.map(s =>
-          supabase.from('associados').select('*', { count: 'exact', head: true }).eq('status', s)
+          supabase.from('associados').select('id', { count: 'exact', head: true }).eq('status', s)
         ),
       ]);
 
