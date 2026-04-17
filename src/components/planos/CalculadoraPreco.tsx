@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -75,7 +75,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
   const [anoVeiculo, setAnoVeiculo] = useState<string>('');
   const [categoria, setCategoria] = useState<string>('nenhuma');
   const [semResultado, setSemResultado] = useState(false);
-  const jaCalculouRef = useRef(false);
+  const [jaCalculou, setJaCalculou] = useState(false);
 
   // Placa lookup
   const [placa, setPlaca] = useState('');
@@ -85,7 +85,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
 
   const { data: limites } = useConfigLimitesVeiculo();
   const { data: regioesDb } = useRegioesAtivas();
-  const REGIOES = useMemo(() => (regioesDb || []).map(r => ({ value: r.codigo, label: r.nome })), [regioesDb]);
+  const REGIOES = useMemo(() => (regioesDb || []).map(r => ({ value: r.codigo.toLowerCase(), label: r.nome })), [regioesDb]);
 
   // FIPE-below-minimum alert
   const [fipeBloqueado, setFipeBloqueado] = useState(false);
@@ -107,7 +107,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
 
   // ── Motor Unificado: usePlanosCotacao ──
   const { planos: planosCalculados, isLoading: planosLoading } = usePlanosCotacao({
-    valorFipe: temFipe && jaCalculouRef.current ? fipeNumerico : 0,
+    valorFipe: temFipe && jaCalculou ? fipeNumerico : 0,
     regiao,
     combustivel: combustivelPricing,
     categoria: categoriaAtiva,
@@ -120,7 +120,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
 
   // Check FIPE mínimo
   useEffect(() => {
-    if (jaCalculouRef.current && temFipe) {
+    if (jaCalculou && temFipe) {
       const fipeMinimo = limites?.fipeMinimo ?? 15000;
       setFipeBloqueado(fipeNumerico < fipeMinimo);
       setSemResultado(!fipeBloqueado && planosCalculados.length === 0);
@@ -178,7 +178,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
   };
 
   const handleCalcular = () => {
-    jaCalculouRef.current = true;
+    setJaCalculou(true);
     const fipeMinimo = limites?.fipeMinimo ?? 15000;
     if (fipeNumerico < fipeMinimo) {
       setFipeBloqueado(true);
@@ -208,7 +208,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
     setPlaca('');
     setVeiculoPlaca(null);
     setCombustivelDetectado(null);
-    jaCalculouRef.current = false;
+    setJaCalculou(false);
   };
 
   const handleIrParaCotacao = (planoId: string) => {
@@ -225,7 +225,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
     setOpen(false);
   };
 
-  const showResults = jaCalculouRef.current && temFipe && !fipeBloqueado && planosCalculados.length > 0;
+  const showResults = jaCalculou && temFipe && !fipeBloqueado && planosCalculados.length > 0;
 
   const catLabel = categoriaAtiva
     ? CATEGORIAS_VEICULO_CALC.find(c => c.value === categoriaAtiva)?.label || null
@@ -632,7 +632,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
             </Alert>
           )}
 
-          {jaCalculouRef.current && temFipe && !fipeBloqueado && planosCalculados.length === 0 && !planosLoading && (
+          {jaCalculou && temFipe && !fipeBloqueado && planosCalculados.length === 0 && !planosLoading && (
             <div className="text-center py-4 animate-fade-in">
               <p className="text-sm font-medium text-muted-foreground">
                 Consulte um consultor
