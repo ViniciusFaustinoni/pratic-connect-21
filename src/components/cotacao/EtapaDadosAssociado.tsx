@@ -7,7 +7,9 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { User, ArrowRight, Phone, UserPlus, X } from 'lucide-react';
 import { useVendedores } from '@/hooks/useVendedores';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useAssociadoSearch, type AssociadoSearchResult } from '@/hooks/useAssociadoSearch';
 import { useVerificarVeiculoAtivoCpf } from '@/hooks/useVerificarVeiculoAtivoCpf';
 import { DialogTipoOperacao } from '@/components/cotacao/DialogTipoOperacao';
@@ -75,6 +77,10 @@ export function EtapaDadosAssociado({
   onSubstituicao,
 }: EtapaDadosAssociadoProps) {
   const { data: vendedores = [], isLoading: isLoadingVendedores } = useVendedores();
+  const { user } = useAuth();
+  const { isDiretor, isGerente, isSupervisor } = usePermissions();
+  const podeAtribuirVendedor = isDiretor || isGerente || isSupervisor;
+
   const [buscaIndicador, setBuscaIndicador] = useState('');
   const { data: resultadosBusca = [], isLoading: isSearching } = useAssociadoSearch(buscaIndicador);
 
@@ -82,7 +88,14 @@ export function EtapaDadosAssociado({
   const [cpfBusca, setCpfBusca] = useState('');
   const { data: veiculoAtivoCpf, isLoading: verificandoCpf } = useVerificarVeiculoAtivoCpf(cpfBusca);
   const [showDialogTipo, setShowDialogTipo] = useState(false);
-  
+
+  // Auto-atribui o vendedor logado se ele não for liderança (ou pré-seleciona p/ liderança)
+  useEffect(() => {
+    if (!consultorId && user?.id) {
+      setConsultorId(user.id);
+    }
+  }, [user?.id, consultorId, setConsultorId]);
+
   // Pode avançar se Nome, Telefone e Consultor estão preenchidos
   const telefoneValido = telefone1.replace(/\D/g, '').length >= 10;
   const canProceed = nome.trim() !== '' && telefoneValido && consultorId !== '' && (!isIndicacao || indicadorId !== '');
@@ -232,32 +245,36 @@ export function EtapaDadosAssociado({
           </div>
         </div>
 
-        <Separator />
+        {podeAtribuirVendedor && (
+          <>
+            <Separator />
 
-        {/* Consultor Responsável */}
-        <div className="space-y-2">
-          <Label htmlFor="consultor">
-            Consultor Responsável <span className="text-destructive">*</span>
-          </Label>
-          <Select value={consultorId} onValueChange={setConsultorId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione o consultor" />
-            </SelectTrigger>
-            <SelectContent>
-              {isLoadingVendedores ? (
-                <SelectItem value="loading" disabled>
-                  Carregando...
-                </SelectItem>
-              ) : (
-                vendedores.map((vendedor) => (
-                  <SelectItem key={vendedor.user_id} value={vendedor.user_id}>
-                    {vendedor.nome}
-                  </SelectItem>
-                ))
-              )}
-            </SelectContent>
-          </Select>
-        </div>
+            {/* Consultor Responsável (apenas para liderança) */}
+            <div className="space-y-2">
+              <Label htmlFor="consultor">
+                Consultor Responsável <span className="text-destructive">*</span>
+              </Label>
+              <Select value={consultorId} onValueChange={setConsultorId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o consultor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {isLoadingVendedores ? (
+                    <SelectItem value="loading" disabled>
+                      Carregando...
+                    </SelectItem>
+                  ) : (
+                    vendedores.map((vendedor) => (
+                      <SelectItem key={vendedor.user_id} value={vendedor.user_id}>
+                        {vendedor.nome}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        )}
 
         <Separator />
 
