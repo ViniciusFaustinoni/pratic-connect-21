@@ -47,9 +47,12 @@ const STATUS_OPTIONS: { value: StatusAssociado; label: string }[] = [
   { value: 'inadimplente', label: 'Inadimplente' },
   { value: 'cancelado', label: 'Cancelado' },
   { value: 'em_analise', label: 'Em Análise' },
+  { value: 'pendente_vistoria', label: 'Pendente de Vistoria' },
+  { value: 'aprovado', label: 'Aprovado' },
   { value: 'bloqueado', label: 'Bloqueado' },
   { value: 'documentacao_pendente', label: 'Documentação Pendente' },
   { value: 'aguardando_instalacao', label: 'Aguardando Instalação' },
+  { value: 'recusado', label: 'Recusado' },
 ];
 
 const PERIODO_OPTIONS = [

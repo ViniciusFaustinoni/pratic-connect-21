@@ -70,6 +70,7 @@ export interface AssociadoFilters {
 export interface ContagemAssociados {
   total: number;
   em_analise: number;
+  pendente_vistoria: number;
   aprovado: number;
   documentacao_pendente: number;
   aguardando_instalacao: number;
@@ -78,6 +79,7 @@ export interface ContagemAssociados {
   suspenso: number;
   cancelado: number;
   bloqueado: number;
+  recusado: number;
 }
 
 // ============================================
@@ -251,7 +253,7 @@ export function useAssociadosContagem() {
     queryKey: ['associados-contagem'],
     refetchOnMount: 'always',
     queryFn: async () => {
-      const statuses = ['em_analise', 'aprovado', 'documentacao_pendente', 'aguardando_instalacao', 'ativo', 'inadimplente', 'suspenso', 'cancelado', 'bloqueado'] as const;
+      const statuses = ['em_analise', 'pendente_vistoria', 'aprovado', 'documentacao_pendente', 'aguardando_instalacao', 'ativo', 'inadimplente', 'suspenso', 'cancelado', 'bloqueado', 'recusado'] as const;
 
       const [totalRes, ...statusRes] = await Promise.all([
         supabase.from('associados').select('id', { count: 'exact', head: true }),
@@ -265,6 +267,7 @@ export function useAssociadosContagem() {
       const contagem: ContagemAssociados = {
         total: totalRes.count || 0,
         em_analise: 0,
+        pendente_vistoria: 0,
         aprovado: 0,
         documentacao_pendente: 0,
         aguardando_instalacao: 0,
@@ -273,6 +276,7 @@ export function useAssociadosContagem() {
         suspenso: 0,
         cancelado: 0,
         bloqueado: 0,
+        recusado: 0,
       };
 
       statuses.forEach((s, i) => {
