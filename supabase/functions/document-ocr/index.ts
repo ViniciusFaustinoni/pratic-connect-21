@@ -581,8 +581,9 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
     let result;
     try {
       let cleanContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      cleanContent = cleanContent.replace(/_CONFIDENCE_/g, '0.95');
-      cleanContent = cleanContent.replace(/:\s*_[A-Z_]+_/g, ': null');
+      // Limpar placeholders deixados pelo modelo (ex: _CONFIDENCE_, _NOME_) → null
+      // (não substituímos mais por 0.95 — confiança é calculada de verdade abaixo)
+      cleanContent = cleanContent.replace(/:\s*_[A-Z_]+_\s*([,}\]])/g, ': null$1');
       result = JSON.parse(cleanContent);
     } catch (parseError) {
       console.warn('[OCR] JSON.parse falhou, tentando reparar JSON truncado...');
