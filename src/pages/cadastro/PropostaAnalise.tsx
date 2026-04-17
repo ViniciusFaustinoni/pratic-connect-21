@@ -87,6 +87,51 @@ export default function PropostaAnalise() {
   // Verificar se pode aprovar
   const podeAprovar = proposta?.status === 'assinado' && !proposta?.tem_documento_pendente;
 
+  // Estado final (já aprovado / reprovado / cancelado)
+  const isAprovada = proposta?.status === 'ativo';
+  const isReprovada = proposta?.status === 'reprovado';
+  const isCancelada = proposta?.status === 'cancelado';
+  const isFinalizada = isAprovada || isReprovada || isCancelada;
+
+  // Buscar dados de aprovação/reprovação para banner
+  const [estadoFinal, setEstadoFinal] = useState<{
+    aprovado_em: string | null;
+    aprovado_por_nome: string | null;
+    motivo_reprovacao?: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!id || !isFinalizada) {
+      setEstadoFinal(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data: contrato } = await supabase
+        .from('contratos')
+        .select('aprovado_em, aprovado_por, motivo_reprovacao')
+        .eq('id', id)
+        .maybeSingle();
+      let aprovadorNome: string | null = null;
+      if (contrato?.aprovado_por) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('nome')
+          .eq('id', contrato.aprovado_por)
+          .maybeSingle();
+        aprovadorNome = prof?.nome || null;
+      }
+      if (!cancelled) {
+        setEstadoFinal({
+          aprovado_em: contrato?.aprovado_em || null,
+          aprovado_por_nome: aprovadorNome,
+          motivo_reprovacao: (contrato as any)?.motivo_reprovacao || null,
+        });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [id, isFinalizada]);
+
   const handleAprovar = () => {
     setShowConfirmAprovar(true);
   };
