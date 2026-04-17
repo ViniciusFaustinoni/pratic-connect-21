@@ -218,24 +218,26 @@ export function VideoCapture({
               playsInline
               className="h-full w-full rounded-lg object-cover"
             />
-            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-              <div className="flex flex-col items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="h-3 w-3 animate-pulse rounded-full bg-red-500" />
-                  <span className="text-lg font-semibold text-white">
-                    {formatTime(recordingTime)} / {formatTime(maxDuration)}
-                  </span>
-                </div>
-                <Button
-                  size="lg"
-                  variant="destructive"
-                  onClick={stopRecording}
-                  className="gap-2"
-                >
-                  <Square className="h-5 w-5" />
-                  Parar Gravação
-                </Button>
+            {/* HUD topo: timer */}
+            <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-center bg-gradient-to-b from-black/70 to-transparent px-3 py-2">
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
+                <span className="text-sm font-semibold text-white drop-shadow">
+                  {formatTime(recordingTime)} / {formatTime(maxDuration)}
+                </span>
               </div>
+            </div>
+            {/* HUD rodapé: botão parar */}
+            <div className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-gradient-to-t from-black/70 to-transparent px-3 py-3">
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={stopRecording}
+                className="gap-2"
+              >
+                <Square className="h-4 w-4" />
+                Parar Gravação
+              </Button>
             </div>
           </>
         ) : hasVideo ? (
