@@ -18,6 +18,7 @@ import {
   ZoomIn,
   CheckCircle,
   Image as ImageIcon,
+  AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -26,6 +27,63 @@ import type { VistoriaFotoInfo } from '@/hooks/usePropostasPendentes';
 import { DocumentosSolicitadosCard, type DocumentoSolicitadoEnviado } from '@/components/cadastro/DocumentosSolicitadosCard';
 
 const isVideoTipo = (tipo?: string | null) => tipo?.startsWith('video');
+
+// Placeholder para mídias quebradas (0 bytes / 404 / formato não suportado)
+function MidiaQuebrada({ label, className }: { label?: string; className?: string }) {
+  return (
+    <div className={cn(
+      "w-full h-full flex flex-col items-center justify-center gap-1 bg-destructive/10 text-destructive text-center p-2",
+      className
+    )}>
+      <AlertTriangle className="h-5 w-5" />
+      <span className="text-[10px] font-medium leading-tight">Arquivo corrompido</span>
+      {label && <span className="text-[9px] opacity-70 truncate max-w-full">{label}</span>}
+    </div>
+  );
+}
+
+function ImgComFallback({ src, alt, className }: { src: string; alt: string; className?: string }) {
+  const [erro, setErro] = useState(false);
+  if (erro) return <MidiaQuebrada label={alt} className={className} />;
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      loading="lazy"
+      onError={() => setErro(true)}
+    />
+  );
+}
+
+function VideoComFallback({ src, className, controls, autoPlay, muted, preload, playsInline }: {
+  src: string;
+  className?: string;
+  controls?: boolean;
+  autoPlay?: boolean;
+  muted?: boolean;
+  preload?: string;
+  playsInline?: boolean;
+}) {
+  const [erro, setErro] = useState(false);
+  if (erro) return <MidiaQuebrada label="vídeo" className={className} />;
+  // Detecta extensão pra type hint, mas sempre oferece os 2 sources
+  const isMp4 = /\.mp4(\?|$)/i.test(src);
+  return (
+    <video
+      className={className}
+      controls={controls}
+      autoPlay={autoPlay}
+      muted={muted}
+      preload={preload as any}
+      playsInline={playsInline}
+      onError={() => setErro(true)}
+    >
+      <source src={src} type={isMp4 ? 'video/mp4' : 'video/webm'} />
+      <source src={src} type={isMp4 ? 'video/webm' : 'video/mp4'} />
+    </video>
+  );
+}
 
 interface PropostaMidiaGridProps {
   video360Url?: string | null;
@@ -91,7 +149,7 @@ export function PropostaMidiaGrid({
               </Badge>
             </div>
             <div className="aspect-video bg-muted rounded-lg flex items-center justify-center relative overflow-hidden">
-              <video src={video360Url} className="w-full h-full object-cover" muted preload="metadata" />
+              <VideoComFallback src={video360Url} className="w-full h-full object-cover" muted preload="metadata" />
               <div className="absolute inset-0 bg-black/40 flex items-center justify-center group-hover:bg-black/30 transition-colors">
                 <div className="w-12 h-12 rounded-full bg-purple-500 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
                   <Play className="h-6 w-6 text-white ml-0.5" />
@@ -134,7 +192,7 @@ export function PropostaMidiaGrid({
                       <Play className="h-6 w-6 text-white" />
                     </div>
                   ) : (
-                    <img src={foto.arquivo_url} alt={foto.tipo || `Foto ${idx + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                    <ImgComFallback src={foto.arquivo_url} alt={foto.tipo || `Foto ${idx + 1}`} className="w-full h-full object-cover" />
                   )}
                   {idx === 5 && totalFotos > 6 && (
                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
@@ -210,7 +268,7 @@ export function PropostaMidiaGrid({
             </DialogTitle>
           </DialogHeader>
           <div className="bg-black">
-            <video src={video360Url || ''} controls autoPlay className="w-full max-h-[70vh] object-contain" playsInline />
+            <VideoComFallback src={video360Url || ''} controls autoPlay className="w-full max-h-[70vh] object-contain" playsInline />
           </div>
         </DialogContent>
       </Dialog>
@@ -231,7 +289,7 @@ export function PropostaMidiaGrid({
           <div className="relative bg-black min-h-[60vh] flex items-center justify-center">
             {fotos[galeriaIndex] && (
               isVideoTipo(fotos[galeriaIndex].tipo) ? (
-                <video
+                <VideoComFallback
                   key={fotos[galeriaIndex].id}
                   src={fotos[galeriaIndex].arquivo_url}
                   controls
@@ -240,7 +298,7 @@ export function PropostaMidiaGrid({
                   className="max-h-[70vh] max-w-full object-contain"
                 />
               ) : (
-                <img
+                <ImgComFallback
                   src={fotos[galeriaIndex].arquivo_url}
                   alt={fotos[galeriaIndex].tipo || `Foto ${galeriaIndex + 1}`}
                   className="max-h-[70vh] max-w-full object-contain"
@@ -289,7 +347,7 @@ export function PropostaMidiaGrid({
                       <Play className="h-4 w-4 text-white" />
                     </div>
                   ) : (
-                    <img src={foto.arquivo_url} alt={foto.tipo || `Foto ${idx + 1}`} className="w-full h-full object-cover" />
+                    <ImgComFallback src={foto.arquivo_url} alt={foto.tipo || `Foto ${idx + 1}`} className="w-full h-full object-cover" />
                   )}
                 </button>
               ))}

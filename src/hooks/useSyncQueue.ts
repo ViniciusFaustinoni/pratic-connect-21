@@ -17,6 +17,11 @@ async function uploadMidiaServidor(midia: MidiaPendente): Promise<string> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Sessão expirada — reentre para sincronizar');
 
+  // Bloquear blobs vazios — evita gravar arquivos de 0 bytes no storage
+  if (!midia.blob || midia.blob.size === 0) {
+    throw new Error('HTTP 422: blob vazio (descartado para evitar arquivo corrompido)');
+  }
+
   if (midia.origem === 'regulador') {
     const fd = new FormData();
     fd.append('acao', 'salvar_midias');
@@ -46,71 +51,54 @@ async function uploadMidiaServidor(midia: MidiaPendente): Promise<string> {
     return json.url || '';
   }
 
-  // origem === 'instalador' — fluxo via storage direto + persistência em vistoria_fotos / vistorias
+  // origem === 'instalador' — path determinístico + upsert atômico (sem race)
   if (midia.tipo === 'foto') {
-    // Slot = tipo da foto (ex.: 'frente', 'chassi', 'odometro')
     const tipo = String(midia.slot);
-    const fileName = `${midia.vistoria_id}/${tipo}_${Date.now()}.jpg`;
-
-    // Buscar foto existente desse tipo para substituir
-    const { data: fotoExistente } = await supabase
-      .from('vistoria_fotos')
-      .select('id, arquivo_url')
-      .eq('vistoria_id', midia.vistoria_id)
-      .eq('tipo', tipo)
-      .maybeSingle();
+    const fileName = `${midia.vistoria_id}/${tipo}.jpg`;
 
     const { error: upErr } = await supabase.storage
       .from('vistoria-fotos')
-      .upload(fileName, midia.blob, { contentType: midia.mime, upsert: true });
+      .upload(fileName, midia.blob, {
+        contentType: midia.mime || 'image/jpeg',
+        upsert: true,
+        cacheControl: '3600',
+      });
     if (upErr) throw new Error(upErr.message);
 
     const { data: pub } = supabase.storage.from('vistoria-fotos').getPublicUrl(fileName);
-    const publicUrl = pub.publicUrl;
+    const publicUrl = `${pub.publicUrl}?v=${Date.now()}`;
 
-    // Limpar foto antiga (se existir e for diferente)
-    if (fotoExistente) {
-      const partes = fotoExistente.arquivo_url.split('/vistoria-fotos/');
-      if (partes[1]) {
-        await supabase.storage.from('vistoria-fotos').remove([partes[1]]).catch(() => {});
-      }
-      await supabase.from('vistoria_fotos').delete().eq('id', fotoExistente.id);
-    }
-
-    const { error: insErr } = await supabase.from('vistoria_fotos').insert({
-      vistoria_id: midia.vistoria_id,
-      tipo,
-      arquivo_url: publicUrl,
-      visivel_cliente: true,
-    });
+    const { error: insErr } = await supabase
+      .from('vistoria_fotos')
+      .upsert(
+        {
+          vistoria_id: midia.vistoria_id,
+          tipo,
+          arquivo_url: publicUrl,
+          visivel_cliente: true,
+        },
+        { onConflict: 'vistoria_id,tipo' }
+      );
     if (insErr) throw new Error(insErr.message);
 
     return publicUrl;
   }
 
-  // Vídeo do instalador
-  const fileName = `${midia.vistoria_id}/video_360_${Date.now()}.webm`;
-
-  // Apaga vídeo anterior se houver
-  const { data: vistoriaAtual } = await supabase
-    .from('vistorias')
-    .select('video_360_url')
-    .eq('id', midia.vistoria_id)
-    .maybeSingle();
-  if (vistoriaAtual?.video_360_url) {
-    const partes = vistoriaAtual.video_360_url.split('/vistoria-videos/');
-    if (partes[1]) {
-      await supabase.storage.from('vistoria-videos').remove([partes[1]]).catch(() => {});
-    }
-  }
+  // Vídeo do instalador — path determinístico baseado na extensão do mime
+  const ext = (midia.mime || '').includes('mp4') ? 'mp4' : 'webm';
+  const fileName = `${midia.vistoria_id}/video_360.${ext}`;
 
   const { error: upErr } = await supabase.storage
     .from('vistoria-videos')
-    .upload(fileName, midia.blob, { contentType: midia.mime, upsert: true });
+    .upload(fileName, midia.blob, {
+      contentType: midia.mime || `video/${ext}`,
+      upsert: true,
+      cacheControl: '3600',
+    });
   if (upErr) throw new Error(upErr.message);
 
   const { data: pub } = supabase.storage.from('vistoria-videos').getPublicUrl(fileName);
-  const publicUrl = pub.publicUrl;
+  const publicUrl = `${pub.publicUrl}?v=${Date.now()}`;
 
   const { error: updErr } = await supabase
     .from('vistorias')

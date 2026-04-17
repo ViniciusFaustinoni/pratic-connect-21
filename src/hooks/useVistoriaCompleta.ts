@@ -345,46 +345,41 @@ export function useUploadVideo360() {
 
   return useMutation({
     mutationFn: async (data: { vistoriaId: string; file: File }) => {
-      // Buscar vídeo existente para deletar
-      const { data: vistoria } = await supabase
-        .from('vistorias')
-        .select('video_360_url')
-        .eq('id', data.vistoriaId)
-        .single();
-
-      // Se existir vídeo anterior, deletar do storage
-      if (vistoria?.video_360_url) {
-        const urlParts = vistoria.video_360_url.split('/vistoria-videos/');
-        if (urlParts[1]) {
-          const filePath = urlParts[1];
-          await supabase.storage.from('vistoria-videos').remove([filePath]);
-        }
+      // Validar blob não-vazio antes de qualquer operação
+      if (!data.file || data.file.size === 0) {
+        throw new Error('Arquivo de vídeo vazio ou inválido');
       }
 
-      const fileExt = data.file.name.split('.').pop();
-      const fileName = `${data.vistoriaId}/video_360_${Date.now()}.${fileExt}`;
+      // Path determinístico — upsert sobrescreve atomicamente, sem race
+      const fileExt = (data.file.name.split('.').pop() || 'webm').toLowerCase();
+      const fileName = `${data.vistoriaId}/video_360.${fileExt}`;
+      const contentType = data.file.type || (fileExt === 'mp4' ? 'video/mp4' : 'video/webm');
 
-      // Upload para bucket de vídeos
       const { error: uploadError } = await supabase.storage
         .from('vistoria-videos')
-        .upload(fileName, data.file);
+        .upload(fileName, data.file, {
+          contentType,
+          upsert: true,
+          cacheControl: '3600',
+        });
 
       if (uploadError) throw uploadError;
 
-      // Obter URL pública
+      // Obter URL pública (com cache-buster para furar CDN no analista)
       const { data: publicUrl } = supabase.storage
         .from('vistoria-videos')
         .getPublicUrl(fileName);
 
-      // Atualizar vistoria com URL do vídeo
+      const finalUrl = `${publicUrl.publicUrl}?v=${Date.now()}`;
+
       const { error: updateError } = await supabase
         .from('vistorias')
-        .update({ video_360_url: publicUrl.publicUrl })
+        .update({ video_360_url: finalUrl })
         .eq('id', data.vistoriaId);
 
       if (updateError) throw updateError;
 
-      return publicUrl.publicUrl;
+      return finalUrl;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['vistoria-completa'] });
@@ -421,50 +416,44 @@ export function useUploadFotoVistoriaCompleta() {
         throw new Error('Vistoria não encontrada. Recarregue a página e tente novamente.');
       }
 
-      // Primeiro, verificar se já existe uma foto desse tipo para essa vistoria
-      const { data: fotoExistente } = await supabase
-        .from('vistoria_fotos')
-        .select('id, arquivo_url')
-        .eq('vistoria_id', data.vistoriaId)
-        .eq('tipo', data.tipo)
-        .maybeSingle();
+      // Validar blob não-vazio
+      if (!data.file || data.file.size === 0) {
+        throw new Error('Arquivo de imagem vazio ou inválido');
+      }
 
-      // Fazer upload do novo arquivo ANTES de deletar o antigo (evitar perda)
-      const fileExt = data.file.name.split('.').pop();
-      const fileName = `${data.vistoriaId}/${data.tipo}_${Date.now()}.${fileExt}`;
+      // Path determinístico — upsert atômico, sem race entre uploads concorrentes
+      const fileName = `${data.vistoriaId}/${data.tipo}.jpg`;
+      const contentType = data.file.type || 'image/jpeg';
 
       const { error: uploadError } = await supabase.storage
         .from('vistoria-fotos')
-        .upload(fileName, data.file);
+        .upload(fileName, data.file, {
+          contentType,
+          upsert: true,
+          cacheControl: '3600',
+        });
 
       if (uploadError) throw uploadError;
 
-      // Obter URL pública
+      // Obter URL pública com cache-buster
       const { data: publicUrl } = supabase.storage
         .from('vistoria-fotos')
         .getPublicUrl(fileName);
 
-      // Se existir foto antiga, deletar do storage e da tabela DEPOIS do upload
-      if (fotoExistente) {
-        const urlParts = fotoExistente.arquivo_url.split('/vistoria-fotos/');
-        if (urlParts[1]) {
-          await supabase.storage.from('vistoria-fotos').remove([urlParts[1]]);
-        }
-        await supabase.from('vistoria_fotos').delete().eq('id', fotoExistente.id);
-      }
+      const finalUrl = `${publicUrl.publicUrl}?v=${Date.now()}`;
 
-      // Inserir novo registro na tabela com retry em caso de FK error
+      // Upsert no DB usando constraint única (vistoria_id, tipo)
       let result: any = null;
       const insertPayload = {
         vistoria_id: data.vistoriaId,
         tipo: data.tipo,
-        arquivo_url: publicUrl.publicUrl,
+        arquivo_url: finalUrl,
         visivel_cliente: data.visivelCliente ?? true,
       };
 
       const { data: insertResult, error: insertError } = await supabase
         .from('vistoria_fotos')
-        .insert(insertPayload)
+        .upsert(insertPayload, { onConflict: 'vistoria_id,tipo' })
         .select()
         .single();
 
@@ -487,7 +476,7 @@ export function useUploadFotoVistoriaCompleta() {
           // Retry uma vez
           const { data: retryResult, error: retryError } = await supabase
             .from('vistoria_fotos')
-            .insert(insertPayload)
+            .upsert(insertPayload, { onConflict: 'vistoria_id,tipo' })
             .select()
             .single();
 
@@ -506,7 +495,7 @@ export function useUploadFotoVistoriaCompleta() {
         try {
           const { data: ocrData, error: ocrError } = await supabase.functions.invoke('odometro-ocr', {
             body: { 
-              url: publicUrl.publicUrl, 
+              url: finalUrl, 
               vistoriaId: data.vistoriaId
             }
           });

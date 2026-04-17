@@ -69,9 +69,16 @@ export function VideoCapture({
         videoPreviewRef.current.play();
       }
       
-      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-        ? 'video/webm;codecs=vp9'
-        : 'video/webm';
+      // Prefer MP4 (Safari/iOS) → fallback WebM
+      const candidates = [
+        'video/mp4;codecs=h264,aac',
+        'video/mp4',
+        'video/webm;codecs=vp9',
+        'video/webm',
+      ];
+      const mimeType = candidates.find((t) => MediaRecorder.isTypeSupported(t)) || 'video/webm';
+      const ext = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
+      const baseType = mimeType.startsWith('video/mp4') ? 'video/mp4' : 'video/webm';
       
       const mediaRecorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = mediaRecorder;
@@ -83,8 +90,8 @@ export function VideoCapture({
       };
       
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'video/webm' });
-        const file = new File([blob], `video_360_${Date.now()}.webm`, { type: 'video/webm' });
+        const blob = new Blob(chunksRef.current, { type: baseType });
+        const file = new File([blob], `video_360_${Date.now()}.${ext}`, { type: baseType });
         const url = URL.createObjectURL(blob);
         setPreviewUrl(url);
         setPendingFile(file);
