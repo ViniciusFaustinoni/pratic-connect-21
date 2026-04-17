@@ -307,31 +307,82 @@ export function VideoCapture({
             </div>
           </>
         ) : (
-          <div className="flex flex-col items-center gap-3 p-4">
+          <div className="flex flex-col items-center gap-3 p-4 w-full">
             <Video className="h-12 w-12 text-slate-500" />
             <span className="text-center text-sm text-slate-400">{label}</span>
-            <div className="flex flex-col items-center gap-2">
-              <Button
-                onClick={startRecording}
-                className="gap-2 bg-red-600 hover:bg-red-700"
-              >
-                <Play className="h-4 w-4" />
-                Gravar Vídeo
-              </Button>
-              {!cameraOnly && (
-                <>
-                  <span className="text-xs text-slate-500">ou</span>
+            {(() => {
+              const inApp = detectInAppBrowser();
+              if (inApp) {
+                const navAlvo = isIOS() ? 'Safari' : 'Chrome';
+                const copiarLink = async () => {
+                  try {
+                    await navigator.clipboard.writeText(window.location.href);
+                    toast.success('Link copiado! Cole no ' + navAlvo + '.');
+                  } catch {
+                    toast.error('Não foi possível copiar. Copie manualmente.');
+                  }
+                };
+                return (
+                  <div className="w-full max-w-sm space-y-3">
+                    <div className="rounded-lg border border-amber-400 bg-amber-50 p-3 text-amber-900 space-y-2">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5 text-amber-600" />
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold">Abra no {navAlvo} para ver a câmera</p>
+                          <p className="text-xs leading-relaxed">
+                            O navegador do {getInAppBrowserName(inApp)} não permite ver a câmera ao vivo.
+                            Toque no menu (⋯) acima e escolha <strong>Abrir no {navAlvo}</strong>.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={copiarLink}
+                          className="gap-2 border-amber-400 bg-white hover:bg-amber-100 text-amber-900 w-full"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                          Copiar link
+                        </Button>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => inputRef.current?.click()}
+                      className="w-full border-slate-600 text-slate-400"
+                    >
+                      Gravar mesmo assim (sem preview)
+                    </Button>
+                  </div>
+                );
+              }
+              return (
+                <div className="flex flex-col items-center gap-2">
                   <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => inputRef.current?.click()}
-                    className="border-slate-600 text-slate-400"
+                    onClick={startRecording}
+                    className="gap-2 bg-red-600 hover:bg-red-700"
                   >
-                    Selecionar da Galeria
+                    <Play className="h-4 w-4" />
+                    Gravar Vídeo
                   </Button>
-                </>
-              )}
-            </div>
+                  {!cameraOnly && (
+                    <>
+                      <span className="text-xs text-slate-500">ou</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => inputRef.current?.click()}
+                        className="border-slate-600 text-slate-400"
+                      >
+                        Selecionar da Galeria
+                      </Button>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>
