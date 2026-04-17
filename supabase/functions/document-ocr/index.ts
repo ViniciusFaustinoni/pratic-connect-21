@@ -938,3 +938,48 @@ async function extractTextFromPDFBuffer(buffer: Uint8Array): Promise<string> {
     return '';
   }
 }
+
+/**
+ * Extrai candidatos plausíveis para um campo a partir de texto bruto do PDF.
+ * Usado quando o checksum do valor extraído pela IA falha.
+ */
+function extractCandidatesFromText(text: string, field: string): string[] {
+  if (!text) return [];
+  const out = new Set<string>();
+  switch (field) {
+    case 'placa': {
+      const re = /\b([A-Z]{3}[-\s]?[0-9][A-Z0-9][0-9]{2})\b/g;
+      let m;
+      while ((m = re.exec(text)) !== null) out.add(m[1].replace(/[-\s]/g, '').toUpperCase());
+      break;
+    }
+    case 'renavam': {
+      const re = /\b(\d{9,11})\b/g;
+      let m;
+      while ((m = re.exec(text)) !== null) out.add(m[1].padStart(11, '0'));
+      break;
+    }
+    case 'chassi': {
+      const re = /\b([A-HJ-NPR-Z0-9]{17})\b/gi;
+      let m;
+      while ((m = re.exec(text)) !== null) out.add(m[1].toUpperCase());
+      break;
+    }
+    case 'cpf_comprador':
+    case 'cpf_cnpj_comprador': {
+      const reCpf = /\b(\d{3}\.?\d{3}\.?\d{3}-?\d{2})\b/g;
+      const reCnpj = /\b(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})\b/g;
+      let m;
+      while ((m = reCpf.exec(text)) !== null) {
+        const c = m[1].replace(/\D/g, '');
+        out.add(`${c.slice(0,3)}.${c.slice(3,6)}.${c.slice(6,9)}-${c.slice(9,11)}`);
+      }
+      while ((m = reCnpj.exec(text)) !== null) {
+        const c = m[1].replace(/\D/g, '');
+        out.add(`${c.slice(0,2)}.${c.slice(2,5)}.${c.slice(5,8)}/${c.slice(8,12)}-${c.slice(12,14)}`);
+      }
+      break;
+    }
+  }
+  return Array.from(out);
+}
