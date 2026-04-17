@@ -30,6 +30,54 @@ function validateCPF(cpf: string): boolean {
   return r === parseInt(cleaned[10]);
 }
 
+// Validação de CNPJ por dígito verificador
+function validateCNPJ(cnpj: string): boolean {
+  const cleaned = cnpj.replace(/\D/g, '');
+  if (cleaned.length !== 14) return false;
+  if (/^(\d)\1+$/.test(cleaned)) return false;
+  const calc = (len: number) => {
+    const weights = len === 12 ? [5,4,3,2,9,8,7,6,5,4,3,2] : [6,5,4,3,2,9,8,7,6,5,4,3,2];
+    let sum = 0;
+    for (let i = 0; i < len; i++) sum += parseInt(cleaned[i]) * weights[i];
+    const r = sum % 11;
+    return r < 2 ? 0 : 11 - r;
+  };
+  return calc(12) === parseInt(cleaned[12]) && calc(13) === parseInt(cleaned[13]);
+}
+
+// Placa brasileira: ABC1234 (antiga) ou ABC1D23 (Mercosul)
+function validatePlaca(placa: string): boolean {
+  if (!placa) return false;
+  const cleaned = placa.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  if (cleaned.length !== 7) return false;
+  return /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(cleaned);
+}
+
+// Renavam: 11 dígitos com dígito verificador (módulo 11)
+function validateRenavam(renavam: string): boolean {
+  if (!renavam) return false;
+  const cleaned = renavam.replace(/\D/g, '').padStart(11, '0');
+  if (cleaned.length !== 11) return false;
+  if (/^0+$/.test(cleaned)) return false;
+  const base = cleaned.substring(0, 10);
+  const dv = parseInt(cleaned[10]);
+  const reversed = base.split('').reverse().join('');
+  const weights = [2,3,4,5,6,7,8,9,2,3];
+  let sum = 0;
+  for (let i = 0; i < 10; i++) sum += parseInt(reversed[i]) * weights[i];
+  const mod = (sum * 10) % 11;
+  const dvCalc = mod === 10 ? 0 : mod;
+  return dvCalc === dv;
+}
+
+// Chassi: 17 caracteres alfanuméricos, sem I, O ou Q
+function validateChassi(chassi: string): boolean {
+  if (!chassi) return false;
+  const cleaned = chassi.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  if (cleaned.length !== 17) return false;
+  return /^[A-HJ-NPR-Z0-9]{17}$/.test(cleaned);
+}
+
 // Mapa de dígitos comumente confundidos por modelos de visão
 const DIGIT_CONFUSIONS: Record<number, number[]> = {
   0: [8, 6],
