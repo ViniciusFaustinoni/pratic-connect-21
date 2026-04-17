@@ -26,6 +26,7 @@ import {
   XCircle,
   Ban,
   ExternalLink,
+  ClipboardCheck,
 } from 'lucide-react';
 import {
   useProposta,
