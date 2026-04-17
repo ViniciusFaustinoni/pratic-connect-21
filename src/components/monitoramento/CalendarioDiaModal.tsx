@@ -326,7 +326,11 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
       placa: string;
       associado: string;
       tecnico: string;
+      tecnicoAtribuido: boolean;
       periodo: string;
+      data_agendada: string;
+      iniciada_em: string | null;
+      concluida_em: string | null;
     }> = [];
 
     (instalacoes as any[]).forEach((inst) => {
@@ -337,7 +341,11 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
         placa: inst.veiculos?.placa || '—',
         associado: inst.associados?.nome || '—',
         tecnico: inst.instalador?.nome || 'Não atribuído',
+        tecnicoAtribuido: !!inst.instalador?.nome,
         periodo: inst.periodo || 'manha',
+        data_agendada: inst.data_agendada,
+        iniciada_em: inst.iniciada_em || null,
+        concluida_em: inst.concluida_em || null,
       });
     });
 
@@ -349,12 +357,17 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
         placa: v.veiculo?.placa || '—',
         associado: v.associado?.nome || '—',
         tecnico: v.tecnico?.nome || 'Não atribuído',
+        tecnicoAtribuido: !!v.tecnico?.nome,
         periodo: 'manha', // vistorias campo don't have periodo
+        data_agendada: v.data_agendada,
+        iniciada_em: v.iniciada_em || null,
+        concluida_em: v.concluida_em || null,
       });
     });
 
     return items;
   }, [instalacoes, vistoriasCampo]);
+
 
   // Group rota by period
   const rotaPorPeriodo = useMemo(() => {
