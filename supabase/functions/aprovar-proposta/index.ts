@@ -9,13 +9,43 @@ const corsHeaders = {
 const FIPE_MINIMO_RASTREADOR_PADRAO = 30000;
 const FIPE_MINIMO_RASTREADOR_MOTO_PADRAO = 9000;
 
+// Keywords que indicam motocicleta (paridade com src/data/vistoriaConfigCompleta.ts)
+const MOTO_KEYWORDS = [
+  'moto', 'motocicleta', 'ciclomotor', 'triciclo', 'scooter',
+  'nxr', 'bros', 'cg ', 'cg-', 'cb ', 'cb-', 'cbr', 'pcx', 'biz', 'pop',
+  'titan', 'fan', 'xre', 'lander', 'tenere', 'crosser', 'fazer', 'ybr',
+  'neo', 'fluo', 'burgman', 'intruder', 'yes', 'gsr', 'v-strom', 'factor',
+  'dl ', 'crf', 'sahara', 'twister', 'hornet', 'africa twin', 'ninja',
+  'z900', 'z800', 'z750', 'z400', 'versys', 'vulcan', 'next', ' riva',
+  'citycom', 'maxsym', 'boulevard', 'bandit', 'hayabusa', 'gsxr', 'gsx',
+  'elite', 'adv', 'sh ', 'sh-', 'lead', 'xadv', 'x-adv', 'transalp',
+  'nmax', 'xtz', 'xj6', 'mt-', 'mt ', 'crypton',
+  'duke', 'apache', 'jet', 'kansas', 'mirage', 'horizon',
+];
+
+function detectarTipoVeiculo(
+  marca: string | null | undefined,
+  modelo: string | null | undefined,
+  marcasExclusivasMoto: string[]
+): 'moto' | 'automovel' {
+  const marcaNorm = (marca || '').trim().toUpperCase();
+  if (marcaNorm && marcasExclusivasMoto.some(m => marcaNorm === m.toUpperCase().trim())) {
+    return 'moto';
+  }
+  if (modelo) {
+    const modeloLower = ` ${modelo.toLowerCase()} `;
+    if (MOTO_KEYWORDS.some(kw => modeloLower.includes(kw))) return 'moto';
+  }
+  return 'automovel';
+}
+
 function precisaRastreador(
   valorFipe: number | null | undefined,
   fipeMinimo: number,
-  _tipoVeiculo: string = 'automovel',
+  tipoVeiculo: 'moto' | 'automovel' = 'automovel',
   fipeMinimoMoto?: number
 ): boolean {
-  const limite = _tipoVeiculo === 'moto' ? (fipeMinimoMoto ?? FIPE_MINIMO_RASTREADOR_MOTO_PADRAO) : fipeMinimo;
+  const limite = tipoVeiculo === 'moto' ? (fipeMinimoMoto ?? FIPE_MINIMO_RASTREADOR_MOTO_PADRAO) : fipeMinimo;
   if (valorFipe === null || valorFipe === undefined || valorFipe <= 0) return true;
   return valorFipe >= limite;
 }
@@ -65,7 +95,6 @@ serve(async (req) => {
     }
 
     const associadoId = contrato.associado_id;
-    const diaVencimento = contrato.dia_vencimento || (contrato.associado as any)?.dia_vencimento || 15;
 
     // 2. Atualizar contrato para ativo (atomicamente)
     const { data: contratoAtualizado, error: contratoError } = await supabase
@@ -86,7 +115,7 @@ serve(async (req) => {
       throw new Error(`Não foi possível aprovar. Status atual: ${refetch?.status || 'desconhecido'}`);
     }
 
-    // 3. Paralelo: instalação concluída + veículo + configurações + associado update + renavam/chassi
+    // 3. Paralelo: instalação concluída + veículos + configurações + associado update
     const veiculoIdDoContrato = (contrato as any).veiculo_id;
 
     const [
@@ -95,23 +124,18 @@ serve(async (req) => {
       configRes,
       associadoUpdateRes,
     ] = await Promise.all([
-      // Instalação concluída
       supabase.from('instalacoes').select('id, status, rastreador_id')
         .eq('contrato_id', contrato_id).eq('status', 'concluida').maybeSingle(),
-      // Veículo
-      veiculoIdDoContrato
-        ? supabase.from('veiculos').select('id, placa, modelo, valor_fipe').eq('id', veiculoIdDoContrato)
-        : supabase.from('veiculos').select('id, placa, modelo, valor_fipe').eq('associado_id', associadoId).limit(1),
-      // Configurações de rastreador
+      // Buscar TODOS os veículos do associado (para tratamento multi-veículo)
+      supabase.from('veiculos').select('id, placa, marca, modelo, valor_fipe').eq('associado_id', associadoId),
       supabase.from('configuracoes').select('chave, valor')
-        .in('chave', ['operacional_fipe_minimo_rastreador', 'operacional_fipe_minimo_rastreador_moto']),
-      // Atualizar associado
+        .in('chave', ['operacional_fipe_minimo_rastreador', 'operacional_fipe_minimo_rastreador_moto', 'marcas_exclusivas_moto']),
       supabase.from('associados').update({
         status: 'ativo', data_adesao: agora.split('T')[0], aprovado_por, aprovado_em: agora,
       }).eq('id', associadoId).select('id, status').single(),
     ]);
 
-    // Atualizar renavam/chassi se fornecidos
+    // Atualizar renavam/chassi no veículo do contrato se fornecidos
     if (veiculoIdDoContrato && (veiculo_renavam || veiculo_chassi)) {
       const updateData: Record<string, string> = {};
       if (veiculo_renavam) updateData.renavam = veiculo_renavam;
@@ -121,57 +145,74 @@ serve(async (req) => {
 
     const jaTemInstalacaoConcluida = !!instalacaoConcluidaRes.data;
     const instalacaoConcluida = instalacaoConcluidaRes.data;
-    const veiculos = veiculosRes.data;
+    const veiculos = veiculosRes.data || [];
 
     if (associadoUpdateRes.error) {
       console.error('[aprovar-proposta] Erro associado:', associadoUpdateRes.error);
       throw new Error(`Falha ao atualizar associado: ${associadoUpdateRes.error.message}`);
     }
 
-    // Parse configurações rastreador
+    // Parse configurações
     let fipeMinRastreador = FIPE_MINIMO_RASTREADOR_PADRAO;
     let fipeMinRastreadorMoto = FIPE_MINIMO_RASTREADOR_MOTO_PADRAO;
+    let marcasExclusivasMoto: string[] = [];
     if (configRes.data) {
       for (const cfg of configRes.data) {
         if (cfg.chave === 'operacional_fipe_minimo_rastreador') fipeMinRastreador = Number(cfg.valor) || FIPE_MINIMO_RASTREADOR_PADRAO;
         if (cfg.chave === 'operacional_fipe_minimo_rastreador_moto') fipeMinRastreadorMoto = Number(cfg.valor) || FIPE_MINIMO_RASTREADOR_MOTO_PADRAO;
+        if (cfg.chave === 'marcas_exclusivas_moto' && cfg.valor) {
+          try {
+            const raw = String(cfg.valor).trim();
+            marcasExclusivasMoto = raw.startsWith('[')
+              ? JSON.parse(raw)
+              : raw.split(',').map((m: string) => m.trim());
+          } catch {
+            marcasExclusivasMoto = [];
+          }
+        }
       }
     }
 
-    // Verificar instalação ativa para o veículo
-    const veiculoIdParaInstalacao = veiculoIdDoContrato || (veiculos && veiculos[0]?.id);
-    let jaTemInstalacaoAtiva = false;
-    if (veiculoIdParaInstalacao) {
-      const { data: instalacaoAtiva } = await supabase.from('instalacoes')
-        .select('id, status, contrato_id')
-        .eq('veiculo_id', veiculoIdParaInstalacao)
-        .in('status', ['agendada', 'em_rota', 'em_andamento'])
-        .maybeSingle();
-      jaTemInstalacaoAtiva = !!instalacaoAtiva;
-    }
+    // 4. Iterar TODOS os veículos do associado
+    let algumProtecao360SemRastreador = false;
+    let algumPrecisouRastreador = false;
+    let veiculoPrincipal: any = null;
 
-    // 4. Atualizar veículo e criar instalação se necessário
-    let protecao360SemRastreador = false;
-    if (veiculos && veiculos.length > 0) {
-      const veiculo = veiculos[0];
+    for (const veiculo of veiculos) {
       const veiculoId = veiculo.id;
       const valorFipe = (veiculo as any).valor_fipe || 0;
+      const tipoVeiculo = detectarTipoVeiculo((veiculo as any).marca, (veiculo as any).modelo, marcasExclusivasMoto);
 
-      const veiculoPrecisaRastreador = precisaRastreador(valorFipe, fipeMinRastreador, 'automovel', fipeMinRastreadorMoto);
-      const ativarProtecao360 = jaTemInstalacaoConcluida || !veiculoPrecisaRastreador;
+      const veiculoPrecisaRastreador = precisaRastreador(valorFipe, fipeMinRastreador, tipoVeiculo, fipeMinRastreadorMoto);
+
+      // Se a instalação concluída pertence a ESTE veículo, ativa Proteção 360
+      const instalacaoDesteVeiculo = jaTemInstalacaoConcluida && (instalacaoConcluida as any)?.veiculo_id === veiculoId;
+      const ativarProtecao360 = instalacaoDesteVeiculo || !veiculoPrecisaRastreador;
       const statusVeiculo = ativarProtecao360 ? 'ativo' : 'instalacao_pendente';
 
-      if (!veiculoPrecisaRastreador) {
-        protecao360SemRastreador = true;
-        console.log(`[aprovar-proposta] FIPE R$${valorFipe} < R$${fipeMinRastreador} — Sem rastreador`);
-      }
+      console.log(`[aprovar-proposta] Veículo ${veiculo.placa} (${tipoVeiculo}, FIPE R$${valorFipe}): precisaRastreador=${veiculoPrecisaRastreador}, status=${statusVeiculo}`);
+
+      if (!veiculoPrecisaRastreador) algumProtecao360SemRastreador = true;
+      if (veiculoPrecisaRastreador) algumPrecisouRastreador = true;
+      if (veiculoId === veiculoIdDoContrato || !veiculoPrincipal) veiculoPrincipal = veiculo;
 
       await supabase.from('veiculos').update({
         status: statusVeiculo, cobertura_roubo_furto: true, cobertura_total: ativarProtecao360,
       }).eq('id', veiculoId);
 
-      // Se instalação concluída — ativar rastreador na plataforma
-      if (jaTemInstalacaoConcluida && instalacaoConcluida?.rastreador_id) {
+      // Verificar se já existe instalação ativa para este veículo
+      let jaTemInstalacaoAtivaDesteVeic = false;
+      if (veiculoPrecisaRastreador && !instalacaoDesteVeiculo) {
+        const { data: instalacaoAtiva } = await supabase.from('instalacoes')
+          .select('id')
+          .eq('veiculo_id', veiculoId)
+          .in('status', ['agendada', 'em_rota', 'em_andamento'])
+          .maybeSingle();
+        jaTemInstalacaoAtivaDesteVeic = !!instalacaoAtiva;
+      }
+
+      // Ativação automática rastreador (apenas para veículo com instalação concluída)
+      if (instalacaoDesteVeiculo && instalacaoConcluida?.rastreador_id) {
         try {
           const { data: rastreadorData } = await supabase.from('rastreadores')
             .select('imei, plataforma').eq('id', instalacaoConcluida.rastreador_id).single();
@@ -194,9 +235,8 @@ serve(async (req) => {
               body: { veiculo_id: veiculoId, rastreador_id: instalacaoConcluida.rastreador_id, associado_id: associadoId },
             });
 
-            // Notificar cobertura 360 (fire and forget)
             supabase.functions.invoke('notificar-cliente', {
-              body: { tipo: 'cobertura_total_ativada', associado_id: associadoId, dados: { placa: veiculo.placa || '', marca: '', modelo: veiculo.modelo || '' } },
+              body: { tipo: 'cobertura_total_ativada', associado_id: associadoId, dados: { placa: veiculo.placa || '', marca: (veiculo as any).marca || '', modelo: veiculo.modelo || '' } },
             }).catch(() => {});
           }
         } catch (err) {
@@ -205,7 +245,7 @@ serve(async (req) => {
       }
 
       // Criar instalação se necessário
-      if (!jaTemInstalacaoConcluida && !jaTemInstalacaoAtiva && veiculoPrecisaRastreador) {
+      if (veiculoPrecisaRastreador && !instalacaoDesteVeiculo && !jaTemInstalacaoAtivaDesteVeic) {
         const associadoData = contrato.associado as any;
         let dataAgendada = new Date().toISOString().split('T')[0];
         let periodoPreferido = 'manha';
@@ -241,7 +281,6 @@ serve(async (req) => {
           }
         }
 
-        // Geocodificar
         let endereco_latitude: number | null = null;
         let endereco_longitude: number | null = null;
         if (enderecoLogradouro && enderecoCidade) {
@@ -280,34 +319,33 @@ serve(async (req) => {
           local_vistoria: 'cliente',
           permite_encaixe: permiteEncaixe,
         });
-        console.log('[aprovar-proposta] Instalação criada');
+        console.log(`[aprovar-proposta] Instalação criada para veículo ${veiculo.placa}`);
       } else if (!veiculoPrecisaRastreador) {
-        // Notificar cobertura 360 sem rastreador
         supabase.functions.invoke('notificar-cliente', {
-          body: { tipo: 'cobertura_total_ativada', associado_id: associadoId, dados: { placa: veiculo.placa || '', marca: '', modelo: veiculo.modelo || '' } },
+          body: { tipo: 'cobertura_total_ativada', associado_id: associadoId, dados: { placa: veiculo.placa || '', marca: (veiculo as any).marca || '', modelo: veiculo.modelo || '' } },
         }).catch(() => {});
-      }
-
-      // Criar acesso do associado se instalação não concluída
-      if (!jaTemInstalacaoConcluida) {
-        try {
-          await supabase.functions.invoke('ativar-associado', {
-            body: { associado_id: associadoId, veiculo_id: veiculoId },
-          });
-        } catch (e) {
-          console.warn('[aprovar-proposta] Erro criar acesso:', e);
-        }
       }
     }
 
-    // 5. Paralelo: histórico + documentos + link_token + SGA
+    // Criar acesso do associado se nenhuma instalação concluída
+    if (!jaTemInstalacaoConcluida && veiculoPrincipal) {
+      try {
+        await supabase.functions.invoke('ativar-associado', {
+          body: { associado_id: associadoId, veiculo_id: veiculoPrincipal.id },
+        });
+      } catch (e) {
+        console.warn('[aprovar-proposta] Erro criar acesso:', e);
+      }
+    }
+
+    // 5. Histórico + documentos + SGA
     const mensagemHistorico = jaTemInstalacaoConcluida
       ? 'Proposta aprovada pelo analista de cadastro. Instalação já concluída. Proteção 360º ativada.'
-      : protecao360SemRastreador
-        ? 'Proposta aprovada pelo analista de cadastro. Proteção 360° ativada (veículo sem necessidade de rastreador).'
-        : 'Proposta aprovada pelo analista de cadastro. Cobertura Roubo/Furto ativada. Aguardando instalação para Proteção 360º.';
+      : algumPrecisouRastreador
+        ? 'Proposta aprovada pelo analista de cadastro. Cobertura Roubo/Furto ativada. Aguardando instalação para Proteção 360º.'
+        : 'Proposta aprovada pelo analista de cadastro. Proteção 360° ativada (veículo sem necessidade de rastreador).';
 
-    const docPromises = [
+    const docPromises: Promise<any>[] = [
       supabase.from('associados_historico').insert({
         associado_id: associadoId, contrato_id: contrato_id, tipo: 'status_alterado',
         descricao: mensagemHistorico, usuario_id: aprovado_por,
@@ -330,7 +368,7 @@ serve(async (req) => {
 
     await Promise.all(docPromises);
 
-    // SGA Hinova sync (background, não bloqueia)
+    // SGA Hinova sync (background)
     try {
       const { data: veiculoParaSGA } = await supabase.from('veiculos')
         .select('id').eq('associado_id', associadoId).eq('sincronizado_hinova', false).limit(1).maybeSingle();
@@ -349,9 +387,9 @@ serve(async (req) => {
 
     const mensagemRetorno = jaTemInstalacaoConcluida
       ? 'Proposta aprovada! Instalação já concluída. Proteção 360º ativada.'
-      : protecao360SemRastreador
-        ? 'Proposta aprovada! Proteção 360° ativada (sem necessidade de rastreador).'
-        : 'Proposta aprovada! Cobertura Roubo/Furto ativada. Aguardando instalação para Proteção 360º.';
+      : algumPrecisouRastreador
+        ? 'Proposta aprovada! Cobertura Roubo/Furto ativada. Aguardando instalação para Proteção 360º.'
+        : 'Proposta aprovada! Proteção 360° ativada (sem necessidade de rastreador).';
 
     console.log('[aprovar-proposta] Concluído:', mensagemRetorno);
 
