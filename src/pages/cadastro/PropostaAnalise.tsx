@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,9 @@ import {
   Smartphone,
   ShieldCheck,
   ShieldOff,
+  XCircle,
+  Ban,
+  ExternalLink,
 } from 'lucide-react';
 import {
   useProposta,
@@ -83,6 +86,51 @@ export default function PropostaAnalise() {
 
   // Verificar se pode aprovar
   const podeAprovar = proposta?.status === 'assinado' && !proposta?.tem_documento_pendente;
+
+  // Estado final (já aprovado / reprovado / cancelado)
+  const isAprovada = proposta?.status === 'ativo';
+  const isReprovada = proposta?.status === 'reprovado';
+  const isCancelada = proposta?.status === 'cancelado';
+  const isFinalizada = isAprovada || isReprovada || isCancelada;
+
+  // Buscar dados de aprovação/reprovação para banner
+  const [estadoFinal, setEstadoFinal] = useState<{
+    aprovado_em: string | null;
+    aprovado_por_nome: string | null;
+    motivo_reprovacao?: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!id || !isFinalizada) {
+      setEstadoFinal(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data: contrato } = await supabase
+        .from('contratos')
+        .select('aprovado_em, aprovado_por')
+        .eq('id', id)
+        .maybeSingle();
+      let aprovadorNome: string | null = null;
+      if (contrato?.aprovado_por) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('nome')
+          .eq('id', contrato.aprovado_por)
+          .maybeSingle();
+        aprovadorNome = prof?.nome || null;
+      }
+      if (!cancelled) {
+        setEstadoFinal({
+          aprovado_em: contrato?.aprovado_em || null,
+          aprovado_por_nome: aprovadorNome,
+          motivo_reprovacao: null,
+        });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [id, isFinalizada]);
 
   const handleAprovar = () => {
     setShowConfirmAprovar(true);
@@ -254,7 +302,86 @@ export default function PropostaAnalise() {
         onProxima={nextProposta ? () => navigate(`/cadastro/propostas/${nextProposta.id}`) : undefined}
       />
 
-      {/* Botão de ativação Softruck (quando aplicável) */}
+      {/* Banner de estado final (proposta já aprovada / reprovada / cancelada) */}
+      {isFinalizada && (
+        <div
+          className={
+            isAprovada
+              ? 'rounded-lg border-2 border-success/40 bg-success/10 p-4 space-y-3'
+              : isReprovada
+                ? 'rounded-lg border-2 border-destructive/40 bg-destructive/10 p-4 space-y-3'
+                : 'rounded-lg border-2 border-muted-foreground/30 bg-muted p-4 space-y-3'
+          }
+        >
+          <div className="flex items-start gap-3">
+            {isAprovada ? (
+              <CheckCircle className="h-6 w-6 text-success mt-0.5 shrink-0" />
+            ) : isReprovada ? (
+              <XCircle className="h-6 w-6 text-destructive mt-0.5 shrink-0" />
+            ) : (
+              <Ban className="h-6 w-6 text-muted-foreground mt-0.5 shrink-0" />
+            )}
+            <div className="flex-1">
+              <p
+                className={
+                  isAprovada
+                    ? 'font-semibold text-success'
+                    : isReprovada
+                      ? 'font-semibold text-destructive'
+                      : 'font-semibold text-foreground'
+                }
+              >
+                {isAprovada
+                  ? 'Proposta aprovada — cadastro concluído'
+                  : isReprovada
+                    ? 'Proposta reprovada'
+                    : 'Proposta cancelada'}
+              </p>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {isAprovada && estadoFinal?.aprovado_em && (
+                  <>
+                    Aprovada em{' '}
+                    {new Date(estadoFinal.aprovado_em).toLocaleString('pt-BR', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                    {estadoFinal.aprovado_por_nome && <> por <strong className="text-foreground">{estadoFinal.aprovado_por_nome}</strong></>}.
+                  </>
+                )}
+                {isAprovada && !estadoFinal?.aprovado_em && (
+                  <>O associado já está ativo no sistema.</>
+                )}
+                {isReprovada && <>Esta proposta foi reprovada e não está mais disponível para análise.</>}
+                {isCancelada && <>Esta proposta foi cancelada.</>}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2">
+            {isAprovada && proposta.associado_id && (
+              <Button
+                className="flex-1 bg-success hover:bg-success/90 text-white"
+                onClick={() => navigate(`/cadastro/associados/${proposta.associado_id}`)}
+              >
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Ver associado
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => navigate('/cadastro/propostas')}
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Voltar para lista
+            </Button>
+          </div>
+        </div>
+      )}
+
       {podeAtivarSoftruck && (
         <div className="rounded-lg border-2 border-warning/30 bg-warning/10 p-4 space-y-3">
           <div className="flex items-start gap-3">
