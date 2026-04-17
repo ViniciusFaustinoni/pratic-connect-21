@@ -39,7 +39,11 @@ import {
   WifiOff,
   Phone,
   MapPin,
+  Info,
+  Map as MapIcon,
+  Wrench,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAbrirEAgendarManutencao } from '@/hooks/useVistoriaManutencao';
 import { useProfissionaisEquipe } from '@/hooks/useEquipe';
 import { useVagasPeriodo } from '@/hooks/useVagasPeriodo';
@@ -61,6 +65,7 @@ import {
 } from '@/data/autovistoriaConfig';
 import { cn } from '@/lib/utils';
 import { buscarCep } from '@/lib/cep';
+import { obterCoordenadasEndereco } from '@/services/geocodingService';
 import { formatDistanceToNow } from 'date-fns';
 
 interface RastreadorInfo {
@@ -104,8 +109,13 @@ export function AgendarManutencaoUnificadoModal({
   const [cidade, setCidade] = useState('');
   const [uf, setUf] = useState('');
   const [buscandoCep, setBuscandoCep] = useState(false);
+  // Coordenadas geocodificadas para endereço alternativo
+  const [latGeo, setLatGeo] = useState<number | null>(null);
+  const [lngGeo, setLngGeo] = useState<number | null>(null);
+  const [geocodificando, setGeocodificando] = useState(false);
 
   // Hooks
+  const navigate = useNavigate();
   const { data: equipe, isLoading: loadingEquipe } = useProfissionaisEquipe();
   const abrirEAgendarMutation = useAbrirEAgendarManutencao();
   const { isDiretor, isCoordenadorMonitoramento, isAnalistaMonitoramento } = usePermissions();
@@ -195,6 +205,10 @@ export function AgendarManutencaoUnificadoModal({
       setCep(`${cepLimpo.slice(0, 5)}-${cepLimpo.slice(5, 8)}`);
     }
     
+    // Resetar coordenadas ao mudar CEP
+    setLatGeo(null);
+    setLngGeo(null);
+    
     if (cepLimpo.length === 8) {
       setBuscandoCep(true);
       const endereco = await buscarCep(cepLimpo);
@@ -207,6 +221,30 @@ export function AgendarManutencaoUnificadoModal({
       setBuscandoCep(false);
     }
   };
+
+  // Geocodificar endereço alternativo quando logradouro+numero+cidade estiverem preenchidos
+  // Necessário para o pin aparecer no mapa de atribuição
+  useEffect(() => {
+    if (tipoEndereco !== 'outro' || localTipo !== 'rota') return;
+    if (!logradouro || !numero || !cidade) return;
+    
+    const handler = setTimeout(async () => {
+      setGeocodificando(true);
+      try {
+        const coords = await obterCoordenadasEndereco({
+          logradouro, numero, bairro, cidade, uf, cep: cep.replace(/\D/g, ''),
+        });
+        setLatGeo(coords.latitude);
+        setLngGeo(coords.longitude);
+      } catch (e) {
+        console.error('[AgendarManutencao] Erro geocoding:', e);
+      } finally {
+        setGeocodificando(false);
+      }
+    }, 600);
+    
+    return () => clearTimeout(handler);
+  }, [tipoEndereco, localTipo, logradouro, numero, bairro, cidade, uf, cep]);
 
   // Limpar ao fechar
   useEffect(() => {
@@ -226,6 +264,8 @@ export function AgendarManutencaoUnificadoModal({
       setBairro('');
       setCidade('');
       setUf('');
+      setLatGeo(null);
+      setLngGeo(null);
     }
   }, [open]);
 
@@ -239,8 +279,12 @@ export function AgendarManutencaoUnificadoModal({
     }
   }, [dataAgendada, periodo, periodosDisponiveis]);
 
+  // Profissional efetivo: '__sem__' equivale a "atribuir depois" → null
+  const profissionalEfetivo = profissionalId && profissionalId !== '__sem__' ? profissionalId : null;
+  const semTecnico = !profissionalEfetivo;
+
   const handleSubmit = async () => {
-    if (!rastreadorCompleto || !motivo || !dataAgendada || !profissionalId || !periodo) return;
+    if (!rastreadorCompleto || !motivo || !dataAgendada || !periodo) return;
 
     // Montar endereço final
     let enderecoFinal = '';
@@ -260,11 +304,13 @@ export function AgendarManutencaoUnificadoModal({
       periodo: periodo as Periodo,
       localTipo,
       localEndereco: localTipo === 'rota' ? enderecoFinal : undefined,
-      profissionalId,
+      profissionalId: profissionalEfetivo,
       permiteEncaixe,
       notificarWhatsApp,
       enderecoAlternativo: localTipo === 'rota' && tipoEndereco === 'outro' ? {
         logradouro, numero, bairro, cidade, uf, cep: cep.replace(/\D/g, ''),
+        latitude: latGeo,
+        longitude: lngGeo,
       } : undefined,
     });
 
@@ -278,7 +324,8 @@ export function AgendarManutencaoUnificadoModal({
       : (cep.replace(/\D/g, '').length === 8 && logradouro && numero)
   );
 
-  const isValid = motivo && dataAgendada && periodo && profissionalId && enderecoValido;
+  // Técnico não é mais obrigatório — pode ficar para atribuir depois
+  const isValid = motivo && dataAgendada && periodo && enderecoValido;
   const profissionais = equipe || [];
 
   if (!rastreador) return null;
@@ -623,6 +670,28 @@ export function AgendarManutencaoUnificadoModal({
                         className="w-32"
                       />
                     </div>
+
+                    {/* Indicador de geocoding */}
+                    {logradouro && numero && (
+                      <div className="flex items-center gap-2 text-xs">
+                        {geocodificando ? (
+                          <>
+                            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                            <span className="text-muted-foreground">Localizando endereço no mapa...</span>
+                          </>
+                        ) : latGeo && lngGeo ? (
+                          <>
+                            <MapPin className="h-3 w-3 text-emerald-600" />
+                            <span className="text-emerald-700">Endereço localizado — aparecerá no mapa</span>
+                          </>
+                        ) : (
+                          <>
+                            <Info className="h-3 w-3 text-amber-600" />
+                            <span className="text-amber-700">Sem coordenadas — pode não aparecer no mapa de atribuição</span>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -630,15 +699,21 @@ export function AgendarManutencaoUnificadoModal({
 
             {/* Técnico */}
             <div className="space-y-2">
-              <Label>Técnico Responsável *</Label>
+              <Label>Técnico Responsável</Label>
               <Select
                 value={profissionalId}
                 onValueChange={setProfissionalId}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione o técnico..." />
+                  <SelectValue placeholder="Selecione o técnico ou deixe para atribuir depois..." />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="__sem__">
+                    <div className="flex flex-col">
+                      <span className="font-medium">Atribuir depois (no mapa)</span>
+                      <span className="text-xs text-muted-foreground">Tarefa entra na fila de atribuição</span>
+                    </div>
+                  </SelectItem>
                   {loadingEquipe ? (
                     <div className="p-2 text-center">
                       <Loader2 className="h-4 w-4 animate-spin mx-auto" />
@@ -656,6 +731,54 @@ export function AgendarManutencaoUnificadoModal({
                   )}
                 </SelectContent>
               </Select>
+
+              {/* Banner explicativo quando "atribuir depois" */}
+              {semTecnico && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900 p-3 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+                    <div className="text-xs text-blue-900 dark:text-blue-100 space-y-1">
+                      <p className="font-medium">Como funciona sem técnico atribuído:</p>
+                      <ul className="space-y-0.5 list-disc list-inside">
+                        <li>
+                          <strong>Na base:</strong> aparece em <strong>Serviços de Campo</strong> para o coordenador atribuir.
+                        </li>
+                        <li>
+                          <strong>Em rota:</strong> aparece como pin no <strong>Mapa</strong> — basta arrastar até um técnico em campo (modo "Atribuição Manual").
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs gap-1"
+                      onClick={() => {
+                        navigate('/monitoramento/mapa');
+                        onOpenChange(false);
+                      }}
+                    >
+                      <MapIcon className="h-3 w-3" />
+                      Abrir Mapa
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs gap-1"
+                      onClick={() => {
+                        navigate('/diretoria/vistorias-instalacoes');
+                        onOpenChange(false);
+                      }}
+                    >
+                      <Wrench className="h-3 w-3" />
+                      Serviços de Campo
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Opções */}
@@ -698,7 +821,7 @@ export function AgendarManutencaoUnificadoModal({
             disabled={!isValid || abrirEAgendarMutation.isPending}
           >
             {abrirEAgendarMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Agendar Manutenção
+            {semTecnico ? 'Agendar (atribuir depois)' : 'Agendar Manutenção'}
           </Button>
         </DialogFooter>
       </DialogContent>

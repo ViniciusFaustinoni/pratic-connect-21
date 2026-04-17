@@ -1154,7 +1154,8 @@ export interface AbrirEAgendarManutencaoParams {
   periodo: 'manha' | 'tarde';
   localTipo: LocalTipoManutencao;
   localEndereco?: string;
-  profissionalId: string;
+  /** Técnico responsável. Se null, fica pendente para atribuição via mapa/serviços de campo */
+  profissionalId: string | null;
   permiteEncaixe: boolean;
   notificarWhatsApp: boolean;
   /** Endereço alternativo (quando o usuário digita outro endereço) */
@@ -1165,6 +1166,9 @@ export interface AbrirEAgendarManutencaoParams {
     cidade: string;
     uf: string;
     cep: string;
+    /** Coordenadas geocodificadas (opcional) — necessário para o pin aparecer no mapa */
+    latitude?: number | null;
+    longitude?: number | null;
   };
 }
 
@@ -1283,19 +1287,22 @@ export function useAbrirEAgendarManutencao() {
         cidade = params.enderecoAlternativo.cidade;
         uf = params.enderecoAlternativo.uf;
         cep = params.enderecoAlternativo.cep;
-        latitude = null;
-        longitude = null;
+        latitude = params.enderecoAlternativo.latitude ?? null;
+        longitude = params.enderecoAlternativo.longitude ?? null;
       }
+
+      const temTecnico = !!params.profissionalId;
 
       const servicoData = {
         tipo: 'vistoria_manutencao' as const,
-        status: 'agendada' as const, // ← JÁ VAI DIRETO PARA AGENDADA
+        // Com técnico → 'agendada'; sem técnico → 'pendente' (para aparecer nas filas de atribuição)
+        status: (temTecnico ? 'agendada' : 'pendente') as 'agendada' | 'pendente',
         data_agendada: params.dataAgendada,
         periodo: params.periodo,
         rastreador_id: params.rastreadorId,
         veiculo_id: veiculo?.id || null,
         associado_id: associado?.id || null,
-        profissional_id: params.profissionalId,
+        profissional_id: params.profissionalId || null,
         local_vistoria: params.localTipo === 'rota' ? 'cliente' : 'base',
         local_tipo_manutencao: params.localTipo,
         permite_encaixe: params.permiteEncaixe,
