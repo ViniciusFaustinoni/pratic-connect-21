@@ -2,7 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // pdfjs-dist para descompressão real (FlateDecode) e extração nativa de texto
 // Build legacy é compatível com Deno/edge runtime sem worker
-import * as pdfjsLib from "https://esm.sh/pdfjs-dist@4.0.379/legacy/build/pdf.mjs";
+// unpkg serve pdf.min.mjs sem deps de canvas (Node), funciona no Deno edge runtime
+import * as pdfjsLib from "https://esm.sh/pdfjs-dist@4.0.379/legacy/build/pdf.min.mjs?bundle&no-check";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
