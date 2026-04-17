@@ -1,68 +1,54 @@
 
 
-## Diagnóstico
+## O que muda
 
-O componente `VideoCapture` (`src/components/instalador/VideoCapture.tsx`) **já implementa live preview correto** (`getUserMedia` + `<video srcObject autoPlay muted playsInline>` nas linhas 67-69 e 214-220). Funciona bem em Safari, Chrome e WebView Android.
+No modal **`CalendarioDiaModal.tsx`**, na **aba Rota**, adicionar um aviso explicativo (banner) no topo informando que a atribuição de tarefas de rota **não é feita aqui** — deve ser feita no **Mapa** ou em **Serviços de Campo** —, com dois botões/links de redirecionamento. A aba **Base** continua exatamente como está hoje (com botões "Atribuir" / "Reatribuir" funcionando), pois a regra é: "atribuição por este modal é apenas para tarefas na base".
 
-**Por que o usuário não vê o preview:** o screenshot mostra "WA Business" no topo — está dentro do **navegador in-app do WhatsApp Business no iOS** (WKWebView restrito da Meta). Esse navegador embutido **bloqueia ou não renderiza `getUserMedia` corretamente**: ou a permissão é negada silenciosamente, ou o stream é obtido mas o `<video srcObject>` fica preto. Resultado: o usuário clica em "Gravar Vídeo", o iOS abre a câmera nativa em tela cheia (via fallback do `<input capture>` em alguns casos, ou nada acontece), grava sem feedback visual customizado, e só vê o resultado depois de parar.
+## Mudança técnica
 
-Isso é uma limitação conhecida e **intencional** dos in-app browsers de Meta (WhatsApp/Instagram/Facebook) — não tem como burlar do lado do código. A solução padrão da indústria é **detectar o in-app browser e forçar abertura no Safari/Chrome**.
+**Arquivo único: `src/components/monitoramento/CalendarioDiaModal.tsx`**
 
-## Solução em 2 partes
+1. Importar `useNavigate` de `react-router-dom`, e os ícones `MapIcon` e `Wrench` (lucide-react).
+2. Dentro de `<TabsContent value="rota">` (linhas 417–469), inserir, **acima** do `rotaItems.length === 0 ? ...`, um bloco fixo:
 
-### Parte 1 — Garantir que o liveview funcione bem onde é possível (Safari/Chrome reais)
-
-O componente atual já está correto. Pequenos hardenings preventivos no `VideoCapture.tsx`:
-- Definir `videoPreviewRef.current.muted = true` programaticamente antes do `play()` (alguns iOS Safari ignoram o atributo JSX e bloqueiam autoplay com áudio).
-- `await videoPreviewRef.current.play()` com tratamento — capturar `NotAllowedError` e exibir botão "Tocar preview" como último fallback.
-- Adicionar `style={{ transform: 'scaleX(1)' }}` e `controls={false}` explícitos para evitar overlay nativo do iOS sobrepondo o HUD.
-
-### Parte 2 — Detectar in-app browser do WhatsApp/Instagram/Facebook e bloquear gravação inline
-
-Criar `src/lib/detectInAppBrowser.ts`:
-```ts
-export function detectInAppBrowser(): 'whatsapp' | 'instagram' | 'facebook' | 'tiktok' | null {
-  const ua = navigator.userAgent || '';
-  if (/WhatsApp/i.test(ua)) return 'whatsapp';
-  if (/Instagram/i.test(ua)) return 'instagram';
-  if (/FBAN|FBAV|FB_IAB/i.test(ua)) return 'facebook';
-  if (/TikTok|musical_ly/i.test(ua)) return 'tiktok';
-  return null;
-}
+```tsx
+<div className="rounded-lg border border-blue-300 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 p-3 mb-3">
+  <div className="flex items-start gap-3">
+    <MapPin className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+    <div className="flex-1 space-y-2">
+      <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">
+        Atribuição de tarefas de rota
+      </p>
+      <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
+        Tarefas de rota não são atribuídas por este modal.
+        Use o <strong>Mapa de Atribuições</strong> (visual, com técnicos em campo)
+        ou <strong>Serviços de Campo</strong> (lista completa).
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="outline" className="gap-1.5"
+          onClick={() => { onClose(); navigate('/monitoramento/mapa'); }}>
+          <MapIcon className="h-3.5 w-3.5" /> Abrir Mapa
+        </Button>
+        <Button size="sm" variant="outline" className="gap-1.5"
+          onClick={() => { onClose(); navigate('/diretoria/vistorias-instalacoes'); }}>
+          <Wrench className="h-3.5 w-3.5" /> Serviços de Campo
+        </Button>
+      </div>
+    </div>
+  </div>
+</div>
 ```
 
-No `VideoCapture.tsx`, antes da tela inicial de gravação:
-- Se `detectInAppBrowser()` retornar algo, mostrar um **bloco de aviso bem visível** no lugar do botão "Gravar Vídeo":
-  - Ícone + título: "Abra no navegador para gravar"
-  - Texto: *"Você está no navegador interno do WhatsApp, que não permite ver a câmera enquanto grava. Toque no menu (⋯) acima e escolha **Abrir no Safari** (iPhone) ou **Abrir no Chrome** (Android)."*
-  - Botão secundário: "Copiar link" (`navigator.clipboard.writeText(window.location.href)` + toast).
-  - Botão terciário (fallback degradado): "Gravar mesmo assim (sem preview ao vivo)" — usa o `<input type="file" accept="video/*" capture="environment">` nativo, que sempre funciona, embora sem HUD customizado.
-
-Isso resolve o problema de UX para 99% dos casos: o usuário vai ser orientado a abrir no Safari/Chrome (onde o liveview já funciona), e quem insistir tem o fallback nativo do iOS que pelo menos abre a câmera do sistema com preview pleno.
-
-### Parte 3 — Aplicar o mesmo aviso na tela `AutovistoriaCotacao.tsx`
-
-O fluxo público de cotação é onde o link chega via WhatsApp e o usuário abre dentro do in-app browser. Adicionar um banner persistente no topo da `AutovistoriaCotacao` (e também em `CotacaoPublicaCompleta`) avisando antes mesmo de chegar na etapa de gravação:
-
-> "📱 Para uma melhor experiência ao gravar o vídeo, abra este link no Safari (iPhone) ou Chrome (Android)." + botão "Copiar link"
-
-Só aparece se `detectInAppBrowser() !== null`.
-
-## Arquivos a editar/criar
-
-- **criar** `src/lib/detectInAppBrowser.ts`
-- **editar** `src/components/instalador/VideoCapture.tsx` — pequeno hardening do preview + bloco de aviso/fallback in-app
-- **editar** `src/components/cotacao-publica/AutovistoriaCotacao.tsx` — banner no topo
-- **editar** `src/pages/public/CotacaoPublicaCompleta.tsx` — banner no topo (mesma vistoria pública)
+3. (Opcional, leve) Na lista de cards da aba Rota, manter como está (apenas leitura). O texto "Não atribuído" já aparece na coluna do técnico — fica claro que o usuário precisa ir para os locais corretos.
 
 ## Validação
 
-1. Abrir o link da cotação no **Safari do iPhone**: clicar em "Gravar Vídeo" → deve aparecer o preview ao vivo com o HUD (timer + botão parar) e a câmera traseira em tempo real.
-2. Abrir o **mesmo link dentro do WhatsApp Business**: deve aparecer o aviso amarelo com instruções de abrir no Safari + botão "Copiar link" + opção de fallback.
-3. Usar o fallback "Gravar mesmo assim" no WhatsApp in-app: deve abrir a câmera nativa do iOS, gravar e retornar o vídeo.
-4. Testar em Chrome Android: liveview funciona normalmente.
+1. Logar como diretor.
+2. Ir em **Monitoramento → Calendário** → clicar em um dia com tarefas de rota.
+3. Aba **Rota**: deve aparecer o banner azul com explicação + 2 botões. Clicar em "Abrir Mapa" → navega para `/monitoramento/mapa` e fecha modal. Clicar em "Serviços de Campo" → navega para `/diretoria/vistorias-instalacoes`.
+4. Aba **Base**: nada muda — botões "Atribuir/Reatribuir" continuam funcionando.
 
-## Observação importante
+## Arquivos a editar
 
-O liveview **já está implementado e funcional** no código — o problema do usuário é exclusivamente o navegador onde ele está abrindo o link. A correção aqui é principalmente sobre **detectar e orientar**, não sobre "implementar liveview" do zero.
+- `src/components/monitoramento/CalendarioDiaModal.tsx` (único)
 
