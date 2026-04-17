@@ -139,7 +139,26 @@ export function ListaRastreadores() {
         .range((pagina - 1) * ITEMS_PER_PAGE, pagina * ITEMS_PER_PAGE - 1);
 
       if (busca) {
-        query = query.or(`codigo.ilike.%${busca}%,imei.ilike.%${busca}%,numero_serie.ilike.%${busca}%`);
+        const termo = busca.trim();
+        const cpfDigits = termo.replace(/\D/g, '');
+        const [vPlacaRes, vAssocRes] = await Promise.all([
+          supabase.from('veiculos').select('id').ilike('placa', `%${termo}%`),
+          supabase
+            .from('veiculos')
+            .select('id, associados!inner(nome, cpf)')
+            .or(
+              `nome.ilike.%${termo}%${cpfDigits ? `,cpf.ilike.%${cpfDigits}%` : ''}`,
+              { referencedTable: 'associados' }
+            ),
+        ]);
+        const ids = Array.from(new Set([
+          ...((vPlacaRes.data ?? []).map((v: any) => v.id)),
+          ...((vAssocRes.data ?? []).map((v: any) => v.id)),
+        ]));
+        const direto = `codigo.ilike.%${termo}%,imei.ilike.%${termo}%,numero_serie.ilike.%${termo}%`;
+        query = ids.length
+          ? query.or(`${direto},veiculo_id.in.(${ids.join(',')})`)
+          : query.or(direto);
       }
 
       if (statusFiltro && statusFiltro !== 'todos') {
