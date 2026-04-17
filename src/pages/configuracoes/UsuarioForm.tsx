@@ -14,6 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useVendedorStats } from '@/hooks/useVendedorHistorico';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAppRoles } from '@/hooks/useAppRoles';
@@ -760,6 +761,49 @@ export default function UsuarioForm() {
                       Define os percentuais de comissão aplicados a este consultor/agência
                     </p>
                   </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Modo de recebimento da agência — só diretor/admin pode alterar */}
+            {formData.tipo === 'agencia' && (isDiretor || isAdminMaster) && (
+              <Card className="border-border/50 border-blue-500/30">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <TrendingUp className="w-5 h-5 text-blue-500" />
+                    Modo de Recebimento da Agência
+                  </CardTitle>
+                  <CardDescription>
+                    Define como esta agência recebe o valor da adesão dos associados que indicar
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <RadioGroup
+                    value={formData.agencia_forma_recebimento}
+                    onValueChange={(v) =>
+                      setFormData(prev => ({ ...prev, agencia_forma_recebimento: v as 'comissao' | 'em_maos' }))
+                    }
+                    className="space-y-3"
+                  >
+                    <label className="flex items-start gap-3 p-3 rounded-md border border-border cursor-pointer hover:bg-muted/50">
+                      <RadioGroupItem value="comissao" id="recebe-comissao" className="mt-1" />
+                      <div className="space-y-1">
+                        <div className="font-medium">Recebe via Comissão</div>
+                        <p className="text-xs text-muted-foreground">
+                          Padrão. O associado paga a adesão via ASAAS (PIX/boleto) e a agência recebe comissão conforme a grade atribuída.
+                        </p>
+                      </div>
+                    </label>
+                    <label className="flex items-start gap-3 p-3 rounded-md border border-border cursor-pointer hover:bg-muted/50">
+                      <RadioGroupItem value="em_maos" id="recebe-em-maos" className="mt-1" />
+                      <div className="space-y-1">
+                        <div className="font-medium">Recebe em Mãos</div>
+                        <p className="text-xs text-muted-foreground">
+                          A agência recebe a adesão diretamente do associado. O sistema registra o valor da venda normalmente, mas <strong>não gera cobrança de adesão no ASAAS</strong>. O contrato, a cobertura e a instalação seguem o fluxo padrão.
+                        </p>
+                      </div>
+                    </label>
+                  </RadioGroup>
                 </CardContent>
               </Card>
             )}
