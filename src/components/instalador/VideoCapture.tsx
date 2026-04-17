@@ -129,9 +129,17 @@ export function VideoCapture({
         });
       }, 1000);
       
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao acessar câmera:', err);
-      setError('Não foi possível acessar a câmera. Verifique as permissões.');
+      const inApp = detectInAppBrowser();
+      if (inApp) {
+        // Em navegadores in-app (WhatsApp/Instagram/Facebook/TikTok) o getUserMedia
+        // costuma falhar ou retornar stream sem preview. Mostramos o aviso completo.
+        setCameraBlocked(true);
+        setError(null);
+      } else {
+        setError('Não foi possível acessar a câmera. Verifique as permissões.');
+      }
     }
   };
 
