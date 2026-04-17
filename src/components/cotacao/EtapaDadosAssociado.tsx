@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { User, ArrowRight, Phone, UserPlus, X } from 'lucide-react';
 import { useVendedores } from '@/hooks/useVendedores';
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAssociadoSearch, type AssociadoSearchResult } from '@/hooks/useAssociadoSearch';
 import { useVerificarVeiculoAtivoCpf } from '@/hooks/useVerificarVeiculoAtivoCpf';
