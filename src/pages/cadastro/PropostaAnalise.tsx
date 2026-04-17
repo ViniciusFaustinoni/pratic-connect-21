@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,9 @@ import {
   Smartphone,
   ShieldCheck,
   ShieldOff,
+  XCircle,
+  Ban,
+  ExternalLink,
 } from 'lucide-react';
 import {
   useProposta,
