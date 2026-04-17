@@ -70,6 +70,7 @@ export interface AssociadoFilters {
 export interface ContagemAssociados {
   total: number;
   em_analise: number;
+  pendente_vistoria: number;
   aprovado: number;
   documentacao_pendente: number;
   aguardando_instalacao: number;
@@ -78,6 +79,7 @@ export interface ContagemAssociados {
   suspenso: number;
   cancelado: number;
   bloqueado: number;
+  recusado: number;
 }
 
 // ============================================
