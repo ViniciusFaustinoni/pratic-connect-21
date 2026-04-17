@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Video, Square, Play, Loader2, CheckCircle, RotateCcw, X } from 'lucide-react';
+import { Video, Square, Play, Loader2, CheckCircle, RotateCcw, X, AlertTriangle, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { detectInAppBrowser, getInAppBrowserName, isIOS } from '@/lib/detectInAppBrowser';
+import { toast } from 'sonner';
 
 interface VideoCaptureProps {
   onCapture: (file: File) => void;
@@ -63,10 +65,17 @@ export function VideoCapture({
       
       streamRef.current = stream;
       
-      // Mostrar preview ao vivo
+      // Mostrar preview ao vivo (hardening iOS Safari)
       if (videoPreviewRef.current) {
-        videoPreviewRef.current.srcObject = stream;
-        videoPreviewRef.current.play();
+        const v = videoPreviewRef.current;
+        v.srcObject = stream;
+        v.muted = true;
+        v.playsInline = true;
+        try {
+          await v.play();
+        } catch (playErr) {
+          console.warn('[VideoCapture] play() bloqueado:', playErr);
+        }
       }
       
       // Prefer MP4 (Safari/iOS) → fallback WebM
