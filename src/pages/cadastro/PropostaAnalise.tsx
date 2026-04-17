@@ -109,7 +109,7 @@ export default function PropostaAnalise() {
     (async () => {
       const { data: contrato } = await supabase
         .from('contratos')
-        .select('aprovado_em, aprovado_por, motivo_reprovacao')
+        .select('aprovado_em, aprovado_por')
         .eq('id', id)
         .maybeSingle();
       let aprovadorNome: string | null = null;
@@ -125,7 +125,7 @@ export default function PropostaAnalise() {
         setEstadoFinal({
           aprovado_em: contrato?.aprovado_em || null,
           aprovado_por_nome: aprovadorNome,
-          motivo_reprovacao: (contrato as any)?.motivo_reprovacao || null,
+          motivo_reprovacao: null,
         });
       }
     })();
