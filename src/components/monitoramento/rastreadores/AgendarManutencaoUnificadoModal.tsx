@@ -821,7 +821,7 @@ export function AgendarManutencaoUnificadoModal({
             disabled={!isValid || abrirEAgendarMutation.isPending}
           >
             {abrirEAgendarMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Agendar Manutenção
+            {semTecnico ? 'Agendar (atribuir depois)' : 'Agendar Manutenção'}
           </Button>
         </DialogFooter>
       </DialogContent>
