@@ -154,6 +154,11 @@ export default function Associados() {
   const updateStatus = useUpdateAssociadoStatus();
   const deleteAssociado = useDeleteAssociado();
 
+  // Reset paginação ao alterar filtros server-side
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, planoFilter, cidadeFilter, sheetFilters.status, sheetFilters.plano_id, sheetFilters.cidade]);
+
   // Check if any filter is active
   const hasFilters = search || statusFilter !== 'all' || planoFilter !== 'all' || cidadeFilter !== 'all' || Object.keys(sheetFilters).length > 0;
 
