@@ -148,6 +148,7 @@ function getStatusExecucao(item: {
 
 export function CalendarioDiaModal({ open, onClose, data, abaInicial }: CalendarioDiaModalProps) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [anteciparId, setAnteciparId] = useState<string | null>(null);
   const [atribuirId, setAtribuirId] = useState<string | null>(null);
   const [tecnicoSelecionado, setTecnicoSelecionado] = useState<string>('');
