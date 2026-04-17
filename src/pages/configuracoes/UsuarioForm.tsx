@@ -479,7 +479,7 @@ export default function UsuarioForm() {
       setGradeError(false);
       toast.success(isEditing ? 'Usuário atualizado!' : 'Usuário criado!');
       queryClient.invalidateQueries({ queryKey: ['usuarios'] });
-      navigate('/configuracoes/usuarios');
+      navigate('/configuracoes/usuarios-acessos');
     },
     onError: (error: any) => {
       const errorMessage = error.message || 'Erro ao salvar usuário';
