@@ -178,11 +178,13 @@ export default function Oficinas() {
         </div>
       )}
 
-      <OficinaFormDialog open={formOpen} onOpenChange={setFormOpen} />
-      <OficinaDetailDrawer
-        oficina={selectedOficina}
-        open={!!selectedOficina}
-        onOpenChange={(open) => !open && setSelectedOficina(null)}
+      <OficinaFormDialog
+        open={formOpen}
+        onOpenChange={(open) => {
+          setFormOpen(open);
+          if (!open) setSelectedOficina(null);
+        }}
+        oficina={selectedOficina ?? undefined}
       />
       <ImportarOficinasDialog
         open={importOpen}
