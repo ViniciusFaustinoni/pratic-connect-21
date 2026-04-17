@@ -234,7 +234,7 @@ export function ListaRastreadores() {
   });
 
   const limparFiltros = () => {
-    setBusca('');
+    setBuscaInput('');
     setStatusFiltro('todos');
     setPlataformaFiltro('todas');
     setPortadorFiltro('todos');
