@@ -110,7 +110,10 @@ export default function Oficinas() {
             <Card
               key={oficina.id}
               className="cursor-pointer transition-shadow hover:shadow-md"
-              onClick={() => setSelectedOficina(oficina)}
+              onClick={() => {
+                setSelectedOficina(oficina);
+                setFormOpen(true);
+              }}
             >
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">
