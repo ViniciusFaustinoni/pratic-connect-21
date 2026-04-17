@@ -152,6 +152,10 @@ export default function PropostaAnalise() {
         veiculoRenavam: veiculoRenavam || undefined,
         veiculoChassi: veiculoChassi || undefined,
       });
+      toast.success('Proposta aprovada!', {
+        description: 'Após a instalação, o monitoramento dará o segundo check para liberação total da Proteção 360 e do app do associado.',
+        duration: 6000,
+      });
       // Navegar para próxima ou voltar para lista
       if (nextProposta) {
         navigate(`/cadastro/propostas/${nextProposta.id}`);
