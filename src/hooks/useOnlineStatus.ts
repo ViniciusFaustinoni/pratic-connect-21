@@ -24,16 +24,27 @@ export function useOnlineStatus(): boolean {
       }
       try {
         const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
-        if (!supabaseUrl) return;
+        const supabaseKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY;
+        if (!supabaseUrl || !supabaseKey) {
+          // Sem config para verificar, confia no navigator
+          if (!cancelled) setOnline(true);
+          return;
+        }
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), 5000);
-        const res = await fetch(`${supabaseUrl}/auth/v1/health`, {
+        // Qualquer resposta HTTP (200/4xx/5xx) prova que há rede.
+        // Apenas erro de fetch (network/timeout) indica offline real.
+        await fetch(`${supabaseUrl}/auth/v1/health`, {
           method: 'GET',
           cache: 'no-store',
           signal: ctrl.signal,
+          headers: {
+            apikey: supabaseKey,
+            Authorization: `Bearer ${supabaseKey}`,
+          },
         });
         clearTimeout(t);
-        if (!cancelled) setOnline(res.ok);
+        if (!cancelled) setOnline(true);
       } catch {
         if (!cancelled) setOnline(false);
       }
