@@ -432,9 +432,16 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
                             <CardContent className="p-3 flex items-center justify-between gap-3">
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-1">
-                                  <Badge className={cn('text-xs', STATUS_BADGE_CLASSES[item.status] || 'bg-muted')}>
-                                    {STATUS_VISTORIA_LABEL[item.status] || item.status}
-                                  </Badge>
+                                  {(() => {
+                                    const exec = getStatusExecucao({
+                                      status: item.status,
+                                      iniciada_em: item.iniciada_em,
+                                      concluida_em: item.concluida_em,
+                                      data_agendada: item.data_agendada,
+                                      tecnicoAtribuido: item.tecnicoAtribuido,
+                                    });
+                                    return <Badge className={cn('text-xs', exec.className)}>{exec.label}</Badge>;
+                                  })()}
                                   <span className="text-xs text-muted-foreground">
                                     {item.tipo === 'instalacao' ? 'Instalação' : 'Vistoria Campo'}
                                   </span>
