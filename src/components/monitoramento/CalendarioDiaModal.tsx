@@ -480,9 +480,17 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
                         <div className="flex items-center justify-between gap-3">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
-                              <Badge className={cn('text-xs', STATUS_BADGE_CLASSES[ag.status] || 'bg-muted')}>
-                                {STATUS_VISTORIA_LABEL[ag.status] || ag.status}
-                              </Badge>
+                              {(() => {
+                                const exec = getStatusExecucao({
+                                  status: ag.status,
+                                  data_agendada: ag.data_agendada,
+                                  tecnicoAtribuido: !!ag.atendido_por,
+                                  vistoriaStatus: ag.vistoria?.status,
+                                  vistoriaIniciadaEm: ag.vistoria?.iniciada_em,
+                                  vistoriaConcluidaEm: ag.vistoria?.concluida_em,
+                                });
+                                return <Badge className={cn('text-xs', exec.className)}>{exec.label}</Badge>;
+                              })()}
                               <span className="flex items-center gap-1 text-xs text-muted-foreground">
                                 <Clock className="h-3 w-3" />
                                 {ag.horario}
