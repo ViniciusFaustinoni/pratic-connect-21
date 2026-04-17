@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
 import { VideoCapture } from '@/components/instalador/VideoCapture';
+import { InAppBrowserBanner } from '@/components/shared/InAppBrowserBanner';
 
 
 interface AutovistoriaCotacaoProps {
@@ -274,6 +275,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
         </CardHeader>
         
         <CardContent className="space-y-6">
+          <InAppBrowserBanner persistent />
           <div className="text-center space-y-4">
             <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
               <Video className="h-10 w-10 text-primary" />
