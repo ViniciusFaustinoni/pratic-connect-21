@@ -85,7 +85,12 @@ export default function PropostaAnalise() {
   ) && !proposta?.instalacao_info && !isVistoriaBase;
 
   // Verificar se pode aprovar
-  const podeAprovar = proposta?.status === 'assinado' && !proposta?.tem_documento_pendente;
+  // NOVO: bloqueia aprovação enquanto vistoria/instalação não foi executada
+  const aguardandoExecucao = proposta?.tipo_etapa_analise === 'agendamento_confirmado';
+  const podeAprovar =
+    proposta?.status === 'assinado' &&
+    !proposta?.tem_documento_pendente &&
+    !aguardandoExecucao;
 
   // Estado final (já aprovado / reprovado / cancelado)
   const isAprovada = proposta?.status === 'ativo';
