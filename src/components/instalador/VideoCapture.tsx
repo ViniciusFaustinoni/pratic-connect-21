@@ -31,6 +31,8 @@ export function VideoCapture({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Quando getUserMedia falha em in-app browser, mostramos o aviso de "abrir no navegador"
+  const [cameraBlocked, setCameraBlocked] = useState(false);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
