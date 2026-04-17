@@ -187,8 +187,7 @@ Compare nome_titular com nomeEsperado:
 function tryRepairTruncatedJSON(raw: string): object | null {
   let s = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
   
-  s = s.replace(/_CONFIDENCE_/g, '0.95');
-  s = s.replace(/:\s*_[A-Z_]+_/g, ': null');
+  s = s.replace(/:\s*_[A-Z_]+_\s*([,}\]])/g, ': null$1');
 
   try { return JSON.parse(s); } catch { /* continue */ }
 
