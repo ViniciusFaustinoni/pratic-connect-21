@@ -1,10 +1,18 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// pdfjs-dist para descompressão real (FlateDecode) e extração nativa de texto
+// Build legacy é compatível com Deno/edge runtime sem worker
+// unpkg serve pdf.min.mjs sem deps de canvas (Node), funciona no Deno edge runtime
+import * as pdfjsLib from "https://esm.sh/pdfjs-dist@4.0.379/legacy/build/pdf.min.mjs?bundle&no-check";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
+
+// ============================================================
+// Validadores de campos brasileiros (checksum)
+// ============================================================
 
 // Validação de CPF por dígito verificador
 function validateCPF(cpf: string): boolean {
@@ -21,6 +29,54 @@ function validateCPF(cpf: string): boolean {
   r = (sum * 10) % 11;
   if (r === 10 || r === 11) r = 0;
   return r === parseInt(cleaned[10]);
+}
+
+// Validação de CNPJ por dígito verificador
+function validateCNPJ(cnpj: string): boolean {
+  const cleaned = cnpj.replace(/\D/g, '');
+  if (cleaned.length !== 14) return false;
+  if (/^(\d)\1+$/.test(cleaned)) return false;
+  const calc = (len: number) => {
+    const weights = len === 12 ? [5,4,3,2,9,8,7,6,5,4,3,2] : [6,5,4,3,2,9,8,7,6,5,4,3,2];
+    let sum = 0;
+    for (let i = 0; i < len; i++) sum += parseInt(cleaned[i]) * weights[i];
+    const r = sum % 11;
+    return r < 2 ? 0 : 11 - r;
+  };
+  return calc(12) === parseInt(cleaned[12]) && calc(13) === parseInt(cleaned[13]);
+}
+
+// Placa brasileira: ABC1234 (antiga) ou ABC1D23 (Mercosul)
+function validatePlaca(placa: string): boolean {
+  if (!placa) return false;
+  const cleaned = placa.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  if (cleaned.length !== 7) return false;
+  return /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(cleaned);
+}
+
+// Renavam: 11 dígitos com dígito verificador (módulo 11)
+function validateRenavam(renavam: string): boolean {
+  if (!renavam) return false;
+  const cleaned = renavam.replace(/\D/g, '').padStart(11, '0');
+  if (cleaned.length !== 11) return false;
+  if (/^0+$/.test(cleaned)) return false;
+  const base = cleaned.substring(0, 10);
+  const dv = parseInt(cleaned[10]);
+  const reversed = base.split('').reverse().join('');
+  const weights = [2,3,4,5,6,7,8,9,2,3];
+  let sum = 0;
+  for (let i = 0; i < 10; i++) sum += parseInt(reversed[i]) * weights[i];
+  const mod = (sum * 10) % 11;
+  const dvCalc = mod === 10 ? 0 : mod;
+  return dvCalc === dv;
+}
+
+// Chassi: 17 caracteres alfanuméricos, sem I, O ou Q
+function validateChassi(chassi: string): boolean {
+  if (!chassi) return false;
+  const cleaned = chassi.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  if (cleaned.length !== 17) return false;
+  return /^[A-HJ-NPR-Z0-9]{17}$/.test(cleaned);
 }
 
 // Mapa de dígitos comumente confundidos por modelos de visão
@@ -132,8 +188,7 @@ Compare nome_titular com nomeEsperado:
 function tryRepairTruncatedJSON(raw: string): object | null {
   let s = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
   
-  s = s.replace(/_CONFIDENCE_/g, '0.95');
-  s = s.replace(/:\s*_[A-Z_]+_/g, ': null');
+  s = s.replace(/:\s*_[A-Z_]+_\s*([,}\]])/g, ': null$1');
 
   try { return JSON.parse(s); } catch { /* continue */ }
 
@@ -258,8 +313,8 @@ function extractCPFFromRaw(raw: string): string | null {
   return null;
 }
 
-// Modelo estável para OCR (evitar modelos preview em fluxo crítico)
-const OCR_MODEL = 'google/gemini-2.5-flash-image';
+// Modelo estável para OCR de TEXTO (não usar -image, otimizado para geração)
+const OCR_MODEL = 'google/gemini-2.5-flash';
 const OCR_RETRY_MODEL = 'google/gemini-2.5-pro';
 
 serve(async (req) => {
@@ -410,7 +465,7 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
         if (isPdfUrl) {
           try {
             // Decodificar o PDF e procurar texto embutido
-            const pdfText = extractTextFromPDFBuffer(uint8Array);
+            const pdfText = await extractTextFromPDFBuffer(uint8Array);
             if (pdfText && pdfText.length > 50) {
               extractedPdfText = pdfText;
               console.log(`[OCR] Texto nativo extraído do PDF: ${pdfText.length} chars`);
@@ -465,7 +520,7 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           },
         ],
         max_tokens: 2000,
-        temperature: 0.1,
+        temperature: 0,
       }),
     });
 
@@ -526,8 +581,9 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
     let result;
     try {
       let cleanContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      cleanContent = cleanContent.replace(/_CONFIDENCE_/g, '0.95');
-      cleanContent = cleanContent.replace(/:\s*_[A-Z_]+_/g, ': null');
+      // Limpar placeholders deixados pelo modelo (ex: _CONFIDENCE_, _NOME_) → null
+      // (não substituímos mais por 0.95 — confiança é calculada de verdade abaixo)
+      cleanContent = cleanContent.replace(/:\s*_[A-Z_]+_\s*([,}\]])/g, ': null$1');
       result = JSON.parse(cleanContent);
     } catch (parseError) {
       console.warn('[OCR] JSON.parse falhou, tentando reparar JSON truncado...');
@@ -752,6 +808,87 @@ Use a função para retornar o CPF encontrado ou "ilegivel" se não conseguir le
       }
     }
 
+    // ============================================================
+    // Validação universal de campos críticos por checksum + retry
+    // ============================================================
+    if (result?.dados && typeof result.dados === 'object') {
+      const tipo = result.tipo_detectado;
+      const d = result.dados as Record<string, any>;
+
+      // Mapa: campo → validador
+      const fieldValidators: Array<{ tipos: string[]; field: string; validate: (v: string) => boolean; label: string }> = [
+        { tipos: ['crlv', 'atpv_e', 'nota_fiscal_veiculo'], field: 'placa', validate: validatePlaca, label: 'Placa' },
+        { tipos: ['crlv', 'atpv_e'], field: 'renavam', validate: validateRenavam, label: 'Renavam' },
+        { tipos: ['crlv', 'atpv_e', 'nota_fiscal_veiculo'], field: 'chassi', validate: validateChassi, label: 'Chassi' },
+        { tipos: ['atpv_e'], field: 'cpf_comprador', validate: (v) => validateCPF(v.replace(/\D/g, '')), label: 'CPF comprador' },
+        { tipos: ['nota_fiscal_veiculo'], field: 'cpf_cnpj_comprador', validate: (v) => {
+          const c = v.replace(/\D/g, '');
+          return c.length === 11 ? validateCPF(c) : c.length === 14 ? validateCNPJ(c) : false;
+        }, label: 'CPF/CNPJ comprador' },
+      ];
+
+      const checksumResults: Array<{ field: string; ok: boolean; value: any }> = [];
+
+      for (const v of fieldValidators) {
+        if (!v.tipos.includes(tipo)) continue;
+        const raw = d[v.field];
+        if (!raw || raw === 'ilegivel') {
+          checksumResults.push({ field: v.field, ok: false, value: raw });
+          continue;
+        }
+        const ok = v.validate(String(raw));
+        checksumResults.push({ field: v.field, ok, value: raw });
+        if (!ok) {
+          console.warn(`[OCR] Validação falhou: ${v.label}="${raw}" inválido`);
+
+          // Tentar recuperar do texto nativo do PDF
+          if (extractedPdfText) {
+            const candidates = extractCandidatesFromText(extractedPdfText, v.field);
+            for (const cand of candidates) {
+              if (v.validate(cand)) {
+                console.log(`[OCR] ${v.label} corrigido via texto nativo: "${raw}" → "${cand}"`);
+                d[v.field] = cand;
+                checksumResults[checksumResults.length - 1] = { field: v.field, ok: true, value: cand };
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      // Se houve falhas e não conseguimos corrigir, marcar como revisar
+      const failedFields = checksumResults.filter(r => !r.ok && r.value && r.value !== 'ilegivel');
+      if (failedFields.length > 0) {
+        const names = failedFields.map(f => f.field).join(', ');
+        result.motivo = (result.motivo || '') + ` Campos com checksum inválido: ${names}.`;
+        if (result.sugestao === 'aprovar') result.sugestao = 'revisar';
+      }
+
+      // ============================================================
+      // Confiança real (substitui fake 0.95)
+      // ============================================================
+      const totalChecks = checksumResults.length;
+      const okChecks = checksumResults.filter(r => r.ok).length;
+      const fromNativePdf = !!extractedPdfText && extractedPdfText.length > 50;
+
+      let confidence = 0.7; // base visual
+      if (fromNativePdf) confidence = 0.85;
+      if (totalChecks > 0) {
+        const checksumRatio = okChecks / totalChecks;
+        confidence = (fromNativePdf ? 0.6 : 0.4) + checksumRatio * 0.4;
+      }
+      // Penalizar se houver campos null/ilegivel relevantes
+      const nullishCount = Object.values(d).filter(v => v === null || v === 'ilegivel').length;
+      const totalFields = Object.keys(d).length;
+      if (totalFields > 0) {
+        const completeness = 1 - nullishCount / totalFields;
+        confidence = confidence * (0.7 + completeness * 0.3);
+      }
+      result.confianca = Math.max(0.1, Math.min(0.99, Number(confidence.toFixed(2))));
+      result._fonte_dados = fromNativePdf ? 'pdf_nativo+visual' : 'visual';
+      result._checksums = checksumResults;
+    }
+
     return new Response(
       JSON.stringify(result),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -768,61 +905,82 @@ Use a função para retornar o CPF encontrado ou "ilegivel" se não conseguir le
 });
 
 /**
- * Extrai texto nativo de um buffer PDF (extração simples de strings de texto).
- * Não depende de bibliotecas externas - faz parsing direto dos operadores de texto do PDF.
+ * Extrai texto nativo de um PDF usando pdfjs-dist (descomprime FlateDecode etc).
+ * Retorna string vazia se for PDF escaneado puro (apenas imagens).
  */
-function extractTextFromPDFBuffer(buffer: Uint8Array): string {
-  const decoder = new TextDecoder('latin1');
-  const pdfString = decoder.decode(buffer);
-  
-  const textParts: string[] = [];
-  
-  // Extrair texto entre parênteses em operadores de texto PDF (Tj, TJ, ', ")
-  // Padrão: (texto) Tj  ou  [(texto1) (texto2)] TJ
-  const textRegex = /\(([^)]*)\)/g;
-  let match;
-  
-  while ((match = textRegex.exec(pdfString)) !== null) {
-    let text = match[1];
-    if (!text || text.length === 0) continue;
-    
-    // Decodificar escapes do PDF
-    text = text
-      .replace(/\\n/g, '\n')
-      .replace(/\\r/g, '\r')
-      .replace(/\\t/g, '\t')
-      .replace(/\\\\/g, '\\')
-      .replace(/\\'/g, "'")
-      .replace(/\\"/g, '"')
-      .replace(/\\\(/g, '(')
-      .replace(/\\\)/g, ')')
-      .replace(/\\(\d{3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)));
-    
-    // Filtrar lixo binário (manter apenas texto legível)
-    const cleanText = text.replace(/[^\x20-\x7E\xA0-\xFF\u0100-\u024F]/g, '');
-    if (cleanText.length > 1) {
-      textParts.push(cleanText);
+async function extractTextFromPDFBuffer(buffer: Uint8Array): Promise<string> {
+  try {
+    // pdfjs-dist precisa de um Uint8Array novo (não compartilhado)
+    const data = new Uint8Array(buffer);
+    const loadingTask = (pdfjsLib as any).getDocument({
+      data,
+      disableFontFace: true,
+      useSystemFonts: false,
+      isEvalSupported: false,
+      // Sem worker no edge runtime
+      verbosity: 0,
+    });
+    const pdf = await loadingTask.promise;
+    const parts: string[] = [];
+    const maxPages = Math.min(pdf.numPages, 10);
+    for (let p = 1; p <= maxPages; p++) {
+      const page = await pdf.getPage(p);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items
+        .map((it: any) => (typeof it.str === 'string' ? it.str : ''))
+        .filter(Boolean)
+        .join(' ');
+      if (pageText.trim()) parts.push(pageText);
     }
+    const result = parts.join('\n').replace(/[ \t]+/g, ' ').trim();
+    return result;
+  } catch (err) {
+    console.warn('[OCR] pdfjs falhou ao extrair texto:', err instanceof Error ? err.message : err);
+    return '';
   }
-  
-  // Também tentar extrair texto de streams descomprimidos
-  // Procurar por sequências que parecem texto real
-  const unicodeRegex = /<([0-9A-Fa-f]+)>\s*Tj/g;
-  while ((match = unicodeRegex.exec(pdfString)) !== null) {
-    const hex = match[1];
-    if (hex.length < 4) continue;
-    let text = '';
-    for (let i = 0; i < hex.length; i += 4) {
-      const charCode = parseInt(hex.substring(i, i + 4), 16);
-      if (charCode > 31 && charCode < 65535) {
-        text += String.fromCharCode(charCode);
+}
+
+/**
+ * Extrai candidatos plausíveis para um campo a partir de texto bruto do PDF.
+ * Usado quando o checksum do valor extraído pela IA falha.
+ */
+function extractCandidatesFromText(text: string, field: string): string[] {
+  if (!text) return [];
+  const out = new Set<string>();
+  switch (field) {
+    case 'placa': {
+      const re = /\b([A-Z]{3}[-\s]?[0-9][A-Z0-9][0-9]{2})\b/g;
+      let m;
+      while ((m = re.exec(text)) !== null) out.add(m[1].replace(/[-\s]/g, '').toUpperCase());
+      break;
+    }
+    case 'renavam': {
+      const re = /\b(\d{9,11})\b/g;
+      let m;
+      while ((m = re.exec(text)) !== null) out.add(m[1].padStart(11, '0'));
+      break;
+    }
+    case 'chassi': {
+      const re = /\b([A-HJ-NPR-Z0-9]{17})\b/gi;
+      let m;
+      while ((m = re.exec(text)) !== null) out.add(m[1].toUpperCase());
+      break;
+    }
+    case 'cpf_comprador':
+    case 'cpf_cnpj_comprador': {
+      const reCpf = /\b(\d{3}\.?\d{3}\.?\d{3}-?\d{2})\b/g;
+      const reCnpj = /\b(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})\b/g;
+      let m;
+      while ((m = reCpf.exec(text)) !== null) {
+        const c = m[1].replace(/\D/g, '');
+        out.add(`${c.slice(0,3)}.${c.slice(3,6)}.${c.slice(6,9)}-${c.slice(9,11)}`);
       }
-    }
-    if (text.length > 1) {
-      textParts.push(text);
+      while ((m = reCnpj.exec(text)) !== null) {
+        const c = m[1].replace(/\D/g, '');
+        out.add(`${c.slice(0,2)}.${c.slice(2,5)}.${c.slice(5,8)}/${c.slice(8,12)}-${c.slice(12,14)}`);
+      }
+      break;
     }
   }
-  
-  const result = textParts.join(' ').replace(/\s+/g, ' ').trim();
-  return result;
+  return Array.from(out);
 }
