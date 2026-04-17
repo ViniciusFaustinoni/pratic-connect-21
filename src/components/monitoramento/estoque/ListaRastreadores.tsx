@@ -101,7 +101,9 @@ export function ListaRastreadores() {
   const { data: plataformasLabels } = usePlataformasLabels();
   const { data: profissionais } = useProfissionaisEquipe();
   
-  const [busca, setBusca] = useState('');
+  const [buscaInput, setBuscaInput] = useState('');
+  const busca = useDebounce(buscaInput, 300);
+  useEffect(() => { setPagina(1); }, [busca]);
   const [statusFiltro, setStatusFiltro] = useState<string>('todos');
   const [plataformaFiltro, setPlataformaFiltro] = useState<string>('todas');
   const [portadorFiltro, setPortadorFiltro] = useState<string>('todos');
