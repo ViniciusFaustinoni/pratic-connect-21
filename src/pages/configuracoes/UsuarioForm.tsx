@@ -288,6 +288,7 @@ export default function UsuarioForm() {
     regioes_atendimento: [] as string[],
     capacidade_diaria: 10,
     grade_comissao_id: '' as string,
+    agencia_forma_recebimento: 'comissao' as 'comissao' | 'em_maos',
   });
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
