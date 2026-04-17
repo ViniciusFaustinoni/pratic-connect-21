@@ -2,32 +2,67 @@
 
 ## Diagnóstico
 
-As KPIs estão zeradas no preview, mas **no banco existem 9.519 associados visíveis ao diretor** (9.496 ativos + 23 pendente vistoria). O código atual (`useAssociadosContagem` em `src/hooks/useAssociados.ts` linhas 249-285) está correto — faz count puro por status, sem filtro de origem. A RLS `is_funcionario(auth.uid())` libera tudo para staff e o usuário de teste tem `tipo='funcionario'` + role `diretor`.
+Em `/monitoramento/rastreadores` existem **duas abas com tabelas independentes** e busca diferente:
 
-### Por que está zerado na tela
+| Aba | Componente | Busca aceita |
+|---|---|---|
+| **Visão Geral** | `RastreadorFiltersV2` + `useRastreadores` | código, IMEI, série, placa, nome/CPF do associado |
+| **Estoque** | `ListaRastreadores` (estado próprio) | **só código, IMEI e série** |
 
-O último deploy falhou — exatamente o erro que você colou agora:
+O usuário muito provavelmente está na aba **Estoque** (onde fica a tabela completa de itens em estoque). O placeholder lá diz "Buscar por código, IMEI ou série" e a query SQL filtra apenas esses três campos (linha 139 de `ListaRastreadores.tsx`):
+
+```ts
+query.or(`codigo.ilike.%${busca}%,imei.ilike.%${busca}%,numero_serie.ilike.%${busca}%`);
 ```
-dist upload failed: generate R2 credentials ... Client.Timeout
-```
 
-Então o navegador ainda está carregando a **versão antiga** do bundle, que tinha `.eq('origem_cadastro', 'interno')` nas queries. Como **100% dos 9.496 ativos são `api_externa`** (vindos da base Hinova), o filtro antigo zera tudo. Os 23 `interno` que aparecem no banco estão em `pendente_vistoria`, e o status `pendente_vistoria` nem é contado nas cards da tela — por isso "Em Análise = 0" também.
+Não há nenhum filtro por placa nem por associado, e o relacionamento com `veiculos`/`associados` é só para exibir a coluna, não para filtrar.
 
-Conclusão: **o código já está corrigido, falta apenas o build subir**.
+## Correção proposta
 
-## Ação
+Estender a busca de `ListaRastreadores` para incluir placa e nome/CPF do associado, espelhando a lógica que já existe em `useRastreadores` (sub-queries em `veiculos` e `associados` para coletar `veiculo_id`s e combinar com filtro direto em `codigo/imei/numero_serie`).
 
-Não há edição de código para fazer. Plano:
+### Mudanças
 
-1. **Republicar**: usar o botão "Publish". O erro anterior foi timeout transitório do Cloudflare R2, não do código. Uma nova tentativa normalmente sobe.
-2. **Após o build subir**, no preview: forçar hard-refresh (Ctrl+Shift+R ou abrir aba anônima). Os hooks já têm `refetchOnMount: 'always'` adicionados na última iteração, então o cache do React Query também será quebrado.
-3. **Validar**: Total Geral deve mostrar ~9.519, Ativos ~9.496, e a busca por "WILLIAM" / placa "LSP3E65" deve retornar resultados.
+**`src/components/monitoramento/estoque/ListaRastreadores.tsx`**
+1. Atualizar o placeholder do input para: *"Buscar por código, IMEI, série, placa ou associado..."*
+2. Substituir o trecho da query (linha 138-140) por uma busca composta:
+   ```ts
+   if (busca) {
+     const termo = busca.trim();
+     // IDs de veículos cuja placa bate
+     const { data: vPlaca } = await supabase
+       .from('veiculos').select('id').ilike('placa', `%${termo}%`);
+     // IDs de veículos cujo associado bate (nome ou CPF)
+     const { data: vAssoc } = await supabase
+       .from('veiculos')
+       .select('id, associados!inner(nome, cpf)')
+       .or(`nome.ilike.%${termo}%,cpf.ilike.%${termo.replace(/\D/g,'')}%`,
+           { referencedTable: 'associados' });
+     const ids = Array.from(new Set([
+       ...(vPlaca?.map(v=>v.id) ?? []),
+       ...(vAssoc?.map(v=>v.id) ?? []),
+     ]));
+     const direto = `codigo.ilike.%${termo}%,imei.ilike.%${termo}%,numero_serie.ilike.%${termo}%`;
+     query = ids.length
+       ? query.or(`${direto},veiculo_id.in.(${ids.join(',')})`)
+       : query.or(direto);
+   }
+   ```
+3. Adicionar debounce simples (300ms) no input para não disparar uma query a cada tecla — novo estado `buscaInput` controla o `<Input>` e `useEffect` empurra para `busca` (a key do React Query).
 
-## Se após republicar ainda ficar zerado
+### Validação
 
-Aí sim é outro problema. Coisas a investigar (só se o sintoma persistir):
-- Se existe Service Worker agressivo mantendo bundle em cache → desregistrar em DevTools → Application → Service Workers.
-- Se a contagem `head:true` sem `*` está sendo bloqueada por alguma policy de coluna → testar alterar `select('*', {count:'exact',head:true})` para `select('id',{count:'exact',head:true})`.
+1. Logar como diretor (`admin@teste.com`/`123456789`).
+2. Ir em **Monitoramento → Rastreadores → aba Estoque**.
+3. Digitar uma placa existente (ex.: `LUQ0573`) → deve listar o rastreador instalado nesse veículo.
+4. Digitar parte do nome de um associado conhecido → deve listar rastreadores dos veículos dele.
+5. Digitar IMEI/código → continua funcionando como antes.
+6. Mesma validação na aba "Visão Geral" (já funcionava) — não pode regredir.
 
-Mas isso só se o republish não resolver. Neste momento, **só republicar**.
+### Arquivos a editar
+- `src/components/monitoramento/estoque/ListaRastreadores.tsx` (único)
+
+### Próximo passo (sugerido, fora deste plano)
+
+Você mencionou que "outros filtros também não estão afiados". Se quiser, depois desta correção liste 1–2 telas específicas (ex.: "Vendas → Cotações", "Associados") com o sintoma exato e eu faço uma varredura focada — assim evitamos varrer todas as 50+ telas às cegas.
 
