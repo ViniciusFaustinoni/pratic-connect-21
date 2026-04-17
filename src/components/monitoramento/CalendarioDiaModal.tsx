@@ -9,7 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
-import { MapPin, Building2, Clock, User, Car, CalendarClock, Loader2, ChevronRight } from 'lucide-react';
+import { MapPin, Building2, Clock, User, Car, CalendarClock, Loader2, ChevronRight, Map as MapIcon, Wrench } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useProfissionaisEquipe } from '@/hooks/useEquipe';
 import { toast } from 'sonner';
@@ -147,6 +148,7 @@ function getStatusExecucao(item: {
 
 export function CalendarioDiaModal({ open, onClose, data, abaInicial }: CalendarioDiaModalProps) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [anteciparId, setAnteciparId] = useState<string | null>(null);
   const [atribuirId, setAtribuirId] = useState<string | null>(null);
   const [tecnicoSelecionado, setTecnicoSelecionado] = useState<string>('');
@@ -415,6 +417,40 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
 
             {/* ===== ABA ROTA ===== */}
             <TabsContent value="rota" className="space-y-4 mt-4">
+              <div className="rounded-lg border border-blue-300 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 p-3">
+                <div className="flex items-start gap-3">
+                  <MapPin className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                  <div className="flex-1 space-y-2">
+                    <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">
+                      Atribuição de tarefas de rota
+                    </p>
+                    <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
+                      Tarefas de rota não são atribuídas por este modal.
+                      Use o <strong>Mapa de Atribuições</strong> (visual, com técnicos em campo)
+                      ou <strong>Serviços de Campo</strong> (lista completa).
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5"
+                        onClick={() => { onClose(); navigate('/monitoramento/mapa'); }}
+                      >
+                        <MapIcon className="h-3.5 w-3.5" /> Abrir Mapa
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5"
+                        onClick={() => { onClose(); navigate('/diretoria/vistorias-instalacoes'); }}
+                      >
+                        <Wrench className="h-3.5 w-3.5" /> Serviços de Campo
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {rotaItems.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">Nenhuma tarefa de rota neste dia.</p>
               ) : (
