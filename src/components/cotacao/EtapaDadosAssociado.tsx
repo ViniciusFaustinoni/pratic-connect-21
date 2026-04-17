@@ -77,6 +77,10 @@ export function EtapaDadosAssociado({
   onSubstituicao,
 }: EtapaDadosAssociadoProps) {
   const { data: vendedores = [], isLoading: isLoadingVendedores } = useVendedores();
+  const { user } = useAuth();
+  const { isDiretor, isGerente, isSupervisor } = usePermissions();
+  const podeAtribuirVendedor = isDiretor || isGerente || isSupervisor;
+
   const [buscaIndicador, setBuscaIndicador] = useState('');
   const { data: resultadosBusca = [], isLoading: isSearching } = useAssociadoSearch(buscaIndicador);
 
@@ -84,7 +88,14 @@ export function EtapaDadosAssociado({
   const [cpfBusca, setCpfBusca] = useState('');
   const { data: veiculoAtivoCpf, isLoading: verificandoCpf } = useVerificarVeiculoAtivoCpf(cpfBusca);
   const [showDialogTipo, setShowDialogTipo] = useState(false);
-  
+
+  // Auto-atribui o vendedor logado se ele não for liderança (ou pré-seleciona p/ liderança)
+  useEffect(() => {
+    if (!consultorId && user?.id) {
+      setConsultorId(user.id);
+    }
+  }, [user?.id, consultorId, setConsultorId]);
+
   // Pode avançar se Nome, Telefone e Consultor estão preenchidos
   const telefoneValido = telefone1.replace(/\D/g, '').length >= 10;
   const canProceed = nome.trim() !== '' && telefoneValido && consultorId !== '' && (!isIndicacao || indicadorId !== '');
