@@ -784,7 +784,7 @@ export function EtapaAssinaturaContrato({
               <Mail className="h-8 w-8 text-white animate-bounce" />
             </div>
             <p className="text-3xl md:text-4xl font-extrabold text-white uppercase leading-tight animate-pulse">
-              SEU CONTRATO ESTÁ NO SEU E-MAIL PARA ASSINATURA!
+              SUA PROPOSTA DE FILIAÇÃO ESTÁ NO SEU E-MAIL PARA ASSINATURA!
             </p>
           </div>
 
