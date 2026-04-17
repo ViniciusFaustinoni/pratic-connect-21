@@ -31,6 +31,8 @@ export function VideoCapture({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Quando getUserMedia falha em in-app browser, mostramos o aviso de "abrir no navegador"
+  const [cameraBlocked, setCameraBlocked] = useState(false);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -127,9 +129,17 @@ export function VideoCapture({
         });
       }, 1000);
       
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao acessar câmera:', err);
-      setError('Não foi possível acessar a câmera. Verifique as permissões.');
+      const inApp = detectInAppBrowser();
+      if (inApp) {
+        // Em navegadores in-app (WhatsApp/Instagram/Facebook/TikTok) o getUserMedia
+        // costuma falhar ou retornar stream sem preview. Mostramos o aviso completo.
+        setCameraBlocked(true);
+        setError(null);
+      } else {
+        setError('Não foi possível acessar a câmera. Verifique as permissões.');
+      }
     }
   };
 
@@ -312,26 +322,28 @@ export function VideoCapture({
             <span className="text-center text-sm text-slate-400">{label}</span>
             {(() => {
               const inApp = detectInAppBrowser();
-              if (inApp) {
-                const navAlvo = isIOS() ? 'Safari' : 'Chrome';
-                const copiarLink = async () => {
-                  try {
-                    await navigator.clipboard.writeText(window.location.href);
-                    toast.success('Link copiado! Cole no ' + navAlvo + '.');
-                  } catch {
-                    toast.error('Não foi possível copiar. Copie manualmente.');
-                  }
-                };
+              const navAlvo = isIOS() ? 'Safari' : 'Chrome';
+              const copiarLink = async () => {
+                try {
+                  await navigator.clipboard.writeText(window.location.href);
+                  toast.success('Link copiado! Cole no ' + navAlvo + '.');
+                } catch {
+                  toast.error('Não foi possível copiar. Copie manualmente.');
+                }
+              };
+
+              // Só mostra o aviso bloqueante depois que a câmera realmente falhou
+              if (cameraBlocked && inApp) {
                 return (
                   <div className="w-full max-w-sm space-y-3">
                     <div className="rounded-lg border border-amber-400 bg-amber-50 p-3 text-amber-900 space-y-2">
                       <div className="flex items-start gap-2">
                         <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5 text-amber-600" />
                         <div className="space-y-1">
-                          <p className="text-sm font-semibold">Abra no {navAlvo} para ver a câmera</p>
+                          <p className="text-sm font-semibold">Câmera bloqueada — abra no {navAlvo}</p>
                           <p className="text-xs leading-relaxed">
-                            O navegador do {getInAppBrowserName(inApp)} não permite ver a câmera ao vivo.
-                            Toque no menu (⋯) acima e escolha <strong>Abrir no {navAlvo}</strong>.
+                            O navegador do {getInAppBrowserName(inApp)} não permitiu acesso à câmera ao vivo.
+                            Toque no menu (⋯) acima e escolha <strong>Abrir no {navAlvo}</strong> para ver a gravação em tempo real.
                           </p>
                         </div>
                       </div>
@@ -344,6 +356,15 @@ export function VideoCapture({
                         >
                           <Copy className="h-3.5 w-3.5" />
                           Copiar link
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => { setCameraBlocked(false); startRecording(); }}
+                          className="gap-2 border-amber-400 bg-white hover:bg-amber-100 text-amber-900 w-full"
+                        >
+                          <Play className="h-3.5 w-3.5" />
+                          Tentar câmera novamente
                         </Button>
                       </div>
                     </div>
@@ -358,8 +379,18 @@ export function VideoCapture({
                   </div>
                 );
               }
+
               return (
-                <div className="flex flex-col items-center gap-2">
+                <div className="flex flex-col items-center gap-2 w-full max-w-sm">
+                  {inApp && (
+                    <div className="w-full rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5 text-amber-600" />
+                      <span>
+                        Você está no navegador do {getInAppBrowserName(inApp)}. Se a câmera ao vivo não aparecer,
+                        toque em ⋯ e escolha <strong>Abrir no {navAlvo}</strong>.
+                      </span>
+                    </div>
+                  )}
                   <Button
                     onClick={startRecording}
                     className="gap-2 bg-red-600 hover:bg-red-700"
