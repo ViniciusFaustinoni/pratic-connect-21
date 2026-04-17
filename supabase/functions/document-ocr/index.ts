@@ -520,7 +520,7 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           },
         ],
         max_tokens: 2000,
-        temperature: 0.1,
+        temperature: 0,
       }),
     });
 
