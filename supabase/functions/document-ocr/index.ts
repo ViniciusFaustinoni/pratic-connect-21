@@ -313,8 +313,8 @@ function extractCPFFromRaw(raw: string): string | null {
   return null;
 }
 
-// Modelo estável para OCR (evitar modelos preview em fluxo crítico)
-const OCR_MODEL = 'google/gemini-2.5-flash-image';
+// Modelo estável para OCR de TEXTO (não usar -image, otimizado para geração)
+const OCR_MODEL = 'google/gemini-2.5-flash';
 const OCR_RETRY_MODEL = 'google/gemini-2.5-pro';
 
 serve(async (req) => {
