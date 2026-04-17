@@ -823,61 +823,37 @@ Use a função para retornar o CPF encontrado ou "ilegivel" se não conseguir le
 });
 
 /**
- * Extrai texto nativo de um buffer PDF (extração simples de strings de texto).
- * Não depende de bibliotecas externas - faz parsing direto dos operadores de texto do PDF.
+ * Extrai texto nativo de um PDF usando pdfjs-dist (descomprime FlateDecode etc).
+ * Retorna string vazia se for PDF escaneado puro (apenas imagens).
  */
-function extractTextFromPDFBuffer(buffer: Uint8Array): string {
-  const decoder = new TextDecoder('latin1');
-  const pdfString = decoder.decode(buffer);
-  
-  const textParts: string[] = [];
-  
-  // Extrair texto entre parênteses em operadores de texto PDF (Tj, TJ, ', ")
-  // Padrão: (texto) Tj  ou  [(texto1) (texto2)] TJ
-  const textRegex = /\(([^)]*)\)/g;
-  let match;
-  
-  while ((match = textRegex.exec(pdfString)) !== null) {
-    let text = match[1];
-    if (!text || text.length === 0) continue;
-    
-    // Decodificar escapes do PDF
-    text = text
-      .replace(/\\n/g, '\n')
-      .replace(/\\r/g, '\r')
-      .replace(/\\t/g, '\t')
-      .replace(/\\\\/g, '\\')
-      .replace(/\\'/g, "'")
-      .replace(/\\"/g, '"')
-      .replace(/\\\(/g, '(')
-      .replace(/\\\)/g, ')')
-      .replace(/\\(\d{3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)));
-    
-    // Filtrar lixo binário (manter apenas texto legível)
-    const cleanText = text.replace(/[^\x20-\x7E\xA0-\xFF\u0100-\u024F]/g, '');
-    if (cleanText.length > 1) {
-      textParts.push(cleanText);
+async function extractTextFromPDFBuffer(buffer: Uint8Array): Promise<string> {
+  try {
+    // pdfjs-dist precisa de um Uint8Array novo (não compartilhado)
+    const data = new Uint8Array(buffer);
+    const loadingTask = (pdfjsLib as any).getDocument({
+      data,
+      disableFontFace: true,
+      useSystemFonts: false,
+      isEvalSupported: false,
+      // Sem worker no edge runtime
+      verbosity: 0,
+    });
+    const pdf = await loadingTask.promise;
+    const parts: string[] = [];
+    const maxPages = Math.min(pdf.numPages, 10);
+    for (let p = 1; p <= maxPages; p++) {
+      const page = await pdf.getPage(p);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items
+        .map((it: any) => (typeof it.str === 'string' ? it.str : ''))
+        .filter(Boolean)
+        .join(' ');
+      if (pageText.trim()) parts.push(pageText);
     }
+    const result = parts.join('\n').replace(/[ \t]+/g, ' ').trim();
+    return result;
+  } catch (err) {
+    console.warn('[OCR] pdfjs falhou ao extrair texto:', err instanceof Error ? err.message : err);
+    return '';
   }
-  
-  // Também tentar extrair texto de streams descomprimidos
-  // Procurar por sequências que parecem texto real
-  const unicodeRegex = /<([0-9A-Fa-f]+)>\s*Tj/g;
-  while ((match = unicodeRegex.exec(pdfString)) !== null) {
-    const hex = match[1];
-    if (hex.length < 4) continue;
-    let text = '';
-    for (let i = 0; i < hex.length; i += 4) {
-      const charCode = parseInt(hex.substring(i, i + 4), 16);
-      if (charCode > 31 && charCode < 65535) {
-        text += String.fromCharCode(charCode);
-      }
-    }
-    if (text.length > 1) {
-      textParts.push(text);
-    }
-  }
-  
-  const result = textParts.join(' ').replace(/\s+/g, ' ').trim();
-  return result;
 }
