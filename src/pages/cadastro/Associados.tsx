@@ -125,9 +125,29 @@ export default function Associados() {
     periodo?: string;
   }>({});
 
+  // Construir filtros server-side
+  const serverStatusList = useMemo(() => {
+    if (sheetFilters.status?.length) return sheetFilters.status;
+    if (statusFilter !== 'all') return [statusFilter as StatusAssociado];
+    return undefined;
+  }, [sheetFilters.status, statusFilter]);
+
+  const serverPlanoId = sheetFilters.plano_id || (planoFilter !== 'all' ? planoFilter : undefined);
+  const serverCidade = sheetFilters.cidade || (cidadeFilter !== 'all' ? cidadeFilter : undefined);
+
   // Queries
-  const { data, isLoading } = useAssociados();
+  const { data, isLoading } = useAssociados({
+    filters: {
+      search: search || undefined,
+      status: serverStatusList,
+      plano_id: serverPlanoId,
+      cidade: serverCidade,
+    },
+    pagination: { page, pageSize },
+  });
   const associados = data?.associados;
+  const serverTotal = data?.pagination.total ?? 0;
+  const serverTotalPages = data?.pagination.totalPages ?? 1;
   const { data: contagem } = useAssociadosContagem();
   const { data: planos } = usePlanos();
   const { data: cidades } = useAssociadosCidades();
