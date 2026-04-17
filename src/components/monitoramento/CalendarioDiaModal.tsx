@@ -50,6 +50,101 @@ const STATUS_BADGE_CLASSES: Record<string, string> = {
   cancelada: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
 };
 
+// Badge de execução: o que de fato aconteceu, não apenas confirmação WhatsApp.
+type ExecucaoBadge = { label: string; className: string };
+
+function getStatusExecucao(item: {
+  status?: string | null;
+  iniciada_em?: string | null;
+  concluida_em?: string | null;
+  data_agendada?: string | null;
+  tecnicoAtribuido?: boolean;
+  // Para itens de agendamentos_base, podem vir do join com vistorias
+  vistoriaStatus?: string | null;
+  vistoriaIniciadaEm?: string | null;
+  vistoriaConcluidaEm?: string | null;
+}): ExecucaoBadge {
+  const status = (item.status || '').toLowerCase();
+  const vStatus = (item.vistoriaStatus || '').toLowerCase();
+  const concluidaEm = item.concluida_em || item.vistoriaConcluidaEm;
+  const iniciadaEm = item.iniciada_em || item.vistoriaIniciadaEm;
+
+  const concluidaStatuses = ['concluida', 'concluido', 'realizado', 'aprovada'];
+  const naoCompareceuStatuses = ['nao_compareceu', 'faltou'];
+  const emAndamentoStatuses = ['em_andamento', 'em_rota'];
+  const canceladaStatuses = ['cancelada', 'cancelado'];
+
+  // 1) Concluída
+  if (concluidaEm || concluidaStatuses.includes(status) || concluidaStatuses.includes(vStatus)) {
+    return {
+      label: 'Concluída',
+      className: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
+    };
+  }
+
+  // 2) Não compareceu
+  if (naoCompareceuStatuses.includes(status) || naoCompareceuStatuses.includes(vStatus)) {
+    return {
+      label: 'Não compareceu',
+      className: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
+    };
+  }
+
+  // 3) Em andamento
+  if (iniciadaEm || emAndamentoStatuses.includes(status) || emAndamentoStatuses.includes(vStatus)) {
+    return {
+      label: 'Em andamento',
+      className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300',
+    };
+  }
+
+  // 4) Cancelada
+  if (canceladaStatuses.includes(status) || canceladaStatuses.includes(vStatus)) {
+    return {
+      label: 'Cancelada',
+      className: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
+    };
+  }
+
+  // 5) Não realizada (data passada e nenhum dos acima)
+  const hojeStr = format(new Date(), 'yyyy-MM-dd');
+  const dataItem = (item.data_agendada || '').slice(0, 10);
+  if (dataItem && dataItem < hojeStr) {
+    if (status === 'confirmado' && !item.tecnicoAtribuido) {
+      return {
+        label: 'Sem técnico',
+        className: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300',
+      };
+    }
+    return {
+      label: 'Não realizada',
+      className: 'bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300',
+    };
+  }
+
+  // 6) Sem técnico (futuro/hoje)
+  if (status === 'confirmado' && !item.tecnicoAtribuido) {
+    return {
+      label: 'Sem técnico',
+      className: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300',
+    };
+  }
+
+  // 7) Agendada (confirmado com técnico)
+  if (status === 'confirmado') {
+    return {
+      label: 'Agendada',
+      className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',
+    };
+  }
+
+  // 8) Default: usar label cru
+  return {
+    label: STATUS_VISTORIA_LABEL[status] || status || '—',
+    className: STATUS_BADGE_CLASSES[status] || 'bg-muted text-muted-foreground',
+  };
+}
+
 export function CalendarioDiaModal({ open, onClose, data, abaInicial }: CalendarioDiaModalProps) {
   const queryClient = useQueryClient();
   const [anteciparId, setAnteciparId] = useState<string | null>(null);
