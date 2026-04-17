@@ -1,51 +1,71 @@
 
 
-## Resposta às duas perguntas
+## Resumo do que muda
 
-### 1. Supervisor de Vendas — JÁ EXISTE ✅
+Adicionar em agências um **modo de recebimento**:
+- **Via Comissão** (padrão atual): tudo continua como hoje (ASAAS, adesão, cobranças).
+- **Em Mãos** (novo): contrato segue normalmente (status, cobertura, instalação), **mas sem gerar cobrança de adesão no ASAAS nem exigir pagamento do associado**. O valor da venda é apenas registrado para cálculo/relatório.
 
-Está tudo implementado no sistema:
+## Quem pode mudar
+Diretor (regra já usada em outros toggles sensíveis). Alteração feita na tela de edição de usuário tipo Agência.
 
-**Role no banco** (`app_roles_config`):
-| role | label | área | sigla |
-|---|---|---|---|
-| `gerente_comercial` | Gerente Comercial | Comercial | GerC |
-| **`supervisor_vendas`** | **Supervisor de Vendas** | **Comercial** | **SupV** |
-| `vendedor_clt` | Vendedor CLT | Comercial | VdC |
-| `vendedor_externo` | Vendedor Externo | Comercial | VdE |
-| `agencia` | Agência | Comercial | Ag |
+## Mudanças
 
-**Vínculo supervisor → vendedores**: tabela `equipes_comerciais` (`supervisor_id`, `vendedor_id`) com hooks prontos: `useMinhaEquipe`, `useEquipesComerciais`, `useAdicionarVendedorEquipe`, `useRemoverVendedorEquipe`.
+### 1. Banco (migration)
+- `profiles`: nova coluna `agencia_forma_recebimento text default 'comissao'` com check `in ('comissao','em_maos')`. Só tem efeito quando `tipo='agencia'`.
+- `contratos`: nova coluna `adesao_isenta_agencia boolean default false` — marca contratos vendidos por agência em modo "em mãos" (para relatórios/auditoria e para pular ASAAS).
 
-**Criação de cotação em nome de vendedor**: já funciona. No `CotacaoFormDialog.tsx` linha 181:
+### 2. Edge function `asaas-cobranca-adesao`
+No início, depois de buscar o contrato, verificar se o vendedor é agência em modo `em_maos`:
 ```ts
-const podeAtribuirVendedor = isDiretor || isGerente || isSupervisor;
+const { data: contrato } = supabase.from('contratos')
+  .select('vendedor_id, cotacao:cotacoes(vendedor_id)').eq('id', contratoId).single();
+const vendedorId = contrato.vendedor_id ?? contrato.cotacao?.vendedor_id;
+if (vendedorId) {
+  const { data: vendedor } = supabase.from('profiles')
+    .select('tipo, agencia_forma_recebimento').eq('user_id', vendedorId).maybeSingle();
+  if (vendedor?.tipo === 'agencia' && vendedor.agencia_forma_recebimento === 'em_maos') {
+    // marcar contrato como isento e pago, criar instalação, retornar sucesso sem chamar ASAAS
+    await supabase.from('contratos').update({
+      adesao_isenta_agencia: true,
+      adesao_paga: true,
+      adesao_paga_em: new Date().toISOString(),
+    }).eq('id', contratoId);
+    return jsonResponse({ success: true, isento: true, agencia_em_maos: true });
+  }
+}
 ```
-O supervisor vê o seletor "Consultor Responsável" e pode atribuir a cotação a qualquer vendedor. A RLS da tabela `cotacoes` também autoriza supervisor a ver/editar cotações da equipe.
+(Reutiliza exatamente o mesmo caminho de "adesão zerada" que já existe no front — `EtapaPagamentoCotacao.tsx` linha 217-251.)
 
-**Leads**: RLS usa `is_supervisor_of(...)` — supervisor enxerga leads dos seus vendedores (via `equipes_comerciais`).
+### 3. Fluxo público `EtapaPagamentoCotacao.tsx`
+Antes de abrir a tela de cobrança, consultar (via `publicSupabase`) se o contrato já tem `adesao_isenta_agencia=true` OU detectar pelo `vendedor_id` da cotação. Se sim, seguir o mesmo branch de adesão zerada: marca pago, dispara `criar-instalacao-pos-pagamento` com `skipPaymentCheck:true`, mostra tela de sucesso ("Sua adesão foi confirmada pela agência responsável") e avança.
 
-**Filtros de UI**: `LeadFilters`, página `/vendas/leads`, `/vendas/comissoes` já têm gates `isSupervisor || isGerencia`.
+### 4. UI de edição de Agência (`UsuarioForm.tsx` / `UsuarioEditar.tsx`)
+Quando `tipo === 'agencia'` e usuário logado é diretor, mostrar RadioGroup:
+- ( ) Recebe via Comissão (padrão)
+- ( ) Recebe em Mãos (adesão não é cobrada do associado)
 
-Flags expostas no front: `isSupervisor` em `usePermissions()` e `useAuth()`.
+Texto explicativo abaixo: *"Em 'Recebe em Mãos', o sistema registra o valor da venda normalmente, mas não gera cobrança de adesão no ASAAS — a agência é responsável por receber diretamente do associado."*
 
-### 2. Vendedor tipo "Agência" — JÁ EXISTE ✅
+### 5. Indicadores visuais
+- Card da cotação/contrato: badge "Adesão Direta c/ Agência" quando `adesao_isenta_agencia=true` (em vez de "Paga"/"Pendente").
+- Painel da agência: mostrar o modo atual em destaque.
 
-- Role `agencia` (sort_order 14, área Comercial).
-- `profile.tipo = 'agencia'` — tipo próprio de conta (além de `funcionario`/`associado`/`prestador`).
-- Campos CNPJ/razão social/nome fantasia no profile (vs CPF dos demais).
-- `ProtectedRoute` redireciona `tipo='agencia'` para `/agencia` (dashboard próprio).
-- Fluxo de criação em `UsuarioForm.tsx` trata agência separadamente (CNPJ obrigatório, grade de comissão obrigatória).
-- Memória do projeto: `external-consultant-ecosystem-v2` e `commission-and-agency-management` detalham o ecossistema ponta-a-ponta (cotação com 4 cenários, dashboards, comissões recorrentes).
+### 6. Comissão
+A grade de comissão atual da agência continua funcionando igual — o valor da venda é computado normalmente (contrato tem `valor_mensal`, `valor_adesao` etc.). O que muda é apenas a **não-geração** da cobrança de adesão no ASAAS. Se a política futura for não pagar comissão sobre adesão em modo "em mãos", isso fica para outra iteração.
 
----
+## Validação
 
-## Conclusão
+1. Logar como diretor → editar uma agência existente → alternar para "Recebe em Mãos" → salvar.
+2. Criar cotação com essa agência como vendedor → finalizar fluxo público até a etapa de pagamento.
+3. Resultado esperado: tela de pagamento exibe "Adesão confirmada pela agência" (sem PIX/boleto), contrato vai para `ativo`, instalação é agendada, associado fica ativo.
+4. Comparar com outra cotação de agência em modo "Comissão" → fluxo ASAAS normal.
+5. Relatório financeiro: contratos "em mãos" aparecem com flag visível.
 
-**Nada precisa ser construído.** Os dois recursos já estão implementados e em produção:
-
-- Supervisor de Vendas: role ativo, tabela de equipes, hooks, RLS, filtros de UI e permissão para criar cotação em nome de vendedor.
-- Agência: tipo de usuário próprio, área comercial, dashboard dedicado, comissões.
-
-Se você estiver sentindo que **algo não funciona na prática** (ex.: "acessei como supervisor mas não consegui escolher o vendedor X", ou "agência não aparece em algum relatório"), me diga o cenário exato (quem logou, em qual tela, o que esperava) que eu investigo o ponto específico. Caso contrário, o requisito já está atendido.
+## Arquivos a editar
+- Migration SQL (nova)
+- `supabase/functions/asaas-cobranca-adesao/index.ts`
+- `src/components/cotacao-publica/EtapaPagamentoCotacao.tsx`
+- `src/pages/configuracoes/UsuarioForm.tsx` (ou `UsuarioEditar.tsx`, confirmar qual é usada para agência)
+- `src/components/cotacoes/CotacaoCard.tsx` e `src/pages/vendas/ContratoDetalhe.tsx` (badge visual)
 
