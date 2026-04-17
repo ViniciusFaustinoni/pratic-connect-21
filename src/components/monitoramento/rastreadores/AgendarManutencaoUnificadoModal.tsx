@@ -39,7 +39,11 @@ import {
   WifiOff,
   Phone,
   MapPin,
+  Info,
+  Map as MapIcon,
+  Wrench,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAbrirEAgendarManutencao } from '@/hooks/useVistoriaManutencao';
 import { useProfissionaisEquipe } from '@/hooks/useEquipe';
 import { useVagasPeriodo } from '@/hooks/useVagasPeriodo';
@@ -61,6 +65,7 @@ import {
 } from '@/data/autovistoriaConfig';
 import { cn } from '@/lib/utils';
 import { buscarCep } from '@/lib/cep';
+import { obterCoordenadasEndereco } from '@/services/geocodingService';
 import { formatDistanceToNow } from 'date-fns';
 
 interface RastreadorInfo {
