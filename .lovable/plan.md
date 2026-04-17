@@ -1,59 +1,109 @@
 
 
-## Escopo
+## Causa raiz (confirmada por inspeção do banco)
 
-Dois fixes cirúrgicos em `src/components/monitoramento/CalendarioDiaModal.tsx`. Sem refatorar a fonte de dados (continuamos lendo `vistorias`, `instalacoes`, `agendamentos_base` como hoje).
+Verifiquei as 4 fotos quebradas do print. **Todas têm 0 bytes no storage**, mas seu registro existe em `vistoria_fotos`:
 
-## Fix 1 — Aba Base/Rota refletir `local_vistoria` real
+| Tipo | Tamanho real |
+|---|---|
+| `painel_km` | **0 bytes** ❌ |
+| `local_rastreador` | **0 bytes** ❌ |
+| `lateral_esquerda` | **0 bytes** ❌ |
+| `traseira` | **0 bytes** ❌ |
+| `frente` | 2.4 MB ✅ |
+| `lateral_direita` | 2.1 MB ✅ |
+| `motor_chassi` | 2.9 MB ✅ |
+| `avarias` | 2.0 MB ✅ |
+| video 360 .webm | **0 bytes** ❌ |
 
-**Causa**: o modal divide itens por **tabela de origem** (`agendamentos_base` → Base, `vistorias` + `instalacoes` → Rota). A vistoria da Laiane aparece em Base porque existe um espelho em `agendamentos_base`, mas no banco principal `local_vistoria='cliente'`.
+ETag das 4 fotos = `d41d8cd98f00b204e9800998ecf8427e` (MD5 do arquivo vazio). O analista vê só o **alt text** (`painel_km`, `local_rastrea`...) porque o `<img>` não consegue renderizar nada.
 
-**Correção**: na query de `agendamentos_base` (linha 99–112), trazer também `vistoria_id` e a `local_vistoria` da vistoria vinculada via join. Filtrar fora qualquer agendamento_base cuja vistoria associada tenha `local_vistoria = 'cliente'` — esses pertencem à aba Rota e já são carregados pela query de `vistoriasCampo`.
+## 3 bugs reais
 
+### Bug 1 — Race em `useVistoriaCompleta.ts` (linhas 432–453) [CAUSA PRIMÁRIA]
+O fluxo é: `upload novo → buscar antiga (mesmo tipo) → deletar do storage`. Mas a busca da antiga (linha 425) acontece **antes** do upload e devolve só `id, arquivo_url`. Quando o vistoriador re-tira a mesma foto rapidamente (ou quando o sync queue + o upload direto disputam o mesmo `tipo`), há janela em que:
+1. Upload A finaliza → URL pública criada
+2. Upload B começa, lê a "antiga" (= A), faz upload do B
+3. Insere registro B no DB (`arquivo_url` aponta pro caminho B)
+4. **Deleta A do storage** ✅
+5. Mas o **path B já é o próprio recém-subido** porque o `Date.now()` colidiu ou porque o segundo upload tentou `upsert` num path idêntico → o storage manteve o registro mas com bytes do `remove` posterior
+
+A combinação `useUploadFotoVistoriaCompleta` (sem `upsert`, sem `contentType`) + `useSyncQueue` (com `upsert: true`, `contentType: midia.mime`) na **mesma vistoria, mesmo tipo, ao mesmo tempo**, resulta em arquivo zerado quando o blob da fila offline já foi descartado/revogado mas o registro ainda processa.
+
+### Bug 2 — Vídeo `.webm` no Safari/iOS
+`VideoCapture.tsx:72-87` força sempre `video/webm;codecs=vp9`. iOS Safari (que muito analista usa em iPad) **não decodifica webm** — exibe só o ícone de play quebrado, igual ao print do usuário. O preview no `<video>` da `PropostaMidiaGrid` (linha 94) idem.
+
+### Bug 3 — Sem `contentType` no upload primário
+`useVistoriaCompleta.ts:436-438` chama `.upload(fileName, data.file)` **sem** opções. Sem `contentType` e sem `upsert: false` explícito, se o `data.file` for um Blob sem mime declarado o storage pode aceitar e gravar sem header, prejudicando o servir cross-origin pra `<img>`/`<video>`.
+
+## Plano de correção
+
+### Arquivo 1: `src/hooks/useVistoriaCompleta.ts`
+
+**A) Eliminar a race**: trocar a estratégia "upload novo + delete antiga" por **upsert direto em path determinístico**:
 ```ts
-.select('..., vistoria_id, vistoria:vistorias!agendamentos_base_vistoria_id_fkey(local_vistoria)')
-// no useMemo: filtrar onde row.vistoria?.local_vistoria === 'cliente'
+const fileName = `${data.vistoriaId}/${data.tipo}.jpg`; // SEM Date.now()
+await supabase.storage.from('vistoria-fotos').upload(fileName, data.file, {
+  contentType: data.file.type || 'image/jpeg',
+  upsert: true,                  // sobrescreve a antiga atomicamente
+  cacheControl: '3600',
+});
+```
+- Eliminar todo o bloco `fotoExistente` + delete posterior (linhas 425-454).
+- Usar `onConflict` no insert da `vistoria_fotos` (constraint `vistoria_id+tipo` única) com `upsert` do PostgREST: `.upsert(payload, { onConflict: 'vistoria_id,tipo' })`. Se o constraint não existir, criar via migration.
+- Ao atualizar a URL no DB, anexar `?v=${Date.now()}` pra furar cache do CDN no analista.
+
+**B) Mesmo tratamento em `useUploadVideo360`** (linhas 343-398): path determinístico `${vistoriaId}/video_360.<ext>`, `upsert: true`, `contentType` obrigatório.
+
+### Arquivo 2: `src/hooks/useSyncQueue.ts`
+
+- Antes de subir cada item da fila, **validar que `midia.blob.size > 0`**. Se zero, abortar o item, marcar como `falha_permanente` e logar (evita gravar arquivo vazio no storage).
+- Mesmo `path determinístico` do Arquivo 1. Como o queue já usa `upsert: true`, basta alinhar os nomes.
+
+### Arquivo 3: `src/components/instalador/VideoCapture.tsx`
+
+- Detectar suporte e gravar em **MP4 quando disponível** (Safari/iOS suporta `video/mp4`); cair pra `video/webm;codecs=vp9` como fallback:
+```ts
+const candidates = [
+  'video/mp4;codecs=h264,aac',
+  'video/mp4',
+  'video/webm;codecs=vp9',
+  'video/webm',
+];
+const mimeType = candidates.find(t => MediaRecorder.isTypeSupported(t)) || 'video/webm';
+const ext = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
+```
+- Salvar o `File` com a extensão correta (`video_360_${Date.now()}.${ext}`).
+
+### Arquivo 4: `src/components/cadastro/proposta/PropostaMidiaGrid.tsx` (defensivo)
+
+- Adicionar `onError` no `<img>` que substitui por placeholder "Arquivo corrompido — pedir reenvio" + botão pra disparar `solicitar reenvio` ao cliente, em vez de mostrar texto bruto.
+- Adicionar `<source type="video/webm">` e `<source type="video/mp4">` no `<video>` pra navegador escolher.
+
+### Migração SQL
+
+Adicionar constraint única se não existir:
+```sql
+CREATE UNIQUE INDEX IF NOT EXISTS vistoria_fotos_vistoria_tipo_uniq 
+  ON vistoria_fotos(vistoria_id, tipo);
 ```
 
-Resultado: Laiane some de "Base", aparece em "Rota". Renan/Adriano (`local_vistoria='base'`) continuam em Base.
+### Limpeza dos 5 órfãos atuais
 
-## Fix 2 — Badge de execução substituindo "Confirmado"
-
-**Causa**: a UI mostra `STATUS_VISTORIA_LABEL[status]` cru. `confirmado` em `agendamentos_base` significa só "técnico atribuído + WhatsApp enviado", não execução.
-
-**Correção**: criar uma função `getStatusExecucao(item)` que retorna o status efetivo:
-
-| Condição (em ordem) | Badge | Cor |
-|---|---|---|
-| `concluida_em` preenchido OU status ∈ {concluida, realizado, aprovada} | **Concluída** | verde |
-| status ∈ {nao_compareceu, faltou} | **Não compareceu** | vermelho |
-| `iniciada_em` preenchido OU status ∈ {em_andamento, em_rota} | **Em andamento** | âmbar |
-| status = `cancelada/cancelado` | **Cancelada** | vermelho |
-| data_agendada < hoje E nenhum dos acima | **Não realizada** | vermelho-claro |
-| status = `confirmado` E sem técnico (`atendido_por`/`profissional_id` null) | **Sem técnico** | laranja |
-| status = `confirmado` com técnico | **Agendada** | azul |
-| default | label atual | atual |
-
-Para itens da aba Base que não trazem `iniciada_em`/`concluida_em` (a tabela `agendamentos_base` não tem esses campos), buscar via join com `vistorias` (já adicionado no Fix 1): `vistoria:vistorias(local_vistoria, status, iniciada_em, concluida_em)`.
-
-Aplicar o mesmo helper em ambas as abas (Rota e Base) para ficar consistente.
+Script de migration uma vez: deletar registros de `vistoria_fotos` cujo objeto no storage tem `metadata->>'size' = '0'`, e zerar `vistorias.video_360_url` da vistoria `f6a53640...`. Avisar o vistoriador via WhatsApp pra reenviar (ou só marcar a vistoria como `requer_reenvio`).
 
 ## Não mexer
 
-- `RotaCalendario.tsx`, `MapaVistoriasContent.tsx`, mutations de antecipar/atribuir, esquema de banco. A correção é puramente apresentacional + um filtro extra.
-- Não migramos a fonte de dados de `vistorias`/`agendamentos_base` para `servicos` (fora de escopo, alto risco).
+- Bucket policies (já públicas), `usePropostasPendentes`, layouts da análise, fluxo de aprovação.
 
 ## Validação
 
-1. Abrir calendário no dia **16/04/2026**:
-   - Laiane (RKL2G70) deve aparecer em **Rota** (não em Base) com badge **Não realizada**.
-   - Adriano (RKO4F90) em **Base** com badge **Não compareceu**.
-   - Renan (PZS6D39) em **Base** com badge **Sem técnico** (e `Não realizada` se já passou do horário — usar a regra de não realizada como prioridade quando data < hoje).
-2. Abrir um dia futuro com agendamento confirmado e técnico: badge **Agendada** (azul).
-3. Abrir um dia com vistoria realmente concluída: badge **Concluída** (verde).
+1. Re-tirar a mesma foto 3x rápido → só 1 registro fica, com bytes corretos.
+2. Subir vídeo no Safari iOS → toca normal pro analista.
+3. Forçar fila offline com blob zerado (DevTools) → não cria registro vazio no DB.
+4. Abrir proposta `f6a53640...` após limpeza → arquivos quebrados removidos, status indica "aguardando reenvio".
 
 ## Resultado
 
-- Aba Base/Rota passa a refletir o `local_vistoria` real do banco.
-- Badges deixam de mentir sobre execução; diretor vê de relance o que aconteceu de fato.
+Foto/vídeo quebrados deixam de existir na origem. Quando o blob é válido, chega íntegro ao analista. Quando algo falha, o sistema **avisa explicitamente** em vez de mostrar imagem quebrada.
 
