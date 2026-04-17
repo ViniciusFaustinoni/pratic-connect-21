@@ -1,53 +1,51 @@
 
 
-## Diagnóstico
+## Resposta às duas perguntas
 
-Confirmei no banco: William está `ativo`, veículos cadastrados (**LSP3E65** como `instalacao_pendente`, **LUQ0573** como `ativo`), **instalação agendada** para hoje período manhã existe na tabela `instalacoes`. RLS permite diretor ver tudo.
+### 1. Supervisor de Vendas — JÁ EXISTE ✅
 
-Então por que o usuário não vê? **Dois motivos independentes**:
+Está tudo implementado no sistema:
 
-### 1. Build do preview está defasado (principal)
-A correção do `useAssociados` (remoção do `.eq('origem_cadastro','interno')`) foi feita, mas o **último deploy falhou** por timeout do Cloudflare R2:
+**Role no banco** (`app_roles_config`):
+| role | label | área | sigla |
+|---|---|---|---|
+| `gerente_comercial` | Gerente Comercial | Comercial | GerC |
+| **`supervisor_vendas`** | **Supervisor de Vendas** | **Comercial** | **SupV** |
+| `vendedor_clt` | Vendedor CLT | Comercial | VdC |
+| `vendedor_externo` | Vendedor Externo | Comercial | VdE |
+| `agencia` | Agência | Comercial | Ag |
+
+**Vínculo supervisor → vendedores**: tabela `equipes_comerciais` (`supervisor_id`, `vendedor_id`) com hooks prontos: `useMinhaEquipe`, `useEquipesComerciais`, `useAdicionarVendedorEquipe`, `useRemoverVendedorEquipe`.
+
+**Criação de cotação em nome de vendedor**: já funciona. No `CotacaoFormDialog.tsx` linha 181:
+```ts
+const podeAtribuirVendedor = isDiretor || isGerente || isSupervisor;
 ```
-dist upload failed: ... net/http: request canceled (Client.Timeout exceeded)
-```
-O usuário está carregando uma versão antiga do JS — por isso continua vendo "Total Geral: 0" e busca vazia. Um hard-refresh não resolve; só publicar de novo.
+O supervisor vê o seletor "Consultor Responsável" e pode atribuir a cotação a qualquer vendedor. A RLS da tabela `cotacoes` também autoriza supervisor a ver/editar cotações da equipe.
 
-### 2. Filtro `origem_cadastro='interno'` ainda existe em outros arquivos
-O William foi cadastrado via `api_externa` (como 99% dos associados). Restam 3 arquivos filtrando só `interno`:
-- `src/hooks/useVeiculos.ts` (linha 53) — aba Veículos não lista os dele
-- `src/pages/cadastro/Veiculos.tsx` (linhas 184, 185, 200) — métricas zeradas
-- `src/hooks/useBaseAntiga.ts` — esse é intencional (base migrada Hinova), **não mexer**
+**Leads**: RLS usa `is_supervisor_of(...)` — supervisor enxerga leads dos seus vendedores (via `equipes_comerciais`).
 
-Na tela de monitoramento `/monitoramento/vistorias-instalacoes-mon` aba **Instalações**, o hook `useInstalacoes` NÃO tem filtro de origem — quando o build novo carregar, a instalação agendada de hoje vai aparecer naturalmente.
+**Filtros de UI**: `LeadFilters`, página `/vendas/leads`, `/vendas/comissoes` já têm gates `isSupervisor || isGerencia`.
 
----
+Flags expostas no front: `isSupervisor` em `usePermissions()` e `useAuth()`.
 
-## Correções
+### 2. Vendedor tipo "Agência" — JÁ EXISTE ✅
 
-### Passo 1 — Remover filtro `origem_cadastro='interno'` em Veículos
-**`src/hooks/useVeiculos.ts`** (linha 50-55): remover `.eq('associado.origem_cadastro', 'interno')` e trocar `!inner` por join padrão.
-
-**`src/pages/cadastro/Veiculos.tsx`** (linhas 184, 185, 200): remover os três `.eq('associado.origem_cadastro','interno')` das queries de métrica e listagem.
-
-### Passo 2 — Forçar cache-bust do React Query em Associados/Instalações
-Adicionar `refetchOnMount: 'always'` nos hooks `useAssociados` e `useInstalacoes` para garantir que, assim que o build novo subir, os dados antigos em cache do service worker/browser sejam sobrescritos.
-
-### Passo 3 — Republicar
-O build volta a subir normalmente (o timeout anterior foi infra transitória do Lovable, não do código).
+- Role `agencia` (sort_order 14, área Comercial).
+- `profile.tipo = 'agencia'` — tipo próprio de conta (além de `funcionario`/`associado`/`prestador`).
+- Campos CNPJ/razão social/nome fantasia no profile (vs CPF dos demais).
+- `ProtectedRoute` redireciona `tipo='agencia'` para `/agencia` (dashboard próprio).
+- Fluxo de criação em `UsuarioForm.tsx` trata agência separadamente (CNPJ obrigatório, grade de comissão obrigatória).
+- Memória do projeto: `external-consultant-ecosystem-v2` e `commission-and-agency-management` detalham o ecossistema ponta-a-ponta (cotação com 4 cenários, dashboards, comissões recorrentes).
 
 ---
 
-## Validação pós-correção
+## Conclusão
 
-1. Abrir `/cadastro/associados` como diretor → Total Geral ~9.519, buscar "WILLIAM" → aparece com status **Ativo**; buscar placa **LSP3E65** → aparece.
-2. Abrir `/cadastro/veiculos` → total geral inclui os 9.400+ veículos `api_externa`; buscar **LSP3E65** e **LUQ0573** → aparecem.
-3. Abrir `/monitoramento/vistorias-instalacoes-mon` → aba **Instalações** → instalação agendada da XRE 300 para hoje (período manhã) aparece na lista e na contagem "Agendadas".
-4. Abrir ficha do associado → ambos veículos visíveis com os status corretos.
+**Nada precisa ser construído.** Os dois recursos já estão implementados e em produção:
 
----
+- Supervisor de Vendas: role ativo, tabela de equipes, hooks, RLS, filtros de UI e permissão para criar cotação em nome de vendedor.
+- Agência: tipo de usuário próprio, área comercial, dashboard dedicado, comissões.
 
-## Resumo executivo
-
-O William **já está cadastrado certinho no banco** — a instalação dele foi agendada, os dois veículos estão com os status corretos. O que está acontecendo é que o navegador do usuário está carregando uma versão antiga do app porque a última publicação falhou por um timeout de infraestrutura. Vamos fazer mais dois ajustes pequenos (remover um filtro que escondia veículos vindos da base migrada) e republicar. Depois disso o William aparece tanto em Associados quanto em Veículos quanto no Monitoramento.
+Se você estiver sentindo que **algo não funciona na prática** (ex.: "acessei como supervisor mas não consegui escolher o vendedor X", ou "agência não aparece em algum relatório"), me diga o cenário exato (quem logou, em qual tela, o que esperava) que eu investigo o ponto específico. Caso contrário, o requisito já está atendido.
 
