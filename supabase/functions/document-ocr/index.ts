@@ -464,7 +464,7 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
         if (isPdfUrl) {
           try {
             // Decodificar o PDF e procurar texto embutido
-            const pdfText = extractTextFromPDFBuffer(uint8Array);
+            const pdfText = await extractTextFromPDFBuffer(uint8Array);
             if (pdfText && pdfText.length > 50) {
               extractedPdfText = pdfText;
               console.log(`[OCR] Texto nativo extraído do PDF: ${pdfText.length} chars`);
