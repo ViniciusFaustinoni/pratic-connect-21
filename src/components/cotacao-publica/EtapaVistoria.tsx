@@ -162,7 +162,7 @@ export function EtapaVistoria({
                   if (tipoInstalacao === 'rota') {
                     setModo('agendada');
                   } else if (tipoInstalacao === 'base') {
-                    setModo('agendada-base');
+                    setModo('escolha-base');
                   } else {
                     setModo('escolha-local');
                   }
