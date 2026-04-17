@@ -95,6 +95,7 @@ export function useAssociados({ filters, pagination, enabled = true }: UseAssoci
 
   return useQuery({
     queryKey: ['associados', filters, pagination],
+    refetchOnMount: 'always',
     queryFn: async () => {
       let query = supabase
         .from('associados')
@@ -248,6 +249,7 @@ export function useAssociado(id: string | undefined) {
 export function useAssociadosContagem() {
   return useQuery({
     queryKey: ['associados-contagem'],
+    refetchOnMount: 'always',
     queryFn: async () => {
       const statuses = ['em_analise', 'aprovado', 'documentacao_pendente', 'aguardando_instalacao', 'ativo', 'inadimplente', 'suspenso', 'cancelado', 'bloqueado'] as const;
 

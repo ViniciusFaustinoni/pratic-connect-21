@@ -46,11 +46,10 @@ export function useVeiculos(associadoId?: string) {
         return data as Veiculo[];
       }
 
-      // Listagem geral — apenas base nova (interno)
-      let query = supabase
+      // Listagem geral — todos os veículos (interno + api_externa)
+      const query = supabase
         .from('veiculos')
-        .select('*, associado:associados!inner(id, nome, cpf, origem_cadastro)')
-        .eq('associado.origem_cadastro', 'interno')
+        .select('*, associado:associados(id, nome, cpf, origem_cadastro)')
         .order('created_at', { ascending: false });
       
       const { data, error } = await query;
