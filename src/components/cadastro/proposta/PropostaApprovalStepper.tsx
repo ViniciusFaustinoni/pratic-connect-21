@@ -338,7 +338,7 @@ export function PropostaApprovalStepper({
               </CardContent>
             </Card>
 
-            {/* Action buttons */}
+            {/* Action buttons (apenas quando elegível para aprovar) */}
             {podeAprovar && (
               <div className="space-y-3">
                 <Button
@@ -378,6 +378,56 @@ export function PropostaApprovalStepper({
                     Reprovar
                   </Button>
                 </div>
+              </div>
+            )}
+
+            {/* Estado final: proposta já aprovada/reprovada/cancelada */}
+            {!podeAprovar && (proposta.status === 'ativo' || proposta.status === 'reprovado' || proposta.status === 'cancelado') && (
+              <Card
+                className={cn(
+                  'border-2',
+                  proposta.status === 'ativo' && 'border-success/40 bg-success/5',
+                  proposta.status === 'reprovado' && 'border-destructive/40 bg-destructive/5',
+                  proposta.status === 'cancelado' && 'border-border bg-muted'
+                )}
+              >
+                <CardContent className="p-5 text-center space-y-2">
+                  {proposta.status === 'ativo' ? (
+                    <CheckCircle className="h-10 w-10 text-success mx-auto" />
+                  ) : (
+                    <AlertCircle
+                      className={cn(
+                        'h-10 w-10 mx-auto',
+                        proposta.status === 'reprovado' ? 'text-destructive' : 'text-muted-foreground'
+                      )}
+                    />
+                  )}
+                  <p
+                    className={cn(
+                      'text-base font-bold',
+                      proposta.status === 'ativo' && 'text-success',
+                      proposta.status === 'reprovado' && 'text-destructive',
+                      proposta.status === 'cancelado' && 'text-foreground'
+                    )}
+                  >
+                    {proposta.status === 'ativo' && 'Proposta já aprovada'}
+                    {proposta.status === 'reprovado' && 'Proposta reprovada'}
+                    {proposta.status === 'cancelado' && 'Proposta cancelada'}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Esta proposta já foi finalizada e não aceita novas ações de análise.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Estado bloqueado por documentos pendentes (mas ainda assinada) */}
+            {!podeAprovar && proposta.status === 'assinado' && proposta.tem_documento_pendente && (
+              <div className="flex items-center gap-2.5 px-4 py-3 rounded-lg bg-warning/10 border border-warning/30">
+                <AlertCircle className="h-5 w-5 text-warning shrink-0" />
+                <p className="text-sm font-semibold text-warning">
+                  Aguardando envio de documentos solicitados ao cliente para liberar a aprovação.
+                </p>
               </div>
             )}
           </div>
