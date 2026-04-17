@@ -520,7 +520,7 @@ export default function UsuarioForm() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/configuracoes/usuarios')}>
+        <Button variant="ghost" size="icon" onClick={() => navigate('/configuracoes/usuarios-acessos')}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div>
