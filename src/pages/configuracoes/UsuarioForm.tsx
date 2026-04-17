@@ -836,7 +836,7 @@ export default function UsuarioForm() {
                 {saveUser.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
                 {isEditing ? 'Salvar alterações' : 'Criar usuário'}
               </Button>
-              <Button type="button" variant="outline" onClick={() => navigate('/configuracoes/usuarios')} className="w-full">
+              <Button type="button" variant="outline" onClick={() => navigate('/configuracoes/usuarios-acessos')} className="w-full">
                 Cancelar
               </Button>
             </div>
