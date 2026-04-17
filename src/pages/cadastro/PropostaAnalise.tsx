@@ -302,7 +302,86 @@ export default function PropostaAnalise() {
         onProxima={nextProposta ? () => navigate(`/cadastro/propostas/${nextProposta.id}`) : undefined}
       />
 
-      {/* Botão de ativação Softruck (quando aplicável) */}
+      {/* Banner de estado final (proposta já aprovada / reprovada / cancelada) */}
+      {isFinalizada && (
+        <div
+          className={
+            isAprovada
+              ? 'rounded-lg border-2 border-success/40 bg-success/10 p-4 space-y-3'
+              : isReprovada
+                ? 'rounded-lg border-2 border-destructive/40 bg-destructive/10 p-4 space-y-3'
+                : 'rounded-lg border-2 border-muted-foreground/30 bg-muted p-4 space-y-3'
+          }
+        >
+          <div className="flex items-start gap-3">
+            {isAprovada ? (
+              <CheckCircle className="h-6 w-6 text-success mt-0.5 shrink-0" />
+            ) : isReprovada ? (
+              <XCircle className="h-6 w-6 text-destructive mt-0.5 shrink-0" />
+            ) : (
+              <Ban className="h-6 w-6 text-muted-foreground mt-0.5 shrink-0" />
+            )}
+            <div className="flex-1">
+              <p
+                className={
+                  isAprovada
+                    ? 'font-semibold text-success'
+                    : isReprovada
+                      ? 'font-semibold text-destructive'
+                      : 'font-semibold text-foreground'
+                }
+              >
+                {isAprovada
+                  ? 'Proposta aprovada — cadastro concluído'
+                  : isReprovada
+                    ? 'Proposta reprovada'
+                    : 'Proposta cancelada'}
+              </p>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {isAprovada && estadoFinal?.aprovado_em && (
+                  <>
+                    Aprovada em{' '}
+                    {new Date(estadoFinal.aprovado_em).toLocaleString('pt-BR', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                    {estadoFinal.aprovado_por_nome && <> por <strong className="text-foreground">{estadoFinal.aprovado_por_nome}</strong></>}.
+                  </>
+                )}
+                {isAprovada && !estadoFinal?.aprovado_em && (
+                  <>O associado já está ativo no sistema.</>
+                )}
+                {isReprovada && <>Esta proposta foi reprovada e não está mais disponível para análise.</>}
+                {isCancelada && <>Esta proposta foi cancelada.</>}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2">
+            {isAprovada && proposta.associado_id && (
+              <Button
+                className="flex-1 bg-success hover:bg-success/90 text-white"
+                onClick={() => navigate(`/cadastro/associados/${proposta.associado_id}`)}
+              >
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Ver associado
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => navigate('/cadastro/propostas')}
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Voltar para lista
+            </Button>
+          </div>
+        </div>
+      )}
+
       {podeAtivarSoftruck && (
         <div className="rounded-lg border-2 border-warning/30 bg-warning/10 p-4 space-y-3">
           <div className="flex items-start gap-3">
