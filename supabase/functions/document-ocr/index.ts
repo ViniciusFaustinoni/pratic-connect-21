@@ -807,6 +807,87 @@ Use a função para retornar o CPF encontrado ou "ilegivel" se não conseguir le
       }
     }
 
+    // ============================================================
+    // Validação universal de campos críticos por checksum + retry
+    // ============================================================
+    if (result?.dados && typeof result.dados === 'object') {
+      const tipo = result.tipo_detectado;
+      const d = result.dados as Record<string, any>;
+
+      // Mapa: campo → validador
+      const fieldValidators: Array<{ tipos: string[]; field: string; validate: (v: string) => boolean; label: string }> = [
+        { tipos: ['crlv', 'atpv_e', 'nota_fiscal_veiculo'], field: 'placa', validate: validatePlaca, label: 'Placa' },
+        { tipos: ['crlv', 'atpv_e'], field: 'renavam', validate: validateRenavam, label: 'Renavam' },
+        { tipos: ['crlv', 'atpv_e', 'nota_fiscal_veiculo'], field: 'chassi', validate: validateChassi, label: 'Chassi' },
+        { tipos: ['atpv_e'], field: 'cpf_comprador', validate: (v) => validateCPF(v.replace(/\D/g, '')), label: 'CPF comprador' },
+        { tipos: ['nota_fiscal_veiculo'], field: 'cpf_cnpj_comprador', validate: (v) => {
+          const c = v.replace(/\D/g, '');
+          return c.length === 11 ? validateCPF(c) : c.length === 14 ? validateCNPJ(c) : false;
+        }, label: 'CPF/CNPJ comprador' },
+      ];
+
+      const checksumResults: Array<{ field: string; ok: boolean; value: any }> = [];
+
+      for (const v of fieldValidators) {
+        if (!v.tipos.includes(tipo)) continue;
+        const raw = d[v.field];
+        if (!raw || raw === 'ilegivel') {
+          checksumResults.push({ field: v.field, ok: false, value: raw });
+          continue;
+        }
+        const ok = v.validate(String(raw));
+        checksumResults.push({ field: v.field, ok, value: raw });
+        if (!ok) {
+          console.warn(`[OCR] Validação falhou: ${v.label}="${raw}" inválido`);
+
+          // Tentar recuperar do texto nativo do PDF
+          if (extractedPdfText) {
+            const candidates = extractCandidatesFromText(extractedPdfText, v.field);
+            for (const cand of candidates) {
+              if (v.validate(cand)) {
+                console.log(`[OCR] ${v.label} corrigido via texto nativo: "${raw}" → "${cand}"`);
+                d[v.field] = cand;
+                checksumResults[checksumResults.length - 1] = { field: v.field, ok: true, value: cand };
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      // Se houve falhas e não conseguimos corrigir, marcar como revisar
+      const failedFields = checksumResults.filter(r => !r.ok && r.value && r.value !== 'ilegivel');
+      if (failedFields.length > 0) {
+        const names = failedFields.map(f => f.field).join(', ');
+        result.motivo = (result.motivo || '') + ` Campos com checksum inválido: ${names}.`;
+        if (result.sugestao === 'aprovar') result.sugestao = 'revisar';
+      }
+
+      // ============================================================
+      // Confiança real (substitui fake 0.95)
+      // ============================================================
+      const totalChecks = checksumResults.length;
+      const okChecks = checksumResults.filter(r => r.ok).length;
+      const fromNativePdf = !!extractedPdfText && extractedPdfText.length > 50;
+
+      let confidence = 0.7; // base visual
+      if (fromNativePdf) confidence = 0.85;
+      if (totalChecks > 0) {
+        const checksumRatio = okChecks / totalChecks;
+        confidence = (fromNativePdf ? 0.6 : 0.4) + checksumRatio * 0.4;
+      }
+      // Penalizar se houver campos null/ilegivel relevantes
+      const nullishCount = Object.values(d).filter(v => v === null || v === 'ilegivel').length;
+      const totalFields = Object.keys(d).length;
+      if (totalFields > 0) {
+        const completeness = 1 - nullishCount / totalFields;
+        confidence = confidence * (0.7 + completeness * 0.3);
+      }
+      result.confianca = Math.max(0.1, Math.min(0.99, Number(confidence.toFixed(2))));
+      result._fonte_dados = fromNativePdf ? 'pdf_nativo+visual' : 'visual';
+      result._checksums = checksumResults;
+    }
+
     return new Response(
       JSON.stringify(result),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
