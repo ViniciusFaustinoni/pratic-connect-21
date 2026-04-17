@@ -1,51 +1,70 @@
 
 
-## Causa raiz
+## O que aconteceu com a proposta LSP3E65 (CTR-20260417124855-MF0CWF)
 
-No fluxo público (`EtapaVistoria.tsx`), quando o usuário clica em "Agendar Vistoria Presencial", a lógica das **linhas 159–168** decide para onde ir baseando-se em `tipoInstalacao`:
+**Cliente:** WILLIAM DO CARMO DA SILVA — Honda XRE 300, placa LSP3E65
 
+### Linha do tempo real (do banco)
+
+| Hora (17/04) | Evento |
+|---|---|
+| 12:48:55 | Contrato criado a partir da cotação COT-20260417-093916772-294 |
+| 12:49:03 | Status `rascunho → pendente_assinatura` (envio Autentique) |
+| 13:35:58 | Cliente visualizou o documento |
+| 13:38:42 | Cliente assinou (Autentique, e-mail williamsilvacarmoo@gmail.com) |
+| **17:55:22** | **Diretor aprovou a proposta** (`aprovado_em`, `aprovado_por=37beadcf...`) |
+| 17:55:23 | Status `assinado → ativo` |
+
+### Estado atual no banco
+
+- `contratos.status = ativo` ✅
+- `autentique_status = signed` ✅
+- `aprovado_em = 17:55:22` ✅
+- `data_ativacao = 17:55:22` ✅
+- `adesao_paga = true` ✅
+- Associado `b10ad945-...` está `ativo` ✅
+- Veículo `LSP3E65` está `ativo` ✅
+
+**Conclusão: a aprovação foi processada com sucesso. O cadastro está concluído. Não houve falha no backend.**
+
+### O que o usuário viu (e por que parece "travada")
+
+A tela de Aprovação Final (`PropostaApprovalStepper`, etapa 3) só renderiza os botões "Aprovar Proposta / Solicitar Documentos / Reprovar" quando `podeAprovar === true`.
+
+`podeAprovar` é definido em `src/pages/cadastro/PropostaAnalise.tsx` linha 85:
 ```ts
-if (tipoInstalacao === 'rota')      setModo('agendada');        // pula escolha de base
-else if (tipoInstalacao === 'base') setModo('agendada-base');   // ❌ pula escolha de qual base!
-else                                 setModo('escolha-local');
+const podeAprovar = proposta?.status === 'assinado' && !proposta?.tem_documento_pendente;
 ```
 
-Quando o consultor pré-define `tipoInstalacao = 'base'`, o código **pula direto para `agendada-base`**, mas `oficinaIdSelecionada` está vazio (`''`). O `AgendamentoBase` então cai no fallback da linha 113–118 (`useOficina('')` retorna nada → usa `configBase`) e mostra "Base PRATIC" com endereço da Av. Brigadeiro Lima e Silva (config global), sem deixar o usuário escolher entre as bases reais cadastradas (Oficina Praticcar / Auto GJ).
+Como o contrato já está `ativo` (não `assinado`), os botões somem — **mas a tela não exibe nenhuma mensagem dizendo "já aprovado"**. Resultado visual: Resumo mostra tudo "Concluído" mas não aparece nenhuma ação. Parece travado.
 
-Quando o usuário clica "Voltar" a partir dessa tela, o handler é `setModo('escolha-base')` (linha 265) — e aí sim aparece a tela correta com as 2 bases. Daí o sintoma: o `EscolhaBase` existe e funciona, mas **só é alcançado pelo botão Voltar**, nunca no fluxo direto.
+Provável fluxo do usuário: clicou em "Aprovar Proposta" às 17:55, aprovação processou, mas a navegação automática (`navigate('/cadastro/propostas')`) não ocorreu por algum motivo (clique no Voltar do navegador, refresh, ou o `setShowConfirmAprovar(false)` que disparou um re-render), e ele ficou na URL detalhada vendo um estado pós-aprovação sem feedback.
 
-Mesmo bug existe em `AgendamentoVistoriaCompleta.tsx` linhas 45–47: `tipoInstalacao === 'base' ? 'escolha-base'` — esse arquivo **acerta** (vai para `escolha-base`). O divergente é o `EtapaVistoria.tsx`.
+### Correção proposta (UX)
 
-## Correção
+Em `src/pages/cadastro/PropostaAnalise.tsx` + `PropostaApprovalStepper.tsx`:
 
-**`src/components/cotacao-publica/EtapaVistoria.tsx`** — linha 164:
+1. Quando `proposta.status === 'ativo'` (já aprovado), exibir um **banner verde de sucesso** no topo:
+   > "Proposta já aprovada em 17/04/2026 às 17:55 por [Aprovador]. Cadastro concluído."
+   
+   Com botão **"Ver associado"** (vai para `/cadastro/associados/{associado_id}`) e **"Voltar para lista"**.
 
-```diff
-  } else if (tipoInstalacao === 'base') {
--   setModo('agendada-base');
-+   setModo('escolha-base');
-  }
-```
+2. No stepper (etapa 3), substituir os botões de ação por uma mensagem de estado final quando `status === 'ativo'`, `cancelado` ou `reprovado` — em vez de simplesmente esconder os botões.
 
-E ajustar o "Voltar" da `escolha-base` (linha 242) para refletir corretamente: quando `tipoInstalacao === 'base'` o passo anterior é `escolha` (não `escolha-local`, que é pulado). Já está correto: `setModo(tipoInstalacao ? 'escolha' : 'escolha-local')` ✓.
+3. Garantir que `useProposta` redirecione automaticamente para a lista quando o status não for mais `assinado` (opcional — pode fazer apenas o item 1 para manter rastreabilidade).
 
-## Auditoria
+### Arquivos a editar
 
-- `AgendamentoVistoriaCompleta.tsx` (usado pós-autovistoria): já direciona corretamente para `escolha-base`. Sem mudança.
-- `EscolhaLocalVistoria.tsx`: filtra opções por `tipoInstalacao` corretamente. Sem mudança.
-- Quando há 1 só base cadastrada, o `EscolhaBase` ainda renderiza ela como cartão clicável — UX consistente, sem auto-skip (intencional).
+- `src/pages/cadastro/PropostaAnalise.tsx` — adicionar banner de "já aprovado" + buscar nome de quem aprovou.
+- `src/components/cadastro/proposta/PropostaApprovalStepper.tsx` — exibir estado final quando `!podeAprovar` por motivo de já estar aprovado/reprovado/cancelado.
 
-## Validação
+### Validação
 
-1. Link público com cotação onde consultor marcou `tipo_instalacao = 'base'`.
-2. Etapa Vistoria → "Agendar Vistoria Presencial" → deve cair em **"Escolha a base"** com as 2 unidades (Oficina Praticcar e Auto GJ), **não** direto na agenda.
-3. Selecionar base → tela de horários da base escolhida (endereço bate com a base clicada).
-4. Botão Voltar da agenda → volta para "Escolha a base".
-5. Botão Voltar de "Escolha a base" → volta para a tela inicial de tipo de vistoria (autovistoria/agendar).
-6. Cotação sem `tipo_instalacao` definido: mantém fluxo `escolha-local` → escolha-base → agenda.
-7. Cotação com `tipo_instalacao = 'rota'`: vai direto para agenda no endereço do cliente (inalterado).
+1. Abrir `/cadastro/propostas/d96300ef-9c49-4b3b-9e14-47197098ccbc` → deve mostrar banner verde "Proposta aprovada em 17/04 17:55" com botão para ver o associado.
+2. Abrir uma proposta ainda `assinado` → fluxo normal de aprovação inalterado.
+3. Após aprovar uma proposta nova, navegação para próxima/lista continua funcionando.
 
-## Resultado
+### Resultado
 
-Usuário sempre vê a lista de bases disponíveis antes dos horários, eliminando a seleção automática indevida da Base PRATIC global.
+A "proposta LSP3E65" **não tem problema** — está aprovada e o associado está ativo. O bug é puramente visual: a tela de análise não comunica o estado pós-aprovação quando o usuário volta a ela.
 
