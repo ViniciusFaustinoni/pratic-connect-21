@@ -14,6 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useVendedorStats } from '@/hooks/useVendedorHistorico';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAppRoles } from '@/hooks/useAppRoles';
@@ -288,6 +289,7 @@ export default function UsuarioForm() {
     regioes_atendimento: [] as string[],
     capacidade_diaria: 10,
     grade_comissao_id: '' as string,
+    agencia_forma_recebimento: 'comissao' as 'comissao' | 'em_maos',
   });
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -388,6 +390,7 @@ export default function UsuarioForm() {
       perfis: usuario.roles || [], regioes_atendimento: usuario.regioes_atendimento || [],
       capacidade_diaria: usuario.capacidade_diaria || 10,
       grade_comissao_id: userGrade || '',
+      agencia_forma_recebimento: ((usuario as any).agencia_forma_recebimento === 'em_maos' ? 'em_maos' : 'comissao') as 'comissao' | 'em_maos',
     };
     setFormData((prev) => {
       const same = prev.nome === next.nome && prev.email === next.email &&
@@ -399,7 +402,8 @@ export default function UsuarioForm() {
         prev.perfis.every((p, i) => p === next.perfis[i]) &&
         prev.regioes_atendimento.length === next.regioes_atendimento.length &&
         prev.capacidade_diaria === next.capacidade_diaria &&
-        prev.grade_comissao_id === next.grade_comissao_id;
+        prev.grade_comissao_id === next.grade_comissao_id &&
+        prev.agencia_forma_recebimento === next.agencia_forma_recebimento;
       return same ? prev : next;
     });
   }, [usuario, userGrade]);
@@ -427,6 +431,7 @@ export default function UsuarioForm() {
           profileUpdate.razao_social = formData.razao_social;
           profileUpdate.nome_fantasia = formData.nome_fantasia;
           profileUpdate.cpf = null;
+          profileUpdate.agencia_forma_recebimento = formData.agencia_forma_recebimento;
         } else {
           profileUpdate.cpf = formData.cpf;
           profileUpdate.cnpj = null;
@@ -756,6 +761,49 @@ export default function UsuarioForm() {
                       Define os percentuais de comissão aplicados a este consultor/agência
                     </p>
                   </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Modo de recebimento da agência — só diretor/admin pode alterar */}
+            {formData.tipo === 'agencia' && (isDiretor || isAdminMaster) && (
+              <Card className="border-border/50 border-blue-500/30">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <TrendingUp className="w-5 h-5 text-blue-500" />
+                    Modo de Recebimento da Agência
+                  </CardTitle>
+                  <CardDescription>
+                    Define como esta agência recebe o valor da adesão dos associados que indicar
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <RadioGroup
+                    value={formData.agencia_forma_recebimento}
+                    onValueChange={(v) =>
+                      setFormData(prev => ({ ...prev, agencia_forma_recebimento: v as 'comissao' | 'em_maos' }))
+                    }
+                    className="space-y-3"
+                  >
+                    <label className="flex items-start gap-3 p-3 rounded-md border border-border cursor-pointer hover:bg-muted/50">
+                      <RadioGroupItem value="comissao" id="recebe-comissao" className="mt-1" />
+                      <div className="space-y-1">
+                        <div className="font-medium">Recebe via Comissão</div>
+                        <p className="text-xs text-muted-foreground">
+                          Padrão. O associado paga a adesão via ASAAS (PIX/boleto) e a agência recebe comissão conforme a grade atribuída.
+                        </p>
+                      </div>
+                    </label>
+                    <label className="flex items-start gap-3 p-3 rounded-md border border-border cursor-pointer hover:bg-muted/50">
+                      <RadioGroupItem value="em_maos" id="recebe-em-maos" className="mt-1" />
+                      <div className="space-y-1">
+                        <div className="font-medium">Recebe em Mãos</div>
+                        <p className="text-xs text-muted-foreground">
+                          A agência recebe a adesão diretamente do associado. O sistema registra o valor da venda normalmente, mas <strong>não gera cobrança de adesão no ASAAS</strong>. O contrato, a cobertura e a instalação seguem o fluxo padrão.
+                        </p>
+                      </div>
+                    </label>
+                  </RadioGroup>
                 </CardContent>
               </Card>
             )}

@@ -93,6 +93,52 @@ serve(async (req) => {
       );
     }
 
+    // GUARD: Agência em modo "recebe em mãos" — não cria cobrança no ASAAS
+    try {
+      const { data: contratoAg } = await supabase
+        .from('contratos')
+        .select('id, vendedor_id, cotacao_id, cotacoes:cotacao_id(vendedor_id)')
+        .eq('id', contratoId)
+        .maybeSingle();
+
+      const vendedorId =
+        (contratoAg as any)?.vendedor_id ||
+        (contratoAg as any)?.cotacoes?.vendedor_id ||
+        null;
+
+      if (vendedorId) {
+        const { data: vendedor } = await supabase
+          .from('profiles')
+          .select('tipo, agencia_forma_recebimento')
+          .eq('user_id', vendedorId)
+          .maybeSingle();
+
+        if (vendedor?.tipo === 'agencia' && (vendedor as any).agencia_forma_recebimento === 'em_maos') {
+          console.log('[asaas-cobranca-adesao] Agência em modo "em_maos" — adesão isenta no ASAAS, recebida diretamente pela agência.');
+          await supabase
+            .from('contratos')
+            .update({
+              adesao_isenta_agencia: true,
+              adesao_paga: true,
+              adesao_paga_em: new Date().toISOString(),
+            })
+            .eq('id', contratoId);
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              isento: true,
+              agencia_em_maos: true,
+              message: 'Adesão será recebida diretamente pela agência. Nenhuma cobrança gerada no ASAAS.',
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+    } catch (agErr) {
+      console.error('[asaas-cobranca-adesao] Erro ao checar agência (seguindo fluxo normal):', agErr);
+    }
+
     // Sanitizar CPF/CNPJ
     let cpfCnpj = (cliente.cpfCnpj || '').replace(/\D/g, '');
     if (cpfCnpj.length > 0 && cpfCnpj.length < 11) {

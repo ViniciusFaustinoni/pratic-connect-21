@@ -7981,6 +7981,7 @@ export type Database = {
       contratos: {
         Row: {
           adesao_cobranca_id: string | null
+          adesao_isenta_agencia: boolean
           adesao_paga: boolean | null
           adesao_paga_em: string | null
           adicionais_selecionados: Json | null
@@ -8099,6 +8100,7 @@ export type Database = {
         }
         Insert: {
           adesao_cobranca_id?: string | null
+          adesao_isenta_agencia?: boolean
           adesao_paga?: boolean | null
           adesao_paga_em?: string | null
           adicionais_selecionados?: Json | null
@@ -8217,6 +8219,7 @@ export type Database = {
         }
         Update: {
           adesao_cobranca_id?: string | null
+          adesao_isenta_agencia?: boolean
           adesao_paga?: boolean | null
           adesao_paga_em?: string | null
           adicionais_selecionados?: Json | null
@@ -20127,6 +20130,7 @@ export type Database = {
       profiles: {
         Row: {
           agencia_bancaria: string | null
+          agencia_forma_recebimento: string
           ativo: boolean
           avatar_url: string | null
           banco: string | null
@@ -20164,6 +20168,7 @@ export type Database = {
         }
         Insert: {
           agencia_bancaria?: string | null
+          agencia_forma_recebimento?: string
           ativo?: boolean
           avatar_url?: string | null
           banco?: string | null
@@ -20201,6 +20206,7 @@ export type Database = {
         }
         Update: {
           agencia_bancaria?: string | null
+          agencia_forma_recebimento?: string
           ativo?: boolean
           avatar_url?: string | null
           banco?: string | null

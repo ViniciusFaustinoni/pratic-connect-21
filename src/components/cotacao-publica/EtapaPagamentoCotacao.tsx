@@ -194,15 +194,15 @@ export function EtapaPagamentoCotacao({
       // Primeiro, verificar se a cotação já tem contrato
       const { data: cotacao } = await publicSupabase
         .from('cotacoes')
-        .select('contrato_gerado_id')
+        .select('contrato_gerado_id, vendedor_id')
         .eq('id', cotacaoId)
         .single();
 
       if (cotacao?.contrato_gerado_id) {
-        // Verificar se o contrato já está pago
+        // Verificar se o contrato já está pago OU isento por agência
         const { data: contrato } = await publicSupabase
           .from('contratos')
-          .select('adesao_paga')
+          .select('adesao_paga, adesao_isenta_agencia, vendedor_id')
           .eq('id', cotacao.contrato_gerado_id)
           .maybeSingle();
 
@@ -211,6 +211,43 @@ export function EtapaPagamentoCotacao({
           setContratoId(cotacao.contrato_gerado_id);
           setEtapaInterna('pago');
           return;
+        }
+
+        // ===== AGÊNCIA RECEBE EM MÃOS: pular cobrança ASAAS =====
+        const vendedorId = (contrato as any)?.vendedor_id || cotacao?.vendedor_id;
+        if (vendedorId) {
+          const { data: vendedor } = await publicSupabase
+            .from('profiles')
+            .select('tipo, agencia_forma_recebimento')
+            .eq('user_id', vendedorId)
+            .maybeSingle();
+
+          if (vendedor?.tipo === 'agencia' && (vendedor as any)?.agencia_forma_recebimento === 'em_maos') {
+            console.log('[EtapaPagamento] Agência em modo "em_maos" — adesão recebida diretamente pela agência');
+            setMsgAdesaoZerada('Sua adesão foi confirmada diretamente pela agência responsável. Nenhum pagamento é devido no sistema.');
+
+            await publicSupabase
+              .from('contratos')
+              .update({
+                adesao_paga: true,
+                adesao_isenta_agencia: true,
+              } as any)
+              .eq('id', cotacao.contrato_gerado_id);
+
+            try {
+              await publicSupabase.functions.invoke('criar-instalacao-pos-pagamento', {
+                body: { cotacaoId, skipPaymentCheck: true },
+              });
+            } catch (instErr) {
+              console.error('[EtapaPagamento] Erro ao criar instalação (agência em mãos):', instErr);
+            }
+
+            setContratoId(cotacao.contrato_gerado_id);
+            setAdesaoZerada(true);
+            setEtapaInterna('pago');
+            setTimeout(() => onPagamentoConfirmado(), 1500);
+            return;
+          }
         }
       }
 
