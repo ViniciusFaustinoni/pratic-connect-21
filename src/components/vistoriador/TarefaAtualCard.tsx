@@ -560,6 +560,8 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
                   </div>
                 )}
               </div>
+                );
+              })()
             ) : isEmRota ? (
               <div className="grid grid-cols-2 gap-3">
                 <Button
