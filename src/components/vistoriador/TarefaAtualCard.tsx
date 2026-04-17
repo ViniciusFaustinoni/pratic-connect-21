@@ -501,10 +501,13 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
           {/* Ações */}
           <div className="space-y-3 pt-2">
             {isAgendada ? (
-              // Tarefa atribuída - contato obrigatório antes de iniciar percurso
+              // Tarefa atribuída - contato obrigatório antes de iniciar percurso (apenas para serviços externos)
+              (() => {
+                const isNaBase = tarefa.local_vistoria === 'base';
+                return (
               <div className="space-y-2">
-                {/* Mensagem de orientação quando contato não foi feito */}
-                {!contatoRealizado && (
+                {/* Mensagem de orientação quando contato não foi feito (somente serviços externos) */}
+                {!isNaBase && !contatoRealizado && (
                   <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-md py-2 px-3">
                     <MessageCircle className="h-4 w-4 flex-shrink-0" />
                     <span>Entre em contato com o associado antes de iniciar o percurso</span>
@@ -512,7 +515,7 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
                 )}
                 
                 {/* Feedback de contato realizado */}
-                {contatoRealizado && (
+                {!isNaBase && contatoRealizado && (
                   <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 bg-green-500/10 rounded-md py-2 px-3">
                     <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
                     <span>Contato realizado via {tarefa.contato_tipo === 'whatsapp' ? 'WhatsApp' : 'Ligação'}</span>
@@ -521,7 +524,7 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
 
                 <Button
                   onClick={handleIniciarRota}
-                  disabled={isIniciandoRota || !podeIniciarPorHorario || !contatoRealizado}
+                  disabled={isIniciandoRota || !podeIniciarPorHorario || (!isNaBase && !contatoRealizado)}
                   className="w-full gap-2"
                 >
                   {isIniciandoRota ? (
