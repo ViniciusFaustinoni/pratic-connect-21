@@ -149,7 +149,7 @@ export function PropostaMidiaGrid({
               </Badge>
             </div>
             <div className="aspect-video bg-muted rounded-lg flex items-center justify-center relative overflow-hidden">
-              <video src={video360Url} className="w-full h-full object-cover" muted preload="metadata" />
+              <VideoComFallback src={video360Url} className="w-full h-full object-cover" muted preload="metadata" />
               <div className="absolute inset-0 bg-black/40 flex items-center justify-center group-hover:bg-black/30 transition-colors">
                 <div className="w-12 h-12 rounded-full bg-purple-500 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
                   <Play className="h-6 w-6 text-white ml-0.5" />
@@ -192,7 +192,7 @@ export function PropostaMidiaGrid({
                       <Play className="h-6 w-6 text-white" />
                     </div>
                   ) : (
-                    <img src={foto.arquivo_url} alt={foto.tipo || `Foto ${idx + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                    <ImgComFallback src={foto.arquivo_url} alt={foto.tipo || `Foto ${idx + 1}`} className="w-full h-full object-cover" />
                   )}
                   {idx === 5 && totalFotos > 6 && (
                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
@@ -268,7 +268,7 @@ export function PropostaMidiaGrid({
             </DialogTitle>
           </DialogHeader>
           <div className="bg-black">
-            <video src={video360Url || ''} controls autoPlay className="w-full max-h-[70vh] object-contain" playsInline />
+            <VideoComFallback src={video360Url || ''} controls autoPlay className="w-full max-h-[70vh] object-contain" playsInline />
           </div>
         </DialogContent>
       </Dialog>
