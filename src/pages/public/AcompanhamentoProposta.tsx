@@ -428,8 +428,25 @@ function getStatusInfo(associado: AssociadoData) {
     };
   }
 
-  // Pendente vistoria
+  // Pendente vistoria — diferenciar "agendamento confirmado" (em análise cadastral)
+  // vs "sem agendamento" (aguardando vistoria)
   if (associado.status === 'pendente_vistoria') {
+    const temAgendamento = !!instalacao?.data_agendada;
+    if (temAgendamento) {
+      return {
+        status: 'em_analise_cadastral',
+        icon: ClipboardCheck,
+        color: 'info',
+        title: 'Em Análise Cadastral',
+        description: 'Recebemos seu agendamento e documentação. Nosso analista está revisando seu cadastro. Após aprovação, sua vistoria/instalação será executada conforme agendado.',
+        showDetails: true,
+        showInstalacao: true,
+        showCriarConta: false,
+        showEmRota: false,
+        showEmAndamento: false,
+        showAtribuidaRota: false,
+      };
+    }
     return {
       status: 'pendente_vistoria',
       icon: Camera,

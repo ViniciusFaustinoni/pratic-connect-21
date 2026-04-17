@@ -81,12 +81,20 @@ export interface VistoriaBaseInfo {
   atendido_por_nome: string | null;
 }
 
+// Estágio da análise para diferenciar fila do analista
+export type TipoEtapaAnalise =
+  | 'agendamento_confirmado'   // Cliente agendou, vistoria/instalação ainda não executada
+  | 'vistoria_em_execucao'     // Autovistoria iniciada (algumas fotos enviadas)
+  | 'vistoria_concluida'       // Autovistoria/vistoria-base concluída
+  | 'instalacao_concluida';    // Instalação domiciliar concluída
+
 export interface PropostaPendente {
   id: string;
   numero: string | null;
   data_assinatura: string | null;
   valor_mensal: number | null;
   status: string | null;
+  tipo_etapa_analise: TipoEtapaAnalise | null;
   cliente_nome: string | null;
   cliente_cpf: string | null;
   cliente_telefone: string | null;
@@ -495,6 +503,7 @@ export function usePropostasPendentes() {
       } | null = null;
       
       if (contrato.cotacao_id) {
+        // Aceita 'agendado' OU 'realizado' (analista pode revisar docs já no agendamento)
         const { data: agendamentoBase } = await supabase
           .from('agendamentos_base')
           .select(`
@@ -505,7 +514,8 @@ export function usePropostasPendentes() {
             atendido_por_profile:profiles!agendamentos_base_atendido_por_fkey(nome)
           `)
           .eq('cotacao_id', contrato.cotacao_id)
-          .eq('status', 'realizado')
+          .in('status', ['agendado', 'realizado'])
+          .order('data_agendada', { ascending: false })
           .limit(1)
           .maybeSingle();
         
@@ -520,16 +530,35 @@ export function usePropostasPendentes() {
         }
       }
       
-      const temVistoriaBaseRealizada = !!vistoriaBaseInfo;
-      
-      // Permitir propostas COM autovistoria ou vistoria na base mesmo sem instalação
-      // (a instalação será criada pelo cadastro após aprovação)
-      if (!instalacaoInfo && !temAutovistoria && !temVistoriaBaseRealizada) {
+      const temVistoriaBaseRealizada = vistoriaBaseInfo?.status === 'realizado';
+      const temVistoriaBaseAgendada = vistoriaBaseInfo?.status === 'agendado';
+      const temInstalacaoAgendada = !!instalacaoAgendada;
+
+      // NOVA REGRA: incluir propostas com agendamento confirmado OU execução em andamento/concluída
+      const temQualquerEtapa =
+        instalacaoInfo ||
+        temAutovistoria ||
+        temVistoriaBaseRealizada ||
+        temVistoriaBaseAgendada ||
+        temInstalacaoAgendada;
+
+      if (!temQualquerEtapa) {
         return null;
+      }
+
+      // Determinar estágio para o analista
+      let tipoEtapaAnalise: TipoEtapaAnalise;
+      if (instalacaoInfo) {
+        tipoEtapaAnalise = 'instalacao_concluida';
+      } else if (temAutovistoria || temVistoriaBaseRealizada) {
+        tipoEtapaAnalise = 'vistoria_concluida';
+      } else {
+        tipoEtapaAnalise = 'agendamento_confirmado';
       }
 
           return {
             ...contrato,
+            tipo_etapa_analise: tipoEtapaAnalise,
             associado,
             plano,
             plano_nome: planoNome,
@@ -1099,7 +1128,8 @@ export function useProposta(contratoId: string | undefined) {
             atendido_por_profile:profiles!agendamentos_base_atendido_por_fkey(nome)
           `)
           .eq('cotacao_id', contrato.cotacao_id)
-          .eq('status', 'realizado')
+          .in('status', ['agendado', 'realizado'])
+          .order('data_agendada', { ascending: false })
           .limit(1)
           .maybeSingle();
         
@@ -1114,8 +1144,21 @@ export function useProposta(contratoId: string | undefined) {
         }
       }
 
+      // Determinar estágio para o analista (mesma lógica da listagem)
+      const temAutovistoriaProp = vistoria && vistoria.fotos && vistoria.fotos.length > 0;
+      const temVistoriaBaseRealizadaProp = vistoriaBaseInfo?.status === 'realizado';
+      let tipoEtapaAnaliseSingle: TipoEtapaAnalise | null = null;
+      if (instalacaoInfo) {
+        tipoEtapaAnaliseSingle = 'instalacao_concluida';
+      } else if (temAutovistoriaProp || temVistoriaBaseRealizadaProp) {
+        tipoEtapaAnaliseSingle = 'vistoria_concluida';
+      } else if (instalacaoAgendada || vistoriaBaseInfo?.status === 'agendado') {
+        tipoEtapaAnaliseSingle = 'agendamento_confirmado';
+      }
+
       const result: PropostaPendente = {
         ...contrato,
+        tipo_etapa_analise: tipoEtapaAnaliseSingle,
         associado,
         plano,
         plano_nome: planoNome,

@@ -26,6 +26,7 @@ import {
   XCircle,
   Ban,
   ExternalLink,
+  ClipboardCheck,
 } from 'lucide-react';
 import {
   useProposta,
@@ -85,7 +86,12 @@ export default function PropostaAnalise() {
   ) && !proposta?.instalacao_info && !isVistoriaBase;
 
   // Verificar se pode aprovar
-  const podeAprovar = proposta?.status === 'assinado' && !proposta?.tem_documento_pendente;
+  // NOVO: bloqueia aprovação enquanto vistoria/instalação não foi executada
+  const aguardandoExecucao = proposta?.tipo_etapa_analise === 'agendamento_confirmado';
+  const podeAprovar =
+    proposta?.status === 'assinado' &&
+    !proposta?.tem_documento_pendente &&
+    !aguardandoExecucao;
 
   // Estado final (já aprovado / reprovado / cancelado)
   const isAprovada = proposta?.status === 'ativo';
@@ -145,6 +151,10 @@ export default function PropostaAnalise() {
         contratoId: id,
         veiculoRenavam: veiculoRenavam || undefined,
         veiculoChassi: veiculoChassi || undefined,
+      });
+      toast.success('Proposta aprovada!', {
+        description: 'Após a instalação, o monitoramento dará o segundo check para liberação total da Proteção 360 e do app do associado.',
+        duration: 6000,
       });
       // Navegar para próxima ou voltar para lista
       if (nextProposta) {
@@ -378,6 +388,22 @@ export default function PropostaAnalise() {
               <ArrowLeft className="mr-2 h-4 w-4" />
               Voltar para lista
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Banner: aguardando execução da vistoria/instalação (analista pode revisar docs mas não aprovar) */}
+      {!isFinalizada && aguardandoExecucao && (
+        <div className="rounded-lg border-2 border-info/40 bg-info/10 p-4">
+          <div className="flex items-start gap-3">
+            <ClipboardCheck className="h-5 w-5 text-info mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <p className="font-semibold text-info">Análise documental disponível</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Você pode revisar documentos e contrato agora. A <strong>aprovação final</strong> será liberada após a execução da vistoria/instalação agendada.
+                Em seguida, o monitoramento dará o <strong>segundo check</strong> para liberar a Proteção 360 e o app do associado.
+              </p>
+            </div>
           </div>
         </div>
       )}
