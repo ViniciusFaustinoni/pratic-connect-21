@@ -102,30 +102,8 @@ export function VideoCapture({
       streamRef.current = stream;
       // O attach ao <video> acontece no useEffect acima, garantindo que o ref já está montado.
       setLiveStream(stream);
-    setError(null);
-    chunksRef.current = [];
-    
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-        audio: true,
-      });
-      
-      streamRef.current = stream;
-      
-      // Mostrar preview ao vivo (hardening iOS Safari)
-      if (videoPreviewRef.current) {
-        const v = videoPreviewRef.current;
-        v.srcObject = stream;
-        v.muted = true;
-        v.playsInline = true;
-        try {
-          await v.play();
-        } catch (playErr) {
-          console.warn('[VideoCapture] play() bloqueado:', playErr);
-        }
-      }
-      
+
+
       // Prefer MP4 (Safari/iOS) → fallback WebM
       const candidates = [
         'video/mp4;codecs=h264,aac',
