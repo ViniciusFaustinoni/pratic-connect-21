@@ -309,7 +309,7 @@ serve(async (req) => {
     if (contrato.veiculo_id) {
       const { data: veiculoData } = await supabase
         .from('veiculos')
-        .select('flag_placa_vermelha, flag_ex_taxi, flag_taxi_ativo, flag_chassi_remarcado, flag_ex_ressarcido, flag_avarias_vistoria, blindado')
+        .select('flag_placa_vermelha, flag_ex_taxi, flag_taxi_ativo, flag_chassi_remarcado, flag_ex_ressarcido, flag_avarias_vistoria, blindado, ano_fabricacao, ano_modelo')
         .eq('id', contrato.veiculo_id)
         .maybeSingle();
       veiculoDB = veiculoData;

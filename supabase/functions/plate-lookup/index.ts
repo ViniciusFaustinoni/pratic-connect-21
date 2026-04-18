@@ -134,7 +134,7 @@ serve(async (req) => {
     }
 
     const apiData = await response.json();
-    console.log(`[plate-lookup] Resposta da API (fallback: ${usedFallback}):`, JSON.stringify(apiData));
+    console.log(`[plate-lookup] Resposta da API RAW (fallback: ${usedFallback}):`, JSON.stringify(apiData));
 
     // Extrair dados aninhados (estrutura: { data: { veiculo: {...}, fipes: [...] } })
     const veiculo = apiData.data?.veiculo || apiData.veiculo || apiData;
@@ -152,13 +152,41 @@ serve(async (req) => {
 
     console.log(`[plate-lookup] Marca: ${marca}, Modelo: ${modelo}`);
 
+    // ============= ANO FABRICAÇÃO vs ANO MODELO =============
+    // A API pode entregar de várias formas:
+    //   - veiculo.ano = "2014"          (um único valor)
+    //   - veiculo.ano = "2014/2015"     (fab/mod no mesmo campo)
+    //   - veiculo.ano_fabricacao + veiculo.ano_modelo (separados)
+    // Mapeamos os 3 cenários priorizando os campos separados quando existirem.
+    const anoRaw = String(veiculo.ano || '').trim();
+    let anoFabricacao = '';
+    let anoModelo = '';
+
+    if (veiculo.ano_fabricacao || veiculo.ano_modelo) {
+      anoFabricacao = String(veiculo.ano_fabricacao || veiculo.ano_modelo || '').trim();
+      anoModelo = String(veiculo.ano_modelo || veiculo.ano_fabricacao || '').trim();
+    } else if (anoRaw.includes('/')) {
+      const [fab, mod] = anoRaw.split('/').map(s => s.trim());
+      anoFabricacao = fab || '';
+      anoModelo = mod || fab || '';
+    } else if (anoRaw) {
+      // Único valor — sem como saber se é fab ou mod, usamos o mesmo nos dois.
+      // O front/CRLV deve corrigir o ano modelo quando aplicável.
+      anoFabricacao = anoRaw;
+      anoModelo = anoRaw;
+    }
+
+    console.log(`[plate-lookup] Ano fab: ${anoFabricacao}, Ano mod: ${anoModelo}`);
+
     const vehicleData = {
       placa: veiculo.placa || formatarPlaca(placaNormalizada),
       chassi: veiculo.chassi || '',
       marca: marca.trim(),
       modelo: modelo,
       marca_modelo: marcaModelo,
-      ano: veiculo.ano || '',
+      ano: anoModelo || anoFabricacao || '', // legado (mantém compat)
+      ano_fabricacao: anoFabricacao,
+      ano_modelo: anoModelo,
       cor: veiculo.cor || '',
       combustivel: veiculo.combustivel || '',
       municipio: veiculo.municipio || '',

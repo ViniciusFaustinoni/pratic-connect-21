@@ -413,8 +413,16 @@ export function mapearDadosParaTemplate(
       renavam: contrato.veiculo_renavam || veiculo.veiculo_renavam || "",
       marca: contrato.veiculo_marca || veiculo.veiculo_marca || "",
       modelo: contrato.veiculo_modelo || veiculo.veiculo_modelo || "",
-      ano: contrato.veiculo_ano || veiculo.veiculo_ano || 0,
-      ano_fabricacao: contrato.veiculo_ano_fabricacao || veiculo.veiculo_ano_fabricacao || 0,
+      // Hierarquia ano modelo: contrato > veiculoDB.ano_modelo > lead/veiculo > 0
+      ano: contrato.veiculo_ano || veiculoDB?.ano_modelo || veiculo.veiculo_ano || 0,
+      // Hierarquia ano fabricação: contrato > veiculoDB.ano_fabricacao > lead/veiculo > ano modelo (último recurso) > 0
+      ano_fabricacao:
+        contrato.veiculo_ano_fabricacao
+        || veiculoDB?.ano_fabricacao
+        || veiculo.veiculo_ano_fabricacao
+        || contrato.veiculo_ano
+        || veiculo.veiculo_ano
+        || 0,
       cor: contrato.veiculo_cor || veiculo.veiculo_cor || "",
       combustivel: contrato.veiculo_combustivel || veiculo.veiculo_combustivel || "",
       categoria: contrato.veiculo_categoria || veiculo.veiculo_categoria || "Automóvel",

@@ -205,12 +205,13 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
           setDadosExtraidos(prev => ({ ...prev, modelo: { value: lead.veiculo_modelo, fonte: 'Lead' } }));
         }
         if (lead.veiculo_ano) {
-          form.setValue('ano_fabricacao', lead.veiculo_ano);
+          // Não espelhar: o lead só guarda um ano (geralmente o modelo).
+          // Preencher ano_modelo e deixar ano_fabricacao em branco para o usuário
+          // confirmar a partir do CRLV — evita gravar Fab=Mod incorretamente.
           form.setValue('ano_modelo', lead.veiculo_ano);
-          setDadosExtraidos(prev => ({ 
-            ...prev, 
-            ano_fabricacao: { value: String(lead.veiculo_ano), fonte: 'Lead' },
-            ano_modelo: { value: String(lead.veiculo_ano), fonte: 'Lead' }
+          setDadosExtraidos(prev => ({
+            ...prev,
+            ano_modelo: { value: String(lead.veiculo_ano), fonte: 'Lead' },
           }));
         }
         if (lead.veiculo_placa) {
@@ -261,13 +262,20 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
           setDadosExtraidos(prev => ({ ...prev, modelo: { value: cotacao.veiculo_modelo!, fonte: 'Cotação' } }));
         }
         if (cotacao.veiculo_ano) {
-          form.setValue('ano_fabricacao', cotacao.veiculo_ano);
+          // Mesmo critério do bloco do lead: nunca espelhar ano_fabricacao = ano_modelo.
+          // Preferir veiculo_ano_fabricacao da cotação quando existir; senão deixar vazio.
           form.setValue('ano_modelo', cotacao.veiculo_ano);
-          setDadosExtraidos(prev => ({ 
-            ...prev, 
-            ano_fabricacao: { value: String(cotacao.veiculo_ano), fonte: 'Cotação' },
-            ano_modelo: { value: String(cotacao.veiculo_ano), fonte: 'Cotação' }
+          setDadosExtraidos(prev => ({
+            ...prev,
+            ano_modelo: { value: String(cotacao.veiculo_ano), fonte: 'Cotação' },
           }));
+          if (cotacao.veiculo_ano_fabricacao) {
+            form.setValue('ano_fabricacao', cotacao.veiculo_ano_fabricacao);
+            setDadosExtraidos(prev => ({
+              ...prev,
+              ano_fabricacao: { value: String(cotacao.veiculo_ano_fabricacao), fonte: 'Cotação' },
+            }));
+          }
         }
         if (cotacao.veiculo_placa) {
           form.setValue('placa', cotacao.veiculo_placa);
