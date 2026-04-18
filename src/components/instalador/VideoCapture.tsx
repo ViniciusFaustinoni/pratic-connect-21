@@ -244,12 +244,27 @@ export function VideoCapture({
 
       <div
         className={cn(
-          'relative flex aspect-video flex-col items-center justify-center rounded-lg border-2 border-dashed transition-all',
+          'relative flex aspect-video flex-col items-center justify-center rounded-lg border-2 border-dashed transition-all overflow-hidden',
           hasVideo
             ? 'border-transparent'
             : 'border-slate-600 bg-slate-800'
         )}
       >
+        {/* <video> de preview ao vivo SEMPRE montado — só fica visível durante a gravação.
+            Isso evita o race condition em que o ref ainda é null quando getUserMedia resolve. */}
+        <video
+          ref={videoPreviewRef}
+          autoPlay
+          muted
+          playsInline
+          // @ts-ignore — atributo necessário em WebViews iOS antigos
+          webkit-playsinline=""
+          className={cn(
+            'absolute inset-0 h-full w-full rounded-lg object-cover bg-black',
+            isRecording ? 'block' : 'hidden'
+          )}
+        />
+
         {uploading ? (
           <div className="flex flex-col items-center gap-2">
             <Loader2 className="h-10 w-10 animate-spin text-blue-500" />
@@ -257,15 +272,8 @@ export function VideoCapture({
           </div>
         ) : isRecording ? (
           <>
-            <video
-              ref={videoPreviewRef}
-              autoPlay
-              muted
-              playsInline
-              className="h-full w-full rounded-lg object-cover"
-            />
             {/* HUD topo: timer */}
-            <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-center bg-gradient-to-b from-black/70 to-transparent px-3 py-2">
+            <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-center bg-gradient-to-b from-black/70 to-transparent px-3 py-2 z-10">
               <div className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
                 <span className="text-sm font-semibold text-white drop-shadow">
@@ -274,7 +282,7 @@ export function VideoCapture({
               </div>
             </div>
             {/* HUD rodapé: botão parar */}
-            <div className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-gradient-to-t from-black/70 to-transparent px-3 py-3">
+            <div className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-gradient-to-t from-black/70 to-transparent px-3 py-3 z-10">
               <Button
                 size="sm"
                 variant="destructive"
