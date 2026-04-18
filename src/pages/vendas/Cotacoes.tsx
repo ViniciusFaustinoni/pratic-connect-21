@@ -79,7 +79,7 @@ const categorizarBeneficios = (coberturas: string[]) => {
 export default function Cotacoes() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showCotacaoForm, setShowCotacaoForm] = useState(false);
   const [showNovaEntrada, setShowNovaEntrada] = useState(false);
