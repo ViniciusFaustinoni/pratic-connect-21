@@ -288,6 +288,19 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
         
         <CardContent className="space-y-6">
           <InAppBrowserBanner persistent />
+
+          {capability.lowEnd && (
+            <div className="rounded-lg border border-amber-400/60 bg-amber-50 dark:bg-amber-950/30 p-3 text-amber-900 dark:text-amber-200 flex items-start gap-2">
+              <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5 text-amber-600" />
+              <div className="space-y-1 text-sm">
+                <p className="font-semibold">Detectamos memória limitada neste aparelho</p>
+                <p className="text-xs leading-relaxed">
+                  Para evitar travamentos, <strong>feche outros aplicativos</strong> antes de gravar o vídeo e tirar as fotos.
+                  Se preferir, podemos <strong>agendar uma vistoria presencial</strong> em uma de nossas bases.
+                </p>
+              </div>
+            </div>
+          )}
           <div className="text-center space-y-4">
             <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
               <Video className="h-10 w-10 text-primary" />
@@ -342,7 +355,13 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
 
           {videoUrl && (
             <Button 
-              onClick={() => setVideoConfirmado(true)} 
+              onClick={() => {
+                // Libera memória do preview do vídeo antes da etapa de fotos.
+                // O VideoCapture já revoga seu blob local via efeito 'confirmed';
+                // aqui apenas avançamos. O videoUrl remoto segue disponível.
+                console.log('[Autovistoria] Avançando para etapa de fotos — preview do vídeo liberado');
+                setVideoConfirmado(true);
+              }} 
               className="w-full mt-4"
               size="lg"
             >
