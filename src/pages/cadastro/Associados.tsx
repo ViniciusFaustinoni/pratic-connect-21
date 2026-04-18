@@ -7,6 +7,7 @@ import {
   MessageCircle, X, ChevronLeft, ChevronRight, Users, Download, Filter, DollarSign, Trash2,
   SlidersHorizontal, ShieldAlert, Ban
 } from 'lucide-react';
+import { useDebounce } from '@/hooks/useDebounce';
 import { motion } from 'framer-motion';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuth } from '@/contexts/AuthContext';
@@ -103,7 +104,8 @@ export default function Associados() {
   const canDeleteAssociados = isDiretor || isDesenvolvedor || isAdminMaster;
   
   // State
-  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const search = useDebounce(searchInput, 350);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [planoFilter, setPlanoFilter] = useState<string>('all');
   const [cidadeFilter, setCidadeFilter] = useState<string>('all');
@@ -136,7 +138,7 @@ export default function Associados() {
   const serverCidade = sheetFilters.cidade || (cidadeFilter !== 'all' ? cidadeFilter : undefined);
 
   // Queries
-  const { data, isLoading } = useAssociados({
+  const { data, isLoading, isFetching } = useAssociados({
     filters: {
       search: search || undefined,
       status: serverStatusList,
@@ -216,7 +218,7 @@ export default function Associados() {
   };
 
   const clearFilters = () => {
-    setSearch('');
+    setSearchInput('');
     setStatusFilter('all');
     setPlanoFilter('all');
     setCidadeFilter('all');
@@ -482,13 +484,9 @@ export default function Associados() {
     },
   ], [contagem, totalAssociados]);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  // Mostra a página inteira sempre — sem early return — para preservar o foco
+  // do input de busca durante refetches (debounce + keepPreviousData).
+  const showInlineLoader = isFetching && (!associados || associados.length === 0);
 
   return (
     <TooltipProvider>
@@ -590,9 +588,12 @@ export default function Associados() {
             <Input
               placeholder="Buscar por nome, CPF, telefone ou placa..."
               className="pl-9 bg-card peer"
-              value={search}
-              onChange={(e) => handleFilterChange(setSearch, e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
             />
+            {isFetching && (
+              <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+            )}
           </div>
           
           <div className="flex flex-wrap items-center gap-2">

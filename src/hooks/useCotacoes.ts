@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
@@ -71,11 +71,13 @@ export interface CotacaoWithRelations extends Omit<Cotacao, 'dados_extras'> {
 export interface UseCotacoesOptions {
   vendedorId?: string;
   viewScope?: 'own' | 'team' | 'all';
+  searchTerm?: string;
 }
 
 export function useCotacoes(options?: UseCotacoesOptions) {
+  const search = (options?.searchTerm || '').trim();
   return useQuery({
-    queryKey: ['cotacoes', options?.viewScope, options?.vendedorId],
+    queryKey: ['cotacoes', options?.viewScope, options?.vendedorId, search],
     queryFn: async () => {
       let query = supabase
         .from('cotacoes')
@@ -94,13 +96,31 @@ export function useCotacoes(options?: UseCotacoesOptions) {
           vendedor:profiles!cotacoes_vendedor_profiles_fkey(user_id, nome, email, whatsapp, full_name)
         `)
         .order('created_at', { ascending: false })
-        .limit(100);
+        .limit(search ? 300 : 100);
       
       // Filtrar por vendedor se viewScope = 'own'
       if (options?.viewScope === 'own' && options?.vendedorId) {
         query = query.eq('vendedor_id', options.vendedorId);
       }
-      
+
+      // Busca server-side (sem isso, busca em campos como `numero` ficava limitada
+      // ao lote inicial de 100 cotações e perdia registros antigos).
+      if (search) {
+        const safe = search.replace(/[,()]/g, '');
+        // Busca direta nos campos da cotação
+        query = query.or(
+          [
+            `numero.ilike.%${safe}%`,
+            `veiculo_placa.ilike.%${safe}%`,
+            `veiculo_marca.ilike.%${safe}%`,
+            `veiculo_modelo.ilike.%${safe}%`,
+            `nome_solicitante.ilike.%${safe}%`,
+            `telefone1_solicitante.ilike.%${safe}%`,
+            `email_solicitante.ilike.%${safe}%`,
+          ].join(',')
+        );
+      }
+
       const { data, error } = await query;
       
       if (error) throw error;
@@ -128,6 +148,7 @@ export function useCotacoes(options?: UseCotacoesOptions) {
       
       return mapped as CotacaoWithRelations[];
     },
+    placeholderData: keepPreviousData,
     staleTime: 1000 * 60 * 1, // Reduzido para 1 minuto para melhor responsividade
   });
 }
