@@ -55,6 +55,16 @@ export function VideoCapture({
     };
   }, [previewUrl]);
 
+  // Após upload confirmado pelo pai, libera o blob local pesado para reduzir pressão de memória.
+  // Mantém apenas o videoUrl remoto para exibição.
+  useEffect(() => {
+    if (confirmed && previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+      setPendingFile(null);
+    }
+  }, [confirmed, previewUrl]);
+
   const startRecording = async () => {
     setError(null);
     chunksRef.current = [];
