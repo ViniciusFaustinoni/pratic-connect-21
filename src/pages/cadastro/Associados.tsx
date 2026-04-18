@@ -588,9 +588,12 @@ export default function Associados() {
             <Input
               placeholder="Buscar por nome, CPF, telefone ou placa..."
               className="pl-9 bg-card peer"
-              value={search}
-              onChange={(e) => handleFilterChange(setSearch, e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
             />
+            {isFetching && (
+              <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+            )}
           </div>
           
           <div className="flex flex-wrap items-center gap-2">
