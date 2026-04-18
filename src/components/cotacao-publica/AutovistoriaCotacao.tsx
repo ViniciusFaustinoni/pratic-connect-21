@@ -25,6 +25,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
 import { VideoCapture } from '@/components/instalador/VideoCapture';
 import { InAppBrowserBanner } from '@/components/shared/InAppBrowserBanner';
+import { useDeviceCapability } from '@/hooks/useDeviceCapability';
 
 
 interface AutovistoriaCotacaoProps {
@@ -48,7 +49,9 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
   
   const inputRef = useRef<HTMLInputElement>(null);
   const finalizandoRef = useRef(false);
+  const restauradoToastRef = useRef(false);
   
+  const capability = useDeviceCapability();
   const { data: fotosExistentes, isLoading: carregandoFotos } = useFotosCotacaoVistoria(cotacaoId);
   const uploadMutation = useUploadFotoCotacaoVistoria();
   const finalizarMutation = useFinalizarVistoriaCotacao();
@@ -107,6 +110,19 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
     };
   }, []);
 
+  // Telemetria + alerta após restauração de aba (Chrome matou o processo por OOM)
+  useEffect(() => {
+    console.log(
+      `[Autovistoria] Capacidade do dispositivo: deviceMemory=${capability.deviceMemory ?? '?'}GB cores=${capability.hardwareConcurrency ?? '?'} lowEnd=${capability.lowEnd} heap=${capability.usedHeapMB ?? '?'}MB wasDiscarded=${capability.wasDiscarded}`
+    );
+    if (capability.wasDiscarded && !restauradoToastRef.current) {
+      restauradoToastRef.current = true;
+      toast.info('Continuamos de onde você parou. Toque para enviar a próxima foto.', {
+        duration: 6000,
+      });
+    }
+  }, [capability]);
+
   const handleCapturarFoto = () => {
     inputRef.current?.click();
   };
@@ -131,16 +147,12 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
     
     try {
       // Comprimir imagem para economizar memória e acelerar upload
+      // Perfil é resolvido automaticamente conforme deviceMemory (low/mid/high)
       let arquivoFinal = file;
-      if (file.size > 500 * 1024) {
+      if (file.size > 250 * 1024) {
         toast.loading('Otimizando imagem...', { id: 'compress' });
         try {
-          arquivoFinal = await compressImage(file, { 
-            maxWidth: 1920, 
-            maxHeight: 1920, 
-            quality: 0.75,
-            maxSizeKB: 800 
-          });
+          arquivoFinal = await compressImage(file);
           toast.dismiss('compress');
         } catch (compressError) {
           console.warn('[AutovistoriaCotacao] Erro na compressão, usando original:', compressError);
