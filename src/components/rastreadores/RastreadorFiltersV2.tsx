@@ -38,6 +38,26 @@ export function RastreadorFiltersV2({ filters, onFiltersChange }: RastreadorFilt
   const { data: plataformas, isLoading: loadingPlataformas } = usePlataformasOptions();
   const [isExpanded, setIsExpanded] = useState(false);
 
+  // Input controlado localmente; só dispara filtro 350ms após parar de digitar.
+  const [searchInput, setSearchInput] = useState(filters.search || '');
+  const debouncedSearch = useDebounce(searchInput, 350);
+
+  useEffect(() => {
+    const current = filters.search || '';
+    const next = debouncedSearch || '';
+    if (current !== next) {
+      onFiltersChange({ ...filters, search: next || undefined });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch]);
+
+  useEffect(() => {
+    if (!filters.search && searchInput) {
+      setSearchInput('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.search]);
+
   const handleStatusChange = (value: StatusRastreador | 'todos') => {
     if (value === 'todos') {
       onFiltersChange({ ...filters, status: undefined });
