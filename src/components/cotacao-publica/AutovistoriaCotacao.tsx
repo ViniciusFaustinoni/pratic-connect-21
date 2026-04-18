@@ -25,6 +25,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
 import { VideoCapture } from '@/components/instalador/VideoCapture';
 import { InAppBrowserBanner } from '@/components/shared/InAppBrowserBanner';
+import { useDeviceCapability } from '@/hooks/useDeviceCapability';
 
 
 interface AutovistoriaCotacaoProps {
@@ -48,7 +49,9 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
   
   const inputRef = useRef<HTMLInputElement>(null);
   const finalizandoRef = useRef(false);
+  const restauradoToastRef = useRef(false);
   
+  const capability = useDeviceCapability();
   const { data: fotosExistentes, isLoading: carregandoFotos } = useFotosCotacaoVistoria(cotacaoId);
   const uploadMutation = useUploadFotoCotacaoVistoria();
   const finalizarMutation = useFinalizarVistoriaCotacao();
@@ -107,6 +110,19 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
     };
   }, []);
 
+  // Telemetria + alerta após restauração de aba (Chrome matou o processo por OOM)
+  useEffect(() => {
+    console.log(
+      `[Autovistoria] Capacidade do dispositivo: deviceMemory=${capability.deviceMemory ?? '?'}GB cores=${capability.hardwareConcurrency ?? '?'} lowEnd=${capability.lowEnd} heap=${capability.usedHeapMB ?? '?'}MB wasDiscarded=${capability.wasDiscarded}`
+    );
+    if (capability.wasDiscarded && !restauradoToastRef.current) {
+      restauradoToastRef.current = true;
+      toast.info('Continuamos de onde você parou. Toque para enviar a próxima foto.', {
+        duration: 6000,
+      });
+    }
+  }, [capability]);
+
   const handleCapturarFoto = () => {
     inputRef.current?.click();
   };
@@ -131,16 +147,12 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
     
     try {
       // Comprimir imagem para economizar memória e acelerar upload
+      // Perfil é resolvido automaticamente conforme deviceMemory (low/mid/high)
       let arquivoFinal = file;
-      if (file.size > 500 * 1024) {
+      if (file.size > 250 * 1024) {
         toast.loading('Otimizando imagem...', { id: 'compress' });
         try {
-          arquivoFinal = await compressImage(file, { 
-            maxWidth: 1920, 
-            maxHeight: 1920, 
-            quality: 0.75,
-            maxSizeKB: 800 
-          });
+          arquivoFinal = await compressImage(file);
           toast.dismiss('compress');
         } catch (compressError) {
           console.warn('[AutovistoriaCotacao] Erro na compressão, usando original:', compressError);
@@ -276,6 +288,19 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
         
         <CardContent className="space-y-6">
           <InAppBrowserBanner persistent />
+
+          {capability.lowEnd && (
+            <div className="rounded-lg border border-amber-400/60 bg-amber-50 dark:bg-amber-950/30 p-3 text-amber-900 dark:text-amber-200 flex items-start gap-2">
+              <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5 text-amber-600" />
+              <div className="space-y-1 text-sm">
+                <p className="font-semibold">Detectamos memória limitada neste aparelho</p>
+                <p className="text-xs leading-relaxed">
+                  Para evitar travamentos, <strong>feche outros aplicativos</strong> antes de gravar o vídeo e tirar as fotos.
+                  Se preferir, podemos <strong>agendar uma vistoria presencial</strong> em uma de nossas bases.
+                </p>
+              </div>
+            </div>
+          )}
           <div className="text-center space-y-4">
             <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
               <Video className="h-10 w-10 text-primary" />
@@ -330,7 +355,13 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
 
           {videoUrl && (
             <Button 
-              onClick={() => setVideoConfirmado(true)} 
+              onClick={() => {
+                // Libera memória do preview do vídeo antes da etapa de fotos.
+                // O VideoCapture já revoga seu blob local via efeito 'confirmed';
+                // aqui apenas avançamos. O videoUrl remoto segue disponível.
+                console.log('[Autovistoria] Avançando para etapa de fotos — preview do vídeo liberado');
+                setVideoConfirmado(true);
+              }} 
               className="w-full mt-4"
               size="lg"
             >
