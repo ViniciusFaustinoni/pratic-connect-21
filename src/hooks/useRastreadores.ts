@@ -114,16 +114,18 @@ export function useRastreadores(filters?: RastreadorFilters) {
 
         // 2) Veículos cujo associado bate por nome OU CPF (consultas separadas — embed OR no PostgREST é frágil)
         const associadoIds = new Set<string>();
-        const assocQueries: Promise<any>[] = [
+        const assocPromises: Array<PromiseLike<any>> = [
           supabase.from('associados').select('id').ilike('nome', `%${rawSafe}%`).limit(200),
         ];
         if (digits.length >= 3) {
-          assocQueries.push(supabase.from('associados').select('id').ilike('cpf', `%${digits}%`).limit(200));
+          assocPromises.push(
+            supabase.from('associados').select('id').ilike('cpf', `%${digits}%`).limit(200)
+          );
         }
-        const assocResults = await Promise.all(assocQueries);
-        assocResults.forEach((r) => {
-          if (r.error) console.warn('[useRastreadores] busca associado erro:', r.error);
-          (r.data || []).forEach((a: any) => associadoIds.add(a.id));
+        const assocResults = await Promise.all(assocPromises);
+        assocResults.forEach((r: any) => {
+          if (r?.error) console.warn('[useRastreadores] busca associado erro:', r.error);
+          (r?.data || []).forEach((a: any) => associadoIds.add(a.id));
         });
 
         if (associadoIds.size > 0) {
