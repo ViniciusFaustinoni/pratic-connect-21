@@ -17,9 +17,13 @@ export function useOnlineStatus(): boolean {
     window.addEventListener('offline', handleOffline);
 
     let cancelled = false;
+    // Conta falhas consecutivas — só marca offline após 2 falhas seguidas (~60s).
+    // Evita falso positivo em redes móveis com latência alta (5G/LTE em movimento).
+    let failuresInARow = 0;
     const ping = async () => {
       if (!navigator.onLine) {
         if (!cancelled) setOnline(false);
+        failuresInARow = 2;
         return;
       }
       try {
@@ -28,12 +32,13 @@ export function useOnlineStatus(): boolean {
         if (!supabaseUrl || !supabaseKey) {
           // Sem config para verificar, confia no navigator
           if (!cancelled) setOnline(true);
+          failuresInARow = 0;
           return;
         }
         const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 5000);
+        // Timeout 10s — 5G em movimento pode ter latência alta no primeiro pacote.
+        const t = setTimeout(() => ctrl.abort(), 10000);
         // Qualquer resposta HTTP (200/4xx/5xx) prova que há rede.
-        // Apenas erro de fetch (network/timeout) indica offline real.
         await fetch(`${supabaseUrl}/auth/v1/health`, {
           method: 'GET',
           cache: 'no-store',
@@ -44,9 +49,12 @@ export function useOnlineStatus(): boolean {
           },
         });
         clearTimeout(t);
+        failuresInARow = 0;
         if (!cancelled) setOnline(true);
       } catch {
-        if (!cancelled) setOnline(false);
+        failuresInARow += 1;
+        // Só marca offline após 2 falhas consecutivas — evita flicker em latência alta.
+        if (failuresInARow >= 2 && !cancelled) setOnline(false);
       }
     };
 
