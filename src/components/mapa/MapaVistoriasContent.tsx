@@ -1383,7 +1383,7 @@ export function MapaVistoriasContent() {
       <div className="flex h-full gap-4">
         <Card className={cn(
           "flex-shrink-0 flex flex-col overflow-hidden transition-all duration-300",
-          painelAberto ? "w-72" : "w-0 border-0 p-0 opacity-0 pointer-events-none"
+          painelAberto ? "w-[22rem] xl:w-[26rem] 2xl:w-[30rem]" : "w-0 border-0 p-0 opacity-0 pointer-events-none"
         )}>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
