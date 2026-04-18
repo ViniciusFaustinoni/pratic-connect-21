@@ -1,8 +1,9 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import type { StatusAssociado } from '@/types/database';
+import { normalizarBusca, escapeOrValue } from '@/lib/buscaUtils';
 
 type Associado = Tables<'associados'>;
 type AssociadoInsert = TablesInsert<'associados'>;
@@ -98,6 +99,7 @@ export function useAssociados({ filters, pagination, enabled = true }: UseAssoci
   return useQuery({
     queryKey: ['associados', filters, pagination],
     refetchOnMount: 'always',
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       let query = supabase
         .from('associados')
@@ -141,41 +143,52 @@ export function useAssociados({ filters, pagination, enabled = true }: UseAssoci
       }
 
       // Busca por nome, CPF, email, telefone ou placa
+      // Aceita CPF/telefone com OU sem máscara, e placa com OU sem hífen.
       if (filters?.search) {
-        const raw = filters.search.trim();
-        const digits = raw.replace(/\D/g, '');
-        if (digits.length === 11) {
-          // CPF completo
-          query = query.eq('cpf', digits);
-        } else {
-          // Busca por placa: filtrar associados que têm veículo com a placa
-          const placaUpper = raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
-          let associadoIdsByPlaca: string[] = [];
-          if (placaUpper.length >= 4 && placaUpper.length <= 7) {
-            const { data: veics } = await supabase
-              .from('veiculos')
-              .select('associado_id')
-              .ilike('placa', `%${placaUpper}%`)
-              .not('associado_id', 'is', null)
-              .limit(500);
-            associadoIdsByPlaca = (veics || [])
-              .map((v: any) => v.associado_id)
-              .filter(Boolean);
-          }
+        const { raw, digits, cpfFormatado, telefoneFormatado, placa } = normalizarBusca(filters.search);
+        const rawSafe = escapeOrValue(raw);
 
-          const orParts = [
-            `nome.ilike.%${raw}%`,
-            `email.ilike.%${raw}%`,
-          ];
-          if (digits.length >= 4) {
-            orParts.push(`cpf.ilike.%${digits}%`);
-            orParts.push(`telefone.ilike.%${digits}%`);
-          }
-          if (associadoIdsByPlaca.length > 0) {
-            orParts.push(`id.in.(${associadoIdsByPlaca.join(',')})`);
-          }
-          query = query.or(orParts.join(','));
+        // Busca por placa em veículos vinculados
+        let associadoIdsByPlaca: string[] = [];
+        if (placa) {
+          const { data: veics } = await supabase
+            .from('veiculos')
+            .select('associado_id')
+            .ilike('placa', `%${placa}%`)
+            .not('associado_id', 'is', null)
+            .limit(500);
+          associadoIdsByPlaca = (veics || [])
+            .map((v: any) => v.associado_id)
+            .filter(Boolean);
         }
+
+        const orParts: string[] = [
+          `nome.ilike.%${rawSafe}%`,
+          `email.ilike.%${rawSafe}%`,
+        ];
+
+        if (digits.length === 11 && cpfFormatado) {
+          // CPF completo: tenta cru e formatado
+          orParts.push(`cpf.eq.${digits}`);
+          orParts.push(`cpf.eq.${cpfFormatado}`);
+        } else if (digits.length >= 3) {
+          // CPF parcial
+          orParts.push(`cpf.ilike.%${digits}%`);
+        }
+
+        if (telefoneFormatado) {
+          // Telefone completo: cru + formatado
+          orParts.push(`telefone.ilike.%${digits}%`);
+          orParts.push(`telefone.ilike.%${escapeOrValue(telefoneFormatado)}%`);
+        } else if (digits.length >= 3) {
+          orParts.push(`telefone.ilike.%${digits}%`);
+        }
+
+        if (associadoIdsByPlaca.length > 0) {
+          orParts.push(`id.in.(${associadoIdsByPlaca.join(',')})`);
+        }
+
+        query = query.or(orParts.join(','));
       }
 
       // Ordenação e paginação
