@@ -537,7 +537,7 @@ serve(async (req) => {
         .update({
           status: "assinado",
           autentique_status: "signed",
-          data_assinatura: new Date().toISOString()
+          data_assinatura: effectiveSignedAt,
         })
         .eq("id", contrato.id);
 
