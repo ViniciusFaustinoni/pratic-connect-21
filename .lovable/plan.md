@@ -1,58 +1,34 @@
 
 
-## Causa raiz (definitiva)
+## Causa
+Na aba `Monitoramento → Mapa`, o painel lateral de "Serviços de Campo" (`MapaVistoriasContent.tsx`, linha 1386) está fixado em `w-72` (288 px). Os cards (placa, datas longas, badges como "Arraste no mapa", nomes completos) não cabem nessa largura e são truncados — exatamente o que aparece no print.
 
-O `<video ref={videoPreviewRef}>` em `VideoCapture.tsx` está dentro do branch `isRecording ? (...) : ...` (linhas 241-271). O fluxo de `startRecording` é:
+## Correção (1 arquivo, 2 linhas)
 
-```
-1. getUserMedia() resolve com stream
-2. acessa videoPreviewRef.current  ← ainda é NULL (vídeo não montado)
-3. if (videoPreviewRef.current) { ... }  ← pulado silenciosamente
-4. setIsRecording(true)  ← React MONTA o <video> agora, sem srcObject
-5. usuário vê tela preta até parar a gravação
-```
+**`src/components/mapa/MapaVistoriasContent.tsx` (linhas 1384-1387)**
 
-O `srcObject` **nunca chega ao elemento**. Quando o usuário para de gravar, criamos um Object URL do blob final e aí sim o `<video src=...>` da tela "hasVideo" aparece — daí a impressão de que "só vê depois que termina".
+Trocar a largura fixa por uma largura responsiva que cresça em telas maiores e deixar a coluna do mapa absorver o resto:
 
-Em iOS/in-app, o bug é igual; só fica mascarado porque o usuário acha que "é restrição de navegador".
-
-## Correção raiz (em VideoCapture.tsx)
-
-**1. Manter o `<video>` sempre montado** (deixa de ser condicional). Em vez de aparecer só quando `isRecording`, fica sempre no DOM e só alterna visibilidade/contêiner via CSS. Garante que `videoPreviewRef.current` nunca seja `null` quando `startRecording` rodar.
-
-**2. Atribuir `srcObject` via `useEffect`** que reage a um novo state `liveStream`:
-
-```ts
-const [liveStream, setLiveStream] = useState<MediaStream | null>(null);
-
-useEffect(() => {
-  const v = videoPreviewRef.current;
-  if (!v || !liveStream) return;
-  v.srcObject = liveStream;
-  v.muted = true;
-  v.playsInline = true;
-  v.play().catch(err => console.warn('[VideoCapture] play():', err));
-}, [liveStream]);
+```tsx
+painelAberto 
+  ? "w-[22rem] xl:w-[26rem] 2xl:w-[30rem]" 
+  : "w-0 border-0 p-0 opacity-0 pointer-events-none"
 ```
 
-**3. `startRecording` simplificado**: chama `getUserMedia`, faz `setLiveStream(stream)` e `setIsRecording(true)`. O `useEffect` cuida do attach + play assim que o React confirma o ref.
+- **Mobile/tablet (<1280 px):** 352 px (w-[22rem]) — +64 px vs. hoje, já resolve os truncamentos do print.
+- **Desktop (≥1280 px):** 416 px.
+- **Telas grandes (≥1536 px):** 480 px — cards totalmente confortáveis.
 
-**4. Limpeza**: ao parar/desmontar, `setLiveStream(null)` e `v.srcObject = null` (já existe parcialmente). Garantir que tracks param sempre.
+O `Card` do mapa ao lado já usa `flex-1`, então se ajusta sozinho.
 
-**5. iOS hardening reforçado**: `v.setAttribute('playsinline', '')` + `v.setAttribute('webkit-playsinline', '')` antes do `play()` (o JSX `playsInline` cobre isso, mas reforço programático ajuda em WebViews antigos).
-
-## Por que isso resolve definitivamente
-
-- `videoPreviewRef.current` **sempre existe** quando o stream chega → fim do "if pulado silenciosamente".
-- O `useEffect` desacopla o attach do timing do gesto → React garante que o DOM já refletiu o ref.
-- Funciona idêntico em Chrome Android, Safari iOS e in-app (a falha real de in-app continua sendo tratada pelo `cameraBlocked`).
-
-## Arquivo a editar
-- `src/components/instalador/VideoCapture.tsx` — único arquivo. Não toca em `AutovistoriaCotacao.tsx`, `ExecutarVistoriaCompleta.tsx`, `ExecutarRetirada.tsx` nem `InstaladorChecklist.tsx` — todos consomem o componente igual e herdam a correção.
+## Mobile (`MapaMobileContent`)
+A versão mobile é renderizada em rota separada (`/instalador/mapa`) e usa drawer/sheet em tela cheia — não é afetada por este ajuste e não precisa de mudança.
 
 ## Validação
-1. Cotação pública (mobile real Android Chrome) — clicar "Gravar Vídeo": preview da câmera aparece **imediatamente**, com timer e contorno HUD.
-2. iOS Safari — mesmo comportamento.
-3. WhatsApp/Instagram in-app — continua mostrando o aviso "abrir no Chrome/Safari" quando `getUserMedia` falha (sem regressão).
-4. Parar a gravação → vídeo final aparece com controles + botão "Confirmar e Enviar".
+1. `/monitoramento/mapa` em 1366 px e 1920 px: cards mostram "Arraste no mapa", nomes do associado/instalador e badges sem corte.
+2. Botão fechar painel (`ChevronLeft`) e reabrir continuam funcionando.
+3. Mapa não fica espremido em nenhum breakpoint (verificar em 1280 px).
+
+## Arquivo a editar
+- `src/components/mapa/MapaVistoriasContent.tsx`
 
