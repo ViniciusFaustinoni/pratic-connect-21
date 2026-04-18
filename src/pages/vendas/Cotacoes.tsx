@@ -114,10 +114,13 @@ export default function Cotacoes() {
   const { profile, user } = useAuth();
   
   const { data: vendedores } = useVendedores();
-  
-  const { data: cotacoes, isLoading } = useCotacoes({
+
+  const search = useDebounce(searchInput, 350);
+
+  const { data: cotacoes, isLoading, isFetching } = useCotacoes({
     vendedorId: permissions.userId,
     viewScope: permissions.cotacao.viewScope,
+    searchTerm: search,
   });
   
   const updateCotacao = useUpdateCotacao();
@@ -557,7 +560,7 @@ export default function Cotacoes() {
   };
 
   const clearFilters = () => {
-    setSearch('');
+    setSearchInput('');
     setStatusFilter('all');
     setMesFilter('all');
     setDataFilter(undefined);
@@ -705,8 +708,8 @@ export default function Cotacoes() {
             <Input
               placeholder="Buscar lead, veículo ou número..."
               className="pl-9 h-9 border-0 bg-background/80 shadow-sm focus-visible:ring-1"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
             />
           </div>
           {activeTab === 'em_andamento' && (
