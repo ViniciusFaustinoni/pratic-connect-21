@@ -218,7 +218,7 @@ export default function Associados() {
   };
 
   const clearFilters = () => {
-    setSearch('');
+    setSearchInput('');
     setStatusFilter('all');
     setPlanoFilter('all');
     setCidadeFilter('all');
@@ -484,13 +484,9 @@ export default function Associados() {
     },
   ], [contagem, totalAssociados]);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  // Mostra a página inteira sempre — sem early return — para preservar o foco
+  // do input de busca durante refetches (debounce + keepPreviousData).
+  const showInlineLoader = isFetching && (!associados || associados.length === 0);
 
   return (
     <TooltipProvider>
