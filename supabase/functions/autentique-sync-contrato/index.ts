@@ -158,6 +158,7 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const _startTime = Date.now();
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -351,25 +352,35 @@ serve(async (req) => {
       return actionName === 'SIGN' || actionName === 'ASSINAR' || s.signed?.created_at;
     });
     
-    // Verificar se TODOS os signatários com SIGN assinaram
+    // Considerar biometric_approved como assinatura efetiva (PF_FACIAL com revisão manual
+    // do Autentique nunca preenche signed.created_at, mas a assinatura é legalmente válida)
+    const isEffectivelySigned = (s: any) =>
+      !!s.signed?.created_at ||
+      (!!s.biometric_approved?.created_at && !!s.viewed?.created_at);
+
     const hasSigners = signersWithSignAction.length > 0;
-    const allSignersSigned = hasSigners && signersWithSignAction.every((s: any) => s.signed?.created_at);
+    const allSignersSigned = hasSigners && signersWithSignAction.every(isEffectivelySigned);
     const anySignerRejected = signatures.some((s: any) => s.rejected?.created_at);
     const anySignerViewed = signatures.some((s: any) => s.viewed?.created_at);
-    const anySignerSigned = signatures.some((s: any) => s.signed?.created_at);
-    
-    // Encontrar quem assinou
-    const signerWhoSigned = allPossibleSigners.find((s: any) => s.signed?.created_at);
+    const anySignerSigned = signatures.some(isEffectivelySigned);
+
+    const signerWhoSigned = allPossibleSigners.find(isEffectivelySigned)
+      || signatures.find(isEffectivelySigned);
     const signerName = signerWhoSigned?.name || signersWithSignAction[0]?.name || "Cliente";
+
+    // Timestamp efetivo: signed.created_at → biometric_approved.created_at
+    const effectiveSignedAt =
+      signerWhoSigned?.signed?.created_at ||
+      signerWhoSigned?.biometric_approved?.created_at ||
+      new Date().toISOString();
 
     let overallStatus = "pending";
     if (allSignersSigned) overallStatus = "signed";
     else if (anySignerRejected) overallStatus = "rejected";
     else if (anySignerViewed) overallStatus = "viewed";
 
-    // ═══ DETECTAR REVISÃO BIOMÉTRICA MANUAL (PF_FACIAL) ═══
-    // Cliente concluiu o fluxo (selfie) mas Autentique exige aprovação manual.
-    // Sinais: viewed=true, signed=null, biometric_approved=null, biometric_rejected=null
+    // ═══ REVISÃO BIOMÉTRICA MANUAL (PF_FACIAL) ═══
+    // Só é "review" enquanto biometric_approved/rejected ainda não foram setados.
     let biometricStatus: "review" | "rejected" | null = null;
     const signersInBiometricReview = signersWithSignAction.filter((s: any) => {
       const viewed = !!s.viewed?.created_at;
@@ -385,7 +396,11 @@ serve(async (req) => {
 
     if (anySignerBiometricRejected) {
       biometricStatus = "rejected";
-    } else if (signersInBiometricReview.length > 0 && overallStatus === "viewed") {
+    } else if (
+      signersInBiometricReview.length > 0 &&
+      overallStatus === "viewed" &&
+      !allSignersSigned
+    ) {
       const oldestView = signersInBiometricReview
         .map((s: any) => new Date(s.viewed.created_at).getTime())
         .reduce((a: number, b: number) => Math.min(a, b), Date.now());
@@ -523,7 +538,7 @@ serve(async (req) => {
         .update({
           status: "assinado",
           autentique_status: "signed",
-          data_assinatura: new Date().toISOString()
+          data_assinatura: effectiveSignedAt,
         })
         .eq("id", contrato.id);
 

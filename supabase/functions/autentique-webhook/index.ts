@@ -931,7 +931,8 @@ serve(async (req) => {
 
     // Processar eventos - NOVOS tipos de evento do Autentique
     switch (eventType) {
-      case "signature.accepted": {
+      case "signature.accepted":
+      case "signature.biometric_approved": {
         // Documento foi ASSINADO
         console.log(`[autentique-webhook] 🎉 Documento ${documentId} foi ASSINADO por ${signerName} (${signerEmail})`);
         console.log("[autentique-webhook] Atualizando contrato para status 'assinado'...");
