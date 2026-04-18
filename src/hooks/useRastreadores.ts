@@ -1,7 +1,8 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables, TablesInsert, TablesUpdate, Database } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
+import { normalizarBusca, escapeOrValue } from '@/lib/buscaUtils';
 
 export type Rastreador = Tables<'rastreadores'>;
 export type RastreadorInsert = TablesInsert<'rastreadores'>;
@@ -53,6 +54,7 @@ export function isRastreadorOnline(ultimaComunicacao: string | null): boolean {
 export function useRastreadores(filters?: RastreadorFilters) {
   return useQuery({
     queryKey: ['rastreadores', filters],
+    placeholderData: keepPreviousData,
     queryFn: async (): Promise<RastreadoresPaginatedResult> => {
       const page = filters?.page ?? 1;
       const pageSize = filters?.pageSize ?? 50;
@@ -95,29 +97,48 @@ export function useRastreadores(filters?: RastreadorFilters) {
       }
 
       if (filters?.search) {
-        const searchTerm = filters.search.trim();
-        
-        // Search in related tables (veiculos by placa, associados by nome/cpf)
-        const { data: veiculoIds } = await supabase
-          .from('veiculos')
-          .select('id')
-          .ilike('placa', `%${searchTerm}%`);
-        
-        const { data: associadoVeiculos } = await supabase
-          .from('veiculos')
-          .select('id, associados!inner(nome, cpf)')
-          .or(`nome.ilike.%${searchTerm}%,cpf.ilike.%${searchTerm.replace(/\D/g, '')}%`, { referencedTable: 'associados' });
+        const { raw, digits, placa } = normalizarBusca(filters.search);
+        const rawSafe = escapeOrValue(raw);
 
-        // Collect all matching veiculo_ids
-        const matchingVeiculoIds = new Set<string>();
-        veiculoIds?.forEach(v => matchingVeiculoIds.add(v.id));
-        associadoVeiculos?.forEach(v => matchingVeiculoIds.add(v.id));
+        // 1) Veículos por placa (normalizada, sem hífen)
+        const veiculoIdsByPlaca = new Set<string>();
+        if (placa) {
+          const { data: veics, error: vErr } = await supabase
+            .from('veiculos')
+            .select('id')
+            .ilike('placa', `%${placa}%`)
+            .limit(200);
+          if (vErr) console.warn('[useRastreadores] busca placa erro:', vErr);
+          (veics || []).forEach((v: any) => veiculoIdsByPlaca.add(v.id));
+        }
 
-        // Build OR filter combining direct fields + veiculo_id matches
-        const directFilter = `codigo.ilike.%${searchTerm}%,numero_serie.ilike.%${searchTerm}%,imei.ilike.%${searchTerm}%`;
-        
-        if (matchingVeiculoIds.size > 0) {
-          const ids = Array.from(matchingVeiculoIds);
+        // 2) Veículos cujo associado bate por nome OU CPF (consultas separadas — embed OR no PostgREST é frágil)
+        const associadoIds = new Set<string>();
+        const assocQueries: Promise<any>[] = [
+          supabase.from('associados').select('id').ilike('nome', `%${rawSafe}%`).limit(200),
+        ];
+        if (digits.length >= 3) {
+          assocQueries.push(supabase.from('associados').select('id').ilike('cpf', `%${digits}%`).limit(200));
+        }
+        const assocResults = await Promise.all(assocQueries);
+        assocResults.forEach((r) => {
+          if (r.error) console.warn('[useRastreadores] busca associado erro:', r.error);
+          (r.data || []).forEach((a: any) => associadoIds.add(a.id));
+        });
+
+        if (associadoIds.size > 0) {
+          const { data: vAssoc } = await supabase
+            .from('veiculos')
+            .select('id')
+            .in('associado_id', Array.from(associadoIds))
+            .limit(500);
+          (vAssoc || []).forEach((v: any) => veiculoIdsByPlaca.add(v.id));
+        }
+
+        const directFilter = `codigo.ilike.%${rawSafe}%,numero_serie.ilike.%${rawSafe}%,imei.ilike.%${rawSafe}%`;
+
+        if (veiculoIdsByPlaca.size > 0) {
+          const ids = Array.from(veiculoIdsByPlaca);
           query = query.or(`${directFilter},veiculo_id.in.(${ids.join(',')})`);
         } else {
           query = query.or(directFilter);

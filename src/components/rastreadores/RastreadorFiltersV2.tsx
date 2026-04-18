@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useDebounce } from '@/hooks/useDebounce';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -61,10 +62,11 @@ export function RastreadorFiltersV2({ filters, onFiltersChange }: RastreadorFilt
   };
 
   const handleSearchChange = (value: string) => {
-    onFiltersChange({ ...filters, search: value || undefined });
+    setSearchInput(value);
   };
 
   const clearFilters = () => {
+    setSearchInput('');
     onFiltersChange({});
   };
 
