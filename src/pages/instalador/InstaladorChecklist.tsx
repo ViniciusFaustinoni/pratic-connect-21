@@ -145,7 +145,7 @@ export default function InstaladorChecklist() {
   const [imeiInfo, setImeiInfo] = useState<{ codigo?: string; plataforma?: string; status?: string } | null>(null);
 
   const { data: servico, isLoading, error } = useServicoDetalhes(id);
-  const { data: vistoriaCompleta, isLoading: isLoadingVistoria } = useVistoriaCompletaPorServico(id ?? null);
+  const { data: vistoriaCompleta, isLoading: isLoadingVistoria, error: vistoriaError, refetch: refetchVistoria, isFetching: isFetchingVistoria } = useVistoriaCompletaPorServico(id ?? null);
   const { data: rastreadoresEmPorte, isLoading: isLoadingRastreadores, error: erroRastreadores, refetch: refetchRastreadores } = useRastreadoresDoPortador();
   const { data: fipeMinRastreador = 30000 } = useConfigFipeRastreador();
   const { data: fipeMinRastreadorMoto = 9000 } = useConfigFipeRastreadorMoto();
@@ -1210,16 +1210,24 @@ export default function InstaladorChecklist() {
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <AlertCircle className="h-8 w-8 text-amber-500 mb-3" />
                 <p className="text-white font-medium">Não foi possível carregar a vistoria</p>
-                <p className="text-sm text-slate-400 mb-4">
-                  Ocorreu um erro ao criar o registro de vistoria. Tente novamente.
+                <p className="text-sm text-slate-400 mb-2">
+                  {!navigator.onLine
+                    ? 'Sem conexão estável. Vamos tentar novamente assim que a internet voltar.'
+                    : vistoriaError
+                      ? `Erro: ${(vistoriaError as Error).message}`
+                      : 'Ocorreu um erro ao criar o registro de vistoria.'}
                 </p>
-                <Button 
+                <p className="text-xs text-slate-500 mb-4">
+                  Toque em "Tentar agora" — não é necessário recarregar a página.
+                </p>
+                <Button
                   variant="outline"
-                  onClick={() => window.location.reload()}
+                  onClick={() => refetchVistoria()}
+                  disabled={isFetchingVistoria}
                   className="gap-2"
                 >
-                  <Loader2 className="h-4 w-4" />
-                  Tentar novamente
+                  <Loader2 className={cn("h-4 w-4", isFetchingVistoria && "animate-spin")} />
+                  {isFetchingVistoria ? 'Tentando...' : 'Tentar agora'}
                 </Button>
               </div>
             )}

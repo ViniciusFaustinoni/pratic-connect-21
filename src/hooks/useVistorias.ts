@@ -851,6 +851,9 @@ export function useExecutarVistoria() {
 export function useVistoriaCompletaPorServico(servicoId: string | null) {
   return useQuery({
     queryKey: ['vistoria-completa-servico', servicoId],
+    // Retry automático em redes instáveis (5G/LTE em movimento). Backoff exponencial.
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
     queryFn: async () => {
       if (!servicoId) return null;
 
@@ -952,6 +955,38 @@ export function useVistoriaCompletaPorServico(servicoId: string | null) {
           veiculo_id: servico.veiculo_id,
           profissional_id: servico.profissional_id,
         });
+
+        // Dedupe defensivo: se um INSERT anterior chegou ao banco mas a resposta
+        // foi perdida (rede flaky), evita criar duplicata. Procura vistoria
+        // recente em_analise para o mesmo trio (associado + veiculo + cotacao).
+        if (servico.cotacao_id) {
+          const { data: vistoriaRecente } = await supabase
+            .from('vistorias')
+            .select(`
+              *,
+              veiculo:veiculos(
+                id, placa, chassi, marca, modelo, 
+                ano_fabricacao, ano_modelo, cor,
+                associado:associados(id, nome, cpf, telefone)
+              ),
+              associado:associados!vistorias_associado_id_fkey(id, nome, cpf, telefone),
+              vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
+              fotos:vistoria_fotos(*)
+            `)
+            .eq('associado_id', servico.associado_id)
+            .eq('veiculo_id', servico.veiculo_id)
+            .eq('cotacao_id', servico.cotacao_id)
+            .eq('status', 'em_analise')
+            .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (vistoriaRecente) {
+            console.log('[useVistoriaCompletaPorServico] Dedupe: vistoria recente encontrada, reaproveitando', vistoriaRecente.id);
+            await supabase.from('servicos').update({ vistoria_origem_id: vistoriaRecente.id }).eq('id', servicoId);
+            return vistoriaRecente;
+          }
+        }
 
         // Tentar criar com vistoriador_id primeiro
         let novaVistoria = null;
