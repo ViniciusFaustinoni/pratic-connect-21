@@ -38,6 +38,10 @@ export interface VehicleData {
   modelo: string;
   marca_modelo: string;
   ano: string;
+  /** Ano de fabricação devolvido pelo plate-lookup (pode ser igual a ano_modelo quando a API não separa). */
+  ano_fabricacao?: string;
+  /** Ano modelo devolvido pelo plate-lookup. */
+  ano_modelo?: string;
   cor: string;
   combustivel: string;
   municipio: string;
@@ -303,12 +307,16 @@ export function useFipe() {
     const { vehicleData, fipeData } = result;
     
     // Convert to legacy format
+    // IMPORTANTE: usar ano_fabricacao e ano_modelo SEPARADOS quando o backend devolver.
+    // Fallback para o campo `ano` (legado) apenas se os campos separados não vierem.
+    const anoFabRaw = vehicleData.ano_fabricacao || vehicleData.ano || '';
+    const anoModRaw = vehicleData.ano_modelo || vehicleData.ano || '';
     return {
       placa: vehicleData.placa,
       marca: vehicleData.marca,
       modelo: vehicleData.modelo,
-      anoFabricacao: vehicleData.ano ? parseInt(vehicleData.ano) : null,
-      anoModelo: vehicleData.ano ? parseInt(vehicleData.ano) : null,
+      anoFabricacao: anoFabRaw ? parseInt(anoFabRaw) : null,
+      anoModelo: anoModRaw ? parseInt(anoModRaw) : null,
       cor: vehicleData.cor,
       combustivel: vehicleData.combustivel,
       chassi: vehicleData.chassi,
