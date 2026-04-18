@@ -7,6 +7,7 @@ import {
   MessageCircle, X, ChevronLeft, ChevronRight, Users, Download, Filter, DollarSign, Trash2,
   SlidersHorizontal, ShieldAlert, Ban
 } from 'lucide-react';
+import { useDebounce } from '@/hooks/useDebounce';
 import { motion } from 'framer-motion';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuth } from '@/contexts/AuthContext';
@@ -103,7 +104,8 @@ export default function Associados() {
   const canDeleteAssociados = isDiretor || isDesenvolvedor || isAdminMaster;
   
   // State
-  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const search = useDebounce(searchInput, 350);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [planoFilter, setPlanoFilter] = useState<string>('all');
   const [cidadeFilter, setCidadeFilter] = useState<string>('all');
@@ -136,7 +138,7 @@ export default function Associados() {
   const serverCidade = sheetFilters.cidade || (cidadeFilter !== 'all' ? cidadeFilter : undefined);
 
   // Queries
-  const { data, isLoading } = useAssociados({
+  const { data, isLoading, isFetching } = useAssociados({
     filters: {
       search: search || undefined,
       status: serverStatusList,
