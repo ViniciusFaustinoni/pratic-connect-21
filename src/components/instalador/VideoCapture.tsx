@@ -174,15 +174,18 @@ export function VideoCapture({
     }
     
     if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
+      try { mediaRecorderRef.current.stop(); } catch {}
     }
     
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
     }
     
+    // Limpa o stream do <video> via state — o useEffect também faz srcObject = null.
+    setLiveStream(null);
     if (videoPreviewRef.current) {
-      videoPreviewRef.current.srcObject = null;
+      try { videoPreviewRef.current.srcObject = null; } catch {}
     }
     
     setIsRecording(false);
