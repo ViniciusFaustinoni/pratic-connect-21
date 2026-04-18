@@ -67,7 +67,41 @@ export function VideoCapture({
     }
   }, [confirmed, previewUrl]);
 
+  // Attach do MediaStream ao <video> assim que ambos existem.
+  // Resolve o race condition: o ref pode ainda não estar montado quando getUserMedia resolve.
+  useEffect(() => {
+    const v = videoPreviewRef.current;
+    if (!v) return;
+    if (!liveStream) {
+      // Garante limpeza explícita ao parar.
+      try { v.srcObject = null; } catch {}
+      return;
+    }
+    try {
+      v.srcObject = liveStream;
+      v.muted = true;
+      v.playsInline = true;
+      v.setAttribute('playsinline', '');
+      v.setAttribute('webkit-playsinline', '');
+      v.play().catch(err => console.warn('[VideoCapture] play():', err));
+    } catch (err) {
+      console.warn('[VideoCapture] attach stream falhou:', err);
+    }
+  }, [liveStream]);
+
   const startRecording = async () => {
+    setError(null);
+    chunksRef.current = [];
+    
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+        audio: true,
+      });
+      
+      streamRef.current = stream;
+      // O attach ao <video> acontece no useEffect acima, garantindo que o ref já está montado.
+      setLiveStream(stream);
     setError(null);
     chunksRef.current = [];
     
