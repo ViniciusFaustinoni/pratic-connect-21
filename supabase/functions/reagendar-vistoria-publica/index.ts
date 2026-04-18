@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
         .eq("data_agendada", nova_data)
         .eq("periodo", periodo)
         .eq("local_vistoria", "cliente")
-        .not("status", "in", '("cancelada","recusada","reagendada")');
+        .not("status", "in", '("cancelada","reagendada","nao_compareceu")');
 
       if (vagasErr) {
         console.error("[reagendar] Erro ao verificar vagas:", vagasErr);

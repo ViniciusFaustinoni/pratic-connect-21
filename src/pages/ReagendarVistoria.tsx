@@ -100,7 +100,7 @@ export default function ReagendarVistoria() {
         .select('periodo')
         .eq('data_agendada', data)
         .eq('local_vistoria', 'cliente')
-        .not('status', 'in', '("cancelada","recusada","reagendada")');
+        .not('status', 'in', '("cancelada","reagendada","nao_compareceu")');
 
       if (error) {
         console.error('[ReagendarVistoria] Erro ao buscar vagas:', error);
