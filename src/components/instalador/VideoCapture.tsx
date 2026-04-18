@@ -33,6 +33,8 @@ export function VideoCapture({
   const [error, setError] = useState<string | null>(null);
   // Quando getUserMedia falha em in-app browser, mostramos o aviso de "abrir no navegador"
   const [cameraBlocked, setCameraBlocked] = useState(false);
+  // Stream ao vivo para preview — desacoplado do mount do <video> via useEffect.
+  const [liveStream, setLiveStream] = useState<MediaStream | null>(null);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
