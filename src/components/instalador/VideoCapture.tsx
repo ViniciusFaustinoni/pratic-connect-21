@@ -33,6 +33,8 @@ export function VideoCapture({
   const [error, setError] = useState<string | null>(null);
   // Quando getUserMedia falha em in-app browser, mostramos o aviso de "abrir no navegador"
   const [cameraBlocked, setCameraBlocked] = useState(false);
+  // Stream ao vivo para preview — desacoplado do mount do <video> via useEffect.
+  const [liveStream, setLiveStream] = useState<MediaStream | null>(null);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -65,6 +67,28 @@ export function VideoCapture({
     }
   }, [confirmed, previewUrl]);
 
+  // Attach do MediaStream ao <video> assim que ambos existem.
+  // Resolve o race condition: o ref pode ainda não estar montado quando getUserMedia resolve.
+  useEffect(() => {
+    const v = videoPreviewRef.current;
+    if (!v) return;
+    if (!liveStream) {
+      // Garante limpeza explícita ao parar.
+      try { v.srcObject = null; } catch {}
+      return;
+    }
+    try {
+      v.srcObject = liveStream;
+      v.muted = true;
+      v.playsInline = true;
+      v.setAttribute('playsinline', '');
+      v.setAttribute('webkit-playsinline', '');
+      v.play().catch(err => console.warn('[VideoCapture] play():', err));
+    } catch (err) {
+      console.warn('[VideoCapture] attach stream falhou:', err);
+    }
+  }, [liveStream]);
+
   const startRecording = async () => {
     setError(null);
     chunksRef.current = [];
@@ -76,20 +100,10 @@ export function VideoCapture({
       });
       
       streamRef.current = stream;
-      
-      // Mostrar preview ao vivo (hardening iOS Safari)
-      if (videoPreviewRef.current) {
-        const v = videoPreviewRef.current;
-        v.srcObject = stream;
-        v.muted = true;
-        v.playsInline = true;
-        try {
-          await v.play();
-        } catch (playErr) {
-          console.warn('[VideoCapture] play() bloqueado:', playErr);
-        }
-      }
-      
+      // O attach ao <video> acontece no useEffect acima, garantindo que o ref já está montado.
+      setLiveStream(stream);
+
+
       // Prefer MP4 (Safari/iOS) → fallback WebM
       const candidates = [
         'video/mp4;codecs=h264,aac',
@@ -160,15 +174,18 @@ export function VideoCapture({
     }
     
     if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
+      try { mediaRecorderRef.current.stop(); } catch {}
     }
     
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
     }
     
+    // Limpa o stream do <video> via state — o useEffect também faz srcObject = null.
+    setLiveStream(null);
     if (videoPreviewRef.current) {
-      videoPreviewRef.current.srcObject = null;
+      try { videoPreviewRef.current.srcObject = null; } catch {}
     }
     
     setIsRecording(false);
@@ -227,12 +244,27 @@ export function VideoCapture({
 
       <div
         className={cn(
-          'relative flex aspect-video flex-col items-center justify-center rounded-lg border-2 border-dashed transition-all',
+          'relative flex aspect-video flex-col items-center justify-center rounded-lg border-2 border-dashed transition-all overflow-hidden',
           hasVideo
             ? 'border-transparent'
             : 'border-slate-600 bg-slate-800'
         )}
       >
+        {/* <video> de preview ao vivo SEMPRE montado — só fica visível durante a gravação.
+            Isso evita o race condition em que o ref ainda é null quando getUserMedia resolve. */}
+        <video
+          ref={videoPreviewRef}
+          autoPlay
+          muted
+          playsInline
+          // @ts-ignore — atributo necessário em WebViews iOS antigos
+          webkit-playsinline=""
+          className={cn(
+            'absolute inset-0 h-full w-full rounded-lg object-cover bg-black',
+            isRecording ? 'block' : 'hidden'
+          )}
+        />
+
         {uploading ? (
           <div className="flex flex-col items-center gap-2">
             <Loader2 className="h-10 w-10 animate-spin text-blue-500" />
@@ -240,15 +272,8 @@ export function VideoCapture({
           </div>
         ) : isRecording ? (
           <>
-            <video
-              ref={videoPreviewRef}
-              autoPlay
-              muted
-              playsInline
-              className="h-full w-full rounded-lg object-cover"
-            />
             {/* HUD topo: timer */}
-            <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-center bg-gradient-to-b from-black/70 to-transparent px-3 py-2">
+            <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-center bg-gradient-to-b from-black/70 to-transparent px-3 py-2 z-10">
               <div className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
                 <span className="text-sm font-semibold text-white drop-shadow">
@@ -257,7 +282,7 @@ export function VideoCapture({
               </div>
             </div>
             {/* HUD rodapé: botão parar */}
-            <div className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-gradient-to-t from-black/70 to-transparent px-3 py-3">
+            <div className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-gradient-to-t from-black/70 to-transparent px-3 py-3 z-10">
               <Button
                 size="sm"
                 variant="destructive"
