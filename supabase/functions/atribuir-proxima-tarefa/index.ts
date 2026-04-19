@@ -278,23 +278,37 @@ serve(async (req) => {
       const limiteAlmocoMinutos = cfgAlmoco?.valor ? Math.round(parseFloat(cfgAlmoco.valor) * 60) : 240;
 
       if (minutosTrabalhados >= limiteAlmocoMinutos) {
-        console.log(`[atribuir-proxima-tarefa] Profissional trabalhou ${minutosTrabalhados} min (limite: ${limiteAlmocoMinutos}). Forçando almoço.`);
-        
-        await supabase
-          .from('turnos_profissionais')
-          .update({ 
-            status: 'em_almoco',
-            inicio_almoco: new Date().toISOString()
-          })
-          .eq('id', turnoHoje.id);
-        
-        return new Response(
-          JSON.stringify({
-            resultado: 'almoco_iniciado',
-            mensagem: 'Você completou 4 horas de trabalho. Horário de almoço iniciado automaticamente (1 hora).'
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        // ⚠️ Antes de forçar almoço, checar se há serviço em execução.
+        // Se houver, adiar o início do almoço — esperar o técnico finalizar.
+        const { data: servicosEmExecucao } = await supabase
+          .from('servicos')
+          .select('id')
+          .eq('profissional_id', profissionalId)
+          .in('status', ['em_rota', 'em_andamento'])
+          .limit(1);
+
+        if (servicosEmExecucao && servicosEmExecucao.length > 0) {
+          console.log(`[atribuir-proxima-tarefa] Almoço adiado — profissional em tarefa ${servicosEmExecucao[0].id}`);
+          // Não muda status; cai no fluxo abaixo que devolverá ja_tem_tarefa.
+        } else {
+          console.log(`[atribuir-proxima-tarefa] Profissional trabalhou ${minutosTrabalhados} min (limite: ${limiteAlmocoMinutos}). Forçando almoço.`);
+
+          await supabase
+            .from('turnos_profissionais')
+            .update({
+              status: 'em_almoco',
+              inicio_almoco: new Date().toISOString()
+            })
+            .eq('id', turnoHoje.id);
+
+          return new Response(
+            JSON.stringify({
+              resultado: 'almoco_iniciado',
+              mensagem: 'Você completou 4 horas de trabalho. Horário de almoço iniciado automaticamente (1 hora).'
+            }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
       }
     }
 
