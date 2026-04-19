@@ -1,50 +1,66 @@
 
 
-## Causa raiz (3 telas, mesmo padrão)
+## Causa raiz definitiva
 
-Verificado nos arquivos: **Associados**, **Cotações** e **Rastreadores** sofrem da mesma família de bugs. O sintoma "página recarrega a cada letra" vem de `if (isLoading) return <Spinner>` no topo dos componentes — desmonta o `<Input>` toda vez que `queryKey` muda. Somado a isso, normalização de CPF/telefone/placa é inconsistente, então buscas válidas não retornam.
+O início automático do almoço acontece em **3 lugares** e nenhum deles checa se o profissional tem tarefa em execução (`em_rota` ou `em_andamento`):
 
-## Correção unificada
+1. **Frontend — `src/hooks/useJornadaTrabalho.ts` linhas 392-402**
+   ```ts
+   if (turno?.status === 'ativo' && !turno.inicio_almoco
+       && tempoReal.minutosTrabalhados >= TEMPO_ATE_ALMOCO_MINUTOS) {
+     iniciarAlmocoMutation.mutate();   // dispara mesmo durante execução
+   }
+   ```
+   No instante em que o relógio cruza 4h, o hook chama a mutation, o turno vira `em_almoco` e o `<AlmocoBloqueioOverlay />` (renderizado em `InstaladorLayout.tsx` linha 124, **fora** das rotas de execução) cobre toda a tela com `fixed inset-0 z-[100]` — incluindo a tela de execução da vistoria, impedindo finalizar.
 
-### A. Fluidez (todos os 3)
-**Padrão único** aplicado em `Associados.tsx`, `Cotacoes.tsx` e `Rastreadores.tsx`:
-1. Remover `if (isLoading) return <Loader2/>` no topo.
-2. Manter header + filtros + `<Input>` sempre montados.
-3. Spinner/skeleton vai **dentro** do corpo da tabela (`isFetching && !data.length`).
-4. Estado local `searchInput` controla o input; `useDebounce(searchInput, 350)` alimenta o filtro.
-5. Hooks recebem `placeholderData: keepPreviousData` → `isLoading` não volta a `true` em refetches; tabela faz fade sem desmontar.
+2. **Edge Function — `supabase/functions/atribuir-proxima-tarefa/index.ts` linhas 266-298**
+   Quando o app pede próxima tarefa e o profissional já passou de 4h, força `status='em_almoco'` sem consultar `servicos` em execução.
 
-### B. Busca encontrar dados reais
-Helper único **`src/lib/buscaUtils.ts`** (novo):
-```ts
-normalizarBusca(termo) → { 
-  digits,            // só números
-  cpfFormatado,      // 000.000.000-00 quando 11 dígitos
-  telefoneFormatado, // (00) 00000-0000 quando 10/11 dígitos
-  placa              // [A-Z0-9] uppercase
-}
-```
+3. **Cron — `supabase/functions/cron-atribuir-tarefas/index.ts` linhas 196-223**
+   Mesma lógica, idem.
 
-Aplicado em:
-- **`useAssociados.ts`**: aceita CPF cru OU formatado (`cpf.eq.<digits>,cpf.eq.<formatado>`); telefone idem; placa 4-8 chars normalizada.
-- **`useRastreadores.ts`**: corrige o `.or(..., { referencedTable })` malformado (HTTP 400 silencioso identificado antes); aplica mesmo helper; adiciona `.limit()` em subqueries de placa para não estourar URL; debounce upstream.
-- **`useCotacoes.ts`**: adiciona parâmetro `searchTerm` server-side com `or(numero.ilike, leads.nome.ilike, veiculo_placa.ilike, veiculo_marca.ilike, veiculo_modelo.ilike)` — hoje busca é só client-side sobre lote inicial e perde registros antigos.
+Resultado prático observado no print: técnico em vistoria passa das 4h, o servidor (ou o próprio frontend) flipa o turno para `em_almoco`, o overlay aparece em cima da tela de execução, e o botão "Concluir vistoria" fica inalcançável.
 
-### Escopo
-3 telas, 1 helper novo, sem mudança de schema, sem nova dependência.
+## Correção
+
+### A. Helper único de checagem (frontend)
+**Novo:** `src/hooks/useTemTarefaEmExecucao.ts` (~25 linhas) — usa `useTarefaAtual` e devolve `true` quando `tarefa.status ∈ {'em_rota','em_andamento'}`. Reutilizável.
+
+### B. Bloquear início automático no frontend
+**`src/hooks/useJornadaTrabalho.ts`**
+- Importar o helper.
+- No `useEffect` das linhas 392-402, adicionar condição `&& !temTarefaEmExecucao` antes do `iniciarAlmocoMutation.mutate()`.
+- Expor flag `almocoAdiado` (true quando passou de 4h e tem tarefa em execução) para mostrar badge sutil "Almoço aguardando finalização da tarefa atual" no `JornadaStatusBar`.
+
+### C. Bloquear overlay enquanto tarefa estiver ativa
+**`src/components/vistoriador/AlmocoBloqueioOverlay.tsx`**
+- Importar `useTemTarefaEmExecucao`.
+- Mudar o early return: se `emAlmoco && temTarefaEmExecucao` → `return null` (nunca cobre a tela; técnico finaliza normalmente).
+- Como segurança extra, se o turno já estiver `em_almoco` no banco mas houver tarefa em execução, disparar **rollback** automático: chamar `update turnos_profissionais set status='ativo', inicio_almoco=null where id=...` (cobre o caso em que servidor já flipou o turno antes da correção). Isso é consistente porque o tempo de almoço só conta a partir de `inicio_almoco`.
+
+### D. Bloquear no servidor (origem real do bug em produção)
+**`supabase/functions/atribuir-proxima-tarefa/index.ts`** (linhas 266-298)
+- Antes do bloco "Forçar almoço", consultar `servicos` do profissional `in ('em_rota','em_andamento')`. Se houver, **pular** o force-lunch e devolver normalmente (`ja_tem_tarefa`). Sem mudar o turno.
+
+**`supabase/functions/cron-atribuir-tarefas/index.ts`** (linhas 196-223)
+- Mesma checagem antes de forçar `em_almoco`. Se há tarefa em execução, `continue` sem flipar o status.
+
+### E. Pós-conclusão da tarefa
+- Não precisa de gatilho novo: assim que a tarefa é concluída, o `useEffect` do `useJornadaTrabalho` reavalia (`temTarefaEmExecucao` vira false) e dispara o almoço naturalmente. O cron também passa a forçar no próximo ciclo.
+
+## Validação (admin@teste.com → simular técnico)
+1. Abrir tela de execução de vistoria com turno > 4h trabalhadas → overlay **não** aparece, botão "Concluir" funciona.
+2. Concluir a vistoria → em até 30s o overlay aparece (frontend) ou na próxima chamada da edge function (servidor) → almoço inicia.
+3. Console mostra `[useJornadaTrabalho] Almoço adiado — tarefa em execução` em vez de iniciar.
+4. Logs da edge: `[atribuir-proxima-tarefa] Almoço adiado — profissional em tarefa <id>`.
+5. Sem tarefa em execução → comportamento atual preservado (almoço inicia em 4h).
 
 ## Arquivos
-- `src/lib/buscaUtils.ts` (novo)
-- `src/pages/cadastro/Associados.tsx`
-- `src/pages/vendas/Cotacoes.tsx`
-- `src/pages/cadastro/Rastreadores.tsx`
-- `src/hooks/useAssociados.ts`
-- `src/hooks/useCotacoes.ts`
-- `src/hooks/useRastreadores.ts`
+- `src/hooks/useTemTarefaEmExecucao.ts` (novo)
+- `src/hooks/useJornadaTrabalho.ts`
+- `src/components/vistoriador/AlmocoBloqueioOverlay.tsx`
+- `supabase/functions/atribuir-proxima-tarefa/index.ts`
+- `supabase/functions/cron-atribuir-tarefas/index.ts`
 
-## Validação (login admin@teste.com)
-1. **Associados**: digitar `daniel` letra a letra → input mantém foco, sem flash de spinner em tela cheia. Buscar `21997844853`, `12345678900`, `123.456.789-00`, `PZU3B88`, `pzu-3b88` → todos retornam.
-2. **Rastreadores**: buscar placa com e sem hífen → encontra; Network mostra 200 (não mais 400 silencioso).
-3. **Cotações**: buscar cotação antiga (fora do lote inicial de 100) → aparece via server-side.
-4. **DevTools Network**: ≤1 request por pausa de 350 ms em todas as telas.
+Sem mudança de schema, sem nova dependência.
 
