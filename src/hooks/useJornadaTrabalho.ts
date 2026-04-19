@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { getHojeBrasilia } from '@/lib/date-utils';
+import { useTemTarefaEmExecucao } from './useTemTarefaEmExecucao';
 
 interface TurnoProfissional {
   id: string;
@@ -389,17 +390,51 @@ export function useJornadaTrabalho() {
     }
   });
 
+  // Checar se há tarefa em execução (em_rota / em_andamento)
+  const temTarefaEmExecucao = useTemTarefaEmExecucao();
+
   // Verificar se deve iniciar almoço automaticamente
+  // ⚠️ NÃO inicia se houver tarefa em execução — espera o técnico finalizar.
   useEffect(() => {
     if (
       turno?.status === 'ativo' &&
       !turno.inicio_almoco &&
       tempoReal.minutosTrabalhados >= TEMPO_ATE_ALMOCO_MINUTOS
     ) {
+      if (temTarefaEmExecucao) {
+        console.log('[useJornadaTrabalho] Almoço adiado — tarefa em execução');
+        return;
+      }
       console.log('[useJornadaTrabalho] 4 horas trabalhadas - iniciando almoço automaticamente');
       iniciarAlmocoMutation.mutate();
     }
-  }, [turno?.status, turno?.inicio_almoco, tempoReal.minutosTrabalhados]);
+  }, [turno?.status, turno?.inicio_almoco, tempoReal.minutosTrabalhados, temTarefaEmExecucao]);
+
+  // Flag exposta para UI: passou de 4h mas almoço foi adiado por tarefa em execução
+  const almocoAdiado =
+    turno?.status === 'ativo' &&
+    !turno.inicio_almoco &&
+    tempoReal.minutosTrabalhados >= TEMPO_ATE_ALMOCO_MINUTOS &&
+    temTarefaEmExecucao;
+
+  // Rollback de segurança: se o servidor já flipou para 'em_almoco' mas há tarefa em execução,
+  // reverter para 'ativo' para liberar a tela do técnico.
+  useEffect(() => {
+    if (turno?.status === 'em_almoco' && turno?.id && temTarefaEmExecucao) {
+      console.log('[useJornadaTrabalho] Rollback de almoço — tarefa em execução detectada');
+      supabase
+        .from('turnos_profissionais')
+        .update({ status: 'ativo', inicio_almoco: null })
+        .eq('id', turno.id)
+        .then(({ error }) => {
+          if (error) {
+            console.error('[useJornadaTrabalho] Falha no rollback de almoço:', error);
+          } else {
+            refetchTurno();
+          }
+        });
+    }
+  }, [turno?.status, turno?.id, temTarefaEmExecucao, refetchTurno]);
 
   // Auto-finalizar almoço quando os 60 minutos se completam
   useEffect(() => {
@@ -516,7 +551,11 @@ export function useJornadaTrabalho() {
     isIniciandoAlmoco: iniciarAlmocoMutation.isPending,
     isFinalizandoAlmoco: finalizarAlmocoMutation.isPending,
     isEncerrando: encerrarTurnoMutation.isPending,
-    
+
+    // Flags de UI
+    almocoAdiado,
+    temTarefaEmExecucao,
+
     // Helpers
     formatarMinutos,
     getTempoFormatado: () => formatarTempoJornada(tempoReal.minutosTrabalhados, minutosRestantes)

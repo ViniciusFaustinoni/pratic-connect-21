@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Coffee, Clock, ArrowRight } from 'lucide-react';
 import { useJornadaTrabalho, formatarMinutos } from '@/hooks/useJornadaTrabalho';
+import { useTemTarefaEmExecucao } from '@/hooks/useTemTarefaEmExecucao';
 import { Button } from '@/components/ui/button';
 
 /**
@@ -9,6 +10,7 @@ import { Button } from '@/components/ui/button';
  */
 export function AlmocoBloqueioOverlay() {
   const { emAlmoco, minutosAlmocoRestantes, turno, finalizarAlmoco, isFinalizandoAlmoco } = useJornadaTrabalho();
+  const temTarefaEmExecucao = useTemTarefaEmExecucao();
   const [segundosRestantes, setSegundosRestantes] = useState(0);
 
   // Calcular segundos restantes em tempo real
@@ -33,6 +35,12 @@ export function AlmocoBloqueioOverlay() {
   }, [emAlmoco, turno?.inicio_almoco]);
 
   if (!emAlmoco) {
+    return null;
+  }
+
+  // ⚠️ Nunca cobrir a tela enquanto o técnico estiver com tarefa em execução.
+  // O hook useJornadaTrabalho fará rollback do status no banco em paralelo.
+  if (temTarefaEmExecucao) {
     return null;
   }
 

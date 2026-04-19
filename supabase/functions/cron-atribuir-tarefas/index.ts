@@ -207,16 +207,29 @@ serve(async (req) => {
           const minutosTrabalhados = Math.floor((agora.getTime() - inicioTurno.getTime()) / 60000);
 
           if (minutosTrabalhados >= 240) { // 4 horas
+            // ⚠️ Antes de forçar almoço, checar se há serviço em execução.
+            const { data: servicosEmExecucao } = await supabase
+              .from('servicos')
+              .select('id')
+              .eq('profissional_id', prof.vistoriador_id)
+              .in('status', ['em_rota', 'em_andamento'])
+              .limit(1);
+
+            if (servicosEmExecucao && servicosEmExecucao.length > 0) {
+              console.log(`[cron-atribuir-tarefas] ⏸️ Almoço adiado para ${prof.vistoriador_id} — em tarefa ${servicosEmExecucao[0].id}`);
+              continue; // pular este profissional neste ciclo, sem flipar status
+            }
+
             console.log(`[cron-atribuir-tarefas] ⏰ Profissional ${prof.vistoriador_id} atingiu 4h - forçando ALMOÇO`);
-            
+
             await supabase
               .from('turnos_profissionais')
-              .update({ 
+              .update({
                 status: 'em_almoco',
                 inicio_almoco: new Date().toISOString()
               })
               .eq('id', turnoHoje.id);
-            
+
             continue; // Pular atribuição
           }
         }
