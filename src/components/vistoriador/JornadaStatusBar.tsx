@@ -22,7 +22,8 @@ export function JornadaStatusBar({ className }: JornadaStatusBarProps) {
     minutosAlmocoRestantes,
     minutosAtrasoAlmoco,
     turno,
-    isLoading
+    isLoading,
+    almocoAdiado,
   } = useJornadaTrabalho();
 
   // Mostrar loading enquanto busca o turno
@@ -115,6 +116,16 @@ export function JornadaStatusBar({ className }: JornadaStatusBarProps) {
         value={percentualJornada} 
         className="h-2"
       />
+
+      {/* Almoço adiado: passou de 4h mas técnico está em tarefa */}
+      {almocoAdiado && (
+        <div className="flex items-center justify-center gap-1 text-xs">
+          <Coffee className="h-3 w-3 text-amber-400" />
+          <span className="text-amber-400">
+            Almoço aguardando finalização da tarefa atual
+          </span>
+        </div>
+      )}
 
       {/* Acréscimo por atraso de almoço */}
       {atrasoRegistrado > 0 && (
