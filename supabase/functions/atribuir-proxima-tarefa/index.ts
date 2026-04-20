@@ -156,6 +156,26 @@ serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Verificar flag de atribuição manual — quando ativa, não entrega tarefa automaticamente
+    const { data: configManual } = await supabase
+      .from('configuracoes')
+      .select('valor')
+      .eq('chave', 'atribuicao_manual_rotas')
+      .maybeSingle();
+
+    if (configManual?.valor === 'true') {
+      console.log('[atribuir-proxima-tarefa] Atribuição MANUAL ativa — não entregando tarefa automática');
+      return new Response(
+        JSON.stringify({
+          resultado: 'manual_ativo',
+          atribuido: false,
+          motivo: 'manual_ativo',
+          mensagem: 'Atribuição manual ativa — aguarde o coordenador atribuir sua próxima tarefa.',
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Get auth header
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {

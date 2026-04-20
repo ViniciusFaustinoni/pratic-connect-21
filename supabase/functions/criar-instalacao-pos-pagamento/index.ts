@@ -563,18 +563,28 @@ serve(async (req) => {
       console.error('[CriarInstalacaoPosPagamento] Erro ao processar CC vendedor externo:', ccErr);
     }
 
-    // 7. DISPARAR ATRIBUIÇÃO AUTOMÁTICA (só se instalação foi criada)
+    // 7. DISPARAR ATRIBUIÇÃO AUTOMÁTICA (só se instalação foi criada E modo manual estiver desligado)
     if (novaInstalacaoId) {
       try {
-        await fetch(`${supabaseUrl}/functions/v1/cron-atribuir-tarefas`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${serviceRoleKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({}),
-        });
-        console.log('[CriarInstalacaoPosPagamento] ✓ Atribuição automática disparada');
+        const { data: configManual } = await supabase
+          .from('configuracoes')
+          .select('valor')
+          .eq('chave', 'atribuicao_manual_rotas')
+          .maybeSingle();
+
+        if (configManual?.valor === 'true') {
+          console.log('[CriarInstalacaoPosPagamento] Atribuição MANUAL ativa — pulando disparo automático');
+        } else {
+          await fetch(`${supabaseUrl}/functions/v1/cron-atribuir-tarefas`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${serviceRoleKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({}),
+          });
+          console.log('[CriarInstalacaoPosPagamento] ✓ Atribuição automática disparada');
+        }
       } catch (atribErr) {
         console.warn('[CriarInstalacaoPosPagamento] Atribuição imediata falhou:', atribErr);
       }

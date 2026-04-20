@@ -32,6 +32,18 @@ Deno.serve(async (req) => {
     // Ler configuração dinâmica de raio de redistribuição
     const redistribuicaoRaioKm = await getConfiguracaoNumero(supabase, 'redistribuicao_raio_km', 5);
 
+    // Verificar flag de atribuição manual — quando ativa, NÃO redistribui órfãos automaticamente
+    // (mas o fluxo de marcar nao_compareceu + enviar link de reagendamento continua)
+    const { data: configManualFlag } = await supabase
+      .from('configuracoes')
+      .select('valor')
+      .eq('chave', 'atribuicao_manual_rotas')
+      .maybeSingle();
+    const atribuicaoManualAtiva = configManualFlag?.valor === 'true';
+    if (atribuicaoManualAtiva) {
+      console.log('[cron-reagendamento] Atribuição MANUAL ativa — redistribuição automática de órfãos desligada');
+    }
+
     // ===== PARTE 1: Recuperar imprevistos órfãos =====
     // Serviços com imprevisto registrado há mais de 30 min mas ainda em status ativo ou imprevisto_pendente
     const threshold30min = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
@@ -64,7 +76,7 @@ Deno.serve(async (req) => {
 
         const origem = orfao.imprevisto_origem || 'associado'; // default = associado (comportamento anterior)
 
-        if (origem === 'instalador' && orfao.latitude && orfao.longitude) {
+        if (origem === 'instalador' && orfao.latitude && orfao.longitude && !atribuicaoManualAtiva) {
           // ========== REDISTRIBUIÇÃO PROATIVA (imprevisto do instalador) ==========
           console.log(`[cron-reagendamento] Imprevisto do INSTALADOR: tentando redistribuir ${orfao.id}`);
 
