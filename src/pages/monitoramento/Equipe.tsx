@@ -319,6 +319,14 @@ export default function Equipe() {
         profissionalId={profissionalRelatorio?.id || ''}
         profissionalNome={profissionalRelatorio?.nome || ''}
       />
+
+      <ServicosAtribuidosModal
+        open={servicosModalOpen}
+        onOpenChange={setServicosModalOpen}
+        modo={servicosModalCtx.modo}
+        profissionalId={servicosModalCtx.profissional?.id || null}
+        profissionalNome={servicosModalCtx.profissional?.nome}
+      />
     </div>
   );
 }
