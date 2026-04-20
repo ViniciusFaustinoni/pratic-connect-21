@@ -24,7 +24,9 @@ import {
   Send,
   Copy,
   Image,
+  MapPinned,
 } from 'lucide-react';
+import { RealocarInstalacaoDialog } from '@/components/instalacoes/RealocarInstalacaoDialog';
 import {
   Dialog,
   DialogContent,
@@ -61,6 +63,7 @@ export function InstalacaoDetailDrawer({
   const [visualizadorAberto, setVisualizadorAberto] = useState(false);
   const [fotoIndex, setFotoIndex] = useState(0);
   const [fotosAtivas, setFotosAtivas] = useState<Array<{ url: string; label: string; tipo?: string }>>([]);
+  const [realocarOpen, setRealocarOpen] = useState(false);
   const { data: instalacao, isLoading } = useInstalacao(instalacaoId || undefined);
   const updateStatus = useUpdateInstalacaoStatus();
 
@@ -807,6 +810,18 @@ export function InstalacaoDetailDrawer({
                   >
                     <CheckCircle className="h-4 w-4 mr-1" />
                     Concluir
+                  </Button>
+                )}
+
+                {['agendada', 'nao_compareceu', 'reagendada', 'cancelada'].includes(instalacao.status) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setRealocarOpen(true)}
+                    className="border-primary/40 text-primary hover:bg-primary/10"
+                  >
+                    <MapPinned className="h-4 w-4 mr-1" />
+                    Realocar serviço
                   </Button>
                 )}
 
