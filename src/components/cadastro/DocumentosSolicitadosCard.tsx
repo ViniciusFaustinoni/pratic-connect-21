@@ -1,11 +1,12 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Eye, FileText, Calendar, MessageSquare, AlertCircle } from 'lucide-react';
+import { RefreshCw, Eye, FileText, Calendar, MessageSquare, AlertCircle, Clock, X, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useCancelarDocumentosSolicitados } from '@/hooks/useCancelarDocumentosSolicitados';
 
-// Labels para tipos de documentos
+// Labels para tipos de documentos (cobre cadastrais e fotos de vistoria)
 const TIPO_DOCUMENTO_LABELS: Record<string, string> = {
   'cnh': 'CNH',
   'crlv': 'CRLV',
@@ -20,9 +21,18 @@ const TIPO_DOCUMENTO_LABELS: Record<string, string> = {
   'pneu_dianteiro_direito': 'Pneu Dianteiro Direito',
   'pneu_traseiro_esquerdo': 'Pneu Traseiro Esquerdo',
   'pneu_traseiro_direito': 'Pneu Traseiro Direito',
-  'chassi': 'Chassi',
-  'motor': 'Motor',
+  'chassi': 'Foto do Chassi',
+  'motor': 'Foto do Motor',
+  'odometro': 'Foto do Odômetro',
+  'painel': 'Foto do Painel',
+  'frente': 'Foto Frontal',
+  'traseira': 'Foto Traseira',
+  'lateral_esquerda': 'Lateral Esquerda',
+  'lateral_direita': 'Lateral Direita',
+  'banco_dianteiro': 'Foto do Banco Dianteiro',
+  'banco_traseiro': 'Foto do Banco Traseiro',
   'selfie_veiculo': 'Selfie com Veículo',
+  'nota_fiscal_veiculo': 'Nota Fiscal do Veículo',
   'outro': 'Documento',
 };
 
@@ -41,12 +51,33 @@ export interface DocumentoSolicitadoEnviado {
   } | null;
 }
 
-interface DocumentosSolicitadosCardProps {
-  documentosSolicitados: DocumentoSolicitadoEnviado[];
+export interface DocumentoSolicitadoPendente {
+  id: string;
+  tipo_documento: string;
+  descricao: string | null;
+  observacao_solicitacao: string | null;
+  solicitado_em: string | null;
+  created_at: string | null;
 }
 
-export function DocumentosSolicitadosCard({ documentosSolicitados }: DocumentosSolicitadosCardProps) {
-  if (!documentosSolicitados || documentosSolicitados.length === 0) {
+interface DocumentosSolicitadosCardProps {
+  documentosSolicitados: DocumentoSolicitadoEnviado[];
+  documentosPendentes?: DocumentoSolicitadoPendente[];
+  contratoId?: string;
+  associadoId?: string;
+}
+
+export function DocumentosSolicitadosCard({
+  documentosSolicitados,
+  documentosPendentes = [],
+  contratoId,
+  associadoId,
+}: DocumentosSolicitadosCardProps) {
+  const cancelarMutation = useCancelarDocumentosSolicitados();
+  const temEnviados = documentosSolicitados && documentosSolicitados.length > 0;
+  const temPendentes = documentosPendentes && documentosPendentes.length > 0;
+
+  if (!temEnviados && !temPendentes) {
     return null;
   }
 
