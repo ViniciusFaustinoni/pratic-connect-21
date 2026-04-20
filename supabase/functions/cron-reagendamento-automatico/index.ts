@@ -414,7 +414,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`[cron-reagendamento] Resumo Parte 2: ${processados} reagendados, ${ignoradosRecente} ignorados (recentes), ${ignoradosJanela} ignorados (janela ativa)`);
+    console.log(`[cron-reagendamento] Resumo Parte 2: ${processados} reagendados, ${ignoradosRecente} recentes, ${ignoradosJanela} janela ativa, ${ignoradosBase} base, ${ignoradosCriadoAposCutoff} criados após cutoff, ${ignoradosStatusMudou} status mudou`);
 
     return new Response(
       JSON.stringify({
