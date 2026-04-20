@@ -289,21 +289,34 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Janela vencida e serviço antigo → marcar como nao_compareceu
+        // Janela vencida e serviço antigo → marcar como nao_compareceu e devolver do técnico
+        const profissionalAnterior = servico.profissional_id;
         await supabase
           .from("servicos")
           .update({
             status: "nao_compareceu",
+            profissional_id: null,
             updated_at: new Date().toISOString(),
           })
           .eq("id", servico.id);
+
+        // Cancelar entradas em fila ligadas ao serviço
+        await supabase
+          .from("fila_servicos")
+          .update({ status: "cancelado" } as any)
+          .eq("servico_id", servico.id)
+          .eq("status", "aguardando");
+
+        if (profissionalAnterior) {
+          console.log(`[cron-reagendamento] ↩ Tarefa ${servico.id} devolvida do técnico ${profissionalAnterior}`);
+        }
 
         await supabase.functions.invoke("enviar-link-reagendamento", {
           body: { servico_id: servico.id },
         });
 
         processados++;
-        console.log(`[cron-reagendamento] Processado (vencido): ${servico.id} (cutoff=${cutoff})`);
+        console.log(`[cron-reagendamento] Processado (vencido): ${servico.id} (cutoff=${cutoff}, status_anterior=${servico.status})`);
       } catch (e: any) {
         console.error(`[cron-reagendamento] Erro no serviço ${servico.id}:`, e.message);
       }
