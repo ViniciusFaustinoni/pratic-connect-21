@@ -1,113 +1,108 @@
 
 
-## Consolidar Serviços de Campo em uma única tela unificada
+## Envio do Termo de Filiação via WhatsApp Meta (template + link Autentique)
 
 ### Diagnóstico
-Hoje `Serviços de Campo` tem 8 abas (`Atribuição Manual`, `Instalações`, `Vistorias`, `Retiradas`, `Encaixes`, `Viagens`, `Manutenção`, `Histórico`) — cada uma é uma página separada com sua própria lista, métricas e filtros, mesmo a maioria dos dados vindo da **mesma tabela `servicos`** (já tem `tipo`, `status`, `data_agendada`, etc.).
 
-A duplicação dificulta:
-- visão geral (analista precisa pular abas)
-- filtros cruzados (ex.: "tudo de hoje em SP")
-- comparação de SLA entre tipos
+- O contrato (Termo de Afiliação) é gerado pela edge function `autentique-create-by-token`, que salva em `contratos.autentique_url` o link curto da Autentique no formato `https://assina.ae/<token>`.
+- Já existe um **template Meta APROVADO** chamado `assinatura_documento_v2` com:
+  - Corpo: 2 variáveis (`{{1}}` = primeiro nome, `{{2}}` = nome do documento)
+  - Botão URL dinâmico: `https://assina.ae/{{1}}` (1 variável de botão = token Autentique)
+- O envio via WhatsApp foi removido do fluxo (`// WhatsApp template sending removed - link is now shown directly on the public page`). Falta reativar.
+- A infra para enviar templates Meta com botão URL dinâmico já existe em `whatsapp-send-text` (suporta `template_button_params`).
 
-### Solução: aba única "Serviços" + abas operacionais reduzidas
+### Solução
 
-**1. Nova aba "Serviços" (default)** — tabela única com todos os tipos de serviço de campo, diferenciados por **Badge de tipo** com tooltip rico, e **modal de detalhes ao clicar na linha**.
+#### 1. Garantir que o template oficial existe e está aprovado
+Já existe `assinatura_documento_v2` APPROVED. Nenhuma criação nova necessária — apenas vamos referenciá-lo.
+
+Como o usuário pediu explicitamente para "criar um template Meta no formato de envio de link", vou criar uma variante v3 dedicada **especificamente ao Termo de Filiação** (mais alinhada ao contexto, sem genérico de "documento"), via SQL insert na tabela `whatsapp_meta_templates` com status `DRAFT`. O usuário envia para a Meta pelo botão "Enviar para aprovação" da aba Templates Meta.
 
 ```text
-ABAS NOVAS (Serviços de Campo)
-├─ Serviços (NOVA — default, lista unificada)
-├─ Atribuição Manual (mantém — operacional drag&drop)
-├─ Encaixes (mantém — operacional)
-├─ Viagens (mantém — específico de logística + diárias)
-├─ Manutenção (mantém — fluxo próprio)
-└─ Histórico (mantém)
-
-REMOVIDAS (consolidadas na aba Serviços)
-├─ Instalações
-├─ Vistorias
-└─ Retiradas
+nome:       termo_filiacao_assinatura_v1
+categoria:  UTILITY
+header:     none
+corpo:
+  Olá {{1}}! 📄
+  
+  Seu *Termo de Filiação PRATIC* está pronto para assinatura digital.
+  
+  Veículo: *{{2}}*
+  Contrato: {{3}}
+  
+  Clique no botão abaixo para ler e assinar com validade jurídica.
+  Após a assinatura, sua proteção será ativada.
+rodape:     Equipe PRATIC 🛡️
+botão URL:  "Assinar Termo"  →  https://assina.ae/{{1}}
+variáveis exemplo: { "1": "João", "2": "HB20 - ABC1234", "3": "PRT-2026-001234" }
 ```
 
-Os fluxos operacionais (Atribuição Manual, Encaixes, Viagens, Manutenção, Histórico) ficam separados porque têm UX próprio. A consolidação atinge as 3 listagens equivalentes.
+Enquanto este novo template não estiver aprovado, o sistema usa automaticamente o já aprovado `assinatura_documento_v2` como fallback (lógica de seleção descrita abaixo).
 
-### Componentes da nova aba "Serviços"
+#### 2. Helper compartilhado (reusável)
+Criar `supabase/functions/_shared/enviar-termo-filiacao-whatsapp.ts` com a função:
 
-**A. Métricas no topo (8 cards clicáveis filtram)**
-- Pré-execução (agendada + atribuida + aguardando_prestador + pendente)
-- Em campo (em_rota + no_local + em_andamento)
-- Aguardando análise (em_analise)
-- Concluídas hoje
-- Não compareceu
-- Reagendadas
-- Multas/bloqueios (badge específico de retiradas)
-- Total do dia
+```ts
+enviarTermoFiliacaoWhatsApp(supabase, {
+  contratoId,
+  telefone,
+  nomeCompleto,
+  veiculoLabel,   // "HB20 - ABC1234"
+  numeroContrato,
+  autentiqueUrl,  // https://assina.ae/<token>
+})
+```
 
-**B. Filtros**
-- Busca: nome / placa / protocolo / código rastreador
-- Tipo (multi-select com 8 opções, todas marcadas por padrão): Instalação, Revistoria, Vist. Entrada, Vist. Saída, Vist. Sinistro, Vist. Periódica, Vist. Manutenção, Retirada
-- Status (multi-select agrupado por fase)
-- Origem técnico (Interno / Prestador externo)
-- Cidade/UF
-- Data (range)
-- Botão "Limpar"
+Lógica:
+- Extrai o token do final da URL (`url.split('/').pop()`).
+- Procura template aprovado nesta ordem: `termo_filiacao_assinatura_v1` → `assinatura_documento_v2`.
+- Monta `template_params` conforme o template encontrado (3 params no novo, 2 no fallback usando "Termo de Afiliação Nº X").
+- Chama `whatsapp-send-text` com `template_name`, `template_params`, `template_button_params: [token]`, `referencia_tipo: 'termo_filiacao'`, `referencia_id: contratoId`.
+- Faz log estruturado e nunca quebra o fluxo principal (try/catch silencioso).
 
-**C. Tabela unificada — colunas**
-| Tipo | Data/Período | Associado | Veículo | Endereço | Técnico | Status | Ações |
+#### 3. Reativar o envio em `autentique-create-by-token`
+Após o `update` que grava `autentique_url` no contrato (linha ~788), chamar o helper acima usando o telefone do `lead`/`associado`. Substituir o comentário "WhatsApp template sending removed".
 
-- **Coluna Tipo**: `Badge` colorido com ícone (Wrench / ClipboardCheck / PackageX / RefreshCw…) usando o mapa `TIPO_SERVICO_COLORS` já existente.
-- **Tooltip no Badge** (Radix `Tooltip`): mostra
-  - Nome completo do tipo (ex.: "Vistoria de Sinistro")
-  - Protocolo
-  - Origem (cadastro / monitoramento / financeiro / sinistro)
-  - Motivo (quando retirada/sinistro)
-  - SLA / data limite quando aplicável
-  - Flag "Encaixe permitido" / "Cliente aceita encaixe"
-- **Linha clicável** → abre **Modal de Detalhes**
+Mesmo tratamento na edge function `autentique-create` (fluxo interno do CRM, quando admin envia manualmente).
 
-**D. Modal de Detalhes (`ServicoDetailModal`)**
-Componente novo que rotea para o conteúdo certo conforme `tipo`:
-- `instalacao` / `revistoria` → reusa `InstalacaoDetailDrawer`
-- `vistoria_*` (exceto retirada) → reusa `VistoriaDetailDrawer`
-- `vistoria_retirada` → conteúdo dedicado (motivo, multa, integridade, deadline) — reaproveita os componentes já presentes em `RetiradasContent`
+#### 4. Botão manual na UI (Reenviar por WhatsApp)
+Em `src/components/contratos/ContratoDetailDrawer.tsx` (gaveta de detalhes do contrato), adicionar botão **"Reenviar link por WhatsApp"** visível quando `autentique_url` existe e contrato está `pendente_assinatura`. Chama uma nova edge function leve `enviar-termo-filiacao-whatsapp` (wrapper público do helper) com `contratoId`.
 
-Header do modal:
-- Badge de tipo + Badge de status
-- Protocolo, data/período
-- Quick actions: WhatsApp, Maps, "Ver no mapa de monitoramento"
-- Tabs internas: **Resumo** | **Cliente & Veículo** | **Endereço** | **Histórico** | **Mídias** (quando houver) | **Ações operacionais** (cancelar, reagendar, atribuir prestador)
+#### 5. Migration
+Inserir o template novo como DRAFT:
 
-### Arquivos previstos
+```sql
+INSERT INTO whatsapp_meta_templates
+  (nome, categoria, idioma, status, header_tipo, corpo, rodape, botoes, variaveis_exemplo)
+VALUES (
+  'termo_filiacao_assinatura_v1', 'UTILITY', 'pt_BR', 'DRAFT', 'none',
+  'Olá {{1}}! 📄\n\nSeu *Termo de Filiação PRATIC* está pronto para assinatura digital.\n\nVeículo: *{{2}}*\nContrato: {{3}}\n\nClique no botão abaixo para ler e assinar com validade jurídica.\nApós a assinatura, sua proteção será ativada.',
+  'Equipe PRATIC 🛡️',
+  '[{"tipo":"url","texto":"Assinar Termo","url":"https://assina.ae/{{1}}"}]'::jsonb,
+  '{"1":"João","2":"HB20 - ABC1234","3":"PRT-2026-001234"}'::jsonb
+)
+ON CONFLICT (nome) DO NOTHING;
+```
+
+### Arquivos tocados
 
 **Novos**
-- `src/pages/monitoramento/ServicosCampoUnificado.tsx` — página da aba "Serviços"
-- `src/components/servicos-campo/ServicosTable.tsx` — tabela unificada com tooltip
-- `src/components/servicos-campo/ServicoTipoBadge.tsx` — Badge + Tooltip rico
-- `src/components/servicos-campo/ServicosFilters.tsx` — filtros consolidados
-- `src/components/servicos-campo/ServicoDetailModal.tsx` — modal roteador
-- `src/components/servicos-campo/ServicosMetricasCards.tsx` — 8 cards clicáveis
-- `src/hooks/useServicosCampoUnificado.ts` — hook que envelopa `useServicos` aplicando todos os filtros e devolvendo métricas agrupadas
+- `supabase/migrations/<timestamp>_template_termo_filiacao.sql` — insert do template DRAFT.
+- `supabase/functions/_shared/enviar-termo-filiacao-whatsapp.ts` — helper reusável.
+- `supabase/functions/enviar-termo-filiacao-whatsapp/index.ts` — wrapper público (para botão manual da UI).
 
 **Editados**
-- `src/pages/monitoramento/VistoriasInstalacoesMon.tsx` — substituir as 3 abas (`Instalações`, `Vistorias`, `Retiradas`) por uma só aba `Serviços` (default), reordenar restantes
-- (Não vamos apagar ainda `Instalacoes.tsx` / `Vistorias.tsx` / `RetiradasContent.tsx` — eles continuam sendo usados em rotas/modais internos; só removemos as abas. Limpeza definitiva pode vir num passo seguinte se você quiser.)
-
-### Reaproveitamento
-- `useServicos({ tipo: [...] })` já existe e suporta filtro multi-tipo
-- `STATUS_SERVICO_LABELS`, `STATUS_SERVICO_COLORS`, `TIPO_SERVICO_LABELS` já existem em `src/hooks/useServicos.ts`
-- `InstalacaoDetailDrawer` e `VistoriaDetailDrawer` já existem e serão reutilizados pelo modal roteador
-- Tooltip do shadcn já está disponível (`@/components/ui/tooltip`)
+- `supabase/functions/autentique-create-by-token/index.ts` — reativa envio WhatsApp pós-criação do link.
+- `supabase/functions/autentique-create/index.ts` — idem para o fluxo interno.
+- `src/components/contratos/ContratoDetailDrawer.tsx` — botão "Reenviar por WhatsApp" (com toast de sucesso/erro).
+- `supabase/config.toml` — registrar a nova edge function (verify_jwt = false para uso público com auth do usuário).
 
 ### Validação
-1. Abrir `/monitoramento/vistorias-instalacoes-mon` → aba "Serviços" abre por padrão com lista de tudo.
-2. Cards de métricas mostram contagens corretas; clicar em "Em Campo" filtra a tabela.
-3. Cada linha mostra Badge de tipo colorido. Hover no Badge → tooltip com protocolo, origem, motivo, SLA.
-4. Clicar em linha de instalação → modal abre conteúdo de `InstalacaoDetailDrawer`.
-5. Clicar em linha de vistoria de saída → modal abre conteúdo de `VistoriaDetailDrawer`.
-6. Clicar em linha de retirada → modal abre conteúdo dedicado (multa, integridade, deadline).
-7. Filtro multi-tipo funciona (ex.: marcar só "Retirada + Vist. Sinistro").
-8. Filtro de status agrupado por fase funciona.
-9. Filtro de origem (Interno/Prestador) funciona.
-10. Busca por placa, nome, protocolo, código rastreador funciona em todos os tipos.
-11. Atribuição Manual, Encaixes, Viagens, Manutenção e Histórico continuam funcionando como hoje (sem regressão).
+
+1. Aba **Configurações → WhatsApp → Templates Meta**: novo template `termo_filiacao_assinatura_v1` aparece como DRAFT, com prévia mostrando o botão "Assinar Termo".
+2. Clicar em "Enviar para aprovação" → status muda para PENDING (Meta vai aprovar/rejeitar).
+3. Concluir um pagamento de adesão real (ou usar contrato do ALEX) → fluxo público gera o `autentique_url` → cliente recebe no WhatsApp **imediatamente** uma mensagem com o template `assinatura_documento_v2` (fallback enquanto o novo não está aprovado), botão "Assinar agora" levando ao link Autentique correto.
+4. Em `Vendas → Contratos`, abrir um contrato `pendente_assinatura` → clicar **"Reenviar por WhatsApp"** → toast de sucesso, mensagem chega novamente, registro aparece em `whatsapp_mensagens` com `referencia_tipo='termo_filiacao'` e `referencia_id=<contratoId>`.
+5. Após `termo_filiacao_assinatura_v1` ser aprovado pela Meta, novos envios passam a usar este template automaticamente (sem mudança de código).
+6. Não há regressão: contratos sem WhatsApp cadastrado não quebram o fluxo (helper apenas loga e segue).
 
