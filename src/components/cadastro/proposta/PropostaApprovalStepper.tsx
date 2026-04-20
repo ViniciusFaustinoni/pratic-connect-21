@@ -15,6 +15,7 @@ import type { DocumentoAnexadoCompleto } from '@/types/documentos';
 import type { PropostaPendente, VistoriaFotoInfo } from '@/hooks/usePropostasPendentes';
 import type { DocumentoSolicitadoEnviado } from '@/components/cadastro/DocumentosSolicitadosCard';
 import { useCancelarDocumentosSolicitados } from '@/hooks/useCancelarDocumentosSolicitados';
+import { formatPeriodoLabel } from '@/lib/periodo-utils';
 
 interface PropostaApprovalStepperProps {
   proposta: PropostaPendente;
@@ -338,7 +339,7 @@ export function PropostaApprovalStepper({
                               {' '}em <strong className="text-foreground">
                                 {new Date(proposta.vistoria_base_info.data_agendada + 'T00:00:00').toLocaleDateString('pt-BR')}
                               </strong>
-                              {proposta.vistoria_base_info.horario && <> às <strong className="text-foreground">{proposta.vistoria_base_info.horario}</strong></>}
+                              {proposta.vistoria_base_info.horario && <> — <strong className="text-foreground">{formatPeriodoLabel(proposta.vistoria_base_info.horario)}</strong></>}
                             </>
                           )}
                           . Aprove apenas a documentação para liberar o agendamento.

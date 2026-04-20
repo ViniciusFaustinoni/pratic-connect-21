@@ -162,26 +162,14 @@ export const PERIODOS_DISPONIVEIS: PeriodoConfig[] = [
 // Limite máximo de vagas por período por dia
 export const LIMITE_VAGAS_POR_PERIODO = 10;
 
-// Horários disponíveis para agendamento de vistoria (segunda a sexta) - LEGADO
+/** @deprecated Agendamento agora é por PERÍODO (manhã/tarde). Use PERIODOS_DISPONIVEIS. */
 export const HORARIOS_DISPONIVEIS = [
-  '08:00',
-  '09:00',
-  '10:00',
-  '11:00',
-  '14:00',
-  '15:00',
-  '16:00',
-  '17:00',
+  '08:00', '09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00',
 ];
 
-// Horários disponíveis para sábado (08:00 às 13:00) - LEGADO
+/** @deprecated Agendamento agora é por PERÍODO (manhã/tarde). Use PERIODOS_DISPONIVEIS. */
 export const HORARIOS_SABADO = [
-  '08:00',
-  '09:00',
-  '10:00',
-  '11:00',
-  '12:00',
-  '13:00',
+  '08:00', '09:00', '10:00', '11:00', '12:00', '13:00',
 ];
 
 // Função helper para verificar se é domingo (não sábado)
@@ -228,10 +216,8 @@ export const getPeriodosDisponivelsPorHora = (date: Date): PeriodoConfig[] => {
   });
 };
 
-// Função para obter horários disponíveis baseado na data (legado)
+/** @deprecated Use getPeriodosParaDia. Mantido apenas para compatibilidade com código legado. */
 export const getHorariosParaDia = (date: Date): string[] => {
-  if (isSabado(date)) {
-    return HORARIOS_SABADO;
-  }
+  if (isSabado(date)) return HORARIOS_SABADO;
   return HORARIOS_DISPONIVEIS;
 };

@@ -14,8 +14,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useReagendarTarefa } from "@/hooks/useReagendarTarefa";
 import { parseDataLocal } from "@/lib/date-utils";
+import { normalizePeriodo, PERIODO_LABEL, type PeriodoCanonico } from "@/lib/periodo-utils";
 
 interface ReagendarTarefaDialogProps {
   open: boolean;
@@ -26,6 +34,7 @@ interface ReagendarTarefaDialogProps {
     associadoNome?: string | null;
     dataAtual?: string | null;
     horaAtual?: string | null;
+    periodoAtual?: string | null;
   };
   onSuccess?: () => void;
 }
@@ -41,34 +50,42 @@ export function ReagendarTarefaDialog({
   const hojeStr = format(new Date(), "yyyy-MM-dd");
 
   const [novaData, setNovaData] = useState<string>("");
-  const [novaHora, setNovaHora] = useState<string>("");
+  const [novoPeriodo, setNovoPeriodo] = useState<PeriodoCanonico>("manha");
   const [motivo, setMotivo] = useState<string>("");
   const [enviarWhatsapp, setEnviarWhatsapp] = useState<boolean>(true);
 
   useEffect(() => {
     if (open) {
       setNovaData(resumo.dataAtual?.slice(0, 10) || hojeStr);
-      setNovaHora(resumo.horaAtual?.slice(0, 5) || "09:00");
+      const inicial = resumo.periodoAtual
+        ? normalizePeriodo(resumo.periodoAtual)
+        : resumo.horaAtual
+          ? normalizePeriodo(resumo.horaAtual)
+          : "manha";
+      setNovoPeriodo(inicial as PeriodoCanonico);
       setMotivo("");
       setEnviarWhatsapp(true);
     }
-  }, [open, resumo.dataAtual, resumo.horaAtual, hojeStr]);
+  }, [open, resumo.dataAtual, resumo.horaAtual, resumo.periodoAtual, hojeStr]);
 
   const dataAtualLabel = resumo.dataAtual
     ? format(parseDataLocal(resumo.dataAtual.slice(0, 10)) || new Date(), "dd/MM/yyyy")
     : "—";
-  const horaAtualLabel = resumo.horaAtual?.slice(0, 5) || "—";
+  const periodoAtualLabel = resumo.periodoAtual
+    ? PERIODO_LABEL[normalizePeriodo(resumo.periodoAtual)]
+    : resumo.horaAtual
+      ? PERIODO_LABEL[normalizePeriodo(resumo.horaAtual)]
+      : "—";
 
   const dataValida = !!novaData && novaData >= hojeStr;
-  const horaValida = !!novaHora && /^\d{2}:\d{2}$/.test(novaHora);
-  const podeConfirmar = !!servicoId && dataValida && horaValida && !reagendar.isPending;
+  const podeConfirmar = !!servicoId && dataValida && !reagendar.isPending;
 
   const handleConfirmar = async () => {
     if (!servicoId) return;
     await reagendar.mutateAsync({
       servicoId,
       novaData,
-      novaHora,
+      novoPeriodo,
       motivo: motivo.trim() || undefined,
       enviarWhatsapp,
     });
@@ -85,7 +102,7 @@ export function ReagendarTarefaDialog({
             Reagendar tarefa
           </DialogTitle>
           <DialogDescription>
-            Defina uma nova data e horário. O técnico atribuído (se houver) será
+            Defina uma nova data e período. O técnico atribuído (se houver) será
             mantido. O associado pode ser notificado por WhatsApp.
           </DialogDescription>
         </DialogHeader>
@@ -99,7 +116,7 @@ export function ReagendarTarefaDialog({
               <strong>Associado:</strong> {resumo.associadoNome || "—"}
             </p>
             <p>
-              <strong>Atual:</strong> {dataAtualLabel} às {horaAtualLabel}
+              <strong>Atual:</strong> {dataAtualLabel} — {periodoAtualLabel}
             </p>
           </div>
 
@@ -115,13 +132,16 @@ export function ReagendarTarefaDialog({
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="nova-hora">Novo horário</Label>
-              <Input
-                id="nova-hora"
-                type="time"
-                value={novaHora}
-                onChange={(e) => setNovaHora(e.target.value)}
-              />
+              <Label htmlFor="novo-periodo">Novo período</Label>
+              <Select value={novoPeriodo} onValueChange={(v) => setNovoPeriodo(v as PeriodoCanonico)}>
+                <SelectTrigger id="novo-periodo">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manha">Manhã (08:00 – 12:00)</SelectItem>
+                  <SelectItem value="tarde">Tarde (13:00 – 18:00)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 

@@ -55,14 +55,14 @@ export function RealocarInstalacaoDialog({
   const [novaRotaNome, setNovaRotaNome] = useState('');
   const [novaRotaCidade, setNovaRotaCidade] = useState('');
   const [instaladorId, setInstaladorId] = useState<string>('');
-  const [horaAgendada, setHoraAgendada] = useState('');
+  const [periodoRota, setPeriodoRota] = useState<'manha' | 'tarde'>('manha');
   const [motivoRota, setMotivoRota] = useState('');
   const [notificarRota, setNotificarRota] = useState(true);
 
   // Aba BASE
   const [oficinaId, setOficinaId] = useState<string>('');
   const [dataBase, setDataBase] = useState(hojeStr);
-  const [horarioBase, setHorarioBase] = useState('09:00');
+  const [periodoBase, setPeriodoBase] = useState<'manha' | 'tarde'>('manha');
   const [motivoBase, setMotivoBase] = useState('');
   const [notificarBase, setNotificarBase] = useState(true);
 
@@ -137,7 +137,7 @@ export function RealocarInstalacaoDialog({
       rotaId: rotaFinalId,
       instaladorId: manualAtiva ? null : (instaladorEfetivo || null),
       dataAgendada: data,
-      horaAgendada: horaAgendada || null,
+      periodo: periodoRota,
       motivo: motivoRota.trim(),
       notificarWhatsApp: notificarRota,
     });
@@ -146,14 +146,14 @@ export function RealocarInstalacaoDialog({
   };
 
   const handleRealocarBase = async () => {
-    if (!oficinaId || !motivoBase.trim() || !horarioBase) return;
+    if (!oficinaId || !motivoBase.trim()) return;
     const baseSel = bases.find((b) => b.id === oficinaId);
     await realocarParaBase.mutateAsync({
       instalacaoId,
       oficinaId,
       oficinaNome: baseSel?.nome_fantasia || baseSel?.razao_social || 'Base',
       dataAgendada: dataBase,
-      horario: horarioBase.length === 5 ? `${horarioBase}:00` : horarioBase,
+      periodo: periodoBase,
       motivo: motivoBase.trim(),
       notificarWhatsApp: notificarBase,
     });
@@ -203,12 +203,16 @@ export function RealocarInstalacaoDialog({
                 />
               </div>
               <div>
-                <Label>Novo horário (opcional)</Label>
-                <Input
-                  type="time"
-                  value={horaAgendada}
-                  onChange={(e) => setHoraAgendada(e.target.value)}
-                />
+                <Label>Período</Label>
+                <Select value={periodoRota} onValueChange={(v) => setPeriodoRota(v as 'manha' | 'tarde')}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="manha">Manhã (08:00 – 12:00)</SelectItem>
+                    <SelectItem value="tarde">Tarde (13:00 – 18:00)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -348,12 +352,16 @@ export function RealocarInstalacaoDialog({
                 />
               </div>
               <div>
-                <Label>Horário</Label>
-                <Input
-                  type="time"
-                  value={horarioBase}
-                  onChange={(e) => setHorarioBase(e.target.value)}
-                />
+                <Label>Período</Label>
+                <Select value={periodoBase} onValueChange={(v) => setPeriodoBase(v as 'manha' | 'tarde')}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="manha">Manhã (08:00 – 12:00)</SelectItem>
+                    <SelectItem value="tarde">Tarde (13:00 – 18:00)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -375,7 +383,7 @@ export function RealocarInstalacaoDialog({
             <Button
               className="w-full"
               onClick={handleRealocarBase}
-              disabled={realocarParaBase.isPending || !oficinaId || !motivoBase.trim() || !horarioBase}
+              disabled={realocarParaBase.isPending || !oficinaId || !motivoBase.trim()}
             >
               {realocarParaBase.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
               Realocar para esta base

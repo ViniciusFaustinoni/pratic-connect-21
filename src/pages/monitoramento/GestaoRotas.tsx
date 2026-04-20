@@ -299,7 +299,7 @@ export default function GestaoRotas({ embedded = false }: { embedded?: boolean }
                         <TableHeader>
                           <TableRow>
                             <TableHead className="w-12">#</TableHead>
-                            <TableHead className="w-20">Hora</TableHead>
+                            <TableHead className="w-24">Período</TableHead>
                             <TableHead className="w-28">Tipo</TableHead>
                             <TableHead>Cliente</TableHead>
                             <TableHead>Veículo</TableHead>
@@ -316,7 +316,7 @@ export default function GestaoRotas({ embedded = false }: { embedded?: boolean }
                               <TableRow key={instalacao.id}>
                                 <TableCell className="font-medium">{index + 1}</TableCell>
                                 <TableCell>
-                                  {instalacao.periodo === 'manha' ? '09:00' : '14:00'}
+                                  {instalacao.periodo === 'manha' ? 'Manhã' : 'Tarde'}
                                 </TableCell>
                                 <TableCell>
                                   <span className="flex items-center gap-1">

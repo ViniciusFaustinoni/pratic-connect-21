@@ -2,13 +2,14 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { PERIODO_LABEL } from '@/lib/periodo-utils';
 
 interface RealocarParaRotaParams {
   instalacaoId: string;
   rotaId: string;
   instaladorId?: string | null;
   dataAgendada: string; // yyyy-MM-dd
-  horaAgendada?: string | null;
+  periodo: 'manha' | 'tarde';
   motivo: string;
   notificarWhatsApp: boolean;
 }
@@ -18,7 +19,7 @@ interface RealocarParaBaseParams {
   oficinaId: string;
   oficinaNome: string;
   dataAgendada: string;
-  horario: string; // HH:mm
+  periodo: 'manha' | 'tarde';
   motivo: string;
   notificarWhatsApp: boolean;
 }
@@ -72,7 +73,6 @@ export function useRealocarInstalacao() {
 
   const realocarParaRota = useMutation({
     mutationFn: async (params: RealocarParaRotaParams) => {
-      // Buscar dados atuais para histórico + WhatsApp
       const { data: inst, error: fetchErr } = await supabase
         .from('instalacoes')
         .select('id, status, associado_id, associados(nome, telefone), veiculos(placa, marca, modelo)')
@@ -85,9 +85,10 @@ export function useRealocarInstalacao() {
         data_agendada: params.dataAgendada,
         status: 'agendada',
         local_vistoria: 'cliente',
+        periodo: params.periodo,
+        hora_agendada: null,
       };
       if (params.instaladorId) update.instalador_responsavel_id = params.instaladorId;
-      if (params.horaAgendada) update.hora_agendada = params.horaAgendada;
 
       const { error: updErr } = await supabase
         .from('instalacoes')
@@ -105,15 +106,14 @@ export function useRealocarInstalacao() {
           rota_id: params.rotaId,
           instalador_id: params.instaladorId,
           data_agendada: params.dataAgendada,
-          hora_agendada: params.horaAgendada,
+          periodo: params.periodo,
         },
       });
 
       if (params.notificarWhatsApp && (inst as any).associados?.telefone) {
         const dataFmt = format(new Date(params.dataAgendada + 'T00:00:00'), 'dd/MM/yyyy');
-        const horaFmt = params.horaAgendada ? ` às ${params.horaAgendada.slice(0, 5)}` : '';
         const placa = (inst as any).veiculos?.placa || '';
-        const msg = `Olá ${(inst as any).associados?.nome || ''}! Sua instalação${placa ? ` do veículo ${placa}` : ''} foi reagendada para ${dataFmt}${horaFmt}. Em breve nosso instalador entrará em contato. Equipe Pratic.`;
+        const msg = `Olá ${(inst as any).associados?.nome || ''}! Sua instalação${placa ? ` do veículo ${placa}` : ''} foi reagendada para ${dataFmt} — ${PERIODO_LABEL[params.periodo]}. Em breve nosso instalador entrará em contato. Equipe Pratic.`;
         await notificarAssociado((inst as any).associados.telefone, msg);
       }
     },
@@ -138,14 +138,14 @@ export function useRealocarInstalacao() {
         ? `${veiculo.marca || ''} ${veiculo.modelo || ''} ${veiculo.ano_modelo || ''}`.trim()
         : null;
 
-      // 1) Insert agendamentos_base
+      // 1) Insert agendamentos_base com horario = canônico do período
       const { error: agErr } = await (supabase as any)
         .from('agendamentos_base')
         .insert({
           instalacao_id: params.instalacaoId,
           oficina_id: params.oficinaId,
           data_agendada: params.dataAgendada,
-          horario: params.horario,
+          horario: params.periodo,
           cliente_nome: (inst as any).associados?.nome || 'Cliente',
           cliente_telefone: (inst as any).associados?.telefone || null,
           veiculo_placa: veiculo?.placa || null,
@@ -155,7 +155,7 @@ export function useRealocarInstalacao() {
         });
       if (agErr) throw agErr;
 
-      // 2) Update instalações: agendada + local=base + sem rota
+      // 2) Update instalações
       const { error: updErr } = await supabase
         .from('instalacoes')
         .update({
@@ -163,7 +163,8 @@ export function useRealocarInstalacao() {
           local_vistoria: 'base',
           rota_id: null,
           data_agendada: params.dataAgendada,
-          hora_agendada: params.horario,
+          periodo: params.periodo,
+          hora_agendada: null,
         } as any)
         .eq('id', params.instalacaoId);
       if (updErr) throw updErr;
@@ -178,14 +179,14 @@ export function useRealocarInstalacao() {
           oficina_id: params.oficinaId,
           oficina_nome: params.oficinaNome,
           data_agendada: params.dataAgendada,
-          horario: params.horario,
+          periodo: params.periodo,
           local_vistoria: 'base',
         },
       });
 
       if (params.notificarWhatsApp && (inst as any).associados?.telefone) {
         const dataFmt = format(new Date(params.dataAgendada + 'T00:00:00'), 'dd/MM/yyyy');
-        const msg = `Olá ${(inst as any).associados?.nome || ''}! Sua instalação foi remarcada para ser realizada na base *${params.oficinaNome}* em ${dataFmt} às ${params.horario.slice(0, 5)}. Por favor, compareça com o veículo. Equipe Pratic.`;
+        const msg = `Olá ${(inst as any).associados?.nome || ''}! Sua instalação foi remarcada para ser realizada na base *${params.oficinaNome}* em ${dataFmt} — ${PERIODO_LABEL[params.periodo]}. Por favor, compareça com o veículo. Equipe Pratic.`;
         await notificarAssociado((inst as any).associados.telefone, msg);
       }
     },
