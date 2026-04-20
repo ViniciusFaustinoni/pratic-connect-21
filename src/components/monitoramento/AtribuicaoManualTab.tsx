@@ -1,18 +1,20 @@
 import { useState } from 'react';
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, useDraggable, useDroppable, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { useServicosParaAtribuir, useVistoriadoresAtivos, useAtribuirServicoManual } from '@/hooks/useAtribuicaoManual';
+import { useServicosParaAtribuir, useVistoriadoresAtivos, useAtribuirServicoManual, useAtribuirServicoPrestador, AtribuirPrestadorResult } from '@/hooks/useAtribuicaoManual';
+import { useVistoriadoresPrestadores } from '@/hooks/useVistoriadoresPrestadores';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2, GripVertical, MapPin, User, Car, Clock, Wrench, ClipboardCheck, Search, Calendar, Navigation, FileText } from 'lucide-react';
+import { Loader2, GripVertical, MapPin, User, Car, Clock, Wrench, ClipboardCheck, Search, Calendar, Navigation, FileText, ExternalLink } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { format, parseISO, isToday, isTomorrow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { TIPO_SERVICO_LABELS } from '@/hooks/useServicos';
+import { LinkPrestadorResultDialog } from './LinkPrestadorResultDialog';
 
 function getTipoLabel(tipo: string) {
   if (tipo === 'vistoria_base') return 'Vistoria Base';
@@ -180,18 +182,69 @@ function DroppableVistoriador({ vistoriador }: { vistoriador: any }) {
   );
 }
 
+// ── Droppable Prestador Card ──
+function DroppablePrestador({ prestador }: { prestador: any }) {
+  const { isOver, setNodeRef } = useDroppable({ id: `prest-${prestador.id}` });
+
+  return (
+    <Card
+      ref={setNodeRef}
+      className={cn(
+        'transition-all',
+        isOver && 'ring-2 ring-amber-500 bg-amber-50/50 dark:bg-amber-950/20 scale-[1.01]'
+      )}
+    >
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+            <ExternalLink className="h-4 w-4 text-amber-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <CardTitle className="text-sm truncate">{prestador.nome}</CardTitle>
+            {prestador.telefone && (
+              <p className="text-xs text-muted-foreground">{prestador.telefone}</p>
+            )}
+            {prestador.cpf_cnpj && (
+              <p className="text-[10px] text-muted-foreground/70">{prestador.cpf_cnpj}</p>
+            )}
+          </div>
+          <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800">
+            Prestador
+          </Badge>
+        </div>
+      </CardHeader>
+      {isOver && (
+        <div className="px-4 pb-3">
+          <div className="border-2 border-dashed border-amber-400/60 rounded-lg p-3 text-center text-xs text-amber-600">
+            Soltar aqui para atribuir ao prestador
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // ── Main Component ──
 export default function AtribuicaoManualTab() {
   const { data: servicos, isLoading: loadingServicos } = useServicosParaAtribuir();
   const { data: vistoriadores, isLoading: loadingVist } = useVistoriadoresAtivos();
+  const { data: prestadores, isLoading: loadingPrestadores } = useVistoriadoresPrestadores();
   const atribuirMutation = useAtribuirServicoManual();
+  const atribuirPrestadorMutation = useAtribuirServicoPrestador();
 
   const [filtroTipo, setFiltroTipo] = useState<string>('todos');
   const [busca, setBusca] = useState('');
   const [dragging, setDragging] = useState<any>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ servico: any; vistoriadorId: string } | null>(null);
 
+  // Prestador assignment states
+  const [prestadorConfirmDialog, setPrestadorConfirmDialog] = useState<{ servico: any; prestadorId: string; prestadorNome: string; prestadorTelefone?: string | null } | null>(null);
+  const [valorPrestador, setValorPrestador] = useState('');
+  const [linkResult, setLinkResult] = useState<AtribuirPrestadorResult | null>(null);
+
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  const prestadoresAtivos = (prestadores || []).filter((p: any) => p.ativo);
 
   const servicosFiltrados = (servicos || []).filter(s => {
     if (filtroTipo !== 'todos' && s.tipo !== filtroTipo) return false;
@@ -225,9 +278,24 @@ export default function AtribuicaoManualTab() {
     const { active, over } = event;
     if (!over) return;
 
-    const vistoriadorId = (over.id as string).replace('vist-', '');
-    const servico = active.data.current;
-    setConfirmDialog({ servico, vistoriadorId });
+    const overId = over.id as string;
+
+    if (overId.startsWith('prest-')) {
+      const prestadorId = overId.replace('prest-', '');
+      const prest = prestadoresAtivos.find((p: any) => p.id === prestadorId);
+      const servico = active.data.current;
+      setPrestadorConfirmDialog({
+        servico,
+        prestadorId,
+        prestadorNome: prest?.nome || 'Prestador',
+        prestadorTelefone: prest?.telefone,
+      });
+      setValorPrestador('');
+    } else {
+      const vistoriadorId = overId.replace('vist-', '');
+      const servico = active.data.current;
+      setConfirmDialog({ servico, vistoriadorId });
+    }
   };
 
   const handleConfirm = () => {
@@ -240,10 +308,31 @@ export default function AtribuicaoManualTab() {
     setConfirmDialog(null);
   };
 
+  const handleConfirmPrestador = async () => {
+    if (!prestadorConfirmDialog) return;
+    const valor = parseFloat(valorPrestador);
+    if (isNaN(valor) || valor <= 0) return;
+
+    try {
+      const result = await atribuirPrestadorMutation.mutateAsync({
+        servicoId: prestadorConfirmDialog.servico.id,
+        prestadorId: prestadorConfirmDialog.prestadorId,
+        prestadorNome: prestadorConfirmDialog.prestadorNome,
+        prestadorTelefone: prestadorConfirmDialog.prestadorTelefone,
+        valor,
+      });
+      setPrestadorConfirmDialog(null);
+      setLinkResult(result);
+    } catch {
+      // Error handled by mutation
+    }
+  };
+
   const vistoriadorConfirm = confirmDialog
     ? (vistoriadores || []).find(v => v.id === confirmDialog.vistoriadorId)
     : null;
   const servicoConfirmAssoc = confirmDialog?.servico?.associado as any;
+  const prestadorConfirmAssoc = prestadorConfirmDialog?.servico?.associado as any;
 
   if (loadingServicos || loadingVist) {
     return (
@@ -309,11 +398,12 @@ export default function AtribuicaoManualTab() {
           </Card>
         </div>
 
-        {/* ── Right: Vistoriadores ── */}
-        <div className="lg:col-span-2 space-y-3">
+        {/* ── Right: Vistoriadores + Prestadores ── */}
+        <div className="lg:col-span-2 space-y-3 max-h-[80vh] overflow-y-auto">
+          {/* Técnicos Internos */}
           <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
             <User className="h-4 w-4" />
-            Vistoriadores Ativos
+            Técnicos Internos
             <Badge variant="secondary">{(vistoriadores || []).length}</Badge>
           </h3>
           {(vistoriadores || []).length === 0 && (
@@ -322,6 +412,30 @@ export default function AtribuicaoManualTab() {
           {(vistoriadores || []).map(v => (
             <DroppableVistoriador key={v.id} vistoriador={v} />
           ))}
+
+          {/* Prestadores Externos */}
+          <div className="border-t pt-3 mt-3">
+            <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2 mb-3">
+              <ExternalLink className="h-4 w-4" />
+              Prestadores Externos
+              <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800">
+                {prestadoresAtivos.length}
+              </Badge>
+            </h3>
+            {loadingPrestadores ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              </div>
+            ) : prestadoresAtivos.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Nenhum prestador ativo</p>
+            ) : (
+              <div className="space-y-2">
+                {prestadoresAtivos.map((p: any) => (
+                  <DroppablePrestador key={p.id} prestador={p} />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -329,7 +443,7 @@ export default function AtribuicaoManualTab() {
         {dragging && <DragOverlayCard servico={dragging} />}
       </DragOverlay>
 
-      {/* ── Confirmation Dialog ── */}
+      {/* ── Confirmation Dialog (Técnico Interno) ── */}
       <Dialog open={!!confirmDialog} onOpenChange={() => setConfirmDialog(null)}>
         <DialogContent>
           <DialogHeader>
@@ -350,6 +464,62 @@ export default function AtribuicaoManualTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Confirmation Dialog (Prestador Externo) ── */}
+      <Dialog open={!!prestadorConfirmDialog} onOpenChange={() => setPrestadorConfirmDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              Atribuir a Prestador Externo
+            </DialogTitle>
+            <DialogDescription>
+              Atribuir <strong>{getTipoLabel(prestadorConfirmDialog?.servico?.tipo)}</strong>
+              {prestadorConfirmDialog?.servico?.bairro && <> em <strong>{prestadorConfirmDialog.servico.bairro}</strong></>}
+              {prestadorConfirmAssoc?.nome && <> ({prestadorConfirmAssoc.nome})</>}
+              {' '}para o prestador <strong>{prestadorConfirmDialog?.prestadorNome}</strong>?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800">
+              Prestador Externo — Link será gerado sem envio automático de WhatsApp
+            </Badge>
+
+            <div>
+              <label className="text-sm font-medium mb-1 block">Valor (R$) *</label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Ex: 80.00"
+                value={valorPrestador}
+                onChange={e => setValorPrestador(e.target.value)}
+                className="h-9"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPrestadorConfirmDialog(null)}>Cancelar</Button>
+            <Button
+              onClick={handleConfirmPrestador}
+              disabled={atribuirPrestadorMutation.isPending || !valorPrestador || parseFloat(valorPrestador) <= 0}
+            >
+              {atribuirPrestadorMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+              Gerar Link
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Link Result Dialog ── */}
+      <LinkPrestadorResultDialog
+        open={!!linkResult}
+        onClose={() => setLinkResult(null)}
+        url={linkResult?.url || ''}
+        prestadorNome={linkResult?.prestadorNome || ''}
+        prestadorTelefone={linkResult?.prestadorTelefone}
+      />
     </DndContext>
   );
 }
