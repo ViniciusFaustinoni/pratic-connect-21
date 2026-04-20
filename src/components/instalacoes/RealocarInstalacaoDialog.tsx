@@ -26,6 +26,8 @@ import {
 import { useBasesPratic } from '@/hooks/useBasesPratic';
 import { useInstaladores } from '@/hooks/useRotas';
 import { useRealocarInstalacao } from '@/hooks/useRealocarInstalacao';
+import { useConfigAtribuicaoManual } from '@/hooks/useAtribuicaoManual';
+import { Info } from 'lucide-react';
 
 interface Props {
   open: boolean;
@@ -66,6 +68,7 @@ export function RealocarInstalacaoDialog({
 
   const { data: instaladores = [] } = useInstaladores();
   const { data: bases = [] } = useBasesPratic();
+  const { data: manualAtiva = false } = useConfigAtribuicaoManual();
   const { realocarParaRota, realocarParaBase } = useRealocarInstalacao();
 
   // Rotas do dia selecionado
@@ -132,7 +135,7 @@ export function RealocarInstalacaoDialog({
     await realocarParaRota.mutateAsync({
       instalacaoId,
       rotaId: rotaFinalId,
-      instaladorId: instaladorEfetivo || null,
+      instaladorId: manualAtiva ? null : (instaladorEfetivo || null),
       dataAgendada: data,
       horaAgendada: horaAgendada || null,
       motivo: motivoRota.trim(),
@@ -183,6 +186,12 @@ export function RealocarInstalacaoDialog({
 
           {/* ABA ROTA */}
           <TabsContent value="rota" className="space-y-3 pt-3">
+            {manualAtiva && (
+              <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-2 text-xs text-foreground">
+                <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                <span>Modo Atribuição Manual ativo — o serviço entrará na fila de atribuição para você designar o instalador no mapa.</span>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Data</Label>
@@ -251,23 +260,25 @@ export function RealocarInstalacaoDialog({
               </div>
             )}
 
-            <div>
-              <Label>Instalador {!criandoRota && rotaSelecionada?.instalador?.nome ? '(opcional, sobrescreve)' : ''}</Label>
-              <Select value={instaladorId} onValueChange={setInstaladorId}>
-                <SelectTrigger>
-                  <SelectValue placeholder={
-                    rotaSelecionada?.instalador?.nome
-                      ? `Padrão: ${rotaSelecionada.instalador.nome}`
-                      : 'Selecione um instalador'
-                  } />
-                </SelectTrigger>
-                <SelectContent>
-                  {instaladores.map((i: any) => (
-                    <SelectItem key={i.id} value={i.id}>{i.nome}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {!manualAtiva && (
+              <div>
+                <Label>Instalador {!criandoRota && rotaSelecionada?.instalador?.nome ? '(opcional, sobrescreve)' : ''}</Label>
+                <Select value={instaladorId} onValueChange={setInstaladorId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={
+                      rotaSelecionada?.instalador?.nome
+                        ? `Padrão: ${rotaSelecionada.instalador.nome}`
+                        : 'Selecione um instalador'
+                    } />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {instaladores.map((i: any) => (
+                      <SelectItem key={i.id} value={i.id}>{i.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div>
               <Label>Motivo da realocação *</Label>
@@ -301,6 +312,12 @@ export function RealocarInstalacaoDialog({
 
           {/* ABA BASE */}
           <TabsContent value="base" className="space-y-3 pt-3">
+            {manualAtiva && (
+              <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-2 text-xs text-foreground">
+                <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                <span>Modo Atribuição Manual ativo — o serviço entrará na fila de atribuição para você designar o instalador no mapa.</span>
+              </div>
+            )}
             <div>
               <Label>Base (oficina Pratic)</Label>
               <Select value={oficinaId} onValueChange={setOficinaId}>
