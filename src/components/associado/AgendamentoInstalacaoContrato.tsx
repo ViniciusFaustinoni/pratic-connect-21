@@ -390,34 +390,63 @@ export function AgendamentoInstalacaoContrato({ contratoId, enderecoInicial, onC
             )}
           </div>
           
-          {/* Seleção de horário */}
+          {/* Seleção de período */}
           <div>
             <label className="text-sm font-medium text-foreground flex items-center gap-2 mb-3">
               <Clock className="h-4 w-4 text-primary" />
-              Horário
+              Período
             </label>
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-              {horariosDisponiveis.map((horario) => {
-                const selecionado = horarioSelecionado === horario;
-                
+            <div className="grid grid-cols-2 gap-3">
+              {periodosDisponiveis.map((periodo) => {
+                const selecionado = periodoSelecionado === periodo.id;
+                const vagas = vagasData ? vagasData[periodo.id] : null;
+                const esgotado = vagas !== null && vagas <= 0;
+
                 return (
                   <button
-                    key={horario}
-                    onClick={() => setHorarioSelecionado(horario)}
+                    key={periodo.id}
+                    onClick={() => !esgotado && setPeriodoSelecionado(periodo.id)}
+                    disabled={esgotado}
                     className={cn(
-                      "p-2.5 rounded-lg border text-center font-medium transition-all",
-                      selecionado
-                        ? "border-primary bg-primary/10 ring-2 ring-primary/20 text-primary"
-                        : "border-border/50 bg-card/50 hover:bg-accent/10 hover:border-primary/50 text-foreground"
+                      "p-4 rounded-lg border-2 text-left transition-all",
+                      selecionado && "border-primary bg-primary/10 ring-2 ring-primary/20",
+                      esgotado && "opacity-50 cursor-not-allowed bg-muted",
+                      !selecionado && !esgotado && "border-border/50 bg-card/50 hover:bg-accent/10 hover:border-primary/50"
                     )}
                   >
-                    {horario}
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "w-10 h-10 rounded-full flex items-center justify-center",
+                        selecionado ? "bg-primary/20" : "bg-muted"
+                      )}>
+                        {periodo.id === 'manha'
+                          ? <Sun className="h-5 w-5 text-amber-500" />
+                          : <Sunset className="h-5 w-5 text-orange-500" />}
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-bold text-foreground">{periodo.label}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {periodo.horarioInicio} às {periodo.horarioFim}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-2 text-xs">
+                      {isLoadingVagas ? (
+                        <span className="text-muted-foreground flex items-center gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin" /> Verificando...
+                        </span>
+                      ) : esgotado ? (
+                        <span className="text-destructive font-medium">Esgotado</span>
+                      ) : vagas !== null ? (
+                        <span className="text-success font-medium">{vagas} vagas disponíveis</span>
+                      ) : null}
+                    </div>
                   </button>
                 );
               })}
             </div>
           </div>
-          
+
           {/* Responsável */}
           <div className="space-y-4">
             <label className="text-sm font-medium text-foreground flex items-center gap-2">
@@ -494,15 +523,17 @@ export function AgendamentoInstalacaoContrato({ contratoId, enderecoInicial, onC
           </div>
           
           {/* Resumo */}
-          {dataSelecionada && horarioSelecionado && enderecoCompleto && (
+          {dataSelecionada && periodoSelecionado && enderecoCompleto && (
             <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
               <h4 className="font-medium text-foreground mb-2">Resumo do agendamento</h4>
               <p className="text-sm text-muted-foreground">
                 <strong className="text-foreground">
                   {format(dataSelecionada, "EEEE, d 'de' MMMM", { locale: ptBR })}
                 </strong>
-                {' '}às{' '}
-                <strong className="text-foreground">{horarioSelecionado}</strong>
+                {' — '}
+                <strong className="text-foreground">
+                  {periodoSelecionado === 'manha' ? 'Manhã (08:00–12:00)' : 'Tarde (14:00–18:00)'}
+                </strong>
               </p>
               <p className="text-sm text-muted-foreground mt-1">
                 {logradouro}, {numero} - {bairro}, {cidade}/{estado}
