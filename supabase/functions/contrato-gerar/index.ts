@@ -794,6 +794,11 @@ serve(async (req) => {
     const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
     const random = Math.random().toString(36).substring(2, 8).toUpperCase();
     const numeroTemp = `CTR-${timestamp}-${random}`;
+
+    // Helper de defesa em profundidade: trunca strings longas para evitar erro 22001
+    // (value too long for varchar(N)) caso o cliente cole textos enormes em campos de endereço.
+    const cap = (v: string | null | undefined, n: number): string | null | undefined =>
+      v == null ? v : (typeof v === 'string' && v.length > n ? v.slice(0, n) : v);
     
         // Gerar link_token para permitir acesso público ao contrato (satisfaz RLS)
         const linkToken = crypto.randomUUID();
