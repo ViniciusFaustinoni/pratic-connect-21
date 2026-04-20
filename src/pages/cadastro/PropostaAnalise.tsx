@@ -95,10 +95,17 @@ export default function PropostaAnalise() {
   // Verificar se pode aprovar
   // NOVO: bloqueia aprovação enquanto vistoria/instalação não foi executada
   const aguardandoExecucao = proposta?.tipo_etapa_analise === 'agendamento_confirmado';
+
+  // NOVO: vistoria na base agendada SEM fotos ainda → fluxo de aprovação só por documentos
+  const isVistoriaBaseSemFotos =
+    proposta?.tipo_vistoria === 'agendada_base' &&
+    proposta?.vistoria_base_info?.status !== 'realizado' &&
+    !(proposta?.vistoria?.fotos?.length);
+
   const podeAprovar =
     proposta?.status === 'assinado' &&
     !proposta?.tem_documento_pendente &&
-    !aguardandoExecucao;
+    (!aguardandoExecucao || isVistoriaBaseSemFotos);
 
   // Estado final (já aprovado / reprovado / cancelado)
   const isAprovada = proposta?.status === 'ativo';
@@ -400,7 +407,7 @@ export default function PropostaAnalise() {
       )}
 
       {/* Banner: aguardando execução da vistoria/instalação (analista pode revisar docs mas não aprovar) */}
-      {!isFinalizada && aguardandoExecucao && (
+      {!isFinalizada && aguardandoExecucao && !isVistoriaBaseSemFotos && (
         <div className="rounded-lg border-2 border-info/40 bg-info/10 p-4">
           <div className="flex items-start gap-3">
             <ClipboardCheck className="h-5 w-5 text-info mt-0.5 shrink-0" />
@@ -461,6 +468,7 @@ export default function PropostaAnalise() {
         isAprovando={aprovarMutation.isPending}
         isAutovistoria={isAutovistoria}
         podeAprovar={podeAprovar}
+        isVistoriaBaseSemFotos={!!isVistoriaBaseSemFotos}
       />
 
       {/* ZONA 3: Tabs de Detalhes (sempre visíveis) */}

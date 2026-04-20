@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { 
   FileText, Camera, ShieldCheck, CheckCircle, ChevronRight, ChevronLeft,
-  AlertCircle, Eye
+  AlertCircle, Eye, MapPin
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -27,6 +27,8 @@ interface PropostaApprovalStepperProps {
   isAprovando: boolean;
   isAutovistoria: boolean;
   podeAprovar: boolean;
+  /** Quando true, oculta a etapa de Fotos & Vistoria (vistoria na base sem fotos do associado). */
+  isVistoriaBaseSemFotos?: boolean;
 }
 
 interface StepConfig {
@@ -37,23 +39,26 @@ interface StepConfig {
   description: string;
 }
 
-const steps: StepConfig[] = [
-  { 
-    id: 1, label: 'Documentos', shortLabel: 'Docs',
-    icon: <FileText className="h-4 w-4" />,
-    description: 'Analise e aprove cada documento anexado'
-  },
-  { 
-    id: 2, label: 'Fotos & Vistoria', shortLabel: 'Fotos',
-    icon: <Camera className="h-4 w-4" />,
-    description: 'Revise as fotos e o vídeo da vistoria'
-  },
-  { 
-    id: 3, label: 'Aprovação Final', shortLabel: 'Aprovar',
-    icon: <ShieldCheck className="h-4 w-4" />,
-    description: 'Confirme a liberação da cobertura'
-  },
-];
+const STEP_DOCS: StepConfig = { 
+  id: 1, label: 'Documentos', shortLabel: 'Docs',
+  icon: <FileText className="h-4 w-4" />,
+  description: 'Analise e aprove cada documento anexado'
+};
+const STEP_FOTOS: StepConfig = { 
+  id: 2, label: 'Fotos & Vistoria', shortLabel: 'Fotos',
+  icon: <Camera className="h-4 w-4" />,
+  description: 'Revise as fotos e o vídeo da vistoria'
+};
+const STEP_FINAL_3: StepConfig = { 
+  id: 3, label: 'Aprovação Final', shortLabel: 'Aprovar',
+  icon: <ShieldCheck className="h-4 w-4" />,
+  description: 'Confirme a liberação da cobertura'
+};
+const STEP_FINAL_2: StepConfig = { 
+  id: 2, label: 'Aprovação Final', shortLabel: 'Aprovar',
+  icon: <ShieldCheck className="h-4 w-4" />,
+  description: 'Confirme a liberação da cobertura'
+};
 
 export function PropostaApprovalStepper({
   proposta,
@@ -67,9 +72,16 @@ export function PropostaApprovalStepper({
   isAprovando,
   isAutovistoria,
   podeAprovar,
+  isVistoriaBaseSemFotos = false,
 }: PropostaApprovalStepperProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [fotosRevisadas, setFotosRevisadas] = useState(false);
+
+  // Quando vistoria na base sem fotos, omite a etapa "Fotos & Vistoria" e o último passo é o id 2.
+  const steps: StepConfig[] = isVistoriaBaseSemFotos
+    ? [STEP_DOCS, STEP_FINAL_2]
+    : [STEP_DOCS, STEP_FOTOS, STEP_FINAL_3];
+  const finalStepId = isVistoriaBaseSemFotos ? 2 : 3;
 
   // Step 1 validation: all documents approved (or no documents)
   const totalDocs = documentos.length;
@@ -79,12 +91,13 @@ export function PropostaApprovalStepper({
   const step1Complete = totalDocs === 0 || (docsPendentes === 0 && docsReprovados === 0);
 
   // Step 2 validation: user confirmed photos reviewed
+  // Quando isVistoriaBaseSemFotos, força true (não bloqueia aprovação).
   const temFotos = (proposta.vistoria?.fotos?.length || 0) > 0 || !!proposta.vistoria?.video_360_url;
-  const step2Complete = fotosRevisadas || !temFotos;
+  const step2Complete = isVistoriaBaseSemFotos ? true : (fotosRevisadas || !temFotos);
 
   const canAdvanceFromStep = (step: number): boolean => {
     if (step === 1) return step1Complete;
-    if (step === 2) return step2Complete;
+    if (step === 2 && !isVistoriaBaseSemFotos) return step2Complete;
     return true;
   };
 
@@ -218,8 +231,8 @@ export function PropostaApprovalStepper({
           </div>
         )}
 
-        {/* STEP 2: Fotos & Vistoria */}
-        {currentStep === 2 && (
+        {/* STEP 2: Fotos & Vistoria (oculto quando isVistoriaBaseSemFotos) */}
+        {currentStep === 2 && !isVistoriaBaseSemFotos && (
           <div className="space-y-4 animate-fade-in">
             <PropostaMidiaGrid
               video360Url={proposta.vistoria?.video_360_url}
@@ -268,8 +281,8 @@ export function PropostaApprovalStepper({
           </div>
         )}
 
-        {/* STEP 3: Aprovação Final */}
-        {currentStep === 3 && (
+        {/* STEP FINAL: Aprovação Final (id 3 normal, id 2 quando isVistoriaBaseSemFotos) */}
+        {currentStep === finalStepId && (
           <div className="space-y-4 animate-fade-in">
             {/* Summary checklist */}
             <Card className="border-border">
@@ -305,35 +318,58 @@ export function PropostaApprovalStepper({
                     )}
                   </div>
 
-                  {/* Photos check */}
-                  <div className={cn(
-                    "flex items-center gap-3 p-3 rounded-lg border",
-                    step2Complete 
-                      ? "bg-success/5 border-success/30" 
-                      : "bg-warning/5 border-warning/30"
-                  )}>
-                    {step2Complete ? (
-                      <CheckCircle className="h-5 w-5 text-success shrink-0" />
-                    ) : (
-                      <Eye className="h-5 w-5 text-warning shrink-0" />
-                    )}
-                    <div className="flex-1">
-                      <p className={cn("text-sm font-semibold", step2Complete ? "text-success" : "text-warning")}>
-                        Fotos & Vistoria
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {!temFotos 
-                          ? 'Sem fotos/vídeo disponíveis' 
-                          : step2Complete 
-                            ? 'Fotos e vistoria revisadas' 
-                            : 'Revisão pendente'
-                        }
-                      </p>
+                  {/* Photos check OU banner de vistoria na base */}
+                  {isVistoriaBaseSemFotos ? (
+                    <div className="flex items-start gap-3 p-3 rounded-lg border bg-info/5 border-info/30">
+                      <MapPin className="h-5 w-5 text-info shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-info">
+                          Vistoria agendada na base
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          As fotos do veículo serão registradas pelo técnico no dia do atendimento presencial
+                          {proposta.vistoria_base_info?.data_agendada && (
+                            <>
+                              {' '}em <strong className="text-foreground">
+                                {new Date(proposta.vistoria_base_info.data_agendada + 'T00:00:00').toLocaleDateString('pt-BR')}
+                              </strong>
+                              {proposta.vistoria_base_info.horario && <> às <strong className="text-foreground">{proposta.vistoria_base_info.horario}</strong></>}
+                            </>
+                          )}
+                          . Aprove apenas a documentação para liberar o agendamento.
+                        </p>
+                      </div>
                     </div>
-                    {step2Complete && (
-                      <Badge className="bg-success/20 text-success border-0 text-xs">Concluído</Badge>
-                    )}
-                  </div>
+                  ) : (
+                    <div className={cn(
+                      "flex items-center gap-3 p-3 rounded-lg border",
+                      step2Complete 
+                        ? "bg-success/5 border-success/30" 
+                        : "bg-warning/5 border-warning/30"
+                    )}>
+                      {step2Complete ? (
+                        <CheckCircle className="h-5 w-5 text-success shrink-0" />
+                      ) : (
+                        <Eye className="h-5 w-5 text-warning shrink-0" />
+                      )}
+                      <div className="flex-1">
+                        <p className={cn("text-sm font-semibold", step2Complete ? "text-success" : "text-warning")}>
+                          Fotos & Vistoria
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {!temFotos 
+                            ? 'Sem fotos/vídeo disponíveis' 
+                            : step2Complete 
+                              ? 'Fotos e vistoria revisadas' 
+                              : 'Revisão pendente'
+                          }
+                        </p>
+                      </div>
+                      {step2Complete && (
+                        <Badge className="bg-success/20 text-success border-0 text-xs">Concluído</Badge>
+                      )}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -355,7 +391,7 @@ export function PropostaApprovalStepper({
                   ) : (
                     <>
                       <ShieldCheck className="mr-2 h-5 w-5" />
-                      {isAutovistoria ? 'Liberar Cobertura Roubo e Furto' : 'Aprovar Proposta'}
+                      {isAutovistoria && !isVistoriaBaseSemFotos ? 'Liberar Cobertura Roubo e Furto' : 'Aprovar Proposta'}
                     </>
                   )}
                 </Button>
@@ -450,9 +486,9 @@ export function PropostaApprovalStepper({
           Etapa {currentStep} de {steps.length}
         </span>
 
-        {currentStep < 3 ? (
+        {currentStep < finalStepId ? (
           <Button
-            onClick={() => setCurrentStep(prev => Math.min(3, prev + 1))}
+            onClick={() => setCurrentStep(prev => Math.min(finalStepId, prev + 1))}
             disabled={!canAdvanceFromStep(currentStep)}
             className="gap-2"
           >
