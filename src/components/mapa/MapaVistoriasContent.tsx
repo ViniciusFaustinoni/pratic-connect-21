@@ -52,6 +52,7 @@ import {
   UserPlus,
   Loader2,
   Pencil,
+  MapPinned,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -76,6 +77,7 @@ import { formatPlacaExibicao, isPlacaPlaceholder } from "@/lib/placa-utils";
 import { ReagendarTarefaDialog } from "@/components/mapa/ReagendarTarefaDialog";
 import { AlocarVistoriadorDialog } from "@/components/mapa/AlocarVistoriadorDialog";
 import { AlterarEnderecoTipoDialog } from "@/components/mapa/AlterarEnderecoTipoDialog";
+import { RealocarInstalacaoDialog } from "@/components/instalacoes/RealocarInstalacaoDialog";
 
 const COR_REALIZADA = '#10B981';
 const COR_A_REALIZAR = '#EF4444';
@@ -304,6 +306,13 @@ export function MapaVistoriasContent() {
     associadoNome: string | null;
     dataAtual: string | null;
     horaAtual: string | null;
+  } | null>(null);
+
+  // Realocar instalação (limbo → rota/base)
+  const [realocarState, setRealocarState] = useState<{
+    instalacaoId: string;
+    placa: string | null;
+    associadoNome: string | null;
   } | null>(null);
 
   // Alterar endereço/tipo state
@@ -903,6 +912,19 @@ export function MapaVistoriasContent() {
                         <CalendarClock className="h-3 w-3" />Reagendar
                       </button>
                     )}
+                    {v.tipo_servico === 'instalacao' && ['agendada', 'nao_compareceu', 'reagendada', 'cancelada'].includes(v.status) && (
+                      <button
+                        onClick={() => setRealocarState({
+                          instalacaoId: v.id,
+                          placa: formatPlacaExibicao(v.veiculo_placa),
+                          associadoNome: v.associado_nome,
+                        })}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded text-xs hover:bg-primary/90"
+                        title="Realocar para outra rota ou base"
+                      >
+                        <MapPinned className="h-3 w-3" />Realocar
+                      </button>
+                    )}
                     {podeCancelarAtribuicao && v.vistoriador_id && !isRealizada && v.servico_id_unificado && (
                       <button
                         onClick={() => setCancelConfirmation({
@@ -1381,6 +1403,17 @@ export function MapaVistoriasContent() {
           horaAtual: reagendarState?.horaAtual,
         }}
       />
+
+      {/* Realocar instalação em limbo */}
+      {realocarState && (
+        <RealocarInstalacaoDialog
+          open={!!realocarState}
+          onOpenChange={(open) => !open && setRealocarState(null)}
+          instalacaoId={realocarState.instalacaoId}
+          veiculoLabel={realocarState.placa || undefined}
+          associadoNome={realocarState.associadoNome || undefined}
+        />
+      )}
 
       {/* Alterar endereço/tipo */}
       <AlterarEnderecoTipoDialog
