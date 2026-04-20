@@ -22,7 +22,7 @@ export default function InstaladorLogin() {
 
   // Redirect if already logged in
   useEffect(() => {
-    if (user && hasRole('instalador_vistoriador')) {
+    if (user && (hasRole('instalador_vistoriador') || hasRole('vistoriador_base'))) {
       navigate('/instalador', { replace: true });
     }
     if (user && hasRole('analista_eventos' as any)) {

@@ -28,8 +28,8 @@ export function usePWAInstallProfissional(): PWAInstallState {
   const [isInstalled, setIsInstalled] = useState(false);
   const [showIOSInstructions, setShowIOSInstructions] = useState(false);
   
-  // Verificar se está autenticado como profissional
-  const isAuthenticated = !!user && hasRole('instalador_vistoriador');
+  // Verificar se está autenticado como profissional (instalador OU vistoriador base)
+  const isAuthenticated = !!user && (hasRole('instalador_vistoriador') || hasRole('vistoriador_base'));
 
   // Detectar dispositivo
   const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';

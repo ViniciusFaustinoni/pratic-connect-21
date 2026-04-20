@@ -96,7 +96,7 @@ export function AppHeader() {
                 Configurações
               </DropdownMenuItem>
             )}
-            {roles.includes('instalador_vistoriador') && (
+            {(roles.includes('instalador_vistoriador') || roles.includes('vistoriador_base')) && (
               <DropdownMenuItem onClick={() => navigate('/instalador')} className="cursor-pointer">
                 <Wrench className="mr-2 h-4 w-4" />
                 App Instalador
