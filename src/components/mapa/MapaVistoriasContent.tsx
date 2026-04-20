@@ -74,6 +74,7 @@ import { CalendarioDiaModal } from "@/components/monitoramento/CalendarioDiaModa
 import { formatPlacaExibicao, isPlacaPlaceholder } from "@/lib/placa-utils";
 import { ReagendarTarefaDialog } from "@/components/mapa/ReagendarTarefaDialog";
 import { AlocarVistoriadorDialog } from "@/components/mapa/AlocarVistoriadorDialog";
+import { AlterarEnderecoTipoDialog } from "@/components/mapa/AlterarEnderecoTipoDialog";
 
 const COR_REALIZADA = '#10B981';
 const COR_A_REALIZAR = '#EF4444';
