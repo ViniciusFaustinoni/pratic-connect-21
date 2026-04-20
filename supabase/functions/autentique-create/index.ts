@@ -830,7 +830,29 @@ serve(async (req) => {
       },
     });
 
-    // WhatsApp template sending removed - link is now shown directly on the public page
+    // Envio do link de assinatura via WhatsApp (template Meta com botão URL dinâmico)
+    if (signatureLink) {
+      try {
+        const { enviarTermoFiliacaoWhatsApp } = await import("../_shared/enviar-termo-filiacao-whatsapp.ts");
+        const cliente: any = (contrato as any).associados || (contrato as any).leads || {};
+        const telefoneCliente = cliente.telefone;
+        const nomeCliente = cliente.nome;
+        const veiculoLabel = [
+          (contrato as any).leads?.veiculo_modelo,
+          (contrato as any).leads?.veiculo_placa,
+        ].filter(Boolean).join(' - ') || null;
+        await enviarTermoFiliacaoWhatsApp(supabase, {
+          contratoId: contratoId,
+          telefone: telefoneCliente,
+          nomeCompleto: nomeCliente,
+          veiculoLabel,
+          numeroContrato: (contrato as any).numero,
+          autentiqueUrl: signatureLink,
+        });
+      } catch (waErr) {
+        console.warn('[autentique-create] envio WhatsApp falhou (não bloqueante):', waErr);
+      }
+    }
 
     // Registrar no histórico do lead
     if (contrato.lead_id) {

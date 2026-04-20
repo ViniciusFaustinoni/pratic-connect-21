@@ -186,3 +186,6 @@ verify_jwt = false
 
 [functions.cron-followup-reagendamento]
 verify_jwt = false
+
+[functions.enviar-termo-filiacao-whatsapp]
+verify_jwt = false

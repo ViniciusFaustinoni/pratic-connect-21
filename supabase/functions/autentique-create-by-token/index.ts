@@ -11,6 +11,7 @@ import { filterEligibleItems } from "../_shared/eligibility-filter.ts";
 import { mapearDadosParaTemplate, buscarConfiguracoesEmpresa, buscarRegrasVenda, buscarRegrasDepreciacao } from "../_shared/termo-afiliacao-utils.ts";
 import { buscarEGerarAditivos, substituirVariaveis, limparVariaveisNaoSubstituidas, generateStyles, generateHeader, generateFooter, markdownParaHTML, sanitizeSignatureBlocks, exigeRastreador, extrairCodigosBeneficios } from "../_shared/template-utils.ts";
 import { logEdgeFunction } from "../_shared/log-edge-function.ts";
+import { enviarTermoFiliacaoWhatsApp } from "../_shared/enviar-termo-filiacao-whatsapp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -804,7 +805,24 @@ serve(async (req) => {
       },
     });
 
-    // WhatsApp template sending removed - link is now shown directly on the public page
+    // Envio do link de assinatura via WhatsApp (template Meta com botão URL dinâmico)
+    try {
+      const cliente: any = contrato.associados || contrato.leads || {};
+      const telefoneCliente = cliente.telefone;
+      const nomeCliente = cliente.nome;
+      const veiculoLabel = [contrato.leads?.veiculo_modelo, contrato.leads?.veiculo_placa]
+        .filter(Boolean).join(' - ') || null;
+      await enviarTermoFiliacaoWhatsApp(supabase, {
+        contratoId: contrato.id,
+        telefone: telefoneCliente,
+        nomeCompleto: nomeCliente,
+        veiculoLabel,
+        numeroContrato: contrato.numero,
+        autentiqueUrl: signatureLink,
+      });
+    } catch (waErr) {
+      console.warn('[autentique-create-by-token] envio WhatsApp falhou (não bloqueante):', waErr);
+    }
 
     // Registrar no histórico do lead se existir
     if (contrato.lead_id) {
