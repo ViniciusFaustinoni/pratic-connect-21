@@ -38,6 +38,9 @@ import { useToast } from '@/hooks/use-toast';
 import { useInstalacao, useUpdateInstalacaoStatus, type Instalacao } from '@/hooks/useInstalacoes';
 import { STATUS_INSTALACAO_LABELS, STATUS_INSTALACAO_COLORS, PERIODO_LABELS } from '@/types/database';
 import { cn } from '@/lib/utils';
+import { useFotosVistoriaUnificada, agruparFotosPorCategoria, formatarTipoFoto, type FotoAutovistoria } from '@/hooks/useFotosAutovistoria';
+import { VisualizadorFoto } from '@/components/analise/VisualizadorFoto';
+import { Camera, Video, IdCard, FileText } from 'lucide-react';
 
 interface InstalacaoDetailDrawerProps {
   instalacaoId: string | null;
@@ -55,6 +58,9 @@ export function InstalacaoDetailDrawer({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [fotoDialogUrl, setFotoDialogUrl] = useState<string | null>(null);
+  const [visualizadorAberto, setVisualizadorAberto] = useState(false);
+  const [fotoIndex, setFotoIndex] = useState(0);
+  const [fotosAtivas, setFotosAtivas] = useState<Array<{ url: string; label: string; tipo?: string }>>([]);
   const { data: instalacao, isLoading } = useInstalacao(instalacaoId || undefined);
   const updateStatus = useUpdateInstalacaoStatus();
 
@@ -172,6 +178,77 @@ export function InstalacaoDetailDrawer({
     },
     enabled: !!instalacaoId && open,
   });
+
+  // Dados completos do associado
+  const { data: associadoFull } = useQuery({
+    queryKey: ['associado-full-drawer', instalacao?.associado_id],
+    enabled: !!instalacao?.associado_id && open,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('associados')
+        .select('nome, cpf, rg, data_nascimento, estado_civil, profissao, telefone, telefone_secundario, email, logradouro, numero, complemento, bairro, cidade, uf, cep, status, created_at, cnh_numero, cnh_categoria, cnh_validade, plano_id')
+        .eq('id', instalacao!.associado_id)
+        .maybeSingle();
+      return data;
+    },
+  });
+
+  // Plano vigente + cotacao_id a partir do contrato
+  const { data: contratoInfo } = useQuery({
+    queryKey: ['contrato-plano-drawer', instalacao?.contrato_id, associadoFull?.plano_id],
+    enabled: open && (!!instalacao?.contrato_id || !!associadoFull?.plano_id),
+    queryFn: async () => {
+      let planoId: string | null = associadoFull?.plano_id || null;
+      let cotacaoId: string | null = null;
+      let dataAdesao: string | null = null;
+      let mensalidade: number | null = null;
+
+      if (instalacao?.contrato_id) {
+        const { data: contrato } = await (supabase as any)
+          .from('contratos')
+          .select('cotacao_id, created_at, valor_mensalidade, plano_id')
+          .eq('id', instalacao.contrato_id)
+          .maybeSingle();
+        if (contrato) {
+          cotacaoId = contrato.cotacao_id || null;
+          dataAdesao = contrato.created_at;
+          mensalidade = contrato.valor_mensalidade ?? null;
+          planoId = contrato.plano_id || planoId;
+        }
+      }
+
+      let planoNome: string | null = null;
+      if (planoId) {
+        const { data: plano } = await supabase
+          .from('planos')
+          .select('nome')
+          .eq('id', planoId)
+          .maybeSingle();
+        planoNome = plano?.nome || null;
+      }
+
+      return { planoNome, mensalidade, dataAdesao, cotacaoId };
+    },
+  });
+
+  // Fotos (autovistoria + instalador)
+  const { data: fotosData } = useFotosVistoriaUnificada({
+    contratoId: instalacao?.contrato_id || undefined,
+    cotacaoId: contratoInfo?.cotacaoId || undefined,
+  });
+
+  const abrirGaleria = (fotos: FotoAutovistoria[], index: number) => {
+    setFotosAtivas(fotos.map(f => ({ url: f.arquivo_url, label: formatarTipoFoto(f.tipo), tipo: f.tipo })));
+    setFotoIndex(index);
+    setVisualizadorAberto(true);
+  };
+
+  const abrirVideo360 = (url: string) => {
+    setFotosAtivas([{ url, label: 'Vídeo 360°', tipo: 'video_360' }]);
+    setFotoIndex(0);
+    setVisualizadorAberto(true);
+  };
+
   const handleStatusChange = async (status: Instalacao['status']) => {
     if (!instalacaoId) return;
     
@@ -540,7 +617,154 @@ export function InstalacaoDetailDrawer({
 
             <Separator />
 
-            {/* Ações */}
+            {/* Dados do Associado */}
+            {associadoFull && (
+              <section className="space-y-3">
+                <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                  <IdCard className="h-4 w-4" />
+                  Dados do Associado
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  <div><span className="text-muted-foreground">Nome:</span> <strong>{associadoFull.nome}</strong></div>
+                  {associadoFull.cpf && <div><span className="text-muted-foreground">CPF:</span> {associadoFull.cpf}</div>}
+                  {associadoFull.rg && <div><span className="text-muted-foreground">RG:</span> {associadoFull.rg}</div>}
+                  {associadoFull.data_nascimento && <div><span className="text-muted-foreground">Nascimento:</span> {format(new Date(associadoFull.data_nascimento + 'T00:00:00'), 'dd/MM/yyyy')}</div>}
+                  {associadoFull.estado_civil && <div><span className="text-muted-foreground">Estado Civil:</span> {associadoFull.estado_civil}</div>}
+                  {associadoFull.profissao && <div><span className="text-muted-foreground">Profissão:</span> {associadoFull.profissao}</div>}
+                  {associadoFull.telefone && <div><span className="text-muted-foreground">Telefone:</span> {associadoFull.telefone}</div>}
+                  {associadoFull.telefone_secundario && <div><span className="text-muted-foreground">Telefone 2:</span> {associadoFull.telefone_secundario}</div>}
+                  {associadoFull.email && <div className="sm:col-span-2"><span className="text-muted-foreground">E-mail:</span> {associadoFull.email}</div>}
+                </div>
+
+                {(associadoFull.logradouro || associadoFull.cidade) && (
+                  <div className="text-sm border-t border-border pt-3">
+                    <p className="text-xs text-muted-foreground mb-1">Endereço residencial</p>
+                    <p>
+                      {associadoFull.logradouro}
+                      {associadoFull.numero && `, ${associadoFull.numero}`}
+                      {associadoFull.complemento && ` - ${associadoFull.complemento}`}
+                    </p>
+                    <p className="text-muted-foreground">
+                      {associadoFull.bairro}
+                      {associadoFull.cidade && ` - ${associadoFull.cidade}`}
+                      {associadoFull.uf && `/${associadoFull.uf}`}
+                      {associadoFull.cep && ` • CEP: ${associadoFull.cep}`}
+                    </p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm border-t border-border pt-3">
+                  {associadoFull.status && <div><span className="text-muted-foreground">Status:</span> <Badge variant="outline">{associadoFull.status}</Badge></div>}
+                  {associadoFull.created_at && <div><span className="text-muted-foreground">Cadastro:</span> {format(new Date(associadoFull.created_at), 'dd/MM/yyyy')}</div>}
+                  {contratoInfo?.planoNome && <div><span className="text-muted-foreground">Plano:</span> <strong>{contratoInfo.planoNome}</strong></div>}
+                  {contratoInfo?.mensalidade != null && <div><span className="text-muted-foreground">Mensalidade:</span> <strong>{contratoInfo.mensalidade.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></div>}
+                  {contratoInfo?.dataAdesao && <div><span className="text-muted-foreground">Adesão:</span> {format(new Date(contratoInfo.dataAdesao), 'dd/MM/yyyy')}</div>}
+                </div>
+
+                {(associadoFull.cnh_numero || associadoFull.cnh_categoria || associadoFull.cnh_validade) && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm border-t border-border pt-3">
+                    {associadoFull.cnh_numero && <div><span className="text-muted-foreground">CNH:</span> {associadoFull.cnh_numero}</div>}
+                    {associadoFull.cnh_categoria && <div><span className="text-muted-foreground">Categoria:</span> {associadoFull.cnh_categoria}</div>}
+                    {associadoFull.cnh_validade && <div><span className="text-muted-foreground">Validade:</span> {format(new Date(associadoFull.cnh_validade + 'T00:00:00'), 'dd/MM/yyyy')}</div>}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* Galeria de Autovistoria */}
+            {fotosData?.fotosAutovistoria && fotosData.fotosAutovistoria.length > 0 && (() => {
+              const grupos = agruparFotosPorCategoria(fotosData.fotosAutovistoria);
+              const todas = fotosData.fotosAutovistoria;
+              return (
+                <>
+                  <Separator />
+                  <section className="space-y-3">
+                    <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                      <Camera className="h-4 w-4" />
+                      Galeria de Autovistoria ({todas.length})
+                    </h3>
+                    {(['identificacao', 'exterior', 'interior', 'outros'] as const).map((cat) =>
+                      grupos[cat].length > 0 ? (
+                        <div key={cat}>
+                          <p className="text-xs text-muted-foreground mb-1.5 capitalize">{cat}</p>
+                          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                            {grupos[cat].map((foto) => {
+                              const idx = todas.findIndex((f) => f.id === foto.id);
+                              return (
+                                <button
+                                  key={foto.id}
+                                  onClick={() => abrirGaleria(todas, idx)}
+                                  className="aspect-square rounded-md overflow-hidden border border-border hover:border-primary transition-colors"
+                                >
+                                  <img src={foto.arquivo_url} alt={formatarTipoFoto(foto.tipo)} className="w-full h-full object-cover" loading="lazy" />
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : null
+                    )}
+                  </section>
+                </>
+              );
+            })()}
+
+            {/* Galeria do Instalador */}
+            {((fotosData?.fotosInstalador && fotosData.fotosInstalador.length > 0) || fotosData?.video360Url) && (() => {
+              const grupos = fotosData.fotosInstalador ? agruparFotosPorCategoria(fotosData.fotosInstalador) : null;
+              const todas = fotosData.fotosInstalador || [];
+              return (
+                <>
+                  <Separator />
+                  <section className="space-y-3">
+                    <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                      <FileText className="h-4 w-4" />
+                      Galeria do Instalador ({todas.length})
+                    </h3>
+                    {fotosData.video360Url && (
+                      <button
+                        onClick={() => abrirVideo360(fotosData.video360Url!)}
+                        className="flex items-center gap-2 text-sm text-primary hover:underline"
+                      >
+                        <Video className="h-4 w-4" />
+                        Ver Vídeo 360°
+                      </button>
+                    )}
+                    {grupos && (['identificacao', 'exterior', 'interior', 'outros'] as const).map((cat) =>
+                      grupos[cat].length > 0 ? (
+                        <div key={cat}>
+                          <p className="text-xs text-muted-foreground mb-1.5 capitalize">{cat}</p>
+                          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                            {grupos[cat].map((foto) => {
+                              const idx = todas.findIndex((f) => f.id === foto.id);
+                              return (
+                                <button
+                                  key={foto.id}
+                                  onClick={() => abrirGaleria(todas, idx)}
+                                  className="aspect-square rounded-md overflow-hidden border border-border hover:border-primary transition-colors"
+                                >
+                                  <img src={foto.arquivo_url} alt={formatarTipoFoto(foto.tipo)} className="w-full h-full object-cover" loading="lazy" />
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : null
+                    )}
+                  </section>
+                </>
+              );
+            })()}
+
+            <VisualizadorFoto
+              fotos={fotosAtivas}
+              indexInicial={fotoIndex}
+              open={visualizadorAberto}
+              onClose={() => setVisualizadorAberto(false)}
+            />
+
+            <Separator />
+
             <section className="space-y-3">
               <h3 className="text-sm font-medium text-muted-foreground">Ações</h3>
               
