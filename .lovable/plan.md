@@ -1,65 +1,39 @@
 
 
-## Realocar instalação não realizada (no drawer + mapa)
+## Ajuste — Realocação respeitando modo Atribuição Manual
 
-### Problema
-Quando a instalação não acontece (status `nao_compareceu`, `reagendada`, `cancelada` ou `agendada` sem instalador) o veículo cai num limbo: o drawer de detalhes só permite mudar o status, sem opção de mover para outra rota nem para uma base. Exemplo: Marcos (placa QXV0H02) está com status `nao_compareceu` e `rota_id=null`, sem ação possível.
+### Comportamento atual
+Ao realocar um serviço (drawer ou mapa), o sistema sempre define `instalador_responsavel_id` (na aba Rota) ou cria agendamento direto na base. Isso **bypassa** o fluxo de Atribuição Manual quando ele está ativo, tirando do coordenador a chance de escolher o instalador no mapa.
 
-### Solução — botão **"Realocar serviço"** no drawer de instalação + atalho no mapa
-Visível para perfil **Coordenador de Monitoramento** (e Diretor) sempre que `status ∈ {agendada, nao_compareceu, reagendada, cancelada}`. Abre um modal com 2 abas:
+### Comportamento desejado
+Quando `useConfigAtribuicaoManual().data === true` (modo manual ligado):
 
-**Aba 1 — Mover para uma Rota**
-- Combo "Data" (default = hoje, mín = hoje)
-- Combo "Rota" listando rotas daquele dia (`useRotasDoDia`) com nome, instalador e contagem de serviços. Opção "Criar nova rota" abre um campo simples de nome/cidade e cria via insert em `rotas` antes de atribuir.
-- Combo opcional "Instalador" (preenchido automaticamente pelo instalador da rota; editável).
-- Combo opcional "Novo horário" (`hora_agendada`).
-- Campo "Motivo da realocação" (obrigatório).
-- Checkbox "Notificar associado por WhatsApp" (default ON).
+**Aba "Mover para Rota"**
+- Esconder o seletor "Instalador" (a rota pode até ter instalador padrão, mas não vinculamos automaticamente).
+- No update de `instalacoes`, **NÃO setar** `instalador_responsavel_id` — deixar `null`.
+- Manter `rota_id`, `data_agendada`, `hora_agendada`, `status='agendada'`.
+- Resultado: o serviço aparece na aba **Atribuição Manual** (`/monitoramento/vistorias-instalacoes-mon` → tab "Atribuição Manual") e no **Mapa** como pin sem dono, pronto para o coordenador atribuir.
 
-Ação: `update instalacoes set rota_id, instalador_id, data_agendada, hora_agendada, status='agendada' where id = ?`. Registra em `instalacoes_historico` (ou tabela equivalente) e dispara WhatsApp ao associado quando marcado.
+**Aba "Mover para Base"**
+- Manter como está (agendamento na base não passa por instalador de rota).
+- Apenas garantir que `instalador_responsavel_id` continue `null` no `instalacoes`.
 
-**Aba 2 — Mover para uma Base (oficina)**
-- Combo "Base" listando oficinas Pratic (`useBasesPratic`).
-- Combo "Data" e "Horário".
-- Campo "Motivo" (obrigatório).
-- Checkbox "Notificar associado por WhatsApp" (default ON, mensagem padrão "Compareça à base X em ...").
+**Quando o modo manual está desligado**: comportamento atual preservado (instalador é setado normalmente).
 
-Ação: cria registro em `agendamentos_base` (`instalacao_id`, `oficina_id`, `data_agendada`, `horario`, `cliente_nome`, `cliente_telefone`, `veiculo_placa`, `veiculo_descricao`, `status='confirmado'`) e atualiza `instalacoes` para `status='agendada'` + `rota_id=null` + `local_vistoria='base'`. Histórico + WhatsApp como acima.
+### Mensagem de UI
+No topo de cada aba do `RealocarInstalacaoDialog`, quando `manualAtiva === true`, exibir um aviso curto:
+> "Modo Atribuição Manual ativo — o serviço entrará na fila de atribuição para você designar o instalador no mapa."
 
-### Pontos de entrada
-1. **Drawer `InstalacaoDetailDrawer.tsx`** (Serviços de Campo > Instalações): adicionar botão "Realocar serviço" na seção Ações, ao lado de "Reagendar" e "Não Compareceu". Ícone `MapPinned`.
-2. **Mapa de Atribuições (`MapaVistoriasContent.tsx`)**: no popup do pin de uma instalação sem instalador atribuído ou com status problemático, adicionar botão "Realocar" que abre o mesmo modal.
+### Arquivos tocados
+- **`src/components/instalacoes/RealocarInstalacaoDialog.tsx`** — ler `useConfigAtribuicaoManual`; ocultar seletor de instalador na aba Rota quando ativo; exibir aviso; não enviar `instaladorId` no payload.
+- **`src/hooks/useRealocarInstalacao.ts`** — ao montar o `update` da aba Rota, só incluir `instalador_responsavel_id` quando o caller passar valor (já está condicional, mas confirmar que `null`/`undefined` não sobrescreve incorretamente). Sem mudança de assinatura.
 
-### Permissões / RLS
-Reutilizar policies existentes (`canManageInstalacoes` / `canManageEquipeEstoque`). Coordenador de Monitoramento já tem acesso (memo `monitoring-coordinator-permissions`). Sem nova policy.
+Sem migração, sem nova policy, sem alteração no fluxo de Atribuição Manual existente.
 
-### Banco de dados
-Sem migração de schema. Apenas escritas em tabelas existentes:
-- `instalacoes` (update)
-- `agendamentos_base` (insert quando aba Base)
-- `rotas` (insert quando criar rota nova)
-- `instalacoes_historico` (insert para auditoria — verificar nome real e ajustar se necessário)
-
-### Arquivos a criar/alterar
-- **Novo:** `src/components/instalacoes/RealocarInstalacaoDialog.tsx` — modal com as 2 abas.
-- **Novo:** `src/hooks/useRealocarInstalacao.ts` — `useMutation` com 2 funções: `realocarParaRota` e `realocarParaBase`, ambas registrando histórico e disparando WhatsApp opcional via `whatsapp-send-text`.
-- **Editar:** `src/components/instalacoes/InstalacaoDetailDrawer.tsx` — botão "Realocar serviço" na seção Ações.
-- **Editar:** `src/components/mapa/MapaVistoriasContent.tsx` — botão "Realocar" no popup da instalação sem dono / em limbo.
-
-### Validação pós-deploy
-1. Abrir Marcos Vinicius (QXV0H02, status `nao_compareceu`) em Serviços de Campo > Instalações → drawer mostra botão "Realocar serviço".
-2. Mover para Rota → status volta para `agendada`, `rota_id` e `instalador_id` preenchidos, WhatsApp enviado, instalação aparece na rota selecionada.
-3. Mover para Base → registro criado em `agendamentos_base`, instalação aparece em "Vistoria na Base" do técnico daquela oficina.
-4. Reabrir o drawer → status mostra "Agendada" e bloco mostra a nova rota/base.
-5. No Mapa de Atribuições, o pin azul desse veículo agora reflete a nova alocação.
-6. Conferir entrada em `instalacoes_historico` com tipo "realocada" e motivo digitado.
-7. Mobile 400px → modal responsivo, abas empilháveis.
-
-### Pergunta antes de implementar
-Quando o veículo é movido para uma **base**, a instalação original em `instalacoes` deve:
-- (A) Permanecer como `agendada` mas com `local_vistoria='base'` e linkar via `agendamentos_base.instalacao_id` (sem duplicação) — **recomendado**.
-- (B) Ser marcada como `cancelada` e o agendamento na base passa a ser a fonte de verdade.
-- (C) Outro comportamento.
-
-Aguardo essa decisão para finalizar a aba Base — as demais partes do plano não dependem dela.
+### Validação
+1. Ativar Atribuição Manual nas configurações.
+2. Realocar Marcos Vinicius (QXV0H02) para uma rota → conferir que `instalador_responsavel_id` ficou `null` e o serviço aparece na aba "Atribuição Manual" e como pin sem dono no mapa.
+3. Coordenador atribui o serviço a um instalador via mapa → fluxo manual normal segue.
+4. Desativar Atribuição Manual e realocar outro serviço → instalador é vinculado automaticamente como antes.
+5. Realocar para Base com manual ativo → agendamento criado normalmente, `instalacoes.instalador_responsavel_id` permanece `null`.
 
