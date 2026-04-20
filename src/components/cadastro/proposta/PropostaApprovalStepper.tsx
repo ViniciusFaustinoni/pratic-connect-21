@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { 
   FileText, Camera, ShieldCheck, CheckCircle, ChevronRight, ChevronLeft,
-  AlertCircle, Eye, MapPin
+  AlertCircle, Eye, MapPin, XCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,6 +14,7 @@ import { VistoriaObservacoesCard } from '@/components/cadastro/VistoriaObservaco
 import type { DocumentoAnexadoCompleto } from '@/types/documentos';
 import type { PropostaPendente, VistoriaFotoInfo } from '@/hooks/usePropostasPendentes';
 import type { DocumentoSolicitadoEnviado } from '@/components/cadastro/DocumentosSolicitadosCard';
+import { useCancelarDocumentosSolicitados } from '@/hooks/useCancelarDocumentosSolicitados';
 
 interface PropostaApprovalStepperProps {
   proposta: PropostaPendente;
@@ -76,6 +77,7 @@ export function PropostaApprovalStepper({
 }: PropostaApprovalStepperProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [fotosRevisadas, setFotosRevisadas] = useState(false);
+  const cancelarDocsMutation = useCancelarDocumentosSolicitados();
 
   // Quando vistoria na base sem fotos, omite a etapa "Fotos & Vistoria" e o último passo é o id 2.
   const steps: StepConfig[] = isVistoriaBaseSemFotos
@@ -241,6 +243,9 @@ export function PropostaApprovalStepper({
               assinaturaData={proposta.instalacao_info?.concluida_em}
               assinaturaPor={proposta.instalacao_info?.instalador_nome}
               documentosSolicitados={proposta.documentos_solicitados_enviados}
+              documentosSolicitadosPendentes={proposta.documentos_solicitados_pendentes}
+              contratoId={proposta.id}
+              associadoId={proposta.associado_id || undefined}
             />
 
             {proposta.vistoria && (proposta.vistoria.observacoes || proposta.vistoria.km_atual) && (
@@ -459,11 +464,35 @@ export function PropostaApprovalStepper({
 
             {/* Estado bloqueado por documentos pendentes (mas ainda assinada) */}
             {!podeAprovar && proposta.status === 'assinado' && proposta.tem_documento_pendente && (
-              <div className="flex items-center gap-2.5 px-4 py-3 rounded-lg bg-warning/10 border border-warning/30">
-                <AlertCircle className="h-5 w-5 text-warning shrink-0" />
-                <p className="text-sm font-semibold text-warning">
-                  Aguardando envio de documentos solicitados ao cliente para liberar a aprovação.
-                </p>
+              <div className="flex items-start gap-2.5 px-4 py-3 rounded-lg bg-warning/10 border border-warning/30">
+                <AlertCircle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-warning">
+                    Aguardando envio de {proposta.documentos_solicitados_pendentes?.length || ''} documento(s) solicitado(s) ao cliente
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Cancele as solicitações pendentes se não forem mais necessárias para liberar a aprovação.
+                  </p>
+                </div>
+                {(proposta.documentos_solicitados_pendentes?.length || 0) > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-warning/50 text-warning hover:bg-warning/10 shrink-0"
+                    disabled={cancelarDocsMutation.isPending}
+                    onClick={() => {
+                      const ids = proposta.documentos_solicitados_pendentes!.map((d) => d.id);
+                      cancelarDocsMutation.mutate({
+                        ids,
+                        contratoId: proposta.id,
+                        associadoId: proposta.associado_id || undefined,
+                      });
+                    }}
+                  >
+                    <XCircle className="h-3.5 w-3.5 mr-1" />
+                    Cancelar solicitações
+                  </Button>
+                )}
               </div>
             )}
           </div>

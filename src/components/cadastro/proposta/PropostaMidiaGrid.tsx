@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { VistoriaFotoInfo } from '@/hooks/usePropostasPendentes';
-import { DocumentosSolicitadosCard, type DocumentoSolicitadoEnviado } from '@/components/cadastro/DocumentosSolicitadosCard';
+import { DocumentosSolicitadosCard, type DocumentoSolicitadoEnviado, type DocumentoSolicitadoPendente } from '@/components/cadastro/DocumentosSolicitadosCard';
 
 const isVideoTipo = (tipo?: string | null) => tipo?.startsWith('video');
 
@@ -92,6 +92,9 @@ interface PropostaMidiaGridProps {
   assinaturaData?: string | null;
   assinaturaPor?: string | null;
   documentosSolicitados?: DocumentoSolicitadoEnviado[];
+  documentosSolicitadosPendentes?: DocumentoSolicitadoPendente[];
+  contratoId?: string;
+  associadoId?: string;
 }
 
 export function PropostaMidiaGrid({
@@ -101,6 +104,9 @@ export function PropostaMidiaGrid({
   assinaturaData,
   assinaturaPor,
   documentosSolicitados,
+  documentosSolicitadosPendentes,
+  contratoId,
+  associadoId,
 }: PropostaMidiaGridProps) {
   const [showVideo, setShowVideo] = useState(false);
   const [showGaleria, setShowGaleria] = useState(false);
@@ -122,7 +128,7 @@ export function PropostaMidiaGrid({
     }
   };
 
-  const hasDocsSolicitados = documentosSolicitados && documentosSolicitados.length > 0;
+  const hasDocsSolicitados = (documentosSolicitados && documentosSolicitados.length > 0) || (documentosSolicitadosPendentes && documentosSolicitadosPendentes.length > 0);
 
   const midiaContent = (
     <div className={cn(
@@ -252,7 +258,12 @@ export function PropostaMidiaGrid({
       {hasDocsSolicitados ? (
         <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
           {midiaContent}
-          <DocumentosSolicitadosCard documentosSolicitados={documentosSolicitados} />
+          <DocumentosSolicitadosCard
+            documentosSolicitados={documentosSolicitados || []}
+            documentosPendentes={documentosSolicitadosPendentes}
+            contratoId={contratoId}
+            associadoId={associadoId}
+          />
         </div>
       ) : (
         midiaContent
