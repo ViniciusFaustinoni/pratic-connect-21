@@ -1,57 +1,64 @@
 
 
-## Adicionar Dados do Associado + Galerias de Fotos ao Drawer de Instalação
+## Diferenciar fluxo de almoço para técnicos Base vs Rota
 
-### Objetivo
-Estender `InstalacaoDetailDrawer.tsx` com 3 novos blocos no final do conteúdo (antes das ações de status), sem unificar com a tela de associado e sem tocar em outros arquivos.
+### Comportamento atual
+- Almoço inicia **automaticamente** após 4h trabalhadas (`useJornadaTrabalho` linha 398-411).
+- Almoço finaliza **automaticamente** após 60min (linha 440-449).
+- `AlmocoBloqueioOverlay` cobre a tela inteira durante o almoço.
+- Não há diferenciação entre técnico Rota e técnico Base.
 
-### Layout final do drawer
+### Comportamento desejado
+| Tipo | Início do almoço | Fim do almoço | Overlay de bloqueio |
+|------|------------------|----------------|---------------------|
+| **Rota** (atual) | Automático após 4h | Automático após 60min (ou manual) | Sim, cobre a tela |
+| **Base** (novo) | **Manual** via botão "Iniciar almoço" (visível na janela de almoço) | **Manual** via botão "Finalizar almoço" | **Não** — apenas botões na barra de jornada |
 
-```text
-Detalhes da Instalação                              [Status] ×
-├─ Agendamento / Veículo / Endereço / Prestador …   (já existe)
-├─ ▼ Dados do Associado                             ← NOVO
-│   ├─ Identificação (nome, CPF, RG, nascimento, estado civil, profissão)
-│   ├─ Contato (telefone, telefone 2, e-mail)
-│   ├─ Endereço residencial
-│   ├─ Status + data de cadastro + plano + mensalidade
-│   └─ CNH (quando houver)
-├─ ▼ Galeria de Autovistoria                        ← NOVO (só se ≥1 foto)
-│   └─ Grid de thumbnails agrupadas por categoria
-├─ ▼ Galeria do Instalador                          ← NOVO (só se ≥1 foto)
-│   ├─ Grid de thumbnails (exterior / identificação / interior)
-│   └─ Vídeo 360 (quando houver)
-└─ Ações de status                                  (já existe)
-```
+Para o técnico Base, o tempo de trabalho e de almoço continua sendo medido e gravado em `turnos_profissionais` igual ao Rota — a única diferença é que ele decide quando pausa.
+
+### Definição de "janela de almoço" para o Base
+O botão "Iniciar almoço" só aparece quando:
+- `status === 'ativo'` (turno em andamento, não em almoço, não encerrado)
+- `tempoReal.minutosTrabalhados >= TEMPO_ATE_ALMOCO_MINUTOS` (ou seja, já passou das 4h trabalhadas configuradas)
+
+Sem janela rígida de fim — ele pode iniciar o almoço a qualquer momento depois das 4h. Antes das 4h, o botão fica oculto (consistente com a regra de jornada).
 
 ### Implementação técnica
 
-**Arquivo único alterado:** `src/components/instalacoes/InstalacaoDetailDrawer.tsx`
+**Arquivo 1: `src/hooks/useJornadaTrabalho.ts`**
+- Importar `useAlocacaoDiaria` e capturar `isBase`.
+- Adicionar `isBase` ao retorno do hook (para a UI saber).
+- **Bloquear auto-início do almoço quando `isBase === true`** (linha 398-411): adicionar `&& !isBase` na condição.
+- **Bloquear auto-finalização do almoço quando `isBase === true`** (linha 440-449): adicionar `&& !isBase` na condição. Base finaliza manualmente.
+- Manter o cálculo de atraso de almoço para Base também — se ele extrapolar 60min de pausa, o acréscimo continua sendo aplicado à jornada (mantém justiça no banco de horas).
+- Manter `almocoAdiado` apenas para Rota (já é por construção, pois Base nunca entra no auto).
 
-1. **Query do associado** (`useQuery` em `associados`):
-   campos `nome, cpf_cnpj, rg, data_nascimento, estado_civil, profissao, nacionalidade, telefone, telefone_secundario, email, endereco, numero, complemento, bairro, cidade, estado, cep, status, created_at, cnh_numero, cnh_categoria, cnh_validade`.
+**Arquivo 2: `src/components/vistoriador/AlmocoBloqueioOverlay.tsx`**
+- Importar `useAlocacaoDiaria`.
+- No early-return: se `isBase === true`, **nunca renderizar o overlay** (mesmo em almoço). Base não tem tela de bloqueio.
 
-2. **Query do plano vigente** (`useQuery` em `contratos → planos`):
-   filtrar por `associado_id + veiculo_id` da instalação. Mesma chamada já retorna `contratos.cotacao_id` para alimentar a galeria de autovistoria.
-   Select: `cotacao_id, data_adesao, planos ( nome, valor_mensalidade )`.
-
-3. **Hook de fotos** — reaproveitar `useFotosVistoriaUnificada({ contratoId: instalacao.contrato_id, cotacaoId })` de `src/hooks/useFotosAutovistoria.ts`. Retorna `fotosInstalador`, `fotosAutovistoria`, `video360Url`. Agrupar com `agruparFotosPorCategoria()` e formatar labels com `formatarTipoFoto()`.
-
-4. **Galerias** — grid responsivo `grid-cols-3 sm:grid-cols-4 md:grid-cols-6`, thumbnails `aspect-square object-cover`, separador visual por categoria. Vídeo 360 renderizado inline com tag `<video controls>` no topo da galeria do instalador.
-
-5. **Visualizador** — estado local `{ visualizadorAberto, fotoIndex, fotosAtivas }`. Clicar numa thumbnail seta `fotosAtivas` (lista mapeada para `{ url, label, tipo }`) e abre o `VisualizadorFoto` já existente em `src/components/analise/VisualizadorFoto.tsx`.
-
-6. **Estado vazio gracioso** — cada um dos 2 cards de galeria some quando o array correspondente é vazio. Card "Dados do Associado" sempre aparece (com loader enquanto carrega). Subcard CNH some se `cnh_numero` for nulo.
-
-### O que NÃO muda
-Sem migração, sem novo hook, sem alteração em RLS/schema/rotas/buckets, sem mudanças no `VisualizadorFoto`. RLS já cobre staff em todas as tabelas envolvidas.
+**Arquivo 3: `src/components/vistoriador/JornadaStatusBar.tsx`**
+- Receber `isBase` do hook.
+- **Para Base com `status === 'ativo'` e `minutosTrabalhados >= TEMPO_ATE_ALMOCO_MINUTOS` e sem `inicio_almoco`**: renderizar botão verde **"Iniciar almoço"** (chama `iniciarAlmoco()`).
+- **Para Base com `emAlmoco === true`**: trocar o card amarelo de "Horário de Almoço" para uma versão que mostra:
+  - Tempo decorrido de almoço (contador crescente)
+  - Aviso visual quando passa de 60min ("⚠️ +Xmin de acréscimo na jornada")
+  - Botão **"Finalizar almoço"** (chama `finalizarAlmoco()`)
+- Para Rota o comportamento permanece idêntico (overlay + auto-finalização).
 
 ### Validação pós-deploy
-1. `/monitoramento/instalacoes` → abrir instalação concluída com fotos do instalador → ver "Dados do Associado" + "Galeria do Instalador" + vídeo 360 (quando houver).
-2. Clicar em thumbnail → `VisualizadorFoto` abre com navegação, zoom e rotação.
-3. Instalação cujo associado fez autovistoria → aparece também "Galeria de Autovistoria".
-4. Instalação agendada sem fotos → só "Dados do Associado" aparece; cards de galeria ocultos.
-5. Associado sem CNH → subcard de CNH some.
-6. Mobile 400px → grids empilham para 3 colunas, modal continua navegável.
-7. Perfil `analista_cadastro` → vê tudo.
+1. **Técnico Rota** com 4h trabalhadas e sem tarefa → overlay de almoço aparece automaticamente; finaliza sozinho aos 60min. (comportamento atual preservado)
+2. **Técnico Base** trabalhando: ao cruzar 4h, **não** aparece overlay; aparece botão "Iniciar almoço" na barra de jornada.
+3. **Técnico Base** clica em "Iniciar almoço" → status muda para `em_almoco`, tempo de almoço começa a contar, **sem overlay bloqueando**.
+4. **Técnico Base** em almoço passa de 60min → barra mostra contador crescente + aviso de acréscimo; botão "Finalizar almoço" continua visível.
+5. **Técnico Base** clica em "Finalizar almoço" → volta para `ativo`, atraso registrado em `minutos_atraso_almoco`, jornada ajustada.
+6. Conferir no banco que `inicio_almoco`, `fim_almoco` e `minutos_atraso_almoco` são gravados corretamente para o técnico Base.
+7. Em dia útil (segunda a sexta) onde `useAlocacaoDiaria` retorna `isBase=false` por padrão → técnico cai no fluxo Rota normalmente.
+
+### Arquivos tocados
+- `src/hooks/useJornadaTrabalho.ts` — bypass de auto-almoço para Base + expor `isBase`.
+- `src/components/vistoriador/AlmocoBloqueioOverlay.tsx` — não renderizar para Base.
+- `src/components/vistoriador/JornadaStatusBar.tsx` — botões manuais "Iniciar/Finalizar almoço" para Base.
+
+Sem migração, sem novo hook, sem alteração de schema/RLS.
 
