@@ -204,16 +204,16 @@ export function InstalacaoDetailDrawer({
       let mensalidade: number | null = null;
 
       if (instalacao?.contrato_id) {
-        const { data: contrato } = await supabase
+        const { data: contrato } = await (supabase as any)
           .from('contratos')
           .select('cotacao_id, created_at, valor_mensalidade, plano_id')
           .eq('id', instalacao.contrato_id)
           .maybeSingle();
         if (contrato) {
-          cotacaoId = (contrato as any).cotacao_id || null;
+          cotacaoId = contrato.cotacao_id || null;
           dataAdesao = contrato.created_at;
-          mensalidade = (contrato as any).valor_mensalidade ?? null;
-          planoId = (contrato as any).plano_id || planoId;
+          mensalidade = contrato.valor_mensalidade ?? null;
+          planoId = contrato.plano_id || planoId;
         }
       }
 
