@@ -231,8 +231,8 @@ export function PropostaApprovalStepper({
           </div>
         )}
 
-        {/* STEP 2: Fotos & Vistoria */}
-        {currentStep === 2 && (
+        {/* STEP 2: Fotos & Vistoria (oculto quando isVistoriaBaseSemFotos) */}
+        {currentStep === 2 && !isVistoriaBaseSemFotos && (
           <div className="space-y-4 animate-fade-in">
             <PropostaMidiaGrid
               video360Url={proposta.vistoria?.video_360_url}
@@ -281,8 +281,8 @@ export function PropostaApprovalStepper({
           </div>
         )}
 
-        {/* STEP 3: Aprovação Final */}
-        {currentStep === 3 && (
+        {/* STEP FINAL: Aprovação Final (id 3 normal, id 2 quando isVistoriaBaseSemFotos) */}
+        {currentStep === finalStepId && (
           <div className="space-y-4 animate-fade-in">
             {/* Summary checklist */}
             <Card className="border-border">
@@ -318,35 +318,58 @@ export function PropostaApprovalStepper({
                     )}
                   </div>
 
-                  {/* Photos check */}
-                  <div className={cn(
-                    "flex items-center gap-3 p-3 rounded-lg border",
-                    step2Complete 
-                      ? "bg-success/5 border-success/30" 
-                      : "bg-warning/5 border-warning/30"
-                  )}>
-                    {step2Complete ? (
-                      <CheckCircle className="h-5 w-5 text-success shrink-0" />
-                    ) : (
-                      <Eye className="h-5 w-5 text-warning shrink-0" />
-                    )}
-                    <div className="flex-1">
-                      <p className={cn("text-sm font-semibold", step2Complete ? "text-success" : "text-warning")}>
-                        Fotos & Vistoria
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {!temFotos 
-                          ? 'Sem fotos/vídeo disponíveis' 
-                          : step2Complete 
-                            ? 'Fotos e vistoria revisadas' 
-                            : 'Revisão pendente'
-                        }
-                      </p>
+                  {/* Photos check OU banner de vistoria na base */}
+                  {isVistoriaBaseSemFotos ? (
+                    <div className="flex items-start gap-3 p-3 rounded-lg border bg-info/5 border-info/30">
+                      <MapPin className="h-5 w-5 text-info shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-info">
+                          Vistoria agendada na base
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          As fotos do veículo serão registradas pelo técnico no dia do atendimento presencial
+                          {proposta.vistoria_base_info?.data_agendada && (
+                            <>
+                              {' '}em <strong className="text-foreground">
+                                {new Date(proposta.vistoria_base_info.data_agendada + 'T00:00:00').toLocaleDateString('pt-BR')}
+                              </strong>
+                              {proposta.vistoria_base_info.horario && <> às <strong className="text-foreground">{proposta.vistoria_base_info.horario}</strong></>}
+                            </>
+                          )}
+                          . Aprove apenas a documentação para liberar o agendamento.
+                        </p>
+                      </div>
                     </div>
-                    {step2Complete && (
-                      <Badge className="bg-success/20 text-success border-0 text-xs">Concluído</Badge>
-                    )}
-                  </div>
+                  ) : (
+                    <div className={cn(
+                      "flex items-center gap-3 p-3 rounded-lg border",
+                      step2Complete 
+                        ? "bg-success/5 border-success/30" 
+                        : "bg-warning/5 border-warning/30"
+                    )}>
+                      {step2Complete ? (
+                        <CheckCircle className="h-5 w-5 text-success shrink-0" />
+                      ) : (
+                        <Eye className="h-5 w-5 text-warning shrink-0" />
+                      )}
+                      <div className="flex-1">
+                        <p className={cn("text-sm font-semibold", step2Complete ? "text-success" : "text-warning")}>
+                          Fotos & Vistoria
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {!temFotos 
+                            ? 'Sem fotos/vídeo disponíveis' 
+                            : step2Complete 
+                              ? 'Fotos e vistoria revisadas' 
+                              : 'Revisão pendente'
+                          }
+                        </p>
+                      </div>
+                      {step2Complete && (
+                        <Badge className="bg-success/20 text-success border-0 text-xs">Concluído</Badge>
+                      )}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
