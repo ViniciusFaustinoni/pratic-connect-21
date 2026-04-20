@@ -368,6 +368,7 @@ export function usePropostasPendentes() {
 
       // Buscar documentos solicitados que já foram enviados pelo cliente
       let documentosSolicitadosEnviados: DocumentoSolicitadoEnviado[] = [];
+      let documentosSolicitadosPendentes: DocumentoSolicitadoPendente[] = [];
       if (contrato.associado_id) {
         const { data: docsSolicitados } = await supabase
           .from('documentos_solicitados')
@@ -390,6 +391,18 @@ export function usePropostasPendentes() {
 
         if (docsSolicitados) {
           documentosSolicitadosEnviados = docsSolicitados as unknown as DocumentoSolicitadoEnviado[];
+        }
+
+        // Pendentes ainda não enviados pelo cliente (bloqueiam aprovação)
+        const { data: docsPend } = await supabase
+          .from('documentos_solicitados')
+          .select('id, tipo_documento, descricao, observacao_solicitacao, solicitado_em, created_at')
+          .eq('associado_id', contrato.associado_id)
+          .eq('status', 'pendente')
+          .is('enviado_em', null);
+
+        if (docsPend) {
+          documentosSolicitadosPendentes = docsPend as unknown as DocumentoSolicitadoPendente[];
         }
       }
 
@@ -837,6 +850,7 @@ export function useProposta(contratoId: string | undefined) {
 
       // Buscar documentos solicitados que já foram enviados pelo cliente
       let documentosSolicitadosEnviados: DocumentoSolicitadoEnviado[] = [];
+      let documentosSolicitadosPendentes: DocumentoSolicitadoPendente[] = [];
       if (contrato.associado_id) {
         const { data: docsSolicitados } = await supabase
           .from('documentos_solicitados')
@@ -859,6 +873,18 @@ export function useProposta(contratoId: string | undefined) {
 
         if (docsSolicitados) {
           documentosSolicitadosEnviados = docsSolicitados as unknown as DocumentoSolicitadoEnviado[];
+        }
+
+        // Pendentes ainda não enviados pelo cliente (bloqueiam aprovação)
+        const { data: docsPend } = await supabase
+          .from('documentos_solicitados')
+          .select('id, tipo_documento, descricao, observacao_solicitacao, solicitado_em, created_at')
+          .eq('associado_id', contrato.associado_id)
+          .eq('status', 'pendente')
+          .is('enviado_em', null);
+
+        if (docsPend) {
+          documentosSolicitadosPendentes = docsPend as unknown as DocumentoSolicitadoPendente[];
         }
       }
 
