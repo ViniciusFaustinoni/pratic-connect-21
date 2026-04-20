@@ -22,7 +22,19 @@ export function useVistoriadoresRealtime() {
     queryKey: ['vistoriadores-localizacao-realtime'],
     queryFn: async (): Promise<VistoriadorLocalizacao[]> => {
       const cutoffTime = subMinutes(new Date(), 60).toISOString();
-      
+      const turnoCutoff = subMinutes(new Date(), 30).toISOString();
+
+      // Buscar profissionais com turno aberto hoje (sem fim_turno)
+      const hojeStr = new Date().toISOString().split('T')[0];
+      const { data: turnosAbertos } = await supabase
+        .from('turnos_profissionais')
+        .select('profissional_id')
+        .eq('data', hojeStr)
+        .is('fim_turno', null);
+
+      const idsComTurnoAberto = new Set((turnosAbertos || []).map(t => t.profissional_id));
+
+      // Trazer todos com updated_at recente; filtraremos em memória
       const { data, error } = await supabase
         .from('vistoriadores_localizacao')
         .select(`
@@ -36,8 +48,7 @@ export function useVistoriadoresRealtime() {
             telefone
           )
         `)
-        .gte('updated_at', cutoffTime)
-        .eq('em_servico', true);
+        .gte('updated_at', cutoffTime);
 
       if (error) {
         console.error('Erro ao buscar localização dos vistoriadores:', error);
@@ -46,8 +57,17 @@ export function useVistoriadoresRealtime() {
 
       if (!data?.length) return [];
 
+      // Filtro robusto: em_servico=true OU (updated_at >= 30min E turno aberto)
+      const dataFiltrada = data.filter((item: any) => {
+        if (item.em_servico) return true;
+        const recente = new Date(item.updated_at).getTime() >= new Date(turnoCutoff).getTime();
+        return recente && idsComTurnoAberto.has(item.vistoriador_id);
+      });
+
+      if (!dataFiltrada.length) return [];
+
       // Buscar tarefas ativas dos profissionais para determinar status operacional
-      const profissionalIds = data.map((item: any) => item.vistoriador_id);
+      const profissionalIds = dataFiltrada.map((item: any) => item.vistoriador_id);
       const { data: tarefasAtivas } = await supabase
         .from('servicos')
         .select('profissional_id, status, contato_realizado_em')
@@ -68,10 +88,10 @@ export function useVistoriadoresRealtime() {
         }
       });
 
-      const LIMITE_INATIVIDADE_MS = 15 * 60 * 1000; // 15 minutos
+      const LIMITE_INATIVIDADE_MS = 25 * 60 * 1000; // 25 minutos
       const agoraMs = Date.now();
 
-      return data.map((item: any) => {
+      return dataFiltrada.map((item: any) => {
         const tarefa = tarefaPorProfissional[item.vistoriador_id];
         const updatedAt = new Date(item.updated_at).getTime();
         const estaInativo = agoraMs - updatedAt > LIMITE_INATIVIDADE_MS;

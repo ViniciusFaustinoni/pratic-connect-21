@@ -56,6 +56,8 @@ class BackgroundLocationService {
   private watcherId: string | null = null;
   private profissionalId: string | null = null;
   private isRunning: boolean = false;
+  private lastLocation: { latitude: number; longitude: number; accuracy?: number } | null = null;
+  private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
   /**
    * Verifica se está rodando em plataforma nativa
@@ -101,6 +103,11 @@ class BackgroundLocationService {
           }
 
           if (location) {
+            this.lastLocation = {
+              latitude: location.latitude,
+              longitude: location.longitude,
+              accuracy: location.accuracy,
+            };
             await this.enviarLocalizacao(location.latitude, location.longitude, location.accuracy);
           }
         }
@@ -108,6 +115,23 @@ class BackgroundLocationService {
 
       this.isRunning = true;
       console.log('[BackgroundLocation] Watcher iniciado com ID:', this.watcherId);
+
+      // Heartbeat a cada 2 minutos: reusa última posição mesmo se o técnico estiver parado
+      // Resolve o caso "técnico parado em residência/instalação" sem disparar movimento
+      if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = setInterval(async () => {
+        if (this.lastLocation) {
+          console.log('[BackgroundLocation] Heartbeat (técnico estacionário) — renovando updated_at');
+          await this.enviarLocalizacao(
+            this.lastLocation.latitude,
+            this.lastLocation.longitude,
+            this.lastLocation.accuracy
+          );
+        } else {
+          console.log('[BackgroundLocation] Heartbeat: sem última posição conhecida ainda');
+        }
+      }, 2 * 60 * 1000);
+
       return true;
     } catch (error) {
       console.error('[BackgroundLocation] Erro ao iniciar:', error);
@@ -162,7 +186,12 @@ class BackgroundLocationService {
       await BackgroundGeolocation.removeWatcher({ id: this.watcherId });
       this.watcherId = null;
       this.isRunning = false;
-      console.log('[BackgroundLocation] Watcher removido com sucesso');
+      if (this.heartbeatInterval) {
+        clearInterval(this.heartbeatInterval);
+        this.heartbeatInterval = null;
+      }
+      this.lastLocation = null;
+      console.log('[BackgroundLocation] Watcher e heartbeat removidos com sucesso');
     } catch (error) {
       console.error('[BackgroundLocation] Erro ao parar:', error);
     }

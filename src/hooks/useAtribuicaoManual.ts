@@ -108,13 +108,32 @@ export function useVistoriadoresAtivos() {
   return useQuery({
     queryKey: ['vistoriadores-ativos-manual'],
     queryFn: async () => {
-      const { data: localizacoes, error: locErr } = await supabase
+      // 1) Buscar profissionais com turno aberto hoje
+      const hojeStr = new Date().toISOString().split('T')[0];
+      const { data: turnosAbertos } = await supabase
+        .from('turnos_profissionais')
+        .select('profissional_id')
+        .eq('data', hojeStr)
+        .is('fim_turno', null);
+
+      const idsComTurnoAberto = new Set((turnosAbertos || []).map(t => t.profissional_id));
+
+      // 2) Buscar localizações recentes (até 30 min) — sem filtro estrito de em_servico
+      const cutoff30min = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      const { data: localizacoesRaw, error: locErr } = await supabase
         .from('vistoriadores_localizacao')
         .select('vistoriador_id, latitude, longitude, em_servico, updated_at')
-        .eq('em_servico', true);
+        .gte('updated_at', cutoff30min);
 
       if (locErr) throw locErr;
-      if (!localizacoes || localizacoes.length === 0) return [];
+      if (!localizacoesRaw || localizacoesRaw.length === 0) return [];
+
+      // 3) Filtro robusto: em_servico=true OU (recente E turno aberto)
+      const localizacoes = localizacoesRaw.filter(l =>
+        l.em_servico || idsComTurnoAberto.has(l.vistoriador_id)
+      );
+
+      if (localizacoes.length === 0) return [];
 
       const ids = localizacoes.map(l => l.vistoriador_id);
 
