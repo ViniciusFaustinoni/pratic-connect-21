@@ -166,6 +166,19 @@ export function JornadaStatusBar({ className }: JornadaStatusBarProps) {
         className="h-2"
       />
 
+      {/* Botão manual "Iniciar almoço" para técnicos Base após 4h */}
+      {isBase && deveIniciarAlmoco && (
+        <Button
+          onClick={() => iniciarAlmoco()}
+          disabled={isIniciandoAlmoco}
+          size="sm"
+          className="w-full bg-amber-600 hover:bg-amber-700 text-white"
+        >
+          <Play className="h-4 w-4 mr-2" />
+          {isIniciandoAlmoco ? 'Iniciando...' : 'Iniciar almoço'}
+        </Button>
+      )}
+
       {/* Almoço adiado: passou de 4h mas técnico está em tarefa */}
       {almocoAdiado && (
         <div className="flex items-center justify-center gap-1 text-xs">
