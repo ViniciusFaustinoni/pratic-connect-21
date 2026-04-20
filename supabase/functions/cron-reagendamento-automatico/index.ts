@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
 
         const origem = orfao.imprevisto_origem || 'associado'; // default = associado (comportamento anterior)
 
-        if (origem === 'instalador' && orfao.latitude && orfao.longitude) {
+        if (origem === 'instalador' && orfao.latitude && orfao.longitude && !atribuicaoManualAtiva) {
           // ========== REDISTRIBUIÇÃO PROATIVA (imprevisto do instalador) ==========
           console.log(`[cron-reagendamento] Imprevisto do INSTALADOR: tentando redistribuir ${orfao.id}`);
 
