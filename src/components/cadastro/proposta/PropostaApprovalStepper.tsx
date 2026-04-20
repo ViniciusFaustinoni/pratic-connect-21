@@ -391,7 +391,7 @@ export function PropostaApprovalStepper({
                   ) : (
                     <>
                       <ShieldCheck className="mr-2 h-5 w-5" />
-                      {isAutovistoria ? 'Liberar Cobertura Roubo e Furto' : 'Aprovar Proposta'}
+                      {isAutovistoria && !isVistoriaBaseSemFotos ? 'Liberar Cobertura Roubo e Furto' : 'Aprovar Proposta'}
                     </>
                   )}
                 </Button>
@@ -486,9 +486,9 @@ export function PropostaApprovalStepper({
           Etapa {currentStep} de {steps.length}
         </span>
 
-        {currentStep < 3 ? (
+        {currentStep < finalStepId ? (
           <Button
-            onClick={() => setCurrentStep(prev => Math.min(3, prev + 1))}
+            onClick={() => setCurrentStep(prev => Math.min(finalStepId, prev + 1))}
             disabled={!canAdvanceFromStep(currentStep)}
             className="gap-2"
           >
