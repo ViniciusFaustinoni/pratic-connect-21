@@ -9708,29 +9708,7 @@ export type Database = {
           motivo?: string
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "datas_bloqueadas_criado_por_fkey"
-            columns: ["criado_por"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "datas_bloqueadas_criado_por_fkey"
-            columns: ["criado_por"]
-            isOneToOne: false
-            referencedRelation: "vw_metricas_vendedores"
-            referencedColumns: ["vendedor_id"]
-          },
-          {
-            foreignKeyName: "datas_bloqueadas_criado_por_fkey"
-            columns: ["criado_por"]
-            isOneToOne: false
-            referencedRelation: "vw_vendedores_conflito"
-            referencedColumns: ["vendedor_id"]
-          },
-        ]
+        Relationships: []
       }
       departamentos: {
         Row: {
