@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { 
   FileText, Camera, ShieldCheck, CheckCircle, ChevronRight, ChevronLeft,
-  AlertCircle, Eye
+  AlertCircle, Eye, MapPin
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -27,6 +27,8 @@ interface PropostaApprovalStepperProps {
   isAprovando: boolean;
   isAutovistoria: boolean;
   podeAprovar: boolean;
+  /** Quando true, oculta a etapa de Fotos & Vistoria (vistoria na base sem fotos do associado). */
+  isVistoriaBaseSemFotos?: boolean;
 }
 
 interface StepConfig {
@@ -37,23 +39,26 @@ interface StepConfig {
   description: string;
 }
 
-const steps: StepConfig[] = [
-  { 
-    id: 1, label: 'Documentos', shortLabel: 'Docs',
-    icon: <FileText className="h-4 w-4" />,
-    description: 'Analise e aprove cada documento anexado'
-  },
-  { 
-    id: 2, label: 'Fotos & Vistoria', shortLabel: 'Fotos',
-    icon: <Camera className="h-4 w-4" />,
-    description: 'Revise as fotos e o vídeo da vistoria'
-  },
-  { 
-    id: 3, label: 'Aprovação Final', shortLabel: 'Aprovar',
-    icon: <ShieldCheck className="h-4 w-4" />,
-    description: 'Confirme a liberação da cobertura'
-  },
-];
+const STEP_DOCS: StepConfig = { 
+  id: 1, label: 'Documentos', shortLabel: 'Docs',
+  icon: <FileText className="h-4 w-4" />,
+  description: 'Analise e aprove cada documento anexado'
+};
+const STEP_FOTOS: StepConfig = { 
+  id: 2, label: 'Fotos & Vistoria', shortLabel: 'Fotos',
+  icon: <Camera className="h-4 w-4" />,
+  description: 'Revise as fotos e o vídeo da vistoria'
+};
+const STEP_FINAL_3: StepConfig = { 
+  id: 3, label: 'Aprovação Final', shortLabel: 'Aprovar',
+  icon: <ShieldCheck className="h-4 w-4" />,
+  description: 'Confirme a liberação da cobertura'
+};
+const STEP_FINAL_2: StepConfig = { 
+  id: 2, label: 'Aprovação Final', shortLabel: 'Aprovar',
+  icon: <ShieldCheck className="h-4 w-4" />,
+  description: 'Confirme a liberação da cobertura'
+};
 
 export function PropostaApprovalStepper({
   proposta,
@@ -67,9 +72,16 @@ export function PropostaApprovalStepper({
   isAprovando,
   isAutovistoria,
   podeAprovar,
+  isVistoriaBaseSemFotos = false,
 }: PropostaApprovalStepperProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [fotosRevisadas, setFotosRevisadas] = useState(false);
+
+  // Quando vistoria na base sem fotos, omite a etapa "Fotos & Vistoria" e o último passo é o id 2.
+  const steps: StepConfig[] = isVistoriaBaseSemFotos
+    ? [STEP_DOCS, STEP_FINAL_2]
+    : [STEP_DOCS, STEP_FOTOS, STEP_FINAL_3];
+  const finalStepId = isVistoriaBaseSemFotos ? 2 : 3;
 
   // Step 1 validation: all documents approved (or no documents)
   const totalDocs = documentos.length;
@@ -79,12 +91,13 @@ export function PropostaApprovalStepper({
   const step1Complete = totalDocs === 0 || (docsPendentes === 0 && docsReprovados === 0);
 
   // Step 2 validation: user confirmed photos reviewed
+  // Quando isVistoriaBaseSemFotos, força true (não bloqueia aprovação).
   const temFotos = (proposta.vistoria?.fotos?.length || 0) > 0 || !!proposta.vistoria?.video_360_url;
-  const step2Complete = fotosRevisadas || !temFotos;
+  const step2Complete = isVistoriaBaseSemFotos ? true : (fotosRevisadas || !temFotos);
 
   const canAdvanceFromStep = (step: number): boolean => {
     if (step === 1) return step1Complete;
-    if (step === 2) return step2Complete;
+    if (step === 2 && !isVistoriaBaseSemFotos) return step2Complete;
     return true;
   };
 
