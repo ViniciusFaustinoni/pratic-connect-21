@@ -1,7 +1,5 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ListChecks, Puzzle, Truck, Hand, History, Settings } from 'lucide-react';
-import MonitoramentoEncaixes from './Encaixes';
-import ViagensTab from './ViagensTab';
+import { ListChecks, Hand, History } from 'lucide-react';
 import ServicosCampoUnificado from './ServicosCampoUnificado';
 import { useConfigAtribuicaoManual } from '@/hooks/useAtribuicaoManual';
 import { lazy, Suspense } from 'react';
@@ -10,7 +8,6 @@ import AlertaImprevistosPendentes from '@/components/monitoramento/AlertaImprevi
 
 const AtribuicaoManualTab = lazy(() => import('@/components/monitoramento/AtribuicaoManualTab'));
 const HistoricoAtribuicoesTab = lazy(() => import('@/components/monitoramento/HistoricoAtribuicoesTab'));
-const ManutencaoRastreadoresTab = lazy(() => import('@/components/monitoramento/manutencao-rastreadores/ManutencaoRastreadoresTab'));
 
 export default function VistoriasInstalacoesMon() {
   const { data: manualAtiva } = useConfigAtribuicaoManual();
@@ -20,7 +17,7 @@ export default function VistoriasInstalacoesMon() {
       <div>
         <h1 className="text-2xl font-bold">Serviços de Campo</h1>
         <p className="text-muted-foreground">
-          Acompanhe instalações, vistorias, retiradas e encaixes em um único painel
+          Acompanhe instalações, vistorias, retiradas, encaixes, viagens e manutenções em um único painel
         </p>
       </div>
 
@@ -39,18 +36,6 @@ export default function VistoriasInstalacoesMon() {
               <ListChecks className="h-4 w-4" />
               <span className="hidden sm:inline">Serviços</span>
             </TabsTrigger>
-            <TabsTrigger value="encaixes" className="gap-2 shrink-0">
-              <Puzzle className="h-4 w-4" />
-              <span className="hidden sm:inline">Encaixes</span>
-            </TabsTrigger>
-            <TabsTrigger value="viagens" className="gap-2 shrink-0">
-              <Truck className="h-4 w-4" />
-              <span className="hidden sm:inline">Viagens</span>
-            </TabsTrigger>
-            <TabsTrigger value="manutencao" className="gap-2 shrink-0">
-              <Settings className="h-4 w-4" />
-              <span className="hidden sm:inline">Manutenção</span>
-            </TabsTrigger>
             <TabsTrigger value="historico" className="gap-2 shrink-0">
               <History className="h-4 w-4" />
               <span className="hidden sm:inline">Histórico</span>
@@ -68,20 +53,6 @@ export default function VistoriasInstalacoesMon() {
 
         <TabsContent value="servicos">
           <ServicosCampoUnificado />
-        </TabsContent>
-
-        <TabsContent value="encaixes">
-          <MonitoramentoEncaixes embedded />
-        </TabsContent>
-
-        <TabsContent value="viagens">
-          <ViagensTab />
-        </TabsContent>
-
-        <TabsContent value="manutencao">
-          <Suspense fallback={<div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
-            <ManutencaoRastreadoresTab />
-          </Suspense>
         </TabsContent>
 
         <TabsContent value="historico">
