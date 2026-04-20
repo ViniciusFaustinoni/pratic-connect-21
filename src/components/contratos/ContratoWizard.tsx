@@ -1092,7 +1092,7 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
                     {!temDocPessoal && (
                       <Badge variant="outline" className="text-amber-600 border-amber-600">
                         <AlertCircle className="h-3 w-3 mr-1" />
-                        Falta: CNH ou RG
+                        Falta: CNH, RG ou CIN
                       </Badge>
                     )}
                     {!temCrlv && (
