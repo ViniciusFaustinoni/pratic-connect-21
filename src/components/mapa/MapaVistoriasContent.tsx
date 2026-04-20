@@ -881,6 +881,12 @@ export function MapaVistoriasContent() {
                       Arraste até um técnico para atribuir
                     </p>
                   )}
+                  {/* Prestador assignment option in popup */}
+                  {!!atribuicaoManualAtiva && !isRealizada && !v.vistoriador_id && !!v.servico_id_unificado && (
+                    <div className="mt-1">
+                      <AtribuirPrestadorPopover servicoId={v.servico_id_unificado} />
+                    </div>
+                  )}
                 </div>
                 {!isEmExecucao && (
                   <div className="flex gap-2 flex-wrap">
