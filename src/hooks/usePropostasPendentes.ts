@@ -1442,6 +1442,8 @@ export function useSolicitarDocumentos() {
           odometro: 'Foto do Odômetro',
           chassi: 'Foto do Chassi',
           motor: 'Foto do Motor',
+          video_360: 'Vídeo 360° do Veículo',
+          painel: 'Foto do Painel',
           banco_dianteiro: 'Foto Banco Dianteiro',
           banco_traseiro: 'Foto Banco Traseiro',
           pneu_dianteiro_direito: 'Pneu Dianteiro Direito',
