@@ -789,7 +789,7 @@ export function EtapaDadosPessoaisDocumentos({
           {/* Indicador de status */}
           {!podeAvancar && (
             <p className="text-center text-sm text-muted-foreground">
-              {!temDocumentoPessoal && 'Envie CNH ou RG • '}
+              {!temDocumentoPessoal && 'Envie CNH, RG ou CIN • '}
               {!temCrlv && 'Envie CRLV, Nota Fiscal ou ATPV-e • '}
               {!temComprovante && 'Envie Comprovante • '}
               {!temContato && 'Preencha e-mail e telefone'}
