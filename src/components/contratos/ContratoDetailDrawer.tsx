@@ -573,6 +573,7 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
                                 <Send className="mr-2 h-3.5 w-3.5" />
                               )}
                               Reenviar link por WhatsApp (template)
+                            </Button>
 
                             {/* Botão de Sincronização Manual */}
                             <Button 
