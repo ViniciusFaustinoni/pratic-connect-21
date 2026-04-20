@@ -76,6 +76,7 @@ export interface InstalacaoFilters {
   instalador_id?: string;
   search?: string;
   sem_instalador?: boolean;
+  origem?: 'interno' | 'prestador';
 }
 
 export interface InstalacoesMetricas {
@@ -177,6 +178,13 @@ export function useInstalacoes(filtersOrParams?: InstalacaoFilters | UseInstalac
       // Filtro sem instalador (considera ambos os campos)
       if (filters?.sem_instalador) {
         query = query.is('instalador_id', null).is('instalador_responsavel_id', null);
+      }
+
+      // Filtro por origem (interno vs prestador externo)
+      if (filters?.origem === 'prestador') {
+        query = query.not('vistoriador_prestador_id', 'is', null);
+      } else if (filters?.origem === 'interno') {
+        query = query.is('vistoriador_prestador_id', null);
       }
 
       // Paginação
