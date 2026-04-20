@@ -8,9 +8,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ChevronLeft, ChevronRight, Calendar, Building2, MapPin } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Building2, MapPin, Lock, Unlock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { STATUS_INSTALACAO_COLORS } from '@/types/monitoramento';
+import { useDatasBloqueadasSet } from '@/hooks/useDatasBloqueadas';
+import { usePermissions } from '@/hooks/usePermissions';
+import { BloquearDataDialog } from '@/components/monitoramento/BloquearDataDialog';
 
 const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const MESES = [
@@ -38,6 +41,11 @@ export default function CalendarioInstalacoesPage() {
   const navigate = useNavigate();
   const [mesAtual, setMesAtual] = useState(new Date());
   const [diaSelecionado, setDiaSelecionado] = useState<string | null>(null);
+  const [bloqueioDialog, setBloqueioDialog] = useState<{ data: string; bloqueada: boolean; motivo?: string } | null>(null);
+
+  const { set: datasBloqueadasSet, motivosMap } = useDatasBloqueadasSet();
+  const { isDiretor, isCoordenadorMonitoramento, isAdminMaster, isDesenvolvedor } = usePermissions();
+  const podeBloquear = isDiretor || isCoordenadorMonitoramento || isAdminMaster || isDesenvolvedor;
 
   // Calcular primeiro e último dia do mês para filtrar
   const primeiroDia = new Date(mesAtual.getFullYear(), mesAtual.getMonth(), 1);

@@ -9683,6 +9683,55 @@ export type Database = {
           },
         ]
       }
+      datas_bloqueadas: {
+        Row: {
+          created_at: string
+          criado_por: string | null
+          data: string
+          id: string
+          motivo: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          criado_por?: string | null
+          data: string
+          id?: string
+          motivo: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          criado_por?: string | null
+          data?: string
+          id?: string
+          motivo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "datas_bloqueadas_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "datas_bloqueadas_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "datas_bloqueadas_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
       departamentos: {
         Row: {
           ativo: boolean | null
@@ -29173,6 +29222,7 @@ export type Database = {
         Args: { p_encaixe_id: string; p_profissional_id: string }
         Returns: boolean
       }
+      data_esta_bloqueada: { Args: { _data: string }; Returns: boolean }
       expirar_encaixes_urgentes: { Args: never; Returns: number }
       fn_calcular_bonificacao_adesao: {
         Args: {
