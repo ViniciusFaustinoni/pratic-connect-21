@@ -664,6 +664,13 @@ export function MapaVistoriasContent() {
                         <Locate className="h-4 w-4" />
                       </Button>
                     )}
+                    {!!atribuicaoManualAtiva && !isRealizada && !v.vistoriador_id && !!v.servico_id_unificado && (
+                      <AtribuirTecnicoPopover
+                        servicoId={v.servico_id_unificado}
+                        alocacoesHoje={alocacoesHoje}
+                        atribuirMutation={atribuirMutation}
+                      />
+                    )}
                     {canSendConfirmation && (
                       <Button
                         variant="outline"
