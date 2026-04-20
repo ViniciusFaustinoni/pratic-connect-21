@@ -794,6 +794,11 @@ serve(async (req) => {
     const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
     const random = Math.random().toString(36).substring(2, 8).toUpperCase();
     const numeroTemp = `CTR-${timestamp}-${random}`;
+
+    // Helper de defesa em profundidade: trunca strings longas para evitar erro 22001
+    // (value too long for varchar(N)) caso o cliente cole textos enormes em campos de endereço.
+    const cap = (v: string | null | undefined, n: number): string | null | undefined =>
+      v == null ? v : (typeof v === 'string' && v.length > n ? v.slice(0, n) : v);
     
         // Gerar link_token para permitir acesso público ao contrato (satisfaz RLS)
         const linkToken = crypto.randomUUID();
@@ -827,8 +832,8 @@ serve(async (req) => {
             carencia_vidros_motivo_isencao: carenciaVidrosMotivoIsencao,
             
             // Dados do veículo (snapshot completo)
-            veiculo_marca: cotacao.veiculo_marca,
-            veiculo_modelo: cotacao.veiculo_modelo,
+            veiculo_marca: cap(cotacao.veiculo_marca, 100),
+            veiculo_modelo: cap(cotacao.veiculo_modelo, 100),
             veiculo_ano: cotacao.veiculo_ano,
             veiculo_placa: cotacao.veiculo_placa,
             veiculo_valor_fipe: cotacao.valor_fipe,
@@ -862,8 +867,8 @@ serve(async (req) => {
             // NOVOS CAMPOS: Endereço detalhado (snapshot)
             cliente_logradouro: cotacao.cliente_logradouro || null,
             cliente_numero: cotacao.cliente_numero || null,
-            cliente_bairro: cotacao.cliente_bairro || null,
-            cliente_complemento: cotacao.cliente_complemento || null,
+            cliente_bairro: cap(cotacao.cliente_bairro, 150) || null,
+            cliente_complemento: cap(cotacao.cliente_complemento, 255) || null,
             
             // Link público para satisfazer RLS em acesso anônimo
             link_token: linkToken,
