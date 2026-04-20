@@ -53,18 +53,53 @@ export function ImprevistoBotao({ tarefaId, clienteNome, clienteTelefone, client
         ? `${motivoLabel} - ${observacoes}`
         : motivoLabel;
 
+      const now = new Date().toISOString();
+
+      // Buscar referências de origem (instalacao/vistoria) para espelhar a liberação
+      const { data: servicoAtual } = await supabase
+        .from('servicos')
+        .select('instalacao_origem_id, vistoria_origem_id')
+        .eq('id', tarefaId)
+        .maybeSingle();
+
+      // Atualização principal do serviço: libera técnico imediatamente
       const { error } = await supabase
         .from('servicos')
         .update({
-          imprevisto_registrado_em: new Date().toISOString(),
+          imprevisto_registrado_em: now,
           imprevisto_motivo: motivoCompleto,
           imprevisto_origem: origem,
           status: 'imprevisto_pendente',
-          updated_at: new Date().toISOString(),
+          profissional_id: null,
+          updated_at: now,
         } as any)
         .eq('id', tarefaId);
 
       if (error) throw error;
+
+      // Espelhar liberação nas tabelas de origem (instalacoes / vistorias)
+      if (servicoAtual?.instalacao_origem_id) {
+        await supabase
+          .from('instalacoes')
+          .update({
+            instalador_responsavel_id: null,
+            rota_id: null,
+            status: 'agendada',
+            updated_at: now,
+          } as any)
+          .eq('id', servicoAtual.instalacao_origem_id);
+      }
+      if (servicoAtual?.vistoria_origem_id) {
+        await supabase
+          .from('vistorias')
+          .update({
+            vistoriador_id: null,
+            rota_id: null,
+            status: 'agendada',
+            updated_at: now,
+          } as any)
+          .eq('id', servicoAtual.vistoria_origem_id);
+      }
 
       // Se imprevisto do instalador e NÃO pode continuar, marcar indisponível no dia
       if (origem === 'instalador' && podeContinuar === false) {
@@ -73,7 +108,7 @@ export function ImprevistoBotao({ tarefaId, clienteNome, clienteTelefone, client
           .from('turnos_profissionais')
           .update({
             status: 'encerrado',
-            fim_turno: new Date().toISOString(),
+            fim_turno: now,
           } as any)
           .eq('data', hoje)
           .eq('status', 'ativo');
@@ -99,7 +134,12 @@ export function ImprevistoBotao({ tarefaId, clienteNome, clienteTelefone, client
       toast.success('Imprevisto registrado');
       setOpen(false);
       setShowDuploCheck(true);
+      // Invalidar todas as queries afetadas para liberar o card imediatamente
       queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['instalacoes-calendario'] });
+      queryClient.invalidateQueries({ queryKey: ['profissional-em-servico'] });
     } catch (error: any) {
       console.error('Erro ao registrar imprevisto:', error);
       toast.error('Erro ao registrar imprevisto');
