@@ -698,6 +698,35 @@ export function MapaVistoriasContent() {
                         <Send className="h-4 w-4" />
                       </Button>
                     )}
+                    {podeAlterar && !isRealizada && !!v.servico_id_unificado && (
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 text-purple-600 border-purple-300 hover:bg-purple-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAlterarState({
+                            servicoId: v.servico_id_unificado!,
+                            placa: formatPlacaExibicao(v.veiculo_placa),
+                            associadoNome: v.associado_nome,
+                            endereco: {
+                              cep: (v as any).endereco_cep,
+                              logradouro: (v as any).endereco_logradouro,
+                              numero: (v as any).endereco_numero,
+                              complemento: (v as any).endereco_complemento,
+                              bairro: v.endereco_bairro,
+                              cidade: v.endereco_cidade,
+                              uf: (v as any).endereco_uf,
+                            },
+                            profissionalId: v.vistoriador_id,
+                          });
+                        }}
+                        title="Alterar endereço ou tipo"
+                        aria-label="Alterar endereço ou tipo"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
