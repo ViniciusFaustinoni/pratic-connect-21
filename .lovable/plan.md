@@ -1,39 +1,39 @@
 
 
-## Liberar K2500 apenas na linha Select Diesel
+## Corrigir cancelamentos automáticos indevidos da vistoria
 
-### Diagnóstico
-O KIA K2500 não aparece na cotação porque não está cadastrado na regra `marca_modelo` (whitelist) das `entity_eligibility_rules`. Mesmo aparecendo como "veículo pesado" na tela de elegibilidade, o motor de cotação (`useEntityEligibilityRules.ts`) bloqueia modelos não listados explicitamente quando o modo é `include`.
+### Diagnóstico (confirmado nos logs de hoje)
+O cron `cron-reagendamento-automatico` marcou 7 serviços como `nao_compareceu` e disparou link de reagendamento. Causas:
 
-### Escopo da correção
-Liberar o K2500 **exclusivamente na Linha Select** (variantes Diesel), seguindo a mesma configuração já aplicada ao BONGO. Nas demais linhas (Especial, Premium, Lançamento, etc.) o K2500 permanece **não aceito**.
+1. **Não filtra por `local_vistoria`** — serviços agendados na **base** entram no loop de "não compareceu", mesmo o associado estando lá fisicamente.
+2. **Cutoff por período ignora `created_at`** — serviços criados às 18:51/19:13/20:38 com `periodo='manha'` são cancelados imediatamente porque o cutoff `12:15` já passou. A guarda de "30min de idade" só atrasa, não impede.
+3. **Sem revalidação de status antes do envio** — entre o SELECT do cron e o envio do WhatsApp pode haver corrida (profissional acabou de fechar a OS).
+
+### Escopo aprovado
+**Não alterar o template Meta** (`reagendamento_servico`) nem o texto de fallback Evolution. Apenas corrigir a lógica do cron para parar de cancelar indevidamente.
 
 ### O que será feito
 
-#### 1. Migration de dados — adicionar K2500 na Linha Select
-Inserir entrada do K2500 na regra `marca_modelo` da Linha Select Diesel (`entity_id` correspondente em `entity_eligibility_rules`), via `jsonb_set`/append ao array `modelos`:
+#### 1. `cron-reagendamento-automatico/index.ts` — filtro por local
+- Adicionar `local_vistoria` ao SELECT de `servicos`.
+- Na Parte 2 (regra de "não compareceu"), **pular** todos os serviços com `local_vistoria = 'base'`. Atendimento na base não tem cancelamento automático — quem fecha é o atendente.
 
-```json
-{ "marca": "KIA", "modelo": "K2500", "status": "aceito", "combustivel": "diesel", "categoria": "veiculo_pesado" }
-```
+#### 2. `cron-reagendamento-automatico/index.ts` — cutoff coerente com criação
+Para serviços **sem `hora_agendada`** (cutoff por período):
+- Se `created_at` for **posterior** ao cutoff do dia atual, **não cancelar** nesta execução.
+- Aguardar o próximo período/dia para reavaliar.
+- Mantém intacta a lógica para serviços com `hora_agendada` (cancelamento por horário absoluto continua igual).
 
-Não criar entrada em nenhuma outra linha. Não tocar em planos flex/gasolina.
-
-#### 2. Normalização defensiva da marca BONGO
-Onde o BONGO estiver cadastrado como `"KIA MOTORS"`, normalizar para `"KIA"` para alinhar com o que a FIPE devolve. Apenas update de string dentro do JSON, sem mudar status/categoria.
-
-#### 3. Normalização no motor de matching
-Pequeno ajuste em `src/hooks/useEntityEligibilityRules.ts` e em `supabase/functions/agente-consultor-ia/index.ts`: comparar marca pelo primeiro token uppercased (`"KIA MOTORS"` ≡ `"KIA"`), evitando que cadastros divergentes futuros quebrem o matching.
+#### 3. `cron-reagendamento-automatico/index.ts` — guard anti-corrida
+Antes de invocar `enviar-link-reagendamento`, fazer um `SELECT status` rápido do serviço. Se o status já não for mais `agendada/em_rota/em_andamento` (ex.: `concluida`), abortar o envio para esse item.
 
 ### Arquivos editados
-- **Nova migration** `supabase/migrations/<timestamp>_add_k2500_select_eligibility.sql` — adiciona K2500 na Select Diesel + normaliza marca do BONGO.
-- `src/hooks/useEntityEligibilityRules.ts` — normalização do primeiro token da marca.
-- `supabase/functions/agente-consultor-ia/index.ts` — mesma normalização server-side.
+- `supabase/functions/cron-reagendamento-automatico/index.ts` (única alteração)
 
 ### Validação
-1. Cotação **KIA / K2500 HD / Diesel** → lista planos da **Select Diesel** (e somente dela).
-2. Cotação **KIA / K2500** em qualquer outra linha (Especial, Premium, Lançamento) → continua **sem planos**.
-3. BONGO continua funcionando em todas as linhas onde já era aceito (sem regressão).
-4. Tela `/diretoria/gestao-comercial` → Elegibilidade da Select passa a mostrar K2500 ao lado do BONGO.
-5. Motor da IA (`agente-consultor-ia`) devolve os mesmos planos do frontend para o K2500.
+1. Serviço com `local_vistoria='base'` → cron ignora, sem mensagem.
+2. Serviço a domicílio criado às 19:00 com `periodo='manha'` → cron NÃO cancela hoje.
+3. Serviço a domicílio com `hora_agendada=10:00` não iniciado às 10:30 → cron continua cancelando (comportamento correto preservado).
+4. Serviço concluído entre o SELECT e o envio → não recebe mensagem de reagendamento.
+5. Texto recebido pelo associado permanece exatamente igual ao atual (template Meta inalterado).
 
