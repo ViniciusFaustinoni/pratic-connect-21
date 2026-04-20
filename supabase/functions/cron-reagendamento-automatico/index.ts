@@ -238,7 +238,7 @@ Deno.serve(async (req) => {
     // ✅ CORRIGIDO: Só marca como nao_compareceu quando a janela de atendimento realmente venceu
     const { data: servicos, error } = await supabase
       .from("servicos")
-      .select("id, tipo, status, reagendamento_enviado_em, created_at, hora_agendada, periodo, associado_id, veiculo_id, profissional_id")
+      .select("id, tipo, status, reagendamento_enviado_em, created_at, hora_agendada, periodo, associado_id, veiculo_id, profissional_id, local_vistoria")
       .eq("data_agendada", hoje)
       .in("status", ["agendada", "em_rota", "em_andamento"])
       .is("reagendamento_enviado_em", null)
@@ -291,6 +291,10 @@ Deno.serve(async (req) => {
     let ignoradosRecente = 0;
     let ignoradosJanela = 0;
 
+    let ignoradosBase = 0;
+    let ignoradosCriadoAposCutoff = 0;
+    let ignoradosStatusMudou = 0;
+
     for (const servico of servicos || []) {
       try {
         // Guard: cancelar serviços sem associado ou veículo
@@ -305,6 +309,12 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // CHECK 0: Atendimento na BASE não tem cancelamento automático (quem fecha é o atendente)
+        if ((servico as any).local_vistoria === "base") {
+          ignoradosBase++;
+          continue;
+        }
+
         // CHECK 1: Idade mínima — nunca reagendar serviço recém-criado
         const idadeMs = now.getTime() - new Date(servico.created_at).getTime();
         if (idadeMs < IDADE_MINIMA_MS) {
@@ -314,6 +324,7 @@ Deno.serve(async (req) => {
 
         // CHECK 2: Janela de atendimento ainda não venceu
         let cutoff: string;
+        let usouCutoffPeriodo = false;
 
         if (servico.hora_agendada) {
           // Tem hora específica → cutoff = hora + tolerância
@@ -321,6 +332,7 @@ Deno.serve(async (req) => {
         } else if (servico.periodo && cutoffPeriodo[servico.periodo]) {
           // Tem período → usar cutoff do período
           cutoff = cutoffPeriodo[servico.periodo];
+          usouCutoffPeriodo = true;
         } else {
           // Sem hora nem período → cutoff padrão conservador
           cutoff = CUTOFF_PADRAO;
@@ -328,6 +340,44 @@ Deno.serve(async (req) => {
 
         if (horaAtualBrasilia < cutoff) {
           ignoradosJanela++;
+          continue;
+        }
+
+        // CHECK 2.1: Se cutoff é por período, exigir que o serviço tenha sido criado ANTES do cutoff de hoje
+        // Evita cancelar serviços criados às 19:00 com periodo='manha' (cutoff 12:15 já passou na criação)
+        if (usouCutoffPeriodo) {
+          const createdHoraBrasilia = new Date(servico.created_at).toLocaleTimeString("pt-BR", {
+            timeZone: "America/Sao_Paulo",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          });
+          const createdDataBrasilia = new Date(servico.created_at).toLocaleDateString("pt-BR", {
+            timeZone: "America/Sao_Paulo",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          });
+          const [cd, cm, cy] = createdDataBrasilia.split("/");
+          const createdDataIso = `${cy}-${cm}-${cd}`;
+
+          if (createdDataIso === hoje && createdHoraBrasilia >= cutoff) {
+            ignoradosCriadoAposCutoff++;
+            console.log(`[cron-reagendamento] Ignorado (criado ${createdHoraBrasilia} após cutoff ${cutoff}): ${servico.id}`);
+            continue;
+          }
+        }
+
+        // CHECK 3 (anti-corrida): revalidar status antes de marcar como nao_compareceu
+        const { data: servicoAtual } = await supabase
+          .from("servicos")
+          .select("status")
+          .eq("id", servico.id)
+          .maybeSingle();
+
+        if (!servicoAtual || !["agendada", "em_rota", "em_andamento"].includes(servicoAtual.status)) {
+          ignoradosStatusMudou++;
+          console.log(`[cron-reagendamento] Status mudou para ${servicoAtual?.status} — abortando: ${servico.id}`);
           continue;
         }
 
@@ -364,7 +414,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`[cron-reagendamento] Resumo Parte 2: ${processados} reagendados, ${ignoradosRecente} ignorados (recentes), ${ignoradosJanela} ignorados (janela ativa)`);
+    console.log(`[cron-reagendamento] Resumo Parte 2: ${processados} reagendados, ${ignoradosRecente} recentes, ${ignoradosJanela} janela ativa, ${ignoradosBase} base, ${ignoradosCriadoAposCutoff} criados após cutoff, ${ignoradosStatusMudou} status mudou`);
 
     return new Response(
       JSON.stringify({
