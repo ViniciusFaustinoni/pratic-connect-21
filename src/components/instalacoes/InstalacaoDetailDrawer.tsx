@@ -58,6 +58,9 @@ export function InstalacaoDetailDrawer({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [fotoDialogUrl, setFotoDialogUrl] = useState<string | null>(null);
+  const [visualizadorAberto, setVisualizadorAberto] = useState(false);
+  const [fotoIndex, setFotoIndex] = useState(0);
+  const [fotosAtivas, setFotosAtivas] = useState<Array<{ url: string; label: string; tipo?: string }>>([]);
   const { data: instalacao, isLoading } = useInstalacao(instalacaoId || undefined);
   const updateStatus = useUpdateInstalacaoStatus();
 
