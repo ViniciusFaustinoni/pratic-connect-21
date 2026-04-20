@@ -1,39 +1,41 @@
 
 
-## Corrigir cancelamentos automáticos indevidos da vistoria
+## Equipe de Monitoramento — Tabs e drill-down de serviços
 
-### Diagnóstico (confirmado nos logs de hoje)
-O cron `cron-reagendamento-automatico` marcou 7 serviços como `nao_compareceu` e disparou link de reagendamento. Causas:
+### Mudanças
 
-1. **Não filtra por `local_vistoria`** — serviços agendados na **base** entram no loop de "não compareceu", mesmo o associado estando lá fisicamente.
-2. **Cutoff por período ignora `created_at`** — serviços criados às 18:51/19:13/20:38 com `periodo='manha'` são cancelados imediatamente porque o cutoff `12:15` já passou. A guarda de "30min de idade" só atrasa, não impede.
-3. **Sem revalidação de status antes do envio** — entre o SELECT do cron e o envio do WhatsApp pode haver corrida (profissional acabou de fechar a OS).
+#### 1. Duas abas dentro de "Equipe"
+Substituir o grid único por sub-abas baseadas no `role` do `user_roles`:
 
-### Escopo aprovado
-**Não alterar o template Meta** (`reagendamento_servico`) nem o texto de fallback Evolution. Apenas corrigir a lógica do cron para parar de cancelar indevidamente.
+- **Instaladores** → profissionais com role `instalador_vistoriador` (executam vistorias/instalações em campo).
+- **Administrativo** → todos os demais perfis ligados ao monitoramento que **não são** instaladores: `analista_monitoramento`, `coordenador_monitoramento` e quaisquer outros papéis administrativos do módulo.
 
-### O que será feito
+A aba "Plantões" existente permanece intacta como aba irmã. Filtros, métricas e busca passam a operar sobre a lista da aba ativa. Contadores `(N)` ficam ao lado do nome de cada aba.
 
-#### 1. `cron-reagendamento-automatico/index.ts` — filtro por local
-- Adicionar `local_vistoria` ao SELECT de `servicos`.
-- Na Parte 2 (regra de "não compareceu"), **pular** todos os serviços com `local_vistoria = 'base'`. Atendimento na base não tem cancelamento automático — quem fecha é o atendente.
+#### 2. Click no card → modal "Serviços Atribuídos"
+Adicionar handler `onClick` ao corpo do `EquipeCard` (preservando que cliques no menu `⋮` e no botão "Relatório" não disparam o drill-down via `stopPropagation`).
 
-#### 2. `cron-reagendamento-automatico/index.ts` — cutoff coerente com criação
-Para serviços **sem `hora_agendada`** (cutoff por período):
-- Se `created_at` for **posterior** ao cutoff do dia atual, **não cancelar** nesta execução.
-- Aguardar o próximo período/dia para reavaliar.
-- Mantém intacta a lógica para serviços com `hora_agendada` (cancelamento por horário absoluto continua igual).
+Abre um novo modal `ServicosAtribuidosModal` com **comportamento dependente do tipo**:
 
-#### 3. `cron-reagendamento-automatico/index.ts` — guard anti-corrida
-Antes de invocar `enviar-link-reagendamento`, fazer um `SELECT status` rápido do serviço. Se o status já não for mais `agendada/em_rota/em_andamento` (ex.: `concluida`), abortar o envio para esse item.
+- **Card de Instalador** → lista todos os serviços atribuídos a **ele mesmo** (agendada, em_rota, em_andamento, concluída, nao_compareceu, reagendada). Colunas: Data/hora, Tipo, Associado, Veículo/placa, Bairro, Status, link "Abrir".
+- **Card Administrativo** → lista todos os serviços atribuídos **a qualquer instalador**, agrupados por técnico (nome do instalador como cabeçalho, com avatar/iniciais). É a visão de monitoramento "ver todos os serviços com os técnicos". Mesmas colunas + coluna **Técnico**.
+
+Filtros do modal: período (Hoje / 7 dias / 30 dias / Todos), status (todos / agendada / em andamento / concluída / nao_compareceu) e busca por associado/placa.
 
 ### Arquivos editados
-- `supabase/functions/cron-reagendamento-automatico/index.ts` (única alteração)
+
+- `src/pages/monitoramento/Equipe.tsx` — sub-abas Instaladores/Administrativo dentro da aba "Equipe", contagem por aba, filtragem por role.
+- `src/hooks/useEquipe.ts` — incluir `role` (`instalador_vistoriador` | `analista_monitoramento` | demais) no objeto `ProfissionalEquipe` para permitir o split.
+- `src/components/equipe/EquipeCard.tsx` — `onClick` no card + prop `onVerServicos`; `stopPropagation` no menu `⋮` e no botão "Relatório".
+- **Novo** `src/components/monitoramento/ServicosAtribuidosModal.tsx` — modal com lista/agrupamento conforme o tipo do profissional.
+- **Novo** `src/hooks/useServicosAtribuidos.ts` — query parametrizada: por `profissional_id` (instalador) **ou** todos os serviços de instaladores ativos (modo administrativo), com filtros de período/status/busca.
 
 ### Validação
-1. Serviço com `local_vistoria='base'` → cron ignora, sem mensagem.
-2. Serviço a domicílio criado às 19:00 com `periodo='manha'` → cron NÃO cancela hoje.
-3. Serviço a domicílio com `hora_agendada=10:00` não iniciado às 10:30 → cron continua cancelando (comportamento correto preservado).
-4. Serviço concluído entre o SELECT e o envio → não recebe mensagem de reagendamento.
-5. Texto recebido pelo associado permanece exatamente igual ao atual (template Meta inalterado).
+1. Aba "Instaladores" mostra apenas profissionais com role `instalador_vistoriador`; "Administrativo" mostra os demais (analistas, coordenadores).
+2. Contadores `(N)` em cada sub-aba batem com o total filtrado.
+3. Clicar em card de instalador abre modal só com os serviços dele.
+4. Clicar em card administrativo abre modal com todos os serviços de todos os instaladores, agrupados por técnico.
+5. Cliques em "Editar/Desativar/Relatório" continuam funcionando sem abrir o modal de serviços.
+6. Filtros (período, status, busca) funcionam em ambos os modos do modal.
+7. Aba "Plantões" continua acessível e inalterada.
 
