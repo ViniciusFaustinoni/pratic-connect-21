@@ -341,16 +341,28 @@ export default function CalendarioInstalacoesPage() {
                 );
               };
 
+              const bloqueada = datasBloqueadasSet.has(dataStr);
+              const motivoBloqueio = motivosMap.get(dataStr);
+
               return (
                 <div
                   key={index}
                   onClick={() => setDiaSelecionado(dataStr)}
                   className={cn(
-                    'min-h-[100px] p-2 border-b border-r cursor-pointer transition-colors hover:bg-muted/50',
+                    'relative min-h-[100px] p-2 border-b border-r cursor-pointer transition-colors hover:bg-muted/50',
                     !dia.mesAtual && 'bg-muted/30 text-muted-foreground',
                     dia.diaAtual && 'ring-2 ring-inset ring-primary',
+                    bloqueada && 'bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/50',
                     index % 7 === 6 && 'border-r-0'
                   )}
+                  style={
+                    bloqueada
+                      ? {
+                          backgroundImage:
+                            'repeating-linear-gradient(45deg, transparent, transparent 6px, hsl(var(--destructive) / 0.08) 6px, hsl(var(--destructive) / 0.08) 12px)',
+                        }
+                      : undefined
+                  }
                 >
                   {/* Número do dia + badges de contagem */}
                   <div className="flex items-start justify-between">
@@ -362,13 +374,38 @@ export default function CalendarioInstalacoesPage() {
                     >
                       {dia.data.getDate()}
                     </span>
-                    {vistoriasDia.base.length > 0 && (
-                      <span className="inline-flex items-center gap-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 dark:text-indigo-300">
-                        <Building2 className="h-2.5 w-2.5" />
-                        {vistoriasDia.base.length}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-1">
+                      {vistoriasDia.base.length > 0 && (
+                        <span className="inline-flex items-center gap-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 dark:text-indigo-300">
+                          <Building2 className="h-2.5 w-2.5" />
+                          {vistoriasDia.base.length}
+                        </span>
+                      )}
+                      {podeBloquear && dia.mesAtual && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setBloqueioDialog({ data: dataStr, bloqueada, motivo: motivoBloqueio });
+                          }}
+                          className={cn(
+                            'inline-flex h-5 w-5 items-center justify-center rounded hover:bg-muted',
+                            bloqueada ? 'text-destructive' : 'text-muted-foreground opacity-60 hover:opacity-100'
+                          )}
+                          title={bloqueada ? `Bloqueado: ${motivoBloqueio}` : 'Bloquear data'}
+                          aria-label={bloqueada ? 'Desbloquear data' : 'Bloquear data'}
+                        >
+                          {bloqueada ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
+                        </button>
+                      )}
+                    </div>
                   </div>
+
+                  {bloqueada && (
+                    <div className="mt-1 rounded-sm bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive line-clamp-2">
+                      🔒 {motivoBloqueio || 'Bloqueado'}
+                    </div>
+                  )}
 
                   {/* Instalações do dia - agrupadas por período */}
                   {(temInstalacoes || temVistorias) && (
@@ -430,6 +467,16 @@ export default function CalendarioInstalacoesPage() {
         onClose={() => setDiaSelecionado(null)}
         data={diaSelecionado || ''}
       />
+
+      {bloqueioDialog && (
+        <BloquearDataDialog
+          open={!!bloqueioDialog}
+          onOpenChange={(v) => !v && setBloqueioDialog(null)}
+          data={bloqueioDialog.data}
+          bloqueada={bloqueioDialog.bloqueada}
+          motivoAtual={bloqueioDialog.motivo}
+        />
+      )}
     </div>
   );
 }
