@@ -128,7 +128,7 @@ export function useInstalacoes(filtersOrParams?: InstalacaoFilters | UseInstalac
 
   return useQuery({
     queryKey: ['instalacoes', filters, pagination],
-    refetchOnMount: 'always',
+    staleTime: 30000,
     queryFn: async () => {
       let query = supabase
         .from('instalacoes')
@@ -274,7 +274,7 @@ export function useInstalacao(id: string | undefined) {
 export function useInstalacoesContagem(data?: string) {
   return useQuery({
     queryKey: ['instalacoes-contagem', data],
-    refetchOnMount: 'always',
+    staleTime: 60000,
     queryFn: async () => {
       const hoje = data || new Date().toISOString().split('T')[0];
 
@@ -321,7 +321,8 @@ export function useInstalacoesContagem(data?: string) {
 
       return contagem;
     },
-    refetchInterval: 30000,
+    refetchInterval: 120000,
+    refetchIntervalInBackground: false,
   });
 }
 
