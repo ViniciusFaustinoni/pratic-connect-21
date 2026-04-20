@@ -1,56 +1,68 @@
 
 
-## Regra de integridade: instalações não podem ser excluídas
+## Diagnóstico — Por que staff não vê fotos da vistoria do instalador
 
-Remover toda capacidade de **DELETE** sobre `instalacoes` originada do módulo de Monitoramento. Registros permanecem para sempre; só o `status` evolui (`agendada → em_rota → em_andamento → concluida` ou laterais `reagendada / cancelada / nao_compareceu / em_analise`).
+### Causa raiz (confirmada em banco)
 
-### Diagnóstico — onde existe DELETE hoje
+A tabela **`vistoria_fotos`** só tem policies de SELECT para:
+- **Associado dono** (`get_my_associado_id(auth.uid())`)
+- **Anon via link público de contrato** (`contratos.link_token`)
 
-| # | Local | Ação atual | Decisão |
-|---|---|---|---|
-| 1 | `src/pages/monitoramento/InstalacoesList.tsx` (linhas 360-374, 409-433) | Item "Excluir" no DropdownMenu + `AlertDialog` chamando `deleteInstalacao.mutate` para instalações canceladas | **Remover** botão, dialog, estados (`deleteDialogOpen`, `instalacaoToDelete`) e import |
-| 2 | `src/components/instalacoes/InstalacaoDetailDrawer.tsx` (linhas 188-198, 637-666) | Botão "Excluir" no rodapé do drawer quando status = `cancelada` | **Remover** botão, `handleDelete`, `confirmDeleteOpen`, import de `useDeleteInstalacao` |
-| 3 | `src/hooks/useInstalacoes.ts` (linhas 803-824) | Hook `useDeleteInstalacao` faz `.from('instalacoes').delete()` | **Remover** o hook por completo (nenhum outro consumidor após 1 e 2) |
-| 4 | `supabase/functions/delete-ativacao/index.ts` e `delete-associado/index.ts` | DELETE em cascata ao excluir associado/ativação inteira (fluxo administrativo de outro módulo, não de Monitoramento) | **Manter intacto** — escopo diferente |
+**Não existe** policy SELECT para staff autenticado (diretor, analista_cadastro, admin_master etc.). Quando o hook `useFotosVistoriaUnificada` faz `SELECT ... FROM vistoria_fotos WHERE vistoria_id = ?` para um funcionário, RLS retorna zero linhas → condição `(vistoriaUnificada?.fotosInstalador?.length || 0) > 0` é falsa → **Card "Galeria do Instalador" nem renderiza**.
 
-### Defesa em profundidade no banco
+Por isso a screenshot mostra apenas **Galeria de Autovistoria** (tabela `cotacoes_vistoria_fotos`, que tem policy `Usuários autenticados acesso total`) e nenhuma Galeria do Instalador.
 
-Adicionar policy de RLS **restritiva** que nega `DELETE` em `instalacoes` para qualquer usuário autenticado (inclusive Diretor), garantindo que nem chamadas diretas via SDK nem inspeções futuras consigam apagar:
+Comparação das duas tabelas:
+
+| Tabela | Policy staff autenticado | Resultado |
+|---|---|---|
+| `cotacoes_vistoria_fotos` | ✅ "Usuários autenticados acesso total" | Aparece |
+| `vistoria_fotos` | ❌ Nenhuma | **Invisível para staff** |
+
+Obs.: a tabela-pai `vistorias` **já tem** a policy `Staff and own vistoriadores can view vistorias` listando diretor/admin_master/analista_cadastro/coordenador_monitoramento/etc. A policy filha de `vistoria_fotos` foi esquecida quando a tabela foi criada.
+
+Documentos em si (`documentos`) **funcionam** — policy `View documents` cobre `is_funcionario(auth.uid())`. Se o usuário também está sem ver documentos, é outra questão (provavelmente nenhum documento cadastrado para aquele associado específico). A queixa central é fotos.
+
+### Correção
+
+Adicionar **uma policy RLS** em `public.vistoria_fotos` espelhando a policy já existente em `vistorias`:
 
 ```sql
-CREATE POLICY "instalacoes_no_delete"
-ON public.instalacoes
-AS RESTRICTIVE
-FOR DELETE
-TO authenticated, anon
-USING (false);
+CREATE POLICY "Staff can view vistoria_fotos"
+ON public.vistoria_fotos
+FOR SELECT
+TO authenticated
+USING (
+  has_role(auth.uid(), 'coordenador_monitoramento'::app_role)
+  OR has_role(auth.uid(), 'diretor'::app_role)
+  OR has_role(auth.uid(), 'admin_master'::app_role)
+  OR has_role(auth.uid(), 'desenvolvedor'::app_role)
+  OR has_role(auth.uid(), 'analista_cadastro'::app_role)
+  OR has_role(auth.uid(), 'analista_eventos'::app_role)
+  OR (
+    has_role(auth.uid(), 'instalador_vistoriador'::app_role)
+    AND vistoria_id IN (
+      SELECT v.id FROM public.vistorias v
+      WHERE v.vistoriador_id = get_my_profile_id()
+    )
+  )
+);
 ```
 
-Isso preserva os DELETEs feitos pelas edge functions `delete-ativacao` e `delete-associado` porque ambas usam `service_role` (bypass RLS) — fluxo de exclusão de associado inteiro continua funcionando.
-
-### Substituição na UX
-
-Onde existia "Excluir", o coordenador continua tendo:
-- **Cancelar** (já existe) — muda status para `cancelada`.
-- **Reagendar** (já existe) — muda status para `reagendada`.
-- **Marcar como Não Compareceu** — adicionar item no DropdownMenu da lista e botão no drawer (status `nao_compareceu` já existe no enum) usando o `useUpdateInstalacaoStatus` já existente. Disponível para status `agendada`, `em_rota`, `em_andamento`.
-
-Assim a lista mantém todos os registros históricos e o coordenador navega o ciclo de vida sem nunca apagar dados.
+A policy existente `Associates can view own inspection photos` continua intacta para o associado dono, e `Public can view inspection photos via contract` continua intacta para o fluxo público de contrato. Sem mudanças em UI, hooks ou buckets de storage (os buckets `vistoria-fotos` e `documentos` já são públicos, então as URLs das imagens abrem sem problema — o bloqueio é puramente na leitura das linhas da tabela).
 
 ### Validação após deploy
 
-1. Lista `/monitoramento/instalacoes` → instalação cancelada → DropdownMenu não mostra mais "Excluir", apenas "Ver detalhes" e "Marcar como Não Compareceu" (quando aplicável).
-2. Drawer de detalhes de uma instalação cancelada → não há botão "Excluir".
-3. Tentativa direta via console: `supabase.from('instalacoes').delete().eq('id', '<id>')` → retorna erro de RLS.
-4. Excluir um associado pelo fluxo administrativo (`delete-associado` edge function) → continua removendo as instalações dele em cascata (service_role bypassa RLS).
-5. Histórico do associado mostra todas as instalações antigas (concluídas, canceladas, não compareceu, reagendadas).
+1. Logar como diretor (`admin@teste.com`) → `/cadastro/associados` → abrir um associado que tenha contrato com instalação concluída (ex.: `associado_id = 1acbb2e9-e170-46d5-aabc-da8c0bd0af05`, contrato `84553445-...`, 6 fotos).
+2. Aba **Documentos** → Card "**Galeria do Instalador**" deve aparecer com as 6 fotos agrupadas (exterior, identificação, interior).
+3. Clicar em uma foto → modal abre com imagem em tamanho grande.
+4. Logar como `analista_cadastro` → mesma tela → mesmas fotos visíveis.
+5. Repetir com um associado que tenha só autovistoria (`cotacoes_vistoria_fotos`) → continua aparecendo apenas "Galeria de Autovistoria" (comportamento correto).
+6. Testar que o fluxo público anon de contrato (`/contrato/:token`) continua vendo as fotos — policy antiga preservada.
 
-### Arquivos tocados
+### Arquivo tocado
 
-- `src/pages/monitoramento/InstalacoesList.tsx` — remover botão/dialog/estados de Excluir; adicionar item "Marcar como Não Compareceu".
-- `src/components/instalacoes/InstalacaoDetailDrawer.tsx` — remover botão/dialog/handler de Excluir; adicionar botão "Não Compareceu" para status em andamento.
-- `src/hooks/useInstalacoes.ts` — remover `useDeleteInstalacao`.
-- **Migração SQL** — policy restritiva `instalacoes_no_delete`.
+- **Nova migração SQL** — adiciona policy `Staff can view vistoria_fotos` em `public.vistoria_fotos`.
 
-Sem mudança de schema (enum `status_instalacao` já contém `nao_compareceu`). Sem nova dependência. Edge functions de exclusão de associado/ativação permanecem intocadas.
+Sem mudança de frontend, hook, bucket, nem schema. Nenhuma policy existente é alterada ou removida.
 
