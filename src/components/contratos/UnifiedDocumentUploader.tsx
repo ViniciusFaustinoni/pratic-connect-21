@@ -199,14 +199,33 @@ export function UnifiedDocumentUploader({
 
       // Validar placa do CRLV contra a placa esperada da cotação
       if (ocrResult.tipo_detectado === 'crlv' && placaEsperada && ocrResult.dados?.placa) {
+        // Normaliza placa tolerando confusões comuns de OCR entre letras/dígitos
+        // Posições de letra (0,1,2,4 no padrão Mercosul) e dígito (3,5,6)
+        const LETTER_TO_DIGIT: Record<string, string> = {
+          O: '0', Q: '0', D: '0',
+          I: '1', L: '1',
+          Z: '2',
+          S: '5',
+          G: '6',
+          T: '7',
+          B: '8',
+        };
+        const DIGIT_TO_LETTER: Record<string, string> = {
+          '0': 'O',
+          '1': 'I',
+          '2': 'Z',
+          '5': 'S',
+          '6': 'G',
+          '8': 'B',
+        };
         const normalizePlaca = (p: string) => {
           const clean = p.replace(/[-\s]/g, '').toUpperCase();
           if (clean.length === 7) {
             return clean.split('').map((ch, i) => {
               const isLetterPos = i <= 2 || i === 4;
               const isDigitPos = i === 3 || i === 5 || i === 6;
-              if (isLetterPos && ch === '0') return 'O';
-              if (isDigitPos && ch === 'O') return '0';
+              if (isLetterPos && DIGIT_TO_LETTER[ch]) return DIGIT_TO_LETTER[ch];
+              if (isDigitPos && LETTER_TO_DIGIT[ch]) return LETTER_TO_DIGIT[ch];
               return ch;
             }).join('');
           }
