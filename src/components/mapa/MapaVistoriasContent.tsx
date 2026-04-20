@@ -1381,6 +1381,20 @@ export function MapaVistoriasContent() {
           horaAtual: reagendarState?.horaAtual,
         }}
       />
+
+      {/* Alterar endereço/tipo */}
+      <AlterarEnderecoTipoDialog
+        open={!!alterarState}
+        onOpenChange={(open) => !open && setAlterarState(null)}
+        origem="rota"
+        servicoId={alterarState?.servicoId || null}
+        resumo={{
+          placa: alterarState?.placa,
+          associadoNome: alterarState?.associadoNome,
+        }}
+        initialEndereco={alterarState?.endereco}
+        initialProfissionalId={alterarState?.profissionalId || null}
+      />
     </>
   );
 
