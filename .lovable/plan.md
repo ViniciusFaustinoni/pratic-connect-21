@@ -1,76 +1,45 @@
 
 
-## Diagnóstico — Por que a flag "Atribuição Manual" está sendo ignorada
+## Adicionar botão de atribuição rápida nos cards do Mapa
 
-A flag `atribuicao_manual_rotas` está como `true` no banco (confirmado via consulta), mas **3 motores automáticos não a respeitam**. Cada um foi escrito de forma isolada e só `processar-encaixes-automaticos` faz o check correto.
+### O que muda
+Em cada card de serviço pendente no painel lateral do Mapa de Monitoramento, ao lado do botão de localizar (📍) e do botão de WhatsApp (✉️), adicionar um **botão "Atribuir" (ícone `UserPlus`)** que abre um popover com a lista de técnicos ativos. Clicar em um técnico atribui o serviço imediatamente — alternativa ao drag-and-drop atual.
 
-### Motores que ignoram o switch
+### Onde
+Arquivo único: `src/components/mapa/MapaVistoriasContent.tsx`, dentro do bloco de ações do card (linhas 657-678, coluna `flex flex-col gap-1 flex-shrink-0`).
 
-| # | Edge Function | Comportamento atual | Quando dispara |
-|---|---|---|---|
-| 1 | `cron-atribuir-tarefas` | Comentário explícito ignorando a flag (linhas 110-113). Só checa `fila_atribuicao_ativa`. | A cada 5 min via cron |
-| 2 | `atribuir-proxima-tarefa` | Nenhum check da flag. Atribui próxima tarefa quando técnico conclui uma. | Invocado ao concluir serviço / aceitar |
-| 3 | `cron-reagendamento-automatico` (Parte 1 — órfãos) | Atribui órfãos diretamente ao mais próximo (linhas 112-118). | A cada 5 min via cron |
-| 4 | `criar-instalacao-pos-pagamento` | Invoca `cron-atribuir-tarefas` ao criar instalação pós-pagamento. | Webhook de pagamento aprovado |
-| 5 | `processar-encaixes-automaticos` | ✅ Já respeita a flag (linhas 130-136). | Modelo a seguir |
+### Comportamento
+- **Visível somente quando** o card é "atribuível":
+  - `atribuicaoManualAtiva` (flag global ligada) **e**
+  - serviço ainda não realizado **e**
+  - `!v.vistoriador_id` (não atribuído) **e**
+  - `v.servico_id_unificado` existe.
+  - Não exige coordenadas GPS (diferente do drag), atendendo justamente os cards "Sem coordenadas GPS" do print.
+- Clique no botão → abre `Popover` com:
+  - título "Atribuir a um técnico"
+  - lista filtrável (input simples) de técnicos retornados por `useVistoriadoresAtivos()`
+  - cada item mostra avatar/iniciais + nome + badge do tipo de alocação do dia (Rota / Base — se houver)
+- Clique em um técnico → chama `atribuirServicoMutation.mutate({ servicoId: v.servico_id_unificado, profissionalId: tecnico.id, isBase: <derivado> })`
+- Sucesso → fecha popover, toast "Serviço atribuído a {nome}", invalida queries (já feito pela mutation existente)
+- Erro → toast com `error.message` (regra de pareamento de base já tratada na mutation)
 
-### Causa direta no caso do print
-O técnico Kleytonn recebeu uma reagendamento "automaticamente após o horário". O fluxo provável: associado reagendou via link público → `reagendar-vistoria-publica` setou status `agendada` → `cron-atribuir-tarefas` rodou no ciclo seguinte → atribuiu ao Kleytonn ignorando o switch.
+### Detalhes técnicos
+- Reusar hooks já existentes: `useVistoriadoresAtivos`, `useAtribuirServicoManual`, `useAlocacoesDiaHoje` (para pintar o badge Rota/Base).
+- Componentes shadcn: `Popover`, `PopoverTrigger`, `PopoverContent`, `Command`/`CommandInput`/`CommandList` (já no projeto).
+- Ícone: `UserPlus` do `lucide-react` (adicionar ao import existente).
+- `e.stopPropagation()` em todos os handlers (igual aos outros botões da coluna) para não disparar `selecionarVistoria`.
+- Determinação de `isBase`: se o serviço pertence a `agendamentos_base`. No contexto deste painel, `v.servico_id_unificado` aponta para `servicos` (rota), portanto `isBase=false`. Manter `false` aqui — alocações de base já têm fluxo próprio.
+- Loading: enquanto `atribuirServicoMutation.isPending`, desabilitar a lista e mostrar spinner inline no item clicado.
+- Acessibilidade: `aria-label="Atribuir técnico"` no botão.
 
----
-
-## Plano de correção
-
-### 1) Helper compartilhado para checar a flag
-Adicionar no início de cada edge function abaixo o mesmo bloco já usado em `processar-encaixes-automaticos`:
-
-```ts
-const { data: configManual } = await supabase
-  .from('configuracoes')
-  .select('valor')
-  .eq('chave', 'atribuicao_manual_rotas')
-  .maybeSingle();
-
-if (configManual?.valor === 'true') {
-  console.log('[<fn-name>] Atribuição MANUAL ativa — atribuição automática desligada');
-  return new Response(
-    JSON.stringify({ resultado: 'manual_ativo', mensagem: 'Atribuição manual ativa — pulando' }),
-    { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-  );
-}
-```
-
-### 2) Aplicar em cada motor
-
-**a) `supabase/functions/cron-atribuir-tarefas/index.ts`**
-- Remover o comentário "NOTA: A flag … NÃO bloqueia mais o motor automático" (linhas 110-113).
-- Inserir o check da flag **antes** de buscar profissionais (após o check de `fila_atribuicao_ativa`).
-
-**b) `supabase/functions/atribuir-proxima-tarefa/index.ts`**
-- Inserir o check logo após criar o supabase client.
-- Quando manual ativo, retornar `{ atribuido: false, motivo: 'manual_ativo' }` sem tocar em `servicos`.
-
-**c) `supabase/functions/cron-reagendamento-automatico/index.ts` — Parte 1 (órfãos)**
-- O fluxo de detectar órfãos (status `agendada` sem `profissional_id` há >2h) deve continuar rodando, mas a **ação de auto-atribuir** ao técnico mais próximo (linhas 112-122) deve ser pulada quando manual ativo.
-- Em vez de atribuir, apenas logar como pendente para que o coordenador atribua via painel. O envio de link de reagendamento (Parte 2) continua funcionando normalmente.
-
-**d) `supabase/functions/criar-instalacao-pos-pagamento/index.ts`**
-- Antes de invocar `cron-atribuir-tarefas` (linha 569), checar a flag. Se manual ativo, pular a invocação — a tarefa nasce sem `profissional_id` e aparece no painel de Atribuição Manual.
-
-### 3) Validação após deploy
-
-1. Confirmar `atribuicao_manual_rotas = true` no banco.
-2. Criar serviço de teste sem profissional → aguardar 5 min → conferir que `cron-atribuir-tarefas` logou "Atribuição MANUAL ativa" e o serviço continua sem `profissional_id`.
-3. Reagendar via link público uma vistoria → confirmar que volta a `agendada` mas **não** ganha `profissional_id` automaticamente.
-4. Concluir uma tarefa em campo → `atribuir-proxima-tarefa` deve retornar `manual_ativo` e **não** entregar nova tarefa automaticamente.
-5. Aprovar pagamento de um contrato novo → instalação criada deve aparecer no painel manual sem profissional.
-6. Desligar o switch → próximos ciclos voltam a atribuir normalmente.
+### Validação após deploy
+1. Painel `/monitoramento/mapa` com flag manual ON → cards sem técnico mostram o novo botão `UserPlus`.
+2. Card "Sem coordenadas GPS" (ex.: SQY2D63) — drag não funciona mas o botão sim.
+3. Clicar → lista de técnicos ativos aparece → clicar em "Wallace" → toast de sucesso, técnico aparece no card e o badge "Não atribuído" some.
+4. Reagendar o card e confirmar que ele continua atribuível pelo botão.
+5. Confirmar log em `servicos_atribuicoes_log` com `tipo_atribuicao='manual'`.
 
 ### Arquivos tocados
-- `supabase/functions/cron-atribuir-tarefas/index.ts`
-- `supabase/functions/atribuir-proxima-tarefa/index.ts`
-- `supabase/functions/cron-reagendamento-automatico/index.ts`
-- `supabase/functions/criar-instalacao-pos-pagamento/index.ts`
+- `src/components/mapa/MapaVistoriasContent.tsx` (única alteração)
 
-Sem mudança de schema. Sem nova dependência. Sem mudança de frontend. `processar-encaixes-automaticos` permanece como está (já correto, vira o padrão de referência).
-
+Sem mudança de schema, hooks ou edge functions.
