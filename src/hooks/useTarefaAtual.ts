@@ -36,13 +36,8 @@ export function useTarefaAtual() {
     queryFn: async (): Promise<(TarefaAtual & { confirmacao_whatsapp?: string | null; confirmado_via_whatsapp_em?: string | null }) | null> => {
       if (!profissionalId) return null;
 
-      // Proteção contra session bleed: comparar auth.uid() com profile.user_id
-      // (NÃO com profile.id, que é o PK interno e geralmente diferente do auth uid)
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || (profileUserId && user.id !== profileUserId)) {
-        console.warn('[useTarefaAtual] Session mismatch - user.id:', user?.id?.substring(0, 8), 'profile.user_id:', profileUserId?.substring(0, 8));
-        return null;
-      }
+      // NÃO chamar supabase.auth.getUser() aqui — antes era feito a cada 5s
+      // e gerava pressão imensa no serviço de Auth. O AuthContext já valida o user.
 
       // Usar a nova RPC que consulta a tabela servicos
       const { data, error } = await supabase.rpc('buscar_tarefa_atual_profissional', {
@@ -103,7 +98,6 @@ export function useTarefaAtual() {
           cor: veic?.cor,
           imei_rastreador: rast?.imei || rastSubstituto?.imei,
         };
-        console.log('[useTarefaAtual] Tarefa recuperada via fallback:', tarefa.id);
       } else {
         tarefa = data[0];
       }
@@ -158,8 +152,12 @@ export function useTarefaAtual() {
       };
     },
     enabled: !!profissionalId,
-    refetchInterval: 5000,
-    staleTime: 3000,
+    // Antes era 5s (gerava enorme pressão sobre Auth+DB). 30s é suficiente
+    // pois useServicosRealtime já invalida instantaneamente em mudanças.
+    refetchInterval: 30000,
+    // Pausar polling quando aba está oculta (economia massiva de requests)
+    refetchIntervalInBackground: false,
+    staleTime: 15000,
   });
 
   // Detectar quando uma nova tarefa é atribuída automaticamente
