@@ -49,7 +49,11 @@ import {
   GripVertical,
   Building2,
   CalendarClock,
+  UserPlus,
+  Loader2,
 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { toast } from "sonner";
 import { useVistoriasMapa, VistoriaMapa } from "@/hooks/useVistoriasMapa";
 import { useVistoriadoresRealtime, VistoriadorLocalizacao } from "@/hooks/useVistoriadoresRealtime";
@@ -57,7 +61,7 @@ import { TIPO_VISTORIA_LABELS } from "@/types/servicos-rota";
 import { createColoredMarkerSvg, svgToDataUrl, createVistoriadorMarkerSvg, COR_VISTORIADOR } from "@/lib/rota-colors";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useConfigAtribuicaoManual, useAtribuirServicoManual } from "@/hooks/useAtribuicaoManual";
+import { useConfigAtribuicaoManual, useAtribuirServicoManual, useVistoriadoresAtivos } from "@/hooks/useAtribuicaoManual";
 import { useDesatribuirServico } from "@/hooks/useDesatribuirServico";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useEnviarConfirmacaoWhatsApp } from "@/hooks/useEnviarConfirmacaoWhatsApp";
@@ -659,6 +663,13 @@ export function MapaVistoriasContent() {
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); selecionarVistoria(v); }}>
                         <Locate className="h-4 w-4" />
                       </Button>
+                    )}
+                    {!!atribuicaoManualAtiva && !isRealizada && !v.vistoriador_id && !!v.servico_id_unificado && (
+                      <AtribuirTecnicoPopover
+                        servicoId={v.servico_id_unificado}
+                        alocacoesHoje={alocacoesHoje}
+                        atribuirMutation={atribuirMutation}
+                      />
                     )}
                     {canSendConfirmation && (
                       <Button
@@ -1444,5 +1455,115 @@ export function MapaVistoriasContent() {
         </Card>
       </div>
     </>
+  );
+}
+
+interface AtribuirTecnicoPopoverProps {
+  servicoId: string;
+  alocacoesHoje: Record<string, any>;
+  atribuirMutation: ReturnType<typeof useAtribuirServicoManual>;
+}
+
+function AtribuirTecnicoPopover({ servicoId, alocacoesHoje, atribuirMutation }: AtribuirTecnicoPopoverProps) {
+  const [open, setOpen] = useState(false);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const { data: tecnicos, isLoading } = useVistoriadoresAtivos();
+
+  const handleSelect = (profissionalId: string, nome: string) => {
+    setPendingId(profissionalId);
+    atribuirMutation.mutate(
+      { servicoId, profissionalId, isBase: false },
+      {
+        onSuccess: () => {
+          toast.success(`Serviço atribuído a ${nome}`);
+          setPendingId(null);
+          setOpen(false);
+        },
+        onError: () => {
+          setPendingId(null);
+        },
+      }
+    );
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-8 w-8 text-blue-600 border-blue-300 hover:bg-blue-50"
+          onClick={(e) => e.stopPropagation()}
+          aria-label="Atribuir técnico"
+          title="Atribuir técnico"
+        >
+          <UserPlus className="h-4 w-4" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-72 p-0"
+        align="end"
+        onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        <div className="px-3 py-2 border-b">
+          <p className="text-sm font-semibold">Atribuir a um técnico</p>
+        </div>
+        <Command>
+          <CommandInput placeholder="Buscar técnico..." />
+          <CommandList>
+            {isLoading ? (
+              <div className="py-6 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" /> Carregando...
+              </div>
+            ) : (
+              <>
+                <CommandEmpty>Nenhum técnico ativo encontrado.</CommandEmpty>
+                <CommandGroup>
+                  {(tecnicos || []).map((t: any) => {
+                    const aloc = alocacoesHoje?.[t.id];
+                    const tipoAloc = aloc?.tipo_alocacao as 'rota' | 'base' | undefined;
+                    const isPending = pendingId === t.id;
+                    const isBusy = atribuirMutation.isPending;
+                    const iniciais = (t.nome || '?')
+                      .split(' ')
+                      .map((n: string) => n[0])
+                      .filter(Boolean)
+                      .slice(0, 2)
+                      .join('')
+                      .toUpperCase();
+                    return (
+                      <CommandItem
+                        key={t.id}
+                        value={t.nome || t.id}
+                        disabled={isBusy}
+                        onSelect={() => handleSelect(t.id, t.nome || 'Técnico')}
+                        className="flex items-center gap-2"
+                      >
+                        <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-xs font-semibold flex-shrink-0 overflow-hidden">
+                          {t.avatar_url ? (
+                            <img src={t.avatar_url} alt={t.nome} className="h-full w-full object-cover" />
+                          ) : (
+                            iniciais
+                          )}
+                        </div>
+                        <span className="flex-1 truncate text-sm">{t.nome}</span>
+                        {tipoAloc === 'base' && (
+                          <Badge variant="outline" className="text-[10px] h-4 bg-amber-50 text-amber-700 border-amber-200">Base</Badge>
+                        )}
+                        {tipoAloc === 'rota' && (
+                          <Badge variant="outline" className="text-[10px] h-4 bg-blue-50 text-blue-700 border-blue-200">Rota</Badge>
+                        )}
+                        {isPending && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              </>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
