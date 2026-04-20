@@ -1,50 +1,57 @@
 
 
-## Erro ao gerar contrato — causa raiz identificada
+## Adicionar Dados do Associado + Galerias de Fotos ao Drawer de Instalação
 
-### Diagnóstico
-Edge Function `contrato-gerar` falha no INSERT em `public.contratos` com:
-```
-22001 — value too long for type character varying(100)
-```
-A cotação `COT-20260420-131917085-582` (Cleber / Chevrolet Montana) tem **`cliente_complemento` com 121 caracteres** ("Casa Referencia: Entrar na rua do bar floresta próxima a ponte Cachoeira Grande, virar na próxima à direita, final da rua"), enquanto a coluna `contratos.cliente_complemento` é `VARCHAR(100)`.
+### Objetivo
+Estender `InstalacaoDetailDrawer.tsx` com 3 novos blocos no final do conteúdo (antes das ações de status), sem unificar com a tela de associado e sem tocar em outros arquivos.
 
-Outros campos VARCHAR(100) na mesma tabela com risco de estourar em outras cotações: `cliente_bairro`, `cliente_cidade`, `cliente_complemento`, `cliente_profissao`, `veiculo_marca`, `veiculo_modelo`, `veiculo_financeira`. Em `cotacoes`, vários desses campos são `text` (sem limite) — o limite mais curto na tabela `contratos` é o gargalo.
+### Layout final do drawer
 
-### Solução
-
-**1. Migration — relaxar limites em `contratos`** (única forma definitiva, evita perder dado de endereço inserido pelo cliente):
-
-```sql
-ALTER TABLE public.contratos
-  ALTER COLUMN cliente_complemento  TYPE varchar(255),
-  ALTER COLUMN cliente_bairro       TYPE varchar(150),
-  ALTER COLUMN cliente_cidade       TYPE varchar(150),
-  ALTER COLUMN cliente_profissao    TYPE varchar(150),
-  ALTER COLUMN veiculo_marca        TYPE varchar(150),
-  ALTER COLUMN veiculo_modelo       TYPE varchar(255),
-  ALTER COLUMN veiculo_financeira   TYPE varchar(150);
+```text
+Detalhes da Instalação                              [Status] ×
+├─ Agendamento / Veículo / Endereço / Prestador …   (já existe)
+├─ ▼ Dados do Associado                             ← NOVO
+│   ├─ Identificação (nome, CPF, RG, nascimento, estado civil, profissão)
+│   ├─ Contato (telefone, telefone 2, e-mail)
+│   ├─ Endereço residencial
+│   ├─ Status + data de cadastro + plano + mensalidade
+│   └─ CNH (quando houver)
+├─ ▼ Galeria de Autovistoria                        ← NOVO (só se ≥1 foto)
+│   └─ Grid de thumbnails agrupadas por categoria
+├─ ▼ Galeria do Instalador                          ← NOVO (só se ≥1 foto)
+│   ├─ Grid de thumbnails (exterior / identificação / interior)
+│   └─ Vídeo 360 (quando houver)
+└─ Ações de status                                  (já existe)
 ```
 
-Sem perda de dado, sem reescrita de tabela pesada (PostgreSQL faz `ALTER TYPE varchar(N)→varchar(M>N)` apenas validando metadado).
+### Implementação técnica
 
-**2. Defesa em profundidade — sanitizar no edge function** `supabase/functions/contrato-gerar/index.ts` (~linha 803). Antes do INSERT, truncar com segurança qualquer campo string preservando o que couber, p. ex.:
+**Arquivo único alterado:** `src/components/instalacoes/InstalacaoDetailDrawer.tsx`
 
-```ts
-const cap = (v: string | null | undefined, n: number) =>
-  v == null ? v : (v.length > n ? v.slice(0, n) : v);
-```
-e aplicar em `cliente_complemento`, `cliente_bairro`, `cliente_cidade`, `cliente_profissao`, `veiculo_marca`, `veiculo_modelo` usando os novos limites. Garante que cotações antigas/futuras nunca quebrem mesmo se o cliente colar texto enorme.
+1. **Query do associado** (`useQuery` em `associados`):
+   campos `nome, cpf_cnpj, rg, data_nascimento, estado_civil, profissao, nacionalidade, telefone, telefone_secundario, email, endereco, numero, complemento, bairro, cidade, estado, cep, status, created_at, cnh_numero, cnh_categoria, cnh_validade`.
 
-**3. Reprocessar a cotação travada do Cleber**
-Após deploy, o usuário clica em "Tentar Novamente" — o fluxo é idempotente (já tem checagem de contrato existente nas linhas 224-235). Não precisa intervenção manual no banco.
+2. **Query do plano vigente** (`useQuery` em `contratos → planos`):
+   filtrar por `associado_id + veiculo_id` da instalação. Mesma chamada já retorna `contratos.cotacao_id` para alimentar a galeria de autovistoria.
+   Select: `cotacao_id, data_adesao, planos ( nome, valor_mensalidade )`.
 
-### Arquivos alterados
-- `supabase/migrations/<timestamp>_aumentar_limites_varchar_contratos.sql` (novo)
-- `supabase/functions/contrato-gerar/index.ts` — adicionar helper `cap()` e envolver os 7 campos no objeto do INSERT (linhas ~830-866).
+3. **Hook de fotos** — reaproveitar `useFotosVistoriaUnificada({ contratoId: instalacao.contrato_id, cotacaoId })` de `src/hooks/useFotosAutovistoria.ts`. Retorna `fotosInstalador`, `fotosAutovistoria`, `video360Url`. Agrupar com `agruparFotosPorCategoria()` e formatar labels com `formatarTipoFoto()`.
 
-### Validação
-1. Abrir o link público da cotação `COT-20260420-131917085-582` → clicar **Tentar Novamente** na etapa Contrato → contrato gerado com sucesso, segue para Autentique.
-2. Conferir nos logs `contrato-gerar` ausência do erro `22001`.
-3. Verificar no banco que `contratos.cliente_complemento` foi gravado com os 121 caracteres completos.
+4. **Galerias** — grid responsivo `grid-cols-3 sm:grid-cols-4 md:grid-cols-6`, thumbnails `aspect-square object-cover`, separador visual por categoria. Vídeo 360 renderizado inline com tag `<video controls>` no topo da galeria do instalador.
+
+5. **Visualizador** — estado local `{ visualizadorAberto, fotoIndex, fotosAtivas }`. Clicar numa thumbnail seta `fotosAtivas` (lista mapeada para `{ url, label, tipo }`) e abre o `VisualizadorFoto` já existente em `src/components/analise/VisualizadorFoto.tsx`.
+
+6. **Estado vazio gracioso** — cada um dos 2 cards de galeria some quando o array correspondente é vazio. Card "Dados do Associado" sempre aparece (com loader enquanto carrega). Subcard CNH some se `cnh_numero` for nulo.
+
+### O que NÃO muda
+Sem migração, sem novo hook, sem alteração em RLS/schema/rotas/buckets, sem mudanças no `VisualizadorFoto`. RLS já cobre staff em todas as tabelas envolvidas.
+
+### Validação pós-deploy
+1. `/monitoramento/instalacoes` → abrir instalação concluída com fotos do instalador → ver "Dados do Associado" + "Galeria do Instalador" + vídeo 360 (quando houver).
+2. Clicar em thumbnail → `VisualizadorFoto` abre com navegação, zoom e rotação.
+3. Instalação cujo associado fez autovistoria → aparece também "Galeria de Autovistoria".
+4. Instalação agendada sem fotos → só "Dados do Associado" aparece; cards de galeria ocultos.
+5. Associado sem CNH → subcard de CNH some.
+6. Mobile 400px → grids empilham para 3 colunas, modal continua navegável.
+7. Perfil `analista_cadastro` → vê tudo.
 
