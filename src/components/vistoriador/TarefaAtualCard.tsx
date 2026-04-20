@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ImprevistoBotao } from './ImprevistoBotao';
+import { horaLiberacaoTarefa, PERIODO_LABEL } from '@/lib/periodo-utils';
 import { SlaIndicador } from '@/components/ui/SlaIndicador';
 import { ModalRecusaTarefa } from './ModalRecusaTarefa';
 import { supabase } from '@/integrations/supabase/client';
@@ -89,38 +90,32 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
     return () => clearInterval(interval);
   }, []);
 
-  // Verificar se pode iniciar rota baseado no horário agendado
+  // Hora de liberação efetiva (início do período, ou hora_agendada como fallback)
+  const horaLiberacao = useMemo(
+    () => horaLiberacaoTarefa(tarefa as any),
+    [tarefa.periodo, tarefa.hora_agendada, tarefa.permite_encaixe]
+  );
+
+  // Verificar se pode iniciar rota baseado no horário de liberação (período)
   const podeIniciarPorHorario = useMemo(() => {
-    // Se não é hoje, pode iniciar (tarefas futuras atribuídas manualmente)
     const hoje = agora.toISOString().split('T')[0];
     if (tarefa.data_agendada !== hoje) return true;
-    
-    // Se é encaixe, pode iniciar a qualquer momento
     if (tarefa.permite_encaixe) return true;
-    
-    // Se não tem hora específica, pode iniciar
-    if (!tarefa.hora_agendada) return true;
-    
-    // Verificar se hora atual >= hora agendada
-    const horaAtual = agora.toTimeString().slice(0, 5); // "HH:MM"
-    const horaAgendada = tarefa.hora_agendada.slice(0, 5);
-    return horaAtual >= horaAgendada;
-  }, [agora, tarefa.data_agendada, tarefa.hora_agendada, tarefa.permite_encaixe]);
+    if (!horaLiberacao) return true;
+    const horaAtual = agora.toTimeString().slice(0, 5);
+    return horaAtual >= horaLiberacao;
+  }, [agora, tarefa.data_agendada, tarefa.permite_encaixe, horaLiberacao]);
 
   // Calcular tempo restante para habilitar
   const tempoRestante = useMemo(() => {
-    if (podeIniciarPorHorario || !tarefa.hora_agendada) return null;
-    
-    const [h, m] = tarefa.hora_agendada.split(':').map(Number);
-    const horaAgendada = new Date(agora);
-    horaAgendada.setHours(h, m, 0, 0);
-    
-    const diff = horaAgendada.getTime() - agora.getTime();
+    if (podeIniciarPorHorario || !horaLiberacao) return null;
+    const [h, m] = horaLiberacao.split(':').map(Number);
+    const ref = new Date(agora);
+    ref.setHours(h, m, 0, 0);
+    const diff = ref.getTime() - agora.getTime();
     if (diff <= 0) return null;
-    
-    const minutos = Math.ceil(diff / 60000);
-    return minutos;
-  }, [agora, tarefa.hora_agendada, podeIniciarPorHorario]);
+    return Math.ceil(diff / 60000);
+  }, [agora, horaLiberacao, podeIniciarPorHorario]);
 
   const enderecoCompleto = [
     tarefa.endereco.logradouro,
@@ -552,14 +547,19 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
                 </div>
                 
                 {/* Feedback visual quando bloqueado por horário */}
-                {!podeIniciarPorHorario && tarefa.hora_agendada && (
+                {!podeIniciarPorHorario && horaLiberacao && (
                   <div className="flex items-center justify-center gap-2 text-sm text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-md py-2 px-3">
                     <Timer className="h-4 w-4" />
                     <span>
-                      {tempoRestante && tempoRestante > 60 
-                        ? `Disponível em ${Math.floor(tempoRestante / 60)}h ${tempoRestante % 60}min (${tarefa.hora_agendada.slice(0, 5)})`
-                        : `Disponível em ${tempoRestante} min (${tarefa.hora_agendada.slice(0, 5)})`
-                      }
+                      {(() => {
+                        const periodoLabel = tarefa.periodo && PERIODO_LABEL[tarefa.periodo as 'manha'|'tarde'|'noite']
+                          ? ` — período da ${PERIODO_LABEL[tarefa.periodo as 'manha'|'tarde'|'noite']} começa às ${horaLiberacao}`
+                          : ` (${horaLiberacao})`;
+                        const tempo = tempoRestante && tempoRestante > 60
+                          ? `${Math.floor(tempoRestante / 60)}h ${tempoRestante % 60}min`
+                          : `${tempoRestante} min`;
+                        return `Disponível em ${tempo}${periodoLabel}`;
+                      })()}
                     </span>
                   </div>
                 )}

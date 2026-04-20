@@ -207,7 +207,7 @@ export function useIniciarRota() {
       // e buscar dados para validação de horário
       const { data: servico, error: fetchError } = await supabase
         .from('servicos')
-        .select('profissional_id, data_agendada, hora_agendada, permite_encaixe')
+        .select('profissional_id, data_agendada, hora_agendada, periodo, permite_encaixe')
         .eq('id', tarefaId)
         .single();
       
@@ -221,18 +221,20 @@ export function useIniciarRota() {
         throw new Error('Este serviço não está atribuído a você');
       }
 
-      // NOVA VALIDAÇÃO: Verificar se o horário agendado já chegou (exceto encaixes)
+      // NOVA VALIDAÇÃO: Verificar se o início do período já chegou (exceto encaixes)
       const hojeStr = new Date().toISOString().split('T')[0];
-      const horaAtual = new Date().toTimeString().slice(0, 5); // "HH:MM"
-      
+      const horaAtual = new Date().toTimeString().slice(0, 5);
+      const { horaLiberacaoTarefa } = await import('@/lib/periodo-utils');
+      const horaLib = horaLiberacaoTarefa(servico as any);
+
       if (
         servico &&
         !servico.permite_encaixe &&
         servico.data_agendada === hojeStr &&
-        servico.hora_agendada &&
-        horaAtual < servico.hora_agendada
+        horaLib &&
+        horaAtual < horaLib
       ) {
-        throw new Error(`Serviço agendado para ${servico.hora_agendada}. Aguarde o horário.`);
+        throw new Error(`Período disponível a partir das ${horaLib}.`);
       }
 
       // Só então atualizar status
