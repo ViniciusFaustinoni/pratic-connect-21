@@ -1,108 +1,97 @@
 
 
-## Envio do Termo de Filiação via WhatsApp Meta (template + link Autentique)
+## Marcar instalação como "Concluída com ressalvas (sistema legado)" e ativar para 360
 
-### Diagnóstico
+### Contexto
+A instalação do **VENILTON AUGUSTO DA SILVA** (Ford Focus, HAT3D43) foi efetivamente realizada pelo Wallace, mas o registro ficou aberto porque a finalização foi feita no **sistema antigo**. Precisamos:
+1. Destravar o Wallace.
+2. Fechar o serviço como **concluído com ressalvas** (não como cancelado, para preservar o histórico real de execução).
+3. Ativar o veículo para **monitoramento 360** (rastreador ativo, cobertura liberada).
 
-- O contrato (Termo de Afiliação) é gerado pela edge function `autentique-create-by-token`, que salva em `contratos.autentique_url` o link curto da Autentique no formato `https://assina.ae/<token>`.
-- Já existe um **template Meta APROVADO** chamado `assinatura_documento_v2` com:
-  - Corpo: 2 variáveis (`{{1}}` = primeiro nome, `{{2}}` = nome do documento)
-  - Botão URL dinâmico: `https://assina.ae/{{1}}` (1 variável de botão = token Autentique)
-- O envio via WhatsApp foi removido do fluxo (`// WhatsApp template sending removed - link is now shown directly on the public page`). Falta reativar.
-- A infra para enviar templates Meta com botão URL dinâmico já existe em `whatsapp-send-text` (suporta `template_button_params`).
+### Ações (via SQL — uma migração de dados única)
 
-### Solução
+#### 1. Fechar a vistoria/serviço órfão como concluído com ressalvas
+```sql
+-- Serviço
+UPDATE servicos
+   SET status = 'concluida',
+       iniciada_em = COALESCE(iniciada_em, created_at),
+       concluida_em = now(),
+       observacoes = COALESCE(observacoes,'') ||
+         E'\n[20/04 - ajuste manual] Serviço finalizado no sistema antigo. Registrado como CONCLUÍDO COM RESSALVAS para destravar o instalador WALLACE e ativar o veículo no 360.'
+ WHERE id = '1ae32eeb-41a2-4d23-99b7-e825c0e3da2d';
 
-#### 1. Garantir que o template oficial existe e está aprovado
-Já existe `assinatura_documento_v2` APPROVED. Nenhuma criação nova necessária — apenas vamos referenciá-lo.
+-- Vistoria correspondente
+UPDATE vistorias
+   SET status = 'concluida_com_ressalvas',
+       concluida_em = now(),
+       observacoes_finais = 'Instalação finalizada no sistema legado. Registro migrado com ressalvas para destravar fluxo e ativar 360.',
+       updated_at = now()
+ WHERE id = '9a79a9b4-7894-44bf-a23b-efd67ab1c086';
 
-Como o usuário pediu explicitamente para "criar um template Meta no formato de envio de link", vou criar uma variante v3 dedicada **especificamente ao Termo de Filiação** (mais alinhada ao contexto, sem genérico de "documento"), via SQL insert na tabela `whatsapp_meta_templates` com status `DRAFT`. O usuário envia para a Meta pelo botão "Enviar para aprovação" da aba Templates Meta.
-
-```text
-nome:       termo_filiacao_assinatura_v1
-categoria:  UTILITY
-header:     none
-corpo:
-  Olá {{1}}! 📄
-  
-  Seu *Termo de Filiação PRATIC* está pronto para assinatura digital.
-  
-  Veículo: *{{2}}*
-  Contrato: {{3}}
-  
-  Clique no botão abaixo para ler e assinar com validade jurídica.
-  Após a assinatura, sua proteção será ativada.
-rodape:     Equipe PRATIC 🛡️
-botão URL:  "Assinar Termo"  →  https://assina.ae/{{1}}
-variáveis exemplo: { "1": "João", "2": "HB20 - ABC1234", "3": "PRT-2026-001234" }
+-- Agendamento base
+UPDATE agendamentos_base
+   SET status = 'concluido',
+       updated_at = now()
+ WHERE id = '836bcba0-92a5-4193-b608-5426461b2d69';
 ```
 
-Enquanto este novo template não estiver aprovado, o sistema usa automaticamente o já aprovado `assinatura_documento_v2` como fallback (lógica de seleção descrita abaixo).
+#### 2. Ativar veículo para Monitoramento 360
+```sql
+-- Marca rastreador como ativo / instalado
+UPDATE veiculos
+   SET rastreador_ativo = true,
+       rastreador_instalado_em = COALESCE(rastreador_instalado_em, now()),
+       monitoramento_ativo = true,
+       updated_at = now()
+ WHERE placa = 'HAT3D43';
 
-#### 2. Helper compartilhado (reusável)
-Criar `supabase/functions/_shared/enviar-termo-filiacao-whatsapp.ts` com a função:
-
-```ts
-enviarTermoFiliacaoWhatsApp(supabase, {
-  contratoId,
-  telefone,
-  nomeCompleto,
-  veiculoLabel,   // "HB20 - ABC1234"
-  numeroContrato,
-  autentiqueUrl,  // https://assina.ae/<token>
-})
+-- Garante que a cobertura não fique suspensa pela regra das 48h
+-- (limpa qualquer suspensão automática por falta de instalação)
+UPDATE coberturas_associado
+   SET status = 'ativa',
+       suspenso_motivo = NULL,
+       suspenso_em = NULL,
+       updated_at = now()
+ WHERE veiculo_id = (SELECT id FROM veiculos WHERE placa = 'HAT3D43')
+   AND suspenso_motivo ILIKE '%rastreador%';
 ```
 
-Lógica:
-- Extrai o token do final da URL (`url.split('/').pop()`).
-- Procura template aprovado nesta ordem: `termo_filiacao_assinatura_v1` → `assinatura_documento_v2`.
-- Monta `template_params` conforme o template encontrado (3 params no novo, 2 no fallback usando "Termo de Afiliação Nº X").
-- Chama `whatsapp-send-text` com `template_name`, `template_params`, `template_button_params: [token]`, `referencia_tipo: 'termo_filiacao'`, `referencia_id: contratoId`.
-- Faz log estruturado e nunca quebra o fluxo principal (try/catch silencioso).
+#### 3. Registrar no histórico do associado (auditoria)
+```sql
+INSERT INTO associados_historico (associado_id, veiculo_id, tipo, descricao, dados_novos)
+SELECT v.associado_id,
+       v.id,
+       'instalacao_concluida_legado',
+       'Instalação concluída com ressalvas — finalizada no sistema antigo. Veículo ativado para Monitoramento 360 manualmente em 20/04.',
+       jsonb_build_object(
+         'instalador', 'Wallace',
+         'placa', 'HAT3D43',
+         'origem_ajuste', 'sistema_legado',
+         'servico_id', '1ae32eeb-41a2-4d23-99b7-e825c0e3da2d'
+       )
+  FROM veiculos v
+ WHERE v.placa = 'HAT3D43';
+```
 
-#### 3. Reativar o envio em `autentique-create-by-token`
-Após o `update` que grava `autentique_url` no contrato (linha ~788), chamar o helper acima usando o telefone do `lead`/`associado`. Substituir o comentário "WhatsApp template sending removed".
-
-Mesmo tratamento na edge function `autentique-create` (fluxo interno do CRM, quando admin envia manualmente).
-
-#### 4. Botão manual na UI (Reenviar por WhatsApp)
-Em `src/components/contratos/ContratoDetailDrawer.tsx` (gaveta de detalhes do contrato), adicionar botão **"Reenviar link por WhatsApp"** visível quando `autentique_url` existe e contrato está `pendente_assinatura`. Chama uma nova edge function leve `enviar-termo-filiacao-whatsapp` (wrapper público do helper) com `contratoId`.
-
-#### 5. Migration
-Inserir o template novo como DRAFT:
+#### 4. Cancelar a instalação duplicada de amanhã (09:00)
+A instalação `5671f5cd` foi gerada porque o sistema "achou" que a vistoria não tinha terminado. Como o serviço já está concluído de fato, ela vira duplicidade.
 
 ```sql
-INSERT INTO whatsapp_meta_templates
-  (nome, categoria, idioma, status, header_tipo, corpo, rodape, botoes, variaveis_exemplo)
-VALUES (
-  'termo_filiacao_assinatura_v1', 'UTILITY', 'pt_BR', 'DRAFT', 'none',
-  'Olá {{1}}! 📄\n\nSeu *Termo de Filiação PRATIC* está pronto para assinatura digital.\n\nVeículo: *{{2}}*\nContrato: {{3}}\n\nClique no botão abaixo para ler e assinar com validade jurídica.\nApós a assinatura, sua proteção será ativada.',
-  'Equipe PRATIC 🛡️',
-  '[{"tipo":"url","texto":"Assinar Termo","url":"https://assina.ae/{{1}}"}]'::jsonb,
-  '{"1":"João","2":"HB20 - ABC1234","3":"PRT-2026-001234"}'::jsonb
-)
-ON CONFLICT (nome) DO NOTHING;
+UPDATE servicos
+   SET status = 'cancelada',
+       observacoes = COALESCE(observacoes,'') ||
+         E'\n[20/04] Cancelada por duplicidade — instalação já realizada (registrada com ressalvas via sistema legado).'
+ WHERE id = '5671f5cd-...';   -- confirmar UUID completo via consulta antes
 ```
 
-### Arquivos tocados
-
-**Novos**
-- `supabase/migrations/<timestamp>_template_termo_filiacao.sql` — insert do template DRAFT.
-- `supabase/functions/_shared/enviar-termo-filiacao-whatsapp.ts` — helper reusável.
-- `supabase/functions/enviar-termo-filiacao-whatsapp/index.ts` — wrapper público (para botão manual da UI).
-
-**Editados**
-- `supabase/functions/autentique-create-by-token/index.ts` — reativa envio WhatsApp pós-criação do link.
-- `supabase/functions/autentique-create/index.ts` — idem para o fluxo interno.
-- `src/components/contratos/ContratoDetailDrawer.tsx` — botão "Reenviar por WhatsApp" (com toast de sucesso/erro).
-- `supabase/config.toml` — registrar a nova edge function (verify_jwt = false para uso público com auth do usuário).
+### Nada de mudança em código front
+Apenas dados. As telas de Serviços, Mapa de Equipe e Monitoramento 360 vão refletir automaticamente.
 
 ### Validação
-
-1. Aba **Configurações → WhatsApp → Templates Meta**: novo template `termo_filiacao_assinatura_v1` aparece como DRAFT, com prévia mostrando o botão "Assinar Termo".
-2. Clicar em "Enviar para aprovação" → status muda para PENDING (Meta vai aprovar/rejeitar).
-3. Concluir um pagamento de adesão real (ou usar contrato do ALEX) → fluxo público gera o `autentique_url` → cliente recebe no WhatsApp **imediatamente** uma mensagem com o template `assinatura_documento_v2` (fallback enquanto o novo não está aprovado), botão "Assinar agora" levando ao link Autentique correto.
-4. Em `Vendas → Contratos`, abrir um contrato `pendente_assinatura` → clicar **"Reenviar por WhatsApp"** → toast de sucesso, mensagem chega novamente, registro aparece em `whatsapp_mensagens` com `referencia_tipo='termo_filiacao'` e `referencia_id=<contratoId>`.
-5. Após `termo_filiacao_assinatura_v1` ser aprovado pela Meta, novos envios passam a usar este template automaticamente (sem mudança de código).
-6. Não há regressão: contratos sem WhatsApp cadastrado não quebram o fluxo (helper apenas loga e segue).
+1. Tela do Wallace: a tarefa do VENILTON deixa de aparecer; "Tarefa Atual" zera (ou mostra a próxima legítima).
+2. Em **Monitoramento → Serviços de Campo → Serviços**, filtrar por placa HAT3D43 → aparece como **Concluída com ressalvas**.
+3. Em **Monitoramento 360**, o veículo HAT3D43 do VENILTON aparece como **ativo**, com rastreador instalado e cobertura ativa.
+4. Histórico do associado mostra a entrada `instalacao_concluida_legado`.
+5. Sem nova instalação duplicada agendada para 21/04 09:00.
 
