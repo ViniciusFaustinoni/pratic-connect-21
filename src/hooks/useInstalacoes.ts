@@ -800,25 +800,7 @@ export function useUpdateInstalacaoStatus() {
   });
 }
 
-export function useDeleteInstalacao() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('instalacoes')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
-      queryClient.invalidateQueries({ queryKey: ['instalacoes-metricas'] });
-      toast.success('Instalação removida!');
-    },
-    onError: () => {
-      toast.error('Erro ao remover instalação');
-    },
-  });
-}
+// useDeleteInstalacao foi removido intencionalmente.
+// Regra de integridade: registros de instalação NÃO podem ser excluídos.
+// Apenas o status evolui (cancelada, reagendada, nao_compareceu, concluida, etc.)
+// para preservar todo o histórico do associado para auditoria.
