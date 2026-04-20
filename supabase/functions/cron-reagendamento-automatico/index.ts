@@ -193,6 +193,36 @@ Deno.serve(async (req) => {
           })
           .eq("id", orfao.id);
 
+        // Espelhar liberação nas tabelas de origem (instalacoes / vistorias)
+        const { data: refs } = await supabase
+          .from("servicos")
+          .select("instalacao_origem_id, vistoria_origem_id")
+          .eq("id", orfao.id)
+          .maybeSingle();
+
+        if (refs?.instalacao_origem_id) {
+          await supabase
+            .from("instalacoes")
+            .update({
+              instalador_responsavel_id: null,
+              rota_id: null,
+              status: "agendada",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", refs.instalacao_origem_id);
+        }
+        if (refs?.vistoria_origem_id) {
+          await supabase
+            .from("vistorias")
+            .update({
+              vistoriador_id: null,
+              rota_id: null,
+              status: "agendada",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", refs.vistoria_origem_id);
+        }
+
         await supabase.functions.invoke("enviar-link-reagendamento", {
           body: { servico_id: orfao.id },
         });
