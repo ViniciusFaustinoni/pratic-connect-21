@@ -16,8 +16,8 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Buscar registros com em_servico=true e updated_at mais antigo que 20 minutos
-    const limiteInatividade = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+    // Buscar registros com em_servico=true e updated_at mais antigo que 30 minutos
+    const limiteInatividade = new Date(Date.now() - 30 * 60 * 1000).toISOString();
 
     const { data: inativos, error: fetchError } = await supabase
       .from("vistoriadores_localizacao")
@@ -41,7 +41,45 @@ Deno.serve(async (req) => {
       );
     }
 
-    const ids = inativos.map((i) => i.vistoriador_id);
+    const candidatos = inativos.map((i) => i.vistoriador_id);
+
+    // Salvaguarda: nunca derrubar profissionais com tarefa ATIVA em campo
+    const { data: tarefasAtivas, error: tarefasError } = await supabase
+      .from("servicos")
+      .select("profissional_id")
+      .in("profissional_id", candidatos)
+      .in("status", ["em_rota", "em_andamento"]);
+
+    if (tarefasError) {
+      console.error("Erro ao validar tarefas ativas:", tarefasError);
+    }
+
+    const idsEmCampo = new Set(
+      (tarefasAtivas || [])
+        .map((t) => t.profissional_id)
+        .filter((id): id is string => !!id)
+    );
+
+    const ids = candidatos.filter((id) => !idsEmCampo.has(id));
+
+    if (idsEmCampo.size > 0) {
+      console.log(
+        `Skip: ${idsEmCampo.size} profissional(is) em tarefa ativa preservados:`,
+        Array.from(idsEmCampo)
+      );
+    }
+
+    if (ids.length === 0) {
+      return new Response(
+        JSON.stringify({
+          message: "Todos os candidatos estão em tarefa ativa — nenhum desativado",
+          desativados: 0,
+          preservados: idsEmCampo.size,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     console.log(`Marcando ${ids.length} profissionais como offline:`, ids);
 
     const { error: updateError } = await supabase
@@ -58,7 +96,11 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ message: "OK", desativados: ids.length }),
+      JSON.stringify({
+        message: "OK",
+        desativados: ids.length,
+        preservados: idsEmCampo.size,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

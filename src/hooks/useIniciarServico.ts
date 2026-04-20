@@ -23,8 +23,8 @@ interface GeolocationState {
   error?: string;
 }
 
-// Intervalo de atualização de localização (5 minutos)
-const LOCATION_UPDATE_INTERVAL = 5 * 60 * 1000;
+// Intervalo de atualização de localização (2 minutos)
+const LOCATION_UPDATE_INTERVAL = 2 * 60 * 1000;
 
 // Intervalo de polling para buscar novas tarefas (30 segundos — Realtime é o primário)
 const TASK_POLLING_INTERVAL = 30 * 1000;
@@ -207,7 +207,8 @@ export function useIniciarServico() {
       }
     );
 
-    // Enviar localização periodicamente (a cada 5 minutos)
+    // Enviar localização periodicamente (a cada 2 minutos)
+    // Se GPS falhar, faz heartbeat com última posição conhecida (mantém em_servico=true)
     locationIntervalRef.current = setInterval(async () => {
       try {
         const position = await new Promise<GeolocationPosition>((resolve, reject) => {
@@ -220,7 +221,15 @@ export function useIniciarServico() {
         
         await enviarLocalizacao(position.coords.latitude, position.coords.longitude, true);
       } catch (error) {
-        console.warn('[useIniciarServico] Erro ao atualizar localização periódica:', error);
+        console.warn('[useIniciarServico] GPS falhou no intervalo, tentando heartbeat com última posição:', error);
+        // Heartbeat sem GPS: reusa última lat/lng conhecida apenas para renovar updated_at
+        setGeoState(prev => {
+          if (prev.latitude != null && prev.longitude != null) {
+            enviarLocalizacao(prev.latitude, prev.longitude, true);
+            console.log('[useIniciarServico] Heartbeat enviado sem GPS novo (última posição reusada)');
+          }
+          return prev;
+        });
       }
     }, LOCATION_UPDATE_INTERVAL);
 
@@ -262,6 +271,52 @@ export function useIniciarServico() {
       };
     }
   }, [profile?.id, emServico, iniciarTrackingLocalizacao, pararTrackingLocalizacao]);
+
+  // Forçar heartbeat imediato ao retomar a aba (visibilitychange/focus)
+  // Evita gap após suspensão de aba pelo navegador (mobile em background)
+  useEffect(() => {
+    if (!profile?.id || !emServico) return;
+
+    const forcarHeartbeat = () => {
+      if (!navigator.geolocation) return;
+      console.log('[useIniciarServico] Aba retomada — forçando heartbeat imediato');
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          enviarLocalizacao(pos.coords.latitude, pos.coords.longitude, true);
+          setGeoState(prev => ({
+            ...prev,
+            status: 'granted',
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+          }));
+        },
+        () => {
+          // GPS falhou: heartbeat com última posição conhecida
+          setGeoState(prev => {
+            if (prev.latitude != null && prev.longitude != null) {
+              enviarLocalizacao(prev.latitude, prev.longitude, true);
+              console.log('[useIniciarServico] Heartbeat de retomada sem GPS (última posição reusada)');
+            }
+            return prev;
+          });
+        },
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+      );
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') forcarHeartbeat();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', forcarHeartbeat);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', forcarHeartbeat);
+    };
+  }, [profile?.id, emServico, enviarLocalizacao]);
 
   // Polling automático para buscar novas tarefas quando em serviço sem tarefa
   useEffect(() => {

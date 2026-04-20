@@ -175,7 +175,7 @@ export function useProfissionaisEquipe() {
         
         // Determinar status operacional
         // Determinar status operacional com verificação de freshness
-        const LIMITE_INATIVIDADE_MS = 15 * 60 * 1000; // 15 minutos
+        const LIMITE_INATIVIDADE_MS = 25 * 60 * 1000; // 25 minutos
         let status_operacional: StatusOperacional = 'offline';
         if (localizacao?.em_servico) {
           const updatedAt = new Date(localizacao.updated_at).getTime();
