@@ -49,7 +49,11 @@ import {
   GripVertical,
   Building2,
   CalendarClock,
+  UserPlus,
+  Loader2,
 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { toast } from "sonner";
 import { useVistoriasMapa, VistoriaMapa } from "@/hooks/useVistoriasMapa";
 import { useVistoriadoresRealtime, VistoriadorLocalizacao } from "@/hooks/useVistoriadoresRealtime";
@@ -57,7 +61,7 @@ import { TIPO_VISTORIA_LABELS } from "@/types/servicos-rota";
 import { createColoredMarkerSvg, svgToDataUrl, createVistoriadorMarkerSvg, COR_VISTORIADOR } from "@/lib/rota-colors";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useConfigAtribuicaoManual, useAtribuirServicoManual } from "@/hooks/useAtribuicaoManual";
+import { useConfigAtribuicaoManual, useAtribuirServicoManual, useVistoriadoresAtivos } from "@/hooks/useAtribuicaoManual";
 import { useDesatribuirServico } from "@/hooks/useDesatribuirServico";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useEnviarConfirmacaoWhatsApp } from "@/hooks/useEnviarConfirmacaoWhatsApp";
