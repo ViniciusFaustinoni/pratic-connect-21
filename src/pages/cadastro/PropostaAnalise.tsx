@@ -38,6 +38,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAtivarRastreador } from '@/hooks/useAtivarRastreador';
+import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 import { SolicitarDocumentosDialog } from '@/components/cadastro/SolicitarDocumentosDialog';
 import { ReprovarPropostaDialog } from '@/components/cadastro/ReprovarPropostaDialog';
 import { VisualizadorDocumentoModal } from '@/components/cadastro/VisualizadorDocumentoModal';
@@ -84,6 +85,12 @@ export default function PropostaAnalise() {
     proposta?.vistoria?.modalidade === 'autovistoria' ||
     proposta?.vistoria?.tipo === 'autovistoria'
   ) && !proposta?.instalacao_info && !isVistoriaBase;
+
+  // Tipo de veículo (carro/moto) para personalizar labels do dialog de reenvio
+  const { tipoVeiculo } = useDetectarTipoVeiculo(
+    proposta?.veiculo_marca,
+    proposta?.veiculo_modelo
+  );
 
   // Verificar se pode aprovar
   // NOVO: bloqueia aprovação enquanto vistoria/instalação não foi executada
@@ -471,6 +478,8 @@ export default function PropostaAnalise() {
         onOpenChange={setShowSolicitarDocs}
         onConfirm={handleSolicitarDocumentos}
         loading={solicitarDocsMutation.isPending}
+        isAutovistoria={isAutovistoria}
+        tipoVeiculo={tipoVeiculo}
       />
 
       <ReprovarPropostaDialog

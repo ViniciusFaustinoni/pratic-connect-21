@@ -367,7 +367,7 @@ export function PropostaApprovalStepper({
                     onClick={onSolicitarDocs}
                   >
                     <FileText className="mr-2 h-4 w-4" />
-                    Solicitar Documentos
+                    Solicitar Reenvio
                   </Button>
                   <Button
                     variant="outline"

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -17,13 +17,17 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { FileText, Send, Camera, Gauge, CircleDot, Car, User } from 'lucide-react';
+import { FileText, Send, Camera, Gauge, Car, Video } from 'lucide-react';
 
 interface SolicitarDocumentosDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: (documentos: string[], observacoes: string) => void;
   loading?: boolean;
+  /** Se true, proposta veio de autovistoria de Roubo e Furto (apenas chassi, motor e vídeo 360°) */
+  isAutovistoria?: boolean;
+  /** Tipo de veículo para rótulos adequados. Default: 'carro' */
+  tipoVeiculo?: 'carro' | 'moto';
 }
 
 interface DocumentoItem {
@@ -38,8 +42,11 @@ interface CategoriaDocumentos {
   documentos: DocumentoItem[];
 }
 
-const CATEGORIAS_DOCUMENTOS: CategoriaDocumentos[] = [
-  {
+function buildCategorias(
+  isAutovistoria: boolean,
+  tipoVeiculo: 'carro' | 'moto'
+): CategoriaDocumentos[] {
+  const pessoais: CategoriaDocumentos = {
     id: 'pessoais',
     categoria: 'Documentos Pessoais',
     icon: <FileText className="h-4 w-4" />,
@@ -48,124 +55,106 @@ const CATEGORIAS_DOCUMENTOS: CategoriaDocumentos[] = [
       { id: 'crlv', label: 'CRLV (Documento do Veículo)' },
       { id: 'comprovante_residencia', label: 'Comprovante de Residência' },
     ],
-  },
-  {
-    id: 'externas',
-    categoria: 'Fotos do Veículo - Externas',
-    icon: <Car className="h-4 w-4" />,
-    documentos: [
-      { id: 'selfie_veiculo', label: 'Selfie com o Veículo ao Fundo' },
-      { id: 'frente', label: 'Frente do Veículo' },
-      { id: 'traseira', label: 'Traseira do Veículo' },
-      { id: 'lateral_direita', label: 'Lateral Direita' },
-      { id: 'lateral_esquerda', label: 'Lateral Esquerda' },
-    ],
-  },
-  {
-    id: 'internas',
-    categoria: 'Fotos do Veículo - Internas',
-    icon: <Gauge className="h-4 w-4" />,
-    documentos: [
-      { id: 'odometro', label: 'Odômetro (veículo ligado)' },
-      { id: 'painel', label: 'Painel Completo' },
-      { id: 'chassi', label: 'Número do Chassi' },
-      { id: 'motor', label: 'Motor (capô aberto)' },
-      { id: 'banco_dianteiro', label: 'Banco Dianteiro' },
-      { id: 'banco_traseiro', label: 'Banco Traseiro' },
-    ],
-  },
-  {
-    id: 'pneus',
-    categoria: 'Fotos dos Pneus',
-    icon: <CircleDot className="h-4 w-4" />,
-    documentos: [
-      { id: 'pneu_dianteiro_direito', label: 'Pneu Dianteiro Direito' },
-      { id: 'pneu_dianteiro_esquerdo', label: 'Pneu Dianteiro Esquerdo' },
-      { id: 'pneu_traseiro_direito', label: 'Pneu Traseiro Direito' },
-      { id: 'pneu_traseiro_esquerdo', label: 'Pneu Traseiro Esquerdo' },
-    ],
-  },
-  {
+  };
+
+  const outros: CategoriaDocumentos = {
     id: 'outros',
     categoria: 'Outros',
     icon: <Camera className="h-4 w-4" />,
     documentos: [
-      { id: 'outro', label: 'Outro Documento (especificar nas observações)' },
+      { id: 'outro', label: 'Outro (descrever nas observações)' },
     ],
-  },
-];
+  };
 
-// IDs de todas as fotos de vistoria (para seleção em massa)
-const FOTOS_VISTORIA_IDS = CATEGORIAS_DOCUMENTOS
-  .filter(cat => ['externas', 'internas', 'pneus'].includes(cat.id))
-  .flatMap(cat => cat.documentos.map(doc => doc.id));
+  if (isAutovistoria) {
+    const veiculoLabel = tipoVeiculo === 'moto' ? 'da Moto' : 'do Veículo';
+    return [
+      pessoais,
+      {
+        id: 'autovistoria',
+        categoria: 'Autovistoria — Roubo e Furto',
+        icon: <Video className="h-4 w-4" />,
+        documentos: [
+          { id: 'chassi', label: `Foto do Chassi ${veiculoLabel}` },
+          { id: 'motor', label: `Foto do Motor ${veiculoLabel}` },
+          { id: 'video_360', label: `Vídeo 360° ${veiculoLabel}` },
+        ],
+      },
+      outros,
+    ];
+  }
+
+  // Fluxo de instalação/vistoria presencial (laudo do instalador)
+  return [
+    pessoais,
+    {
+      id: 'fotos_instalador',
+      categoria: 'Fotos Técnicas (Instalador)',
+      icon: <Car className="h-4 w-4" />,
+      documentos: [
+        { id: 'frente', label: 'Frente do Veículo' },
+        { id: 'traseira', label: 'Traseira do Veículo' },
+        { id: 'lateral_direita', label: 'Lateral Direita' },
+        { id: 'lateral_esquerda', label: 'Lateral Esquerda' },
+        { id: 'painel', label: 'Painel Completo' },
+        { id: 'odometro', label: 'Odômetro (veículo ligado)' },
+        { id: 'chassi', label: 'Número do Chassi' },
+        { id: 'motor', label: 'Motor (capô aberto)' },
+      ],
+    },
+    outros,
+  ];
+}
 
 export function SolicitarDocumentosDialog({
   open,
   onOpenChange,
   onConfirm,
   loading,
+  isAutovistoria = false,
+  tipoVeiculo = 'carro',
 }: SolicitarDocumentosDialogProps) {
   const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
   const [observacoes, setObservacoes] = useState('');
-  const [openCategories, setOpenCategories] = useState<string[]>(['pessoais']);
+  const [openCategories, setOpenCategories] = useState<string[]>([
+    'pessoais',
+    isAutovistoria ? 'autovistoria' : 'fotos_instalador',
+  ]);
+
+  const CATEGORIAS = useMemo(
+    () => buildCategorias(isAutovistoria, tipoVeiculo),
+    [isAutovistoria, tipoVeiculo]
+  );
 
   const handleToggleDoc = (docId: string) => {
     setSelectedDocs((prev) =>
-      prev.includes(docId)
-        ? prev.filter((id) => id !== docId)
-        : [...prev, docId]
+      prev.includes(docId) ? prev.filter((id) => id !== docId) : [...prev, docId]
     );
   };
 
-  const handleSelectAllVistoria = () => {
-    setSelectedDocs((prev) => {
-      const newDocs = new Set(prev);
-      FOTOS_VISTORIA_IDS.forEach(id => newDocs.add(id));
-      return Array.from(newDocs);
-    });
-    // Expandir categorias de vistoria
-    setOpenCategories(prev => {
-      const newOpen = new Set(prev);
-      ['externas', 'internas', 'pneus'].forEach(id => newOpen.add(id));
-      return Array.from(newOpen);
-    });
-  };
-
   const handleSelectCategory = (categoriaId: string) => {
-    const categoria = CATEGORIAS_DOCUMENTOS.find(c => c.id === categoriaId);
+    const categoria = CATEGORIAS.find((c) => c.id === categoriaId);
     if (!categoria) return;
-    
-    const categoryDocIds = categoria.documentos.map(d => d.id);
-    const allSelected = categoryDocIds.every(id => selectedDocs.includes(id));
-    
+    const ids = categoria.documentos.map((d) => d.id);
+    const allSelected = ids.every((id) => selectedDocs.includes(id));
     if (allSelected) {
-      // Desmarcar todos da categoria
-      setSelectedDocs(prev => prev.filter(id => !categoryDocIds.includes(id)));
+      setSelectedDocs((prev) => prev.filter((id) => !ids.includes(id)));
     } else {
-      // Marcar todos da categoria
-      setSelectedDocs(prev => {
-        const newDocs = new Set(prev);
-        categoryDocIds.forEach(id => newDocs.add(id));
-        return Array.from(newDocs);
-      });
+      setSelectedDocs((prev) => Array.from(new Set([...prev, ...ids])));
     }
   };
 
-  const handleClearSelection = () => {
-    setSelectedDocs([]);
-  };
+  const handleClearSelection = () => setSelectedDocs([]);
 
   const getSelectedCountForCategory = (categoriaId: string) => {
-    const categoria = CATEGORIAS_DOCUMENTOS.find(c => c.id === categoriaId);
+    const categoria = CATEGORIAS.find((c) => c.id === categoriaId);
     if (!categoria) return 0;
-    return categoria.documentos.filter(d => selectedDocs.includes(d.id)).length;
+    return categoria.documentos.filter((d) => selectedDocs.includes(d.id)).length;
   };
 
   const handleConfirm = () => {
     if (selectedDocs.length === 0) return;
     onConfirm(selectedDocs, observacoes);
-    // Reset form
     setSelectedDocs([]);
     setObservacoes('');
   };
@@ -182,25 +171,14 @@ export function SolicitarDocumentosDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-foreground">
             <FileText className="h-5 w-5 text-warning" />
-            Solicitar Documentos
+            Solicitar Reenvio
           </DialogTitle>
           <DialogDescription>
-            Selecione os documentos ou fotos que precisam ser reenviados pelo associado.
+            Selecione os itens que o associado precisa <strong>reenviar</strong> (documentos, fotos ou vídeo). Ele será notificado via WhatsApp com o link de acompanhamento.
           </DialogDescription>
         </DialogHeader>
 
-        {/* Botões de ação rápida */}
         <div className="flex gap-2 flex-wrap">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleSelectAllVistoria}
-            className="text-xs"
-          >
-            <Camera className="h-3 w-3 mr-1" />
-            Todas Fotos Vistoria
-          </Button>
           <Button
             type="button"
             variant="ghost"
@@ -220,7 +198,7 @@ export function SolicitarDocumentosDialog({
             onValueChange={setOpenCategories}
             className="w-full"
           >
-            {CATEGORIAS_DOCUMENTOS.map((categoria) => {
+            {CATEGORIAS.map((categoria) => {
               const selectedCount = getSelectedCountForCategory(categoria.id);
               const totalCount = categoria.documentos.length;
               const allSelected = selectedCount === totalCount && totalCount > 0;
@@ -237,17 +215,18 @@ export function SolicitarDocumentosDialog({
                       <span className="text-sm font-medium text-foreground">
                         {categoria.categoria}
                       </span>
-                      <span className={`text-xs px-1.5 py-0.5 rounded-full ml-auto mr-2 ${
-                        selectedCount > 0 
-                          ? 'bg-warning/20 text-warning' 
-                          : 'bg-muted text-muted-foreground'
-                      }`}>
+                      <span
+                        className={`text-xs px-1.5 py-0.5 rounded-full ml-auto mr-2 ${
+                          selectedCount > 0
+                            ? 'bg-warning/20 text-warning'
+                            : 'bg-muted text-muted-foreground'
+                        }`}
+                      >
                         {selectedCount}/{totalCount}
                       </span>
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="pb-3">
-                    {/* Botão selecionar todos da categoria */}
                     {totalCount > 1 && (
                       <Button
                         type="button"
@@ -291,7 +270,6 @@ export function SolicitarDocumentosDialog({
             })}
           </Accordion>
 
-          {/* Campo de observações */}
           <div className="space-y-2 mt-4">
             <Label htmlFor="observacoes" className="text-foreground font-medium">
               Observações para o associado (opcional)
@@ -307,11 +285,7 @@ export function SolicitarDocumentosDialog({
         </div>
 
         <DialogFooter className="mt-4">
-          <Button
-            variant="outline"
-            onClick={handleClose}
-            className="border-border"
-          >
+          <Button variant="outline" onClick={handleClose} className="border-border">
             Cancelar
           </Button>
           <Button
@@ -324,7 +298,7 @@ export function SolicitarDocumentosDialog({
             ) : (
               <>
                 <Send className="mr-2 h-4 w-4" />
-                Enviar Solicitação ({selectedDocs.length})
+                Solicitar novo envio ({selectedDocs.length})
               </>
             )}
           </Button>
