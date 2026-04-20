@@ -415,7 +415,7 @@ export function useAtribuirServicoPrestador() {
             .select('id')
             .eq('associado_id', servico.associado_id)
             .eq('veiculo_id', servico.veiculo_id)
-            .in('status', ['agendada', 'em_andamento', 'pendente'])
+            .in('status', ['agendada', 'em_andamento'] as any[])
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle();
@@ -457,7 +457,7 @@ export function useAtribuirServicoPrestador() {
             .select('id')
             .eq('associado_id', servico.associado_id)
             .eq('veiculo_id', servico.veiculo_id)
-            .in('status', ['agendada', 'em_andamento', 'pendente'])
+            .in('status', ['agendada', 'em_andamento'] as any[])
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle();
