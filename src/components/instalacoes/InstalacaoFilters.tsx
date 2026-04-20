@@ -228,28 +228,51 @@ export function InstalacaoFilters({ filters, onFiltersChange }: InstalacaoFilter
             </div>
           </div>
 
-          {/* Instalador */}
-          <div>
-            <label className="text-sm font-medium mb-2 block">Instalador</label>
-            <Select
-              value={filters.instaladorId || ''}
-              onValueChange={(value) => onFiltersChange({ 
-                ...filters, 
-                instaladorId: value || undefined 
-              })}
-            >
-              <SelectTrigger className="w-full md:w-[300px]">
-                <SelectValue placeholder="Todos os instaladores" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">Todos</SelectItem>
-                {instaladores?.map((i) => (
-                  <SelectItem key={i.id} value={i.id}>
-                    {i.nome}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Instalador */}
+            <div>
+              <label className="text-sm font-medium mb-2 block">Instalador</label>
+              <Select
+                value={filters.instaladorId || ''}
+                onValueChange={(value) => onFiltersChange({
+                  ...filters,
+                  instaladorId: value || undefined
+                })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os instaladores" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Todos</SelectItem>
+                  {instaladores?.map((i) => (
+                    <SelectItem key={i.id} value={i.id}>
+                      {i.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Origem */}
+            <div>
+              <label className="text-sm font-medium mb-2 block">Origem</label>
+              <Select
+                value={filters.origem || ''}
+                onValueChange={(value) => onFiltersChange({
+                  ...filters,
+                  origem: (value as 'interno' | 'prestador') || undefined,
+                })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todas as origens" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Todas</SelectItem>
+                  <SelectItem value="interno">Equipe interna</SelectItem>
+                  <SelectItem value="prestador">Prestador externo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
       )}
