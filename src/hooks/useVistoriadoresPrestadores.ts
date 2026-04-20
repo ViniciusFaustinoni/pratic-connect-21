@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+export type PrestadorOrigem = 'vistoriador_prestador' | 'prestador_instalacao';
+
 export interface VistoriadorPrestador {
   id: string;
   nome: string;
@@ -12,9 +14,10 @@ export interface VistoriadorPrestador {
   observacoes: string | null;
   created_at: string;
   updated_at: string;
+  origem?: PrestadorOrigem;
 }
 
-type VistoriadorPrestadorInput = Omit<VistoriadorPrestador, 'id' | 'created_at' | 'updated_at'>;
+type VistoriadorPrestadorInput = Omit<VistoriadorPrestador, 'id' | 'created_at' | 'updated_at' | 'origem'>;
 
 const QUERY_KEY = ['vistoriadores-prestadores'];
 
@@ -24,12 +27,42 @@ export function useVistoriadoresPrestadores() {
   const query = useQuery({
     queryKey: QUERY_KEY,
     queryFn: async (): Promise<VistoriadorPrestador[]> => {
-      const { data, error } = await (supabase as any)
+      // Fonte 1: vistoriadores_prestadores (cadastro dedicado a vistorias)
+      const { data: vp, error: vpErr } = await (supabase as any)
         .from('vistoriadores_prestadores')
         .select('*')
         .order('nome');
-      if (error) throw error;
-      return data ?? [];
+      if (vpErr) throw vpErr;
+
+      // Fonte 2: prestadores_instalacao (cadastro usado em /monitoramento/prestadores-parceiros)
+      const { data: pi, error: piErr } = await (supabase as any)
+        .from('prestadores_instalacao')
+        .select('id, nome, whatsapp, ativo, created_at, updated_at')
+        .order('nome');
+      if (piErr) console.error('[useVistoriadoresPrestadores] prestadores_instalacao:', piErr);
+
+      const fromVp: VistoriadorPrestador[] = (vp ?? []).map((p: any) => ({
+        ...p,
+        origem: 'vistoriador_prestador' as const,
+      }));
+
+      const idsVp = new Set(fromVp.map(p => p.id));
+      const fromPi: VistoriadorPrestador[] = (pi ?? [])
+        .filter((p: any) => !idsVp.has(p.id)) // evita duplicados se houver mesmo id
+        .map((p: any) => ({
+          id: p.id,
+          nome: p.nome,
+          telefone: p.whatsapp ?? null,
+          email: null,
+          cpf_cnpj: null,
+          ativo: !!p.ativo,
+          observacoes: null,
+          created_at: p.created_at,
+          updated_at: p.updated_at,
+          origem: 'prestador_instalacao' as const,
+        }));
+
+      return [...fromVp, ...fromPi].sort((a, b) => a.nome.localeCompare(b.nome));
     },
   });
 
