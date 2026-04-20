@@ -85,6 +85,7 @@ interface VeiculoEncontrado {
   combustivel?: string;
   codigoFipe?: string;
   valorFipe?: number;
+  tipoVeiculoApi?: string;
 }
 
 // PlanoCalculado removido — usa PlanoCotacao do hook diretamente
@@ -383,8 +384,12 @@ export default function CotadorPage() {
   // Hooks Supabase
   const { data: leadsData, isLoading: loadingLeads } = useAllLeads();
   
-  // Detectar tipo de veículo automaticamente
-  const { tipoVeiculo: tipoVeiculoDetectado } = useDetectarTipoVeiculo(marca, modelo);
+  // Detectar tipo de veículo automaticamente (incluindo dica da API de placa)
+  const { tipoVeiculo: tipoVeiculoDetectado } = useDetectarTipoVeiculo(
+    marca,
+    modelo,
+    veiculoEncontrado?.tipoVeiculoApi || null
+  );
 
   // Hook de planos com filtro por uso (aplicativo vs passeio)
   const parametrosPlanos = useMemo(() => ({
@@ -668,6 +673,7 @@ export default function CotadorPage() {
           combustivel: vehicleData.combustivel,
           codigoFipe: fipeData?.codigo,
           valorFipe: fipeData?.valor,
+          tipoVeiculoApi: vehicleData.tipo_de_veiculo,
         });
 
         // Usar valores normalizados para os selects

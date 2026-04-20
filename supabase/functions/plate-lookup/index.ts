@@ -195,7 +195,7 @@ serve(async (req) => {
       renavam: veiculo.renavam || '',
       potencia: veiculo.potencia || '',
       cilindradas: veiculo.cilindradas || '',
-      tipo_veiculo: veiculo.tipo_de_veiculo || '',
+      tipo_de_veiculo: veiculo.tipo_de_veiculo || veiculo.tipo_veiculo || '',
       categoria: veiculo.categoria || '',
       procedencia: veiculo.procedencia || '',
       numero_portas: veiculo.quantidade_passageiro || veiculo.qt_portas || veiculo.quantidade_passageiros || '',
