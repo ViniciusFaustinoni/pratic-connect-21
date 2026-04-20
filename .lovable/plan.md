@@ -1,61 +1,141 @@
 
-## Ajuste — Adicionar Dados do Associado + Galerias de Fotos ao Drawer de Instalação
+## Bloqueio de datas pelo Coordenador de Monitoramento
 
-Mantendo o drawer de **Detalhes da Instalação** como está (sem unificar com a tela de associado), **adicionar** três blocos novos ao final do conteúdo existente:
+Permitir que o Coordenador de Monitoramento (e Diretor/Admin Master) bloqueie dias inteiros no calendário. Em datas bloqueadas nenhum novo agendamento é aceito — nem pelo associado no fluxo público, nem por atribuição manual da equipe. Agendamentos **pré-existentes** na data não são afetados (o coordenador decide manualmente o que fazer com eles, normalmente reagendar).
 
-1. **Dados do Associado** — campos da aba "Associado" de `/cadastro/associados`.
-2. **Galeria de Autovistoria** — fotos enviadas pelo associado (`cotacoes_vistoria_fotos`), quando houver.
-3. **Galeria do Instalador** — fotos da instalação (`vistoria_fotos`) + vídeo 360 quando houver.
+### 1. Banco — nova tabela `datas_bloqueadas`
 
-### Onde ficam os novos blocos
+Migração SQL criando:
 
-Inseridos em `InstalacaoDetailDrawer.tsx`, após as seções existentes (Agendamento, Veículo, Endereço, Prestador, Presença GPS, Recusas, Observações) e **antes** dos botões de Ação de Status.
+```sql
+CREATE TABLE public.datas_bloqueadas (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  data date NOT NULL UNIQUE,
+  motivo text NOT NULL,
+  criado_por uuid REFERENCES public.profiles(id),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
 
+ALTER TABLE public.datas_bloqueadas ENABLE ROW LEVEL SECURITY;
+
+-- Leitura: todos autenticados + anon (fluxo público precisa consultar)
+CREATE POLICY "Public read datas bloqueadas"
+  ON public.datas_bloqueadas FOR SELECT TO anon, authenticated USING (true);
+
+-- Escrita: apenas coordenador, diretor, admin_master, desenvolvedor
+CREATE POLICY "Coord manage datas bloqueadas"
+  ON public.datas_bloqueadas FOR ALL TO authenticated
+  USING (
+    has_role(auth.uid(), 'coordenador_monitoramento'::app_role)
+    OR has_role(auth.uid(), 'diretor'::app_role)
+    OR has_role(auth.uid(), 'admin_master'::app_role)
+    OR has_role(auth.uid(), 'desenvolvedor'::app_role)
+  )
+  WITH CHECK (...mesmas roles);
+
+-- Função helper usada por UI e edge functions
+CREATE OR REPLACE FUNCTION public.data_esta_bloqueada(_data date)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
+  SELECT EXISTS (SELECT 1 FROM public.datas_bloqueadas WHERE data = _data);
+$$;
 ```
-Detalhes da Instalação                              [Status] ×
-├─ Agendamento / Veículo / Endereço / Prestador …   (já existe)
-├─ ▼ Dados do Associado                             ← NOVO
-│   ├─ Identificação (nome, CPF, RG, nascimento, estado civil, profissão)
-│   ├─ Contato (telefone, telefone 2, e-mail)
-│   ├─ Endereço residencial
-│   ├─ Status + data de cadastro + plano + mensalidade
-│   └─ CNH (quando houver)
-├─ ▼ Galeria de Autovistoria                        ← NOVO (quando aplicável)
-│   └─ Grid de thumbnails agrupadas por categoria
-├─ ▼ Galeria do Instalador                          ← NOVO (quando aplicável)
-│   ├─ Grid de thumbnails agrupadas (exterior / identificação / interior)
-│   └─ Vídeo 360 (quando houver)
-└─ Ações de status                                  (já existe)
+
+Trigger `BEFORE INSERT OR UPDATE` em `servicos`, `vistorias` e `agendamentos_base` para rejeitar gravações novas onde `data_agendada` coincide com linha em `datas_bloqueadas` (barreira server-side que vale para qualquer caminho, inclusive edge functions e mutations diretas):
+
+```sql
+CREATE OR REPLACE FUNCTION public.bloquear_agendamento_em_data_bloqueada()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'INSERT' OR NEW.data_agendada IS DISTINCT FROM OLD.data_agendada THEN
+    IF NEW.data_agendada IS NOT NULL
+       AND EXISTS (SELECT 1 FROM public.datas_bloqueadas WHERE data = NEW.data_agendada::date) THEN
+      RAISE EXCEPTION 'DATA_BLOQUEADA: A data % está bloqueada para novos agendamentos.', NEW.data_agendada
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE TRIGGER trg_bloqueio_servicos BEFORE INSERT OR UPDATE ON public.servicos
+  FOR EACH ROW EXECUTE FUNCTION public.bloquear_agendamento_em_data_bloqueada();
+-- mesmo em vistorias e agendamentos_base
 ```
 
-Cada galeria só renderiza se tiver ≥ 1 foto. Clicar em qualquer thumbnail abre o `VisualizadorFoto` (componente já existente em `src/components/analise/VisualizadorFoto.tsx`) com navegação, zoom, rotação e suporte a vídeo.
+### 2. Hook compartilhado `useDatasBloqueadas`
 
-### Implementação
+Novo arquivo `src/hooks/useDatasBloqueadas.ts`:
 
-1. **`InstalacaoDetailDrawer.tsx`** — adicionar:
-   - `useQuery` para `associados` (campos: nome, cpf_cnpj, rg, data_nascimento, estado_civil, profissao, nacionalidade, telefone, telefone_secundario, email, endereco, numero, complemento, bairro, cidade, estado, cep, status, created_at, cnh_numero, cnh_categoria, cnh_validade).
-   - `useQuery` para plano vigente via `contratos` → `planos` (nome do plano, mensalidade, data de adesão) filtrando pelo `associado_id` + `veiculo_id` da instalação.
-   - Hook `useFotosVistoriaUnificada({ contratoId: instalacao.contrato_id, cotacaoId: <quando houver> })` — **já existe** em `src/hooks/useFotosAutovistoria.ts`.
-   - Para descobrir `cotacao_id`: consultar `contratos.cotacao_id` via o próprio `useQuery` de plano (mesma chamada já traz isso).
-   - Renderizar os três blocos com estado vazio gracioso (card some quando não há dado).
-   - Thumbnails em grid responsivo (`grid-cols-3 sm:grid-cols-4 md:grid-cols-6`), `aspect-square`, `object-cover`.
-   - Estado local `visualizadorAberto` + `fotoIndex` + `fotosAtivas` para controlar o `VisualizadorFoto`.
+- `useDatasBloqueadas()` — lista todas as datas bloqueadas (ordenadas).
+- `useIsDataBloqueada(date)` — boolean rápido para validar uma data específica.
+- `useBloquearData()` / `useDesbloquearData()` — mutations com toast e invalidação de queries (`vagas-periodo`, `instalacoes-calendario`, etc.).
+- Usa `publicSupabase` na versão que precisa rodar no fluxo anon, `supabase` na versão autenticada.
 
-2. **Sem mudanças** em hooks compartilhados, RLS, schema, rotas, buckets ou no componente `VisualizadorFoto`.
-3. **RLS**: `associados`, `contratos`, `planos`, `cotacoes_vistoria_fotos` e `vistoria_fotos` já permitem leitura para staff (policy de `vistoria_fotos` foi adicionada na migração anterior).
+### 3. UI — botão no Calendário de Serviços
+
+Em `src/pages/monitoramento/CalendarioInstalacoes.tsx`:
+
+- Cada célula do dia ganha um pequeno botão "🔒" no canto, visível apenas para roles autorizados (`useHasAnyRole(['coordenador_monitoramento', 'diretor', 'admin_master', 'desenvolvedor'])`).
+- Clique abre um `AlertDialog` com:
+  - Campo obrigatório **Motivo** (textarea).
+  - Aviso: "Novos agendamentos serão recusados. Agendamentos existentes nessa data não serão cancelados automaticamente — reagende manualmente se necessário."
+  - Botão **Bloquear data** / **Desbloquear data**.
+- Dias bloqueados ficam com fundo `bg-red-50 dark:bg-red-950/30`, faixa diagonal sutil e badge "Bloqueado — {motivo}".
+- Modal `CalendarioDiaModal` ganha um alerta vermelho no topo quando o dia está bloqueado, e o botão "Agendar nova instalação" fica desabilitado.
+
+### 4. Propagação do bloqueio nos fluxos de agendamento
+
+Todos os componentes que possuem `disabled={isDateDisabled}` passam a consultar `useDatasBloqueadas()` e somam a regra:
+
+- `src/components/associado/AgendarVistoria.tsx`
+- `src/components/associado/AgendamentoInstalacaoContrato.tsx`
+- `src/components/cotacao-publica/AgendamentoVistoria.tsx`
+- `src/components/cotacao-publica/AgendamentoBase.tsx`
+- `src/components/evento/EventoAgendamento.tsx`
+- `src/components/monitoramento/manutencao/AgendarManutencaoModal.tsx`
+
+```ts
+const { data: bloqueadas } = useDatasBloqueadas();
+const setBloqueadas = useMemo(() => new Set(bloqueadas?.map(b => b.data) ?? []), [bloqueadas]);
+
+const isDateDisabled = (date: Date) => {
+  // regras atuais (passado, domingo, etc.)
+  return ... || setBloqueadas.has(format(date, 'yyyy-MM-dd'));
+};
+```
+
+Nas listas que geram "próximas datas disponíveis" (laços `while` que empilham datas úteis) o mesmo `Set` é usado para pular dias bloqueados.
+
+### 5. Edge functions de atribuição/reagendamento
+
+`supabase/functions/atribuir-proxima-tarefa/index.ts` e `cron-reagendamento-automatico/index.ts` ganham checagem via `data_esta_bloqueada(_data)` antes de insert/update, retornando erro amigável. Como o trigger do banco já protege, isso é defesa em profundidade para dar mensagem clara (`"Data bloqueada: {motivo}"` em vez de erro genérico).
+
+### 6. Tratamento de erro no frontend
+
+Helper `src/lib/supabaseErrors.ts` (ou local nos hooks de criação) detecta `DATA_BLOQUEADA:` no `error.message` e exibe toast destrutivo: "Esta data foi bloqueada pelo coordenador. Escolha outra data."
 
 ### Validação pós-deploy
 
-1. `/monitoramento/instalacoes` → abrir detalhes de instalação concluída com fotos de instalador → ver bloco "Dados do Associado" preenchido + "Galeria do Instalador" com thumbnails + vídeo 360 (quando houver).
-2. Clicar em thumbnail → `VisualizadorFoto` abre, navega entre as fotos, zoom e rotação funcionam.
-3. Instalação cujo associado fez autovistoria → aparece também "Galeria de Autovistoria".
-4. Instalação agendada sem fotos ainda → apenas "Dados do Associado" aparece; os dois cards de galeria ficam ocultos.
-5. Associado sem CNH → subcard de CNH some; demais campos continuam.
-6. Mobile 400px → grids empilham para 3 colunas, modal continua navegável.
-7. Perfil `analista_cadastro` → vê tudo (policies já cobrem).
+1. Logar como `admin@teste.com` → `/monitoramento/calendario` → clicar no cadeado de `2026-04-25` → preencher motivo "Feriado regional" → confirmar. Dia fica hachurado em vermelho.
+2. Abrir fluxo público `/cotacao/:token` → tentar escolher `2026-04-25` no calendário → data aparece desabilitada.
+3. Abrir modal "Agendar Manutenção" como coordenador → `2026-04-25` desabilitado.
+4. Tentar `INSERT` direto via SQL com `data_agendada='2026-04-25'` em `servicos` → erro `DATA_BLOQUEADA`.
+5. Desbloquear a data → calendário e formulários voltam ao normal sem reload manual (invalidação de query funciona).
+6. Testar mobile: botão de cadeado acessível via tap, modal responsivo.
+7. Logar como `analista_cadastro` → cadeado **não aparece** no calendário; apenas visualiza o dia bloqueado.
 
-### Arquivo tocado
+### Arquivos tocados
 
-- `src/components/instalacoes/InstalacaoDetailDrawer.tsx` — único arquivo alterado. Adiciona queries de associado/plano, integra `useFotosVistoriaUnificada` e `VisualizadorFoto`, renderiza os três novos blocos.
+- **Migração SQL** (nova) — tabela, RLS, função `data_esta_bloqueada`, trigger aplicado em `servicos`, `vistorias`, `agendamentos_base`.
+- `src/hooks/useDatasBloqueadas.ts` (novo).
+- `src/pages/monitoramento/CalendarioInstalacoes.tsx` — botão cadeado + destaque visual.
+- `src/components/monitoramento/CalendarioDiaModal.tsx` — alerta + desabilitar ações.
+- `src/components/monitoramento/BloquearDataDialog.tsx` (novo) — dialog de motivo.
+- `src/components/associado/AgendarVistoria.tsx`, `AgendamentoInstalacaoContrato.tsx`
+- `src/components/cotacao-publica/AgendamentoVistoria.tsx`, `AgendamentoBase.tsx`
+- `src/components/evento/EventoAgendamento.tsx`
+- `src/components/monitoramento/manutencao/AgendarManutencaoModal.tsx`
+- `supabase/functions/atribuir-proxima-tarefa/index.ts`
+- `supabase/functions/cron-reagendamento-automatico/index.ts`
 
-Sem migração, sem novo hook, sem mudança em outras telas.
+Sem mudança em schema de `servicos`/`vistorias`, sem quebrar fluxos existentes.
