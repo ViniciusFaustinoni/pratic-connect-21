@@ -1,73 +1,87 @@
 
+## Corrigir lista de prestadores na atribuição manual
 
-## Aceitar nova Carteira de Identidade Nacional (CIN) como RG no OCR
+### Diagnóstico
+O problema não é um filtro de “online”. No código atual, os prestadores externos da atribuição manual são buscados em `vistoriadores_prestadores` e filtrados apenas por `ativo`:
 
-### Problema
-O prompt de OCR (`supabase/functions/document-ocr/index.ts`) descreve apenas o RG antigo, exigindo o campo "REGISTRO GERAL" como número principal. A nova **CIN** (Carteira de Identidade Nacional, válida em todo território nacional desde 2022, obrigatória até fev/2032) usa o **CPF como número único de identificação**, traz QR Code, pode ter validade "INDETERMINADA" e nomeia os campos em PT/EN ("Registro Geral - CPF / Personal Number", "Validade / Expiry"). Hoje o modelo pode:
-- Confundir o tipo (detectar como "outro");
-- Falhar ao extrair RG (porque o número do RG/CPF agora é o mesmo);
-- Reprovar por "validade ilegível" quando está escrito INDETERMINADA;
-- Não conseguir validar nome ou CPF esperado.
+- `src/components/monitoramento/AtribuicaoManualTab.tsx`
+- `src/components/mapa/AtribuirPrestadorPopover.tsx`
+- `src/hooks/useVistoriadoresPrestadores.ts`
 
-Caso real: imagem enviada (Marli Silva de Góis – CIN RJ, validade INDETERMINADA, CPF 828.181.187-00).
+Só que a tela de cadastro/gestão de prestadores parceiros usa outra tabela:
 
-### Solução
+- `src/pages/monitoramento/PrestadoresParceiros.tsx` → `prestadores_instalacao`
 
-**1. `supabase/functions/document-ocr/index.ts` – Atualizar o prompt da seção RG**
-Reescrever a seção `### RG` (linhas 137-143) para cobrir os dois formatos:
+Resultado: se os prestadores foram cadastrados em `prestadores_instalacao`, a aba “Prestadores Externos” fica zerada mesmo com prestadores ativos, porque ela consulta a fonte errada. O sistema aparenta “esperar online”, mas na prática está olhando outra tabela.
 
-```
-### RG / CIN (Carteira de Identidade Nacional)
-Aceite TANTO o RG antigo (modelo estadual com REGISTRO GERAL próprio)
-QUANTO a nova CIN (Carteira de Identidade Nacional - válida em todo território nacional, com QR Code).
-Ambos retornam tipo_detectado:"rg".
+### O que ajustar
 
-Campos:
-- nome: campo "NOME / Name" no topo. Não confunda com filiação ou nome do expedidor.
-- cpf: SEMPRE presente.
-  • CIN: aparece como "Registro Geral - CPF / Personal Number" — usa o CPF como número único.
-  • RG antigo: aparece em campo CPF separado (frente ou verso).
-  • Formato XXX.XXX.XXX-XX. Se ilegível, retorne "ilegivel".
-- rg: número do Registro Geral.
-  • RG antigo: número estadual (ex.: 12.345.678-9).
-  • CIN: o CPF é o número único — use o mesmo valor do CPF.
-- data_nascimento: "Data de Nascimento / Date of Birth" (YYYY-MM-DD).
-- data_expedicao: "Data de Emissão / Issue Date" (YYYY-MM-DD) — só na CIN.
-- validade: "Validade / Expiry" (YYYY-MM-DD).
-  • CIN pode trazer "INDETERMINADA" — nesse caso retorne validade:"indeterminada" e considere VÁLIDO.
-- orgao_expedidor: "DETRAN-RJ", "SSP-SP", etc. (se visível).
-- variante: "cin" se for a nova Carteira de Identidade Nacional (tem QR Code grande, layout verde/amarelo, texto bilíngue, "VÁLIDA EM TODO O TERRITÓRIO NACIONAL"); "rg_antigo" caso contrário.
+**1. Unificar a fonte usada pela atribuição manual**
+Criar um hook único para a atribuição manual buscar prestadores externos a partir de ambas as fontes compatíveis:
+- `vistoriadores_prestadores`
+- `prestadores_instalacao`
 
-Regras especiais CIN:
-- NÃO reprove por validade ausente/INDETERMINADA — é o padrão da CIN.
-- NÃO reprove por RG igual ao CPF — é o comportamento esperado da CIN.
-- QR Code presente é indicador forte de CIN.
-```
+Retornar um shape normalizado, por exemplo:
+- `id`
+- `nome`
+- `telefone`
+- `ativo`
+- `origem` (`vistoriador_prestador` | `prestador_instalacao`)
 
-Adicionar `'rg'` continua válido em `tipo_detectado` (já está). Adicionar `data_expedicao`, `orgao_expedidor` e `variante` à lista `dadosFields` do parser de fallback (linha 258).
+Isso evita que a UI dependa de onde o prestador foi cadastrado.
 
-**2. Atualizar label do `tipoEsperado` (linha 397)**
-```ts
-rg: 'RG ou CIN (Carteira de Identidade — antiga ou nova Carteira de Identidade Nacional)',
-```
+**2. Atualizar a aba `AtribuicaoManualTab.tsx`**
+Trocar o uso direto de `useVistoriadoresPrestadores()` por esse hook unificado.
+A seção “Prestadores Externos” deve:
+- mostrar sempre os prestadores ativos, sem qualquer regra de turno/localização
+- exibir contagem correta
+- diferenciar visualmente a origem se necessário
+- manter drag and drop funcionando
 
-**3. `src/components/contratos/UnifiedDocumentUploader.tsx` e `DocumentUploader.tsx`**
-Atualizar labels visíveis:
-- `rg: { label: 'RG / CIN', ... descricao: 'RG antigo ou nova Carteira de Identidade Nacional (CIN)' }`
-- Em `documentosEsperados`: `label: 'CNH, RG ou CIN'`.
+**3. Atualizar `AtribuirPrestadorPopover.tsx`**
+Usar a mesma lista unificada no fluxo por clique (mapa/serviços).
+Ao selecionar um prestador:
+- se vier de `vistoriadores_prestadores`, manter `vistoriador_prestador_id`
+- se vier de `prestadores_instalacao`, enviar `prestador_id`
 
-Nenhuma mudança estrutural — `'rg'` continua sendo o `tipo_detectado` retornado para ambos os formatos.
+Assim o popover passa a listar os prestadores que o usuário já vê no cadastro atual.
 
-**4. `src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx` e `src/components/contratos/ContratoWizard.tsx`**
-A lógica já trata `tipoDocumento === 'cnh' || tipoDocumento === 'rg'` para preencher dados pessoais — funcionará automaticamente para CIN. Sem alterações necessárias além das labels.
+**4. Adaptar `useAtribuirServicoPrestador()`**
+Hoje a mutation assume `prestadorId` como `vistoriador_prestador_id`.
+Ajustar para aceitar também a origem do prestador:
+- `origem: 'vistoriador_prestador' | 'prestador_instalacao'`
 
-**5. `src/utils/syncCnhData.ts` (já normaliza RG)**
-A regex de limpeza já remove sufixos "DETRAN RJ" etc. Validar que `cnh_numero` aceite o formato CIN (CPF puro com pontuação) — sim, é uma string livre, sem alteração.
+Regras:
+- para vistoria: usar apenas `vistoriador_prestador_id` (fluxo público de vistoria já é baseado nisso)
+- para instalação: aceitar ambos, aproveitando a retrocompatibilidade já existente em `gerar-link-prestador`
+
+Se o usuário tentar atribuir uma vistoria a um prestador que só existe em `prestadores_instalacao`, mostrar erro claro orientando cadastrar esse prestador também como vistoriador prestador.
+
+**5. Ajustar os textos da interface**
+Deixar explícito na UI que prestadores externos:
+- não dependem de “online”
+- aparecem por cadastro ativo
+- internos continuam dependendo de turno/localização
+
+Exemplos de microcopy:
+- “Prestadores externos ativos”
+- “Disponíveis por cadastro, não por status online”
+
+### Arquivos previstos
+- `src/hooks/useVistoriadoresPrestadores.ts` ou novo hook unificado para atribuição
+- `src/components/monitoramento/AtribuicaoManualTab.tsx`
+- `src/components/mapa/AtribuirPrestadorPopover.tsx`
+- `src/hooks/useAtribuicaoManual.ts`
+
+### Resultado esperado
+- A seção “Prestadores Externos” deixa de ficar vazia quando existem prestadores ativos cadastrados na base usada hoje pelo monitoramento.
+- Prestadores aparecem sempre que estiverem ativos, sem depender de online.
+- Drag and drop e atribuição por clique continuam funcionando.
+- O botão “Copiar Link do Prestador” continua sendo exibido após a atribuição.
 
 ### Validação
-1. Submeter foto da CIN da Marli (validade INDETERMINADA) no link público de envio de documentos → deve detectar `tipo_detectado:"rg"`, `variante:"cin"`, extrair nome, CPF, e marcar como **válido** (não reprovar por validade).
-2. Submeter RG antigo padrão SSP → continua sendo detectado como `rg` com número de registro estadual e CPF separado.
-3. No fluxo público de cotação, ao subir CIN, os campos nome e CPF devem ser auto-preenchidos como já acontece com CNH/RG.
-4. Cadastro/aprovação: card mostra "RG / CIN" ✅ aprovado quando OCR retorna sugestão `aprovar`.
-5. Garantir que validações de "documento vencido" não disparem para CIN com validade `indeterminada`.
-
+1. Com prestadores ativos apenas em `prestadores_instalacao`, abrir `/monitoramento/vistorias-instalacoes-mon` → eles devem aparecer na seção “Prestadores Externos”.
+2. No mapa e no painel de serviços, clicar numa tarefa → o popover deve listar esses prestadores.
+3. Atribuir instalação a prestador externo → gerar link e mostrar “Copiar Link”.
+4. Confirmar que técnicos internos continuam exigindo online/turno, mas prestadores não.
+5. Tentar atribuir vistoria a prestador vindo apenas da tabela legada → sistema deve orientar corretamente se esse tipo precisar de cadastro também em `vistoriadores_prestadores`.
