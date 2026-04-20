@@ -194,6 +194,24 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
     window.open(url, '_blank');
   };
 
+  const [reenviandoTemplate, setReenviandoTemplate] = useState(false);
+  const handleReenviarTemplateWhatsApp = async () => {
+    if (!contrato?.id) return;
+    setReenviandoTemplate(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('enviar-termo-filiacao-whatsapp', {
+        body: { contratoId: contrato.id },
+      });
+      if (error) throw error;
+      if (data?.success === false) throw new Error(data.error || 'Falha ao enviar');
+      toast.success(`Link enviado via WhatsApp${data?.template_usado ? ` (${data.template_usado})` : ''}`);
+    } catch (err: any) {
+      toast.error(`Erro ao enviar: ${err?.message || 'desconhecido'}`);
+    } finally {
+      setReenviandoTemplate(false);
+    }
+  };
+
   // Handlers para link do associado
   const handleGerarLink = async () => {
     if (!contrato) return;
@@ -540,6 +558,21 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
                                 WhatsApp
                               </Button>
                             </div>
+
+                            <Button
+                              variant="default"
+                              size="sm"
+                              className="w-full"
+                              onClick={handleReenviarTemplateWhatsApp}
+                              disabled={reenviandoTemplate || !contrato.autentique_url}
+                              title="Envia template Meta oficial com botão de assinatura"
+                            >
+                              {reenviandoTemplate ? (
+                                <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Send className="mr-2 h-3.5 w-3.5" />
+                              )}
+                              Reenviar link por WhatsApp (template)
 
                             {/* Botão de Sincronização Manual */}
                             <Button 
