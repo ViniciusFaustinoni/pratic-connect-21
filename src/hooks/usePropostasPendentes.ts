@@ -51,6 +51,15 @@ export interface DocumentoSolicitadoEnviado {
   } | null;
 }
 
+export interface DocumentoSolicitadoPendente {
+  id: string;
+  tipo_documento: string;
+  descricao: string | null;
+  observacao_solicitacao: string | null;
+  solicitado_em: string | null;
+  created_at: string | null;
+}
+
 // Informações da instalação e rastreador
 export interface InstalacaoInfo {
   id: string;
@@ -121,6 +130,7 @@ export interface PropostaPendente {
   associado_status: string | null;
   vistoria: VistoriaInfo | null;
   documentos_solicitados_enviados: DocumentoSolicitadoEnviado[];
+  documentos_solicitados_pendentes: DocumentoSolicitadoPendente[];
   instalacao_info: InstalacaoInfo | null; // Dados da instalação concluída
   instalacao_agendada: InstalacaoAgendadaInfo | null; // Dados do agendamento (pré-instalação)
   vistoria_base_info: VistoriaBaseInfo | null; // Dados da vistoria na base
