@@ -1,68 +1,61 @@
 
+## Ajuste — Adicionar Dados do Associado + Galerias de Fotos ao Drawer de Instalação
 
-## Diagnóstico — Por que staff não vê fotos da vistoria do instalador
+Mantendo o drawer de **Detalhes da Instalação** como está (sem unificar com a tela de associado), **adicionar** três blocos novos ao final do conteúdo existente:
 
-### Causa raiz (confirmada em banco)
+1. **Dados do Associado** — campos da aba "Associado" de `/cadastro/associados`.
+2. **Galeria de Autovistoria** — fotos enviadas pelo associado (`cotacoes_vistoria_fotos`), quando houver.
+3. **Galeria do Instalador** — fotos da instalação (`vistoria_fotos`) + vídeo 360 quando houver.
 
-A tabela **`vistoria_fotos`** só tem policies de SELECT para:
-- **Associado dono** (`get_my_associado_id(auth.uid())`)
-- **Anon via link público de contrato** (`contratos.link_token`)
+### Onde ficam os novos blocos
 
-**Não existe** policy SELECT para staff autenticado (diretor, analista_cadastro, admin_master etc.). Quando o hook `useFotosVistoriaUnificada` faz `SELECT ... FROM vistoria_fotos WHERE vistoria_id = ?` para um funcionário, RLS retorna zero linhas → condição `(vistoriaUnificada?.fotosInstalador?.length || 0) > 0` é falsa → **Card "Galeria do Instalador" nem renderiza**.
+Inseridos em `InstalacaoDetailDrawer.tsx`, após as seções existentes (Agendamento, Veículo, Endereço, Prestador, Presença GPS, Recusas, Observações) e **antes** dos botões de Ação de Status.
 
-Por isso a screenshot mostra apenas **Galeria de Autovistoria** (tabela `cotacoes_vistoria_fotos`, que tem policy `Usuários autenticados acesso total`) e nenhuma Galeria do Instalador.
-
-Comparação das duas tabelas:
-
-| Tabela | Policy staff autenticado | Resultado |
-|---|---|---|
-| `cotacoes_vistoria_fotos` | ✅ "Usuários autenticados acesso total" | Aparece |
-| `vistoria_fotos` | ❌ Nenhuma | **Invisível para staff** |
-
-Obs.: a tabela-pai `vistorias` **já tem** a policy `Staff and own vistoriadores can view vistorias` listando diretor/admin_master/analista_cadastro/coordenador_monitoramento/etc. A policy filha de `vistoria_fotos` foi esquecida quando a tabela foi criada.
-
-Documentos em si (`documentos`) **funcionam** — policy `View documents` cobre `is_funcionario(auth.uid())`. Se o usuário também está sem ver documentos, é outra questão (provavelmente nenhum documento cadastrado para aquele associado específico). A queixa central é fotos.
-
-### Correção
-
-Adicionar **uma policy RLS** em `public.vistoria_fotos` espelhando a policy já existente em `vistorias`:
-
-```sql
-CREATE POLICY "Staff can view vistoria_fotos"
-ON public.vistoria_fotos
-FOR SELECT
-TO authenticated
-USING (
-  has_role(auth.uid(), 'coordenador_monitoramento'::app_role)
-  OR has_role(auth.uid(), 'diretor'::app_role)
-  OR has_role(auth.uid(), 'admin_master'::app_role)
-  OR has_role(auth.uid(), 'desenvolvedor'::app_role)
-  OR has_role(auth.uid(), 'analista_cadastro'::app_role)
-  OR has_role(auth.uid(), 'analista_eventos'::app_role)
-  OR (
-    has_role(auth.uid(), 'instalador_vistoriador'::app_role)
-    AND vistoria_id IN (
-      SELECT v.id FROM public.vistorias v
-      WHERE v.vistoriador_id = get_my_profile_id()
-    )
-  )
-);
+```
+Detalhes da Instalação                              [Status] ×
+├─ Agendamento / Veículo / Endereço / Prestador …   (já existe)
+├─ ▼ Dados do Associado                             ← NOVO
+│   ├─ Identificação (nome, CPF, RG, nascimento, estado civil, profissão)
+│   ├─ Contato (telefone, telefone 2, e-mail)
+│   ├─ Endereço residencial
+│   ├─ Status + data de cadastro + plano + mensalidade
+│   └─ CNH (quando houver)
+├─ ▼ Galeria de Autovistoria                        ← NOVO (quando aplicável)
+│   └─ Grid de thumbnails agrupadas por categoria
+├─ ▼ Galeria do Instalador                          ← NOVO (quando aplicável)
+│   ├─ Grid de thumbnails agrupadas (exterior / identificação / interior)
+│   └─ Vídeo 360 (quando houver)
+└─ Ações de status                                  (já existe)
 ```
 
-A policy existente `Associates can view own inspection photos` continua intacta para o associado dono, e `Public can view inspection photos via contract` continua intacta para o fluxo público de contrato. Sem mudanças em UI, hooks ou buckets de storage (os buckets `vistoria-fotos` e `documentos` já são públicos, então as URLs das imagens abrem sem problema — o bloqueio é puramente na leitura das linhas da tabela).
+Cada galeria só renderiza se tiver ≥ 1 foto. Clicar em qualquer thumbnail abre o `VisualizadorFoto` (componente já existente em `src/components/analise/VisualizadorFoto.tsx`) com navegação, zoom, rotação e suporte a vídeo.
 
-### Validação após deploy
+### Implementação
 
-1. Logar como diretor (`admin@teste.com`) → `/cadastro/associados` → abrir um associado que tenha contrato com instalação concluída (ex.: `associado_id = 1acbb2e9-e170-46d5-aabc-da8c0bd0af05`, contrato `84553445-...`, 6 fotos).
-2. Aba **Documentos** → Card "**Galeria do Instalador**" deve aparecer com as 6 fotos agrupadas (exterior, identificação, interior).
-3. Clicar em uma foto → modal abre com imagem em tamanho grande.
-4. Logar como `analista_cadastro` → mesma tela → mesmas fotos visíveis.
-5. Repetir com um associado que tenha só autovistoria (`cotacoes_vistoria_fotos`) → continua aparecendo apenas "Galeria de Autovistoria" (comportamento correto).
-6. Testar que o fluxo público anon de contrato (`/contrato/:token`) continua vendo as fotos — policy antiga preservada.
+1. **`InstalacaoDetailDrawer.tsx`** — adicionar:
+   - `useQuery` para `associados` (campos: nome, cpf_cnpj, rg, data_nascimento, estado_civil, profissao, nacionalidade, telefone, telefone_secundario, email, endereco, numero, complemento, bairro, cidade, estado, cep, status, created_at, cnh_numero, cnh_categoria, cnh_validade).
+   - `useQuery` para plano vigente via `contratos` → `planos` (nome do plano, mensalidade, data de adesão) filtrando pelo `associado_id` + `veiculo_id` da instalação.
+   - Hook `useFotosVistoriaUnificada({ contratoId: instalacao.contrato_id, cotacaoId: <quando houver> })` — **já existe** em `src/hooks/useFotosAutovistoria.ts`.
+   - Para descobrir `cotacao_id`: consultar `contratos.cotacao_id` via o próprio `useQuery` de plano (mesma chamada já traz isso).
+   - Renderizar os três blocos com estado vazio gracioso (card some quando não há dado).
+   - Thumbnails em grid responsivo (`grid-cols-3 sm:grid-cols-4 md:grid-cols-6`), `aspect-square`, `object-cover`.
+   - Estado local `visualizadorAberto` + `fotoIndex` + `fotosAtivas` para controlar o `VisualizadorFoto`.
+
+2. **Sem mudanças** em hooks compartilhados, RLS, schema, rotas, buckets ou no componente `VisualizadorFoto`.
+3. **RLS**: `associados`, `contratos`, `planos`, `cotacoes_vistoria_fotos` e `vistoria_fotos` já permitem leitura para staff (policy de `vistoria_fotos` foi adicionada na migração anterior).
+
+### Validação pós-deploy
+
+1. `/monitoramento/instalacoes` → abrir detalhes de instalação concluída com fotos de instalador → ver bloco "Dados do Associado" preenchido + "Galeria do Instalador" com thumbnails + vídeo 360 (quando houver).
+2. Clicar em thumbnail → `VisualizadorFoto` abre, navega entre as fotos, zoom e rotação funcionam.
+3. Instalação cujo associado fez autovistoria → aparece também "Galeria de Autovistoria".
+4. Instalação agendada sem fotos ainda → apenas "Dados do Associado" aparece; os dois cards de galeria ficam ocultos.
+5. Associado sem CNH → subcard de CNH some; demais campos continuam.
+6. Mobile 400px → grids empilham para 3 colunas, modal continua navegável.
+7. Perfil `analista_cadastro` → vê tudo (policies já cobrem).
 
 ### Arquivo tocado
 
-- **Nova migração SQL** — adiciona policy `Staff can view vistoria_fotos` em `public.vistoria_fotos`.
+- `src/components/instalacoes/InstalacaoDetailDrawer.tsx` — único arquivo alterado. Adiciona queries de associado/plano, integra `useFotosVistoriaUnificada` e `VisualizadorFoto`, renderiza os três novos blocos.
 
-Sem mudança de frontend, hook, bucket, nem schema. Nenhuma policy existente é alterada ou removida.
-
+Sem migração, sem novo hook, sem mudança em outras telas.
