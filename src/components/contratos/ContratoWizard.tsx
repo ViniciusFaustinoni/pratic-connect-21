@@ -1157,7 +1157,7 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
                   <div className="p-4 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
                     <p className="text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
                       <AlertCircle className="h-4 w-4" />
-                      É necessário enviar pelo menos: documento pessoal (CNH ou RG) e CRLV do veículo.
+                      É necessário enviar pelo menos: documento pessoal (CNH, RG ou CIN) e CRLV do veículo.
                     </p>
                   </div>
                 )}
