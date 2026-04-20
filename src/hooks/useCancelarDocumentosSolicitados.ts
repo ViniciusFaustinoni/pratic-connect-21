@@ -19,15 +19,15 @@ export function useCancelarDocumentosSolicitados() {
     mutationFn: async ({ ids }: CancelarParams) => {
       if (!ids || ids.length === 0) return { count: 0 };
 
-      const { error, count } = await supabase
+      const { data, error } = await supabase
         .from('documentos_solicitados')
         .update({ status: 'cancelado', updated_at: new Date().toISOString() })
         .in('id', ids)
         .eq('status', 'pendente')
-        .select('id', { count: 'exact' });
+        .select('id');
 
       if (error) throw error;
-      return { count: count ?? ids.length };
+      return { count: data?.length ?? ids.length };
     },
     onSuccess: (result, variables) => {
       const qtd = result.count;
