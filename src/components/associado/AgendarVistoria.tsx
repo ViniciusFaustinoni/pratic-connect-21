@@ -8,6 +8,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { isDomingo, getHorariosParaDia } from '@/data/autovistoriaConfig';
 import { useCriarVistoriaAgendada } from '@/hooks/useContratoLink';
+import { useDatasBloqueadasSet } from '@/hooks/useDatasBloqueadas';
 
 interface AgendarVistoriaProps {
   contratoId: string;
@@ -22,12 +23,14 @@ export function AgendarVistoria({ contratoId, associadoId, veiculoId, readOnly, 
   const [dataSelecionada, setDataSelecionada] = useState<Date | undefined>();
   const [horarioSelecionado, setHorarioSelecionado] = useState<string | null>(null);
   const criarVistoria = useCriarVistoriaAgendada();
+  const { set: datasBloqueadasSet } = useDatasBloqueadasSet();
 
-  // Desabilitar datas passadas e domingos (sábados são permitidos)
+  // Desabilitar datas passadas, domingos e datas bloqueadas pelo coordenador
   const isDateDisabled = (date: Date) => {
     const today = startOfDay(new Date());
     const minDate = addDays(today, 1); // Mínimo: amanhã
-    return isBefore(date, minDate) || isDomingo(date); // Só bloqueia domingo
+    if (isBefore(date, minDate) || isDomingo(date)) return true;
+    return datasBloqueadasSet.has(format(date, 'yyyy-MM-dd'));
   };
   
   // Obter horários baseado na data selecionada
