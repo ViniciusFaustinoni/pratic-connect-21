@@ -3,14 +3,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Calendar, Clock, CheckCircle2, Loader2, MapPin, User, Search, Phone, Shield, AlertTriangle } from 'lucide-react';
+import { Calendar, Clock, CheckCircle2, Loader2, MapPin, User, Search, Phone, Shield, AlertTriangle, Sun, Sunset } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { buscarCep } from '@/lib/cep';
 import { Badge } from '@/components/ui/badge';
 import { useAgendarInstalacaoContrato } from '@/hooks/useContratoLink';
-import { isDomingo, getHorariosParaDia } from '@/data/autovistoriaConfig';
+import { isDomingo, PERIODOS_DISPONIVEIS, getPeriodosDisponivelsPorHora, type Periodo } from '@/data/autovistoriaConfig';
+import { useVagasPeriodo } from '@/hooks/useVagasPeriodo';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { useDatasBloqueadasSet } from '@/hooks/useDatasBloqueadas';
 
@@ -37,7 +38,7 @@ interface AgendamentoInstalacaoContratoProps {
 
 export function AgendamentoInstalacaoContrato({ contratoId, enderecoInicial, onConfirmar }: AgendamentoInstalacaoContratoProps) {
   const [dataSelecionada, setDataSelecionada] = useState<Date | null>(null);
-  const [horarioSelecionado, setHorarioSelecionado] = useState<string | null>(null);
+  const [periodoSelecionado, setPeriodoSelecionado] = useState<Periodo | null>(null);
   
   // Estados para endereço
   const [cep, setCep] = useState(enderecoInicial?.cep || '');
@@ -110,15 +111,28 @@ export function AgendamentoInstalacaoContrato({ contratoId, enderecoInicial, onC
       );
       if (!aindaDisponivel) {
         setDataSelecionada(null);
-        setHorarioSelecionado(null);
+        setPeriodoSelecionado(null);
       }
     }
   }, [datasDisponiveis]);
-  
-  // Obter horários baseado na data selecionada
-  const horariosDisponiveis = dataSelecionada 
-    ? getHorariosParaDia(dataSelecionada)
-    : getHorariosParaDia(new Date());
+
+  // Períodos disponíveis (considera hora atual quando hoje)
+  const periodosDisponiveis = useMemo(() => {
+    if (!dataSelecionada) return PERIODOS_DISPONIVEIS;
+    return getPeriodosDisponivelsPorHora(dataSelecionada);
+  }, [dataSelecionada]);
+
+  // Reset período se mudar de data e o período não estiver mais disponível
+  useEffect(() => {
+    if (dataSelecionada && periodoSelecionado) {
+      const ok = periodosDisponiveis.some(p => p.id === periodoSelecionado);
+      if (!ok) setPeriodoSelecionado(null);
+    }
+  }, [dataSelecionada, periodoSelecionado, periodosDisponiveis]);
+
+  // Vagas por período
+  const dataFmt = dataSelecionada ? format(dataSelecionada, 'yyyy-MM-dd') : null;
+  const { data: vagasData, isLoading: isLoadingVagas } = useVagasPeriodo(dataFmt);
   
   const handleCepChange = async (value: string) => {
     const cepLimpo = value.replace(/\D/g, '');
@@ -149,13 +163,13 @@ export function AgendamentoInstalacaoContrato({ contratoId, enderecoInicial, onC
   };
   
   const handleConfirmar = async () => {
-    if (!dataSelecionada || !horarioSelecionado) return;
+    if (!dataSelecionada || !periodoSelecionado) return;
     
     try {
       await agendarMutation.mutateAsync({
         contratoId,
         dataAgendada: format(dataSelecionada, 'yyyy-MM-dd'),
-        horarioAgendado: horarioSelecionado,
+        horarioAgendado: periodoSelecionado,
           endereco: {
             cep: cep.replace(/\D/g, ''),
             logradouro,
@@ -192,7 +206,7 @@ export function AgendamentoInstalacaoContrato({ contratoId, enderecoInicial, onC
   );
   
   const podeConfirmar = dataSelecionada && 
-    horarioSelecionado && 
+    periodoSelecionado && 
     enderecoCompleto && 
     responsavelValido && 
     !agendarMutation.isPending;

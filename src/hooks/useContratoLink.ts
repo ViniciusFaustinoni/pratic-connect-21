@@ -718,12 +718,29 @@ export function useAgendarInstalacaoContrato() {
         console.warn('Erro ao geocodificar endereço:', err);
       }
       
-      // Atualizar contrato com dados de agendamento
+      // Normalizar período (aceita 'manha'/'tarde' ou legado HH:MM)
+      const periodoCanonico = (() => {
+        const v = (horarioAgendado || '').trim().toLowerCase();
+        if (v === 'manha' || v === 'manhã') return 'manha';
+        if (v === 'tarde') return 'tarde';
+        if (v === 'noite') return 'noite';
+        const m = /^(\d{1,2}):/.exec(v);
+        if (m) {
+          const h = parseInt(m[1], 10);
+          if (h < 12) return 'manha';
+          if (h < 18) return 'tarde';
+          return 'noite';
+        }
+        return 'manha';
+      })();
+
+      // Atualizar contrato com dados de agendamento (período, sem hora fixa)
       const { error } = await supabase
         .from('contratos')
         .update({
           vistoria_completa_data_agendada: dataAgendada,
-          vistoria_completa_horario_agendado: horarioAgendado,
+          vistoria_completa_periodo: periodoCanonico,
+          vistoria_completa_horario_agendado: null,
           vistoria_completa_endereco_cep: endereco.cep,
           vistoria_completa_endereco_logradouro: endereco.logradouro,
           vistoria_completa_endereco_numero: endereco.numero,
@@ -741,13 +758,14 @@ export function useAgendarInstalacaoContrato() {
       if (error) throw error;
       
       // Registrar no histórico
+      const periodoLabel = periodoCanonico === 'manha' ? 'Manhã' : periodoCanonico === 'tarde' ? 'Tarde' : 'Noite';
       await supabase.from('contratos_historico').insert({
         contrato_id: contratoId,
         evento: 'instalacao_agendada',
-        descricao: `Instalação agendada para ${dataAgendada} às ${horarioAgendado}`,
+        descricao: `Instalação agendada para ${dataAgendada} — ${periodoLabel}`,
         dados: {
           data: dataAgendada,
-          horario: horarioAgendado,
+          periodo: periodoCanonico,
           endereco: `${endereco.logradouro}, ${endereco.numero} - ${endereco.bairro}`,
         },
       });
