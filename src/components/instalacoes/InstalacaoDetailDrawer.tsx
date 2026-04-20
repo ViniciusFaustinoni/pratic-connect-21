@@ -249,6 +249,7 @@ export function InstalacaoDetailDrawer({
     setVisualizadorAberto(true);
   };
 
+  const handleStatusChange = async (status: Instalacao['status']) => {
     if (!instalacaoId) return;
     
     try {
