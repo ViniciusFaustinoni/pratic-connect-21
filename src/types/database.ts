@@ -684,25 +684,7 @@ export const STATUS_ROTA_LABELS: Record<StatusRota, string> = {
   cancelada: 'Cancelada',
 };
 
-export const STATUS_INSTALACAO_LABELS: Record<StatusInstalacao, string> = {
-  agendada: 'Agendada',
-  em_rota: 'Em Rota',
-  em_andamento: 'Em Andamento',
-  concluida: 'Concluída',
-  reagendada: 'Reagendada',
-  cancelada: 'Cancelada',
-  em_analise: 'Em Análise',
-};
-
-export const STATUS_INSTALACAO_COLORS: Record<StatusInstalacao, string> = {
-  agendada: 'bg-blue-100 text-blue-800',
-  em_rota: 'bg-purple-100 text-purple-800',
-  em_andamento: 'bg-amber-100 text-amber-800',
-  concluida: 'bg-green-100 text-green-800',
-  reagendada: 'bg-orange-100 text-orange-800',
-  cancelada: 'bg-red-100 text-red-800',
-  em_analise: 'bg-amber-100 text-amber-800',
-};
+// STATUS_INSTALACAO_LABELS / STATUS_INSTALACAO_COLORS definidos acima (fonte única)
 
 // Alias for PERIODO_INSTALACAO_LABELS
 export const PERIODO_LABELS = {
