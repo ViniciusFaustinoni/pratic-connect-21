@@ -1,66 +1,78 @@
 
 
-## Causa raiz definitiva
+## Diagnóstico — Causa raiz dos dois problemas
 
-O início automático do almoço acontece em **3 lugares** e nenhum deles checa se o profissional tem tarefa em execução (`em_rota` ou `em_andamento`):
+Após inspeção do banco, das edge functions, dos hooks e dos cron jobs, identifiquei a **mesma causa raiz** para ambos os problemas:
 
-1. **Frontend — `src/hooks/useJornadaTrabalho.ts` linhas 392-402**
-   ```ts
-   if (turno?.status === 'ativo' && !turno.inicio_almoco
-       && tempoReal.minutosTrabalhados >= TEMPO_ATE_ALMOCO_MINUTOS) {
-     iniciarAlmocoMutation.mutate();   // dispara mesmo durante execução
-   }
-   ```
-   No instante em que o relógio cruza 4h, o hook chama a mutation, o turno vira `em_almoco` e o `<AlmocoBloqueioOverlay />` (renderizado em `InstaladorLayout.tsx` linha 124, **fora** das rotas de execução) cobre toda a tela com `fixed inset-0 z-[100]` — incluindo a tela de execução da vistoria, impedindo finalizar.
+### Cadeia do bug
 
-2. **Edge Function — `supabase/functions/atribuir-proxima-tarefa/index.ts` linhas 266-298**
-   Quando o app pede próxima tarefa e o profissional já passou de 4h, força `status='em_almoco'` sem consultar `servicos` em execução.
+1. **App web do técnico** (`useIniciarServico.ts`) envia localização ao banco a cada **5 minutos** (`LOCATION_UPDATE_INTERVAL`).
+2. **App nativo** (`backgroundLocationService.ts`) só envia ao **mover-se 50 metros** — técnico parado em residência/instalação não envia nada.
+3. **Cron `limpar-servico-inativo-cron`** roda a cada **10 minutos** e marca `em_servico = false` para qualquer registro com `updated_at` mais antigo que **20 minutos**.
+4. **Painel "Vistoriadores Ativos"** (`useVistoriadoresAtivos`, `useVistoriadoresRealtime`) filtra por `em_servico = true` → técnico some.
+5. **Painel "Equipe"** (`useEquipe.ts`) marca como `offline` qualquer técnico cujo `updated_at` passou de **15 minutos**, mesmo que `em_servico` ainda seja `true`.
 
-3. **Cron — `supabase/functions/cron-atribuir-tarefas/index.ts` linhas 196-223**
-   Mesma lógica, idem.
+### Evidência no banco (consultado agora)
 
-Resultado prático observado no print: técnico em vistoria passa das 4h, o servidor (ou o próprio frontend) flipa o turno para `em_almoco`, o overlay aparece em cima da tela de execução, e o botão "Concluir vistoria" fica inalcançável.
+Apenas **WALLACE** está com `em_servico = true` (atualizado há 2 min). Todos os demais técnicos que aparecem online no app pessoal (Kleytonn, Raphael, etc.) estão com `em_servico = false` no banco — **derrubados pelo cron**, não por logout.
 
-## Correção
+### Por que o web sozinho não segura
 
-### A. Helper único de checagem (frontend)
-**Novo:** `src/hooks/useTemTarefaEmExecucao.ts` (~25 linhas) — usa `useTarefaAtual` e devolve `true` quando `tarefa.status ∈ {'em_rota','em_andamento'}`. Reutilizável.
+O `setInterval` de 5 min só funciona enquanto a aba está visível e ativa. Quando o navegador suspende a aba (mobile em background, tela bloqueada, outra aba ativa por >5 min), o intervalo congela. Resultado: 20 min depois o cron derruba.
 
-### B. Bloquear início automático no frontend
-**`src/hooks/useJornadaTrabalho.ts`**
-- Importar o helper.
-- No `useEffect` das linhas 392-402, adicionar condição `&& !temTarefaEmExecucao` antes do `iniciarAlmocoMutation.mutate()`.
-- Expor flag `almocoAdiado` (true quando passou de 4h e tem tarefa em execução) para mostrar badge sutil "Almoço aguardando finalização da tarefa atual" no `JornadaStatusBar`.
+---
 
-### C. Bloquear overlay enquanto tarefa estiver ativa
-**`src/components/vistoriador/AlmocoBloqueioOverlay.tsx`**
-- Importar `useTemTarefaEmExecucao`.
-- Mudar o early return: se `emAlmoco && temTarefaEmExecucao` → `return null` (nunca cobre a tela; técnico finaliza normalmente).
-- Como segurança extra, se o turno já estiver `em_almoco` no banco mas houver tarefa em execução, disparar **rollback** automático: chamar `update turnos_profissionais set status='ativo', inicio_almoco=null where id=...` (cobre o caso em que servidor já flipou o turno antes da correção). Isso é consistente porque o tempo de almoço só conta a partir de `inicio_almoco`.
+## Plano de correção
 
-### D. Bloquear no servidor (origem real do bug em produção)
-**`supabase/functions/atribuir-proxima-tarefa/index.ts`** (linhas 266-298)
-- Antes do bloco "Forçar almoço", consultar `servicos` do profissional `in ('em_rota','em_andamento')`. Se houver, **pular** o force-lunch e devolver normalmente (`ja_tem_tarefa`). Sem mudar o turno.
+### 1) Heartbeat resiliente no app do técnico
+Arquivo: `src/hooks/useIniciarServico.ts`
 
-**`supabase/functions/cron-atribuir-tarefas/index.ts`** (linhas 196-223)
-- Mesma checagem antes de forçar `em_almoco`. Se há tarefa em execução, `continue` sem flipar o status.
+- Reduzir `LOCATION_UPDATE_INTERVAL` de **5 min → 2 min**.
+- Adicionar `visibilitychange` listener: ao voltar para a aba, disparar `enviarLocalizacao` imediatamente para evitar gap após suspensão.
+- Adicionar `focus` listener idem.
+- Quando o `getCurrentPosition` falhar mas o técnico estiver `em_servico`, fazer um **upsert apenas do `updated_at`** (heartbeat sem coordenadas) reusando última lat/lng do state — isso mantém `em_servico=true` mesmo sem GPS.
 
-### E. Pós-conclusão da tarefa
-- Não precisa de gatilho novo: assim que a tarefa é concluída, o `useEffect` do `useJornadaTrabalho` reavalia (`temTarefaEmExecucao` vira false) e dispara o almoço naturalmente. O cron também passa a forçar no próximo ciclo.
+### 2) Background nativo com heartbeat por tempo
+Arquivo: `src/services/backgroundLocationService.ts`
 
-## Validação (admin@teste.com → simular técnico)
-1. Abrir tela de execução de vistoria com turno > 4h trabalhadas → overlay **não** aparece, botão "Concluir" funciona.
-2. Concluir a vistoria → em até 30s o overlay aparece (frontend) ou na próxima chamada da edge function (servidor) → almoço inicia.
-3. Console mostra `[useJornadaTrabalho] Almoço adiado — tarefa em execução` em vez de iniciar.
-4. Logs da edge: `[atribuir-proxima-tarefa] Almoço adiado — profissional em tarefa <id>`.
-5. Sem tarefa em execução → comportamento atual preservado (almoço inicia em 4h).
+Hoje o watcher só dispara em movimento. Adicionar timer paralelo (`setInterval` de 2 min) que reusa a última posição conhecida e faz upsert para renovar `updated_at`, resolvendo o caso "técnico parado".
 
-## Arquivos
-- `src/hooks/useTemTarefaEmExecucao.ts` (novo)
-- `src/hooks/useJornadaTrabalho.ts`
-- `src/components/vistoriador/AlmocoBloqueioOverlay.tsx`
-- `supabase/functions/atribuir-proxima-tarefa/index.ts`
-- `supabase/functions/cron-atribuir-tarefas/index.ts`
+### 3) Aumentar tolerância do cron
+Arquivo: `supabase/functions/limpar-servico-inativo/index.ts`
 
-Sem mudança de schema, sem nova dependência.
+- Subir o threshold de **20 → 30 minutos**.
+- Antes de marcar `em_servico=false`, validar se o profissional **não tem tarefa ativa** (`em_rota` ou `em_andamento`) na tabela `servicos`. Se tiver, pular — técnico em campo nunca deve ser "expulso".
+
+### 4) Fallback de exibição no painel monitor
+Arquivos: `src/hooks/useAtribuicaoManual.ts` (`useVistoriadoresAtivos`) e `src/hooks/useVistoriadoresRealtime.ts`
+
+Trocar o filtro estrito `em_servico = true` por uma regra mais robusta:
+- Mostrar quem tem `em_servico = true` **OU** `updated_at >= 30min` **E** possui turno ativo do dia (`turnos_profissionais` sem `fim_turno`).
+
+Isso garante que mesmo se o cron derrubar, o técnico permanece visível enquanto seu turno está aberto.
+
+### 5) Threshold "offline" mais realista
+Arquivo: `src/hooks/useEquipe.ts`
+
+Subir `LIMITE_INATIVIDADE_MS` de **15 → 25 minutos** para alinhar com o novo intervalo de heartbeat e evitar pisca-pisca na tela do coordenador.
+
+---
+
+## Validação após deploy
+
+1. Abrir app do técnico (Kleytonn) → confirmar logs `[useIniciarServico] Localização atualizada` a cada 2 min.
+2. Bloquear tela do celular por 8 min → ao desbloquear, novo upsert imediato (visibilitychange).
+3. Painel `/monitoramento/mapa` aba Equipe → técnico não muda para "offline" durante turno ativo.
+4. Rodar manualmente `limpar-servico-inativo` com técnico ativo em tarefa → log "skip — em tarefa".
+5. Painel "Atribuição Manual" → contar "Vistoriadores Ativos" deve refletir todos com turno aberto, não só os com GPS recente.
+
+## Arquivos tocados
+- `src/hooks/useIniciarServico.ts`
+- `src/services/backgroundLocationService.ts`
+- `src/hooks/useAtribuicaoManual.ts`
+- `src/hooks/useVistoriadoresRealtime.ts`
+- `src/hooks/useEquipe.ts`
+- `supabase/functions/limpar-servico-inativo/index.ts`
+
+Sem mudança de schema. Sem nova dependência.
 
