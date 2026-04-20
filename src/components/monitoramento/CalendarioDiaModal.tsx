@@ -9,12 +9,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
-import { MapPin, Building2, Clock, User, Car, CalendarClock, Loader2, ChevronRight, Map as MapIcon, Wrench } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { MapPin, Building2, Clock, User, Car, CalendarClock, Loader2, ChevronRight, Map as MapIcon, Wrench, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useProfissionaisEquipe } from '@/hooks/useEquipe';
 import { toast } from 'sonner';
 import { STATUS_INSTALACAO_COLORS } from '@/types/monitoramento';
+import { useDatasBloqueadasSet } from '@/hooks/useDatasBloqueadas';
 
 interface CalendarioDiaModalProps {
   open: boolean;
@@ -157,6 +159,11 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
   const parsedData = data ? parseISO(data) : new Date();
   const dataFutura = data ? isAfter(parsedData, startOfDay(new Date())) : false;
   const dataFormatada = data ? format(parsedData, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : '';
+
+  // Bloqueio de data
+  const { set: datasBloqueadasSet, motivosMap } = useDatasBloqueadasSet();
+  const dataBloqueada = data ? datasBloqueadasSet.has(data) : false;
+  const motivoBloqueio = data ? motivosMap.get(data) : undefined;
 
   // --- Queries ---
 
@@ -397,6 +404,19 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
             📅 Tarefas do dia {dataFormatada}
           </DialogTitle>
         </DialogHeader>
+
+        {dataBloqueada && (
+          <Alert variant="destructive" className="mt-2">
+            <Lock className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Data bloqueada pelo coordenador.</strong>{' '}
+              {motivoBloqueio && <span className="block text-sm mt-1">Motivo: {motivoBloqueio}</span>}
+              <span className="block text-sm mt-1">
+                Novos agendamentos não são permitidos nesta data.
+              </span>
+            </AlertDescription>
+          </Alert>
+        )}
 
         {isLoading ? (
           <div className="flex items-center justify-center py-12">

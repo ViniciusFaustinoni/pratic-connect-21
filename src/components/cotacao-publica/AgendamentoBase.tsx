@@ -11,6 +11,7 @@ import { useConfiguracaoBase, useHorariosDisponiveis, useCriarAgendamentoBase } 
 import { useOficina } from '@/hooks/useOficinas';
 import { cn } from '@/lib/utils';
 import { isDomingo, isSabado } from '@/data/autovistoriaConfig';
+import { useDatasBloqueadasSet } from '@/hooks/useDatasBloqueadas';
 
 interface AgendamentoBaseProps {
   cotacaoId: string;
@@ -46,21 +47,24 @@ export function AgendamentoBase({
     oficinaId
   );
   const criarAgendamento = useCriarAgendamentoBase();
+  const { set: datasBloqueadasSet } = useDatasBloqueadasSet();
 
-  // Gerar próximos 7 dias úteis a partir do offset (incluindo sábados)
+  // Gerar próximos 7 dias úteis a partir do offset (pula domingos e datas bloqueadas)
   const diasDisponiveis = useMemo(() => {
     const dias: Date[] = [];
-    let currentDate = addDays(new Date(), weekOffset * 7); // Começa hoje
+    let currentDate = addDays(new Date(), weekOffset * 7);
+    let guard = 0;
     
-    while (dias.length < 7) {
-      if (!isDomingo(currentDate)) { // Só bloqueia domingo
+    while (dias.length < 7 && guard < 60) {
+      if (!isDomingo(currentDate) && !datasBloqueadasSet.has(format(currentDate, 'yyyy-MM-dd'))) {
         dias.push(currentDate);
       }
       currentDate = addDays(currentDate, 1);
+      guard++;
     }
     
     return dias;
-  }, [weekOffset]);
+  }, [weekOffset, datasBloqueadasSet]);
 
   // Gerar slots de horário (considerando horário reduzido no sábado e filtrando passados se for hoje)
   const slotsHorario = useMemo(() => {
