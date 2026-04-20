@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { PlantoesCalendario } from '@/components/equipe/PlantoesCalendario';
-import { Plus, Loader2, Users, Sparkles, CalendarDays } from 'lucide-react';
+import { Plus, Loader2, Users, Sparkles, CalendarDays, Wrench, Headphones } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Breadcrumb,
@@ -14,6 +14,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProfissionalModal, ProfissionalFormData } from '@/components/monitoramento/ProfissionalModal';
 import { RelatorioTarefasModal } from '@/components/monitoramento/RelatorioTarefasModal';
+import { ServicosAtribuidosModal } from '@/components/monitoramento/ServicosAtribuidosModal';
 import { EquipeCard, EquipeFilters, EquipeMetrics } from '@/components/equipe';
 import { useProfissionaisEquipe, useSaveProfissional, useToggleProfissionalStatus, ProfissionalEquipe } from '@/hooks/useEquipe';
 import { toast } from 'sonner';
@@ -30,6 +31,11 @@ export default function Equipe() {
   
   const [relatorioModalOpen, setRelatorioModalOpen] = useState(false);
   const [profissionalRelatorio, setProfissionalRelatorio] = useState<ProfissionalEquipe | null>(null);
+
+  const [servicosModalOpen, setServicosModalOpen] = useState(false);
+  const [servicosModalCtx, setServicosModalCtx] = useState<{ modo: 'profissional' | 'todos_instaladores'; profissional?: ProfissionalEquipe }>({ modo: 'profissional' });
+
+  const [subTab, setSubTab] = useState<'instaladores' | 'administrativo'>('instaladores');
 
   const { data: profissionais, isLoading, error } = useProfissionaisEquipe();
   const { mutate: saveProfissional } = useSaveProfissional();
