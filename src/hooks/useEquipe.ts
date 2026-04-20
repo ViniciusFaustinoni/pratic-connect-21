@@ -236,7 +236,11 @@ export function useProfissionaisEquipe() {
         };
       }) as ProfissionalEquipe[];
     },
-    refetchInterval: 30000, // Atualizar a cada 30 segundos
+    // Reduzido: monitoramento de equipe não precisa de 30s.
+    // 90s + realtime cobre o caso de uso operacional sem gargalo.
+    refetchInterval: 90000,
+    refetchIntervalInBackground: false,
+    staleTime: 60000,
   });
 }
 
