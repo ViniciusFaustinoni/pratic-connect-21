@@ -306,7 +306,17 @@ export function MapaVistoriasContent() {
     horaAtual: string | null;
   } | null>(null);
 
+  // Alterar endereço/tipo state
+  const [alterarState, setAlterarState] = useState<{
+    servicoId: string;
+    placa: string | null;
+    associadoNome: string | null;
+    endereco: { cep?: string | null; logradouro?: string | null; numero?: string | null; complemento?: string | null; bairro?: string | null; cidade?: string | null; uf?: string | null };
+    profissionalId: string | null;
+  } | null>(null);
+
   const podeReagendar = isDiretor || isCoordenadorMonitoramento || isAnalistaMonitoramento || isAdminMaster || isDesenvolvedor;
+  const podeAlterar = podeReagendar;
 
   const vistoriadoresEmServico = useMemo(() => {
     return (vistoriadores || []).filter(
