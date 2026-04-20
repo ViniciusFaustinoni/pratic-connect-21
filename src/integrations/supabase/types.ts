@@ -29591,6 +29591,9 @@ export type Database = {
         | "cancelada"
         | "em_analise"
         | "nao_compareceu"
+        | "atribuida"
+        | "aguardando_prestador"
+        | "no_local"
       status_oficina: "ativo" | "inativo" | "suspenso" | "bloqueado"
       status_ordem_servico:
         | "rascunho"
@@ -30009,6 +30012,9 @@ export const Constants = {
         "cancelada",
         "em_analise",
         "nao_compareceu",
+        "atribuida",
+        "aguardando_prestador",
+        "no_local",
       ],
       status_oficina: ["ativo", "inativo", "suspenso", "bloqueado"],
       status_ordem_servico: [

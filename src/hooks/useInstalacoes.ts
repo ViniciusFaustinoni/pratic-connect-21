@@ -76,21 +76,32 @@ export interface InstalacaoFilters {
   instalador_id?: string;
   search?: string;
   sem_instalador?: boolean;
+  origem?: 'interno' | 'prestador';
 }
 
 export interface InstalacoesMetricas {
+  preExecucao: number;       // agendada + atribuida + aguardando_prestador
+  emCampo: number;           // em_rota + no_local + em_andamento
+  aguardandoAnalise: number; // em_analise
+  concluidasHoje: number;
+  naoCompareceu: number;
+  reagendadas: number;
+  // Compatibilidade retroativa
   agendadas: number;
   emRota: number;
-  concluidasHoje: number;
-  reagendadas: number;
 }
 
 export interface ContagemInstalacoes {
   total: number;
   agendadas: number;
+  atribuidas: number;
+  aguardando_prestador: number;
   em_rota: number;
+  no_local: number;
   em_andamento: number;
+  em_analise: number;
   concluidas_hoje: number;
+  nao_compareceu: number;
   reagendadas: number;
   canceladas: number;
 }
@@ -167,6 +178,13 @@ export function useInstalacoes(filtersOrParams?: InstalacaoFilters | UseInstalac
       // Filtro sem instalador (considera ambos os campos)
       if (filters?.sem_instalador) {
         query = query.is('instalador_id', null).is('instalador_responsavel_id', null);
+      }
+
+      // Filtro por origem (interno vs prestador externo)
+      if (filters?.origem === 'prestador') {
+        query = query.not('vistoriador_prestador_id', 'is', null);
+      } else if (filters?.origem === 'interno') {
+        query = query.is('vistoriador_prestador_id', null);
       }
 
       // Paginação
@@ -269,23 +287,36 @@ export function useInstalacoesContagem(data?: string) {
       const contagem: ContagemInstalacoes = {
         total: instalacoes.length,
         agendadas: 0,
+        atribuidas: 0,
+        aguardando_prestador: 0,
         em_rota: 0,
+        no_local: 0,
         em_andamento: 0,
+        em_analise: 0,
         concluidas_hoje: 0,
+        nao_compareceu: 0,
         reagendadas: 0,
         canceladas: 0,
       };
 
       instalacoes.forEach((inst) => {
-        if (inst.status === 'agendada') contagem.agendadas++;
-        if (inst.status === 'em_rota') contagem.em_rota++;
-        if (inst.status === 'em_andamento') contagem.em_andamento++;
-        if (inst.status === 'concluida') {
-          const updatedDate = inst.updated_at?.split('T')[0];
-          if (updatedDate === hoje) contagem.concluidas_hoje++;
+        switch (inst.status) {
+          case 'agendada': contagem.agendadas++; break;
+          case 'atribuida': contagem.atribuidas++; break;
+          case 'aguardando_prestador': contagem.aguardando_prestador++; break;
+          case 'em_rota': contagem.em_rota++; break;
+          case 'no_local': contagem.no_local++; break;
+          case 'em_andamento': contagem.em_andamento++; break;
+          case 'em_analise': contagem.em_analise++; break;
+          case 'concluida': {
+            const updatedDate = inst.updated_at?.split('T')[0];
+            if (updatedDate === hoje) contagem.concluidas_hoje++;
+            break;
+          }
+          case 'nao_compareceu': contagem.nao_compareceu++; break;
+          case 'reagendada': contagem.reagendadas++; break;
+          case 'cancelada': contagem.canceladas++; break;
         }
-        if (inst.status === 'reagendada') contagem.reagendadas++;
-        if (inst.status === 'cancelada') contagem.canceladas++;
       });
 
       return contagem;
@@ -303,22 +334,26 @@ export function useInstalacoesMetricas() {
     queryFn: async () => {
       const hoje = new Date();
       const em7Dias = addDays(hoje, 7);
+      const hojeStr = hoje.toISOString().split('T')[0];
+      const em7DiasStr = em7Dias.toISOString().split('T')[0];
 
-      // Agendadas nos próximos 7 dias
-      const { count: agendadas } = await supabase
+      const { count: preExecucao } = await supabase
         .from('instalacoes')
         .select('*', { count: 'exact', head: true })
-        .eq('status', 'agendada')
-        .gte('data_agendada', hoje.toISOString().split('T')[0])
-        .lte('data_agendada', em7Dias.toISOString().split('T')[0]);
+        .in('status', ['agendada', 'atribuida', 'aguardando_prestador'])
+        .gte('data_agendada', hojeStr)
+        .lte('data_agendada', em7DiasStr);
 
-      // Em rota ou em andamento
-      const { count: emRota } = await supabase
+      const { count: emCampo } = await supabase
         .from('instalacoes')
         .select('*', { count: 'exact', head: true })
-        .in('status', ['em_rota', 'em_andamento']);
+        .in('status', ['em_rota', 'no_local', 'em_andamento']);
 
-      // Concluídas hoje
+      const { count: aguardandoAnalise } = await supabase
+        .from('instalacoes')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'em_analise');
+
       const { count: concluidasHoje } = await supabase
         .from('instalacoes')
         .select('*', { count: 'exact', head: true })
@@ -326,17 +361,26 @@ export function useInstalacoesMetricas() {
         .gte('updated_at', startOfDay(hoje).toISOString())
         .lte('updated_at', endOfDay(hoje).toISOString());
 
-      // Reagendadas
+      const { count: naoCompareceu } = await supabase
+        .from('instalacoes')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'nao_compareceu');
+
       const { count: reagendadas } = await supabase
         .from('instalacoes')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'reagendada');
 
       return {
-        agendadas: agendadas || 0,
-        emRota: emRota || 0,
+        preExecucao: preExecucao || 0,
+        emCampo: emCampo || 0,
+        aguardandoAnalise: aguardandoAnalise || 0,
         concluidasHoje: concluidasHoje || 0,
+        naoCompareceu: naoCompareceu || 0,
         reagendadas: reagendadas || 0,
+        // Compatibilidade retroativa
+        agendadas: preExecucao || 0,
+        emRota: emCampo || 0,
       } as InstalacoesMetricas;
     },
   });

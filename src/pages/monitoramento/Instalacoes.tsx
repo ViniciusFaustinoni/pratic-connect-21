@@ -2,15 +2,18 @@ import { useState } from 'react';
 import { format } from 'date-fns';
 import { useFilasRealtime } from '@/hooks/useFilasRealtime';
 import { ptBR } from 'date-fns/locale';
-import { 
-  Calendar, 
-  MapPin, 
-  Wrench, 
+import {
+  Calendar,
+  MapPin,
+  Wrench,
   RotateCcw,
   Loader2,
   Phone,
   Navigation,
-  Eye
+  Eye,
+  ClipboardCheck,
+  UserX,
+  ExternalLink,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -86,36 +89,48 @@ export default function Instalacoes() {
         </div>
       </div>
 
-      {/* Cards de Métricas */}
-      <div className="grid gap-4 md:grid-cols-4">
+      {/* Cards de Métricas — agrupadas por fase */}
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Agendadas</CardTitle>
+            <CardTitle className="text-sm font-medium">Pré-Execução</CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {loadingMetricas ? '-' : metricas?.agendadas || 0}
+              {loadingMetricas ? '-' : metricas?.preExecucao || 0}
             </div>
-            <p className="text-xs text-muted-foreground">Para os próximos 7 dias</p>
+            <p className="text-xs text-muted-foreground">Agendada / Atribuída / Aguard. Prestador</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Em Rota</CardTitle>
-            <MapPin className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Em Campo</CardTitle>
+            <MapPin className="h-4 w-4 text-purple-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {loadingMetricas ? '-' : metricas?.emRota || 0}
+              {loadingMetricas ? '-' : metricas?.emCampo || 0}
             </div>
-            <p className="text-xs text-muted-foreground">Instaladores em campo</p>
+            <p className="text-xs text-muted-foreground">Em rota / No local / Em andamento</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Aguard. Análise</CardTitle>
+            <ClipboardCheck className="h-4 w-4 text-yellow-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {loadingMetricas ? '-' : metricas?.aguardandoAnalise || 0}
+            </div>
+            <p className="text-xs text-muted-foreground">Laudos pendentes</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Concluídas Hoje</CardTitle>
-            <Wrench className="h-4 w-4 text-muted-foreground" />
+            <Wrench className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
@@ -126,8 +141,20 @@ export default function Instalacoes() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Não Compareceu</CardTitle>
+            <UserX className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {loadingMetricas ? '-' : metricas?.naoCompareceu || 0}
+            </div>
+            <p className="text-xs text-muted-foreground">Cliente faltou</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Reagendadas</CardTitle>
-            <RotateCcw className="h-4 w-4 text-destructive" />
+            <RotateCcw className="h-4 w-4 text-orange-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
@@ -231,9 +258,16 @@ export default function Instalacoes() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {(instalacao as any).instalador?.nome || (instalacao as any).instalador_responsavel?.nome || (
-                          <span className="text-muted-foreground">Não atribuído</span>
-                        )}
+                        <div className="flex items-center gap-1">
+                          {(instalacao as any).vistoriador_prestador_id && (
+                            <ExternalLink className="h-3 w-3 text-amber-600" aria-label="Prestador externo" />
+                          )}
+                          <span>
+                            {(instalacao as any).instalador?.nome || (instalacao as any).instalador_responsavel?.nome || (
+                              <span className="text-muted-foreground">Não atribuído</span>
+                            )}
+                          </span>
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Badge className={STATUS_INSTALACAO_COLORS[instalacao.status]}>
