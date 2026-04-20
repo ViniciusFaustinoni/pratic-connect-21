@@ -113,12 +113,23 @@ export default function Equipe() {
     );
   };
 
+  // Split por role: instalador vs administrativo (analistas/coordenadores/etc)
+  const { instaladores, administrativo } = useMemo(() => {
+    const inst: ProfissionalEquipe[] = [];
+    const adm: ProfissionalEquipe[] = [];
+    (profissionais || []).forEach(p => {
+      if (p.role === 'instalador_vistoriador') inst.push(p);
+      else adm.push(p);
+    });
+    return { instaladores: inst, administrativo: adm };
+  }, [profissionais]);
+
+  const baseList = subTab === 'instaladores' ? instaladores : administrativo;
+
   const profissionaisFiltrados = useMemo(() => {
-    if (!profissionais) return [];
-    
-    return profissionais.filter((prof) => {
+    return baseList.filter((prof) => {
       const searchLower = searchTerm.toLowerCase();
-      const matchSearch = 
+      const matchSearch =
         prof.nome.toLowerCase().includes(searchLower) ||
         prof.email.toLowerCase().includes(searchLower) ||
         (prof.telefone && prof.telefone.includes(searchTerm));
@@ -127,7 +138,7 @@ export default function Equipe() {
       const matchRegiao = regiaoFilter === 'todas' || prof.regioes_atendimento.includes(regiaoFilter);
       return matchSearch && matchStatus && matchStatusOperacional && matchRegiao;
     });
-  }, [profissionais, searchTerm, statusFilter, statusOperacionalFilter, regiaoFilter]);
+  }, [baseList, searchTerm, statusFilter, statusOperacionalFilter, regiaoFilter]);
 
   return (
     <div className="space-y-4 sm:space-y-6">
