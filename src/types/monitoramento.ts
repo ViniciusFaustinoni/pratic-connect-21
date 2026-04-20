@@ -2,14 +2,18 @@
 // ENUMS E TIPOS BASE (alinhados com o banco)
 // ============================================
 
-// Usar os tipos do banco diretamente para status de instalação
-export type StatusInstalacao = 
-  | 'agendada' 
-  | 'em_rota' 
-  | 'em_andamento' 
-  | 'concluida' 
-  | 'reagendada' 
-  | 'cancelada';
+// Status de instalação: fonte única em src/types/database.ts
+export type {
+  StatusInstalacao,
+  FaseInstalacao,
+} from './database';
+export {
+  STATUS_INSTALACAO_LABELS,
+  STATUS_INSTALACAO_COLORS,
+  STATUS_INSTALACAO_FASE,
+} from './database';
+
+import type { StatusInstalacao } from './database';
 
 export type PeriodoInstalacao = 'manha' | 'tarde' | 'noite';
 
@@ -20,26 +24,8 @@ export type StatusRastreador = 'estoque' | 'instalado' | 'manutencao' | 'baixado
 export type PlataformaRastreador = 'rede_veiculos' | 'soft_truck' | 'nenhum';
 
 // ============================================
-// LABELS E CORES
+// LABELS E CORES (não-instalação)
 // ============================================
-
-export const STATUS_INSTALACAO_LABELS: Record<StatusInstalacao, string> = {
-  agendada: 'Agendada',
-  em_rota: 'Em Rota',
-  em_andamento: 'Em Andamento',
-  concluida: 'Concluída',
-  reagendada: 'Reagendada',
-  cancelada: 'Cancelada',
-};
-
-export const STATUS_INSTALACAO_COLORS: Record<StatusInstalacao, string> = {
-  agendada: 'bg-blue-100 text-blue-800 border-blue-300',
-  em_rota: 'bg-purple-100 text-purple-800 border-purple-300',
-  em_andamento: 'bg-orange-100 text-orange-800 border-orange-300',
-  concluida: 'bg-green-100 text-green-800 border-green-300',
-  reagendada: 'bg-gray-100 text-gray-800 border-gray-300',
-  cancelada: 'bg-red-100 text-red-800 border-red-300',
-};
 
 export const PERIODO_LABELS: Record<PeriodoInstalacao, string> = {
   manha: 'Manhã (08h-12h)',
@@ -124,7 +110,6 @@ export interface Instalacao {
 }
 
 export interface InstalacaoComRelacoes extends Instalacao {
-  // Nomes usados pelo banco (join padrão)
   associados?: {
     id: string;
     nome: string;
@@ -155,7 +140,6 @@ export interface InstalacaoComRelacoes extends Instalacao {
     numero_serie?: string | null;
     imei?: string | null;
   } | null;
-  // Profile do instalador (join com alias)
   profiles?: {
     id: string;
     nome: string;
@@ -205,6 +189,7 @@ export interface InstalacaoFilters {
   instaladorId?: string;
   dataInicio?: Date;
   dataFim?: Date;
+  origem?: 'interno' | 'prestador';
 }
 
 export interface RotaFilters {
@@ -300,12 +285,17 @@ export interface EstatisticasInstalador {
   tempo_medio_minutos: number;
 }
 
-// Métricas
+// Métricas — agrupadas por fase
 export interface InstalacoesMetricas {
+  preExecucao: number;
+  emCampo: number;
+  aguardandoAnalise: number;
+  concluidasHoje: number;
+  naoCompareceu: number;
+  reagendadas: number;
+  // Compatibilidade retroativa
   agendadas: number;
   emRota: number;
-  concluidasHoje: number;
-  reagendadas: number;
 }
 
 // ============================================

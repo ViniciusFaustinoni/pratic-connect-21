@@ -107,7 +107,63 @@ export type StatusRastreador =
 
 export type StatusRota = 'pendente' | 'em_andamento' | 'concluida' | 'cancelada';
 
-export type StatusInstalacao = 'agendada' | 'em_rota' | 'em_andamento' | 'concluida' | 'reagendada' | 'cancelada' | 'em_analise';
+export type StatusInstalacao =
+  | 'agendada'
+  | 'atribuida'
+  | 'aguardando_prestador'
+  | 'em_rota'
+  | 'no_local'
+  | 'em_andamento'
+  | 'em_analise'
+  | 'concluida'
+  | 'nao_compareceu'
+  | 'reagendada'
+  | 'cancelada';
+
+// Fases do ciclo de vida da instalação
+export type FaseInstalacao = 'pre_execucao' | 'em_campo' | 'pos_execucao' | 'excecao';
+
+export const STATUS_INSTALACAO_FASE: Record<StatusInstalacao, FaseInstalacao> = {
+  agendada: 'pre_execucao',
+  atribuida: 'pre_execucao',
+  aguardando_prestador: 'pre_execucao',
+  em_rota: 'em_campo',
+  no_local: 'em_campo',
+  em_andamento: 'em_campo',
+  em_analise: 'pos_execucao',
+  concluida: 'pos_execucao',
+  nao_compareceu: 'excecao',
+  reagendada: 'excecao',
+  cancelada: 'excecao',
+};
+
+export const STATUS_INSTALACAO_LABELS: Record<StatusInstalacao, string> = {
+  agendada: 'Agendada',
+  atribuida: 'Atribuída',
+  aguardando_prestador: 'Aguardando Prestador',
+  em_rota: 'Em Rota',
+  no_local: 'No Local',
+  em_andamento: 'Em Andamento',
+  em_analise: 'Aguardando Análise',
+  concluida: 'Concluída',
+  nao_compareceu: 'Não Compareceu',
+  reagendada: 'Reagendada',
+  cancelada: 'Cancelada',
+};
+
+export const STATUS_INSTALACAO_COLORS: Record<StatusInstalacao, string> = {
+  agendada: 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/30 dark:text-blue-300',
+  atribuida: 'bg-indigo-100 text-indigo-800 border-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-300',
+  aguardando_prestador: 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300',
+  em_rota: 'bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-900/30 dark:text-purple-300',
+  no_local: 'bg-cyan-100 text-cyan-800 border-cyan-300 dark:bg-cyan-900/30 dark:text-cyan-300',
+  em_andamento: 'bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900/30 dark:text-orange-300',
+  em_analise: 'bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-300',
+  concluida: 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-300',
+  nao_compareceu: 'bg-red-200 text-red-900 border-red-400 dark:bg-red-900/40 dark:text-red-300',
+  reagendada: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300',
+  cancelada: 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-300',
+};
 
 export type StatusVistoria = 'pendente' | 'aprovada' | 'reprovada' | 'em_analise';
 

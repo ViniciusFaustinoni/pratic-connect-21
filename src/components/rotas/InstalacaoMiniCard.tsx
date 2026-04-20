@@ -7,31 +7,9 @@ import { Button } from '@/components/ui/button';
 import { useRemoveInstalacaoFromRota } from '@/hooks/useRotas';
 import { toast } from 'sonner';
 import type { Tables, Database } from '@/integrations/supabase/types';
+import { STATUS_INSTALACAO_LABELS, STATUS_INSTALACAO_COLORS, type StatusInstalacao } from '@/types/database';
 
-type StatusInstalacao = Database['public']['Enums']['status_instalacao'];
 type PeriodoInstalacao = Database['public']['Enums']['periodo_instalacao'];
-
-const STATUS_INSTALACAO_LABELS: Record<StatusInstalacao, string> = {
-  agendada: 'Agendada',
-  em_rota: 'Em Rota',
-  em_andamento: 'Em Andamento',
-  concluida: 'Concluída',
-  reagendada: 'Reagendada',
-  cancelada: 'Cancelada',
-  em_analise: 'Em Análise',
-  nao_compareceu: 'Não Compareceu',
-};
-
-const STATUS_INSTALACAO_COLORS: Record<StatusInstalacao, string> = {
-  agendada: 'bg-muted text-muted-foreground',
-  em_rota: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  em_andamento: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
-  concluida: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  reagendada: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
-  cancelada: 'bg-destructive/10 text-destructive',
-  em_analise: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300',
-  nao_compareceu: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
-};
 
 const PERIODO_ICONS: Record<PeriodoInstalacao, React.ElementType> = {
   manha: Sunrise,
