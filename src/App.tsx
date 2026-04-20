@@ -496,6 +496,7 @@ const App = () => (
               <Route path="/cadastro/substituicoes/:id" element={<SubstituicaoDetalhePage />} />
               <Route path="/cadastro/veiculos" element={<Veiculos />} />
               <Route path="/cadastro/fila-documentos" element={<FilaDocumentos />} />
+              <Route path="/cadastro" element={<Navigate to="/cadastro/propostas" replace />} />
               <Route path="/cadastro/documentos/:id" element={<AnaliseDocumento />} />
               <Route path="/cadastro/vistorias/:id/analise" element={<AnaliseVistoria />} />
               <Route path="/cadastro/propostas" element={<PropostasPendentes />} />
