@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useInstalacoes, useInstalacoesContagem, useInstalacaoActions, useDeleteInstalacao, InstalacaoFilters, InstalacaoWithRelations } from '@/hooks/useInstalacoes';
+import { useInstalacoes, useInstalacoesContagem, useInstalacaoActions, useUpdateInstalacaoStatus, InstalacaoFilters, InstalacaoWithRelations } from '@/hooks/useInstalacoes';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -9,8 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Search, Plus, Clock, Calendar, Truck, CheckCircle, MoreHorizontal, Eye, UserPlus, X, ChevronLeft, ChevronRight, MapPin, AlertCircle, Trash2, AlertTriangle } from 'lucide-react';
+import { Search, Plus, Clock, Calendar, Truck, CheckCircle, MoreHorizontal, Eye, UserPlus, X, ChevronLeft, ChevronRight, MapPin, AlertCircle, AlertTriangle, UserX } from 'lucide-react';
 import { SlaIndicador, useSlaConfig, calcularPercentualSla } from '@/components/ui/SlaIndicador';
 import { cn } from '@/lib/utils';
 import { STATUS_INSTALACAO_LABELS, STATUS_INSTALACAO_COLORS, PERIODO_LABELS, StatusInstalacao, PeriodoInstalacao } from '@/types/database';
@@ -39,8 +38,6 @@ export default function InstalacoesList() {
   const [atribuirDialogOpen, setAtribuirDialogOpen] = useState(false);
   const [selectedInstalacaoId, setSelectedInstalacaoId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [instalacaoToDelete, setInstalacaoToDelete] = useState<string | null>(null);
 
   const [searchDebounced, setSearchDebounced] = useState('');
   
@@ -93,7 +90,7 @@ export default function InstalacoesList() {
 
   const { data: contagem } = useInstalacoesContagem();
   const { cancelarInstalacao, isCancelando } = useInstalacaoActions();
-  const deleteInstalacao = useDeleteInstalacao();
+  const updateStatus = useUpdateInstalacaoStatus();
   const { data: slaConfig } = useSlaConfig();
 
   // Extract instalacoes and pagination from data
@@ -345,30 +342,21 @@ export default function InstalacoesList() {
                             <UserPlus className="h-4 w-4 mr-2" /> Atribuir instalador
                           </DropdownMenuItem>
                         )}
-                        {inst.status !== 'concluida' && inst.status !== 'cancelada' && (
+                        {(['agendada', 'em_rota', 'em_andamento'] as StatusInstalacao[]).includes(inst.status as StatusInstalacao) && (
                           <>
                             <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              disabled={updateStatus.isPending}
+                              onClick={(e) => { e.stopPropagation(); updateStatus.mutate({ id: inst.id, status: 'nao_compareceu' }); }}
+                            >
+                              <UserX className="h-4 w-4 mr-2" /> Marcar como Não Compareceu
+                            </DropdownMenuItem>
                             <DropdownMenuItem 
                               className="text-destructive"
                               disabled={isCancelando}
                               onClick={(e) => { e.stopPropagation(); cancelarInstalacao({ id: inst.id, motivo: 'Cancelada pelo admin' }); }}
                             >
                               <X className="h-4 w-4 mr-2" /> Cancelar
-                            </DropdownMenuItem>
-                          </>
-                        )}
-                        {inst.status === 'cancelada' && (
-                          <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem 
-                              className="text-destructive"
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                setInstalacaoToDelete(inst.id); 
-                                setDeleteDialogOpen(true); 
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" /> Excluir
                             </DropdownMenuItem>
                           </>
                         )}
@@ -405,32 +393,6 @@ export default function InstalacoesList() {
         open={atribuirDialogOpen}
         onOpenChange={setAtribuirDialogOpen}
       />
-
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir instalação?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta ação não pode ser desfeita. A instalação será permanentemente removida do sistema.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={() => {
-                if (instalacaoToDelete) {
-                  deleteInstalacao.mutate(instalacaoToDelete);
-                  setDeleteDialogOpen(false);
-                  setInstalacaoToDelete(null);
-                }
-              }}
-              className="bg-destructive hover:bg-destructive/90"
-            >
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

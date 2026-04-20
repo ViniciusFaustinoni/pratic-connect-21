@@ -18,24 +18,13 @@ import {
   XCircle,
   RotateCcw,
   Cpu,
-  Trash2,
+  UserX,
   Shield,
   ExternalLink,
   Send,
   Copy,
   Image,
 } from 'lucide-react';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
 import {
   Dialog,
   DialogContent,
@@ -46,7 +35,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { useInstalacao, useUpdateInstalacaoStatus, useDeleteInstalacao, type Instalacao } from '@/hooks/useInstalacoes';
+import { useInstalacao, useUpdateInstalacaoStatus, type Instalacao } from '@/hooks/useInstalacoes';
 import { STATUS_INSTALACAO_LABELS, STATUS_INSTALACAO_COLORS, PERIODO_LABELS } from '@/types/database';
 import { cn } from '@/lib/utils';
 
@@ -65,11 +54,9 @@ export function InstalacaoDetailDrawer({
 }: InstalacaoDetailDrawerProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [fotoDialogUrl, setFotoDialogUrl] = useState<string | null>(null);
   const { data: instalacao, isLoading } = useInstalacao(instalacaoId || undefined);
   const updateStatus = useUpdateInstalacaoStatus();
-  const deleteInstalacao = useDeleteInstalacao();
 
   // Buscar link do prestador (se houver)
   const { data: prestadorLink } = useQuery({
@@ -185,18 +172,6 @@ export function InstalacaoDetailDrawer({
     },
     enabled: !!instalacaoId && open,
   });
-  const handleDelete = async () => {
-    if (!instalacaoId) return;
-    
-    try {
-      await deleteInstalacao.mutateAsync(instalacaoId);
-      setConfirmDeleteOpen(false);
-      onOpenChange(false);
-    } catch (error) {
-      // Error handled by hook
-    }
-  };
-
   const handleStatusChange = async (status: Instalacao['status']) => {
     if (!instalacaoId) return;
     
@@ -613,6 +588,15 @@ export function InstalacaoDetailDrawer({
 
                 {['agendada', 'em_rota', 'em_andamento'].includes(instalacao.status) && (
                   <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleStatusChange('nao_compareceu')}
+                      disabled={updateStatus.isPending}
+                    >
+                      <UserX className="h-4 w-4 mr-1" />
+                      Não Compareceu
+                    </Button>
                     <Button 
                       variant="outline" 
                       size="sm"
@@ -632,37 +616,6 @@ export function InstalacaoDetailDrawer({
                       Cancelar
                     </Button>
                   </>
-                )}
-
-                {instalacao.status === 'cancelada' && (
-                  <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="sm">
-                        <Trash2 className="h-4 w-4 mr-1" />
-                        Excluir
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Excluir instalação?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Esta ação não pode ser desfeita. A instalação será permanentemente removida do sistema.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction 
-                          onClick={handleDelete}
-                          className="bg-destructive hover:bg-destructive/90"
-                        >
-                          {deleteInstalacao.isPending && (
-                            <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                          )}
-                          Excluir
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
                 )}
               </div>
             </section>
