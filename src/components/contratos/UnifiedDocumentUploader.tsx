@@ -59,7 +59,7 @@ interface UnifiedDocumentUploaderProps {
 
 const tipoLabels: Record<TipoDocumentoDetectado, { label: string; icon: typeof FileText }> = {
   cnh: { label: 'CNH', icon: User },
-  rg: { label: 'RG', icon: User },
+  rg: { label: 'RG / CIN', icon: User },
   crlv: { label: 'CRLV', icon: Car },
   nota_fiscal_veiculo: { label: 'Nota Fiscal do Veículo', icon: FileText },
   atpv_e: { label: 'ATPV-e / CRV Digital', icon: Car },
