@@ -26,6 +26,7 @@ Deno.serve(async (req) => {
       valor,
       atribuido_por,
       reenviar,
+      skip_whatsapp,
     } = body
 
     const prestadorIdFinal = vistoriador_prestador_id || prestador_id

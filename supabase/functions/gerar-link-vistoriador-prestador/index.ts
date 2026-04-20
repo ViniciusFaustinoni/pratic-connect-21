@@ -16,7 +16,7 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    const { instalacao_id, vistoriador_prestador_id, valor, atribuido_por, reenviar } = await req.json()
+    const { instalacao_id, vistoriador_prestador_id, valor, atribuido_por, reenviar, skip_whatsapp } = await req.json()
 
     if (!instalacao_id || !vistoriador_prestador_id) {
       return new Response(
