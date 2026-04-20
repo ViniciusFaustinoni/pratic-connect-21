@@ -1,120 +1,113 @@
 
 
-## Acertar status de Instalações em Serviços de Campo
+## Consolidar Serviços de Campo em uma única tela unificada
 
 ### Diagnóstico
+Hoje `Serviços de Campo` tem 8 abas (`Atribuição Manual`, `Instalações`, `Vistorias`, `Retiradas`, `Encaixes`, `Viagens`, `Manutenção`, `Histórico`) — cada uma é uma página separada com sua própria lista, métricas e filtros, mesmo a maioria dos dados vindo da **mesma tabela `servicos`** (já tem `tipo`, `status`, `data_agendada`, etc.).
 
-**Estado atual do enum no banco** (`status_instalacao`):
-`agendada, em_rota, em_andamento, concluida, reagendada, cancelada, em_analise, nao_compareceu`
+A duplicação dificulta:
+- visão geral (analista precisa pular abas)
+- filtros cruzados (ex.: "tudo de hoje em SP")
+- comparação de SLA entre tipos
 
-**Problemas identificados:**
+### Solução: aba única "Serviços" + abas operacionais reduzidas
 
-1. **Tipos desalinhados** — o front usa duas definições diferentes:
-   - `src/types/database.ts` → 7 status (sem `nao_compareceu`)
-   - `src/types/monitoramento.ts` → 6 status (sem `em_analise` nem `nao_compareceu`)
-   - O banco tem **8 status**. Resultado: `nao_compareceu` (11 registros, hoje a maior fatia) aparece sem label e sem cor na tabela e some do filtro.
-
-2. **Faltam fases intermediárias importantes** — entre "Agendada" e "Em Rota" há um vazio:
-   - Quando atribuída a um instalador interno mas ainda não saiu da base → continua `agendada`
-   - Quando atribuída a um prestador externo (link gerado, aguardando aceite) → continua `agendada`
-   - Quando o instalador chegou no local mas ainda não iniciou → continua `em_rota`
-   - "Em Análise" hoje é genérico, não diz se é análise pré-instalação ou pós-execução (laudo)
-
-3. **Status "fantasmas"** sem flow claro:
-   - `nao_compareceu`: existe no banco e é setado, mas o front ignora — analista vê linha em branco
-   - `em_analise`: usado tanto antes (cadastro) quanto depois (laudo) — confunde
-
-4. **Sem distinção de origem** — uma instalação atribuída a prestador externo aparece exatamente igual a uma interna na rota.
-
-### Solução
-
-#### 1. Padronizar e expandir o enum (fases claras)
-
-Novo conjunto de status com fases bem definidas:
+**1. Nova aba "Serviços" (default)** — tabela única com todos os tipos de serviço de campo, diferenciados por **Badge de tipo** com tooltip rico, e **modal de detalhes ao clicar na linha**.
 
 ```text
-PRÉ-EXECUÇÃO
-├─ agendada               → criada, sem instalador atribuído
-├─ atribuida              → instalador interno designado, ainda na base
-└─ aguardando_prestador   → link de prestador externo gerado, aguardando aceite
+ABAS NOVAS (Serviços de Campo)
+├─ Serviços (NOVA — default, lista unificada)
+├─ Atribuição Manual (mantém — operacional drag&drop)
+├─ Encaixes (mantém — operacional)
+├─ Viagens (mantém — específico de logística + diárias)
+├─ Manutenção (mantém — fluxo próprio)
+└─ Histórico (mantém)
 
-EM CAMPO
-├─ em_rota                → instalador a caminho do local
-├─ no_local               → chegou, ainda não iniciou serviço
-└─ em_andamento           → instalação em execução
-
-PÓS-EXECUÇÃO
-├─ em_analise             → laudo enviado, aguardando análise do monitoramento
-└─ concluida              → aprovada e finalizada
-
-EXCEÇÕES
-├─ nao_compareceu         → cliente faltou (já existe, hoje invisível)
-├─ reagendada             → remarcada para nova data
-└─ cancelada              → cancelada definitivamente
+REMOVIDAS (consolidadas na aba Serviços)
+├─ Instalações
+├─ Vistorias
+└─ Retiradas
 ```
 
-#### 2. Migration
+Os fluxos operacionais (Atribuição Manual, Encaixes, Viagens, Manutenção, Histórico) ficam separados porque têm UX próprio. A consolidação atinge as 3 listagens equivalentes.
 
-- Adicionar valores ao enum: `atribuida`, `aguardando_prestador`, `no_local`
-- Trigger leve para auto-transicionar `agendada` → `atribuida` quando `instalador_id` é setado, e `agendada`/`atribuida` → `aguardando_prestador` quando `vistoriador_prestador_id` é setado.
-- (Edge functions de início de rota / chegada / start serviço já existentes serão ajustadas para gravar `em_rota`, `no_local`, `em_andamento` — sem quebrar fluxos atuais.)
+### Componentes da nova aba "Serviços"
 
-#### 3. Unificar tipos no front
+**A. Métricas no topo (8 cards clicáveis filtram)**
+- Pré-execução (agendada + atribuida + aguardando_prestador + pendente)
+- Em campo (em_rota + no_local + em_andamento)
+- Aguardando análise (em_analise)
+- Concluídas hoje
+- Não compareceu
+- Reagendadas
+- Multas/bloqueios (badge específico de retiradas)
+- Total do dia
 
-- **Eleger `src/types/database.ts` como fonte única** para `StatusInstalacao` (tipo + labels + cores).
-- Remover o tipo duplicado em `src/types/monitoramento.ts` e reexportar de `database.ts`.
-- Atualizar todos os 7 arquivos que importam status para a fonte única.
+**B. Filtros**
+- Busca: nome / placa / protocolo / código rastreador
+- Tipo (multi-select com 8 opções, todas marcadas por padrão): Instalação, Revistoria, Vist. Entrada, Vist. Saída, Vist. Sinistro, Vist. Periódica, Vist. Manutenção, Retirada
+- Status (multi-select agrupado por fase)
+- Origem técnico (Interno / Prestador externo)
+- Cidade/UF
+- Data (range)
+- Botão "Limpar"
 
-#### 4. Labels e cores definitivas
+**C. Tabela unificada — colunas**
+| Tipo | Data/Período | Associado | Veículo | Endereço | Técnico | Status | Ações |
 
-| Status | Label | Cor |
-|---|---|---|
-| agendada | Agendada | azul claro |
-| atribuida | Atribuída | índigo |
-| aguardando_prestador | Aguardando Prestador | âmbar |
-| em_rota | Em Rota | roxo |
-| no_local | No Local | ciano |
-| em_andamento | Em Andamento | laranja |
-| em_analise | Aguardando Análise | amarelo |
-| concluida | Concluída | verde |
-| nao_compareceu | Não Compareceu | vermelho escuro |
-| reagendada | Reagendada | laranja claro |
-| cancelada | Cancelada | vermelho |
+- **Coluna Tipo**: `Badge` colorido com ícone (Wrench / ClipboardCheck / PackageX / RefreshCw…) usando o mapa `TIPO_SERVICO_COLORS` já existente.
+- **Tooltip no Badge** (Radix `Tooltip`): mostra
+  - Nome completo do tipo (ex.: "Vistoria de Sinistro")
+  - Protocolo
+  - Origem (cadastro / monitoramento / financeiro / sinistro)
+  - Motivo (quando retirada/sinistro)
+  - SLA / data limite quando aplicável
+  - Flag "Encaixe permitido" / "Cliente aceita encaixe"
+- **Linha clicável** → abre **Modal de Detalhes**
 
-#### 5. Métricas e filtros (Instalacoes.tsx)
+**D. Modal de Detalhes (`ServicoDetailModal`)**
+Componente novo que rotea para o conteúdo certo conforme `tipo`:
+- `instalacao` / `revistoria` → reusa `InstalacaoDetailDrawer`
+- `vistoria_*` (exceto retirada) → reusa `VistoriaDetailDrawer`
+- `vistoria_retirada` → conteúdo dedicado (motivo, multa, integridade, deadline) — reaproveita os componentes já presentes em `RetiradasContent`
 
-- Cards do topo passam a 6 indicadores agrupados por fase:
-  - **Pré-Execução** (agendada + atribuida + aguardando_prestador)
-  - **Em Campo** (em_rota + no_local + em_andamento)
-  - **Aguardando Análise** (em_analise)
-  - **Concluídas Hoje**
-  - **Não Compareceu**
-  - **Reagendadas**
-- Filtros de status reorganizados em 3 grupos (Pré-Execução / Em Campo / Pós-Execução & Exceções) com checkbox por status.
-- Adicionar filtro novo "Origem" (interno / prestador) baseado em `vistoriador_prestador_id IS NOT NULL`.
+Header do modal:
+- Badge de tipo + Badge de status
+- Protocolo, data/período
+- Quick actions: WhatsApp, Maps, "Ver no mapa de monitoramento"
+- Tabs internas: **Resumo** | **Cliente & Veículo** | **Endereço** | **Histórico** | **Mídias** (quando houver) | **Ações operacionais** (cancelar, reagendar, atribuir prestador)
 
-#### 6. Atualizar `useInstalacoesMetricas`
+### Arquivos previstos
 
-Recalcular as contagens para refletir os novos agrupamentos por fase (sem regressão em consumidores antigos: manter `agendadas`, `emRota`, `concluidasHoje`, `reagendadas` somando tudo da fase correspondente).
+**Novos**
+- `src/pages/monitoramento/ServicosCampoUnificado.tsx` — página da aba "Serviços"
+- `src/components/servicos-campo/ServicosTable.tsx` — tabela unificada com tooltip
+- `src/components/servicos-campo/ServicoTipoBadge.tsx` — Badge + Tooltip rico
+- `src/components/servicos-campo/ServicosFilters.tsx` — filtros consolidados
+- `src/components/servicos-campo/ServicoDetailModal.tsx` — modal roteador
+- `src/components/servicos-campo/ServicosMetricasCards.tsx` — 8 cards clicáveis
+- `src/hooks/useServicosCampoUnificado.ts` — hook que envelopa `useServicos` aplicando todos os filtros e devolvendo métricas agrupadas
 
-### Arquivos tocados
+**Editados**
+- `src/pages/monitoramento/VistoriasInstalacoesMon.tsx` — substituir as 3 abas (`Instalações`, `Vistorias`, `Retiradas`) por uma só aba `Serviços` (default), reordenar restantes
+- (Não vamos apagar ainda `Instalacoes.tsx` / `Vistorias.tsx` / `RetiradasContent.tsx` — eles continuam sendo usados em rotas/modais internos; só removemos as abas. Limpeza definitiva pode vir num passo seguinte se você quiser.)
 
-- `supabase/migrations/...` — adicionar 3 valores ao enum + trigger de auto-transição.
-- `src/types/database.ts` — expandir tipo, labels, cores.
-- `src/types/monitoramento.ts` — remover duplicata, reexportar.
-- `src/hooks/useInstalacoes.ts` — atualizar agrupamento de métricas.
-- `src/pages/monitoramento/Instalacoes.tsx` — novos cards por fase + badge de origem.
-- `src/components/instalacoes/InstalacaoFilters.tsx` — filtros agrupados + filtro de origem.
-- `src/components/rotas/InstalacaoMiniCard.tsx` — mapa de cores/labels atualizado (já tem `nao_compareceu`, validar consistência).
-- Edge functions de fluxo (`iniciar-rota`, `chegar-local`, `iniciar-instalacao`, `gerar-link-prestador`) — gravar o status correto da fase.
+### Reaproveitamento
+- `useServicos({ tipo: [...] })` já existe e suporta filtro multi-tipo
+- `STATUS_SERVICO_LABELS`, `STATUS_SERVICO_COLORS`, `TIPO_SERVICO_LABELS` já existem em `src/hooks/useServicos.ts`
+- `InstalacaoDetailDrawer` e `VistoriaDetailDrawer` já existem e serão reutilizados pelo modal roteador
+- Tooltip do shadcn já está disponível (`@/components/ui/tooltip`)
 
 ### Validação
-
-1. Migration aplicada → enum tem 11 valores.
-2. Lista atual de instalações: as 11 com `nao_compareceu` aparecem com badge "Não Compareceu" vermelho (hoje aparecem em branco).
-3. Atribuir instalação a instalador interno → status passa a "Atribuída" automaticamente.
-4. Gerar link de prestador → status passa a "Aguardando Prestador".
-5. Cards de métricas mostram os 6 grupos por fase com totais coerentes.
-6. Filtro por fase funciona; filtro por origem (interno/prestador) funciona.
-7. Telas que já consumiam `agendada`/`em_rota`/`concluida` continuam exibindo corretamente (sem regressão).
+1. Abrir `/monitoramento/vistorias-instalacoes-mon` → aba "Serviços" abre por padrão com lista de tudo.
+2. Cards de métricas mostram contagens corretas; clicar em "Em Campo" filtra a tabela.
+3. Cada linha mostra Badge de tipo colorido. Hover no Badge → tooltip com protocolo, origem, motivo, SLA.
+4. Clicar em linha de instalação → modal abre conteúdo de `InstalacaoDetailDrawer`.
+5. Clicar em linha de vistoria de saída → modal abre conteúdo de `VistoriaDetailDrawer`.
+6. Clicar em linha de retirada → modal abre conteúdo dedicado (multa, integridade, deadline).
+7. Filtro multi-tipo funciona (ex.: marcar só "Retirada + Vist. Sinistro").
+8. Filtro de status agrupado por fase funciona.
+9. Filtro de origem (Interno/Prestador) funciona.
+10. Busca por placa, nome, protocolo, código rastreador funciona em todos os tipos.
+11. Atribuição Manual, Encaixes, Viagens, Manutenção e Histórico continuam funcionando como hoje (sem regressão).
 
