@@ -1,48 +1,73 @@
 
 
-## Adaptar Aprovação para Vistoria na Base (sem fotos do associado)
+## Aceitar nova Carteira de Identidade Nacional (CIN) como RG no OCR
 
 ### Problema
-Quando o associado escolhe "Vistoria + Instalação na Base" (`cotacoes.tipo_vistoria = 'agendada_base'`), ele **não envia fotos nem vídeo 360°** — toda a mídia será capturada pelo técnico na oficina parceira no dia do atendimento. Hoje, o stepper de aprovação (`PropostaApprovalStepper`) sempre exige passar pela etapa "Fotos & Vistoria" e mostra "Sem fotos/vídeo disponíveis", confundindo o cadastro (caso real: Rafael Lucindo / KYS4C01).
+O prompt de OCR (`supabase/functions/document-ocr/index.ts`) descreve apenas o RG antigo, exigindo o campo "REGISTRO GERAL" como número principal. A nova **CIN** (Carteira de Identidade Nacional, válida em todo território nacional desde 2022, obrigatória até fev/2032) usa o **CPF como número único de identificação**, traz QR Code, pode ter validade "INDETERMINADA" e nomeia os campos em PT/EN ("Registro Geral - CPF / Personal Number", "Validade / Expiry"). Hoje o modelo pode:
+- Confundir o tipo (detectar como "outro");
+- Falhar ao extrair RG (porque o número do RG/CPF agora é o mesmo);
+- Reprovar por "validade ilegível" quando está escrito INDETERMINADA;
+- Não conseguir validar nome ou CPF esperado.
+
+Caso real: imagem enviada (Marli Silva de Góis – CIN RJ, validade INDETERMINADA, CPF 828.181.187-00).
 
 ### Solução
-Quando `tipo_vistoria === 'agendada_base'` **e** ainda não existe vistoria executada (sem `instalacao_info` e sem `vistoria_base_info` concluída), o fluxo de aprovação deve:
 
-1. **Pular automaticamente a Etapa 2 (Fotos & Vistoria)** — o stepper passa a ter apenas 2 etapas: Documentos → Aprovação Final.
-2. **Aprovar com base apenas na documentação** — o botão "Aprovar Proposta" libera quando todos os documentos estão aprovados, sem exigir checkbox de revisão de fotos.
-3. **Exibir banner informativo** na Etapa 3 explicando que as fotos serão capturadas presencialmente na base no dia do agendamento (com data/hora se disponível em `vistoria_base_info`/`agendamentos_base`).
-4. **Manter texto de aprovação correto** — o botão diz "Aprovar Proposta" (não "Liberar Cobertura Roubo e Furto", que é específico de autovistoria).
+**1. `supabase/functions/document-ocr/index.ts` – Atualizar o prompt da seção RG**
+Reescrever a seção `### RG` (linhas 137-143) para cobrir os dois formatos:
 
-Quando a vistoria na base **for executada** (técnico subiu fotos), o fluxo volta ao normal de 3 etapas — as fotos aparecem em `proposta.vistoria.fotos` e Etapa 2 reaparece automaticamente para revisão.
+```
+### RG / CIN (Carteira de Identidade Nacional)
+Aceite TANTO o RG antigo (modelo estadual com REGISTRO GERAL próprio)
+QUANTO a nova CIN (Carteira de Identidade Nacional - válida em todo território nacional, com QR Code).
+Ambos retornam tipo_detectado:"rg".
 
-### Arquivos tocados
+Campos:
+- nome: campo "NOME / Name" no topo. Não confunda com filiação ou nome do expedidor.
+- cpf: SEMPRE presente.
+  • CIN: aparece como "Registro Geral - CPF / Personal Number" — usa o CPF como número único.
+  • RG antigo: aparece em campo CPF separado (frente ou verso).
+  • Formato XXX.XXX.XXX-XX. Se ilegível, retorne "ilegivel".
+- rg: número do Registro Geral.
+  • RG antigo: número estadual (ex.: 12.345.678-9).
+  • CIN: o CPF é o número único — use o mesmo valor do CPF.
+- data_nascimento: "Data de Nascimento / Date of Birth" (YYYY-MM-DD).
+- data_expedicao: "Data de Emissão / Issue Date" (YYYY-MM-DD) — só na CIN.
+- validade: "Validade / Expiry" (YYYY-MM-DD).
+  • CIN pode trazer "INDETERMINADA" — nesse caso retorne validade:"indeterminada" e considere VÁLIDO.
+- orgao_expedidor: "DETRAN-RJ", "SSP-SP", etc. (se visível).
+- variante: "cin" se for a nova Carteira de Identidade Nacional (tem QR Code grande, layout verde/amarelo, texto bilíngue, "VÁLIDA EM TODO O TERRITÓRIO NACIONAL"); "rg_antigo" caso contrário.
 
-**1. `src/hooks/usePropostasPendentes.ts`**
-- Adicionar campo `tipo_vistoria: 'autovistoria' | 'agendada' | 'agendada_base' | null` na interface `PropostaPendente`.
-- Popular este campo no `useProposta` (e na lista resumida `usePropostasPendentes`) buscando de `cotacoes.tipo_vistoria` quando `contrato.cotacao_id` existir. Já existe a leitura na linha 319-323; basta propagá-la para o objeto retornado.
+Regras especiais CIN:
+- NÃO reprove por validade ausente/INDETERMINADA — é o padrão da CIN.
+- NÃO reprove por RG igual ao CPF — é o comportamento esperado da CIN.
+- QR Code presente é indicador forte de CIN.
+```
 
-**2. `src/pages/cadastro/PropostaAnalise.tsx`**
-- Calcular nova flag:
-  ```ts
-  const isVistoriaBaseSemFotos =
-    proposta?.tipo_vistoria === 'agendada_base' &&
-    !proposta?.vistoria_base_info?.concluida_em &&
-    !(proposta?.vistoria?.fotos?.length);
-  ```
-- Passar `isVistoriaBaseSemFotos` como nova prop para `PropostaApprovalStepper`.
+Adicionar `'rg'` continua válido em `tipo_detectado` (já está). Adicionar `data_expedicao`, `orgao_expedidor` e `variante` à lista `dadosFields` do parser de fallback (linha 258).
 
-**3. `src/components/cadastro/proposta/PropostaApprovalStepper.tsx`**
-- Aceitar prop `isVistoriaBaseSemFotos: boolean`.
-- Quando `true`:
-  - Renderizar apenas 2 itens no array `steps` (Documentos + Aprovação Final), reindexando o ID 3 para 2.
-  - `step2Complete` (fotos) é forçado para `true` (não bloqueia avanço/aprovação).
-  - Substituir o card de "Fotos & Vistoria" no resumo da Etapa Final por um card informativo:
-    > 📍 **Vistoria agendada na base** — As fotos do veículo serão registradas pelo técnico no dia do atendimento presencial em `{data_agendamento}`. Aprove apenas a documentação para liberar o agendamento.
-  - O botão de aprovar mantém o texto "Aprovar Proposta" e desabilita só por `!step1Complete`.
+**2. Atualizar label do `tipoEsperado` (linha 397)**
+```ts
+rg: 'RG ou CIN (Carteira de Identidade — antiga ou nova Carteira de Identidade Nacional)',
+```
+
+**3. `src/components/contratos/UnifiedDocumentUploader.tsx` e `DocumentUploader.tsx`**
+Atualizar labels visíveis:
+- `rg: { label: 'RG / CIN', ... descricao: 'RG antigo ou nova Carteira de Identidade Nacional (CIN)' }`
+- Em `documentosEsperados`: `label: 'CNH, RG ou CIN'`.
+
+Nenhuma mudança estrutural — `'rg'` continua sendo o `tipo_detectado` retornado para ambos os formatos.
+
+**4. `src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx` e `src/components/contratos/ContratoWizard.tsx`**
+A lógica já trata `tipoDocumento === 'cnh' || tipoDocumento === 'rg'` para preencher dados pessoais — funcionará automaticamente para CIN. Sem alterações necessárias além das labels.
+
+**5. `src/utils/syncCnhData.ts` (já normaliza RG)**
+A regex de limpeza já remove sufixos "DETRAN RJ" etc. Validar que `cnh_numero` aceite o formato CIN (CPF puro com pontuação) — sim, é uma string livre, sem alteração.
 
 ### Validação
-1. Rafael Lucindo (KYS4C01): abrir a proposta → stepper mostra 2 etapas, Etapa 2 some, botão "Aprovar Proposta" libera quando docs estiverem 100% aprovados.
-2. Proposta autovistoria normal: continua com 3 etapas e checkbox de revisão de fotos (sem regressão).
-3. Proposta `agendada_base` **após** o técnico da oficina concluir a vistoria e subir fotos: volta a 3 etapas, fotos aparecem para revisão.
-4. Proposta `agendada` (rota domiciliar) sem fotos ainda: continua bloqueada aguardando execução (`aguardandoExecucao`), comportamento atual preservado.
+1. Submeter foto da CIN da Marli (validade INDETERMINADA) no link público de envio de documentos → deve detectar `tipo_detectado:"rg"`, `variante:"cin"`, extrair nome, CPF, e marcar como **válido** (não reprovar por validade).
+2. Submeter RG antigo padrão SSP → continua sendo detectado como `rg` com número de registro estadual e CPF separado.
+3. No fluxo público de cotação, ao subir CIN, os campos nome e CPF devem ser auto-preenchidos como já acontece com CNH/RG.
+4. Cadastro/aprovação: card mostra "RG / CIN" ✅ aprovado quando OCR retorna sugestão `aprovar`.
+5. Garantir que validações de "documento vencido" não disparem para CIN com validade `indeterminada`.
 
