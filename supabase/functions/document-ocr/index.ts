@@ -134,13 +134,28 @@ nome, cpf (XXX.XXX.XXX-XX - PRIORIDADE MÁXIMA), rg, numero_registro (11 dígito
 - LEIA CADA DÍGITO DO CPF INDIVIDUALMENTE, DA ESQUERDA PARA A DIREITA. O CPF possui dígitos verificadores matemáticos — se tiver dúvida em qualquer dígito, retorne cpf:"ilegivel" em vez de adivinhar.
 - CATEGORIA: leia EXCLUSIVAMENTE do campo "9 CAT HAB" que fica na frente da CNH, ao lado do CPF e nº registro. NÃO extraia da grade/tabela de categorias (verso ou rodapé) que lista ACC, A, B, C, D, BE, CE, DE etc com datas de habilitação. A grade é apenas um detalhamento — a categoria principal está no campo "9 CAT HAB". Categorias válidas: A, B, C, D, E, AB, AC, AD, AE, ACC.
 
-### RG
-nome, rg, cpf (se presente), data_nascimento, data_expedicao
-- NOME: extrair EXCLUSIVAMENTE do campo "NOME" que fica na parte superior do documento, logo abaixo do cabeçalho institucional. Este é o nome do titular do documento.
-- NÃO confundir com nomes de autoridades, presidentes do DETRAN, ou assinaturas oficiais impressas no rodapé do documento (ex: "PRESIDENTE DO DETRAN").
-- FILIAÇÃO: campos "FILIAÇÃO" contêm nomes dos pais — NÃO são o nome do titular.
-- RG: campo "REGISTRO GERAL" — extrair o número com pontuação.
-- CPF: pode estar presente no verso ou na frente. Formato XXX.XXX.XXX-XX.
+### RG / CIN (Carteira de Identidade Nacional)
+Aceite TANTO o RG antigo (modelo estadual com REGISTRO GERAL próprio) QUANTO a nova CIN (Carteira de Identidade Nacional - válida em todo território nacional, com QR Code, layout bilíngue PT/EN, texto "VÁLIDA EM TODO O TERRITÓRIO NACIONAL"). Ambos retornam tipo_detectado:"rg".
+
+Campos:
+- nome: campo "NOME / Name" no topo, logo abaixo do cabeçalho. NÃO confundir com filiação (nomes dos pais), autoridades, "PRESIDENTE DO DETRAN" ou assinaturas no rodapé.
+- cpf: SEMPRE presente. Formato XXX.XXX.XXX-XX. Se ilegível, retorne "ilegivel".
+  • CIN: aparece como "Registro Geral - CPF / Personal Number" — o CPF é o número único de identificação.
+  • RG antigo: campo CPF separado (frente ou verso).
+- rg: número do Registro Geral.
+  • RG antigo: campo "REGISTRO GERAL" com número estadual (ex.: 12.345.678-9).
+  • CIN: o CPF É o número único — use o mesmo valor do CPF.
+- data_nascimento: "Data de Nascimento / Date of Birth" (YYYY-MM-DD).
+- data_expedicao: "Data de Emissão / Issue Date" (YYYY-MM-DD).
+- validade: "Validade / Expiry" (YYYY-MM-DD).
+  • CIN frequentemente traz "INDETERMINADA" — nesse caso retorne validade:"indeterminada" e considere VÁLIDO.
+- orgao_expedidor: "DETRAN-RJ", "SSP-SP", etc. (se visível).
+- variante: "cin" se for a nova Carteira de Identidade Nacional (QR Code grande, layout bilíngue, "VÁLIDA EM TODO O TERRITÓRIO NACIONAL"); "rg_antigo" caso contrário.
+
+Regras especiais CIN:
+- NÃO reprove por validade ausente/INDETERMINADA — é o padrão da CIN.
+- NÃO reprove por RG igual ao CPF — é o comportamento esperado da CIN.
+- QR Code grande presente é indicador forte de CIN.
 
 ### CRLV
 placa (ABC1234/ABC1D23), renavam (11 dígitos), chassi (17 chars), marca, modelo, ano_fabricacao (int), ano_modelo (int), cor (campo "COR"/"COR PREDOMINANTE" - leia literalmente), combustivel, motor, nome_proprietario, blindado (bool)
