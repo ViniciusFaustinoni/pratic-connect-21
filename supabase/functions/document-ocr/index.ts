@@ -409,7 +409,7 @@ serve(async (req) => {
       const tipoLabels: Record<string, string> = {
         cnh: 'CNH (Carteira Nacional de Habilitação)',
         crlv: 'CRLV (Certificado de Registro e Licenciamento de Veículo)',
-        rg: 'RG (Registro Geral)',
+        rg: 'RG ou CIN (Carteira de Identidade — RG antigo ou nova Carteira de Identidade Nacional)',
         comprovante_residencia: 'Comprovante de Residência',
         laudo_vistoria: 'Laudo de Vistoria',
         nota_fiscal_veiculo: 'Nota Fiscal de Veículo',
