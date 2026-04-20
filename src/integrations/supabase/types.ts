@@ -2692,7 +2692,7 @@ export type Database = {
           score_risco: number | null
           status: string | null
           tipo_indicio: string
-          vendedor_id: string
+          vendedor_id: string | null
         }
         Insert: {
           analisado_em?: string | null
@@ -2706,7 +2706,7 @@ export type Database = {
           score_risco?: number | null
           status?: string | null
           tipo_indicio: string
-          vendedor_id: string
+          vendedor_id?: string | null
         }
         Update: {
           analisado_em?: string | null
@@ -2720,7 +2720,7 @@ export type Database = {
           score_risco?: number | null
           status?: string | null
           tipo_indicio?: string
-          vendedor_id?: string
+          vendedor_id?: string | null
         }
         Relationships: [
           {
@@ -4797,7 +4797,7 @@ export type Database = {
           valor_abatimento: number
           valor_bruto: number
           valor_liquido: number
-          vendedor_id: string
+          vendedor_id: string | null
         }
         Insert: {
           associado_id?: string | null
@@ -4820,7 +4820,7 @@ export type Database = {
           valor_abatimento?: number
           valor_bruto?: number
           valor_liquido?: number
-          vendedor_id: string
+          vendedor_id?: string | null
         }
         Update: {
           associado_id?: string | null
@@ -4843,7 +4843,7 @@ export type Database = {
           valor_abatimento?: number
           valor_bruto?: number
           valor_liquido?: number
-          vendedor_id?: string
+          vendedor_id?: string | null
         }
         Relationships: [
           {
@@ -6814,7 +6814,7 @@ export type Database = {
           marco_placas: number
           percentual_recorrente_garantido: number
           valor_pago: number
-          vendedor_id: string
+          vendedor_id: string | null
         }
         Insert: {
           campanha_id?: string | null
@@ -6824,7 +6824,7 @@ export type Database = {
           marco_placas: number
           percentual_recorrente_garantido?: number
           valor_pago: number
-          vendedor_id: string
+          vendedor_id?: string | null
         }
         Update: {
           campanha_id?: string | null
@@ -6834,7 +6834,7 @@ export type Database = {
           marco_placas?: number
           percentual_recorrente_garantido?: number
           valor_pago?: number
-          vendedor_id?: string
+          vendedor_id?: string | null
         }
         Relationships: [
           {
@@ -6880,7 +6880,7 @@ export type Database = {
           id: string
           tipo: string
           valor: number
-          vendedor_id: string
+          vendedor_id: string | null
         }
         Insert: {
           aplicada_em?: string
@@ -6894,7 +6894,7 @@ export type Database = {
           id?: string
           tipo: string
           valor: number
-          vendedor_id: string
+          vendedor_id?: string | null
         }
         Update: {
           aplicada_em?: string
@@ -6908,7 +6908,7 @@ export type Database = {
           id?: string
           tipo?: string
           valor?: number
-          vendedor_id?: string
+          vendedor_id?: string | null
         }
         Relationships: [
           {
@@ -7304,7 +7304,7 @@ export type Database = {
           vendas_canceladas: number
           vendas_confirmadas: number
           vendas_liquidas: number
-          vendedor_id: string
+          vendedor_id: string | null
         }
         Insert: {
           campanha_id: string
@@ -7320,7 +7320,7 @@ export type Database = {
           vendas_canceladas?: number
           vendas_confirmadas?: number
           vendas_liquidas?: number
-          vendedor_id: string
+          vendedor_id?: string | null
         }
         Update: {
           campanha_id?: string
@@ -7336,7 +7336,7 @@ export type Database = {
           vendas_canceladas?: number
           vendas_confirmadas?: number
           vendas_liquidas?: number
-          vendedor_id?: string
+          vendedor_id?: string | null
         }
         Relationships: [
           {
@@ -7382,7 +7382,7 @@ export type Database = {
           total_boletos_pagos: number
           updated_at: string
           valor_recorrente: number
-          vendedor_id: string
+          vendedor_id: string | null
         }
         Insert: {
           ano_referencia: number
@@ -7396,7 +7396,7 @@ export type Database = {
           total_boletos_pagos?: number
           updated_at?: string
           valor_recorrente?: number
-          vendedor_id: string
+          vendedor_id?: string | null
         }
         Update: {
           ano_referencia?: number
@@ -7410,7 +7410,7 @@ export type Database = {
           total_boletos_pagos?: number
           updated_at?: string
           valor_recorrente?: number
-          vendedor_id?: string
+          vendedor_id?: string | null
         }
         Relationships: [
           {
@@ -9265,7 +9265,21 @@ export type Database = {
             columns: ["vendedor_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["user_id"]
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotacoes_vendedor_profiles_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "cotacoes_vendedor_profiles_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
           },
           {
             foreignKeyName: "cotacoes_vistoria_id_fkey"
@@ -12340,7 +12354,7 @@ export type Database = {
           id: string
           motivo: string | null
           prioridade: number | null
-          profissional_id: string
+          profissional_id: string | null
           servico_id: string
           status: string | null
         }
@@ -12351,7 +12365,7 @@ export type Database = {
           id?: string
           motivo?: string | null
           prioridade?: number | null
-          profissional_id: string
+          profissional_id?: string | null
           servico_id: string
           status?: string | null
         }
@@ -12362,7 +12376,7 @@ export type Database = {
           id?: string
           motivo?: string | null
           prioridade?: number | null
-          profissional_id?: string
+          profissional_id?: string | null
           servico_id?: string
           status?: string | null
         }
@@ -17401,7 +17415,7 @@ export type Database = {
           fotos_urls: Json
           id: string
           ordem_servico_id: string
-          regulador_id: string
+          regulador_id: string | null
           tem_problema: boolean | null
           tipo_problema: string | null
           video_url: string | null
@@ -17415,7 +17429,7 @@ export type Database = {
           fotos_urls?: Json
           id?: string
           ordem_servico_id: string
-          regulador_id: string
+          regulador_id?: string | null
           tem_problema?: boolean | null
           tipo_problema?: string | null
           video_url?: string | null
@@ -17429,7 +17443,7 @@ export type Database = {
           fotos_urls?: Json
           id?: string
           ordem_servico_id?: string
-          regulador_id?: string
+          regulador_id?: string | null
           tem_problema?: boolean | null
           tipo_problema?: string | null
           video_url?: string | null
@@ -17473,7 +17487,7 @@ export type Database = {
           longitude: number | null
           observacoes: string | null
           ordem_servico_id: string
-          regulador_id: string
+          regulador_id: string | null
           video_url: string | null
         }
         Insert: {
@@ -17483,7 +17497,7 @@ export type Database = {
           longitude?: number | null
           observacoes?: string | null
           ordem_servico_id: string
-          regulador_id: string
+          regulador_id?: string | null
           video_url?: string | null
         }
         Update: {
@@ -17493,7 +17507,7 @@ export type Database = {
           longitude?: number | null
           observacoes?: string | null
           ordem_servico_id?: string
-          regulador_id?: string
+          regulador_id?: string | null
           video_url?: string | null
         }
         Relationships: [
@@ -19060,7 +19074,7 @@ export type Database = {
           referencia_id: string | null
           referencia_tipo: string | null
           tipo_operacao: string
-          vendedor_id: string
+          vendedor_id: string | null
         }
         Insert: {
           conta_ranking?: boolean
@@ -19074,7 +19088,7 @@ export type Database = {
           referencia_id?: string | null
           referencia_tipo?: string | null
           tipo_operacao: string
-          vendedor_id: string
+          vendedor_id?: string | null
         }
         Update: {
           conta_ranking?: boolean
@@ -19088,7 +19102,7 @@ export type Database = {
           referencia_id?: string | null
           referencia_tipo?: string | null
           tipo_operacao?: string
-          vendedor_id?: string
+          vendedor_id?: string | null
         }
         Relationships: [
           {
@@ -22311,19 +22325,19 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
-          instalador_id: string
+          instalador_id: string | null
           rota_id: string
         }
         Insert: {
           created_at?: string | null
           id?: string
-          instalador_id: string
+          instalador_id?: string | null
           rota_id: string
         }
         Update: {
           created_at?: string | null
           id?: string
-          instalador_id?: string
+          instalador_id?: string | null
           rota_id?: string
         }
         Relationships: [
@@ -23161,7 +23175,7 @@ export type Database = {
           distancia_km: number | null
           id: string
           observacoes: string | null
-          profissional_id: string
+          profissional_id: string | null
           servico_id: string | null
           tipo_atribuicao: string
         }
@@ -23172,7 +23186,7 @@ export type Database = {
           distancia_km?: number | null
           id?: string
           observacoes?: string | null
-          profissional_id: string
+          profissional_id?: string | null
           servico_id?: string | null
           tipo_atribuicao?: string
         }
@@ -23183,7 +23197,7 @@ export type Database = {
           distancia_km?: number | null
           id?: string
           observacoes?: string | null
-          profissional_id?: string
+          profissional_id?: string | null
           servico_id?: string | null
           tipo_atribuicao?: string
         }
@@ -23560,7 +23574,7 @@ export type Database = {
           descricao: string
           id: string
           local: string | null
-          registrado_por: string
+          registrado_por: string | null
           resultado: string | null
           sindicancia_id: string
           tipo: string
@@ -23571,7 +23585,7 @@ export type Database = {
           descricao: string
           id?: string
           local?: string | null
-          registrado_por: string
+          registrado_por?: string | null
           resultado?: string | null
           sindicancia_id: string
           tipo: string
@@ -23582,7 +23596,7 @@ export type Database = {
           descricao?: string
           id?: string
           local?: string | null
-          registrado_por?: string
+          registrado_por?: string | null
           resultado?: string | null
           sindicancia_id?: string
           tipo?: string
@@ -24353,7 +24367,21 @@ export type Database = {
             columns: ["usuario_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["user_id"]
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistro_historico_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "sinistro_historico_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
           },
         ]
       }
