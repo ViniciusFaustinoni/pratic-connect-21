@@ -41,6 +41,7 @@ import {
 } from '@/data/autovistoriaConfig';
 import { cn } from '@/lib/utils';
 import { buscarCep } from '@/lib/cep';
+import { useDatasBloqueadasSet } from '@/hooks/useDatasBloqueadas';
 
 interface AgendarManutencaoModalProps {
   open: boolean;
@@ -77,13 +78,15 @@ export function AgendarManutencaoModal({
   const { isDiretor, isCoordenadorMonitoramento, isAnalistaMonitoramento } = usePermissions();
   const podeHabilitarEncaixe = isDiretor || isCoordenadorMonitoramento || isAnalistaMonitoramento;
 
-  // Configuração de datas - hoje + próximos 2 dias (excluindo domingos)
+  // Configuração de datas - hoje + próximos 2 dias (excluindo domingos e bloqueadas)
   const dataMinima = startOfDay(new Date());
   const dataMaxima = addDays(dataMinima, 2);
+  const { set: datasBloqueadasSet } = useDatasBloqueadasSet();
   
   const diasDesabilitados = (date: Date) => {
     const start = startOfDay(date);
-    return isSunday(start) || start < dataMinima || start > dataMaxima;
+    if (isSunday(start) || start < dataMinima || start > dataMaxima) return true;
+    return datasBloqueadasSet.has(format(start, 'yyyy-MM-dd'));
   };
 
   // Verificação de vagas para a data selecionada

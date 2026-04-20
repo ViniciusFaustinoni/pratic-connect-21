@@ -14,6 +14,7 @@ import { maskCEP, maskTelefone } from '@/lib/validations';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useFinalizarVistoriaCotacao, useAgendarVistoriaCompleta } from '@/hooks/useCotacaoVistoria';
 import { useVagasPeriodo } from '@/hooks/useVagasPeriodo';
+import { useDatasBloqueadasSet } from '@/hooks/useDatasBloqueadas';
 import { 
   isDomingo, 
   getPeriodosDisponivelsPorHora, 
@@ -89,13 +90,14 @@ export function AgendamentoVistoria({
   const { data: vagasData, isLoading: isLoadingVagas } = useVagasPeriodo(dataFormatada);
 
   // === LÓGICA DE DATAS ===
+  const { set: datasBloqueadasSet } = useDatasBloqueadasSet();
   
-  // Gerar hoje (se houver períodos) + próximos 2 dias úteis
+  // Gerar hoje (se houver períodos) + próximos dias úteis (pula domingos e datas bloqueadas)
   const hoje = new Date();
   const datasDisponiveis: Date[] = [];
   
-  // Incluir hoje se não for domingo E se ainda houver períodos disponíveis
-  if (!isDomingo(hoje)) {
+  // Incluir hoje se não for domingo, não estiver bloqueado E se ainda houver períodos disponíveis
+  if (!isDomingo(hoje) && !datasBloqueadasSet.has(format(hoje, 'yyyy-MM-dd'))) {
     const periodosHoje = getPeriodosDisponivelsPorHora(hoje);
     if (periodosHoje.length > 0) {
       datasDisponiveis.push(hoje);
@@ -105,11 +107,13 @@ export function AgendamentoVistoria({
   // Continuar com dias futuros até ter no máximo 3 datas (hoje + 2 dias)
   let dia = addDays(hoje, 1);
   const maxDatas = 3;
-  while (datasDisponiveis.length < maxDatas) {
-    if (!isDomingo(dia)) {
+  let guard = 0;
+  while (datasDisponiveis.length < maxDatas && guard < 60) {
+    if (!isDomingo(dia) && !datasBloqueadasSet.has(format(dia, 'yyyy-MM-dd'))) {
       datasDisponiveis.push(new Date(dia));
     }
     dia = addDays(dia, 1);
+    guard++;
   }
 
   // Períodos disponíveis para a data selecionada (considera hora atual para hoje)

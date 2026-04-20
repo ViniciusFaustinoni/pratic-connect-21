@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { useAgendarInstalacaoContrato } from '@/hooks/useContratoLink';
 import { isDomingo, getHorariosParaDia } from '@/data/autovistoriaConfig';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
+import { useDatasBloqueadasSet } from '@/hooks/useDatasBloqueadas';
 
 interface PrazoEstado {
   estado: string;
@@ -82,20 +83,24 @@ export function AgendamentoInstalacaoContrato({ contratoId, enderecoInicial, onC
     return Math.ceil(prazoHoras / 24);
   }, [estado, prazosEstado]);
   
-  // Gerar datas disponíveis dinamicamente
+  const { set: datasBloqueadasSet } = useDatasBloqueadasSet();
+
+  // Gerar datas disponíveis dinamicamente (pula domingos + datas bloqueadas)
   const datasDisponiveis = useMemo(() => {
     const hoje = new Date();
     const datas: Date[] = [];
     let dia = addDays(hoje, 1);
+    let guard = 0;
     
-    while (datas.length < diasUteis) {
-      if (!isDomingo(dia)) {
+    while (datas.length < diasUteis && guard < 60) {
+      if (!isDomingo(dia) && !datasBloqueadasSet.has(format(dia, 'yyyy-MM-dd'))) {
         datas.push(dia);
       }
       dia = addDays(dia, 1);
+      guard++;
     }
     return datas;
-  }, [diasUteis]);
+  }, [diasUteis, datasBloqueadasSet]);
   
   // Reset data selecionada se mudar de estado e a data não estiver mais disponível
   useEffect(() => {
