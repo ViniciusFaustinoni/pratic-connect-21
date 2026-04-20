@@ -1,58 +1,120 @@
 
 
-## Bug: "Aguardando envio de documentos" mesmo com tudo aprovado
+## Acertar status de Instalações em Serviços de Campo
 
-### Causa raiz
-A flag `tem_documento_pendente` (que dispara o aviso amarelo e bloqueia o botão "Aprovar Proposta") é calculada em `usePropostasPendentes.ts` (linhas 273-281 e 752-760) por:
+### Diagnóstico
 
-```ts
-SELECT COUNT(*) FROM documentos_solicitados
-WHERE associado_id = X AND status = 'pendente'
+**Estado atual do enum no banco** (`status_instalacao`):
+`agendada, em_rota, em_andamento, concluida, reagendada, cancelada, em_analise, nao_compareceu`
+
+**Problemas identificados:**
+
+1. **Tipos desalinhados** — o front usa duas definições diferentes:
+   - `src/types/database.ts` → 7 status (sem `nao_compareceu`)
+   - `src/types/monitoramento.ts` → 6 status (sem `em_analise` nem `nao_compareceu`)
+   - O banco tem **8 status**. Resultado: `nao_compareceu` (11 registros, hoje a maior fatia) aparece sem label e sem cor na tabela e some do filtro.
+
+2. **Faltam fases intermediárias importantes** — entre "Agendada" e "Em Rota" há um vazio:
+   - Quando atribuída a um instalador interno mas ainda não saiu da base → continua `agendada`
+   - Quando atribuída a um prestador externo (link gerado, aguardando aceite) → continua `agendada`
+   - Quando o instalador chegou no local mas ainda não iniciou → continua `em_rota`
+   - "Em Análise" hoje é genérico, não diz se é análise pré-instalação ou pós-execução (laudo)
+
+3. **Status "fantasmas"** sem flow claro:
+   - `nao_compareceu`: existe no banco e é setado, mas o front ignora — analista vê linha em branco
+   - `em_analise`: usado tanto antes (cadastro) quanto depois (laudo) — confunde
+
+4. **Sem distinção de origem** — uma instalação atribuída a prestador externo aparece exatamente igual a uma interna na rota.
+
+### Solução
+
+#### 1. Padronizar e expandir o enum (fases claras)
+
+Novo conjunto de status com fases bem definidas:
+
+```text
+PRÉ-EXECUÇÃO
+├─ agendada               → criada, sem instalador atribuído
+├─ atribuida              → instalador interno designado, ainda na base
+└─ aguardando_prestador   → link de prestador externo gerado, aguardando aceite
+
+EM CAMPO
+├─ em_rota                → instalador a caminho do local
+├─ no_local               → chegou, ainda não iniciou serviço
+└─ em_andamento           → instalação em execução
+
+PÓS-EXECUÇÃO
+├─ em_analise             → laudo enviado, aguardando análise do monitoramento
+└─ concluida              → aprovada e finalizada
+
+EXCEÇÕES
+├─ nao_compareceu         → cliente faltou (já existe, hoje invisível)
+├─ reagendada             → remarcada para nova data
+└─ cancelada              → cancelada definitivamente
 ```
 
-No caso do **ALEX DE OLIVEIRA SOBRINHO / TUB9C24** existem **5 registros** em `documentos_solicitados` com `status='pendente'` e `enviado_em=NULL`:
-- `odometro`, `painel`, `chassi`, `banco_dianteiro`, `banco_traseiro`
+#### 2. Migration
 
-Esses registros foram criados em 20/04/2026 16:23 (provavelmente via "Solicitar Reenvio" pelo analista, pedindo fotos extras do veículo). O cliente nunca enviou.
+- Adicionar valores ao enum: `atribuida`, `aguardando_prestador`, `no_local`
+- Trigger leve para auto-transicionar `agendada` → `atribuida` quando `instalador_id` é setado, e `agendada`/`atribuida` → `aguardando_prestador` quando `vistoriador_prestador_id` é setado.
+- (Edge functions de início de rota / chegada / start serviço já existentes serão ajustadas para gravar `em_rota`, `no_local`, `em_andamento` — sem quebrar fluxos atuais.)
 
-**O efeito visível:**
-- Os 4 documentos cadastrais aparecem como `4/4 aprovado(s)` ✅
-- A autovistoria (vídeo 360 + chassi + motor da `cotacoes_vistoria_fotos`) é mostrada como concluída ✅
-- Mas o sistema continua bloqueado pelos 5 pedidos extras nunca enviados — e **eles não aparecem em lugar nenhum na tela do analista**, porque `DocumentosSolicitadosCard` só renderiza os já enviados (`documentos_solicitados_enviados`). Por isso parece um bug "fantasma".
+#### 3. Unificar tipos no front
 
-### Solução em duas frentes
+- **Eleger `src/types/database.ts` como fonte única** para `StatusInstalacao` (tipo + labels + cores).
+- Remover o tipo duplicado em `src/types/monitoramento.ts` e reexportar de `database.ts`.
+- Atualizar todos os 7 arquivos que importam status para a fonte única.
 
-**1. Desbloquear o ALEX agora (caso real do cliente)**
+#### 4. Labels e cores definitivas
 
-Marcar manualmente os 5 pedidos pendentes como `cancelado` (não `aprovado`, para preservar histórico) e seguir com a aprovação normal:
+| Status | Label | Cor |
+|---|---|---|
+| agendada | Agendada | azul claro |
+| atribuida | Atribuída | índigo |
+| aguardando_prestador | Aguardando Prestador | âmbar |
+| em_rota | Em Rota | roxo |
+| no_local | No Local | ciano |
+| em_andamento | Em Andamento | laranja |
+| em_analise | Aguardando Análise | amarelo |
+| concluida | Concluída | verde |
+| nao_compareceu | Não Compareceu | vermelho escuro |
+| reagendada | Reagendada | laranja claro |
+| cancelada | Cancelada | vermelho |
 
-```sql
-UPDATE documentos_solicitados
-SET status = 'cancelado', updated_at = now()
-WHERE associado_id = '28a82785-ee88-4df5-a051-4874e8c1eb71'
-  AND status = 'pendente';
-```
+#### 5. Métricas e filtros (Instalacoes.tsx)
 
-Após isso, abrir a proposta novamente → o botão "Aprovar Proposta" libera e o fluxo segue para instalação. (Se `cancelado` não estiver no enum, usaremos `'enviado'` + `enviado_em = now()` ou criaremos a opção, conforme o schema permitir.)
+- Cards do topo passam a 6 indicadores agrupados por fase:
+  - **Pré-Execução** (agendada + atribuida + aguardando_prestador)
+  - **Em Campo** (em_rota + no_local + em_andamento)
+  - **Aguardando Análise** (em_analise)
+  - **Concluídas Hoje**
+  - **Não Compareceu**
+  - **Reagendadas**
+- Filtros de status reorganizados em 3 grupos (Pré-Execução / Em Campo / Pós-Execução & Exceções) com checkbox por status.
+- Adicionar filtro novo "Origem" (interno / prestador) baseado em `vistoriador_prestador_id IS NOT NULL`.
 
-**2. Eliminar o bug de UX (correção definitiva)**
+#### 6. Atualizar `useInstalacoesMetricas`
 
-Tornar visíveis e gerenciáveis os pedidos pendentes na tela do analista:
-
-- **`src/hooks/usePropostasPendentes.ts`**: além de `documentos_solicitados_enviados`, retornar também `documentos_solicitados_pendentes` (status='pendente', `enviado_em IS NULL`).
-- **`src/components/cadastro/DocumentosSolicitadosCard.tsx`**: renderizar uma seção adicional "Documentos solicitados ainda não enviados pelo cliente" listando cada `tipo_documento` (com label amigável reutilizando o mapa de `DocumentosPendentesPublico`) + botão por linha **"Cancelar solicitação"** e botão geral **"Cancelar todas"**. Cancelar = `UPDATE documentos_solicitados SET status='cancelado'`.
-- **`src/components/cadastro/proposta/PropostaApprovalStepper.tsx`**: quando `tem_documento_pendente=true`, o aviso amarelo passa a citar a quantidade ("Aguardando envio de **5** documento(s) solicitado(s) ao cliente") e oferecer botão direto "Cancelar solicitações pendentes" que chama o mesmo hook acima.
-- **Stepper**: o `step1Complete` continua exigindo docs aprovados; mas o bloqueio de aprovação final passa a usar `tem_documento_pendente_visivel` (somente quando o analista realmente pediu e ainda quer esperar) — após cancelar, a proposta libera para aprovação imediatamente.
+Recalcular as contagens para refletir os novos agrupamentos por fase (sem regressão em consumidores antigos: manter `agendadas`, `emRota`, `concluidasHoje`, `reagendadas` somando tudo da fase correspondente).
 
 ### Arquivos tocados
-- `src/hooks/usePropostasPendentes.ts` — incluir lista `documentos_solicitados_pendentes` no retorno (interface + 2 pontos onde é montado o objeto).
-- `src/components/cadastro/DocumentosSolicitadosCard.tsx` — nova seção "pendentes" com ações de cancelar.
-- `src/components/cadastro/proposta/PropostaApprovalStepper.tsx` — banner com contagem + botão de cancelar tudo.
-- `src/components/cadastro/proposta/PropostaMidiaGrid.tsx` — passar a nova lista para o card.
+
+- `supabase/migrations/...` — adicionar 3 valores ao enum + trigger de auto-transição.
+- `src/types/database.ts` — expandir tipo, labels, cores.
+- `src/types/monitoramento.ts` — remover duplicata, reexportar.
+- `src/hooks/useInstalacoes.ts` — atualizar agrupamento de métricas.
+- `src/pages/monitoramento/Instalacoes.tsx` — novos cards por fase + badge de origem.
+- `src/components/instalacoes/InstalacaoFilters.tsx` — filtros agrupados + filtro de origem.
+- `src/components/rotas/InstalacaoMiniCard.tsx` — mapa de cores/labels atualizado (já tem `nao_compareceu`, validar consistência).
+- Edge functions de fluxo (`iniciar-rota`, `chegar-local`, `iniciar-instalacao`, `gerar-link-prestador`) — gravar o status correto da fase.
 
 ### Validação
-1. Rodar o `UPDATE` acima → recarregar `/cadastro/propostas/{contrato_id}` do ALEX → botão "Aprovar Proposta" libera → confirmar aprovação → proposta avança para instalação (status `aprovado` / `aguardando_instalacao`).
-2. Em outra proposta com `documentos_solicitados` pendentes não enviados, conferir que o card "Documentos solicitados ainda não enviados" aparece, lista os tipos corretos e o botão "Cancelar solicitação" funciona (status vira `cancelado`, badge some, aprovação libera).
-3. Proposta sem nenhum `documentos_solicitados` segue funcionando como hoje (sem regressão).
-4. Proposta onde o cliente realmente envia o documento solicitado: `DocumentosSolicitadosCard` continua mostrando o item como **enviado** para revisão (lógica atual preservada).
+
+1. Migration aplicada → enum tem 11 valores.
+2. Lista atual de instalações: as 11 com `nao_compareceu` aparecem com badge "Não Compareceu" vermelho (hoje aparecem em branco).
+3. Atribuir instalação a instalador interno → status passa a "Atribuída" automaticamente.
+4. Gerar link de prestador → status passa a "Aguardando Prestador".
+5. Cards de métricas mostram os 6 grupos por fase com totais coerentes.
+6. Filtro por fase funciona; filtro por origem (interno/prestador) funciona.
+7. Telas que já consumiam `agendada`/`em_rota`/`concluida` continuam exibindo corretamente (sem regressão).
 
