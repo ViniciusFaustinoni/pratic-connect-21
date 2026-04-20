@@ -860,7 +860,7 @@ export function useVistoriaCompletaPorServico(servicoId: string | null) {
       // 1. Buscar dados do serviço para obter relacionamentos
       const { data: servico, error: servicoError } = await supabase
         .from('servicos')
-        .select('associado_id, veiculo_id, profissional_id, contrato_id, cotacao_id, rota_id, vistoria_origem_id, instalacao_origem_id')
+        .select('associado_id, veiculo_id, profissional_id, contrato_id, cotacao_id, rota_id, vistoria_origem_id, instalacao_origem_id, data_agendada, hora_agendada, periodo, cep, logradouro, numero, bairro, cidade')
         .eq('id', servicoId)
         .single();
 
@@ -1002,6 +1002,15 @@ export function useVistoriaCompletaPorServico(servicoId: string | null) {
             cotacao_id: servico.cotacao_id,
             tipo: 'entrada',
             status: 'em_analise',
+            // Necessários para o trigger sync_vistoria_to_servicos não falhar com NULL
+            data_agendada: servico.data_agendada,
+            horario_agendado: servico.hora_agendada,
+            endereco_cep: servico.cep,
+            endereco_logradouro: servico.logradouro,
+            endereco_numero: servico.numero,
+            endereco_bairro: servico.bairro,
+            endereco_cidade: servico.cidade,
+            rota_id: servico.rota_id,
           })
           .select(`
             *,
@@ -1030,6 +1039,15 @@ export function useVistoriaCompletaPorServico(servicoId: string | null) {
               cotacao_id: servico.cotacao_id,
               tipo: 'entrada',
               status: 'em_analise',
+              // Necessários para o trigger sync_vistoria_to_servicos não falhar com NULL
+              data_agendada: servico.data_agendada,
+              horario_agendado: servico.hora_agendada,
+              endereco_cep: servico.cep,
+              endereco_logradouro: servico.logradouro,
+              endereco_numero: servico.numero,
+              endereco_bairro: servico.bairro,
+              endereco_cidade: servico.cidade,
+              rota_id: servico.rota_id,
             })
             .select(`
               *,
