@@ -861,6 +861,15 @@ export function InstalacaoDetailDrawer({
           </div>
         )}
       </DialogContent>
+      {instalacao && (
+        <RealocarInstalacaoDialog
+          open={realocarOpen}
+          onOpenChange={setRealocarOpen}
+          instalacaoId={instalacao.id}
+          veiculoLabel={instalacao.veiculos?.placa}
+          associadoNome={instalacao.associados?.nome}
+        />
+      )}
     </Dialog>
   );
 }
