@@ -54,6 +54,63 @@ function validatePlaca(placa: string): boolean {
   return /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(cleaned);
 }
 
+// Mapas para desambiguar caracteres confundidos pelo OCR (Mercosul vs antigo)
+const DIGIT_TO_LETTER: Record<string, string> = { '0': 'O', '1': 'I', '5': 'S', '8': 'B', '2': 'Z', '6': 'G' };
+const LETTER_TO_DIGIT: Record<string, string> = { 'O': '0', 'I': '1', 'S': '5', 'B': '8', 'Z': '2', 'G': '6', 'T': '7', 'L': '1', 'Q': '0' };
+
+/**
+ * Normalização posicional Mercosul-aware (LLL N L NN).
+ * Posições 0,1,2,4 → letras (corrige 0→O, 1→I, etc.)
+ * Posições 3,5,6 → dígitos (corrige O→0, I→1, etc.)
+ * Retorna a placa "saneada" para o padrão Mercosul. Não garante validade.
+ */
+function normalizePlacaMercosul(raw: string): string {
+  if (!raw) return '';
+  const cleaned = raw.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  if (cleaned.length !== 7) return cleaned;
+  const out: string[] = cleaned.split('');
+  const letterIdx = [0, 1, 2, 4];
+  const digitIdx = [3, 5, 6];
+  for (const i of letterIdx) {
+    const ch = out[i];
+    if (/[0-9]/.test(ch) && DIGIT_TO_LETTER[ch]) out[i] = DIGIT_TO_LETTER[ch];
+  }
+  for (const i of digitIdx) {
+    const ch = out[i];
+    if (/[A-Z]/.test(ch) && LETTER_TO_DIGIT[ch]) out[i] = LETTER_TO_DIGIT[ch];
+  }
+  return out.join('');
+}
+
+const PLACA_MERCOSUL_RE = /^[A-Z]{3}[0-9][A-Z][0-9]{2}$/;
+const PLACA_ANTIGA_RE = /^[A-Z]{3}[0-9]{4}$/;
+
+/**
+ * Resolve a placa preferindo o formato Mercosul quando há ambiguidade
+ * na 5ª posição (ex.: "1" lido no lugar de "I").
+ * Retorna { placa, ajustada } com a melhor escolha.
+ */
+function resolvePlacaPreferMercosul(raw: string): { placa: string; ajustada: boolean } {
+  const cleaned = (raw || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  if (cleaned.length !== 7) return { placa: cleaned, ajustada: false };
+
+  // Já é Mercosul válido
+  if (PLACA_MERCOSUL_RE.test(cleaned)) return { placa: cleaned, ajustada: false };
+
+  // Tenta normalizar para Mercosul
+  const normalized = normalizePlacaMercosul(cleaned);
+  if (PLACA_MERCOSUL_RE.test(normalized) && normalized !== cleaned) {
+    // Só prefere Mercosul se a 5ª posição original era um dígito ambíguo (1/0/5/8/2/6)
+    const ch5 = cleaned[4];
+    if (/[0-9]/.test(ch5) && DIGIT_TO_LETTER[ch5]) {
+      return { placa: normalized, ajustada: true };
+    }
+  }
+
+  // Senão, mantém o cleaned (pode ser placa antiga válida)
+  return { placa: cleaned, ajustada: false };
+}
+
 // Renavam: 11 dígitos com dígito verificador (módulo 11)
 function validateRenavam(renavam: string): boolean {
   if (!renavam) return false;
@@ -161,6 +218,7 @@ Regras especiais CIN:
 placa (ABC1234/ABC1D23), renavam (11 dígitos), chassi (17 chars), marca, modelo, ano_fabricacao (int), ano_modelo (int), cor (campo "COR"/"COR PREDOMINANTE" - leia literalmente), combustivel, motor, nome_proprietario, blindado (bool)
 - "ANO FAB/MOD: 2013/2014" → ano_fabricacao:2013, ano_modelo:2014
 - Blindado: procure em OBS/TIPO por "BLINDADO/BLINDAGEM/PROTEÇÃO BALÍSTICA". Sempre inclua campo blindado.
+- ⚠️ ATENÇÃO PLACA MERCOSUL (formato LLL-NLNN, ex: RKR3I57, BRA2E19): o **5º caractere é SEMPRE uma LETRA (A-Z)**, NUNCA um dígito (0-9). Se visualmente parecer "1" → leia como "I"; "0" → "O"; "5" → "S"; "8" → "B"; "2" → "Z"; "6" → "G". Em caso de dúvida entre letra e número na 5ª posição, **escolha sempre a LETRA**. Placa antiga (LLLNNNN, ex: ABC1234) tem dígitos nas 4 últimas posições.
 
 ### Nota Fiscal de Veículo (DANFE / NF-e com dados veiculares)
 Detectar quando o documento é uma Nota Fiscal (DANFE/NF-e) que contenha dados de veículo (chassi, motor, valor).
@@ -851,17 +909,28 @@ Use a função para retornar o CPF encontrado ou "ilegivel" se não conseguir le
           checksumResults.push({ field: v.field, ok: false, value: raw });
           continue;
         }
-        const ok = v.validate(String(raw));
-        checksumResults.push({ field: v.field, ok, value: raw });
+
+        // ==== Pré-tratamento PLACA: prefere Mercosul quando ambíguo ====
+        if (v.field === 'placa') {
+          const { placa: resolved, ajustada } = resolvePlacaPreferMercosul(String(raw));
+          if (ajustada && validatePlaca(resolved)) {
+            console.log(`[OCR] Placa ajustada por normalização Mercosul: "${raw}" → "${resolved}"`);
+            d.placa = resolved;
+          }
+        }
+
+        const currentVal = String(d[v.field]);
+        const ok = v.validate(currentVal);
+        checksumResults.push({ field: v.field, ok, value: d[v.field] });
         if (!ok) {
-          console.warn(`[OCR] Validação falhou: ${v.label}="${raw}" inválido`);
+          console.warn(`[OCR] Validação falhou: ${v.label}="${currentVal}" inválido`);
 
           // Tentar recuperar do texto nativo do PDF
           if (extractedPdfText) {
             const candidates = extractCandidatesFromText(extractedPdfText, v.field);
             for (const cand of candidates) {
               if (v.validate(cand)) {
-                console.log(`[OCR] ${v.label} corrigido via texto nativo: "${raw}" → "${cand}"`);
+                console.log(`[OCR] ${v.label} corrigido via texto nativo: "${currentVal}" → "${cand}"`);
                 d[v.field] = cand;
                 checksumResults[checksumResults.length - 1] = { field: v.field, ok: true, value: cand };
                 break;
@@ -966,7 +1035,13 @@ function extractCandidatesFromText(text: string, field: string): string[] {
     case 'placa': {
       const re = /\b([A-Z]{3}[-\s]?[0-9][A-Z0-9][0-9]{2})\b/g;
       let m;
-      while ((m = re.exec(text)) !== null) out.add(m[1].replace(/[-\s]/g, '').toUpperCase());
+      while ((m = re.exec(text)) !== null) {
+        const cru = m[1].replace(/[-\s]/g, '').toUpperCase();
+        out.add(cru);
+        // Adiciona também a versão normalizada Mercosul como candidato alternativo
+        const norm = normalizePlacaMercosul(cru);
+        if (norm && norm !== cru) out.add(norm);
+      }
       break;
     }
     case 'renavam': {
