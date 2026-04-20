@@ -204,15 +204,23 @@ export function useAlterarEnderecoTipo() {
         // tipo: deduzir do contexto (vistoria por padrão)
         const tipo = ab.instalacao_id ? 'instalacao' : 'vistoria';
 
-        // Resolver associado_id via cotacao se possível
+        // associado_id pode ser resolvido via instalação/vistoria de origem
         let associado_id: string | null = null;
-        if (ab.cotacao_id) {
-          const { data: cot } = await supabase
-            .from('cotacoes')
+        if (ab.instalacao_id) {
+          const { data: inst } = await supabase
+            .from('instalacoes')
             .select('associado_id')
-            .eq('id', ab.cotacao_id)
+            .eq('id', ab.instalacao_id)
             .maybeSingle();
-          associado_id = cot?.associado_id ?? null;
+          associado_id = (inst as any)?.associado_id ?? null;
+        }
+        if (!associado_id && ab.vistoria_id) {
+          const { data: vis } = await supabase
+            .from('vistorias')
+            .select('associado_id')
+            .eq('id', ab.vistoria_id)
+            .maybeSingle();
+          associado_id = (vis as any)?.associado_id ?? null;
         }
 
         const { data: novoSrv, error: errIns } = await supabase
