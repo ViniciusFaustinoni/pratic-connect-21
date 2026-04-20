@@ -21,17 +21,24 @@ import {
 import { cn } from '@/lib/utils';
 import { InstalacaoFilters as Filters } from '@/hooks/useInstalacoes';
 import { useInstaladores } from '@/hooks/useRotas';
-import { STATUS_INSTALACAO_LABELS, PERIODO_LABELS, PeriodoInstalacao } from '@/types/database';
-import type { Instalacao } from '@/hooks/useInstalacoes';
-
-type StatusInstalacao = Instalacao['status'];
+import {
+  STATUS_INSTALACAO_LABELS,
+  STATUS_INSTALACAO_COLORS,
+  PERIODO_LABELS,
+  PeriodoInstalacao,
+  StatusInstalacao,
+} from '@/types/database';
 
 interface InstalacaoFiltersProps {
   filters: Filters;
   onFiltersChange: (filters: Filters) => void;
 }
 
-const statusOptions = Object.entries(STATUS_INSTALACAO_LABELS) as [StatusInstalacao, string][];
+const FASES: { titulo: string; statuses: StatusInstalacao[] }[] = [
+  { titulo: 'Pré-Execução', statuses: ['agendada', 'atribuida', 'aguardando_prestador'] },
+  { titulo: 'Em Campo', statuses: ['em_rota', 'no_local', 'em_andamento'] },
+  { titulo: 'Pós-Execução & Exceções', statuses: ['em_analise', 'concluida', 'nao_compareceu', 'reagendada', 'cancelada'] },
+];
 
 export function InstalacaoFilters({ filters, onFiltersChange }: InstalacaoFiltersProps) {
   const [showFilters, setShowFilters] = useState(false);
@@ -54,13 +61,14 @@ export function InstalacaoFilters({ filters, onFiltersChange }: InstalacaoFilter
     onFiltersChange({});
   };
 
-  const hasActiveFilters = 
+  const hasActiveFilters =
     (filters.status && filters.status.length > 0) ||
     filters.periodo ||
     filters.dataInicio ||
     filters.dataFim ||
     filters.instaladorId ||
-    filters.search;
+    filters.search ||
+    filters.origem;
 
   return (
     <div className="space-y-4">
@@ -88,6 +96,7 @@ export function InstalacaoFilters({ filters, onFiltersChange }: InstalacaoFilter
                 filters.periodo ? 1 : 0,
                 filters.dataInicio || filters.dataFim ? 1 : 0,
                 filters.instaladorId ? 1 : 0,
+                filters.origem ? 1 : 0,
               ].reduce((a, b) => a + b, 0)}
             </Badge>
           )}
@@ -102,21 +111,33 @@ export function InstalacaoFilters({ filters, onFiltersChange }: InstalacaoFilter
       {/* Painel de filtros expandido */}
       {showFilters && (
         <div className="p-4 border rounded-lg bg-card space-y-4">
-          {/* Status */}
-          <div>
-            <label className="text-sm font-medium mb-2 block">Status</label>
-            <div className="flex flex-wrap gap-2">
-              {statusOptions.map(([value, label]) => (
-                <Badge
-                  key={value}
-                  variant={filters.status?.includes(value) ? 'default' : 'outline'}
-                  className="cursor-pointer"
-                  onClick={() => handleStatusToggle(value)}
-                >
-                  {label}
-                </Badge>
-              ))}
-            </div>
+          {/* Status agrupados por fase */}
+          <div className="space-y-3">
+            {FASES.map((fase) => (
+              <div key={fase.titulo}>
+                <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2 block">
+                  {fase.titulo}
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {fase.statuses.map((value) => {
+                    const isActive = Array.isArray(filters.status) && filters.status.includes(value);
+                    return (
+                      <Badge
+                        key={value}
+                        variant={isActive ? 'default' : 'outline'}
+                        className={cn(
+                          'cursor-pointer transition-all',
+                          !isActive && STATUS_INSTALACAO_COLORS[value]
+                        )}
+                        onClick={() => handleStatusToggle(value)}
+                      >
+                        {STATUS_INSTALACAO_LABELS[value]}
+                      </Badge>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
