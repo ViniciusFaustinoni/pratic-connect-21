@@ -687,11 +687,14 @@ export function MapaVistoriasContent() {
                       </Button>
                     )}
                     {!!atribuicaoManualAtiva && !isRealizada && !v.vistoriador_id && !!v.servico_id_unificado && (
-                      <AtribuirTecnicoPopover
-                        servicoId={v.servico_id_unificado}
-                        alocacoesHoje={alocacoesHoje}
-                        atribuirMutation={atribuirMutation}
-                      />
+                      <>
+                        <AtribuirTecnicoPopover
+                          servicoId={v.servico_id_unificado}
+                          alocacoesHoje={alocacoesHoje}
+                          atribuirMutation={atribuirMutation}
+                        />
+                        <AtribuirPrestadorPopover servicoId={v.servico_id_unificado} />
+                      </>
                     )}
                     {canSendConfirmation && (
                       <Button
