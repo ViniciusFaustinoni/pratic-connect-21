@@ -38,6 +38,9 @@ import { useToast } from '@/hooks/use-toast';
 import { useInstalacao, useUpdateInstalacaoStatus, type Instalacao } from '@/hooks/useInstalacoes';
 import { STATUS_INSTALACAO_LABELS, STATUS_INSTALACAO_COLORS, PERIODO_LABELS } from '@/types/database';
 import { cn } from '@/lib/utils';
+import { useFotosVistoriaUnificada, agruparFotosPorCategoria, formatarTipoFoto, type FotoAutovistoria } from '@/hooks/useFotosAutovistoria';
+import { VisualizadorFoto } from '@/components/analise/VisualizadorFoto';
+import { Camera, Video, IdCard, FileText } from 'lucide-react';
 
 interface InstalacaoDetailDrawerProps {
   instalacaoId: string | null;
