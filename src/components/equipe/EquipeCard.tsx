@@ -40,6 +40,7 @@ interface EquipeCardProps {
   onEditar: (prof: ProfissionalEquipe) => void;
   onDesativar: (prof: ProfissionalEquipe) => void;
   onRelatorio: (prof: ProfissionalEquipe) => void;
+  onVerServicos?: (prof: ProfissionalEquipe) => void;
 }
 
 const STATUS_CONFIG: Record<StatusProfissional, { label: string; className: string }> = {
