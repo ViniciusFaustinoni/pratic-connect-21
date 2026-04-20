@@ -1,141 +1,68 @@
 
-## Bloqueio de datas pelo Coordenador de Monitoramento
 
-Permitir que o Coordenador de Monitoramento (e Diretor/Admin Master) bloqueie dias inteiros no calendário. Em datas bloqueadas nenhum novo agendamento é aceito — nem pelo associado no fluxo público, nem por atribuição manual da equipe. Agendamentos **pré-existentes** na data não são afetados (o coordenador decide manualmente o que fazer com eles, normalmente reagendar).
+## Ajuste — "Solicitar Documentos" alinhado ao fluxo real de autovistoria
 
-### 1. Banco — nova tabela `datas_bloqueadas`
+### Problema
 
-Migração SQL criando:
+O botão **Solicitar Documentos** na análise da proposta (`/cadastro/propostas/:id`) abre um dialog com **17+ opções genéricas** (selfie com veículo, 4 lados, 4 pneus, banco dianteiro/traseiro, etc.) que **não existem** no fluxo real de autovistoria de Roubo e Furto. Hoje a autovistoria captura apenas:
 
-```sql
-CREATE TABLE public.datas_bloqueadas (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  data date NOT NULL UNIQUE,
-  motivo text NOT NULL,
-  criado_por uuid REFERENCES public.profiles(id),
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
+- **Carro**: 2 fotos (chassi + motor) + 1 vídeo 360°
+- **Moto**: 2 fotos (chassi + motor) + 1 vídeo 360°
 
-ALTER TABLE public.datas_bloqueadas ENABLE ROW LEVEL SECURITY;
+Além disso, o botão se chama "Solicitar Documentos" mas serve também para pedir reenvio de fotos/vídeo — nome engana.
 
--- Leitura: todos autenticados + anon (fluxo público precisa consultar)
-CREATE POLICY "Public read datas bloqueadas"
-  ON public.datas_bloqueadas FOR SELECT TO anon, authenticated USING (true);
+### Solução
 
--- Escrita: apenas coordenador, diretor, admin_master, desenvolvedor
-CREATE POLICY "Coord manage datas bloqueadas"
-  ON public.datas_bloqueadas FOR ALL TO authenticated
-  USING (
-    has_role(auth.uid(), 'coordenador_monitoramento'::app_role)
-    OR has_role(auth.uid(), 'diretor'::app_role)
-    OR has_role(auth.uid(), 'admin_master'::app_role)
-    OR has_role(auth.uid(), 'desenvolvedor'::app_role)
-  )
-  WITH CHECK (...mesmas roles);
+**1. Renomear** o botão e o dialog para **"Solicitar Reenvio"** (título) / **"Solicitar novo envio"** (botão) — cobre documentos, fotos e vídeos.
 
--- Função helper usada por UI e edge functions
-CREATE OR REPLACE FUNCTION public.data_esta_bloqueada(_data date)
-RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
-  SELECT EXISTS (SELECT 1 FROM public.datas_bloqueadas WHERE data = _data);
-$$;
-```
+**2. Reescrever a lista de itens** do `SolicitarDocumentosDialog.tsx` para espelhar **exatamente** o que a autovistoria/contratação real coleta, detectando o tipo de veículo (carro/moto) a partir da proposta.
 
-Trigger `BEFORE INSERT OR UPDATE` em `servicos`, `vistorias` e `agendamentos_base` para rejeitar gravações novas onde `data_agendada` coincide com linha em `datas_bloqueadas` (barreira server-side que vale para qualquer caminho, inclusive edge functions e mutations diretas):
+Nova estrutura de categorias:
 
-```sql
-CREATE OR REPLACE FUNCTION public.bloquear_agendamento_em_data_bloqueada()
-RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-  IF TG_OP = 'INSERT' OR NEW.data_agendada IS DISTINCT FROM OLD.data_agendada THEN
-    IF NEW.data_agendada IS NOT NULL
-       AND EXISTS (SELECT 1 FROM public.datas_bloqueadas WHERE data = NEW.data_agendada::date) THEN
-      RAISE EXCEPTION 'DATA_BLOQUEADA: A data % está bloqueada para novos agendamentos.', NEW.data_agendada
-        USING ERRCODE = 'check_violation';
-    END IF;
-  END IF;
-  RETURN NEW;
-END $$;
+- **Documentos Pessoais** (sempre):
+  - CNH
+  - CRLV (documento do veículo)
+  - Comprovante de Residência
 
-CREATE TRIGGER trg_bloqueio_servicos BEFORE INSERT OR UPDATE ON public.servicos
-  FOR EACH ROW EXECUTE FUNCTION public.bloquear_agendamento_em_data_bloqueada();
--- mesmo em vistorias e agendamentos_base
-```
+- **Autovistoria — Roubo e Furto** (quando `isAutovistoria`):
+  - `chassi` — Foto do chassi (carro ou moto, conforme veículo)
+  - `motor` — Foto do motor
+  - `video_360` — Vídeo 360° do veículo (NOVO tipo de item)
 
-### 2. Hook compartilhado `useDatasBloqueadas`
+- **Fotos Técnicas do Instalador** (quando NÃO é autovistoria — instalação presencial ou vistoria na base, cobertura total):
+  - Lista herdada do laudo real do instalador (frente, traseira, laterais, painel, odômetro, chassi, motor) — puxada do config `FOTOS_INSTALADOR` já existente no sistema, sem itens inventados.
 
-Novo arquivo `src/hooks/useDatasBloqueadas.ts`:
+- **Outros** (sempre, 1 item):
+  - Outro (descrever nas observações)
 
-- `useDatasBloqueadas()` — lista todas as datas bloqueadas (ordenadas).
-- `useIsDataBloqueada(date)` — boolean rápido para validar uma data específica.
-- `useBloquearData()` / `useDesbloquearData()` — mutations com toast e invalidação de queries (`vagas-periodo`, `instalacoes-calendario`, etc.).
-- Usa `publicSupabase` na versão que precisa rodar no fluxo anon, `supabase` na versão autenticada.
+Categorias exibidas são **condicionais** baseadas em `isAutovistoria` e no `tipo_veiculo` — o analista só vê o que o cliente realmente precisa reenviar.
 
-### 3. UI — botão no Calendário de Serviços
+**3. Detectar `tipoVeiculo`** no componente: novo prop `tipoVeiculo: 'carro' | 'moto'` passado de `PropostaAnalise.tsx`. Resolvido lendo `proposta.veiculo_marca`/`veiculo_modelo` → tabela `marcas_modelos.categoria` (já é a fonte oficial por memory `vehicle-type-detection-source`). Se não resolver, default = `'carro'` e ambos tipos ficam visíveis.
 
-Em `src/pages/monitoramento/CalendarioInstalacoes.tsx`:
+**4. Adicionar suporte ao tipo `video_360`** no mapa `DOCUMENTO_LABELS` de `usePropostasPendentes.ts` (linha 1433) para a mensagem WhatsApp ficar legível: `video_360 → "Vídeo 360° do Veículo"`.
 
-- Cada célula do dia ganha um pequeno botão "🔒" no canto, visível apenas para roles autorizados (`useHasAnyRole(['coordenador_monitoramento', 'diretor', 'admin_master', 'desenvolvedor'])`).
-- Clique abre um `AlertDialog` com:
-  - Campo obrigatório **Motivo** (textarea).
-  - Aviso: "Novos agendamentos serão recusados. Agendamentos existentes nessa data não serão cancelados automaticamente — reagende manualmente se necessário."
-  - Botão **Bloquear data** / **Desbloquear data**.
-- Dias bloqueados ficam com fundo `bg-red-50 dark:bg-red-950/30`, faixa diagonal sutil e badge "Bloqueado — {motivo}".
-- Modal `CalendarioDiaModal` ganha um alerta vermelho no topo quando o dia está bloqueado, e o botão "Agendar nova instalação" fica desabilitado.
+**5. Botão e título** em `PropostaApprovalStepper.tsx` (linha 370) passam de **"Solicitar Documentos"** para **"Solicitar Reenvio"**. Título do dialog idem. `onSolicitarDocs` continua igual.
 
-### 4. Propagação do bloqueio nos fluxos de agendamento
-
-Todos os componentes que possuem `disabled={isDateDisabled}` passam a consultar `useDatasBloqueadas()` e somam a regra:
-
-- `src/components/associado/AgendarVistoria.tsx`
-- `src/components/associado/AgendamentoInstalacaoContrato.tsx`
-- `src/components/cotacao-publica/AgendamentoVistoria.tsx`
-- `src/components/cotacao-publica/AgendamentoBase.tsx`
-- `src/components/evento/EventoAgendamento.tsx`
-- `src/components/monitoramento/manutencao/AgendarManutencaoModal.tsx`
-
-```ts
-const { data: bloqueadas } = useDatasBloqueadas();
-const setBloqueadas = useMemo(() => new Set(bloqueadas?.map(b => b.data) ?? []), [bloqueadas]);
-
-const isDateDisabled = (date: Date) => {
-  // regras atuais (passado, domingo, etc.)
-  return ... || setBloqueadas.has(format(date, 'yyyy-MM-dd'));
-};
-```
-
-Nas listas que geram "próximas datas disponíveis" (laços `while` que empilham datas úteis) o mesmo `Set` é usado para pular dias bloqueados.
-
-### 5. Edge functions de atribuição/reagendamento
-
-`supabase/functions/atribuir-proxima-tarefa/index.ts` e `cron-reagendamento-automatico/index.ts` ganham checagem via `data_esta_bloqueada(_data)` antes de insert/update, retornando erro amigável. Como o trigger do banco já protege, isso é defesa em profundidade para dar mensagem clara (`"Data bloqueada: {motivo}"` em vez de erro genérico).
-
-### 6. Tratamento de erro no frontend
-
-Helper `src/lib/supabaseErrors.ts` (ou local nos hooks de criação) detecta `DATA_BLOQUEADA:` no `error.message` e exibe toast destrutivo: "Esta data foi bloqueada pelo coordenador. Escolha outra data."
+**6. Mensagem de ajuda no topo do dialog** fica:
+> "Selecione os itens que o associado precisa **reenviar** (documentos, fotos ou vídeo). Ele será notificado via WhatsApp com o link de acompanhamento."
 
 ### Validação pós-deploy
 
-1. Logar como `admin@teste.com` → `/monitoramento/calendario` → clicar no cadeado de `2026-04-25` → preencher motivo "Feriado regional" → confirmar. Dia fica hachurado em vermelho.
-2. Abrir fluxo público `/cotacao/:token` → tentar escolher `2026-04-25` no calendário → data aparece desabilitada.
-3. Abrir modal "Agendar Manutenção" como coordenador → `2026-04-25` desabilitado.
-4. Tentar `INSERT` direto via SQL com `data_agendada='2026-04-25'` em `servicos` → erro `DATA_BLOQUEADA`.
-5. Desbloquear a data → calendário e formulários voltam ao normal sem reload manual (invalidação de query funciona).
-6. Testar mobile: botão de cadeado acessível via tap, modal responsivo.
-7. Logar como `analista_cadastro` → cadeado **não aparece** no calendário; apenas visualiza o dia bloqueado.
+1. Logar como `admin@teste.com` → `/cadastro/propostas/9efdeaad-7735-410a-b2d1-630abe00dc0a` → clicar **Solicitar Reenvio**.
+2. Como é autovistoria de Roubo e Furto de carro, dialog mostra **somente**: Documentos Pessoais (3), Autovistoria Roubo e Furto (chassi, motor, vídeo 360°), Outros.
+3. Não aparecem mais: selfie com veículo, pneus, bancos, laterais soltas.
+4. Abrir uma proposta de **moto** com autovistoria → `chassi` e `motor` ficam rotulados conforme `FOTOS_AUTOVISTORIA_MOTO`.
+5. Abrir uma proposta com **instalação presencial concluída** (não autovistoria) → dialog mostra a lista do instalador (frente, traseira, laterais, painel, odômetro, chassi, motor).
+6. Selecionar `video_360` + CNH → confirmar → WhatsApp recebido pelo associado mostra linha `• Vídeo 360° do Veículo` e `• CNH`.
+7. Texto do botão na zona de aprovação final lê "Solicitar Reenvio" em vez de "Solicitar Documentos".
 
-### Arquivos tocados
+### Arquivos alterados
 
-- **Migração SQL** (nova) — tabela, RLS, função `data_esta_bloqueada`, trigger aplicado em `servicos`, `vistorias`, `agendamentos_base`.
-- `src/hooks/useDatasBloqueadas.ts` (novo).
-- `src/pages/monitoramento/CalendarioInstalacoes.tsx` — botão cadeado + destaque visual.
-- `src/components/monitoramento/CalendarioDiaModal.tsx` — alerta + desabilitar ações.
-- `src/components/monitoramento/BloquearDataDialog.tsx` (novo) — dialog de motivo.
-- `src/components/associado/AgendarVistoria.tsx`, `AgendamentoInstalacaoContrato.tsx`
-- `src/components/cotacao-publica/AgendamentoVistoria.tsx`, `AgendamentoBase.tsx`
-- `src/components/evento/EventoAgendamento.tsx`
-- `src/components/monitoramento/manutencao/AgendarManutencaoModal.tsx`
-- `supabase/functions/atribuir-proxima-tarefa/index.ts`
-- `supabase/functions/cron-reagendamento-automatico/index.ts`
+- `src/components/cadastro/SolicitarDocumentosDialog.tsx` — reescrita da lista `CATEGORIAS_DOCUMENTOS` com detecção de contexto (`isAutovistoria`, `tipoVeiculo`), novo tipo `video_360`, título "Solicitar Reenvio".
+- `src/components/cadastro/proposta/PropostaApprovalStepper.tsx` — label do botão vira "Solicitar Reenvio".
+- `src/pages/cadastro/PropostaAnalise.tsx` — passa `isAutovistoria` e `tipoVeiculo` resolvido ao `SolicitarDocumentosDialog`.
+- `src/hooks/usePropostasPendentes.ts` — adicionar `video_360` em `DOCUMENTO_LABELS`.
+- (Opcional, só se necessário) `src/hooks/useVehicleCategory.ts` ou reuso do helper existente em `vehicle-type-detection-source` para resolver carro/moto via `marcas_modelos`.
 
-Sem mudança em schema de `servicos`/`vistorias`, sem quebrar fluxos existentes.
+Sem migração, sem mudança de schema, sem quebrar fluxos existentes.
+
