@@ -25,6 +25,33 @@ Deno.serve(async (req) => {
       )
     }
 
+    // Garantir que existe registro em vistoriadores_prestadores (espelha de prestadores_instalacao se necessário)
+    const { data: vpExist } = await supabase
+      .from('vistoriadores_prestadores')
+      .select('id')
+      .eq('id', vistoriador_prestador_id)
+      .maybeSingle()
+
+    if (!vpExist) {
+      const { data: pi } = await supabase
+        .from('prestadores_instalacao')
+        .select('id, nome, whatsapp')
+        .eq('id', vistoriador_prestador_id)
+        .maybeSingle()
+
+      if (pi) {
+        const { error: upErr } = await supabase
+          .from('vistoriadores_prestadores')
+          .upsert({ id: pi.id, nome: pi.nome, telefone: pi.whatsapp, ativo: true }, { onConflict: 'id' })
+        if (upErr) console.error('Erro ao espelhar prestador_instalacao:', upErr)
+      } else {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Prestador não encontrado em vistoriadores_prestadores nem prestadores_instalacao' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+    }
+
     // ── AÇÃO 1: Gerar ou reusar token ──
     let linkToken: string
     let linkId: string
