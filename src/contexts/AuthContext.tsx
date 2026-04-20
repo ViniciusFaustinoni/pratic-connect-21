@@ -245,10 +245,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setInitialized(true);
         }
       }
+    }).catch((err) => {
+      // Se getSession falhar (timeout/network), não travar — destravar UI
+      console.warn('[AuthContext] getSession falhou:', err?.message || err);
+      if (mounted && !hasLoadedData) {
+        setLoading(false);
+        setInitialized(true);
+      }
     });
+
+    // Failsafe: se em 20s não inicializou (backend Auth caído),
+    // destrava UI para mostrar tela de login/erro em vez de spinner infinito.
+    const initTimeout = setTimeout(() => {
+      if (mounted && !hasLoadedData) {
+        console.warn('[AuthContext] Timeout de inicialização (20s) — destravando UI');
+        setLoading(false);
+        setInitialized(true);
+      }
+    }, 20000);
 
     return () => {
       mounted = false;
+      clearTimeout(initTimeout);
       subscription.unsubscribe();
     };
   }, [fetchProfile, fetchPerfis]);
