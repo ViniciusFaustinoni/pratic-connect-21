@@ -1,64 +1,65 @@
 
 
-## Diferenciar fluxo de almoço para técnicos Base vs Rota
+## Realocar instalação não realizada (no drawer + mapa)
 
-### Comportamento atual
-- Almoço inicia **automaticamente** após 4h trabalhadas (`useJornadaTrabalho` linha 398-411).
-- Almoço finaliza **automaticamente** após 60min (linha 440-449).
-- `AlmocoBloqueioOverlay` cobre a tela inteira durante o almoço.
-- Não há diferenciação entre técnico Rota e técnico Base.
+### Problema
+Quando a instalação não acontece (status `nao_compareceu`, `reagendada`, `cancelada` ou `agendada` sem instalador) o veículo cai num limbo: o drawer de detalhes só permite mudar o status, sem opção de mover para outra rota nem para uma base. Exemplo: Marcos (placa QXV0H02) está com status `nao_compareceu` e `rota_id=null`, sem ação possível.
 
-### Comportamento desejado
-| Tipo | Início do almoço | Fim do almoço | Overlay de bloqueio |
-|------|------------------|----------------|---------------------|
-| **Rota** (atual) | Automático após 4h | Automático após 60min (ou manual) | Sim, cobre a tela |
-| **Base** (novo) | **Manual** via botão "Iniciar almoço" (visível na janela de almoço) | **Manual** via botão "Finalizar almoço" | **Não** — apenas botões na barra de jornada |
+### Solução — botão **"Realocar serviço"** no drawer de instalação + atalho no mapa
+Visível para perfil **Coordenador de Monitoramento** (e Diretor) sempre que `status ∈ {agendada, nao_compareceu, reagendada, cancelada}`. Abre um modal com 2 abas:
 
-Para o técnico Base, o tempo de trabalho e de almoço continua sendo medido e gravado em `turnos_profissionais` igual ao Rota — a única diferença é que ele decide quando pausa.
+**Aba 1 — Mover para uma Rota**
+- Combo "Data" (default = hoje, mín = hoje)
+- Combo "Rota" listando rotas daquele dia (`useRotasDoDia`) com nome, instalador e contagem de serviços. Opção "Criar nova rota" abre um campo simples de nome/cidade e cria via insert em `rotas` antes de atribuir.
+- Combo opcional "Instalador" (preenchido automaticamente pelo instalador da rota; editável).
+- Combo opcional "Novo horário" (`hora_agendada`).
+- Campo "Motivo da realocação" (obrigatório).
+- Checkbox "Notificar associado por WhatsApp" (default ON).
 
-### Definição de "janela de almoço" para o Base
-O botão "Iniciar almoço" só aparece quando:
-- `status === 'ativo'` (turno em andamento, não em almoço, não encerrado)
-- `tempoReal.minutosTrabalhados >= TEMPO_ATE_ALMOCO_MINUTOS` (ou seja, já passou das 4h trabalhadas configuradas)
+Ação: `update instalacoes set rota_id, instalador_id, data_agendada, hora_agendada, status='agendada' where id = ?`. Registra em `instalacoes_historico` (ou tabela equivalente) e dispara WhatsApp ao associado quando marcado.
 
-Sem janela rígida de fim — ele pode iniciar o almoço a qualquer momento depois das 4h. Antes das 4h, o botão fica oculto (consistente com a regra de jornada).
+**Aba 2 — Mover para uma Base (oficina)**
+- Combo "Base" listando oficinas Pratic (`useBasesPratic`).
+- Combo "Data" e "Horário".
+- Campo "Motivo" (obrigatório).
+- Checkbox "Notificar associado por WhatsApp" (default ON, mensagem padrão "Compareça à base X em ...").
 
-### Implementação técnica
+Ação: cria registro em `agendamentos_base` (`instalacao_id`, `oficina_id`, `data_agendada`, `horario`, `cliente_nome`, `cliente_telefone`, `veiculo_placa`, `veiculo_descricao`, `status='confirmado'`) e atualiza `instalacoes` para `status='agendada'` + `rota_id=null` + `local_vistoria='base'`. Histórico + WhatsApp como acima.
 
-**Arquivo 1: `src/hooks/useJornadaTrabalho.ts`**
-- Importar `useAlocacaoDiaria` e capturar `isBase`.
-- Adicionar `isBase` ao retorno do hook (para a UI saber).
-- **Bloquear auto-início do almoço quando `isBase === true`** (linha 398-411): adicionar `&& !isBase` na condição.
-- **Bloquear auto-finalização do almoço quando `isBase === true`** (linha 440-449): adicionar `&& !isBase` na condição. Base finaliza manualmente.
-- Manter o cálculo de atraso de almoço para Base também — se ele extrapolar 60min de pausa, o acréscimo continua sendo aplicado à jornada (mantém justiça no banco de horas).
-- Manter `almocoAdiado` apenas para Rota (já é por construção, pois Base nunca entra no auto).
+### Pontos de entrada
+1. **Drawer `InstalacaoDetailDrawer.tsx`** (Serviços de Campo > Instalações): adicionar botão "Realocar serviço" na seção Ações, ao lado de "Reagendar" e "Não Compareceu". Ícone `MapPinned`.
+2. **Mapa de Atribuições (`MapaVistoriasContent.tsx`)**: no popup do pin de uma instalação sem instalador atribuído ou com status problemático, adicionar botão "Realocar" que abre o mesmo modal.
 
-**Arquivo 2: `src/components/vistoriador/AlmocoBloqueioOverlay.tsx`**
-- Importar `useAlocacaoDiaria`.
-- No early-return: se `isBase === true`, **nunca renderizar o overlay** (mesmo em almoço). Base não tem tela de bloqueio.
+### Permissões / RLS
+Reutilizar policies existentes (`canManageInstalacoes` / `canManageEquipeEstoque`). Coordenador de Monitoramento já tem acesso (memo `monitoring-coordinator-permissions`). Sem nova policy.
 
-**Arquivo 3: `src/components/vistoriador/JornadaStatusBar.tsx`**
-- Receber `isBase` do hook.
-- **Para Base com `status === 'ativo'` e `minutosTrabalhados >= TEMPO_ATE_ALMOCO_MINUTOS` e sem `inicio_almoco`**: renderizar botão verde **"Iniciar almoço"** (chama `iniciarAlmoco()`).
-- **Para Base com `emAlmoco === true`**: trocar o card amarelo de "Horário de Almoço" para uma versão que mostra:
-  - Tempo decorrido de almoço (contador crescente)
-  - Aviso visual quando passa de 60min ("⚠️ +Xmin de acréscimo na jornada")
-  - Botão **"Finalizar almoço"** (chama `finalizarAlmoco()`)
-- Para Rota o comportamento permanece idêntico (overlay + auto-finalização).
+### Banco de dados
+Sem migração de schema. Apenas escritas em tabelas existentes:
+- `instalacoes` (update)
+- `agendamentos_base` (insert quando aba Base)
+- `rotas` (insert quando criar rota nova)
+- `instalacoes_historico` (insert para auditoria — verificar nome real e ajustar se necessário)
+
+### Arquivos a criar/alterar
+- **Novo:** `src/components/instalacoes/RealocarInstalacaoDialog.tsx` — modal com as 2 abas.
+- **Novo:** `src/hooks/useRealocarInstalacao.ts` — `useMutation` com 2 funções: `realocarParaRota` e `realocarParaBase`, ambas registrando histórico e disparando WhatsApp opcional via `whatsapp-send-text`.
+- **Editar:** `src/components/instalacoes/InstalacaoDetailDrawer.tsx` — botão "Realocar serviço" na seção Ações.
+- **Editar:** `src/components/mapa/MapaVistoriasContent.tsx` — botão "Realocar" no popup da instalação sem dono / em limbo.
 
 ### Validação pós-deploy
-1. **Técnico Rota** com 4h trabalhadas e sem tarefa → overlay de almoço aparece automaticamente; finaliza sozinho aos 60min. (comportamento atual preservado)
-2. **Técnico Base** trabalhando: ao cruzar 4h, **não** aparece overlay; aparece botão "Iniciar almoço" na barra de jornada.
-3. **Técnico Base** clica em "Iniciar almoço" → status muda para `em_almoco`, tempo de almoço começa a contar, **sem overlay bloqueando**.
-4. **Técnico Base** em almoço passa de 60min → barra mostra contador crescente + aviso de acréscimo; botão "Finalizar almoço" continua visível.
-5. **Técnico Base** clica em "Finalizar almoço" → volta para `ativo`, atraso registrado em `minutos_atraso_almoco`, jornada ajustada.
-6. Conferir no banco que `inicio_almoco`, `fim_almoco` e `minutos_atraso_almoco` são gravados corretamente para o técnico Base.
-7. Em dia útil (segunda a sexta) onde `useAlocacaoDiaria` retorna `isBase=false` por padrão → técnico cai no fluxo Rota normalmente.
+1. Abrir Marcos Vinicius (QXV0H02, status `nao_compareceu`) em Serviços de Campo > Instalações → drawer mostra botão "Realocar serviço".
+2. Mover para Rota → status volta para `agendada`, `rota_id` e `instalador_id` preenchidos, WhatsApp enviado, instalação aparece na rota selecionada.
+3. Mover para Base → registro criado em `agendamentos_base`, instalação aparece em "Vistoria na Base" do técnico daquela oficina.
+4. Reabrir o drawer → status mostra "Agendada" e bloco mostra a nova rota/base.
+5. No Mapa de Atribuições, o pin azul desse veículo agora reflete a nova alocação.
+6. Conferir entrada em `instalacoes_historico` com tipo "realocada" e motivo digitado.
+7. Mobile 400px → modal responsivo, abas empilháveis.
 
-### Arquivos tocados
-- `src/hooks/useJornadaTrabalho.ts` — bypass de auto-almoço para Base + expor `isBase`.
-- `src/components/vistoriador/AlmocoBloqueioOverlay.tsx` — não renderizar para Base.
-- `src/components/vistoriador/JornadaStatusBar.tsx` — botões manuais "Iniciar/Finalizar almoço" para Base.
+### Pergunta antes de implementar
+Quando o veículo é movido para uma **base**, a instalação original em `instalacoes` deve:
+- (A) Permanecer como `agendada` mas com `local_vistoria='base'` e linkar via `agendamentos_base.instalacao_id` (sem duplicação) — **recomendado**.
+- (B) Ser marcada como `cancelada` e o agendamento na base passa a ser a fonte de verdade.
+- (C) Outro comportamento.
 
-Sem migração, sem novo hook, sem alteração de schema/RLS.
+Aguardo essa decisão para finalizar a aba Base — as demais partes do plano não dependem dela.
 
