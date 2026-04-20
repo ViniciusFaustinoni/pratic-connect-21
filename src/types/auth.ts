@@ -198,7 +198,7 @@ export function computeAuthFlags(state: AuthState): AuthFlags {
     isAnalistaCadastro: perfis.includes('analista_cadastro'),
     isCoordenadorMonitoramento: perfis.includes('coordenador_monitoramento'),
     isAnalistaPlataforma: perfis.includes('analista_plataforma'),
-    isInstalador: perfis.includes('instalador_vistoriador'),
+    isInstalador: perfis.includes('instalador_vistoriador') || perfis.includes('vistoriador_base'),
     isRegulador: perfis.includes('regulador'),
     isAnalistaEventos: perfis.includes('analista_eventos'),
     isSindicante: perfis.includes('sindicante'),
