@@ -575,6 +575,7 @@ export function usePropostasPendentes() {
             instalacao_info: instalacaoInfo,
             instalacao_agendada: instalacaoAgendada,
             vistoria_base_info: vistoriaBaseInfo,
+            tipo_vistoria: tipoVistoriaCotacao,
             veiculo_id: null, // Não disponível na lista resumida
             veiculo_cobertura_total: null, // Não disponível na lista resumida
             veiculo_renavam: null, // Não disponível na lista resumida
@@ -703,6 +704,7 @@ export function useProposta(contratoId: string | undefined) {
       let enderecoCompleto: string | null = null;
       let planoNome: string | null = null;
       let instalacaoAgendada: InstalacaoAgendadaInfo | null = null;
+      let tipoVistoriaCotacao: 'autovistoria' | 'agendada' | 'agendada_base' | null = null;
       
       if (contrato.cotacao_id) {
         const { data: cotacao } = await supabase
@@ -711,12 +713,14 @@ export function useProposta(contratoId: string | undefined) {
             cliente_logradouro, cliente_numero, cliente_bairro, cliente_cidade, cliente_uf, 
             plano_escolhido_id, vistoria_permite_encaixe, 
             vistoria_data_agendada, vistoria_horario_agendado,
-            vistoria_completa_data_agendada, vistoria_completa_horario_agendado
+            vistoria_completa_data_agendada, vistoria_completa_horario_agendado,
+            tipo_vistoria
           `)
           .eq('id', contrato.cotacao_id)
           .maybeSingle();
         
         if (cotacao) {
+          tipoVistoriaCotacao = (cotacao.tipo_vistoria as any) || null;
           if (cotacao.cliente_logradouro) {
             enderecoCompleto = `${cotacao.cliente_logradouro}, ${cotacao.cliente_numero || 'S/N'} - ${cotacao.cliente_bairro || ''}, ${cotacao.cliente_cidade || ''} - ${cotacao.cliente_uf || ''}`;
           }
@@ -1175,6 +1179,7 @@ export function useProposta(contratoId: string | undefined) {
         instalacao_info: instalacaoInfo,
         instalacao_agendada: instalacaoAgendada,
         vistoria_base_info: vistoriaBaseInfo,
+        tipo_vistoria: tipoVistoriaCotacao,
         veiculo_id: veiculoId,
         veiculo_cobertura_total: veiculoCoberturaTotal,
         veiculo_renavam: veiculoRenavam,
