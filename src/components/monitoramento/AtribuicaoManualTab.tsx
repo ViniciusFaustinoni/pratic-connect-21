@@ -415,19 +415,22 @@ export default function AtribuicaoManualTab() {
 
           {/* Prestadores Externos */}
           <div className="border-t pt-3 mt-3">
-            <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2 mb-3">
+            <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2 mb-1">
               <ExternalLink className="h-4 w-4" />
               Prestadores Externos
               <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800">
                 {prestadoresAtivos.length}
               </Badge>
             </h3>
+            <p className="text-[11px] text-muted-foreground mb-3">
+              Disponíveis por cadastro ativo — não dependem de status online.
+            </p>
             {loadingPrestadores ? (
               <div className="flex items-center justify-center py-4">
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
               </div>
             ) : prestadoresAtivos.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">Nenhum prestador ativo</p>
+              <p className="text-sm text-muted-foreground text-center py-4">Nenhum prestador ativo cadastrado</p>
             ) : (
               <div className="space-y-2">
                 {prestadoresAtivos.map((p: any) => (

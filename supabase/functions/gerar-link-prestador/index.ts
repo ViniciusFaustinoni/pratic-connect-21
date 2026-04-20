@@ -53,21 +53,45 @@ Deno.serve(async (req) => {
       usaVistoriadorPrestador = true
       prestadorData = { nome: vp.nome, whatsapp: vp.telefone, cidade: vp.cidade }
     } else {
-      const { data: pa, error: paErr } = await supabase
-        .from('prestadores_assistencia')
-        .select('id, razao_social, nome_fantasia, whatsapp, telefone, cidade')
+      // Tenta prestadores_instalacao (cadastro usado em /monitoramento/prestadores-parceiros)
+      const { data: pi } = await supabase
+        .from('prestadores_instalacao')
+        .select('id, nome, whatsapp')
         .eq('id', prestadorIdFinal)
-        .single()
-      if (paErr || !pa) {
-        return new Response(
-          JSON.stringify({ success: false, error: 'Prestador não encontrado' }),
-          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-      prestadorData = {
-        nome: pa.nome_fantasia || pa.razao_social,
-        whatsapp: pa.whatsapp || pa.telefone,
-        cidade: pa.cidade,
+        .maybeSingle()
+
+      if (pi) {
+        // Espelha em vistoriadores_prestadores (mesmo id) para usar coluna vistoriador_prestador_id
+        const { error: upsertErr } = await supabase
+          .from('vistoriadores_prestadores')
+          .upsert({
+            id: pi.id,
+            nome: pi.nome,
+            telefone: pi.whatsapp,
+            ativo: true,
+          }, { onConflict: 'id' })
+        if (upsertErr) {
+          console.error('Erro ao espelhar prestador_instalacao em vistoriadores_prestadores:', upsertErr)
+        }
+        usaVistoriadorPrestador = true
+        prestadorData = { nome: pi.nome, whatsapp: pi.whatsapp, cidade: null }
+      } else {
+        const { data: pa, error: paErr } = await supabase
+          .from('prestadores_assistencia')
+          .select('id, razao_social, nome_fantasia, whatsapp, telefone, cidade')
+          .eq('id', prestadorIdFinal)
+          .single()
+        if (paErr || !pa) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Prestador não encontrado' }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+        prestadorData = {
+          nome: pa.nome_fantasia || pa.razao_social,
+          whatsapp: pa.whatsapp || pa.telefone,
+          cidade: pa.cidade,
+        }
       }
     }
 
