@@ -59,8 +59,8 @@ const tipoConfig: Record<TipoDocumentoContrato, {
     obrigatorio: true,
   },
   rg: { 
-    label: 'RG', 
-    descricao: 'Documento de identidade (alternativa à CNH)',
+    label: 'RG / CIN', 
+    descricao: 'RG antigo ou nova Carteira de Identidade Nacional (CIN) — alternativa à CNH',
     icon: User,
     obrigatorio: false,
   },
