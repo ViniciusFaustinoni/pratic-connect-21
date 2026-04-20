@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { getHojeBrasilia } from '@/lib/date-utils';
 import { useTemTarefaEmExecucao } from './useTemTarefaEmExecucao';
+import { useAlocacaoDiaria } from './useAlocacaoDiaria';
 
 interface TurnoProfissional {
   id: string;
@@ -393,13 +394,18 @@ export function useJornadaTrabalho() {
   // Checar se há tarefa em execução (em_rota / em_andamento)
   const temTarefaEmExecucao = useTemTarefaEmExecucao();
 
+  // Tipo de alocação do dia (rota vs base). Base = controla almoço manualmente.
+  const { isBase } = useAlocacaoDiaria();
+
   // Verificar se deve iniciar almoço automaticamente
   // ⚠️ NÃO inicia se houver tarefa em execução — espera o técnico finalizar.
+  // ⚠️ NÃO inicia para técnicos Base — eles iniciam manualmente.
   useEffect(() => {
     if (
       turno?.status === 'ativo' &&
       !turno.inicio_almoco &&
-      tempoReal.minutosTrabalhados >= TEMPO_ATE_ALMOCO_MINUTOS
+      tempoReal.minutosTrabalhados >= TEMPO_ATE_ALMOCO_MINUTOS &&
+      !isBase
     ) {
       if (temTarefaEmExecucao) {
         console.log('[useJornadaTrabalho] Almoço adiado — tarefa em execução');
@@ -408,7 +414,7 @@ export function useJornadaTrabalho() {
       console.log('[useJornadaTrabalho] 4 horas trabalhadas - iniciando almoço automaticamente');
       iniciarAlmocoMutation.mutate();
     }
-  }, [turno?.status, turno?.inicio_almoco, tempoReal.minutosTrabalhados, temTarefaEmExecucao]);
+  }, [turno?.status, turno?.inicio_almoco, tempoReal.minutosTrabalhados, temTarefaEmExecucao, isBase]);
 
   // Flag exposta para UI: passou de 4h mas almoço foi adiado por tarefa em execução
   const almocoAdiado =
@@ -437,16 +443,18 @@ export function useJornadaTrabalho() {
   }, [turno?.status, turno?.id, temTarefaEmExecucao, refetchTurno]);
 
   // Auto-finalizar almoço quando os 60 minutos se completam
+  // ⚠️ NÃO finaliza para técnicos Base — eles finalizam manualmente.
   useEffect(() => {
     if (
       turno?.status === 'em_almoco' &&
       tempoReal.minutosAlmoco >= DURACAO_ALMOCO_MINUTOS &&
-      !finalizarAlmocoMutation.isPending
+      !finalizarAlmocoMutation.isPending &&
+      !isBase
     ) {
       console.log('[useJornadaTrabalho] Almoço de 60min completo - finalizando automaticamente');
       finalizarAlmocoMutation.mutate();
     }
-  }, [turno?.status, tempoReal.minutosAlmoco]);
+  }, [turno?.status, tempoReal.minutosAlmoco, isBase]);
 
   // Calcular atraso de almoço em tempo real
   const calcularAtrasoAlmocoAtual = (): number => {
@@ -555,6 +563,7 @@ export function useJornadaTrabalho() {
     // Flags de UI
     almocoAdiado,
     temTarefaEmExecucao,
+    isBase,
 
     // Helpers
     formatarMinutos,

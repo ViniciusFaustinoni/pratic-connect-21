@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Coffee, Clock, ArrowRight } from 'lucide-react';
 import { useJornadaTrabalho, formatarMinutos } from '@/hooks/useJornadaTrabalho';
 import { useTemTarefaEmExecucao } from '@/hooks/useTemTarefaEmExecucao';
+import { useAlocacaoDiaria } from '@/hooks/useAlocacaoDiaria';
 import { Button } from '@/components/ui/button';
 
 /**
@@ -11,6 +12,7 @@ import { Button } from '@/components/ui/button';
 export function AlmocoBloqueioOverlay() {
   const { emAlmoco, minutosAlmocoRestantes, turno, finalizarAlmoco, isFinalizandoAlmoco } = useJornadaTrabalho();
   const temTarefaEmExecucao = useTemTarefaEmExecucao();
+  const { isBase } = useAlocacaoDiaria();
   const [segundosRestantes, setSegundosRestantes] = useState(0);
 
   // Calcular segundos restantes em tempo real
@@ -35,6 +37,11 @@ export function AlmocoBloqueioOverlay() {
   }, [emAlmoco, turno?.inicio_almoco]);
 
   if (!emAlmoco) {
+    return null;
+  }
+
+  // ⚠️ Técnicos Base controlam o almoço manualmente — nunca exibir overlay.
+  if (isBase) {
     return null;
   }
 
