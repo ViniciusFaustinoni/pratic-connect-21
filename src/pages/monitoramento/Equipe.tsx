@@ -70,6 +70,16 @@ export default function Equipe() {
     setRelatorioModalOpen(true);
   };
 
+  const handleVerServicos = (prof: ProfissionalEquipe) => {
+    if (prof.role === 'instalador_vistoriador') {
+      setServicosModalCtx({ modo: 'profissional', profissional: prof });
+    } else {
+      // Card administrativo → ver TODOS os serviços de instaladores
+      setServicosModalCtx({ modo: 'todos_instaladores', profissional: prof });
+    }
+    setServicosModalOpen(true);
+  };
+
   const handleSave = (data: ProfissionalFormData) => {
     saveProfissional(
       {
