@@ -196,9 +196,9 @@ Deno.serve(async (req) => {
     // ✅ CORRIGIDO: Só marca como nao_compareceu quando a janela de atendimento realmente venceu
     const { data: servicos, error } = await supabase
       .from("servicos")
-      .select("id, tipo, status, reagendamento_enviado_em, created_at, hora_agendada, periodo, associado_id, veiculo_id")
+      .select("id, tipo, status, reagendamento_enviado_em, created_at, hora_agendada, periodo, associado_id, veiculo_id, profissional_id")
       .eq("data_agendada", hoje)
-      .eq("status", "agendada")
+      .in("status", ["agendada", "em_rota", "em_andamento"])
       .is("reagendamento_enviado_em", null)
       .in("tipo", [
         "vistoria_entrada",
@@ -222,18 +222,18 @@ Deno.serve(async (req) => {
       hour12: false,
     });
 
-    // Idade mínima: 4 horas desde a criação
-    const IDADE_MINIMA_MS = 4 * 60 * 60 * 1000;
-    // Tolerância após hora agendada: 2 horas
-    const TOLERANCIA_HORA_MIN = "02:00";
+    // Idade mínima: 30 minutos desde a criação
+    const IDADE_MINIMA_MS = 30 * 60 * 1000;
+    // Tolerância após hora agendada: 15 minutos
+    const TOLERANCIA_HORA_MIN = "00:15";
 
-    // Mapa de cutoff por período
+    // Mapa de cutoff por período (com tolerância de 15 min)
     const cutoffPeriodo: Record<string, string> = {
-      manha: "14:00",   // manhã vence às 14h
-      tarde: "19:00",   // tarde vence às 19h
-      noite: "23:00",   // noite vence às 23h
+      manha: "12:15",
+      tarde: "17:15",
+      noite: "21:15",
     };
-    // Cutoff padrão (sem hora nem período): fim do expediente
+    // Cutoff padrão (sem hora nem período)
     const CUTOFF_PADRAO = "20:00";
 
     function somarHoras(hora: string, acrescimo: string): string {
@@ -289,21 +289,34 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Janela vencida e serviço antigo → marcar como nao_compareceu
+        // Janela vencida e serviço antigo → marcar como nao_compareceu e devolver do técnico
+        const profissionalAnterior = servico.profissional_id;
         await supabase
           .from("servicos")
           .update({
             status: "nao_compareceu",
+            profissional_id: null,
             updated_at: new Date().toISOString(),
           })
           .eq("id", servico.id);
+
+        // Cancelar entradas em fila ligadas ao serviço
+        await supabase
+          .from("fila_servicos")
+          .update({ status: "cancelado" } as any)
+          .eq("servico_id", servico.id)
+          .eq("status", "aguardando");
+
+        if (profissionalAnterior) {
+          console.log(`[cron-reagendamento] ↩ Tarefa ${servico.id} devolvida do técnico ${profissionalAnterior}`);
+        }
 
         await supabase.functions.invoke("enviar-link-reagendamento", {
           body: { servico_id: servico.id },
         });
 
         processados++;
-        console.log(`[cron-reagendamento] Processado (vencido): ${servico.id} (cutoff=${cutoff})`);
+        console.log(`[cron-reagendamento] Processado (vencido): ${servico.id} (cutoff=${cutoff}, status_anterior=${servico.status})`);
       } catch (e: any) {
         console.error(`[cron-reagendamento] Erro no serviço ${servico.id}:`, e.message);
       }
