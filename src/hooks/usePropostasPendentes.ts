@@ -124,6 +124,7 @@ export interface PropostaPendente {
   instalacao_info: InstalacaoInfo | null; // Dados da instalação concluída
   instalacao_agendada: InstalacaoAgendadaInfo | null; // Dados do agendamento (pré-instalação)
   vistoria_base_info: VistoriaBaseInfo | null; // Dados da vistoria na base
+  tipo_vistoria: 'autovistoria' | 'agendada' | 'agendada_base' | null; // Modalidade definida na cotação
 }
 
 export interface PropostaStats {
