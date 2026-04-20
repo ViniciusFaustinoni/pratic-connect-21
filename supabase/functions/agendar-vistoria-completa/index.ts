@@ -9,7 +9,9 @@ const corsHeaders = {
 interface AgendarVistoriaRequest {
   cotacaoId: string;
   dataAgendada: string;
-  horarioAgendado: string;
+  /** Pode vir como 'manha'/'tarde' (preferido) ou HH:MM (legado). */
+  horarioAgendado?: string;
+  periodo?: 'manha' | 'tarde';
   endereco: {
     cep: string;
     logradouro: string;
@@ -45,6 +47,16 @@ serve(async (req) => {
 
     const body: AgendarVistoriaRequest = await req.json();
     const { cotacaoId, dataAgendada, horarioAgendado, endereco, responsavel, latitude, longitude, permiteEncaixe } = body;
+
+    // Normalizar período (canônico) — sempre passa a operar por período
+    const periodoNorm: 'manha' | 'tarde' = (() => {
+      const v = String(body.periodo || horarioAgendado || '').toLowerCase();
+      if (v === 'tarde') return 'tarde';
+      if (v === 'manha' || v === 'manhã') return 'manha';
+      const m = /^(\d{1,2}):/.exec(v);
+      if (m) return parseInt(m[1], 10) < 12 ? 'manha' : 'tarde';
+      return 'manha';
+    })();
 
     console.log('[AgendarVistoriaCompleta] Iniciando para cotação:', cotacaoId, 'permiteEncaixe:', permiteEncaixe);
 
@@ -123,7 +135,8 @@ serve(async (req) => {
     
     const updateData: Record<string, unknown> = {
       vistoria_completa_data_agendada: dataAgendada,
-      vistoria_completa_horario_agendado: horarioAgendado,
+      vistoria_completa_horario_agendado: null,
+      vistoria_completa_periodo: periodoNorm,
       vistoria_completa_endereco_cep: endereco.cep,
       vistoria_completa_endereco_logradouro: endereco.logradouro,
       vistoria_completa_endereco_numero: endereco.numero,
@@ -151,7 +164,7 @@ serve(async (req) => {
 
     console.log('[AgendarVistoriaCompleta] Agendamento salvo na cotação:', {
       data: dataAgendada,
-      horario: horarioAgendado,
+      periodo: periodoNorm,
       permiteEncaixe: permiteEncaixe ?? false,
       temCoordenadas: !!(finalLatitude && finalLongitude),
       latitude: finalLatitude,
@@ -169,9 +182,7 @@ serve(async (req) => {
         const nomeAbrev = nomeCliente.split(' ')[0];
 
         if (telefoneCliente) {
-          // Determinar período pelo horário agendado
-          const horaAgendada = parseInt(horarioAgendado?.split(':')[0] || '8', 10);
-          const periodoTexto = horaAgendada < 12 ? 'pela manhã' : 'pela tarde';
+          const periodoTexto = periodoNorm === 'manha' ? 'pela manhã' : 'pela tarde';
 
           const dataObj = new Date(dataAgendada + 'T12:00:00');
           const dataFormatada = dataObj.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' });

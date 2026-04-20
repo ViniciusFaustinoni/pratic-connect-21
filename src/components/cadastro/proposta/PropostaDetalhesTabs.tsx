@@ -27,6 +27,7 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { PropostaPendente } from '@/hooks/usePropostasPendentes';
+import { formatPeriodoLabel } from '@/lib/periodo-utils';
 
 interface PropostaDetalhesTabsProps {
   proposta: PropostaPendente;
@@ -237,7 +238,7 @@ export function PropostaDetalhesTabs({
             <CardContent className="px-4 pb-4 pt-2">
               <div className="grid gap-2 sm:grid-cols-2">
                 <FichaField icon={Calendar} label="Data Agendada" value={format(new Date(proposta.instalacao_agendada!.data), "dd/MM/yyyy", { locale: ptBR })} highlight iconColor="text-info" />
-                <FichaField icon={Clock} label="Horário" value={proposta.instalacao_agendada!.horario} iconColor="text-info" />
+                <FichaField icon={Clock} label="Período" value={formatPeriodoLabel(proposta.instalacao_agendada!.horario)} iconColor="text-info" />
               </div>
               {proposta.instalacao_agendada?.permite_encaixe && (
                 <div className="flex items-center gap-2 p-2.5 rounded-lg bg-primary/10 border border-primary/30 mt-2">
@@ -260,7 +261,7 @@ export function PropostaDetalhesTabs({
             <CardContent className="px-4 pb-4 pt-2">
               <div className="grid gap-2 sm:grid-cols-2">
                 <FichaField icon={Calendar} label="Data" value={format(new Date(proposta.vistoria_base_info!.data_agendada + 'T00:00:00'), "dd/MM/yyyy", { locale: ptBR })} highlight iconColor="text-success" />
-                <FichaField icon={Clock} label="Horário" value={proposta.vistoria_base_info!.horario} iconColor="text-success" />
+                <FichaField icon={Clock} label="Período" value={formatPeriodoLabel(proposta.vistoria_base_info!.horario)} iconColor="text-success" />
                 <FichaField icon={User} label="Atendido por" value={proposta.vistoria_base_info!.atendido_por_nome} iconColor="text-success" />
                 <div className="flex items-center px-3">
                   <Badge className="bg-success/20 text-success border-success/30 text-xs">

@@ -91,8 +91,21 @@ export function useAlterarEnderecoTipo() {
         throw new Error('Selecione a oficina/base.');
       }
       if (tipoNovo === 'base' && !input.horario) {
-        throw new Error('Informe o horário do atendimento na base.');
+        throw new Error('Informe o período do atendimento na base.');
       }
+      // Normaliza período (input.horario pode vir como 'manha'/'tarde' ou HH:MM legado)
+      const periodoCanonico = (() => {
+        const v = String(input.horario || '').toLowerCase();
+        if (v === 'manha' || v === 'tarde' || v === 'noite') return v as 'manha' | 'tarde' | 'noite';
+        const m = /^(\d{1,2}):/.exec(v);
+        if (m) {
+          const h = parseInt(m[1], 10);
+          if (h < 12) return 'manha';
+          if (h < 18) return 'tarde';
+          return 'noite';
+        }
+        return 'manha';
+      })();
 
       // ── Caso 1: mantém o tipo ──
       if (tipoNovo === origem) {
@@ -121,7 +134,7 @@ export function useAlterarEnderecoTipo() {
             .from('agendamentos_base')
             .update({
               oficina_id: input.oficinaId!,
-              horario: input.horario!,
+              horario: periodoCanonico,
               atendido_por: input.profissionalId ?? null,
             })
             .eq('id', input.agendamentoBaseId);
@@ -167,7 +180,7 @@ export function useAlterarEnderecoTipo() {
           veiculo_placa,
           veiculo_descricao,
           data_agendada: srv.data_agendada,
-          horario: input.horario!,
+          horario: periodoCanonico,
           oficina_id: input.oficinaId!,
           atendido_por: input.profissionalId ?? null,
           status: input.profissionalId ? 'confirmado' : 'agendado',
@@ -229,8 +242,8 @@ export function useAlterarEnderecoTipo() {
             tipo,
             status: input.profissionalId ? 'agendada' : 'pendente',
             data_agendada: ab.data_agendada,
-            hora_agendada: input.horario || ab.horario,
-            periodo: 'manha',
+            hora_agendada: null,
+            periodo: periodoCanonico,
             cep: input.endereco?.cep || null,
             logradouro: input.endereco?.logradouro || null,
             numero: input.endereco?.numero || null,

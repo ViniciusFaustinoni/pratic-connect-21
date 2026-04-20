@@ -141,12 +141,11 @@ export function useCriarAgendamentoBase() {
       veiculoDescricao?: string;
       oficinaId?: string;
     }) => {
-      // Verificar capacidade antes de inserir (filtrado por oficina)
+      // Verificar capacidade do PERÍODO antes de inserir (considera legado HH:MM e canônico 'manha'/'tarde')
       let checkQ = publicSupabase
         .from('agendamentos_base')
-        .select('id')
+        .select('horario')
         .eq('data_agendada', dados.dataAgendada)
-        .eq('horario', dados.horario)
         .in('status', ['agendado', 'confirmado']);
 
       if (dados.oficinaId) {
@@ -154,20 +153,33 @@ export function useCriarAgendamentoBase() {
       }
 
       const { data: existentes, error: checkError } = await checkQ;
-
       if (checkError) throw checkError;
 
-      // Buscar capacidade configurada
+      // Buscar capacidade configurada (por hora) e estimar capacidade por período
       const { data: configCapacidade } = await publicSupabase
         .from('configuracoes')
         .select('valor')
         .eq('chave', 'base_capacidade_horario')
         .single();
 
-      const capacidade = parseInt(configCapacidade?.valor || '2');
+      const capHora = parseInt(configCapacidade?.valor || '2');
+      // Manhã = 4h, Tarde = 5h (consistente com AgendamentoBase.tsx)
+      const capacidadePeriodo = dados.horario === 'tarde' ? 5 * capHora : 4 * capHora;
 
-      if (existentes && existentes.length >= capacidade) {
-        throw new Error('Este horário já está lotado. Por favor, escolha outro.');
+      const ocupados = (existentes || []).filter((e: any) => {
+        const v = String(e.horario || '').trim().toLowerCase();
+        if (v === dados.horario) return true;
+        const m = /^(\d{1,2}):/.exec(v);
+        if (m) {
+          const h = parseInt(m[1], 10);
+          if (dados.horario === 'manha') return h < 12;
+          if (dados.horario === 'tarde') return h >= 12 && h < 18;
+        }
+        return false;
+      }).length;
+
+      if (ocupados >= capacidadePeriodo) {
+        throw new Error('Este período já está lotado. Por favor, escolha outro.');
       }
 
       // Criar agendamento

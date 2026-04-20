@@ -1,20 +1,28 @@
 // Início de cada período de atendimento (HH:MM)
 export const PERIODO_INICIO: Record<'manha' | 'tarde' | 'noite', string> = {
   manha: '08:00',
-  tarde: '12:00',
+  tarde: '13:00',
   noite: '18:00',
 };
 
 export const PERIODO_LABEL: Record<'manha' | 'tarde' | 'noite', string> = {
-  manha: 'manhã',
-  tarde: 'tarde',
-  noite: 'noite',
+  manha: 'Manhã',
+  tarde: 'Tarde',
+  noite: 'Noite',
 };
+
+export const PERIODO_FAIXA: Record<'manha' | 'tarde' | 'noite', string> = {
+  manha: '08:00 – 12:00',
+  tarde: '13:00 – 18:00',
+  noite: '18:00 – 22:00',
+};
+
+export type PeriodoCanonico = 'manha' | 'tarde' | 'noite';
 
 /**
  * Retorna o horário (HH:MM) a partir do qual a tarefa pode ser iniciada.
  * - Encaixes: liberam imediato (null).
- * - Tarefas com período definido: usam o início do período (08:00 / 12:00 / 18:00).
+ * - Tarefas com período definido: usam o início do período (08:00 / 13:00 / 18:00).
  * - Fallback (sem período): usam hora_agendada.
  * - Sem período e sem hora: null (libera).
  */
@@ -24,7 +32,53 @@ export function horaLiberacaoTarefa(tarefa: {
   permite_encaixe?: boolean | null;
 }): string | null {
   if (tarefa.permite_encaixe) return null;
-  const p = tarefa.periodo as 'manha' | 'tarde' | 'noite' | undefined | null;
+  const p = tarefa.periodo as PeriodoCanonico | undefined | null;
   if (p && PERIODO_INICIO[p]) return PERIODO_INICIO[p];
   return tarefa.hora_agendada ? tarefa.hora_agendada.slice(0, 5) : null;
+}
+
+/**
+ * Converte qualquer valor (canônico 'manha'/'tarde'/'noite' OU legado HH:MM
+ * OU rótulo 'Manhã'/'Tarde') no rótulo de período legível.
+ * Útil para exibir registros antigos sem quebrar.
+ */
+export function formatPeriodoLabel(value?: string | null): string {
+  if (!value) return '—';
+  const v = value.trim().toLowerCase();
+  if (v === 'manha' || v === 'manhã') return 'Manhã';
+  if (v === 'tarde') return 'Tarde';
+  if (v === 'noite') return 'Noite';
+  // legado HH:MM
+  const m = /^(\d{1,2}):(\d{2})/.exec(v);
+  if (m) {
+    const h = parseInt(m[1], 10);
+    if (h < 12) return 'Manhã';
+    if (h < 18) return 'Tarde';
+    return 'Noite';
+  }
+  return value;
+}
+
+/**
+ * Converte um horário legado HH:MM em período canônico ('manha' | 'tarde' | 'noite').
+ */
+export function periodoFromHora(hora?: string | null): PeriodoCanonico {
+  if (!hora) return 'manha';
+  const h = parseInt(hora.slice(0, 2), 10);
+  if (Number.isNaN(h)) return 'manha';
+  if (h < 12) return 'manha';
+  if (h < 18) return 'tarde';
+  return 'noite';
+}
+
+/**
+ * Normaliza qualquer valor (canônico ou HH:MM) em período canônico.
+ */
+export function normalizePeriodo(value?: string | null): PeriodoCanonico {
+  if (!value) return 'manha';
+  const v = value.trim().toLowerCase();
+  if (v === 'manha' || v === 'manhã') return 'manha';
+  if (v === 'tarde') return 'tarde';
+  if (v === 'noite') return 'noite';
+  return periodoFromHora(v);
 }

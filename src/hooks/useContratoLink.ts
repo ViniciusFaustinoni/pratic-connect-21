@@ -192,14 +192,14 @@ export function useCriarVistoriaAgendada() {
     mutationFn: async ({ 
       contratoId, 
       dataAgendada, 
-      horarioAgendado,
+      periodo,
       veiculoId,
       associadoId,
       endereco,
     }: { 
       contratoId: string; 
       dataAgendada: string; 
-      horarioAgendado: string;
+      periodo: 'manha' | 'tarde';
       veiculoId?: string;
       associadoId: string;
       endereco?: {
@@ -215,7 +215,7 @@ export function useCriarVistoriaAgendada() {
         throw new Error('Associado não vinculado ao contrato. Entre em contato com a associação.');
       }
       
-      // Criar vistoria
+      // Criar vistoria (sem horário fixo)
       const { data: vistoria, error: vistoriaError } = await supabase
         .from('vistorias')
         .insert({
@@ -223,35 +223,26 @@ export function useCriarVistoriaAgendada() {
           veiculo_id: veiculoId,
           contrato_id: contratoId,
           data_agendada: dataAgendada,
-          horario_agendado: horarioAgendado,
+          horario_agendado: null,
+          periodo,
           modalidade: 'presencial',
           status: 'pendente',
-          tipo: 'instalacao' as any, // Instalação (anteriormente "entrada")
-        })
+          tipo: 'instalacao' as any,
+        } as any)
         .select()
         .single();
       
       if (vistoriaError) throw vistoriaError;
       
-      // Determinar período baseado no horário
-      const hora = parseInt(horarioAgendado.split(':')[0], 10);
-      let periodo: 'manha' | 'tarde' | 'noite' = 'manha';
-      if (hora >= 12 && hora < 18) {
-        periodo = 'tarde';
-      } else if (hora >= 18) {
-        periodo = 'noite';
-      }
-      
       // Criar instalação para integrar com módulo de rotas/monitoramento
-      // Isso permite que a vistoria presencial apareça no painel de rotas
       const { error: instalacaoError } = await supabase
         .from('instalacoes')
         .insert({
           associado_id: associadoId,
           veiculo_id: veiculoId || null,
           data_agendada: dataAgendada,
-          hora_agendada: horarioAgendado,
-          periodo: periodo,
+          hora_agendada: null,
+          periodo,
           status: 'agendada',
           observacoes: `Vistoria presencial - Contrato: ${contratoId}`,
           cep: endereco?.cep,
@@ -264,15 +255,14 @@ export function useCriarVistoriaAgendada() {
       
       if (instalacaoError) {
         console.error('[useCriarVistoriaAgendada] Erro ao criar instalação para rotas:', instalacaoError);
-        // Não falhar a operação principal, apenas logar
       }
       
-      // Atualizar contrato com dados do agendamento (persistir para detectar após reload)
+      // Atualizar contrato (sem horário fixo)
       const { error: contratoUpdateError } = await supabase
         .from('contratos')
         .update({
           vistoria_completa_data_agendada: dataAgendada,
-          vistoria_completa_horario_agendado: horarioAgendado,
+          vistoria_completa_horario_agendado: null,
           vistoria_completa_endereco_cep: endereco?.cep || null,
           vistoria_completa_endereco_logradouro: endereco?.logradouro || null,
           vistoria_completa_endereco_numero: endereco?.numero || null,
@@ -280,23 +270,21 @@ export function useCriarVistoriaAgendada() {
           vistoria_completa_endereco_cidade: endereco?.cidade || null,
           vistoria_completa_endereco_estado: endereco?.uf || null,
           vistoria_id: vistoria.id,
-        })
+        } as any)
         .eq('id', contratoId);
       
       if (contratoUpdateError) {
         console.error('[useCriarVistoriaAgendada] Erro ao atualizar contrato:', contratoUpdateError);
-        // Não falhar a operação principal, apenas logar
       }
       
-      // Registrar no histórico do contrato
+      const periodoLabel = periodo === 'manha' ? 'Manhã' : 'Tarde';
       await supabase.from('contratos_historico').insert({
         contrato_id: contratoId,
         evento: 'vistoria_agendada',
-        descricao: `Vistoria agendada para ${dataAgendada} às ${horarioAgendado}`,
-        dados: { vistoria_id: vistoria.id, data: dataAgendada, horario: horarioAgendado },
+        descricao: `Vistoria agendada para ${dataAgendada} — ${periodoLabel}`,
+        dados: { vistoria_id: vistoria.id, data: dataAgendada, periodo },
       });
 
-      // Notificar coordenadores/reguladores — buscar roles da área Monitoramento
       try {
         const { data: configs } = await supabase
           .from('app_roles_config')
@@ -313,7 +301,7 @@ export function useCriarVistoriaAgendada() {
           const notificacoes = coordenadores.map((c) => ({
             user_id: c.user_id,
             titulo: 'Nova Vistoria Agendada',
-            mensagem: `Vistoria agendada para ${dataAgendada} às ${horarioAgendado}`,
+            mensagem: `Vistoria agendada para ${dataAgendada} — ${periodoLabel}`,
             tipo: 'sistema',
             subtipo: 'vistoria_agendada',
             link: '/monitoramento/vistorias',

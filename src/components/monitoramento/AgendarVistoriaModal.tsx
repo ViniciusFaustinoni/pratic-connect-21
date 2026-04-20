@@ -51,7 +51,8 @@ export interface AgendarVistoriaFormData {
   tipo: TipoVistoriaAgendamento;
   data?: Date;
   periodo?: PeriodoVistoria;
-  horarioEspecifico?: string;
+  /** @deprecated horário específico não é mais usado — agendamento é por período. */
+  horarioEspecifico?: undefined;
   vistoriadorId?: string;
   atribuirDepois: boolean;
   pontoFixoId?: string;
@@ -74,12 +75,6 @@ export interface AgendarVistoriaModalProps {
 const PERIODOS = [
   { value: 'manha', label: 'Manhã (08h-12h)' },
   { value: 'tarde', label: 'Tarde (13h-18h)' },
-];
-
-const HORARIOS = [
-  '08:00', '08:30', '09:00', '09:30', '10:00', '10:30',
-  '11:00', '11:30', '13:00', '13:30', '14:00', '14:30',
-  '15:00', '15:30', '16:00', '16:30', '17:00', '17:30',
 ];
 
 const PRAZOS_AUTO_VISTORIA = [
@@ -386,31 +381,8 @@ export function AgendarVistoriaModal({
                 </div>
               </div>
 
-              {/* Horário Específico e Vistoriador */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Horário Específico (opcional)</Label>
-                  <Select
-                    value={formData.horarioEspecifico || 'any'}
-                    onValueChange={(value) => updateForm('horarioEspecifico', value === 'any' ? undefined : value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Qualquer horário" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="any">Qualquer horário</SelectItem>
-                      {HORARIOS.filter(h => {
-                        if (!formData.periodo) return true;
-                        const hour = parseInt(h.split(':')[0]);
-                        if (formData.periodo === 'manha') return hour < 12;
-                        return hour >= 13;
-                      }).map((h) => (
-                        <SelectItem key={h} value={h}>{h}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
+              {/* Vistoriador */}
+              <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-2">
                   <Label>Vistoriador</Label>
                   <Select
