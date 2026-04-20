@@ -106,6 +106,8 @@ export function useEquipeHoje() {
     staleTime: 90000,
   });
 }
+
+export function useAlertasCoordenador() {
   return useQuery({
     queryKey: ['alertas-coordenador'],
     queryFn: async () => {
