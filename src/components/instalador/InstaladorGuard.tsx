@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
 
 interface InstaladorGuardProps {
@@ -28,7 +27,8 @@ export function InstaladorGuard({ children }: InstaladorGuardProps) {
     lastUserIdRef.current = user?.id ?? null;
   }, [user?.id, queryClient]);
 
-  // Timeout de loading para evitar tela branca infinita
+  // Timeout de loading: se passar de 15s, mostra tela de "backend indisponível"
+  // em vez de loop infinito tentando refresh (o cliente Supabase já faz autoRefresh).
   const [loadingTooLong, setLoadingTooLong] = useState(false);
 
   useEffect(() => {
@@ -36,25 +36,27 @@ export function InstaladorGuard({ children }: InstaladorGuardProps) {
       setLoadingTooLong(false);
       return;
     }
-
-    const timer = setTimeout(async () => {
-      console.warn('[InstaladorGuard] Loading > 10s, tentando refresh da sessão...');
-      try {
-        const { error } = await supabase.auth.refreshSession();
-        if (error) {
-          console.error('[InstaladorGuard] Refresh falhou:', error);
-          setLoadingTooLong(true);
-        }
-      } catch {
-        setLoadingTooLong(true);
-      }
-    }, 10000);
-
+    const timer = setTimeout(() => setLoadingTooLong(true), 15000);
     return () => clearTimeout(timer);
   }, [loading]);
 
   if (loading && loadingTooLong) {
-    return <Navigate to="/instalador/login" replace />;
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-900 px-4">
+        <div className="text-center max-w-md">
+          <h1 className="text-xl font-bold text-white">Servidor temporariamente indisponível</h1>
+          <p className="mt-2 text-slate-400">
+            Não conseguimos confirmar sua sessão. Verifique sua conexão e tente novamente.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
   }
 
   if (loading) {

@@ -143,9 +143,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setSession(currentSession);
         }
 
-        const [userProfile, userPerfis] = await Promise.all([
-          fetchProfile(currentSession.user.id),
-          fetchPerfis(currentSession.user.id),
+        // Timeout de 15s nas buscas de profile/roles para não travar UI
+        // se PostgREST estiver lento. Em caso de timeout, segue com dados vazios
+        // e o usuário verá tela de erro/permissão em vez de spinner eterno.
+        const timeoutPromise = new Promise<[null, never[]]>((resolve) =>
+          setTimeout(() => {
+            console.warn('[AuthContext] Timeout (15s) ao buscar profile/perfis');
+            resolve([null, []]);
+          }, 15000)
+        );
+
+        const [userProfile, userPerfis] = await Promise.race([
+          Promise.all([fetchProfile(currentSession.user.id), fetchPerfis(currentSession.user.id)]),
+          timeoutPromise,
         ]);
 
         if (mounted) {
@@ -245,10 +255,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setInitialized(true);
         }
       }
+    }).catch((err) => {
+      // Se getSession falhar (timeout/network), não travar — destravar UI
+      console.warn('[AuthContext] getSession falhou:', err?.message || err);
+      if (mounted && !hasLoadedData) {
+        setLoading(false);
+        setInitialized(true);
+      }
     });
+
+    // Failsafe: se em 20s não inicializou (backend Auth caído),
+    // destrava UI para mostrar tela de login/erro em vez de spinner infinito.
+    const initTimeout = setTimeout(() => {
+      if (mounted && !hasLoadedData) {
+        console.warn('[AuthContext] Timeout de inicialização (20s) — destravando UI');
+        setLoading(false);
+        setInitialized(true);
+      }
+    }, 20000);
 
     return () => {
       mounted = false;
+      clearTimeout(initTimeout);
       subscription.unsubscribe();
     };
   }, [fetchProfile, fetchPerfis]);

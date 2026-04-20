@@ -101,7 +101,9 @@ export function useEquipeHoje() {
 
       return Array.from(profissionaisMap.values());
     },
-    refetchInterval: 60000,
+    refetchInterval: 120000,
+    refetchIntervalInBackground: false,
+    staleTime: 90000,
   });
 }
 
@@ -164,7 +166,9 @@ export function useAlertasCoordenador() {
 
       return alertas;
     },
-    refetchInterval: 120000,
+    refetchInterval: 180000,
+    refetchIntervalInBackground: false,
+    staleTime: 120000,
   });
 }
 
@@ -221,6 +225,8 @@ export function useRotasHojeMetricas() {
         taxaConclusao,
       };
     },
-    refetchInterval: 60000,
+    refetchInterval: 120000,
+    refetchIntervalInBackground: false,
+    staleTime: 90000,
   });
 }
