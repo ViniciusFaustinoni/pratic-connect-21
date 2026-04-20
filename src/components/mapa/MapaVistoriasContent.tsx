@@ -78,6 +78,7 @@ import { ReagendarTarefaDialog } from "@/components/mapa/ReagendarTarefaDialog";
 import { AlocarVistoriadorDialog } from "@/components/mapa/AlocarVistoriadorDialog";
 import { AlterarEnderecoTipoDialog } from "@/components/mapa/AlterarEnderecoTipoDialog";
 import { RealocarInstalacaoDialog } from "@/components/instalacoes/RealocarInstalacaoDialog";
+import { AtribuirPrestadorPopover } from "@/components/mapa/AtribuirPrestadorPopover";
 
 const COR_REALIZADA = '#10B981';
 const COR_A_REALIZAR = '#EF4444';
