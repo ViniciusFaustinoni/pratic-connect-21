@@ -1,53 +1,117 @@
 
-
-## Corrigir leitura de placa Mercosul no OCR de CRLV (caso `RKR3I57` lido como `RKR3157`)
+## Corrigir na raiz o bug de “Tarefa Atual” presa por vistoria órfã
 
 ### Diagnóstico
-- O CRLV físico tem placa **Mercosul `RKR3I57`** (posição 5 = letra `I`).
-- O Gemini está lendo a posição 5 como dígito `1` por ambiguidade visual (`I` vs `1` em fonte do CRLV) → entrega `RKR3157`.
-- `RKR3157` casa com o regex de **placa antiga** (`AAA0000`), então `validatePlaca` aprova → nenhum retry, nenhuma correção.
-- A função `extractCandidatesFromText` (fallback de texto nativo do PDF) usa o mesmo regex genérico, sem desambiguação posicional.
-- A normalização posicional `LETTER_TO_DIGIT` / `DIGIT_TO_LETTER` que existe no `UnifiedDocumentUploader.tsx` só é acionada quando há **placa esperada para comparar** — não no fluxo padrão de leitura de CRLV.
+Já existe uma correção parcial no projeto, mas ela ainda não fecha o problema na origem:
 
-### Solução (3 frentes complementares, edge function `document-ocr`)
+- A app do técnico depende da RPC `buscar_tarefa_atual_profissional` para decidir qual serviço exibir como “Tarefa Atual”.
+- Hoje essa RPC ainda considera qualquer `servicos` em `agendada`, `em_rota`, `em_andamento` ou `em_analise`, sem bloquear o caso em que existe uma `vistoria_entrada` antiga/orfã e já foi criada uma `instalacao` posterior para o mesmo veículo/associado.
+- O trigger `sync_vistoria_to_servicos()` já tenta evitar duplicidade por `(associado_id, veiculo_id, contrato_id)`, mas ainda pode apenas “grudar” uma nova vistoria em um serviço ativo existente, sem encerrar explicitamente a vistoria de entrada órfã.
+- O fluxo de criação de instalação (`aprovar-proposta` + trigger `sync_instalacao_to_servicos`) cria corretamente a instalação em `servicos`, porém não elimina a vistoria antiga concorrente.
+- Resultado: a RPC continua priorizando a vistoria órfã e o técnico fica preso nela, gerando cards com tempo inflado e, em alguns casos, falha ao abrir a execução.
 
-#### 1. Normalizador posicional Mercosul-aware (servidor)
-Criar helper `normalizePlacaMercosul(raw: string)` no `document-ocr/index.ts` que:
-- Remove não-alfanuméricos e uppercase.
-- Se 7 chars: aplica mapeamento por posição
-  - índices 0,1,2 e **4** → forçar **letra** (`0→O, 1→I, 5→S, 8→B, 2→Z, 6→G`)
-  - índices 3, 5, 6 → forçar **dígito** (`O→0, I→1, S→5, B→8, Z→2, G→6, T→7`)
-- Retorna a placa "saneada".
+### O que será implementado
 
-#### 2. Detecção dupla: Mercosul vs antiga, com prioridade ao Mercosul quando ambíguo
-Substituir a aceitação cega em `validatePlaca` por uma rotina que:
-- Aplica `normalizePlacaMercosul` à placa retornada pela IA.
-- Se o resultado **bate no padrão Mercosul** (`LLL N L NN`) **e** o original tinha algum caractere ambíguo na posição 4 (`1/I`, `0/O`, etc.), prefere a versão Mercosul.
-- Mantém placa antiga válida quando todos os 4 últimos chars são genuinamente dígitos no doc original.
-- Loga: `[OCR] Placa ajustada por normalização Mercosul: "RKR3157" → "RKR3I57"`.
+#### 1. Blindagem da RPC de tarefa atual
+Atualizar `public.buscar_tarefa_atual_profissional` para ignorar serviços órfãos antes do ranking final.
 
-#### 3. Reforço no prompt + extração de texto nativo
-- **Prompt do Gemini** (seção `### CRLV`, linha ~161): adicionar instrução explícita:
-  > "ATENÇÃO PLACA MERCOSUL: o 5º caractere é SEMPRE uma letra (A-Z). Nunca retorne dígito (0-9) na 5ª posição. Se visualmente parecer '1', leia como 'I'; '0' → 'O'; '5' → 'S'; '8' → 'B'. Se incerto entre letra e número na pos.5, escolha a LETRA."
-- **`extractCandidatesFromText`** (caso `placa`): após capturar com regex genérico, devolver tanto a versão crua quanto a versão **normalizada Mercosul** como candidatos, para o validador escolher a correta.
+Regras novas para excluir da “Tarefa Atual”:
+- `vistoria_entrada` em `agendada`/`em_analise`/`em_rota` sem `iniciada_em`
+- que possua, para o mesmo `(associado_id, veiculo_id)`, uma `instalacao` posterior em status relevante (`agendada`, `em_rota`, `em_andamento`, `concluida`, `aprovada`, `aprovada_ressalvas`, `nao_compareceu`, `reagendada`)
+- e/ou cujo `contrato_id` já esteja ativo, mostrando que a vistoria inicial deixou de ser a tarefa válida
 
-#### 4. Re-validação final
-Após todas as correções, rodar `validatePlaca` no resultado final. Se `RKR3I57` valida (Mercosul), grava `dados.placa = "RKR3I57"`. Caso contrário, mantém o que estava e registra `_motivos.placa_ambigua = true` para o operador revisar manualmente.
+Efeito:
+- a vistoria órfã deixa de bloquear técnico
+- `useTarefaAtual`, `useTarefaAtualServico`, `useTemTarefaEmExecucao` e o polling de `useIniciarServico` passam a receber a tarefa correta sem mudar a UI
 
-### Arquivos tocados
+#### 2. Correção estrutural no trigger de materialização de vistoria
+Reforçar `public.sync_vistoria_to_servicos()` para não manter aberta uma vistoria de entrada que perdeu validade operacional.
 
-**Editado**
-- `supabase/functions/document-ocr/index.ts` — adicionar `normalizePlacaMercosul`, ajustar pipeline de validação de placa (linhas ~50, ~160, ~835, ~967).
+Ajustes:
+- antes de criar/vincular serviço de `vistoria_entrada`, verificar se já existe `instalacao` ativa/posterior para o mesmo `(associado_id, veiculo_id, contrato_id/cotacao_id)`
+- se existir, não criar novo `servico` concorrente de vistoria
+- se houver serviço órfão de vistoria já existente e não iniciado, atualizá-lo para um estado terminal seguro (`cancelada`) com observação automática indicando substituição por instalação posterior
 
-**Sem mudanças**
-- Front (`UnifiedDocumentUploader.tsx`) — já tem a normalização posicional na comparação; vai continuar funcionando como segunda camada.
-- Schema/banco — sem migration.
+Isso impede reincidência mesmo quando a origem vier de:
+- `agendamentos_base`
+- vistoria materializada pelo mapa
+- aprovação de proposta que já gera instalação
+
+#### 3. Correção estrutural no trigger de instalação
+Reforçar `sync_instalacao_to_servicos()` ou criar helper dedicado chamado pelo trigger de instalação para cancelar automaticamente `vistoria_entrada` aberta e não iniciada do mesmo veículo/associado no momento em que a instalação é criada.
+
+Regra:
+- ao inserir instalação, procurar `servicos` do tipo `vistoria_entrada`
+- limitar aos status abertos (`agendada`, `em_analise`, opcionalmente `em_rota` se não iniciada)
+- nunca cancelar se a vistoria já tiver `iniciada_em`
+- anexar observação de auditoria automática
+
+Isso fecha a brecha antes mesmo de a RPC precisar filtrar.
+
+#### 4. Backfill de dados para limpar órfãos já existentes
+Criar uma migration de saneamento para:
+- localizar `vistoria_entrada` órfãs já abertas
+- cancelar automaticamente apenas as que forem claramente substituídas por instalação posterior
+- preservar casos legítimos em andamento
+
+Critérios conservadores:
+- mesma combinação `(associado_id, veiculo_id)`
+- vistoria não iniciada
+- instalação posterior existente
+- status aberto de vistoria
+
+#### 5. Visão de monitoramento para o coordenador
+Adicionar uma view `v_tarefas_orfas` para listar rapidamente casos futuros, com colunas como:
+- `servico_vistoria_id`
+- `associado_id`
+- `veiculo_id`
+- `placa`
+- `data_agendada_vistoria`
+- `servico_instalacao_relacionado`
+- `motivo_orfandade`
+
+Isso permite auditoria contínua sem depender de relatos do técnico.
+
+### Arquivos e áreas impactadas
+
+**Banco / migrations**
+- nova migration para recriar `buscar_tarefa_atual_profissional`
+- nova migration para reforçar `sync_vistoria_to_servicos`
+- nova migration para reforçar `sync_instalacao_to_servicos` ou criar helper de cancelamento
+- nova migration de backfill/saneamento
+- nova migration com view `v_tarefas_orfas`
+
+**Código sem mudança funcional grande**
+- `src/hooks/useTarefaAtual.ts`
+- `src/hooks/useServicos.ts`
+- `src/hooks/useIniciarServico.ts`
+
+Esses arquivos devem continuar iguais ou só receber ajustes mínimos se a tipagem da RPC mudar.
+
+### Detalhes técnicos
+```text
+Origem do bug
+vistorias/agendamentos_base -> sync_vistoria_to_servicos -> servicos(vistoria_entrada aberta)
+aprovar-proposta/instalacoes -> sync_instalacao_to_servicos -> servicos(instalacao aberta)
+buscar_tarefa_atual_profissional -> escolhe a vistoria antiga por ranking/status
+UI do técnico -> fica presa na tarefa errada
+```
+
+```text
+Defesa final em camadas
+1) trigger da instalação encerra vistoria órfã
+2) trigger da vistoria evita criar concorrência inválida
+3) RPC ignora qualquer órfã remanescente
+4) view monitora exceções
+```
 
 ### Validação
-1. Reenviar o CRLV do print (Renault Kwid, Mauro Cunha Siqueira) → OCR retorna `placa: "RKR3I57"` (não mais `RKR3157`).
-2. Log da edge function mostra `[OCR] Placa ajustada por normalização Mercosul: "RKR3157" → "RKR3I57"`.
-3. CRLVs com placas antigas legítimas (ex.: `ABC1234`) continuam sendo lidos corretamente — sem falso-positivo de Mercosul.
-4. CRLVs Mercosul já lidos certo (ex.: `BRA2E19`) continuam idênticos (idempotente).
-5. Cotação, contrato e SGA passam a usar `RKR3I57`, evitando falha de "placa não bate" em validações futuras.
-6. Fluxo do `UnifiedDocumentUploader` quando o usuário digita placa esperada continua funcionando (segunda camada de defesa intacta).
-
+1. Reproduzir um caso como Rafael/KYS4C01 ou Venilton/HAT3D43:
+   - com vistoria órfã + instalação posterior
+   - a “Tarefa Atual” deve mostrar a tarefa válida ou nenhuma tarefa
+2. Confirmar que o técnico não vê mais card com tempo inflado por serviço morto.
+3. Abrir a execução da tarefa retornada pela RPC e validar que carrega normalmente.
+4. Criar em teste uma `vistoria_entrada` e depois uma `instalacao` para o mesmo veículo:
+   - a vistoria aberta deve ser cancelada automaticamente se não iniciada
+5. Verificar que vistorias legítimas em andamento não são canceladas.
+6. Consultar `v_tarefas_orfas` e garantir que os casos antigos saneados desaparecem ou ficam claramente rastreáveis.
