@@ -1,10 +1,8 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Wrench, ClipboardCheck, Puzzle, Truck, PackageX, Hand, History, Settings } from 'lucide-react';
-import Instalacoes from './Instalacoes';
-import Vistorias from './Vistorias';
+import { ListChecks, Puzzle, Truck, Hand, History, Settings } from 'lucide-react';
 import MonitoramentoEncaixes from './Encaixes';
 import ViagensTab from './ViagensTab';
-import RetiradasContent from './RetiradasContent';
+import ServicosCampoUnificado from './ServicosCampoUnificado';
 import { useConfigAtribuicaoManual } from '@/hooks/useAtribuicaoManual';
 import { lazy, Suspense } from 'react';
 import { Loader2 } from 'lucide-react';
@@ -28,7 +26,7 @@ export default function VistoriasInstalacoesMon() {
 
       <AlertaImprevistosPendentes />
 
-      <Tabs defaultValue={manualAtiva ? 'atribuicao-manual' : 'instalacoes'} className="w-full">
+      <Tabs defaultValue={manualAtiva ? 'atribuicao-manual' : 'servicos'} className="w-full">
         <div className="overflow-x-auto -mx-4 px-4">
           <TabsList className="w-auto inline-flex">
             {manualAtiva && (
@@ -37,17 +35,9 @@ export default function VistoriasInstalacoesMon() {
                 <span className="hidden sm:inline">Atribuição Manual</span>
               </TabsTrigger>
             )}
-            <TabsTrigger value="instalacoes" className="gap-2 shrink-0">
-              <Wrench className="h-4 w-4" />
-              <span className="hidden sm:inline">Instalações</span>
-            </TabsTrigger>
-            <TabsTrigger value="vistorias" className="gap-2 shrink-0">
-              <ClipboardCheck className="h-4 w-4" />
-              <span className="hidden sm:inline">Vistorias</span>
-            </TabsTrigger>
-            <TabsTrigger value="retiradas" className="gap-2 shrink-0">
-              <PackageX className="h-4 w-4" />
-              <span className="hidden sm:inline">Retiradas</span>
+            <TabsTrigger value="servicos" className="gap-2 shrink-0">
+              <ListChecks className="h-4 w-4" />
+              <span className="hidden sm:inline">Serviços</span>
             </TabsTrigger>
             <TabsTrigger value="encaixes" className="gap-2 shrink-0">
               <Puzzle className="h-4 w-4" />
@@ -76,16 +66,8 @@ export default function VistoriasInstalacoesMon() {
           </TabsContent>
         )}
 
-        <TabsContent value="instalacoes">
-          <Instalacoes />
-        </TabsContent>
-
-        <TabsContent value="vistorias">
-          <Vistorias />
-        </TabsContent>
-
-        <TabsContent value="retiradas">
-          <RetiradasContent />
+        <TabsContent value="servicos">
+          <ServicosCampoUnificado />
         </TabsContent>
 
         <TabsContent value="encaixes">
