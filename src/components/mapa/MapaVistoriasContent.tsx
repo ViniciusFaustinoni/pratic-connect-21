@@ -51,6 +51,7 @@ import {
   CalendarClock,
   UserPlus,
   Loader2,
+  Pencil,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -74,6 +75,7 @@ import { CalendarioDiaModal } from "@/components/monitoramento/CalendarioDiaModa
 import { formatPlacaExibicao, isPlacaPlaceholder } from "@/lib/placa-utils";
 import { ReagendarTarefaDialog } from "@/components/mapa/ReagendarTarefaDialog";
 import { AlocarVistoriadorDialog } from "@/components/mapa/AlocarVistoriadorDialog";
+import { AlterarEnderecoTipoDialog } from "@/components/mapa/AlterarEnderecoTipoDialog";
 
 const COR_REALIZADA = '#10B981';
 const COR_A_REALIZAR = '#EF4444';
@@ -304,7 +306,17 @@ export function MapaVistoriasContent() {
     horaAtual: string | null;
   } | null>(null);
 
+  // Alterar endereço/tipo state
+  const [alterarState, setAlterarState] = useState<{
+    servicoId: string;
+    placa: string | null;
+    associadoNome: string | null;
+    endereco: { cep?: string | null; logradouro?: string | null; numero?: string | null; complemento?: string | null; bairro?: string | null; cidade?: string | null; uf?: string | null };
+    profissionalId: string | null;
+  } | null>(null);
+
   const podeReagendar = isDiretor || isCoordenadorMonitoramento || isAnalistaMonitoramento || isAdminMaster || isDesenvolvedor;
+  const podeAlterar = podeReagendar;
 
   const vistoriadoresEmServico = useMemo(() => {
     return (vistoriadores || []).filter(
@@ -684,6 +696,35 @@ export function MapaVistoriasContent() {
                         title="Enviar confirmação WhatsApp"
                       >
                         <Send className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {podeAlterar && !isRealizada && !!v.servico_id_unificado && (
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 text-purple-600 border-purple-300 hover:bg-purple-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAlterarState({
+                            servicoId: v.servico_id_unificado!,
+                            placa: formatPlacaExibicao(v.veiculo_placa),
+                            associadoNome: v.associado_nome,
+                            endereco: {
+                              cep: (v as any).endereco_cep,
+                              logradouro: (v as any).endereco_logradouro,
+                              numero: (v as any).endereco_numero,
+                              complemento: (v as any).endereco_complemento,
+                              bairro: v.endereco_bairro,
+                              cidade: v.endereco_cidade,
+                              uf: (v as any).endereco_uf,
+                            },
+                            profissionalId: v.vistoriador_id,
+                          });
+                        }}
+                        title="Alterar endereço ou tipo"
+                        aria-label="Alterar endereço ou tipo"
+                      >
+                        <Pencil className="h-4 w-4" />
                       </Button>
                     )}
                   </div>
@@ -1339,6 +1380,20 @@ export function MapaVistoriasContent() {
           dataAtual: reagendarState?.dataAtual,
           horaAtual: reagendarState?.horaAtual,
         }}
+      />
+
+      {/* Alterar endereço/tipo */}
+      <AlterarEnderecoTipoDialog
+        open={!!alterarState}
+        onOpenChange={(open) => !open && setAlterarState(null)}
+        origem="rota"
+        servicoId={alterarState?.servicoId || null}
+        resumo={{
+          placa: alterarState?.placa,
+          associadoNome: alterarState?.associadoNome,
+        }}
+        initialEndereco={alterarState?.endereco}
+        initialProfissionalId={alterarState?.profissionalId || null}
       />
     </>
   );
