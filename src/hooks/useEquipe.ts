@@ -4,10 +4,12 @@ import { format, startOfDay } from 'date-fns';
 
 export type StatusProfissional = 'disponivel' | 'indisponivel' | 'ferias' | 'afastado';
 export type StatusOperacional = 'em_contato' | 'em_andamento' | 'em_rota' | 'disponivel_operacional' | 'offline';
+export type RoleEquipe = 'instalador_vistoriador' | 'analista_monitoramento' | string;
 
 export interface ProfissionalEquipe {
   id: string;
   user_id: string;
+  role: RoleEquipe;
   nome: string;
   email: string;
   telefone: string | null;
@@ -53,6 +55,14 @@ export function useProfissionaisEquipe() {
       if (!roles?.length) return [];
 
       const userIds = roles.map(r => r.user_id);
+      // Mapa user_id -> role (prioriza instalador_vistoriador se houver múltiplos)
+      const roleByUserId: Record<string, string> = {};
+      roles.forEach(r => {
+        const existing = roleByUserId[r.user_id];
+        if (!existing || r.role === 'instalador_vistoriador') {
+          roleByUserId[r.user_id] = r.role as string;
+        }
+      });
 
       // 2. Buscar profiles completos
       const { data: profiles, error: profilesError } = await supabase
@@ -198,6 +208,7 @@ export function useProfissionaisEquipe() {
         return {
           id: profile.id,
           user_id: profile.user_id,
+          role: roleByUserId[profile.user_id] || 'analista_monitoramento',
           nome: profile.nome || 'Sem nome',
           email: profile.email || '',
           telefone: profile.telefone,

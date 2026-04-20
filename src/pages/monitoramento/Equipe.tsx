@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { PlantoesCalendario } from '@/components/equipe/PlantoesCalendario';
-import { Plus, Loader2, Users, Sparkles, CalendarDays } from 'lucide-react';
+import { Plus, Loader2, Users, Sparkles, CalendarDays, Wrench, Headphones } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Breadcrumb,
@@ -14,6 +14,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProfissionalModal, ProfissionalFormData } from '@/components/monitoramento/ProfissionalModal';
 import { RelatorioTarefasModal } from '@/components/monitoramento/RelatorioTarefasModal';
+import { ServicosAtribuidosModal } from '@/components/monitoramento/ServicosAtribuidosModal';
 import { EquipeCard, EquipeFilters, EquipeMetrics } from '@/components/equipe';
 import { useProfissionaisEquipe, useSaveProfissional, useToggleProfissionalStatus, ProfissionalEquipe } from '@/hooks/useEquipe';
 import { toast } from 'sonner';
@@ -30,6 +31,11 @@ export default function Equipe() {
   
   const [relatorioModalOpen, setRelatorioModalOpen] = useState(false);
   const [profissionalRelatorio, setProfissionalRelatorio] = useState<ProfissionalEquipe | null>(null);
+
+  const [servicosModalOpen, setServicosModalOpen] = useState(false);
+  const [servicosModalCtx, setServicosModalCtx] = useState<{ modo: 'profissional' | 'todos_instaladores'; profissional?: ProfissionalEquipe }>({ modo: 'profissional' });
+
+  const [subTab, setSubTab] = useState<'instaladores' | 'administrativo'>('instaladores');
 
   const { data: profissionais, isLoading, error } = useProfissionaisEquipe();
   const { mutate: saveProfissional } = useSaveProfissional();
@@ -62,6 +68,16 @@ export default function Equipe() {
   const handleRelatorio = (prof: ProfissionalEquipe) => {
     setProfissionalRelatorio(prof);
     setRelatorioModalOpen(true);
+  };
+
+  const handleVerServicos = (prof: ProfissionalEquipe) => {
+    if (prof.role === 'instalador_vistoriador') {
+      setServicosModalCtx({ modo: 'profissional', profissional: prof });
+    } else {
+      // Card administrativo → ver TODOS os serviços de instaladores
+      setServicosModalCtx({ modo: 'todos_instaladores', profissional: prof });
+    }
+    setServicosModalOpen(true);
   };
 
   const handleSave = (data: ProfissionalFormData) => {
@@ -97,12 +113,23 @@ export default function Equipe() {
     );
   };
 
+  // Split por role: instalador vs administrativo (analistas/coordenadores/etc)
+  const { instaladores, administrativo } = useMemo(() => {
+    const inst: ProfissionalEquipe[] = [];
+    const adm: ProfissionalEquipe[] = [];
+    (profissionais || []).forEach(p => {
+      if (p.role === 'instalador_vistoriador') inst.push(p);
+      else adm.push(p);
+    });
+    return { instaladores: inst, administrativo: adm };
+  }, [profissionais]);
+
+  const baseList = subTab === 'instaladores' ? instaladores : administrativo;
+
   const profissionaisFiltrados = useMemo(() => {
-    if (!profissionais) return [];
-    
-    return profissionais.filter((prof) => {
+    return baseList.filter((prof) => {
       const searchLower = searchTerm.toLowerCase();
-      const matchSearch = 
+      const matchSearch =
         prof.nome.toLowerCase().includes(searchLower) ||
         prof.email.toLowerCase().includes(searchLower) ||
         (prof.telefone && prof.telefone.includes(searchTerm));
@@ -111,7 +138,7 @@ export default function Equipe() {
       const matchRegiao = regiaoFilter === 'todas' || prof.regioes_atendimento.includes(regiaoFilter);
       return matchSearch && matchStatus && matchStatusOperacional && matchRegiao;
     });
-  }, [profissionais, searchTerm, statusFilter, statusOperacionalFilter, regiaoFilter]);
+  }, [baseList, searchTerm, statusFilter, statusOperacionalFilter, regiaoFilter]);
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -176,9 +203,23 @@ export default function Equipe() {
         </TabsList>
 
         <TabsContent value="equipe" className="space-y-4 mt-4">
+          {/* Sub-abas: Instaladores / Administrativo */}
+          <Tabs value={subTab} onValueChange={(v) => setSubTab(v as 'instaladores' | 'administrativo')} className="w-full">
+            <TabsList className="w-full sm:w-auto grid grid-cols-2 sm:inline-flex">
+              <TabsTrigger value="instaladores" className="gap-2">
+                <Wrench className="h-4 w-4" />
+                Instaladores ({instaladores.length})
+              </TabsTrigger>
+              <TabsTrigger value="administrativo" className="gap-2">
+                <Headphones className="h-4 w-4" />
+                Administrativo ({administrativo.length})
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+
           {/* Métricas */}
-          {profissionais && profissionais.length > 0 && (
-            <EquipeMetrics profissionais={profissionais} />
+          {baseList.length > 0 && (
+            <EquipeMetrics profissionais={baseList} />
           )}
 
           {/* Filtros */}
@@ -215,8 +256,9 @@ export default function Equipe() {
                     Nenhum profissional encontrado
                   </h3>
                   <p className="text-sm text-muted-foreground text-center max-w-md px-4">
-                    Cadastre vistoriadores, instaladores ou analistas de monitoramento 
-                    ou ajuste os filtros de busca.
+                    {subTab === 'instaladores'
+                      ? 'Cadastre vistoriadores ou instaladores ou ajuste os filtros.'
+                      : 'Cadastre analistas/coordenadores de monitoramento ou ajuste os filtros.'}
                   </p>
                   <Button onClick={handleNovoProfissional} variant="outline" className="mt-4">
                     <Plus className="mr-2 h-4 w-4" />
@@ -231,6 +273,7 @@ export default function Equipe() {
                     onEditar={handleEditar}
                     onDesativar={handleDesativar}
                     onRelatorio={handleRelatorio}
+                    onVerServicos={handleVerServicos}
                   />
                 ))
               )}
@@ -275,6 +318,14 @@ export default function Equipe() {
         onOpenChange={setRelatorioModalOpen}
         profissionalId={profissionalRelatorio?.id || ''}
         profissionalNome={profissionalRelatorio?.nome || ''}
+      />
+
+      <ServicosAtribuidosModal
+        open={servicosModalOpen}
+        onOpenChange={setServicosModalOpen}
+        modo={servicosModalCtx.modo}
+        profissionalId={servicosModalCtx.profissional?.id || null}
+        profissionalNome={servicosModalCtx.profissional?.nome}
       />
     </div>
   );

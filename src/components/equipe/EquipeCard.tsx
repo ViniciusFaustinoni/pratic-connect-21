@@ -40,6 +40,7 @@ interface EquipeCardProps {
   onEditar: (prof: ProfissionalEquipe) => void;
   onDesativar: (prof: ProfissionalEquipe) => void;
   onRelatorio: (prof: ProfissionalEquipe) => void;
+  onVerServicos?: (prof: ProfissionalEquipe) => void;
 }
 
 const STATUS_CONFIG: Record<StatusProfissional, { label: string; className: string }> = {
@@ -105,7 +106,7 @@ const STATUS_OPERACIONAL_CONFIG: Record<StatusOperacional, {
   },
 };
 
-export function EquipeCard({ profissional, onEditar, onDesativar, onRelatorio }: EquipeCardProps) {
+export function EquipeCard({ profissional, onEditar, onDesativar, onRelatorio, onVerServicos }: EquipeCardProps) {
   const getInitials = (nome: string) =>
     nome
       .split(' ')
@@ -126,8 +127,18 @@ export function EquipeCard({ profissional, onEditar, onDesativar, onRelatorio }:
   const statusOp = STATUS_OPERACIONAL_CONFIG[profissional.status_operacional];
   const statusProf = STATUS_CONFIG[profissional.status];
 
+  const handleCardClick = () => {
+    onVerServicos?.(profissional);
+  };
+
   return (
-    <Card className="group relative overflow-hidden border-border/50 bg-card hover:border-primary/30 transition-all duration-300 hover:shadow-lg hover:shadow-primary/5">
+    <Card
+      onClick={onVerServicos ? handleCardClick : undefined}
+      className={cn(
+        "group relative overflow-hidden border-border/50 bg-card hover:border-primary/30 transition-all duration-300 hover:shadow-lg hover:shadow-primary/5",
+        onVerServicos && "cursor-pointer"
+      )}
+    >
       {/* Top status bar */}
       <div className={cn(
         "absolute top-0 left-0 right-0 h-1",
@@ -175,27 +186,28 @@ export function EquipeCard({ profissional, onEditar, onDesativar, onRelatorio }:
                 variant="ghost" 
                 size="icon" 
                 className="h-8 w-8 flex-shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                onClick={(e) => e.stopPropagation()}
               >
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={() => onEditar(profissional)}>
+            <DropdownMenuContent align="end" className="w-48" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEditar(profissional); }}>
                 <Edit className="mr-2 h-4 w-4" />
                 Editar
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
                 <Calendar className="mr-2 h-4 w-4" />
                 Ver agenda
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
                 <Umbrella className="mr-2 h-4 w-4" />
                 Marcar férias
               </DropdownMenuItem>
               <DropdownMenuItem 
                 className={profissional.ativo ? "text-destructive" : "text-emerald-500"}
-                onClick={() => onDesativar(profissional)}
+                onClick={(e) => { e.stopPropagation(); onDesativar(profissional); }}
               >
                 <UserX className="mr-2 h-4 w-4" />
                 {profissional.ativo ? 'Desativar' : 'Ativar'}
@@ -269,6 +281,7 @@ export function EquipeCard({ profissional, onEditar, onDesativar, onRelatorio }:
                 href={`https://www.google.com/maps?q=${profissional.latitude},${profissional.longitude}`}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
                 className="text-primary hover:underline flex items-center gap-0.5"
               >
                 Mapa
@@ -295,7 +308,7 @@ export function EquipeCard({ profissional, onEditar, onDesativar, onRelatorio }:
             variant="ghost" 
             size="sm" 
             className="h-7 text-xs gap-1 text-primary hover:text-primary"
-            onClick={() => onRelatorio(profissional)}
+            onClick={(e) => { e.stopPropagation(); onRelatorio(profissional); }}
           >
             <BarChart className="h-3 w-3" />
             Relatório
