@@ -178,7 +178,77 @@ export function InstalacaoDetailDrawer({
     },
     enabled: !!instalacaoId && open,
   });
-  const handleStatusChange = async (status: Instalacao['status']) => {
+
+  // Dados completos do associado
+  const { data: associadoFull } = useQuery({
+    queryKey: ['associado-full-drawer', instalacao?.associado_id],
+    enabled: !!instalacao?.associado_id && open,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('associados')
+        .select('nome, cpf, rg, data_nascimento, estado_civil, profissao, telefone, telefone_secundario, email, logradouro, numero, complemento, bairro, cidade, uf, cep, status, created_at, cnh_numero, cnh_categoria, cnh_validade, plano_id')
+        .eq('id', instalacao!.associado_id)
+        .maybeSingle();
+      return data;
+    },
+  });
+
+  // Plano vigente + cotacao_id a partir do contrato
+  const { data: contratoInfo } = useQuery({
+    queryKey: ['contrato-plano-drawer', instalacao?.contrato_id, associadoFull?.plano_id],
+    enabled: open && (!!instalacao?.contrato_id || !!associadoFull?.plano_id),
+    queryFn: async () => {
+      let planoId: string | null = associadoFull?.plano_id || null;
+      let cotacaoId: string | null = null;
+      let dataAdesao: string | null = null;
+      let mensalidade: number | null = null;
+
+      if (instalacao?.contrato_id) {
+        const { data: contrato } = await supabase
+          .from('contratos')
+          .select('cotacao_id, created_at, valor_mensalidade, plano_id')
+          .eq('id', instalacao.contrato_id)
+          .maybeSingle();
+        if (contrato) {
+          cotacaoId = (contrato as any).cotacao_id || null;
+          dataAdesao = contrato.created_at;
+          mensalidade = (contrato as any).valor_mensalidade ?? null;
+          planoId = (contrato as any).plano_id || planoId;
+        }
+      }
+
+      let planoNome: string | null = null;
+      if (planoId) {
+        const { data: plano } = await supabase
+          .from('planos')
+          .select('nome')
+          .eq('id', planoId)
+          .maybeSingle();
+        planoNome = plano?.nome || null;
+      }
+
+      return { planoNome, mensalidade, dataAdesao, cotacaoId };
+    },
+  });
+
+  // Fotos (autovistoria + instalador)
+  const { data: fotosData } = useFotosVistoriaUnificada({
+    contratoId: instalacao?.contrato_id || undefined,
+    cotacaoId: contratoInfo?.cotacaoId || undefined,
+  });
+
+  const abrirGaleria = (fotos: FotoAutovistoria[], index: number) => {
+    setFotosAtivas(fotos.map(f => ({ url: f.arquivo_url, label: formatarTipoFoto(f.tipo), tipo: f.tipo })));
+    setFotoIndex(index);
+    setVisualizadorAberto(true);
+  };
+
+  const abrirVideo360 = (url: string) => {
+    setFotosAtivas([{ url, label: 'Vídeo 360°', tipo: 'video_360' }]);
+    setFotoIndex(0);
+    setVisualizadorAberto(true);
+  };
+
     if (!instalacaoId) return;
     
     try {
