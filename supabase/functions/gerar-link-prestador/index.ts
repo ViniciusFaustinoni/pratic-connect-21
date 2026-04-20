@@ -26,6 +26,7 @@ Deno.serve(async (req) => {
       valor,
       atribuido_por,
       reenviar,
+      skip_whatsapp,
     } = body
 
     const prestadorIdFinal = vistoriador_prestador_id || prestador_id
@@ -148,11 +149,13 @@ Deno.serve(async (req) => {
       ? new Date(instalacao.data_agendada + 'T12:00:00').toLocaleDateString('pt-BR')
       : 'A definir'
 
-    // ── AÇÃO 3: Enviar WhatsApp ──
+    // ── AÇÃO 3: Enviar WhatsApp (salvo se skip_whatsapp) ──
     let whatsappEnviado = false
     let whatsappErro: string | null = null
 
-    if (prestadorData.whatsapp) {
+    if (skip_whatsapp) {
+      whatsappErro = 'skip_whatsapp=true'
+    } else if (prestadorData.whatsapp) {
       const telefoneLimpo = String(prestadorData.whatsapp).replace(/\D/g, '')
       const telefoneFormatado = telefoneLimpo.startsWith('55') ? telefoneLimpo : `55${telefoneLimpo}`
 

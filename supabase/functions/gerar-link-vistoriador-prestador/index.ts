@@ -16,7 +16,7 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    const { instalacao_id, vistoriador_prestador_id, valor, atribuido_por, reenviar } = await req.json()
+    const { instalacao_id, vistoriador_prestador_id, valor, atribuido_por, reenviar, skip_whatsapp } = await req.json()
 
     if (!instalacao_id || !vistoriador_prestador_id) {
       return new Response(
@@ -152,7 +152,9 @@ Deno.serve(async (req) => {
     let whatsappEnviado = false
     let whatsappErro: string | null = null
 
-    if (camposFaltantes.length > 0) {
+    if (skip_whatsapp) {
+      whatsappErro = 'skip_whatsapp=true'
+    } else if (camposFaltantes.length > 0) {
       whatsappErro = `Campos obrigatórios ausentes: ${camposFaltantes.join(', ')}`
       console.error('Campos faltantes para WhatsApp:', whatsappErro)
     } else {

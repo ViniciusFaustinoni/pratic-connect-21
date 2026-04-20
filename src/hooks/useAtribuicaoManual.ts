@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+const PRODUCTION_BASE_URL = 'https://app.praticcar.org';
+
 export function useConfigAtribuicaoManual() {
   return useQuery({
     queryKey: ['config-atribuicao-manual'],
@@ -363,6 +365,150 @@ export function useAtribuirServicoManual() {
     },
     onError: (err: any) => {
       toast.error('Erro ao atribuir serviço: ' + (err.message || ''));
+    },
+  });
+}
+
+export interface AtribuirPrestadorParams {
+  servicoId: string;
+  prestadorId: string;
+  prestadorNome: string;
+  prestadorTelefone?: string | null;
+  valor: number;
+}
+
+export interface AtribuirPrestadorResult {
+  token: string;
+  url: string;
+  prestadorNome: string;
+  prestadorTelefone?: string | null;
+}
+
+export function useAtribuirServicoPrestador() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: AtribuirPrestadorParams): Promise<AtribuirPrestadorResult> => {
+      const { servicoId, prestadorId, valor } = params;
+
+      // 1) Determine type: check if it's an instalação or vistoria service
+      const { data: servico, error: sErr } = await supabase
+        .from('servicos')
+        .select('id, tipo, instalacao_origem_id, vistoria_origem_id, associado_id, veiculo_id, contrato_id, cotacao_id')
+        .eq('id', servicoId)
+        .maybeSingle();
+
+      if (sErr || !servico) throw new Error('Serviço não encontrado');
+
+      const profileId = await getProfileId();
+      let result: any;
+
+      const isInstalacao = servico.tipo === 'instalacao';
+
+      if (isInstalacao) {
+        // Get instalacao_id
+        let instalacaoId = servico.instalacao_origem_id;
+        if (!instalacaoId) {
+          // Try finding via associado + veiculo
+          const { data: inst } = await supabase
+            .from('instalacoes')
+            .select('id')
+            .eq('associado_id', servico.associado_id)
+            .eq('veiculo_id', servico.veiculo_id)
+            .in('status', ['agendada', 'em_andamento'] as any[])
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          instalacaoId = inst?.id;
+        }
+
+        if (!instalacaoId) throw new Error('Instalação não encontrada para este serviço');
+
+        const { data, error } = await supabase.functions.invoke('gerar-link-prestador', {
+          body: {
+            instalacao_id: instalacaoId,
+            vistoriador_prestador_id: prestadorId,
+            valor,
+            atribuido_por: profileId,
+            skip_whatsapp: true,
+          },
+        });
+
+        if (error) throw new Error(error.message || 'Erro ao gerar link do prestador');
+        if (!data?.success) throw new Error(data?.error || 'Erro ao gerar link');
+        result = data;
+      } else {
+        // Vistoria type - find instalacao_id via vistoria
+        let instalacaoId: string | null = null;
+
+        if (servico.vistoria_origem_id) {
+          const { data: vist } = await supabase
+            .from('vistorias')
+            .select('instalacao_id')
+            .eq('id', servico.vistoria_origem_id)
+            .maybeSingle();
+          instalacaoId = vist?.instalacao_id || null;
+        }
+
+        if (!instalacaoId) {
+          // Fallback: find active instalação for same associado+veiculo
+          const { data: inst } = await supabase
+            .from('instalacoes')
+            .select('id')
+            .eq('associado_id', servico.associado_id)
+            .eq('veiculo_id', servico.veiculo_id)
+            .in('status', ['agendada', 'em_andamento'] as any[])
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          instalacaoId = inst?.id;
+        }
+
+        if (!instalacaoId) throw new Error('Instalação de origem não encontrada para vistoria');
+
+        const { data, error } = await supabase.functions.invoke('gerar-link-vistoriador-prestador', {
+          body: {
+            instalacao_id: instalacaoId,
+            vistoriador_prestador_id: prestadorId,
+            valor,
+            atribuido_por: profileId,
+            skip_whatsapp: true,
+          },
+        });
+
+        if (error) throw new Error(error.message || 'Erro ao gerar link do prestador');
+        if (!data?.success) throw new Error(data?.error || 'Erro ao gerar link');
+        result = data;
+      }
+
+      // Log assignment
+      try {
+        await supabase.from('servicos_atribuicoes_log').insert({
+          servico_id: servicoId,
+          profissional_id: prestadorId,
+          tipo_atribuicao: 'manual_prestador',
+          atribuido_por: profileId,
+          observacoes: `Atribuição a prestador externo ${params.prestadorNome} — Valor: R$ ${valor.toFixed(2)} — Link gerado (sem WhatsApp automático)`,
+        } as any);
+      } catch (logErr) {
+        console.error('Erro ao registrar log de atribuição prestador:', logErr);
+      }
+
+      return {
+        token: result.token,
+        url: result.url,
+        prestadorNome: params.prestadorNome,
+        prestadorTelefone: params.prestadorTelefone,
+      };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['servicos-para-atribuir-manual'] });
+      qc.invalidateQueries({ queryKey: ['vistoriadores-ativos-manual'] });
+      qc.invalidateQueries({ queryKey: ['vistorias-mapa'] });
+      qc.invalidateQueries({ queryKey: ['servicos'] });
+    },
+    onError: (err: any) => {
+      toast.error('Erro ao atribuir a prestador: ' + (err.message || ''));
     },
   });
 }

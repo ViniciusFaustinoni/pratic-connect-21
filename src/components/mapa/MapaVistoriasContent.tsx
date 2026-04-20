@@ -78,6 +78,7 @@ import { ReagendarTarefaDialog } from "@/components/mapa/ReagendarTarefaDialog";
 import { AlocarVistoriadorDialog } from "@/components/mapa/AlocarVistoriadorDialog";
 import { AlterarEnderecoTipoDialog } from "@/components/mapa/AlterarEnderecoTipoDialog";
 import { RealocarInstalacaoDialog } from "@/components/instalacoes/RealocarInstalacaoDialog";
+import { AtribuirPrestadorPopover } from "@/components/mapa/AtribuirPrestadorPopover";
 
 const COR_REALIZADA = '#10B981';
 const COR_A_REALIZAR = '#EF4444';
@@ -686,11 +687,14 @@ export function MapaVistoriasContent() {
                       </Button>
                     )}
                     {!!atribuicaoManualAtiva && !isRealizada && !v.vistoriador_id && !!v.servico_id_unificado && (
-                      <AtribuirTecnicoPopover
-                        servicoId={v.servico_id_unificado}
-                        alocacoesHoje={alocacoesHoje}
-                        atribuirMutation={atribuirMutation}
-                      />
+                      <>
+                        <AtribuirTecnicoPopover
+                          servicoId={v.servico_id_unificado}
+                          alocacoesHoje={alocacoesHoje}
+                          atribuirMutation={atribuirMutation}
+                        />
+                        <AtribuirPrestadorPopover servicoId={v.servico_id_unificado} />
+                      </>
                     )}
                     {canSendConfirmation && (
                       <Button
@@ -876,6 +880,12 @@ export function MapaVistoriasContent() {
                       <GripVertical className="h-3 w-3" />
                       Arraste até um técnico para atribuir
                     </p>
+                  )}
+                  {/* Prestador assignment option in popup */}
+                  {!!atribuicaoManualAtiva && !isRealizada && !v.vistoriador_id && !!v.servico_id_unificado && (
+                    <div className="mt-1">
+                      <AtribuirPrestadorPopover servicoId={v.servico_id_unificado} />
+                    </div>
                   )}
                 </div>
                 {!isEmExecucao && (
