@@ -72,8 +72,9 @@ export function InstaladorGuard({ children }: InstaladorGuardProps) {
     return <Navigate to="/instalador/login" state={{ from: location }} replace />;
   }
 
-  // Verificar se tem a role de instalador/vistoriador (role unificada)
-  if (!hasRole('instalador_vistoriador')) {
+  // Verificar se tem alguma role operacional do app do técnico
+  const podeAcessar = hasRole('instalador_vistoriador') || hasRole('vistoriador_base');
+  if (!podeAcessar) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-slate-900 px-4">
         <div className="text-center">
