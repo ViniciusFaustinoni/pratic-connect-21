@@ -223,11 +223,15 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
         console.warn('Erro ao enviar notificação de imprevisto:', notifErr);
       }
 
-      // Desatribuir serviço
+      // Desatribuir serviço e registrar imprevisto (dispara trigger que libera instalação/vistoria)
       await supabase.from('servicos').update({
         profissional_id: null,
-        status: 'pendente',
-      }).eq('id', tarefa.id);
+        status: 'imprevisto_pendente',
+        imprevisto_registrado_em: new Date().toISOString(),
+        imprevisto_origem: 'instalador',
+        imprevisto_motivo: motivo,
+        imprevisto_motivo_livre: motivoLivre || null,
+      } as any).eq('id', tarefa.id);
 
       // Verificar limite de recusas e enviar alerta
       if (turnoId) {
