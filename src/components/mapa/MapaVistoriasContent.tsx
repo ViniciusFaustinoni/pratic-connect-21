@@ -903,6 +903,19 @@ export function MapaVistoriasContent() {
                         <CalendarClock className="h-3 w-3" />Reagendar
                       </button>
                     )}
+                    {v.tipo_servico === 'instalacao' && ['agendada', 'nao_compareceu', 'reagendada', 'cancelada'].includes(v.status) && (
+                      <button
+                        onClick={() => setRealocarState({
+                          instalacaoId: v.id,
+                          placa: formatPlacaExibicao(v.veiculo_placa),
+                          associadoNome: v.associado_nome,
+                        })}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded text-xs hover:bg-primary/90"
+                        title="Realocar para outra rota ou base"
+                      >
+                        <MapPinned className="h-3 w-3" />Realocar
+                      </button>
+                    )}
                     {podeCancelarAtribuicao && v.vistoriador_id && !isRealizada && v.servico_id_unificado && (
                       <button
                         onClick={() => setCancelConfirmation({
