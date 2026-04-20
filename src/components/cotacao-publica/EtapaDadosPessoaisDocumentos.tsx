@@ -473,7 +473,7 @@ export function EtapaDadosPessoaisDocumentos({
               )}
             </div>
             <div className="flex-1">
-              <p className="text-sm font-medium">CNH ou RG</p>
+              <p className="text-sm font-medium">CNH, RG ou CIN</p>
               {temDadosPessoais && (
                 <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-muted-foreground mt-1">
                   {dadosExtraidos.nome && <div><span className="font-medium">Nome:</span> {dadosExtraidos.nome}</div>}
@@ -789,7 +789,7 @@ export function EtapaDadosPessoaisDocumentos({
           {/* Indicador de status */}
           {!podeAvancar && (
             <p className="text-center text-sm text-muted-foreground">
-              {!temDocumentoPessoal && 'Envie CNH ou RG • '}
+              {!temDocumentoPessoal && 'Envie CNH, RG ou CIN • '}
               {!temCrlv && 'Envie CRLV, Nota Fiscal ou ATPV-e • '}
               {!temComprovante && 'Envie Comprovante • '}
               {!temContato && 'Preencha e-mail e telefone'}

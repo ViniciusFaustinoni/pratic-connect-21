@@ -59,7 +59,7 @@ interface UnifiedDocumentUploaderProps {
 
 const tipoLabels: Record<TipoDocumentoDetectado, { label: string; icon: typeof FileText }> = {
   cnh: { label: 'CNH', icon: User },
-  rg: { label: 'RG', icon: User },
+  rg: { label: 'RG / CIN', icon: User },
   crlv: { label: 'CRLV', icon: Car },
   nota_fiscal_veiculo: { label: 'Nota Fiscal do Veículo', icon: FileText },
   atpv_e: { label: 'ATPV-e / CRV Digital', icon: Car },
@@ -68,7 +68,7 @@ const tipoLabels: Record<TipoDocumentoDetectado, { label: string; icon: typeof F
 };
 
 const documentosEsperados = [
-  { tipo: 'cnh' as const, label: 'CNH ou RG', alternativa: 'rg' as const },
+  { tipo: 'cnh' as const, label: 'CNH, RG ou CIN', alternativa: 'rg' as const },
   { tipo: 'comprovante_residencia' as const, label: 'Comprovante de Residência' },
   { tipo: 'crlv' as const, label: 'CRLV, Nota Fiscal ou ATPV-e (CRV Digital)', alternativa: 'nota_fiscal_veiculo' as const },
 ];
