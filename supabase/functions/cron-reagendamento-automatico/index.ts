@@ -222,18 +222,18 @@ Deno.serve(async (req) => {
       hour12: false,
     });
 
-    // Idade mínima: 4 horas desde a criação
-    const IDADE_MINIMA_MS = 4 * 60 * 60 * 1000;
-    // Tolerância após hora agendada: 2 horas
-    const TOLERANCIA_HORA_MIN = "02:00";
+    // Idade mínima: 30 minutos desde a criação
+    const IDADE_MINIMA_MS = 30 * 60 * 1000;
+    // Tolerância após hora agendada: 15 minutos
+    const TOLERANCIA_HORA_MIN = "00:15";
 
-    // Mapa de cutoff por período
+    // Mapa de cutoff por período (com tolerância de 15 min)
     const cutoffPeriodo: Record<string, string> = {
-      manha: "14:00",   // manhã vence às 14h
-      tarde: "19:00",   // tarde vence às 19h
-      noite: "23:00",   // noite vence às 23h
+      manha: "12:15",
+      tarde: "17:15",
+      noite: "21:15",
     };
-    // Cutoff padrão (sem hora nem período): fim do expediente
+    // Cutoff padrão (sem hora nem período)
     const CUTOFF_PADRAO = "20:00";
 
     function somarHoras(hora: string, acrescimo: string): string {
