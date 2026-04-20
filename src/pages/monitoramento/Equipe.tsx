@@ -203,9 +203,23 @@ export default function Equipe() {
         </TabsList>
 
         <TabsContent value="equipe" className="space-y-4 mt-4">
+          {/* Sub-abas: Instaladores / Administrativo */}
+          <Tabs value={subTab} onValueChange={(v) => setSubTab(v as 'instaladores' | 'administrativo')} className="w-full">
+            <TabsList className="w-full sm:w-auto grid grid-cols-2 sm:inline-flex">
+              <TabsTrigger value="instaladores" className="gap-2">
+                <Wrench className="h-4 w-4" />
+                Instaladores ({instaladores.length})
+              </TabsTrigger>
+              <TabsTrigger value="administrativo" className="gap-2">
+                <Headphones className="h-4 w-4" />
+                Administrativo ({administrativo.length})
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+
           {/* Métricas */}
-          {profissionais && profissionais.length > 0 && (
-            <EquipeMetrics profissionais={profissionais} />
+          {baseList.length > 0 && (
+            <EquipeMetrics profissionais={baseList} />
           )}
 
           {/* Filtros */}
@@ -242,8 +256,9 @@ export default function Equipe() {
                     Nenhum profissional encontrado
                   </h3>
                   <p className="text-sm text-muted-foreground text-center max-w-md px-4">
-                    Cadastre vistoriadores, instaladores ou analistas de monitoramento 
-                    ou ajuste os filtros de busca.
+                    {subTab === 'instaladores'
+                      ? 'Cadastre vistoriadores ou instaladores ou ajuste os filtros.'
+                      : 'Cadastre analistas/coordenadores de monitoramento ou ajuste os filtros.'}
                   </p>
                   <Button onClick={handleNovoProfissional} variant="outline" className="mt-4">
                     <Plus className="mr-2 h-4 w-4" />
@@ -258,6 +273,7 @@ export default function Equipe() {
                     onEditar={handleEditar}
                     onDesativar={handleDesativar}
                     onRelatorio={handleRelatorio}
+                    onVerServicos={handleVerServicos}
                   />
                 ))
               )}
