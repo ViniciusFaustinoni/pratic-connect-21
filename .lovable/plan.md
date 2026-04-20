@@ -1,55 +1,48 @@
 
 
-## Atribuição Manual a Técnicos Prestadores
+## Adaptar Aprovação para Vistoria na Base (sem fotos do associado)
 
-### Contexto
-Hoje a aba "Atribuição Manual" e o mapa só permitem arrastar/atribuir serviços a técnicos internos (com turno aberto e localização ativa). Prestadores externos só podem ser atribuídos manualmente via drawer da instalação (`PainelAtribuicaoPrestador`). O usuário quer unificar isso: o coordenador deve poder, na mesma interface, escolher entre técnico interno ou prestador, e ao atribuir a prestador, ver um botão "Copiar Link" (sem envio automático de template WhatsApp).
+### Problema
+Quando o associado escolhe "Vistoria + Instalação na Base" (`cotacoes.tipo_vistoria = 'agendada_base'`), ele **não envia fotos nem vídeo 360°** — toda a mídia será capturada pelo técnico na oficina parceira no dia do atendimento. Hoje, o stepper de aprovação (`PropostaApprovalStepper`) sempre exige passar pela etapa "Fotos & Vistoria" e mostra "Sem fotos/vídeo disponíveis", confundindo o cadastro (caso real: Rafael Lucindo / KYS4C01).
+
+### Solução
+Quando `tipo_vistoria === 'agendada_base'` **e** ainda não existe vistoria executada (sem `instalacao_info` e sem `vistoria_base_info` concluída), o fluxo de aprovação deve:
+
+1. **Pular automaticamente a Etapa 2 (Fotos & Vistoria)** — o stepper passa a ter apenas 2 etapas: Documentos → Aprovação Final.
+2. **Aprovar com base apenas na documentação** — o botão "Aprovar Proposta" libera quando todos os documentos estão aprovados, sem exigir checkbox de revisão de fotos.
+3. **Exibir banner informativo** na Etapa 3 explicando que as fotos serão capturadas presencialmente na base no dia do agendamento (com data/hora se disponível em `vistoria_base_info`/`agendamentos_base`).
+4. **Manter texto de aprovação correto** — o botão diz "Aprovar Proposta" (não "Liberar Cobertura Roubo e Furto", que é específico de autovistoria).
+
+Quando a vistoria na base **for executada** (técnico subiu fotos), o fluxo volta ao normal de 3 etapas — as fotos aparecem em `proposta.vistoria.fotos` e Etapa 2 reaparece automaticamente para revisão.
 
 ### Arquivos tocados
 
-**1. `src/components/monitoramento/AtribuicaoManualTab.tsx`**
-- Adicionar seção "Prestadores" no painel direito, abaixo dos "Vistoriadores Ativos", listando prestadores ativos da tabela `vistoriadores_prestadores` (reutilizar `useVistoriadoresPrestadores`).
-- Cada prestador é um `DroppableVistoriador` adaptado (novo componente `DroppablePrestador`) — aceita drag-and-drop.
-- Ao soltar um serviço em um prestador, o dialog de confirmação muda: mostra campo "Valor (R$)" e identifica como "Prestador Externo". O botão de confirmar gera o link e mostra o resultado com botão "Copiar Link".
+**1. `src/hooks/usePropostasPendentes.ts`**
+- Adicionar campo `tipo_vistoria: 'autovistoria' | 'agendada' | 'agendada_base' | null` na interface `PropostaPendente`.
+- Popular este campo no `useProposta` (e na lista resumida `usePropostasPendentes`) buscando de `cotacoes.tipo_vistoria` quando `contrato.cotacao_id` existir. Já existe a leitura na linha 319-323; basta propagá-la para o objeto retornado.
 
-**2. `src/hooks/useAtribuicaoManual.ts`**
-- Novo mutation `useAtribuirServicoPrestador` que:
-  1. Busca `instalacao_origem_id` do `servico` (para serviços tipo `instalacao`). Para outros tipos, busca via `vistoria_origem_id` → `vistorias.instalacao_id` ou cria link direto.
-  2. Invoca a edge function `gerar-link-vistoriador-prestador` (para vistorias) ou `gerar-link-prestador` (para instalações) passando `instalacao_id`, `vistoriador_prestador_id`, `valor`, `atribuido_por`.
-  3. Retorna `{ token, url }` para o UI mostrar o botão "Copiar Link".
-  4. Registra no `servicos_atribuicoes_log` com `tipo_atribuicao: 'manual_prestador'`.
+**2. `src/pages/cadastro/PropostaAnalise.tsx`**
+- Calcular nova flag:
+  ```ts
+  const isVistoriaBaseSemFotos =
+    proposta?.tipo_vistoria === 'agendada_base' &&
+    !proposta?.vistoria_base_info?.concluida_em &&
+    !(proposta?.vistoria?.fotos?.length);
+  ```
+- Passar `isVistoriaBaseSemFotos` como nova prop para `PropostaApprovalStepper`.
 
-**3. Edge Functions `gerar-link-prestador` e `gerar-link-vistoriador-prestador`**
-- Adicionar parâmetro opcional `skip_whatsapp: true`. Quando presente, pula o envio de WhatsApp (ações 3/AÇÃO 3) e retorna o link normalmente. Isso permite que o coordenador copie o link manualmente sem disparar template via Meta.
-- O restante do fluxo (criação do link, auditoria, financeiro) permanece igual.
-
-**4. `src/components/monitoramento/AtribuicaoManualTab.tsx` — Dialog de resultado**
-- Após atribuição a prestador, um segundo dialog aparece com:
-  - URL do prestador
-  - Botão "Copiar Link" (usa `navigator.clipboard`)
-  - Botão "Abrir no WhatsApp" (abre `https://wa.me/{telefone}?text={url}` para envio manual)
-  - Badge indicando "Link gerado — dispensa envio de template"
-
-**5. `src/components/mapa/MapaVistoriasContent.tsx`** (popup do serviço no mapa)
-- Ao clicar em um serviço sem profissional, mostrar duas opções:
-  - "Atribuir a Técnico Interno" → fluxo atual (seletor de profissionais)
-  - "Atribuir a Prestador" → abre mini-modal com lista de prestadores, campo valor, e após confirmar mostra botão "Copiar Link"
-
-### Fluxo do usuário
-1. Coordenador abre aba "Atribuição Manual" ou mapa.
-2. Vê serviços pendentes à esquerda, técnicos internos E prestadores à direita.
-3. Arrasta serviço para um prestador → dialog pede valor → confirma.
-4. Sistema gera link via edge function (sem enviar WhatsApp) → mostra dialog com URL e botão "Copiar Link".
-5. Coordenador copia e envia manualmente pelo WhatsApp ou outro canal.
-6. Prestador acessa o link público e realiza a tarefa (mesma tela atual de `/prestador/instalacao/:token` ou `/vistoria-prestador/:token`).
-
-### Sem migração de schema
-As tabelas `instalacao_prestador_links`, `vistoria_prestador_links` e `vistoriadores_prestadores` já existem com todos os campos necessários. Nenhuma alteração de schema é necessária.
+**3. `src/components/cadastro/proposta/PropostaApprovalStepper.tsx`**
+- Aceitar prop `isVistoriaBaseSemFotos: boolean`.
+- Quando `true`:
+  - Renderizar apenas 2 itens no array `steps` (Documentos + Aprovação Final), reindexando o ID 3 para 2.
+  - `step2Complete` (fotos) é forçado para `true` (não bloqueia avanço/aprovação).
+  - Substituir o card de "Fotos & Vistoria" no resumo da Etapa Final por um card informativo:
+    > 📍 **Vistoria agendada na base** — As fotos do veículo serão registradas pelo técnico no dia do atendimento presencial em `{data_agendamento}`. Aprove apenas a documentação para liberar o agendamento.
+  - O botão de aprovar mantém o texto "Aprovar Proposta" e desabilita só por `!step1Complete`.
 
 ### Validação
-1. Arrastar serviço de instalação para um prestador na aba de Atribuição Manual → dialog de confirmação com campo valor → gerar link → botão "Copiar Link" funciona.
-2. Arrastar serviço de vistoria para um prestador → mesma lógica, usa `gerar-link-vistoriador-prestador`.
-3. Clicar em serviço no mapa → opções "Técnico Interno" e "Prestador" visíveis.
-4. Confirmar que NÃO é enviado template WhatsApp automaticamente quando `skip_whatsapp=true`.
-5. Prestador acessa link copiado → página pública carrega normalmente.
+1. Rafael Lucindo (KYS4C01): abrir a proposta → stepper mostra 2 etapas, Etapa 2 some, botão "Aprovar Proposta" libera quando docs estiverem 100% aprovados.
+2. Proposta autovistoria normal: continua com 3 etapas e checkbox de revisão de fotos (sem regressão).
+3. Proposta `agendada_base` **após** o técnico da oficina concluir a vistoria e subir fotos: volta a 3 etapas, fotos aparecem para revisão.
+4. Proposta `agendada` (rota domiciliar) sem fotos ainda: continua bloqueada aguardando execução (`aguardandoExecucao`), comportamento atual preservado.
 
