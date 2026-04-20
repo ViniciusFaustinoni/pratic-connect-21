@@ -106,7 +106,7 @@ const STATUS_OPERACIONAL_CONFIG: Record<StatusOperacional, {
   },
 };
 
-export function EquipeCard({ profissional, onEditar, onDesativar, onRelatorio }: EquipeCardProps) {
+export function EquipeCard({ profissional, onEditar, onDesativar, onRelatorio, onVerServicos }: EquipeCardProps) {
   const getInitials = (nome: string) =>
     nome
       .split(' ')
@@ -127,8 +127,18 @@ export function EquipeCard({ profissional, onEditar, onDesativar, onRelatorio }:
   const statusOp = STATUS_OPERACIONAL_CONFIG[profissional.status_operacional];
   const statusProf = STATUS_CONFIG[profissional.status];
 
+  const handleCardClick = () => {
+    onVerServicos?.(profissional);
+  };
+
   return (
-    <Card className="group relative overflow-hidden border-border/50 bg-card hover:border-primary/30 transition-all duration-300 hover:shadow-lg hover:shadow-primary/5">
+    <Card
+      onClick={onVerServicos ? handleCardClick : undefined}
+      className={cn(
+        "group relative overflow-hidden border-border/50 bg-card hover:border-primary/30 transition-all duration-300 hover:shadow-lg hover:shadow-primary/5",
+        onVerServicos && "cursor-pointer"
+      )}
+    >
       {/* Top status bar */}
       <div className={cn(
         "absolute top-0 left-0 right-0 h-1",
