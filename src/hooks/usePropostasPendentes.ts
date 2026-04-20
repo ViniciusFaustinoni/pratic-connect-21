@@ -234,15 +234,17 @@ export function usePropostasPendentes() {
           let enderecoCompleto: string | null = null;
           let planoNome: string | null = null;
           let instalacaoAgendada: InstalacaoAgendadaInfo | null = null;
+          let tipoVistoriaCotacao: 'autovistoria' | 'agendada' | 'agendada_base' | null = null;
           
           if (contrato.cotacao_id) {
             const { data: cotacao } = await supabase
               .from('cotacoes')
-              .select('cliente_logradouro, cliente_numero, cliente_bairro, cliente_cidade, cliente_uf, plano_escolhido_id, vistoria_permite_encaixe, vistoria_data_agendada, vistoria_horario_agendado')
+              .select('cliente_logradouro, cliente_numero, cliente_bairro, cliente_cidade, cliente_uf, plano_escolhido_id, vistoria_permite_encaixe, vistoria_data_agendada, vistoria_horario_agendado, tipo_vistoria')
               .eq('id', contrato.cotacao_id)
               .maybeSingle();
             
             if (cotacao) {
+              tipoVistoriaCotacao = (cotacao.tipo_vistoria as any) || null;
               if (cotacao.cliente_logradouro) {
                 enderecoCompleto = `${cotacao.cliente_logradouro}, ${cotacao.cliente_numero || 'S/N'} - ${cotacao.cliente_bairro || ''}, ${cotacao.cliente_cidade || ''} - ${cotacao.cliente_uf || ''}`;
               }
