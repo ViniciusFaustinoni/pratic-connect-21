@@ -41,12 +41,14 @@ export default function InstalacoesList() {
 
   const [searchDebounced, setSearchDebounced] = useState('');
   
-  // Detectar parâmetro ?agendar=true para navegar ao agendamento
+  // Detectar parâmetro ?agendar=true e redirecionar para Serviços de Campo
+  // (rota /monitoramento/instalacoes/agendar não existe; o agendamento é feito
+  // pelo módulo unificado de serviços de campo)
   useEffect(() => {
     if (searchParams.get('agendar') === 'true') {
       searchParams.delete('agendar');
       setSearchParams(searchParams, { replace: true });
-      navigate('/monitoramento/instalacoes/agendar');
+      navigate('/monitoramento/vistorias-instalacoes-mon');
     }
   }, [searchParams, setSearchParams, navigate]);
   
