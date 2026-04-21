@@ -9306,27 +9306,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "cotacoes_vendedor_profiles_fkey"
-            columns: ["vendedor_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cotacoes_vendedor_profiles_fkey"
-            columns: ["vendedor_id"]
-            isOneToOne: false
-            referencedRelation: "vw_metricas_vendedores"
-            referencedColumns: ["vendedor_id"]
-          },
-          {
-            foreignKeyName: "cotacoes_vendedor_profiles_fkey"
-            columns: ["vendedor_id"]
-            isOneToOne: false
-            referencedRelation: "vw_vendedores_conflito"
-            referencedColumns: ["vendedor_id"]
-          },
-          {
             foreignKeyName: "cotacoes_vistoria_id_fkey"
             columns: ["vistoria_id"]
             isOneToOne: false
