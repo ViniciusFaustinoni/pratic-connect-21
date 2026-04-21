@@ -27,7 +27,8 @@ export function BadgeDespachoStatus({ chamadoId, chamadoStatus }: Props) {
       return data;
     },
     enabled: ['aguardando_aceites', 'prestador_a_caminho', 'prestador_despachado', 'em_atendimento'].includes(chamadoStatus),
-    refetchInterval: 15000,
+    refetchInterval: 30_000, // Fase 4: 15s -> 30s
+    refetchIntervalInBackground: false,
   });
 
   useEffect(() => {

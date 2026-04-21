@@ -106,7 +106,8 @@ export function usePrestadoresAtivosMapa() {
       ]);
       return [...vist, ...inst];
     },
-    refetchInterval: 30_000,
+    refetchInterval: 60_000, // Fase 4: realtime já invalida; poll vira fallback
+    refetchIntervalInBackground: false,
   });
 
   useEffect(() => {

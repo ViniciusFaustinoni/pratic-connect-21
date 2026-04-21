@@ -254,8 +254,9 @@ export default function AcompanharChamado() {
       if (error) throw error;
       return data as Chamado;
     },
-    enabled: !!id,
-    refetchInterval: 30000,
+    enabled: !!id && (typeof document === 'undefined' || document.visibilityState === 'visible'),
+    refetchInterval: 60_000, // Fase 4
+    refetchIntervalInBackground: false,
   });
 
   // Query - histórico de eventos
@@ -270,8 +271,9 @@ export default function AcompanharChamado() {
       if (error) throw error;
       return data as HistoricoEvento[];
     },
-    enabled: !!id,
-    refetchInterval: 30000,
+    enabled: !!id && (typeof document === 'undefined' || document.visibilityState === 'visible'),
+    refetchInterval: 60_000, // Fase 4
+    refetchIntervalInBackground: false,
   });
 
   // Mutation - cancelar chamado

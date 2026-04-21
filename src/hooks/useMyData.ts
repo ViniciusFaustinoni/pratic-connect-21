@@ -245,7 +245,8 @@ export function useMyVehiclePosition(rastreadorId?: string) {
       };
     },
     enabled: !!rastreadorId,
-    refetchInterval: 30000,
+    refetchInterval: 60_000, // Fase 4
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -298,8 +299,9 @@ export function useVeiculoPosicao(veiculoId?: string) {
       return data;
     },
     enabled: !!veiculoId,
-    refetchInterval: 30000,
-    staleTime: 15000,
+    refetchInterval: 60_000, // Fase 4
+    refetchIntervalInBackground: false,
+    staleTime: 30_000,
   });
 
   const atualizarManual = useMutation({

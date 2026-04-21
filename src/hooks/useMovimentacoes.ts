@@ -46,6 +46,7 @@ export function useMovimentacoes() {
         updated_at: item.updated_at,
       }));
     },
-    refetchInterval: 30000,
+    refetchInterval: 60_000, // Fase 4: 30s -> 60s
+    refetchIntervalInBackground: false,
   });
 }

@@ -55,7 +55,8 @@ export function useVistoriasPrestadoresDashboard() {
         data_agendada: row.instalacoes?.data_agendada ?? null,
       }));
     },
-    refetchInterval: 30000,
+    refetchInterval: 90_000, // Fase 4: realtime cobre, poll é fallback
+    refetchIntervalInBackground: false,
   });
 
   // Realtime

@@ -154,7 +154,8 @@ export default function AlertasMonitoramento() {
         return (data || []) as unknown as Alerta[];
       }
     },
-    refetchInterval: 30000,
+    refetchInterval: 60_000, // Fase 4
+    refetchIntervalInBackground: false,
   });
 
   // Contagem
@@ -165,7 +166,8 @@ export default function AlertasMonitoramento() {
       if (error) throw error;
       return (data?.[0] || { abertos: 0, visualizados: 0, criticos: 0, total: 0 }) as Contagem;
     },
-    refetchInterval: 30000,
+    refetchInterval: 60_000, // Fase 4
+    refetchIntervalInBackground: false,
   });
 
   // Mutations

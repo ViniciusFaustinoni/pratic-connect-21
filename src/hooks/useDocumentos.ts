@@ -203,7 +203,8 @@ export function useDocumentosContagem(filters?: { hoje?: boolean }) {
 
       return contagem;
     },
-    refetchInterval: 30000, // Atualiza a cada 30 segundos
+    refetchInterval: 90_000, // Fase 4: 30s -> 90s
+    refetchIntervalInBackground: false,
   });
 }
 

@@ -103,7 +103,8 @@ export default function TrackingAssistencia() {
       };
     },
     enabled: !!id,
-    refetchInterval: 30000, // Atualiza a cada 30 segundos
+    refetchInterval: 60_000, // Fase 4: 30s -> 60s
+    refetchIntervalInBackground: false,
   });
 
   // Determinar posição a exibir (prioridade: tempo real > salva > origem)
