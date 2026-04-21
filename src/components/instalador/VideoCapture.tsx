@@ -94,12 +94,39 @@ export function VideoCapture({
     chunksRef.current = [];
     
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-        audio: true,
-      });
-      
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+          audio: true,
+        });
+      } catch (audioErr: any) {
+        // Fallback: alguns dispositivos negam só o microfone. Tenta sem áudio.
+        if (audioErr?.name === 'NotAllowedError' || audioErr?.name === 'NotFoundError' || audioErr?.name === 'OverconstrainedError') {
+          console.warn('[VideoCapture] áudio indisponível, gravando sem áudio:', audioErr?.name);
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment' },
+            audio: false,
+          });
+          toast.warning('Gravando sem áudio (microfone indisponível).');
+        } else {
+          throw audioErr;
+        }
+      }
+
       streamRef.current = stream;
+      // Log de debug — útil para suporte quando o usuário relatar "tela preta".
+      try {
+        const vt = stream.getVideoTracks()[0];
+        const settings = vt?.getSettings?.() || {};
+        console.info('[VideoCapture] live stream attached', {
+          width: settings.width,
+          height: settings.height,
+          frameRate: settings.frameRate,
+          facingMode: settings.facingMode,
+          audioTracks: stream.getAudioTracks().length,
+        });
+      } catch {}
       // O attach ao <video> acontece no useEffect acima, garantindo que o ref já está montado.
       setLiveStream(stream);
 
