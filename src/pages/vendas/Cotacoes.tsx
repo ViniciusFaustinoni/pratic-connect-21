@@ -586,10 +586,11 @@ export default function Cotacoes() {
     setDataFilter(undefined);
     setConsultorFilter('all');
     setFiltroOrfas(false);
+    setEtapaFunilFilter('all');
     setSelectedIds(new Set());
   };
 
-  const hasActiveFilters = search || statusFilter !== 'all' || mesFilter !== 'all' || dataFilter || consultorFilter !== 'all' || filtroOrfas;
+  const hasActiveFilters = search || statusFilter !== 'all' || mesFilter !== 'all' || dataFilter || consultorFilter !== 'all' || filtroOrfas || etapaFunilFilter !== 'all';
 
   // Stats - 9 status do fluxo de cotação
   const statusStats = useMemo(() => {
