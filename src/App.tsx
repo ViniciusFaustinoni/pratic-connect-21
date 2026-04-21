@@ -159,6 +159,7 @@ const AgenteConsultorIA = lazy(() => import("./pages/configuracoes/AgenteConsult
 const ApiDocumentation = lazy(() => import("./pages/configuracoes/ApiDocumentation"));
 const RateioConfig = lazy(() => import("./pages/configuracoes/RateioConfig"));
 const UsuariosAcessos = lazy(() => import("./pages/configuracoes/UsuariosAcessos"));
+const Telemetria = lazy(() => import("./pages/admin/Telemetria"));
 
 // Assistência
 const AssistenciaDashboard = lazy(() => import("./pages/assistencia/AssistenciaDashboard"));
@@ -706,6 +707,7 @@ const App = () => (
                 <Route path="api" element={<ApiDocumentation />} />
                 <Route path="sistema" element={<Sistema />} />
               </Route>
+              <Route path="/admin/telemetria" element={<Telemetria />} />
             </Route>
             
             {/* Associate App Routes */}

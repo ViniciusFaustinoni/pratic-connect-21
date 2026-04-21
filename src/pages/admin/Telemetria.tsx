@@ -28,7 +28,7 @@ export default function Telemetria() {
         .order('window_start', { ascending: false })
         .limit(10000);
       if (error) throw error;
-      return (data || []) as Row[];
+      return ((data as unknown) as Row[]) || [];
     },
     staleTime: 60_000,
     refetchIntervalInBackground: false,
