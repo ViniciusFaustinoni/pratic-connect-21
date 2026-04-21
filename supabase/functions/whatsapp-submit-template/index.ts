@@ -17,7 +17,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const templateName = body.template_name || "aprovacao_fipe_diretoria_v2";
+    const templateName = body.template_name || "autorizacao_fipe_diretoria_v4";
     const forceRecreate = body.force_recreate === true;
 
     // Buscar template do banco
@@ -70,31 +70,58 @@ serve(async (req) => {
     // Montar corpo do template para a API da Meta
     const varMatches = (template.corpo || "").match(/\{\{\d+\}\}/g) || [];
     const varCount = new Set(varMatches).size;
-    const exampleValues = [];
+
+    // Preferir variaveis_exemplo do banco; fallback para placeholders
+    const exampleValues: string[] = [];
+    const varExemplos = (template.variaveis_exemplo || {}) as Record<string, string>;
     for (let i = 1; i <= varCount; i++) {
-      exampleValues.push(`exemplo_${i}`);
+      exampleValues.push(varExemplos[String(i)] || `exemplo_${i}`);
     }
 
-    const components: any[] = [
-      {
-        type: "BODY",
-        text: template.corpo,
-        ...(varCount > 0 ? {
-          example: {
-            body_text: [exampleValues],
-          },
-        } : {}),
-      },
-    ];
+    const components: any[] = [];
 
-    // Adicionar botões se existirem
+    // HEADER (opcional, tipo TEXT)
+    if (template.header_tipo && template.header_tipo !== 'none' && template.header_texto) {
+      components.push({
+        type: "HEADER",
+        format: String(template.header_tipo).toUpperCase(), // TEXT
+        text: template.header_texto,
+      });
+    }
+
+    // BODY
+    components.push({
+      type: "BODY",
+      text: template.corpo,
+      ...(varCount > 0 ? {
+        example: {
+          body_text: [exampleValues],
+        },
+      } : {}),
+    });
+
+    // FOOTER (texto puro, sem emoji/quebra de linha — Meta rejeita)
+    if (template.rodape && String(template.rodape).trim()) {
+      const footerLimpo = String(template.rodape).replace(/\n+/g, ' ').trim();
+      components.push({ type: "FOOTER", text: footerLimpo });
+    }
+
+    // BUTTONS — suporta URL dinâmica com example
     if (template.botoes && Array.isArray(template.botoes) && template.botoes.length > 0) {
       const buttons = template.botoes.map((b: any) => {
-        if (b.type === "QUICK_REPLY" || b.tipo === "resposta_rapida") {
-          return { type: "QUICK_REPLY", text: b.text || b.texto };
+        const tipo = (b.type || b.tipo || '').toLowerCase();
+        const texto = b.text || b.texto;
+        if (tipo === "quick_reply" || tipo === "resposta_rapida") {
+          return { type: "QUICK_REPLY", text: texto };
         }
-        if (b.type === "URL" || b.tipo === "url") {
-          return { type: "URL", text: b.text || b.texto, url: b.url };
+        if (tipo === "url") {
+          const btn: any = { type: "URL", text: texto, url: b.url };
+          // Se URL contém variável dinâmica {{n}}, exigir example
+          if (/\{\{\d+\}\}/.test(b.url)) {
+            const exemplo = b.exemplo || b.example;
+            if (exemplo) btn.example = [exemplo];
+          }
+          return btn;
         }
         return b;
       });

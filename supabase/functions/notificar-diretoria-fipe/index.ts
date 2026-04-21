@@ -87,17 +87,18 @@ serve(async (req) => {
       .eq("id", cotacao_id);
 
     // Verificar se template Meta está aprovado
+    const TEMPLATE_NAME = "autorizacao_fipe_diretoria_v4";
     const { data: templateMeta } = await supabase
       .from("whatsapp_meta_templates")
       .select("nome, status")
-      .eq("nome", "autorizacao_fipe_diretoria")
+      .eq("nome", TEMPLATE_NAME)
       .maybeSingle();
 
     const templateAprovado = templateMeta?.status === "APPROVED";
 
     const fipeFormatado = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(valor_fipe || 0);
     const limiteFormatado = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(limite_aplicado || 0);
-    const urlPainel = "https://app.praticcar.org/diretoria/aprovacoes";
+    const urlPainel = `https://app.praticcar.org/vendas/aprovacoes-fipe/${cotacao_id}`;
 
     let enviados = 0;
 
@@ -125,18 +126,21 @@ serve(async (req) => {
         continue;
       }
 
-      // Montar parâmetros do template
+      // Montar parâmetros do template (autorizacao_fipe_diretoria_v4)
+      // Ordem: {{1}} diretor, {{2}} veículo, {{3}} ano, {{4}} placa, {{5}} fipe, {{6}} limite, {{7}} associado
       const marcaModelo = `${veiculo_marca || ""} ${veiculo_modelo || ""}`.trim();
+      const nomeDiretor = (profile.nome || "Diretor(a)").split(/\s+/)[0];
       const templateParams = [
+        nomeDiretor,
         marcaModelo || "N/A",
         String(veiculo_ano || "N/A"),
         veiculo_placa || "N/A",
         fipeFormatado,
         limiteFormatado,
-        tipo_veiculo || categoria_placa || "N/A",
         nome_solicitante || "N/A",
-        urlPainel,
       ];
+      // Parâmetro do botão URL dinâmico: id da cotação no path
+      const templateButtonParams = [cotacao_id];
 
       const isBlindado = motivo === 'veiculo_blindado';
       const mensagemFallback = isBlindado
@@ -166,9 +170,10 @@ serve(async (req) => {
         };
 
         if (templateAprovado) {
-          sendPayload.template_name = "autorizacao_fipe_diretoria";
+          sendPayload.template_name = TEMPLATE_NAME;
           sendPayload.template_params = templateParams;
-          console.log(`[notificar-diretoria-fipe] Enviando template Meta para ${profile.nome}`);
+          sendPayload.template_button_params = templateButtonParams;
+          console.log(`[notificar-diretoria-fipe] Enviando template Meta ${TEMPLATE_NAME} para ${profile.nome}`);
         } else {
           // Template Meta não aprovado → forçar Evolution API como fallback
           sendPayload.force_provider = "evolution";

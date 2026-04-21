@@ -28,7 +28,7 @@ interface ResultadoEnvio {
   skipped?: boolean;
 }
 
-const PRIMARY_TEMPLATE = 'termo_filiacao_assinatura_v1';
+const PRIMARY_TEMPLATE = 'termo_filiacao_assinatura_v2';
 const FALLBACK_TEMPLATE = 'assinatura_documento_v2';
 
 function extrairToken(url: string): string | null {
