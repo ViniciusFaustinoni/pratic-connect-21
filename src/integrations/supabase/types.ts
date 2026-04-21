@@ -4777,6 +4777,7 @@ export type Database = {
       }
       cc_vendedor_lancamentos: {
         Row: {
+          abate_recorrente: boolean
           associado_id: string | null
           categoria: string
           contrato_id: string | null
@@ -4800,6 +4801,7 @@ export type Database = {
           vendedor_id: string | null
         }
         Insert: {
+          abate_recorrente?: boolean
           associado_id?: string | null
           categoria: string
           contrato_id?: string | null
@@ -4823,6 +4825,7 @@ export type Database = {
           vendedor_id?: string | null
         }
         Update: {
+          abate_recorrente?: boolean
           associado_id?: string | null
           categoria?: string
           contrato_id?: string | null
@@ -8831,6 +8834,7 @@ export type Database = {
           campanha_desconto_id: string | null
           cancelada_em: string | null
           categoria: string | null
+          cenario_adesao: string | null
           cidade: string | null
           cliente_bairro: string | null
           cliente_cep: string | null
@@ -8953,6 +8957,7 @@ export type Database = {
           campanha_desconto_id?: string | null
           cancelada_em?: string | null
           categoria?: string | null
+          cenario_adesao?: string | null
           cidade?: string | null
           cliente_bairro?: string | null
           cliente_cep?: string | null
@@ -9075,6 +9080,7 @@ export type Database = {
           campanha_desconto_id?: string | null
           cancelada_em?: string | null
           categoria?: string | null
+          cenario_adesao?: string | null
           cidade?: string | null
           cliente_bairro?: string | null
           cliente_cep?: string | null

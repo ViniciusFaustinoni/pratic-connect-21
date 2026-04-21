@@ -435,132 +435,191 @@ serve(async (req) => {
       console.log('[CriarInstalacaoPosPagamento] Instalação criada com sucesso:', novaInstalacaoId);
     }
 
-    // 6.1 GERAR LANÇAMENTOS CC VENDEDOR EXTERNO (roda INDEPENDENTE da criação de instalação)
+    // 6.1 GERAR LANÇAMENTOS FINANCEIROS (consultor + módulo Financeiro empresa)
+    // Aplica as 4 regras de cenário de adesão:
+    //   cobra_base   → consultor recebe 100% adesão; empresa não recebe.
+    //   cobra_rota   → consultor recebe (adesão − R$50); empresa recebe R$50 (repasse_volante recebido).
+    //   isenta_base  → nenhum lançamento.
+    //   isenta_rota  → débito recorrente de R$50 no consultor (abate dos próximos créditos);
+    //                  registra entrada PENDENTE de R$50 no Financeiro empresa.
     try {
       const { data: cotacaoVendedor } = await supabase
         .from('cotacoes')
-        .select('vendedor_id, tipo_instalacao, valor_adesao')
+        .select('vendedor_id, tipo_instalacao, valor_adesao, cenario_adesao')
         .eq('id', cotacaoId)
         .single();
 
       if (cotacaoVendedor?.vendedor_id) {
-        const { data: perfilVendedor } = await supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', cotacaoVendedor.vendedor_id)
-          .eq('role', 'vendedor_externo')
-          .maybeSingle();
+        // Verificar idempotência (já gerado anteriormente)
+        const { data: lancExistente } = await supabase
+          .from('cc_vendedor_lancamentos')
+          .select('id')
+          .eq('contrato_id', contrato.id)
+          .eq('vendedor_id', cotacaoVendedor.vendedor_id)
+          .limit(1);
 
-        if (perfilVendedor) {
-          console.log('[CriarInstalacaoPosPagamento] Vendedor externo detectado, gerando lançamentos CC...');
-          
-          const { data: lancExistente } = await supabase
-            .from('cc_vendedor_lancamentos')
-            .select('id')
-            .eq('contrato_id', contrato.id)
-            .eq('vendedor_id', cotacaoVendedor.vendedor_id)
-            .limit(1);
+        if (lancExistente && lancExistente.length > 0) {
+          console.log('[CriarInstalacaoPosPagamento] Lançamentos CC já existem, pulando...');
+        } else {
+          const { data: configs } = await supabase
+            .from('configuracoes')
+            .select('chave, valor')
+            .in('chave', [
+              'comissao_ext_pct_adesao',
+              'comissao_ext_valor_volante',
+              'comissao_ext_tipo_recorrente',
+              'comissao_ext_valor_recorrente',
+              'comissao_ext_parcelas_recorrente',
+            ]);
 
-          if (lancExistente && lancExistente.length > 0) {
-            console.log('[CriarInstalacaoPosPagamento] Lançamentos CC já existem, pulando...');
-          } else {
-            const { data: configs } = await supabase
-              .from('configuracoes')
-              .select('chave, valor')
-              .in('chave', [
-                'comissao_ext_pct_adesao',
-                'comissao_ext_valor_volante',
-                'comissao_ext_tipo_recorrente',
-                'comissao_ext_valor_recorrente',
-                'comissao_ext_parcelas_recorrente',
-              ]);
+          const configMap: Record<string, string> = {
+            comissao_ext_pct_adesao: '100',
+            comissao_ext_valor_volante: '50',
+            comissao_ext_tipo_recorrente: 'percentual',
+            comissao_ext_valor_recorrente: '0',
+            comissao_ext_parcelas_recorrente: '6',
+          };
+          configs?.forEach(c => { if (c.valor) configMap[c.chave] = c.valor; });
 
-            const configMap: Record<string, string> = {
-              comissao_ext_pct_adesao: '100',
-              comissao_ext_valor_volante: '50',
-              comissao_ext_tipo_recorrente: 'percentual',
-              comissao_ext_valor_recorrente: '0',
-              comissao_ext_parcelas_recorrente: '6',
-            };
-            configs?.forEach(c => { if (c.valor) configMap[c.chave] = c.valor; });
+          const pctAdesao = Number(configMap.comissao_ext_pct_adesao) / 100;
+          const valorVolante = Number(configMap.comissao_ext_valor_volante);
+          const tipoRecorrente = configMap.comissao_ext_tipo_recorrente;
+          const valorRecorrente = Number(configMap.comissao_ext_valor_recorrente);
+          const parcelasRecorrente = Number(configMap.comissao_ext_parcelas_recorrente);
 
-            const pctAdesao = Number(configMap.comissao_ext_pct_adesao) / 100;
-            const valorVolante = Number(configMap.comissao_ext_valor_volante);
-            const tipoRecorrente = configMap.comissao_ext_tipo_recorrente;
-            const valorRecorrente = Number(configMap.comissao_ext_valor_recorrente);
-            const parcelasRecorrente = Number(configMap.comissao_ext_parcelas_recorrente);
+          const valorAdesao = Number(cotacaoVendedor.valor_adesao || 0);
+          const tipoInstalacao = cotacaoVendedor.tipo_instalacao || 'base';
 
-            const valorAdesao = cotacaoVendedor.valor_adesao || 0;
-            const tipoInstalacao = cotacaoVendedor.tipo_instalacao || 'base';
-            const cobrou = valorAdesao > 0;
-            const volante = tipoInstalacao === 'volante' || tipoInstalacao === 'rota';
-            const hoje = new Date().toISOString().slice(0, 10);
+          // Resolver cenário (com fallback para cotações antigas)
+          let cenario: 'cobra_rota' | 'cobra_base' | 'isenta_rota' | 'isenta_base' =
+            (cotacaoVendedor.cenario_adesao as any) || (
+              valorAdesao > 0
+                ? (tipoInstalacao === 'rota' || tipoInstalacao === 'volante' ? 'cobra_rota' : 'cobra_base')
+                : (tipoInstalacao === 'rota' || tipoInstalacao === 'volante' ? 'isenta_rota' : 'isenta_base')
+            );
 
-            const { data: assocData } = await supabase
-              .from('associados')
-              .select('nome')
-              .eq('id', contrato.associado_id)
-              .single();
-            const nomeAssociado = assocData?.nome || 'Associado';
+          console.log(`[CriarInstalacaoPosPagamento] Cenário resolvido: ${cenario} | adesão=${valorAdesao} | tipo=${tipoInstalacao}`);
 
-            if (!cobrou && !volante) {
-              console.log('[CriarInstalacaoPosPagamento] Cenário isenta+base: nenhum lançamento CC');
+          const hoje = new Date().toISOString().slice(0, 10);
+
+          const { data: assocData } = await supabase
+            .from('associados')
+            .select('nome')
+            .eq('id', contrato.associado_id)
+            .single();
+          const nomeAssociado = assocData?.nome || 'Associado';
+
+          const inserts: any[] = [];
+          const movimentacoesEmpresa: any[] = [];
+
+          if (cenario === 'cobra_base') {
+            // 100% adesão para o consultor; sem repasse para empresa.
+            const comissaoAdesao = valorAdesao * pctAdesao;
+            inserts.push({
+              vendedor_id: cotacaoVendedor.vendedor_id,
+              associado_id: contrato.associado_id,
+              contrato_id: contrato.id,
+              tipo: 'credito', categoria: 'adesao',
+              descricao: `Comissão de adesão (cobra+base) — ${nomeAssociado} — R$ ${comissaoAdesao.toFixed(2)}`,
+              valor_bruto: comissaoAdesao, valor_abatimento: 0, valor_liquido: comissaoAdesao,
+              status: 'a_pagar', data_lancamento: hoje,
+            });
+          } else if (cenario === 'cobra_rota') {
+            // Empresa recebe R$ 50 (repasse_volante); consultor recebe o restante.
+            const valorEmpresa = Math.min(valorAdesao, valorVolante);
+            const comissaoConsultor = Math.max(valorAdesao - valorVolante, 0) * pctAdesao;
+
+            if (comissaoConsultor > 0) {
+              inserts.push({
+                vendedor_id: cotacaoVendedor.vendedor_id,
+                associado_id: contrato.associado_id,
+                contrato_id: contrato.id,
+                tipo: 'credito', categoria: 'adesao',
+                descricao: `Comissão de adesão (cobra+rota) — ${nomeAssociado} — R$ ${comissaoConsultor.toFixed(2)} (após repasse R$ ${valorEmpresa.toFixed(2)})`,
+                valor_bruto: comissaoConsultor, valor_abatimento: 0, valor_liquido: comissaoConsultor,
+                status: 'a_pagar', data_lancamento: hoje,
+              });
+            }
+
+            if (valorEmpresa > 0) {
+              movimentacoesEmpresa.push({
+                tipo: 'entrada',
+                categoria: 'repasse_volante',
+                referencia_tipo: 'contrato',
+                referencia_id: contrato.id,
+                valor: valorEmpresa,
+                data_movimentacao: hoje,
+                data_competencia: hoje,
+                descricao: `Repasse Volante (cobra+rota) — ${nomeAssociado}`,
+                observacao: `Cotação ${cotacaoId} | Vendedor ${cotacaoVendedor.vendedor_id}`,
+              });
+            }
+          } else if (cenario === 'isenta_base') {
+            // Nenhum lançamento.
+            console.log('[CriarInstalacaoPosPagamento] Cenário isenta+base: sem lançamentos.');
+          } else if (cenario === 'isenta_rota') {
+            // Débito de R$ 50 no recorrente do consultor + entrada pendente no Financeiro empresa.
+            inserts.push({
+              vendedor_id: cotacaoVendedor.vendedor_id,
+              associado_id: contrato.associado_id,
+              contrato_id: contrato.id,
+              tipo: 'debito', categoria: 'volante_recorrente',
+              descricao: `Débito recorrente — instalação volante (isenta+rota) — ${nomeAssociado} — R$ ${valorVolante.toFixed(2)}`,
+              valor_bruto: valorVolante, valor_abatimento: 0, valor_liquido: valorVolante,
+              status: 'pendente', data_lancamento: hoje,
+              abate_recorrente: true,
+            });
+
+            movimentacoesEmpresa.push({
+              tipo: 'entrada',
+              categoria: 'repasse_volante_pendente',
+              referencia_tipo: 'contrato',
+              referencia_id: contrato.id,
+              valor: valorVolante,
+              data_movimentacao: hoje,
+              data_competencia: hoje,
+              descricao: `Repasse Volante a receber do consultor (isenta+rota) — ${nomeAssociado}`,
+              observacao: `Cotação ${cotacaoId} | Vendedor ${cotacaoVendedor.vendedor_id} | abate dos próximos recorrentes`,
+            });
+          }
+
+          // Parcelas recorrentes mensais (independem do cenário)
+          for (let i = 1; i <= parcelasRecorrente; i++) {
+            const valorBruto = tipoRecorrente === 'fixo' ? valorRecorrente : 0;
+            inserts.push({
+              vendedor_id: cotacaoVendedor.vendedor_id,
+              associado_id: contrato.associado_id,
+              contrato_id: contrato.id,
+              tipo: 'credito', categoria: 'recorrente',
+              descricao: `Comissão recorrente parcela ${i}/${parcelasRecorrente} — ${nomeAssociado}`,
+              valor_bruto: valorBruto, valor_abatimento: 0, valor_liquido: valorBruto,
+              parcela_numero: i, parcela_total: parcelasRecorrente,
+              status: 'pendente',
+              data_lancamento: hoje,
+            });
+          }
+
+          if (inserts.length > 0) {
+            const { error: ccError } = await supabase.from('cc_vendedor_lancamentos').insert(inserts);
+            if (ccError) {
+              console.error('[CriarInstalacaoPosPagamento] Erro ao gerar lançamentos CC:', ccError);
             } else {
-              const inserts: any[] = [];
+              console.log(`[CriarInstalacaoPosPagamento] ✓ ${inserts.length} lançamentos CC gerados (cenário=${cenario})`);
+            }
+          }
 
-              if (cobrou) {
-                const comissaoAdesao = valorAdesao * pctAdesao;
-                inserts.push({
-                  vendedor_id: cotacaoVendedor.vendedor_id,
-                  associado_id: contrato.associado_id,
-                  contrato_id: contrato.id,
-                  tipo: 'credito', categoria: 'adesao',
-                  descricao: `Comissão de adesão — ${nomeAssociado} — R$ ${comissaoAdesao.toFixed(2)}`,
-                  valor_bruto: comissaoAdesao, valor_abatimento: 0, valor_liquido: comissaoAdesao,
-                  status: 'a_pagar', data_lancamento: hoje,
-                });
-              }
-
-              if (volante) {
-                inserts.push({
-                  vendedor_id: cotacaoVendedor.vendedor_id,
-                  associado_id: contrato.associado_id,
-                  contrato_id: contrato.id,
-                  tipo: 'debito', categoria: 'volante',
-                  descricao: `Débito instalação volante — ${nomeAssociado} — R$ ${valorVolante.toFixed(2)}`,
-                  valor_bruto: valorVolante, valor_abatimento: 0, valor_liquido: valorVolante,
-                  status: cobrou ? 'a_pagar' : 'pendente',
-                  data_lancamento: hoje,
-                });
-              }
-
-              for (let i = 1; i <= parcelasRecorrente; i++) {
-                const valorBruto = tipoRecorrente === 'fixo' ? valorRecorrente : 0;
-                inserts.push({
-                  vendedor_id: cotacaoVendedor.vendedor_id,
-                  associado_id: contrato.associado_id,
-                  contrato_id: contrato.id,
-                  tipo: 'credito', categoria: 'recorrente',
-                  descricao: `Comissão recorrente parcela ${i}/${parcelasRecorrente} — ${nomeAssociado}`,
-                  valor_bruto: valorBruto, valor_abatimento: 0, valor_liquido: valorBruto,
-                  parcela_numero: i, parcela_total: parcelasRecorrente,
-                  status: 'pendente',
-                  data_lancamento: hoje,
-                });
-              }
-
-              const { error: ccError } = await supabase.from('cc_vendedor_lancamentos').insert(inserts);
-              if (ccError) {
-                console.error('[CriarInstalacaoPosPagamento] Erro ao gerar lançamentos CC:', ccError);
-              } else {
-                console.log(`[CriarInstalacaoPosPagamento] ✓ ${inserts.length} lançamentos CC gerados para vendedor ${cotacaoVendedor.vendedor_id}`);
-              }
+          if (movimentacoesEmpresa.length > 0) {
+            const { error: movError } = await supabase.from('movimentacoes_financeiras').insert(movimentacoesEmpresa);
+            if (movError) {
+              console.error('[CriarInstalacaoPosPagamento] Erro ao registrar movimentação financeira da empresa:', movError);
+            } else {
+              console.log(`[CriarInstalacaoPosPagamento] ✓ ${movimentacoesEmpresa.length} movimentação(ões) registrada(s) no Financeiro empresa`);
             }
           }
         }
       }
     } catch (ccErr) {
-      console.error('[CriarInstalacaoPosPagamento] Erro ao processar CC vendedor externo:', ccErr);
+      console.error('[CriarInstalacaoPosPagamento] Erro ao processar lançamentos financeiros:', ccErr);
     }
 
     // 7. DISPARAR ATRIBUIÇÃO AUTOMÁTICA (só se instalação foi criada E modo manual estiver desligado)

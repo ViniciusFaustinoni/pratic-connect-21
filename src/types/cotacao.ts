@@ -182,6 +182,7 @@ export interface CriarCotacaoPayload {
   nome_solicitante?: string | null;
   valor_adesao?: number;
   tipo_instalacao?: 'rota' | 'base';
+  cenario_adesao?: 'cobra_rota' | 'cobra_base' | 'isenta_rota' | 'isenta_base' | null;
   indicador_id?: string | null;
   indicador_nome?: string | null;
   associado_id?: string | null;

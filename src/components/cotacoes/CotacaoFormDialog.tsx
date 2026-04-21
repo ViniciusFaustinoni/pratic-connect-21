@@ -1194,8 +1194,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       }
     }
     
-    // Alertar se valor estiver muito diferente do plano selecionado
-    if (planosSelecionados.length > 0) {
+    // Alertar se valor estiver muito diferente do plano selecionado (não alertar em cenários isentos)
+    if (!isCenarioIsento && planosSelecionados.length > 0) {
       const valorPlano = planosSelecionados[0].valorAdesao || 199.90;
       if (data.valor_adesao < valorPlano * 0.5) {
         toast.warning(`Atenção: O valor de adesão (${formatCurrency(data.valor_adesao)}) está bem abaixo do sugerido pelo plano (${formatCurrency(valorPlano)}). Verifique se está correto.`);
@@ -1257,9 +1257,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         // Indicação
         indicador_id: indicadorId || null,
         indicador_nome: indicadorNome || null,
-        // Tipo de instalação (somente vendedor externo)
+        // Cenário de adesão e tipo de instalação
         ...(cenarioExterno ? {
           tipo_instalacao: cenarioExterno.includes('rota') ? 'rota' as const : 'base' as const,
+          cenario_adesao: cenarioExterno,
         } : {}),
         // Planos para comparação (múltiplos planos selecionados)
         dados_extras: {
