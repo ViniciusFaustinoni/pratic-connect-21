@@ -202,10 +202,29 @@ export default function Cotacoes() {
       if (filtroOrfas) {
         matchesOrfas = !cotacao.lead_id;
       }
-      
-      return matchesSearch && matchesStatus && matchesMes && matchesData && matchesConsultor && matchesOrfas;
+
+      let matchesEtapa = true;
+      if (etapaFunilFilter !== 'all') {
+        const sc = cotacao.status_contratacao || '';
+        const st = cotacao.status;
+        switch (etapaFunilFilter) {
+          case 'rascunho': matchesEtapa = st === 'rascunho'; break;
+          case 'enviada': matchesEtapa = st === 'enviada' && !sc; break;
+          case 'escolhendo_plano': matchesEtapa = ['escolhendo_plano', 'plano_escolhido'].includes(sc); break;
+          case 'enviando_documentos': matchesEtapa = ['enviando_documentos', 'dados_preenchidos'].includes(sc); break;
+          case 'em_analise': matchesEtapa = sc === 'em_analise'; break;
+          case 'assinando_contrato': matchesEtapa = sc === 'assinando_contrato'; break;
+          case 'pagando_taxa': matchesEtapa = sc === 'pagando_taxa'; break;
+          case 'agendando_vistoria': matchesEtapa = sc === 'agendando_vistoria'; break;
+          case 'concluido': matchesEtapa = st === 'aceita' || sc === 'concluido'; break;
+          case 'perdida': matchesEtapa = ['recusada', 'expirada'].includes(st); break;
+          default: matchesEtapa = true;
+        }
+      }
+
+      return matchesSearch && matchesStatus && matchesMes && matchesData && matchesConsultor && matchesOrfas && matchesEtapa;
     });
-  }, [cotacoes, search, statusFilter, mesFilter, dataFilter, consultorFilter, filtroOrfas]);
+  }, [cotacoes, search, statusFilter, mesFilter, dataFilter, consultorFilter, filtroOrfas, etapaFunilFilter]);
 
   // Ordenação cronológica — mais recentes primeiro
   const sortedCotacoes = useMemo(() => {
