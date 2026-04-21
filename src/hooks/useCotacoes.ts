@@ -92,8 +92,7 @@ export function useCotacoes(options?: UseCotacoesOptions) {
             adesao_paga,
             associados:associados!fk_contratos_associado(id, status)
           ),
-          instalacoes:instalacoes!instalacoes_cotacao_id_fkey(id, status, data_agendada),
-          vendedor:profiles!cotacoes_vendedor_profiles_fkey(user_id, nome, email, whatsapp, full_name)
+          instalacoes:instalacoes!instalacoes_cotacao_id_fkey(id, status, data_agendada)
         `)
         .order('created_at', { ascending: false })
         .limit(search ? 300 : 100);
@@ -124,27 +123,41 @@ export function useCotacoes(options?: UseCotacoesOptions) {
       const { data, error } = await query;
       
       if (error) throw error;
-      
+
+      // Buscar vendedores em lote (relacionando profiles.user_id = cotacoes.vendedor_id)
+      const vendedorIds = Array.from(
+        new Set((data || []).map((c: any) => c.vendedor_id).filter(Boolean))
+      );
+      const vendedoresMap = new Map<string, any>();
+      if (vendedorIds.length > 0) {
+        const { data: vendedores } = await supabase
+          .from('profiles')
+          .select('user_id, nome, email, whatsapp, full_name')
+          .in('user_id', vendedorIds);
+        (vendedores || []).forEach((v: any) => vendedoresMap.set(v.user_id, v));
+      }
+
       // Mapear vendedor para formato esperado (incluindo whatsapp para PDF)
-      const mapped = (data || []).map((cotacao: any) => ({
-        ...cotacao,
-        vendedor: cotacao.vendedor ? {
-          id: cotacao.vendedor.user_id,
-          nome: cotacao.vendedor.nome,
-          email: cotacao.vendedor.email,
-          whatsapp: cotacao.vendedor.whatsapp,
-          full_name: cotacao.vendedor.full_name || cotacao.vendedor.nome,
-        } : null,
-        // Mapear profiles para componente de PDF
-        profiles: cotacao.vendedor ? {
-          full_name: cotacao.vendedor.full_name || cotacao.vendedor.nome,
-          whatsapp: cotacao.vendedor.whatsapp,
-        } : null,
-        // Garantir que contrato seja objeto ou null (não array)
-        contrato: Array.isArray(cotacao.contrato) 
-          ? cotacao.contrato[0] || null 
-          : cotacao.contrato || null,
-      }));
+      const mapped = (data || []).map((cotacao: any) => {
+        const v = cotacao.vendedor_id ? vendedoresMap.get(cotacao.vendedor_id) : null;
+        return {
+          ...cotacao,
+          vendedor: v ? {
+            id: v.user_id,
+            nome: v.nome,
+            email: v.email,
+            whatsapp: v.whatsapp,
+            full_name: v.full_name || v.nome,
+          } : null,
+          profiles: v ? {
+            full_name: v.full_name || v.nome,
+            whatsapp: v.whatsapp,
+          } : null,
+          contrato: Array.isArray(cotacao.contrato) 
+            ? cotacao.contrato[0] || null 
+            : cotacao.contrato || null,
+        };
+      });
       
       return mapped as CotacaoWithRelations[];
     },

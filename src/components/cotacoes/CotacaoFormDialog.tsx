@@ -1298,13 +1298,21 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         onSuccess?.();
       } else {
         // Modo criação: criar nova cotação
+        // vendedor_id sempre referencia auth.users(id) (ID de login)
+        const vendedorIdFinal = podeAtribuirVendedor
+          ? (pendingFormData.vendedor_id || userId || user?.id)
+          : (userId || user?.id);
+
+        if (!vendedorIdFinal) {
+          toast.error('Não foi possível identificar o consultor responsável. Atualize a página ou selecione outro consultor.');
+          throw new Error('vendedor_id ausente ao criar cotação');
+        }
+
         const novaCotacao = await createCotacao.mutateAsync({
           ...cotacaoData,
           solicitar_fipe_menor: solicitarFipeMenor,
           status: 'rascunho',
-          vendedor_id: podeAtribuirVendedor 
-            ? (pendingFormData.vendedor_id || userId || user?.id) 
-            : (userId || user?.id),
+          vendedor_id: vendedorIdFinal,
         });
         
         // Se solicitou FIPE menor, criar registro de aprovação
