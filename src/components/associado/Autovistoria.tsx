@@ -333,6 +333,7 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
     return (
       <Card className="max-w-lg mx-auto">
         <CardContent className="pt-8 pb-8 space-y-6">
+          <InAppBrowserBanner persistent />
           {/* Captura de Localização - OBRIGATÓRIO */}
           <LocationCapture 
             onLocationCapture={setCoordenadas}
