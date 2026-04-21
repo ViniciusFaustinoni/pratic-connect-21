@@ -1266,64 +1266,14 @@ export default function InstaladorChecklist() {
                     </p>
                   </CardHeader>
                   <CardContent>
-                    {video360Enviado ? (
-                      <div className="space-y-3">
-                        <video 
-                          src={videoUrl} 
-                          controls 
-                          className="w-full rounded-lg max-h-48"
-                        />
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full border-slate-600 text-slate-300"
-                          onClick={() => {
-                            const input = document.getElementById('video-input') as HTMLInputElement;
-                            input?.click();
-                          }}
-                          disabled={uploadingVideo}
-                        >
-                          {uploadingVideo ? (
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          ) : (
-                            <Video className="h-4 w-4 mr-2" />
-                          )}
-                          Substituir vídeo
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        className="w-full"
-                        onClick={() => {
-                          const input = document.getElementById('video-input') as HTMLInputElement;
-                          input?.click();
-                        }}
-                        disabled={uploadingVideo}
-                      >
-                        {uploadingVideo ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Enviando...
-                          </>
-                        ) : (
-                          <>
-                            <Video className="h-4 w-4 mr-2" />
-                            Gravar Vídeo 360°
-                          </>
-                        )}
-                      </Button>
-                    )}
-                    <input
-                      id="video-input"
-                      type="file"
-                      accept="video/*"
-                      capture="environment"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) handleVideoCapture(file);
-                        e.target.value = '';
-                      }}
+                    <VideoCapture
+                      onCapture={handleVideoCapture}
+                      videoUrl={videoUrl || undefined}
+                      uploading={uploadingVideo}
+                      confirmed={!!videoUrl && !uploadingVideo}
+                      maxDuration={120}
+                      label="Vídeo 360° do veículo"
+                      cameraOnly
                     />
                   </CardContent>
                 </Card>
