@@ -101,6 +101,7 @@ export default function Cotacoes() {
   const [dataFilter, setDataFilter] = useState<Date | undefined>(undefined);
   const [consultorFilter, setConsultorFilter] = useState<string>('all');
   const [filtroOrfas, setFiltroOrfas] = useState(false);
+  const [etapaFunilFilter, setEtapaFunilFilter] = useState<string>('all');
   
   // Seleção em lote
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -201,10 +202,29 @@ export default function Cotacoes() {
       if (filtroOrfas) {
         matchesOrfas = !cotacao.lead_id;
       }
-      
-      return matchesSearch && matchesStatus && matchesMes && matchesData && matchesConsultor && matchesOrfas;
+
+      let matchesEtapa = true;
+      if (etapaFunilFilter !== 'all') {
+        const sc = cotacao.status_contratacao || '';
+        const st = cotacao.status;
+        switch (etapaFunilFilter) {
+          case 'rascunho': matchesEtapa = st === 'rascunho'; break;
+          case 'enviada': matchesEtapa = st === 'enviada' && !sc; break;
+          case 'escolhendo_plano': matchesEtapa = ['escolhendo_plano', 'plano_escolhido'].includes(sc); break;
+          case 'enviando_documentos': matchesEtapa = ['enviando_documentos', 'dados_preenchidos'].includes(sc); break;
+          case 'em_analise': matchesEtapa = sc === 'em_analise'; break;
+          case 'assinando_contrato': matchesEtapa = sc === 'assinando_contrato'; break;
+          case 'pagando_taxa': matchesEtapa = sc === 'pagando_taxa'; break;
+          case 'agendando_vistoria': matchesEtapa = sc === 'agendando_vistoria'; break;
+          case 'concluido': matchesEtapa = st === 'aceita' || sc === 'concluido'; break;
+          case 'perdida': matchesEtapa = ['recusada', 'expirada'].includes(st); break;
+          default: matchesEtapa = true;
+        }
+      }
+
+      return matchesSearch && matchesStatus && matchesMes && matchesData && matchesConsultor && matchesOrfas && matchesEtapa;
     });
-  }, [cotacoes, search, statusFilter, mesFilter, dataFilter, consultorFilter, filtroOrfas]);
+  }, [cotacoes, search, statusFilter, mesFilter, dataFilter, consultorFilter, filtroOrfas, etapaFunilFilter]);
 
   // Ordenação cronológica — mais recentes primeiro
   const sortedCotacoes = useMemo(() => {
@@ -566,10 +586,11 @@ export default function Cotacoes() {
     setDataFilter(undefined);
     setConsultorFilter('all');
     setFiltroOrfas(false);
+    setEtapaFunilFilter('all');
     setSelectedIds(new Set());
   };
 
-  const hasActiveFilters = search || statusFilter !== 'all' || mesFilter !== 'all' || dataFilter || consultorFilter !== 'all' || filtroOrfas;
+  const hasActiveFilters = search || statusFilter !== 'all' || mesFilter !== 'all' || dataFilter || consultorFilter !== 'all' || filtroOrfas || etapaFunilFilter !== 'all';
 
   // Stats - 9 status do fluxo de cotação
   const statusStats = useMemo(() => {
@@ -733,7 +754,27 @@ export default function Cotacoes() {
               </Select>
             </>
           )}
-          
+
+          <Select value={etapaFunilFilter} onValueChange={setEtapaFunilFilter}>
+            <SelectTrigger className="w-[200px] h-9 border-0 bg-background/80 shadow-sm">
+              <ListChecks className="h-4 w-4 mr-1.5 text-muted-foreground" />
+              <SelectValue placeholder="Etapa do funil" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as etapas</SelectItem>
+              <SelectItem value="rascunho">Rascunho</SelectItem>
+              <SelectItem value="enviada">Enviada — aguardando cliente</SelectItem>
+              <SelectItem value="escolhendo_plano">Escolhendo plano</SelectItem>
+              <SelectItem value="enviando_documentos">Enviando documentos</SelectItem>
+              <SelectItem value="em_analise">Documentos em análise</SelectItem>
+              <SelectItem value="assinando_contrato">Aguardando assinatura</SelectItem>
+              <SelectItem value="pagando_taxa">Pagando taxa</SelectItem>
+              <SelectItem value="agendando_vistoria">Agendando vistoria</SelectItem>
+              <SelectItem value="concluido">Convertida em associado</SelectItem>
+              <SelectItem value="perdida">Perdida / expirada</SelectItem>
+            </SelectContent>
+          </Select>
+
           <Popover>
             <PopoverTrigger asChild>
               <Button 
@@ -814,7 +855,7 @@ export default function Cotacoes() {
               <RefreshCw className="h-3.5 w-3.5 mr-1" />
               Limpar
               <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[10px]">
-                {[search, statusFilter !== 'all', mesFilter !== 'all', dataFilter, consultorFilter !== 'all', filtroOrfas].filter(Boolean).length}
+                {[search, statusFilter !== 'all', mesFilter !== 'all', dataFilter, consultorFilter !== 'all', filtroOrfas, etapaFunilFilter !== 'all'].filter(Boolean).length}
               </Badge>
             </Button>
           )}
