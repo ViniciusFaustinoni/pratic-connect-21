@@ -265,6 +265,7 @@ function useAcompanhamentoProposta(token: string | undefined) {
     },
     enabled: !!token,
     refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
 }
 

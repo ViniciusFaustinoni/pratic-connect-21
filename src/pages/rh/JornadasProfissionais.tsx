@@ -115,6 +115,7 @@ export default function JornadasProfissionais() {
       return data as TurnoComProfile[];
     },
     refetchInterval: isHoje ? 60000 : false,
+    refetchIntervalInBackground: false,
   });
 
   // Buscar contagem de recusas por turno

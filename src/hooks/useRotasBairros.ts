@@ -88,5 +88,6 @@ export function useRotasBairros(data?: Date) {
       });
     },
     refetchInterval: 60000,
+    refetchIntervalInBackground: false,
   });
 }

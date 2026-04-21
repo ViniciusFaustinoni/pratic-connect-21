@@ -164,6 +164,7 @@ export function useCotacaoContratacao(token: string | undefined) {
     },
     enabled: !!token,
     refetchInterval: 30000,
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
     staleTime: 0,
   });
@@ -208,6 +209,7 @@ export function useCotacaoContratacao(token: string | undefined) {
     },
     enabled: !!associadoId,
     refetchInterval: 30000, // Revalidar a cada 30 segundos como fallback
+    refetchIntervalInBackground: false,
   });
 
   // REALTIME: Subscrição para atualizações em tempo real

@@ -111,6 +111,7 @@ export function useSinistroMensagens(sinistroId: string | undefined) {
     },
     enabled: !!sinistroId,
     refetchInterval: 60000, // Polling a cada 60s
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -340,5 +341,6 @@ export function useMensagensNaoLidas(sinistroId: string | undefined) {
     },
     enabled: !!sinistroId,
     refetchInterval: 60000, // Verificar a cada 60s
+    refetchIntervalInBackground: false,
   });
 }

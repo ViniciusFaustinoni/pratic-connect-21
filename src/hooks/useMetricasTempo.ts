@@ -232,5 +232,6 @@ export function useMetricasTempo(filtros?: FiltrosMetricasTempo) {
       };
     },
     refetchInterval: 60000, // Atualizar a cada 1 minuto
+    refetchIntervalInBackground: false,
   });
 }

@@ -33,5 +33,6 @@ export function useImprevistosSemResposta() {
       return data ?? [];
     },
     refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 }

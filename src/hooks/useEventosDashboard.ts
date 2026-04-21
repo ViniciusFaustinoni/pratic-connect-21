@@ -64,6 +64,7 @@ export function useKPIAbertos(filtros: FiltrosGlobais) {
       return count || 0;
     },
     refetchInterval: 120000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -94,6 +95,7 @@ export function useKPINovosEsteMes(filtros: FiltrosGlobais) {
       return { count: countAtual, variacao: Math.round(variacao) };
     },
     refetchInterval: 120000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -112,6 +114,7 @@ export function useKPIAguardandoAcao(filtros: FiltrosGlobais) {
       return count || 0;
     },
     refetchInterval: 120000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -126,6 +129,7 @@ export function useKPIEmOficina(filtros: FiltrosGlobais) {
       return count || 0;
     },
     refetchInterval: 120000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -140,6 +144,7 @@ export function useKPIEmRecuperacao(filtros: FiltrosGlobais) {
       return count || 0;
     },
     refetchInterval: 120000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -164,6 +169,7 @@ export function useKPIIndenizacoesPendentes(filtros: FiltrosGlobais) {
       return { count: total, valorTotal };
     },
     refetchInterval: 120000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -206,6 +212,7 @@ export function useFunilOperacional(filtros: FiltrosGlobais) {
       return fases;
     },
     refetchInterval: 120000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -227,6 +234,7 @@ export function useEventosPorTipo(filtros: FiltrosGlobais) {
       return contagem;
     },
     refetchInterval: 120000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -265,6 +273,7 @@ export function useEventosPorMes(filtros: FiltrosGlobais) {
       }));
     },
     refetchInterval: 120000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -291,6 +300,7 @@ export function useTaxaAprovacao(filtros: FiltrosGlobais) {
       return { taxa: Math.round(taxa), aprovados, reprovados, sindicancia };
     },
     refetchInterval: 120000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -332,6 +342,7 @@ export function useTempoMedioPorFase(filtros: FiltrosGlobais) {
       ];
     },
     refetchInterval: 120000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -367,6 +378,7 @@ export function useCustosAcumulados(filtros: FiltrosGlobais) {
       }));
     },
     refetchInterval: 120000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -442,6 +454,7 @@ export function useAlertasUrgentes() {
       };
     },
     refetchInterval: 120000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -470,5 +483,6 @@ export function useEventosRecentes(filtros: FiltrosGlobais, faseFilter?: string[
       return data || [];
     },
     refetchInterval: 120000,
+    refetchIntervalInBackground: false,
   });
 }

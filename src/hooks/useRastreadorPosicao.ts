@@ -78,6 +78,7 @@ export function useRastreadorPosicaoAtual(rastreadorId: string | undefined) {
     },
     enabled: !!rastreadorId,
     refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -101,6 +102,7 @@ export function useRastreadorTempoReal(rastreadorId?: string, autoRefresh = true
     },
     enabled: !!rastreadorId,
     refetchInterval: autoRefresh ? 30000 : false,
+    refetchIntervalInBackground: false,
     staleTime: 15000,
   });
 

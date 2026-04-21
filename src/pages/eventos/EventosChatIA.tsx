@@ -23,6 +23,7 @@ export default function EventosChatIA() {
     },
     staleTime: 30000,
     refetchInterval: 60000,
+    refetchIntervalInBackground: false,
   });
 
   // Fetch associados for avatar matching

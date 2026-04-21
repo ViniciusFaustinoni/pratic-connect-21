@@ -91,6 +91,7 @@ export function useAutentiqueStatus(documentId: string | undefined) {
       }
       return 30000;
     },
+    refetchIntervalInBackground: false,
   });
 }
 

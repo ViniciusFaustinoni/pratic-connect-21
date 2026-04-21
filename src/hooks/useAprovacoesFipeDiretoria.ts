@@ -36,6 +36,7 @@ export function useAprovacaoFipeDiretoriaPorCotacao(cotacaoId: string | undefine
     },
     enabled: !!cotacaoId && enabled,
     refetchInterval: 15000, // Polling a cada 15s
+    refetchIntervalInBackground: false,
   });
 }
 

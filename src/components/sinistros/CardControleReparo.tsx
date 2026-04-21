@@ -70,6 +70,7 @@ export function CardControleReparo({ sinistro, onOpenAtribuirFornecedores }: Car
     },
     enabled: sinistro.status === 'em_reparo',
     refetchInterval: sinistro.status === 'em_reparo' ? 10000 : false,
+    refetchIntervalInBackground: false,
   });
 
   // Buscar oficina atribuída

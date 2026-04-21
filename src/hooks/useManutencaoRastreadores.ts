@@ -65,6 +65,7 @@ export function useManutencaoRastreadores() {
       return data || [];
     },
     refetchInterval: 5 * 60 * 1000,
+    refetchIntervalInBackground: false,
   });
 
   // Query 2: Tratativas existentes

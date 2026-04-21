@@ -120,6 +120,7 @@ export function useJornadaTrabalho() {
     enabled: !!profile?.id,
     staleTime: 10000,
     refetchInterval: 30000, // Polling a cada 30s (fallback do realtime)
+    refetchIntervalInBackground: false,
   });
 
   // Realtime subscription para turnos_profissionais

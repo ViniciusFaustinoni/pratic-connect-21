@@ -379,6 +379,7 @@ export function useNotificacoesNaoLidas() {
       return count || 0;
     },
     refetchInterval: 60000,
+    refetchIntervalInBackground: false,
   });
 }
 

@@ -118,6 +118,7 @@ export default function AssistenciaDashboard() {
       };
     },
     refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
 
   // Chamados ativos
@@ -146,6 +147,7 @@ export default function AssistenciaDashboard() {
       return data;
     },
     refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
 
   // Prestadores disponíveis

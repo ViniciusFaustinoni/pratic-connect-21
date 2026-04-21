@@ -437,6 +437,7 @@ export function useTarefaAtualServico() {
     },
     enabled: !!profissionalId,
     refetchInterval: 30000,
+    refetchIntervalInBackground: false,
     staleTime: 10000,
   });
 

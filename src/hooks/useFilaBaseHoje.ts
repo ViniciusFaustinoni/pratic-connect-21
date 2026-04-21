@@ -37,6 +37,7 @@ export function useFilaBaseHoje(enabled: boolean = true) {
     queryKey: ['fila-base-hoje', profile?.id, baseId],
     enabled: enabled && !!profile?.id,
     refetchInterval: 30000,
+    refetchIntervalInBackground: false,
     staleTime: 15000,
     queryFn: async (): Promise<{
       disponiveis: VistoriaBaseFila[];
