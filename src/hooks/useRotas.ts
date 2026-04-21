@@ -120,39 +120,46 @@ export function useRota(id: string | undefined) {
 
       if (riError) console.error('Error fetching rota_instaladores:', riError);
 
-      // Buscar instalações com instalador responsável
-      const { data: instalacoes, error: instError } = await supabase
-        .from('instalacoes')
+      // Fase 3: leitura unificada de `servicos` (substitui instalacoes + vistorias)
+      const { data: servicos, error: servError } = await supabase
+        .from('servicos')
         .select(`
           *,
           associados(*),
           veiculos(*),
-          instalador_responsavel:profiles!instalacoes_instalador_responsavel_id_fkey(id, nome, telefone)
+          profissional:profiles!servicos_profissional_id_fkey(id, nome, telefone)
         `)
         .eq('rota_id', id)
         .order('periodo');
 
-      if (instError) throw instError;
+      if (servError) throw servError;
 
-      // Buscar vistorias vinculadas à rota
-      const { data: vistorias, error: vistError } = await supabase
-        .from('vistorias')
-        .select(`
-          id, tipo, origem, status, data_agendada, periodo,
-          endereco_bairro, endereco_cidade, endereco_logradouro, endereco_numero, endereco_cep,
-          associados:associado_id(*),
-          veiculos:veiculo_id(*),
-          vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome, telefone)
-        `)
-        .eq('rota_id', id)
-        .order('data_agendada');
+      // Particiona por tipo, mantendo o shape esperado pelos consumers
+      const instalacoes = (servicos || [])
+        .filter((s: any) => s.tipo === 'vistoria_instalacao')
+        .map((s: any) => ({
+          ...s,
+          instalador_responsavel_id: s.profissional_id,
+          instalador_responsavel: s.profissional,
+        }));
 
-      if (vistError) console.error('Error fetching vistorias:', vistError);
+      const vistorias = (servicos || [])
+        .filter((s: any) => s.tipo !== 'vistoria_instalacao')
+        .map((s: any) => ({
+          ...s,
+          vistoriador_id: s.profissional_id,
+          vistoriador: s.profissional,
+          endereco_bairro: s.bairro,
+          endereco_cidade: s.cidade,
+          endereco_logradouro: s.logradouro,
+          endereco_numero: s.numero,
+          endereco_cep: s.cep,
+        }));
 
-      return { 
-        ...rota, 
+      return {
+        ...rota,
         instalacoes,
-        vistorias: vistorias || [],
+        vistorias,
         rota_instaladores: rotaInstaladores || []
       } as RotaWithRelations & { vistorias: any[] };
     },
