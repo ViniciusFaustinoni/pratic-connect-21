@@ -120,39 +120,46 @@ export function useRota(id: string | undefined) {
 
       if (riError) console.error('Error fetching rota_instaladores:', riError);
 
-      // Buscar instalações com instalador responsável
-      const { data: instalacoes, error: instError } = await supabase
-        .from('instalacoes')
+      // Fase 3: leitura unificada de `servicos` (substitui instalacoes + vistorias)
+      const { data: servicos, error: servError } = await supabase
+        .from('servicos')
         .select(`
           *,
           associados(*),
-          veiculos(*),
-          instalador_responsavel:profiles!instalacoes_instalador_responsavel_id_fkey(id, nome, telefone)
+          veiculos:veiculos!servicos_veiculo_id_fkey(*),
+          profissional:profiles!servicos_profissional_id_fkey(id, nome, telefone)
         `)
         .eq('rota_id', id)
         .order('periodo');
 
-      if (instError) throw instError;
+      if (servError) throw servError;
 
-      // Buscar vistorias vinculadas à rota
-      const { data: vistorias, error: vistError } = await supabase
-        .from('vistorias')
-        .select(`
-          id, tipo, origem, status, data_agendada, periodo,
-          endereco_bairro, endereco_cidade, endereco_logradouro, endereco_numero, endereco_cep,
-          associados:associado_id(*),
-          veiculos:veiculo_id(*),
-          vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome, telefone)
-        `)
-        .eq('rota_id', id)
-        .order('data_agendada');
+      // Particiona por tipo, mantendo o shape esperado pelos consumers
+      const instalacoes = (servicos || [])
+        .filter((s: any) => s.tipo === 'vistoria_instalacao')
+        .map((s: any) => ({
+          ...s,
+          instalador_responsavel_id: s.profissional_id,
+          instalador_responsavel: s.profissional,
+        }));
 
-      if (vistError) console.error('Error fetching vistorias:', vistError);
+      const vistorias = (servicos || [])
+        .filter((s: any) => s.tipo !== 'vistoria_instalacao')
+        .map((s: any) => ({
+          ...s,
+          vistoriador_id: s.profissional_id,
+          vistoriador: s.profissional,
+          endereco_bairro: s.bairro,
+          endereco_cidade: s.cidade,
+          endereco_logradouro: s.logradouro,
+          endereco_numero: s.numero,
+          endereco_cep: s.cep,
+        }));
 
-      return { 
-        ...rota, 
+      return {
+        ...rota,
         instalacoes,
-        vistorias: vistorias || [],
+        vistorias,
         rota_instaladores: rotaInstaladores || []
       } as RotaWithRelations & { vistorias: any[] };
     },
@@ -251,13 +258,15 @@ export function useInstalacoesDisponiveis(data?: Date) {
   return useQuery({
     queryKey: ['instalacoes-disponiveis', data ? format(data, 'yyyy-MM-dd') : 'todas'],
     queryFn: async () => {
+      // Fase 3: lê de `servicos` filtrando por tipo='vistoria_instalacao'
       let query = supabase
-        .from('instalacoes')
+        .from('servicos')
         .select(`
           *,
           associados(id, nome, telefone),
-          veiculos(id, marca, modelo, placa, ano_modelo)
+          veiculos:veiculos!servicos_veiculo_id_fkey(id, marca, modelo, placa, ano_modelo)
         `)
+        .eq('tipo', 'vistoria_instalacao' as any)
         .is('rota_id', null)
         .in('status', ['agendada', 'reagendada'])
         .order('data_agendada');
@@ -266,9 +275,9 @@ export function useInstalacoesDisponiveis(data?: Date) {
         query = query.eq('data_agendada', format(data, 'yyyy-MM-dd'));
       }
 
-      const { data: instalacoes, error } = await query;
+      const { data: servicos, error } = await query;
       if (error) throw error;
-      return instalacoes;
+      return servicos;
     },
   });
 }
@@ -318,8 +327,9 @@ export function useCidadesComInstalacoes() {
   return useQuery({
     queryKey: ['cidades-instalacoes'],
     queryFn: async () => {
+      // Fase 3: lê de `servicos` (todas tipos) — cidades operacionais
       const { data, error } = await supabase
-        .from('instalacoes')
+        .from('servicos')
         .select('cidade')
         .not('cidade', 'is', null)
         .order('cidade');
@@ -413,16 +423,10 @@ export function useDeleteRota() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      // Desvincular instalações
+      // Fase 3: desvincular serviços (instalações + vistorias unificadas)
       await supabase
-        .from('instalacoes')
-        .update({ rota_id: null })
-        .eq('rota_id', id);
-
-      // Desvincular vistorias
-      await supabase
-        .from('vistorias')
-        .update({ rota_id: null })
+        .from('servicos')
+        .update({ rota_id: null } as any)
         .eq('rota_id', id);
 
       // Excluir vínculos N:N com instaladores
@@ -444,7 +448,8 @@ export function useDeleteRota() {
       queryClient.invalidateQueries({ queryKey: ['rotas-metricas'] });
       queryClient.invalidateQueries({ queryKey: ['rotas-semana'] });
       queryClient.invalidateQueries({ queryKey: ['instalacoes-disponiveis'] });
-      queryClient.invalidateQueries({ queryKey: ['vistorias'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      queryClient.invalidateQueries({ queryKey: ['equipe'] });
     },
   });
 }
@@ -455,46 +460,26 @@ export function useAddInstalacaoToRota() {
 
   return useMutation({
     mutationFn: async ({ instalacaoId, rotaId, instaladorId }: { instalacaoId: string; rotaId: string; instaladorId?: string }) => {
-      // Buscar a instalação para obter contrato_id e cotacao_id
-      const { data: instalacao, error: fetchError } = await supabase
-        .from('instalacoes')
-        .select('id, contrato_id, cotacao_id, instalador_responsavel_id')
+      // Fase 3: opera diretamente em servicos
+      const { data: servico, error: fetchError } = await supabase
+        .from('servicos')
+        .select('id, profissional_id')
         .eq('id', instalacaoId)
         .single();
-      
+
       if (fetchError) throw fetchError;
-      
-      const responsavelId = instaladorId || instalacao?.instalador_responsavel_id;
-      
-      // Atualizar a instalação
+
+      const responsavelId = instaladorId || servico?.profissional_id;
+
+      const update: Record<string, unknown> = { rota_id: rotaId };
+      if (responsavelId) update.profissional_id = responsavelId;
+
       const { error } = await supabase
-        .from('instalacoes')
-        .update({ 
-          rota_id: rotaId,
-          instalador_responsavel_id: responsavelId || undefined,
-        })
+        .from('servicos')
+        .update(update as any)
         .eq('id', instalacaoId);
 
       if (error) throw error;
-      
-      // O trigger no banco vai sincronizar as vistorias automaticamente
-      // Mas para garantir, também atualizamos diretamente
-      if (instalacao?.contrato_id) {
-        await supabase
-          .from('vistorias')
-          .update({ rota_id: rotaId, vistoriador_id: responsavelId })
-          .eq('contrato_id', instalacao.contrato_id)
-          .is('rota_id', null)
-          .in('status', ['pendente', 'em_analise', 'agendada']);
-      }
-      if (instalacao?.cotacao_id) {
-        await supabase
-          .from('vistorias')
-          .update({ rota_id: rotaId, vistoriador_id: responsavelId })
-          .eq('cotacao_id', instalacao.cotacao_id)
-          .is('rota_id', null)
-          .in('status', ['pendente', 'em_analise', 'agendada']);
-      }
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['rota', variables.rotaId] });
@@ -502,6 +487,8 @@ export function useAddInstalacaoToRota() {
       queryClient.invalidateQueries({ queryKey: ['instalacoes-disponiveis'] });
       queryClient.invalidateQueries({ queryKey: ['vistorias-mapa'] });
       queryClient.invalidateQueries({ queryKey: ['servicos-por-bairros'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      queryClient.invalidateQueries({ queryKey: ['equipe'] });
     },
   });
 }
@@ -512,41 +499,14 @@ export function useRemoveInstalacaoFromRota() {
 
   return useMutation({
     mutationFn: async ({ instalacaoId, rotaId }: { instalacaoId: string; rotaId: string }) => {
-      // Buscar a instalação para obter contrato_id e cotacao_id
-      const { data: instalacao, error: fetchError } = await supabase
-        .from('instalacoes')
-        .select('id, contrato_id, cotacao_id')
-        .eq('id', instalacaoId)
-        .single();
-      
-      if (fetchError) throw fetchError;
-      
-      // Remover rota da instalação
+      // Fase 3: opera diretamente em servicos
       const { error } = await supabase
-        .from('instalacoes')
-        .update({ rota_id: null })
-        .eq('id', instalacaoId);
+        .from('servicos')
+        .update({ rota_id: null } as any)
+        .eq('id', instalacaoId)
+        .eq('rota_id', rotaId);
 
       if (error) throw error;
-      
-      // O trigger no banco vai sincronizar as vistorias automaticamente
-      // Mas também removemos manualmente para garantir consistência
-      if (instalacao?.contrato_id) {
-        await supabase
-          .from('vistorias')
-          .update({ rota_id: null })
-          .eq('contrato_id', instalacao.contrato_id)
-          .eq('rota_id', rotaId) // Só remove se for a mesma rota
-          .in('status', ['pendente', 'em_analise', 'agendada']);
-      }
-      if (instalacao?.cotacao_id) {
-        await supabase
-          .from('vistorias')
-          .update({ rota_id: null })
-          .eq('cotacao_id', instalacao.cotacao_id)
-          .eq('rota_id', rotaId)
-          .in('status', ['pendente', 'em_analise', 'agendada']);
-      }
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['rota', variables.rotaId] });
