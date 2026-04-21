@@ -835,6 +835,7 @@ export default function CotadorPage() {
         veiculo_placa: veiculoEncontrado?.placa || placaBusca.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || null,
         valor_adesao: valorAdesaoCustom ?? undefined,
         tipo_instalacao: tipoInstalacao || undefined,
+        cenario_adesao: (cenarioExterno as any) || null,
         indicador_id: indicadorId || null,
         indicador_nome: indicadorNome || null,
         associado_id: inclusaoAssociadoId || null,
@@ -1649,7 +1650,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                     <RadioGroupItem value="cobra_rota" className="mt-0.5" />
                     <div>
                       <p className="font-medium text-sm">Cobrar adesão + Instalação na rota</p>
-                      <p className="text-xs text-muted-foreground">{formatCurrency(repasseVolante)} descontado da adesão para cobrir a rota. Sem desconto no recorrente.</p>
+                      <p className="text-xs text-muted-foreground">{formatCurrency(repasseVolante)} vai para a empresa, restante fica com você. Se cobrar exatamente {formatCurrency(repasseVolante)}, tudo vai para a empresa.</p>
                     </div>
                   </label>
                   <label
@@ -1661,7 +1662,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                     <RadioGroupItem value="isenta_rota" className="mt-0.5" />
                     <div>
                       <p className="font-medium text-sm">Isentar adesão + Instalação na rota</p>
-                      <p className="text-xs text-muted-foreground">Adesão zerada. Desconto de rota abatido do recorrente do consultor.</p>
+                      <p className="text-xs text-muted-foreground">{formatCurrency(repasseVolante)} será descontado do seu próximo recorrente.</p>
                     </div>
                   </label>
                   <label
@@ -1673,7 +1674,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                     <RadioGroupItem value="isenta_base" className="mt-0.5" />
                     <div>
                       <p className="font-medium text-sm">Isentar adesão + Instalação na base</p>
-                      <p className="text-xs text-muted-foreground">Sem adesão, sem cobrança. Zero a zero.</p>
+                      <p className="text-xs text-muted-foreground">Nenhuma cobrança. Zero a zero.</p>
                     </div>
                   </label>
                   <label
@@ -1685,7 +1686,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                     <RadioGroupItem value="cobra_base" className="mt-0.5" />
                     <div>
                       <p className="font-medium text-sm">Cobrar adesão + Instalação na base</p>
-                      <p className="text-xs text-muted-foreground">Adesão integral para o consultor. Nada para a empresa.</p>
+                      <p className="text-xs text-muted-foreground">Adesão integral fica com você. Nada para a empresa.</p>
                     </div>
                   </label>
                 </RadioGroup>
