@@ -71,7 +71,7 @@ export default function Equipe() {
   };
 
   const handleVerServicos = (prof: ProfissionalEquipe) => {
-    if (prof.role === 'instalador_vistoriador') {
+    if (prof.categoria === 'instalador') {
       setServicosModalCtx({ modo: 'profissional', profissional: prof });
     } else {
       // Card administrativo → ver TODOS os serviços de instaladores
