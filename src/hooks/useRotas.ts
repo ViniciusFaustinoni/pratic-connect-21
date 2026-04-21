@@ -126,7 +126,7 @@ export function useRota(id: string | undefined) {
         .select(`
           *,
           associados(*),
-          veiculos(*),
+          veiculos:veiculos!servicos_veiculo_id_fkey(*),
           profissional:profiles!servicos_profissional_id_fkey(id, nome, telefone)
         `)
         .eq('rota_id', id)
@@ -264,7 +264,7 @@ export function useInstalacoesDisponiveis(data?: Date) {
         .select(`
           *,
           associados(id, nome, telefone),
-          veiculos(id, marca, modelo, placa, ano_modelo)
+          veiculos:veiculos!servicos_veiculo_id_fkey(id, marca, modelo, placa, ano_modelo)
         `)
         .eq('tipo', 'vistoria_instalacao' as any)
         .is('rota_id', null)
