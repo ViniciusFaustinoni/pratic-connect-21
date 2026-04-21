@@ -118,7 +118,7 @@ export default function Equipe() {
     const inst: ProfissionalEquipe[] = [];
     const adm: ProfissionalEquipe[] = [];
     (profissionais || []).forEach(p => {
-      if (p.role === 'instalador_vistoriador') inst.push(p);
+      if (p.categoria === 'instalador') inst.push(p);
       else adm.push(p);
     });
     return { instaladores: inst, administrativo: adm };
