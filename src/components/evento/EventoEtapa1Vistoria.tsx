@@ -4,6 +4,7 @@ import { Camera, X, Loader2, Video, CheckCircle2, RefreshCw } from 'lucide-react
 import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
+import { VideoCapture } from '@/components/instalador/VideoCapture';
 
 const MIN_FOTOS = 5;
 const MAX_FOTOS = 15;
@@ -193,41 +194,17 @@ export default function EventoEtapa1Vistoria({ token, onComplete, dadosEtapa1, e
           </p>
         </div>
 
-        {videoPreviewUrl ? (
-          <div className="space-y-2">
-            <div className="relative rounded-lg overflow-hidden border bg-muted">
-              <video src={videoPreviewUrl} controls className="w-full max-h-48 object-contain" />
-              <button
-                type="button"
-                onClick={removeVideo}
-                className="absolute top-2 right-2 bg-black/60 text-white rounded-full p-1"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-green-600">
-              <CheckCircle2 className="h-4 w-4" />
-              <span>Novo vídeo selecionado</span>
-            </div>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => videoInputRef.current?.click()}
-            className="w-full py-6 rounded-lg border-2 border-dashed border-border flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-primary hover:text-primary transition-colors"
-          >
-            <Video className="h-8 w-8" />
-            <span className="text-sm font-medium">Gravar / Selecionar Novo Vídeo</span>
-          </button>
-        )}
-
-        <input
-          ref={videoInputRef}
-          type="file"
-          accept="video/*"
-          capture="environment"
-          onChange={handleVideoChange}
-          className="hidden"
+        <VideoCapture
+          onCapture={(file) => {
+            if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
+            setVideo(file);
+            setVideoPreviewUrl(URL.createObjectURL(file));
+          }}
+          onReset={removeVideo}
+          videoUrl={videoPreviewUrl || undefined}
+          confirmed={!!video}
+          maxDuration={120}
+          label="Gravar / Selecionar Novo Vídeo"
         />
 
         <div className="flex gap-2">
@@ -310,46 +287,20 @@ export default function EventoEtapa1Vistoria({ token, onComplete, dadosEtapa1, e
           Grave um vídeo curto (até 2 minutos) mostrando os danos no veículo.
         </p>
 
-        {videoPreviewUrl ? (
-          <div className="mt-3 space-y-2">
-            <div className="relative rounded-lg overflow-hidden border bg-muted">
-              <video
-                src={videoPreviewUrl}
-                controls
-                className="w-full max-h-48 object-contain"
-              />
-              <button
-                type="button"
-                onClick={removeVideo}
-                className="absolute top-2 right-2 bg-black/60 text-white rounded-full p-1"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-green-600">
-              <CheckCircle2 className="h-4 w-4" />
-              <span>Vídeo adicionado</span>
-            </div>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => videoInputRef.current?.click()}
-            className="mt-3 w-full py-6 rounded-lg border-2 border-dashed border-border flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-primary hover:text-primary transition-colors"
-          >
-            <Video className="h-8 w-8" />
-            <span className="text-sm font-medium">Gravar / Selecionar Vídeo</span>
-          </button>
-        )}
-
-        <input
-          ref={videoInputRef}
-          type="file"
-          accept="video/*"
-          capture="environment"
-          onChange={handleVideoChange}
-          className="hidden"
-        />
+        <div className="mt-3">
+          <VideoCapture
+            onCapture={(file) => {
+              if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
+              setVideo(file);
+              setVideoPreviewUrl(URL.createObjectURL(file));
+            }}
+            onReset={removeVideo}
+            videoUrl={videoPreviewUrl || undefined}
+            confirmed={!!video}
+            maxDuration={120}
+            label="Gravar vídeo do veículo"
+          />
+        </div>
       </div>
 
       <Button
