@@ -41,6 +41,7 @@ export function useSubstituicaoPublica(token: string | undefined) {
     },
     enabled: !!token,
     refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   });
 
   // Realtime subscription for status changes

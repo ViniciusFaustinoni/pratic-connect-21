@@ -91,6 +91,7 @@ export function useIntegracaoCredenciais({ integracao }: UseIntegracaoCredenciai
       return result.data?.[0] || null;
     },
     refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
 
   // Mutation para salvar credenciais

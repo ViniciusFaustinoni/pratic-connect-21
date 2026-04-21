@@ -86,6 +86,7 @@ export function useContagemRessalvasMonitoramento() {
       return count || 0;
     },
     refetchInterval: 60000,
+    refetchIntervalInBackground: false,
   });
 }
 

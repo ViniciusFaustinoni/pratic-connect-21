@@ -49,6 +49,7 @@ export function useRastreadorStatus() {
       }) || [];
     },
     refetchInterval: 30000, // Atualizar a cada 30s
+    refetchIntervalInBackground: false,
   });
 }
 

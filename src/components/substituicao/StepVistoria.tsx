@@ -95,6 +95,7 @@ export function StepVistoria({
       if (!status || status === 'aprovada' || status === 'reprovada') return false;
       return 10_000;
     },
+    refetchIntervalInBackground: false,
   });
 
   // Create vistoria (autovistoria)

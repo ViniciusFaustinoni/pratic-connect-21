@@ -52,6 +52,7 @@ export function PrestadoresAtivos() {
       };
     },
     refetchInterval: 60000,
+    refetchIntervalInBackground: false,
   });
 
   if (isLoading) {

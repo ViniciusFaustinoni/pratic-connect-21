@@ -66,6 +66,7 @@ export function StepRastreador({
       if (data && data.status !== 'concluida') return 10_000;
       return false;
     },
+    refetchIntervalInBackground: false,
   });
 
   const semRastreador = !loadingRastreador && !rastreador;

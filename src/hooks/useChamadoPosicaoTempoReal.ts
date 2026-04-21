@@ -100,6 +100,7 @@ export function useChamadoPosicaoTempoReal(
     },
     enabled: !!veiculoId,
     refetchInterval: autoRefresh ? refetchInterval : false,
+    refetchIntervalInBackground: false,
     staleTime: 15000,
   });
 

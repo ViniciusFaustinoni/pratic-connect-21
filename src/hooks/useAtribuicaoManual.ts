@@ -82,6 +82,7 @@ export function useServicosParaAtribuir() {
       return merged;
     },
     refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -179,6 +180,7 @@ export function useVistoriadoresAtivos() {
       });
     },
     refetchInterval: 30000,
+    refetchIntervalInBackground: false,
     staleTime: 25000,
   });
 }

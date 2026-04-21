@@ -39,6 +39,7 @@ export function useIntegracoesStatus(): IntegracoesStatus {
       return data?.status || null;
     },
     refetchInterval: 60000, // Atualizar a cada 1 min
+    refetchIntervalInBackground: false,
     staleTime: 30000,
   });
 
@@ -60,6 +61,7 @@ export function useIntegracoesStatus(): IntegracoesStatus {
       return data?.status === 'open';
     },
     refetchInterval: 30000, // Atualizar a cada 30s
+    refetchIntervalInBackground: false,
   });
 
   // Buscar status dos rastreadores (já existente)

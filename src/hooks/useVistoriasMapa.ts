@@ -73,6 +73,7 @@ export function useVistoriasMapa(options: UseVistoriasMapaOptions = {}) {
     },
     enabled: !filtrarPorUsuario || !!profile?.id,
     refetchInterval: 60000,
+    refetchIntervalInBackground: false,
   });
 }
 

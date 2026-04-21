@@ -66,5 +66,6 @@ export function usePerformanceSemanalCoordenador() {
     },
     staleTime: 60000,
     refetchInterval: 60000,
+    refetchIntervalInBackground: false,
   });
 }

@@ -27,6 +27,7 @@ export function useSolicitacoesMigracaoList(filtroStatus: string) {
       return data;
     },
     refetchInterval: 15000,
+    refetchIntervalInBackground: false,
   });
 }
 

@@ -107,6 +107,7 @@ export function AlertasWidget({ limite = 10, mostrarTodos = false }: AlertasWidg
       return (data || []) as Alerta[];
     },
     refetchInterval: 60000, // Atualizar a cada minuto
+    refetchIntervalInBackground: false,
   });
 
   // Query para contagem
@@ -118,6 +119,7 @@ export function AlertasWidget({ limite = 10, mostrarTodos = false }: AlertasWidg
       return (data?.[0] || { abertos: 0, visualizados: 0, criticos: 0, total: 0 }) as Contagem;
     },
     refetchInterval: 60000,
+    refetchIntervalInBackground: false,
   });
 
   // Mutation: Marcar como visualizado

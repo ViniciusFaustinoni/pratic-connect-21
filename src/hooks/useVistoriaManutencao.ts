@@ -206,6 +206,7 @@ export function useVistoriasManutencaoMetricas() {
       return metricas;
     },
     refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
 }
 

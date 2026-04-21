@@ -90,6 +90,7 @@ export function useOrdemServico(id: string | undefined) {
       }
       return false;
     },
+    refetchIntervalInBackground: false,
   });
 }
 

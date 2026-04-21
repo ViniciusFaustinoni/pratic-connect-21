@@ -58,6 +58,7 @@ export function BotaoEnviarSGA({
     },
     enabled: !!veiculoId && !sincronizado,
     refetchInterval: 30000, // Atualizar a cada 30s
+    refetchIntervalInBackground: false,
   });
 
   // Se já sincronizado, mostrar badge de sucesso

@@ -168,6 +168,7 @@ export function useManutencaoInternaMetricas() {
       return metricas;
     },
     refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
 }
 

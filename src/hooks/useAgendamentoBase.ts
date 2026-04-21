@@ -122,6 +122,7 @@ export function useAgendamentosBaseDia(data?: string) {
       return agendamentos || [];
     },
     refetchInterval: 60000, // Atualizar a cada 60s
+    refetchIntervalInBackground: false,
   });
 }
 

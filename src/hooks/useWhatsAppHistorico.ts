@@ -34,6 +34,7 @@ export function useWhatsAppHistorico(telefone: string | null | undefined, limit 
     enabled: !!telefone,
     staleTime: 30000, // 30 segundos
     refetchInterval: 60000, // Atualizar a cada 1 minuto
+    refetchIntervalInBackground: false,
   });
 }
 

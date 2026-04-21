@@ -59,5 +59,6 @@ export function useRastreadoresPorPortador() {
       };
     },
     refetchInterval: 60000, // Atualiza a cada minuto
+    refetchIntervalInBackground: false,
   });
 }

@@ -94,6 +94,7 @@ export function VistoriadoresEmAlerta() {
       return resultado;
     },
     refetchInterval: 60000,
+    refetchIntervalInBackground: false,
   });
 
   // Realtime: invalidar ao mudar turnos ou serviços

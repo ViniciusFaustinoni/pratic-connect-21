@@ -149,6 +149,7 @@ export function useAcionamentosAtivos() {
       return data;
     },
     refetchInterval: 30000, // Atualiza a cada 30 segundos
+    refetchIntervalInBackground: false,
   });
 }
 

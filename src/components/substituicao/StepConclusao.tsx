@@ -52,6 +52,7 @@ export function StepConclusao({
       if (status && TERMINAL_STATUSES.includes(status)) return false;
       return 10_000;
     },
+    refetchIntervalInBackground: false,
   });
 
   const status = substituicao?.status ?? 'aguardando_aprovacao';
