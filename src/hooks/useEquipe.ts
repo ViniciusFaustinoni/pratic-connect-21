@@ -4,12 +4,14 @@ import { format, startOfDay } from 'date-fns';
 
 export type StatusProfissional = 'disponivel' | 'indisponivel' | 'ferias' | 'afastado';
 export type StatusOperacional = 'em_contato' | 'em_andamento' | 'em_rota' | 'disponivel_operacional' | 'offline';
-export type RoleEquipe = 'instalador_vistoriador' | 'analista_monitoramento' | string;
+export type RoleEquipe = 'instalador_vistoriador' | 'analista_monitoramento' | 'vistoriador_base' | string;
+export type CategoriaEquipe = 'instalador' | 'administrativo';
 
 export interface ProfissionalEquipe {
   id: string;
   user_id: string;
   role: RoleEquipe;
+  categoria: CategoriaEquipe;
   nome: string;
   email: string;
   telefone: string | null;
@@ -49,20 +51,26 @@ export function useProfissionaisEquipe() {
       const { data: roles, error: rolesError } = await supabase
         .from('user_roles')
         .select('user_id, role')
-        .in('role', ['instalador_vistoriador', 'analista_monitoramento'] as any[]);
+        .in('role', ['instalador_vistoriador', 'analista_monitoramento', 'vistoriador_base'] as any[]);
 
       if (rolesError) throw rolesError;
       if (!roles?.length) return [];
 
-      const userIds = roles.map(r => r.user_id);
-      // Mapa user_id -> role (prioriza instalador_vistoriador se houver múltiplos)
-      const roleByUserId: Record<string, string> = {};
+      const userIds = Array.from(new Set(roles.map(r => r.user_id)));
+      // Mapa user_id -> Set de roles
+      const rolesByUserId: Record<string, Set<string>> = {};
       roles.forEach(r => {
-        const existing = roleByUserId[r.user_id];
-        if (!existing || r.role === 'instalador_vistoriador') {
-          roleByUserId[r.user_id] = r.role as string;
-        }
+        if (!rolesByUserId[r.user_id]) rolesByUserId[r.user_id] = new Set();
+        rolesByUserId[r.user_id].add(r.role as string);
       });
+
+      // Role principal: prioriza instalador_vistoriador > vistoriador_base > analista_monitoramento
+      const principalRole = (set: Set<string>): string => {
+        if (set.has('instalador_vistoriador')) return 'instalador_vistoriador';
+        if (set.has('vistoriador_base')) return 'vistoriador_base';
+        if (set.has('analista_monitoramento')) return 'analista_monitoramento';
+        return Array.from(set)[0] || 'analista_monitoramento';
+      };
 
       // 2. Buscar profiles completos
       const { data: profiles, error: profilesError } = await supabase
@@ -205,10 +213,17 @@ export function useProfissionaisEquipe() {
           }
         }
 
+        const userRoles = rolesByUserId[profile.user_id] || new Set<string>();
+        const categoria: CategoriaEquipe =
+          userRoles.has('instalador_vistoriador') || userRoles.has('vistoriador_base')
+            ? 'instalador'
+            : 'administrativo';
+
         return {
           id: profile.id,
           user_id: profile.user_id,
-          role: roleByUserId[profile.user_id] || 'analista_monitoramento',
+          role: principalRole(userRoles),
+          categoria,
           nome: profile.nome || 'Sem nome',
           email: profile.email || '',
           telefone: profile.telefone,

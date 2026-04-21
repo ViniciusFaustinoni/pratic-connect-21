@@ -71,7 +71,7 @@ export default function Equipe() {
   };
 
   const handleVerServicos = (prof: ProfissionalEquipe) => {
-    if (prof.role === 'instalador_vistoriador') {
+    if (prof.categoria === 'instalador') {
       setServicosModalCtx({ modo: 'profissional', profissional: prof });
     } else {
       // Card administrativo → ver TODOS os serviços de instaladores
@@ -118,7 +118,7 @@ export default function Equipe() {
     const inst: ProfissionalEquipe[] = [];
     const adm: ProfissionalEquipe[] = [];
     (profissionais || []).forEach(p => {
-      if (p.role === 'instalador_vistoriador') inst.push(p);
+      if (p.categoria === 'instalador') inst.push(p);
       else adm.push(p);
     });
     return { instaladores: inst, administrativo: adm };
