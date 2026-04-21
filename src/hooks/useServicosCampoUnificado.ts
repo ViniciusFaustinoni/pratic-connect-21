@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useServicos, type Servico, type StatusServico, type TipoServico } from './useServicos';
-import { startOfDay, endOfDay, isToday, parseISO } from 'date-fns';
+import { isToday, parseISO, differenceInHours } from 'date-fns';
 
 export type FaseServico =
   | 'pre_execucao'
@@ -13,6 +13,31 @@ export type FaseServico =
 
 export type OrigemTecnico = 'todos' | 'interno' | 'prestador';
 
+export type FaseJornada =
+  | 'aguardando_documentos'
+  | 'documentos_em_analise'
+  | 'documentos_aprovados_sem_agendamento'
+  | 'agendado_aguardando_data'
+  | 'em_rota_execucao'
+  | 'concluido_aguardando_analise'
+  | 'concluido_aguardando_ativacao'
+  | 'reprovado_aguardando_reagendamento'
+  | 'nao_compareceu_pendente_contato'
+  | 'cancelado_suspenso';
+
+export const FASE_JORNADA_LABELS: Record<FaseJornada, string> = {
+  aguardando_documentos: 'Aguardando documentos',
+  documentos_em_analise: 'Documentos em análise',
+  documentos_aprovados_sem_agendamento: 'Documentos aprovados — sem agendamento',
+  agendado_aguardando_data: 'Agendado — aguardando data',
+  em_rota_execucao: 'Em rota / em execução',
+  concluido_aguardando_analise: 'Concluído — aguardando análise',
+  concluido_aguardando_ativacao: 'Concluído — aguardando ativação',
+  reprovado_aguardando_reagendamento: 'Reprovado — aguardando reagendamento',
+  nao_compareceu_pendente_contato: 'Não compareceu — pendente contato',
+  cancelado_suspenso: 'Cancelado / suspenso',
+};
+
 export interface ServicosCampoFilters {
   search?: string;
   tipos?: TipoServico[];
@@ -23,6 +48,7 @@ export interface ServicosCampoFilters {
   dataInicio?: string;
   dataFim?: string;
   fase?: FaseServico | 'todos';
+  faseJornada?: FaseJornada | 'todos';
 }
 
 export const FASE_TO_STATUS: Record<FaseServico, StatusServico[]> = {
@@ -46,7 +72,6 @@ export const FASE_LABELS: Record<FaseServico, string> = {
 };
 
 function isInterno(s: Servico): boolean {
-  // Heurística: tem profissional_id (técnico interno) e não tem origem 'prestador'
   return !!s.profissional_id && (s as any).origem !== 'prestador_externo';
 }
 
@@ -55,8 +80,48 @@ function isPrestador(s: Servico): boolean {
     || (s as any).origem === 'prestador_externo';
 }
 
+/**
+ * Calcula a fase da jornada do associado a partir do estado real
+ * do serviço, documentos e rastreador.
+ */
+export function calcularFaseJornada(s: Servico): FaseJornada {
+  const status = s.status;
+  const docsStatus = (s as any).associado?.documentos_status as string | undefined;
+  const rastreadorAtivado = (s as any).rastreador?.status_ativacao === 'ativo'
+    || (s as any).rastreador_ativado;
+
+  if (status === 'cancelada') return 'cancelado_suspenso';
+  if (status === 'nao_compareceu') return 'nao_compareceu_pendente_contato';
+  if (status === 'reagendada' || status === 'reprovada') {
+    return 'reprovado_aguardando_reagendamento';
+  }
+  if (status === 'em_rota' || status === 'em_andamento') return 'em_rota_execucao';
+  if (status === 'em_analise') return 'concluido_aguardando_analise';
+
+  if (status === 'concluida' || status === 'aprovada' || status === 'aprovada_ressalvas') {
+    // Regra 48h: se concluído mas rastreador não ativado, fica nesse estado
+    if (!rastreadorAtivado && (s.tipo === 'instalacao' || s.tipo === 'revistoria')) {
+      const concluidoEm = s.concluida_em ? parseISO(s.concluida_em) : null;
+      if (concluidoEm && differenceInHours(new Date(), concluidoEm) <= 72) {
+        return 'concluido_aguardando_ativacao';
+      }
+    }
+    return 'concluido_aguardando_analise';
+  }
+
+  // Pendente / agendada — depende de documentos
+  if (docsStatus === 'em_analise') return 'documentos_em_analise';
+  if (docsStatus === 'pendente' || docsStatus === 'aguardando') {
+    return 'aguardando_documentos';
+  }
+
+  if (status === 'agendada') return 'agendado_aguardando_data';
+  if (status === 'pendente') return 'documentos_aprovados_sem_agendamento';
+
+  return 'agendado_aguardando_data';
+}
+
 export function useServicosCampoUnificado(filters: ServicosCampoFilters = {}) {
-  // Busca todos os tipos de campo (sem vistoria_entrada que é base)
   const tiposBase: TipoServico[] = filters.tipos && filters.tipos.length > 0
     ? filters.tipos
     : [
@@ -95,6 +160,10 @@ export function useServicosCampoUnificado(filters: ServicosCampoFilters = {}) {
     if (filters.fase && filters.fase !== 'todos') {
       const allowed = new Set(FASE_TO_STATUS[filters.fase]);
       result = result.filter((srv) => allowed.has(srv.status));
+    }
+
+    if (filters.faseJornada && filters.faseJornada !== 'todos') {
+      result = result.filter((srv) => calcularFaseJornada(srv) === filters.faseJornada);
     }
 
     if (filters.statuses && filters.statuses.length > 0) {

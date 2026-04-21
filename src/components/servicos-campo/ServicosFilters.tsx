@@ -14,7 +14,12 @@ import {
   TIPO_SERVICO_LABELS, STATUS_SERVICO_LABELS,
   type TipoServico, type StatusServico,
 } from '@/hooks/useServicos';
-import type { ServicosCampoFilters, OrigemTecnico } from '@/hooks/useServicosCampoUnificado';
+import {
+  FASE_JORNADA_LABELS,
+  type ServicosCampoFilters,
+  type OrigemTecnico,
+  type FaseJornada,
+} from '@/hooks/useServicosCampoUnificado';
 
 const TIPOS_DISPONIVEIS: TipoServico[] = [
   'instalacao', 'revistoria', 'vistoria_entrada', 'vistoria_saida',
@@ -57,6 +62,7 @@ export function ServicosFilters({ filters, onChange, onClear }: ServicosFiltersP
     (filters.tipos && filters.tipos.length > 0) ||
     (filters.statuses && filters.statuses.length > 0) ||
     (filters.origemTecnico && filters.origemTecnico !== 'todos') ||
+    (filters.faseJornada && filters.faseJornada !== 'todos') ||
     !!filters.cidade ||
     !!filters.uf;
 
@@ -127,6 +133,22 @@ export function ServicosFilters({ filters, onChange, onClear }: ServicosFiltersP
           ))}
         </PopoverContent>
       </Popover>
+
+      {/* Fase da Jornada */}
+      <Select
+        value={filters.faseJornada || 'todos'}
+        onValueChange={(v) => onChange({ ...filters, faseJornada: v as FaseJornada | 'todos' })}
+      >
+        <SelectTrigger className="w-[240px] h-9">
+          <SelectValue placeholder="Fase da Jornada" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="todos">Todas as fases</SelectItem>
+          {(Object.keys(FASE_JORNADA_LABELS) as FaseJornada[]).map((k) => (
+            <SelectItem key={k} value={k}>{FASE_JORNADA_LABELS[k]}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
       {/* Origem */}
       <Select
