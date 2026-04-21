@@ -5586,6 +5586,51 @@ export type Database = {
           },
         ]
       }
+      client_telemetry: {
+        Row: {
+          avg_ms: number | null
+          count: number
+          created_at: string
+          endpoint: string
+          error_count: number
+          id: string
+          method: string | null
+          route: string | null
+          session_id: string | null
+          status_bucket: string | null
+          user_id: string | null
+          window_start: string
+        }
+        Insert: {
+          avg_ms?: number | null
+          count?: number
+          created_at?: string
+          endpoint: string
+          error_count?: number
+          id?: string
+          method?: string | null
+          route?: string | null
+          session_id?: string | null
+          status_bucket?: string | null
+          user_id?: string | null
+          window_start: string
+        }
+        Update: {
+          avg_ms?: number | null
+          count?: number
+          created_at?: string
+          endpoint?: string
+          error_count?: number
+          id?: string
+          method?: string | null
+          route?: string | null
+          session_id?: string | null
+          status_bucket?: string | null
+          user_id?: string | null
+          window_start?: string
+        }
+        Relationships: []
+      }
       coberturas: {
         Row: {
           ativo: boolean | null
