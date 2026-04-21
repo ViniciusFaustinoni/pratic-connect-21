@@ -258,13 +258,15 @@ export function useInstalacoesDisponiveis(data?: Date) {
   return useQuery({
     queryKey: ['instalacoes-disponiveis', data ? format(data, 'yyyy-MM-dd') : 'todas'],
     queryFn: async () => {
+      // Fase 3: lê de `servicos` filtrando por tipo='vistoria_instalacao'
       let query = supabase
-        .from('instalacoes')
+        .from('servicos')
         .select(`
           *,
           associados(id, nome, telefone),
           veiculos(id, marca, modelo, placa, ano_modelo)
         `)
+        .eq('tipo', 'vistoria_instalacao' as any)
         .is('rota_id', null)
         .in('status', ['agendada', 'reagendada'])
         .order('data_agendada');
@@ -273,9 +275,9 @@ export function useInstalacoesDisponiveis(data?: Date) {
         query = query.eq('data_agendada', format(data, 'yyyy-MM-dd'));
       }
 
-      const { data: instalacoes, error } = await query;
+      const { data: servicos, error } = await query;
       if (error) throw error;
-      return instalacoes;
+      return servicos;
     },
   });
 }
@@ -325,8 +327,9 @@ export function useCidadesComInstalacoes() {
   return useQuery({
     queryKey: ['cidades-instalacoes'],
     queryFn: async () => {
+      // Fase 3: lê de `servicos` (todas tipos) — cidades operacionais
       const { data, error } = await supabase
-        .from('instalacoes')
+        .from('servicos')
         .select('cidade')
         .not('cidade', 'is', null)
         .order('cidade');
