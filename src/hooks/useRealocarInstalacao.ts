@@ -73,10 +73,12 @@ export function useRealocarInstalacao() {
 
   const realocarParaRota = useMutation({
     mutationFn: async (params: RealocarParaRotaParams) => {
-      const { data: inst, error: fetchErr } = await supabase
-        .from('instalacoes')
+      // Fase 3: fonte única é `servicos` (tipo = vistoria_instalacao)
+      const { data: serv, error: fetchErr } = await supabase
+        .from('servicos')
         .select('id, status, associado_id, associados(nome, telefone), veiculos(placa, marca, modelo)')
         .eq('id', params.instalacaoId)
+        .eq('tipo', 'vistoria_instalacao' as any)
         .single();
       if (fetchErr) throw fetchErr;
 
@@ -88,33 +90,33 @@ export function useRealocarInstalacao() {
         periodo: params.periodo,
         hora_agendada: null,
       };
-      if (params.instaladorId) update.instalador_responsavel_id = params.instaladorId;
+      if (params.instaladorId) update.profissional_id = params.instaladorId;
 
       const { error: updErr } = await supabase
-        .from('instalacoes')
+        .from('servicos')
         .update(update as any)
         .eq('id', params.instalacaoId);
       if (updErr) throw updErr;
 
       await registrarHistorico({
         instalacaoId: params.instalacaoId,
-        associadoId: (inst as any).associado_id,
+        associadoId: (serv as any).associado_id,
         motivo: params.motivo,
         destino: 'rota',
-        statusAnterior: (inst as any).status,
+        statusAnterior: (serv as any).status,
         dadosNovos: {
           rota_id: params.rotaId,
-          instalador_id: params.instaladorId,
+          profissional_id: params.instaladorId,
           data_agendada: params.dataAgendada,
           periodo: params.periodo,
         },
       });
 
-      if (params.notificarWhatsApp && (inst as any).associados?.telefone) {
+      if (params.notificarWhatsApp && (serv as any).associados?.telefone) {
         const dataFmt = format(new Date(params.dataAgendada + 'T00:00:00'), 'dd/MM/yyyy');
-        const placa = (inst as any).veiculos?.placa || '';
-        const msg = `Olá ${(inst as any).associados?.nome || ''}! Sua instalação${placa ? ` do veículo ${placa}` : ''} foi reagendada para ${dataFmt} — ${PERIODO_LABEL[params.periodo]}. Em breve nosso instalador entrará em contato. Equipe Pratic.`;
-        await notificarAssociado((inst as any).associados.telefone, msg);
+        const placa = (serv as any).veiculos?.placa || '';
+        const msg = `Olá ${(serv as any).associados?.nome || ''}! Sua instalação${placa ? ` do veículo ${placa}` : ''} foi reagendada para ${dataFmt} — ${PERIODO_LABEL[params.periodo]}. Em breve nosso instalador entrará em contato. Equipe Pratic.`;
+        await notificarAssociado((serv as any).associados.telefone, msg);
       }
     },
     onSuccess: () => {
@@ -126,14 +128,16 @@ export function useRealocarInstalacao() {
 
   const realocarParaBase = useMutation({
     mutationFn: async (params: RealocarParaBaseParams) => {
-      const { data: inst, error: fetchErr } = await supabase
-        .from('instalacoes')
+      // Fase 3: fonte única é `servicos` (tipo = vistoria_instalacao)
+      const { data: serv, error: fetchErr } = await supabase
+        .from('servicos')
         .select('id, status, associado_id, associados(nome, telefone), veiculos(placa, marca, modelo, ano_modelo)')
         .eq('id', params.instalacaoId)
+        .eq('tipo', 'vistoria_instalacao' as any)
         .single();
       if (fetchErr) throw fetchErr;
 
-      const veiculo = (inst as any).veiculos;
+      const veiculo = (serv as any).veiculos;
       const veiculoDescricao = veiculo
         ? `${veiculo.marca || ''} ${veiculo.modelo || ''} ${veiculo.ano_modelo || ''}`.trim()
         : null;
@@ -146,8 +150,8 @@ export function useRealocarInstalacao() {
           oficina_id: params.oficinaId,
           data_agendada: params.dataAgendada,
           horario: params.periodo,
-          cliente_nome: (inst as any).associados?.nome || 'Cliente',
-          cliente_telefone: (inst as any).associados?.telefone || null,
+          cliente_nome: (serv as any).associados?.nome || 'Cliente',
+          cliente_telefone: (serv as any).associados?.telefone || null,
           veiculo_placa: veiculo?.placa || null,
           veiculo_descricao: veiculoDescricao,
           status: 'confirmado',
@@ -155,9 +159,9 @@ export function useRealocarInstalacao() {
         });
       if (agErr) throw agErr;
 
-      // 2) Update instalações
+      // 2) Update servicos
       const { error: updErr } = await supabase
-        .from('instalacoes')
+        .from('servicos')
         .update({
           status: 'agendada',
           local_vistoria: 'base',
@@ -171,10 +175,10 @@ export function useRealocarInstalacao() {
 
       await registrarHistorico({
         instalacaoId: params.instalacaoId,
-        associadoId: (inst as any).associado_id,
+        associadoId: (serv as any).associado_id,
         motivo: params.motivo,
         destino: 'base',
-        statusAnterior: (inst as any).status,
+        statusAnterior: (serv as any).status,
         dadosNovos: {
           oficina_id: params.oficinaId,
           oficina_nome: params.oficinaNome,
@@ -184,10 +188,10 @@ export function useRealocarInstalacao() {
         },
       });
 
-      if (params.notificarWhatsApp && (inst as any).associados?.telefone) {
+      if (params.notificarWhatsApp && (serv as any).associados?.telefone) {
         const dataFmt = format(new Date(params.dataAgendada + 'T00:00:00'), 'dd/MM/yyyy');
-        const msg = `Olá ${(inst as any).associados?.nome || ''}! Sua instalação foi remarcada para ser realizada na base *${params.oficinaNome}* em ${dataFmt} — ${PERIODO_LABEL[params.periodo]}. Por favor, compareça com o veículo. Equipe Pratic.`;
-        await notificarAssociado((inst as any).associados.telefone, msg);
+        const msg = `Olá ${(serv as any).associados?.nome || ''}! Sua instalação foi remarcada para ser realizada na base *${params.oficinaNome}* em ${dataFmt} — ${PERIODO_LABEL[params.periodo]}. Por favor, compareça com o veículo. Equipe Pratic.`;
+        await notificarAssociado((serv as any).associados.telefone, msg);
       }
     },
     onSuccess: () => {
