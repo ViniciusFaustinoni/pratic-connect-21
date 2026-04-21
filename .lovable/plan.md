@@ -1,80 +1,58 @@
 
 
-## Plano de correção — Auditoria Instalador/Técnico × Serviços
+## Fase 3 — Saneamento de leituras legadas (`instalacoes` / `vistorias` → `servicos`)
 
-Plano executivo dividido em 4 fases, do bloqueante crítico ao saneamento. Cada fase é independente e pode ser aprovada/executada isoladamente.
+### Diagnóstico
+59 arquivos em `src/` ainda leem das tabelas legadas. A grande maioria é de telas históricas/relatórios (fora de escopo). O foco desta fase são **hooks e componentes ATIVOS no fluxo operacional** (monitoramento, equipe, rotas, vistoriador), onde a divergência de fonte de dados causa contadores zerados, atribuições fantasma e inconsistência com `useEquipe`.
 
----
+### Arquivos prioritários (ordem de execução)
 
-### Fase 1 — CRÍTICO: Corrigir fluxo de Retirada (edge functions quebradas)
+#### Lote 1 — Operação técnico (alta criticidade)
+1. **`src/components/vistoriador/ImprevistoBotao.tsx`** (linhas 81-100)
+   - Hoje: ao registrar imprevisto, atualiza `instalacoes.instalador_responsavel_id=null` e `vistorias.vistoriador_id=null`.
+   - Correção: atualizar `servicos` (via `id` do serviço atual) — `profissional_id=null`, `status='pendente_realocacao'` (ou similar). Remover lógica que diferencia `instalacao_origem_id` vs `vistoria_origem_id` — usar só `servico_id`.
 
-**Problema**: `confirmar-retirada` e `gerar-link-retirada` operam sobre `ordens_servico` (tabela vazia) e tentam gravar status `entregue` / `em_garantia` que não existem no enum `status_ordem_servico`. O fluxo real de retirada de rastreador hoje vive em `servicos.tipo = 'vistoria_retirada'` (vide `useCriarRetirada`).
+2. **`src/hooks/useRealocarInstalacao.ts`** (linhas 75-170)
+   - Hoje: realocação de instalação opera em `instalacoes` (rota e base).
+   - Correção: trocar para `servicos` com filtro `tipo='vistoria_instalacao'`. Renomear hook → `useRealocarServico` (mantendo alias temporário para compatibilidade).
 
-**Ação**:
-1. **Marcar como deprecated** as edge functions `gerar-link-retirada` e `confirmar-retirada` (manter como no-op que retorna 410 Gone com mensagem "Fluxo migrado para servicos") até confirmar que ninguém mais as invoca.
-2. **Buscar todos os call sites** dessas funções (`supabase.functions.invoke('gerar-link-retirada' | 'confirmar-retirada')`) e removê-los/redirecioná-los para o fluxo de `servicos`.
-3. **Documentar** no `mem://` que retirada agora é exclusivamente via `servicos.tipo='vistoria_retirada'`.
+#### Lote 2 — Rotas (média criticidade)
+3. **`src/hooks/useRotas.ts`** (linhas 123-545)
+   - Hoje: 11 referências a `instalacoes`/`vistorias` para vincular/desvincular rota.
+   - Correção: unificar em `servicos.rota_id` com filtros por `tipo`. Remover queries duplicadas (uma query em `servicos` substitui as duas).
+   - Maior refator do lote — quebrar em commits menores se necessário.
 
----
+#### Lote 3 — Modal de monitoramento (baixa criticidade visual, mas dado errado)
+4. **`src/components/monitoramento/CalendarioDiaModal.tsx`** (linha 174+)
+   - Verificar se a query do calendário está somando duas tabelas legadas em vez de `servicos` — se for o caso, migrar.
 
-### Fase 2 — Integridade de dados (triggers + backfill)
+### Não tocar (relatórios históricos / telas desativadas)
+Os outros 55 arquivos com `from('instalacoes')` ou `from('vistorias')` ficam como estão. Critério: se o componente é referenciado pelas rotas `/monitoramento/*`, `/vistoriador/*`, `/rotas/*`, `/servicos-campo/*` E modifica dados, está em escopo. Demais (relatórios, dashboards históricos, exports) ficam intocados.
 
-**Problemas detectados**:
-- `servicos` com `status='concluida'` sem `concluida_em` preenchido.
-- Vistorias de manutenção concluídas sem `profissional_id`.
-- Registros órfãos em `servicos_pendentes_rota` (IDs/datas nulos).
+### Padrão de migração
 
-**Ação**:
-1. **Trigger `BEFORE UPDATE` em `servicos`**: se `NEW.status='concluida' AND NEW.concluida_em IS NULL`, setar `NEW.concluida_em = now()`. Se `profissional_id IS NULL`, bloquear ou logar warning.
-2. **Backfill** registros existentes: `UPDATE servicos SET concluida_em = updated_at WHERE status='concluida' AND concluida_em IS NULL`.
-3. **Limpar órfãos** em `servicos_pendentes_rota` com IDs/datas nulos (DELETE WHERE servico_id IS NULL OR data_agendada IS NULL).
-4. **Constraint NOT NULL** em `servicos_pendentes_rota.servico_id` e `data_agendada` para prevenir reincidência.
+Para cada query:
+- `from('instalacoes')` → `from('servicos').eq('tipo', 'vistoria_instalacao')`
+- `from('vistorias')` → `from('servicos').in('tipo', ['vistoria_manutencao', 'vistoria_retirada'])` (ou `.eq` específico, conforme contexto)
+- `instalador_responsavel_id` / `vistoriador_id` / `instalador_id` → `profissional_id`
+- `instalacao_origem_id` / `vistoria_origem_id` → usar apenas o `id` do serviço
 
----
+### Critérios de aceitação
 
-### Fase 3 — Saneamento de leituras legadas
-
-**Problema**: Após Fase corrigida em `useEquipe`, ainda há componentes lendo de `instalacoes` e `vistorias` (legadas). Auditar e migrar:
-
-**Ação**:
-1. `grep` por `from('instalacoes')` e `from('vistorias')` em `src/`.
-2. Para cada hit em hooks/componentes ativos do fluxo monitoramento/equipe/serviços, migrar para `servicos` com filtro de `tipo` apropriado (`vistoria_instalacao`, `vistoria_manutencao`, `vistoria_retirada`).
-3. Não tocar em telas de relatórios históricos que dependem de dados antigos.
-
-**Específicos já mapeados**:
-- `EquipeCard.tsx` (modais de detalhes do profissional)
-- Modais de "ver serviços" do profissional
-
----
-
-### Fase 4 — Refinamento de métrica "Tarefas hoje"
-
-**Problema**: Contador X/10 inclui `nao_compareceu` e `reagendada`, inflando o numerador (parece que o instalador "fez" tarefas que na verdade falharam).
-
-**Ação**:
-1. Em `useEquipe.ts`, separar em **3 contadores** no objeto retornado:
-   - `tarefas_hoje_total` (todas, incluindo nao_compareceu/reagendada) — usado para "carga do dia"
-   - `tarefas_hoje_concluidas` (status='concluida')
-   - `tarefas_hoje_pendentes` (agendada/em_rota/em_andamento)
-2. Atualizar `EquipeCard` para exibir formato `concluídas / pendentes / capacidade` (ex: "3 ✓ · 2 ⏳ / 10").
-3. Manter retrocompatibilidade do campo `tarefas_hoje` (= concluidas + pendentes, sem falhas).
-
----
-
-### Critérios de aceitação globais
-
-1. Nenhuma chamada ativa às funções `gerar-link-retirada` / `confirmar-retirada` no frontend.
-2. `servicos` concluídos sempre têm `concluida_em` preenchido (verificável por query).
-3. Cards de equipe refletem com precisão: concluídas vs pendentes vs falhas separadamente.
-4. Sem regressão visual em mapa de monitoramento, agendamento, ou modais de profissional.
+1. Imprevisto registrado por vistoriador desatribui o serviço corretamente (verificável: `servicos.profissional_id` fica `null` após clique).
+2. Realocação de instalação para outra rota/base atualiza `servicos.rota_id` e reflete no card de equipe (contador `tarefas_hoje_pendentes` diminui no profissional anterior, aumenta no novo).
+3. `useRotas` retorna a mesma listagem de antes (sem regressão visual em `/rotas`).
+4. Calendário de monitoramento exibe contagem unificada (sem duplicação ou ausência de itens que estão em `servicos`).
+5. Sem warnings de TypeScript após renomeação/migração.
 
 ### Fora de escopo
+- Drop das tabelas `instalacoes` e `vistorias` (fase futura).
+- Migração dos 55 arquivos de relatório/dashboard histórico.
+- Renomeação de páginas/rotas (`/rotas` continua como está).
+- Backfill de dados antigos de `instalacoes`/`vistorias` para `servicos` (assumimos que dados novos já caem em `servicos`).
 
-- Reativar heartbeat de geolocalização do app móvel (depende do app, não do web).
-- Investigar por que automação de `reagendamento_token` não dispara em no-shows (auditoria separada do worker de cron).
-- Drop das tabelas legadas `instalacoes` / `vistorias` (fase futura, após confirmação de zero leituras).
-
-### Sugestão de execução
-
-Recomendo aprovar **Fase 1 isolada primeiro** (é a única bloqueante). Fases 2-4 podem ser aprovadas em conjunto depois, ou separadas conforme prioridade.
+### Ordem de aprovação sugerida
+- **Lote 1 isolado** (ImprevistoBotao + useRealocarInstalacao) — 2 arquivos, baixo risco, alto ganho operacional.
+- **Lote 2** (useRotas) — em segundo momento, requer teste manual em `/rotas`.
+- **Lote 3** (CalendarioDiaModal) — incremental, após confirmação dos lotes anteriores.
 
