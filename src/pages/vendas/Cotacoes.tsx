@@ -855,7 +855,7 @@ export default function Cotacoes() {
               <RefreshCw className="h-3.5 w-3.5 mr-1" />
               Limpar
               <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[10px]">
-                {[search, statusFilter !== 'all', mesFilter !== 'all', dataFilter, consultorFilter !== 'all', filtroOrfas].filter(Boolean).length}
+                {[search, statusFilter !== 'all', mesFilter !== 'all', dataFilter, consultorFilter !== 'all', filtroOrfas, etapaFunilFilter !== 'all'].filter(Boolean).length}
               </Badge>
             </Button>
           )}
