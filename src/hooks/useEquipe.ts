@@ -4,12 +4,14 @@ import { format, startOfDay } from 'date-fns';
 
 export type StatusProfissional = 'disponivel' | 'indisponivel' | 'ferias' | 'afastado';
 export type StatusOperacional = 'em_contato' | 'em_andamento' | 'em_rota' | 'disponivel_operacional' | 'offline';
-export type RoleEquipe = 'instalador_vistoriador' | 'analista_monitoramento' | string;
+export type RoleEquipe = 'instalador_vistoriador' | 'analista_monitoramento' | 'vistoriador_base' | string;
+export type CategoriaEquipe = 'instalador' | 'administrativo';
 
 export interface ProfissionalEquipe {
   id: string;
   user_id: string;
   role: RoleEquipe;
+  categoria: CategoriaEquipe;
   nome: string;
   email: string;
   telefone: string | null;
