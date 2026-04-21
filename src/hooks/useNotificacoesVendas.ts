@@ -78,11 +78,12 @@ export function useMarcarNotificacaoLida() {
 }
 
 // Hook para escutar notificações em tempo real
-export function useNotificacoesVendasRealtime() {
+export function useNotificacoesVendasRealtime(enabled: boolean = true) {
   const { profile } = useAuth();
   const queryClient = useQueryClient();
 
   useEffect(() => {
+    if (!enabled) return;
     if (!profile?.id) return;
 
     const channel = supabase
@@ -125,14 +126,16 @@ export function useNotificacoesVendasRealtime() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [profile?.id, queryClient]);
+  }, [enabled, profile?.id, queryClient]);
 }
 
 // Hook para escutar mudanças em leads (para atualizar Kanban em tempo real)
-export function useLeadsRealtime() {
+export function useLeadsRealtime(enabled: boolean = true) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
+    if (!enabled) return;
+
     const channel = supabase
       .channel('leads-realtime')
       .on(
@@ -166,5 +169,5 @@ export function useLeadsRealtime() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [queryClient]);
+  }, [enabled, queryClient]);
 }
