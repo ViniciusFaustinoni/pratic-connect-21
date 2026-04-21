@@ -1,33 +1,54 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+
+// Chaves exatas que dependem de instalacoes/vistorias.
+// Substitui o predicate amplo (que disparava dezenas de refetches por evento).
+const INSTALACOES_KEYS = [
+  ['instalacoes'],
+  ['instalacoes-contagem'],
+  ['instalacoes-metricas'],
+  ['instalador-instalacoes'],
+  ['instalacoes-disponiveis'],
+] as const;
+
+const VISTORIAS_KEYS = [
+  ['vistorias'],
+  ['vistorias-contagem'],
+  ['vistorias-metricas'],
+] as const;
 
 export function useFilasRealtime() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   useEffect(() => {
-    const invalidateInstalacoesQueries = () => {
-      queryClient.invalidateQueries({
-        predicate: (query) => {
-          const key = query.queryKey[0] as string;
-          return key?.startsWith('instalac');
-        }
-      });
+    // Não monta canal sem usuário (evita canais órfãos durante boot do AuthContext)
+    if (!user) return;
+
+    const isRelevantUpdate = (payload: any) => {
+      if (payload.eventType !== 'UPDATE') return true;
+      const oldRow = payload.old || {};
+      const newRow = payload.new || {};
+      // Só invalida em UPDATE se status, data_agendada ou rota_id mudaram
+      return (
+        oldRow.status !== newRow.status ||
+        oldRow.data_agendada !== newRow.data_agendada ||
+        oldRow.rota_id !== newRow.rota_id
+      );
     };
 
-    const invalidateVistoriasQueries = () => {
-      queryClient.invalidateQueries({
-        predicate: (query) => {
-          const key = query.queryKey[0] as string;
-          return key?.startsWith('vistoria');
-        }
+    const invalidateExact = (keys: readonly (readonly string[])[]) => {
+      keys.forEach((key) => {
+        queryClient.invalidateQueries({ queryKey: key as unknown as string[] });
       });
     };
 
     const handleInstalacoesChange = (payload: any) => {
-      console.log('[Realtime Filas] Mudança em instalacoes:', payload);
-      invalidateInstalacoesQueries();
+      if (!isRelevantUpdate(payload)) return;
+      invalidateExact(INSTALACOES_KEYS);
 
       if (payload.eventType === 'INSERT') {
         toast.info('📅 Nova instalação agendada', {
@@ -37,8 +58,8 @@ export function useFilasRealtime() {
     };
 
     const handleVistoriasChange = (payload: any) => {
-      console.log('[Realtime Filas] Mudança em vistorias:', payload);
-      invalidateVistoriasQueries();
+      if (!isRelevantUpdate(payload)) return;
+      invalidateExact(VISTORIAS_KEYS);
 
       if (payload.eventType === 'INSERT') {
         toast.info('📋 Nova vistoria agendada', {
@@ -49,7 +70,7 @@ export function useFilasRealtime() {
 
     const channel = supabase
       .channel('filas-realtime')
-      .on('postgres_changes', 
+      .on('postgres_changes',
         { event: '*', schema: 'public', table: 'instalacoes' },
         handleInstalacoesChange
       )
@@ -62,5 +83,5 @@ export function useFilasRealtime() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [queryClient]);
+  }, [queryClient, user?.id]);
 }
