@@ -21,6 +21,8 @@ export interface RastreadorFilters {
   plataforma?: string;
   search?: string;
   comunicacao?: 'online' | 'offline' | 'atencao' | 'todos';
+  data_instalacao_inicio?: string; // ISO date (YYYY-MM-DD)
+  data_instalacao_fim?: string;    // ISO date (YYYY-MM-DD)
   page?: number;
   pageSize?: number;
 }
@@ -94,6 +96,34 @@ export function useRastreadores(filters?: RastreadorFilters) {
 
       if (filters?.plataforma) {
         query = query.eq('plataforma', filters.plataforma);
+      }
+
+      // Filtro por data de instalação (cruza com tabela servicos)
+      if (filters?.data_instalacao_inicio || filters?.data_instalacao_fim) {
+        let svcQuery = supabase
+          .from('servicos')
+          .select('rastreador_id')
+          .eq('tipo', 'instalacao')
+          .eq('status', 'concluida')
+          .not('rastreador_id', 'is', null);
+
+        if (filters.data_instalacao_inicio) {
+          svcQuery = svcQuery.gte('concluida_em', `${filters.data_instalacao_inicio}T00:00:00`);
+        }
+        if (filters.data_instalacao_fim) {
+          svcQuery = svcQuery.lte('concluida_em', `${filters.data_instalacao_fim}T23:59:59`);
+        }
+
+        const { data: svcData, error: svcError } = await svcQuery.limit(5000);
+        if (svcError) {
+          console.warn('[useRastreadores] busca data instalação erro:', svcError);
+        }
+        const ids = Array.from(new Set((svcData || []).map((s: any) => s.rastreador_id).filter(Boolean)));
+
+        if (ids.length === 0) {
+          return { items: [], total: 0, totalPages: 0 };
+        }
+        query = query.in('id', ids);
       }
 
       if (filters?.search) {
