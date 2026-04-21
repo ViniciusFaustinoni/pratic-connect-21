@@ -1,58 +1,111 @@
 
 
-## Fase 3 — Saneamento de leituras legadas (`instalacoes` / `vistorias` → `servicos`)
+## Correção definitiva — erro ao gerar cotação para todos os perfis comerciais
 
-### Diagnóstico
-59 arquivos em `src/` ainda leem das tabelas legadas. A grande maioria é de telas históricas/relatórios (fora de escopo). O foco desta fase são **hooks e componentes ATIVOS no fluxo operacional** (monitoramento, equipe, rotas, vistoriador), onde a divergência de fonte de dados causa contadores zerados, atribuições fantasma e inconsistência com `useEquipe`.
+### Causa raiz confirmada
 
-### Arquivos prioritários (ordem de execução)
+O erro acontece porque o sistema está usando **dois identificadores diferentes para o consultor/vendedor responsável pela cotação**.
 
-#### Lote 1 — Operação técnico (alta criticidade)
-1. **`src/components/vistoriador/ImprevistoBotao.tsx`** (linhas 81-100)
-   - Hoje: ao registrar imprevisto, atualiza `instalacoes.instalador_responsavel_id=null` e `vistorias.vistoriador_id=null`.
-   - Correção: atualizar `servicos` (via `id` do serviço atual) — `profissional_id=null`, `status='pendente_realocacao'` (ou similar). Remover lógica que diferencia `instalacao_origem_id` vs `vistoria_origem_id` — usar só `servico_id`.
+Hoje, ao criar cotação, o formulário envia o ID do usuário autenticado ou o `user_id` do consultor selecionado. Porém, a regra estrutural atual da cotação também exige que esse campo corresponda ao ID interno do perfil do consultor.
 
-2. **`src/hooks/useRealocarInstalacao.ts`** (linhas 75-170)
-   - Hoje: realocação de instalação opera em `instalacoes` (rota e base).
-   - Correção: trocar para `servicos` com filtro `tipo='vistoria_instalacao'`. Renomear hook → `useRealocarServico` (mantendo alias temporário para compatibilidade).
+Resultado: quando o consultor tem esses dois IDs diferentes, a criação da cotação é rejeitada.
 
-#### Lote 2 — Rotas (média criticidade)
-3. **`src/hooks/useRotas.ts`** (linhas 123-545)
-   - Hoje: 11 referências a `instalacoes`/`vistorias` para vincular/desvincular rota.
-   - Correção: unificar em `servicos.rota_id` com filtros por `tipo`. Remover queries duplicadas (uma query em `servicos` substitui as duas).
-   - Maior refator do lote — quebrar em commits menores se necessário.
+A auditoria mostrou que isso afeta praticamente todos os perfis comerciais:
 
-#### Lote 3 — Modal de monitoramento (baixa criticidade visual, mas dado errado)
-4. **`src/components/monitoramento/CalendarioDiaModal.tsx`** (linha 174+)
-   - Verificar se a query do calendário está somando duas tabelas legadas em vez de `servicos` — se for o caso, migrar.
+- Total de perfis comerciais auditados: **199**
+- Com IDs diferentes entre usuário e perfil: **187**
+- Vendedores CLT com IDs diferentes: **162 de 162**
+- Vendedores externos com IDs diferentes: **20 de 27**
+- Diretor de teste `admin@teste.com`: também tem IDs diferentes
 
-### Não tocar (relatórios históricos / telas desativadas)
-Os outros 55 arquivos com `from('instalacoes')` ou `from('vistorias')` ficam como estão. Critério: se o componente é referenciado pelas rotas `/monitoramento/*`, `/vistoriador/*`, `/rotas/*`, `/servicos-campo/*` E modifica dados, está em escopo. Demais (relatórios, dashboards históricos, exports) ficam intocados.
+Por isso o erro aparece para vendedor CLT, vendedor externo e também para diretor/gestor ao atribuir consultor.
 
-### Padrão de migração
+### Problema técnico específico
 
-Para cada query:
-- `from('instalacoes')` → `from('servicos').eq('tipo', 'vistoria_instalacao')`
-- `from('vistorias')` → `from('servicos').in('tipo', ['vistoria_manutencao', 'vistoria_retirada'])` (ou `.eq` específico, conforme contexto)
-- `instalador_responsavel_id` / `vistoriador_id` / `instalador_id` → `profissional_id`
-- `instalacao_origem_id` / `vistoria_origem_id` → usar apenas o `id` do serviço
+O sistema está inconsistente:
+
+1. Algumas regras e telas tratam `vendedor_id` como **ID de login do usuário**.
+2. Outras relações tratam `vendedor_id` como **ID do perfil do vendedor**.
+3. A criação da cotação envia o ID de login.
+4. A validação estrutural também exige o ID do perfil.
+5. Para a maioria dos vendedores, esses IDs não são iguais.
+6. A cotação é bloqueada antes de ser criada.
+
+### Plano de correção
+
+#### 1. Padronizar `cotacoes.vendedor_id` como ID do usuário de login
+
+Manter a cotação usando o ID do usuário autenticado como fonte principal do vendedor responsável.
+
+Motivo:
+- As permissões de visualização e edição já usam esse padrão.
+- A criação atual do formulário já envia esse padrão.
+- O vínculo com login, permissões e papéis comerciais fica mais direto.
+- Evita quebrar a regra “vendedor vê suas próprias cotações”.
+
+#### 2. Remover a relação conflitante com o ID interno do perfil
+
+Criar uma migration para remover a constraint incorreta/conflitante que exige que `cotacoes.vendedor_id` exista como ID interno de perfil.
+
+Manter apenas a relação compatível com o usuário autenticado.
+
+#### 3. Corrigir joins e exibição do vendedor nas telas de cotação
+
+Atualizar as consultas que buscam dados do vendedor para relacionar a cotação com o perfil através do ID de usuário, não pelo ID interno do perfil.
+
+Arquivos principais:
+- `src/hooks/useCotacoes.ts`
+- `src/hooks/useVendedores.ts`
+- `src/components/cotacoes/CotacaoFormDialog.tsx`
+
+A lista de consultores continuará mostrando nomes normalmente, mas o valor salvo será sempre o ID de login do consultor.
+
+#### 4. Corrigir o fallback do formulário
+
+No formulário de cotação:
+
+- Se gestor/diretor selecionar um consultor, salvar o ID de login do consultor selecionado.
+- Se não selecionar, salvar o ID de login do usuário atual.
+- Se vendedor CLT/externo criar a própria cotação, salvar o ID de login dele.
+- Adicionar validação com mensagem clara caso o usuário logado não tenha perfil comercial válido.
+
+#### 5. Revisar pontos sensíveis que usam `vendedor_id`
+
+Auditar e ajustar usos em:
+- listagem de cotações;
+- detalhes da cotação;
+- métricas comerciais;
+- permissões de edição/visualização;
+- duplicação de cotação;
+- geração/aceite de contrato a partir da cotação.
+
+Atenção: contratos parecem usar outro padrão em parte do sistema. A correção será limitada à geração de cotação para não misturar fluxos sem necessidade.
+
+#### 6. Melhorar mensagem de erro
+
+Trocar a mensagem genérica “Erro ao gerar cotação” por uma mensagem operacional mais clara quando o problema for vendedor/consultor inválido:
+
+“Não foi possível identificar o consultor responsável. Atualize a página ou selecione outro consultor.”
+
+E manter o erro técnico no console para auditoria.
 
 ### Critérios de aceitação
 
-1. Imprevisto registrado por vistoriador desatribui o serviço corretamente (verificável: `servicos.profissional_id` fica `null` após clique).
-2. Realocação de instalação para outra rota/base atualiza `servicos.rota_id` e reflete no card de equipe (contador `tarefas_hoje_pendentes` diminui no profissional anterior, aumenta no novo).
-3. `useRotas` retorna a mesma listagem de antes (sem regressão visual em `/rotas`).
-4. Calendário de monitoramento exibe contagem unificada (sem duplicação ou ausência de itens que estão em `servicos`).
-5. Sem warnings de TypeScript após renomeação/migração.
+1. Diretor `admin@teste.com` consegue gerar cotação sem selecionar consultor.
+2. Diretor consegue gerar cotação selecionando vendedor CLT.
+3. Diretor consegue gerar cotação selecionando vendedor externo.
+4. Vendedor CLT consegue gerar cotação própria.
+5. Vendedor externo consegue gerar cotação própria.
+6. A cotação criada aparece na listagem correta do vendedor.
+7. Gestores continuam vendo todas as cotações.
+8. Vendedor continua vendo apenas suas próprias cotações.
+9. Nome, e-mail e WhatsApp do consultor continuam aparecendo corretamente na cotação e no PDF.
+10. Não há mais erro estrutural ao inserir cotação por conflito de vendedor.
 
 ### Fora de escopo
-- Drop das tabelas `instalacoes` e `vistorias` (fase futura).
-- Migração dos 55 arquivos de relatório/dashboard histórico.
-- Renomeação de páginas/rotas (`/rotas` continua como está).
-- Backfill de dados antigos de `instalacoes`/`vistorias` para `servicos` (assumimos que dados novos já caem em `servicos`).
 
-### Ordem de aprovação sugerida
-- **Lote 1 isolado** (ImprevistoBotao + useRealocarInstalacao) — 2 arquivos, baixo risco, alto ganho operacional.
-- **Lote 2** (useRotas) — em segundo momento, requer teste manual em `/rotas`.
-- **Lote 3** (CalendarioDiaModal) — incremental, após confirmação dos lotes anteriores.
+- Reestruturar contratos e comissões.
+- Migrar todas as tabelas comerciais para um único padrão de vendedor.
+- Alterar papéis/permissões comerciais.
+- Corrigir métricas históricas que dependam de contratos antigos.
 
