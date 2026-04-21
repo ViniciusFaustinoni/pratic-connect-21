@@ -213,10 +213,17 @@ export function useProfissionaisEquipe() {
           }
         }
 
+        const userRoles = rolesByUserId[profile.user_id] || new Set<string>();
+        const categoria: CategoriaEquipe =
+          userRoles.has('instalador_vistoriador') || userRoles.has('vistoriador_base')
+            ? 'instalador'
+            : 'administrativo';
+
         return {
           id: profile.id,
           user_id: profile.user_id,
-          role: roleByUserId[profile.user_id] || 'analista_monitoramento',
+          role: principalRole(userRoles),
+          categoria,
           nome: profile.nome || 'Sem nome',
           email: profile.email || '',
           telefone: profile.telefone,
