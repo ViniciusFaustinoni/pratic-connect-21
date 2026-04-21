@@ -1,41 +1,80 @@
 
 
-## Corrigir contador "Tarefas hoje" (X/10) na tela Equipe — usar tabela `servicos`
+## Plano de correção — Auditoria Instalador/Técnico × Serviços
 
-### Diagnóstico
+Plano executivo dividido em 4 fases, do bloqueante crítico ao saneamento. Cada fase é independente e pode ser aprovada/executada isoladamente.
 
-No hook `src/hooks/useEquipe.ts` (linhas 87–118), o contador `tarefas_hoje` e o campo `ultima_atividade` são populados a partir da tabela **`instalacoes`** (legada, parcial). Porém, todo o restante do sistema (atribuições, mapas, distribuição) já opera em cima da tabela **`servicos`** — vide `useServicosAtribuidos`, `useTarefasProfissional`, etc.
+---
 
-Resultado: como praticamente nenhum serviço novo está sendo registrado em `instalacoes` com `instalador_responsavel_id` preenchido, todos os profissionais aparecem com **0/10**, mesmo havendo movimentação real (confirmado no banco: 10 serviços em 20/abr, 2 agendados em 22/abr — todos com `profissional_id` em `servicos`, nenhum sendo contado).
+### Fase 1 — CRÍTICO: Corrigir fluxo de Retirada (edge functions quebradas)
 
-### Solução (1 arquivo)
+**Problema**: `confirmar-retirada` e `gerar-link-retirada` operam sobre `ordens_servico` (tabela vazia) e tentam gravar status `entregue` / `em_garantia` que não existem no enum `status_ordem_servico`. O fluxo real de retirada de rastreador hoje vive em `servicos.tipo = 'vistoria_retirada'` (vide `useCriarRetirada`).
 
-**`src/hooks/useEquipe.ts`** — Substituir as duas queries que leem de `instalacoes` por queries equivalentes em `servicos`:
+**Ação**:
+1. **Marcar como deprecated** as edge functions `gerar-link-retirada` e `confirmar-retirada` (manter como no-op que retorna 410 Gone com mensagem "Fluxo migrado para servicos") até confirmar que ninguém mais as invoca.
+2. **Buscar todos os call sites** dessas funções (`supabase.functions.invoke('gerar-link-retirada' | 'confirmar-retirada')`) e removê-los/redirecioná-los para o fluxo de `servicos`.
+3. **Documentar** no `mem://` que retirada agora é exclusivamente via `servicos.tipo='vistoria_retirada'`.
 
-1. **Bloco "3. Buscar contagem de tarefas hoje"** (linhas 87–102):
-   - Trocar `from('instalacoes')` por `from('servicos')`.
-   - Selecionar `profissional_id, status` (não há mais `instalador_responsavel_id` / `instalador_id` distintos — `servicos` tem só `profissional_id`).
-   - Filtrar `data_agendada = hoje` e `status in ['agendada','em_rota','em_andamento','concluida','nao_compareceu','reagendada']` (alinhado a `useServicosAtribuidos.STATUS_VALIDOS`).
-   - Agregar por `profissional_id` direto.
+---
 
-2. **Bloco "4. Buscar última atividade"** (linhas 104–118):
-   - Trocar `from('instalacoes')` por `from('servicos')`.
-   - Filtrar `.in('profissional_id', profileIds)` e `status = 'concluida'`.
-   - Usar `concluida_em` (preferencial) com fallback para `updated_at`. Ordenar desc, limit 100.
-   - Agregar por `profissional_id`.
+### Fase 2 — Integridade de dados (triggers + backfill)
 
-3. **Sem mudanças** em interface, default `capacidade_diaria || 10`, ou em qualquer consumidor (`EquipeCard.tsx` continua lendo `tarefas_hoje` / `capacidade_diaria` normalmente).
+**Problemas detectados**:
+- `servicos` com `status='concluida'` sem `concluida_em` preenchido.
+- Vistorias de manutenção concluídas sem `profissional_id`.
+- Registros órfãos em `servicos_pendentes_rota` (IDs/datas nulos).
 
-### Critérios de aceitação
+**Ação**:
+1. **Trigger `BEFORE UPDATE` em `servicos`**: se `NEW.status='concluida' AND NEW.concluida_em IS NULL`, setar `NEW.concluida_em = now()`. Se `profissional_id IS NULL`, bloquear ou logar warning.
+2. **Backfill** registros existentes: `UPDATE servicos SET concluida_em = updated_at WHERE status='concluida' AND concluida_em IS NULL`.
+3. **Limpar órfãos** em `servicos_pendentes_rota` com IDs/datas nulos (DELETE WHERE servico_id IS NULL OR data_agendada IS NULL).
+4. **Constraint NOT NULL** em `servicos_pendentes_rota.servico_id` e `data_agendada` para prevenir reincidência.
 
-1. Profissionais com serviços agendados/em execução para a data atual passam a exibir contagem real (ex: "3/10" em vez de "0/10").
-2. Status do dia anterior **não** influencia o contador (filtro `data_agendada = hoje` mantido).
-3. "Última atividade" passa a refletir a última conclusão real registrada em `servicos`.
-4. Tabs "Instaladores" e "Administrativo" continuam funcionando como na correção anterior.
-5. Nenhuma regressão: filtros de região, status operacional, modais de novo/editar profissional intactos.
+---
+
+### Fase 3 — Saneamento de leituras legadas
+
+**Problema**: Após Fase corrigida em `useEquipe`, ainda há componentes lendo de `instalacoes` e `vistorias` (legadas). Auditar e migrar:
+
+**Ação**:
+1. `grep` por `from('instalacoes')` e `from('vistorias')` em `src/`.
+2. Para cada hit em hooks/componentes ativos do fluxo monitoramento/equipe/serviços, migrar para `servicos` com filtro de `tipo` apropriado (`vistoria_instalacao`, `vistoria_manutencao`, `vistoria_retirada`).
+3. Não tocar em telas de relatórios históricos que dependem de dados antigos.
+
+**Específicos já mapeados**:
+- `EquipeCard.tsx` (modais de detalhes do profissional)
+- Modais de "ver serviços" do profissional
+
+---
+
+### Fase 4 — Refinamento de métrica "Tarefas hoje"
+
+**Problema**: Contador X/10 inclui `nao_compareceu` e `reagendada`, inflando o numerador (parece que o instalador "fez" tarefas que na verdade falharam).
+
+**Ação**:
+1. Em `useEquipe.ts`, separar em **3 contadores** no objeto retornado:
+   - `tarefas_hoje_total` (todas, incluindo nao_compareceu/reagendada) — usado para "carga do dia"
+   - `tarefas_hoje_concluidas` (status='concluida')
+   - `tarefas_hoje_pendentes` (agendada/em_rota/em_andamento)
+2. Atualizar `EquipeCard` para exibir formato `concluídas / pendentes / capacidade` (ex: "3 ✓ · 2 ⏳ / 10").
+3. Manter retrocompatibilidade do campo `tarefas_hoje` (= concluidas + pendentes, sem falhas).
+
+---
+
+### Critérios de aceitação globais
+
+1. Nenhuma chamada ativa às funções `gerar-link-retirada` / `confirmar-retirada` no frontend.
+2. `servicos` concluídos sempre têm `concluida_em` preenchido (verificável por query).
+3. Cards de equipe refletem com precisão: concluídas vs pendentes vs falhas separadamente.
+4. Sem regressão visual em mapa de monitoramento, agendamento, ou modais de profissional.
 
 ### Fora de escopo
-- Tornar a `capacidade_diaria` configurável por dia da semana / escala.
-- Remover a tabela `instalacoes` (será descontinuada em fase futura, junto com Fase 5 de realtime).
-- Adicionar contador separado de "concluídas hoje" vs "pendentes hoje" no card.
+
+- Reativar heartbeat de geolocalização do app móvel (depende do app, não do web).
+- Investigar por que automação de `reagendamento_token` não dispara em no-shows (auditoria separada do worker de cron).
+- Drop das tabelas legadas `instalacoes` / `vistorias` (fase futura, após confirmação de zero leituras).
+
+### Sugestão de execução
+
+Recomendo aprovar **Fase 1 isolada primeiro** (é a única bloqueante). Fases 2-4 podem ser aprovadas em conjunto depois, ou separadas conforme prioridade.
 
