@@ -55,14 +55,8 @@ export function ImprevistoBotao({ tarefaId, clienteNome, clienteTelefone, client
 
       const now = new Date().toISOString();
 
-      // Buscar referências de origem (instalacao/vistoria) para espelhar a liberação
-      const { data: servicoAtual } = await supabase
-        .from('servicos')
-        .select('instalacao_origem_id, vistoria_origem_id')
-        .eq('id', tarefaId)
-        .maybeSingle();
-
-      // Atualização principal do serviço: libera técnico imediatamente
+      // Atualização única em servicos: libera técnico e rota imediatamente
+      // (Fase 3: removido espelhamento legado em instalacoes/vistorias — fonte única é servicos)
       const { error } = await supabase
         .from('servicos')
         .update({
@@ -71,35 +65,12 @@ export function ImprevistoBotao({ tarefaId, clienteNome, clienteTelefone, client
           imprevisto_origem: origem,
           status: 'imprevisto_pendente',
           profissional_id: null,
+          rota_id: null,
           updated_at: now,
         } as any)
         .eq('id', tarefaId);
 
       if (error) throw error;
-
-      // Espelhar liberação nas tabelas de origem (instalacoes / vistorias)
-      if (servicoAtual?.instalacao_origem_id) {
-        await supabase
-          .from('instalacoes')
-          .update({
-            instalador_responsavel_id: null,
-            rota_id: null,
-            status: 'agendada',
-            updated_at: now,
-          } as any)
-          .eq('id', servicoAtual.instalacao_origem_id);
-      }
-      if (servicoAtual?.vistoria_origem_id) {
-        await supabase
-          .from('vistorias')
-          .update({
-            vistoriador_id: null,
-            rota_id: null,
-            status: 'agendada',
-            updated_at: now,
-          } as any)
-          .eq('id', servicoAtual.vistoria_origem_id);
-      }
 
       // Se imprevisto do instalador e NÃO pode continuar, marcar indisponível no dia
       if (origem === 'instalador' && podeContinuar === false) {
