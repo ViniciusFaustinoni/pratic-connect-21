@@ -4,6 +4,7 @@ import { Camera, X, Loader2, Video, CheckCircle2, RefreshCw } from 'lucide-react
 import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
+import { VideoCapture } from '@/components/instalador/VideoCapture';
 
 const MIN_FOTOS = 5;
 const MAX_FOTOS = 15;

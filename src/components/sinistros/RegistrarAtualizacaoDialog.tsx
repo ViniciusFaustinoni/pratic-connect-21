@@ -12,6 +12,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Camera, Upload, X, CheckCircle2, Circle, CircleDot, ArrowRight, AlertTriangle } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
+import { VideoCapture } from '@/components/instalador/VideoCapture';
 
 interface Props {
   open: boolean;
@@ -227,12 +228,16 @@ export function RegistrarAtualizacaoDialog({ open, onOpenChange, ordemServico }:
           {/* Vídeo opcional */}
           <div>
             <Label className="text-sm">Vídeo (opcional)</Label>
-            <input
-              type="file"
-              accept="video/*"
-              className="mt-1 text-xs"
-              onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
-            />
+            <div className="mt-1">
+              <VideoCapture
+                onCapture={(file) => setVideoFile(file)}
+                onReset={() => setVideoFile(null)}
+                videoUrl={videoFile ? URL.createObjectURL(videoFile) : undefined}
+                confirmed={!!videoFile}
+                maxDuration={120}
+                label="Gravar vídeo do reparo"
+              />
+            </div>
           </div>
 
           {/* Descrição */}

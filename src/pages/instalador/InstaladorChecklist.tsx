@@ -48,6 +48,7 @@ import {
   useRecusarVeiculoServico,
   useEnviarParaMonitoramento
 } from '@/hooks/useServicos';
+import { VideoCapture } from '@/components/instalador/VideoCapture';
 import { useVistoriaCompletaPorServico } from '@/hooks/useVistorias';
 import { useUploadFotoVistoriaCompleta, useUploadVideo360 } from '@/hooks/useVistoriaCompleta';
 import { 

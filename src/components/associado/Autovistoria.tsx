@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
 import { LocationCapture, Coordenadas } from './LocationCapture';
 import { VideoCapture } from '@/components/instalador/VideoCapture';
+import { InAppBrowserBanner } from '@/components/shared/InAppBrowserBanner';
 
 interface AutovistoriaProps {
   contratoId: string;
