@@ -84,36 +84,37 @@ export function useProfissionaisEquipe() {
 
       const profileIds = profiles.map(p => p.id);
 
-      // 3. Buscar contagem de tarefas hoje para cada profissional
+      // 3. Buscar contagem de tarefas hoje para cada profissional (tabela `servicos`)
       const hoje = format(new Date(), 'yyyy-MM-dd');
-      const { data: instalacoes } = await supabase
-        .from('instalacoes')
-        .select('instalador_id, instalador_responsavel_id, status')
+      const { data: servicosHoje } = await supabase
+        .from('servicos')
+        .select('profissional_id, status')
+        .in('profissional_id', profileIds)
         .eq('data_agendada', hoje)
-        .in('status', ['agendada', 'em_rota', 'em_andamento', 'concluida']);
+        .in('status', ['agendada', 'em_rota', 'em_andamento', 'concluida', 'nao_compareceu', 'reagendada']);
 
       // Contar tarefas por profissional
       const tarefasPorProfissional: Record<string, number> = {};
-      instalacoes?.forEach(inst => {
-        const id = inst.instalador_responsavel_id || inst.instalador_id;
-        if (id) {
-          tarefasPorProfissional[id] = (tarefasPorProfissional[id] || 0) + 1;
+      servicosHoje?.forEach(svc => {
+        if (svc.profissional_id) {
+          tarefasPorProfissional[svc.profissional_id] = (tarefasPorProfissional[svc.profissional_id] || 0) + 1;
         }
       });
 
-      // 4. Buscar última atividade (última instalação concluída)
+      // 4. Buscar última atividade (último serviço concluído)
       const { data: ultimasAtividades } = await supabase
-        .from('instalacoes')
-        .select('instalador_responsavel_id, updated_at')
-        .in('instalador_responsavel_id', profileIds)
+        .from('servicos')
+        .select('profissional_id, concluida_em, updated_at')
+        .in('profissional_id', profileIds)
         .eq('status', 'concluida')
         .order('updated_at', { ascending: false })
         .limit(100);
 
       const ultimaAtividadePorProfissional: Record<string, string> = {};
-      ultimasAtividades?.forEach(inst => {
-        if (inst.instalador_responsavel_id && inst.updated_at && !ultimaAtividadePorProfissional[inst.instalador_responsavel_id]) {
-          ultimaAtividadePorProfissional[inst.instalador_responsavel_id] = inst.updated_at;
+      ultimasAtividades?.forEach(svc => {
+        const ts = svc.concluida_em || svc.updated_at;
+        if (svc.profissional_id && ts && !ultimaAtividadePorProfissional[svc.profissional_id]) {
+          ultimaAtividadePorProfissional[svc.profissional_id] = ts;
         }
       });
 
