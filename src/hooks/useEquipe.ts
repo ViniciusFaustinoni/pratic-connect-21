@@ -29,6 +29,10 @@ export interface ProfissionalEquipe {
   status_operacional: StatusOperacional;
   ativo: boolean;
   tarefas_hoje: number;
+  tarefas_hoje_concluidas: number;
+  tarefas_hoje_pendentes: number;
+  tarefas_hoje_falhas: number;
+  tarefas_hoje_total: number;
   ultima_atividade: string | null;
   rastreadores_atribuidos: number;
   inicio_turno: string | null;
@@ -93,12 +97,18 @@ export function useProfissionaisEquipe() {
         .eq('data_agendada', hoje)
         .in('status', ['agendada', 'em_rota', 'em_andamento', 'concluida', 'nao_compareceu', 'reagendada']);
 
-      // Contar tarefas por profissional
-      const tarefasPorProfissional: Record<string, number> = {};
+      // Contar tarefas por profissional, separando concluídas/pendentes/falhas
+      const STATUS_CONCLUIDA = new Set(['concluida']);
+      const STATUS_PENDENTE = new Set(['agendada', 'em_rota', 'em_andamento']);
+      const STATUS_FALHA = new Set(['nao_compareceu', 'reagendada']);
+      const contagemPorProfissional: Record<string, { concluidas: number; pendentes: number; falhas: number; total: number }> = {};
       servicosHoje?.forEach(svc => {
-        if (svc.profissional_id) {
-          tarefasPorProfissional[svc.profissional_id] = (tarefasPorProfissional[svc.profissional_id] || 0) + 1;
-        }
+        if (!svc.profissional_id) return;
+        const c = contagemPorProfissional[svc.profissional_id] ||= { concluidas: 0, pendentes: 0, falhas: 0, total: 0 };
+        c.total += 1;
+        if (STATUS_CONCLUIDA.has(svc.status)) c.concluidas += 1;
+        else if (STATUS_PENDENTE.has(svc.status)) c.pendentes += 1;
+        else if (STATUS_FALHA.has(svc.status)) c.falhas += 1;
       });
 
       // 4. Buscar última atividade (último serviço concluído)
@@ -241,7 +251,11 @@ export function useProfissionaisEquipe() {
           status: (profile.ativo ? 'disponivel' : 'indisponivel') as StatusProfissional,
           status_operacional,
           ativo: profile.ativo ?? true,
-          tarefas_hoje: tarefasPorProfissional[profile.id] || 0,
+          tarefas_hoje: (contagemPorProfissional[profile.id]?.concluidas || 0) + (contagemPorProfissional[profile.id]?.pendentes || 0),
+          tarefas_hoje_concluidas: contagemPorProfissional[profile.id]?.concluidas || 0,
+          tarefas_hoje_pendentes: contagemPorProfissional[profile.id]?.pendentes || 0,
+          tarefas_hoje_falhas: contagemPorProfissional[profile.id]?.falhas || 0,
+          tarefas_hoje_total: contagemPorProfissional[profile.id]?.total || 0,
           ultima_atividade: ultimaAtividadePorProfissional[profile.id] || null,
           rastreadores_atribuidos: rastreadoresPorProfissional[profile.id] || 0,
           inicio_turno: turnoPorProfissional[profile.id] || null,
