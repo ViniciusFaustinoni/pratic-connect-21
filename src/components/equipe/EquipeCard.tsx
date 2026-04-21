@@ -256,11 +256,19 @@ export function EquipeCard({ profissional, onEditar, onDesativar, onRelatorio, o
           
           <span className="text-border">•</span>
 
-          {/* Tarefas hoje */}
-          <div className="flex items-center gap-1 text-xs">
+          {/* Tarefas hoje: concluídas ✓ · pendentes ⏳ / capacidade (falhas ⚠) */}
+          <div
+            className="flex items-center gap-1 text-xs"
+            title={`Concluídas: ${profissional.tarefas_hoje_concluidas} · Pendentes: ${profissional.tarefas_hoje_pendentes} · Falhas (no-show/reagendada): ${profissional.tarefas_hoje_falhas} · Capacidade: ${profissional.capacidade_diaria}`}
+          >
             <TrendingUp className="h-3 w-3 text-primary" />
-            <span className="font-semibold text-foreground">{profissional.tarefas_hoje}</span>
+            <span className="font-semibold text-emerald-500">{profissional.tarefas_hoje_concluidas}</span>
+            <span className="text-muted-foreground">·</span>
+            <span className="font-semibold text-foreground">{profissional.tarefas_hoje_pendentes}</span>
             <span className="text-muted-foreground">/{profissional.capacidade_diaria}</span>
+            {profissional.tarefas_hoje_falhas > 0 && (
+              <span className="text-amber-500 font-medium ml-0.5">⚠{profissional.tarefas_hoje_falhas}</span>
+            )}
           </div>
 
           <span className="text-border">•</span>
