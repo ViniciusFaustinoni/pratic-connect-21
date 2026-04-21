@@ -116,6 +116,7 @@ const EventosChatIA = lazy(() => import("./pages/eventos/EventosChatIA"));
 
 // Monitoramento
 const InstalacaoDetalhe = lazy(() => import("./pages/monitoramento/InstalacaoDetalhe"));
+const InstalacoesList = lazy(() => import("./pages/monitoramento/InstalacoesList"));
 const Rotas = lazy(() => import("./pages/monitoramento/Rotas"));
 const Rastreadores = lazy(() => import("./pages/monitoramento/Rastreadores"));
 const AlertasMonitoramento = lazy(() => import("./pages/monitoramento/AlertasMonitoramento"));
@@ -612,6 +613,7 @@ const App = () => (
               {/* Monitoramento */}
               <Route path="/monitoramento/dashboard" element={<DashboardCoordenador />} />
               <Route path="/monitoramento/equipe" element={<Equipe />} />
+              <Route path="/monitoramento/instalacoes" element={<InstalacoesList />} />
               <Route path="/monitoramento/instalacoes/:id" element={<InstalacaoDetalhe />} />
               <Route path="/diretoria/vistorias-instalacoes" element={<Rotas />} />
               <Route path="/monitoramento/mapa" element={<Mapa />} />
