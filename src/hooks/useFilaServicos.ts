@@ -75,7 +75,9 @@ export function useFilaServicos() {
       if (error) throw error;
       return (data || []) as unknown as FilaServico[];
     },
-    refetchInterval: 30000,
+    // Sem polling: realtime acima já invalida em qualquer mudança em fila_servicos.
+    refetchOnWindowFocus: true,
+    staleTime: 60_000,
   });
 
   const forcarReatribuicao = useMutation({

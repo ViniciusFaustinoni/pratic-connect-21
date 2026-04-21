@@ -321,8 +321,11 @@ export function useInstalacoesContagem(data?: string) {
 
       return contagem;
     },
-    refetchInterval: 120000,
+    // Realtime (useFilasRealtime) já invalida ['instalacoes-contagem'].
+    // Mantém fallback longo de 5min apenas para reconexão.
+    refetchInterval: 300_000,
     refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
 }
 
