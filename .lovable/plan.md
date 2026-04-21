@@ -1,57 +1,41 @@
 
 
-## Filtro de rastreadores — adicionar busca por data de instalação
+## Bloqueio de datas no calendário — permitir bloquear dias do próximo mês visíveis no grid
 
-### Estado atual (já implementado — não vou refazer)
+### Causa da falha (confirmada no código)
 
-A busca de texto na aba **Rastreadores** já cobre:
-- IMEI, código e número de série do rastreador
-- **Placa** do veículo vinculado (já implementada em `useRastreadores.ts` — busca via tabela `veiculos`)
-- **Nome e CPF do associado** vinculado (já implementada via tabela `associados`)
+Em `src/pages/monitoramento/CalendarioInstalacoes.tsx`, linha 384, o botão de cadeado só é renderizado quando `dia.mesAtual === true`:
 
-Confirmo que esses três campos já funcionam no input "Buscar por IMEI, código, placa ou nome do associado…". Se você está vendo algum caso onde a busca por placa/associado não retorna resultado, me diz a placa/nome exato para eu investigar — pode ser uma falha pontual de dado, não de filtro.
-
-### O que falta (vou implementar)
-
-**Filtro por data de instalação** — hoje não existe. A data real de instalação fica em `servicos.concluida_em` (onde `tipo='instalacao'` e `rastreador_id` aponta para o rastreador). Vou adicionar um filtro de intervalo de datas que cruza com essa tabela.
-
-### Mudanças
-
-#### 1. UI — `RastreadorFiltersV2.tsx`
-- Dentro do painel expandido "Filtros", adicionar nova seção **"Data de instalação"** com dois `DatePicker` (de / até) usando o componente `Calendar` já existente no projeto.
-- Botão "Limpar período" ao lado.
-- Adicionar badge resumindo o período quando filtro está ativo (ex.: "01/03/2026 → 15/04/2026").
-
-#### 2. Tipagem — `useRastreadores.ts`
-Adicionar em `RastreadorFilters`:
-```
-data_instalacao_inicio?: string;  // ISO date
-data_instalacao_fim?: string;     // ISO date
+```tsx
+{podeBloquear && dia.mesAtual && ( <button … cadeado … /> )}
 ```
 
-#### 3. Lógica de query — `useRastreadores.ts`
-Quando qualquer uma das datas estiver preenchida:
-1. Consultar `servicos` filtrando `tipo='instalacao'`, `status='concluida'` (ou equivalente), e `concluida_em` dentro do período informado.
-2. Coletar `rastreador_id` distintos do resultado.
-3. Aplicar `query.in('id', rastreadorIdsDoPeriodo)` na consulta principal.
-4. Se o set vier vazio, retornar `items: []` direto sem ir ao Supabase.
+`mesAtual` aqui significa "pertence ao mês exibido no grid". Resultado: os dias do mês seguinte que aparecem na última linha do calendário (no caso, **1 a 9 de maio enquanto exibimos abril**) ficam sem o botão de cadeado. O usuário vê "01" no grid de abril, clica e nada acontece — daí a percepção de que "só dá pra bloquear o mês atual".
 
-Combina com os demais filtros (status, plataforma, comunicação, search) usando `AND`.
+Importante: a navegação `>` para maio funciona, mas o usuário espera bloquear direto pelo dia já visível. Faz sentido permitir.
 
-#### 4. Indicador de filtro ativo
-- Incluir o período no `activeFiltersCount` e no bloco de badges quando o painel estiver fechado, com botão `X` para limpar.
+### Mudança
+
+Em `src/pages/monitoramento/CalendarioInstalacoes.tsx`:
+
+1. **Remover** o gate `dia.mesAtual` da renderização do botão de cadeado (linha 384).
+2. **Adicionar** um único guarda: não mostrar o cadeado para datas **no passado** (anteriores a hoje, comparando por `yyyy-MM-dd`). Bloquear o passado não tem efeito operacional.
+3. Manter o gate `podeBloquear` (Diretor / Coordenador de Monitoramento / Admin Master / Desenvolvedor).
+4. **Ajuste visual menor**: quando o dia pertence ao próximo/anterior mês (`!dia.mesAtual`) e está bloqueado, manter o hachurado vermelho atual — já funciona porque `bloqueada` é calculado por `dataStr`, independente de `mesAtual`.
+5. Aplicar a mesma regra ao indicador "🔒 motivo" (linhas 404-408): já é renderizado independente de `mesAtual`, então nada a mudar.
 
 ### Critérios de aceitação
 
-1. Painel "Filtros" expandido mostra novo bloco "Data de instalação" com dois seletores de data.
-2. Selecionar período retorna apenas rastreadores cuja instalação (`servicos.tipo='instalacao'`, `concluida_em` dentro do range) ocorreu naquele intervalo.
-3. Combina corretamente com filtros de status, plataforma, comunicação e busca por texto.
-4. Badge mostra o período ativo quando o painel está fechado e permite limpar.
-5. Busca por placa, nome do associado e CPF continua funcionando como hoje.
+1. Estando em **abril**, com hoje = 21/04, o ícone de cadeado aparece em **todos os dias visíveis a partir de hoje** — incluindo os dias 1 a 9 de **maio** que aparecem na última linha do grid de abril.
+2. Clicar em "1" (maio) abre o `BloquearDataDialog` com a data correta `2026-05-01` e permite gravar o motivo "Feriado do Trabalho".
+3. Após bloquear, o dia 1 de maio fica hachurado em vermelho tanto na visão de abril (overflow) quanto na visão de maio.
+4. Dias no passado (anteriores a hoje) **não** mostram o botão de cadeado.
+5. Datas já bloqueadas no passado continuam exibindo o hachurado e o motivo, mas sem botão para alterar.
+6. Permissão continua restrita a Diretor, Coordenador de Monitoramento, Admin Master e Desenvolvedor.
 
 ### Fora de escopo
 
-- Adicionar coluna `data_instalacao` direto em `rastreadores` (a fonte de verdade é o serviço concluído).
-- Filtros por data de criação ou data de baixa do rastreador (posso adicionar depois se quiser).
-- Exportação CSV filtrada por período.
+- Limitar a janela máxima de bloqueio futuro (ex.: "no máximo 6 meses à frente"). Hoje já é livre via navegação; manter assim.
+- Bloqueio em massa de intervalo de datas (seleção de range).
+- Bloqueio recorrente anual para feriados fixos.
 
