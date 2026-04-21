@@ -381,7 +381,12 @@ export default function CalendarioInstalacoesPage() {
                           {vistoriasDia.base.length}
                         </span>
                       )}
-                      {podeBloquear && dia.mesAtual && (
+                      {podeBloquear && (() => {
+                        const hojeRef = new Date();
+                        hojeRef.setHours(0, 0, 0, 0);
+                        const hojeStr = `${hojeRef.getFullYear()}-${String(hojeRef.getMonth() + 1).padStart(2, '0')}-${String(hojeRef.getDate()).padStart(2, '0')}`;
+                        return dataStr >= hojeStr;
+                      })() && (
                         <button
                           type="button"
                           onClick={(e) => {
