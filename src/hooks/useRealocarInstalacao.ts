@@ -63,12 +63,14 @@ export function useRealocarInstalacao() {
   const queryClient = useQueryClient();
 
   const invalidar = () => {
+    queryClient.invalidateQueries({ queryKey: ['servicos'] });
     queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
     queryClient.invalidateQueries({ queryKey: ['instalacao'] });
     queryClient.invalidateQueries({ queryKey: ['rotas'] });
     queryClient.invalidateQueries({ queryKey: ['rota'] });
     queryClient.invalidateQueries({ queryKey: ['agendamentos-base'] });
     queryClient.invalidateQueries({ queryKey: ['mapa-vistorias'] });
+    queryClient.invalidateQueries({ queryKey: ['equipe'] });
   };
 
   const realocarParaRota = useMutation({
