@@ -32,7 +32,8 @@ export function useAcionamentosTodos(filters: AcionamentoFilters = {}) {
       if (error) throw error;
       return data;
     },
-    refetchInterval: 30000,
+    refetchInterval: 60_000, // Fase 4
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -63,7 +64,8 @@ export function useAcionamentosContadores() {
 
       return { solicitados, ativos, encerradosHoje, totalMes };
     },
-    refetchInterval: 30000,
+    refetchInterval: 60_000, // Fase 4
+    refetchIntervalInBackground: false,
   });
 }
 

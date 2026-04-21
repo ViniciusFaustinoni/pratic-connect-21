@@ -43,7 +43,8 @@ export function useInstalacoesAguardandoAprovacao() {
 
       return pendentes;
     },
-    refetchInterval: 30000,
+    refetchInterval: 60_000, // Fase 4
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -89,7 +90,8 @@ export function useAprovacaoMonitoramentoStats() {
         reprovadosHoje: reprovadosHoje || 0,
       };
     },
-    refetchInterval: 30000,
+    refetchInterval: 60_000, // Fase 4
+    refetchIntervalInBackground: false,
   });
 }
 

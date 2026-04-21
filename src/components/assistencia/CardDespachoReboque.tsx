@@ -172,7 +172,9 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
       return data;
     },
     enabled: !!despacho?.id,
-    refetchInterval: 10000, // Poll every 10s para ver aceites em tempo real
+    // Fase 4: poll agressivo só durante 'aguardando_aceites'; fora disso, depende de invalidações
+    refetchInterval: despacho?.status === 'aguardando' ? 10_000 : false,
+    refetchIntervalInBackground: false,
   });
 
   // Buscar status log
@@ -205,7 +207,8 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
       return data;
     },
     enabled: !!despacho && despacho.status === 'atribuido',
-    refetchInterval: 15000,
+    refetchInterval: 30_000, // Fase 4: 15s -> 30s
+    refetchIntervalInBackground: false,
   });
 
   // Buscar trilha do tracking
@@ -222,7 +225,8 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
       return data;
     },
     enabled: !!despacho && despacho.status === 'atribuido',
-    refetchInterval: 30000,
+    refetchInterval: 60_000, // Fase 4
+    refetchIntervalInBackground: false,
   });
 
   // Dados do chamado para o mapa

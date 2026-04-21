@@ -19,8 +19,9 @@ export function useWhatsAppStatus(instanciaId?: string) {
       
       return data;
     },
-    refetchInterval: 30000, // Verificar a cada 30s
-    staleTime: 10000,
+    refetchInterval: 120_000, // Fase 4: 30s -> 120s
+    refetchIntervalInBackground: false,
+    staleTime: 60_000,
     retry: 1,
   });
 

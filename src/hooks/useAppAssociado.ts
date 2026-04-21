@@ -264,7 +264,8 @@ export function useAssistenciaAtiva() {
         } : undefined,
       } as AssistenciaApp;
     },
-    refetchInterval: 30000,
+    refetchInterval: 60_000, // Fase 4
+    refetchIntervalInBackground: false,
   });
 }
 
