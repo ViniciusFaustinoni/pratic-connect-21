@@ -754,7 +754,27 @@ export default function Cotacoes() {
               </Select>
             </>
           )}
-          
+
+          <Select value={etapaFunilFilter} onValueChange={setEtapaFunilFilter}>
+            <SelectTrigger className="w-[200px] h-9 border-0 bg-background/80 shadow-sm">
+              <ListChecks className="h-4 w-4 mr-1.5 text-muted-foreground" />
+              <SelectValue placeholder="Etapa do funil" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as etapas</SelectItem>
+              <SelectItem value="rascunho">Rascunho</SelectItem>
+              <SelectItem value="enviada">Enviada — aguardando cliente</SelectItem>
+              <SelectItem value="escolhendo_plano">Escolhendo plano</SelectItem>
+              <SelectItem value="enviando_documentos">Enviando documentos</SelectItem>
+              <SelectItem value="em_analise">Documentos em análise</SelectItem>
+              <SelectItem value="assinando_contrato">Aguardando assinatura</SelectItem>
+              <SelectItem value="pagando_taxa">Pagando taxa</SelectItem>
+              <SelectItem value="agendando_vistoria">Agendando vistoria</SelectItem>
+              <SelectItem value="concluido">Convertida em associado</SelectItem>
+              <SelectItem value="perdida">Perdida / expirada</SelectItem>
+            </SelectContent>
+          </Select>
+
           <Popover>
             <PopoverTrigger asChild>
               <Button 
