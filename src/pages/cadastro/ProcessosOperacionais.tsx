@@ -509,7 +509,7 @@ function useProcessosCounts() {
           .from('cotacoes')
           .select('id', { count: 'exact', head: true })
           .filter('dados_extras->>tipo_entrada', 'eq', 'inclusao')
-          .in('status', ['rascunho', 'enviada', 'visualizada', 'em_contratacao']),
+          .in('status', ['rascunho', 'enviada']),
       ]);
 
       return {
