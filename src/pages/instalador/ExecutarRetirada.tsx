@@ -143,6 +143,7 @@ export default function ExecutarRetirada() {
   // Estados
   const [uploadingFoto, setUploadingFoto] = useState<string | null>(null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [videoUploadProgress, setVideoUploadProgress] = useState<number>(0);
   const [processando, setProcessando] = useState(false);
   const [showConfirmacao, setShowConfirmacao] = useState(false);
   
@@ -828,7 +829,7 @@ export default function ExecutarRetirada() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <VideoCapture onCapture={handleUploadVideo} videoUrl={videoUrl} uploading={uploadingVideo} maxDuration={120} />
+                <VideoCapture onCapture={handleUploadVideo} videoUrl={videoUrl} uploading={uploadingVideo} uploadProgress={uploadingVideo ? videoUploadProgress : undefined} maxDuration={120} />
               </CardContent>
             </Card>
 
