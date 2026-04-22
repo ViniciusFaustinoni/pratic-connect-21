@@ -1,56 +1,78 @@
 
 
-## Reconhecer Nota Fiscal no link público + Extrair número do motor
+## Tornar visível a opção "Regra do 1% (FIPE Menor)" no formulário de cotação
 
-### Causa raiz
+### Diagnóstico
 
-**1) Nota Fiscal não reconhecida**
-O prompt do `document-ocr` tem um bloco curto para `nota_fiscal_veiculo` que não dá ao modelo as pistas visuais clássicas de uma DANFE (cabeçalho "DANFE / NF-e", "CHAVE DE ACESSO", "CFOP", "DESCRIÇÃO DOS PRODUTOS / SERVIÇOS", "DADOS ADICIONAIS"). Resultado: quando o associado envia uma DANFE de moto/carro 0 km no slot do CRLV (no fluxo público da cotação), o modelo costuma classificar como `outro` ou tenta forçar como `crlv`, e o frontend rejeita o documento (slot não preenchido).
+O motor da Regra do 1% **já está 100% implementado no backend e na lógica do componente**:
 
-Além disso, o prompt não orienta a IA a **reconhecer o número do motor dentro do bloco "DESCRIÇÃO DOS PRODUTOS"** — em DANFEs de veículos, o `Nº MOTOR` aparece concatenado na descrição do produto (ex.: `CHASSI:9C6KG991070073366, No MOTOR:G3W6E-104052, RENAVAM:001187...`), algo que o modelo não extrai bem sem instrução específica.
+- Cálculo de elegibilidade (`fipeMenorInfo`) usando `entity_eligibility_rules` com fallback para tabela legada — `src/components/cotacoes/CotacaoFormDialog.tsx:415-480`
+- Estados (`solicitarFipeMenor`, `justificativaFipeMenor`)
+- Validação no submit + criação da solicitação em `aprovacoes_fipe_menor`
+- Tela de aprovações pelo supervisor (`/vendas/aprovacoes`) já operacional
+- Switch para ligar/desligar a regra globalmente em `Configurações › FIPE Menor 1%`
 
-**2) Número do motor não puxado**
-- No CRLV: o prompt pede o campo `motor`, mas não menciona `numero_motor` nem indica que o CRLV traz esse dado no campo "Nº DO MOTOR" (ou "MOTOR Nº"). O front (`EtapaDadosPessoaisDocumentos.tsx` linha 243) só lê `dados.motor`.
-- Na NF: o prompt define `numero_motor`, mas sem indicar onde encontrá-lo (descrição do produto, padrão `MOTOR:XXXXXX` ou `Nº MOTOR XXXXXX`).
-- O upload via link público em `DocumentosPendentesPublico.tsx` (admin solicitando documentos avulsos) **não roda OCR** — apenas armazena. Isso impede qualquer extração ou validação na hora do envio.
+**O que falta**: nenhum elemento de UI renderiza o painel para o consultor marcar "Quero solicitar FIPE menor" e digitar a justificativa. Também não há limites por tipo de veículo (R$ 120k carros / R$ 27k motos) nem checagem de blindagem.
 
-### Plano de correção
+### O que será feito
 
-**1. Reforçar detecção de NF no `supabase/functions/document-ocr/index.ts`**
-   - Reescrever o bloco `### Nota Fiscal de Veículo` do `systemPrompt` listando os marcadores típicos da DANFE (cabeçalho "DANFE", "DOCUMENTO AUXILIAR DA NOTA FISCAL ELETRÔNICA", "CHAVE DE ACESSO" de 44 dígitos, código de barras, "PROTOCOLO DE AUTORIZAÇÃO DE USO", "NATUREZA DA OPERAÇÃO: VENDA DE VEÍCULO 0 KM", colunas "NCM/SH", "CFOP", "V. UNITÁRIO", "V. TOTAL").
-   - Detalhar onde encontrar os dados veiculares: bloco "DESCRIÇÃO DOS PRODUTOS / SERVIÇOS", padrões `CHASSI:`, `CHASSI Nº`, `MOTOR:`, `Nº MOTOR`, `RENAVAM:`, `COR:`, `COMBUSTÍVEL:`, `ANO FAB:`, `ANO MOD:`, `MARCA:`, `CATEGORIA:`, `TIPO VEICULO:`, `CILINDRADAS:`, `POTENCIA:`.
-   - Instruir explicitamente: extrair `numero_motor` dessa string mesmo quando estiver concatenada com outros campos (regex mental: `MOTOR\s*:?\s*([A-Z0-9-]+)`).
-   - Definir `valor_nota_fiscal` como o `VALOR TOTAL DA NOTA` (ou "V. TOTAL" do produto principal quando único).
-   - Adicionar `nome_comprador` = "DESTINATÁRIO/REMETENTE → NOME / RAZÃO SOCIAL" e `cpf_cnpj_comprador` = campo "CNPJ / CPF" do destinatário.
-   - Adicionar regra: se o documento é uma DANFE/NF-e que contenha qualquer item identificável como veículo (CHASSI 17 chars OU CFOP 5405/5104/6405/etc OU descrição com palavras "VEÍCULO", "MOTOCICLETA", "AUTOMÓVEL", "0 KM", "ZERO KM"), `tipo_detectado` = `"nota_fiscal_veiculo"` — nunca `crlv` nem `outro`.
+**1) Renderizar painel FIPE Menor no `CotacaoFormDialog.tsx`** (logo após "Faixa enquadrada", linha ~1807)
 
-**2. Adicionar `numero_motor` ao bloco do CRLV**
-   - No prompt do CRLV, listar `numero_motor` como campo (alias do `motor`) e indicar que vem do campo "MOTOR Nº" / "Nº DO MOTOR" / "MOTOR" do CRLV.
-   - Em `EtapaDadosPessoaisDocumentos.tsx`, no bloco `tipoDocumento === 'crlv'`, popular também `novosDados.numero_motor` a partir de `dados.numero_motor || dados.motor`.
+Lógica de exibição em cascata:
+- Só aparece se `fipeMenorAtivo === true` (config global)
+- Só aparece se `fipeMenorInfo !== null` (ou seja: já passa do mínimo configurado e existe faixa inferior calculada)
+- Estado A (**veículo elegível**): card verde com badge "Elegível", mostrando:
+  - FIPE atual → FIPE - 1% → faixa antiga vs faixa nova
+  - Mensalidade atual vs reduzida → "Economia de R$ X/mês"
+  - Checkbox "Solicitar FIPE Menor (sujeito a aprovação por e-mail em até 24h úteis)"
+  - Quando marcado → `Textarea` obrigatório (≥ 5 caracteres) para justificativa
+- Estado B (**não elegível pelo cálculo**): card cinza informativo "Veículo não se enquadra: FIPE - 1% continua na mesma faixa"
+- Estado C (**bloqueado por restrição comercial**): card amber explicando o motivo (limite por tipo, blindado, depreciação)
 
-**3. Validação leve do número do motor (servidor)**
-   - No `document-ocr`, após o parse, normalizar `numero_motor` (uppercase, remover espaços) e descartar valores claramente inválidos (< 5 caracteres ou só zeros). Não bloqueia o documento, só limpa.
+**2) Adicionar restrições comerciais por tipo de veículo**
 
-**4. OCR no envio de documentos avulsos pelo link público (`DocumentosPendentesPublico.tsx`)**
-   - Após o upload bem-sucedido para o bucket `cotacoes-docs`, **antes** de marcar o `documentos_solicitados` como enviado, invocar `supabase.functions.invoke('document-ocr', { body: { url: publicUrl, tipoEsperado: doc.tipo_documento } })` em background (não bloqueia o usuário).
-   - Persistir `tipo_detectado`, `dados_ocr` e `sugestao` em colunas existentes do registro `documentos` (campos `dados_extraidos jsonb`, `tipo_detectado text`, `confianca_ocr numeric`, `sugestao_ocr text`) — usar as colunas que já existem na tabela; se não existirem, persistir em `metadata jsonb`. Verificar schema antes (próximo passo, na execução).
-   - Se o admin pediu `crlv` e o OCR detectou `nota_fiscal_veiculo`, **aceitar como equivalente** (não rejeitar) — o slot do CRLV passa a aceitar NF e ATPV-e nesse fluxo público também, igual ao fluxo da cotação pública.
-   - Mostrar no card do documento (após upload) um badge: "Reconhecido como Nota Fiscal" / "Reconhecido como CRLV" + ícone de sucesso ou de revisão necessária.
+Novas chaves em `configuracoes` (categoria `operacional`):
+- `fipe_menor_limite_carro` (default: `120000`)
+- `fipe_menor_limite_moto` (default: `27000`)
 
-**5. Memória**
-   - Atualizar `mem://infrastructure/documents/ocr-resilience-and-cnh-parsing-v4` para incluir as novas regras de detecção de DANFE e extração do `numero_motor` em CRLV/NF.
+A função `fipeMenorInfo` passa a retornar também `bloqueado: { motivo: string } | null` quando:
+- `tipoVeiculoDetectado === 'moto'` e `valorFipe > fipe_menor_limite_moto`
+- `tipoVeiculoDetectado === 'carro'` e `valorFipe > fipe_menor_limite_carro`
+- `veiculoBlindado === true`
+- Plano selecionado tem cobertura 100% e veículo está com depreciação ativa
 
-### Arquivos afetados
+**3) Diretoria › Configurações**
 
-- `supabase/functions/document-ocr/index.ts` — prompt da NF reforçado, `numero_motor` no CRLV, normalização do motor.
-- `src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx` — popular `numero_motor` quando vier do CRLV.
-- `src/components/cotacao-publica/DocumentosPendentesPublico.tsx` — invocar OCR após upload, aceitar NF/ATPV-e no slot de CRLV, exibir tipo reconhecido.
-- (opcional) `src/integrations/supabase/types.ts` — refletir novas colunas se for necessário criar via migration.
-- `mem://infrastructure/documents/ocr-resilience-and-cnh-parsing-v4` — regras atualizadas.
+Adicionar os dois novos limites no card "FIPE Menor 1%" (junto ao switch já existente), com inputs numéricos (R$) e textos auxiliares.
 
-### Validação
+### Detalhes técnicos
 
-- Reenviar a DANFE do print (Yamaha YBR150, motor `G3W6E-104052`, chassi `9C6KG991070073366`) pelo fluxo público de cotação → resultado esperado: `tipo_detectado=nota_fiscal_veiculo`, `numero_motor="G3W6E-104052"`, `chassi="9C6KG991070073366"`, `valor_nota_fiscal="18890.00"`, `nome_comprador="WENDEL LUIZ PEDRO SANTIAGO"`, slot do CRLV verde com badge "Nota Fiscal (substitui CRLV)".
-- Enviar um CRLV qualquer no mesmo fluxo → `numero_motor` agora preenchido junto com placa/chassi/renavam.
-- Enviar a mesma DANFE pelo link público de documentos avulsos (admin solicita CRLV) → upload aceito, badge "Reconhecido como Nota Fiscal" aparece e o documento entra para análise.
+- Arquivos alterados:
+  - `src/components/cotacoes/CotacaoFormDialog.tsx` — adicionar bloco JSX após linha 1807 + estender `fipeMenorInfo` com checagens de bloqueio
+  - `src/pages/diretoria/Configuracoes.tsx` — expandir card FIPE Menor com 2 inputs de limite
+  - Migration SQL — inserir as 2 novas chaves em `configuracoes`
+- A elegibilidade continua usando exclusivamente `entity_eligibility_rules` (motor moderno) — sem reintroduzir tabelas legadas
+- Limite mínimo (`fipe_menor_limite_minimo`, default R$ 30k) já existente é preservado
+- Cota mensal por consultor (1 a 5 pedidos baseados no desempenho) **não entra neste escopo** — fica como recomendação de evolução futura, pois exige nova tabela e cálculo de vendas do mês anterior. Caso queira incluir agora, me avise antes de aprovar.
+
+### Como ficará (esquema)
+
+```text
+[Faixa enquadrada: R$ 70.000 – R$ 75.000]
+
+┌─────────────────────────────────────────────────────────┐
+│ ✓ Elegível à Regra do 1% (FIPE Menor)        [Badge]    │
+│                                                         │
+│ FIPE atual:      R$ 75.600                              │
+│ FIPE - 1%:       R$ 74.844  → cai na faixa anterior    │
+│ Faixa atual:     R$ 75.000–80.000  → R$ 198,00/mês     │
+│ Faixa reduzida:  R$ 70.000–75.000  → R$ 184,00/mês     │
+│ Economia:        R$ 14,00/mês                           │
+│                                                         │
+│ ☐ Solicitar FIPE Menor                                  │
+│   (Aprovação por e-mail em até 24h úteis)               │
+│                                                         │
+│ [Justificativa: __________________________]             │
+└─────────────────────────────────────────────────────────┘
+```
 
