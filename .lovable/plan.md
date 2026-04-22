@@ -1,85 +1,81 @@
 
 
-## Corrigir falhas de envio de vídeo 360° (Auto-vistoria pública e Instalador)
+## Corrigir instalação que termina pela metade ("rastreador já está ativo" e fluxo duplicado)
 
 ### Diagnóstico (com evidências do banco)
 
-Verifiquei os buckets de storage e os uploads recentes:
+Confirmei dois bugs que se combinam para travar a instalação no momento de informar o rastreador:
 
-| Bucket | Usado por | Limite por arquivo |
-|---|---|---|
-| `cotacoes-vistoria` | Auto-vistoria pública (cotação) | **52 MB (HARD LIMIT)** |
-| `vistoria-videos` | Vistoria do instalador / vistoria completa | sem limite |
-| `vistorias` | Retirada do instalador | sem limite |
-| `documentos` | Auto-vistoria de contrato (associado logado) | sem limite |
+**Bug 1 — Validação rígida de IMEI bloqueia retomada**
+Em `InstaladorChecklist.tsx` linha 554 e em `useAprovarVeiculoServico` linha 897, a regra é binária:
+```
+if (rastreador.status !== 'estoque') → "indisponível" / "não está disponível"
+```
+Cenários reais que caem aqui:
+- O instalador já submeteu uma vez e o `useAprovarVeiculoServico` chegou a marcar o rastreador como `instalado` + `veiculo_id = X`, mas algum passo posterior falhou (ex.: ativação na Softruck, geração de laudo, rede caiu). O serviço continua `agendada/aprovada` e, ao reabrir, o IMEI aparece como **"indisponível: instalado"** mesmo já estando vinculado ao **mesmo veículo**.
+- O IMEI foi vinculado ao veículo previamente pelo formulário `VincularRastreadorForm` (cadastro) — o caminho duplo que o usuário citou. Quando o instalador chega na execução, vê "indisponível".
+- Status `em_porte` (rastreador entregue ao técnico mas ainda não digitado como `estoque` por configuração antiga).
 
-Uploads bem-sucedidos recentes (últimas 24h) já estão no limite: **44 MB, 46 MB, 47 MB, 38 MB**. Vários iPhones gravando 1-2 minutos em alta qualidade ultrapassam 52 MB e o Storage rejeita com erro genérico — daí o toast `"Erro ao enviar vídeo. Tente novamente."`.
+**Bug 2 — Caminho duplo de criação de serviço deixa órfãos**
+Consulta confirma: dos 37 serviços `tipo='instalacao'` dos últimos 30 dias, **5 (13%) têm `instalacao_origem_id = NULL`**. Exemplo concreto encontrado hoje: serviço `70abc44a-8004-4b41-a468-4ead8d796b07` (placa TUM3D59), status `aprovada`, sem instalação vinculada.
 
-Outros problemas identificados nos handlers atuais:
-1. **Mensagem de erro inútil** — todos os 4 handlers de vídeo (`AutovistoriaCotacao`, `Autovistoria`, `CotacaoPublicaCompleta`, `ExecutarRetirada`) capturam o erro e mostram `"Erro ao enviar vídeo"` sem distinguir a causa (limite de tamanho, rede caiu, sessão expirou, mime rejeitado).
-2. **Sem retry automático** — uma falha de rede temporária derruba o upload inteiro e o associado tem que regravar o vídeo.
-3. **Sem aviso preventivo de tamanho** — só existe um `toast.warning` para >100 MB no `VideoCapture`, mas o limite real do bucket público é metade disso.
-4. **Sem indicação de progresso real** — o usuário vê só `Enviando vídeo...` indefinidamente; em conexões lentas (3G/4G fraco) parece travado.
-5. **Bucket `cotacoes-vistoria` rejeita arquivos `.mov` do iPhone** se o mimetype real divergir da lista permitida (`video/quicktime` está na lista, mas alguns Safaris reportam mimetype vazio).
+Quando isso acontece, a sincronização com a tabela `instalacoes` (`useServicos.ts` linhas 932-950) é **silenciosamente pulada** — o serviço é finalizado mas a tabela `instalacoes` continua aberta. O `aprovar-proposta` lê `instalacoes` para decidir se ativa Proteção 360, então o veículo fica em `instalacao_pendente` mesmo após o técnico concluir tudo.
 
 ### O que vai mudar
 
-**1. Subir o limite do bucket `cotacoes-vistoria` para 200 MB**
+**1. Permitir rastreador já vinculado ao MESMO veículo** (ambos os pontos)
 
-Migration alterando `storage.buckets.file_size_limit` de `52428800` para `209715200` (200 MB). O bucket `vistoria-videos` continua sem limite — manter assim. Uma vistoria 360° de 2 minutos gravada em iPhone moderno cabe folgadamente em 150 MB.
+Trocar a checagem binária por uma matriz de cenários, em `InstaladorChecklist.tsx` (validação visual) e em `useAprovarVeiculoServico` (validação de submit):
 
-**2. Compressão/transcodificação opcional no cliente para vídeos grandes**
+| `status` do rastreador | `veiculo_id` | Ação |
+|---|---|---|
+| `estoque` | qualquer | ✅ permite (caso normal) |
+| `em_porte` | qualquer | ✅ permite (entregue ao técnico) |
+| `instalado` | = veículo do serviço | ✅ permite (retomada idempotente — apenas atualiza demais campos) |
+| `instalado` | ≠ veículo do serviço | ❌ bloqueia: "Rastreador instalado em outro veículo (placa X)" |
+| `manutencao`/`baixado` | qualquer | ❌ bloqueia com mensagem clara |
 
-No `VideoCapture.tsx`, ao receber arquivo via galeria (`handleFileUpload`):
-- Se `file.size > 80 MB`, mostrar toast informativo: `"Vídeo grande detectado — preparando para envio…"` e tentar reduzir bitrate via `MediaRecorder` re-encode em `video/webm;codecs=vp9` a 1 Mbps (chunked, 5s por chunk) **se** o navegador suportar.
-- Se a transcodificação falhar ou for muito lenta (>15s), enviar o arquivo original mesmo assim — o limite de 200 MB já cobre a maioria dos casos.
-- Para gravação direta com `MediaRecorder`, adicionar `videoBitsPerSecond: 1_500_000` no construtor (linha 145) para limitar gravações longas a ~12 MB/min.
+A UI passa a exibir, no caso "instalado no MESMO veículo", uma badge verde "Rastreador já vinculado a este veículo — confirmando instalação" em vez de bloquear.
 
-**3. Retry com backoff e mensagens específicas**
+No backend (`useAprovarVeiculoServico`), o `UPDATE rastreadores` continua sendo executado (idempotente: já está com `status='instalado'`, só reforça `veiculo_id`, `local_instalacao`, `descricao_instalacao`, `foto_local_instalacao_url`). A inserção em `estoque_movimentacoes` só acontece se `status_anterior === 'estoque'` (evita duplicação de movimentação).
 
-Criar um helper `uploadVideoWithRetry(supabaseClient, bucket, path, file)` em `src/lib/videoUpload.ts` que:
-- Tenta upload até 3 vezes com backoff exponencial (1s, 3s, 8s).
-- Identifica erros específicos pelo `error.message`/`statusCode` do Supabase Storage:
-  - `Payload too large` / `413` → `"Vídeo muito grande. Grave um vídeo mais curto (até 1 minuto)."`
-  - `JWT expired` / `401` → `"Sua sessão expirou. Recarregue a página e tente novamente."`
-  - `Network request failed` / `Failed to fetch` → tentar de novo silenciosamente; se esgotar, `"Conexão instável. Verifique sua internet e tente novamente."`
-  - `mime type ... not allowed` → `"Formato de vídeo não suportado. Grave novamente usando o botão da câmera."`
-- Loga cada tentativa no console com `[videoUpload]` para facilitar debug.
+**2. Garantir conclusão da `instalacoes` mesmo sem `instalacao_origem_id`**
 
-Adotar o helper nos 4 pontos: `useUploadFotoCotacaoVistoria` (linha 65), `useContratoLink.useUploadFotoAutovistoria` (linha 439), `useVistoriaCompleta.useUploadVideo360` (linha 358), `ExecutarRetirada.handleUploadVideo` (linha 367).
+No `useAprovarVeiculoServico`, quando `instalacao_origem_id` for NULL, fazer um fallback:
+- Procurar uma instalação aberta (`status NOT IN ('concluida','cancelada')`) pelo `veiculo_id` do serviço.
+- Se encontrar, atualizar `status='concluida'` + `concluida_em` + `rastreador_id` e gravar `instalacao_origem_id` no serviço para consistência futura.
+- Se não encontrar nenhuma, logar warning (a instalação foi criada por fluxo legado e o `aprovar-proposta` será notificado por outro caminho).
 
-**4. Indicador de progresso real**
+**3. Backfill manual dos casos atuais**
 
-`@supabase/storage-js` não expõe `onUploadProgress` nativo, mas dá pra estimar via `XMLHttpRequest` direto contra o endpoint `/storage/v1/object/<bucket>/<path>` com `Authorization` header. Implementar isso no helper:
-- Atualizar uma callback `onProgress(percent: number)` durante o upload.
-- No `VideoCapture.tsx`, exibir barra de progresso dentro do bloco `uploading` (linha 308-312) em vez de só o spinner: `Enviando vídeo... 47%`.
-- Cada handler passa a callback que atualiza um state local `uploadProgress`.
+Migration única (DML) que resolve os serviços já presos:
+- Para cada `servicos` com `tipo='instalacao'` e `instalacao_origem_id IS NULL` dos últimos 30 dias: tentar amarrar à `instalacoes` aberta do mesmo `veiculo_id` (a mais recente).
+- Para os 5 serviços identificados, isso destrava o "duplo caminho" sem precisar refazer instalação.
 
-**5. Aviso preventivo no fim da gravação**
+**4. Mensagens de erro acionáveis**
 
-No `MediaRecorder.onstop` do `VideoCapture` (linha 154), depois de criar o blob, se `blob.size > 80 * 1024 * 1024`, mostrar toast: `"Vídeo gerado com X MB — pode demorar para enviar em conexão lenta."` (informativo, não bloqueia).
+Quando o rastreador for genuinamente bloqueado, o toast atual `"Rastreador não está disponível"` vira:
+- `"Rastreador X já instalado no veículo Y (placa ABC1234). Use outro IMEI ou solicite remoção primeiro."`
+- `"Rastreador em manutenção — solicite outro ao coordenador."`
 
 ### O que NÃO muda
 
-- Fluxo geral da auto-vistoria, ordem dos passos e UX de gravação seguem iguais.
-- Buckets continuam como estão (apenas o limite do `cotacoes-vistoria` muda).
-- Validação de chassi/odômetro via OCR não é afetada.
-- Política de RLS dos buckets continua intacta.
-
-### Riscos
-
-- Subir limite para 200 MB aumenta custo de armazenamento marginalmente. Mitigado pelo bitrate cap no MediaRecorder (gravações novas ficam em ~12 MB/min).
-- Re-encode no cliente consome CPU em celulares antigos. Mitigado pelo timeout de 15s — se demorar, enviamos o original.
-- O `XMLHttpRequest` direto contra `/storage/v1/object` exige replicar o header de auth do client. Já temos isso no `supabase.auth.getSession()` para o cliente autenticado; para o público (`publicSupabase`), usamos a `anon key` direto.
+- Estrutura das tabelas `servicos`, `instalacoes` e `rastreadores`.
+- Etapas 1-3 do checklist (Dados, Checklist, Fotos).
+- Fluxo paralelo do `VincularRastreadorForm` (cadastro) — continua funcionando, agora reconhecido pelo instalador como "já vinculado".
+- Política RLS, ativação na Softruck/Rede Veículos, geração do laudo.
 
 ### Arquivos editados
 
-- **Migration nova**: `ALTER` no `storage.buckets` para subir o limite de `cotacoes-vistoria` para 200 MB.
-- `src/lib/videoUpload.ts` (novo) — helper com retry, progress e mensagens de erro específicas.
-- `src/components/instalador/VideoCapture.tsx` — `videoBitsPerSecond`, aviso de tamanho pós-gravação, barra de progresso.
-- `src/hooks/useCotacaoVistoria.ts` — usar helper no upload da auto-vistoria pública.
-- `src/hooks/useContratoLink.ts` — usar helper no upload da auto-vistoria do associado logado.
-- `src/hooks/useVistoriaCompleta.ts` — usar helper em `useUploadVideo360`.
-- `src/pages/instalador/ExecutarRetirada.tsx` — usar helper em `handleUploadVideo`.
-- `src/pages/public/CotacaoPublicaCompleta.tsx` e `src/components/associado/Autovistoria.tsx` — passar callback `onProgress` para o `VideoCapture`.
+- `src/pages/instalador/InstaladorChecklist.tsx` — matriz de validação do IMEI (linhas 542-575) + UI de "já vinculado a este veículo" + toasts específicos.
+- `src/hooks/useServicos.ts` — `useAprovarVeiculoServico`:
+  - validação idempotente do rastreador (linhas 884-901);
+  - `UPDATE` condicional sem repetir movimentação de estoque (linhas 980-1013);
+  - fallback para localizar `instalacoes` quando `instalacao_origem_id` for NULL (linhas 924-950).
+- **Migration nova** — backfill: vincular `servicos.instalacao_origem_id` órfãos à `instalacoes` aberta correspondente; concluir `instalacoes` cuja `servicos` correspondente já está `concluida`.
+
+### Riscos
+
+- O fallback por `veiculo_id` pode amarrar um serviço a uma instalação errada se houver duas instalações abertas para o mesmo veículo (raro). Mitigação: pegar a mais recente e logar; em caso real, o coordenador pode corrigir manualmente.
+- Permitir `status='instalado'` no MESMO veículo abre brecha teórica para "concluir" duas vezes; mitigado porque o `UPDATE` é idempotente e a movimentação de estoque só dispara se `status_anterior='estoque'`.
 
