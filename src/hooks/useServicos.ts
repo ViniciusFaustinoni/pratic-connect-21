@@ -1368,7 +1368,7 @@ export function useEnviarParaMonitoramento() {
 
 // Helper para verificar se é uma instalação
 export function isInstalacao(tipo: TipoServico): boolean {
-  return tipo === 'instalacao';
+  return tipo === 'instalacao' || tipo === 'vistoria_entrada';
 }
 
 // Helper para verificar se é uma revistoria
