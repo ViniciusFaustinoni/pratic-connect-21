@@ -60,7 +60,14 @@ serve(async (req) => {
 
         // Telemetria amostral: 1 log a cada 10 placas (e sempre a primeira do batch)
         if (idx === 0 || idx % 10 === 0) {
-          await supabase.from('sga_sync_logs').insert({
+          console.log('[SGA Mapear][telem]', JSON.stringify({
+            placa: v.placa,
+            endpoint: debug.endpoint,
+            http_status: debug.status,
+            body_sample: debug.bodySample,
+            encontrado: !!found?.codigo_veiculo,
+          }));
+          const { error: logErr } = await supabase.from('sga_sync_logs').insert({
             action: 'buscar_veiculo_placa',
             status: found?.codigo_veiculo ? 'ok' : 'empty',
             veiculo_id: v.id,
@@ -72,7 +79,8 @@ serve(async (req) => {
               body_sample: debug.bodySample,
               encontrado: !!found?.codigo_veiculo,
             },
-          }).then(() => {}, (e: any) => console.warn('[SGA Mapear] log fail:', e?.message));
+          });
+          if (logErr) console.warn('[SGA Mapear] log fail:', logErr.message);
         }
 
         if (found?.codigo_veiculo) {
