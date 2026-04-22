@@ -11,6 +11,13 @@ export interface BuscaNormalizada {
   cpfFormatado: string | null;
   telefoneFormatado: string | null;
   placa: string | null;
+  /**
+   * Placa "forte" — termo claramente identificável como placa
+   * (alfanumérico com letras E dígitos, 6–8 chars). Quando presente,
+   * a busca deve restringir-se a placa+nome e ignorar fallbacks
+   * por dígitos em CPF/telefone para evitar falsos positivos.
+   */
+  placaForte: string | null;
 }
 
 export function normalizarBusca(termo: string): BuscaNormalizada {
@@ -33,7 +40,17 @@ export function normalizarBusca(termo: string): BuscaNormalizada {
   const placaCandidata = raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
   const placa = placaCandidata.length >= 4 && placaCandidata.length <= 8 ? placaCandidata : null;
 
-  return { raw, digits, cpfFormatado, telefoneFormatado, placa };
+  // Placa "forte": precisa ter PELO MENOS 1 letra E 1 dígito, e não pode ser
+  // um CPF/telefone completo (11 dígitos). Usado para evitar que dígitos da placa
+  // poluam buscas por CPF/telefone parciais.
+  const temLetra = /[A-Z]/.test(placaCandidata);
+  const temDigito = /[0-9]/.test(placaCandidata);
+  const placaForte =
+    placa && temLetra && temDigito && placaCandidata.length >= 6 && placaCandidata.length <= 8
+      ? placaCandidata
+      : null;
+
+  return { raw, digits, cpfFormatado, telefoneFormatado, placa, placaForte };
 }
 
 /**
