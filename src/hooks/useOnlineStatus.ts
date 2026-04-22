@@ -3,7 +3,13 @@ import { useEffect, useState } from 'react';
 /**
  * Detecção robusta de conexão.
  * `navigator.onLine` mente em alguns Androids — confirma com um ping leve
- * ao endpoint público do Supabase a cada 30s.
+ * a um asset estático do mesmo origem (favicon) a cada 30s.
+ *
+ * IMPORTANTE: NÃO usamos endpoints do Supabase aqui. Headers como `apikey` /
+ * `Authorization` disparam preflight CORS (OPTIONS), que falha em algumas
+ * redes móveis e WebViews Android, fazendo o app aparecer "offline" mesmo
+ * com 5G/LTE perfeitamente conectado. Um GET simples no `/favicon.ico` do
+ * próprio domínio é same-origin → sem CORS, sempre 200 quando há rede.
  */
 export function useOnlineStatus(): boolean {
   const [online, setOnline] = useState<boolean>(
@@ -11,48 +17,59 @@ export function useOnlineStatus(): boolean {
   );
 
   useEffect(() => {
-    const handleOnline = () => setOnline(true);
-    const handleOffline = () => setOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
     let cancelled = false;
     // Conta falhas consecutivas — só marca offline após 2 falhas seguidas (~60s).
     // Evita falso positivo em redes móveis com latência alta (5G/LTE em movimento).
     let failuresInARow = 0;
+
+    const handleOnline = () => {
+      // Reseta contador e marca online imediatamente — sem esperar próximo ping.
+      failuresInARow = 0;
+      if (!cancelled) setOnline(true);
+    };
+    const handleOffline = () => {
+      failuresInARow = 2;
+      if (!cancelled) setOnline(false);
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
     const ping = async () => {
-      if (!navigator.onLine) {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
         if (!cancelled) setOnline(false);
         failuresInARow = 2;
         return;
       }
       try {
-        const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
-        const supabaseKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY;
-        if (!supabaseUrl || !supabaseKey) {
-          // Sem config para verificar, confia no navigator
-          if (!cancelled) setOnline(true);
-          failuresInARow = 0;
-          return;
-        }
         const ctrl = new AbortController();
         // Timeout 10s — 5G em movimento pode ter latência alta no primeiro pacote.
         const t = setTimeout(() => ctrl.abort(), 10000);
-        // Qualquer resposta HTTP (200/4xx/5xx) prova que há rede.
-        await fetch(`${supabaseUrl}/auth/v1/health`, {
+        // GET simples mesmo origem → sem preflight CORS, sem credenciais, sem headers customizados.
+        // Cache-buster evita resposta cacheada do SW/disk.
+        const res = await fetch(`/favicon.ico?cb=${Date.now()}`, {
           method: 'GET',
           cache: 'no-store',
           signal: ctrl.signal,
-          headers: {
-            apikey: supabaseKey,
-            Authorization: `Bearer ${supabaseKey}`,
-          },
+          credentials: 'omit',
         });
         clearTimeout(t);
-        failuresInARow = 0;
-        if (!cancelled) setOnline(true);
-      } catch {
+        // Qualquer resposta HTTP (200/404/etc) prova que há rede até o servidor.
+        if (res) {
+          failuresInARow = 0;
+          if (!cancelled) setOnline(true);
+          if (typeof console !== 'undefined') {
+            // Log discreto (debug); ajuda a diagnosticar casos futuros.
+            // console.debug('[useOnlineStatus] ping ok', res.status);
+          }
+        }
+      } catch (err: any) {
         failuresInARow += 1;
+        console.warn(
+          '[useOnlineStatus] ping falhou:',
+          err?.name || 'Error',
+          err?.message || '',
+          `(falhas consecutivas: ${failuresInARow})`
+        );
         // Só marca offline após 2 falhas consecutivas — evita flicker em latência alta.
         if (failuresInARow >= 2 && !cancelled) setOnline(false);
       }
