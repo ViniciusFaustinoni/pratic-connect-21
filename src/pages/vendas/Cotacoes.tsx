@@ -253,6 +253,19 @@ export default function Cotacoes() {
       return dateB - dateA;
     });
   }, [sortedCotacoes]);
+
+  // Totais SEM filtros — para badges das abas, garantindo visibilidade real
+  const cotacoesEmAndamentoTotal = useMemo(() => {
+    return (cotacoes || []).filter(c =>
+      STATUS_EM_ANDAMENTO.includes(c.status) && c.status_contratacao !== 'concluido'
+    ).length;
+  }, [cotacoes]);
+
+  const cotacoesFinalizadasTotal = useMemo(() => {
+    return (cotacoes || []).filter(c =>
+      STATUS_FINALIZADAS.includes(c.status) || c.status_contratacao === 'concluido'
+    ).length;
+  }, [cotacoes]);
   
   const mesesDisponiveis = [...new Set((cotacoes || []).map(c => {
     const date = new Date(c.created_at);
@@ -696,19 +709,41 @@ export default function Cotacoes() {
         })}
       </div>
 
+      {/* Card mobile: total de cotações (visível mesmo com filtros aplicados) */}
+      {cotacoes && cotacoes.length > 0 && (
+        <div className="md:hidden">
+          <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 flex items-center justify-between">
+            <div className="text-sm">
+              <span className="text-muted-foreground">Você tem </span>
+              <span className="font-bold text-primary">{cotacoes.length}</span>
+              <span className="text-muted-foreground"> cotação(ões) no total</span>
+            </div>
+            {hasActiveFilters && (
+              <Button size="sm" variant="ghost" onClick={clearFilters} className="h-7 px-2 text-xs">
+                Limpar filtros
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Tabs Em Andamento / Finalizadas */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+      <Tabs value={activeTab} onValueChange={(v) => {
+        setActiveTab(v);
+        // Reset do filtro de Status — ele só existe em "Em Andamento" e fica "fantasma" entre abas
+        setStatusFilter('all');
+      }} className="space-y-4">
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="em_andamento" className="gap-2">
             Em Andamento
             <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
-              {cotacoesEmAndamento.length}
+              {cotacoesEmAndamentoTotal}
             </Badge>
           </TabsTrigger>
           <TabsTrigger value="finalizadas" className="gap-2">
             Finalizadas
             <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
-              {cotacoesFinalizadas.length}
+              {cotacoesFinalizadasTotal}
             </Badge>
           </TabsTrigger>
         </TabsList>
@@ -888,6 +923,19 @@ export default function Cotacoes() {
 
         {/* Tab Em Andamento */}
         <TabsContent value="em_andamento">
+          {cotacoesEmAndamentoTotal > 0 && cotacoesEmAndamento.length === 0 && hasActiveFilters && (
+            <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+              <div className="flex items-center gap-2 text-sm">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                <span>
+                  Você tem <strong>{cotacoesEmAndamentoTotal}</strong> cotação(ões) em andamento, mas os filtros ativos estão ocultando todas.
+                </span>
+              </div>
+              <Button size="sm" variant="outline" onClick={clearFilters} className="shrink-0">
+                Limpar filtros
+              </Button>
+            </div>
+          )}
           <CotacoesTable 
             cotacoes={cotacoesEmAndamento}
             onRowClick={handleRowClick}
@@ -906,6 +954,19 @@ export default function Cotacoes() {
 
         {/* Tab Finalizadas */}
         <TabsContent value="finalizadas">
+          {cotacoesFinalizadasTotal > 0 && cotacoesFinalizadas.length === 0 && hasActiveFilters && (
+            <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+              <div className="flex items-center gap-2 text-sm">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                <span>
+                  Você tem <strong>{cotacoesFinalizadasTotal}</strong> cotação(ões) finalizadas, mas os filtros ativos estão ocultando todas.
+                </span>
+              </div>
+              <Button size="sm" variant="outline" onClick={clearFilters} className="shrink-0">
+                Limpar filtros
+              </Button>
+            </div>
+          )}
           <CotacoesTable 
             cotacoes={cotacoesFinalizadas}
             onRowClick={handleRowClick}
@@ -971,6 +1032,18 @@ export default function Cotacoes() {
           plano_id: cotacaoParaDuplicar.plano_id,
           dados_extras: cotacaoParaDuplicar.dados_extras as any,
         } : null}
+        onSuccess={() => {
+          // Após criar/editar cotação, garantir que apareça: voltar para Em Andamento e limpar filtros
+          setActiveTab('em_andamento');
+          setStatusFilter('all');
+          setMesFilter('all');
+          setDataFilter(undefined);
+          setConsultorFilter('all');
+          setFiltroOrfas(false);
+          setEtapaFunilFilter('all');
+          setSearchInput('');
+          toast.success('Cotação salva! Exibindo em "Em Andamento".');
+        }}
       />
       <ContratoWizard 
         open={showContratoWizard} 
