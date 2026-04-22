@@ -61,6 +61,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { CurrencyInput, TelefoneInput } from '@/components/inputs/MaskedInputs';
 import { cotacaoSchema, type CotacaoFormData } from '@/lib/validations';
 import { useCreateCotacao, useUpdateCotacao } from '@/hooks/useCotacoes';
