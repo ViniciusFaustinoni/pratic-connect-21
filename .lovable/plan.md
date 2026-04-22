@@ -1,142 +1,137 @@
 
 
-## Correção dos templates Meta rejeitados + limpeza de duplicados
+## Sincronização Financeira da Base Antiga via API SGA Hinova
 
-### Diagnóstico (vindo direto do banco e da Meta)
+### Resposta direta
 
-**1. `termo_filiacao_assinatura_v1` — REJECTED**
-Motivo oficial da Meta (campo `motivo_rejeicao`):
-> "O rodapé da mensagem não pode ter novas linhas ou emojis."
+**Sim, é totalmente possível.** A API SGA v2 (`https://api.hinova.com.br/api/sga/v2/`) expõe exatamente os dois endpoints necessários:
 
-Causa real:
-- `rodape: "Equipe PRATIC 🛡️"` → emoji proibido em footer.
-- Botão URL com **variável dinâmica em meio do path** (`https://assina.ae/{{1}}`) — a Meta exige URLs estáticas OU URL com variável apenas no final, com exemplo concreto. Faltou o `example` do botão (causa rejeição secundária comum mesmo quando a Meta cita só o footer).
-- Corpo tem emojis (📄) — permitido em UTILITY, mas a combinação com footer rico aumenta risco.
-
-**2. `autorizacao_fipe_diretoria`, `aprovacao_fipe_diretoria_v2`, `aprovacao_fipe_diretoria_v3` — REJECTED**
-Motivo: sem `motivo_rejeicao` salvo, mas o padrão da Meta para esse texto é claro:
-- Texto ambíguo entre **UTILITY** e **MARKETING/CTA externo**: "Acesse o painel para aprovar ou recusar" + botão URL para painel **interno** (`/vendas/aprovacoes-fipe`) sem que o destinatário tenha relação prévia com aquela URL pública → Meta classifica como promocional/CTA não-transacional.
-- `aprovacao_fipe_diretoria_v2` tem botão tipo `url` com `texto: "Acesse"` mas `url: https://app.praticcar.org` (URL genérica, sem contexto da ação).
-- v3 e `autorizacao_fipe_diretoria` são **idênticos no corpo** (8 variáveis) — duplicação pura.
-
-### O que vou fazer
-
-#### Parte A — Recriar `termo_filiacao_assinatura_v1` em conformidade com a Meta
-
-Submeter novo template **`termo_filiacao_assinatura_v2`** (a Meta não permite editar template REJECTED — precisa novo nome):
-
-```
-Categoria: UTILITY
-Idioma: pt_BR
-Header: none
-Corpo:
-Olá, {{1}}.
-
-Seu Termo de Filiação está disponível para assinatura digital com validade jurídica.
-
-Veículo: {{2}}
-Contrato: {{3}}
-
-Após assinar, sua proteção será ativada automaticamente.
-
-Footer: PRATIC Proteção Veicular
-(sem emoji, sem quebra de linha)
-
-Botão (CTA URL dinâmica):
-  Tipo: URL
-  Texto: Assinar termo
-  URL: https://app.praticcar.org/contrato/{{1}}
-  Exemplo: https://app.praticcar.org/contrato/abc123
-```
-
-Justificativas para aprovação:
-- Footer texto puro, sem emoji, sem `\n`.
-- Emoji removido do corpo (mais seguro para UTILITY de assinatura).
-- URL muda de `assina.ae` (curto/encurtador, Meta penaliza) para domínio próprio `app.praticcar.org` que já é a URL de produção (`mem://infrastructure/domain/production-url-policy`).
-- `example` da URL preenchido (campo obrigatório para CTA dinâmico).
-- Tom estritamente transacional, sem call-to-action promocional.
-
-Atualizar `supabase/functions/_shared/enviar-termo-filiacao-whatsapp.ts` linha 31 para `PRIMARY_TEMPLATE = 'termo_filiacao_assinatura_v2'` (mantendo `assinatura_documento_v2` como fallback).
-
-#### Parte B — Recriar `autorizacao_fipe_diretoria` em conformidade
-
-Submeter novo template **`autorizacao_fipe_diretoria_v4`**:
-
-```
-Categoria: UTILITY
-Idioma: pt_BR
-Header: TEXT — "Nova solicitação de autorização"
-Corpo:
-Olá, {{1}}.
-
-Há uma nova solicitação de autorização de veículo aguardando sua análise como diretor(a).
-
-Veículo: {{2}}
-Ano: {{3}}
-Placa: {{4}}
-Valor FIPE: {{5}}
-Limite atual: {{6}}
-Associado: {{7}}
-
-Acesse o painel administrativo para registrar sua decisão.
-
-Footer: PRATIC Proteção Veicular
-
-Botão (CTA URL dinâmica):
-  Tipo: URL
-  Texto: Abrir painel
-  URL: https://app.praticcar.org/vendas/aprovacoes-fipe/{{1}}
-  Exemplo: https://app.praticcar.org/vendas/aprovacoes-fipe/sol-2026-001
-```
-
-Justificativas:
-- Header dedicado deixa explícito que é UTILITY transacional ao revisor da Meta.
-- Variável `{{1}}` agora é o **nome do diretor** (não placa) — segue padrão Meta de "personalização do destinatário", reduz chance de rejeição.
-- "Tipo" removido (era variável vaga `{{6}}`); colocada placa em variável própria.
-- Removido "ou responda diretamente com APROVAR ou RECUSAR" — esse trecho induz interação livre fora do contexto UTILITY e foi provável gatilho de rejeição.
-- URL com path da solicitação específica + `example` preenchido.
-- Footer texto puro.
-
-Atualizar `supabase/functions/notificar-diretoria-fipe/index.ts` linhas 91-95 e 167-170 para usar `autorizacao_fipe_diretoria_v4` e adaptar o array `templateParams` para a nova ordem de 7 variáveis (nome diretor, veículo, ano, placa, fipe, limite, associado) + parâmetro de botão (id da solicitação).
-
-#### Parte C — Limpeza dos duplicados
-
-Excluir do banco `whatsapp_meta_templates` (e da Meta via API quando possível) — todos REJECTED e não usados em nenhum lugar do código:
-
-| Template | Ação |
+| Endpoint | O que retorna |
 |---|---|
-| `aprovacao_fipe_diretoria_v2` | Deletar (referenciado só como **default** em `whatsapp-submit-template/index.ts` linha 20 — vou trocar default para `autorizacao_fipe_diretoria_v4`) |
-| `aprovacao_fipe_diretoria_v3` | Deletar (não referenciado) |
-| `autorizacao_fipe_diretoria` (sem v) | Deletar (será substituído por `_v4`) |
-| `termo_filiacao_assinatura_v1` | Deletar (substituído por `_v2`) |
+| `GET /buscar/situacao-financeira-veiculo/:codigo_ou_placa` | Status global do veículo: `ADIMPLENTE` / `INADIMPLENTE` |
+| `POST /listar/boleto-associado-veiculo` | Lista completa de boletos do veículo: pagos, em aberto, vencidos, a vencer — com valor, multa, mora, dias vencidos, data emissão/vencimento/pagamento, situação, nosso_número, linha digitável, taxas detalhadas |
 
-Ficam apenas `autorizacao_fipe_diretoria_v4` e `termo_filiacao_assinatura_v2` — únicas versões em uso.
+Outros endpoints suporte: `GET /buscar/boleto/:nosso_numero` (detalhe individual), `GET /listar/situacao-boleto/:situacao` (mapa de códigos de situação → ABERTO/BAIXADO/CANCELADO/etc).
 
-#### Parte D — Submissão à Meta
+### Estado atual no sistema
 
-Disparar `whatsapp-submit-template` para os 2 novos templates via botão "Sincronizar" da própria UI (`/configuracoes/integracoes/whatsapp` → tab Templates Meta), ou via Edge Function direto.
+- `associados` com `codigo_hinova` preenchido: **9.506 / 9.537** (99,7%)
+- `veiculos` com `codigo_hinova` preenchido: **9 / 9.662** (0,1%) — gargalo
+- Tabela `cobrancas` já existe com todos os campos necessários (`nosso_numero`, `valor_final`, `multa`, `juros`, `data_vencimento`, `data_pagamento`, `status`, `linha_digitavel`, `boleto_url`, etc) — está **vazia (0 registros)**
+- Edge functions Hinova já existem: `sga-hinova-sync`, `sga-verificar-veiculo`, `cron-sga-retry`, `cron-sga-health-check` — autenticação, credenciais e rate limiting já resolvidos
 
-### Arquivos modificados
+### Estratégia em 3 fases
 
-| Arquivo | Mudança |
+```text
+FASE 1 — Mapear codigo_hinova nos 9.653 veículos faltantes
+   │ Para cada veículo da base antiga sem codigo_hinova:
+   │   GET /veiculo/buscar/{placa}/placa  (já implementado em sga-verificar-veiculo)
+   │   → preenche veiculos.codigo_hinova
+   ▼
+FASE 2 — Backfill financeiro inicial (one-shot por veículo)
+   │ Para cada veículo com codigo_hinova:
+   │   1) GET /buscar/situacao-financeira-veiculo/{codigo}
+   │      → atualiza veiculos.situacao_financeira_sga ('ADIMPLENTE'/'INADIMPLENTE')
+   │   2) POST /listar/boleto-associado-veiculo
+   │      body: {codigo_associado, codigo_veiculo}
+   │      → upsert em cobrancas (chave única: nosso_numero)
+   ▼
+FASE 3 — Sincronização recorrente (cron diário + on-demand)
+   │ Cron diário 02:00: re-sync de todos os veículos base antiga
+   │ Botão "Atualizar financeiro" no detalhe do veículo (on-demand)
+   │ Webhook hipotético da Hinova (se disponível) — fallback no cron
+```
+
+### Mudanças no banco
+
+**Tabela `cobrancas`** — adicionar:
+- `origem` enum `'sistema' | 'sga_hinova'` (default `sistema`) para distinguir cobranças nativas vs importadas
+- `codigo_situacao_boleto_hinova` int — código bruto da Hinova (mapeamento via `listar/situacao-boleto`)
+- `tipo_boleto_hinova` text — ex: `FECHAMENTO`, `MENSALIDADE`, `TAXA`
+- `dados_brutos_sga` jsonb — payload completo do boleto Hinova (auditoria + futuros campos)
+- `sincronizado_sga_em` timestamptz
+- UNIQUE constraint em `(nosso_numero)` quando `nosso_numero IS NOT NULL` para idempotência do upsert
+- Índice em `(veiculo_id, status, data_vencimento)` para queries de inadimplência
+
+**Tabela `veiculos`** — adicionar:
+- `situacao_financeira_sga` text — `ADIMPLENTE` / `INADIMPLENTE` / `null`
+- `situacao_financeira_sga_em` timestamptz
+- `total_aberto_sga` numeric — soma de cobranças abertas (cache p/ listagem)
+- `total_vencido_sga` numeric
+
+**Nova tabela `sga_sync_financeiro_jobs`** (controle do backfill):
+- `id`, `veiculo_id`, `tipo` (`mapear_codigo` | `backfill_inicial` | `resync`), `status` (`pendente` | `executando` | `concluido` | `erro`), `tentativas`, `ultimo_erro`, `boletos_importados`, `iniciado_em`, `concluido_em`
+
+### Edge Functions
+
+| Função | Responsabilidade |
 |---|---|
-| Migration nova | INSERT dos 2 templates novos + DELETE dos 4 antigos rejeitados |
-| `supabase/functions/_shared/enviar-termo-filiacao-whatsapp.ts` | `PRIMARY_TEMPLATE` → `termo_filiacao_assinatura_v2` + ajustar params |
-| `supabase/functions/notificar-diretoria-fipe/index.ts` | Trocar nome do template + reordenar `templateParams` para 7 variáveis + adicionar param do botão |
-| `supabase/functions/whatsapp-submit-template/index.ts` | Default do template para `autorizacao_fipe_diretoria_v4` |
-| Sincronizar com Meta via Edge Function existente | Submete os 2 novos para aprovação |
+| `sga-mapear-codigos-veiculos` (nova) | Worker em batch: lê veículos sem `codigo_hinova`, busca por placa, atualiza. Processa N por execução (rate-limit safe) |
+| `sga-sync-financeiro-veiculo` (nova) | Para um único veículo: chama os 2 endpoints, faz upsert em `cobrancas`, atualiza totais em `veiculos`. Reusável para on-demand e cron |
+| `sga-backfill-financeiro` (nova) | Orquestrador: enfileira todos os veículos elegíveis em `sga_sync_financeiro_jobs` e dispara workers paralelos com throttling (ex: 5 req/s) |
+| `cron-sga-sync-financeiro-diario` (nova, pg_cron 02:00) | Re-sincroniza todos os veículos da base antiga diariamente |
+| `sga-hinova-sync` (existente) | Inalterada — continua sincronizando cadastros para o SGA |
 
-### Critérios de aceitação
+### Frontend (mínimo)
 
-1. Banco fica com **apenas** `termo_filiacao_assinatura_v2` e `autorizacao_fipe_diretoria_v4` para esses dois fluxos — sem duplicados rejeitados.
-2. Ambos passam pela validação local (footer sem emoji/quebra, botão URL com `example`).
-3. Submissão à Meta retorna `PENDING` (sem erro de payload).
-4. Edge Functions `enviar-termo-filiacao-whatsapp` e `notificar-diretoria-fipe` continuam funcionando, agora apontando para os templates novos.
-5. UI de Templates Meta mostra os 4 antigos sumidos e os 2 novos como `PENDING` aguardando análise da Meta.
+1. **`/cadastro/base-antiga`** — adicionar:
+   - Botão "Sincronizar Financeiro (Backfill)" no header → dispara `sga-backfill-financeiro` e mostra progresso
+   - Coluna nova: "Situação SGA" (ADIMPLENTE/INADIMPLENTE/—) na aba Veículos
+   - No drawer de detalhe do veículo: aba **"Financeiro SGA"** com lista de boletos (status, vencimento, valor, multa/mora, link), filtros, e botão "Atualizar agora"
+2. **Tela de progresso do backfill** (modal ou rota `/cadastro/base-antiga/sync`): contadores live de `sga_sync_financeiro_jobs` (pendente/executando/concluído/erro), gráfico, lista de erros para retry manual
+
+### Mapeamento de campos (Hinova → cobrancas)
+
+| Hinova | cobrancas |
+|---|---|
+| `nosso_numero` | `nosso_numero` (chave única) |
+| `valor_boleto` | `valor` |
+| `valor_boleto_multa_mora` | `valor_final` |
+| `valor_multa` | `multa` |
+| `valor_mora` | `juros` |
+| `data_emissao` | `data_emissao` |
+| `data_vencimento` | `data_vencimento` |
+| `data_vencimento_original` | (novo: `data_vencimento_original`) |
+| `data_pagamento` | `data_pagamento` |
+| `linha_digitavel` | `linha_digitavel` |
+| `situacao_boleto` (texto) | `status` mapeado: `ABERTO`→`aguardando_pagamento`, `BAIXADO`→`pago`, `VENCIDO`→`vencido`, `CANCELADO`→`cancelado` |
+| `mes_referente` | `referencia_mes` + `referencia_ano` |
+| `tipo_boleto` | `tipo_boleto_hinova` |
+| objeto completo | `dados_brutos_sga` (jsonb) |
+| — | `origem = 'sga_hinova'` |
+
+### Ordem de execução
+
+1. Migração de schema (cobrancas + veiculos + jobs + índices)
+2. Edge function `sga-sync-financeiro-veiculo` (unidade reutilizável) + testes
+3. Edge function `sga-mapear-codigos-veiculos` (resolve gap de 9.653 veículos)
+4. Edge function `sga-backfill-financeiro` (orquestrador com fila)
+5. UI: botão de backfill + tela de progresso
+6. UI: aba "Financeiro SGA" no detalhe do veículo + botão "Atualizar agora"
+7. Cron diário + monitoramento
+
+### Custos / riscos
+
+- **Volume de chamadas inicial**: ~9.650 chamadas para mapear códigos + ~9.650 × 2 chamadas para backfill = **~30k requests**. Com throttling de 5 req/s → ~1h40min de processamento total. Executado em background, sem impacto no usuário.
+- **Rate limit Hinova**: usar a mesma estratégia já provada em `sga-hinova-sync` (retry exponencial, fila, `cron-sga-retry`).
+- **Veículos sem match por placa no SGA**: ficam marcados em `sga_sync_financeiro_jobs` como `erro` com motivo, exibidos na tela de progresso para revisão manual.
+- **Idempotência**: upsert por `nosso_numero` garante que rodar múltiplas vezes não duplica.
 
 ### Fora de escopo
 
-- Migrar templates APPROVED já em produção (não precisam mexer).
-- Criar versão MARKETING desses fluxos (são transacionais por natureza).
-- Reescrever a tela de gestão de templates Meta.
+- Geração de novos boletos via API Hinova (`POST /boleto/cadastrar`) — só leitura
+- Sincronização inversa (sistema → Hinova) de pagamentos feitos no app
+- Webhook receptor da Hinova (não consta na doc; usar polling diário)
+- Backfill de associados sem `codigo_hinova` (apenas 31 casos — manual)
+
+### Critérios de aceitação
+
+1. Após backfill, todos os 9.662 veículos da base antiga têm `codigo_hinova` preenchido (ou marcados como erro com motivo)
+2. Tabela `cobrancas` populada com todos os boletos históricos retornados pela Hinova, sem duplicatas
+3. `veiculos.situacao_financeira_sga` reflete o status retornado pelo endpoint específico
+4. `veiculos.total_aberto_sga` / `total_vencido_sga` calculados corretamente
+5. Drawer do veículo mostra todos os boletos (pagos, em aberto, vencidos, a vencer) com link para 2ª via
+6. Cron diário roda às 02:00 atualizando os dados
+7. Botão "Atualizar agora" no detalhe do veículo refaz a sync individual em <5s
+8. Hook `useVerificarDebitosAssociado` passa a refletir também os débitos vindos do SGA
 
