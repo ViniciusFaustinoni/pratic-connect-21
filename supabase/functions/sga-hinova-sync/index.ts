@@ -582,6 +582,20 @@ serve(async (req) => {
     }
 
     // ========================================
+    // GUARD DE DUPLICIDADE: associado da BASE ANTIGA não pode ser reenviado ao SGA.
+    // A base antiga (origem_cadastro='api_externa') já existe no Hinova com seu
+    // próprio codigo_hinova. Reenviar criaria duplicidade. Este endpoint é
+    // exclusivo do fluxo de envio de NOVOS associados (origem_cadastro='interno').
+    // ========================================
+    if (associado.origem_cadastro === 'api_externa') {
+      const msg = `Associado pertence à base antiga (origem_cadastro=api_externa, codigo_hinova=${associado.codigo_hinova ?? 'null'}). Não pode ser reenviado ao SGA — risco de duplicidade.`;
+      console.warn('[SGA Sync] Bloqueado:', msg);
+      await logSync(_vid, _aid, 'guard_base_antiga', 'error', null, null, msg);
+      await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
+      return;
+    }
+
+    // ========================================
     // PASSO 2: Buscar dados do veículo
     // ========================================
     const { data: veiculo, error: veiculoError } = await supabase

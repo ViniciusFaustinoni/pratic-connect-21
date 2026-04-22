@@ -13,12 +13,14 @@ interface JobStatus {
   concluido: number;
   erro: number;
   sem_historico_hinova: number;
+  cancelado: number;
 }
 
 interface StatusResp {
   jobs: JobStatus;
   veiculos_sem_codigo: number;
   veiculos_com_codigo: number;
+  veiculos_sistema_novo: number;
 }
 
 export function SgaBackfillFinanceiroDialog() {
@@ -101,8 +103,9 @@ export function SgaBackfillFinanceiroDialog() {
   };
 
   const semHistorico = status?.jobs.sem_historico_hinova ?? 0;
-  const totalJobs = status ? status.jobs.pendente + status.jobs.executando + status.jobs.concluido + status.jobs.erro + semHistorico : 0;
-  const finalizados = status ? status.jobs.concluido + semHistorico : 0;
+  const cancelados = status?.jobs.cancelado ?? 0;
+  const totalJobs = status ? status.jobs.pendente + status.jobs.executando + status.jobs.concluido + status.jobs.erro + semHistorico + cancelados : 0;
+  const finalizados = status ? status.jobs.concluido + semHistorico + cancelados : 0;
   const concluidoPct = totalJobs > 0 ? Math.round((finalizados / totalJobs) * 100) : 0;
 
   return (
@@ -118,19 +121,24 @@ export function SgaBackfillFinanceiroDialog() {
               <Database className="h-5 w-5" /> Sincronização Financeira SGA Hinova
             </DialogTitle>
             <DialogDescription>
-              Importa boletos, situação financeira e histórico de pagamentos da API Hinova para todos os veículos da base antiga.
+              Sincroniza apenas veículos da <strong>base antiga</strong> (importados via API Hinova). Veículos novos contratados pelo
+              sistema são enviados ao SGA automaticamente após a contratação e não entram nesta fila.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div className="rounded-md border bg-card p-3">
-                <p className="text-xs text-muted-foreground">Veículos com código Hinova</p>
+                <p className="text-xs text-muted-foreground">Elegíveis com código</p>
                 <p className="text-2xl font-bold">{status?.veiculos_com_codigo ?? '—'}</p>
               </div>
               <div className="rounded-md border bg-card p-3">
-                <p className="text-xs text-muted-foreground">Veículos sem código Hinova</p>
+                <p className="text-xs text-muted-foreground">Elegíveis sem código</p>
                 <p className="text-2xl font-bold text-orange-600">{status?.veiculos_sem_codigo ?? '—'}</p>
+              </div>
+              <div className="rounded-md border bg-muted/40 p-3">
+                <p className="text-xs text-muted-foreground">Sistema novo (não sincronizam)</p>
+                <p className="text-2xl font-bold text-muted-foreground">{status?.veiculos_sistema_novo ?? '—'}</p>
               </div>
             </div>
 
@@ -146,6 +154,9 @@ export function SgaBackfillFinanceiroDialog() {
                   <Badge variant="secondary" className="gap-1"><Loader2 className="h-3 w-3" /> Executando: {status.jobs.executando}</Badge>
                   <Badge variant="secondary" className="gap-1 bg-green-50 text-green-700"><CheckCircle2 className="h-3 w-3" /> Concluídos: {status.jobs.concluido}</Badge>
                   <Badge variant="secondary" className="gap-1"><MinusCircle className="h-3 w-3" /> Sem histórico Hinova: {semHistorico}</Badge>
+                  {cancelados > 0 && (
+                    <Badge variant="secondary" className="gap-1"><MinusCircle className="h-3 w-3" /> Cancelados (sistema novo): {cancelados}</Badge>
+                  )}
                   <Badge variant="secondary" className="gap-1 bg-red-50 text-red-700"><AlertCircle className="h-3 w-3" /> Erros: {status.jobs.erro}</Badge>
                 </div>
                 {semHistorico > 0 && (

@@ -27,11 +27,15 @@ serve(async (req) => {
     const delayMs = Math.max(parseInt(body.delay_ms ?? '250'), 50);
     const idsFilter: string[] | undefined = Array.isArray(body.veiculo_ids) && body.veiculo_ids.length ? body.veiculo_ids : undefined;
 
+    // IMPORTANTE: apenas veículos da BASE ANTIGA (origem_cadastro='api_externa').
+    // Veículos do sistema novo (origem_cadastro='interno') são enviados ao SGA via
+    // sga-hinova-sync; não devem ser mapeados por placa para evitar duplicidade.
     let q = supabase
       .from('veiculos')
-      .select('id, placa, associado_id')
+      .select('id, placa, associado_id, associados:associados!inner(origem_cadastro)')
       .is('codigo_hinova', null)
-      .not('placa', 'is', null);
+      .not('placa', 'is', null)
+      .eq('associados.origem_cadastro', 'api_externa');
 
     if (idsFilter) q = q.in('id', idsFilter);
     q = q.limit(batchSize);
@@ -91,9 +95,10 @@ serve(async (req) => {
 
     const { count: restantes } = await supabase
       .from('veiculos')
-      .select('id', { count: 'exact', head: true })
+      .select('id, associados:associados!inner(origem_cadastro)', { count: 'exact', head: true })
       .is('codigo_hinova', null)
-      .not('placa', 'is', null);
+      .not('placa', 'is', null)
+      .eq('associados.origem_cadastro', 'api_externa');
 
     return json(200, { success: true, processados: veiculos.length, mapeados, nao_encontrados, erros, restantes: restantes ?? 0 });
   } catch (err: any) {
