@@ -56,11 +56,32 @@ serve(async (req) => {
     const associado: any = Array.isArray((veiculo as any).associados) ? (veiculo as any).associados[0] : (veiculo as any).associados;
     if (!associado?.codigo_hinova) throw new Error('Associado sem codigo_hinova');
 
-    // Auth Hinova
-    const creds = await getHinovaCreds(supabase);
-    if (!creds) throw new Error('Credenciais Hinova não configuradas');
-    const session = await autenticarHinova(creds);
-    if (!session) throw new Error('Falha ao autenticar na Hinova');
+    // Auth Hinova (com log explícito em sga_sync_logs)
+    const authStart = Date.now();
+    let session;
+    try {
+      const creds = await getHinovaCreds(supabase);
+      if (!creds) throw new Error('Credenciais Hinova não configuradas');
+      session = await autenticarHinova(creds);
+      if (!session) throw new Error('Falha ao autenticar na Hinova');
+
+      await supabase.from('sga_sync_logs').insert({
+        veiculo_id: veiculoId,
+        action: 'autenticar',
+        status: 'success',
+        duracao_ms: Date.now() - authStart,
+      });
+    } catch (authErr: any) {
+      const msg = String(authErr?.message || authErr);
+      await supabase.from('sga_sync_logs').insert({
+        veiculo_id: veiculoId,
+        action: 'autenticar',
+        status: 'error',
+        error_message: msg,
+        duracao_ms: Date.now() - authStart,
+      });
+      throw authErr;
+    }
 
     // 1) Situação financeira
     const situacao = await buscarSituacaoFinanceiraVeiculo(session, veiculo.codigo_hinova);
