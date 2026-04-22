@@ -40,11 +40,12 @@ async function geocodeNominatim(endereco: string): Promise<GeocodeResult> {
       }
     });
     
-    // Retry on 429 (rate limit) — respect Retry-After header
-    if (response.status === 429) {
+    // Retry on 429 (rate limit) — respect Retry-After header, up to 2 retries
+    let retryCount = 0;
+    while (response.status === 429 && retryCount < 2) {
       const retryAfter = parseInt(response.headers.get('Retry-After') || '2', 10);
       const waitMs = Math.min(retryAfter * 1000, 5000);
-      console.warn(`[Geocode] Rate limited (429). Retrying after ${waitMs}ms...`);
+      console.warn(`[Geocode] Rate limited (429). Retry ${retryCount + 1}/2 after ${waitMs}ms...`);
       await new Promise(r => setTimeout(r, waitMs));
       response = await fetch(url, {
         headers: { 
@@ -52,6 +53,7 @@ async function geocodeNominatim(endereco: string): Promise<GeocodeResult> {
           'Accept-Language': 'pt-BR,pt;q=0.9'
         }
       });
+      retryCount++;
     }
     
     if (!response.ok) {
@@ -165,6 +167,45 @@ serve(async (req) => {
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
+      }
+    }
+
+    // Último recurso: fallback por CEP via ViaCEP -> Nominatim com CEP+cidade
+    if (!resultado.success && body.cep) {
+      const cepLimpo = body.cep.replace(/\D/g, '');
+      if (cepLimpo.length === 8) {
+        try {
+          console.log('[Geocode] Fallback CEP via ViaCEP:', cepLimpo);
+          const viaCepResp = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+          if (viaCepResp.ok) {
+            const viaCep = await viaCepResp.json();
+            if (!viaCep?.erro) {
+              const partes = [
+                viaCep.logradouro,
+                viaCep.bairro,
+                viaCep.localidade,
+                viaCep.uf,
+                cepLimpo,
+                'Brasil'
+              ].filter(Boolean);
+              const enderecoCep = partes.join(', ');
+              const resultadoCep = await geocodeNominatim(enderecoCep);
+              if (resultadoCep.success) {
+                return new Response(
+                  JSON.stringify({
+                    ...resultadoCep,
+                    endereco_buscado: enderecoCep,
+                    aproximado: true,
+                    fonte_fallback: 'viacep'
+                  }),
+                  { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('[Geocode] ViaCEP fallback falhou:', e);
+        }
       }
     }
     

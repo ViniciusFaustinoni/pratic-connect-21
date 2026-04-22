@@ -282,6 +282,7 @@ export function MapaVistoriasContent() {
   const podeCancelarAtribuicao = isDiretor || isCoordenadorMonitoramento || isAnalistaMonitoramento || isAdminMaster || isDesenvolvedor;
 
   const [filtroBusca, setFiltroBusca] = useState("");
+  const [apenasSemGps, setApenasSemGps] = useState(false);
   const [posicaoSelecionada, setPosicaoSelecionada] = useState<[number, number] | null>(null);
   const [vistoriaSelecionada, setVistoriaSelecionada] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -338,6 +339,7 @@ export function MapaVistoriasContent() {
     if (!vistorias) return [];
     return vistorias.filter((v) => {
       if (!v.data_agendada) return false;
+      if (apenasSemGps && (v.latitude && v.longitude)) return false;
       if (filtroBusca) {
         const termo = filtroBusca.toLowerCase();
         const placa = v.veiculo_placa?.toLowerCase() || "";
@@ -347,7 +349,11 @@ export function MapaVistoriasContent() {
       }
       return true;
     });
-  }, [vistorias, filtroBusca]);
+  }, [vistorias, filtroBusca, apenasSemGps]);
+
+  const totalSemGps = useMemo(() => {
+    return (vistorias || []).filter((v) => v.data_agendada && (!v.latitude || !v.longitude)).length;
+  }, [vistorias]);
 
   // Chronological index map for tooltip numbering
   const ordemCronologica = useMemo(() => {
@@ -435,13 +441,60 @@ export function MapaVistoriasContent() {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }, []);
 
+  const abrirAlterarEndereco = useCallback((vistoria: VistoriaMapa) => {
+    setAlterarState({
+      servicoId: vistoria.servico_id_unificado || vistoria.id,
+      placa: formatPlacaExibicao(vistoria.veiculo_placa),
+      associadoNome: vistoria.associado_nome,
+      endereco: {
+        cep: (vistoria as any).endereco_cep,
+        logradouro: (vistoria as any).endereco_logradouro,
+        numero: (vistoria as any).endereco_numero,
+        complemento: (vistoria as any).endereco_complemento,
+        bairro: vistoria.endereco_bairro,
+        cidade: vistoria.endereco_cidade,
+        uf: (vistoria as any).endereco_uf,
+      },
+      profissionalId: vistoria.vistoriador_id,
+    });
+  }, []);
+
   const selecionarVistoria = (vistoria: VistoriaMapa) => {
+    setVistoriaSelecionada(vistoria.id);
     if (vistoria.latitude && vistoria.longitude) {
       setPosicaoSelecionada([vistoria.latitude, vistoria.longitude]);
-      setVistoriaSelecionada(vistoria.id);
       if (isMobile) setDrawerOpen(false);
     } else {
-      toast.error("Vistoria sem coordenadas GPS");
+      // Sem GPS: destaca o card e oferece atalho para corrigir endereço
+      toast.info("Vistoria sem GPS. Corrija o endereço para liberar a localização.", {
+        action: {
+          label: "Corrigir endereço",
+          onClick: () => abrirAlterarEndereco(vistoria),
+        },
+      });
+    }
+  };
+
+  // Re-tenta geocodificar um serviço sem coordenadas
+  const [retryingGeocodeId, setRetryingGeocodeId] = useState<string | null>(null);
+  const tentarGeocodificarNovamente = async (vistoria: VistoriaMapa) => {
+    const sid = vistoria.servico_id_unificado || vistoria.id;
+    if (!sid) return;
+    setRetryingGeocodeId(vistoria.id);
+    try {
+      const { data, error } = await supabase.functions.invoke('geocode-servico-retry', {
+        body: { servicoId: sid },
+      });
+      if (error) throw error;
+      if (data?.success) {
+        toast.success(`Coordenadas obtidas${data.aproximado ? ' (aproximadas)' : ''}. Atualizando lista...`);
+      } else {
+        toast.error(data?.error || 'Não foi possível geolocalizar. Corrija o endereço.');
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao tentar geolocalizar');
+    } finally {
+      setRetryingGeocodeId(null);
     }
   };
 
@@ -554,13 +607,23 @@ export function MapaVistoriasContent() {
 
   const renderFilters = () => (
     <>
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 flex-wrap items-center">
         <Badge className="bg-red-500/10 text-red-600 border-red-500/20">
           {vistoriasComCoordenadas.length} no mapa
         </Badge>
-        <Badge className="bg-muted text-muted-foreground">
-          {vistoriasFiltradas.length - vistoriasComCoordenadas.length} sem GPS
-        </Badge>
+        <button
+          type="button"
+          onClick={() => setApenasSemGps((v) => !v)}
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors",
+            apenasSemGps
+              ? "bg-amber-500 text-white border-amber-500"
+              : "bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800"
+          )}
+          title={apenasSemGps ? "Mostrar todas" : "Filtrar apenas vistorias sem GPS"}
+        >
+          ⚠️ {totalSemGps} sem GPS{apenasSemGps ? " (filtrado)" : ""}
+        </button>
       </div>
       <div className="relative mt-2">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -678,7 +741,32 @@ export function MapaVistoriasContent() {
                         <CheckCircle2 className="h-3 w-3" />Realizada
                       </p>
                     )}
-                    {!v.latitude && <p className="text-xs text-orange-600 mt-1">⚠️ Sem coordenadas GPS</p>}
+                    {!v.latitude && (
+                      <div className="mt-2 flex flex-col gap-1.5">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); abrirAlterarEndereco(v); }}
+                          className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 text-xs font-medium"
+                          title="Corrigir endereço para liberar GPS"
+                        >
+                          <MapPin className="h-3 w-3" />
+                          ⚠️ Corrigir endereço para liberar GPS
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); tentarGeocodificarNovamente(v); }}
+                          disabled={retryingGeocodeId === v.id}
+                          className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 rounded-md border border-amber-300 text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-800 text-xs disabled:opacity-50"
+                          title="Tentar geolocalizar novamente sem alterar endereço"
+                        >
+                          {retryingGeocodeId === v.id ? (
+                            <><Loader2 className="h-3 w-3 animate-spin" />Tentando...</>
+                          ) : (
+                            <><Navigation className="h-3 w-3" />Tentar geolocalizar de novo</>
+                          )}
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-col gap-1 flex-shrink-0">
                     {v.latitude && v.longitude && (
@@ -738,6 +826,46 @@ export function MapaVistoriasContent() {
                         aria-label="Alterar endereço ou tipo"
                       >
                         <Pencil className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {podeReagendar && !isRealizada && !!v.servico_id_unificado && (
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 text-amber-600 border-amber-300 hover:bg-amber-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setReagendarState({
+                            servicoId: v.servico_id_unificado!,
+                            placa: formatPlacaExibicao(v.veiculo_placa),
+                            associadoNome: v.associado_nome,
+                            dataAtual: v.data_agendada,
+                            horaAtual: v.horario_agendado,
+                          });
+                        }}
+                        title="Reagendar data/horário"
+                        aria-label="Reagendar"
+                      >
+                        <CalendarClock className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {v.tipo_servico === 'instalacao' && ['agendada', 'nao_compareceu', 'reagendada', 'cancelada'].includes(v.status) && (
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 text-primary border-primary/40 hover:bg-primary/10"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setRealocarState({
+                            instalacaoId: v.id,
+                            placa: formatPlacaExibicao(v.veiculo_placa),
+                            associadoNome: v.associado_nome,
+                          });
+                        }}
+                        title="Realocar para outra rota ou base"
+                        aria-label="Realocar"
+                      >
+                        <MapPinned className="h-4 w-4" />
                       </Button>
                     )}
                   </div>
