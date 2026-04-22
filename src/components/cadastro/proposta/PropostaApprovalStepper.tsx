@@ -324,13 +324,15 @@ export function PropostaApprovalStepper({
                     )}
                   </div>
 
-                  {/* Photos check OU banner de vistoria na base */}
+                  {/* Photos check OU banner de vistoria agendada (base/cliente) sem fotos */}
                   {isVistoriaBaseSemFotos ? (
                     <div className="flex items-start gap-3 p-3 rounded-lg border bg-info/5 border-info/30">
                       <MapPin className="h-5 w-5 text-info shrink-0 mt-0.5" />
                       <div className="flex-1">
                         <p className="text-sm font-semibold text-info">
-                          Vistoria agendada na base
+                          {proposta.tipo_vistoria === 'agendada_base'
+                            ? 'Vistoria agendada na base'
+                            : 'Vistoria agendada no cliente'}
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
                           As fotos do veículo serão registradas pelo técnico no dia do atendimento presencial
