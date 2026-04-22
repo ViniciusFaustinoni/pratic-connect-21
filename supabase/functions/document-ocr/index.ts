@@ -967,6 +967,26 @@ Use a função para retornar o CPF encontrado ou "ilegivel" se não conseguir le
       const tipo = result.tipo_detectado;
       const d = result.dados as Record<string, any>;
 
+      // Normalização de numero_motor (CRLV/NF): uppercase, trim, descartar inválidos
+      const normalizeMotor = (val: any): string | null => {
+        if (!val || typeof val !== 'string') return null;
+        const cleaned = val.toUpperCase().replace(/\s+/g, '').replace(/[^A-Z0-9-]/g, '');
+        if (cleaned.length < 5) return null;
+        if (/^0+$/.test(cleaned.replace(/-/g, ''))) return null;
+        return cleaned;
+      };
+      if (tipo === 'crlv' || tipo === 'nota_fiscal_veiculo') {
+        const motorRaw = d.numero_motor || d.motor;
+        const motorNorm = normalizeMotor(motorRaw);
+        if (motorNorm) {
+          d.numero_motor = motorNorm;
+          d.motor = motorNorm;
+        } else if (motorRaw) {
+          d.numero_motor = null;
+          d.motor = null;
+        }
+      }
+
       // Mapa: campo → validador
       const fieldValidators: Array<{ tipos: string[]; field: string; validate: (v: string) => boolean; label: string }> = [
         { tipos: ['crlv', 'atpv_e', 'nota_fiscal_veiculo'], field: 'placa', validate: validatePlaca, label: 'Placa' },
