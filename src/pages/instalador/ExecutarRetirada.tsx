@@ -364,26 +364,40 @@ export default function ExecutarRetirada() {
     }
   };
 
-  // Upload de vídeo
+  // Upload de vídeo (resiliente — retry + progresso)
   const handleUploadVideo = async (file: File) => {
     if (!servicoId) return;
     setUploadingVideo(true);
+    setVideoUploadProgress(0);
     try {
-      const fileName = `retirada/${servicoId}/video_360_${Date.now()}.mp4`;
-      const { error: uploadError } = await supabase.storage
-        .from('vistorias')
-        .upload(fileName, file);
-      if (uploadError) throw uploadError;
-      
+      const ext = (file.name.split('.').pop() || 'mp4').toLowerCase();
+      const fileName = `retirada/${servicoId}/video_360_${Date.now()}.${ext}`;
+
+      await uploadVideoWithRetry({
+        supabase,
+        bucket: 'vistorias',
+        path: fileName,
+        file,
+        contentType: file.type || 'video/mp4',
+        upsert: true,
+        onProgress: (pct) => setVideoUploadProgress(pct),
+      });
+
       const { data: signedData } = await supabase.storage.from('vistorias').createSignedUrl(fileName, 3600);
       if (signedData?.signedUrl) {
         setVideoUrl(signedData.signedUrl);
       }
       toast.success('Vídeo enviado!');
     } catch (e) {
-      toast.error('Erro ao enviar vídeo');
+      if (e instanceof VideoUploadError) {
+        // Toast já foi emitido com mensagem amigável dentro do helper? Não — aqui o helper só lança.
+        toast.error(e.userMessage);
+      } else {
+        toast.error('Erro ao enviar vídeo');
+      }
     } finally {
       setUploadingVideo(false);
+      setVideoUploadProgress(0);
     }
   };
 
