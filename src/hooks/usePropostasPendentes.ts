@@ -792,6 +792,8 @@ export function useProposta(contratoId: string | undefined) {
         
         if (cotacao) {
           tipoVistoriaCotacao = (cotacao.tipo_vistoria as any) || null;
+          veiculoBlindadoCot = (cotacao as any).veiculo_blindado ?? null;
+          cenarioAdesaoCot = (cotacao as any).cenario_adesao ?? null;
           if (cotacao.cliente_logradouro) {
             enderecoCompleto = `${cotacao.cliente_logradouro}, ${cotacao.cliente_numero || 'S/N'} - ${cotacao.cliente_bairro || ''}, ${cotacao.cliente_cidade || ''} - ${cotacao.cliente_uf || ''}`;
           }
