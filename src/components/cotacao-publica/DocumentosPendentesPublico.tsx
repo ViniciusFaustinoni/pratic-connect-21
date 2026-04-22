@@ -51,6 +51,19 @@ interface DocUploadState {
   observacao: string;
   uploading: boolean;
   enviado: boolean;
+  ocrTipo?: string | null;
+  ocrSugestao?: string | null;
+  ocrEquivalente?: boolean; // OCR detectou tipo diferente, mas equivalente (ex.: NF para slot CRLV)
+}
+
+// Tipos equivalentes ao CRLV (substituem o documento do veículo)
+const TIPOS_EQUIVALENTES_CRLV = new Set(['nota_fiscal_veiculo', 'atpv_e']);
+
+function isOcrTipoCompativel(tipoEsperado: string, tipoDetectado: string | null | undefined): boolean {
+  if (!tipoDetectado) return false;
+  if (tipoEsperado === tipoDetectado) return true;
+  if (tipoEsperado === 'crlv' && TIPOS_EQUIVALENTES_CRLV.has(tipoDetectado)) return true;
+  return false;
 }
 
 export function DocumentosPendentesPublico({ 
