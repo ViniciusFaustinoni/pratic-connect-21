@@ -52,7 +52,7 @@ async function notificarAssociado(telefone: string | null | undefined, mensagem:
   if (!telefone) return;
   try {
     await supabase.functions.invoke('whatsapp-send-text', {
-      body: { telefone, mensagem },
+      body: { telefone, mensagem, allow_text: true },
     });
   } catch (e) {
     console.warn('Falha ao enviar WhatsApp de realocação:', e);
