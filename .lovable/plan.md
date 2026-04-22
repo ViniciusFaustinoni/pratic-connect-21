@@ -1,69 +1,100 @@
 
 
-## Causa raiz: tarefas sem GPS aparecem com fade e ficam fora do drag-and-drop
+## Causa raiz: edge functions ignoram alocação "Base" e forçam almoço/bloqueio mesmo no técnico que bate ponto externamente
 
-### Por que as tarefas #1, #2, #3 estão "bloqueadas"
+### Onde já está correto (frontend)
 
-Nas 3 tarefas do print, o badge **"⚠️ Corrigir endereço para liberar GPS"** está visível em todas. Isso significa que `vistoria.latitude` é `null` (a geocodificação do endereço falhou). A partir disso, o código em `src/components/mapa/MapaVistoriasContent.tsx` aplica **dois efeitos** que dão a sensação de "bloqueado":
+`useJornadaTrabalho.ts` consulta `useAlocacaoDiaria()` e usa `isBase` para:
+- **NÃO** disparar `iniciarAlmocoMutation` automaticamente após 4h (linhas 405-418).
+- **NÃO** disparar `finalizarAlmocoMutation` automaticamente aos 60min (linhas 448-458).
+- `AlmocoBloqueioOverlay` retorna `null` quando `isBase` (linha 44).
+- `JornadaStatusBar` já mostra botão manual "Iniciar almoço" / "Finalizar almoço" para o Base.
 
-1. **Fade visual** (linha 681): 
-   ```tsx
-   !v.latitude && "opacity-60"
-   ```
-   O card inteiro fica com 60% de opacidade — parece desabilitado.
+Ou seja, a UI respeita a regra. **A trava vem do servidor.**
 
-2. **Drag-and-drop desligado** (linhas 673 e 920):
-   ```tsx
-   const isDraggable = !!atribuicaoManualAtiva && !isRealizada 
-     && !v.vistoriador_id && !!v.latitude && !!v.servico_id_unificado;
-   ```
-   Sem latitude, **não é possível arrastar a tarefa para um técnico no mapa** — porque o sistema precisa da coordenada para calcular distância/ETA até o técnico no momento do drop. Esta trava é intencional e correta.
+### Onde está a trava (raiz)
 
-### O que NÃO está bloqueado (mas o usuário não percebe)
+Duas edge functions decidem o status de almoço/atribuição **sem checar `alocacoes_diarias.tipo_alocacao`**:
 
-Os botões da coluna direita do card (`AtribuirTecnicoPopover`, `AtribuirPrestadorPopover`) **não checam latitude** — eles funcionam para tarefas sem GPS. Linha 777:
-```tsx
-{!!atribuicaoManualAtiva && !isRealizada && !v.vistoriador_id && !!v.servico_id_unificado && (
-  <AtribuirTecnicoPopover ... />
-)}
+1. **`supabase/functions/atribuir-proxima-tarefa/index.ts`** (linhas 249-333)
+   - Se `turno.status === 'em_almoco'` e < 60min → devolve `resultado: 'em_almoco'` e bloqueia atribuição.
+   - Se `minutosTrabalhados >= limiteAlmocoMinutos` (4h) → faz `UPDATE turnos_profissionais SET status='em_almoco', inicio_almoco=now()` **mesmo para técnico Base**.
+   
+2. **`supabase/functions/cron-atribuir-tarefas/index.ts`** (linhas 173-246)
+   - Mesma lógica no cron de 1 em 1 minuto: força `em_almoco` aos 240 min e pula atribuições enquanto status for `em_almoco`.
+
+Resultado: o técnico Base é flipado para `em_almoco` pelo servidor, o cron para de mandar tarefa, e o cliente — mesmo escondendo o overlay — recebe `resultado: 'em_almoco'` ao tentar puxar a próxima. Daí a sensação de "trava no horário".
+
+### Correção raiz (servidor)
+
+**Carregar `tipo_alocacao` do dia em ambas as funções e curto-circuitar a lógica de almoço quando for `'base'`.**
+
+#### 1. `supabase/functions/atribuir-proxima-tarefa/index.ts`
+
+Logo após carregar `turnoHoje` (linha 243), adicionar:
+
+```ts
+const { data: alocHoje } = await supabase
+  .from('alocacoes_diarias')
+  .select('tipo_alocacao')
+  .eq('profissional_id', profissionalId)
+  .eq('data', hoje)
+  .maybeSingle();
+const isBase = alocHoje?.tipo_alocacao === 'base';
 ```
-Ou seja, a atribuição via clique no ícone "UserPlus" azul está disponível. Mas o **fade de 60% engana** o usuário a achar que o card inteiro está desabilitado, e a única affordance de atribuição que ele tenta (arrastar para o técnico no mapa) está bloqueada.
 
-### Correção raiz
+E envolver os dois blocos atuais:
+- Bloco "Se está em almoço, verificar se já expirou" (249-284): se `isBase`, **pular o early-return de bloqueio**. O Base controla manualmente — se ele iniciou, ele finaliza pelo botão. O servidor não auto-finaliza nem bloqueia atribuição.
+- Bloco "Forçar almoço se atingiu limite" (286-333): se `isBase`, **não forçar**. Sair do bloco sem mexer em status.
 
-**Arquivo único: `src/components/mapa/MapaVistoriasContent.tsx`**
+#### 2. `supabase/functions/cron-atribuir-tarefas/index.ts`
 
-1. **Remover o fade enganoso** (linha 681). Trocar `!v.latitude && "opacity-60"` por uma marcação visual mais clara que comunica "sem GPS, mas ainda atribuível por clique" — uma borda tracejada amarela à esquerda + um ícone discreto, mantendo opacidade 100%.
+Dentro do `for (const prof of profissionais)`, antes do bloco de almoço (linha 172), buscar `alocacoes_diarias` para o `prof.vistoriador_id` no dia (em batch antes do loop, para performance — uma única query `IN (ids)`):
 
-2. **Manter o bloqueio de drag** (linhas 673 e 920) — está correto, sem coordenada não há como arrastar no mapa.
+```ts
+const profIds = profissionais.map(p => p.vistoriador_id);
+const { data: alocacoes } = await supabase
+  .from('alocacoes_diarias')
+  .select('profissional_id, tipo_alocacao')
+  .eq('data', hoje)
+  .in('profissional_id', profIds);
+const baseSet = new Set(alocacoes?.filter(a => a.tipo_alocacao === 'base').map(a => a.profissional_id));
+```
 
-3. **Adicionar um badge "Atribuir por clique →"** ao lado do "⚠️ Corrigir endereço" quando `!v.latitude && atribuicaoManualAtiva && !v.vistoriador_id`, apontando para o ícone de UserPlus azul. Isso ensina o coordenador que ele pode atribuir via popover mesmo sem GPS.
+Dentro do loop:
+```ts
+const isBase = baseSet.has(prof.vistoriador_id);
+```
 
-4. **Tooltip no card** quando sem latitude: "Sem coordenadas — arraste no mapa indisponível, mas você pode atribuir clicando no ícone de técnico ou prestador à direita."
+E:
+- Bloco "Se está em almoço, verificar se já expirou" (180-204): se `isBase` e `em_almoco`, **`continue`** (não atribui durante almoço manual do Base, mas também não auto-finaliza — fica no controle do técnico).
+- Bloco "forçar almoço (4h)" (206-246): se `isBase`, **pular completamente**. Nunca forçar almoço para Base.
 
-### Comportamento após a correção
+### Comportamento esperado após a correção
 
-| Situação | Antes | Depois |
+| Cenário (Base) | Antes | Depois |
 |---|---|---|
-| Tarefa sem GPS, modo manual ativo | Card com fade 60%, parece bloqueada, drag bloqueado | Card 100% opaco com borda tracejada amarela, drag continua bloqueado, ícones de atribuir destacados, dica visual aponta para eles |
-| Tarefa com GPS, modo manual ativo | Card normal, drag liberado | Sem mudança |
-| Tarefa já atribuída | Sem mudança | Sem mudança |
+| 4h trabalhadas, sem clicar em "Iniciar almoço" | Servidor força `em_almoco`, cron para de atribuir | Nada muda no servidor; tarefas continuam vindo normalmente |
+| Técnico clica em "Iniciar almoço" no app | UI mostra botão, mas overlay não trava (já ok) | Igual — e cron para de atribuir enquanto `em_almoco` (correto, ele está em almoço) |
+| Técnico clica em "Finalizar almoço" | Mutation já existe e funciona | Igual; servidor não auto-finaliza nem fica esperando "60 min" |
+| Técnico em rota (não-Base) | Servidor força almoço aos 4h, auto-finaliza aos 60min | Sem mudança — comportamento atual preservado |
 
 ### Critérios de aceitação
 
-1. As tarefas #1, #2, #3 do print não aparecem mais com fade — ficam 100% visíveis.
-2. Coordenador consegue atribuir uma tarefa sem GPS clicando no ícone azul "UserPlus" e selecionando um técnico (já funcionava no código, mas agora fica visualmente óbvio).
-3. Drag-and-drop dessas tarefas continua bloqueado (correto — sem coord não há onde soltar no mapa).
-4. Tarefas com GPS continuam com comportamento atual (drag livre, sem badge novo).
-5. O botão "Corrigir endereço para liberar GPS" continua disponível como caminho preferido para resolver na raiz.
+1. Técnico marcado como **Base** no dia atravessa 4h+ sem que o servidor o coloque em `em_almoco` automaticamente.
+2. `atribuir-proxima-tarefa` continua devolvendo tarefas para Base após 4h.
+3. `cron-atribuir-tarefas` continua atribuindo para Base após 4h (logs sem "forçando ALMOÇO" para profIds Base).
+4. Botões manuais "Iniciar almoço" / "Finalizar almoço" do Base continuam funcionando (não foram tocados — já implementados em `JornadaStatusBar`).
+5. Técnicos em rota (não-Base) continuam tendo a regra automática de 4h + auto-finalização de 60min, sem regressão.
+
+### Arquivos envolvidos
+
+- `supabase/functions/atribuir-proxima-tarefa/index.ts` (gating por `isBase`)
+- `supabase/functions/cron-atribuir-tarefas/index.ts` (gating por `isBase` em batch)
 
 ### Fora de escopo
 
-- Recalcular geocodificação automática em background (já existe `tentarGeocodificarNovamente`).
-- Permitir drag de tarefas sem GPS (não faz sentido — o drop precisa de coord para calcular distância).
-- Mexer em RLS, edge functions ou na lógica de `useAtribuirServicoManual`.
-
-### Arquivo envolvido
-
-- `src/components/mapa/MapaVistoriasContent.tsx` (única alteração)
+- Mudar UI da `JornadaStatusBar` (já tem os botões manuais).
+- Mudar `useJornadaTrabalho.ts` (já gateia corretamente).
+- Mexer em RLS, schema ou novas tabelas — apenas leitura adicional de `alocacoes_diarias` que já existe.
 
