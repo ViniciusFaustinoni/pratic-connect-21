@@ -219,7 +219,13 @@ export default function InstaladorChecklist() {
 
   // Configuração dinâmica baseada no tipo de veículo (e se precisa rastreador)
   const fotosConfig = useMemo(() => getFotosByTipoVeiculo(tipoVeiculo), [tipoVeiculo]);
-  const totalObrigatorias = useMemo(() => getTotalFotosObrigatorias(tipoVeiculo), [tipoVeiculo]);
+  const fotosObrigatoriasConfig = useMemo(() =>
+    fotosConfig.filter(f =>
+      f.categoria !== 'instalacao' &&
+      (veiculoPrecisaRastreador || f.categoria !== 'rastreador')
+    )
+  , [fotosConfig, veiculoPrecisaRastreador]);
+  const totalObrigatorias = useMemo(() => fotosObrigatoriasConfig.length, [fotosObrigatoriasConfig]);
   
   // Usar categorias filtradas — incluir rastreador/instalação somente se o veículo exigir rastreador
   const categoriasComFotos = useMemo(() => {
