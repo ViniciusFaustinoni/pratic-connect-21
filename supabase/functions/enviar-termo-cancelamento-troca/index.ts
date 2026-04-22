@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
       <body>
       <h1>TERMO DE CANCELAMENTO POR TROCA DE TITULARIDADE</h1>
       <p>Eu, <strong>${associadoAntigo.nome}</strong>, CPF ${associadoAntigo.cpf || '___'}, declaro estar ciente e de acordo com o cancelamento do meu vínculo de proteção veicular referente ao veículo:</p>
-      <p><strong>${veiculo?.marca} ${veiculo?.modelo} ${veiculo?.ano} - Placa ${veiculo?.placa}</strong></p>
+      <p><strong>${veiculo?.marca} ${veiculo?.modelo} ${veiculo?.ano_modelo} - Placa ${veiculo?.placa}</strong></p>
       <p>Tendo em vista a transferência da titularidade para:</p>
       <p><strong>${novoTitular.nome}</strong>, CPF ${novoTitular.cpf}</p>
       <p>Esta assinatura confirma o encerramento da minha cobertura sobre este veículo.</p>
