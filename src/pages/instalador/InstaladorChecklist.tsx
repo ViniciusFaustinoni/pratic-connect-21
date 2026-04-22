@@ -541,24 +541,55 @@ export default function InstaladorChecklist() {
       try {
         const { data: rastreador, error } = await supabase
           .from('rastreadores')
-          .select('id, codigo, status, plataforma')
+          .select('id, codigo, status, plataforma, veiculo_id')
           .eq('imei', imeiRastreador)
           .maybeSingle();
 
         if (error) throw error;
 
+        const veiculoIdAtual = servico?.veiculos?.id;
+        const codigoExibicao = rastreador?.codigo || rastreador?.id.slice(0, 8) || '';
+
         if (!rastreador) {
           setImeiStatus('nao_encontrado');
           setImeiInfo(null);
           setImeiError('IMEI não encontrado no estoque. Cadastre o rastreador antes.');
-        } else if (rastreador.status !== 'estoque') {
-          setImeiStatus('indisponivel');
-          setImeiInfo({ codigo: rastreador.codigo, plataforma: rastreador.plataforma, status: rastreador.status });
-          setImeiError(`Rastreador ${rastreador.codigo || rastreador.id.slice(0, 8)} não está disponível (status: ${rastreador.status})`);
-        } else {
+        } else if (rastreador.status === 'estoque' || rastreador.status === 'em_porte') {
+          // Disponível para uso normal
           setImeiStatus('disponivel');
           setImeiInfo({ codigo: rastreador.codigo, plataforma: rastreador.plataforma });
           setImeiError('');
+        } else if (rastreador.status === 'instalado' && rastreador.veiculo_id === veiculoIdAtual) {
+          // Retomada idempotente: já instalado neste mesmo veículo
+          setImeiStatus('disponivel');
+          setImeiInfo({ codigo: rastreador.codigo, plataforma: rastreador.plataforma, status: 'ja_vinculado' });
+          setImeiError('');
+        } else if (rastreador.status === 'instalado') {
+          // Instalado em outro veículo - buscar a placa para mostrar
+          let placaOutro = '';
+          if (rastreador.veiculo_id) {
+            const { data: outroVeic } = await supabase
+              .from('veiculos')
+              .select('placa')
+              .eq('id', rastreador.veiculo_id)
+              .maybeSingle();
+            placaOutro = outroVeic?.placa ? ` (placa ${outroVeic.placa})` : '';
+          }
+          setImeiStatus('indisponivel');
+          setImeiInfo({ codigo: rastreador.codigo, plataforma: rastreador.plataforma, status: rastreador.status });
+          setImeiError(`Rastreador ${codigoExibicao} já instalado em outro veículo${placaOutro}. Use outro IMEI ou solicite remoção primeiro.`);
+        } else if (rastreador.status === 'manutencao') {
+          setImeiStatus('indisponivel');
+          setImeiInfo({ codigo: rastreador.codigo, plataforma: rastreador.plataforma, status: rastreador.status });
+          setImeiError(`Rastreador ${codigoExibicao} em manutenção — solicite outro ao coordenador.`);
+        } else if (rastreador.status === 'baixado') {
+          setImeiStatus('indisponivel');
+          setImeiInfo({ codigo: rastreador.codigo, plataforma: rastreador.plataforma, status: rastreador.status });
+          setImeiError(`Rastreador ${codigoExibicao} foi baixado e não pode ser usado.`);
+        } else {
+          setImeiStatus('indisponivel');
+          setImeiInfo({ codigo: rastreador.codigo, plataforma: rastreador.plataforma, status: rastreador.status });
+          setImeiError(`Rastreador ${codigoExibicao} indisponível (status: ${rastreador.status}).`);
         }
       } catch (err) {
         console.error('Erro ao validar IMEI:', err);
