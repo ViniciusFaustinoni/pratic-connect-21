@@ -554,7 +554,7 @@ export default function InstaladorChecklist() {
           setImeiStatus('nao_encontrado');
           setImeiInfo(null);
           setImeiError('IMEI não encontrado no estoque. Cadastre o rastreador antes.');
-        } else if (rastreador.status === 'estoque' || rastreador.status === 'em_porte') {
+        } else if (rastreador.status === 'estoque') {
           // Disponível para uso normal
           setImeiStatus('disponivel');
           setImeiInfo({ codigo: rastreador.codigo, plataforma: rastreador.plataforma });
