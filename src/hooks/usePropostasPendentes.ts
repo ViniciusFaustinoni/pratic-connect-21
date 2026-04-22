@@ -115,6 +115,21 @@ export interface PropostaPendente {
   veiculo_cor: string | null;
   veiculo_renavam: string | null;
   veiculo_chassi: string | null;
+  // Conferência (vindos de contratos / cotacoes)
+  veiculo_combustivel: string | null;
+  veiculo_categoria: string | null;
+  veiculo_tipo_uso: string | null;
+  veiculo_ano_fabricacao: number | null;
+  veiculo_alienado: boolean | null;
+  veiculo_blindado: boolean | null;
+  veiculo_financeira: string | null;
+  veiculo_procedencia: string | null;
+  veiculo_valor_fipe: number | null;
+  codigo_fipe: string | null;
+  cobertura_fipe: number | null;
+  valor_adesao: number | null;
+  uso_aplicativo: boolean | null;
+  cenario_adesao: string | null;
   dia_vencimento: number | null;
   associado_id: string | null;
   cotacao_id: string | null;
