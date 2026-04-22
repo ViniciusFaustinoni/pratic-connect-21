@@ -253,6 +253,19 @@ export default function Cotacoes() {
       return dateB - dateA;
     });
   }, [sortedCotacoes]);
+
+  // Totais SEM filtros — para badges das abas, garantindo visibilidade real
+  const cotacoesEmAndamentoTotal = useMemo(() => {
+    return (cotacoes || []).filter(c =>
+      STATUS_EM_ANDAMENTO.includes(c.status) && c.status_contratacao !== 'concluido'
+    ).length;
+  }, [cotacoes]);
+
+  const cotacoesFinalizadasTotal = useMemo(() => {
+    return (cotacoes || []).filter(c =>
+      STATUS_FINALIZADAS.includes(c.status) || c.status_contratacao === 'concluido'
+    ).length;
+  }, [cotacoes]);
   
   const mesesDisponiveis = [...new Set((cotacoes || []).map(c => {
     const date = new Date(c.created_at);
