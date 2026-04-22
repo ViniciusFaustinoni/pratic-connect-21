@@ -183,13 +183,19 @@ export function useCriarAgendamentoBase() {
         throw new Error('Este período já está lotado. Por favor, escolha outro.');
       }
 
+      // Converter período canônico em horário (coluna `horario` é time no banco)
+      const horarioParaInserir =
+        dados.horario === 'manha' ? '08:00:00'
+        : dados.horario === 'tarde' ? '13:00:00'
+        : dados.horario;
+
       // Criar agendamento
       const { data: agendamento, error } = await publicSupabase
         .from('agendamentos_base')
         .insert({
           cotacao_id: dados.cotacaoId,
           data_agendada: dados.dataAgendada,
-          horario: dados.horario,
+          horario: horarioParaInserir,
           cliente_nome: dados.clienteNome,
           cliente_telefone: dados.clienteTelefone,
           cliente_email: dados.clienteEmail,
