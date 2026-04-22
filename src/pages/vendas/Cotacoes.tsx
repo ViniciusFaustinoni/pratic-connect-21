@@ -1032,6 +1032,18 @@ export default function Cotacoes() {
           plano_id: cotacaoParaDuplicar.plano_id,
           dados_extras: cotacaoParaDuplicar.dados_extras as any,
         } : null}
+        onSuccess={() => {
+          // Após criar/editar cotação, garantir que apareça: voltar para Em Andamento e limpar filtros
+          setActiveTab('em_andamento');
+          setStatusFilter('all');
+          setMesFilter('all');
+          setDataFilter(undefined);
+          setConsultorFilter('all');
+          setFiltroOrfas(false);
+          setEtapaFunilFilter('all');
+          setSearchInput('');
+          toast.success('Cotação salva! Exibindo em "Em Andamento".');
+        }}
       />
       <ContratoWizard 
         open={showContratoWizard} 
