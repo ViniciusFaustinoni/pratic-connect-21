@@ -638,6 +638,8 @@ export function usePropostasPendentes() {
         tipoEtapaAnalise = 'agendamento_confirmado';
       }
 
+          const planoTemRouboFurto = await checkPlanoTemRouboFurto(contrato.plano_id);
+
           return {
             ...contrato,
             tipo_etapa_analise: tipoEtapaAnalise,
@@ -662,6 +664,7 @@ export function usePropostasPendentes() {
             veiculo_chassi: null, // Não disponível na lista resumida
             veiculo_blindado: veiculoBlindadoCot,
             cenario_adesao: cenarioAdesaoCot,
+            plano_tem_roubo_furto: planoTemRouboFurto,
           } as PropostaPendente;
         })
       );
@@ -1274,6 +1277,8 @@ export function useProposta(contratoId: string | undefined) {
         tipoEtapaAnaliseSingle = 'agendamento_confirmado';
       }
 
+      const planoTemRouboFurto = await checkPlanoTemRouboFurto(contrato.plano_id);
+
       const result: PropostaPendente = {
         ...contrato,
         tipo_etapa_analise: tipoEtapaAnaliseSingle,
@@ -1298,6 +1303,7 @@ export function useProposta(contratoId: string | undefined) {
         veiculo_chassi: veiculoChassi,
         veiculo_blindado: veiculoBlindadoCot,
         cenario_adesao: cenarioAdesaoCot,
+        plano_tem_roubo_furto: planoTemRouboFurto,
       };
       return result;
     },
