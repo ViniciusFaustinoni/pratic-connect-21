@@ -246,7 +246,21 @@ serve(async (req) => {
       console.error('[atribuir-proxima-tarefa] Erro ao buscar turno:', turnoError);
     }
 
+    // Verificar tipo de alocação do dia (Base = bate ponto externamente, sem auto-almoço)
+    const { data: alocHoje } = await supabase
+      .from('alocacoes_diarias')
+      .select('tipo_alocacao')
+      .eq('profissional_id', profissionalId)
+      .eq('data', hoje)
+      .maybeSingle();
+    const isBase = alocHoje?.tipo_alocacao === 'base';
+    if (isBase) {
+      console.log(`[atribuir-proxima-tarefa] Profissional ${profissionalId} é BASE — almoço gerido manualmente.`);
+    }
+
     // Se está em almoço, verificar se já expirou (60+ min)
+    // Para Base: se ele iniciou manualmente, bloqueamos atribuição enquanto em_almoco,
+    // mas NÃO auto-finalizamos (ele finaliza pelo botão).
     if (turnoHoje?.status === 'em_almoco' && turnoHoje.inicio_almoco) {
       const inicioAlmoco = new Date(turnoHoje.inicio_almoco);
       const agora = new Date();
