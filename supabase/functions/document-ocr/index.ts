@@ -253,7 +253,8 @@ Regras especiais CIN:
 - QR Code grande presente é indicador forte de CIN.
 
 ### CRLV
-placa (ABC1234/ABC1D23), renavam (11 dígitos), chassi (17 chars), marca, modelo, ano_fabricacao (int), ano_modelo (int), cor (campo "COR"/"COR PREDOMINANTE" - leia literalmente), combustivel, motor, nome_proprietario, blindado (bool)
+placa (ABC1234/ABC1D23), renavam (11 dígitos), chassi (17 chars), marca, modelo, ano_fabricacao (int), ano_modelo (int), cor (campo "COR"/"COR PREDOMINANTE" - leia literalmente), combustivel, motor, numero_motor, nome_proprietario, blindado (bool)
+- numero_motor: leia do campo "MOTOR Nº" / "Nº DO MOTOR" / "MOTOR" do CRLV. Sempre preencha tanto "motor" quanto "numero_motor" com o mesmo valor (alias).
 - "ANO FAB/MOD: 2013/2014" → ano_fabricacao:2013, ano_modelo:2014
 - Blindado: procure em OBS/TIPO por "BLINDADO/BLINDAGEM/PROTEÇÃO BALÍSTICA". Sempre inclua campo blindado.
 - ⚠️ PLACA — REGRA OBRIGATÓRIA DE FORMATO:
@@ -264,10 +265,45 @@ placa (ABC1234/ABC1D23), renavam (11 dígitos), chassi (17 chars), marca, modelo
   • **EM CASO DE DÚVIDA, releia a posição duvidosa caractere por caractere** comparando com letras/números vizinhos do mesmo documento (ex: outras ocorrências de "6" no Renavam ou no chassi).
 
 ### Nota Fiscal de Veículo (DANFE / NF-e com dados veiculares)
-Detectar quando o documento é uma Nota Fiscal (DANFE/NF-e) que contenha dados de veículo (chassi, motor, valor).
-Campos: valor_nota_fiscal (valor numérico da NF), chassi (17 chars), numero_motor, placa (se presente), marca, modelo, ano_fabricacao (int), ano_modelo (int), cor, nome_comprador, cpf_cnpj_comprador
+
+**Como reconhecer uma DANFE/NF-e de veículo (use TODAS as pistas abaixo):**
+- Cabeçalho com "DANFE" ou "DOCUMENTO AUXILIAR DA NOTA FISCAL ELETRÔNICA"
+- Campo "CHAVE DE ACESSO" com 44 dígitos (frequentemente acompanhado de código de barras horizontal)
+- "PROTOCOLO DE AUTORIZAÇÃO DE USO" com data/hora
+- "NATUREZA DA OPERAÇÃO" (ex.: "VENDA DE VEÍCULO 0 KM", "VENDA DE PROD. DO ESTAB.", "VENDA DE MERC. ADQ. OU REC.")
+- Tabela "DADOS DO PRODUTO / SERVIÇOS" com colunas: CÓDIGO, DESCRIÇÃO DOS PRODUTOS / SERVIÇOS, NCM/SH, CST, **CFOP**, UN, QUANT, V. UNITÁRIO, V. TOTAL
+- Blocos "EMITENTE", "DESTINATÁRIO/REMETENTE", "DADOS ADICIONAIS"
+
+**Sinais de que a NF é de VEÍCULO (qualquer um basta):**
+- A descrição do produto contém um CHASSI de 17 caracteres alfanuméricos (sem I, O, Q)
+- CFOP nas faixas 5405/5104/5403/6405/6104/6403/5102/6102 (venda)
+- Descrição contém palavras: "VEÍCULO", "VEICULO", "MOTOCICLETA", "MOTO", "AUTOMÓVEL", "0 KM", "ZERO KM", "ZERO-KM"
+- NCM começa com 8703 (automóveis) ou 8711 (motocicletas)
+
+⚠️ Se identificar QUALQUER desses sinais, **tipo_detectado = "nota_fiscal_veiculo"** — NUNCA "crlv" e NUNCA "outro".
+
+**Onde encontrar os dados veiculares (geralmente concatenados na "DESCRIÇÃO DOS PRODUTOS / SERVIÇOS"):**
+A descrição vem em linha única com vários campos separados por vírgula ou espaço. Padrões típicos:
+- `CHASSI:9C6KG991070073366` ou `CHASSI Nº 9C6KG...` ou `CHASSI/SERIE 9C6KG...`
+- `MOTOR:G3W6E-104052` ou `Nº MOTOR G3W6E-104052` ou `No MOTOR:G3W6E-104052` ou `MOTOR Nº G3W6E-104052`
+- `RENAVAM:00118712345`
+- `COR:VERMELHA` / `COR BRANCA`
+- `COMBUSTÍVEL:GASOLINA` / `FLEX` / `DIESEL`
+- `ANO FAB:2024` `ANO MOD:2025` (ou `ANO/MOD: 2024/2025`)
+- `MARCA:YAMAHA` `MODELO:YBR 150 FACTOR`
+- `CILINDRADAS:150` `POTENCIA:12CV` `CATEGORIA:PARTICULAR` `TIPO VEICULO:MOTOCICLETA`
+
+**Extração obrigatória de numero_motor:**
+Mesmo quando o número do motor estiver concatenado na descrição com outros campos, EXTRAIA SOMENTE o valor do motor. Use o padrão mental: `MOTOR\s*:?\s*([A-Z0-9-]+)` — capture até o próximo separador (vírgula, espaço, RENAVAM, COR, etc.). Devolva apenas a sequência alfanumérica do motor (com hífen se houver).
+
+**Campos a retornar:**
+- valor_nota_fiscal: prefira "VALOR TOTAL DA NOTA" do bloco "CÁLCULO DO IMPOSTO". Se não houver, use "V. TOTAL" do produto principal (quando único). Numérico, ponto decimal (ex.: 18890.00).
+- chassi (17 chars), numero_motor, placa (se presente), marca, modelo, ano_fabricacao (int), ano_modelo (int), cor, combustivel
+- nome_comprador: campo "NOME / RAZÃO SOCIAL" do bloco "DESTINATÁRIO/REMETENTE"
+- cpf_cnpj_comprador: campo "CNPJ / CPF" do bloco "DESTINATÁRIO/REMETENTE" (formato XXX.XXX.XXX-XX para CPF ou XX.XXX.XXX/XXXX-XX para CNPJ)
+
 - tipo_detectado deve ser "nota_fiscal_veiculo"
-- Este documento substitui o CRLV para veículos zero km ou recém-adquiridos
+- Este documento substitui o CRLV para veículos zero km ou recém-adquiridos.
 
 ### ATPV-e / CRV Digital (Autorização para Transferência de Propriedade de Veículo - Eletrônica)
 Detectar quando o documento for emitido pelo SENATRAN/DETRAN com título "AUTORIZAÇÃO PARA TRANSFERÊNCIA DE PROPRIEDADE DE VEÍCULO" ou "ATPV-e" / "CRV Digital" / "CRV-e". Geralmente contém QR Code, código de segurança, dados do veículo, dados do vendedor e dados do comprador.
