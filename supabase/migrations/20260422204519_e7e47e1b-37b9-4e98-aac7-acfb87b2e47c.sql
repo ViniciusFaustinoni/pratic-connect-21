@@ -1,0 +1,1 @@
+UPDATE public.veiculos SET codigo_fipe = '827135-6', updated_at = NOW() WHERE id = '0907831e-3791-4f3d-b46f-8485d923bf27';
