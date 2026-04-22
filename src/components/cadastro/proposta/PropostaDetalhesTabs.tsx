@@ -373,8 +373,11 @@ export function PropostaDetalhesTabs({
             <FichaField icon={FileText} label="Número do Contrato" value={proposta.numero} iconColor="text-emerald-500" />
             <FichaField icon={FileCheck} label="Plano" value={proposta.plano?.nome || proposta.plano_nome} highlight iconColor="text-emerald-500" />
             <FichaField icon={DollarSign} label="Valor Mensal" value={formatCurrency(proposta.valor_mensal)} highlight iconColor="text-emerald-500" />
+            <FichaField icon={DollarSign} label="Valor Adesão" value={formatCurrency(proposta.valor_adesao)} iconColor="text-emerald-500" />
+            <FichaField icon={Calendar} label="Dia de Vencimento" value={proposta.dia_vencimento ? `Todo dia ${proposta.dia_vencimento}` : null} iconColor="text-emerald-500" />
             <FichaField icon={Calendar} label="Data de Assinatura" value={proposta.data_assinatura ? format(new Date(proposta.data_assinatura), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : null} iconColor="text-emerald-500" />
             <FichaField icon={User} label="Vendedor" value={proposta.vendedor?.nome} iconColor="text-emerald-500" />
+            <FichaField icon={FileText} label="Cenário Adesão" value={proposta.cenario_adesao} iconColor="text-emerald-500" />
           </CardContent>
         </Card>
       </TabsContent>
