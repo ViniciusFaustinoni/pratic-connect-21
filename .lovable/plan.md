@@ -1,99 +1,58 @@
 
 
-## Unificar fila de solicitações em Cadastro › Processos
+## Corrigir 401 da Hinova na sincronização financeira individual
 
-### Diagnóstico do estado atual
+### Causa raiz
 
-Hoje existem **três pontos distintos** que listam solicitações da mesma natureza, com fontes de dados diferentes:
+Há **duas implementações divergentes** de leitura/decriptação das credenciais Hinova armazenadas em `integracoes_credenciais`:
 
-| Onde | Aba/Página | Fonte |
-|---|---|---|
-| `/cadastro/processos` (Titularidade) | Lê `chat_solicitacoes_ia` tipo=`troca_titularidade` | **legado** (fluxo IA antigo) |
-| `/cobranca/troca-titularidade` | Lê `solicitacoes_troca_titularidade` (nova tabela) | **novo fluxo** que acabamos de construir |
-| `/monitoramento/aprovacoes` | Lê `solicitacoes_troca_titularidade` (mesma tabela, etapa monit.) | **novo fluxo** |
-| `/cadastro/processos` (Substituições) | `substituicoes_veiculo` | atual |
-| `/cadastro/processos` (Migrações) | `solicitacoes_migracao` | atual |
-| `/cadastro/processos` (Reativação) | `chat_solicitacoes_ia` tipo=`reativacao` | atual |
+| Função | Como deriva a chave de decriptação |
+|---|---|
+| `sga-hinova-sync` (que **funciona** ao cadastrar associado/veículo) | Usa **somente** `SUPABASE_SERVICE_ROLE_KEY` (mesmo segredo usado no `integracoes-credenciais` que **encripta**) |
+| `_shared/hinova-client.ts → getHinovaCreds` (usado pela sync financeira) | `INTEGRACOES_ENCRYPTION_KEY` **se existir**, senão cai para `SUPABASE_SERVICE_ROLE_KEY` |
 
-**Inclusão de veículo**: não tem entidade própria de "solicitação". Hoje vai direto à cotação/contrato via `OutrasEntradasMenu` → `cotacoes` → `contratos.tipo_entrada='inclusao'`. Não há fila de aprovação.
+A função pública `integracoes-credenciais` salva o registro **sempre** encriptado com `SUPABASE_SERVICE_ROLE_KEY`. Se `INTEGRACOES_ENCRYPTION_KEY` estiver definido com qualquer outro valor, `getHinovaCreds` deriva uma chave diferente, a decriptação silenciosa falha (catch + `console.warn` no shared) e retorna `null` — ou pior: decripta um JSON corrompido com `usuario`/`senha` lixo, resultando em **401 "Login ou senha inválido"** na Hinova. Esse é exatamente o erro visto no log da última execução.
 
-### O que vamos unificar
+`sga-hinova-sync` não cai nessa armadilha porque é hardcoded em `SUPABASE_SERVICE_ROLE_KEY`, igual ao salvador.
 
-`/cadastro/processos` passa a ser a **única fila operacional** das solicitações de mudança no contrato/associado. As 4 abas ficam:
+### Correção
 
-```text
-┌─ Cadastro › Processos ────────────────────────────────────┐
-│                                                            │
-│  [Titularidade] [Substituições] [Migrações] [Inclusões]   │
-│                                                            │
-└────────────────────────────────────────────────────────────┘
+**1. Alinhar `_shared/hinova-client.ts` à fonte de verdade do encriptador**
+
+Trocar a ordem de preferência da chave em `getHinovaCreds` para:
+
+```ts
+const secret = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 ```
 
-Reativação sai (vira aba secundária colapsada ou some — é fluxo distinto de "renovar associado", não de mudança contratual). Substituição/Migração permanecem com as fontes atuais. Titularidade muda de fonte. Inclusões ganham aba nova.
+(remover o `INTEGRACOES_ENCRYPTION_KEY`). Justificativa: o `integracoes-credenciais` **nunca** usa `INTEGRACOES_ENCRYPTION_KEY` — é morto. Manter a opção é só fonte de bug futuro.
 
-### Mudanças por aba
+**2. Falhar alto, não silenciar**
 
-**1. Aba Titularidade (refatorada por completo)**
-- **Trocar fonte**: deixa de ler `chat_solicitacoes_ia`. Passa a usar `useSolicitacoesTroca()` (já existe) sobre a tabela `solicitacoes_troca_titularidade`.
-- **Reaproveita** componentes já prontos: cards de listagem com `STATUS_LABEL`, badges de "Termo assinado" e `<ModalDetalhesTroca>` em `modo="cadastro"`.
-- **Sub-abas internas**: Aguardando Cadastro · Aguardando Monitoramento · Em Vistoria · Liberadas/Efetivadas · Recusadas.
-- **Visibilidade por papel**: Cadastro vê todas, mas só pode agir em `aguardando_cadastro` (já enforced no modal pelo `podeAgir`).
+No `getHinovaCreds`, quando o registro do banco existir como `configurado=true` mas a decriptação lançar, **propagar o erro** com mensagem clara (`'Falha ao decriptar credenciais Hinova — verifique INTEGRACOES_ENCRYPTION_KEY/SERVICE_ROLE_KEY'`) em vez de devolver `null`. Hoje o `console.warn` engole o problema e o caller só vê "Credenciais Hinova não configuradas", o que não orienta o diagnóstico.
 
-**2. Aba Substituições (mantida)**
-- Sem mudança funcional; já lê `substituicoes_veiculo`. Mantém navegação para `/cadastro/substituicoes/:id`.
+**3. Validar campos obrigatórios após decriptação**
 
-**3. Aba Migrações (mantida)**
-- Sem mudança; reusa `<MigracoesTab>` existente.
+Após `JSON.parse`, exigir `token`, `usuario`, `senha` não-vazios. Se algum vier vazio (ex.: registro antigo migrado), lançar `Error('Credenciais Hinova incompletas no banco — refaça o cadastro em Configurações > Integrações')` em vez de tentar autenticar com string vazia (que gera o 401 enganoso).
 
-**4. Aba Inclusões (NOVA)**
-- Lê `cotacoes` filtrando contratos com `tipo_entrada='inclusao'` **OU** cotações abertas a partir do fluxo de inclusão. Como `cotacoes` não tem `tipo_entrada`, filtramos via `contratos.tipo_entrada='inclusao'` join com cotação, mais cotações em `dados_extras->>'tipo_entrada' = 'inclusao'` (o fluxo público novo já marca isso). Agrupa por status (Em cotação · Em contratação · Ativo · Recusada).
-- Card mostra: associado, veículo a incluir, FIPE, mensalidade, status. Ação principal = "Abrir cotação" (link público) ou "Ver associado".
-- **Sem botão de aprovar/recusar manual** — inclusão é decisão de venda/financeiro, não passa por aprovação dupla. A fila aqui é **apenas visibilidade operacional** para o Cadastro acompanhar o pipeline.
+**4. Logar resposta da Hinova em caso de 401**
 
-### Páginas que serão **descontinuadas/redirecionadas**
+Em `autenticarHinova`, quando `r.status === 401`, gravar uma linha em `sga_sync_logs` com `action='autenticar'`, `status='error'` e `error_message` contendo o `mensagem` retornado pela Hinova. Hoje só vai pro `console.error`. Sem isso a UI mostra "0 boletos importados" e ninguém percebe.
 
-- `/cobranca/troca-titularidade` → **redirect** para `/cadastro/processos?tab=titularidade`. Remover do menu lateral em "Cobrança". Justificativa: Cadastro é o dono operacional da fila; Cobrança não precisa de tela própria (o financeiro já aparece dentro do `<ModalDetalhesTroca>` na aba "Financeiro Antigo").
-- `/monitoramento/aprovacoes` → **mantida** (etapa específica da equipe de Monitoramento, com `modo="monitoramento"` no modal). Não duplica — é apenas a visão filtrada `aguardando_monitoramento` + `aguardando_vistoria` para o time de Monit.
-- `ReativacoesTab` em ProcessosOperacionais → removida da TabsList (mantém o componente para eventual reaproveitamento, mas não é exposto). Reativação tem fluxo próprio via `ReativacaoWizard` na ficha do associado.
+**5. Propagar erro ao frontend**
 
-### Card-resumo (topo)
-
-Os 4 contadores no topo (`useProcessosCounts`) passam a refletir as novas fontes:
-
-| Card | Query |
-|---|---|
-| Titularidade pendente | `solicitacoes_troca_titularidade` status in (`aguardando_cadastro`, `cotacao_em_andamento`) |
-| Substituições | `substituicoes_veiculo` status=`aguardando_aprovacao` (igual hoje) |
-| Migrações | `solicitacoes_migracao` status=`pendente` (igual hoje) |
-| Inclusões em andamento | `cotacoes` com `dados_extras->>tipo_entrada='inclusao'` e status `em_cotacao`/`pendente_assinatura` |
-
-### Modal único de detalhes
-
-- Titularidade → reusa `<ModalDetalhesTroca modo="cadastro">` (não criar outro).
-- Substituição → mantém navegação para a página detalhe atual `/cadastro/substituicoes/:id`.
-- Migração → reusa o dialog interno do `MigracoesTab` (já existe).
-- Inclusão → modal simples só de visualização (associado + veículo + cotação + atalhos).
-
-### Sidebar
-
-- Em **Cadastro**: "Processos" continua sendo o único item para essa fila. Sem itens novos.
-- Em **Cobrança**: remover "Troca de Titularidade" (vira redirect).
-- Em **Monitoramento**: "Aprovações" continua (etapa Monit.).
+No `sga-sync-financeiro-veiculo`, quando `autenticarHinova` lançar, devolver `json(200, { success: false, error: '<mensagem da Hinova>' })` em vez do genérico atual. O hook `useSGASync` já tem `onError` ligado ao toast — só precisa receber a mensagem.
 
 ### Critérios de aceitação
 
-1. `/cadastro/processos` mostra as 4 abas: Titularidade, Substituições, Migrações, Inclusões.
-2. Aba Titularidade lista solicitações da nova tabela `solicitacoes_troca_titularidade` com badge de status correto e abre `<ModalDetalhesTroca modo="cadastro">`.
-3. Cadastro consegue aprovar/recusar uma solicitação `aguardando_cadastro` direto da tela (botões já existem no modal).
-4. `/cobranca/troca-titularidade` redireciona automaticamente para `/cadastro/processos`.
-5. Item "Troca de Titularidade" sumiu do menu Cobrança.
-6. Aba Inclusões mostra cotações em andamento marcadas como inclusão, com link para a cotação pública.
-7. Contadores do topo refletem as queries novas e atualizam ao aprovar/recusar (invalidação de `processos-counts`).
-8. Nenhuma listagem antiga baseada em `chat_solicitacoes_ia` tipo=troca_titularidade aparece mais — fluxo legado fica órfão (não bloqueia, apenas para de ser exibido).
+1. Botão "Atualizar agora" no modal de detalhes do veículo executa a sincronização com sucesso (mesmas credenciais que `sga-hinova-sync` já usa para cadastro de associado).
+2. `sga_sync_logs` recebe registro `action='autenticar'` em todas as execuções da sync financeira (sucesso e falha).
+3. Em caso de 401 da Hinova, o toast no frontend mostra a mensagem real ("Login ou senha inválido", etc.) em vez de "0 boletos importados".
+4. `cron-sga-sync-financeiro-diario` (que reusa o mesmo `getHinovaCreds`) também volta a funcionar sem qualquer mudança nele — herda a correção pelo shared client.
 
 ### Fora de escopo
 
-- Migrar dados antigos de `chat_solicitacoes_ia` tipo=`troca_titularidade` para a nova tabela. O fluxo IA antigo continua existindo no banco, apenas não é mais exibido nesta área.
-- Criar entidade `solicitacoes_inclusao` separada — inclusão segue sendo gerida pela cotação/contrato.
-- Mexer no fluxo de Reativação (continua via `ReativacaoWizard` na ficha do associado).
+- Trocar credenciais reais da Hinova (não é necessário — a evidência é que estão corretas no banco; o bug é o caminho de leitura).
+- Refatorar `sga-hinova-sync` para usar o shared client (separado, não bloqueia esta correção).
+- Remover `INTEGRACOES_ENCRYPTION_KEY` de outros lugares (faz parte de outra varredura).
 
