@@ -230,6 +230,11 @@ const menuConfig: {
           url: '/monitoramento/aprovacao-associados',
           icon: ShieldAlert,
         },
+        {
+          title: 'Aprovações Troca Titularidade',
+          url: '/monitoramento/aprovacoes',
+          icon: ShieldAlert,
+        },
         { title: 'Prestadores Parceiros', url: '/monitoramento/prestadores-parceiros', icon: Truck },
       ],
     },
@@ -309,6 +314,7 @@ const menuConfig: {
         { title: 'Negativação', url: '/cobranca/negativacao', icon: AlertTriangle },
         { title: 'Régua', url: '/cobranca/regua', icon: List },
         { title: 'Chat', url: '/cobranca/chat', icon: MessageCircle },
+        { title: 'Troca de Titularidade', url: '/cobranca/troca-titularidade', icon: Users },
       ],
     },
     {

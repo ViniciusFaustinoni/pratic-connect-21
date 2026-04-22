@@ -196,6 +196,8 @@ const Negativacao = lazy(() => import("./pages/cobranca/Negativacao"));
 const AcordosList = lazy(() => import("./pages/cobranca/AcordosList"));
 const NovoAcordo = lazy(() => import("./pages/cobranca/NovoAcordo"));
 const AcordoDetalhe = lazy(() => import("./pages/cobranca/AcordoDetalhe"));
+const TrocaTitularidade = lazy(() => import("./pages/cobranca/TrocaTitularidade"));
+const AprovacoesTroca = lazy(() => import("./pages/monitoramento/AprovacoesTroca"));
 
 // Agência
 const AgenciaDashboard = lazy(() => import("./pages/agencia/AgenciaDashboard"));
@@ -563,6 +565,7 @@ const App = () => (
               <Route path="/cobranca/acordos" element={<AcordosList />} />
               <Route path="/cobranca/acordos/novo" element={<NovoAcordo />} />
               <Route path="/cobranca/acordos/:id" element={<AcordoDetalhe />} />
+              <Route path="/cobranca/troca-titularidade" element={<TrocaTitularidade />} />
               
               {/* Contabilidade */}
               <Route path="/contabilidade" element={<ContabilidadeDashboard />} />
@@ -627,6 +630,7 @@ const App = () => (
               <Route path="/monitoramento/imprevistos" element={<ImprevistosPainel />} />
               <Route path="/monitoramento/prestadores-parceiros" element={<PrestadoresParceiros />} />
               <Route path="/monitoramento/mapa-atendimento" element={<MapaAtendimentoPage />} />
+              <Route path="/monitoramento/aprovacoes" element={<AprovacoesTroca />} />
               
               {/* Marketing */}
               <Route path="/marketing" element={<MarketingDashboard />} />
