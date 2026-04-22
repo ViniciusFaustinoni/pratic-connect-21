@@ -1,76 +1,61 @@
 
 
-## Importação financeira SGA: confirmar separação do Asaas e ativar exibição para o associado
+## Remover trava de horário para iniciar tarefa atribuída ao técnico
 
-### Confirmação técnica (resposta direta à pergunta)
+### Causa raiz
 
-Sim, é totalmente possível e **a arquitetura já foi construída exatamente assim**. Asaas e SGA estão isolados no código:
+A trava aparece em **dois pontos** que bloqueiam o botão "Iniciar Tarefa" antes do início do período (08:00 / 13:00 / 18:00):
 
-| Origem | Tabela | Função | Uso |
-|---|---|---|---|
-| **Asaas** | `asaas_cobrancas` | `buscar-boletos-associado`, `asaas-cobrancas`, `asaas-webhook` | Apenas adesão hoje (e cobrança nova quando ativada) |
-| **SGA Hinova** | `cobrancas` (com `origem='sga_hinova'`) | `sga-sync-financeiro-veiculo`, `sga-backfill-financeiro`, `cron-sga-sync-financeiro-diario` | Mensalidades históricas e futuras dos associados da base antiga |
+1. **Frontend — `src/components/vistoriador/TarefaAtualCard.tsx`** (linhas 99-107 e 526)
+   `podeIniciarPorHorario` desabilita o botão quando `horaAtual < horaLiberacaoTarefa(tarefa)`. Por isso o caso real do anexo (10:33, período Tarde com início às 13:00) mostra "Disponível em 2h 27min".
 
-A API Hinova SGA v2 oferece tudo que você listou e o cliente compartilhado (`_shared/hinova-client.ts`) já consome:
+2. **Backend (client mutation) — `src/hooks/useTarefaAtual.ts`** (linhas 222-236, dentro de `useIniciarRota`)
+   Mesmo se o botão fosse habilitado, o `mutationFn` faz uma segunda checagem e lança `Período disponível a partir das HH:MM`.
 
-- `GET /buscar/situacao-financeira-veiculo/{codigo}` → ADIMPLENTE/INADIMPLENTE
-- `POST /listar/boleto-associado-veiculo` → array de boletos com:
-  - `nosso_numero`, `valor_boleto`, `valor_boleto_multa_mora`, `valor_multa`, `valor_mora`
-  - `data_emissao`, `data_vencimento`, `data_vencimento_original`, `data_pagamento`
-  - `linha_digitavel`, `codigo_barras`, `url_boleto`
-  - `situacao_boleto` (pago/aberto/vencido/cancelado), `tipo_boleto`, `mes_referente`
+A função base `horaLiberacaoTarefa` em `src/lib/periodo-utils.ts` é correta e segue sendo útil para **informação visual** (saber a que horas o período começa) — não deve ser removida, só deixa de ser usada como **bloqueio**.
 
-Esses campos já são gravados em `cobrancas` pelo `sga-sync-financeiro-veiculo` (linhas 121–146) com `origem='sga_hinova'`. Nenhum byte passa pelo Asaas.
+### Por que a trava existia
 
-### O que falta (o problema real)
+Foi adicionada para impedir que o técnico iniciasse a rota muito antes do período prometido ao associado (ex.: chegar 6h da manhã num agendamento da tarde). Mas o modelo do negócio é **por período (Manhã/Tarde/Noite)**, não por horário cravado. Se a tarefa **já foi atribuída ao técnico**, ele deve ter autonomia para adiantar — inclusive porque o associado já foi contatado (etapa "Contato realizado via WhatsApp" do anexo) e o adiantamento normalmente é combinado por mensagem.
 
-Verifiquei o banco: **0 cobranças com `origem='sga_hinova'`** importadas até agora. O pipeline está pronto mas não rodou em escala porque:
+### Correção (mínima e cirúrgica)
 
-1. **Mapeamento `codigo_hinova` por veículo** ainda incompleto (corrigido no commit anterior — header `Authorization`). Sem `codigo_hinova` no veículo, o sync de boletos não roda.
-2. **Backfill financeiro nunca processou os 9.618 veículos** — depende do mapeamento.
-3. **App do associado (`useMyBoletos`)** lê SOMENTE `asaas_cobrancas`. Mesmo quando o SGA importar os boletos, o associado da base antiga não vai vê-los — vai abrir o app e achar que está vazio.
+**Arquivo 1 — `src/components/vistoriador/TarefaAtualCard.tsx`**
 
-### Plano
+- Remover `!podeIniciarPorHorario` da condição `disabled` do botão "Iniciar Tarefa" (linha 526). Fica:
+  ```tsx
+  disabled={isIniciandoRota || (!isNaBase && !contatoRealizado)}
+  ```
+- Remover o bloco de feedback amber "Disponível em … período da Tarde começa às …" (linhas 549-565), já que não há mais bloqueio.
+- Manter `horaLiberacao` apenas como referência interna se quisermos exibir uma linha **informativa** discreta (sem trava). Para simplificar, removemos `podeIniciarPorHorario` e `tempoRestante` que ficam órfãos.
 
-**1. Concluir o mapeamento dos 9.618 veículos**
+**Arquivo 2 — `src/hooks/useTarefaAtual.ts`**
 
-Já corrigido o header de auth e logging amostral. Falta apenas rodar `sga-mapear-codigos-veiculos` em lotes de 100 até `restantes ≈ 0`. Eu disparo e monitoro `veiculos.codigo_hinova IS NOT NULL`.
+- Remover o bloco de validação de horário no `mutationFn` de `useIniciarRota` (linhas 222-236), incluindo o `import` dinâmico de `horaLiberacaoTarefa`. A checagem de atribuição (`profissional_id === profile.id`) permanece — essa sim é a trava de segurança real.
 
-**2. Disparar o backfill financeiro completo**
+**Sem mudanças em:**
+- `src/lib/periodo-utils.ts` (a função fica disponível para outros usos, ex.: agendamento/coordenação).
+- Edge functions, banco, RLS, regras de SLA. Nada disso depende dessa trava.
+- Fluxos de "Cheguei no Local", confirmação WhatsApp, contato obrigatório — todos preservados.
 
-`sga-backfill-financeiro` cria 1 job por veículo mapeado e os workers chamam `sga-sync-financeiro-veiculo`, que já grava em `cobrancas`. Métrica de sucesso: `SELECT COUNT(*) FROM cobrancas WHERE origem='sga_hinova'` > 0 e crescendo.
+### Comportamento após a correção
 
-**3. Unificar a visão do associado (`useMyBoletos`)**
-
-Adicionar a leitura de `cobrancas WHERE associado_id = X AND origem='sga_hinova'` ao lado do retorno do Asaas, mapeando para o mesmo tipo `Boleto`. Resultado final = união ordenada por vencimento. Sem mudar nenhum componente de UI — o que é renderizado hoje continua, só passa a incluir os boletos SGA com seus `codigoBarras`, `linhaDigitavel` e `urlBoleto` reais da Hinova.
-
-**4. Garantir totais financeiros do associado consideram SGA**
-
-Hoje `FinanceiroDashboard.tsx` e `RecuperacaoKPIs.tsx` calculam só sobre `asaas_cobrancas`. Adicionar leitura paralela de `cobrancas (origem='sga_hinova')` e somar nos cards. Sem nova UI — apenas a query muda.
-
-**5. Sanidade: confirmar nenhum ponto cria boleto Asaas para mensalidade SGA**
-
-Auditar `gerar-cobrancas-mensais`, `gerar-faturas-mensais`, `disparar-boletos-lote`, `executar-regua-cobranca` para confirmar que nenhum gera Asaas para associados que têm `origem='sga_hinova'` — se gerar, adicionar guarda `WHERE NOT EXISTS (cobrança SGA do mesmo período)`.
+- Técnico com tarefa atribuída pode tocar **"Iniciar Tarefa"** a qualquer hora do dia agendado, desde que (para serviços externos) tenha registrado contato com o associado.
+- Encaixes continuam liberando imediato (já era o caso).
+- Sem mensagem de "Disponível em Xh Ymin".
+- Coordenação continua vendo o período no painel; o técnico apenas deixa de ser bloqueado por ele.
 
 ### Critérios de aceitação
 
-1. Após o mapeamento + backfill, `SELECT COUNT(*) FROM cobrancas WHERE origem='sga_hinova'` retorna milhares de registros, com `codigo_barras`, `linha_digitavel`, `boleto_url`, `valor`, `data_vencimento`, `data_pagamento` (quando pago) preenchidos.
-2. Aba **Financeiro SGA** no modal do veículo (já existente) lista os boletos passados e futuros, com botões "copiar linha digitável" e "abrir 2ª via" funcionando.
-3. App do associado (`/app/boletos`) mostra boletos do Asaas (adesão) **+** boletos SGA (mensalidades) na mesma lista, ordenados por vencimento, sem duplicidade.
-4. Nenhum novo boleto Asaas é gerado para associado que tem mensalidade vinda do SGA.
-5. Asaas continua intacto para taxa de adesão (sem regressão).
+1. Caso real do anexo (10:33, agendado para Tarde) — botão "Iniciar Tarefa" fica habilitado assim que o contato com o associado é confirmado, sem mensagem de "Disponível em 2h 27min".
+2. Tarefa de um dia futuro continua **habilitada** (comportamento atual já era esse — `if (data_agendada !== hoje) return true`).
+3. Tarefa sem contato (serviço externo) ainda permanece bloqueada com a mensagem "Entre em contato com o associado antes de iniciar o percurso" — essa trava é mantida.
+4. Mutation `useIniciarRota` não retorna mais erro `Período disponível a partir das …`.
+5. Nenhuma regressão em "Cheguei no Local", encaixes ou serviços na base.
 
 ### Fora de escopo
 
-- Migrar pagamentos antigos do Asaas → SGA (não há sobreposição: Asaas só tem adesão).
-- Implementar geração de boleto SGA pelo nosso lado (boletos vêm prontos da Hinova).
-- Mudar a régua de cobrança ou notificações WhatsApp (próximo passo, depois de validarmos os dados).
-
-### Arquivos envolvidos
-
-- `supabase/functions/sga-mapear-codigos-veiculos/index.ts` (rodar)
-- `supabase/functions/sga-backfill-financeiro/index.ts` (rodar)
-- `src/hooks/useMyData.ts` (unificar `useMyBoletos`)
-- `src/pages/financeiro/FinanceiroDashboard.tsx` e `src/components/cobranca/RecuperacaoKPIs.tsx` (somar SGA nos KPIs)
-- Auditoria leve em `gerar-cobrancas-mensais`, `gerar-faturas-mensais`, `disparar-boletos-lote`
+- Mexer em SLA, cálculo de "atrasada" no painel da coordenação.
+- Notificação WhatsApp ao associado quando o técnico adianta (pode ser um próximo passo, se desejado).
+- Mudar a lógica do agendador/coordenador — ali continua fazendo sentido considerar o início do período.
 
