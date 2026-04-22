@@ -27,9 +27,6 @@ serve(async (req) => {
     const delayMs = Math.max(parseInt(body.delay_ms ?? '250'), 50);
     const idsFilter: string[] | undefined = Array.isArray(body.veiculo_ids) && body.veiculo_ids.length ? body.veiculo_ids : undefined;
 
-    // IMPORTANTE: apenas veículos da BASE ANTIGA (origem_cadastro='api_externa').
-    // Veículos do sistema novo (origem_cadastro='interno') são enviados ao SGA via
-    // sga-hinova-sync; não devem ser mapeados por placa para evitar duplicidade.
     let q = supabase
       .from('veiculos')
       .select('id, placa, associado_id, associados:associados!inner(origem_cadastro)')
@@ -58,7 +55,6 @@ serve(async (req) => {
       try {
         const { found, debug } = await buscarVeiculoPorPlaca(session, v.placa as string);
 
-        // Telemetria amostral: 1 log a cada 10 placas (e sempre a primeira do batch)
         if (idx === 0 || idx % 10 === 0) {
           console.log('[SGA Mapear][telem]', JSON.stringify({
             placa: v.placa,
@@ -85,17 +81,9 @@ serve(async (req) => {
 
         if (found?.codigo_veiculo) {
           const codAssoc = found.codigo_associado ?? found.codigo_associado_pf ?? null;
-          const upd: Record<string, any> = { codigo_hinova: Number(found.codigo_veiculo) };
-          await supabase.from('veiculos').update(upd).eq('id', v.id);
+          await supabase.from('veiculos').update({ codigo_hinova: Number(found.codigo_veiculo) }).eq('id', v.id);
           if (codAssoc && v.associado_id) {
-            const { data: assoc } = await supabase
-              .from('associados')
-              .select('codigo_hinova')
-              .eq('id', v.associado_id)
-              .single();
-            if (assoc && !assoc.codigo_hinova) {
-              await supabase.from('associados').update({ codigo_hinova: Number(codAssoc) }).eq('id', v.associado_id);
-            }
+            await supabase.from('associados').update({ codigo_hinova: Number(codAssoc) }).eq('id', v.associado_id);
           }
           mapeados++;
         } else {

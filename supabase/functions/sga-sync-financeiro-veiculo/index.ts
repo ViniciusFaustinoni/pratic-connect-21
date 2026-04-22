@@ -12,6 +12,7 @@ import {
   mapStatusBoleto,
   parseDataHinova,
   toNumber,
+  buscarVeiculoPorPlaca,
 } from '../_shared/hinova-client.ts';
 
 const corsHeaders = {
@@ -22,6 +23,56 @@ const corsHeaders = {
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+const cleanCPF = (value: string | null | undefined) => String(value || '').replace(/\D/g, '');
+
+function extractCodigoAssociado(payload: any): number | null {
+  const candidates = [
+    payload?.codigo_associado,
+    payload?.codigo_associado_pf,
+    payload?.codigo,
+    payload?.data?.codigo_associado,
+    payload?.data?.codigo_associado_pf,
+    payload?.data?.codigo,
+    payload?.associado?.codigo_associado,
+    payload?.associado?.codigo_associado_pf,
+    Array.isArray(payload) ? payload[0]?.codigo_associado : null,
+    Array.isArray(payload) ? payload[0]?.codigo_associado_pf : null,
+    Array.isArray(payload) ? payload[0]?.codigo : null,
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = Number(candidate);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+
+  return null;
+}
+
+async function buscarAssociadoPorCpf(session: any, cpf: string | null | undefined) {
+  const cpfLimpo = cleanCPF(cpf);
+  if (cpfLimpo.length !== 11) return null;
+
+  const response = await fetch(`${session.apiUrl}/associado/buscar/${cpfLimpo}/cpf`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.tokenUsuario}`,
+    },
+  });
+
+  const text = await response.text();
+  if (!response.ok) {
+    console.warn('[SGA Sync Veículo] busca CPF status', response.status, text.slice(0, 200));
+    return null;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -44,19 +95,17 @@ serve(async (req) => {
         .eq('id', jobId);
     }
 
-    // Carregar veículo + associado
     const { data: veiculo, error: vErr } = await supabase
       .from('veiculos')
-      .select('id, placa, codigo_hinova, associado_id, associados:associados(id, codigo_hinova)')
+      .select('id, placa, codigo_hinova, associado_id, associados:associados(id, codigo_hinova, cpf, nome, email)')
       .eq('id', veiculoId)
       .single();
 
     if (vErr || !veiculo) throw new Error(`Veículo não encontrado: ${vErr?.message || veiculoId}`);
-    if (!veiculo.codigo_hinova) throw new Error('Veículo sem codigo_hinova — execute mapeamento antes');
-    const associado: any = Array.isArray((veiculo as any).associados) ? (veiculo as any).associados[0] : (veiculo as any).associados;
-    if (!associado?.codigo_hinova) throw new Error('Associado sem codigo_hinova');
 
-    // Auth Hinova (com log explícito em sga_sync_logs)
+    const associado: any = Array.isArray((veiculo as any).associados) ? (veiculo as any).associados[0] : (veiculo as any).associados;
+    if (!associado?.id) throw new Error('Associado não encontrado para o veículo');
+
     const authStart = Date.now();
     let session;
     try {
@@ -67,6 +116,7 @@ serve(async (req) => {
 
       await supabase.from('sga_sync_logs').insert({
         veiculo_id: veiculoId,
+        associado_id: associado.id,
         action: 'autenticar',
         status: 'success',
         duracao_ms: Date.now() - authStart,
@@ -75,6 +125,7 @@ serve(async (req) => {
       const msg = String(authErr?.message || authErr);
       await supabase.from('sga_sync_logs').insert({
         veiculo_id: veiculoId,
+        associado_id: associado.id,
         action: 'autenticar',
         status: 'error',
         error_message: msg,
@@ -83,11 +134,87 @@ serve(async (req) => {
       throw authErr;
     }
 
-    // 1) Situação financeira
-    const situacao = await buscarSituacaoFinanceiraVeiculo(session, veiculo.codigo_hinova);
+    let codigoVeiculo = Number(veiculo.codigo_hinova) || null;
+    let codigoAssociado = Number(associado.codigo_hinova) || null;
 
-    // 2) Boletos
-    const boletos = await listarBoletosVeiculo(session, associado.codigo_hinova, veiculo.codigo_hinova);
+    if (veiculo.placa) {
+      const { found, debug } = await buscarVeiculoPorPlaca(session, veiculo.placa);
+      const codigoVeiculoEncontrado = Number(found?.codigo_veiculo) || null;
+      const codigoAssociadoEncontrado = extractCodigoAssociado(found);
+
+      await supabase.from('sga_sync_logs').insert({
+        veiculo_id: veiculo.id,
+        associado_id: associado.id,
+        action: 'reconciliar_codigos_placa',
+        status: codigoVeiculoEncontrado ? 'success' : 'info',
+        request_payload: { placa: veiculo.placa },
+        response_payload: {
+          endpoint: debug.endpoint,
+          http_status: debug.status,
+          codigo_veiculo: codigoVeiculoEncontrado,
+          codigo_associado: codigoAssociadoEncontrado,
+          body_sample: debug.bodySample,
+        },
+      });
+
+      if (codigoVeiculoEncontrado && codigoVeiculoEncontrado !== codigoVeiculo) {
+        codigoVeiculo = codigoVeiculoEncontrado;
+        await supabase.from('veiculos').update({ codigo_hinova: codigoVeiculoEncontrado }).eq('id', veiculo.id);
+      }
+
+      if (codigoAssociadoEncontrado && codigoAssociadoEncontrado !== codigoAssociado) {
+        codigoAssociado = codigoAssociadoEncontrado;
+        await supabase.from('associados').update({ codigo_hinova: codigoAssociadoEncontrado }).eq('id', associado.id);
+      }
+    }
+
+    if (!codigoAssociado && associado.cpf) {
+      const associadoPorCpf = await buscarAssociadoPorCpf(session, associado.cpf);
+      const codigoAssociadoPorCpf = extractCodigoAssociado(associadoPorCpf);
+
+      await supabase.from('sga_sync_logs').insert({
+        veiculo_id: veiculo.id,
+        associado_id: associado.id,
+        action: 'reconciliar_codigos_cpf',
+        status: codigoAssociadoPorCpf ? 'success' : 'info',
+        request_payload: { cpf: '***' },
+        response_payload: codigoAssociadoPorCpf
+          ? { codigo_associado: codigoAssociadoPorCpf, descricao_situacao: associadoPorCpf?.descricao_situacao ?? null }
+          : { descricao_situacao: associadoPorCpf?.descricao_situacao ?? null },
+      });
+
+      if (codigoAssociadoPorCpf) {
+        codigoAssociado = codigoAssociadoPorCpf;
+        await supabase.from('associados').update({ codigo_hinova: codigoAssociadoPorCpf }).eq('id', associado.id);
+      }
+    }
+
+    if (!codigoVeiculo) throw new Error('Veículo sem codigo_hinova válido');
+    if (!codigoAssociado) throw new Error('Associado sem codigo_hinova válido');
+
+    const situacao = await buscarSituacaoFinanceiraVeiculo(session, codigoVeiculo);
+
+    let boletos = await listarBoletosVeiculo(session, codigoAssociado, codigoVeiculo);
+
+    if ((!boletos || boletos.length === 0) && associado.cpf) {
+      const associadoPorCpf = await buscarAssociadoPorCpf(session, associado.cpf);
+      const codigoAssociadoPorCpf = extractCodigoAssociado(associadoPorCpf);
+
+      if (codigoAssociadoPorCpf && codigoAssociadoPorCpf !== codigoAssociado) {
+        codigoAssociado = codigoAssociadoPorCpf;
+        await supabase.from('associados').update({ codigo_hinova: codigoAssociadoPorCpf }).eq('id', associado.id);
+        boletos = await listarBoletosVeiculo(session, codigoAssociadoPorCpf, codigoVeiculo);
+      }
+    }
+
+    await supabase.from('sga_sync_logs').insert({
+      veiculo_id: veiculo.id,
+      associado_id: associado.id,
+      action: 'listar_boletos_financeiro',
+      status: boletos.length > 0 ? 'success' : 'info',
+      request_payload: { codigo_associado: codigoAssociado, codigo_veiculo: codigoVeiculo },
+      response_payload: { quantidade: boletos.length, situacao_financeira: situacao },
+    });
 
     let importados = 0;
     let totalAberto = 0;
@@ -111,10 +238,17 @@ serve(async (req) => {
       let refMes: number | null = null;
       let refAno: number | null = null;
       if (mesRef) {
-        const m = mesRef.match(/(\d{1,2})\D+(\d{4})/) || mesRef.match(/(\d{4})\D+(\d{1,2})/);
-        if (m) {
-          const a = parseInt(m[1]); const b2 = parseInt(m[2]);
-          if (a > 12) { refAno = a; refMes = b2; } else { refMes = a; refAno = b2; }
+        const match = mesRef.match(/(\d{1,2})\D+(\d{4})/) || mesRef.match(/(\d{4})\D+(\d{1,2})/);
+        if (match) {
+          const a = parseInt(match[1]);
+          const b2 = parseInt(match[2]);
+          if (a > 12) {
+            refAno = a;
+            refMes = b2;
+          } else {
+            refMes = a;
+            refAno = b2;
+          }
         }
       }
 
@@ -166,6 +300,7 @@ serve(async (req) => {
     await supabase
       .from('veiculos')
       .update({
+        codigo_hinova: codigoVeiculo,
         situacao_financeira_sga: situacao,
         situacao_financeira_sga_em: new Date().toISOString(),
         total_aberto_sga: totalAberto,
@@ -177,10 +312,10 @@ serve(async (req) => {
       await supabase
         .from('sga_sync_financeiro_jobs')
         .update({
-          status: 'concluido',
+          status: boletos.length > 0 ? 'concluido' : 'sem_historico_hinova',
           concluido_em: new Date().toISOString(),
           boletos_importados: importados,
-          ultimo_erro: null,
+          ultimo_erro: boletos.length > 0 ? null : 'Nenhum boleto retornado pela Hinova para o vínculo atual de associado/veículo',
         })
         .eq('id', jobId);
     }
@@ -192,6 +327,8 @@ serve(async (req) => {
       boletos_importados: importados,
       total_aberto: totalAberto,
       total_vencido: totalVencido,
+      codigo_associado_utilizado: codigoAssociado,
+      codigo_veiculo_utilizado: codigoVeiculo,
     });
   } catch (err: any) {
     console.error('[SGA Sync Veículo] erro:', err);
