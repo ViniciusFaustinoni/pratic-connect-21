@@ -147,12 +147,13 @@ export function PropostaDetalhesTabs({
               Dados do Cliente
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-4 pb-4">
+          <CardContent className="px-4 pb-4 space-y-3">
             <div className="grid gap-2 sm:grid-cols-2">
               <FichaField icon={User} label="Nome Completo" value={proposta.cliente_nome || associado?.nome} highlight iconColor="text-primary" />
               <FichaField icon={FileText} label="CPF" value={maskCPF(proposta.cliente_cpf || associado?.cpf)} iconColor="text-primary" />
               <FichaField icon={Phone} label="Telefone" value={proposta.cliente_telefone || associado?.telefone} iconColor="text-primary" />
-              <FichaField icon={Mail} label="Email" value={proposta.cliente_email || associado?.email} iconColor="text-primary" />
+              <FichaField icon={Phone} label="WhatsApp / Secundário" value={associado?.whatsapp || associado?.telefone_secundario} iconColor="text-primary" />
+              <FichaField icon={Mail} label="Email" value={proposta.cliente_email || associado?.email} iconColor="text-primary" className="sm:col-span-2" />
               <FichaField
                 icon={MapPin}
                 label="Endereço"
@@ -164,6 +165,20 @@ export function PropostaDetalhesTabs({
                 iconColor="text-primary"
                 className="sm:col-span-2"
               />
+              <FichaField icon={Calendar} label="Data de Nascimento" value={associado?.data_nascimento ? format(new Date(associado.data_nascimento + 'T00:00:00'), "dd/MM/yyyy", { locale: ptBR }) : null} iconColor="text-primary" />
+              <FichaField icon={User} label="Estado Civil" value={associado?.estado_civil} iconColor="text-primary" />
+              <FichaField icon={User} label="Profissão" value={associado?.profissao} iconColor="text-primary" />
+              <FichaField icon={FileText} label="RG" value={associado?.rg} iconColor="text-primary" />
+            </div>
+
+            {/* Bloco CNH */}
+            <div className="border-t border-border/50 pt-3">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-2">CNH</p>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <FichaField icon={FileText} label="Número CNH" value={associado?.cnh_numero} iconColor="text-primary" />
+                <FichaField icon={FileText} label="Categoria" value={associado?.cnh_categoria} iconColor="text-primary" />
+                <FichaField icon={Calendar} label="Validade" value={associado?.cnh_validade ? format(new Date(associado.cnh_validade + 'T00:00:00'), "dd/MM/yyyy", { locale: ptBR }) : null} iconColor="text-primary" />
+              </div>
             </div>
           </CardContent>
         </Card>
