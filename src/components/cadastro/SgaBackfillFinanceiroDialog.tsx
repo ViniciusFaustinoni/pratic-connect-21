@@ -145,8 +145,14 @@ export function SgaBackfillFinanceiroDialog() {
                   <Badge variant="secondary" className="gap-1"><Clock className="h-3 w-3" /> Pendentes: {status.jobs.pendente}</Badge>
                   <Badge variant="secondary" className="gap-1"><Loader2 className="h-3 w-3" /> Executando: {status.jobs.executando}</Badge>
                   <Badge variant="secondary" className="gap-1 bg-green-50 text-green-700"><CheckCircle2 className="h-3 w-3" /> Concluídos: {status.jobs.concluido}</Badge>
+                  <Badge variant="secondary" className="gap-1"><MinusCircle className="h-3 w-3" /> Sem histórico Hinova: {semHistorico}</Badge>
                   <Badge variant="secondary" className="gap-1 bg-red-50 text-red-700"><AlertCircle className="h-3 w-3" /> Erros: {status.jobs.erro}</Badge>
                 </div>
+                {semHistorico > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    "Sem histórico Hinova" são veículos da base nova que nunca existiram no sistema antigo — não são erros.
+                  </p>
+                )}
               </div>
             )}
 
