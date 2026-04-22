@@ -69,6 +69,7 @@ import {
   TrendingDown,
   Database,
   ShieldCheck,
+  ShieldQuestion,
   Route,
   CalendarCheck,
   Settings2,
@@ -109,6 +110,7 @@ import { cn } from '@/lib/utils';
 import { UserAvatar } from '@/components/UserAvatar';
 import { useAppRoles } from '@/hooks/useAppRoles';
 import { useFipeMenorAtivo } from '@/hooks/useFipeMenorAtivo';
+import { useBiometriasPendentesCount } from '@/hooks/useBiometriasPendentes';
 
 // Mapeamento de cores por grupo/item
 const MENU_COLORS: Record<string, string> = {
