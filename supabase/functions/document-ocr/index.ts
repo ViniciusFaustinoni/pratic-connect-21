@@ -256,7 +256,12 @@ Regras especiais CIN:
 placa (ABC1234/ABC1D23), renavam (11 dígitos), chassi (17 chars), marca, modelo, ano_fabricacao (int), ano_modelo (int), cor (campo "COR"/"COR PREDOMINANTE" - leia literalmente), combustivel, motor, nome_proprietario, blindado (bool)
 - "ANO FAB/MOD: 2013/2014" → ano_fabricacao:2013, ano_modelo:2014
 - Blindado: procure em OBS/TIPO por "BLINDADO/BLINDAGEM/PROTEÇÃO BALÍSTICA". Sempre inclua campo blindado.
-- ⚠️ ATENÇÃO PLACA MERCOSUL (formato LLL-NLNN, ex: RKR3I57, BRA2E19): o **5º caractere é SEMPRE uma LETRA (A-Z)**, NUNCA um dígito (0-9). Se visualmente parecer "1" → leia como "I"; "0" → "O"; "5" → "S"; "8" → "B"; "2" → "Z"; "6" → "G". Em caso de dúvida entre letra e número na 5ª posição, **escolha sempre a LETRA**. Placa antiga (LLLNNNN, ex: ABC1234) tem dígitos nas 4 últimas posições.
+- ⚠️ PLACA — REGRA OBRIGATÓRIA DE FORMATO:
+  • Existem DOIS formatos legais no Brasil. NUNCA misture os dois.
+  • **Placa ANTIGA** (LLLNNNN, ex: ABC1234, LQV3623): as **4 últimas posições são SEMPRE dígitos (0-9)**. Se a 5ª posição parecer uma letra (G/I/O/S/B/Z), é OCR errado — leia como dígito (G→6, I→1, O→0, S→5, B→8, Z→2).
+  • **Placa MERCOSUL** (LLLNLNN, ex: RKR3I57, BRA2E19): a **5ª posição é SEMPRE uma LETRA (A-Z)**. Se parecer dígito (1/0/5/8/2/6), leia como letra.
+  • COMO DECIDIR O FORMATO: o CRLV brasileiro emitido a partir de set/2018 usa Mercosul; veículos anteriores podem manter a placa antiga. Use o **campo "PLACA ANTERIOR/UF"** e o ano de fabricação como pista. Se "PLACA ANTERIOR" estiver no formato antigo e for igual à placa atual, então a placa atual também é antiga.
+  • **EM CASO DE DÚVIDA, releia a posição duvidosa caractere por caractere** comparando com letras/números vizinhos do mesmo documento (ex: outras ocorrências de "6" no Renavam ou no chassi).
 
 ### Nota Fiscal de Veículo (DANFE / NF-e com dados veiculares)
 Detectar quando o documento é uma Nota Fiscal (DANFE/NF-e) que contenha dados de veículo (chassi, motor, valor).
