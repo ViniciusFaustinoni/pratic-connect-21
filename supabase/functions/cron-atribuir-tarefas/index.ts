@@ -162,6 +162,20 @@ serve(async (req) => {
 
     console.log(`[cron-atribuir-tarefas] ${profissionais.length} profissional(is) em serviço`);
 
+    // Carregar alocações do dia em batch (Base = bate ponto externamente)
+    const profIds = (profissionais as ProfissionalDisponivel[]).map(p => p.vistoriador_id);
+    const { data: alocacoesHoje } = await supabase
+      .from('alocacoes_diarias')
+      .select('profissional_id, tipo_alocacao')
+      .eq('data', hoje)
+      .in('profissional_id', profIds);
+    const baseSet = new Set(
+      (alocacoesHoje || []).filter(a => a.tipo_alocacao === 'base').map(a => a.profissional_id)
+    );
+    if (baseSet.size > 0) {
+      console.log(`[cron-atribuir-tarefas] ${baseSet.size} profissional(is) marcados como BASE — sem auto-almoço`);
+    }
+
     const atribuicoes: { profissional_id: string; servico_id: string; distancia_km: number; tipo_atribuicao: string }[] = [];
 
     // Dedup: rastrear encaixes que já tiveram confirmação enviada nesta execução
@@ -169,6 +183,7 @@ serve(async (req) => {
 
     // 2. Para cada profissional, verificar se já tem tarefa e tentar atribuir
     for (const prof of profissionais as ProfissionalDisponivel[]) {
+      const isBase = baseSet.has(prof.vistoriador_id);
       // ========== VERIFICAR STATUS DE JORNADA (ALMOÇO) ==========
       const { data: turnoHoje } = await supabase
         .from('turnos_profissionais')
