@@ -84,6 +84,21 @@ serve(async (req) => {
     if (fetchError) throw fetchError;
     if (!contrato?.associado_id) throw new Error('Associado não encontrado');
 
+    // 1b. Verificar se o plano contratado tem cobertura de Roubo/Furto.
+    // Mesma heurística do frontend (regex /roubo|furto/i sobre coberturas.nome).
+    let planoTemRouboFurto = false;
+    if (contrato.plano_id) {
+      const { data: planoCobs } = await supabase
+        .from('planos_coberturas')
+        .select('coberturas(nome)')
+        .eq('plano_id', contrato.plano_id);
+      planoTemRouboFurto = (planoCobs || []).some((row: any) => {
+        const nome = row?.coberturas?.nome || '';
+        return /roubo|furto/i.test(nome);
+      });
+    }
+    console.log(`[aprovar-proposta] Plano ${contrato.plano_id} tem R&F? ${planoTemRouboFurto}`);
+
     // IDEMPOTÊNCIA
     if (contrato.status === 'ativo') {
       console.log('[aprovar-proposta] Já aprovado:', contrato_id);
@@ -196,8 +211,13 @@ serve(async (req) => {
       if (veiculoPrecisaRastreador) algumPrecisouRastreador = true;
       if (veiculoId === veiculoIdDoContrato || !veiculoPrincipal) veiculoPrincipal = veiculo;
 
+      // Cobertura R&F só é ativada se o PLANO contratado a inclui.
+      // Cobertura total continua dependendo da instalação concluída
+      // (ou da dispensa de rastreador via FIPE/categoria).
       await supabase.from('veiculos').update({
-        status: statusVeiculo, cobertura_roubo_furto: true, cobertura_total: ativarProtecao360,
+        status: statusVeiculo,
+        cobertura_roubo_furto: planoTemRouboFurto,
+        cobertura_total: ativarProtecao360,
       }).eq('id', veiculoId);
 
       // Verificar se já existe instalação ativa para este veículo
@@ -341,9 +361,11 @@ serve(async (req) => {
     // 5. Histórico + documentos + SGA
     const mensagemHistorico = jaTemInstalacaoConcluida
       ? 'Proposta aprovada pelo analista de cadastro. Instalação já concluída. Proteção 360º ativada.'
-      : algumPrecisouRastreador
-        ? 'Proposta aprovada pelo analista de cadastro. Cobertura Roubo/Furto ativada. Aguardando instalação para Proteção 360º.'
-        : 'Proposta aprovada pelo analista de cadastro. Proteção 360° ativada (veículo sem necessidade de rastreador).';
+      : !planoTemRouboFurto
+        ? 'Proposta aprovada pelo analista de cadastro. Plano de assistência ativado (sem cobertura de Roubo/Furto).'
+        : algumPrecisouRastreador
+          ? 'Proposta aprovada pelo analista de cadastro. Cobertura Roubo/Furto ativada. Aguardando instalação para Proteção 360º.'
+          : 'Proposta aprovada pelo analista de cadastro. Proteção 360° ativada (veículo sem necessidade de rastreador).';
 
     const docPromises: Promise<any>[] = [
       supabase.from('associados_historico').insert({
@@ -387,9 +409,11 @@ serve(async (req) => {
 
     const mensagemRetorno = jaTemInstalacaoConcluida
       ? 'Proposta aprovada! Instalação já concluída. Proteção 360º ativada.'
-      : algumPrecisouRastreador
-        ? 'Proposta aprovada! Cobertura Roubo/Furto ativada. Aguardando instalação para Proteção 360º.'
-        : 'Proposta aprovada! Proteção 360° ativada (sem necessidade de rastreador).';
+      : !planoTemRouboFurto
+        ? 'Proposta aprovada! Plano de assistência ativado (sem cobertura de Roubo/Furto).'
+        : algumPrecisouRastreador
+          ? 'Proposta aprovada! Cobertura Roubo/Furto ativada. Aguardando instalação para Proteção 360º.'
+          : 'Proposta aprovada! Proteção 360° ativada (sem necessidade de rastreador).';
 
     console.log('[aprovar-proposta] Concluído:', mensagemRetorno);
 
