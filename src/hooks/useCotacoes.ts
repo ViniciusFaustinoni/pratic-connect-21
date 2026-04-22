@@ -95,7 +95,7 @@ export function useCotacoes(options?: UseCotacoesOptions) {
           instalacoes:instalacoes!instalacoes_cotacao_id_fkey(id, status, data_agendada)
         `)
         .order('created_at', { ascending: false })
-        .limit(search ? 300 : 100);
+        .limit(1000);
       
       // Filtrar por vendedor se viewScope = 'own'
       if (options?.viewScope === 'own' && options?.vendedorId) {
