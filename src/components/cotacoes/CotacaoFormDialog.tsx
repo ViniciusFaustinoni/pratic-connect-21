@@ -61,6 +61,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { CurrencyInput, TelefoneInput } from '@/components/inputs/MaskedInputs';
 import { cotacaoSchema, type CotacaoFormData } from '@/lib/validations';
 import { useCreateCotacao, useUpdateCotacao } from '@/hooks/useCotacoes';
@@ -244,19 +245,24 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const criarSolicitacaoFipeMenor = useCriarSolicitacaoFipeMenor();
   const { fipeMenorAtivo } = useFipeMenorAtivo();
 
-  // Limite mínimo de FIPE para permitir FIPE menor (abaixo desse valor, não exibe a opção)
-  const { data: fipeMenorLimiteMinimo = 30000 } = useQuery({
-    queryKey: ['config-fipe-menor-limite-minimo'],
+  // Limites de FIPE para Regra do 1% (mínimo geral + máximos por tipo)
+  const { data: fipeMenorLimites = { minimo: 30000, carro: 120000, moto: 27000 } } = useQuery({
+    queryKey: ['config-fipe-menor-limites'],
     queryFn: async () => {
       const { data } = await supabase
         .from('configuracoes')
-        .select('valor')
-        .eq('chave', 'fipe_menor_limite_minimo')
-        .maybeSingle();
-      return data?.valor ? Number(data.valor) || 30000 : 30000;
+        .select('chave, valor')
+        .in('chave', ['fipe_menor_limite_minimo', 'fipe_menor_limite_carro', 'fipe_menor_limite_moto']);
+      const map = new Map((data || []).map(r => [r.chave, Number(r.valor)] as const));
+      return {
+        minimo: map.get('fipe_menor_limite_minimo') || 30000,
+        carro: map.get('fipe_menor_limite_carro') || 120000,
+        moto: map.get('fipe_menor_limite_moto') || 27000,
+      };
     },
     staleTime: 5 * 60 * 1000,
   });
+  const fipeMenorLimiteMinimo = fipeMenorLimites.minimo;
 
   // Hook para FIPE limite (alto valor)
   const { data: configLimites } = useConfigLimitesVeiculo();
@@ -423,6 +429,22 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       return null;
     }
 
+    // Restrição comercial por tipo de veículo (Regra do 1%)
+    const limiteTipo = tipoVeiculoDetectado === 'moto' ? fipeMenorLimites.moto : fipeMenorLimites.carro;
+    const tipoLabel = tipoVeiculoDetectado === 'moto' ? 'motos' : 'carros';
+    if (valorFipe > limiteTipo) {
+      return {
+        elegivel: false,
+        bloqueado: {
+          motivo: `Regra do 1% disponível apenas para ${tipoLabel} com FIPE até ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(limiteTipo)}.`,
+        },
+        valorReduzido: valorFipe * 0.99,
+        faixaAtual: null as null | { min: number; max: number; mensal: number },
+        faixaInferior: null as null | { min: number; max: number; mensal: number },
+        economia: 0,
+      };
+    }
+
     const plano = planosSelecionados[0];
     const valorReduzido = valorFipe * 0.99;
 
@@ -444,6 +466,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
       return {
         elegivel,
+        bloqueado: null as null | { motivo: string },
         valorReduzido,
         faixaAtual: { min: faixaAtualRule.de, max: faixaAtualRule.ate - 0.01, mensal: mensalAtual },
         faixaInferior: { min: faixaInferiorRule.de, max: faixaInferiorRule.ate - 0.01, mensal: mensalInferior },
@@ -472,12 +495,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
     return {
       elegivel,
+      bloqueado: null as null | { motivo: string },
       valorReduzido,
       faixaAtual: { min: faixaAtual.fipe_min, max: faixaAtual.fipe_max, mensal: faixaAtual.valor_mensal },
       faixaInferior: { min: faixaInferior.fipe_min, max: faixaInferior.fipe_max, mensal: faixaInferior.valor_mensal },
       economia: faixaAtual.valor_mensal - faixaInferior.valor_mensal,
     };
-  }, [valorFipe, planosSelecionados, todasFaixas, fipeMenorLimiteMinimo, planoCoberturasMap, allEligibilityRules]);
+  }, [valorFipe, planosSelecionados, todasFaixas, fipeMenorLimiteMinimo, fipeMenorLimites, tipoVeiculoDetectado, planoCoberturasMap, allEligibilityRules]);
 
   // Faixa de preço atual onde o FIPE se enquadra
   // FONTE: entity_eligibility_rules (motor moderno). Fallback: tabelas_preco_mensalidade (legado)
@@ -1804,6 +1828,104 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 <p className="text-xs text-muted-foreground mt-1.5">
                   Faixa enquadrada: {formatCurrency(faixaAtualFipe.min)} – {formatCurrency(faixaAtualFipe.max)}
                 </p>
+              )}
+
+              {/* ===== Painel Regra do 1% (FIPE Menor) ===== */}
+              {fipeMenorAtivo && fipeMenorInfo && (
+                <div className="mt-3">
+                  {/* Estado C: Bloqueado por restrição comercial */}
+                  {fipeMenorInfo.bloqueado && (
+                    <Alert className="border-amber-500/50 bg-amber-500/10">
+                      <AlertTriangle className="h-4 w-4 text-amber-600" />
+                      <AlertDescription className="text-sm text-amber-700 dark:text-amber-400">
+                        <strong>Regra do 1% indisponível:</strong> {fipeMenorInfo.bloqueado.motivo}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {/* Estado A: Elegível */}
+                  {!fipeMenorInfo.bloqueado && fipeMenorInfo.elegivel && fipeMenorInfo.faixaAtual && fipeMenorInfo.faixaInferior && (
+                    <Card className="border-green-500/40 bg-green-500/5">
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <TrendingDown className="h-4 w-4 text-green-600" />
+                            <span className="text-sm font-semibold text-green-700 dark:text-green-400">
+                              Elegível à Regra do 1% (FIPE Menor)
+                            </span>
+                          </div>
+                          <Badge className="bg-green-600 hover:bg-green-600 text-white border-0">Elegível</Badge>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">FIPE atual:</span>
+                            <span className="font-medium">{formatCurrency(valorFipe)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">FIPE − 1%:</span>
+                            <span className="font-medium">{formatCurrency(fipeMenorInfo.valorReduzido)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Faixa atual:</span>
+                            <span className="font-medium">{formatCurrency(fipeMenorInfo.faixaAtual.mensal)}/mês</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Faixa reduzida:</span>
+                            <span className="font-medium text-green-700 dark:text-green-400">{formatCurrency(fipeMenorInfo.faixaInferior.mensal)}/mês</span>
+                          </div>
+                          <div className="flex justify-between sm:col-span-2 pt-1 border-t border-green-500/20">
+                            <span className="text-muted-foreground">Economia estimada:</span>
+                            <span className="font-semibold text-green-700 dark:text-green-400">
+                              {formatCurrency(Math.max(0, fipeMenorInfo.economia))}/mês
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-2 pt-1">
+                          <Checkbox
+                            id="solicitar-fipe-menor"
+                            checked={solicitarFipeMenor}
+                            onCheckedChange={(v) => setSolicitarFipeMenor(v === true)}
+                            className="mt-0.5"
+                          />
+                          <Label htmlFor="solicitar-fipe-menor" className="text-xs leading-snug cursor-pointer">
+                            Solicitar FIPE Menor
+                            <span className="block text-muted-foreground font-normal">
+                              Sujeito a aprovação por e-mail em até 24h úteis.
+                            </span>
+                          </Label>
+                        </div>
+
+                        {solicitarFipeMenor && (
+                          <div className="space-y-1.5">
+                            <Label htmlFor="justif-fipe-menor" className="text-xs font-medium">
+                              Justificativa <span className="text-destructive">*</span>
+                            </Label>
+                            <Textarea
+                              id="justif-fipe-menor"
+                              value={justificativaFipeMenor}
+                              onChange={(e) => setJustificativaFipeMenor(e.target.value)}
+                              placeholder="Explique o motivo da solicitação (mín. 5 caracteres)..."
+                              rows={3}
+                              className="text-xs"
+                            />
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Estado B: Não elegível pelo cálculo */}
+                  {!fipeMenorInfo.bloqueado && !fipeMenorInfo.elegivel && (
+                    <Alert>
+                      <Info className="h-4 w-4" />
+                      <AlertDescription className="text-xs">
+                        <strong>Regra do 1% não se aplica:</strong> com a redução de 1%, o veículo continua na mesma faixa de preço.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
               )}
 
               {/* Alerta FIPE acima do limite de autorização — só exibe se dupla aprovação ativa */}
