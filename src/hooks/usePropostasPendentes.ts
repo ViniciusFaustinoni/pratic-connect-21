@@ -635,6 +635,8 @@ export function usePropostasPendentes() {
             veiculo_cobertura_total: null, // Não disponível na lista resumida
             veiculo_renavam: null, // Não disponível na lista resumida
             veiculo_chassi: null, // Não disponível na lista resumida
+            veiculo_blindado: veiculoBlindadoCot,
+            cenario_adesao: cenarioAdesaoCot,
           } as PropostaPendente;
         })
       );
@@ -772,6 +774,8 @@ export function useProposta(contratoId: string | undefined) {
       let planoNome: string | null = null;
       let instalacaoAgendada: InstalacaoAgendadaInfo | null = null;
       let tipoVistoriaCotacao: 'autovistoria' | 'agendada' | 'agendada_base' | null = null;
+      let veiculoBlindadoCot: boolean | null = null;
+      let cenarioAdesaoCot: string | null = null;
       
       if (contrato.cotacao_id) {
         const { data: cotacao } = await supabase
@@ -781,7 +785,7 @@ export function useProposta(contratoId: string | undefined) {
             plano_escolhido_id, vistoria_permite_encaixe, 
             vistoria_data_agendada, vistoria_horario_agendado,
             vistoria_completa_data_agendada, vistoria_completa_horario_agendado,
-            tipo_vistoria
+            tipo_vistoria, veiculo_blindado, cenario_adesao
           `)
           .eq('id', contrato.cotacao_id)
           .maybeSingle();
