@@ -1271,6 +1271,8 @@ export function useProposta(contratoId: string | undefined) {
         veiculo_cobertura_total: veiculoCoberturaTotal,
         veiculo_renavam: veiculoRenavam,
         veiculo_chassi: veiculoChassi,
+        veiculo_blindado: veiculoBlindadoCot,
+        cenario_adesao: cenarioAdesaoCot,
       };
       return result;
     },
