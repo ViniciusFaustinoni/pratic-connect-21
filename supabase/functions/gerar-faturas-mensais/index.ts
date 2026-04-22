@@ -162,7 +162,10 @@ serve(async (req) => {
       )
     `;
 
-    const associados = await fetchAllRows(supabase, 'associados', { status: 'ativo' }, selectFields);
+    // GUARDA: excluir base antiga (origem_cadastro='api_externa') — recebem cobrança via SGA Hinova,
+    // não devem entrar no faturamento Asaas para evitar duplicidade.
+    const associadosRaw = await fetchAllRows(supabase, 'associados', { status: 'ativo' }, selectFields + ', origem_cadastro');
+    const associados = (associadosRaw || []).filter((a: any) => a.origem_cadastro !== 'api_externa');
 
     // 5. Buscar taxas administrativas por faixa
     const { data: taxasAdmin } = await supabase
