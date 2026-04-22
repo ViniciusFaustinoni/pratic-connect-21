@@ -17,6 +17,8 @@ import { DocumentosPendentesPublico } from '@/components/cotacao-publica/Documen
 import { AgendamentoBaseResumo } from '@/components/cotacao-publica/AgendamentoBaseResumo';
 import { AgendamentoSubstituicao } from '@/components/cotacao-publica/AgendamentoSubstituicao';
 import { NavegacaoEtapas } from '@/components/cotacao-publica/NavegacaoEtapas';
+import { TelaAnaliseTrocaTitularidade } from '@/components/troca-titularidade/TelaAnaliseTrocaTitularidade';
+import { useSolicitacaoTrocaPublicaPorCotacao } from '@/hooks/useSolicitacaoTrocaPublica';
 import type { DadosPessoaisForm } from '@/components/cotacao-publica/FormularioDadosPessoais';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -94,6 +96,12 @@ export default function CotacaoContratacao() {
   // Substituição: detectar se é substituição e controlar etapa de "mesmo local"
   const dadosExtras = (cotacao as any)?.dados_extras as Record<string, any> | null;
   const isSubstituicao = dadosExtras?.tipo_entrada === 'substituicao';
+  const isTrocaTitularidade = dadosExtras?.tipo_entrada === 'troca_titularidade';
+  const { data: solicitacaoTroca } = useSolicitacaoTrocaPublicaPorCotacao(
+    isTrocaTitularidade ? cotacao?.id : null
+  );
+  const trocaLiberada = solicitacaoTroca?.status === 'liberada_para_assinatura' || solicitacaoTroca?.status === 'efetivada';
+  const trocaReprovada = solicitacaoTroca?.status === 'reprovada_cadastro' || solicitacaoTroca?.status === 'reprovada_monitoramento';
   const [substituicaoMesmoLocal, setSubstituicaoMesmoLocal] = useState<boolean | null>(null);
 
   // Determinar etapa baseada no status para saber o que está concluído
@@ -458,7 +466,14 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                <EtapaAssinaturaContrato
+                {isTrocaTitularidade && !trocaLiberada ? (
+                  <TelaAnaliseTrocaTitularidade
+                    status={solicitacaoTroca?.status}
+                    motivoReprovacao={solicitacaoTroca?.motivo_reprovacao}
+                    termoAssinado={!!solicitacaoTroca?.termo_cancelamento_assinado_em}
+                  />
+                ) : (
+                  <EtapaAssinaturaContrato
                     cotacaoId={cotacao.id}
                     tokenPublico={token || cotacao.token_publico || ''}
                     clienteNome={cotacao.nome_solicitante || ''}
@@ -473,14 +488,17 @@ export default function CotacaoContratacao() {
                       status: (contratoFallback as any).status,
                     } : undefined}
                   />
-                  <NavegacaoEtapas
-                    etapaAtual={etapaAtual}
-                    etapaMaxima={etapaDoStatus}
-                    totalEtapas={STEPS.length}
-                    onVoltar={handleVoltar}
-                    onAvancar={handleAvancar}
-                    navegacaoManual={navegacaoManual}
-                  />
+                )}
+                  {!(isTrocaTitularidade && !trocaLiberada) && (
+                    <NavegacaoEtapas
+                      etapaAtual={etapaAtual}
+                      etapaMaxima={etapaDoStatus}
+                      totalEtapas={STEPS.length}
+                      onVoltar={handleVoltar}
+                      onAvancar={handleAvancar}
+                      navegacaoManual={navegacaoManual}
+                    />
+                  )}
                 </motion.div>
               )}
 
