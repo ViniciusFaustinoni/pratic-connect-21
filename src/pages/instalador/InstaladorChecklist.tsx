@@ -344,20 +344,26 @@ export default function InstaladorChecklist() {
   );
   const temCritico = itensNokCriticos.length > 0;
 
-  // Verificar se todas as fotos obrigatórias foram enviadas (dinâmico por tipo)
+  // Verificar se todas as fotos obrigatórias foram enviadas (dinâmico por tipo + rastreador)
   const fotosObrigatoriasCompletas = useMemo(() => {
-    const obrigatorias = fotosConfig.filter(f => f.categoria !== 'instalacao');
+    const obrigatorias = fotosConfig.filter(f =>
+      f.categoria !== 'instalacao' &&
+      (veiculoPrecisaRastreador || f.categoria !== 'rastreador')
+    );
     return obrigatorias.every(f => fotosEnviadas.some(foto => foto.tipo === f.id));
-  }, [fotosEnviadas, fotosConfig]);
+  }, [fotosEnviadas, fotosConfig, veiculoPrecisaRastreador]);
 
   // Verificar se o vídeo 360 foi enviado
   const video360Enviado = !!videoUrl;
 
   // Contagem de fotos enviadas
   const totalFotosEnviadas = useMemo(() => {
-    const obrigatorias = fotosConfig.filter(f => f.categoria !== 'instalacao');
+    const obrigatorias = fotosConfig.filter(f =>
+      f.categoria !== 'instalacao' &&
+      (veiculoPrecisaRastreador || f.categoria !== 'rastreador')
+    );
     return obrigatorias.filter(f => fotosEnviadas.some(foto => foto.tipo === f.id)).length;
-  }, [fotosEnviadas, fotosConfig]);
+  }, [fotosEnviadas, fotosConfig, veiculoPrecisaRastreador]);
 
   const toggleCategoria = (categoriaId: string) => {
     setOpenCategorias(prev =>
