@@ -37,6 +37,8 @@ import {
   getFotosFiltradas
 } from '@/data/vistoriaConfigCompleta';
 import { useConfigFipeRastreador, useConfigFipeRastreadorMoto, precisaRastreador } from '@/hooks/useConfigRastreador';
+import { compressImage } from '@/lib/imageCompressor';
+import { useDeviceCapability } from '@/hooks/useDeviceCapability';
 
 export default function ExecutarVistoriaCompleta() {
   // A rota /instalador/vistoria/:id agora recebe o ID do SERVIÇO (servicos.id),
@@ -279,19 +281,29 @@ export default function ExecutarVistoriaCompleta() {
   // Handlers
   const handleUploadFoto = async (tipo: string, file: File, visivelCliente: boolean = true) => {
     if (!vistoriaId) return;
+    // Comprime ANTES de qualquer envio/enfileiramento — reduz heap, banda e quota IndexedDB.
+    // Fotos da câmera vêm de 5-12 MB; após compressão ficam 250-700 KB conforme perfil do device.
+    let arquivoFinal = file;
+    try {
+      if (file.size > 250 * 1024) {
+        arquivoFinal = await compressImage(file);
+      }
+    } catch (err) {
+      console.warn('[Vistoria] Falha ao comprimir, usando original:', err);
+    }
     // Offline: enfileira direto
     if (!online || !navigator.onLine) {
-      await offlineQueue.enfileirarFoto(tipo, file);
+      await offlineQueue.enfileirarFoto(tipo, arquivoFinal);
       return;
     }
     setUploadingFoto(tipo);
     try {
-      await uploadFoto.mutateAsync({ vistoriaId, tipo, file, visivelCliente });
+      await uploadFoto.mutateAsync({ vistoriaId, tipo, file: arquivoFinal, visivelCliente });
       toast.success('Foto enviada!');
     } catch (e: any) {
       // Falha de rede → enfileira para reenvio automático
       console.warn('[Vistoria] Upload falhou, enfileirando offline:', e?.message);
-      await offlineQueue.enfileirarFoto(tipo, file);
+      await offlineQueue.enfileirarFoto(tipo, arquivoFinal);
     } finally {
       setUploadingFoto(null);
     }
@@ -299,6 +311,13 @@ export default function ExecutarVistoriaCompleta() {
 
   const handleUploadVideo = async (file: File) => {
     if (!vistoriaId) return;
+    // Validação de tamanho — sem compressão (custosa em CPU para low-end).
+    const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
+    if (file.size > MAX_VIDEO_BYTES) {
+      toast.warning('Vídeo grande detectado (>100 MB).', {
+        description: 'O envio pode demorar. Considere gravar um vídeo mais curto.',
+      });
+    }
     if (!online || !navigator.onLine) {
       await offlineQueue.enfileirarVideo(file);
       return;
