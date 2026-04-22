@@ -137,7 +137,11 @@ export function useRealocarInstalacao() {
       // Fase 3: fonte única é `servicos` (tipo = vistoria_instalacao)
       const { data: serv, error: fetchErr } = await supabase
         .from('servicos')
-        .select('id, status, associado_id, associados(nome, telefone), veiculos(placa, marca, modelo, ano_modelo)')
+        .select(`
+          id, status, associado_id,
+          associados:associados!servicos_associado_id_fkey(nome, telefone),
+          veiculos:veiculos!servicos_veiculo_id_fkey(placa, marca, modelo, ano_modelo)
+        `)
         .eq('id', params.instalacaoId)
         .eq('tipo', 'vistoria_instalacao' as any)
         .single();
