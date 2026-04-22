@@ -1,5 +1,8 @@
-// Cron diário (02:00): enfileira jobs de resync para todos os veículos elegíveis
-// e dispara o orquestrador para processar a fila em batches.
+// Cron diário (02:00): enfileira jobs de resync e processa a fila em batches.
+// IMPORTANTE: a sincronização financeira atua apenas sobre a BASE ANTIGA
+// (associados.origem_cadastro = 'api_externa'). Veículos do sistema novo
+// (origem_cadastro = 'interno') são enviados ao SGA via sga-hinova-sync e
+// suas cobranças vivem localmente — não devem ser sincronizados a partir do Hinova.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
