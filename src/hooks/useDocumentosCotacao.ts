@@ -10,6 +10,91 @@ export interface DocumentoCotacao {
   created_at: string;
 }
 
+type UnifiedCharge = {
+  id: string;
+  status: string;
+  valor: number;
+  data_vencimento: string;
+  data_pagamento: string | null;
+  referencia: string | null;
+  tipo: string | null;
+  fonte: 'asaas' | 'sga';
+};
+
+const PAID_STATUSES = ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'];
+const OPEN_STATUSES = ['PENDING', 'OVERDUE'];
+
+function normalizeSgaStatus(status: string | null | undefined): string {
+  const value = (status || '').trim().toLowerCase();
+  if (value === 'pago') return 'RECEIVED';
+  if (value === 'vencido') return 'OVERDUE';
+  if (value === 'cancelado') return 'DELETED';
+  return 'PENDING';
+}
+
+function buildSgaReference(cobranca: any): string | null {
+  if (cobranca?.referencia_mes && cobranca?.referencia_ano) {
+    return `${String(cobranca.referencia_mes).padStart(2, '0')}/${cobranca.referencia_ano}`;
+  }
+  return cobranca?.tipo_boleto_hinova || cobranca?.descricao || 'Mensalidade SGA';
+}
+
+function mapAsaasCharge(cobranca: any): UnifiedCharge {
+  return {
+    id: cobranca.id,
+    status: cobranca.status || 'PENDING',
+    valor: Number(cobranca.pagamento_valor ?? cobranca.valor_liquido ?? cobranca.valor) || 0,
+    data_vencimento: cobranca.data_vencimento,
+    data_pagamento: cobranca.data_pagamento || cobranca.pagamento_data || null,
+    referencia: cobranca.referencia || cobranca.competencia || cobranca.tipo || 'Cobrança',
+    tipo: cobranca.tipo || null,
+    fonte: 'asaas',
+  };
+}
+
+function mapSgaCharge(cobranca: any): UnifiedCharge {
+  return {
+    id: cobranca.id,
+    status: normalizeSgaStatus(cobranca.status),
+    valor: Number(cobranca.valor_final ?? cobranca.valor) || 0,
+    data_vencimento: cobranca.data_vencimento,
+    data_pagamento: cobranca.data_pagamento || null,
+    referencia: buildSgaReference(cobranca),
+    tipo: cobranca.tipo || 'mensalidade',
+    fonte: 'sga',
+  };
+}
+
+function sortByDueDateDesc(a: UnifiedCharge, b: UnifiedCharge) {
+  return new Date(b.data_vencimento).getTime() - new Date(a.data_vencimento).getTime();
+}
+
+function sortByDueDateAsc(a: UnifiedCharge, b: UnifiedCharge) {
+  return new Date(a.data_vencimento).getTime() - new Date(b.data_vencimento).getTime();
+}
+
+async function fetchUnifiedCharges(associadoId: string) {
+  const [asaasResult, sgaResult] = await Promise.all([
+    supabase
+      .from('asaas_cobrancas')
+      .select('*')
+      .eq('associado_id', associadoId),
+    supabase
+      .from('cobrancas')
+      .select('*')
+      .eq('associado_id', associadoId)
+      .eq('origem', 'sga_hinova'),
+  ]);
+
+  if (asaasResult.error) throw asaasResult.error;
+  if (sgaResult.error) throw sgaResult.error;
+
+  const asaas = (asaasResult.data || []).map(mapAsaasCharge);
+  const sga = (sgaResult.data || []).map(mapSgaCharge);
+
+  return [...asaas, ...sga];
+}
+
 /**
  * Hook para buscar documentos da tabela contratos_documentos via cotacao_id
  */
@@ -87,32 +172,24 @@ export function useResumoFinanceiroAssociado(associadoId: string | undefined) {
     queryFn: async () => {
       if (!associadoId) return { mesesPagos: 0, emAtraso: 0, proximaCobranca: null };
 
-      const { data: cobrancas, error } = await supabase
-        .from('asaas_cobrancas')
-        .select('*')
-        .eq('associado_id', associadoId)
-        .order('data_vencimento', { ascending: true });
-
-      if (error) throw error;
+      const cobrancas = (await fetchUnifiedCharges(associadoId)).sort(sortByDueDateAsc);
 
       const hoje = new Date();
       hoje.setHours(0, 0, 0, 0);
 
-      const mesesPagos = (cobrancas || []).filter(
-        c => ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(c.status)
-      ).length;
+      const mesesPagos = cobrancas.filter((c) => PAID_STATUSES.includes(c.status)).length;
 
-      const emAtraso = (cobrancas || []).filter(c => {
+      const emAtraso = cobrancas.filter((c) => {
         const vencimento = new Date(c.data_vencimento);
         vencimento.setHours(0, 0, 0, 0);
-        return c.status === 'PENDING' && vencimento < hoje;
+        return c.status === 'OVERDUE' || (c.status === 'PENDING' && vencimento < hoje);
       }).length;
 
-      const proximaCobranca = (cobrancas || []).find(c => {
+      const proximaCobranca = cobrancas.find((c) => {
         const vencimento = new Date(c.data_vencimento);
         vencimento.setHours(0, 0, 0, 0);
         return c.status === 'PENDING' && vencimento >= hoje;
-      });
+      }) || null;
 
       return { mesesPagos, emAtraso, proximaCobranca };
     },
@@ -127,20 +204,14 @@ export function useCobrancasAssociado(associadoId: string | undefined) {
     queryFn: async () => {
       if (!associadoId) return { faturas: [], totais: { pago: 0, emAberto: 0 } };
 
-      const { data, error } = await supabase
-        .from('asaas_cobrancas')
-        .select('*')
-        .eq('associado_id', associadoId)
-        .order('data_vencimento', { ascending: false });
+      const faturas = (await fetchUnifiedCharges(associadoId)).sort(sortByDueDateDesc);
 
-      if (error) throw error;
-
-      const faturas = data || [];
       const pago = faturas
-        .filter(f => ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(f.status))
+        .filter((f) => PAID_STATUSES.includes(f.status))
         .reduce((acc, f) => acc + (f.valor || 0), 0);
+
       const emAberto = faturas
-        .filter(f => ['PENDING', 'OVERDUE'].includes(f.status))
+        .filter((f) => OPEN_STATUSES.includes(f.status))
         .reduce((acc, f) => acc + (f.valor || 0), 0);
 
       return { faturas, totais: { pago, emAberto } };
