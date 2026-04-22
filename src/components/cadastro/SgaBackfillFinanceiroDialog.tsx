@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, RefreshCw, Database, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
+import { Loader2, RefreshCw, Database, AlertCircle, CheckCircle2, Clock, MinusCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface JobStatus {
@@ -12,6 +12,7 @@ interface JobStatus {
   executando: number;
   concluido: number;
   erro: number;
+  sem_historico_hinova: number;
 }
 
 interface StatusResp {
