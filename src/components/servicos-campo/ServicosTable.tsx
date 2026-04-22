@@ -29,8 +29,8 @@ export function ServicosTable({ servicos, isLoading, onRowClick }: ServicosTable
         <TableHeader>
           <TableRow>
             <TableHead className="w-[180px]">Tipo</TableHead>
-            <TableHead className="w-[140px]">Data / Período</TableHead>
             <TableHead>Associado</TableHead>
+            <TableHead className="w-[140px]">Data / Período</TableHead>
             <TableHead>Veículo</TableHead>
             <TableHead>Endereço</TableHead>
             <TableHead>Técnico</TableHead>
@@ -76,6 +76,19 @@ export function ServicosTable({ servicos, isLoading, onRowClick }: ServicosTable
                     </div>
                   </TableCell>
                   <TableCell>
+                    <div className="flex items-center gap-1.5">
+                      <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <span className="font-medium truncate max-w-[160px]">
+                        {s.associado?.nome || '—'}
+                      </span>
+                    </div>
+                    {s.protocolo && (
+                      <div className="text-xs text-muted-foreground font-mono mt-0.5">
+                        {s.protocolo}
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell>
                     {s.data_agendada ? (
                       <div>
                         <div className="flex items-center gap-1 text-sm">
@@ -92,19 +105,6 @@ export function ServicosTable({ servicos, isLoading, onRowClick }: ServicosTable
                       </div>
                     ) : (
                       <span className="text-xs text-muted-foreground">Sem data</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1.5">
-                      <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                      <span className="font-medium truncate max-w-[160px]">
-                        {s.associado?.nome || '—'}
-                      </span>
-                    </div>
-                    {s.protocolo && (
-                      <div className="text-xs text-muted-foreground font-mono mt-0.5">
-                        {s.protocolo}
-                      </div>
                     )}
                   </TableCell>
                   <TableCell>
