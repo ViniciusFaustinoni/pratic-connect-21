@@ -565,7 +565,9 @@ const App = () => (
               <Route path="/cobranca/acordos" element={<AcordosList />} />
               <Route path="/cobranca/acordos/novo" element={<NovoAcordo />} />
               <Route path="/cobranca/acordos/:id" element={<AcordoDetalhe />} />
-              <Route path="/cobranca/troca-titularidade" element={<TrocaTitularidade />} />
+              <Route path="/relacionamento/troca-titularidade" element={<TrocaTitularidade />} />
+              {/* Compatibilidade com URL antiga */}
+              <Route path="/cobranca/troca-titularidade" element={<Navigate to="/relacionamento/troca-titularidade" replace />} />
               
               {/* Contabilidade */}
               <Route path="/contabilidade" element={<ContabilidadeDashboard />} />
