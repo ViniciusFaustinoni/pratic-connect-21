@@ -607,13 +607,23 @@ export function MapaVistoriasContent() {
 
   const renderFilters = () => (
     <>
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 flex-wrap items-center">
         <Badge className="bg-red-500/10 text-red-600 border-red-500/20">
           {vistoriasComCoordenadas.length} no mapa
         </Badge>
-        <Badge className="bg-muted text-muted-foreground">
-          {vistoriasFiltradas.length - vistoriasComCoordenadas.length} sem GPS
-        </Badge>
+        <button
+          type="button"
+          onClick={() => setApenasSemGps((v) => !v)}
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors",
+            apenasSemGps
+              ? "bg-amber-500 text-white border-amber-500"
+              : "bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800"
+          )}
+          title={apenasSemGps ? "Mostrar todas" : "Filtrar apenas vistorias sem GPS"}
+        >
+          ⚠️ {totalSemGps} sem GPS{apenasSemGps ? " (filtrado)" : ""}
+        </button>
       </div>
       <div className="relative mt-2">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
