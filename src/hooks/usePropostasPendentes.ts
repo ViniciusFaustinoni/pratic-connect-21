@@ -150,6 +150,31 @@ export interface PropostaPendente {
   instalacao_agendada: InstalacaoAgendadaInfo | null; // Dados do agendamento (pré-instalação)
   vistoria_base_info: VistoriaBaseInfo | null; // Dados da vistoria na base
   tipo_vistoria: 'autovistoria' | 'agendada' | 'agendada_base' | null; // Modalidade definida na cotação
+  /**
+   * True quando o plano contratado tem cobertura de Roubo e/ou Furto.
+   * Define se o Cadastro precisa avaliar fotos do veículo (com R&F) ou só
+   * documentação (sem R&F — assistência 24h, vidros, benefícios soltos).
+   * Detectado inspecionando os nomes das coberturas do plano via regex /roubo|furto/i.
+   */
+  plano_tem_roubo_furto: boolean;
+}
+
+/**
+ * Verifica se um plano possui cobertura de Roubo e/ou Furto consultando
+ * planos_coberturas + coberturas. Mesma heurística usada em outros pontos
+ * do sistema (regex /roubo|furto/i sobre o nome da cobertura).
+ */
+async function checkPlanoTemRouboFurto(planoId: string | null | undefined): Promise<boolean> {
+  if (!planoId) return false;
+  const { data } = await supabase
+    .from('planos_coberturas')
+    .select('coberturas(nome)')
+    .eq('plano_id', planoId);
+  if (!data || data.length === 0) return false;
+  return data.some((row: any) => {
+    const nome = row?.coberturas?.nome || '';
+    return /roubo|furto/i.test(nome);
+  });
 }
 
 export interface PropostaStats {
