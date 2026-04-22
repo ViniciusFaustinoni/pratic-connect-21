@@ -923,6 +923,19 @@ export default function Cotacoes() {
 
         {/* Tab Em Andamento */}
         <TabsContent value="em_andamento">
+          {cotacoesEmAndamentoTotal > 0 && cotacoesEmAndamento.length === 0 && hasActiveFilters && (
+            <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+              <div className="flex items-center gap-2 text-sm">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                <span>
+                  Você tem <strong>{cotacoesEmAndamentoTotal}</strong> cotação(ões) em andamento, mas os filtros ativos estão ocultando todas.
+                </span>
+              </div>
+              <Button size="sm" variant="outline" onClick={clearFilters} className="shrink-0">
+                Limpar filtros
+              </Button>
+            </div>
+          )}
           <CotacoesTable 
             cotacoes={cotacoesEmAndamento}
             onRowClick={handleRowClick}
@@ -941,6 +954,19 @@ export default function Cotacoes() {
 
         {/* Tab Finalizadas */}
         <TabsContent value="finalizadas">
+          {cotacoesFinalizadasTotal > 0 && cotacoesFinalizadas.length === 0 && hasActiveFilters && (
+            <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+              <div className="flex items-center gap-2 text-sm">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                <span>
+                  Você tem <strong>{cotacoesFinalizadasTotal}</strong> cotação(ões) finalizadas, mas os filtros ativos estão ocultando todas.
+                </span>
+              </div>
+              <Button size="sm" variant="outline" onClick={clearFilters} className="shrink-0">
+                Limpar filtros
+              </Button>
+            </div>
+          )}
           <CotacoesTable 
             cotacoes={cotacoesFinalizadas}
             onRowClick={handleRowClick}
