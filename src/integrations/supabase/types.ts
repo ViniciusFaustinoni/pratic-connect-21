@@ -8102,6 +8102,9 @@ export type Database = {
           autentique_documento_id: string | null
           autentique_status: string | null
           autentique_url: string | null
+          biometric_resend_count: number
+          biometric_resent_at: string | null
+          biometric_resent_by: string | null
           carencia_isenta: boolean | null
           carencia_motivo_isencao: string | null
           carencia_vidros_isenta: boolean | null
@@ -8221,6 +8224,9 @@ export type Database = {
           autentique_documento_id?: string | null
           autentique_status?: string | null
           autentique_url?: string | null
+          biometric_resend_count?: number
+          biometric_resent_at?: string | null
+          biometric_resent_by?: string | null
           carencia_isenta?: boolean | null
           carencia_motivo_isencao?: string | null
           carencia_vidros_isenta?: boolean | null
@@ -8340,6 +8346,9 @@ export type Database = {
           autentique_documento_id?: string | null
           autentique_status?: string | null
           autentique_url?: string | null
+          biometric_resend_count?: number
+          biometric_resent_at?: string | null
+          biometric_resent_by?: string | null
           carencia_isenta?: boolean | null
           carencia_motivo_isencao?: string | null
           carencia_vidros_isenta?: boolean | null
@@ -8483,6 +8492,27 @@ export type Database = {
           {
             foreignKeyName: "contratos_aprovado_por_fkey"
             columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "contratos_biometric_resent_by_fkey"
+            columns: ["biometric_resent_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contratos_biometric_resent_by_fkey"
+            columns: ["biometric_resent_by"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "contratos_biometric_resent_by_fkey"
+            columns: ["biometric_resent_by"]
             isOneToOne: false
             referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
