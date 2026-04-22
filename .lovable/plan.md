@@ -1,54 +1,56 @@
 
 
-## Corrigir realocação quando "Atribuição Manual" está ativa
+## Diagnóstico: Por que o PYN0C82 (Montana) não foi sincronizado no SGA
 
-### Problema identificado
+### Causa raiz (encontrada nos logs)
 
-No `RealocarInstalacaoDialog`, quando o modo **Atribuição Manual** está ativado:
+A sincronização SGA do **CLEBER** rodou **uma única vez em 20/04/2026 18:51** e teve este comportamento:
 
-1. O aviso azul diz: *"o serviço entrará na fila de atribuição para você designar o instalador no mapa"* — mas a UI ainda **exige** que se escolha uma rota existente (ou se crie uma nova).
-2. O botão **"Realocar para esta rota"** fica desabilitado por `(!criandoRota && !rotaId)` mesmo no modo manual — então o usuário preenche data/período/motivo e não consegue submeter.
-3. Mesmo se forçar uma rota, o `useRealocarInstalacao.realocarParaRota` envia `instaladorId: null` (correto) mas mantém `rota_id` setado — o que **tira o serviço da fila de atribuição manual** (a fila lista serviços com `profissional_id IS NULL` e sem rota efetiva atribuída ao mapa).
+| Etapa | Resultado |
+|---|---|
+| `autenticar` na Hinova | ✅ sucesso |
+| `cadastrar_veiculo` para **KXS2259** (Kombi) | ❌ erro 406 — *"Já existe um veículo com a placa KXS2259 cadastrado no sistema"* |
+| Recuperação por placa (KXS2259) | ✅ pegou `codigo_veiculo=24137` e marcou como sincronizado |
+| **PYN0C82** (Montana) | ⚠️ **nunca foi processado** — não existe nenhum log para esse veículo |
 
-Resultado: realocar em modo manual não funciona como prometido pelo aviso.
+Ou seja: **o sync rodou só para a Kombi**. O Montana ficou de fora porque, no momento em que a função foi disparada, a Montana ainda não estava elegível (provavelmente estava em outro status / sem cobertura ativa / sem proposta aprovada). Como a função `sga-hinova-sync` é **disparada por veículo** (não em lote por associado), o Montana precisa de um trigger próprio — e esse trigger nunca aconteceu.
+
+Hoje o Montana está:
+- `status = instalacao_pendente`
+- `status_sga = pendente`
+- `codigo_hinova = null`
+- `sincronizado_hinova = false`
+- Zero logs em `sga_sync_logs`
+- Zero jobs em `sga_sync_financeiro_jobs` (só o `backfill_inicial` global de hoje, ainda `pendente`)
+
+**Não é bug da função** — ela funciona (provou isso na Kombi). É **falta de disparo**: nada no fluxo de aprovação do Montana chamou `sga-hinova-sync` para esse veículo.
 
 ### O que vou fazer
 
-**1. `src/components/instalacoes/RealocarInstalacaoDialog.tsx`** — único arquivo alterado
+**Operação pontual** (não é build de feature). Disparar manualmente o sync para o PYN0C82 e corrigir o status local — exatamente como acordamos no plano anterior, mas agora com a causa explicada.
 
-Quando `manualAtiva === true` na aba **Rota**:
-- **Esconder** o seletor de rota, o botão "Criar nova rota" e o seletor de instalador (já está oculto, OK).
-- Mostrar apenas: **Data**, **Período**, **Motivo da realocação** e **Notificar por WhatsApp**.
-- Atualizar o aviso para deixar claro: *"O serviço será reagendado para a data/período escolhidos e entrará na fila de Atribuição Manual. Você designará o instalador depois pelo mapa."*
-- Remover do `disabled` do botão a obrigatoriedade de `rotaId`/`criandoRota` quando manual está ativo. O botão passa a depender apenas de `motivoRota.trim()` + data + período.
-- Renomear o label do botão para **"Reagendar e enviar para fila"** quando manual está ativo (mantém "Realocar para esta rota" no modo automático).
+**1. Invocar `sga-hinova-sync`** com:
+```json
+{ "veiculo_id": "a0136944-7d40-422d-94f2-da6f5c5c65b4",
+  "associado_id": "51ec89d2-57c9-44a7-8e93-1cf521196184" }
+```
+A função vai tentar criar o veículo na Hinova → como provavelmente a placa já existe lá (assim como aconteceu com a Kombi), ela cai na **Estratégia 1** (`GET /veiculo/consultar/placa/PYN0C82`), recupera o `codigo_veiculo` e grava localmente.
 
-Quando `manualAtiva === false`: comportamento atual permanece igual (rota obrigatória, instalador opcional).
+**2. Verificar resultado** consultando `sga_sync_logs` do veículo. Se `sync_completo` = `success`, prosseguir.
 
-**2. `src/hooks/useRealocarInstalacao.ts`** — leve ajuste em `realocarParaRota`
+**3. Ativar localmente** (ambos os veículos, já que ambos estão presos em `instalacao_pendente` apesar de já estarem no SGA):
+- `UPDATE veiculos SET status='ativo' WHERE id IN ('a0136944-…', 'f5bd7c0f-…')`
 
-Adicionar suporte para `rotaId: null` (modo manual). Quando `rotaId === null`:
-- `update.rota_id = null`
-- `update.profissional_id = null`
-- Mantém `status = 'agendada'`, atualiza `data_agendada` e `periodo`
-- Histórico registra como "enviada para fila de atribuição manual"
+**4. Cancelar serviço de instalação obsoleto** do Montana (`e36f0ffb-…`, status `agendada`):
+- `UPDATE servicos SET status='cancelada', observacoes='Cancelada — veículo já cadastrado no SGA, sincronizado manualmente em <data>'`
 
-Isso garante que o serviço apareça em `useServicosParaAtribuir` (filtro: `profissional_id IS NULL` + `status IN ('pendente','agendada')` + `data_agendada >= hoje`) — exatamente onde o gestor o pegará no mapa/aba de atribuição manual.
+**5. Registrar histórico** no associado documentando a sync manual e a causa (sync original em 20/04 só processou a Kombi).
 
-**3. Tipos**
-
-Atualizar `RealocarParaRotaParams.rotaId` para `string | null` no hook.
+### Cenários alternativos
+- **Se Hinova retornar 404 para PYN0C82**: a placa não existe lá. Eu paro, te aviso, e você decide se quer cadastrar de fato (a função tentará criar) ou se a placa está em outro CPF no SGA.
+- **Se o `codigo_veiculo` retornado pertencer a outro CPF no Hinova**: a função grava mesmo assim (não valida cruzamento). Posso adicionar essa validação se quiser — me avisa.
 
 ### Fora do escopo
-- Aba **Base** não muda (ela não depende de rota).
-- Não toco no fluxo do mapa nem na tabela `agendamentos_base`.
-- Sem alteração de schema do banco (campos `rota_id` e `profissional_id` já são nullable em `servicos`).
-
-### Como testar (após aprovação)
-1. Logar como diretor (`admin@teste.com`), ativar **Atribuição Manual** em Configurações.
-2. Em `/monitoramento/vistorias-instalacoes-mon`, abrir uma instalação agendada → clicar **Realocar**.
-3. Confirmar que aparecem só Data + Período + Motivo (sem seletor de rota/instalador).
-4. Reagendar para amanhã, manhã, com motivo "teste" → verificar toast de sucesso.
-5. Ir na aba **Atribuição Manual** → o serviço deve aparecer na fila com a nova data/período.
-6. Desativar atribuição manual → reabrir o diálogo de realocar → confirmar que o seletor de rota volta a aparecer (comportamento antigo preservado).
+- Não vou alterar a função `sga-hinova-sync` (funciona).
+- **Investigação adicional recomendada (separada)**: descobrir *por que* o trigger de sync não foi disparado para o Montana quando ele virou Roubo/Furto. Provavelmente é um gap no fluxo de aprovação que precisa ser auditado em outra task.
 
