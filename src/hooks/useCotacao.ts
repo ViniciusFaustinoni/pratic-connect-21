@@ -366,17 +366,13 @@ export function useCriarCotacao() {
 
       const resultado = resultados[0];
 
+      // CRÍTICO: vendedor_id deve ser auth.uid() (= profiles.user_id),
+      // pois a RLS de cotacoes filtra por vendedor_id = auth.uid().
+      // Usar profiles.id (PK) faz com que o consultor não veja a cotação que ele mesmo criou.
       let vendedorId: string | null = null;
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data: perfil } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('user_id', user.id)
-            .single();
-          if (perfil) vendedorId = perfil.id;
-        }
+        if (user) vendedorId = user.id;
       } catch (err) {
         console.warn('[useCriarCotacao] Erro ao obter vendedor:', err);
       }
