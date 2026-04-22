@@ -105,20 +105,60 @@ function authHeaders(s: HinovaSession): HeadersInit {
   };
 }
 
-/** GET /veiculo/buscar/{placa}/placa */
+/**
+ * Busca veículo por placa na Hinova.
+ * Endpoint primário: GET /veiculo/consultar/placa/{placa} (mesmo usado em sga-hinova-sync, comprovadamente funcional).
+ * Fallback: GET /veiculo/buscar/{placa}/placa (endpoint legado, mantido por segurança).
+ */
 export async function buscarVeiculoPorPlaca(s: HinovaSession, placa: string): Promise<any | null> {
   const placaLimpa = placa.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-  const r = await fetch(`${s.apiUrl}/veiculo/buscar/${placaLimpa}/placa`, { method: 'GET', headers: authHeaders(s) });
-  if (r.status === 404) return null;
-  const txt = await r.text();
+
+  const tryParse = (txt: string): any | null => {
+    try {
+      const j = JSON.parse(txt);
+      if (Array.isArray(j)) return j[0] ?? null;
+      if (j && typeof j === 'object') {
+        if (j.codigo_veiculo) return j;
+        // Algumas variantes envelopam em data/dados
+        if (j.data) {
+          if (Array.isArray(j.data)) return j.data[0] ?? null;
+          if (j.data.codigo_veiculo) return j.data;
+        }
+        if (Array.isArray(j.dados)) return j.dados[0] ?? null;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  // Endpoint primário (consultar/placa)
   try {
-    const j = JSON.parse(txt);
-    if (Array.isArray(j)) return j[0] ?? null;
-    if (j && typeof j === 'object' && j.codigo_veiculo) return j;
-    return null;
-  } catch {
-    return null;
+    const r1 = await fetch(`${s.apiUrl}/veiculo/consultar/placa/${placaLimpa}`, { method: 'GET', headers: authHeaders(s) });
+    if (r1.ok) {
+      const txt = await r1.text();
+      const found = tryParse(txt);
+      if (found?.codigo_veiculo) return found;
+    } else if (r1.status !== 404) {
+      console.warn('[Hinova] consultar/placa status', r1.status);
+    }
+  } catch (e) {
+    console.warn('[Hinova] consultar/placa erro', e);
   }
+
+  // Fallback endpoint legado (buscar/{placa}/placa)
+  try {
+    const r2 = await fetch(`${s.apiUrl}/veiculo/buscar/${placaLimpa}/placa`, { method: 'GET', headers: authHeaders(s) });
+    if (r2.status === 404) return null;
+    if (r2.ok) {
+      const txt = await r2.text();
+      return tryParse(txt);
+    }
+  } catch (e) {
+    console.warn('[Hinova] buscar/placa erro', e);
+  }
+
+  return null;
 }
 
 /** GET /buscar/situacao-financeira-veiculo/{codigo} */
