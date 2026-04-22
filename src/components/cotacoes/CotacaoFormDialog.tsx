@@ -244,19 +244,24 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const criarSolicitacaoFipeMenor = useCriarSolicitacaoFipeMenor();
   const { fipeMenorAtivo } = useFipeMenorAtivo();
 
-  // Limite mínimo de FIPE para permitir FIPE menor (abaixo desse valor, não exibe a opção)
-  const { data: fipeMenorLimiteMinimo = 30000 } = useQuery({
-    queryKey: ['config-fipe-menor-limite-minimo'],
+  // Limites de FIPE para Regra do 1% (mínimo geral + máximos por tipo)
+  const { data: fipeMenorLimites = { minimo: 30000, carro: 120000, moto: 27000 } } = useQuery({
+    queryKey: ['config-fipe-menor-limites'],
     queryFn: async () => {
       const { data } = await supabase
         .from('configuracoes')
-        .select('valor')
-        .eq('chave', 'fipe_menor_limite_minimo')
-        .maybeSingle();
-      return data?.valor ? Number(data.valor) || 30000 : 30000;
+        .select('chave, valor')
+        .in('chave', ['fipe_menor_limite_minimo', 'fipe_menor_limite_carro', 'fipe_menor_limite_moto']);
+      const map = new Map((data || []).map(r => [r.chave, Number(r.valor)] as const));
+      return {
+        minimo: map.get('fipe_menor_limite_minimo') || 30000,
+        carro: map.get('fipe_menor_limite_carro') || 120000,
+        moto: map.get('fipe_menor_limite_moto') || 27000,
+      };
     },
     staleTime: 5 * 60 * 1000,
   });
+  const fipeMenorLimiteMinimo = fipeMenorLimites.minimo;
 
   // Hook para FIPE limite (alto valor)
   const { data: configLimites } = useConfigLimitesVeiculo();
