@@ -221,16 +221,35 @@ Deno.serve(async (req) => {
         // Delete gastos_beneficios
         await supabaseAdmin.from("gastos_beneficios").delete().eq("contrato_id", contrato.id);
 
-        // Excluir blacklist_veiculos que referenciam vistorias do contrato ANTES de excluir vistorias
+        // Buscar vistorias e instalacoes do contrato para limpar agendamentos_base e outras FKs
         const { data: vistoriasContrato } = await supabaseAdmin
           .from("vistorias")
           .select("id")
           .eq("contrato_id", contrato.id);
-        
+
+        const { data: instalacoesContrato } = await supabaseAdmin
+          .from("instalacoes")
+          .select("id")
+          .eq("contrato_id", contrato.id);
+
         if (vistoriasContrato && vistoriasContrato.length > 0) {
           for (const vistoria of vistoriasContrato) {
             await supabaseAdmin.from("blacklist_veiculos").delete().eq("vistoria_id", vistoria.id);
+            // ROOT CAUSE FIX: agendamentos_base.vistoria_id é FK sem cascade
+            await supabaseAdmin.from("agendamentos_base").delete().eq("vistoria_id", vistoria.id);
           }
+        }
+
+        // ROOT CAUSE FIX: agendamentos_base.instalacao_id é FK sem cascade — bloqueia delete de instalacoes
+        if (instalacoesContrato && instalacoesContrato.length > 0) {
+          for (const inst of instalacoesContrato) {
+            await supabaseAdmin.from("agendamentos_base").delete().eq("instalacao_id", inst.id);
+          }
+        }
+
+        // agendamentos_base também pode referenciar a cotação
+        if (contrato.cotacao_id) {
+          await supabaseAdmin.from("agendamentos_base").delete().eq("cotacao_id", contrato.cotacao_id);
         }
 
         // Delete installations and inspections linked to contract
