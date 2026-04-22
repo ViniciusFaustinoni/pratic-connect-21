@@ -372,6 +372,8 @@ export default function InstaladorChecklist() {
     return foto?.arquivo_url;
   };
 
+  const fotoLocalInstalacaoResolvida = fotoLocalInstalacao || getFotoUrl('local_rastreador') || null;
+
   const getProgressoCategoria = (fotos: { id: string }[]) => {
     const enviadas = fotos.filter(f => getFotoUrl(f.id)).length;
     return { enviadas, total: fotos.length };
@@ -645,7 +647,7 @@ export default function InstaladorChecklist() {
         toast.error('Descreva o ponto exato de instalação do rastreador');
         return;
       }
-      if (!fotoLocalInstalacao) {
+      if (!fotoLocalInstalacaoResolvida) {
         toast.error('Tire a foto do local de instalação do rastreador');
         return;
       }
@@ -662,7 +664,7 @@ export default function InstaladorChecklist() {
         fotosRessalva: fotosRessalva.length > 0 ? fotosRessalva.map(f => f.preview) : undefined,
         localInstalacao: veiculoPrecisaRastreador && decisaoInstalador !== 'negado' ? localInstalacao : undefined,
         descricaoInstalacao: veiculoPrecisaRastreador && decisaoInstalador !== 'negado' ? descricaoInstalacao.trim() : undefined,
-        fotoLocalInstalacao: veiculoPrecisaRastreador && decisaoInstalador !== 'negado' ? fotoLocalInstalacao : undefined,
+        fotoLocalInstalacao: veiculoPrecisaRastreador && decisaoInstalador !== 'negado' ? fotoLocalInstalacaoResolvida || undefined : undefined,
       });
       navigate('/instalador');
     } catch (err) {
@@ -1585,7 +1587,7 @@ export default function InstaladorChecklist() {
                         tipo="local_instalacao"
                         label="Local Instalação"
                         obrigatoria={true}
-                        fotoUrl={fotoLocalInstalacao || undefined}
+                        fotoUrl={fotoLocalInstalacaoResolvida || undefined}
                         uploading={uploadingFotoLocal}
                         onCapture={handleFotoLocalInstalacao}
                         onRemove={() => setFotoLocalInstalacao(null)}
