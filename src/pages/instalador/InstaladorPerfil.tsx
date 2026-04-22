@@ -1,7 +1,8 @@
 import { useNavigate } from 'react-router-dom';
-import { User, LogOut, Settings, Bell, HelpCircle, Shield, ChevronRight, TrendingUp, TrendingDown, Calendar, Clock, AlertTriangle, History } from 'lucide-react';
+import { User, LogOut, Settings, Bell, HelpCircle, Shield, ChevronRight, TrendingUp, TrendingDown, Calendar, Clock, AlertTriangle, History, Building2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIniciarServico } from '@/hooks/useIniciarServico';
+import { useAlocacaoDiaria } from '@/hooks/useAlocacaoDiaria';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -24,6 +25,7 @@ export default function InstaladorPerfil() {
   const navigate = useNavigate();
   const { profile, signOut } = useAuth();
   const { emServico } = useIniciarServico();
+  const { isBase } = useAlocacaoDiaria();
 
   // Config: exibir saldo e limite débito
   const { data: configJornada } = useQuery({
@@ -145,83 +147,101 @@ export default function InstaladorPerfil() {
               <User className="h-4 w-4 mr-1.5" />
               Meu Perfil
             </TabsTrigger>
-            <TabsTrigger value="historico" className="flex-1 data-[state=active]:bg-slate-700 data-[state=active]:text-white text-slate-400">
-              <History className="h-4 w-4 mr-1.5" />
-              Histórico
-            </TabsTrigger>
+            {!isBase && (
+              <TabsTrigger value="historico" className="flex-1 data-[state=active]:bg-slate-700 data-[state=active]:text-white text-slate-400">
+                <History className="h-4 w-4 mr-1.5" />
+                Histórico
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {/* Aba Meu Perfil */}
           <TabsContent value="perfil" className="space-y-4 mt-4">
-            {/* Minha Jornada */}
-            <Card className="border-slate-700 bg-slate-800">
-              <CardContent className="p-4 space-y-3">
-                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-blue-400" />
-                  Minha Jornada
-                </h3>
+            {isBase ? (
+              /* Card simples para Técnico Base */
+              <Card className="border-slate-700 bg-slate-800">
+                <CardContent className="p-4 space-y-2">
+                  <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-blue-400" />
+                    Técnico Base
+                  </h3>
+                  <p className="text-sm text-slate-300 leading-relaxed">
+                    Você atua na base — o controle de ponto é feito presencialmente.
+                    Esta tela mostra apenas suas tarefas e configurações.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              /* Minha Jornada — apenas para técnicos de Rota */
+              <Card className="border-slate-700 bg-slate-800">
+                <CardContent className="p-4 space-y-3">
+                  <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-blue-400" />
+                    Minha Jornada
+                  </h3>
 
-                {configJornada?.exibirSaldo && (
-                  <div className="flex items-center justify-between rounded-lg bg-slate-700/50 p-3">
-                    <span className="text-sm text-slate-300">Saldo atual</span>
-                    <div className="flex items-center gap-1">
-                      {saldo >= 0 ? (
-                        <>
-                          <TrendingUp className="h-4 w-4 text-green-400" />
-                          <span className="text-sm font-semibold text-green-400">
-                            + {formatarMinutos(saldo)} de crédito
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <TrendingDown className="h-4 w-4 text-red-400" />
-                          <span className="text-sm font-semibold text-red-400">
-                            - {formatarMinutos(Math.abs(saldo))} de débito
-                          </span>
-                        </>
-                      )}
+                  {configJornada?.exibirSaldo && (
+                    <div className="flex items-center justify-between rounded-lg bg-slate-700/50 p-3">
+                      <span className="text-sm text-slate-300">Saldo atual</span>
+                      <div className="flex items-center gap-1">
+                        {saldo >= 0 ? (
+                          <>
+                            <TrendingUp className="h-4 w-4 text-green-400" />
+                            <span className="text-sm font-semibold text-green-400">
+                              + {formatarMinutos(saldo)} de crédito
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <TrendingDown className="h-4 w-4 text-red-400" />
+                            <span className="text-sm font-semibold text-red-400">
+                              - {formatarMinutos(Math.abs(saldo))} de débito
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-lg bg-slate-700/50 p-3">
+                      <div className="flex items-center gap-1 mb-1">
+                        <Calendar className="h-3 w-3 text-slate-400" />
+                        <p className="text-xs text-slate-400">Dias trabalhados</p>
+                      </div>
+                      <p className="text-lg font-bold text-white">{resumoMes?.dias ?? 0}</p>
+                    </div>
+                    <div className="rounded-lg bg-slate-700/50 p-3">
+                      <div className="flex items-center gap-1 mb-1">
+                        <Clock className="h-3 w-3 text-slate-400" />
+                        <p className="text-xs text-slate-400">Total mês</p>
+                      </div>
+                      <p className="text-lg font-bold text-white">
+                        {formatarMinutos(resumoMes?.totalMinutos ?? 0)}
+                      </p>
                     </div>
                   </div>
-                )}
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-lg bg-slate-700/50 p-3">
-                    <div className="flex items-center gap-1 mb-1">
-                      <Calendar className="h-3 w-3 text-slate-400" />
-                      <p className="text-xs text-slate-400">Dias trabalhados</p>
+                  {(configJornada?.viagemValorDiaria ?? 0) > 0 && (resumoMes?.totalBonusViagem ?? 0) > 0 && (
+                    <div className="rounded-lg bg-orange-900/30 border border-orange-500/30 p-3 flex items-center justify-between">
+                      <span className="text-sm text-orange-300">Diárias de viagem no mês</span>
+                      <span className="text-sm font-semibold text-orange-300">
+                        R$ {(resumoMes?.totalBonusViagem ?? 0).toFixed(2)}
+                      </span>
                     </div>
-                    <p className="text-lg font-bold text-white">{resumoMes?.dias ?? 0}</p>
-                  </div>
-                  <div className="rounded-lg bg-slate-700/50 p-3">
-                    <div className="flex items-center gap-1 mb-1">
-                      <Clock className="h-3 w-3 text-slate-400" />
-                      <p className="text-xs text-slate-400">Total mês</p>
+                  )}
+
+                  {debitoBloqueado && (
+                    <div className="rounded-lg bg-red-900/30 border border-red-500/50 p-3 flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
+                      <p className="text-xs text-red-300">
+                        Seu débito está acima do limite. Você não poderá iniciar novos turnos até regularizar.
+                      </p>
                     </div>
-                    <p className="text-lg font-bold text-white">
-                      {formatarMinutos(resumoMes?.totalMinutos ?? 0)}
-                    </p>
-                  </div>
-                </div>
-
-                {(configJornada?.viagemValorDiaria ?? 0) > 0 && (resumoMes?.totalBonusViagem ?? 0) > 0 && (
-                  <div className="rounded-lg bg-orange-900/30 border border-orange-500/30 p-3 flex items-center justify-between">
-                    <span className="text-sm text-orange-300">Diárias de viagem no mês</span>
-                    <span className="text-sm font-semibold text-orange-300">
-                      R$ {(resumoMes?.totalBonusViagem ?? 0).toFixed(2)}
-                    </span>
-                  </div>
-                )}
-
-                {debitoBloqueado && (
-                  <div className="rounded-lg bg-red-900/30 border border-red-500/50 p-3 flex items-start gap-2">
-                    <AlertTriangle className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
-                    <p className="text-xs text-red-300">
-                      Seu débito está acima do limite. Você não poderá iniciar novos turnos até regularizar.
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Menu */}
             <Card className="border-slate-700 bg-slate-800">
@@ -259,10 +279,12 @@ export default function InstaladorPerfil() {
             </p>
           </TabsContent>
 
-          {/* Aba Histórico */}
-          <TabsContent value="historico" className="mt-4">
-            <HistoricoJornadas exibirSaldo={configJornada?.exibirSaldo ?? true} />
-          </TabsContent>
+          {/* Aba Histórico — escondida para técnico Base */}
+          {!isBase && (
+            <TabsContent value="historico" className="mt-4">
+              <HistoricoJornadas exibirSaldo={configJornada?.exibirSaldo ?? true} />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     </div>
