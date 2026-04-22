@@ -650,7 +650,7 @@ export function AppSidebar() {
     }
     
     return baseGroups;
-  }, [permissions, visibleModules, fipeMenorAtivo]);
+  }, [permissions, visibleModules, fipeMenorAtivo, biometriasPendentesCount]);
 
   const visibleMainItems = useMemo(() => {
     if (permissions.isSindicanteOnly) {
