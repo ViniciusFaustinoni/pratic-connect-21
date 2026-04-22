@@ -354,37 +354,8 @@ export default function Associados() {
     setDetalheAssociadoId(associado.id);
   };
 
-  const exportToExcel = useCallback((format: 'xlsx' | 'csv') => {
-    const dataToExport = filteredAssociados.map((a) => ({
-      'Nome': a.nome,
-      'CPF': formatCpf(a.cpf),
-      'Telefone': formatTelefone(a.telefone),
-      'Email': a.email || '',
-      'Veículo': a.veiculos?.[0] ? `${a.veiculos[0].placa} - ${a.veiculos[0].modelo}` : '',
-      'Plano': a.planos?.nome || '',
-      'Status': STATUS_ASSOCIADO_LABELS[a.status],
-      'Data Adesão': formatDate(a.data_adesao),
-      'Cidade': a.cidade || '',
-      'UF': a.uf || '',
-    }));
+  // Exportação inteligente movida para ExportAssociadosDialog.
 
-    const ws = XLSX.utils.json_to_sheet(dataToExport);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Associados');
-
-    const fileName = `associados_${new Date().toISOString().slice(0, 10)}.${format}`;
-    
-    if (format === 'csv') {
-      XLSX.writeFile(wb, fileName, { bookType: 'csv' });
-    } else {
-      XLSX.writeFile(wb, fileName);
-    }
-
-    toast({
-      title: 'Exportação concluída',
-      description: `${filteredAssociados.length} associados exportados para ${format.toUpperCase()}.`,
-    });
-  }, [filteredAssociados, toast]);
 
   // Totals for progress bars
   const totalAssociados = useMemo(() => {
