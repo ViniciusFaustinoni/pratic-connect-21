@@ -1,57 +1,47 @@
 
 
-## Isolar sincronização financeira aos veículos da base antiga
+## Corrigir erro `invalid input value for enum status_servico: "concluido"` na atribuição de serviços
 
-### Diagnóstico
+### Causa raiz
 
-| Origem | Associados | Veículos | Comportamento desejado |
-|---|---|---|---|
-| `api_externa` (base antiga importada) | 9.496 | 9.621 | Sincronização financeira **ATIVA** (mapear placa → buscar boletos) |
-| `interno` (cotação nova) | 41 | 41 | Sincronização financeira **DESATIVADA**. Vão ao SGA via `sga-hinova-sync` (envio, não leitura) |
+O trigger `trg_troca_vistoria_concluida` (função `tg_troca_vistoria_concluida`) foi criado no fluxo de Troca de Titularidade comparando o status com o literal **`'concluido'`** (masculino). O enum real `status_servico` usa **`'concluida'`** (feminino) — não existe `concluido`. Como o trigger é `AFTER UPDATE OF status`, ele dispara em **qualquer** alteração de status (incluindo a atribuição manual `status='agendada'`), e o Postgres falha ao tentar comparar `NEW.status` com um literal inexistente no enum.
 
-**Chave de diferenciação confirmada**: `associados.origem_cadastro`. Não precisa de coluna nova.
+Resultado: nenhuma atribuição manual funciona — nem rota, nem outros updates de status — desde a criação desse trigger.
 
-### Problema atual
+### Correção
 
-1. `sga-mapear-codigos-veiculos` busca por placa para **TODO** veículo sem `codigo_hinova` — incluindo os 38 internos que ainda não foram enviados ao SGA. Isso polui a fila com `sem_historico_hinova` falsos.
-2. `sga-backfill-financeiro` (enfileirar) seleciona qualquer veículo com `codigo_hinova` + associado com `codigo_hinova`. Quando um veículo `interno` for enviado ao SGA via `sga-hinova-sync`, ele entra no backfill financeiro do dia seguinte — não deveria, pois sua origem é o próprio sistema novo.
-3. Risco de duplicidade: se um veículo `interno` cair no `sga-mapear-codigos-veiculos` por placa antes de ser enviado, ele pode ganhar um `codigo_hinova` de um homônimo da base antiga (placa reutilizada/coincidência). Hoje não há guard.
+**1. Migration SQL** corrigindo a função do trigger:
 
-### Mudanças
+```sql
+CREATE OR REPLACE FUNCTION public.tg_troca_vistoria_concluida()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $$
+BEGIN
+  IF NEW.status = 'concluida'::status_servico
+     AND (OLD.status IS DISTINCT FROM 'concluida'::status_servico) THEN
+    UPDATE public.solicitacoes_troca_titularidade
+       SET status = 'liberada_para_assinatura',
+           updated_at = now()
+     WHERE servico_vistoria_id = NEW.id
+       AND status = 'aguardando_vistoria';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+```
 
-**1. `supabase/functions/sga-mapear-codigos-veiculos/index.ts`**
-- No SELECT, juntar com `associados!inner(origem_cadastro)` e filtrar `origem_cadastro = 'api_externa'`.
-- Veículos `interno` nunca entram no mapeamento por placa.
+Trocas: `'concluido'` → `'concluida'::status_servico` (cast explícito evita reincidência futura).
 
-**2. `supabase/functions/sga-backfill-financeiro/index.ts`**
-- Na ação `enfileirar`: filtrar `associados.origem_cadastro = 'api_externa'`.
-- Na ação `status`: separar contagens "elegíveis (base antiga)" vs "internos (não elegíveis)" para o painel ficar honesto.
-
-**3. `supabase/functions/cron-sga-sync-financeiro-diario/index.ts`**
-- Sem mudança de lógica (já chama o orquestrador), mas comentário explicando que afeta apenas base antiga.
-
-**4. `supabase/functions/sga-hinova-sync/index.ts`** (envio para SGA — base nova)
-- Adicionar guard: se associado já tem `codigo_hinova` E `origem_cadastro = 'api_externa'`, **bloquear envio** com erro claro ("Associado pertence à base antiga, não pode ser reenviado"). Evita duplicidade no SGA.
-- Após criar com sucesso, marcar `sincronizado_hinova=true` (já faz) — esses ficam fora do backfill por NÃO serem `api_externa`.
-
-**5. `src/components/cadastro/SgaBackfillFinanceiroDialog.tsx`**
-- Texto do dialog: deixar explícito "Sincroniza apenas veículos da base antiga (importados via API). Veículos novos contratados pelo sistema são enviados ao SGA automaticamente após a contratação".
-- Mostrar 2 contadores: `Elegíveis (base antiga)` e `Sistema novo (não sincronizam)`.
-
-**6. Limpeza pontual (script de manutenção via SQL)**
-- Marcar como `cancelado` os jobs em `sga_sync_financeiro_jobs` cujo veículo pertença a associado `interno` (limpeza histórica, não recorrente). Status novo `cancelado` adicionado ao CHECK constraint.
+**2. Auditoria de outros triggers** — varrer no banco quaisquer outras funções/triggers que comparem `status_servico` com `'concluido'` (masculino) e corrigir na mesma migration. Suspeitos já mapeados ficam OK; vamos rodar uma busca completa por `'concluido'` em `pg_proc` filtrando funções que tocam `servicos` para garantir que essa é a única ocorrência.
 
 ### Critérios de aceitação
 
-1. Painel mostra "Elegíveis: 9.621 / Sistema novo: 41 (não sincronizam)".
-2. Próxima execução do cron diário não cria jobs para nenhum veículo `interno`.
-3. `sga-mapear-codigos-veiculos` ignora veículos `interno`.
-4. Tentativa de chamar `sga-hinova-sync` para associado `api_externa` retorna erro de duplicidade.
-5. Veículos novos contratados pelo fluxo de cotação seguem indo ao SGA via `sga-hinova-sync` normalmente (envio, não leitura).
-6. Jobs antigos pendentes de veículos `interno` ficam marcados como `cancelado` e somem das métricas de erro.
+1. Atribuir um serviço a um técnico no painel `/monitoramento/vistorias-instalacoes-mon` (aba Atribuição Manual) **não** mais retorna o erro de enum.
+2. O fluxo de Troca de Titularidade continua funcionando: ao concluir a vistoria associada (`status='concluida'`), a `solicitacoes_troca_titularidade` correspondente passa para `liberada_para_assinatura`.
+3. Nenhuma outra função do schema referencia o literal inválido `'concluido'` no contexto de `status_servico`.
 
 ### Fora de escopo
 
-- Reescrever `sga-hinova-sync` (apenas adiciona guard).
-- Migrar histórico financeiro dos 41 internos (não aplicável — eles geram cobranças no sistema novo, não no SGA).
+- Refatorar a aba de Atribuição Manual (não há bug no frontend).
+- Mexer em outros triggers de `servicos` (sem evidência de problema).
 
