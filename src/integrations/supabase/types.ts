@@ -10891,42 +10891,54 @@ export type Database = {
           analista_id: string | null
           arquivo_url: string
           associado_id: string
+          confianca_ocr: number | null
           created_at: string
+          dados_extraidos: Json | null
           data_analise: string | null
           id: string
           motivo_reprovacao: string | null
           nome_arquivo: string
           status: Database["public"]["Enums"]["status_documento"]
+          sugestao_ocr: string | null
           tamanho_bytes: number | null
           tipo: Database["public"]["Enums"]["tipo_documento"]
+          tipo_detectado: string | null
           veiculo_id: string | null
         }
         Insert: {
           analista_id?: string | null
           arquivo_url: string
           associado_id: string
+          confianca_ocr?: number | null
           created_at?: string
+          dados_extraidos?: Json | null
           data_analise?: string | null
           id?: string
           motivo_reprovacao?: string | null
           nome_arquivo: string
           status?: Database["public"]["Enums"]["status_documento"]
+          sugestao_ocr?: string | null
           tamanho_bytes?: number | null
           tipo: Database["public"]["Enums"]["tipo_documento"]
+          tipo_detectado?: string | null
           veiculo_id?: string | null
         }
         Update: {
           analista_id?: string | null
           arquivo_url?: string
           associado_id?: string
+          confianca_ocr?: number | null
           created_at?: string
+          dados_extraidos?: Json | null
           data_analise?: string | null
           id?: string
           motivo_reprovacao?: string | null
           nome_arquivo?: string
           status?: Database["public"]["Enums"]["status_documento"]
+          sugestao_ocr?: string | null
           tamanho_bytes?: number | null
           tipo?: Database["public"]["Enums"]["tipo_documento"]
+          tipo_detectado?: string | null
           veiculo_id?: string | null
         }
         Relationships: [

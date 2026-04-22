@@ -51,6 +51,19 @@ interface DocUploadState {
   observacao: string;
   uploading: boolean;
   enviado: boolean;
+  ocrTipo?: string | null;
+  ocrSugestao?: string | null;
+  ocrEquivalente?: boolean; // OCR detectou tipo diferente, mas equivalente (ex.: NF para slot CRLV)
+}
+
+// Tipos equivalentes ao CRLV (substituem o documento do veículo)
+const TIPOS_EQUIVALENTES_CRLV = new Set(['nota_fiscal_veiculo', 'atpv_e']);
+
+function isOcrTipoCompativel(tipoEsperado: string, tipoDetectado: string | null | undefined): boolean {
+  if (!tipoDetectado) return false;
+  if (tipoEsperado === tipoDetectado) return true;
+  if (tipoEsperado === 'crlv' && TIPOS_EQUIVALENTES_CRLV.has(tipoDetectado)) return true;
+  return false;
 }
 
 export function DocumentosPendentesPublico({ 
@@ -137,6 +150,27 @@ export function DocumentosPendentesPublico({
         .from('cotacoes-docs')
         .getPublicUrl(fileName);
 
+      // 2.1 Rodar OCR (não bloqueante para o usuário; aguardamos para já gravar resultado)
+      let ocrTipoDetectado: string | null = null;
+      let ocrSugestao: string | null = null;
+      let ocrConfianca: number | null = null;
+      let ocrDados: Record<string, unknown> | null = null;
+      try {
+        const { data: ocrResult, error: ocrError } = await publicSupabase.functions.invoke('document-ocr', {
+          body: { url: publicUrl, tipoEsperado: doc.tipo_documento },
+        });
+        if (!ocrError && ocrResult) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const r = ocrResult as any;
+          ocrTipoDetectado = r.tipo_detectado ?? null;
+          ocrSugestao = r.sugestao ?? null;
+          ocrConfianca = typeof r.confianca === 'number' ? r.confianca : null;
+          ocrDados = r.dados ?? null;
+        }
+      } catch (ocrErr) {
+        console.warn('[DocsPendentes] OCR falhou (segue sem bloquear):', ocrErr);
+      }
+
       // 3. Criar registro na tabela documentos (tipo já é validado pelo enum do banco)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: novoDoc, error: docError } = await publicSupabase
@@ -148,7 +182,11 @@ export function DocumentosPendentesPublico({
           nome_arquivo: file.name,
           tamanho_bytes: file.size,
           status: 'pendente',
-        })
+          dados_extraidos: ocrDados,
+          tipo_detectado: ocrTipoDetectado,
+          confianca_ocr: ocrConfianca,
+          sugestao_ocr: ocrSugestao,
+        } as any)
         .select('id')
         .single();
 
@@ -174,10 +212,19 @@ export function DocumentosPendentesPublico({
         throw updateError;
       }
 
-      // Marcar como enviado
+      // Marcar como enviado + guardar resultado do OCR para badge
+      const equivalente = isOcrTipoCompativel(doc.tipo_documento, ocrTipoDetectado)
+        && ocrTipoDetectado !== doc.tipo_documento;
       setUploadStates(prev => ({
         ...prev,
-        [doc.id]: { ...prev[doc.id], uploading: false, enviado: true }
+        [doc.id]: {
+          ...prev[doc.id],
+          uploading: false,
+          enviado: true,
+          ocrTipo: ocrTipoDetectado,
+          ocrSugestao,
+          ocrEquivalente: equivalente,
+        }
       }));
 
       return true;
@@ -340,7 +387,24 @@ export function DocumentosPendentesPublico({
                         </Badge>
                       )}
                     </div>
-                    
+
+                    {/* Badge de reconhecimento OCR (após envio) */}
+                    {isEnviado && state.ocrTipo && (
+                      <div className="mb-2">
+                        {state.ocrEquivalente ? (
+                          <Badge variant="outline" className="text-xs border-success/30 text-success">
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                            Reconhecido como {TIPO_DOCUMENTO_LABELS[state.ocrTipo] || state.ocrTipo} (substitui o solicitado)
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-xs border-success/30 text-success">
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                            Reconhecido como {TIPO_DOCUMENTO_LABELS[state.ocrTipo] || state.ocrTipo}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+
                     {doc.observacao_solicitacao && (
                       <p className="text-xs text-muted-foreground mb-3">
                         <strong>Observação:</strong> {doc.observacao_solicitacao}
