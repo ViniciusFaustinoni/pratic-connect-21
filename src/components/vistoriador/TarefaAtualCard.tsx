@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   MapPin, Phone, Car, Clock, Navigation, Play, 
   CheckCircle2, User, ChevronRight, Loader2, Route, Zap,
-  MessageCircle, MessageSquareWarning, Timer
+  MessageCircle, MessageSquareWarning
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,7 +28,7 @@ import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ImprevistoBotao } from './ImprevistoBotao';
-import { horaLiberacaoTarefa, PERIODO_LABEL } from '@/lib/periodo-utils';
+import { horaLiberacaoTarefa } from '@/lib/periodo-utils';
 import { SlaIndicador } from '@/components/ui/SlaIndicador';
 import { ModalRecusaTarefa } from './ModalRecusaTarefa';
 import { supabase } from '@/integrations/supabase/client';
@@ -82,13 +82,6 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
     staleTime: 1000 * 60 * 10,
   });
 
-  // Estado para atualização em tempo real (a cada minuto)
-  const [agora, setAgora] = useState(new Date());
-  
-  useEffect(() => {
-    const interval = setInterval(() => setAgora(new Date()), 60000); // Atualiza a cada minuto
-    return () => clearInterval(interval);
-  }, []);
 
   // Hora de liberação efetiva (início do período) — mantida apenas como referência
   // informativa. Não bloqueia mais o início da tarefa pelo técnico atribuído.
