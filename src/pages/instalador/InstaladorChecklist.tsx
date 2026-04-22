@@ -41,6 +41,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
+import { compressImage } from '@/lib/imageCompressor';
 import { 
   useServicoDetalhes, 
   useSalvarChecklistServico,
@@ -396,10 +397,19 @@ export default function InstaladorChecklist() {
     if (!id) return;
     setUploadingChecklistFoto(itemId);
     try {
+      // Comprime antes do upload — câmera moderna gera 5-12 MB; após ~250-700 KB.
+      let arquivoFinal = file;
+      try {
+        if (file.size > 250 * 1024) {
+          arquivoFinal = await compressImage(file);
+        }
+      } catch (err) {
+        console.warn('[Checklist] Falha ao comprimir foto, usando original:', err);
+      }
       const fileName = `checklist/${id}/${itemId}/${Date.now()}.jpg`;
       const { error: uploadError } = await supabase.storage
         .from('instalacoes')
-        .upload(fileName, file, { contentType: 'image/jpeg', upsert: true });
+        .upload(fileName, arquivoFinal, { contentType: 'image/jpeg', upsert: true });
       if (uploadError) throw uploadError;
       const { data: urlData } = supabase.storage.from('instalacoes').getPublicUrl(fileName);
       setChecklist(prev => ({

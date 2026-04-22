@@ -100,6 +100,22 @@ export default function ExecutarVistoriaCompleta() {
   const [openCategories, setOpenCategories] = useState<string[]>(['identificacao_motor']);
   const [salvando, setSalvando] = useState(false);
   const [dadosRestaurados, setDadosRestaurados] = useState(false);
+  const restauradoToastRef = useRef(false);
+  const capability = useDeviceCapability();
+
+  // Telemetria de capacidade do dispositivo + alerta de restauração após OOM
+  useEffect(() => {
+    console.log(
+      `[Vistoria] Capacidade do dispositivo: deviceMemory=${capability.deviceMemory ?? '?'}GB cores=${capability.hardwareConcurrency ?? '?'} lowEnd=${capability.lowEnd} heap=${capability.usedHeapMB ?? '?'}MB wasDiscarded=${capability.wasDiscarded}`
+    );
+    if (capability.wasDiscarded && !restauradoToastRef.current) {
+      restauradoToastRef.current = true;
+      toast.info('Continuamos de onde você parou.', {
+        description: 'O app foi recarregado por falta de memória, mas suas fotos e dados foram preservados.',
+        duration: 6000,
+      });
+    }
+  }, [capability]);
   
   const [conferencia, setConferencia] = useState({
     placa: false, chassi: false, modelo: false, cor: false,
