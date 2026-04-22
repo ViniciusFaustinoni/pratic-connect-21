@@ -70,13 +70,14 @@ serve(async (req) => {
           mapeados++;
         } else {
           nao_encontrados++;
-          // marca um job de erro p/ revisão manual se não houver job pendente
+          // Veículo da base nova (não existe na Hinova). Registra como
+          // 'sem_historico_hinova' para sair do retry e não poluir métrica de erros.
           await supabase.from('sga_sync_financeiro_jobs').insert({
             veiculo_id: v.id,
             associado_id: v.associado_id,
             tipo: 'mapear_codigo',
-            status: 'erro',
-            ultimo_erro: 'Placa não encontrada na Hinova',
+            status: 'sem_historico_hinova',
+            ultimo_erro: 'Placa não encontrada na Hinova (veículo da base nova)',
             iniciado_em: new Date().toISOString(),
             concluido_em: new Date().toISOString(),
           });

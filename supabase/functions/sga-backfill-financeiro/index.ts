@@ -29,7 +29,7 @@ serve(async (req) => {
     // -------- STATUS --------
     if (acao === 'status') {
       const counts: Record<string, number> = {};
-      for (const st of ['pendente', 'executando', 'concluido', 'erro']) {
+      for (const st of ['pendente', 'executando', 'concluido', 'erro', 'sem_historico_hinova']) {
         const { count } = await supabase
           .from('sga_sync_financeiro_jobs')
           .select('id', { count: 'exact', head: true })

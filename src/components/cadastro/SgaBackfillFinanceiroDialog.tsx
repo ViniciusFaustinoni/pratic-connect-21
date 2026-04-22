@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, RefreshCw, Database, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
+import { Loader2, RefreshCw, Database, AlertCircle, CheckCircle2, Clock, MinusCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface JobStatus {
@@ -12,6 +12,7 @@ interface JobStatus {
   executando: number;
   concluido: number;
   erro: number;
+  sem_historico_hinova: number;
 }
 
 interface StatusResp {
@@ -99,8 +100,10 @@ export function SgaBackfillFinanceiroDialog() {
     }
   };
 
-  const totalJobs = status ? status.jobs.pendente + status.jobs.executando + status.jobs.concluido + status.jobs.erro : 0;
-  const concluidoPct = totalJobs > 0 ? Math.round((status!.jobs.concluido / totalJobs) * 100) : 0;
+  const semHistorico = status?.jobs.sem_historico_hinova ?? 0;
+  const totalJobs = status ? status.jobs.pendente + status.jobs.executando + status.jobs.concluido + status.jobs.erro + semHistorico : 0;
+  const finalizados = status ? status.jobs.concluido + semHistorico : 0;
+  const concluidoPct = totalJobs > 0 ? Math.round((finalizados / totalJobs) * 100) : 0;
 
   return (
     <>
@@ -142,8 +145,14 @@ export function SgaBackfillFinanceiroDialog() {
                   <Badge variant="secondary" className="gap-1"><Clock className="h-3 w-3" /> Pendentes: {status.jobs.pendente}</Badge>
                   <Badge variant="secondary" className="gap-1"><Loader2 className="h-3 w-3" /> Executando: {status.jobs.executando}</Badge>
                   <Badge variant="secondary" className="gap-1 bg-green-50 text-green-700"><CheckCircle2 className="h-3 w-3" /> Concluídos: {status.jobs.concluido}</Badge>
+                  <Badge variant="secondary" className="gap-1"><MinusCircle className="h-3 w-3" /> Sem histórico Hinova: {semHistorico}</Badge>
                   <Badge variant="secondary" className="gap-1 bg-red-50 text-red-700"><AlertCircle className="h-3 w-3" /> Erros: {status.jobs.erro}</Badge>
                 </div>
+                {semHistorico > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    "Sem histórico Hinova" são veículos da base nova que nunca existiram no sistema antigo — não são erros.
+                  </p>
+                )}
               </div>
             )}
 
