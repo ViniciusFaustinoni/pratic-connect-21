@@ -314,7 +314,6 @@ const menuConfig: {
         { title: 'Negativação', url: '/cobranca/negativacao', icon: AlertTriangle },
         { title: 'Régua', url: '/cobranca/regua', icon: List },
         { title: 'Chat', url: '/cobranca/chat', icon: MessageCircle },
-        { title: 'Troca de Titularidade', url: '/cobranca/troca-titularidade', icon: Users },
       ],
     },
     {

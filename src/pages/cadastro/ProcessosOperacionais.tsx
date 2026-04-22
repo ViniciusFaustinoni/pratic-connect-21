@@ -1,429 +1,138 @@
-import { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useMemo, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { ArrowRightLeft, RotateCcw, RefreshCw, Eye, User, Calendar, Search, ArrowRight, AlertTriangle, FileInput, CheckCircle, XCircle, Loader2, ShieldCheck, ClipboardList } from 'lucide-react';
+  ArrowRightLeft, RefreshCw, Eye, Calendar, Search, ArrowRight,
+  AlertTriangle, FileInput, FileSignature, Car, ExternalLink, PackagePlus,
+} from 'lucide-react';
 import { MigracoesTab } from '@/pages/cadastro/SolicitacoesMigracao';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useSubstituicoes } from '@/hooks/useSubstituicaoVeiculo';
 import { useConfigLimitesVeiculo } from '@/hooks/useConfigLimitesVeiculo';
 import { STATUS_SUBSTITUICAO_LABELS, STATUS_SUBSTITUICAO_CORES } from '@/types/substituicao';
 import type { StatusSubstituicao } from '@/types/substituicao';
-import { usePermissions } from '@/hooks/usePermissions';
-import { toast } from 'sonner';
+import { useSolicitacoesTroca, type StatusTroca } from '@/hooks/useSolicitacoesTroca';
+import { ModalDetalhesTroca } from '@/components/troca-titularidade/ModalDetalhesTroca';
 
 // ============================================
-// TROCA DE TITULARIDADE TAB
+// TROCA DE TITULARIDADE TAB (nova fonte)
 // ============================================
+
+const STATUS_TROCA_LABEL: Record<StatusTroca, string> = {
+  cotacao_em_andamento: 'Cotação em andamento',
+  aguardando_cadastro: 'Aguardando Cadastro',
+  aguardando_monitoramento: 'Aguardando Monitoramento',
+  aguardando_vistoria: 'Em Vistoria',
+  liberada_para_assinatura: 'Liberada para assinatura',
+  efetivada: 'Efetivada',
+  reprovada_cadastro: 'Reprovada (Cadastro)',
+  reprovada_monitoramento: 'Reprovada (Monitoramento)',
+  cancelada: 'Cancelada',
+};
+
+const TROCA_FILTROS: Record<string, StatusTroca[]> = {
+  pendentes: ['aguardando_cadastro', 'cotacao_em_andamento'],
+  aguardando_monit: ['aguardando_monitoramento'],
+  em_vistoria: ['aguardando_vistoria'],
+  aprovadas: ['liberada_para_assinatura', 'efetivada'],
+  recusadas: ['reprovada_cadastro', 'reprovada_monitoramento', 'cancelada'],
+};
 
 function TrocaTitularidadeTab() {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const { isGerencia } = usePermissions();
-
-  const [aprovarId, setAprovarId] = useState<string | null>(null);
-  const [rejeitarId, setRejeitarId] = useState<string | null>(null);
-  const [motivoRejeicao, setMotivoRejeicao] = useState('');
-  const [cenarioResultado, setCenarioResultado] = useState<Record<string, string>>({});
-
-  const { data: solicitacoes, isLoading } = useQuery({
-    queryKey: ['processos-troca-titularidade'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('chat_solicitacoes_ia')
-        .select(`
-          *,
-          associado:associados!chat_solicitacoes_ia_associado_id_fkey(id, nome, cpf, telefone)
-        `)
-        .eq('tipo', 'troca_titularidade')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return data || [];
-    },
-  });
-
-  // Buscar serviços vinculados para Cenário B (status da vistoria em tempo real)
-  const cenarioBIds = useMemo(() => {
-    if (!solicitacoes) return [];
-    return solicitacoes
-      .filter((s: any) => {
-        const dados = s.dados as any;
-        return s.status === 'aprovado' && dados?.cenario_aplicado === 'B';
-      })
-      .map((s: any) => s.id);
-  }, [solicitacoes]);
-
-  const { data: servicosVinculados } = useQuery({
-    queryKey: ['servicos-troca-titularidade', cenarioBIds],
-    queryFn: async () => {
-      if (!cenarioBIds.length) return [];
-      const { data, error } = await supabase
-        .from('servicos')
-        .select('id, status, solicitacao_id')
-        .in('solicitacao_id', cenarioBIds)
-        .eq('origem', 'troca_titularidade');
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: cenarioBIds.length > 0,
-  });
-
-  const servicosPorSolicitacao = useMemo(() => {
-    const map: Record<string, string> = {};
-    servicosVinculados?.forEach((s: any) => {
-      if (s.solicitacao_id) map[s.solicitacao_id] = s.status;
-    });
-    return map;
-  }, [servicosVinculados]);
-
-  const aprovarMutation = useMutation({
-    mutationFn: async (solicitacaoId: string) => {
-      const { data, error } = await supabase.functions.invoke('aprovar-solicitacao-ia', {
-        body: { solicitacao_id: solicitacaoId, acao: 'aprovar' },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      return data;
-    },
-    onSuccess: (data, solicitacaoId) => {
-      if (data?.cenario) {
-        setCenarioResultado(prev => ({ ...prev, [solicitacaoId]: data.cenario }));
-      }
-      queryClient.invalidateQueries({ queryKey: ['processos-troca-titularidade'] });
-      queryClient.invalidateQueries({ queryKey: ['processos-counts'] });
-      toast.success(
-        data?.cenario === 'A'
-          ? 'Aprovado — Cenário A: vistoria dispensada'
-          : 'Aprovado — Cenário B: vistoria agendada'
-      );
-    },
-    onError: (err: Error) => {
-      toast.error(err.message || 'Erro ao aprovar solicitação');
-    },
-  });
-
-  const rejeitarMutation = useMutation({
-    mutationFn: async ({ solicitacaoId, motivo }: { solicitacaoId: string; motivo: string }) => {
-      const { data, error } = await supabase.functions.invoke('aprovar-solicitacao-ia', {
-        body: { solicitacao_id: solicitacaoId, acao: 'rejeitar', motivo },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['processos-troca-titularidade'] });
-      queryClient.invalidateQueries({ queryKey: ['processos-counts'] });
-      toast.success('Solicitação rejeitada');
-      setRejeitarId(null);
-      setMotivoRejeicao('');
-    },
-    onError: (err: Error) => {
-      toast.error(err.message || 'Erro ao rejeitar solicitação');
-    },
-  });
-
-  const statusConfig: Record<string, { label: string; className: string }> = {
-    pendente: { label: 'Pendente', className: 'bg-amber-100 text-amber-800 border-amber-200' },
-    aprovado: { label: 'Aprovado', className: 'bg-green-100 text-green-800 border-green-200' },
-    rejeitado: { label: 'Rejeitado', className: 'bg-red-100 text-red-800 border-red-200' },
-    em_andamento: { label: 'Em Andamento', className: 'bg-blue-100 text-blue-800 border-blue-200' },
-  };
-
-  if (isLoading) {
-    return <div className="flex items-center justify-center py-12 text-muted-foreground">Carregando solicitações...</div>;
-  }
-
-  if (!solicitacoes?.length) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-        <ArrowRightLeft className="h-12 w-12 mb-3 opacity-40" />
-        <p className="text-lg font-medium">Nenhuma solicitação de troca de titularidade</p>
-        <p className="text-sm">As solicitações aparecerão aqui quando forem realizadas pelo app ou WhatsApp.</p>
-      </div>
-    );
-  }
+  const [subAba, setSubAba] = useState<keyof typeof TROCA_FILTROS>('pendentes');
+  const [selecionada, setSelecionada] = useState<string | null>(null);
+  const { data, isLoading } = useSolicitacoesTroca(TROCA_FILTROS[subAba]);
 
   return (
-    <div className="space-y-3">
-      {solicitacoes.map((sol: any) => {
-        const dados = sol.dados as any;
-        const novoTitular = sol.dados_novo_titular as any;
-        const cfg = statusConfig[sol.status] || statusConfig.pendente;
-        const associado = sol.associado as any;
-        const isPendente = sol.status === 'pendente';
-        const isAprovado = sol.status === 'aprovado';
-        const isRejeitado = sol.status === 'rejeitado';
-        const cenario = cenarioResultado[sol.id] || dados?.cenario_aplicado || (
-          sol.resultado_id && sol.status === 'aprovado'
-            ? (sol.resultado_id === sol.id ? 'A' : 'B')
-            : null
-        );
-        const efetivado = !!dados?.efetivado_em;
-        const statusServico = servicosPorSolicitacao[sol.id];
+    <div className="space-y-4">
+      <Tabs value={subAba} onValueChange={(v) => setSubAba(v as keyof typeof TROCA_FILTROS)}>
+        <TabsList className="grid grid-cols-2 md:grid-cols-5 w-full">
+          <TabsTrigger value="pendentes">Aguardando Cadastro</TabsTrigger>
+          <TabsTrigger value="aguardando_monit">Aguardando Monit.</TabsTrigger>
+          <TabsTrigger value="em_vistoria">Em Vistoria</TabsTrigger>
+          <TabsTrigger value="aprovadas">Aprovadas</TabsTrigger>
+          <TabsTrigger value="recusadas">Recusadas</TabsTrigger>
+        </TabsList>
 
-        return (
-          <Card key={sol.id} className="hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 space-y-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-semibold">{associado?.nome || 'Associado não encontrado'}</span>
-                    <Badge className={cfg.className}>{cfg.label}</Badge>
-                    {isAprovado && cenario === 'A' && (
-                      <Badge className="bg-green-100 text-green-800 border-green-200">
-                        <ShieldCheck className="h-3 w-3 mr-1" />
-                        Vistoria dispensada
-                      </Badge>
-                    )}
-                    {isAprovado && cenario === 'B' && !efetivado && (
-                      <Badge className={
-                        statusServico === 'em_andamento'
-                          ? 'bg-blue-100 text-blue-800 border-blue-200'
-                          : 'bg-amber-100 text-amber-800 border-amber-200'
-                      }>
-                        <ClipboardList className="h-3 w-3 mr-1" />
-                        {statusServico === 'em_andamento' ? 'Vistoria em andamento' : 'Aguardando vistoria'}
-                      </Badge>
-                    )}
-                    {isAprovado && efetivado && (
-                      <Badge className="bg-green-100 text-green-800 border-green-200">
-                        <CheckCircle className="h-3 w-3 mr-1" />
-                        Efetivado
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="text-sm text-muted-foreground space-y-1">
-                    {associado?.cpf && <p>CPF: {associado.cpf}</p>}
-                    {novoTitular?.nome && (
-                      <p className="text-foreground">
-                        <span className="text-muted-foreground">Novo titular:</span> {novoTitular.nome}
-                        {novoTitular.cpf && ` — CPF: ${novoTitular.cpf}`}
-                      </p>
-                    )}
-                    {dados?.motivo && <p>Motivo: {dados.motivo}</p>}
-                    {isRejeitado && sol.motivo_rejeicao && (
-                      <p className="text-destructive font-medium">Motivo da rejeição: {sol.motivo_rejeicao}</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Calendar className="h-3 w-3" />
-                    {format(new Date(sol.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                  </div>
-                </div>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  {isPendente && isGerencia && (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-green-700 border-green-300 hover:bg-green-50"
-                        onClick={() => setAprovarId(sol.id)}
-                        disabled={aprovarMutation.isPending}
-                      >
-                        {aprovarMutation.isPending && aprovarMutation.variables === sol.id
-                          ? <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                          : <CheckCircle className="h-4 w-4 mr-1" />
-                        }
-                        Aprovar
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-red-700 border-red-300 hover:bg-red-50"
-                        onClick={() => setRejeitarId(sol.id)}
-                        disabled={rejeitarMutation.isPending}
-                      >
-                        <XCircle className="h-4 w-4 mr-1" />
-                        Rejeitar
-                      </Button>
-                    </>
-                  )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => navigate(`/cadastro/associados/${sol.associado_id}`)}
-                  >
-                    <Eye className="h-4 w-4 mr-1" />
-                    Ver Ficha
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })}
+        <TabsContent value={subAba} className="pt-4">
+          {isLoading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}
+            </div>
+          ) : !data || data.length === 0 ? (
+            <Card><CardContent className="py-10 text-center text-muted-foreground">
+              Nenhuma solicitação nesta aba
+            </CardContent></Card>
+          ) : (
+            <div className="space-y-3">
+              {data.map(s => (
+                <Card key={s.id} className="hover:shadow-md transition cursor-pointer" onClick={() => setSelecionada(s.id)}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant={
+                            s.status === 'efetivada' || s.status === 'liberada_para_assinatura' ? 'default'
+                            : s.status.startsWith('reprovada') || s.status === 'cancelada' ? 'destructive'
+                            : 'secondary'
+                          }>
+                            {STATUS_TROCA_LABEL[s.status]}
+                          </Badge>
+                          {s.termo_cancelamento_assinado_em && (
+                            <Badge variant="outline" className="text-green-600 border-green-600">
+                              <FileSignature className="h-3 w-3 mr-1" /> Termo assinado
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-sm flex-wrap">
+                          <span className="font-medium">{s.associado_antigo?.nome}</span>
+                          <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium">{s.novo_titular_dados?.nome}</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Car className="h-3 w-3" />
+                          {s.veiculo?.marca} {s.veiculo?.modelo} {s.veiculo?.ano} • Placa {s.veiculo?.placa}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Criada em {new Date(s.created_at).toLocaleString('pt-BR')}
+                        </p>
+                        {s.motivo_reprovacao && (
+                          <p className="text-xs text-destructive">Motivo: {s.motivo_reprovacao}</p>
+                        )}
+                      </div>
+                      <Button variant="outline" size="sm">Detalhes</Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
 
-      {/* Dialog de confirmação de aprovação */}
-      <AlertDialog open={!!aprovarId} onOpenChange={(open) => !open && setAprovarId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar aprovação</AlertDialogTitle>
-            <AlertDialogDescription>
-              O sistema determinará automaticamente se é Cenário A (vistoria dispensada) ou Cenário B (vistoria obrigatória) com base nas configurações salvas.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={aprovarMutation.isPending}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (aprovarId) aprovarMutation.mutate(aprovarId);
-                setAprovarId(null);
-              }}
-              disabled={aprovarMutation.isPending}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              {aprovarMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
-              Confirmar Aprovação
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Dialog de rejeição com motivo */}
-      <AlertDialog open={!!rejeitarId} onOpenChange={(open) => { if (!open) { setRejeitarId(null); setMotivoRejeicao(''); } }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Rejeitar solicitação</AlertDialogTitle>
-            <AlertDialogDescription>
-              Informe o motivo da rejeição. O associado será notificado.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <Textarea
-            placeholder="Motivo da rejeição (obrigatório)..."
-            value={motivoRejeicao}
-            onChange={(e) => setMotivoRejeicao(e.target.value)}
-            className="min-h-[80px]"
-          />
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={rejeitarMutation.isPending}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (rejeitarId && motivoRejeicao.trim()) {
-                  rejeitarMutation.mutate({ solicitacaoId: rejeitarId, motivo: motivoRejeicao.trim() });
-                }
-              }}
-              disabled={rejeitarMutation.isPending || !motivoRejeicao.trim()}
-              className="bg-destructive hover:bg-destructive/90"
-            >
-              {rejeitarMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <XCircle className="h-4 w-4 mr-1" />}
-              Confirmar Rejeição
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
-  );
-}
-// ============================================
-// REATIVAÇÕES TAB
-// ============================================
-
-function ReativacoesTab() {
-  const navigate = useNavigate();
-
-  const { data: reativacoes, isLoading } = useQuery({
-    queryKey: ['processos-reativacoes'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('chat_solicitacoes_ia')
-        .select(`
-          *,
-          associado:associados!chat_solicitacoes_ia_associado_id_fkey(id, nome, cpf, telefone, status)
-        `)
-        .eq('tipo', 'reativacao')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return data || [];
-    },
-  });
-
-  const statusConfig: Record<string, { label: string; className: string }> = {
-    pendente: { label: 'Pendente', className: 'bg-amber-100 text-amber-800 border-amber-200' },
-    aprovado: { label: 'Aprovado', className: 'bg-green-100 text-green-800 border-green-200' },
-    rejeitado: { label: 'Rejeitado', className: 'bg-red-100 text-red-800 border-red-200' },
-    em_andamento: { label: 'Em Andamento', className: 'bg-blue-100 text-blue-800 border-blue-200' },
-  };
-
-  if (isLoading) {
-    return <div className="flex items-center justify-center py-12 text-muted-foreground">Carregando reativações...</div>;
-  }
-
-  if (!reativacoes?.length) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-        <RotateCcw className="h-12 w-12 mb-3 opacity-40" />
-        <p className="text-lg font-medium">Nenhuma solicitação de reativação</p>
-        <p className="text-sm">Solicitações de reativação de associados aparecerão aqui.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      {reativacoes.map((sol: any) => {
-        const dados = sol.dados as any;
-        const cfg = statusConfig[sol.status] || statusConfig.pendente;
-        const associado = sol.associado as any;
-
-        return (
-          <Card key={sol.id} className="hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-semibold">{associado?.nome || 'Associado não encontrado'}</span>
-                    <Badge className={cfg.className}>{cfg.label}</Badge>
-                    {associado?.status && (
-                      <Badge variant="outline" className="text-xs">{associado.status}</Badge>
-                    )}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    {associado?.cpf && <p>CPF: {associado.cpf}</p>}
-                    {dados?.motivo && <p>Motivo: {dados.motivo}</p>}
-                  </div>
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Calendar className="h-3 w-3" />
-                    {format(new Date(sol.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                  </div>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate(`/cadastro/associados/${sol.associado_id}`)}
-                >
-                  <Eye className="h-4 w-4 mr-1" />
-                  Ver Ficha
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })}
+      <ModalDetalhesTroca
+        open={!!selecionada}
+        onOpenChange={(o) => !o && setSelecionada(null)}
+        solicitacaoId={selecionada}
+        modo="cadastro"
+      />
     </div>
   );
 }
 
 // ============================================
-// SUBSTITUIÇÕES TAB (inline)
+// SUBSTITUIÇÕES TAB (mantida)
 // ============================================
 
 const SUB_TAB_FILTERS: Record<string, StatusSubstituicao[] | null> = {
@@ -589,24 +298,205 @@ function SubstituicoesTab() {
 }
 
 // ============================================
-// CONTADORES
+// INCLUSÕES TAB (NOVA — só visualização)
+// ============================================
+
+const INCLUSAO_STATUS_LABEL: Record<string, string> = {
+  rascunho: 'Em cotação',
+  enviada: 'Enviada',
+  visualizada: 'Visualizada',
+  em_contratacao: 'Em contratação',
+  contratada: 'Contratada',
+  expirada: 'Expirada',
+  recusada: 'Recusada',
+};
+
+function InclusoesTab() {
+  const navigate = useNavigate();
+  const [busca, setBusca] = useState('');
+
+  const { data: cotacoes, isLoading, refetch } = useQuery({
+    queryKey: ['processos-inclusoes'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('cotacoes')
+        .select('id, numero, status, valor_fipe, valor_total_mensal, veiculo_marca, veiculo_modelo, veiculo_ano, veiculo_placa, token_publico, created_at, dados_extras, contrato_gerado_id')
+        .filter('dados_extras->>tipo_entrada', 'eq', 'inclusao')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // Buscar nomes dos associados a partir do dados_extras.associado_id
+  const associadoIds = useMemo(() => {
+    const ids = new Set<string>();
+    (cotacoes || []).forEach((c: any) => {
+      const aid = c.dados_extras?.associado_id;
+      if (aid) ids.add(aid);
+    });
+    return Array.from(ids);
+  }, [cotacoes]);
+
+  const { data: associados } = useQuery({
+    queryKey: ['inclusoes-associados', associadoIds],
+    queryFn: async () => {
+      if (associadoIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from('associados')
+        .select('id, nome, cpf')
+        .in('id', associadoIds);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: associadoIds.length > 0,
+  });
+
+  const associadosMap = useMemo(() => {
+    const m: Record<string, { nome: string; cpf: string | null }> = {};
+    (associados || []).forEach((a: any) => { m[a.id] = { nome: a.nome, cpf: a.cpf }; });
+    return m;
+  }, [associados]);
+
+  const filtered = useMemo(() => {
+    if (!cotacoes) return [];
+    if (!busca.trim()) return cotacoes;
+    const q = busca.toLowerCase();
+    return cotacoes.filter((c: any) => {
+      const assoc = associadosMap[c.dados_extras?.associado_id || ''];
+      return (
+        assoc?.nome?.toLowerCase().includes(q) ||
+        c.veiculo_placa?.toLowerCase().includes(q) ||
+        c.veiculo_modelo?.toLowerCase().includes(q) ||
+        c.numero?.toLowerCase().includes(q)
+      );
+    });
+  }, [cotacoes, busca, associadosMap]);
+
+  const formatCurrency = (v: number | null) =>
+    v != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v) : '—';
+
+  if (isLoading) {
+    return <Card><CardContent className="py-12 text-center text-muted-foreground">Carregando inclusões...</CardContent></Card>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row gap-2 sm:justify-between">
+        <p className="text-sm text-muted-foreground">
+          Inclusões de veículos em associados existentes. Visualização operacional — a aprovação acontece no fluxo de contratação.
+        </p>
+        <div className="flex gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar associado, placa, nº..."
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              className="pl-8 w-64"
+            />
+          </div>
+          <Button variant="outline" size="icon" onClick={() => refetch()}>
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {filtered.length === 0 ? (
+        <Card><CardContent className="py-10 text-center text-muted-foreground">
+          <PackagePlus className="h-10 w-10 mx-auto mb-2 opacity-40" />
+          Nenhuma cotação de inclusão encontrada.
+        </CardContent></Card>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Cotação</TableHead>
+                  <TableHead>Associado</TableHead>
+                  <TableHead>Veículo</TableHead>
+                  <TableHead>FIPE</TableHead>
+                  <TableHead>Mensalidade</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Criada em</TableHead>
+                  <TableHead className="w-32">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((c: any) => {
+                  const assoc = associadosMap[c.dados_extras?.associado_id || ''];
+                  return (
+                    <TableRow key={c.id} className="hover:bg-muted/50">
+                      <TableCell className="font-mono text-xs">{c.numero || '—'}</TableCell>
+                      <TableCell>
+                        <div className="text-sm font-medium">{assoc?.nome || '—'}</div>
+                        {assoc?.cpf && <div className="text-xs text-muted-foreground">{assoc.cpf}</div>}
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">{c.veiculo_marca} {c.veiculo_modelo} {c.veiculo_ano}</div>
+                        {c.veiculo_placa && <div className="text-xs text-muted-foreground">Placa {c.veiculo_placa}</div>}
+                      </TableCell>
+                      <TableCell className="text-sm">{formatCurrency(c.valor_fipe)}</TableCell>
+                      <TableCell className="text-sm">{formatCurrency(c.valor_total_mensal)}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{INCLUSAO_STATUS_LABEL[c.status] || c.status}</Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {format(new Date(c.created_at), 'dd/MM/yyyy', { locale: ptBR })}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          {c.token_publico && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => window.open(`/cotacao/${c.token_publico}`, '_blank')}
+                              title="Abrir cotação pública"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {c.dados_extras?.associado_id && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => navigate(`/cadastro/associados/${c.dados_extras.associado_id}`)}
+                              title="Ver associado"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ============================================
+// CONTADORES (novas fontes)
 // ============================================
 
 function useProcessosCounts() {
   return useQuery({
     queryKey: ['processos-counts'],
     queryFn: async () => {
-      const [titularidade, reativacao, substituicoes, migracoes] = await Promise.all([
-        supabase
-          .from('chat_solicitacoes_ia')
+      const [titularidade, substituicoes, migracoes, inclusoes] = await Promise.all([
+        (supabase as any)
+          .from('solicitacoes_troca_titularidade')
           .select('id', { count: 'exact', head: true })
-          .eq('tipo', 'troca_titularidade')
-          .eq('status', 'pendente'),
-        supabase
-          .from('chat_solicitacoes_ia')
-          .select('id', { count: 'exact', head: true })
-          .eq('tipo', 'reativacao')
-          .eq('status', 'pendente'),
+          .in('status', ['aguardando_cadastro', 'cotacao_em_andamento']),
         supabase
           .from('substituicoes_veiculo')
           .select('id', { count: 'exact', head: true })
@@ -615,13 +505,18 @@ function useProcessosCounts() {
           .from('solicitacoes_migracao')
           .select('id', { count: 'exact', head: true })
           .eq('status', 'pendente'),
+        supabase
+          .from('cotacoes')
+          .select('id', { count: 'exact', head: true })
+          .filter('dados_extras->>tipo_entrada', 'eq', 'inclusao')
+          .in('status', ['rascunho', 'enviada']),
       ]);
 
       return {
         titularidade: titularidade.count || 0,
-        reativacao: reativacao.count || 0,
         substituicoes: substituicoes.count || 0,
         migracoes: migracoes.count || 0,
+        inclusoes: inclusoes.count || 0,
       };
     },
   });
@@ -631,20 +526,42 @@ function useProcessosCounts() {
 // MAIN PAGE
 // ============================================
 
+const TAB_KEYS = ['titularidade', 'substituicoes', 'migracoes', 'inclusoes'] as const;
+type TabKey = typeof TAB_KEYS[number];
+
 export default function ProcessosOperacionais() {
   const { data: counts } = useProcessosCounts();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = (searchParams.get('tab') as TabKey) || 'titularidade';
+  const [activeTab, setActiveTab] = useState<TabKey>(
+    TAB_KEYS.includes(initialTab) ? initialTab : 'titularidade'
+  );
+
+  useEffect(() => {
+    const t = searchParams.get('tab') as TabKey;
+    if (t && TAB_KEYS.includes(t) && t !== activeTab) setActiveTab(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const handleTabChange = (v: string) => {
+    setActiveTab(v as TabKey);
+    setSearchParams((sp) => {
+      sp.set('tab', v);
+      return sp;
+    }, { replace: true });
+  };
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Processos Operacionais</h1>
         <p className="text-muted-foreground">
-          Central de gestão de trocas de titularidade, reativações, substituições e migrações.
+          Central única de solicitações: trocas de titularidade, substituições, migrações e inclusões de veículo.
         </p>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
             <div className="p-2 rounded-lg bg-blue-100 text-blue-700">
@@ -652,18 +569,7 @@ export default function ProcessosOperacionais() {
             </div>
             <div>
               <p className="text-2xl font-bold">{counts?.titularidade ?? '—'}</p>
-              <p className="text-xs text-muted-foreground">Trocas pendentes</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-green-100 text-green-700">
-              <RotateCcw className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{counts?.reativacao ?? '—'}</p>
-              <p className="text-xs text-muted-foreground">Reativações pendentes</p>
+              <p className="text-xs text-muted-foreground">Titularidade pendente</p>
             </div>
           </CardContent>
         </Card>
@@ -689,23 +595,27 @@ export default function ProcessosOperacionais() {
             </div>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-emerald-100 text-emerald-700">
+              <PackagePlus className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{counts?.inclusoes ?? '—'}</p>
+              <p className="text-xs text-muted-foreground">Inclusões em andamento</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="titularidade" className="w-full">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
         <TabsList className="w-full grid grid-cols-4">
           <TabsTrigger value="titularidade" className="text-xs sm:text-sm">
             <ArrowRightLeft className="h-4 w-4 mr-1 hidden sm:inline" />
             Titularidade
             {(counts?.titularidade ?? 0) > 0 && (
               <Badge className="ml-1.5 bg-blue-600 text-white text-[10px] px-1.5 py-0">{counts?.titularidade}</Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="reativacao" className="text-xs sm:text-sm">
-            <RotateCcw className="h-4 w-4 mr-1 hidden sm:inline" />
-            Reativação
-            {(counts?.reativacao ?? 0) > 0 && (
-              <Badge className="ml-1.5 bg-green-600 text-white text-[10px] px-1.5 py-0">{counts?.reativacao}</Badge>
             )}
           </TabsTrigger>
           <TabsTrigger value="substituicoes" className="text-xs sm:text-sm">
@@ -722,19 +632,26 @@ export default function ProcessosOperacionais() {
               <Badge className="ml-1.5 bg-purple-600 text-white text-[10px] px-1.5 py-0">{counts?.migracoes}</Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="inclusoes" className="text-xs sm:text-sm">
+            <PackagePlus className="h-4 w-4 mr-1 hidden sm:inline" />
+            Inclusões
+            {(counts?.inclusoes ?? 0) > 0 && (
+              <Badge className="ml-1.5 bg-emerald-600 text-white text-[10px] px-1.5 py-0">{counts?.inclusoes}</Badge>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="titularidade">
           <TrocaTitularidadeTab />
-        </TabsContent>
-        <TabsContent value="reativacao">
-          <ReativacoesTab />
         </TabsContent>
         <TabsContent value="substituicoes">
           <SubstituicoesTab />
         </TabsContent>
         <TabsContent value="migracoes">
           <MigracoesTab />
+        </TabsContent>
+        <TabsContent value="inclusoes">
+          <InclusoesTab />
         </TabsContent>
       </Tabs>
     </div>
