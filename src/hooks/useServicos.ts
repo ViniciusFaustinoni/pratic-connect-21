@@ -883,10 +883,11 @@ export function useAprovarVeiculoServico() {
 
       // 1. Buscar e validar rastreador (apenas se IMEI fornecido)
       let rastreadorId: string | null = null;
+      let rastreadorStatusAnterior: string | null = null;
       if (data.imeiRastreador) {
         const { data: rastreador, error: rastreadorError } = await supabase
           .from('rastreadores')
-          .select('id, status, portador_id, codigo')
+          .select('id, status, portador_id, codigo, veiculo_id')
           .eq('imei', data.imeiRastreador)
           .single();
 
@@ -894,10 +895,39 @@ export function useAprovarVeiculoServico() {
           throw new Error('Rastreador não encontrado');
         }
 
-        if (rastreador.status !== 'estoque') {
-          throw new Error('Rastreador não está disponível');
+        // Matriz de validação:
+        // - estoque: OK
+        // - instalado no MESMO veículo: OK (retomada idempotente)
+        // - instalado em OUTRO veículo: bloqueia com placa
+        // - manutencao/baixado: bloqueia com mensagem específica
+        if (rastreador.status === 'estoque') {
+          // permitido
+        } else if (rastreador.status === 'instalado' && rastreador.veiculo_id === data.veiculoId) {
+          // retomada idempotente — permitido
+          console.log('[useAprovarVeiculoServico] Retomada idempotente: rastreador já vinculado a este veículo');
+        } else if (rastreador.status === 'instalado') {
+          let placaOutro = '';
+          if (rastreador.veiculo_id) {
+            const { data: outroVeic } = await supabase
+              .from('veiculos')
+              .select('placa')
+              .eq('id', rastreador.veiculo_id)
+              .maybeSingle();
+            placaOutro = outroVeic?.placa ? ` (placa ${outroVeic.placa})` : '';
+          }
+          throw new Error(
+            `Rastreador ${rastreador.codigo || ''} já instalado em outro veículo${placaOutro}. Use outro IMEI ou solicite remoção primeiro.`
+          );
+        } else if (rastreador.status === 'manutencao') {
+          throw new Error(`Rastreador ${rastreador.codigo || ''} em manutenção — solicite outro ao coordenador.`);
+        } else if (rastreador.status === 'baixado') {
+          throw new Error(`Rastreador ${rastreador.codigo || ''} foi baixado e não pode ser usado.`);
+        } else {
+          throw new Error(`Rastreador ${rastreador.codigo || ''} indisponível (status: ${rastreador.status}).`);
         }
+
         rastreadorId = rastreador.id;
+        rastreadorStatusAnterior = rastreador.status;
       }
 
       // 2. Atualizar serviço
@@ -922,14 +952,40 @@ export function useAprovarVeiculoServico() {
       if (servicoError) throw servicoError;
 
       // 2.1 SINCRONIZAR com tabela instalacoes (o servico tem instalacao_origem_id)
-      // Buscar o servico para obter o instalacao_origem_id
       const { data: servicoCompleto } = await supabase
         .from('servicos')
         .select('instalacao_origem_id')
         .eq('id', data.servicoId)
         .single();
 
-      if (servicoCompleto?.instalacao_origem_id) {
+      let instalacaoIdParaFechar: string | null = servicoCompleto?.instalacao_origem_id || null;
+
+      // Fallback: se não houver instalacao_origem_id, procurar instalação aberta pelo veiculo_id
+      if (!instalacaoIdParaFechar) {
+        console.warn('[useAprovarVeiculoServico] Serviço sem instalacao_origem_id — buscando fallback por veiculo_id');
+        const { data: instAberta } = await supabase
+          .from('instalacoes')
+          .select('id')
+          .eq('veiculo_id', data.veiculoId)
+          .not('status', 'in', '(concluida,cancelada)')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (instAberta?.id) {
+          instalacaoIdParaFechar = instAberta.id;
+          // Gravar vínculo no serviço para consistência futura
+          await supabase
+            .from('servicos')
+            .update({ instalacao_origem_id: instAberta.id })
+            .eq('id', data.servicoId);
+          console.log('[useAprovarVeiculoServico] ✓ Fallback encontrou instalação:', instAberta.id);
+        } else {
+          console.warn('[useAprovarVeiculoServico] Nenhuma instalação aberta encontrada para o veículo. Fluxo legado.');
+        }
+      }
+
+      if (instalacaoIdParaFechar) {
         const instUpdate: Record<string, any> = {
           status: 'concluida',
           concluida_em: agora,
@@ -940,7 +996,7 @@ export function useAprovarVeiculoServico() {
         const { error: instError } = await supabase
           .from('instalacoes')
           .update(instUpdate)
-          .eq('id', servicoCompleto.instalacao_origem_id);
+          .eq('id', instalacaoIdParaFechar);
 
         if (instError) {
           console.error('[useAprovarVeiculoServico] Erro ao sincronizar instalacoes:', instError);
@@ -999,17 +1055,22 @@ export function useAprovarVeiculoServico() {
 
         if (rastreadorUpdateError) throw rastreadorUpdateError;
 
-        // 4. Registrar movimentação de estoque
-        await supabase.from('estoque_movimentacoes').insert({
-          rastreador_id: rastreadorId,
-          tipo: 'instalacao',
-          quantidade: 1,
-          status_anterior: 'estoque',
-          status_novo: 'instalado',
-          veiculo_id: data.veiculoId,
-          observacoes: `Instalado pelo profissional no veículo`,
-          usuario_id: profile?.id,
-        });
+        // 4. Registrar movimentação de estoque APENAS se vinha do estoque
+        // (evita duplicar movimentação em retomadas idempotentes)
+        if (rastreadorStatusAnterior === 'estoque') {
+          await supabase.from('estoque_movimentacoes').insert({
+            rastreador_id: rastreadorId,
+            tipo: 'instalacao',
+            quantidade: 1,
+            status_anterior: 'estoque',
+            status_novo: 'instalado',
+            veiculo_id: data.veiculoId,
+            observacoes: `Instalado pelo profissional no veículo`,
+            usuario_id: profile?.id,
+          });
+        } else {
+          console.log('[useAprovarVeiculoServico] Movimentação de estoque pulada (status anterior:', rastreadorStatusAnterior, ')');
+        }
       }
       const { data: veiculoAtual } = await supabase
         .from('veiculos')
