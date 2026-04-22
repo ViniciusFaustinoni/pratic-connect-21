@@ -36,27 +36,36 @@ export async function getHinovaCreds(supabase: any): Promise<HinovaCreds | null>
   let senha = Deno.env.get('HINOVA_SENHA') || '';
 
   if (!token || !usuario || !senha) {
-    try {
-      const { data } = await supabase
-        .from('integracoes_credenciais')
-        .select('credenciais_encrypted, iv, configurado')
-        .eq('integracao', 'hinova')
-        .single();
+    const { data } = await supabase
+      .from('integracoes_credenciais')
+      .select('credenciais_encrypted, iv, configurado')
+      .eq('integracao', 'hinova')
+      .single();
 
-      if (data?.configurado && data?.credenciais_encrypted && data?.iv) {
-        const secret = Deno.env.get('INTEGRACOES_ENCRYPTION_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    if (data?.configurado && data?.credenciais_encrypted && data?.iv) {
+      // IMPORTANTE: a função `integracoes-credenciais` SEMPRE encripta com SUPABASE_SERVICE_ROLE_KEY.
+      // Manter alinhado para evitar 401 enganoso na Hinova por decriptação com chave divergente.
+      const secret = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      let creds: any;
+      try {
         const key = await deriveKey(secret);
         const enc = Uint8Array.from(atob(data.credenciais_encrypted), c => c.charCodeAt(0));
         const iv = Uint8Array.from(atob(data.iv), c => c.charCodeAt(0));
         const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, enc);
-        const creds = JSON.parse(new TextDecoder().decode(decrypted));
-        token = creds.token || token;
-        usuario = creds.usuario || usuario;
-        senha = creds.senha || senha;
-        if (creds.api_url) apiUrl = creds.api_url;
+        creds = JSON.parse(new TextDecoder().decode(decrypted));
+      } catch (e) {
+        console.error('[Hinova] Falha ao decriptar credenciais:', e);
+        throw new Error('Falha ao decriptar credenciais Hinova — verifique SUPABASE_SERVICE_ROLE_KEY ou refaça o cadastro em Configurações > Integrações');
       }
-    } catch (e) {
-      console.warn('[Hinova] Falha ao ler credenciais do banco:', e);
+
+      token = creds.token || token;
+      usuario = creds.usuario || usuario;
+      senha = creds.senha || senha;
+      if (creds.api_url) apiUrl = creds.api_url;
+
+      if (!token || !usuario || !senha) {
+        throw new Error('Credenciais Hinova incompletas no banco — refaça o cadastro em Configurações > Integrações');
+      }
     }
   }
 
