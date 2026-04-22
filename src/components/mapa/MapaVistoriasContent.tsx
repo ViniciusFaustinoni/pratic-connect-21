@@ -741,7 +741,32 @@ export function MapaVistoriasContent() {
                         <CheckCircle2 className="h-3 w-3" />Realizada
                       </p>
                     )}
-                    {!v.latitude && <p className="text-xs text-orange-600 mt-1">⚠️ Sem coordenadas GPS</p>}
+                    {!v.latitude && (
+                      <div className="mt-2 flex flex-col gap-1.5">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); abrirAlterarEndereco(v); }}
+                          className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 text-xs font-medium"
+                          title="Corrigir endereço para liberar GPS"
+                        >
+                          <MapPin className="h-3 w-3" />
+                          ⚠️ Corrigir endereço para liberar GPS
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); tentarGeocodificarNovamente(v); }}
+                          disabled={retryingGeocodeId === v.id}
+                          className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 rounded-md border border-amber-300 text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-800 text-xs disabled:opacity-50"
+                          title="Tentar geolocalizar novamente sem alterar endereço"
+                        >
+                          {retryingGeocodeId === v.id ? (
+                            <><Loader2 className="h-3 w-3 animate-spin" />Tentando...</>
+                          ) : (
+                            <><Navigation className="h-3 w-3" />Tentar geolocalizar de novo</>
+                          )}
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-col gap-1 flex-shrink-0">
                     {v.latitude && v.longitude && (
