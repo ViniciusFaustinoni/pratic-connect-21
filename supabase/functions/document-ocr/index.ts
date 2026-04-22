@@ -254,7 +254,20 @@ Regras especiais CIN:
 
 ### CRLV
 placa (ABC1234/ABC1D23), renavam (11 dígitos), chassi (17 chars), marca, modelo, ano_fabricacao (int), ano_modelo (int), cor (campo "COR"/"COR PREDOMINANTE" - leia literalmente), combustivel, motor, numero_motor, nome_proprietario, blindado (bool)
-- numero_motor: leia do campo "MOTOR Nº" / "Nº DO MOTOR" / "MOTOR" do CRLV. Sempre preencha tanto "motor" quanto "numero_motor" com o mesmo valor (alias).
+
+⚠️ CAMPO OBRIGATÓRIO — numero_motor (NÚMERO DO MOTOR):
+Este campo é OBRIGATÓRIO no CRLV e NUNCA deve ser omitido. Procure ATIVAMENTE no documento usando TODAS estas variações de rótulo:
+  • "MOTOR Nº", "MOTOR N°", "Nº MOTOR", "N° MOTOR", "Nº DO MOTOR", "N° DO MOTOR"
+  • "MOTOR:", "MOTOR /SÉRIE", "MOTOR/SERIE", "MOTOR / SERIE"
+  • Em CRLV-e/Digital o campo aparece tipicamente LOGO ABAIXO ou AO LADO de "CHASSI"
+Como ler:
+  • Leia caractere por caractere — geralmente 7 a 17 caracteres alfanuméricos (letras MAIÚSCULAS + dígitos, podendo conter hífen "-").
+  • Exemplos: "G3W6E104052", "9C6KG991070073366", "BAH123456", "MOTOR:ABC-12345".
+  • NÃO confunda com Renavam (apenas dígitos), Chassi (17 chars exatos) ou Cilindradas.
+  • Se estiver presente mas você NÃO conseguir ler com certeza, retorne numero_motor:"ilegivel" (NUNCA null se houver campo visível).
+  • Se o campo realmente não existir no documento, retorne numero_motor:null.
+Sempre preencha tanto "motor" quanto "numero_motor" com o MESMO valor (alias obrigatório).
+
 - "ANO FAB/MOD: 2013/2014" → ano_fabricacao:2013, ano_modelo:2014
 - Blindado: procure em OBS/TIPO por "BLINDADO/BLINDAGEM/PROTEÇÃO BALÍSTICA". Sempre inclua campo blindado.
 - ⚠️ PLACA — REGRA OBRIGATÓRIA DE FORMATO:
@@ -307,11 +320,12 @@ Mesmo quando o número do motor estiver concatenado na descrição com outros ca
 
 ### ATPV-e / CRV Digital (Autorização para Transferência de Propriedade de Veículo - Eletrônica)
 Detectar quando o documento for emitido pelo SENATRAN/DETRAN com título "AUTORIZAÇÃO PARA TRANSFERÊNCIA DE PROPRIEDADE DE VEÍCULO" ou "ATPV-e" / "CRV Digital" / "CRV-e". Geralmente contém QR Code, código de segurança, dados do veículo, dados do vendedor e dados do comprador.
-Campos: placa, renavam (11 dígitos), chassi (17 chars), marca, modelo, ano_fabricacao (int), ano_modelo (int), cor, combustivel,
+Campos: placa, renavam (11 dígitos), chassi (17 chars), marca, modelo, ano_fabricacao (int), ano_modelo (int), cor, combustivel, motor, numero_motor,
 nome_comprador, cpf_comprador (XXX.XXX.XXX-XX), endereco_comprador (logradouro+numero), cidade_comprador, uf_comprador (2 letras), cep_comprador,
 nome_vendedor, cpf_cnpj_vendedor,
 valor_declarado_venda (numérico), data_emissao_crv (YYYY-MM-DD), data_venda (YYYY-MM-DD),
 numero_crv, codigo_seguranca_crv, numero_atpv
+- numero_motor: extraia do bloco "Características do Veículo" (rótulos: "MOTOR Nº", "Nº DO MOTOR", "MOTOR:"). Mesmo padrão do CRLV: 7-17 caracteres alfanuméricos. Sempre preencha "motor" e "numero_motor" com o mesmo valor. Se ilegível, use "ilegivel".
 - tipo_detectado deve ser "atpv_e"
 - Este documento SUBSTITUI o CRLV para veículos recém-adquiridos cujo CRLV ainda não foi emitido no nome do novo proprietário.
 - NÃO confundir com CRLV (que tem título "CERTIFICADO DE REGISTRO E LICENCIAMENTO DE VEÍCULO") nem com Nota Fiscal.
