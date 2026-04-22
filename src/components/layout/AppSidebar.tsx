@@ -564,6 +564,7 @@ export function AppSidebar() {
   const { visibleModules, isLoading: isModuleVisLoading } = useModuleVisibility();
   const { isItemVisible } = useModuleItemVisibility();
   const { fipeMenorAtivo } = useFipeMenorAtivo();
+  const { data: biometriasPendentesCount = 0 } = useBiometriasPendentesCount();
 
   const isDataLoading = permissions.isPermissionsLoading || isModuleVisLoading;
 
@@ -602,7 +603,17 @@ export function AppSidebar() {
     }
 
     let baseGroups = filterGroups(menuConfig.groups);
-    
+
+    // Injetar badge dinâmico no item de Biometrias Pendentes
+    baseGroups = baseGroups.map(g => ({
+      ...g,
+      items: g.items.map(item =>
+        item.url === '/cadastro/biometrias-pendentes' && biometriasPendentesCount > 0
+          ? { ...item, badge: String(biometriasPendentesCount) }
+          : item,
+      ),
+    }));
+
     // Filtrar por visibilidade de módulos do banco (se carregado)
     if (visibleModules.length > 0) {
       baseGroups = baseGroups.filter(g => visibleModules.includes(g.id));
