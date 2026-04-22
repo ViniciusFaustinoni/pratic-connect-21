@@ -344,7 +344,7 @@ export function useUploadVideo360() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: { vistoriaId: string; file: File }) => {
+    mutationFn: async (data: { vistoriaId: string; file: File; onProgress?: (percent: number) => void }) => {
       // Validar blob não-vazio antes de qualquer operação
       if (!data.file || data.file.size === 0) {
         throw new Error('Arquivo de vídeo vazio ou inválido');
@@ -355,15 +355,23 @@ export function useUploadVideo360() {
       const fileName = `${data.vistoriaId}/video_360.${fileExt}`;
       const contentType = data.file.type || (fileExt === 'mp4' ? 'video/mp4' : 'video/webm');
 
-      const { error: uploadError } = await supabase.storage
-        .from('vistoria-videos')
-        .upload(fileName, data.file, {
+      try {
+        await uploadVideoWithRetry({
+          supabase,
+          bucket: 'vistoria-videos',
+          path: fileName,
+          file: data.file,
           contentType,
-          upsert: true,
           cacheControl: '3600',
+          upsert: true,
+          onProgress: data.onProgress,
         });
-
-      if (uploadError) throw uploadError;
+      } catch (err) {
+        if (err instanceof VideoUploadError) {
+          toast.error(err.userMessage);
+        }
+        throw err;
+      }
 
       // Obter URL pública (com cache-buster para furar CDN no analista)
       const { data: publicUrl } = supabase.storage
@@ -388,7 +396,10 @@ export function useUploadVideo360() {
     },
     onError: (error) => {
       console.error('Erro ao enviar vídeo:', error);
-      toast.error('Erro ao enviar vídeo');
+      // VideoUploadError já mostrou toast específico — evita duplicar.
+      if (!(error instanceof VideoUploadError)) {
+        toast.error('Erro ao enviar vídeo');
+      }
     },
   });
 }

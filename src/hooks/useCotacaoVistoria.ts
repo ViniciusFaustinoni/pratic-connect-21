@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
 import { geocodificarEndereco } from '@/services/geocodingService';
+import { uploadVideoWithRetry, VideoUploadError } from '@/lib/videoUpload';
 
 // Interface para resultado da edge function de agendamento presencial
 interface AgendarPresencialResponse {
@@ -46,6 +47,7 @@ interface UploadFotoParams {
   file: File;
   latitude?: number;
   longitude?: number;
+  onProgress?: (percent: number) => void;
 }
 
 export interface UploadFotoResult {
@@ -58,15 +60,36 @@ export function useUploadFotoCotacaoVistoria() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ cotacaoId, fotoId, file, latitude, longitude }: UploadFotoParams): Promise<UploadFotoResult> => {
+    mutationFn: async ({ cotacaoId, fotoId, file, latitude, longitude, onProgress }: UploadFotoParams): Promise<UploadFotoResult> => {
       const fileExt = file.name.split('.').pop();
       const fileName = `${cotacaoId}/${fotoId}-${Date.now()}.${fileExt}`;
-      
-      const { error: uploadError } = await publicSupabase.storage
-        .from('cotacoes-vistoria')
-        .upload(fileName, file, { upsert: true });
-      if (uploadError) throw uploadError;
-      
+      const isVideo = file.type.startsWith('video/') || fotoId === 'video_360';
+
+      if (isVideo) {
+        // Upload resiliente com retry e progresso para vídeos.
+        try {
+          await uploadVideoWithRetry({
+            supabase: publicSupabase,
+            bucket: 'cotacoes-vistoria',
+            path: fileName,
+            file,
+            contentType: file.type || undefined,
+            upsert: true,
+            onProgress,
+          });
+        } catch (err) {
+          if (err instanceof VideoUploadError) {
+            toast.error(err.userMessage);
+          }
+          throw err;
+        }
+      } else {
+        const { error: uploadError } = await publicSupabase.storage
+          .from('cotacoes-vistoria')
+          .upload(fileName, file, { upsert: true });
+        if (uploadError) throw uploadError;
+      }
+
       const { data: urlData } = publicSupabase.storage
         .from('cotacoes-vistoria')
         .getPublicUrl(fileName);
@@ -95,7 +118,12 @@ export function useUploadFotoCotacaoVistoria() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['cotacao-vistoria-fotos', variables.cotacaoId] });
     },
-    onError: () => toast.error('Erro ao enviar foto')
+    onError: (err) => {
+      // VideoUploadError já mostrou toast específico — evita duplicar.
+      if (!(err instanceof VideoUploadError)) {
+        toast.error('Erro ao enviar arquivo');
+      }
+    }
   });
 }
 
