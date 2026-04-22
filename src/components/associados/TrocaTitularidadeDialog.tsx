@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +9,7 @@ import { CpfInput, TelefoneInput } from '@/components/inputs/MaskedInputs';
 import { Loader2, Users, Info } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useCriarSolicitacaoTroca } from '@/hooks/useSolicitacoesTroca';
 
 interface TrocaTitularidadeDialogProps {
   open: boolean;
@@ -19,47 +21,53 @@ interface TrocaTitularidadeDialogProps {
 export function TrocaTitularidadeDialog({
   open, onOpenChange, associadoId, associadoNome,
 }: TrocaTitularidadeDialogProps) {
+  const navigate = useNavigate();
   const [nome, setNome] = useState('');
   const [cpf, setCpf] = useState('');
   const [email, setEmail] = useState('');
   const [telefone, setTelefone] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [veiculoId, setVeiculoId] = useState<string | null>(null);
+  const [veiculos, setVeiculos] = useState<Array<{ id: string; descricao: string }>>([]);
+  const [loadingVeiculos, setLoadingVeiculos] = useState(false);
+  const criar = useCriarSolicitacaoTroca();
+
+  // Carregar veículos do associado quando abre
+  if (open && veiculos.length === 0 && !loadingVeiculos) {
+    setLoadingVeiculos(true);
+    supabase
+      .from('veiculos')
+      .select('id, marca, modelo, ano, placa')
+      .eq('associado_id', associadoId)
+      .then(({ data }) => {
+        const list = (data || []).map(v => ({
+          id: v.id,
+          descricao: `${v.marca} ${v.modelo} ${v.ano} - ${v.placa}`,
+        }));
+        setVeiculos(list);
+        if (list.length === 1) setVeiculoId(list[0].id);
+        setLoadingVeiculos(false);
+      });
+  }
 
   const handleSubmit = async () => {
-    if (!nome.trim() || !cpf.trim()) {
-      toast.error('Preencha pelo menos o nome e CPF do novo titular');
+    if (!nome.trim() || !cpf.trim() || !veiculoId) {
+      toast.error('Preencha nome, CPF e selecione o veículo');
       return;
     }
-
-    setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const dadosNovoTitular = { nome: nome.trim(), cpf: cpf.trim(), email: email.trim(), telefone: telefone.trim() };
-
-      const { error } = await supabase
-        .from('chat_solicitacoes_ia')
-        .insert({
-          associado_id: associadoId,
-          tipo: 'troca_titularidade',
-          status: 'pendente',
-          dados: { origem: 'painel_relacionamento' },
-          dados_novo_titular: dadosNovoTitular,
-          ...(user?.id ? { criado_por: user.id } : {}),
-        });
-
-      if (error) throw error;
-
-      toast.success('Solicitação de troca de titularidade criada com sucesso! Aguardando aprovação da diretoria.');
+      const result = await criar.mutateAsync({
+        associado_antigo_id: associadoId,
+        veiculo_id: veiculoId,
+        novo_titular: { nome: nome.trim(), cpf: cpf.trim(), email: email.trim() || undefined, telefone: telefone.trim() || undefined },
+      });
+      toast.success('Solicitação criada! Continue preenchendo a cotação.');
       onOpenChange(false);
-      setNome('');
-      setCpf('');
-      setEmail('');
-      setTelefone('');
-    } catch (error) {
-      console.error('Erro ao criar solicitação:', error);
-      toast.error('Erro ao criar solicitação de troca');
-    } finally {
-      setLoading(false);
+      // Redirecionar para edição da cotação criada
+      if (result?.cotacao_id) {
+        navigate(`/vendas/cotacoes/${result.cotacao_id}`);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Erro ao criar solicitação');
     }
   };
 
@@ -76,22 +84,35 @@ export function TrocaTitularidadeDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Alert className="border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800">
-          <Info className="h-4 w-4 text-blue-600" />
-          <AlertDescription className="text-sm text-blue-800 dark:text-blue-300">
-            A solicitação será enviada para aprovação. Após aprovação, o sistema determinará automaticamente se será necessária nova vistoria com base nos prazos configurados.
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertDescription className="text-sm">
+            Será criada uma cotação para o novo titular. Após preenchida, gere o link público — o novo titular escolhe o plano e envia documentos. A solicitação passará por aprovação do Cadastro e do Monitoramento antes da assinatura.
           </AlertDescription>
         </Alert>
 
         <div className="space-y-4 pt-2">
           <div className="space-y-2">
+            <Label>Veículo a transferir *</Label>
+            {loadingVeiculos ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</div>
+            ) : veiculos.length === 0 ? (
+              <p className="text-sm text-destructive">Nenhum veículo encontrado</p>
+            ) : (
+              <select
+                className="w-full border rounded h-10 px-3 bg-background"
+                value={veiculoId || ''}
+                onChange={(e) => setVeiculoId(e.target.value)}
+              >
+                <option value="">Selecione…</option>
+                {veiculos.map(v => <option key={v.id} value={v.id}>{v.descricao}</option>)}
+              </select>
+            )}
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="novo-titular-nome">Nome completo do novo titular *</Label>
-            <Input
-              id="novo-titular-nome"
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
-              placeholder="Nome completo"
-            />
+            <Input id="novo-titular-nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome completo" />
           </div>
 
           <div className="space-y-2">
@@ -101,13 +122,7 @@ export function TrocaTitularidadeDialog({
 
           <div className="space-y-2">
             <Label htmlFor="novo-titular-email">Email</Label>
-            <Input
-              id="novo-titular-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="email@exemplo.com"
-            />
+            <Input id="novo-titular-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@exemplo.com" />
           </div>
 
           <div className="space-y-2">
@@ -117,12 +132,10 @@ export function TrocaTitularidadeDialog({
         </div>
 
         <div className="flex justify-end gap-2 pt-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
-            Cancelar
-          </Button>
-          <Button onClick={handleSubmit} disabled={loading}>
-            {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Users className="h-4 w-4 mr-2" />}
-            Solicitar Troca
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={criar.isPending}>Cancelar</Button>
+          <Button onClick={handleSubmit} disabled={criar.isPending}>
+            {criar.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Users className="h-4 w-4 mr-2" />}
+            Criar Solicitação
           </Button>
         </div>
       </DialogContent>
