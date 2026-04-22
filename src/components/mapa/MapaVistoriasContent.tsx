@@ -672,17 +672,20 @@ export function MapaVistoriasContent() {
             // Show drag hint for unassigned draggable tasks
             const isDraggable = !!atribuicaoManualAtiva && !isRealizada && !v.vistoriador_id && !!v.latitude && !!v.servico_id_unificado;
 
+            const semGps = !v.latitude;
+            const podeAtribuirPorClique = semGps && !!atribuicaoManualAtiva && !isRealizada && !v.vistoriador_id && !!v.servico_id_unificado;
             return (
               <div
                 key={v.id}
+                title={semGps ? "Sem coordenadas — arraste no mapa indisponível, mas você pode atribuir clicando no ícone de técnico ou prestador à direita." : undefined}
                 className={cn(
                   "p-3 border rounded-lg cursor-pointer transition-colors hover:bg-muted/50",
                   vistoriaSelecionada === v.id && "border-primary bg-primary/5",
-                  !v.latitude && "opacity-60",
+                  semGps && "border-l-amber-400 border-dashed",
                   isAtrasada && "bg-orange-50 dark:bg-orange-950/20",
                 )}
                 onClick={() => selecionarVistoria(v)}
-                style={{ borderLeftWidth: 4, borderLeftColor: color }}
+                style={{ borderLeftWidth: 4, borderLeftColor: semGps ? undefined : color }}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
@@ -739,6 +742,11 @@ export function MapaVistoriasContent() {
                     {isRealizada && (
                       <p className="text-xs mt-1 flex items-center gap-1 text-green-600">
                         <CheckCircle2 className="h-3 w-3" />Realizada
+                      </p>
+                    )}
+                    {podeAtribuirPorClique && (
+                      <p className="text-xs mt-1 flex items-center gap-1 text-blue-700 font-medium">
+                        👉 Atribuir por clique no ícone azul →
                       </p>
                     )}
                     {!v.latitude && (
