@@ -5,7 +5,7 @@ import {
   Car, Image, FileText, X, ChevronDown, ChevronRight,
   CheckCircle, Clock, XCircle, ExternalLink, Camera,
   Wifi, WifiOff, Eye, User, DollarSign, MapPin,
-  AlertTriangle, History, Phone, Mail, Shield
+  AlertTriangle, History, Phone, Mail, Shield, Database
 } from 'lucide-react';
 import {
   Dialog,
@@ -37,6 +37,7 @@ import { useCobrancasAssociado } from '@/hooks/useDocumentosCotacao';
 import { useAssociadoHistoricoCompleto } from '@/hooks/useAssociadoHistoricoCompleto';
 import { MapaRastreador } from '@/components/rastreadores/MapaRastreador';
 import { VincularRastreadorForm } from '@/components/cadastro/VincularRastreadorForm';
+import { VeiculoFinanceiroSGA } from '@/components/cadastro/VeiculoFinanceiroSGA';
 import { cn } from '@/lib/utils';
 
 // ============================================
@@ -153,6 +154,7 @@ export function VeiculoDetalhesModal({ open, onClose, veiculoId }: VeiculoDetalh
                   {[
                     { v: 'resumo', icon: Car, label: 'Resumo' },
                     { v: 'financeiro', icon: DollarSign, label: 'Financeiro', count: (cobrancas as any)?.faturas?.length },
+                    { v: 'financeiro_sga', icon: Database, label: 'Financeiro SGA' },
                     { v: 'rastreador', icon: MapPin, label: 'Rastreador' },
                     { v: 'eventos', icon: AlertTriangle, label: 'Eventos', count: totalEventos },
                     { v: 'fotos', icon: Image, label: 'Fotos/Docs', count: totalFotos + todosDocumentos.length },
@@ -291,6 +293,11 @@ export function VeiculoDetalhesModal({ open, onClose, veiculoId }: VeiculoDetalh
                       ))}
                     </div>
                   )}
+                </TabsContent>
+
+                {/* ===== FINANCEIRO SGA ===== */}
+                <TabsContent value="financeiro_sga" className="m-0">
+                  <VeiculoFinanceiroSGA veiculoId={veiculoId} />
                 </TabsContent>
 
                 {/* ===== RASTREADOR ===== */}
