@@ -15,7 +15,9 @@ import {
   User, Car, MapPin, Calendar, Clock, FileText,
   MessageSquare, Navigation, ExternalLink, Cpu, AlertTriangle,
   DollarSign, Info, Camera, Receipt, History, IdCard, Loader2,
+  MapPinned,
 } from 'lucide-react';
+import { RealocarInstalacaoDialog } from '@/components/instalacoes/RealocarInstalacaoDialog';
 import { cn } from '@/lib/utils';
 import {
   TIPO_SERVICO_LABELS, STATUS_SERVICO_LABELS, STATUS_SERVICO_COLORS,
@@ -47,6 +49,7 @@ interface ServicoDetailModalProps {
 
 export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetailModalProps) {
   const [fichaOpen, setFichaOpen] = useState(false);
+  const [realocarOpen, setRealocarOpen] = useState(false);
 
   if (!servico) return null;
 
@@ -122,6 +125,16 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
                   <ExternalLink className="h-3.5 w-3.5" /> Ver no mapa
                 </a>
               </Button>
+              {isInstalacao && ['agendada', 'nao_compareceu', 'reagendada', 'cancelada'].includes(servico.status) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => setRealocarOpen(true)}
+                >
+                  <MapPinned className="h-3.5 w-3.5" /> Realocar
+                </Button>
+              )}
             </div>
           </DialogHeader>
 
@@ -305,6 +318,16 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
         open={fichaOpen}
         onOpenChange={setFichaOpen}
       />
+
+      {isInstalacao && (
+        <RealocarInstalacaoDialog
+          open={realocarOpen}
+          onOpenChange={setRealocarOpen}
+          instalacaoId={servico.id}
+          veiculoLabel={servico.veiculo?.placa || undefined}
+          associadoNome={servico.associado?.nome || undefined}
+        />
+      )}
     </>
   );
 }
