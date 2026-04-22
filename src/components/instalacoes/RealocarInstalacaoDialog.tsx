@@ -106,6 +106,24 @@ export function RealocarInstalacaoDialog({
   const instaladorEfetivo = instaladorId || rotaSelecionada?.instalador_id || '';
 
   const handleRealocarRota = async () => {
+    if (!motivoRota.trim()) return;
+
+    // Modo Atribuição Manual: envia para fila sem rota/instalador
+    if (manualAtiva) {
+      await realocarParaRota.mutateAsync({
+        instalacaoId,
+        rotaId: null,
+        instaladorId: null,
+        dataAgendada: data,
+        periodo: periodoRota,
+        motivo: motivoRota.trim(),
+        notificarWhatsApp: notificarRota,
+      });
+      onSuccess?.();
+      onOpenChange(false);
+      return;
+    }
+
     let rotaFinalId = rotaId;
 
     if (criandoRota) {
@@ -130,12 +148,12 @@ export function RealocarInstalacaoDialog({
       rotaFinalId = nova.id;
     }
 
-    if (!rotaFinalId || !motivoRota.trim()) return;
+    if (!rotaFinalId) return;
 
     await realocarParaRota.mutateAsync({
       instalacaoId,
       rotaId: rotaFinalId,
-      instaladorId: manualAtiva ? null : (instaladorEfetivo || null),
+      instaladorId: instaladorEfetivo || null,
       dataAgendada: data,
       periodo: periodoRota,
       motivo: motivoRota.trim(),
@@ -189,7 +207,7 @@ export function RealocarInstalacaoDialog({
             {manualAtiva && (
               <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-2 text-xs text-foreground">
                 <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                <span>Modo Atribuição Manual ativo — o serviço entrará na fila de atribuição para você designar o instalador no mapa.</span>
+                <span>Modo Atribuição Manual ativo — o serviço será reagendado para a data/período escolhidos e entrará na fila de Atribuição Manual. Você designará o instalador depois pelo mapa.</span>
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">
@@ -216,7 +234,7 @@ export function RealocarInstalacaoDialog({
               </div>
             </div>
 
-            {!criandoRota ? (
+            {!manualAtiva && (!criandoRota ? (
               <div>
                 <Label>Rota</Label>
                 <Select value={rotaId} onValueChange={setRotaId}>
@@ -262,7 +280,7 @@ export function RealocarInstalacaoDialog({
                   onChange={(e) => setNovaRotaCidade(e.target.value)}
                 />
               </div>
-            )}
+            ))}
 
             {!manualAtiva && (
               <div>
@@ -305,12 +323,12 @@ export function RealocarInstalacaoDialog({
               disabled={
                 realocarParaRota.isPending ||
                 !motivoRota.trim() ||
-                (!criandoRota && !rotaId) ||
-                (criandoRota && !novaRotaNome.trim())
+                (!manualAtiva && !criandoRota && !rotaId) ||
+                (!manualAtiva && criandoRota && !novaRotaNome.trim())
               }
             >
               {realocarParaRota.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-              Realocar para esta rota
+              {manualAtiva ? 'Reagendar e enviar para fila' : 'Realocar para esta rota'}
             </Button>
           </TabsContent>
 

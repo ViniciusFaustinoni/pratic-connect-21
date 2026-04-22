@@ -6,7 +6,7 @@ import { PERIODO_LABEL } from '@/lib/periodo-utils';
 
 interface RealocarParaRotaParams {
   instalacaoId: string;
-  rotaId: string;
+  rotaId: string | null; // null = enviar para fila de atribuição manual
   instaladorId?: string | null;
   dataAgendada: string; // yyyy-MM-dd
   periodo: 'manha' | 'tarde';
@@ -88,15 +88,20 @@ export function useRealocarInstalacao() {
         .single();
       if (fetchErr) throw fetchErr;
 
+      const modoManual = params.rotaId === null;
       const update: Record<string, unknown> = {
-        rota_id: params.rotaId,
+        rota_id: params.rotaId, // pode ser null no modo manual
         data_agendada: params.dataAgendada,
         status: 'agendada',
         local_vistoria: 'cliente',
         periodo: params.periodo,
         hora_agendada: null,
       };
-      if (params.instaladorId) update.profissional_id = params.instaladorId;
+      if (modoManual) {
+        update.profissional_id = null;
+      } else if (params.instaladorId) {
+        update.profissional_id = params.instaladorId;
+      }
 
       const { error: updErr } = await supabase
         .from('servicos')
@@ -107,14 +112,17 @@ export function useRealocarInstalacao() {
       await registrarHistorico({
         instalacaoId: params.instalacaoId,
         associadoId: (serv as any).associado_id,
-        motivo: params.motivo,
+        motivo: modoManual
+          ? `${params.motivo} (enviada para fila de atribuição manual)`
+          : params.motivo,
         destino: 'rota',
         statusAnterior: (serv as any).status,
         dadosNovos: {
           rota_id: params.rotaId,
-          profissional_id: params.instaladorId,
+          profissional_id: modoManual ? null : params.instaladorId,
           data_agendada: params.dataAgendada,
           periodo: params.periodo,
+          atribuicao_manual: modoManual,
         },
       });
 
@@ -125,9 +133,13 @@ export function useRealocarInstalacao() {
         await notificarAssociado((serv as any).associados.telefone, msg);
       }
     },
-    onSuccess: () => {
+    onSuccess: (_d, vars) => {
       invalidar();
-      toast.success('Instalação realocada para a rota!');
+      toast.success(
+        vars.rotaId === null
+          ? 'Serviço reagendado e enviado para a fila de atribuição!'
+          : 'Instalação realocada para a rota!'
+      );
     },
     onError: (e: Error) => toast.error(`Erro ao realocar: ${e.message}`),
   });
