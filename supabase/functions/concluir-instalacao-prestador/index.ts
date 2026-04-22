@@ -72,6 +72,61 @@ Deno.serve(async (req) => {
       )
     }
 
+    // ── DISPARO AUTOMÁTICO: enviar veículo para a plataforma de rastreamento ──
+    let plataformaSyncResult: { plataforma?: string; ok: boolean; error?: string } = { ok: false }
+    try {
+      const { data: instal } = await supabase
+        .from('instalacoes')
+        .select('veiculo_id, associado_id')
+        .eq('id', link.instalacao_id)
+        .maybeSingle()
+
+      if (instal?.veiculo_id) {
+        const { data: rastreador } = await supabase
+          .from('rastreadores')
+          .select('id, imei, plataforma, plataforma_device_id, status')
+          .eq('veiculo_id', instal.veiculo_id)
+          .in('status', ['instalado', 'estoque'])
+          .maybeSingle()
+
+        if (rastreador?.imei && !rastreador.plataforma_device_id) {
+          const { data: assoc } = await supabase
+            .from('associados')
+            .select('email')
+            .eq('id', instal.associado_id)
+            .maybeSingle()
+
+          const fnName = rastreador.plataforma === 'softruck'
+            ? 'softruck-ativar-dispositivo'
+            : rastreador.plataforma === 'rede_veiculos'
+              ? 'rede-veiculos-vincular-cliente'
+              : null
+
+          if (fnName) {
+            console.log(`[concluir-instalacao] Disparando ${fnName} para ${rastreador.imei}`)
+            try {
+              const r = await supabase.functions.invoke(fnName, {
+                body: {
+                  imei: rastreador.imei,
+                  veiculoId: instal.veiculo_id,
+                  associadoId: instal.associado_id,
+                  associadoEmail: assoc?.email,
+                },
+              })
+              plataformaSyncResult = { plataforma: rastreador.plataforma, ok: r.error == null, error: r.error?.message }
+            } catch (err: any) {
+              console.warn('[concluir-instalacao] Falha ao sincronizar plataforma (não bloqueante):', err)
+              plataformaSyncResult = { plataforma: rastreador.plataforma, ok: false, error: err?.message }
+            }
+          }
+        } else {
+          plataformaSyncResult = { ok: true, plataforma: rastreador?.plataforma }
+        }
+      }
+    } catch (syncErr) {
+      console.warn('[concluir-instalacao] Erro no disparo de sync (não bloqueante):', syncErr)
+    }
+
     // ── Buscar dados completos ──
     const { data: instalacao } = await supabase
       .from('instalacoes')
