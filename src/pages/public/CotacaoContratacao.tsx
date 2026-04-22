@@ -468,9 +468,11 @@ export default function CotacaoContratacao() {
                 >
                 {isTrocaTitularidade && !trocaLiberada ? (
                   <TelaAnaliseTrocaTitularidade
-                    status={solicitacaoTroca?.status}
+                    status={(solicitacaoTroca?.status as any) || 'aguardando_cadastro'}
                     motivoReprovacao={solicitacaoTroca?.motivo_reprovacao}
-                    termoAssinado={!!solicitacaoTroca?.termo_cancelamento_assinado_em}
+                    termoAssinadoEm={solicitacaoTroca?.termo_cancelamento_assinado_em}
+                    aprovadoCadastroEm={solicitacaoTroca?.aprovado_cadastro_em}
+                    aprovadoMonitoramentoEm={solicitacaoTroca?.aprovado_monitoramento_em}
                   />
                 ) : (
                   <EtapaAssinaturaContrato
