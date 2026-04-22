@@ -295,6 +295,11 @@ export function VeiculoDetalhesModal({ open, onClose, veiculoId }: VeiculoDetalh
                   )}
                 </TabsContent>
 
+                {/* ===== FINANCEIRO SGA ===== */}
+                <TabsContent value="financeiro_sga" className="m-0">
+                  <VeiculoFinanceiroSGA veiculoId={veiculoId} />
+                </TabsContent>
+
                 {/* ===== RASTREADOR ===== */}
                 <TabsContent value="rastreador" className="p-6 m-0 space-y-4">
                   {rastreador ? (
