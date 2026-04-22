@@ -300,6 +300,7 @@ Deno.serve(async (req) => {
         await supabaseAdmin.from("cc_vendedor_lancamentos").delete().eq("contrato_id", contrato.id);
         await supabaseAdmin.from("pontuacao_eventos").delete().eq("contrato_id", contrato.id);
         await supabaseAdmin.from("substituicoes_veiculo").delete().eq("contrato_id", contrato.id);
+        await supabaseAdmin.from("substituicoes_veiculo").delete().eq("contrato_novo_id", contrato.id);
         await supabaseAdmin.from("comissoes").delete().eq("contrato_id", contrato.id);
         await supabaseAdmin.from("instalacoes_pendentes_criacao").delete().eq("contrato_id", contrato.id);
         await supabaseAdmin.from("servicos").delete().eq("contrato_id", contrato.id);
@@ -308,9 +309,25 @@ Deno.serve(async (req) => {
         await supabaseAdmin.from("contratos_historico").delete().eq("contrato_id", contrato.id);
         await supabaseAdmin.from("documentos_solicitados").delete().eq("contrato_id", contrato.id);
         await supabaseAdmin.from("gastos_beneficios").delete().eq("contrato_id", contrato.id);
+
+        // ROOT CAUSE FIX: agendamentos_base referencia instalacoes/vistorias sem cascade
+        const { data: vistContr } = await supabaseAdmin.from("vistorias").select("id").eq("contrato_id", contrato.id);
+        if (vistContr) {
+          for (const v of vistContr) {
+            await supabaseAdmin.from("agendamentos_base").delete().eq("vistoria_id", v.id);
+          }
+        }
+        const { data: instContr } = await supabaseAdmin.from("instalacoes").select("id").eq("contrato_id", contrato.id);
+        if (instContr) {
+          for (const i of instContr) {
+            await supabaseAdmin.from("agendamentos_base").delete().eq("instalacao_id", i.id);
+          }
+        }
+
         await supabaseAdmin.from("instalacoes").delete().eq("contrato_id", contrato.id);
         await supabaseAdmin.from("vistorias").delete().eq("contrato_id", contrato.id);
-        
+        await supabaseAdmin.from("associados_beneficios_adicionais").update({ contrato_id: null }).eq("contrato_id", contrato.id);
+
         // Excluir contrato
         const forceDeleteResult = await supabaseAdmin.from("contratos").delete().eq("id", contrato.id);
         logIfError("force delete contrato", forceDeleteResult, { contrato_id: contrato.id });
@@ -326,29 +343,50 @@ Deno.serve(async (req) => {
     console.log(`[delete-associado] Contratos restantes após limpeza: ${contratosCount || 0}`);
 
     if (contratosFinal && contratosFinal.length > 0) {
-      // Diagnóstico detalhado: verificar o que está bloqueando
+      // Diagnóstico detalhado: contar TODAS as FKs conhecidas que ainda bloqueiam
       const diagnostico: Record<string, unknown>[] = [];
-      
-      for (const contrato of contratosFinal.slice(0, 5)) { // Limitar a 5 para não sobrecarregar
-        const { count: comDeducCount } = await supabaseAdmin
-          .from("comissoes_deducoes")
+      const fkTables = [
+        "comissoes_deducoes",
+        "cc_vendedor_lancamentos",
+        "pontuacao_eventos",
+        "substituicoes_veiculo",
+        "comissoes",
+        "instalacoes",
+        "instalacoes_pendentes_criacao",
+        "vistorias",
+      ];
+
+      for (const contrato of contratosFinal.slice(0, 5)) {
+        const blockers: Record<string, number> = {};
+        for (const t of fkTables) {
+          const { count } = await supabaseAdmin
+            .from(t)
+            .select("*", { count: "exact", head: true })
+            .eq("contrato_id", contrato.id);
+          if ((count || 0) > 0) blockers[t] = count || 0;
+        }
+        const { count: cotGer } = await supabaseAdmin
+          .from("cotacoes")
           .select("*", { count: "exact", head: true })
-          .eq("contrato_id", contrato.id);
-        
-        diagnostico.push({
-          contrato_id: contrato.id,
-          comissoes_deducoes: comDeducCount || 0,
-        });
+          .eq("contrato_gerado_id", contrato.id);
+        if ((cotGer || 0) > 0) blockers["cotacoes_contrato_gerado"] = cotGer || 0;
+        const { count: subNovo } = await supabaseAdmin
+          .from("substituicoes_veiculo")
+          .select("*", { count: "exact", head: true })
+          .eq("contrato_novo_id", contrato.id);
+        if ((subNovo || 0) > 0) blockers["substituicoes_veiculo_novo"] = subNovo || 0;
+
+        diagnostico.push({ contrato_id: contrato.id, blockers });
       }
 
       console.error(`[delete-associado] BLOQUEIO: ${contratosFinal.length} contratos ainda existem:`, diagnostico);
-      
+
       return new Response(
         JSON.stringify({
           error: "Não foi possível excluir todos os contratos do associado",
           contratos_restantes: contratosFinal.length,
           diagnostico,
-          hint: "Existem dependências de banco bloqueando a exclusão. Verifique comissoes_deducoes ou outras FKs.",
+          hint: "Veja 'blockers' no diagnóstico para identificar a tabela com FK bloqueando a exclusão.",
         }),
         { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
