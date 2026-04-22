@@ -1,56 +1,56 @@
 
 
-## Diagnóstico: Por que o PYN0C82 (Montana) não foi sincronizado no SGA
+## Reconhecer Nota Fiscal no link público + Extrair número do motor
 
-### Causa raiz (encontrada nos logs)
+### Causa raiz
 
-A sincronização SGA do **CLEBER** rodou **uma única vez em 20/04/2026 18:51** e teve este comportamento:
+**1) Nota Fiscal não reconhecida**
+O prompt do `document-ocr` tem um bloco curto para `nota_fiscal_veiculo` que não dá ao modelo as pistas visuais clássicas de uma DANFE (cabeçalho "DANFE / NF-e", "CHAVE DE ACESSO", "CFOP", "DESCRIÇÃO DOS PRODUTOS / SERVIÇOS", "DADOS ADICIONAIS"). Resultado: quando o associado envia uma DANFE de moto/carro 0 km no slot do CRLV (no fluxo público da cotação), o modelo costuma classificar como `outro` ou tenta forçar como `crlv`, e o frontend rejeita o documento (slot não preenchido).
 
-| Etapa | Resultado |
-|---|---|
-| `autenticar` na Hinova | ✅ sucesso |
-| `cadastrar_veiculo` para **KXS2259** (Kombi) | ❌ erro 406 — *"Já existe um veículo com a placa KXS2259 cadastrado no sistema"* |
-| Recuperação por placa (KXS2259) | ✅ pegou `codigo_veiculo=24137` e marcou como sincronizado |
-| **PYN0C82** (Montana) | ⚠️ **nunca foi processado** — não existe nenhum log para esse veículo |
+Além disso, o prompt não orienta a IA a **reconhecer o número do motor dentro do bloco "DESCRIÇÃO DOS PRODUTOS"** — em DANFEs de veículos, o `Nº MOTOR` aparece concatenado na descrição do produto (ex.: `CHASSI:9C6KG991070073366, No MOTOR:G3W6E-104052, RENAVAM:001187...`), algo que o modelo não extrai bem sem instrução específica.
 
-Ou seja: **o sync rodou só para a Kombi**. O Montana ficou de fora porque, no momento em que a função foi disparada, a Montana ainda não estava elegível (provavelmente estava em outro status / sem cobertura ativa / sem proposta aprovada). Como a função `sga-hinova-sync` é **disparada por veículo** (não em lote por associado), o Montana precisa de um trigger próprio — e esse trigger nunca aconteceu.
+**2) Número do motor não puxado**
+- No CRLV: o prompt pede o campo `motor`, mas não menciona `numero_motor` nem indica que o CRLV traz esse dado no campo "Nº DO MOTOR" (ou "MOTOR Nº"). O front (`EtapaDadosPessoaisDocumentos.tsx` linha 243) só lê `dados.motor`.
+- Na NF: o prompt define `numero_motor`, mas sem indicar onde encontrá-lo (descrição do produto, padrão `MOTOR:XXXXXX` ou `Nº MOTOR XXXXXX`).
+- O upload via link público em `DocumentosPendentesPublico.tsx` (admin solicitando documentos avulsos) **não roda OCR** — apenas armazena. Isso impede qualquer extração ou validação na hora do envio.
 
-Hoje o Montana está:
-- `status = instalacao_pendente`
-- `status_sga = pendente`
-- `codigo_hinova = null`
-- `sincronizado_hinova = false`
-- Zero logs em `sga_sync_logs`
-- Zero jobs em `sga_sync_financeiro_jobs` (só o `backfill_inicial` global de hoje, ainda `pendente`)
+### Plano de correção
 
-**Não é bug da função** — ela funciona (provou isso na Kombi). É **falta de disparo**: nada no fluxo de aprovação do Montana chamou `sga-hinova-sync` para esse veículo.
+**1. Reforçar detecção de NF no `supabase/functions/document-ocr/index.ts`**
+   - Reescrever o bloco `### Nota Fiscal de Veículo` do `systemPrompt` listando os marcadores típicos da DANFE (cabeçalho "DANFE", "DOCUMENTO AUXILIAR DA NOTA FISCAL ELETRÔNICA", "CHAVE DE ACESSO" de 44 dígitos, código de barras, "PROTOCOLO DE AUTORIZAÇÃO DE USO", "NATUREZA DA OPERAÇÃO: VENDA DE VEÍCULO 0 KM", colunas "NCM/SH", "CFOP", "V. UNITÁRIO", "V. TOTAL").
+   - Detalhar onde encontrar os dados veiculares: bloco "DESCRIÇÃO DOS PRODUTOS / SERVIÇOS", padrões `CHASSI:`, `CHASSI Nº`, `MOTOR:`, `Nº MOTOR`, `RENAVAM:`, `COR:`, `COMBUSTÍVEL:`, `ANO FAB:`, `ANO MOD:`, `MARCA:`, `CATEGORIA:`, `TIPO VEICULO:`, `CILINDRADAS:`, `POTENCIA:`.
+   - Instruir explicitamente: extrair `numero_motor` dessa string mesmo quando estiver concatenada com outros campos (regex mental: `MOTOR\s*:?\s*([A-Z0-9-]+)`).
+   - Definir `valor_nota_fiscal` como o `VALOR TOTAL DA NOTA` (ou "V. TOTAL" do produto principal quando único).
+   - Adicionar `nome_comprador` = "DESTINATÁRIO/REMETENTE → NOME / RAZÃO SOCIAL" e `cpf_cnpj_comprador` = campo "CNPJ / CPF" do destinatário.
+   - Adicionar regra: se o documento é uma DANFE/NF-e que contenha qualquer item identificável como veículo (CHASSI 17 chars OU CFOP 5405/5104/6405/etc OU descrição com palavras "VEÍCULO", "MOTOCICLETA", "AUTOMÓVEL", "0 KM", "ZERO KM"), `tipo_detectado` = `"nota_fiscal_veiculo"` — nunca `crlv` nem `outro`.
 
-### O que vou fazer
+**2. Adicionar `numero_motor` ao bloco do CRLV**
+   - No prompt do CRLV, listar `numero_motor` como campo (alias do `motor`) e indicar que vem do campo "MOTOR Nº" / "Nº DO MOTOR" / "MOTOR" do CRLV.
+   - Em `EtapaDadosPessoaisDocumentos.tsx`, no bloco `tipoDocumento === 'crlv'`, popular também `novosDados.numero_motor` a partir de `dados.numero_motor || dados.motor`.
 
-**Operação pontual** (não é build de feature). Disparar manualmente o sync para o PYN0C82 e corrigir o status local — exatamente como acordamos no plano anterior, mas agora com a causa explicada.
+**3. Validação leve do número do motor (servidor)**
+   - No `document-ocr`, após o parse, normalizar `numero_motor` (uppercase, remover espaços) e descartar valores claramente inválidos (< 5 caracteres ou só zeros). Não bloqueia o documento, só limpa.
 
-**1. Invocar `sga-hinova-sync`** com:
-```json
-{ "veiculo_id": "a0136944-7d40-422d-94f2-da6f5c5c65b4",
-  "associado_id": "51ec89d2-57c9-44a7-8e93-1cf521196184" }
-```
-A função vai tentar criar o veículo na Hinova → como provavelmente a placa já existe lá (assim como aconteceu com a Kombi), ela cai na **Estratégia 1** (`GET /veiculo/consultar/placa/PYN0C82`), recupera o `codigo_veiculo` e grava localmente.
+**4. OCR no envio de documentos avulsos pelo link público (`DocumentosPendentesPublico.tsx`)**
+   - Após o upload bem-sucedido para o bucket `cotacoes-docs`, **antes** de marcar o `documentos_solicitados` como enviado, invocar `supabase.functions.invoke('document-ocr', { body: { url: publicUrl, tipoEsperado: doc.tipo_documento } })` em background (não bloqueia o usuário).
+   - Persistir `tipo_detectado`, `dados_ocr` e `sugestao` em colunas existentes do registro `documentos` (campos `dados_extraidos jsonb`, `tipo_detectado text`, `confianca_ocr numeric`, `sugestao_ocr text`) — usar as colunas que já existem na tabela; se não existirem, persistir em `metadata jsonb`. Verificar schema antes (próximo passo, na execução).
+   - Se o admin pediu `crlv` e o OCR detectou `nota_fiscal_veiculo`, **aceitar como equivalente** (não rejeitar) — o slot do CRLV passa a aceitar NF e ATPV-e nesse fluxo público também, igual ao fluxo da cotação pública.
+   - Mostrar no card do documento (após upload) um badge: "Reconhecido como Nota Fiscal" / "Reconhecido como CRLV" + ícone de sucesso ou de revisão necessária.
 
-**2. Verificar resultado** consultando `sga_sync_logs` do veículo. Se `sync_completo` = `success`, prosseguir.
+**5. Memória**
+   - Atualizar `mem://infrastructure/documents/ocr-resilience-and-cnh-parsing-v4` para incluir as novas regras de detecção de DANFE e extração do `numero_motor` em CRLV/NF.
 
-**3. Ativar localmente** (ambos os veículos, já que ambos estão presos em `instalacao_pendente` apesar de já estarem no SGA):
-- `UPDATE veiculos SET status='ativo' WHERE id IN ('a0136944-…', 'f5bd7c0f-…')`
+### Arquivos afetados
 
-**4. Cancelar serviço de instalação obsoleto** do Montana (`e36f0ffb-…`, status `agendada`):
-- `UPDATE servicos SET status='cancelada', observacoes='Cancelada — veículo já cadastrado no SGA, sincronizado manualmente em <data>'`
+- `supabase/functions/document-ocr/index.ts` — prompt da NF reforçado, `numero_motor` no CRLV, normalização do motor.
+- `src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx` — popular `numero_motor` quando vier do CRLV.
+- `src/components/cotacao-publica/DocumentosPendentesPublico.tsx` — invocar OCR após upload, aceitar NF/ATPV-e no slot de CRLV, exibir tipo reconhecido.
+- (opcional) `src/integrations/supabase/types.ts` — refletir novas colunas se for necessário criar via migration.
+- `mem://infrastructure/documents/ocr-resilience-and-cnh-parsing-v4` — regras atualizadas.
 
-**5. Registrar histórico** no associado documentando a sync manual e a causa (sync original em 20/04 só processou a Kombi).
+### Validação
 
-### Cenários alternativos
-- **Se Hinova retornar 404 para PYN0C82**: a placa não existe lá. Eu paro, te aviso, e você decide se quer cadastrar de fato (a função tentará criar) ou se a placa está em outro CPF no SGA.
-- **Se o `codigo_veiculo` retornado pertencer a outro CPF no Hinova**: a função grava mesmo assim (não valida cruzamento). Posso adicionar essa validação se quiser — me avisa.
-
-### Fora do escopo
-- Não vou alterar a função `sga-hinova-sync` (funciona).
-- **Investigação adicional recomendada (separada)**: descobrir *por que* o trigger de sync não foi disparado para o Montana quando ele virou Roubo/Furto. Provavelmente é um gap no fluxo de aprovação que precisa ser auditado em outra task.
+- Reenviar a DANFE do print (Yamaha YBR150, motor `G3W6E-104052`, chassi `9C6KG991070073366`) pelo fluxo público de cotação → resultado esperado: `tipo_detectado=nota_fiscal_veiculo`, `numero_motor="G3W6E-104052"`, `chassi="9C6KG991070073366"`, `valor_nota_fiscal="18890.00"`, `nome_comprador="WENDEL LUIZ PEDRO SANTIAGO"`, slot do CRLV verde com badge "Nota Fiscal (substitui CRLV)".
+- Enviar um CRLV qualquer no mesmo fluxo → `numero_motor` agora preenchido junto com placa/chassi/renavam.
+- Enviar a mesma DANFE pelo link público de documentos avulsos (admin solicita CRLV) → upload aceito, badge "Reconhecido como Nota Fiscal" aparece e o documento entra para análise.
 
