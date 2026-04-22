@@ -541,24 +541,55 @@ export default function InstaladorChecklist() {
       try {
         const { data: rastreador, error } = await supabase
           .from('rastreadores')
-          .select('id, codigo, status, plataforma')
+          .select('id, codigo, status, plataforma, veiculo_id')
           .eq('imei', imeiRastreador)
           .maybeSingle();
 
         if (error) throw error;
 
+        const veiculoIdAtual = servico?.veiculos?.id;
+        const codigoExibicao = rastreador?.codigo || rastreador?.id.slice(0, 8) || '';
+
         if (!rastreador) {
           setImeiStatus('nao_encontrado');
           setImeiInfo(null);
           setImeiError('IMEI não encontrado no estoque. Cadastre o rastreador antes.');
-        } else if (rastreador.status !== 'estoque') {
-          setImeiStatus('indisponivel');
-          setImeiInfo({ codigo: rastreador.codigo, plataforma: rastreador.plataforma, status: rastreador.status });
-          setImeiError(`Rastreador ${rastreador.codigo || rastreador.id.slice(0, 8)} não está disponível (status: ${rastreador.status})`);
-        } else {
+        } else if (rastreador.status === 'estoque') {
+          // Disponível para uso normal
           setImeiStatus('disponivel');
           setImeiInfo({ codigo: rastreador.codigo, plataforma: rastreador.plataforma });
           setImeiError('');
+        } else if (rastreador.status === 'instalado' && rastreador.veiculo_id === veiculoIdAtual) {
+          // Retomada idempotente: já instalado neste mesmo veículo
+          setImeiStatus('disponivel');
+          setImeiInfo({ codigo: rastreador.codigo, plataforma: rastreador.plataforma, status: 'ja_vinculado' });
+          setImeiError('');
+        } else if (rastreador.status === 'instalado') {
+          // Instalado em outro veículo - buscar a placa para mostrar
+          let placaOutro = '';
+          if (rastreador.veiculo_id) {
+            const { data: outroVeic } = await supabase
+              .from('veiculos')
+              .select('placa')
+              .eq('id', rastreador.veiculo_id)
+              .maybeSingle();
+            placaOutro = outroVeic?.placa ? ` (placa ${outroVeic.placa})` : '';
+          }
+          setImeiStatus('indisponivel');
+          setImeiInfo({ codigo: rastreador.codigo, plataforma: rastreador.plataforma, status: rastreador.status });
+          setImeiError(`Rastreador ${codigoExibicao} já instalado em outro veículo${placaOutro}. Use outro IMEI ou solicite remoção primeiro.`);
+        } else if (rastreador.status === 'manutencao') {
+          setImeiStatus('indisponivel');
+          setImeiInfo({ codigo: rastreador.codigo, plataforma: rastreador.plataforma, status: rastreador.status });
+          setImeiError(`Rastreador ${codigoExibicao} em manutenção — solicite outro ao coordenador.`);
+        } else if (rastreador.status === 'baixado') {
+          setImeiStatus('indisponivel');
+          setImeiInfo({ codigo: rastreador.codigo, plataforma: rastreador.plataforma, status: rastreador.status });
+          setImeiError(`Rastreador ${codigoExibicao} foi baixado e não pode ser usado.`);
+        } else {
+          setImeiStatus('indisponivel');
+          setImeiInfo({ codigo: rastreador.codigo, plataforma: rastreador.plataforma, status: rastreador.status });
+          setImeiError(`Rastreador ${codigoExibicao} indisponível (status: ${rastreador.status}).`);
         }
       } catch (err) {
         console.error('Erro ao validar IMEI:', err);
@@ -1824,7 +1855,9 @@ export default function InstaladorChecklist() {
                       <div className="rounded-lg bg-green-500/10 border border-green-500/30 p-3">
                         <p className="text-sm text-green-400 flex items-center gap-2 font-medium">
                           <CheckCircle2 className="h-4 w-4" />
-                          Rastreador disponível no estoque
+                          {imeiInfo.status === 'ja_vinculado'
+                            ? 'Rastreador já vinculado a este veículo — confirmando instalação'
+                            : 'Rastreador disponível no estoque'}
                         </p>
                         <div className="mt-2 text-xs text-slate-300 space-y-1">
                           {imeiInfo.codigo && <p>Código: <span className="font-mono font-medium">{imeiInfo.codigo}</span></p>}
@@ -1852,6 +1885,7 @@ export default function InstaladorChecklist() {
                           Rastreador não disponível
                         </p>
                         <div className="mt-2 text-xs text-slate-300 space-y-1">
+                          {imeiError && <p className="text-amber-300">{imeiError}</p>}
                           {imeiInfo.codigo && <p>Código: <span className="font-mono font-medium">{imeiInfo.codigo}</span></p>}
                           <p>Status atual: <Badge variant="outline" className="text-amber-400 border-amber-400/50 ml-1">{imeiInfo.status}</Badge></p>
                         </div>
