@@ -388,7 +388,7 @@ serve(async (req) => {
     }
 
     const requestBody = await req.json();
-    const { veiculo_id, associado_id, action } = requestBody as SyncRequest & { action?: string };
+    const { veiculo_id, associado_id, action, bypass_guard_base_antiga } = requestBody as SyncRequest & { action?: string; bypass_guard_base_antiga?: boolean };
 
     // ========================================
     // MODO TESTE DE CONEXÃO
