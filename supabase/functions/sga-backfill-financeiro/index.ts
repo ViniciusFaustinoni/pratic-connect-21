@@ -61,6 +61,54 @@ serve(async (req) => {
       });
     }
 
+    // -------- CANCELAR JOBS DE VEÍCULOS INTERNOS (limpeza recorrente) --------
+    // Marca como 'cancelado' qualquer job ativo (pendente/executando/erro/sem_historico_hinova)
+    // de veículos cujo associado é 'interno'. Idempotente — pode rodar todo dia.
+    if (acao === 'cancelar_internos') {
+      const veiculosInternos: string[] = [];
+      const pageSize = 1000;
+      let fromIdx = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from('veiculos')
+          .select('id, associados:associados!inner(origem_cadastro)')
+          .eq('associados.origem_cadastro', 'interno')
+          .range(fromIdx, fromIdx + pageSize - 1);
+        if (error) throw error;
+        if (!data?.length) break;
+        veiculosInternos.push(...data.map((v: any) => v.id));
+        if (data.length < pageSize) break;
+        fromIdx += pageSize;
+      }
+
+      if (!veiculosInternos.length) {
+        return json(200, { success: true, cancelados: 0, veiculos_internos: 0 });
+      }
+
+      const CHUNK = 200;
+      let cancelados = 0;
+      for (let i = 0; i < veiculosInternos.length; i += CHUNK) {
+        const slice = veiculosInternos.slice(i, i + CHUNK);
+        const { data, error } = await supabase
+          .from('sga_sync_financeiro_jobs')
+          .update({
+            status: 'cancelado',
+            ultimo_erro: 'Veículo da base nova (origem_cadastro=interno) — não elegível para sincronização financeira do SGA',
+            concluido_em: new Date().toISOString(),
+          })
+          .in('veiculo_id', slice)
+          .in('status', ['pendente', 'executando', 'erro', 'sem_historico_hinova'])
+          .select('id');
+        if (error) {
+          console.error('[SGA Backfill] cancelar_internos erro:', error.message);
+          continue;
+        }
+        cancelados += data?.length ?? 0;
+      }
+
+      return json(200, { success: true, cancelados, veiculos_internos: veiculosInternos.length });
+    }
+
     // -------- ENFILEIRAR --------
     if (acao === 'enfileirar') {
       // Apenas veículos da BASE ANTIGA (origem_cadastro='api_externa').
