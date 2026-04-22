@@ -295,6 +295,35 @@ serve(async (req) => {
 
     contrato = contratoByDocId;
 
+    // ── TROCA DE TITULARIDADE ─────────────────────────────────────────────
+    // Se este documentId pertence a um Termo de Cancelamento de Troca,
+    // marca como assinado e retorna (não há contrato a anexar).
+    if (!contrato) {
+      const { data: solTroca } = await supabase
+        .from('solicitacoes_troca_titularidade')
+        .select('id, status, termo_cancelamento_assinado_em')
+        .eq('termo_cancelamento_autentique_id', documentId)
+        .maybeSingle();
+      if (solTroca) {
+        const wasSigned = (eventType === 'signature.accepted') ||
+          (eventType === 'signature.updated' && payload.event?.data?.signed);
+        if (wasSigned && !solTroca.termo_cancelamento_assinado_em) {
+          await supabase
+            .from('solicitacoes_troca_titularidade')
+            .update({
+              termo_cancelamento_assinado_em: payload.event?.data?.signed || new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', solTroca.id);
+          console.log('[autentique-webhook] ✓ Termo de cancelamento de troca assinado para solicitação', solTroca.id);
+        }
+        return new Response(JSON.stringify({ received: true, troca_titularidade: solTroca.id }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     // FALLBACK: Se não encontrou pelo documento_id, tentar buscar por email do signatário
     if (!contrato) {
       const signerEmail = payload.event?.data?.user?.email;
