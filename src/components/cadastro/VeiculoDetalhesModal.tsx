@@ -5,7 +5,7 @@ import {
   Car, Image, FileText, X, ChevronDown, ChevronRight,
   CheckCircle, Clock, XCircle, ExternalLink, Camera,
   Wifi, WifiOff, Eye, User, DollarSign, MapPin,
-  AlertTriangle, History, Phone, Mail, Shield
+  AlertTriangle, History, Phone, Mail, Shield, Database
 } from 'lucide-react';
 import {
   Dialog,
