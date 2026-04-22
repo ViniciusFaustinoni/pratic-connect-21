@@ -428,6 +428,22 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       return null;
     }
 
+    // Restrição comercial por tipo de veículo (Regra do 1%)
+    const limiteTipo = tipoVeiculoDetectado === 'moto' ? fipeMenorLimites.moto : fipeMenorLimites.carro;
+    const tipoLabel = tipoVeiculoDetectado === 'moto' ? 'motos' : 'carros';
+    if (valorFipe > limiteTipo) {
+      return {
+        elegivel: false,
+        bloqueado: {
+          motivo: `Regra do 1% disponível apenas para ${tipoLabel} com FIPE até ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(limiteTipo)}.`,
+        },
+        valorReduzido: valorFipe * 0.99,
+        faixaAtual: null as null | { min: number; max: number; mensal: number },
+        faixaInferior: null as null | { min: number; max: number; mensal: number },
+        economia: 0,
+      };
+    }
+
     const plano = planosSelecionados[0];
     const valorReduzido = valorFipe * 0.99;
 
@@ -449,6 +465,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
       return {
         elegivel,
+        bloqueado: null as null | { motivo: string },
         valorReduzido,
         faixaAtual: { min: faixaAtualRule.de, max: faixaAtualRule.ate - 0.01, mensal: mensalAtual },
         faixaInferior: { min: faixaInferiorRule.de, max: faixaInferiorRule.ate - 0.01, mensal: mensalInferior },
@@ -477,12 +494,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
     return {
       elegivel,
+      bloqueado: null as null | { motivo: string },
       valorReduzido,
       faixaAtual: { min: faixaAtual.fipe_min, max: faixaAtual.fipe_max, mensal: faixaAtual.valor_mensal },
       faixaInferior: { min: faixaInferior.fipe_min, max: faixaInferior.fipe_max, mensal: faixaInferior.valor_mensal },
       economia: faixaAtual.valor_mensal - faixaInferior.valor_mensal,
     };
-  }, [valorFipe, planosSelecionados, todasFaixas, fipeMenorLimiteMinimo, planoCoberturasMap, allEligibilityRules]);
+  }, [valorFipe, planosSelecionados, todasFaixas, fipeMenorLimiteMinimo, fipeMenorLimites, tipoVeiculoDetectado, planoCoberturasMap, allEligibilityRules]);
 
   // Faixa de preço atual onde o FIPE se enquadra
   // FONTE: entity_eligibility_rules (motor moderno). Fallback: tabelas_preco_mensalidade (legado)
