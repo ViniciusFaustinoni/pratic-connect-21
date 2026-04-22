@@ -737,33 +737,44 @@ export function useMyBoletos() {
     queryFn: async (): Promise<Boleto[]> => {
       if (!associado?.id) return [];
 
+      // 1. Sempre buscar boletos do SGA Hinova (mensalidades base antiga)
+      const sgaBoletos = await buscarBoletosSGA(associado.id);
+
+      // 2. Buscar boletos do Asaas (adesão e cobrança nova)
+      let asaasBoletos: Boleto[] = [];
       try {
-        // Chamar edge function para dados em tempo real da API ASAAS
         const { data, error } = await supabase.functions.invoke('buscar-boletos-associado');
 
         if (error) {
-          console.error('Erro ao buscar boletos da API:', error);
-          // Fallback: buscar do banco local
-          return buscarBoletosLocal(associado.id);
+          console.error('Erro ao buscar boletos da API ASAAS:', error);
+          asaasBoletos = await buscarBoletosLocal(associado.id);
+        } else if (!data?.success || !data?.boletos) {
+          console.warn('API ASAAS retornou sem sucesso, usando fallback local');
+          asaasBoletos = await buscarBoletosLocal(associado.id);
+        } else {
+          asaasBoletos = data.boletos.map(mapBoletoFromApi);
         }
-
-        if (!data?.success || !data?.boletos) {
-          console.warn('API retornou sem sucesso, usando fallback local');
-          return buscarBoletosLocal(associado.id);
-        }
-
-        console.log(`[useMyBoletos] Recebidos ${data.boletos.length} boletos da API ASAAS`);
-        return data.boletos.map(mapBoletoFromApi);
-
       } catch (err) {
-        console.error('Erro inesperado ao buscar boletos:', err);
-        // Fallback: buscar do banco local
-        return buscarBoletosLocal(associado.id);
+        console.error('Erro inesperado ao buscar boletos Asaas:', err);
+        asaasBoletos = await buscarBoletosLocal(associado.id);
       }
+
+      console.log(`[useMyBoletos] SGA: ${sgaBoletos.length} | Asaas: ${asaasBoletos.length}`);
+
+      // 3. Unir e ordenar por data de vencimento (mais recente primeiro)
+      const todos = [...sgaBoletos, ...asaasBoletos];
+      todos.sort((a, b) => {
+        const parseBR = (s: string) => {
+          const [d, m, y] = (s || '').split('/');
+          return new Date(`${y}-${m}-${d}`).getTime() || 0;
+        };
+        return parseBR(b.dataVencimento) - parseBR(a.dataVencimento);
+      });
+      return todos;
     },
     enabled: !!associado?.id,
-    staleTime: 30000, // Cache por 30 segundos
-    gcTime: 60000, // Manter em cache por 1 minuto
+    staleTime: 30000,
+    gcTime: 60000,
   });
 }
 
