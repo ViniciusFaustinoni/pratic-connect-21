@@ -445,10 +445,19 @@ export default function InstaladorChecklist() {
     if (isOdometro) setProcessandoOCR(true);
     
     try {
+      // Comprime antes do upload — reduz heap, banda e quota IndexedDB.
+      let arquivoFinal = file;
+      try {
+        if (file.size > 250 * 1024) {
+          arquivoFinal = await compressImage(file);
+        }
+      } catch (err) {
+        console.warn('[Checklist] Falha ao comprimir foto, usando original:', err);
+      }
       const result = await uploadFotoMutation.mutateAsync({ 
         vistoriaId, 
         tipo: fotoId, 
-        file,
+        file: arquivoFinal,
         visivelCliente 
       });
       
