@@ -219,7 +219,13 @@ export default function InstaladorChecklist() {
 
   // Configuração dinâmica baseada no tipo de veículo (e se precisa rastreador)
   const fotosConfig = useMemo(() => getFotosByTipoVeiculo(tipoVeiculo), [tipoVeiculo]);
-  const totalObrigatorias = useMemo(() => getTotalFotosObrigatorias(tipoVeiculo), [tipoVeiculo]);
+  const fotosObrigatoriasConfig = useMemo(() =>
+    fotosConfig.filter(f =>
+      f.categoria !== 'instalacao' &&
+      (veiculoPrecisaRastreador || f.categoria !== 'rastreador')
+    )
+  , [fotosConfig, veiculoPrecisaRastreador]);
+  const totalObrigatorias = useMemo(() => fotosObrigatoriasConfig.length, [fotosObrigatoriasConfig]);
   
   // Usar categorias filtradas — incluir rastreador/instalação somente se o veículo exigir rastreador
   const categoriasComFotos = useMemo(() => {
@@ -346,24 +352,16 @@ export default function InstaladorChecklist() {
 
   // Verificar se todas as fotos obrigatórias foram enviadas (dinâmico por tipo + rastreador)
   const fotosObrigatoriasCompletas = useMemo(() => {
-    const obrigatorias = fotosConfig.filter(f =>
-      f.categoria !== 'instalacao' &&
-      (veiculoPrecisaRastreador || f.categoria !== 'rastreador')
-    );
-    return obrigatorias.every(f => fotosEnviadas.some(foto => foto.tipo === f.id));
-  }, [fotosEnviadas, fotosConfig, veiculoPrecisaRastreador]);
+    return fotosObrigatoriasConfig.every(f => fotosEnviadas.some(foto => foto.tipo === f.id));
+  }, [fotosEnviadas, fotosObrigatoriasConfig]);
 
   // Verificar se o vídeo 360 foi enviado
   const video360Enviado = !!videoUrl;
 
   // Contagem de fotos enviadas
   const totalFotosEnviadas = useMemo(() => {
-    const obrigatorias = fotosConfig.filter(f =>
-      f.categoria !== 'instalacao' &&
-      (veiculoPrecisaRastreador || f.categoria !== 'rastreador')
-    );
-    return obrigatorias.filter(f => fotosEnviadas.some(foto => foto.tipo === f.id)).length;
-  }, [fotosEnviadas, fotosConfig, veiculoPrecisaRastreador]);
+    return fotosObrigatoriasConfig.filter(f => fotosEnviadas.some(foto => foto.tipo === f.id)).length;
+  }, [fotosEnviadas, fotosObrigatoriasConfig]);
 
   const toggleCategoria = (categoriaId: string) => {
     setOpenCategorias(prev =>
@@ -1264,7 +1262,7 @@ export default function InstaladorChecklist() {
             {!isLoadingVistoria && vistoriaId && (
               <div className="space-y-3">
                 <VistoriaFotoSequencial
-                  fotos={fotosConfig.filter(f => f.categoria !== 'instalacao' && f.categoria !== 'rastreador')}
+                  fotos={fotosObrigatoriasConfig}
                   fotosEnviadas={fotosEnviadas}
                   uploadingFoto={uploadingFoto}
                   onUpload={(fotoId, file) => handleFotoCapture(fotoId, file)}
