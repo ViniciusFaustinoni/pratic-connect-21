@@ -29,8 +29,15 @@ interface PropostaApprovalStepperProps {
   isAprovando: boolean;
   isAutovistoria: boolean;
   podeAprovar: boolean;
-  /** Quando true, oculta a etapa de Fotos & Vistoria (vistoria na base sem fotos do associado). */
-  isVistoriaBaseSemFotos?: boolean;
+  /**
+   * Quando true, o Cadastro avalia fotos & vistoria (etapa 2 visível).
+   * Regra: plano tem cobertura de Roubo/Furto E existem fotos/vídeo a revisar.
+   * Quando false, oculta a etapa "Fotos & Vistoria" — o stepper fica com
+   * Documentos + Aprovação Final apenas.
+   */
+  cadastroAvaliaFotos?: boolean;
+  /** True quando o plano contratado tem cobertura de Roubo e/ou Furto. */
+  planoTemRouboFurto?: boolean;
 }
 
 interface StepConfig {
