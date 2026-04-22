@@ -197,9 +197,50 @@ export function PropostaDetalhesTabs({
             <div className="grid gap-2 sm:grid-cols-2">
               <FichaField icon={Car} label="Modelo/Marca" value={`${proposta.veiculo_modelo || '---'} ${proposta.veiculo_marca || ''}`} highlight iconColor="text-purple-500" />
               <FichaField icon={FileText} label="Placa" value={proposta.veiculo_placa} iconColor="text-purple-500" />
-              <FichaField icon={Calendar} label="Ano" value={proposta.veiculo_ano?.toString()} iconColor="text-purple-500" />
+              <FichaField icon={Calendar} label="Ano Modelo" value={proposta.veiculo_ano?.toString()} iconColor="text-purple-500" />
+              <FichaField icon={Calendar} label="Ano Fabricação" value={proposta.veiculo_ano_fabricacao?.toString()} iconColor="text-purple-500" />
               <FichaField icon={FileText} label="Cor" value={proposta.veiculo_cor} iconColor="text-purple-500" />
+              <FichaField icon={FileText} label="Combustível" value={proposta.veiculo_combustivel} iconColor="text-purple-500" />
+              <FichaField icon={FileText} label="Categoria" value={proposta.veiculo_categoria} iconColor="text-purple-500" />
+              <FichaField icon={FileText} label="Tipo de Uso" value={proposta.veiculo_tipo_uso} iconColor="text-purple-500" />
+              <FichaField icon={FileText} label="Procedência" value={proposta.veiculo_procedencia} iconColor="text-purple-500" />
             </div>
+
+            {/* Bloco FIPE / Cobertura */}
+            <div className="border-t border-border/50 pt-3">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-2">FIPE & Cobertura</p>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <FichaField icon={DollarSign} label="Valor FIPE" value={formatCurrency(proposta.veiculo_valor_fipe)} highlight iconColor="text-emerald-500" />
+                <FichaField icon={Hash} label="Código FIPE" value={proposta.codigo_fipe} iconColor="text-purple-500" />
+                <FichaField icon={DollarSign} label="Cobertura" value={formatCurrency(proposta.cobertura_fipe)} iconColor="text-emerald-500" />
+              </div>
+            </div>
+
+            {/* Status especiais */}
+            {(proposta.veiculo_alienado || proposta.veiculo_blindado || proposta.veiculo_financeira || proposta.veiculo_cobertura_total || proposta.uso_aplicativo) && (
+              <div className="border-t border-border/50 pt-3">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-2">Características especiais</p>
+                <div className="flex flex-wrap gap-2">
+                  {proposta.veiculo_alienado && (
+                    <Badge variant="outline" className="text-warning border-warning/40 bg-warning/10">Alienado</Badge>
+                  )}
+                  {proposta.veiculo_blindado && (
+                    <Badge variant="outline" className="text-info border-info/40 bg-info/10">Blindado</Badge>
+                  )}
+                  {proposta.uso_aplicativo && (
+                    <Badge variant="outline" className="text-info border-info/40 bg-info/10">Uso APP</Badge>
+                  )}
+                  {proposta.veiculo_cobertura_total && (
+                    <Badge variant="outline" className="text-emerald-500 border-emerald-500/40 bg-emerald-500/10">Cobertura Total</Badge>
+                  )}
+                  {proposta.veiculo_financeira && (
+                    <Badge variant="outline" className="text-purple-500 border-purple-500/40 bg-purple-500/10">
+                      Financeira: {proposta.veiculo_financeira}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            )}
             
             {(faltaRenavam || faltaChassi) && (
               <div className="rounded-xl border border-warning/50 bg-warning/10 p-3 flex items-start gap-2">
