@@ -709,19 +709,41 @@ export default function Cotacoes() {
         })}
       </div>
 
+      {/* Card mobile: total de cotações (visível mesmo com filtros aplicados) */}
+      {cotacoes && cotacoes.length > 0 && (
+        <div className="md:hidden">
+          <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 flex items-center justify-between">
+            <div className="text-sm">
+              <span className="text-muted-foreground">Você tem </span>
+              <span className="font-bold text-primary">{cotacoes.length}</span>
+              <span className="text-muted-foreground"> cotação(ões) no total</span>
+            </div>
+            {hasActiveFilters && (
+              <Button size="sm" variant="ghost" onClick={clearFilters} className="h-7 px-2 text-xs">
+                Limpar filtros
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Tabs Em Andamento / Finalizadas */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+      <Tabs value={activeTab} onValueChange={(v) => {
+        setActiveTab(v);
+        // Reset do filtro de Status — ele só existe em "Em Andamento" e fica "fantasma" entre abas
+        setStatusFilter('all');
+      }} className="space-y-4">
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="em_andamento" className="gap-2">
             Em Andamento
             <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
-              {cotacoesEmAndamento.length}
+              {cotacoesEmAndamentoTotal}
             </Badge>
           </TabsTrigger>
           <TabsTrigger value="finalizadas" className="gap-2">
             Finalizadas
             <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
-              {cotacoesFinalizadas.length}
+              {cotacoesFinalizadasTotal}
             </Badge>
           </TabsTrigger>
         </TabsList>
