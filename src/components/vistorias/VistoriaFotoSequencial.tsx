@@ -159,7 +159,13 @@ export function VistoriaFotoSequencial({
               )}
             >
               {url ? (
-                <img src={url} alt="" className="w-full h-full object-cover" />
+                <img
+                  src={url}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  className="w-full h-full object-cover"
+                />
               ) : (
                 <div className="w-full h-full flex items-center justify-center bg-slate-800 text-slate-500 text-xs font-bold">
                   {index + 1}
@@ -283,7 +289,13 @@ export function VistoriaFotoSequencial({
                 </div>
               ) : fotoUrl ? (
                 <div className="relative aspect-[4/3] rounded-xl overflow-hidden border-2 border-emerald-600">
-                  <img src={fotoUrl} alt={fotoAtual.nome} className="w-full h-full object-cover" />
+                  <img
+                    key={fotoAtual.id}
+                    src={fotoUrl}
+                    alt={fotoAtual.nome}
+                    decoding="async"
+                    className="w-full h-full object-cover"
+                  />
                   <div className="absolute bottom-3 right-3">
                     <Button
                       size="sm"
