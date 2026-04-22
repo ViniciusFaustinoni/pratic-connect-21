@@ -284,17 +284,17 @@ placa (ABC1234/ABC1D23), renavam (11 dígitos), chassi (17 chars), marca, modelo
 
 **Onde encontrar os dados veiculares (geralmente concatenados na "DESCRIÇÃO DOS PRODUTOS / SERVIÇOS"):**
 A descrição vem em linha única com vários campos separados por vírgula ou espaço. Padrões típicos:
-- `CHASSI:9C6KG991070073366` ou `CHASSI Nº 9C6KG...` ou `CHASSI/SERIE 9C6KG...`
-- `MOTOR:G3W6E-104052` ou `Nº MOTOR G3W6E-104052` ou `No MOTOR:G3W6E-104052` ou `MOTOR Nº G3W6E-104052`
-- `RENAVAM:00118712345`
-- `COR:VERMELHA` / `COR BRANCA`
-- `COMBUSTÍVEL:GASOLINA` / `FLEX` / `DIESEL`
-- `ANO FAB:2024` `ANO MOD:2025` (ou `ANO/MOD: 2024/2025`)
-- `MARCA:YAMAHA` `MODELO:YBR 150 FACTOR`
-- `CILINDRADAS:150` `POTENCIA:12CV` `CATEGORIA:PARTICULAR` `TIPO VEICULO:MOTOCICLETA`
+- \`CHASSI:9C6KG991070073366\` ou \`CHASSI Nº 9C6KG...\` ou \`CHASSI/SERIE 9C6KG...\`
+- \`MOTOR:G3W6E-104052\` ou \`Nº MOTOR G3W6E-104052\` ou \`No MOTOR:G3W6E-104052\` ou \`MOTOR Nº G3W6E-104052\`
+- \`RENAVAM:00118712345\`
+- \`COR:VERMELHA\` / \`COR BRANCA\`
+- \`COMBUSTÍVEL:GASOLINA\` / \`FLEX\` / \`DIESEL\`
+- \`ANO FAB:2024\` \`ANO MOD:2025\` (ou \`ANO/MOD: 2024/2025\`)
+- \`MARCA:YAMAHA\` \`MODELO:YBR 150 FACTOR\`
+- \`CILINDRADAS:150\` \`POTENCIA:12CV\` \`CATEGORIA:PARTICULAR\` \`TIPO VEICULO:MOTOCICLETA\`
 
 **Extração obrigatória de numero_motor:**
-Mesmo quando o número do motor estiver concatenado na descrição com outros campos, EXTRAIA SOMENTE o valor do motor. Use o padrão mental: `MOTOR\s*:?\s*([A-Z0-9-]+)` — capture até o próximo separador (vírgula, espaço, RENAVAM, COR, etc.). Devolva apenas a sequência alfanumérica do motor (com hífen se houver).
+Mesmo quando o número do motor estiver concatenado na descrição com outros campos, EXTRAIA SOMENTE o valor do motor. Use o padrão mental: \`MOTOR\s*:?\s*([A-Z0-9-]+)\` — capture até o próximo separador (vírgula, espaço, RENAVAM, COR, etc.). Devolva apenas a sequência alfanumérica do motor (com hífen se houver).
 
 **Campos a retornar:**
 - valor_nota_fiscal: prefira "VALOR TOTAL DA NOTA" do bloco "CÁLCULO DO IMPOSTO". Se não houver, use "V. TOTAL" do produto principal (quando único). Numérico, ponto decimal (ex.: 18890.00).
