@@ -75,7 +75,7 @@ export function useRealocarInstalacao() {
 
   const realocarParaRota = useMutation({
     mutationFn: async (params: RealocarParaRotaParams) => {
-      // Fase 3: fonte única é `servicos` (tipo = vistoria_instalacao)
+      // Fonte única é `servicos` (tipo = instalacao)
       const { data: serv, error: fetchErr } = await supabase
         .from('servicos')
         .select(`
@@ -84,7 +84,7 @@ export function useRealocarInstalacao() {
           veiculos:veiculos!servicos_veiculo_id_fkey(placa, marca, modelo)
         `)
         .eq('id', params.instalacaoId)
-        .eq('tipo', 'vistoria_instalacao' as any)
+        .eq('tipo', 'instalacao' as any)
         .single();
       if (fetchErr) throw fetchErr;
 
@@ -146,7 +146,7 @@ export function useRealocarInstalacao() {
 
   const realocarParaBase = useMutation({
     mutationFn: async (params: RealocarParaBaseParams) => {
-      // Fase 3: fonte única é `servicos` (tipo = vistoria_instalacao)
+      // Fonte única é `servicos` (tipo = instalacao)
       const { data: serv, error: fetchErr } = await supabase
         .from('servicos')
         .select(`
@@ -155,7 +155,7 @@ export function useRealocarInstalacao() {
           veiculos:veiculos!servicos_veiculo_id_fkey(placa, marca, modelo, ano_modelo)
         `)
         .eq('id', params.instalacaoId)
-        .eq('tipo', 'vistoria_instalacao' as any)
+        .eq('tipo', 'instalacao' as any)
         .single();
       if (fetchErr) throw fetchErr;
 
