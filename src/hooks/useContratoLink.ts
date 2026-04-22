@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
+import { uploadVideoWithRetry, VideoUploadError } from '@/lib/videoUpload';
 
 // Hook para buscar contrato por token (público) com polling inteligente e timeout
 export function useContratoByToken(token: string | undefined) {

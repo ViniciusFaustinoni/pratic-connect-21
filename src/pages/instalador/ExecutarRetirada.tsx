@@ -28,6 +28,7 @@ import { ChecklistRetirada, type ChecklistRetiradaItem } from '@/components/inst
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { uploadVideoWithRetry, VideoUploadError } from '@/lib/videoUpload';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMultaRastreador } from '@/hooks/useConteudosSistema';
