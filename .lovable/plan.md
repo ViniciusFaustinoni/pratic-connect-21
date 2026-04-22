@@ -1,69 +1,66 @@
 
 
-## Resolver o bloqueio "Vistoria sem coordenadas GPS" no mapa de monitoramento
+## Corrigir mapeamento de códigos Hinova: alinhar headers de autorização
 
-### Diagnóstico
+### Causa raiz definitiva
 
-**Por que vistorias ficam sem coordenadas GPS?**
+O cliente compartilhado `_shared/hinova-client.ts` envia um **header de autorização diferente** do que `sga-hinova-sync` (o único caminho comprovadamente funcional) usa. Por isso 100% das 9.618 placas voltam "não encontradas", mesmo com a autenticação OK.
 
-Na criação do serviço (`criar-instalacao-pos-pagamento`, `aprovar-proposta`), o sistema chama `geocode-endereco` (Nominatim/OpenStreetMap). Quando essa chamada falha — Nominatim retorna `429 rate limited`, ou não encontra o endereço (CEP genérico, número fora da base, logradouro mal escrito, bairro novo) — `latitude/longitude` são gravados como `null` e o serviço fica "órfão" no mapa. Não há retry posterior nem fila de re-geocodificação.
+| Função | `Authorization` | Outros headers |
+|---|---|---|
+| `sga-hinova-sync` (funciona) | `Bearer ${token_usuario}` (token retornado pelo `/usuario/autenticar`) | — |
+| `_shared/hinova-client.ts` (não encontra nada) | `Bearer ${creds.token}` (token fixo de aplicação) | `token_usuario: ${tokenUsuario}` (header custom) |
 
-**Por que a "reatribuição" parece não funcionar?**
+A Hinova SGA v2 espera o **token de sessão** no `Authorization`. Quando recebe o token de aplicação, devolve resposta vazia/200 nas rotas GET de consulta, sem 401 explícito — exatamente o sintoma observado: `boletos_importados: 0`, `situacao_financeira: null`, mapeamento de placa retornando "sem histórico" para todo mundo.
 
-Os botões de **Realocar** (`MapPinned`), **Atribuir Técnico** e **Atribuir Prestador** têm dois pontos de entrada:
-
-| Local | Existe quando GPS é null? |
-|---|---|
-| Popup do Marker no mapa | ❌ Não — sem coordenada não há marker |
-| Card na lista lateral | ⚠️ Parcial — só `Atribuir Técnico/Prestador` (UserPlus) e `Pencil` (alterar endereço) aparecem; **Realocar e Reagendar não estão na lista** |
-
-Resultado: no card da lista, **clicar no card** dispara `selecionarVistoria()` → toast de erro porque tenta posicionar o mapa numa coordenada inexistente. O usuário interpreta como "a função quebrou", mas os botões à direita do card (`UserPlus` azul, `Send` verde, `Pencil` roxo) **funcionam** e não dependem de GPS — o `Pencil` (Alterar endereço/tipo) inclusive **re-geocodifica automaticamente** ao salvar via `useAlterarEnderecoTipo`.
-
-Falta apenas: (1) deixar isso óbvio na UI, (2) parar de bloquear o card inteiro com o toast, (3) oferecer um botão direto de "Corrigir GPS" e (4) ter uma rotina que reprocesse vistorias sem coordenadas em lote.
+Outro ganho: **9.618/9.618 dos veículos pendentes têm `associados.codigo_hinova` preenchido**. Logo, sequer precisamos depender da busca por placa — basta listar os boletos do associado (endpoint que JÁ FUNCIONA quando os headers estão corretos) para descobrir o `codigo_veiculo` Hinova ali presente, ou usar a busca por placa agora corrigida.
 
 ### Correção
 
-**1. Não tratar mais clique no card como erro quando falta GPS**
+**1. Alinhar `authHeaders` no `_shared/hinova-client.ts`**
 
-Em `MapaVistoriasContent.tsx → selecionarVistoria`, trocar o `toast.error('Vistoria sem coordenadas GPS')` por um comportamento útil: marcar a vistoria como selecionada (highlight visual) e mostrar um toast informativo com ação "Corrigir endereço" que abre direto o `AlterarEnderecoTipoDialog` pré-preenchido com o endereço atual.
+Trocar:
+```ts
+{ Authorization: `Bearer ${s.token}`, token_usuario: s.tokenUsuario }
+```
+por:
+```ts
+{ Authorization: `Bearer ${s.tokenUsuario}` }
+```
 
-**2. Adicionar botões "Realocar" e "Reagendar" também no card da lista**
+Isso corrige automaticamente as 3 funções que dependem do shared:
+- `buscarVeiculoPorPlaca` (mapeamento)
+- `buscarSituacaoFinanceiraVeiculo` (sync financeira)
+- `listarBoletosVeiculo` (sync financeira)
 
-Hoje só estão dentro do Popup do Marker. Para serviços `tipo_servico='instalacao'` no card da lista, adicionar os mesmos dois botões (já existe state e handlers; é só renderizar). Sem GPS, esses botões continuam funcionando porque não dependem de coordenadas — o problema atual é que estão escondidos.
+**2. Adicionar telemetria mínima no `buscarVeiculoPorPlaca`**
 
-**3. Botão dedicado "Corrigir GPS" no card quando `latitude` é null**
+Logar `r1.status` + 200 chars do body em **toda** chamada (não só erro), gravado em `sga_sync_logs` com `action='buscar_veiculo_placa'`. Sem isso, o próximo bug volta a passar despercebido. Limitar para 1 log a cada 10 placas processadas para não inundar.
 
-Substituir o atual `<p>⚠️ Sem coordenadas GPS</p>` por um botão amarelo "⚠️ Corrigir endereço para liberar GPS" que abre o `AlterarEnderecoTipoDialog` (que já chama `geocode-endereco` ao salvar). Atalho de 1 clique para o caminho que já existe.
+**3. Re-tentar mapeamento do lote já processado erroneamente**
 
-**4. Re-tentar geocodificação automática on-demand**
+Os 9.618 jobs marcados como `sem_historico_hinova` foram falsos negativos causados pelo bug de header. Migration que **reseta** `sga_sync_financeiro_jobs` onde `tipo='mapear_codigo' AND status='sem_historico_hinova'` (qualquer data, não só os 30min anteriores), liberando todos para reprocessamento.
 
-Criar uma edge function nova `geocode-servico-retry` que recebe `servicoId`, lê o endereço atual de `servicos`, chama `geocode-endereco` e atualiza `latitude/longitude` se obtiver resultado. Expor um botão "Tentar geolocalizar de novo" no mesmo lugar do "Corrigir endereço" — útil quando o endereço está correto e a falha foi transiente (rate limit do Nominatim).
+**4. Validar com 5 placas reais antes de rodar tudo**
 
-**5. Aliviar a fonte do problema na criação**
+Após o fix, executar `sga-mapear-codigos-veiculos` com `batch_size=5` e conferir que pelo menos 4 das 5 voltam mapeadas (esses associados têm `codigo_hinova` válido — placas QNA4J27, LQW4H42, KXK2B80, QUD0D43, RJR2I98 devem retornar). Se ainda voltar 0/5, abrir log `buscar_veiculo_placa` para ver resposta crua.
 
-Em `geocode-endereco`:
-- Aumentar o retry para 2 tentativas com 2s de intervalo em caso de 429.
-- Adicionar fallback final por **CEP-only** via ViaCEP/BrasilAPI quando Nominatim retornar zero resultados (já existe a lógica de "bairro+cidade", adicionar CEP como último recurso).
+**5. Rodar mapeamento em massa**
 
-Isso reduz o volume de serviços que nascem sem coordenada, mas **não substitui** a UI de correção (vai sempre haver casos limites).
-
-**6. Indicador de fila no topo do mapa**
-
-Adicionar um chip discreto no header da página `/monitoramento/mapa` com a contagem de "Vistorias sem GPS" e um botão "Ver todas" que filtra a lista lateral. Hoje as vistorias órfãs ficam diluídas no meio das outras e ninguém repara até elas vencerem o prazo.
+Com o critério acima atendido, processar os 9.618 em lotes de 100 (delay 250ms) — ~25 minutos.
 
 ### Critérios de aceitação
 
-1. Clicar num card de vistoria sem GPS na lista lateral **não** mostra mais toast de erro — em vez disso destaca o card e oferece ação de correção.
-2. Card da lista para `tipo_servico='instalacao'` mostra os botões "Realocar" e "Reagendar" (paridade com o popup).
-3. Quando `latitude` é null, o card mostra um botão amarelo "Corrigir endereço" que abre o `AlterarEnderecoTipoDialog`.
-4. Há um botão "Tentar geolocalizar de novo" que invoca a nova edge function `geocode-servico-retry` e atualiza o serviço no lugar (sem precisar reabrir endereço).
-5. `geocode-endereco` faz fallback por CEP via ViaCEP quando Nominatim não encontra nada.
-6. Header do mapa mostra "X sem GPS" como chip clicável que filtra a lista para esses casos.
-7. O coordenador de monitoramento da imagem (KAIKE) consegue, a partir do card da vistoria sem GPS, em até 2 cliques: (a) corrigir o endereço e gerar GPS, ou (b) realocá-la para outra rota/base.
+1. `_shared/hinova-client.ts` envia `Authorization: Bearer ${tokenUsuario}` (sem header `token_usuario` separado).
+2. `sga_sync_logs` recebe `action='buscar_veiculo_placa'` amostral em cada batch.
+3. Migration zera os 9.618 jobs `sem_historico_hinova` para reprocesso.
+4. Teste com 5 placas conhecidas retorna ≥4 mapeadas.
+5. Rodada completa: `restantes` cai de 9.618 para próximo de 0 (excluindo placas que de fato não existem na Hinova).
+6. Sync financeira por veículo passa a importar boletos > 0 e `situacao_financeira` deixa de ser `null` para associados ativos.
 
 ### Fora de escopo
 
-- Migrar fluxo legado da tabela `vistorias` (a view já cobre, e os mesmos botões já operam sobre `servicos`).
-- Trocar o provider de geocodificação (Nominatim → Google Maps Geocoding API) — pode ser feito depois, é decisão de custo/precisão.
-- Mexer no fluxo de cadastro do consultor (a captura inicial do endereço continua igual; o reforço é no servidor).
+- Refatorar `sga-hinova-sync` para usar o shared client (separado).
+- Mexer no `cron-sga-sync-financeiro-diario` (herda a correção).
+- Trocar credenciais (estão corretas).
 
