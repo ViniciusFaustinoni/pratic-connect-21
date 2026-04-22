@@ -94,6 +94,7 @@ export default function ExecutarVistoriaCompleta() {
   // Estado
   const [uploadingFoto, setUploadingFoto] = useState<string | null>(null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [videoUploadProgress, setVideoUploadProgress] = useState<number>(0);
   const [showRecusaModal, setShowRecusaModal] = useState(false);
   const [showConfirmacao, setShowConfirmacao] = useState(false);
   const [processando, setProcessando] = useState(false);
@@ -327,11 +328,12 @@ export default function ExecutarVistoriaCompleta() {
 
   const handleUploadVideo = async (file: File) => {
     if (!vistoriaId) return;
-    // Validação de tamanho — sem compressão (custosa em CPU para low-end).
-    const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
-    if (file.size > MAX_VIDEO_BYTES) {
-      toast.warning('Vídeo grande detectado (>100 MB).', {
-        description: 'O envio pode demorar. Considere gravar um vídeo mais curto.',
+    // Aviso informativo — sem compressão (custosa em CPU para low-end).
+    const WARN_BYTES = 80 * 1024 * 1024;
+    if (file.size > WARN_BYTES) {
+      const mb = (file.size / 1024 / 1024).toFixed(0);
+      toast.info(`Vídeo grande detectado (${mb} MB)`, {
+        description: 'O envio pode demorar em conexão lenta.',
       });
     }
     if (!online || !navigator.onLine) {
@@ -339,13 +341,19 @@ export default function ExecutarVistoriaCompleta() {
       return;
     }
     setUploadingVideo(true);
+    setVideoUploadProgress(0);
     try {
-      await uploadVideo.mutateAsync({ vistoriaId, file });
+      await uploadVideo.mutateAsync({
+        vistoriaId,
+        file,
+        onProgress: (pct: number) => setVideoUploadProgress(pct),
+      } as any);
     } catch (e: any) {
       console.warn('[Vistoria] Upload de vídeo falhou, enfileirando offline:', e?.message);
       await offlineQueue.enfileirarVideo(file);
     } finally {
       setUploadingVideo(false);
+      setVideoUploadProgress(0);
     }
   };
 
@@ -644,6 +652,7 @@ export default function ExecutarVistoriaCompleta() {
               onCapture={handleUploadVideo}
               videoUrl={video360Url}
               uploading={uploadingVideo}
+              uploadProgress={uploadingVideo ? videoUploadProgress : undefined}
               maxDuration={120}
             />
           </CardContent>

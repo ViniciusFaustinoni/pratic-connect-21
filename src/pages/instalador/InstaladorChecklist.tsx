@@ -117,6 +117,7 @@ export default function InstaladorChecklist() {
   const [uploadingFoto, setUploadingFoto] = useState<string | null>(null);
   const [uploadingChecklistFoto, setUploadingChecklistFoto] = useState<string | null>(null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [videoUploadProgress, setVideoUploadProgress] = useState<number>(0);
   // assinaturaUrl removido - assinatura agora é coletada pelo link público
   const [showModalRecusa, setShowModalRecusa] = useState(false);
   const [showDialogCondicao, setShowDialogCondicao] = useState(false);
@@ -505,12 +506,18 @@ export default function InstaladorChecklist() {
       return;
     }
     setUploadingVideo(true);
+    setVideoUploadProgress(0);
     try {
-      await uploadVideoMutation.mutateAsync({ vistoriaId, file });
+      await uploadVideoMutation.mutateAsync({
+        vistoriaId,
+        file,
+        onProgress: (pct: number) => setVideoUploadProgress(pct),
+      } as any);
     } catch (err) {
       // Erro já tratado no hook
     } finally {
       setUploadingVideo(false);
+      setVideoUploadProgress(0);
     }
   };
 
@@ -1296,6 +1303,7 @@ export default function InstaladorChecklist() {
                       onCapture={handleVideoCapture}
                       videoUrl={videoUrl || undefined}
                       uploading={uploadingVideo}
+                      uploadProgress={uploadingVideo ? videoUploadProgress : undefined}
                       confirmed={!!videoUrl && !uploadingVideo}
                       maxDuration={120}
                       label="Vídeo 360° do veículo"
