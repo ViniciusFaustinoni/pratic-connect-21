@@ -318,6 +318,16 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
         open={fichaOpen}
         onOpenChange={setFichaOpen}
       />
+
+      {isInstalacao && (
+        <RealocarInstalacaoDialog
+          open={realocarOpen}
+          onOpenChange={setRealocarOpen}
+          instalacaoId={servico.id}
+          veiculoLabel={servico.veiculo?.placa || undefined}
+          associadoNome={servico.associado?.nome || undefined}
+        />
+      )}
     </>
   );
 }
