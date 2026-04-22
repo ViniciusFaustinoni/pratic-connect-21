@@ -29,8 +29,8 @@ export function ServicosTable({ servicos, isLoading, onRowClick }: ServicosTable
         <TableHeader>
           <TableRow>
             <TableHead className="w-[180px]">Tipo</TableHead>
-            <TableHead className="w-[140px]">Data / Período</TableHead>
             <TableHead>Associado</TableHead>
+            <TableHead className="w-[140px]">Data / Período</TableHead>
             <TableHead>Veículo</TableHead>
             <TableHead>Endereço</TableHead>
             <TableHead>Técnico</TableHead>
