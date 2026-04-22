@@ -100,8 +100,10 @@ export function SgaBackfillFinanceiroDialog() {
     }
   };
 
-  const totalJobs = status ? status.jobs.pendente + status.jobs.executando + status.jobs.concluido + status.jobs.erro : 0;
-  const concluidoPct = totalJobs > 0 ? Math.round((status!.jobs.concluido / totalJobs) * 100) : 0;
+  const semHistorico = status?.jobs.sem_historico_hinova ?? 0;
+  const totalJobs = status ? status.jobs.pendente + status.jobs.executando + status.jobs.concluido + status.jobs.erro + semHistorico : 0;
+  const finalizados = status ? status.jobs.concluido + semHistorico : 0;
+  const concluidoPct = totalJobs > 0 ? Math.round((finalizados / totalJobs) * 100) : 0;
 
   return (
     <>
