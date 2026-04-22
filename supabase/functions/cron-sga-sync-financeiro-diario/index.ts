@@ -20,6 +20,13 @@ serve(async (req) => {
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
   try {
+    // 0) Limpeza recorrente: cancela jobs órfãos de veículos 'interno'
+    //    (caso algum tenha sido criado antes do guard, ou após migração de origem).
+    const limpeza = await supabase.functions.invoke('sga-backfill-financeiro', {
+      body: { acao: 'cancelar_internos' },
+    });
+    console.log('[Cron SGA Diario] limpeza internos:', limpeza.data);
+
     // 1) Enfileira resync
     const enq = await supabase.functions.invoke('sga-backfill-financeiro', {
       body: { acao: 'enfileirar', tipo: 'resync' },
