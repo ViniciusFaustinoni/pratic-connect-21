@@ -59,6 +59,44 @@ const DIGIT_TO_LETTER: Record<string, string> = { '0': 'O', '1': 'I', '5': 'S', 
 const LETTER_TO_DIGIT: Record<string, string> = { 'O': '0', 'I': '1', 'S': '5', 'B': '8', 'Z': '2', 'G': '6', 'T': '7', 'L': '1', 'Q': '0' };
 
 /**
+ * Gera todas as variantes plausíveis da placa para cobrir confusões OCR
+ * comuns entre Mercosul (LLL N L NN) e formato antigo (LLL NNNN).
+ * Inclui a placa original, normalização Mercosul e normalização para antiga.
+ */
+function gerarCandidatosPlaca(raw: string): string[] {
+  if (!raw) return [];
+  const cleaned = raw.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  if (cleaned.length !== 7) return [cleaned];
+  const out = new Set<string>([cleaned]);
+
+  // Variante 1: força Mercosul (5ª posição = letra)
+  const mercosul = cleaned.split('');
+  for (const i of [0, 1, 2, 4]) {
+    const ch = mercosul[i];
+    if (/[0-9]/.test(ch) && DIGIT_TO_LETTER[ch]) mercosul[i] = DIGIT_TO_LETTER[ch];
+  }
+  for (const i of [3, 5, 6]) {
+    const ch = mercosul[i];
+    if (/[A-Z]/.test(ch) && LETTER_TO_DIGIT[ch]) mercosul[i] = LETTER_TO_DIGIT[ch];
+  }
+  out.add(mercosul.join(''));
+
+  // Variante 2: força antiga (5ª posição = dígito)
+  const antiga = cleaned.split('');
+  for (const i of [0, 1, 2]) {
+    const ch = antiga[i];
+    if (/[0-9]/.test(ch) && DIGIT_TO_LETTER[ch]) antiga[i] = DIGIT_TO_LETTER[ch];
+  }
+  for (const i of [3, 4, 5, 6]) {
+    const ch = antiga[i];
+    if (/[A-Z]/.test(ch) && LETTER_TO_DIGIT[ch]) antiga[i] = LETTER_TO_DIGIT[ch];
+  }
+  out.add(antiga.join(''));
+
+  return Array.from(out);
+}
+
+/**
  * Normalização posicional Mercosul-aware (LLL N L NN).
  * Posições 0,1,2,4 → letras (corrige 0→O, 1→I, etc.)
  * Posições 3,5,6 → dígitos (corrige O→0, I→1, etc.)
