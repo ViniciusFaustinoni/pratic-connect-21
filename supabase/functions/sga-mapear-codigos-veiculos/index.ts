@@ -52,16 +52,33 @@ serve(async (req) => {
     let mapeados = 0;
     let nao_encontrados = 0;
     let erros = 0;
+    let idx = 0;
 
     for (const v of veiculos) {
       try {
-        const found = await buscarVeiculoPorPlaca(session, v.placa as string);
+        const { found, debug } = await buscarVeiculoPorPlaca(session, v.placa as string);
+
+        // Telemetria amostral: 1 log a cada 10 placas (e sempre a primeira do batch)
+        if (idx === 0 || idx % 10 === 0) {
+          await supabase.from('sga_sync_logs').insert({
+            action: 'buscar_veiculo_placa',
+            status: found?.codigo_veiculo ? 'ok' : 'empty',
+            payload: {
+              placa: v.placa,
+              veiculo_id: v.id,
+              endpoint: debug.endpoint,
+              http_status: debug.status,
+              body_sample: debug.bodySample,
+              encontrado: !!found?.codigo_veiculo,
+            },
+          }).then(() => {}, () => {}); // não falhar por log
+        }
+
         if (found?.codigo_veiculo) {
           const codAssoc = found.codigo_associado ?? found.codigo_associado_pf ?? null;
           const upd: Record<string, any> = { codigo_hinova: Number(found.codigo_veiculo) };
           await supabase.from('veiculos').update(upd).eq('id', v.id);
           if (codAssoc && v.associado_id) {
-            // só preenche se associado ainda não tem
             const { data: assoc } = await supabase
               .from('associados')
               .select('codigo_hinova')
@@ -74,14 +91,12 @@ serve(async (req) => {
           mapeados++;
         } else {
           nao_encontrados++;
-          // Veículo da base nova (não existe na Hinova). Registra como
-          // 'sem_historico_hinova' para sair do retry e não poluir métrica de erros.
           await supabase.from('sga_sync_financeiro_jobs').insert({
             veiculo_id: v.id,
             associado_id: v.associado_id,
             tipo: 'mapear_codigo',
             status: 'sem_historico_hinova',
-            ultimo_erro: 'Placa não encontrada na Hinova (veículo da base nova)',
+            ultimo_erro: `Placa não encontrada na Hinova (endpoint=${debug.endpoint}, http=${debug.status})`,
             iniciado_em: new Date().toISOString(),
             concluido_em: new Date().toISOString(),
           });
@@ -90,6 +105,7 @@ serve(async (req) => {
         erros++;
         console.error('[SGA Mapear] erro veículo', v.id, e?.message);
       }
+      idx++;
       await sleep(delayMs);
     }
 
