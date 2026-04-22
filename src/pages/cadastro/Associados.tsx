@@ -973,6 +973,20 @@ export default function Associados() {
           cidades={cidades}
         />
 
+        {/* Export Dialog */}
+        <ExportAssociadosDialog
+          open={exportDialogOpen}
+          onClose={() => setExportDialogOpen(false)}
+          screenFilters={{
+            status: serverStatusList,
+            plano_id: serverPlanoId,
+            cidade: serverCidade,
+            data_adesao_inicio: sheetFilters.data_adesao_inicio,
+            data_adesao_fim: sheetFilters.data_adesao_fim,
+          }}
+          planos={planos}
+        />
+
         {/* Detalhe do Associado em Dialog centralizado */}
         <Dialog open={!!detalheAssociadoId} onOpenChange={(open) => !open && setDetalheAssociadoId(null)}>
           <DialogContent className="max-w-5xl max-h-[92vh] p-0 overflow-y-auto overflow-x-hidden">
