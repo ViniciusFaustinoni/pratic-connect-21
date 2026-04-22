@@ -282,6 +282,7 @@ export function MapaVistoriasContent() {
   const podeCancelarAtribuicao = isDiretor || isCoordenadorMonitoramento || isAnalistaMonitoramento || isAdminMaster || isDesenvolvedor;
 
   const [filtroBusca, setFiltroBusca] = useState("");
+  const [apenasSemGps, setApenasSemGps] = useState(false);
   const [posicaoSelecionada, setPosicaoSelecionada] = useState<[number, number] | null>(null);
   const [vistoriaSelecionada, setVistoriaSelecionada] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
