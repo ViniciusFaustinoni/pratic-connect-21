@@ -125,11 +125,17 @@ function getPublicKey(): string {
   return publicKey;
 }
 
-// Enterprise ID fixo conforme plano aprovado
-const SOFTRUCK_ENTERPRISE_ID = 'oydMqwmvgeLJ1kB';
+// Enterprise ID lido de variável de ambiente (configurada como secret SOFTRUCK_ENTERPRISE_ID).
+// Default fallback caso o secret não esteja configurado: PraticCar (CNPJ 50.974.144/0001-17).
+const SOFTRUCK_ENTERPRISE_ID_FALLBACK = '1Ndzlwjm7NZagyv';
 
 function getEnterpriseId(): string {
-  return SOFTRUCK_ENTERPRISE_ID;
+  const envId = Deno.env.get('SOFTRUCK_ENTERPRISE_ID');
+  if (envId && envId.trim().length > 0) {
+    return envId.trim();
+  }
+  console.warn('[Softruck API] SOFTRUCK_ENTERPRISE_ID não configurado, usando fallback PraticCar');
+  return SOFTRUCK_ENTERPRISE_ID_FALLBACK;
 }
 
 // ========== REQUISIÇÃO GENÉRICA COM RETRY EM 401 ==========
@@ -357,7 +363,7 @@ serve(async (req) => {
           page?: number; 
           search?: string;
         };
-        let endpoint = `/v2/vehicles?attributes[]=plate&attributes[]=vin&attributes[]=type&attributes[]=brand&attributes[]=model&attributes[]=year&attributes[]=color&limit=${limit}&page=${page}`;
+        let endpoint = `/v2/vehicles?attributes[]=plate&attributes[]=vin&attributes[]=type_name&attributes[]=brand_name&attributes[]=model_name&attributes[]=year&attributes[]=color&limit=${limit}&page=${page}`;
         if (search) endpoint += `&search=${encodeURIComponent(search)}`;
         result = await softruckRequest('GET', endpoint, token);
         break;
@@ -409,7 +415,7 @@ serve(async (req) => {
             relationships: {
               enterprise: {
                 type: 'enterprise',
-                id: SOFTRUCK_ENTERPRISE_ID,
+                id: enterpriseId || getEnterpriseId(),
               },
             },
           }],

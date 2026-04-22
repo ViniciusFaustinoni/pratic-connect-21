@@ -21304,6 +21304,48 @@ export type Database = {
           },
         ]
       }
+      rastreadores_api_logs: {
+        Row: {
+          created_at: string
+          duracao_ms: number | null
+          erro_mensagem: string | null
+          id: string
+          operacao: string
+          plataforma: string
+          rastreador_id: string | null
+          request: Json | null
+          response: Json | null
+          status: string | null
+          veiculo_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          duracao_ms?: number | null
+          erro_mensagem?: string | null
+          id?: string
+          operacao: string
+          plataforma: string
+          rastreador_id?: string | null
+          request?: Json | null
+          response?: Json | null
+          status?: string | null
+          veiculo_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          duracao_ms?: number | null
+          erro_mensagem?: string | null
+          id?: string
+          operacao?: string
+          plataforma?: string
+          rastreador_id?: string | null
+          request?: Json | null
+          response?: Json | null
+          status?: string | null
+          veiculo_id?: string | null
+        }
+        Relationships: []
+      }
       rastreadores_comandos: {
         Row: {
           api_request: Json | null

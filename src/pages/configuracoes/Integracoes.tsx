@@ -15,6 +15,7 @@ import { useTodasIntegracoesCredenciais, IntegracaoTipo } from '@/hooks/useInteg
 import { useApiKeys } from '@/hooks/useApiKeys';
 import { useApiLeadsConfig } from '@/hooks/useApiLeadsConfig';
 import { useAllLatestHealthChecks } from '@/hooks/useIntegracaoHealthCheck';
+import { StatusSincronizacaoRastreadores } from '@/components/integracoes/StatusSincronizacaoRastreadores';
 import { ConfigurarIntegracaoSheet } from '@/components/integracoes/ConfigurarIntegracaoSheet';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -424,6 +425,9 @@ export default function Integracoes() {
         </div>
         <SummaryBar ctx={ctx} />
       </div>
+
+      {/* Status sincronização Softruck / Rede Veículos */}
+      {isDiretor && <StatusSincronizacaoRastreadores />}
 
       {/* Categories */}
       {categorias.map((cat) => (
