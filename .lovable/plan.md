@@ -1,79 +1,69 @@
 
 
-## Corrigir 2 bugs do app do técnico: travamento por memória nas fotos/vídeos e falso "Sem internet"
+## Causa raiz: tarefas sem GPS aparecem com fade e ficam fora do drag-and-drop
 
-### Bug 1 — "Insuficiência de memória, não foi possível concluir a operação anterior"
+### Por que as tarefas #1, #2, #3 estão "bloqueadas"
 
-**Causa raiz**
+Nas 3 tarefas do print, o badge **"⚠️ Corrigir endereço para liberar GPS"** está visível em todas. Isso significa que `vistoria.latitude` é `null` (a geocodificação do endereço falhou). A partir disso, o código em `src/components/mapa/MapaVistoriasContent.tsx` aplica **dois efeitos** que dão a sensação de "bloqueado":
 
-A tela de execução do técnico (`src/pages/instalador/ExecutarVistoriaCompleta.tsx`, usada pelo Mapa Mobile) recebe o `File` cru da câmera (5–12 MB em celulares modernos) e:
+1. **Fade visual** (linha 681): 
+   ```tsx
+   !v.latitude && "opacity-60"
+   ```
+   O card inteiro fica com 60% de opacidade — parece desabilitado.
 
-1. Em `handleUploadFoto` envia direto para `uploadFoto.mutateAsync` ou enfileira o blob cru no IndexedDB via `offlineQueue.enfileirarFoto`.
-2. `VistoriaFotoSequencial` cria múltiplos `<img src=URL.createObjectURL(...)>` e thumbnails que mantêm o bitmap decodificado em RAM (4 bytes/pixel → uma foto de 12 MP = ~48 MB de heap).
-3. Em série, com 31 fotos + vídeo 360°, o WebView Android estoura — daí o aviso nativo do Chrome **"Devido à insuficiência de memória, não foi possível concluir a operação anterior"** (a aba foi reciclada).
+2. **Drag-and-drop desligado** (linhas 673 e 920):
+   ```tsx
+   const isDraggable = !!atribuicaoManualAtiva && !isRealizada 
+     && !v.vistoriador_id && !!v.latitude && !!v.servico_id_unificado;
+   ```
+   Sem latitude, **não é possível arrastar a tarefa para um técnico no mapa** — porque o sistema precisa da coordenada para calcular distância/ETA até o técnico no momento do drop. Esta trava é intencional e correta.
 
-A versão do **associado** (`src/components/cotacao-publica/AutovistoriaCotacao.tsx`) já resolveu esse problema usando `compressImage` (perfil adaptativo `low/mid/high` baseado em `navigator.deviceMemory`) + `revokePreview` + telemetria de `wasDiscarded`. **A mesma infra (`src/lib/imageCompressor.ts`, `useDeviceCapability`) já existe — só não está sendo aplicada no caminho do técnico.**
+### O que NÃO está bloqueado (mas o usuário não percebe)
 
-**Correção**
+Os botões da coluna direita do card (`AtribuirTecnicoPopover`, `AtribuirPrestadorPopover`) **não checam latitude** — eles funcionam para tarefas sem GPS. Linha 777:
+```tsx
+{!!atribuicaoManualAtiva && !isRealizada && !v.vistoriador_id && !!v.servico_id_unificado && (
+  <AtribuirTecnicoPopover ... />
+)}
+```
+Ou seja, a atribuição via clique no ícone "UserPlus" azul está disponível. Mas o **fade de 60% engana** o usuário a achar que o card inteiro está desabilitado, e a única affordance de atribuição que ele tenta (arrastar para o técnico no mapa) está bloqueada.
 
-Aplicar o mesmo padrão do associado em todos os pontos de upload de foto/vídeo do app do técnico, sem mudar UI nem regras de negócio:
+### Correção raiz
 
-| Arquivo | Mudança |
-|---|---|
-| `src/pages/instalador/ExecutarVistoriaCompleta.tsx` | Em `handleUploadFoto`: antes de enviar/enfileirar, se `file.size > 250KB` rodar `await compressImage(file)`. Liberar `file` original. Mesmo para `handleUploadVideo` no fluxo de queue (apenas valida tamanho — vídeo não comprimimos no client, mas garantimos `revokeObjectURL` agressivo). |
-| `src/pages/instalador/InstaladorChecklist.tsx` | Mesma compressão em `handleFotoCapture` e `handleAddFotoChecklist` (tela de instalação clássica). |
-| `src/components/vistorias/VistoriaFotoSequencial.tsx` | Trocar `<img src={url}>` das thumbnails por uma versão com `loading="lazy"` + `decoding="async"`; só montar a foto principal grande quando ativa (já é, mas garantir cleanup ao trocar via `key`). Não criar Object URLs locais — sempre usa URL remota retornada pelo upload. |
-| `src/components/instalador/VideoCapture.tsx` | Já revoga `previewUrl` no `confirmed` — adicionar limite de tamanho (alertar se >100 MB) e revogar mais cedo (logo após `onCapture` retornar, não esperar `confirmed`). |
-| `src/lib/offline/db.ts` (`enfileirarMidia`) | Antes de gravar foto no IndexedDB, comprimir se for `tipo='foto'` — evita estourar quota de storage do Dexie em low-end. |
-| `src/pages/instalador/ExecutarVistoriaCompleta.tsx` (topo) | Adicionar `useEffect` de telemetria igual ao `AutovistoriaCotacao` (`deviceMemory`, `wasDiscarded`) e toast "Continuamos de onde você parou" quando voltar de OOM. |
+**Arquivo único: `src/components/mapa/MapaVistoriasContent.tsx`**
 
-Sem nova UI, sem mudança no banco, sem mudança nas edge functions. O `compressImage` já reduz uma foto de 12 MB para ~400-600 KB com perfil `mid` e ~250 KB com `low`.
+1. **Remover o fade enganoso** (linha 681). Trocar `!v.latitude && "opacity-60"` por uma marcação visual mais clara que comunica "sem GPS, mas ainda atribuível por clique" — uma borda tracejada amarela à esquerda + um ícone discreto, mantendo opacidade 100%.
 
-**Critérios de aceitação Bug 1**
+2. **Manter o bloqueio de drag** (linhas 673 e 920) — está correto, sem coordenada não há como arrastar no mapa.
 
-1. Caso real do anexo (31 fotos + vídeo 360° em Android com 4 GB RAM) — concluir sem o aviso "insuficiência de memória".
-2. Console mostra `[compressImage] Perfil mid-end ativo: maxWidth=1280…` e tamanho final por foto < 800 KB.
-3. Heap da aba (DevTools → Performance Memory) não cresce monotonicamente entre fotos — sobe e cai conforme `revokePreview`.
-4. Em modo avião, a fila offline aceita as 31 fotos sem encher a quota do IndexedDB (< 25 MB total).
+3. **Adicionar um badge "Atribuir por clique →"** ao lado do "⚠️ Corrigir endereço" quando `!v.latitude && atribuicaoManualAtiva && !v.vistoriador_id`, apontando para o ícone de UserPlus azul. Isso ensina o coordenador que ele pode atribuir via popover mesmo sem GPS.
 
----
+4. **Tooltip no card** quando sem latitude: "Sem coordenadas — arraste no mapa indisponível, mas você pode atribuir clicando no ícone de técnico ou prestador à direita."
 
-### Bug 2 — Banner "Sem internet — trabalhando offline" aparecendo com 5G/LTE ativo
+### Comportamento após a correção
 
-**Causa raiz**
+| Situação | Antes | Depois |
+|---|---|---|
+| Tarefa sem GPS, modo manual ativo | Card com fade 60%, parece bloqueada, drag bloqueado | Card 100% opaco com borda tracejada amarela, drag continua bloqueado, ícones de atribuir destacados, dica visual aponta para eles |
+| Tarefa com GPS, modo manual ativo | Card normal, drag liberado | Sem mudança |
+| Tarefa já atribuída | Sem mudança | Sem mudança |
 
-`src/hooks/useOnlineStatus.ts` decide se está online fazendo ping a `${supabaseUrl}/auth/v1/health` com headers `apikey` e `Authorization`. Esses headers **disparam preflight CORS (OPTIONS)**. Em algumas redes móveis e em WebViews Android (Chrome Custom Tab usado pelo PWA instalado), o OPTIONS para `/auth/v1/health` pode retornar sem `Access-Control-Allow-Headers: apikey, authorization` adequado em momentos de instabilidade, fazendo o `fetch` rejeitar com `TypeError: Failed to fetch` mesmo com rede 5G perfeita. Após 2 falhas consecutivas (~60s), o banner mostra "Sem internet". Em seguida o `useSyncQueue` checa `navigator.onLine` (que é `true`) e tenta sincronizar — mas o estado React continua `false` até o próximo ping.
+### Critérios de aceitação
 
-Telemetria do anexo confirma: o usuário tem 5G ativo (ícone na barra de status), o token de sessão está válido (consegue carregar dados da vistoria) — mas o ping de health está falhando.
-
-**Correção**
-
-Trocar o ping para uma chamada **CORS-safe** que não exija preflight:
-
-1. Usar `GET` simples para um asset estático do próprio domínio do app: `/favicon.ico?cb=${Date.now()}` (mesmo origin → sem CORS, sempre 200 quando há rede). Isso é o padrão usado por libs como `is-online`/`offline.js`.
-2. Manter timeout de 10s e a lógica de "2 falhas consecutivas" para evitar flicker.
-3. Como fallback, se o navegador disparar evento `online`, resetar `failuresInARow = 0` e marcar online imediatamente sem esperar próximo ping.
-4. Adicionar log detalhado (`console.warn('[useOnlineStatus] ping falhou:', err.name, err.message)`) para diagnosticar futuros casos.
-
-Sem mudança no `useSyncQueue`, no banner ou em qualquer outra dependência — ambos consomem `useOnlineStatus()` puro.
-
-**Arquivo**
-
-- `src/hooks/useOnlineStatus.ts` — substituir o `fetch` para Supabase health pelo ping de favicon do mesmo origem.
-
-**Critérios de aceitação Bug 2**
-
-1. No anexo (5G ativo, app conectado), o banner "Sem internet — trabalhando offline" não aparece.
-2. Quando o técnico realmente fica offline (modo avião), o banner aparece em < 30 s e some em < 30 s ao reconectar.
-3. Sincronização de fotos pendentes (`useSyncQueue`) dispara automaticamente quando volta online — comportamento atual é preservado.
-4. Console mostra `[useOnlineStatus] ping ok` em redes lentas (LTE em movimento) sem oscilar para offline.
-
----
+1. As tarefas #1, #2, #3 do print não aparecem mais com fade — ficam 100% visíveis.
+2. Coordenador consegue atribuir uma tarefa sem GPS clicando no ícone azul "UserPlus" e selecionando um técnico (já funcionava no código, mas agora fica visualmente óbvio).
+3. Drag-and-drop dessas tarefas continua bloqueado (correto — sem coord não há onde soltar no mapa).
+4. Tarefas com GPS continuam com comportamento atual (drag livre, sem badge novo).
+5. O botão "Corrigir endereço para liberar GPS" continua disponível como caminho preferido para resolver na raiz.
 
 ### Fora de escopo
 
-- Mudar a fila de sync, RLS, edge functions ou tabelas.
-- Refatorar a tela `InstaladorChecklist.tsx` para o fluxo novo do mapa (já há plano separado de unificação).
-- Suportar HEIC do iPhone na compressão (segue como está — `accept="image/*"` + canvas converte para JPEG).
-- Compressão de vídeo no client (custo de CPU alto demais para low-end; só validamos tamanho).
+- Recalcular geocodificação automática em background (já existe `tentarGeocodificarNovamente`).
+- Permitir drag de tarefas sem GPS (não faz sentido — o drop precisa de coord para calcular distância).
+- Mexer em RLS, edge functions ou na lógica de `useAtribuirServicoManual`.
+
+### Arquivo envolvido
+
+- `src/components/mapa/MapaVistoriasContent.tsx` (única alteração)
 
