@@ -1,61 +1,79 @@
 
 
-## Remover trava de horário para iniciar tarefa atribuída ao técnico
+## Corrigir 2 bugs do app do técnico: travamento por memória nas fotos/vídeos e falso "Sem internet"
 
-### Causa raiz
+### Bug 1 — "Insuficiência de memória, não foi possível concluir a operação anterior"
 
-A trava aparece em **dois pontos** que bloqueiam o botão "Iniciar Tarefa" antes do início do período (08:00 / 13:00 / 18:00):
+**Causa raiz**
 
-1. **Frontend — `src/components/vistoriador/TarefaAtualCard.tsx`** (linhas 99-107 e 526)
-   `podeIniciarPorHorario` desabilita o botão quando `horaAtual < horaLiberacaoTarefa(tarefa)`. Por isso o caso real do anexo (10:33, período Tarde com início às 13:00) mostra "Disponível em 2h 27min".
+A tela de execução do técnico (`src/pages/instalador/ExecutarVistoriaCompleta.tsx`, usada pelo Mapa Mobile) recebe o `File` cru da câmera (5–12 MB em celulares modernos) e:
 
-2. **Backend (client mutation) — `src/hooks/useTarefaAtual.ts`** (linhas 222-236, dentro de `useIniciarRota`)
-   Mesmo se o botão fosse habilitado, o `mutationFn` faz uma segunda checagem e lança `Período disponível a partir das HH:MM`.
+1. Em `handleUploadFoto` envia direto para `uploadFoto.mutateAsync` ou enfileira o blob cru no IndexedDB via `offlineQueue.enfileirarFoto`.
+2. `VistoriaFotoSequencial` cria múltiplos `<img src=URL.createObjectURL(...)>` e thumbnails que mantêm o bitmap decodificado em RAM (4 bytes/pixel → uma foto de 12 MP = ~48 MB de heap).
+3. Em série, com 31 fotos + vídeo 360°, o WebView Android estoura — daí o aviso nativo do Chrome **"Devido à insuficiência de memória, não foi possível concluir a operação anterior"** (a aba foi reciclada).
 
-A função base `horaLiberacaoTarefa` em `src/lib/periodo-utils.ts` é correta e segue sendo útil para **informação visual** (saber a que horas o período começa) — não deve ser removida, só deixa de ser usada como **bloqueio**.
+A versão do **associado** (`src/components/cotacao-publica/AutovistoriaCotacao.tsx`) já resolveu esse problema usando `compressImage` (perfil adaptativo `low/mid/high` baseado em `navigator.deviceMemory`) + `revokePreview` + telemetria de `wasDiscarded`. **A mesma infra (`src/lib/imageCompressor.ts`, `useDeviceCapability`) já existe — só não está sendo aplicada no caminho do técnico.**
 
-### Por que a trava existia
+**Correção**
 
-Foi adicionada para impedir que o técnico iniciasse a rota muito antes do período prometido ao associado (ex.: chegar 6h da manhã num agendamento da tarde). Mas o modelo do negócio é **por período (Manhã/Tarde/Noite)**, não por horário cravado. Se a tarefa **já foi atribuída ao técnico**, ele deve ter autonomia para adiantar — inclusive porque o associado já foi contatado (etapa "Contato realizado via WhatsApp" do anexo) e o adiantamento normalmente é combinado por mensagem.
+Aplicar o mesmo padrão do associado em todos os pontos de upload de foto/vídeo do app do técnico, sem mudar UI nem regras de negócio:
 
-### Correção (mínima e cirúrgica)
+| Arquivo | Mudança |
+|---|---|
+| `src/pages/instalador/ExecutarVistoriaCompleta.tsx` | Em `handleUploadFoto`: antes de enviar/enfileirar, se `file.size > 250KB` rodar `await compressImage(file)`. Liberar `file` original. Mesmo para `handleUploadVideo` no fluxo de queue (apenas valida tamanho — vídeo não comprimimos no client, mas garantimos `revokeObjectURL` agressivo). |
+| `src/pages/instalador/InstaladorChecklist.tsx` | Mesma compressão em `handleFotoCapture` e `handleAddFotoChecklist` (tela de instalação clássica). |
+| `src/components/vistorias/VistoriaFotoSequencial.tsx` | Trocar `<img src={url}>` das thumbnails por uma versão com `loading="lazy"` + `decoding="async"`; só montar a foto principal grande quando ativa (já é, mas garantir cleanup ao trocar via `key`). Não criar Object URLs locais — sempre usa URL remota retornada pelo upload. |
+| `src/components/instalador/VideoCapture.tsx` | Já revoga `previewUrl` no `confirmed` — adicionar limite de tamanho (alertar se >100 MB) e revogar mais cedo (logo após `onCapture` retornar, não esperar `confirmed`). |
+| `src/lib/offline/db.ts` (`enfileirarMidia`) | Antes de gravar foto no IndexedDB, comprimir se for `tipo='foto'` — evita estourar quota de storage do Dexie em low-end. |
+| `src/pages/instalador/ExecutarVistoriaCompleta.tsx` (topo) | Adicionar `useEffect` de telemetria igual ao `AutovistoriaCotacao` (`deviceMemory`, `wasDiscarded`) e toast "Continuamos de onde você parou" quando voltar de OOM. |
 
-**Arquivo 1 — `src/components/vistoriador/TarefaAtualCard.tsx`**
+Sem nova UI, sem mudança no banco, sem mudança nas edge functions. O `compressImage` já reduz uma foto de 12 MB para ~400-600 KB com perfil `mid` e ~250 KB com `low`.
 
-- Remover `!podeIniciarPorHorario` da condição `disabled` do botão "Iniciar Tarefa" (linha 526). Fica:
-  ```tsx
-  disabled={isIniciandoRota || (!isNaBase && !contatoRealizado)}
-  ```
-- Remover o bloco de feedback amber "Disponível em … período da Tarde começa às …" (linhas 549-565), já que não há mais bloqueio.
-- Manter `horaLiberacao` apenas como referência interna se quisermos exibir uma linha **informativa** discreta (sem trava). Para simplificar, removemos `podeIniciarPorHorario` e `tempoRestante` que ficam órfãos.
+**Critérios de aceitação Bug 1**
 
-**Arquivo 2 — `src/hooks/useTarefaAtual.ts`**
+1. Caso real do anexo (31 fotos + vídeo 360° em Android com 4 GB RAM) — concluir sem o aviso "insuficiência de memória".
+2. Console mostra `[compressImage] Perfil mid-end ativo: maxWidth=1280…` e tamanho final por foto < 800 KB.
+3. Heap da aba (DevTools → Performance Memory) não cresce monotonicamente entre fotos — sobe e cai conforme `revokePreview`.
+4. Em modo avião, a fila offline aceita as 31 fotos sem encher a quota do IndexedDB (< 25 MB total).
 
-- Remover o bloco de validação de horário no `mutationFn` de `useIniciarRota` (linhas 222-236), incluindo o `import` dinâmico de `horaLiberacaoTarefa`. A checagem de atribuição (`profissional_id === profile.id`) permanece — essa sim é a trava de segurança real.
+---
 
-**Sem mudanças em:**
-- `src/lib/periodo-utils.ts` (a função fica disponível para outros usos, ex.: agendamento/coordenação).
-- Edge functions, banco, RLS, regras de SLA. Nada disso depende dessa trava.
-- Fluxos de "Cheguei no Local", confirmação WhatsApp, contato obrigatório — todos preservados.
+### Bug 2 — Banner "Sem internet — trabalhando offline" aparecendo com 5G/LTE ativo
 
-### Comportamento após a correção
+**Causa raiz**
 
-- Técnico com tarefa atribuída pode tocar **"Iniciar Tarefa"** a qualquer hora do dia agendado, desde que (para serviços externos) tenha registrado contato com o associado.
-- Encaixes continuam liberando imediato (já era o caso).
-- Sem mensagem de "Disponível em Xh Ymin".
-- Coordenação continua vendo o período no painel; o técnico apenas deixa de ser bloqueado por ele.
+`src/hooks/useOnlineStatus.ts` decide se está online fazendo ping a `${supabaseUrl}/auth/v1/health` com headers `apikey` e `Authorization`. Esses headers **disparam preflight CORS (OPTIONS)**. Em algumas redes móveis e em WebViews Android (Chrome Custom Tab usado pelo PWA instalado), o OPTIONS para `/auth/v1/health` pode retornar sem `Access-Control-Allow-Headers: apikey, authorization` adequado em momentos de instabilidade, fazendo o `fetch` rejeitar com `TypeError: Failed to fetch` mesmo com rede 5G perfeita. Após 2 falhas consecutivas (~60s), o banner mostra "Sem internet". Em seguida o `useSyncQueue` checa `navigator.onLine` (que é `true`) e tenta sincronizar — mas o estado React continua `false` até o próximo ping.
 
-### Critérios de aceitação
+Telemetria do anexo confirma: o usuário tem 5G ativo (ícone na barra de status), o token de sessão está válido (consegue carregar dados da vistoria) — mas o ping de health está falhando.
 
-1. Caso real do anexo (10:33, agendado para Tarde) — botão "Iniciar Tarefa" fica habilitado assim que o contato com o associado é confirmado, sem mensagem de "Disponível em 2h 27min".
-2. Tarefa de um dia futuro continua **habilitada** (comportamento atual já era esse — `if (data_agendada !== hoje) return true`).
-3. Tarefa sem contato (serviço externo) ainda permanece bloqueada com a mensagem "Entre em contato com o associado antes de iniciar o percurso" — essa trava é mantida.
-4. Mutation `useIniciarRota` não retorna mais erro `Período disponível a partir das …`.
-5. Nenhuma regressão em "Cheguei no Local", encaixes ou serviços na base.
+**Correção**
+
+Trocar o ping para uma chamada **CORS-safe** que não exija preflight:
+
+1. Usar `GET` simples para um asset estático do próprio domínio do app: `/favicon.ico?cb=${Date.now()}` (mesmo origin → sem CORS, sempre 200 quando há rede). Isso é o padrão usado por libs como `is-online`/`offline.js`.
+2. Manter timeout de 10s e a lógica de "2 falhas consecutivas" para evitar flicker.
+3. Como fallback, se o navegador disparar evento `online`, resetar `failuresInARow = 0` e marcar online imediatamente sem esperar próximo ping.
+4. Adicionar log detalhado (`console.warn('[useOnlineStatus] ping falhou:', err.name, err.message)`) para diagnosticar futuros casos.
+
+Sem mudança no `useSyncQueue`, no banner ou em qualquer outra dependência — ambos consomem `useOnlineStatus()` puro.
+
+**Arquivo**
+
+- `src/hooks/useOnlineStatus.ts` — substituir o `fetch` para Supabase health pelo ping de favicon do mesmo origem.
+
+**Critérios de aceitação Bug 2**
+
+1. No anexo (5G ativo, app conectado), o banner "Sem internet — trabalhando offline" não aparece.
+2. Quando o técnico realmente fica offline (modo avião), o banner aparece em < 30 s e some em < 30 s ao reconectar.
+3. Sincronização de fotos pendentes (`useSyncQueue`) dispara automaticamente quando volta online — comportamento atual é preservado.
+4. Console mostra `[useOnlineStatus] ping ok` em redes lentas (LTE em movimento) sem oscilar para offline.
+
+---
 
 ### Fora de escopo
 
-- Mexer em SLA, cálculo de "atrasada" no painel da coordenação.
-- Notificação WhatsApp ao associado quando o técnico adianta (pode ser um próximo passo, se desejado).
-- Mudar a lógica do agendador/coordenador — ali continua fazendo sentido considerar o início do período.
+- Mudar a fila de sync, RLS, edge functions ou tabelas.
+- Refatorar a tela `InstaladorChecklist.tsx` para o fluxo novo do mapa (já há plano separado de unificação).
+- Suportar HEIC do iPhone na compressão (segue como está — `accept="image/*"` + canvas converte para JPEG).
+- Compressão de vídeo no client (custo de CPU alto demais para low-end; só validamos tamanho).
 
