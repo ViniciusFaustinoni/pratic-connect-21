@@ -421,7 +421,7 @@ function tryRepairTruncatedJSON(raw: string): object | null {
 
     if (tipoMatch) {
       const dados: Record<string, string | null> = {};
-      const dadosFields = ['nome', 'cpf', 'rg', 'placa', 'renavam', 'chassi', 'marca', 'modelo', 'cor', 'combustivel', 'motor', 'nome_proprietario', 'categoria', 'numero_registro', 'validade', 'data_expedicao', 'orgao_expedidor', 'variante'];
+      const dadosFields = ['nome', 'cpf', 'rg', 'placa', 'renavam', 'chassi', 'marca', 'modelo', 'cor', 'combustivel', 'motor', 'numero_motor', 'nome_proprietario', 'categoria', 'numero_registro', 'validade', 'data_expedicao', 'orgao_expedidor', 'variante'];
       for (const field of dadosFields) {
         const m = raw.match(new RegExp(`"${field}"\\s*:\\s*"([^"]+)"`));
         if (m) dados[field] = m[1];
