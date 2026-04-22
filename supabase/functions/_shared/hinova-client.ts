@@ -112,9 +112,15 @@ function authHeaders(s: HinovaSession): HeadersInit {
  * Busca veículo por placa na Hinova.
  * Endpoint primário: GET /veiculo/consultar/placa/{placa} (mesmo usado em sga-hinova-sync, comprovadamente funcional).
  * Fallback: GET /veiculo/buscar/{placa}/placa (endpoint legado, mantido por segurança).
+ *
+ * Retorna { found, debug } — debug usado para telemetria amostral.
  */
-export async function buscarVeiculoPorPlaca(s: HinovaSession, placa: string): Promise<any | null> {
+export async function buscarVeiculoPorPlaca(
+  s: HinovaSession,
+  placa: string,
+): Promise<{ found: any | null; debug: { endpoint: string; status: number; bodySample: string } }> {
   const placaLimpa = placa.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  let lastDebug = { endpoint: '', status: 0, bodySample: '' };
 
   const tryParse = (txt: string): any | null => {
     try {
@@ -122,7 +128,6 @@ export async function buscarVeiculoPorPlaca(s: HinovaSession, placa: string): Pr
       if (Array.isArray(j)) return j[0] ?? null;
       if (j && typeof j === 'object') {
         if (j.codigo_veiculo) return j;
-        // Algumas variantes envelopam em data/dados
         if (j.data) {
           if (Array.isArray(j.data)) return j.data[0] ?? null;
           if (j.data.codigo_veiculo) return j.data;
@@ -138,10 +143,11 @@ export async function buscarVeiculoPorPlaca(s: HinovaSession, placa: string): Pr
   // Endpoint primário (consultar/placa)
   try {
     const r1 = await fetch(`${s.apiUrl}/veiculo/consultar/placa/${placaLimpa}`, { method: 'GET', headers: authHeaders(s) });
+    const txt1 = await r1.text();
+    lastDebug = { endpoint: 'consultar/placa', status: r1.status, bodySample: txt1.slice(0, 200) };
     if (r1.ok) {
-      const txt = await r1.text();
-      const found = tryParse(txt);
-      if (found?.codigo_veiculo) return found;
+      const found = tryParse(txt1);
+      if (found?.codigo_veiculo) return { found, debug: lastDebug };
     } else if (r1.status !== 404) {
       console.warn('[Hinova] consultar/placa status', r1.status);
     }
@@ -152,16 +158,18 @@ export async function buscarVeiculoPorPlaca(s: HinovaSession, placa: string): Pr
   // Fallback endpoint legado (buscar/{placa}/placa)
   try {
     const r2 = await fetch(`${s.apiUrl}/veiculo/buscar/${placaLimpa}/placa`, { method: 'GET', headers: authHeaders(s) });
-    if (r2.status === 404) return null;
+    const txt2 = await r2.text();
+    lastDebug = { endpoint: 'buscar/placa', status: r2.status, bodySample: txt2.slice(0, 200) };
+    if (r2.status === 404) return { found: null, debug: lastDebug };
     if (r2.ok) {
-      const txt = await r2.text();
-      return tryParse(txt);
+      const found = tryParse(txt2);
+      return { found, debug: lastDebug };
     }
   } catch (e) {
     console.warn('[Hinova] buscar/placa erro', e);
   }
 
-  return null;
+  return { found: null, debug: lastDebug };
 }
 
 /** GET /buscar/situacao-financeira-veiculo/{codigo} */
