@@ -161,6 +161,7 @@ const ApiDocumentation = lazy(() => import("./pages/configuracoes/ApiDocumentati
 const RateioConfig = lazy(() => import("./pages/configuracoes/RateioConfig"));
 const UsuariosAcessos = lazy(() => import("./pages/configuracoes/UsuariosAcessos"));
 const Telemetria = lazy(() => import("./pages/admin/Telemetria"));
+const AutentiqueBiometriasPendentes = lazy(() => import("./pages/admin/AutentiqueBiometriasPendentes"));
 
 // Assistência
 const AssistenciaDashboard = lazy(() => import("./pages/assistencia/AssistenciaDashboard"));
@@ -510,6 +511,7 @@ const App = () => (
               <Route path="/cadastro/processos" element={<ProcessosOperacionais />} />
               <Route path="/cadastro/recusas-instalador" element={<RecusasInstalador />} />
               <Route path="/cadastro/base-antiga" element={<BaseAntiga />} />
+              <Route path="/cadastro/biometrias-pendentes" element={<AutentiqueBiometriasPendentes />} />
               
               {/* Eventos */}
               <Route path="/eventos/dashboard" element={<SinistrosDashboard />} />
