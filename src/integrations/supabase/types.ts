@@ -27343,6 +27343,7 @@ export type Database = {
       }
       veiculos: {
         Row: {
+          aguardando_placa_definitiva: boolean
           ano_fabricacao: number
           ano_modelo: number
           associado_id: string
@@ -27377,6 +27378,8 @@ export type Database = {
           motivo_inativacao: string | null
           motivo_recusa_veiculo: string | null
           placa: string
+          placa_definitiva_atualizada_em: string | null
+          placa_provisoria: string | null
           plataforma_app: string | null
           principal: boolean | null
           quantidade_cotas: number | null
@@ -27404,6 +27407,7 @@ export type Database = {
           valor_fipe_protegido: number | null
         }
         Insert: {
+          aguardando_placa_definitiva?: boolean
           ano_fabricacao: number
           ano_modelo: number
           associado_id: string
@@ -27438,6 +27442,8 @@ export type Database = {
           motivo_inativacao?: string | null
           motivo_recusa_veiculo?: string | null
           placa: string
+          placa_definitiva_atualizada_em?: string | null
+          placa_provisoria?: string | null
           plataforma_app?: string | null
           principal?: boolean | null
           quantidade_cotas?: number | null
@@ -27465,6 +27471,7 @@ export type Database = {
           valor_fipe_protegido?: number | null
         }
         Update: {
+          aguardando_placa_definitiva?: boolean
           ano_fabricacao?: number
           ano_modelo?: number
           associado_id?: string
@@ -27499,6 +27506,8 @@ export type Database = {
           motivo_inativacao?: string | null
           motivo_recusa_veiculo?: string | null
           placa?: string
+          placa_definitiva_atualizada_em?: string | null
+          placa_provisoria?: string | null
           plataforma_app?: string | null
           principal?: boolean | null
           quantidade_cotas?: number | null
