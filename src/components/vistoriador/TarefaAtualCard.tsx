@@ -90,32 +90,12 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
     return () => clearInterval(interval);
   }, []);
 
-  // Hora de liberação efetiva (início do período, ou hora_agendada como fallback)
+  // Hora de liberação efetiva (início do período) — mantida apenas como referência
+  // informativa. Não bloqueia mais o início da tarefa pelo técnico atribuído.
   const horaLiberacao = useMemo(
     () => horaLiberacaoTarefa(tarefa as any),
     [tarefa.periodo, tarefa.hora_agendada, tarefa.permite_encaixe]
   );
-
-  // Verificar se pode iniciar rota baseado no horário de liberação (período)
-  const podeIniciarPorHorario = useMemo(() => {
-    const hoje = agora.toISOString().split('T')[0];
-    if (tarefa.data_agendada !== hoje) return true;
-    if (tarefa.permite_encaixe) return true;
-    if (!horaLiberacao) return true;
-    const horaAtual = agora.toTimeString().slice(0, 5);
-    return horaAtual >= horaLiberacao;
-  }, [agora, tarefa.data_agendada, tarefa.permite_encaixe, horaLiberacao]);
-
-  // Calcular tempo restante para habilitar
-  const tempoRestante = useMemo(() => {
-    if (podeIniciarPorHorario || !horaLiberacao) return null;
-    const [h, m] = horaLiberacao.split(':').map(Number);
-    const ref = new Date(agora);
-    ref.setHours(h, m, 0, 0);
-    const diff = ref.getTime() - agora.getTime();
-    if (diff <= 0) return null;
-    return Math.ceil(diff / 60000);
-  }, [agora, horaLiberacao, podeIniciarPorHorario]);
 
   const enderecoCompleto = [
     tarefa.endereco.logradouro,
@@ -523,7 +503,7 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
 
                 <Button
                   onClick={handleIniciarRota}
-                  disabled={isIniciandoRota || !podeIniciarPorHorario || (!isNaBase && !contatoRealizado)}
+                  disabled={isIniciandoRota || (!isNaBase && !contatoRealizado)}
                   className="w-full gap-2"
                 >
                   {isIniciandoRota ? (
@@ -545,24 +525,6 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
                     {isRecusando ? 'Reportando...' : 'Reportar Imprevisto'}
                   </button>
                 </div>
-                
-                {/* Feedback visual quando bloqueado por horário */}
-                {!podeIniciarPorHorario && horaLiberacao && (
-                  <div className="flex items-center justify-center gap-2 text-sm text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-md py-2 px-3">
-                    <Timer className="h-4 w-4" />
-                    <span>
-                      {(() => {
-                        const periodoLabel = tarefa.periodo && PERIODO_LABEL[tarefa.periodo as 'manha'|'tarde'|'noite']
-                          ? ` — período da ${PERIODO_LABEL[tarefa.periodo as 'manha'|'tarde'|'noite']} começa às ${horaLiberacao}`
-                          : ` (${horaLiberacao})`;
-                        const tempo = tempoRestante && tempoRestante > 60
-                          ? `${Math.floor(tempoRestante / 60)}h ${tempoRestante % 60}min`
-                          : `${tempoRestante} min`;
-                        return `Disponível em ${tempo}${periodoLabel}`;
-                      })()}
-                    </span>
-                  </div>
-                )}
               </div>
                 );
               })()

@@ -201,11 +201,10 @@ export function useIniciarRota() {
 
   return useMutation({
     mutationFn: async ({ tarefaId }: { tarefaId: string }) => {
-      // Primeiro verificar se o serviço está atribuído a este profissional
-      // e buscar dados para validação de horário
+      // Verificar se o serviço está atribuído a este profissional
       const { data: servico, error: fetchError } = await supabase
         .from('servicos')
-        .select('profissional_id, data_agendada, hora_agendada, periodo, permite_encaixe')
+        .select('profissional_id')
         .eq('id', tarefaId)
         .single();
       
@@ -217,22 +216,6 @@ export function useIniciarRota() {
       
       if (servico.profissional_id !== profile?.id) {
         throw new Error('Este serviço não está atribuído a você');
-      }
-
-      // NOVA VALIDAÇÃO: Verificar se o início do período já chegou (exceto encaixes)
-      const hojeStr = new Date().toISOString().split('T')[0];
-      const horaAtual = new Date().toTimeString().slice(0, 5);
-      const { horaLiberacaoTarefa } = await import('@/lib/periodo-utils');
-      const horaLib = horaLiberacaoTarefa(servico as any);
-
-      if (
-        servico &&
-        !servico.permite_encaixe &&
-        servico.data_agendada === hojeStr &&
-        horaLib &&
-        horaAtual < horaLib
-      ) {
-        throw new Error(`Período disponível a partir das ${horaLib}.`);
       }
 
       // Só então atualizar status
