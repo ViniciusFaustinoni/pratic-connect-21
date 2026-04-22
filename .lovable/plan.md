@@ -1,58 +1,69 @@
 
 
-## Corrigir 401 da Hinova na sincronização financeira individual
+## Resolver o bloqueio "Vistoria sem coordenadas GPS" no mapa de monitoramento
 
-### Causa raiz
+### Diagnóstico
 
-Há **duas implementações divergentes** de leitura/decriptação das credenciais Hinova armazenadas em `integracoes_credenciais`:
+**Por que vistorias ficam sem coordenadas GPS?**
 
-| Função | Como deriva a chave de decriptação |
+Na criação do serviço (`criar-instalacao-pos-pagamento`, `aprovar-proposta`), o sistema chama `geocode-endereco` (Nominatim/OpenStreetMap). Quando essa chamada falha — Nominatim retorna `429 rate limited`, ou não encontra o endereço (CEP genérico, número fora da base, logradouro mal escrito, bairro novo) — `latitude/longitude` são gravados como `null` e o serviço fica "órfão" no mapa. Não há retry posterior nem fila de re-geocodificação.
+
+**Por que a "reatribuição" parece não funcionar?**
+
+Os botões de **Realocar** (`MapPinned`), **Atribuir Técnico** e **Atribuir Prestador** têm dois pontos de entrada:
+
+| Local | Existe quando GPS é null? |
 |---|---|
-| `sga-hinova-sync` (que **funciona** ao cadastrar associado/veículo) | Usa **somente** `SUPABASE_SERVICE_ROLE_KEY` (mesmo segredo usado no `integracoes-credenciais` que **encripta**) |
-| `_shared/hinova-client.ts → getHinovaCreds` (usado pela sync financeira) | `INTEGRACOES_ENCRYPTION_KEY` **se existir**, senão cai para `SUPABASE_SERVICE_ROLE_KEY` |
+| Popup do Marker no mapa | ❌ Não — sem coordenada não há marker |
+| Card na lista lateral | ⚠️ Parcial — só `Atribuir Técnico/Prestador` (UserPlus) e `Pencil` (alterar endereço) aparecem; **Realocar e Reagendar não estão na lista** |
 
-A função pública `integracoes-credenciais` salva o registro **sempre** encriptado com `SUPABASE_SERVICE_ROLE_KEY`. Se `INTEGRACOES_ENCRYPTION_KEY` estiver definido com qualquer outro valor, `getHinovaCreds` deriva uma chave diferente, a decriptação silenciosa falha (catch + `console.warn` no shared) e retorna `null` — ou pior: decripta um JSON corrompido com `usuario`/`senha` lixo, resultando em **401 "Login ou senha inválido"** na Hinova. Esse é exatamente o erro visto no log da última execução.
+Resultado: no card da lista, **clicar no card** dispara `selecionarVistoria()` → toast de erro porque tenta posicionar o mapa numa coordenada inexistente. O usuário interpreta como "a função quebrou", mas os botões à direita do card (`UserPlus` azul, `Send` verde, `Pencil` roxo) **funcionam** e não dependem de GPS — o `Pencil` (Alterar endereço/tipo) inclusive **re-geocodifica automaticamente** ao salvar via `useAlterarEnderecoTipo`.
 
-`sga-hinova-sync` não cai nessa armadilha porque é hardcoded em `SUPABASE_SERVICE_ROLE_KEY`, igual ao salvador.
+Falta apenas: (1) deixar isso óbvio na UI, (2) parar de bloquear o card inteiro com o toast, (3) oferecer um botão direto de "Corrigir GPS" e (4) ter uma rotina que reprocesse vistorias sem coordenadas em lote.
 
 ### Correção
 
-**1. Alinhar `_shared/hinova-client.ts` à fonte de verdade do encriptador**
+**1. Não tratar mais clique no card como erro quando falta GPS**
 
-Trocar a ordem de preferência da chave em `getHinovaCreds` para:
+Em `MapaVistoriasContent.tsx → selecionarVistoria`, trocar o `toast.error('Vistoria sem coordenadas GPS')` por um comportamento útil: marcar a vistoria como selecionada (highlight visual) e mostrar um toast informativo com ação "Corrigir endereço" que abre direto o `AlterarEnderecoTipoDialog` pré-preenchido com o endereço atual.
 
-```ts
-const secret = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-```
+**2. Adicionar botões "Realocar" e "Reagendar" também no card da lista**
 
-(remover o `INTEGRACOES_ENCRYPTION_KEY`). Justificativa: o `integracoes-credenciais` **nunca** usa `INTEGRACOES_ENCRYPTION_KEY` — é morto. Manter a opção é só fonte de bug futuro.
+Hoje só estão dentro do Popup do Marker. Para serviços `tipo_servico='instalacao'` no card da lista, adicionar os mesmos dois botões (já existe state e handlers; é só renderizar). Sem GPS, esses botões continuam funcionando porque não dependem de coordenadas — o problema atual é que estão escondidos.
 
-**2. Falhar alto, não silenciar**
+**3. Botão dedicado "Corrigir GPS" no card quando `latitude` é null**
 
-No `getHinovaCreds`, quando o registro do banco existir como `configurado=true` mas a decriptação lançar, **propagar o erro** com mensagem clara (`'Falha ao decriptar credenciais Hinova — verifique INTEGRACOES_ENCRYPTION_KEY/SERVICE_ROLE_KEY'`) em vez de devolver `null`. Hoje o `console.warn` engole o problema e o caller só vê "Credenciais Hinova não configuradas", o que não orienta o diagnóstico.
+Substituir o atual `<p>⚠️ Sem coordenadas GPS</p>` por um botão amarelo "⚠️ Corrigir endereço para liberar GPS" que abre o `AlterarEnderecoTipoDialog` (que já chama `geocode-endereco` ao salvar). Atalho de 1 clique para o caminho que já existe.
 
-**3. Validar campos obrigatórios após decriptação**
+**4. Re-tentar geocodificação automática on-demand**
 
-Após `JSON.parse`, exigir `token`, `usuario`, `senha` não-vazios. Se algum vier vazio (ex.: registro antigo migrado), lançar `Error('Credenciais Hinova incompletas no banco — refaça o cadastro em Configurações > Integrações')` em vez de tentar autenticar com string vazia (que gera o 401 enganoso).
+Criar uma edge function nova `geocode-servico-retry` que recebe `servicoId`, lê o endereço atual de `servicos`, chama `geocode-endereco` e atualiza `latitude/longitude` se obtiver resultado. Expor um botão "Tentar geolocalizar de novo" no mesmo lugar do "Corrigir endereço" — útil quando o endereço está correto e a falha foi transiente (rate limit do Nominatim).
 
-**4. Logar resposta da Hinova em caso de 401**
+**5. Aliviar a fonte do problema na criação**
 
-Em `autenticarHinova`, quando `r.status === 401`, gravar uma linha em `sga_sync_logs` com `action='autenticar'`, `status='error'` e `error_message` contendo o `mensagem` retornado pela Hinova. Hoje só vai pro `console.error`. Sem isso a UI mostra "0 boletos importados" e ninguém percebe.
+Em `geocode-endereco`:
+- Aumentar o retry para 2 tentativas com 2s de intervalo em caso de 429.
+- Adicionar fallback final por **CEP-only** via ViaCEP/BrasilAPI quando Nominatim retornar zero resultados (já existe a lógica de "bairro+cidade", adicionar CEP como último recurso).
 
-**5. Propagar erro ao frontend**
+Isso reduz o volume de serviços que nascem sem coordenada, mas **não substitui** a UI de correção (vai sempre haver casos limites).
 
-No `sga-sync-financeiro-veiculo`, quando `autenticarHinova` lançar, devolver `json(200, { success: false, error: '<mensagem da Hinova>' })` em vez do genérico atual. O hook `useSGASync` já tem `onError` ligado ao toast — só precisa receber a mensagem.
+**6. Indicador de fila no topo do mapa**
+
+Adicionar um chip discreto no header da página `/monitoramento/mapa` com a contagem de "Vistorias sem GPS" e um botão "Ver todas" que filtra a lista lateral. Hoje as vistorias órfãs ficam diluídas no meio das outras e ninguém repara até elas vencerem o prazo.
 
 ### Critérios de aceitação
 
-1. Botão "Atualizar agora" no modal de detalhes do veículo executa a sincronização com sucesso (mesmas credenciais que `sga-hinova-sync` já usa para cadastro de associado).
-2. `sga_sync_logs` recebe registro `action='autenticar'` em todas as execuções da sync financeira (sucesso e falha).
-3. Em caso de 401 da Hinova, o toast no frontend mostra a mensagem real ("Login ou senha inválido", etc.) em vez de "0 boletos importados".
-4. `cron-sga-sync-financeiro-diario` (que reusa o mesmo `getHinovaCreds`) também volta a funcionar sem qualquer mudança nele — herda a correção pelo shared client.
+1. Clicar num card de vistoria sem GPS na lista lateral **não** mostra mais toast de erro — em vez disso destaca o card e oferece ação de correção.
+2. Card da lista para `tipo_servico='instalacao'` mostra os botões "Realocar" e "Reagendar" (paridade com o popup).
+3. Quando `latitude` é null, o card mostra um botão amarelo "Corrigir endereço" que abre o `AlterarEnderecoTipoDialog`.
+4. Há um botão "Tentar geolocalizar de novo" que invoca a nova edge function `geocode-servico-retry` e atualiza o serviço no lugar (sem precisar reabrir endereço).
+5. `geocode-endereco` faz fallback por CEP via ViaCEP quando Nominatim não encontra nada.
+6. Header do mapa mostra "X sem GPS" como chip clicável que filtra a lista para esses casos.
+7. O coordenador de monitoramento da imagem (KAIKE) consegue, a partir do card da vistoria sem GPS, em até 2 cliques: (a) corrigir o endereço e gerar GPS, ou (b) realocá-la para outra rota/base.
 
 ### Fora de escopo
 
-- Trocar credenciais reais da Hinova (não é necessário — a evidência é que estão corretas no banco; o bug é o caminho de leitura).
-- Refatorar `sga-hinova-sync` para usar o shared client (separado, não bloqueia esta correção).
-- Remover `INTEGRACOES_ENCRYPTION_KEY` de outros lugares (faz parte de outra varredura).
+- Migrar fluxo legado da tabela `vistorias` (a view já cobre, e os mesmos botões já operam sobre `servicos`).
+- Trocar o provider de geocodificação (Nominatim → Google Maps Geocoding API) — pode ser feito depois, é decisão de custo/precisão.
+- Mexer no fluxo de cadastro do consultor (a captura inicial do endereço continua igual; o reforço é no servidor).
 
