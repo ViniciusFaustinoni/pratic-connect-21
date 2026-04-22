@@ -254,7 +254,20 @@ Regras especiais CIN:
 
 ### CRLV
 placa (ABC1234/ABC1D23), renavam (11 dígitos), chassi (17 chars), marca, modelo, ano_fabricacao (int), ano_modelo (int), cor (campo "COR"/"COR PREDOMINANTE" - leia literalmente), combustivel, motor, numero_motor, nome_proprietario, blindado (bool)
-- numero_motor: leia do campo "MOTOR Nº" / "Nº DO MOTOR" / "MOTOR" do CRLV. Sempre preencha tanto "motor" quanto "numero_motor" com o mesmo valor (alias).
+
+⚠️ CAMPO OBRIGATÓRIO — numero_motor (NÚMERO DO MOTOR):
+Este campo é OBRIGATÓRIO no CRLV e NUNCA deve ser omitido. Procure ATIVAMENTE no documento usando TODAS estas variações de rótulo:
+  • "MOTOR Nº", "MOTOR N°", "Nº MOTOR", "N° MOTOR", "Nº DO MOTOR", "N° DO MOTOR"
+  • "MOTOR:", "MOTOR /SÉRIE", "MOTOR/SERIE", "MOTOR / SERIE"
+  • Em CRLV-e/Digital o campo aparece tipicamente LOGO ABAIXO ou AO LADO de "CHASSI"
+Como ler:
+  • Leia caractere por caractere — geralmente 7 a 17 caracteres alfanuméricos (letras MAIÚSCULAS + dígitos, podendo conter hífen "-").
+  • Exemplos: "G3W6E104052", "9C6KG991070073366", "BAH123456", "MOTOR:ABC-12345".
+  • NÃO confunda com Renavam (apenas dígitos), Chassi (17 chars exatos) ou Cilindradas.
+  • Se estiver presente mas você NÃO conseguir ler com certeza, retorne numero_motor:"ilegivel" (NUNCA null se houver campo visível).
+  • Se o campo realmente não existir no documento, retorne numero_motor:null.
+Sempre preencha tanto "motor" quanto "numero_motor" com o MESMO valor (alias obrigatório).
+
 - "ANO FAB/MOD: 2013/2014" → ano_fabricacao:2013, ano_modelo:2014
 - Blindado: procure em OBS/TIPO por "BLINDADO/BLINDAGEM/PROTEÇÃO BALÍSTICA". Sempre inclua campo blindado.
 - ⚠️ PLACA — REGRA OBRIGATÓRIA DE FORMATO:
@@ -307,11 +320,12 @@ Mesmo quando o número do motor estiver concatenado na descrição com outros ca
 
 ### ATPV-e / CRV Digital (Autorização para Transferência de Propriedade de Veículo - Eletrônica)
 Detectar quando o documento for emitido pelo SENATRAN/DETRAN com título "AUTORIZAÇÃO PARA TRANSFERÊNCIA DE PROPRIEDADE DE VEÍCULO" ou "ATPV-e" / "CRV Digital" / "CRV-e". Geralmente contém QR Code, código de segurança, dados do veículo, dados do vendedor e dados do comprador.
-Campos: placa, renavam (11 dígitos), chassi (17 chars), marca, modelo, ano_fabricacao (int), ano_modelo (int), cor, combustivel,
+Campos: placa, renavam (11 dígitos), chassi (17 chars), marca, modelo, ano_fabricacao (int), ano_modelo (int), cor, combustivel, motor, numero_motor,
 nome_comprador, cpf_comprador (XXX.XXX.XXX-XX), endereco_comprador (logradouro+numero), cidade_comprador, uf_comprador (2 letras), cep_comprador,
 nome_vendedor, cpf_cnpj_vendedor,
 valor_declarado_venda (numérico), data_emissao_crv (YYYY-MM-DD), data_venda (YYYY-MM-DD),
 numero_crv, codigo_seguranca_crv, numero_atpv
+- numero_motor: extraia do bloco "Características do Veículo" (rótulos: "MOTOR Nº", "Nº DO MOTOR", "MOTOR:"). Mesmo padrão do CRLV: 7-17 caracteres alfanuméricos. Sempre preencha "motor" e "numero_motor" com o mesmo valor. Se ilegível, use "ilegivel".
 - tipo_detectado deve ser "atpv_e"
 - Este documento SUBSTITUI o CRLV para veículos recém-adquiridos cujo CRLV ainda não foi emitido no nome do novo proprietário.
 - NÃO confundir com CRLV (que tem título "CERTIFICADO DE REGISTRO E LICENCIAMENTO DE VEÍCULO") nem com Nota Fiscal.
@@ -407,7 +421,7 @@ function tryRepairTruncatedJSON(raw: string): object | null {
 
     if (tipoMatch) {
       const dados: Record<string, string | null> = {};
-      const dadosFields = ['nome', 'cpf', 'rg', 'placa', 'renavam', 'chassi', 'marca', 'modelo', 'cor', 'combustivel', 'motor', 'nome_proprietario', 'categoria', 'numero_registro', 'validade', 'data_expedicao', 'orgao_expedidor', 'variante'];
+      const dadosFields = ['nome', 'cpf', 'rg', 'placa', 'renavam', 'chassi', 'marca', 'modelo', 'cor', 'combustivel', 'motor', 'numero_motor', 'nome_proprietario', 'categoria', 'numero_registro', 'validade', 'data_expedicao', 'orgao_expedidor', 'variante'];
       for (const field of dadosFields) {
         const m = raw.match(new RegExp(`"${field}"\\s*:\\s*"([^"]+)"`));
         if (m) dados[field] = m[1];
@@ -975,7 +989,7 @@ Use a função para retornar o CPF encontrado ou "ilegivel" se não conseguir le
         if (/^0+$/.test(cleaned.replace(/-/g, ''))) return null;
         return cleaned;
       };
-      if (tipo === 'crlv' || tipo === 'nota_fiscal_veiculo') {
+      if (tipo === 'crlv' || tipo === 'nota_fiscal_veiculo' || tipo === 'atpv_e') {
         const motorRaw = d.numero_motor || d.motor;
         const motorNorm = normalizeMotor(motorRaw);
         if (motorNorm) {
@@ -984,6 +998,113 @@ Use a função para retornar o CPF encontrado ou "ilegivel" se não conseguir le
         } else if (motorRaw) {
           d.numero_motor = null;
           d.motor = null;
+        }
+
+        // ============================================================
+        // Retentativa direcionada: extrair APENAS numero_motor com modelo mais forte
+        // ============================================================
+        const motorAusente = !d.numero_motor || d.numero_motor === 'ilegivel';
+        if (motorAusente && contentParts && contentParts[1]) {
+          console.log(`[OCR] numero_motor ausente em ${tipo} — disparando retry direcionado com ${OCR_RETRY_MODEL}`);
+          try {
+            const motorRetryPrompt = `TAREFA ÚNICA: Extraia APENAS o NÚMERO DO MOTOR deste documento de veículo brasileiro.
+
+Procure ATIVAMENTE por estes rótulos no documento:
+- "MOTOR Nº", "MOTOR N°", "Nº MOTOR", "N° MOTOR", "Nº DO MOTOR", "N° DO MOTOR"
+- "MOTOR:", "MOTOR /SÉRIE", "MOTOR/SERIE"
+- Em CRLV/CRV digitais o campo aparece logo abaixo ou ao lado de "CHASSI"
+
+O número do motor tem geralmente 7-17 caracteres alfanuméricos (letras MAIÚSCULAS + dígitos, podendo conter hífen).
+
+NÃO confunda com:
+- Renavam (apenas dígitos, 9-11 chars)
+- Chassi (17 chars exatos)
+- Cilindradas (3-4 dígitos)
+
+Use a função para retornar o número do motor encontrado, ou "ilegivel" se identificar o campo mas não conseguir lê-lo.`;
+
+            const motorRetryUserContent: any[] = [
+              { type: 'text', text: 'Extraia o número do motor deste documento.' },
+              contentParts[1],
+            ];
+            if (extractedPdfText) {
+              motorRetryUserContent[0] = {
+                type: 'text',
+                text: `Extraia o número do motor deste documento.\n\nTexto nativo do PDF (use como referência):\n${extractedPdfText.substring(0, 2000)}`,
+              };
+            }
+
+            const motorRetryResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: OCR_RETRY_MODEL,
+                messages: [
+                  { role: 'system', content: motorRetryPrompt },
+                  { role: 'user', content: motorRetryUserContent },
+                ],
+                max_tokens: 200,
+                temperature: 0,
+                tools: [{
+                  type: 'function',
+                  function: {
+                    name: 'report_numero_motor',
+                    description: 'Reportar o número do motor extraído do documento',
+                    parameters: {
+                      type: 'object',
+                      properties: {
+                        numero_motor: {
+                          type: 'string',
+                          description: 'Número do motor (alfanumérico, com hífen opcional) ou "ilegivel" se não conseguir ler',
+                        },
+                      },
+                      required: ['numero_motor'],
+                      additionalProperties: false,
+                    },
+                  },
+                }],
+                tool_choice: { type: 'function', function: { name: 'report_numero_motor' } },
+              }),
+            });
+
+            if (motorRetryResp.ok) {
+              const motorRetryData = await motorRetryResp.json();
+              const toolCall = motorRetryData.choices?.[0]?.message?.tool_calls?.[0];
+              if (toolCall?.function?.arguments) {
+                try {
+                  const args = JSON.parse(toolCall.function.arguments);
+                  const retryMotor = args.numero_motor;
+                  if (retryMotor && retryMotor !== 'ilegivel') {
+                    const norm = normalizeMotor(retryMotor);
+                    if (norm) {
+                      console.log(`[OCR] numero_motor recuperado via retry: "${retryMotor}" → "${norm}"`);
+                      d.numero_motor = norm;
+                      d.motor = norm;
+                    }
+                  } else if (retryMotor === 'ilegivel') {
+                    d.numero_motor = 'ilegivel';
+                    d.motor = 'ilegivel';
+                    console.log('[OCR] numero_motor confirmado como ilegível na retentativa');
+                  }
+                } catch (e) {
+                  console.warn('[OCR] Falha ao parsear tool call do retry de motor:', e);
+                }
+              }
+            } else {
+              console.warn('[OCR] Retry de numero_motor falhou:', motorRetryResp.status);
+            }
+          } catch (motorRetryErr) {
+            console.warn('[OCR] Erro no retry de numero_motor:', motorRetryErr);
+          }
+        }
+
+        // Validação leve: se ainda ausente após retry, marcar como revisar
+        if (tipo === 'crlv' && (!d.numero_motor || d.numero_motor === 'ilegivel')) {
+          result.motivo = (result.motivo || '') + ' Número do motor não foi extraído — preencha manualmente.';
+          if (result.sugestao === 'aprovar') result.sugestao = 'revisar';
         }
       }
 

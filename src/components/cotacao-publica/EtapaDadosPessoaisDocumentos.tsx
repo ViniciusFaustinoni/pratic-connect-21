@@ -292,6 +292,8 @@ export function EtapaDadosPessoaisDocumentos({
         if (dados.renavam) novosDados.veiculo_renavam = dados.renavam;
         if (dados.cor) novosDados.veiculo_cor = dados.cor;
         if (dados.combustivel) novosDados.veiculo_combustivel = dados.combustivel;
+        if (dados.numero_motor) novosDados.numero_motor = dados.numero_motor;
+        if (dados.motor) novosDados.veiculo_motor = dados.motor;
 
         if (dados.ano_fabricacao) {
           const anoFab = parseInt(dados.ano_fabricacao);
