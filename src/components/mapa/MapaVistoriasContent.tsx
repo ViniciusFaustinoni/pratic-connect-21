@@ -339,6 +339,7 @@ export function MapaVistoriasContent() {
     if (!vistorias) return [];
     return vistorias.filter((v) => {
       if (!v.data_agendada) return false;
+      if (apenasSemGps && (v.latitude && v.longitude)) return false;
       if (filtroBusca) {
         const termo = filtroBusca.toLowerCase();
         const placa = v.veiculo_placa?.toLowerCase() || "";
@@ -348,7 +349,11 @@ export function MapaVistoriasContent() {
       }
       return true;
     });
-  }, [vistorias, filtroBusca]);
+  }, [vistorias, filtroBusca, apenasSemGps]);
+
+  const totalSemGps = useMemo(() => {
+    return (vistorias || []).filter((v) => v.data_agendada && (!v.latitude || !v.longitude)).length;
+  }, [vistorias]);
 
   // Chronological index map for tooltip numbering
   const ordemCronologica = useMemo(() => {
