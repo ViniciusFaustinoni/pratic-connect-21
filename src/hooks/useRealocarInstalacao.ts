@@ -171,7 +171,7 @@ export function useRealocarInstalacao() {
           instalacao_id: params.instalacaoId,
           oficina_id: params.oficinaId,
           data_agendada: params.dataAgendada,
-          horario: params.periodo,
+          horario: periodoToTime(params.periodo),
           cliente_nome: (serv as any).associados?.nome || 'Cliente',
           cliente_telefone: (serv as any).associados?.telefone || null,
           veiculo_placa: veiculo?.placa || null,
