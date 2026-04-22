@@ -115,6 +115,21 @@ export interface PropostaPendente {
   veiculo_cor: string | null;
   veiculo_renavam: string | null;
   veiculo_chassi: string | null;
+  // Conferência (vindos de contratos / cotacoes)
+  veiculo_combustivel: string | null;
+  veiculo_categoria: string | null;
+  veiculo_tipo_uso: string | null;
+  veiculo_ano_fabricacao: number | null;
+  veiculo_alienado: boolean | null;
+  veiculo_blindado: boolean | null;
+  veiculo_financeira: string | null;
+  veiculo_procedencia: string | null;
+  veiculo_valor_fipe: number | null;
+  codigo_fipe: string | null;
+  cobertura_fipe: number | null;
+  valor_adesao: number | null;
+  uso_aplicativo: boolean | null;
+  cenario_adesao: string | null;
   dia_vencimento: number | null;
   associado_id: string | null;
   cotacao_id: string | null;
@@ -168,7 +183,19 @@ export function usePropostasPendentes() {
           veiculo_modelo,
           veiculo_marca,
           veiculo_ano,
+          veiculo_ano_fabricacao,
           veiculo_cor,
+          veiculo_combustivel,
+          veiculo_categoria,
+          veiculo_tipo_uso,
+          veiculo_alienado,
+          veiculo_financeira,
+          veiculo_procedencia,
+          veiculo_valor_fipe,
+          codigo_fipe,
+          cobertura_fipe,
+          valor_adesao,
+          uso_aplicativo,
           dia_vencimento,
           associado_id,
           cotacao_id,
@@ -245,16 +272,20 @@ export function usePropostasPendentes() {
           let planoNome: string | null = null;
           let instalacaoAgendada: InstalacaoAgendadaInfo | null = null;
           let tipoVistoriaCotacao: 'autovistoria' | 'agendada' | 'agendada_base' | null = null;
+          let veiculoBlindadoCot: boolean | null = null;
+          let cenarioAdesaoCot: string | null = null;
           
           if (contrato.cotacao_id) {
             const { data: cotacao } = await supabase
               .from('cotacoes')
-              .select('cliente_logradouro, cliente_numero, cliente_bairro, cliente_cidade, cliente_uf, plano_escolhido_id, vistoria_permite_encaixe, vistoria_data_agendada, vistoria_horario_agendado, tipo_vistoria')
+              .select('cliente_logradouro, cliente_numero, cliente_bairro, cliente_cidade, cliente_uf, plano_escolhido_id, vistoria_permite_encaixe, vistoria_data_agendada, vistoria_horario_agendado, tipo_vistoria, veiculo_blindado, cenario_adesao')
               .eq('id', contrato.cotacao_id)
               .maybeSingle();
             
             if (cotacao) {
               tipoVistoriaCotacao = (cotacao.tipo_vistoria as any) || null;
+              veiculoBlindadoCot = (cotacao as any).veiculo_blindado ?? null;
+              cenarioAdesaoCot = (cotacao as any).cenario_adesao ?? null;
               if (cotacao.cliente_logradouro) {
                 enderecoCompleto = `${cotacao.cliente_logradouro}, ${cotacao.cliente_numero || 'S/N'} - ${cotacao.cliente_bairro || ''}, ${cotacao.cliente_cidade || ''} - ${cotacao.cliente_uf || ''}`;
               }
@@ -604,6 +635,8 @@ export function usePropostasPendentes() {
             veiculo_cobertura_total: null, // Não disponível na lista resumida
             veiculo_renavam: null, // Não disponível na lista resumida
             veiculo_chassi: null, // Não disponível na lista resumida
+            veiculo_blindado: veiculoBlindadoCot,
+            cenario_adesao: cenarioAdesaoCot,
           } as PropostaPendente;
         })
       );
@@ -640,7 +673,19 @@ export function useProposta(contratoId: string | undefined) {
           veiculo_modelo,
           veiculo_marca,
           veiculo_ano,
+          veiculo_ano_fabricacao,
           veiculo_cor,
+          veiculo_combustivel,
+          veiculo_categoria,
+          veiculo_tipo_uso,
+          veiculo_alienado,
+          veiculo_financeira,
+          veiculo_procedencia,
+          veiculo_valor_fipe,
+          codigo_fipe,
+          cobertura_fipe,
+          valor_adesao,
+          uso_aplicativo,
           dia_vencimento,
           associado_id,
           cotacao_id,
@@ -729,6 +774,8 @@ export function useProposta(contratoId: string | undefined) {
       let planoNome: string | null = null;
       let instalacaoAgendada: InstalacaoAgendadaInfo | null = null;
       let tipoVistoriaCotacao: 'autovistoria' | 'agendada' | 'agendada_base' | null = null;
+      let veiculoBlindadoCot: boolean | null = null;
+      let cenarioAdesaoCot: string | null = null;
       
       if (contrato.cotacao_id) {
         const { data: cotacao } = await supabase
@@ -738,13 +785,15 @@ export function useProposta(contratoId: string | undefined) {
             plano_escolhido_id, vistoria_permite_encaixe, 
             vistoria_data_agendada, vistoria_horario_agendado,
             vistoria_completa_data_agendada, vistoria_completa_horario_agendado,
-            tipo_vistoria
+            tipo_vistoria, veiculo_blindado, cenario_adesao
           `)
           .eq('id', contrato.cotacao_id)
           .maybeSingle();
         
         if (cotacao) {
           tipoVistoriaCotacao = (cotacao.tipo_vistoria as any) || null;
+          veiculoBlindadoCot = (cotacao as any).veiculo_blindado ?? null;
+          cenarioAdesaoCot = (cotacao as any).cenario_adesao ?? null;
           if (cotacao.cliente_logradouro) {
             enderecoCompleto = `${cotacao.cliente_logradouro}, ${cotacao.cliente_numero || 'S/N'} - ${cotacao.cliente_bairro || ''}, ${cotacao.cliente_cidade || ''} - ${cotacao.cliente_uf || ''}`;
           }
@@ -1222,6 +1271,8 @@ export function useProposta(contratoId: string | undefined) {
         veiculo_cobertura_total: veiculoCoberturaTotal,
         veiculo_renavam: veiculoRenavam,
         veiculo_chassi: veiculoChassi,
+        veiculo_blindado: veiculoBlindadoCot,
+        cenario_adesao: cenarioAdesaoCot,
       };
       return result;
     },

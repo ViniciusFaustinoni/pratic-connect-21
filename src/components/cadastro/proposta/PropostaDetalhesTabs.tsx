@@ -147,12 +147,13 @@ export function PropostaDetalhesTabs({
               Dados do Cliente
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-4 pb-4">
+          <CardContent className="px-4 pb-4 space-y-3">
             <div className="grid gap-2 sm:grid-cols-2">
               <FichaField icon={User} label="Nome Completo" value={proposta.cliente_nome || associado?.nome} highlight iconColor="text-primary" />
               <FichaField icon={FileText} label="CPF" value={maskCPF(proposta.cliente_cpf || associado?.cpf)} iconColor="text-primary" />
               <FichaField icon={Phone} label="Telefone" value={proposta.cliente_telefone || associado?.telefone} iconColor="text-primary" />
-              <FichaField icon={Mail} label="Email" value={proposta.cliente_email || associado?.email} iconColor="text-primary" />
+              <FichaField icon={Phone} label="WhatsApp / Secundário" value={associado?.whatsapp || associado?.telefone_secundario} iconColor="text-primary" />
+              <FichaField icon={Mail} label="Email" value={proposta.cliente_email || associado?.email} iconColor="text-primary" className="sm:col-span-2" />
               <FichaField
                 icon={MapPin}
                 label="Endereço"
@@ -164,6 +165,20 @@ export function PropostaDetalhesTabs({
                 iconColor="text-primary"
                 className="sm:col-span-2"
               />
+              <FichaField icon={Calendar} label="Data de Nascimento" value={associado?.data_nascimento ? format(new Date(associado.data_nascimento + 'T00:00:00'), "dd/MM/yyyy", { locale: ptBR }) : null} iconColor="text-primary" />
+              <FichaField icon={User} label="Estado Civil" value={associado?.estado_civil} iconColor="text-primary" />
+              <FichaField icon={User} label="Profissão" value={associado?.profissao} iconColor="text-primary" />
+              <FichaField icon={FileText} label="RG" value={associado?.rg} iconColor="text-primary" />
+            </div>
+
+            {/* Bloco CNH */}
+            <div className="border-t border-border/50 pt-3">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-2">CNH</p>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <FichaField icon={FileText} label="Número CNH" value={associado?.cnh_numero} iconColor="text-primary" />
+                <FichaField icon={FileText} label="Categoria" value={associado?.cnh_categoria} iconColor="text-primary" />
+                <FichaField icon={Calendar} label="Validade" value={associado?.cnh_validade ? format(new Date(associado.cnh_validade + 'T00:00:00'), "dd/MM/yyyy", { locale: ptBR }) : null} iconColor="text-primary" />
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -182,9 +197,50 @@ export function PropostaDetalhesTabs({
             <div className="grid gap-2 sm:grid-cols-2">
               <FichaField icon={Car} label="Modelo/Marca" value={`${proposta.veiculo_modelo || '---'} ${proposta.veiculo_marca || ''}`} highlight iconColor="text-purple-500" />
               <FichaField icon={FileText} label="Placa" value={proposta.veiculo_placa} iconColor="text-purple-500" />
-              <FichaField icon={Calendar} label="Ano" value={proposta.veiculo_ano?.toString()} iconColor="text-purple-500" />
+              <FichaField icon={Calendar} label="Ano Modelo" value={proposta.veiculo_ano?.toString()} iconColor="text-purple-500" />
+              <FichaField icon={Calendar} label="Ano Fabricação" value={proposta.veiculo_ano_fabricacao?.toString()} iconColor="text-purple-500" />
               <FichaField icon={FileText} label="Cor" value={proposta.veiculo_cor} iconColor="text-purple-500" />
+              <FichaField icon={FileText} label="Combustível" value={proposta.veiculo_combustivel} iconColor="text-purple-500" />
+              <FichaField icon={FileText} label="Categoria" value={proposta.veiculo_categoria} iconColor="text-purple-500" />
+              <FichaField icon={FileText} label="Tipo de Uso" value={proposta.veiculo_tipo_uso} iconColor="text-purple-500" />
+              <FichaField icon={FileText} label="Procedência" value={proposta.veiculo_procedencia} iconColor="text-purple-500" />
             </div>
+
+            {/* Bloco FIPE / Cobertura */}
+            <div className="border-t border-border/50 pt-3">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-2">FIPE & Cobertura</p>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <FichaField icon={DollarSign} label="Valor FIPE" value={formatCurrency(proposta.veiculo_valor_fipe)} highlight iconColor="text-emerald-500" />
+                <FichaField icon={Hash} label="Código FIPE" value={proposta.codigo_fipe} iconColor="text-purple-500" />
+                <FichaField icon={DollarSign} label="Cobertura" value={formatCurrency(proposta.cobertura_fipe)} iconColor="text-emerald-500" />
+              </div>
+            </div>
+
+            {/* Status especiais */}
+            {(proposta.veiculo_alienado || proposta.veiculo_blindado || proposta.veiculo_financeira || proposta.veiculo_cobertura_total || proposta.uso_aplicativo) && (
+              <div className="border-t border-border/50 pt-3">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-2">Características especiais</p>
+                <div className="flex flex-wrap gap-2">
+                  {proposta.veiculo_alienado && (
+                    <Badge variant="outline" className="text-warning border-warning/40 bg-warning/10">Alienado</Badge>
+                  )}
+                  {proposta.veiculo_blindado && (
+                    <Badge variant="outline" className="text-info border-info/40 bg-info/10">Blindado</Badge>
+                  )}
+                  {proposta.uso_aplicativo && (
+                    <Badge variant="outline" className="text-info border-info/40 bg-info/10">Uso APP</Badge>
+                  )}
+                  {proposta.veiculo_cobertura_total && (
+                    <Badge variant="outline" className="text-emerald-500 border-emerald-500/40 bg-emerald-500/10">Cobertura Total</Badge>
+                  )}
+                  {proposta.veiculo_financeira && (
+                    <Badge variant="outline" className="text-purple-500 border-purple-500/40 bg-purple-500/10">
+                      Financeira: {proposta.veiculo_financeira}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            )}
             
             {(faltaRenavam || faltaChassi) && (
               <div className="rounded-xl border border-warning/50 bg-warning/10 p-3 flex items-start gap-2">
@@ -317,8 +373,11 @@ export function PropostaDetalhesTabs({
             <FichaField icon={FileText} label="Número do Contrato" value={proposta.numero} iconColor="text-emerald-500" />
             <FichaField icon={FileCheck} label="Plano" value={proposta.plano?.nome || proposta.plano_nome} highlight iconColor="text-emerald-500" />
             <FichaField icon={DollarSign} label="Valor Mensal" value={formatCurrency(proposta.valor_mensal)} highlight iconColor="text-emerald-500" />
+            <FichaField icon={DollarSign} label="Valor Adesão" value={formatCurrency(proposta.valor_adesao)} iconColor="text-emerald-500" />
+            <FichaField icon={Calendar} label="Dia de Vencimento" value={proposta.dia_vencimento ? `Todo dia ${proposta.dia_vencimento}` : null} iconColor="text-emerald-500" />
             <FichaField icon={Calendar} label="Data de Assinatura" value={proposta.data_assinatura ? format(new Date(proposta.data_assinatura), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : null} iconColor="text-emerald-500" />
             <FichaField icon={User} label="Vendedor" value={proposta.vendedor?.nome} iconColor="text-emerald-500" />
+            <FichaField icon={FileText} label="Cenário Adesão" value={proposta.cenario_adesao} iconColor="text-emerald-500" />
           </CardContent>
         </Card>
       </TabsContent>
