@@ -1,137 +1,127 @@
 
 
-## Sincronização Financeira da Base Antiga via API SGA Hinova
+## Troca de Titularidade — fluxo completo (cotação + dupla aprovação)
 
-### Resposta direta
+### Estado atual
 
-**Sim, é totalmente possível.** A API SGA v2 (`https://api.hinova.com.br/api/sga/v2/`) expõe exatamente os dois endpoints necessários:
+- Existe `TrocaTitularidadeDialog` antigo que apenas cria registro em `chat_solicitacoes_ia` e a função `efetivar-troca-titularidade` cria associado/contrato direto. **Não há cotação pública, dupla aprovação, nem termo de cancelamento Autentique.**
+- Vou substituir o fluxo legado mantendo o histórico antigo intocado.
 
-| Endpoint | O que retorna |
-|---|---|
-| `GET /buscar/situacao-financeira-veiculo/:codigo_ou_placa` | Status global do veículo: `ADIMPLENTE` / `INADIMPLENTE` |
-| `POST /listar/boleto-associado-veiculo` | Lista completa de boletos do veículo: pagos, em aberto, vencidos, a vencer — com valor, multa, mora, dias vencidos, data emissão/vencimento/pagamento, situação, nosso_número, linha digitável, taxas detalhadas |
-
-Outros endpoints suporte: `GET /buscar/boleto/:nosso_numero` (detalhe individual), `GET /listar/situacao-boleto/:situacao` (mapa de códigos de situação → ABERTO/BAIXADO/CANCELADO/etc).
-
-### Estado atual no sistema
-
-- `associados` com `codigo_hinova` preenchido: **9.506 / 9.537** (99,7%)
-- `veiculos` com `codigo_hinova` preenchido: **9 / 9.662** (0,1%) — gargalo
-- Tabela `cobrancas` já existe com todos os campos necessários (`nosso_numero`, `valor_final`, `multa`, `juros`, `data_vencimento`, `data_pagamento`, `status`, `linha_digitavel`, `boleto_url`, etc) — está **vazia (0 registros)**
-- Edge functions Hinova já existem: `sga-hinova-sync`, `sga-verificar-veiculo`, `cron-sga-retry`, `cron-sga-health-check` — autenticação, credenciais e rate limiting já resolvidos
-
-### Estratégia em 3 fases
+### Fluxo ponta a ponta
 
 ```text
-FASE 1 — Mapear codigo_hinova nos 9.653 veículos faltantes
-   │ Para cada veículo da base antiga sem codigo_hinova:
-   │   GET /veiculo/buscar/{placa}/placa  (já implementado em sga-verificar-veiculo)
-   │   → preenche veiculos.codigo_hinova
+[Atendente] abre Troca de Titularidade do associado A
+        │
+        ▼
+Cria solicitacao_troca_titularidade (status=cotacao_em_andamento)
++ cria cotação comum (tipo_entrada='troca_titularidade')
+        │
+        ▼
+[Atendente] preenche cotação → gera link público /cotacao/:token
+        │
+        ▼
+[Novo Titular] escolhe plano, envia docs até passo de assinatura
+       Sistema NÃO gera contrato. Mostra "Em análise — aguarde"
+       (status=aguardando_cadastro)
+        │
+        ▼
+[Sistema] dispara Autentique → Termo de Cancelamento ao A (email)
+        │
+        ▼
+[Associado A] assina termo (webhook marca assinado)
+        │
+        ▼
+[Analista Cadastro] /relacionamento/troca-titularidade
+   Modal: dados, docs, financeiro/adimplência do A, termo assinado
+   Botões Aprovar / Reprovar
+        │
+   ┌────┴────┐
+   ▼         ▼
+Reprovar   Aprovar (→ aguardando_monitoramento)
+   │         │
+   │         ▼
+   │   [Coord. Monitoramento] /monitoramento/aprovacoes
+   │   Botões: Aprovar | Solicitar Vistoria
+   │         │
+   │   ┌─────┴─────┐
+   │   ▼           ▼
+   │ Aprova    Cria serviço vistoria_entrada
+   │ direto    (aguardando_vistoria)
+   │   │           │
+   │   │     vistoria concluída
+   │   └───────────┘
+   │         ▼
+   │   liberada_para_assinatura
+   │   Tela pública atualiza (realtime) → assinatura → autovistoria → pagamento
    ▼
-FASE 2 — Backfill financeiro inicial (one-shot por veículo)
-   │ Para cada veículo com codigo_hinova:
-   │   1) GET /buscar/situacao-financeira-veiculo/{codigo}
-   │      → atualiza veiculos.situacao_financeira_sga ('ADIMPLENTE'/'INADIMPLENTE')
-   │   2) POST /listar/boleto-associado-veiculo
-   │      body: {codigo_associado, codigo_veiculo}
-   │      → upsert em cobrancas (chave única: nosso_numero)
-   ▼
-FASE 3 — Sincronização recorrente (cron diário + on-demand)
-   │ Cron diário 02:00: re-sync de todos os veículos base antiga
-   │ Botão "Atualizar financeiro" no detalhe do veículo (on-demand)
-   │ Webhook hipotético da Hinova (se disponível) — fallback no cron
+reprovada (cadastro ou monitoramento)
+   • Tela pública mostra reprovação
+   • WhatsApp Meta notifica A
+   • Solicitação vai para aba "Recusadas"
 ```
 
-### Mudanças no banco
+### Banco
 
-**Tabela `cobrancas`** — adicionar:
-- `origem` enum `'sistema' | 'sga_hinova'` (default `sistema`) para distinguir cobranças nativas vs importadas
-- `codigo_situacao_boleto_hinova` int — código bruto da Hinova (mapeamento via `listar/situacao-boleto`)
-- `tipo_boleto_hinova` text — ex: `FECHAMENTO`, `MENSALIDADE`, `TAXA`
-- `dados_brutos_sga` jsonb — payload completo do boleto Hinova (auditoria + futuros campos)
-- `sincronizado_sga_em` timestamptz
-- UNIQUE constraint em `(nosso_numero)` quando `nosso_numero IS NOT NULL` para idempotência do upsert
-- Índice em `(veiculo_id, status, data_vencimento)` para queries de inadimplência
+**Nova tabela `solicitacoes_troca_titularidade`**: associado_antigo_id, veiculo_id, cotacao_id, novo_titular_dados (jsonb), novo_associado_id, status (enum), termo_cancelamento_autentique_id, termo_cancelamento_assinado_em, termo_cancelamento_url, aprovado_cadastro_por/em, aprovado_monitoramento_por/em, servico_vistoria_id, motivo_reprovacao, reprovado_por/em, token_publico (unique), created_at/updated_at/criado_por.
 
-**Tabela `veiculos`** — adicionar:
-- `situacao_financeira_sga` text — `ADIMPLENTE` / `INADIMPLENTE` / `null`
-- `situacao_financeira_sga_em` timestamptz
-- `total_aberto_sga` numeric — soma de cobranças abertas (cache p/ listagem)
-- `total_vencido_sga` numeric
+Enum status: `cotacao_em_andamento | aguardando_cadastro | aguardando_monitoramento | aguardando_vistoria | liberada_para_assinatura | efetivada | reprovada_cadastro | reprovada_monitoramento | cancelada`.
 
-**Nova tabela `sga_sync_financeiro_jobs`** (controle do backfill):
-- `id`, `veiculo_id`, `tipo` (`mapear_codigo` | `backfill_inicial` | `resync`), `status` (`pendente` | `executando` | `concluido` | `erro`), `tentativas`, `ultimo_erro`, `boletos_importados`, `iniciado_em`, `concluido_em`
+RLS: associado antigo SELECT própria; cadastro (`canManageAssociados`) full; coord monitoramento full; anônimo SELECT via `token_publico`. Realtime habilitado.
+
+Trigger no `servicos`: ao concluir vistoria vinculada → atualiza solicitação para `liberada_para_assinatura`.
+
+### Frontend
+
+| Arquivo | Mudança |
+|---|---|
+| `TrocaTitularidadeDialog.tsx` (existente) | Reescrito: cria solicitação v2 + cotação base + redireciona pra edição da cotação |
+| `App.tsx` | + rotas `/relacionamento/troca-titularidade` e `/monitoramento/aprovacoes` |
+| `AppSidebar.tsx` | + 2 itens (Troca em Relacionamento, Aprovações em Monitoramento) |
+| `CotacaoContratacao.tsx` (público) | Detectar `tipo_entrada=troca_titularidade`; gatear assinatura por status |
+
+**Novos arquivos:**
+- `src/pages/relacionamento/TrocaTitularidade.tsx` — abas Pendentes/Aguardando Monit./Em Vistoria/Aprovadas/Recusadas
+- `src/pages/monitoramento/AprovacoesTroca.tsx` — Aprovar | Solicitar Vistoria
+- `src/components/troca-titularidade/ModalDetalhesTroca.tsx` — modal compartilhado
+- `src/components/troca-titularidade/RelatorioFinanceiroAntigo.tsx` — boletos + adimplência
+- `src/components/troca-titularidade/TimelineAprovacao.tsx`
+- `src/components/troca-titularidade/TelaAnaliseTrocaTitularidade.tsx` — tela pública aguardando
+- `src/hooks/useSolicitacaoTrocaPublica.ts` — realtime via publicClient
+- `src/hooks/useSolicitacoesTroca.ts` — hooks internos
 
 ### Edge Functions
 
-| Função | Responsabilidade |
-|---|---|
-| `sga-mapear-codigos-veiculos` (nova) | Worker em batch: lê veículos sem `codigo_hinova`, busca por placa, atualiza. Processa N por execução (rate-limit safe) |
-| `sga-sync-financeiro-veiculo` (nova) | Para um único veículo: chama os 2 endpoints, faz upsert em `cobrancas`, atualiza totais em `veiculos`. Reusável para on-demand e cron |
-| `sga-backfill-financeiro` (nova) | Orquestrador: enfileira todos os veículos elegíveis em `sga_sync_financeiro_jobs` e dispara workers paralelos com throttling (ex: 5 req/s) |
-| `cron-sga-sync-financeiro-diario` (nova, pg_cron 02:00) | Re-sincroniza todos os veículos da base antiga diariamente |
-| `sga-hinova-sync` (existente) | Inalterada — continua sincronizando cadastros para o SGA |
+- **Nova `criar-solicitacao-troca-titularidade`** — cria solicitação + cotação base
+- **Nova `enviar-termo-cancelamento-troca`** — Autentique email + PF_FACIAL para A
+- **Nova `aprovar-troca-cadastro`** / **`aprovar-troca-monitoramento`** / **`reprovar-troca-titularidade`** — validam papel, atualizam status, disparam WhatsApp Meta + email
+- **Alterar `autentique-webhook`** — capturar assinatura do termo de cancelamento da troca
+- **Alterar `efetivar-troca-titularidade`** — chamada após pagamento confirmado, cria associado novo do snapshot da cotação aprovada
 
-### Frontend (mínimo)
+### Templates Meta WhatsApp (a criar)
 
-1. **`/cadastro/base-antiga`** — adicionar:
-   - Botão "Sincronizar Financeiro (Backfill)" no header → dispara `sga-backfill-financeiro` e mostra progresso
-   - Coluna nova: "Situação SGA" (ADIMPLENTE/INADIMPLENTE/—) na aba Veículos
-   - No drawer de detalhe do veículo: aba **"Financeiro SGA"** com lista de boletos (status, vencimento, valor, multa/mora, link), filtros, e botão "Atualizar agora"
-2. **Tela de progresso do backfill** (modal ou rota `/cadastro/base-antiga/sync`): contadores live de `sga_sync_financeiro_jobs` (pendente/executando/concluído/erro), gráfico, lista de erros para retry manual
+- `troca_titularidade_solicitada`
+- `troca_titularidade_termo_pendente`
+- `troca_titularidade_aprovada`
+- `troca_titularidade_reprovada`
 
-### Mapeamento de campos (Hinova → cobrancas)
-
-| Hinova | cobrancas |
-|---|---|
-| `nosso_numero` | `nosso_numero` (chave única) |
-| `valor_boleto` | `valor` |
-| `valor_boleto_multa_mora` | `valor_final` |
-| `valor_multa` | `multa` |
-| `valor_mora` | `juros` |
-| `data_emissao` | `data_emissao` |
-| `data_vencimento` | `data_vencimento` |
-| `data_vencimento_original` | (novo: `data_vencimento_original`) |
-| `data_pagamento` | `data_pagamento` |
-| `linha_digitavel` | `linha_digitavel` |
-| `situacao_boleto` (texto) | `status` mapeado: `ABERTO`→`aguardando_pagamento`, `BAIXADO`→`pago`, `VENCIDO`→`vencido`, `CANCELADO`→`cancelado` |
-| `mes_referente` | `referencia_mes` + `referencia_ano` |
-| `tipo_boleto` | `tipo_boleto_hinova` |
-| objeto completo | `dados_brutos_sga` (jsonb) |
-| — | `origem = 'sga_hinova'` |
-
-### Ordem de execução
-
-1. Migração de schema (cobrancas + veiculos + jobs + índices)
-2. Edge function `sga-sync-financeiro-veiculo` (unidade reutilizável) + testes
-3. Edge function `sga-mapear-codigos-veiculos` (resolve gap de 9.653 veículos)
-4. Edge function `sga-backfill-financeiro` (orquestrador com fila)
-5. UI: botão de backfill + tela de progresso
-6. UI: aba "Financeiro SGA" no detalhe do veículo + botão "Atualizar agora"
-7. Cron diário + monitoramento
-
-### Custos / riscos
-
-- **Volume de chamadas inicial**: ~9.650 chamadas para mapear códigos + ~9.650 × 2 chamadas para backfill = **~30k requests**. Com throttling de 5 req/s → ~1h40min de processamento total. Executado em background, sem impacto no usuário.
-- **Rate limit Hinova**: usar a mesma estratégia já provada em `sga-hinova-sync` (retry exponencial, fila, `cron-sga-retry`).
-- **Veículos sem match por placa no SGA**: ficam marcados em `sga_sync_financeiro_jobs` como `erro` com motivo, exibidos na tela de progresso para revisão manual.
-- **Idempotência**: upsert por `nosso_numero` garante que rodar múltiplas vezes não duplica.
-
-### Fora de escopo
-
-- Geração de novos boletos via API Hinova (`POST /boleto/cadastrar`) — só leitura
-- Sincronização inversa (sistema → Hinova) de pagamentos feitos no app
-- Webhook receptor da Hinova (não consta na doc; usar polling diário)
-- Backfill de associados sem `codigo_hinova` (apenas 31 casos — manual)
+UTILITY com CTA URL para `https://app.praticcar.org/cotacao/{{1}}` ou `/relacionamento/troca-titularidade/{{1}}`.
 
 ### Critérios de aceitação
 
-1. Após backfill, todos os 9.662 veículos da base antiga têm `codigo_hinova` preenchido (ou marcados como erro com motivo)
-2. Tabela `cobrancas` populada com todos os boletos históricos retornados pela Hinova, sem duplicatas
-3. `veiculos.situacao_financeira_sga` reflete o status retornado pelo endpoint específico
-4. `veiculos.total_aberto_sga` / `total_vencido_sga` calculados corretamente
-5. Drawer do veículo mostra todos os boletos (pagos, em aberto, vencidos, a vencer) com link para 2ª via
-6. Cron diário roda às 02:00 atualizando os dados
-7. Botão "Atualizar agora" no detalhe do veículo refaz a sync individual em <5s
-8. Hook `useVerificarDebitosAssociado` passa a refletir também os débitos vindos do SGA
+1. Atendente inicia troca → cria cotação vinculada → gera link público
+2. Novo titular escolhe plano e envia docs; ao chegar na assinatura vê "Em análise"
+3. Antigo recebe email Autentique do termo de cancelamento
+4. Cadastro vê em `/relacionamento/troca-titularidade` com docs, financeiro, adimplência, termo
+5. Reprovar → tela pública mostra reprovação + WhatsApp ao antigo + aba Recusadas
+6. Aprovar cadastro → aparece em `/monitoramento/aprovacoes`
+7. Coord aprova → tela pública libera assinatura imediatamente (realtime)
+8. Coord pede vistoria → cria serviço; ao concluir libera assinatura
+9. Após assinatura+pagamento → cria associado novo + contrato (efetiva)
+10. Sidebar mostra os 2 novos itens
+
+### Fora de escopo
+
+- Reescrever a aba antiga `Titularidade` em `/cadastro/processos-operacionais` (mantida read-only de histórico)
+- Migrar solicitações antigas
+- Múltiplos veículos numa mesma troca (1:1)
 
