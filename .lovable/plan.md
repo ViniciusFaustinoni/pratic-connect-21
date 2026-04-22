@@ -1,100 +1,73 @@
 
 
-## Causa raiz: edge functions ignoram alocação "Base" e forçam almoço/bloqueio mesmo no técnico que bate ponto externamente
+## Exportação inteligente de Associados com filtro de data customizado
 
-### Onde já está correto (frontend)
+### O que já existe (não vou mexer)
+- Página `src/pages/cadastro/Associados.tsx` já tem dropdown "Exportar" com XLSX/CSV.
+- Hook `useAssociados` já aceita `data_adesao_inicio` e `data_adesao_fim` (server-side).
+- Painel de filtros `AssociadoFilters.tsx` tem período pré-definido (último mês, 3 meses, último ano) — só radio, sem datas customizadas.
+- Export atual usa `filteredAssociados` (apenas a página atual paginada — limitado a 20/50/100 linhas) e exporta um conjunto fixo de 10 colunas.
 
-`useJornadaTrabalho.ts` consulta `useAlocacaoDiaria()` e usa `isBase` para:
-- **NÃO** disparar `iniciarAlmocoMutation` automaticamente após 4h (linhas 405-418).
-- **NÃO** disparar `finalizarAlmocoMutation` automaticamente aos 60min (linhas 448-458).
-- `AlmocoBloqueioOverlay` retorna `null` quando `isBase` (linha 44).
-- `JornadaStatusBar` já mostra botão manual "Iniciar almoço" / "Finalizar almoço" para o Base.
+### O que está faltando (o pedido)
+1. Filtro de **data customizada** (intervalo "de/até") na barra principal e no painel de filtros, indo direto ao banco.
+2. **Exportação inteligente**: modal dedicado onde o usuário escolhe:
+   - Intervalo de datas (de/até) sobre `data_adesao`.
+   - Quais filtros aplicar (status, plano, cidade, UF) — herda os filtros ativos da tela, mas permite ajustar.
+   - Quais colunas incluir no arquivo.
+   - Formato: XLSX ou CSV.
+3. Export deve buscar **todos os registros** que casam com os filtros (não só a página atual).
 
-Ou seja, a UI respeita a regra. **A trava vem do servidor.**
+---
 
-### Onde está a trava (raiz)
+### Mudanças
 
-Duas edge functions decidem o status de almoço/atribuição **sem checar `alocacoes_diarias.tipo_alocacao`**:
+#### 1. `src/components/cadastro/AssociadoFilters.tsx` — adicionar datas customizadas
+- Substituir o `RadioGroup` "Período de Adesão" por:
+  - Manter atalhos rápidos (último mês, 3 meses, ano) como botões.
+  - Adicionar dois `Input type="date"` lado a lado ("De" / "Até"), com label "Data de adesão".
+- Estender o `onApply` para entregar `data_adesao_inicio?: string` e `data_adesao_fim?: string` (ISO `YYYY-MM-DD`).
+- Atalhos preenchem os dois inputs; usuário pode editar manualmente.
 
-1. **`supabase/functions/atribuir-proxima-tarefa/index.ts`** (linhas 249-333)
-   - Se `turno.status === 'em_almoco'` e < 60min → devolve `resultado: 'em_almoco'` e bloqueia atribuição.
-   - Se `minutosTrabalhados >= limiteAlmocoMinutos` (4h) → faz `UPDATE turnos_profissionais SET status='em_almoco', inicio_almoco=now()` **mesmo para técnico Base**.
-   
-2. **`supabase/functions/cron-atribuir-tarefas/index.ts`** (linhas 173-246)
-   - Mesma lógica no cron de 1 em 1 minuto: força `em_almoco` aos 240 min e pula atribuições enquanto status for `em_almoco`.
+#### 2. `src/pages/cadastro/Associados.tsx` — propagar datas para o servidor
+- Adicionar `data_adesao_inicio` e `data_adesao_fim` ao `sheetFilters` e passar dentro de `useAssociados({ filters })` (já tem suporte server-side).
+- Remover a lógica client-side de filtro de período em `filteredAssociados` (não é mais necessária — vem filtrado do banco).
+- Atualizar `clearFilters`, `activeFilterCount` e `hasFilters` para considerar as novas chaves.
 
-Resultado: o técnico Base é flipado para `em_almoco` pelo servidor, o cron para de mandar tarefa, e o cliente — mesmo escondendo o overlay — recebe `resultado: 'em_almoco'` ao tentar puxar a próxima. Daí a sensação de "trava no horário".
+#### 3. Novo componente `src/components/cadastro/ExportAssociadosDialog.tsx` — exportação inteligente
+- Dialog acionado pelo botão "Exportar" (substituindo o dropdown atual de 2 itens).
+- Seções:
+  - **Intervalo de datas** (de/até) — pré-preenchido com o filtro atual da tela; com atalhos: Hoje, Últimos 7 dias, Mês atual, Mês passado, Últimos 3 meses, Ano atual, Tudo.
+  - **Filtros aplicados** (resumo) — mostra status, plano, cidade vindos da tela, com switch "Usar filtros da tela" (default ON). Se OFF, exporta tudo dentro do intervalo.
+  - **Colunas a incluir** — checkboxes (todas marcadas por padrão): Nome, CPF, Telefone, Email, Veículo (placa+modelo), Plano, Status, Data Adesão, Cidade, UF, Data de nascimento, Endereço, Bairro, CEP. Botões "Marcar todos" / "Desmarcar".
+  - **Formato**: XLSX ou CSV (radio).
+- Ao confirmar:
+  - Faz uma query Supabase direta (igual ao hook, mas **sem paginação** — usa `.range(0, 9999)` em batches se passar de 1000 para evitar limite, ou faz `count` + loops). Padrão recomendado: loop em páginas de 1000 até atingir total.
+  - Monta `dataToExport` apenas com colunas selecionadas.
+  - Gera arquivo via `xlsx` com nome `associados_{YYYYMMDD}_a_{YYYYMMDD}.{ext}`.
+  - Toast de sucesso com quantidade exportada.
+  - Loader no botão durante a busca paginada.
 
-### Correção raiz (servidor)
+#### 4. Atualizar botão "Exportar" em `Associados.tsx`
+- Remover `DropdownMenu` atual.
+- Botão simples que abre `ExportAssociadosDialog`.
 
-**Carregar `tipo_alocacao` do dia em ambas as funções e curto-circuitar a lógica de almoço quando for `'base'`.**
+---
 
-#### 1. `supabase/functions/atribuir-proxima-tarefa/index.ts`
-
-Logo após carregar `turnoHoje` (linha 243), adicionar:
-
-```ts
-const { data: alocHoje } = await supabase
-  .from('alocacoes_diarias')
-  .select('tipo_alocacao')
-  .eq('profissional_id', profissionalId)
-  .eq('data', hoje)
-  .maybeSingle();
-const isBase = alocHoje?.tipo_alocacao === 'base';
-```
-
-E envolver os dois blocos atuais:
-- Bloco "Se está em almoço, verificar se já expirou" (249-284): se `isBase`, **pular o early-return de bloqueio**. O Base controla manualmente — se ele iniciou, ele finaliza pelo botão. O servidor não auto-finaliza nem bloqueia atribuição.
-- Bloco "Forçar almoço se atingiu limite" (286-333): se `isBase`, **não forçar**. Sair do bloco sem mexer em status.
-
-#### 2. `supabase/functions/cron-atribuir-tarefas/index.ts`
-
-Dentro do `for (const prof of profissionais)`, antes do bloco de almoço (linha 172), buscar `alocacoes_diarias` para o `prof.vistoriador_id` no dia (em batch antes do loop, para performance — uma única query `IN (ids)`):
-
-```ts
-const profIds = profissionais.map(p => p.vistoriador_id);
-const { data: alocacoes } = await supabase
-  .from('alocacoes_diarias')
-  .select('profissional_id, tipo_alocacao')
-  .eq('data', hoje)
-  .in('profissional_id', profIds);
-const baseSet = new Set(alocacoes?.filter(a => a.tipo_alocacao === 'base').map(a => a.profissional_id));
-```
-
-Dentro do loop:
-```ts
-const isBase = baseSet.has(prof.vistoriador_id);
-```
-
-E:
-- Bloco "Se está em almoço, verificar se já expirou" (180-204): se `isBase` e `em_almoco`, **`continue`** (não atribui durante almoço manual do Base, mas também não auto-finaliza — fica no controle do técnico).
-- Bloco "forçar almoço (4h)" (206-246): se `isBase`, **pular completamente**. Nunca forçar almoço para Base.
-
-### Comportamento esperado após a correção
-
-| Cenário (Base) | Antes | Depois |
-|---|---|---|
-| 4h trabalhadas, sem clicar em "Iniciar almoço" | Servidor força `em_almoco`, cron para de atribuir | Nada muda no servidor; tarefas continuam vindo normalmente |
-| Técnico clica em "Iniciar almoço" no app | UI mostra botão, mas overlay não trava (já ok) | Igual — e cron para de atribuir enquanto `em_almoco` (correto, ele está em almoço) |
-| Técnico clica em "Finalizar almoço" | Mutation já existe e funciona | Igual; servidor não auto-finaliza nem fica esperando "60 min" |
-| Técnico em rota (não-Base) | Servidor força almoço aos 4h, auto-finaliza aos 60min | Sem mudança — comportamento atual preservado |
-
-### Critérios de aceitação
-
-1. Técnico marcado como **Base** no dia atravessa 4h+ sem que o servidor o coloque em `em_almoco` automaticamente.
-2. `atribuir-proxima-tarefa` continua devolvendo tarefas para Base após 4h.
-3. `cron-atribuir-tarefas` continua atribuindo para Base após 4h (logs sem "forçando ALMOÇO" para profIds Base).
-4. Botões manuais "Iniciar almoço" / "Finalizar almoço" do Base continuam funcionando (não foram tocados — já implementados em `JornadaStatusBar`).
-5. Técnicos em rota (não-Base) continuam tendo a regra automática de 4h + auto-finalização de 60min, sem regressão.
+### Detalhes técnicos
+- Filtro de data usa `data_adesao` (date) via `gte`/`lte` (já implementado no hook).
+- Para evitar o limite default de 1000 linhas do PostgREST na exportação, o dialog faz paginação interna em loop até atingir `count`.
+- Datas vão para o banco como `YYYY-MM-DD` (sem timezone), batendo com a coluna `date`.
+- Atalhos calculam datas em horário local do navegador (BR).
+- O dialog reaproveita `usePlanos`/`useAssociadosCidades` já no escopo da página via props.
 
 ### Arquivos envolvidos
-
-- `supabase/functions/atribuir-proxima-tarefa/index.ts` (gating por `isBase`)
-- `supabase/functions/cron-atribuir-tarefas/index.ts` (gating por `isBase` em batch)
+- `src/components/cadastro/AssociadoFilters.tsx` (datas customizadas + atalhos)
+- `src/pages/cadastro/Associados.tsx` (propagar datas server-side, trocar dropdown por dialog)
+- `src/components/cadastro/ExportAssociadosDialog.tsx` (novo — exportação inteligente)
 
 ### Fora de escopo
-
-- Mudar UI da `JornadaStatusBar` (já tem os botões manuais).
-- Mudar `useJornadaTrabalho.ts` (já gateia corretamente).
-- Mexer em RLS, schema ou novas tabelas — apenas leitura adicional de `alocacoes_diarias` que já existe.
+- Mexer em `useAssociados` (já suporta os filtros de data).
+- Salvar presets de exportação.
+- Exportar dados além da tabela `associados` (não inclui histórico financeiro, sinistros etc.).
+- Job assíncrono para >50k linhas (loop síncrono cobre o volume atual de 9.5k).
 
