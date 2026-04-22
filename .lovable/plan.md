@@ -1,59 +1,85 @@
 
 
-## Diferenciar UX do técnico Base vs Rota (mesmo perfil de acesso)
+## Corrigir falhas de envio de vídeo 360° (Auto-vistoria pública e Instalador)
 
-### Situação atual
+### Diagnóstico (com evidências do banco)
 
-Técnicos Base e Rota usam o **mesmo perfil de acesso** (`tipo: 'profissional'`/instalador) e o mesmo layout `/instalador/*`. A diferenciação acontece via `useAlocacaoDiaria().isBase`. Hoje a UI da Base já tem alguns ajustes (sem aba Mapa, fila da base no Home, almoço manual), mas **continua mostrando**:
+Verifiquei os buckets de storage e os uploads recentes:
 
-1. **Monitor de improdutividade** roda para todos (`useMonitorImprodutividade` no `InstaladorHome`) — gera notificação ao coordenador se não houver serviço concluído em 2h. Inválido para técnico Base, que executa serviços sob demanda na fila e pode passar horas sem nada chegar.
-2. **Card "Minha Jornada" no perfil** mostra saldo/crédito/débito e dias trabalhados — métricas de banco de horas que não fazem sentido para quem bate ponto físico na empresa.
-3. **Barra de jornada (`JornadaStatusBar`)** mostra "X trabalhadas / Y restantes", barra de progresso, almoço, atraso de almoço — tudo controle de ponto eletrônico que o técnico Base não precisa ver.
-4. **Modal de resumo do dia** (`ModalResumoDia`) abre ao encerrar turno mostrando saldo/débito/crédito.
-5. **`useGarantirTurno`** continua criando registros em `turnos_profissionais` para o técnico Base (necessário para vincular serviços, mas sem expor o controle).
+| Bucket | Usado por | Limite por arquivo |
+|---|---|---|
+| `cotacoes-vistoria` | Auto-vistoria pública (cotação) | **52 MB (HARD LIMIT)** |
+| `vistoria-videos` | Vistoria do instalador / vistoria completa | sem limite |
+| `vistorias` | Retirada do instalador | sem limite |
+| `documentos` | Auto-vistoria de contrato (associado logado) | sem limite |
+
+Uploads bem-sucedidos recentes (últimas 24h) já estão no limite: **44 MB, 46 MB, 47 MB, 38 MB**. Vários iPhones gravando 1-2 minutos em alta qualidade ultrapassam 52 MB e o Storage rejeita com erro genérico — daí o toast `"Erro ao enviar vídeo. Tente novamente."`.
+
+Outros problemas identificados nos handlers atuais:
+1. **Mensagem de erro inútil** — todos os 4 handlers de vídeo (`AutovistoriaCotacao`, `Autovistoria`, `CotacaoPublicaCompleta`, `ExecutarRetirada`) capturam o erro e mostram `"Erro ao enviar vídeo"` sem distinguir a causa (limite de tamanho, rede caiu, sessão expirou, mime rejeitado).
+2. **Sem retry automático** — uma falha de rede temporária derruba o upload inteiro e o associado tem que regravar o vídeo.
+3. **Sem aviso preventivo de tamanho** — só existe um `toast.warning` para >100 MB no `VideoCapture`, mas o limite real do bucket público é metade disso.
+4. **Sem indicação de progresso real** — o usuário vê só `Enviando vídeo...` indefinidamente; em conexões lentas (3G/4G fraco) parece travado.
+5. **Bucket `cotacoes-vistoria` rejeita arquivos `.mov` do iPhone** se o mimetype real divergir da lista permitida (`video/quicktime` está na lista, mas alguns Safaris reportam mimetype vazio).
 
 ### O que vai mudar
 
-**Princípio**: Técnico Base **continua com o mesmo perfil de acesso** e o mesmo `InstaladorLayout`. A diferença é puramente de UX — esconder controles de ponto/jornada/improdutividade quando `isBase === true`.
+**1. Subir o limite do bucket `cotacoes-vistoria` para 200 MB**
 
-**1. `useMonitorImprodutividade` — desligar para Base**
-Adicionar `useAlocacaoDiaria` no início do hook. Se `isBase === true`, retornar imediatamente sem registrar interval nem disparar verificação. Técnico de base não pode ser flagged como improdutivo (depende da fila, não da rota).
+Migration alterando `storage.buckets.file_size_limit` de `52428800` para `209715200` (200 MB). O bucket `vistoria-videos` continua sem limite — manter assim. Uma vistoria 360° de 2 minutos gravada em iPhone moderno cabe folgadamente em 150 MB.
 
-**2. `InstaladorHome.tsx` — esconder JornadaStatusBar e modal de resumo para Base**
-- A barra de jornada (`JornadaStatusBar`) só renderiza se `!isVistoriadorBase`.
-- O `ModalResumoDia` só abre se `!isVistoriadorBase` (passar a flag para `useJornadaTrabalho` ou condicionar o `setMostrarResumoDia` ao tipo).
-- Manter `useGarantirTurno` rodando (precisamos do registro de turno para vincular serviços executados), mas silenciosamente.
+**2. Compressão/transcodificação opcional no cliente para vídeos grandes**
 
-**3. `InstaladorPerfil.tsx` — substituir "Minha Jornada" por bloco simples para Base**
-Quando `isBase`:
-- Esconder o card "Minha Jornada" inteiro (saldo, dias trabalhados, total mês, débito bloqueado, diárias de viagem).
-- Trocar por um card simples "Técnico Base" com texto: "Você atua na base — controle de ponto é feito presencialmente. Esta tela mostra apenas suas tarefas e configurações."
-- Manter os menus (Configurações, Notificações, Ajuda, Privacidade, Sair) e o card de identificação no topo.
-- Aba "Histórico" pode ser escondida para Base (não tem banco de horas a consultar) ou substituída por histórico simples de serviços executados.
+No `VideoCapture.tsx`, ao receber arquivo via galeria (`handleFileUpload`):
+- Se `file.size > 80 MB`, mostrar toast informativo: `"Vídeo grande detectado — preparando para envio…"` e tentar reduzir bitrate via `MediaRecorder` re-encode em `video/webm;codecs=vp9` a 1 Mbps (chunked, 5s por chunk) **se** o navegador suportar.
+- Se a transcodificação falhar ou for muito lenta (>15s), enviar o arquivo original mesmo assim — o limite de 200 MB já cobre a maioria dos casos.
+- Para gravação direta com `MediaRecorder`, adicionar `videoBitsPerSecond: 1_500_000` no construtor (linha 145) para limitar gravações longas a ~12 MB/min.
 
-**4. `useJornadaTrabalho.ts` — não exibir resumo do dia para Base**
-No bloco `--- Modal de resumo do dia ---` (linha ~496), adicionar guard `if (isBase) return;` no `useEffect` que dispara `setMostrarResumoDia(true)`. O hook `isBase` já está disponível no escopo (linha 399).
+**3. Retry com backoff e mensagens específicas**
 
-**5. `useGarantirTurno` — sem alteração**
-Continua criando o turno (necessário para FK em serviços executados), apenas sem tela de almoço/jornada na UI.
+Criar um helper `uploadVideoWithRetry(supabaseClient, bucket, path, file)` em `src/lib/videoUpload.ts` que:
+- Tenta upload até 3 vezes com backoff exponencial (1s, 3s, 8s).
+- Identifica erros específicos pelo `error.message`/`statusCode` do Supabase Storage:
+  - `Payload too large` / `413` → `"Vídeo muito grande. Grave um vídeo mais curto (até 1 minuto)."`
+  - `JWT expired` / `401` → `"Sua sessão expirou. Recarregue a página e tente novamente."`
+  - `Network request failed` / `Failed to fetch` → tentar de novo silenciosamente; se esgotar, `"Conexão instável. Verifique sua internet e tente novamente."`
+  - `mime type ... not allowed` → `"Formato de vídeo não suportado. Grave novamente usando o botão da câmera."`
+- Loga cada tentativa no console com `[videoUpload]` para facilitar debug.
+
+Adotar o helper nos 4 pontos: `useUploadFotoCotacaoVistoria` (linha 65), `useContratoLink.useUploadFotoAutovistoria` (linha 439), `useVistoriaCompleta.useUploadVideo360` (linha 358), `ExecutarRetirada.handleUploadVideo` (linha 367).
+
+**4. Indicador de progresso real**
+
+`@supabase/storage-js` não expõe `onUploadProgress` nativo, mas dá pra estimar via `XMLHttpRequest` direto contra o endpoint `/storage/v1/object/<bucket>/<path>` com `Authorization` header. Implementar isso no helper:
+- Atualizar uma callback `onProgress(percent: number)` durante o upload.
+- No `VideoCapture.tsx`, exibir barra de progresso dentro do bloco `uploading` (linha 308-312) em vez de só o spinner: `Enviando vídeo... 47%`.
+- Cada handler passa a callback que atualiza um state local `uploadProgress`.
+
+**5. Aviso preventivo no fim da gravação**
+
+No `MediaRecorder.onstop` do `VideoCapture` (linha 154), depois de criar o blob, se `blob.size > 80 * 1024 * 1024`, mostrar toast: `"Vídeo gerado com X MB — pode demorar para enviar em conexão lenta."` (informativo, não bloqueia).
 
 ### O que NÃO muda
 
-- Roles e permissões: técnico Base e Rota seguem com o mesmo `role` e mesmo `tipo`. Tudo via `isBase` derivado de `alocacoes_diarias`.
-- `InstaladorLayout` (header, bottom nav, guards) — já trata Base corretamente (esconde aba Mapa).
-- Fila da base no Home (`FilaBaseSection`) e execução de vistorias seguem iguais.
-- Auto-finalização de almoço/turno não dispara para Base (já está com `!isBase` guard hoje no hook).
-- Banco de dados: nenhuma migração. O registro em `turnos_profissionais` continua sendo criado para fins de auditoria interna; só não é exposto na UI.
-
-### Arquivos editados
-
-- `src/hooks/useMonitorImprodutividade.ts` — bypass total quando `isBase`.
-- `src/pages/instalador/InstaladorHome.tsx` — esconder `JornadaStatusBar` e `ModalResumoDia` para Base.
-- `src/pages/instalador/InstaladorPerfil.tsx` — esconder card "Minha Jornada" e aba "Histórico" para Base; substituir por bloco informativo simples.
-- `src/hooks/useJornadaTrabalho.ts` — não disparar `mostrarResumoDia` para Base.
+- Fluxo geral da auto-vistoria, ordem dos passos e UX de gravação seguem iguais.
+- Buckets continuam como estão (apenas o limite do `cotacoes-vistoria` muda).
+- Validação de chassi/odômetro via OCR não é afetada.
+- Política de RLS dos buckets continua intacta.
 
 ### Riscos
 
-- Se um técnico mudar de Base para Rota no meio do dia (improvável, mas possível), a UI atualiza junto com `useAlocacaoDiaria` (cache de 60s). Sem efeitos colaterais em dados.
-- Histórico de jornada continua sendo gravado no banco para Base — útil se o gestor quiser auditar tempo presencial depois. Apenas não fica visível para o técnico.
+- Subir limite para 200 MB aumenta custo de armazenamento marginalmente. Mitigado pelo bitrate cap no MediaRecorder (gravações novas ficam em ~12 MB/min).
+- Re-encode no cliente consome CPU em celulares antigos. Mitigado pelo timeout de 15s — se demorar, enviamos o original.
+- O `XMLHttpRequest` direto contra `/storage/v1/object` exige replicar o header de auth do client. Já temos isso no `supabase.auth.getSession()` para o cliente autenticado; para o público (`publicSupabase`), usamos a `anon key` direto.
+
+### Arquivos editados
+
+- **Migration nova**: `ALTER` no `storage.buckets` para subir o limite de `cotacoes-vistoria` para 200 MB.
+- `src/lib/videoUpload.ts` (novo) — helper com retry, progress e mensagens de erro específicas.
+- `src/components/instalador/VideoCapture.tsx` — `videoBitsPerSecond`, aviso de tamanho pós-gravação, barra de progresso.
+- `src/hooks/useCotacaoVistoria.ts` — usar helper no upload da auto-vistoria pública.
+- `src/hooks/useContratoLink.ts` — usar helper no upload da auto-vistoria do associado logado.
+- `src/hooks/useVistoriaCompleta.ts` — usar helper em `useUploadVideo360`.
+- `src/pages/instalador/ExecutarRetirada.tsx` — usar helper em `handleUploadVideo`.
+- `src/pages/public/CotacaoPublicaCompleta.tsx` e `src/components/associado/Autovistoria.tsx` — passar callback `onProgress` para o `VideoCapture`.
 
