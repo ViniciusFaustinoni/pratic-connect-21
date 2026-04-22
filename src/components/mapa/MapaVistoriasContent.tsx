@@ -828,8 +828,46 @@ export function MapaVistoriasContent() {
                         <Pencil className="h-4 w-4" />
                       </Button>
                     )}
-                  </div>
-                </div>
+                    {podeReagendar && !isRealizada && !!v.servico_id_unificado && (
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 text-amber-600 border-amber-300 hover:bg-amber-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setReagendarState({
+                            servicoId: v.servico_id_unificado!,
+                            placa: formatPlacaExibicao(v.veiculo_placa),
+                            associadoNome: v.associado_nome,
+                            dataAtual: v.data_agendada,
+                            horaAtual: v.horario_agendado,
+                          });
+                        }}
+                        title="Reagendar data/horário"
+                        aria-label="Reagendar"
+                      >
+                        <CalendarClock className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {v.tipo_servico === 'instalacao' && ['agendada', 'nao_compareceu', 'reagendada', 'cancelada'].includes(v.status) && (
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 text-primary border-primary/40 hover:bg-primary/10"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setRealocarState({
+                            instalacaoId: v.id,
+                            placa: formatPlacaExibicao(v.veiculo_placa),
+                            associadoNome: v.associado_nome,
+                          });
+                        }}
+                        title="Realocar para outra rota ou base"
+                        aria-label="Realocar"
+                      >
+                        <MapPinned className="h-4 w-4" />
+                      </Button>
+                    )}
               </div>
             );
           })}
