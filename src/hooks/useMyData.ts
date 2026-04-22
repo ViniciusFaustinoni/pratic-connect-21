@@ -616,7 +616,58 @@ function parseCompetencia(competencia: string | null): { mes: number; ano: numbe
   return { mes: 0, ano: 0 };
 }
 
-// Buscar boletos do banco local (fallback)
+// Mapear status de cobrança SGA (origem='sga_hinova') para status do app
+function mapSgaStatus(status: string | null): Boleto['status'] {
+  const map: Record<string, Boleto['status']> = {
+    'pago': 'pago',
+    'aguardando_pagamento': 'pendente',
+    'vencido': 'vencido',
+    'cancelado': 'cancelado',
+  };
+  return map[status || ''] || 'pendente';
+}
+
+// Buscar boletos SGA (Hinova) do associado
+async function buscarBoletosSGA(associadoId: string): Promise<Boleto[]> {
+  const { data, error } = await supabase
+    .from('cobrancas')
+    .select('*')
+    .eq('associado_id', associadoId)
+    .eq('origem', 'sga_hinova')
+    .order('data_vencimento', { ascending: false });
+
+  if (error) {
+    console.warn('[useMyBoletos] Erro ao buscar SGA:', error.message);
+    return [];
+  }
+
+  return (data || []).map((c: any) => {
+    const mes = c.referencia_mes || 0;
+    const ano = c.referencia_ano || 0;
+    return {
+      id: c.id,
+      competencia: mes && ano ? `${String(mes).padStart(2, '0')}/${ano}` : '',
+      competenciaMes: mes,
+      competenciaAno: ano,
+      dataEmissao: c.data_emissao ? formatDateBR(c.data_emissao) : undefined,
+      dataVencimento: formatDateBR(c.data_vencimento),
+      dataPagamento: c.data_pagamento ? formatDateBR(c.data_pagamento) : undefined,
+      valorOriginal: Number(c.valor) || 0,
+      valorFinal: Number(c.valor_final) || Number(c.valor) || 0,
+      valorPago: c.valor_pago ? Number(c.valor_pago) : undefined,
+      valorJuros: c.juros ? Number(c.juros) : undefined,
+      valorMulta: c.multa ? Number(c.multa) : undefined,
+      status: mapSgaStatus(c.status),
+      linhaDigitavel: c.linha_digitavel || undefined,
+      codigoBarras: c.codigo_barras || undefined,
+      urlBoleto: c.boleto_url || undefined,
+      formaPagamento: c.forma_pagamento || undefined,
+      nossoNumero: c.nosso_numero || undefined,
+    };
+  });
+}
+
+// Buscar boletos do banco local (fallback Asaas)
 async function buscarBoletosLocal(associadoId: string): Promise<Boleto[]> {
   const { data, error } = await supabase
     .from('asaas_cobrancas')
