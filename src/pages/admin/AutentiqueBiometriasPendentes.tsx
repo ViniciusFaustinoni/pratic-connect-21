@@ -24,7 +24,7 @@ type StatusFilter = 'todos' | 'biometric_review' | 'biometric_rejected';
 function StatusBadge({ status }: { status: string | null }) {
   if (status === 'biometric_review') {
     return (
-      <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30">
+      <Badge variant="outline" className="border-warning text-warning bg-warning/10">
         <ShieldQuestion className="mr-1 h-3 w-3" />
         Em revisão
       </Badge>
@@ -150,12 +150,12 @@ export default function AutentiqueBiometriasPendentes() {
             <div className="text-3xl font-bold">{data?.total ?? 0}</div>
           </CardContent>
         </Card>
-        <Card className="border-amber-500/30">
+        <Card className="border-warning/30">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-amber-700 dark:text-amber-300">Em revisão</CardTitle>
+            <CardTitle className="text-sm font-medium text-warning">Em revisão</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-amber-700 dark:text-amber-300">{data?.totalReview ?? 0}</div>
+            <div className="text-3xl font-bold text-warning">{data?.totalReview ?? 0}</div>
             <p className="mt-1 text-xs text-muted-foreground">Aguardando análise manual da Autentique</p>
           </CardContent>
         </Card>
