@@ -744,6 +744,11 @@ export function MapaVistoriasContent() {
                         <CheckCircle2 className="h-3 w-3" />Realizada
                       </p>
                     )}
+                    {podeAtribuirPorClique && (
+                      <p className="text-xs mt-1 flex items-center gap-1 text-blue-700 font-medium">
+                        👉 Atribuir por clique no ícone azul →
+                      </p>
+                    )}
                     {!v.latitude && (
                       <div className="mt-2 flex flex-col gap-1.5">
                         <button
