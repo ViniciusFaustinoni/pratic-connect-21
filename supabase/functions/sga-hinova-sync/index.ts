@@ -388,7 +388,7 @@ serve(async (req) => {
     }
 
     const requestBody = await req.json();
-    const { veiculo_id, associado_id, action } = requestBody as SyncRequest & { action?: string };
+    const { veiculo_id, associado_id, action, bypass_guard_base_antiga } = requestBody as SyncRequest & { action?: string; bypass_guard_base_antiga?: boolean };
 
     // ========================================
     // MODO TESTE DE CONEXÃO
@@ -588,11 +588,21 @@ serve(async (req) => {
     // exclusivo do fluxo de envio de NOVOS associados (origem_cadastro='interno').
     // ========================================
     if (associado.origem_cadastro === 'api_externa') {
-      const msg = `Associado pertence à base antiga (origem_cadastro=api_externa, codigo_hinova=${associado.codigo_hinova ?? 'null'}). Não pode ser reenviado ao SGA — risco de duplicidade.`;
-      console.warn('[SGA Sync] Bloqueado:', msg);
-      await logSync(_vid, _aid, 'guard_base_antiga', 'error', null, null, msg);
-      await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
-      return;
+      // Bypass permitido apenas se o associado JÁ tem codigo_hinova (reusa, não duplica).
+      // Usado para casos pontuais onde um veículo do associado da base antiga
+      // não foi cadastrado no SGA e precisa ser incluído manualmente.
+      if (bypass_guard_base_antiga && associado.codigo_hinova) {
+        console.warn(`[SGA Sync] ⚠️ Bypass guard_base_antiga ATIVO para veiculo=${_vid} (associado.codigo_hinova=${associado.codigo_hinova} será reutilizado)`);
+        await logSync(_vid, _aid, 'guard_base_antiga_bypass', 'info',
+          { codigo_hinova_reutilizado: associado.codigo_hinova }, null,
+          'Bypass autorizado: associado já tem codigo_hinova, será reusado para cadastrar veículo');
+      } else {
+        const msg = `Associado pertence à base antiga (origem_cadastro=api_externa, codigo_hinova=${associado.codigo_hinova ?? 'null'}). Não pode ser reenviado ao SGA — risco de duplicidade.`;
+        console.warn('[SGA Sync] Bloqueado:', msg);
+        await logSync(_vid, _aid, 'guard_base_antiga', 'error', null, null, msg);
+        await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
+        return;
+      }
     }
 
     // ========================================
