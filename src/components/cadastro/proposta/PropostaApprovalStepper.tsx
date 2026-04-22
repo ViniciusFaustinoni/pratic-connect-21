@@ -29,8 +29,15 @@ interface PropostaApprovalStepperProps {
   isAprovando: boolean;
   isAutovistoria: boolean;
   podeAprovar: boolean;
-  /** Quando true, oculta a etapa de Fotos & Vistoria (vistoria na base sem fotos do associado). */
-  isVistoriaBaseSemFotos?: boolean;
+  /**
+   * Quando true, o Cadastro avalia fotos & vistoria (etapa 2 visível).
+   * Regra: plano tem cobertura de Roubo/Furto E existem fotos/vídeo a revisar.
+   * Quando false, oculta a etapa "Fotos & Vistoria" — o stepper fica com
+   * Documentos + Aprovação Final apenas.
+   */
+  cadastroAvaliaFotos?: boolean;
+  /** True quando o plano contratado tem cobertura de Roubo e/ou Furto. */
+  planoTemRouboFurto?: boolean;
 }
 
 interface StepConfig {
@@ -74,17 +81,20 @@ export function PropostaApprovalStepper({
   isAprovando,
   isAutovistoria,
   podeAprovar,
-  isVistoriaBaseSemFotos = false,
+  cadastroAvaliaFotos = false,
+  planoTemRouboFurto = true,
 }: PropostaApprovalStepperProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [fotosRevisadas, setFotosRevisadas] = useState(false);
   const cancelarDocsMutation = useCancelarDocumentosSolicitados();
 
-  // Quando vistoria na base sem fotos, omite a etapa "Fotos & Vistoria" e o último passo é o id 2.
-  const steps: StepConfig[] = isVistoriaBaseSemFotos
+  // Quando o cadastro NÃO avalia fotos (plano sem R&F ou vistoria agendada
+  // ainda não realizada), o stepper fica com 2 etapas: Documentos + Aprovação.
+  const ocultarEtapaFotos = !cadastroAvaliaFotos;
+  const steps: StepConfig[] = ocultarEtapaFotos
     ? [STEP_DOCS, STEP_FINAL_2]
     : [STEP_DOCS, STEP_FOTOS, STEP_FINAL_3];
-  const finalStepId = isVistoriaBaseSemFotos ? 2 : 3;
+  const finalStepId = ocultarEtapaFotos ? 2 : 3;
 
   // Step 1 validation: all documents approved (or no documents)
   const totalDocs = documentos.length;
@@ -94,13 +104,13 @@ export function PropostaApprovalStepper({
   const step1Complete = totalDocs === 0 || (docsPendentes === 0 && docsReprovados === 0);
 
   // Step 2 validation: user confirmed photos reviewed
-  // Quando isVistoriaBaseSemFotos, força true (não bloqueia aprovação).
+  // Quando ocultarEtapaFotos, força true (não bloqueia aprovação).
   const temFotos = (proposta.vistoria?.fotos?.length || 0) > 0 || !!proposta.vistoria?.video_360_url;
-  const step2Complete = isVistoriaBaseSemFotos ? true : (fotosRevisadas || !temFotos);
+  const step2Complete = ocultarEtapaFotos ? true : (fotosRevisadas || !temFotos);
 
   const canAdvanceFromStep = (step: number): boolean => {
     if (step === 1) return step1Complete;
-    if (step === 2 && !isVistoriaBaseSemFotos) return step2Complete;
+    if (step === 2 && !ocultarEtapaFotos) return step2Complete;
     return true;
   };
 
@@ -234,8 +244,8 @@ export function PropostaApprovalStepper({
           </div>
         )}
 
-        {/* STEP 2: Fotos & Vistoria (oculto quando isVistoriaBaseSemFotos) */}
-        {currentStep === 2 && !isVistoriaBaseSemFotos && (
+        {/* STEP 2: Fotos & Vistoria (oculto quando ocultarEtapaFotos) */}
+        {currentStep === 2 && !ocultarEtapaFotos && (
           <div className="space-y-4 animate-fade-in">
             <PropostaMidiaGrid
               video360Url={proposta.vistoria?.video_360_url}
@@ -287,7 +297,7 @@ export function PropostaApprovalStepper({
           </div>
         )}
 
-        {/* STEP FINAL: Aprovação Final (id 3 normal, id 2 quando isVistoriaBaseSemFotos) */}
+        {/* STEP FINAL: Aprovação Final (id 3 normal, id 2 quando ocultarEtapaFotos) */}
         {currentStep === finalStepId && (
           <div className="space-y-4 animate-fade-in">
             {/* Summary checklist */}
@@ -324,8 +334,25 @@ export function PropostaApprovalStepper({
                     )}
                   </div>
 
-                  {/* Photos check OU banner de vistoria agendada (base/cliente) sem fotos */}
-                  {isVistoriaBaseSemFotos ? (
+                  {/* Photos check OU banner contextual:
+                      - Plano SEM R&F → banner verde (análise documental basta)
+                      - Plano COM R&F + vistoria agendada sem fotos → banner azul (técnico fará)
+                      - Plano COM R&F + autovistoria → checklist normal de fotos */}
+                  {ocultarEtapaFotos && !planoTemRouboFurto ? (
+                    <div className="flex items-start gap-3 p-3 rounded-lg border bg-success/5 border-success/30">
+                      <ShieldCheck className="h-5 w-5 text-success shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-success">
+                          Plano sem cobertura de Roubo e Furto
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Este plano não inclui Roubo/Furto. A análise documental é
+                          suficiente para liberar a contratação — não é necessário
+                          revisar fotos do veículo.
+                        </p>
+                      </div>
+                    </div>
+                  ) : ocultarEtapaFotos ? (
                     <div className="flex items-start gap-3 p-3 rounded-lg border bg-info/5 border-info/30">
                       <MapPin className="h-5 w-5 text-info shrink-0 mt-0.5" />
                       <div className="flex-1">
@@ -399,7 +426,7 @@ export function PropostaApprovalStepper({
                   ) : (
                     <>
                       <ShieldCheck className="mr-2 h-5 w-5" />
-                      {isAutovistoria && !isVistoriaBaseSemFotos ? 'Liberar Cobertura Roubo e Furto' : 'Aprovar Proposta'}
+                      {isAutovistoria && !ocultarEtapaFotos && planoTemRouboFurto ? 'Liberar Cobertura Roubo e Furto' : 'Aprovar Proposta'}
                     </>
                   )}
                 </Button>
