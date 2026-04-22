@@ -387,7 +387,24 @@ export function DocumentosPendentesPublico({
                         </Badge>
                       )}
                     </div>
-                    
+
+                    {/* Badge de reconhecimento OCR (após envio) */}
+                    {isEnviado && state.ocrTipo && (
+                      <div className="mb-2">
+                        {state.ocrEquivalente ? (
+                          <Badge variant="outline" className="text-xs border-success/30 text-success">
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                            Reconhecido como {TIPO_DOCUMENTO_LABELS[state.ocrTipo] || state.ocrTipo} (substitui o solicitado)
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-xs border-success/30 text-success">
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                            Reconhecido como {TIPO_DOCUMENTO_LABELS[state.ocrTipo] || state.ocrTipo}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+
                     {doc.observacao_solicitacao && (
                       <p className="text-xs text-muted-foreground mb-3">
                         <strong>Observação:</strong> {doc.observacao_solicitacao}
