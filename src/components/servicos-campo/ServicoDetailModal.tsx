@@ -15,7 +15,9 @@ import {
   User, Car, MapPin, Calendar, Clock, FileText,
   MessageSquare, Navigation, ExternalLink, Cpu, AlertTriangle,
   DollarSign, Info, Camera, Receipt, History, IdCard, Loader2,
+  MapPinned,
 } from 'lucide-react';
+import { RealocarInstalacaoDialog } from '@/components/instalacoes/RealocarInstalacaoDialog';
 import { cn } from '@/lib/utils';
 import {
   TIPO_SERVICO_LABELS, STATUS_SERVICO_LABELS, STATUS_SERVICO_COLORS,
