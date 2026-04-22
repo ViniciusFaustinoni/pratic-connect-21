@@ -53,6 +53,8 @@ serve(async (req) => {
     console.log(`[gerar-cobrancas] Gerando cobranças para ${competencia}`);
 
     // Buscar associados ativos com plano, contrato ativo e cliente ASAAS
+    // GUARDA: excluir base antiga (origem_cadastro='api_externa') — esses recebem cobrança via SGA Hinova,
+    // não devem gerar boleto Asaas para mensalidade.
     const { data: associados, error: fetchError } = await supabase
       .from('associados')
       .select(`
@@ -64,6 +66,7 @@ serve(async (req) => {
         plano_id,
         whatsapp,
         telefone,
+        origem_cadastro,
         planos:plano_id (
           nome
         ),
@@ -78,6 +81,7 @@ serve(async (req) => {
       `)
       .eq('status', 'ativo')
       .eq('contratos.status', 'ativo')
+      .neq('origem_cadastro', 'api_externa')
       .not('plano_id', 'is', null);
 
     if (fetchError) {

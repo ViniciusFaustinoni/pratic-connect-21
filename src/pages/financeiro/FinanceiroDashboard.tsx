@@ -59,38 +59,57 @@ export default function FinanceiroDashboard() {
   const hoje = new Date().toISOString().split('T')[0];
   const amanha = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
-  // Estatísticas do mês atual
+  // Estatísticas do mês atual (Asaas adesão + SGA Hinova mensalidades)
   const { data: estatisticas, isLoading: loadingEstatisticas } = useQuery({
     queryKey: ['financeiro-estatisticas', mesAtual, anoAtual],
     queryFn: async () => {
-      // Receitas do mês (usando asaas_cobrancas)
-      const { data: cobrancas } = await supabase
+      // Receitas do mês — Asaas (adesão / cobrança nova)
+      const { data: cobrancasAsaas } = await supabase
         .from('asaas_cobrancas')
         .select('valor, pagamento_valor, status')
         .gte('data_vencimento', inicioMes)
         .lte('data_vencimento', fimMes);
-      
+
+      // Receitas do mês — SGA Hinova (mensalidades base antiga)
+      const { data: cobrancasSga } = await supabase
+        .from('cobrancas')
+        .select('valor, valor_final, valor_pago, status')
+        .eq('origem', 'sga_hinova')
+        .gte('data_vencimento', inicioMes)
+        .lte('data_vencimento', fimMes);
+
       // Despesas do mês
       const { data: despesas } = await supabase
         .from('contas_pagar')
         .select('valor, valor_pago, status')
         .gte('data_vencimento', inicioMes)
         .lte('data_vencimento', fimMes);
-      
-      const totalFaturado = cobrancas?.reduce((acc, c) => acc + Number(c.valor || 0), 0) || 0;
-      const totalRecebido = cobrancas?.reduce((acc, c) => acc + Number(c.pagamento_valor || 0), 0) || 0;
+
+      const totalAsaasFat = cobrancasAsaas?.reduce((acc, c) => acc + Number(c.valor || 0), 0) || 0;
+      const totalAsaasRec = cobrancasAsaas?.reduce((acc, c) => acc + Number(c.pagamento_valor || 0), 0) || 0;
+      const totalSgaFat = cobrancasSga?.reduce((acc, c) => acc + Number(c.valor_final || c.valor || 0), 0) || 0;
+      const totalSgaRec = cobrancasSga?.reduce((acc, c) => acc + Number(c.valor_pago || 0), 0) || 0;
+
+      const totalFaturado = totalAsaasFat + totalSgaFat;
+      const totalRecebido = totalAsaasRec + totalSgaRec;
       const totalPendente = totalFaturado - totalRecebido;
       const totalDespesas = despesas?.reduce((acc, d) => acc + Number(d.valor || 0), 0) || 0;
       const totalDespesasPagas = despesas?.reduce((acc, d) => acc + Number(d.valor_pago || 0), 0) || 0;
-      
-      const qtdCobrancas = cobrancas?.length || 0;
-      const qtdPagas = cobrancas?.filter(c => 
+
+      const qtdAsaas = cobrancasAsaas?.length || 0;
+      const qtdSga = cobrancasSga?.length || 0;
+      const qtdCobrancas = qtdAsaas + qtdSga;
+      const qtdPagasAsaas = cobrancasAsaas?.filter(c =>
         c.status === 'RECEIVED' || c.status === 'CONFIRMED' || c.status === 'pago'
       ).length || 0;
-      const qtdVencidas = cobrancas?.filter(c => 
+      const qtdPagasSga = cobrancasSga?.filter(c => c.status === 'pago').length || 0;
+      const qtdPagas = qtdPagasAsaas + qtdPagasSga;
+      const qtdVencidasAsaas = cobrancasAsaas?.filter(c =>
         c.status === 'OVERDUE' || c.status === 'vencido'
       ).length || 0;
-      
+      const qtdVencidasSga = cobrancasSga?.filter(c => c.status === 'vencido').length || 0;
+      const qtdVencidas = qtdVencidasAsaas + qtdVencidasSga;
+
       return {
         totalFaturado,
         totalRecebido,
@@ -106,22 +125,31 @@ export default function FinanceiroDashboard() {
     }
   });
 
-  // Cobranças vencendo hoje/amanhã
+  // Cobranças vencendo hoje/amanhã (Asaas adesão + SGA mensalidades)
   const { data: vencendoHoje } = useQuery({
     queryKey: ['cobrancas-vencendo'],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('asaas_cobrancas')
-        .select(`
-          id, valor, data_vencimento,
-          associado:associados(nome, telefone)
-        `)
-        .in('data_vencimento', [hoje, amanha])
-        .in('status', ['PENDING', 'pendente'])
-        .order('data_vencimento')
-        .limit(10);
-      
-      return data;
+      const [asaasRes, sgaRes] = await Promise.all([
+        supabase
+          .from('asaas_cobrancas')
+          .select(`id, valor, data_vencimento, associado:associados!asaas_cobrancas_associado_id_fkey(nome, telefone)`)
+          .in('data_vencimento', [hoje, amanha])
+          .in('status', ['PENDING', 'pendente'])
+          .order('data_vencimento')
+          .limit(10),
+        supabase
+          .from('cobrancas')
+          .select(`id, valor:valor_final, data_vencimento, associado:associados(nome, telefone)`)
+          .eq('origem', 'sga_hinova')
+          .in('data_vencimento', [hoje, amanha])
+          .eq('status', 'aguardando_pagamento')
+          .order('data_vencimento')
+          .limit(10),
+      ]);
+
+      const todos = [...(asaasRes.data || []), ...(sgaRes.data || [])];
+      todos.sort((a: any, b: any) => (a.data_vencimento || '').localeCompare(b.data_vencimento || ''));
+      return todos.slice(0, 10);
     }
   });
 
