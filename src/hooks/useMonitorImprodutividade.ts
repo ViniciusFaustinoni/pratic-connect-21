@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useJornadaTrabalho } from './useJornadaTrabalho';
+import { useAlocacaoDiaria } from './useAlocacaoDiaria';
 import { getHojeBrasilia } from '@/lib/date-utils';
 
 /**
@@ -13,6 +14,7 @@ import { getHojeBrasilia } from '@/lib/date-utils';
 export function useMonitorImprodutividade() {
   const { profile } = useAuth();
   const { turno } = useJornadaTrabalho();
+  const { isBase } = useAlocacaoDiaria();
   const alertaEnviadoRef = useRef<string | null>(null);
 
   // Config: horas de alerta
@@ -31,6 +33,8 @@ export function useMonitorImprodutividade() {
 
   useEffect(() => {
     if (!profile?.id || !turno) return;
+    // Técnicos Base não têm cobrança de produtividade — eles atendem fila sob demanda
+    if (isBase) return;
 
     const verificar = async () => {
       // Só verificar turno ativo (não em almoço, não encerrado)
@@ -113,5 +117,5 @@ export function useMonitorImprodutividade() {
     const interval = setInterval(verificar, 5 * 60 * 1000);
 
     return () => clearInterval(interval);
-  }, [profile?.id, turno?.id, turno?.status, turno?.inicio_turno, limiteHoras]);
+  }, [profile?.id, turno?.id, turno?.status, turno?.inicio_turno, limiteHoras, isBase]);
 }
