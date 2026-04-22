@@ -203,6 +203,12 @@ serve(async (req) => {
           continue;
         }
 
+        // Para Base: não auto-finalizar — fica no controle do técnico
+        if (isBase) {
+          console.log(`[cron-atribuir-tarefas] ☕ Profissional BASE ${prof.vistoriador_id} em almoço manual há ${minutosEmAlmoco}min - pulando (sem auto-finalizar)`);
+          continue;
+        }
+
         // Almoço expirado — finalizar automaticamente no servidor
         const minutosAtraso = Math.max(0, minutosEmAlmoco - 60);
         console.log(`[cron-atribuir-tarefas] ☕ ALMOÇO expirado (${minutosEmAlmoco}min) para ${prof.vistoriador_id} — finalizando server-side`);
@@ -218,8 +224,8 @@ serve(async (req) => {
         // Não dar continue — prosseguir para atribuir tarefa
       }
 
-      // Verificar se precisa forçar almoço (4h trabalhadas sem almoço)
-      if (turnoHoje && turnoHoje.status === 'ativo' && !turnoHoje.inicio_almoco) {
+      // Verificar se precisa forçar almoço (4h trabalhadas sem almoço) — NÃO para Base
+      if (!isBase && turnoHoje && turnoHoje.status === 'ativo' && !turnoHoje.inicio_almoco) {
         const { data: turnoCompleto } = await supabase
           .from('turnos_profissionais')
           .select('inicio_turno')
