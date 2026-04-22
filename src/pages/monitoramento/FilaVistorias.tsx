@@ -431,10 +431,13 @@ export default function FilaVistorias() {
   };
 
   // Handler para salvar agendamento
+  // Persistência real ainda não disponível nesta tela. Evitamos enganar o
+  // usuário com um "sucesso" falso e o direcionamos ao fluxo correto.
   const handleSaveAgendamento = async (data: AgendarVistoriaFormData) => {
-    // TODO: Implementar mutação real para salvar no banco
-    console.log('Agendamento:', data);
-    toast.success('Vistoria agendada com sucesso!');
+    console.log('[FilaVistorias] agendamento não persistido:', data);
+    toast.info('Use Serviços de Campo para agendar', {
+      description: 'O agendamento por esta tela ainda não está disponível.',
+    });
     setAgendarModalOpen(false);
   };
 
