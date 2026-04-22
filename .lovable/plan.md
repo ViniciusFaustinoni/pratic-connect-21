@@ -1,47 +1,78 @@
 
 
-## Cotações somem para o Consultor após criar — correções
+## Painel de Biometrias Pendentes + Reenvio de Selfie (A + C)
 
-A causa raiz são problemas **combinados** na página `/vendas/cotacoes` quando acessada por **Consultor (vendedor_clt / vendedor_externo) em mobile**:
+Implementar gestão centralizada de biometrias Autentique que estão em `review` (aguardando aprovação manual da Autentique) ou `rejected` (selfie reprovada), com ação de reenvio de selfie para casos rejeitados.
 
-1. **O badge das abas `Em Andamento` e `Finalizadas` é calculado depois dos filtros** (`cotacoesEmAndamento.length` vem de `sortedCotacoes` → `filteredCotacoes`). Com qualquer filtro ativo (no print: `Status = Visualizada`), ambas as abas mostram `0` e o consultor pensa que a cotação **sumiu** — quando na verdade ela está oculta pelo filtro.
-2. **O filtro de Status fica "preso"** — não há indicação visual forte de que ele está aplicado. O botão `Limpar 1` é discreto e o consultor não associa o filtro ao "sumiço" da cotação que acabou de criar (que entra como `rascunho`, não `visualizada`).
-3. **Cotação recém-criada vai para `status = rascunho`**, mas o consultor está filtrando por outro status → invisível.
-4. **No mobile**, a `statusBar` de pills (Rascunho / Link Enviado / Em Análise…) faz scroll horizontal e fica fora da tela; o consultor não vê o contador "Rascunho: 1" que indicaria que a cotação foi salva.
-5. **RLS está correta** (`vendedor_id = auth.uid()` cobre vendedor_clt e vendedor_externo) e o `useCreateCotacao` seta `vendedor_id` corretamente — não há perda de dados, é só visualização.
+### Contexto técnico
+
+- A API GraphQL pública do Autentique **não permite aprovar biometrias em review** — isso é feito apenas no painel web da Autentique por operador deles. Portanto a página será uma central de **visibilidade + ações suportadas**, não de aprovação direta.
+- O hook `useAutentiqueBiometricStatus.ts` já faz polling individual via `autentique-sync-contrato` e retorna `biometric_status: 'review' | 'rejected' | null`. Vamos usar a mesma fonte de dados, mas em modo lista.
+- O webhook `autentique-webhook` (já existente) atualiza o banco automaticamente quando a Autentique resolve a biometria → não precisamos de polling manual no painel após a ação.
+- A coluna `biometric_status` já existe nos contratos (populada por `autentique-sync-contrato`). Vamos consultar diretamente a tabela `contratos` filtrando por esse campo.
 
 ### O que vai mudar
 
-**1. Contadores das abas independentes dos filtros** (arquivo `src/pages/vendas/Cotacoes.tsx`)
-- Criar `cotacoesEmAndamentoTotal` e `cotacoesFinalizadasTotal` calculados sobre `cotacoes` (lista bruta), aplicando **só** a separação por status — sem aplicar `statusFilter`, `mesFilter`, `dataFilter`, `etapaFunilFilter`, `consultorFilter`, `filtroOrfas` e `search`.
-- Usar esses totais nos badges das `TabsTrigger`. Assim o consultor sempre enxerga "Em Andamento: 1" mesmo se o filtro estiver escondendo.
-- Manter o `cotacoesEmAndamento`/`cotacoesFinalizadas` filtrado para a renderização da `CotacoesTable`.
+**1. Nova página `/admin/autentique/biometrias-pendentes`** (`src/pages/admin/AutentiqueBiometriasPendentes.tsx`)
+- Tabela com contratos onde `biometric_status IN ('review', 'rejected')`.
+- Colunas: Associado (nome + CPF), Contrato (número), Data da assinatura/selfie, Status (badge âmbar `Em revisão` / vermelho `Rejeitada`), Motivo (se rejeitada — vem de `biometric_reason`), Ações.
+- Filtros: status (review / rejected / todos), busca por nome/CPF, range de datas.
+- Auto-refresh a cada 60s (mesmo intervalo do hook existente — não consome créditos extras).
+- Indicador no topo: "X biometrias aguardando revisão" / "Y rejeitadas".
 
-**2. Banner de "filtros ativos escondendo resultados"** (mesmo arquivo)
-- Quando `cotacoes.length > 0`, `(cotacoesEmAndamento.length === 0 && activeTab === 'em_andamento')` e `hasActiveFilters === true`, exibir banner âmbar acima da tabela:
-  - Texto: *"Você tem N cotação(ões), mas os filtros ativos estão ocultando todas. [Limpar filtros]"*
-  - Botão `Limpar filtros` que chama `clearFilters()`.
-- Mesma lógica para a aba `Finalizadas`.
+**2. Ações por linha**
+- **"Abrir no Autentique"** — botão que abre `https://painel.autentique.com.br/documentos/{autentique_document_id}` em nova aba. Operador aprova/reprova lá; webhook atualiza nosso banco.
+- **"Reenviar selfie"** (apenas para `rejected`) — chama nova edge function `autentique-reenviar-selfie` que:
+  1. Cancela a assinatura atual via mutation Autentique (`removeSignerFromDocument` ou recria documento).
+  2. Gera novo signatário com `PF_FACIAL` no mesmo documento (ou cria novo documento se a API não permitir reset de signer).
+  3. Dispara WhatsApp para o associado com o novo link via `enviar-mensagem-whatsapp` (template existente `solicitacao_nova_selfie` — criar se não existir, usando padrão dos templates atuais).
+  4. Loga em `autentique_audit_log` (tabela já existente para auditoria).
+- **"Ver detalhes"** — drawer lateral mostrando histórico do contrato, link para o associado, contato (telefone/whatsapp).
 
-**3. Default de `statusFilter` mais robusto**
-- Garantir que `statusFilter` inicia em `'all'` (já está), e adicionar **reset automático** quando o usuário troca de aba: ao entrar em `em_andamento` resetar `statusFilter='all'` se estava em valor não-pertencente à aba anterior. Evita filtro "fantasma" carregado entre navegações.
+**3. Nova edge function `supabase/functions/autentique-reenviar-selfie/index.ts`**
+- Input: `{ contratoId: string, motivo?: string }`.
+- Valida JWT (operador autenticado com role `admin`, `diretor` ou `analista_documentos`).
+- Busca contrato + dados do associado + `autentique_document_id`.
+- Verifica saldo de créditos `PF_FACIAL` (usar lógica existente; se zero, retorna erro claro pedindo recarga — alinhado com `mem://integrations/autentique/signature-credits-policy`).
+- Executa mutation Autentique para regenerar a assinatura facial.
+- Atualiza `contratos.biometric_status = 'pending'`, `biometric_reason = null`, registra timestamp `biometric_resent_at`.
+- Dispara WhatsApp.
+- Retorna `{ success, signature_url, message }`.
 
-**4. Após criar cotação, sempre voltar para a aba e estado correto**
-- No `onSuccess` do `CotacaoFormDialog` (já chamado dentro da página), forçar `setActiveTab('em_andamento')`, `setStatusFilter('all')`, `setEtapaFunilFilter('all')`, `setDataFilter(undefined)`, `setMesFilter('all')`, `setSearchInput('')` — para que a cotação recém-criada (status `rascunho`) apareça imediatamente.
-- Adicionar toast de sucesso com link "Ver cotação" que abre o modal de detalhes da cotação criada.
+**4. Migração de banco**
+- Adicionar colunas em `contratos` se ainda não existirem:
+  - `biometric_reason TEXT NULL` (motivo da rejeição vindo da Autentique)
+  - `biometric_resent_at TIMESTAMPTZ NULL` (quando foi pedida nova selfie)
+  - `biometric_resent_by UUID NULL REFERENCES profiles(id)` (quem pediu)
+- Não mexer em RLS existente — os campos são lidos pelas mesmas policies do contrato.
 
-**5. Indicador visual de "Cotações que você criou" no mobile**
-- Acima da `TabsList`, em mobile apenas (`md:hidden`), exibir card compacto:
-  - "Você tem **X** cotação(ões) ativa(s)" — sempre baseado em `cotacoes.length` (sem filtros), com cor `primary`.
-- Garante que o consultor sempre veja que existem cotações, mesmo se filtros escondem a tabela.
+**5. Integração com sidebar/menu**
+- Adicionar item no menu admin: **Cadastro → Autentique → Biometrias Pendentes** (seguindo padrão dos itens existentes em `src/components/layout/AppSidebar.tsx` ou equivalente).
+- Badge no menu com contador de biometrias em `review` (consulta leve `count(*) WHERE biometric_status IN ('review','rejected')`, com cache de 60s).
 
-### Impacto
+**6. Permissões**
+- Acesso restrito a roles: `admin`, `diretor`, `analista_documentos`, `gerente_comercial`. Outros perfis não veem o menu nem conseguem acessar a rota (guard via `usePermissions`).
 
-- Vale para **todos** os perfis (Diretor, Consultor, Analista) — Diretor já enxergava porque tem mais largura de tela e raramente usa filtros sticky; consultor em mobile passa a ter a mesma clareza.
-- Sem mudanças de schema, RLS ou Edge Functions.
-- Sem alteração no fluxo de criação ou no `vendedor_id`.
+### O que NÃO vai mudar
 
-### Arquivos editados
+- Nenhuma alteração no fluxo público de assinatura `/cotacao/:token` (memo `mem://features/contracts/autentique-signing-flow-v7` preservada).
+- Webhook `autentique-webhook` continua sendo a fonte de verdade para mudanças de status — apenas adicionamos uma UI para visibilidade + reenvio.
+- Hook `useAutentiqueBiometricStatus` (polling individual no fluxo público) permanece intacto.
+- Função `autentique-sync-contrato` permanece intacta.
 
-- `src/pages/vendas/Cotacoes.tsx` — contadores totais, banner de filtros, reset pós-criação, card mobile.
+### Riscos e mitigações
+
+- **Limite de créditos PF_FACIAL**: a edge function valida saldo antes de gastar. Se zero, devolve erro claro sem cobrar.
+- **Reset de signatário pode não existir na API**: se `removeSignerFromDocument` não for suportado para PF_FACIAL, fallback é criar novo documento Autentique (mantendo o anterior cancelado para auditoria). Decisão final via teste no momento da implementação.
+- **Spam de reenvio**: limitar 1 reenvio por contrato a cada 6h (validação na edge function via `biometric_resent_at`).
+
+### Arquivos editados/criados
+
+- `src/pages/admin/AutentiqueBiometriasPendentes.tsx` (novo)
+- `src/components/admin/autentique/BiometriaPendenteRow.tsx` (novo, opcional para isolar)
+- `src/hooks/useBiometriasPendentes.ts` (novo — query + auto-refresh)
+- `src/components/layout/AppSidebar.tsx` (item de menu + badge)
+- `src/App.tsx` ou roteador equivalente (registrar rota)
+- `supabase/functions/autentique-reenviar-selfie/index.ts` (nova edge function)
+- Migração SQL: 3 colunas em `contratos`
 
