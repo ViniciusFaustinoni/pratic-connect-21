@@ -81,10 +81,18 @@ export async function autenticarHinova(creds: HinovaCreds): Promise<HinovaSessio
   });
   const txt = await r.text();
   let data: any;
-  try { data = JSON.parse(txt); } catch { console.error('[Hinova] auth não-JSON:', txt.slice(0, 200)); return null; }
-  if (!r.ok || !data.token_usuario) {
-    console.error('[Hinova] auth falhou:', data?.mensagem || txt.slice(0, 200));
-    return null;
+  try { data = JSON.parse(txt); } catch { data = null; }
+
+  if (r.status === 401) {
+    const msg = data?.mensagem || data?.message || 'Login ou senha inválido';
+    console.error('[Hinova] auth 401:', msg);
+    throw new Error(`Hinova autenticação 401: ${msg}`);
+  }
+
+  if (!r.ok || !data?.token_usuario) {
+    const msg = data?.mensagem || data?.message || txt.slice(0, 200);
+    console.error('[Hinova] auth falhou:', msg);
+    throw new Error(`Hinova autenticação falhou (${r.status}): ${msg}`);
   }
   return { ...creds, tokenUsuario: data.token_usuario };
 }
