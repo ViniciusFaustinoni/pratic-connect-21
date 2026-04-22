@@ -72,6 +72,26 @@ export function periodoFromHora(hora?: string | null): PeriodoCanonico {
 }
 
 /**
+ * Converte um período canônico ('manha' | 'tarde' | 'noite') em valor `time`
+ * aceito pelo Postgres (HH:MM:SS). Se já vier em HH:MM(:SS) repassa.
+ * Use sempre antes de gravar em colunas `time` (ex.: agendamentos_base.horario).
+ */
+export function periodoToTime(value?: string | null): string {
+  if (!value) return '08:00:00';
+  const v = value.trim().toLowerCase();
+  if (v === 'manha' || v === 'manhã') return '08:00:00';
+  if (v === 'tarde') return '13:00:00';
+  if (v === 'noite') return '18:00:00';
+  // já é HH:MM ou HH:MM:SS
+  const m = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(v);
+  if (m) {
+    const hh = m[1].padStart(2, '0');
+    return `${hh}:${m[2]}:${m[3] || '00'}`;
+  }
+  return '08:00:00';
+}
+
+/**
  * Normaliza qualquer valor (canônico ou HH:MM) em período canônico.
  */
 export function normalizePeriodo(value?: string | null): PeriodoCanonico {

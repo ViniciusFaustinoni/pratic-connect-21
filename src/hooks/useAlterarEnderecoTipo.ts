@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { periodoToTime } from '@/lib/periodo-utils';
 
 export interface AlterarEnderecoTipoInput {
   // Identificação da origem
@@ -134,7 +135,7 @@ export function useAlterarEnderecoTipo() {
             .from('agendamentos_base')
             .update({
               oficina_id: input.oficinaId!,
-              horario: periodoCanonico,
+              horario: periodoToTime(periodoCanonico),
               atendido_por: input.profissionalId ?? null,
             })
             .eq('id', input.agendamentoBaseId);
@@ -180,7 +181,7 @@ export function useAlterarEnderecoTipo() {
           veiculo_placa,
           veiculo_descricao,
           data_agendada: srv.data_agendada,
-          horario: periodoCanonico,
+          horario: periodoToTime(periodoCanonico),
           oficina_id: input.oficinaId!,
           atendido_por: input.profissionalId ?? null,
           status: input.profissionalId ? 'confirmado' : 'agendado',
