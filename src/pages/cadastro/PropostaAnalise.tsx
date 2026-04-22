@@ -96,16 +96,35 @@ export default function PropostaAnalise() {
   // NOVO: bloqueia aprovação enquanto vistoria/instalação não foi executada
   const aguardandoExecucao = proposta?.tipo_etapa_analise === 'agendamento_confirmado';
 
-  // NOVO: vistoria na base agendada SEM fotos ainda → fluxo de aprovação só por documentos
-  const isVistoriaBaseSemFotos =
-    proposta?.tipo_vistoria === 'agendada_base' &&
-    proposta?.vistoria_base_info?.status !== 'realizado' &&
-    !(proposta?.vistoria?.fotos?.length);
+  // Vistoria AGENDADA (base ou no cliente) que ainda NÃO foi executada e ainda
+  // NÃO possui fotos/vídeo do associado → o cadastro analisa só documentação.
+  // A etapa "Fotos & Vistoria" é ocultada porque o registro fotográfico será
+  // feito pelo técnico no atendimento presencial. Isso evita o bug em que o
+  // sistema cobrava a aprovação de fotos para um contrato que nunca seria de
+  // autovistoria (ex.: vistoria agendada no cliente sem fotos).
+  const temFotosOuVideo =
+    (proposta?.vistoria?.fotos?.length || 0) > 0 ||
+    !!proposta?.vistoria?.video_360_url;
+
+  const isVistoriaAgendadaSemFotos =
+    !isAutovistoria &&
+    !temFotosOuVideo &&
+    (
+      // Vistoria na base agendada e ainda não realizada
+      (proposta?.tipo_vistoria === 'agendada_base' &&
+        proposta?.vistoria_base_info?.status !== 'realizado') ||
+      // Vistoria agendada no cliente cuja instalação/vistoria ainda não foi concluída
+      (proposta?.tipo_vistoria === 'agendada' &&
+        proposta?.instalacao_info?.concluida_em == null)
+    );
+
+  // Mantém o nome antigo como alias para o restante do código que ainda lê.
+  const isVistoriaBaseSemFotos = isVistoriaAgendadaSemFotos;
 
   const podeAprovar =
     proposta?.status === 'assinado' &&
     !proposta?.tem_documento_pendente &&
-    (!aguardandoExecucao || isVistoriaBaseSemFotos);
+    (!aguardandoExecucao || isVistoriaAgendadaSemFotos);
 
   // Estado final (já aprovado / reprovado / cancelado)
   const isAprovada = proposta?.status === 'ativo';
