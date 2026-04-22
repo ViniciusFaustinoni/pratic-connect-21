@@ -154,6 +154,7 @@ export function VeiculoDetalhesModal({ open, onClose, veiculoId }: VeiculoDetalh
                   {[
                     { v: 'resumo', icon: Car, label: 'Resumo' },
                     { v: 'financeiro', icon: DollarSign, label: 'Financeiro', count: (cobrancas as any)?.faturas?.length },
+                    { v: 'financeiro_sga', icon: Database, label: 'Financeiro SGA' },
                     { v: 'rastreador', icon: MapPin, label: 'Rastreador' },
                     { v: 'eventos', icon: AlertTriangle, label: 'Eventos', count: totalEventos },
                     { v: 'fotos', icon: Image, label: 'Fotos/Docs', count: totalFotos + todosDocumentos.length },
