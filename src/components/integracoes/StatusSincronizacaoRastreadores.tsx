@@ -57,7 +57,7 @@ function PlatformBlock({ nome, total, sincronizados, pendentes, falhas, onSync, 
             {pendentes + (falhas || 0)} pendente(s)
           </Badge>
         ) : (
-          <Badge variant="secondary" className="gap-1 bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+          <Badge variant="secondary" className="gap-1">
             <CheckCircle2 className="h-3 w-3" />
             Em dia
           </Badge>
@@ -68,11 +68,11 @@ function PlatformBlock({ nome, total, sincronizados, pendentes, falhas, onSync, 
 
       <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
         <span className="flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+          <span className="inline-block h-2 w-2 rounded-full bg-primary" />
           Sincronizados: <strong className="text-foreground">{sincronizados.toLocaleString('pt-BR')}</strong>
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+          <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground" />
           Pendentes: <strong className="text-foreground">{pendentes.toLocaleString('pt-BR')}</strong>
         </span>
         {typeof falhas === 'number' && (
