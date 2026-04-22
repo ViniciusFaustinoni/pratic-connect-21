@@ -145,7 +145,7 @@ export function useAssociados({ filters, pagination, enabled = true }: UseAssoci
       // Busca por nome, CPF, email, telefone ou placa
       // Aceita CPF/telefone com OU sem máscara, e placa com OU sem hífen.
       if (filters?.search) {
-        const { raw, digits, cpfFormatado, telefoneFormatado, placa } = normalizarBusca(filters.search);
+        const { raw, digits, cpfFormatado, telefoneFormatado, placa, placaForte } = normalizarBusca(filters.search);
         const rawSafe = escapeOrValue(raw);
 
         // Busca por placa em veículos vinculados
@@ -162,30 +162,42 @@ export function useAssociados({ filters, pagination, enabled = true }: UseAssoci
             .filter(Boolean);
         }
 
-        const orParts: string[] = [
-          `nome.ilike.%${rawSafe}%`,
-          `email.ilike.%${rawSafe}%`,
-        ];
+        const orParts: string[] = [];
 
-        if (digits.length === 11 && cpfFormatado) {
-          // CPF completo: tenta cru e formatado
-          orParts.push(`cpf.eq.${digits}`);
-          orParts.push(`cpf.eq.${cpfFormatado}`);
-        } else if (digits.length >= 3) {
-          // CPF parcial
-          orParts.push(`cpf.ilike.%${digits}%`);
-        }
+        if (placaForte) {
+          // Termo é claramente uma placa. Restringir a placa + nome para
+          // evitar que os dígitos da placa casem em CPF/telefone parciais
+          // de outros associados (ex.: "SHT1E39" não deve trazer CPFs com "139").
+          orParts.push(`nome.ilike.%${rawSafe}%`);
+          if (associadoIdsByPlaca.length > 0) {
+            orParts.push(`id.in.(${associadoIdsByPlaca.join(',')})`);
+          } else {
+            // Nenhum veículo com essa placa: força resultado vazio do .or
+            orParts.push(`id.eq.00000000-0000-0000-0000-000000000000`);
+          }
+        } else {
+          orParts.push(`nome.ilike.%${rawSafe}%`);
+          orParts.push(`email.ilike.%${rawSafe}%`);
 
-        if (telefoneFormatado) {
-          // Telefone completo: cru + formatado
-          orParts.push(`telefone.ilike.%${digits}%`);
-          orParts.push(`telefone.ilike.%${escapeOrValue(telefoneFormatado)}%`);
-        } else if (digits.length >= 3) {
-          orParts.push(`telefone.ilike.%${digits}%`);
-        }
+          if (digits.length === 11 && cpfFormatado) {
+            // CPF completo: tenta cru e formatado
+            orParts.push(`cpf.eq.${digits}`);
+            orParts.push(`cpf.eq.${cpfFormatado}`);
+          } else if (digits.length >= 3) {
+            // CPF parcial
+            orParts.push(`cpf.ilike.%${digits}%`);
+          }
 
-        if (associadoIdsByPlaca.length > 0) {
-          orParts.push(`id.in.(${associadoIdsByPlaca.join(',')})`);
+          if (telefoneFormatado) {
+            orParts.push(`telefone.ilike.%${digits}%`);
+            orParts.push(`telefone.ilike.%${escapeOrValue(telefoneFormatado)}%`);
+          } else if (digits.length >= 3) {
+            orParts.push(`telefone.ilike.%${digits}%`);
+          }
+
+          if (associadoIdsByPlaca.length > 0) {
+            orParts.push(`id.in.(${associadoIdsByPlaca.join(',')})`);
+          }
         }
 
         query = query.or(orParts.join(','));
