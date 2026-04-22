@@ -37,6 +37,7 @@ import { useCobrancasAssociado } from '@/hooks/useDocumentosCotacao';
 import { useAssociadoHistoricoCompleto } from '@/hooks/useAssociadoHistoricoCompleto';
 import { MapaRastreador } from '@/components/rastreadores/MapaRastreador';
 import { VincularRastreadorForm } from '@/components/cadastro/VincularRastreadorForm';
+import { VeiculoFinanceiroSGA } from '@/components/cadastro/VeiculoFinanceiroSGA';
 import { cn } from '@/lib/utils';
 
 // ============================================
