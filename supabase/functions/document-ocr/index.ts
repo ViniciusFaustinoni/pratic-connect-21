@@ -953,12 +953,39 @@ Use a função para retornar o CPF encontrado ou "ilegivel" se não conseguir le
           continue;
         }
 
-        // ==== Pré-tratamento PLACA: prefere Mercosul quando ambíguo ====
+        // ==== CROSS-CHECK PLACA: sempre confronta com texto nativo do PDF ====
+        // O OCR visual confunde 6↔G, 1↔I, 0↔O entre formato antigo e Mercosul.
+        // O texto nativo do PDF (quando existe) é a fonte mais confiável.
         if (v.field === 'placa') {
-          const { placa: resolved, ajustada } = resolvePlacaPreferMercosul(String(raw));
-          if (ajustada && validatePlaca(resolved)) {
-            console.log(`[OCR] Placa ajustada por normalização Mercosul: "${raw}" → "${resolved}"`);
-            d.placa = resolved;
+          const ocrPlaca = String(raw).replace(/[^A-Z0-9]/gi, '').toUpperCase();
+          const candidatosOCR = gerarCandidatosPlaca(ocrPlaca).filter(p => validatePlaca(p));
+
+          if (extractedPdfText) {
+            const candidatosNativos = extractCandidatesFromText(extractedPdfText, 'placa').filter(p => validatePlaca(p));
+
+            // 1) Se o OCR e o texto nativo coincidem em algum candidato, usa-o.
+            const match = candidatosOCR.find(c => candidatosNativos.includes(c));
+            if (match && match !== ocrPlaca) {
+              console.log(`[OCR] Placa cross-check OCR↔PDF: "${ocrPlaca}" → "${match}"`);
+              d.placa = match;
+            } else if (!match && candidatosNativos.length > 0) {
+              // 2) Se não há intersecção, prioriza o texto nativo (sempre mais confiável que visão).
+              const escolhida = candidatosNativos[0];
+              if (escolhida !== ocrPlaca) {
+                console.log(`[OCR] Placa sobrescrita pelo texto nativo do PDF: "${ocrPlaca}" → "${escolhida}"`);
+                d.placa = escolhida;
+              }
+            }
+          }
+
+          // 3) Fallback legado: prefere Mercosul se ainda não foi resolvido.
+          const atual = String(d.placa);
+          if (!validatePlaca(atual)) {
+            const { placa: resolved, ajustada } = resolvePlacaPreferMercosul(atual);
+            if (ajustada && validatePlaca(resolved)) {
+              console.log(`[OCR] Placa ajustada por normalização Mercosul: "${atual}" → "${resolved}"`);
+              d.placa = resolved;
+            }
           }
         }
 
