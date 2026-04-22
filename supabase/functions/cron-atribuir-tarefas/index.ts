@@ -162,6 +162,20 @@ serve(async (req) => {
 
     console.log(`[cron-atribuir-tarefas] ${profissionais.length} profissional(is) em serviço`);
 
+    // Carregar alocações do dia em batch (Base = bate ponto externamente)
+    const profIds = (profissionais as ProfissionalDisponivel[]).map(p => p.vistoriador_id);
+    const { data: alocacoesHoje } = await supabase
+      .from('alocacoes_diarias')
+      .select('profissional_id, tipo_alocacao')
+      .eq('data', hoje)
+      .in('profissional_id', profIds);
+    const baseSet = new Set(
+      (alocacoesHoje || []).filter(a => a.tipo_alocacao === 'base').map(a => a.profissional_id)
+    );
+    if (baseSet.size > 0) {
+      console.log(`[cron-atribuir-tarefas] ${baseSet.size} profissional(is) marcados como BASE — sem auto-almoço`);
+    }
+
     const atribuicoes: { profissional_id: string; servico_id: string; distancia_km: number; tipo_atribuicao: string }[] = [];
 
     // Dedup: rastrear encaixes que já tiveram confirmação enviada nesta execução
@@ -169,6 +183,7 @@ serve(async (req) => {
 
     // 2. Para cada profissional, verificar se já tem tarefa e tentar atribuir
     for (const prof of profissionais as ProfissionalDisponivel[]) {
+      const isBase = baseSet.has(prof.vistoriador_id);
       // ========== VERIFICAR STATUS DE JORNADA (ALMOÇO) ==========
       const { data: turnoHoje } = await supabase
         .from('turnos_profissionais')
@@ -188,6 +203,12 @@ serve(async (req) => {
           continue;
         }
 
+        // Para Base: não auto-finalizar — fica no controle do técnico
+        if (isBase) {
+          console.log(`[cron-atribuir-tarefas] ☕ Profissional BASE ${prof.vistoriador_id} em almoço manual há ${minutosEmAlmoco}min - pulando (sem auto-finalizar)`);
+          continue;
+        }
+
         // Almoço expirado — finalizar automaticamente no servidor
         const minutosAtraso = Math.max(0, minutosEmAlmoco - 60);
         console.log(`[cron-atribuir-tarefas] ☕ ALMOÇO expirado (${minutosEmAlmoco}min) para ${prof.vistoriador_id} — finalizando server-side`);
@@ -203,8 +224,8 @@ serve(async (req) => {
         // Não dar continue — prosseguir para atribuir tarefa
       }
 
-      // Verificar se precisa forçar almoço (4h trabalhadas sem almoço)
-      if (turnoHoje && turnoHoje.status === 'ativo' && !turnoHoje.inicio_almoco) {
+      // Verificar se precisa forçar almoço (4h trabalhadas sem almoço) — NÃO para Base
+      if (!isBase && turnoHoje && turnoHoje.status === 'ativo' && !turnoHoje.inicio_almoco) {
         const { data: turnoCompleto } = await supabase
           .from('turnos_profissionais')
           .select('inicio_turno')

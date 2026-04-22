@@ -246,7 +246,21 @@ serve(async (req) => {
       console.error('[atribuir-proxima-tarefa] Erro ao buscar turno:', turnoError);
     }
 
+    // Verificar tipo de alocação do dia (Base = bate ponto externamente, sem auto-almoço)
+    const { data: alocHoje } = await supabase
+      .from('alocacoes_diarias')
+      .select('tipo_alocacao')
+      .eq('profissional_id', profissionalId)
+      .eq('data', hoje)
+      .maybeSingle();
+    const isBase = alocHoje?.tipo_alocacao === 'base';
+    if (isBase) {
+      console.log(`[atribuir-proxima-tarefa] Profissional ${profissionalId} é BASE — almoço gerido manualmente.`);
+    }
+
     // Se está em almoço, verificar se já expirou (60+ min)
+    // Para Base: se ele iniciou manualmente, bloqueamos atribuição enquanto em_almoco,
+    // mas NÃO auto-finalizamos (ele finaliza pelo botão).
     if (turnoHoje?.status === 'em_almoco' && turnoHoje.inicio_almoco) {
       const inicioAlmoco = new Date(turnoHoje.inicio_almoco);
       const agora = new Date();
@@ -268,7 +282,21 @@ serve(async (req) => {
         );
       }
 
-      // Almoço expirado — finalizar automaticamente no servidor
+      // Almoço expirado — finalizar automaticamente no servidor (NÃO para Base)
+      if (isBase) {
+        const minutosRestantes = Math.max(0, 60 - minutosEmAlmoco);
+        return new Response(
+          JSON.stringify({
+            resultado: 'em_almoco',
+            mensagem: 'Você está em almoço. Finalize manualmente para receber novas tarefas.',
+            minutos_restantes: minutosRestantes,
+            em_atraso: minutosEmAlmoco > 60,
+            minutos_atraso: Math.max(0, minutosEmAlmoco - 60),
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       const minutosAtraso = Math.max(0, minutosEmAlmoco - 60);
       console.log(`[atribuir-proxima-tarefa] ALMOÇO expirado (${minutosEmAlmoco}min) — finalizando server-side. Atraso: ${minutosAtraso}min`);
 
@@ -283,8 +311,8 @@ serve(async (req) => {
       // Prosseguir normalmente para atribuir tarefa
     }
 
-    // Forçar almoço se atingiu limite configurado sem iniciar
-    if (turnoHoje && turnoHoje.status === 'ativo' && !turnoHoje.inicio_almoco && turnoHoje.inicio_turno) {
+    // Forçar almoço se atingiu limite configurado sem iniciar (NÃO para Base)
+    if (!isBase && turnoHoje && turnoHoje.status === 'ativo' && !turnoHoje.inicio_almoco && turnoHoje.inicio_turno) {
       const inicioTurno = new Date(turnoHoje.inicio_turno);
       const agora = new Date();
       const minutosTrabalhados = Math.floor((agora.getTime() - inicioTurno.getTime()) / 60000);
