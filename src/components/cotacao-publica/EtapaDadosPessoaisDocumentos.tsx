@@ -241,6 +241,9 @@ export function EtapaDadosPessoaisDocumentos({
         if (dados.cor) novosDados.veiculo_cor = dados.cor;
         if (dados.combustivel) novosDados.veiculo_combustivel = dados.combustivel;
         if (dados.motor) novosDados.veiculo_motor = dados.motor;
+        // numero_motor: vem do CRLV (alias de motor) — alimenta o campo dedicado do cadastro
+        const motorCrlv = dados.numero_motor || dados.motor;
+        if (motorCrlv) novosDados.numero_motor = motorCrlv;
         
         if (dados.ano_fabricacao) {
           const anoFab = parseInt(dados.ano_fabricacao);
