@@ -666,12 +666,14 @@ export function useVistoriaCompleta(instalacaoId: string | null) {
     queryFn: async () => {
       if (!instalacaoId) return null;
 
-      // Buscar dados da instalação primeiro para obter cotacao_id e rota_id
+      // Buscar dados da instalação primeiro para obter cotacao_id e rota_id.
+      // Usa maybeSingle: o id pode não ser uma instalação (ex.: agendamentos_base.id)
+      // — nesse caso seguimos sem dados de instalação e os fallbacks tratam.
       const { data: instalacao } = await supabase
         .from('instalacoes')
         .select('associado_id, veiculo_id, instalador_id, contrato_id, cotacao_id, rota_id')
         .eq('id', instalacaoId)
-        .single();
+        .maybeSingle();
 
       // Primeiro, buscar vistoria existente vinculada à instalação
       let { data, error } = await supabase
@@ -857,14 +859,22 @@ export function useVistoriaCompletaPorServico(servicoId: string | null) {
     queryFn: async () => {
       if (!servicoId) return null;
 
-      // 1. Buscar dados do serviço para obter relacionamentos
+      // 1. Buscar dados do serviço para obter relacionamentos.
+      // Usa maybeSingle: o routeId pode pertencer a outras entidades
+      // (agendamentos_base.id, instalacoes.id) — nesse caso retorna null
+      // e os hooks de fallback (por instalação / por agendamento de base)
+      // assumem o trabalho. Não tratar isso como erro.
       const { data: servico, error: servicoError } = await supabase
         .from('servicos')
         .select('associado_id, veiculo_id, profissional_id, contrato_id, cotacao_id, rota_id, vistoria_origem_id, instalacao_origem_id, data_agendada, hora_agendada, periodo, cep, logradouro, numero, bairro, cidade')
         .eq('id', servicoId)
-        .single();
+        .maybeSingle();
 
       if (servicoError) throw servicoError;
+      if (!servico) {
+        // Serviço não encontrado para este id — deixa os fallbacks resolverem.
+        return null;
+      }
 
       // 2. Se o serviço já tem vistoria_origem_id, buscar essa vistoria
       if (servico?.vistoria_origem_id) {
