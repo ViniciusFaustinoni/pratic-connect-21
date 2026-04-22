@@ -25929,6 +25929,339 @@ export type Database = {
         }
         Relationships: []
       }
+      solicitacoes_troca_titularidade: {
+        Row: {
+          aprovado_cadastro_em: string | null
+          aprovado_cadastro_por: string | null
+          aprovado_monitoramento_em: string | null
+          aprovado_monitoramento_por: string | null
+          associado_antigo_id: string
+          cotacao_id: string | null
+          created_at: string
+          criado_por: string | null
+          efetivada_em: string | null
+          id: string
+          motivo_reprovacao: string | null
+          novo_associado_id: string | null
+          novo_titular_dados: Json
+          observacao_cadastro: string | null
+          observacao_monitoramento: string | null
+          reprovado_em: string | null
+          reprovado_por: string | null
+          servico_vistoria_id: string | null
+          status: Database["public"]["Enums"]["status_troca_titularidade"]
+          termo_cancelamento_assinado_em: string | null
+          termo_cancelamento_autentique_id: string | null
+          termo_cancelamento_enviado_em: string | null
+          termo_cancelamento_url: string | null
+          token_publico: string
+          updated_at: string
+          veiculo_id: string
+        }
+        Insert: {
+          aprovado_cadastro_em?: string | null
+          aprovado_cadastro_por?: string | null
+          aprovado_monitoramento_em?: string | null
+          aprovado_monitoramento_por?: string | null
+          associado_antigo_id: string
+          cotacao_id?: string | null
+          created_at?: string
+          criado_por?: string | null
+          efetivada_em?: string | null
+          id?: string
+          motivo_reprovacao?: string | null
+          novo_associado_id?: string | null
+          novo_titular_dados?: Json
+          observacao_cadastro?: string | null
+          observacao_monitoramento?: string | null
+          reprovado_em?: string | null
+          reprovado_por?: string | null
+          servico_vistoria_id?: string | null
+          status?: Database["public"]["Enums"]["status_troca_titularidade"]
+          termo_cancelamento_assinado_em?: string | null
+          termo_cancelamento_autentique_id?: string | null
+          termo_cancelamento_enviado_em?: string | null
+          termo_cancelamento_url?: string | null
+          token_publico?: string
+          updated_at?: string
+          veiculo_id: string
+        }
+        Update: {
+          aprovado_cadastro_em?: string | null
+          aprovado_cadastro_por?: string | null
+          aprovado_monitoramento_em?: string | null
+          aprovado_monitoramento_por?: string | null
+          associado_antigo_id?: string
+          cotacao_id?: string | null
+          created_at?: string
+          criado_por?: string | null
+          efetivada_em?: string | null
+          id?: string
+          motivo_reprovacao?: string | null
+          novo_associado_id?: string | null
+          novo_titular_dados?: Json
+          observacao_cadastro?: string | null
+          observacao_monitoramento?: string | null
+          reprovado_em?: string | null
+          reprovado_por?: string | null
+          servico_vistoria_id?: string | null
+          status?: Database["public"]["Enums"]["status_troca_titularidade"]
+          termo_cancelamento_assinado_em?: string | null
+          termo_cancelamento_autentique_id?: string | null
+          termo_cancelamento_enviado_em?: string | null
+          termo_cancelamento_url?: string | null
+          token_publico?: string
+          updated_at?: string
+          veiculo_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_aprovado_cadastro_por_fkey"
+            columns: ["aprovado_cadastro_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_aprovado_cadastro_por_fkey"
+            columns: ["aprovado_cadastro_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_aprovado_cadastro_por_fkey"
+            columns: ["aprovado_cadastro_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_aprovado_monitoramento_por_fkey"
+            columns: ["aprovado_monitoramento_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_aprovado_monitoramento_por_fkey"
+            columns: ["aprovado_monitoramento_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_aprovado_monitoramento_por_fkey"
+            columns: ["aprovado_monitoramento_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_associado_antigo_id_fkey"
+            columns: ["associado_antigo_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_associado_antigo_id_fkey"
+            columns: ["associado_antigo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_associado_antigo_id_fkey"
+            columns: ["associado_antigo_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_associado_antigo_id_fkey"
+            columns: ["associado_antigo_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_associado_antigo_id_fkey"
+            columns: ["associado_antigo_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_associado_antigo_id_fkey"
+            columns: ["associado_antigo_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_associado_antigo_id_fkey"
+            columns: ["associado_antigo_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "cotacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_novo_associado_id_fkey"
+            columns: ["novo_associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_novo_associado_id_fkey"
+            columns: ["novo_associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_novo_associado_id_fkey"
+            columns: ["novo_associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_novo_associado_id_fkey"
+            columns: ["novo_associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_novo_associado_id_fkey"
+            columns: ["novo_associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_novo_associado_id_fkey"
+            columns: ["novo_associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_novo_associado_id_fkey"
+            columns: ["novo_associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_reprovado_por_fkey"
+            columns: ["reprovado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_reprovado_por_fkey"
+            columns: ["reprovado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_reprovado_por_fkey"
+            columns: ["reprovado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_servico_vistoria_id_fkey"
+            columns: ["servico_vistoria_id"]
+            isOneToOne: false
+            referencedRelation: "servicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_servico_vistoria_id_fkey"
+            columns: ["servico_vistoria_id"]
+            isOneToOne: false
+            referencedRelation: "v_tarefas_orfas"
+            referencedColumns: ["servico_instalacao_relacionado"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_servico_vistoria_id_fkey"
+            columns: ["servico_vistoria_id"]
+            isOneToOne: false
+            referencedRelation: "v_tarefas_orfas"
+            referencedColumns: ["servico_vistoria_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       substituicoes_veiculo: {
         Row: {
           aprovado_em: string | null
@@ -30209,6 +30542,16 @@ export type Database = {
         | "aguardando_indenizacao"
         | "aguardando_pagamento"
         | "pecas_em_cotacao"
+      status_troca_titularidade:
+        | "cotacao_em_andamento"
+        | "aguardando_cadastro"
+        | "aguardando_monitoramento"
+        | "aguardando_vistoria"
+        | "liberada_para_assinatura"
+        | "efetivada"
+        | "reprovada_cadastro"
+        | "reprovada_monitoramento"
+        | "cancelada"
       status_veiculo:
         | "em_analise"
         | "aprovado"
@@ -30636,6 +30979,17 @@ export const Constants = {
         "aguardando_indenizacao",
         "aguardando_pagamento",
         "pecas_em_cotacao",
+      ],
+      status_troca_titularidade: [
+        "cotacao_em_andamento",
+        "aguardando_cadastro",
+        "aguardando_monitoramento",
+        "aguardando_vistoria",
+        "liberada_para_assinatura",
+        "efetivada",
+        "reprovada_cadastro",
+        "reprovada_monitoramento",
+        "cancelada",
       ],
       status_veiculo: [
         "em_analise",
