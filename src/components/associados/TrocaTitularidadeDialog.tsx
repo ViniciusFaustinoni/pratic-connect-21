@@ -36,12 +36,12 @@ export function TrocaTitularidadeDialog({
     setLoadingVeiculos(true);
     supabase
       .from('veiculos')
-      .select('id, marca, modelo, ano, placa')
+      .select('id, marca, modelo, ano_modelo, placa')
       .eq('associado_id', associadoId)
       .then(({ data }) => {
         const list = (data || []).map(v => ({
           id: v.id,
-          descricao: `${v.marca} ${v.modelo} ${v.ano} - ${v.placa}`,
+          descricao: `${v.marca} ${v.modelo} ${v.ano_modelo} - ${v.placa}`,
         }));
         setVeiculos(list);
         if (list.length === 1) setVeiculoId(list[0].id);
