@@ -36,7 +36,7 @@ async function registrarHistorico(opts: {
   await (supabase as any).from('associados_historico').insert({
     associado_id: opts.associadoId,
     instalacao_id: opts.instalacaoId,
-    tipo: 'instalacao',
+    tipo: 'status_alterado',
     acao: 'realocada',
     descricao: `Instalação realocada para ${opts.destino === 'rota' ? 'nova rota' : 'base'}. Motivo: ${opts.motivo}`,
     motivo: opts.motivo,
