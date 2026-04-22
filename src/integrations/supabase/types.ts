@@ -6014,13 +6014,16 @@ export type Database = {
           boleto_url: string | null
           cancelado_por: string | null
           codigo_barras: string | null
+          codigo_situacao_boleto_hinova: number | null
           comprovante_url: string | null
           contrato_id: string | null
           created_at: string
           criado_por: string | null
+          dados_brutos_sga: Json | null
           data_emissao: string
           data_pagamento: string | null
           data_vencimento: string
+          data_vencimento_original: string | null
           desconto: number | null
           descricao: string | null
           forma_pagamento: string | null
@@ -6030,13 +6033,16 @@ export type Database = {
           motivo_cancelamento: string | null
           multa: number | null
           nosso_numero: string | null
+          origem: Database["public"]["Enums"]["cobranca_origem"]
           pix_copia_cola: string | null
           pix_expiracao: string | null
           pix_qrcode: string | null
           referencia_ano: number | null
           referencia_mes: number | null
+          sincronizado_sga_em: string | null
           status: string
           tipo: string
+          tipo_boleto_hinova: string | null
           updated_at: string
           valor: number
           valor_final: number
@@ -6048,13 +6054,16 @@ export type Database = {
           boleto_url?: string | null
           cancelado_por?: string | null
           codigo_barras?: string | null
+          codigo_situacao_boleto_hinova?: number | null
           comprovante_url?: string | null
           contrato_id?: string | null
           created_at?: string
           criado_por?: string | null
+          dados_brutos_sga?: Json | null
           data_emissao?: string
           data_pagamento?: string | null
           data_vencimento: string
+          data_vencimento_original?: string | null
           desconto?: number | null
           descricao?: string | null
           forma_pagamento?: string | null
@@ -6064,13 +6073,16 @@ export type Database = {
           motivo_cancelamento?: string | null
           multa?: number | null
           nosso_numero?: string | null
+          origem?: Database["public"]["Enums"]["cobranca_origem"]
           pix_copia_cola?: string | null
           pix_expiracao?: string | null
           pix_qrcode?: string | null
           referencia_ano?: number | null
           referencia_mes?: number | null
+          sincronizado_sga_em?: string | null
           status?: string
           tipo: string
+          tipo_boleto_hinova?: string | null
           updated_at?: string
           valor: number
           valor_final: number
@@ -6082,13 +6094,16 @@ export type Database = {
           boleto_url?: string | null
           cancelado_por?: string | null
           codigo_barras?: string | null
+          codigo_situacao_boleto_hinova?: number | null
           comprovante_url?: string | null
           contrato_id?: string | null
           created_at?: string
           criado_por?: string | null
+          dados_brutos_sga?: Json | null
           data_emissao?: string
           data_pagamento?: string | null
           data_vencimento?: string
+          data_vencimento_original?: string | null
           desconto?: number | null
           descricao?: string | null
           forma_pagamento?: string | null
@@ -6098,13 +6113,16 @@ export type Database = {
           motivo_cancelamento?: string | null
           multa?: number | null
           nosso_numero?: string | null
+          origem?: Database["public"]["Enums"]["cobranca_origem"]
           pix_copia_cola?: string | null
           pix_expiracao?: string | null
           pix_qrcode?: string | null
           referencia_ano?: number | null
           referencia_mes?: number | null
+          sincronizado_sga_em?: string | null
           status?: string
           tipo?: string
+          tipo_boleto_hinova?: string | null
           updated_at?: string
           valor?: number
           valor_final?: number
@@ -23337,6 +23355,139 @@ export type Database = {
         }
         Relationships: []
       }
+      sga_sync_financeiro_jobs: {
+        Row: {
+          agendado_em: string
+          associado_id: string | null
+          boletos_importados: number
+          concluido_em: string | null
+          created_at: string
+          id: string
+          iniciado_em: string | null
+          status: string
+          tentativas: number
+          tipo: string
+          ultimo_erro: string | null
+          updated_at: string
+          veiculo_id: string
+        }
+        Insert: {
+          agendado_em?: string
+          associado_id?: string | null
+          boletos_importados?: number
+          concluido_em?: string | null
+          created_at?: string
+          id?: string
+          iniciado_em?: string | null
+          status?: string
+          tentativas?: number
+          tipo: string
+          ultimo_erro?: string | null
+          updated_at?: string
+          veiculo_id: string
+        }
+        Update: {
+          agendado_em?: string
+          associado_id?: string | null
+          boletos_importados?: number
+          concluido_em?: string | null
+          created_at?: string
+          id?: string
+          iniciado_em?: string | null
+          status?: string
+          tentativas?: number
+          tipo?: string
+          ultimo_erro?: string | null
+          updated_at?: string
+          veiculo_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sga_sync_financeiro_jobs_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sga_sync_financeiro_jobs_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sga_sync_financeiro_jobs_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sga_sync_financeiro_jobs_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sga_sync_financeiro_jobs_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sga_sync_financeiro_jobs_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sga_sync_financeiro_jobs_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sga_sync_financeiro_jobs_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sga_sync_financeiro_jobs_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "sga_sync_financeiro_jobs_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "sga_sync_financeiro_jobs_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "sga_sync_financeiro_jobs_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sga_sync_logs: {
         Row: {
           action: string
@@ -26891,11 +27042,15 @@ export type Database = {
           renavam: string | null
           sincronizado_hinova: boolean | null
           sincronizado_hinova_em: string | null
+          situacao_financeira_sga: string | null
+          situacao_financeira_sga_em: string | null
           softruck_vehicle_id: string | null
           status: Database["public"]["Enums"]["status_veiculo"] | null
           status_sga: string | null
           substituicao_id: string | null
           substituido_por: string | null
+          total_aberto_sga: number | null
+          total_vencido_sga: number | null
           updated_at: string
           uso_aplicativo: boolean | null
           valor_fipe: number | null
@@ -26948,11 +27103,15 @@ export type Database = {
           renavam?: string | null
           sincronizado_hinova?: boolean | null
           sincronizado_hinova_em?: string | null
+          situacao_financeira_sga?: string | null
+          situacao_financeira_sga_em?: string | null
           softruck_vehicle_id?: string | null
           status?: Database["public"]["Enums"]["status_veiculo"] | null
           status_sga?: string | null
           substituicao_id?: string | null
           substituido_por?: string | null
+          total_aberto_sga?: number | null
+          total_vencido_sga?: number | null
           updated_at?: string
           uso_aplicativo?: boolean | null
           valor_fipe?: number | null
@@ -27005,11 +27164,15 @@ export type Database = {
           renavam?: string | null
           sincronizado_hinova?: boolean | null
           sincronizado_hinova_em?: string | null
+          situacao_financeira_sga?: string | null
+          situacao_financeira_sga_em?: string | null
           softruck_vehicle_id?: string | null
           status?: Database["public"]["Enums"]["status_veiculo"] | null
           status_sga?: string | null
           substituicao_id?: string | null
           substituido_por?: string | null
+          total_aberto_sga?: number | null
+          total_vencido_sga?: number | null
           updated_at?: string
           uso_aplicativo?: boolean | null
           valor_fipe?: number | null
@@ -29861,6 +30024,7 @@ export type Database = {
         | "cancelado"
         | "em_abatimento"
       cc_tipo_lancamento: "credito" | "debito"
+      cobranca_origem: "sistema" | "sga_hinova"
       etapa_lead:
         | "novo"
         | "contato_inicial"
@@ -30280,6 +30444,7 @@ export const Constants = {
         "em_abatimento",
       ],
       cc_tipo_lancamento: ["credito", "debito"],
+      cobranca_origem: ["sistema", "sga_hinova"],
       etapa_lead: [
         "novo",
         "contato_inicial",
