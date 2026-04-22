@@ -145,6 +145,7 @@ export default function CotacaoPublicaCompleta() {
   const [loading, setLoading] = useState(false);
   const [videoVistoriaUrl, setVideoVistoriaUrl] = useState<string | null>(null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [videoUploadProgress, setVideoUploadProgress] = useState<number>(0);
   
   // Ref para prevenir duplo clique
   const isSubmittingRef = useRef(false);
@@ -555,18 +556,21 @@ export default function CotacaoPublicaCompleta() {
   const handleUploadVideo360 = useCallback(async (file: File) => {
     if (!cotacao?.id) return;
     setUploadingVideo(true);
+    setVideoUploadProgress(0);
     try {
       const result = await uploadFotoVistoria.mutateAsync({
         cotacaoId: cotacao.id,
         tipo: 'video_360',
         file,
-      });
+        onProgress: (pct: number) => setVideoUploadProgress(pct),
+      } as any);
       setVideoVistoriaUrl(result.url);
       toast.success('Vídeo 360° enviado!');
     } catch {
-      toast.error('Erro ao enviar vídeo');
+      // Toast amigável já mostrado pelo helper / hook
     } finally {
       setUploadingVideo(false);
+      setVideoUploadProgress(0);
     }
   }, [cotacao?.id, uploadFotoVistoria]);
 
@@ -1181,6 +1185,7 @@ export default function CotacaoPublicaCompleta() {
                     onReset={() => setVideoVistoriaUrl(null)}
                     videoUrl={videoVistoriaUrl || undefined}
                     uploading={uploadingVideo}
+                    uploadProgress={uploadingVideo ? videoUploadProgress : undefined}
                     maxDuration={120}
                     label="Grave um vídeo de 360° ao redor do veículo"
                   />

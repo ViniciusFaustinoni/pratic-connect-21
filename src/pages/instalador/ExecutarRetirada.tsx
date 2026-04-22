@@ -28,6 +28,7 @@ import { ChecklistRetirada, type ChecklistRetiradaItem } from '@/components/inst
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { uploadVideoWithRetry, VideoUploadError } from '@/lib/videoUpload';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMultaRastreador } from '@/hooks/useConteudosSistema';
@@ -142,6 +143,7 @@ export default function ExecutarRetirada() {
   // Estados
   const [uploadingFoto, setUploadingFoto] = useState<string | null>(null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [videoUploadProgress, setVideoUploadProgress] = useState<number>(0);
   const [processando, setProcessando] = useState(false);
   const [showConfirmacao, setShowConfirmacao] = useState(false);
   
@@ -363,26 +365,40 @@ export default function ExecutarRetirada() {
     }
   };
 
-  // Upload de vídeo
+  // Upload de vídeo (resiliente — retry + progresso)
   const handleUploadVideo = async (file: File) => {
     if (!servicoId) return;
     setUploadingVideo(true);
+    setVideoUploadProgress(0);
     try {
-      const fileName = `retirada/${servicoId}/video_360_${Date.now()}.mp4`;
-      const { error: uploadError } = await supabase.storage
-        .from('vistorias')
-        .upload(fileName, file);
-      if (uploadError) throw uploadError;
-      
+      const ext = (file.name.split('.').pop() || 'mp4').toLowerCase();
+      const fileName = `retirada/${servicoId}/video_360_${Date.now()}.${ext}`;
+
+      await uploadVideoWithRetry({
+        supabase,
+        bucket: 'vistorias',
+        path: fileName,
+        file,
+        contentType: file.type || 'video/mp4',
+        upsert: true,
+        onProgress: (pct) => setVideoUploadProgress(pct),
+      });
+
       const { data: signedData } = await supabase.storage.from('vistorias').createSignedUrl(fileName, 3600);
       if (signedData?.signedUrl) {
         setVideoUrl(signedData.signedUrl);
       }
       toast.success('Vídeo enviado!');
     } catch (e) {
-      toast.error('Erro ao enviar vídeo');
+      if (e instanceof VideoUploadError) {
+        // Toast já foi emitido com mensagem amigável dentro do helper? Não — aqui o helper só lança.
+        toast.error(e.userMessage);
+      } else {
+        toast.error('Erro ao enviar vídeo');
+      }
     } finally {
       setUploadingVideo(false);
+      setVideoUploadProgress(0);
     }
   };
 
@@ -813,7 +829,7 @@ export default function ExecutarRetirada() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <VideoCapture onCapture={handleUploadVideo} videoUrl={videoUrl} uploading={uploadingVideo} maxDuration={120} />
+                <VideoCapture onCapture={handleUploadVideo} videoUrl={videoUrl} uploading={uploadingVideo} uploadProgress={uploadingVideo ? videoUploadProgress : undefined} maxDuration={120} />
               </CardContent>
             </Card>
 

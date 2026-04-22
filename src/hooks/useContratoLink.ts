@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
+import { uploadVideoWithRetry, VideoUploadError } from '@/lib/videoUpload';
 
 // Hook para buscar contrato por token (público) com polling inteligente e timeout
 export function useContratoByToken(token: string | undefined) {
@@ -427,20 +428,42 @@ export function useUploadFotoAutovistoria() {
       fotoId, 
       file,
       contratoId,
+      onProgress,
     }: { 
       vistoriaId: string; 
       fotoId: string; 
       file: File;
       contratoId: string;
+      onProgress?: (percent: number) => void;
     }) => {
       const fileName = `vistorias/${vistoriaId}/${fotoId}_${Date.now()}.${file.name.split('.').pop()}`;
-      
-      // Upload do arquivo
-      const { error: uploadError } = await supabase.storage
-        .from('documentos')
-        .upload(fileName, file, { upsert: true });
-      
-      if (uploadError) throw uploadError;
+      const isVideo = file.type.startsWith('video/') || fotoId === 'video_360';
+
+      // Upload do arquivo — usa helper resiliente para vídeos.
+      if (isVideo) {
+        try {
+          await uploadVideoWithRetry({
+            supabase,
+            bucket: 'documentos',
+            path: fileName,
+            file,
+            contentType: file.type || undefined,
+            upsert: true,
+            onProgress,
+          });
+        } catch (err) {
+          if (err instanceof VideoUploadError) {
+            toast.error(err.userMessage);
+          }
+          throw err;
+        }
+      } else {
+        const { error: uploadError } = await supabase.storage
+          .from('documentos')
+          .upload(fileName, file, { upsert: true });
+        
+        if (uploadError) throw uploadError;
+      }
       
       // Obter URL pública
       const { data: urlData } = supabase.storage

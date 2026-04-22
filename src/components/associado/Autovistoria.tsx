@@ -47,6 +47,7 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   const [chassiResultado, setChassiResultado] = useState<ChassiResultado | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [videoUploadProgress, setVideoUploadProgress] = useState<number>(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Buscar autovistoria existente para reidratar fotos após refresh
@@ -286,20 +287,23 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
     }
     
     setUploadingVideo(true);
+    setVideoUploadProgress(0);
     try {
       const result = await uploadFoto.mutateAsync({
         vistoriaId: currentVistoriaId!,
         fotoId: 'video_360',
         file,
         contratoId,
-      });
+        onProgress: (pct: number) => setVideoUploadProgress(pct),
+      } as any);
       setVideoUrl(result.url);
       toast.success('Vídeo 360° enviado com sucesso!');
     } catch (error) {
       console.error('[Autovistoria] Erro no upload do vídeo:', error);
-      toast.error('Erro ao enviar vídeo. Tente novamente.');
+      // Mensagem amigável já tratada pelo helper / hook
     } finally {
       setUploadingVideo(false);
+      setVideoUploadProgress(0);
     }
   };
 
@@ -387,6 +391,7 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
             onReset={handleVideoReset}
             videoUrl={videoUrl || undefined}
             uploading={uploadingVideo}
+            uploadProgress={uploadingVideo ? videoUploadProgress : undefined}
             maxDuration={120}
             label={getLabelVideo360(tipoVeiculo)}
             cameraOnly={true}

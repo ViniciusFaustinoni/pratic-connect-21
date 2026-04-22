@@ -14,6 +14,8 @@ interface VideoCaptureProps {
   maxDuration?: number; // em segundos
   label?: string;
   cameraOnly?: boolean; // Se true, remove opção de galeria
+  /** Progresso do upload (0-100). Quando informado, exibe barra em vez de spinner. */
+  uploadProgress?: number;
 }
 
 export function VideoCapture({
@@ -25,6 +27,7 @@ export function VideoCapture({
   maxDuration = 120, // 2 minutos padrão
   label = 'Vídeo 360°',
   cameraOnly = false,
+  uploadProgress,
 }: VideoCaptureProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -142,7 +145,11 @@ export function VideoCapture({
       const ext = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
       const baseType = mimeType.startsWith('video/mp4') ? 'video/mp4' : 'video/webm';
       
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      // Cap de bitrate para evitar arquivos gigantes em gravações longas (~12 MB/min).
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType,
+        videoBitsPerSecond: 1_500_000,
+      });
       mediaRecorderRef.current = mediaRecorder;
       
       mediaRecorder.ondataavailable = (e) => {
@@ -157,7 +164,15 @@ export function VideoCapture({
         const url = URL.createObjectURL(blob);
         setPreviewUrl(url);
         setPendingFile(file);
-        
+
+        // Aviso preventivo se o vídeo gerado ficou grande (>80 MB).
+        if (blob.size > 80 * 1024 * 1024) {
+          const mb = (blob.size / 1024 / 1024).toFixed(0);
+          toast.info(`Vídeo gerado com ${mb} MB`, {
+            description: 'Pode demorar para enviar em conexão lenta.',
+          });
+        }
+
         // Limpar stream
         if (streamRef.current) {
           streamRef.current.getTracks().forEach(track => track.stop());
@@ -226,11 +241,17 @@ export function VideoCapture({
         setError('Por favor, selecione um arquivo de vídeo.');
         return;
       }
-      // Limite de tamanho — vídeos > 100 MB estouram memória ao decodificar preview em low-end.
-      const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
-      if (file.size > MAX_VIDEO_BYTES) {
-        toast.warning('Vídeo muito grande (>100 MB).', {
-          description: 'Grave um vídeo mais curto para evitar travamentos durante o envio.',
+      // Aviso informativo para arquivos grandes — o limite real do bucket público é 200 MB.
+      const WARN_BYTES = 80 * 1024 * 1024;
+      const HARD_WARN_BYTES = 180 * 1024 * 1024;
+      if (file.size > HARD_WARN_BYTES) {
+        toast.warning('Vídeo muito grande (>180 MB).', {
+          description: 'O envio pode falhar. Grave um vídeo mais curto.',
+        });
+      } else if (file.size > WARN_BYTES) {
+        const mb = (file.size / 1024 / 1024).toFixed(0);
+        toast.info(`Vídeo grande detectado (${mb} MB)`, {
+          description: 'O envio pode demorar em conexão lenta.',
         });
       }
 
@@ -306,9 +327,21 @@ export function VideoCapture({
         />
 
         {uploading ? (
-          <div className="flex flex-col items-center gap-2">
+          <div className="flex flex-col items-center gap-3 px-6 w-full max-w-xs">
             <Loader2 className="h-10 w-10 animate-spin text-blue-500" />
-            <span className="text-sm text-slate-400">Enviando vídeo...</span>
+            <span className="text-sm text-slate-400">
+              {typeof uploadProgress === 'number'
+                ? `Enviando vídeo... ${uploadProgress}%`
+                : 'Enviando vídeo...'}
+            </span>
+            {typeof uploadProgress === 'number' && (
+              <div className="w-full h-2 rounded-full bg-slate-700 overflow-hidden">
+                <div
+                  className="h-full bg-blue-500 transition-all duration-200"
+                  style={{ width: `${Math.max(2, uploadProgress)}%` }}
+                />
+              </div>
+            )}
           </div>
         ) : isRecording ? (
           <>

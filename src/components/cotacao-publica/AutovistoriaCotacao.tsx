@@ -46,6 +46,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoConfirmado, setVideoConfirmado] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [videoUploadProgress, setVideoUploadProgress] = useState<number>(0);
   
   const inputRef = useRef<HTMLInputElement>(null);
   const finalizandoRef = useRef(false);
@@ -222,19 +223,22 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
 
   const handleVideoCapture = async (file: File) => {
     setUploadingVideo(true);
+    setVideoUploadProgress(0);
     try {
       const result = await uploadMutation.mutateAsync({
         cotacaoId,
         fotoId: 'video_360',
         file,
-      });
+        onProgress: (pct: number) => setVideoUploadProgress(pct),
+      } as any);
       setVideoUrl(result.url);
       toast.success('Vídeo 360° enviado com sucesso!');
     } catch (error) {
       console.error('[AutovistoriaCotacao] Erro no upload do vídeo:', error);
-      toast.error('Erro ao enviar vídeo. Tente novamente.');
+      // Mensagem amigável já tratada pelo helper / hook
     } finally {
       setUploadingVideo(false);
+      setVideoUploadProgress(0);
     }
   };
 
@@ -347,6 +351,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
             onReset={handleVideoReset}
             videoUrl={videoUrl ?? undefined}
             uploading={uploadingVideo}
+            uploadProgress={uploadingVideo ? videoUploadProgress : undefined}
             confirmed={!!videoUrl}
             maxDuration={120}
             label={getLabelVideo360(tipoVeiculo)}
