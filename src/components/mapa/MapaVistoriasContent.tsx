@@ -435,13 +435,60 @@ export function MapaVistoriasContent() {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }, []);
 
+  const abrirAlterarEndereco = useCallback((vistoria: VistoriaMapa) => {
+    setAlterarState({
+      servicoId: vistoria.servico_id_unificado || vistoria.id,
+      placa: formatPlacaExibicao(vistoria.veiculo_placa),
+      associadoNome: vistoria.associado_nome,
+      endereco: {
+        cep: (vistoria as any).endereco_cep,
+        logradouro: (vistoria as any).endereco_logradouro,
+        numero: (vistoria as any).endereco_numero,
+        complemento: (vistoria as any).endereco_complemento,
+        bairro: vistoria.endereco_bairro,
+        cidade: vistoria.endereco_cidade,
+        uf: (vistoria as any).endereco_uf,
+      },
+      profissionalId: vistoria.vistoriador_id,
+    });
+  }, []);
+
   const selecionarVistoria = (vistoria: VistoriaMapa) => {
+    setVistoriaSelecionada(vistoria.id);
     if (vistoria.latitude && vistoria.longitude) {
       setPosicaoSelecionada([vistoria.latitude, vistoria.longitude]);
-      setVistoriaSelecionada(vistoria.id);
       if (isMobile) setDrawerOpen(false);
     } else {
-      toast.error("Vistoria sem coordenadas GPS");
+      // Sem GPS: destaca o card e oferece atalho para corrigir endereço
+      toast.info("Vistoria sem GPS. Corrija o endereço para liberar a localização.", {
+        action: {
+          label: "Corrigir endereço",
+          onClick: () => abrirAlterarEndereco(vistoria),
+        },
+      });
+    }
+  };
+
+  // Re-tenta geocodificar um serviço sem coordenadas
+  const [retryingGeocodeId, setRetryingGeocodeId] = useState<string | null>(null);
+  const tentarGeocodificarNovamente = async (vistoria: VistoriaMapa) => {
+    const sid = vistoria.servico_id_unificado || vistoria.id;
+    if (!sid) return;
+    setRetryingGeocodeId(vistoria.id);
+    try {
+      const { data, error } = await supabase.functions.invoke('geocode-servico-retry', {
+        body: { servicoId: sid },
+      });
+      if (error) throw error;
+      if (data?.success) {
+        toast.success(`Coordenadas obtidas${data.aproximado ? ' (aproximadas)' : ''}. Atualizando lista...`);
+      } else {
+        toast.error(data?.error || 'Não foi possível geolocalizar. Corrija o endereço.');
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao tentar geolocalizar');
+    } finally {
+      setRetryingGeocodeId(null);
     }
   };
 
