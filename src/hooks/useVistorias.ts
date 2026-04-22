@@ -666,12 +666,14 @@ export function useVistoriaCompleta(instalacaoId: string | null) {
     queryFn: async () => {
       if (!instalacaoId) return null;
 
-      // Buscar dados da instalação primeiro para obter cotacao_id e rota_id
+      // Buscar dados da instalação primeiro para obter cotacao_id e rota_id.
+      // Usa maybeSingle: o id pode não ser uma instalação (ex.: agendamentos_base.id)
+      // — nesse caso seguimos sem dados de instalação e os fallbacks tratam.
       const { data: instalacao } = await supabase
         .from('instalacoes')
         .select('associado_id, veiculo_id, instalador_id, contrato_id, cotacao_id, rota_id')
         .eq('id', instalacaoId)
-        .single();
+        .maybeSingle();
 
       // Primeiro, buscar vistoria existente vinculada à instalação
       let { data, error } = await supabase
