@@ -1,65 +1,59 @@
 
 
-## Reforçar extração do NÚMERO DO MOTOR no OCR
+## Diferenciar UX do técnico Base vs Rota (mesmo perfil de acesso)
 
-### Diagnóstico
+### Situação atual
 
-O campo `numero_motor` **já existe** em todo o pipeline:
-- `document-ocr/index.ts` cita `numero_motor` na seção CRLV (linha 256-257) e NF-e (linha 296-297)
-- A normalização (uppercase/trim) já existe (linha 968-987)
-- O frontend (`EtapaDadosPessoaisDocumentos.tsx`) consome o campo em CRLV e NF-e e exibe na revisão
-- `ContratoWizard.tsx` também lê `dados.numero_motor`
+Técnicos Base e Rota usam o **mesmo perfil de acesso** (`tipo: 'profissional'`/instalador) e o mesmo layout `/instalador/*`. A diferenciação acontece via `useAlocacaoDiaria().isBase`. Hoje a UI da Base já tem alguns ajustes (sem aba Mapa, fila da base no Home, almoço manual), mas **continua mostrando**:
 
-Então **a infraestrutura está pronta** — o problema é que o modelo de visão **não está retornando o campo de forma consistente**. Razões prováveis:
-
-1. **Instrução muito enxuta no prompt CRLV** — é apenas 1 linha no meio de uma lista de campos; o modelo trata como opcional.
-2. **ATPV-e não extrai `numero_motor`** — a seção lista os campos mas omite o motor (linha 308-318), e o frontend ATPV-e (linha 287+) também não consome.
-3. **Fallback de regex truncamento** (`tryRepairTruncatedJSON`, linha 410) não inclui `numero_motor` no array `dadosFields` — quando a resposta vem truncada, o motor é perdido.
-4. **Nenhuma observação ao usuário** quando o motor falha — ele só descobre depois, no cadastro.
+1. **Monitor de improdutividade** roda para todos (`useMonitorImprodutividade` no `InstaladorHome`) — gera notificação ao coordenador se não houver serviço concluído em 2h. Inválido para técnico Base, que executa serviços sob demanda na fila e pode passar horas sem nada chegar.
+2. **Card "Minha Jornada" no perfil** mostra saldo/crédito/débito e dias trabalhados — métricas de banco de horas que não fazem sentido para quem bate ponto físico na empresa.
+3. **Barra de jornada (`JornadaStatusBar`)** mostra "X trabalhadas / Y restantes", barra de progresso, almoço, atraso de almoço — tudo controle de ponto eletrônico que o técnico Base não precisa ver.
+4. **Modal de resumo do dia** (`ModalResumoDia`) abre ao encerrar turno mostrando saldo/débito/crédito.
+5. **`useGarantirTurno`** continua criando registros em `turnos_profissionais` para o técnico Base (necessário para vincular serviços, mas sem expor o controle).
 
 ### O que vai mudar
 
-**1. `supabase/functions/document-ocr/index.ts` — reforçar prompt CRLV**
+**Princípio**: Técnico Base **continua com o mesmo perfil de acesso** e o mesmo `InstaladorLayout`. A diferença é puramente de UX — esconder controles de ponto/jornada/improdutividade quando `isBase === true`.
 
-Substituir a linha enxuta atual por um bloco dedicado, no mesmo padrão usado para CPF (que funciona bem):
+**1. `useMonitorImprodutividade` — desligar para Base**
+Adicionar `useAlocacaoDiaria` no início do hook. Se `isBase === true`, retornar imediatamente sem registrar interval nem disparar verificação. Técnico de base não pode ser flagged como improdutivo (depende da fila, não da rota).
 
-- Destacar `numero_motor` como **CAMPO OBRIGATÓRIO** do CRLV (não opcional).
-- Listar todas as variações de rótulo: `MOTOR Nº`, `Nº DO MOTOR`, `MOTOR N°`, `MOTOR:`, `MOTOR/SÉRIE`, `Nº MOTOR`, e em CRLV-e/Digital o campo aparece logo abaixo de "CHASSI".
-- Instruir: ler caractere por caractere; o número do motor tem geralmente 7-17 caracteres alfanuméricos (letras maiúsculas + dígitos, podendo conter hífen).
-- Se ilegível, retornar `numero_motor:"ilegivel"` (não `null`) — mesmo padrão do CPF, para diferenciar "não encontrei" de "não consegui ler".
-- Sempre preencher `motor` e `numero_motor` com o mesmo valor.
+**2. `InstaladorHome.tsx` — esconder JornadaStatusBar e modal de resumo para Base**
+- A barra de jornada (`JornadaStatusBar`) só renderiza se `!isVistoriadorBase`.
+- O `ModalResumoDia` só abre se `!isVistoriadorBase` (passar a flag para `useJornadaTrabalho` ou condicionar o `setMostrarResumoDia` ao tipo).
+- Manter `useGarantirTurno` rodando (precisamos do registro de turno para vincular serviços executados), mas silenciosamente.
 
-**2. Adicionar `numero_motor` à seção ATPV-e**
+**3. `InstaladorPerfil.tsx` — substituir "Minha Jornada" por bloco simples para Base**
+Quando `isBase`:
+- Esconder o card "Minha Jornada" inteiro (saldo, dias trabalhados, total mês, débito bloqueado, diárias de viagem).
+- Trocar por um card simples "Técnico Base" com texto: "Você atua na base — controle de ponto é feito presencialmente. Esta tela mostra apenas suas tarefas e configurações."
+- Manter os menus (Configurações, Notificações, Ajuda, Privacidade, Sair) e o card de identificação no topo.
+- Aba "Histórico" pode ser escondida para Base (não tem banco de horas a consultar) ou substituída por histórico simples de serviços executados.
 
-O ATPV-e brasileiro contém o número do motor no bloco "Características do Veículo". Adicionar:
-- Campo `numero_motor` na lista da seção ATPV-e (linha 310-311).
-- No frontend `EtapaDadosPessoaisDocumentos.tsx` linha 288+: adicionar `if (dados.numero_motor) novosDados.numero_motor = dados.numero_motor;` no bloco ATPV-e.
+**4. `useJornadaTrabalho.ts` — não exibir resumo do dia para Base**
+No bloco `--- Modal de resumo do dia ---` (linha ~496), adicionar guard `if (isBase) return;` no `useEffect` que dispara `setMostrarResumoDia(true)`. O hook `isBase` já está disponível no escopo (linha 399).
 
-**3. Reparo de JSON truncado**
+**5. `useGarantirTurno` — sem alteração**
+Continua criando o turno (necessário para FK em serviços executados), apenas sem tela de almoço/jornada na UI.
 
-Adicionar `'numero_motor'` ao array `dadosFields` na linha 410 de `tryRepairTruncatedJSON`, para recuperar o campo mesmo se a resposta da IA for cortada por `max_tokens`.
+### O que NÃO muda
 
-**4. Validação leve no servidor**
-
-Após normalizar (linha 970-987), se `tipo === 'crlv'` e `numero_motor` estiver vazio/null, marcar `result.sugestao = 'revisar'` e adicionar uma observação no `motivo`: "Número do motor não foi extraído — preencha manualmente". Isso garante que o documento entra em revisão manual em vez de aprovar silenciosamente sem o motor.
-
-**5. Re-tentativa direcionada (opcional, baixo custo)**
-
-Se o tipo for CRLV/NF/ATPV-e e `numero_motor` vier vazio na primeira tentativa com `gemini-2.5-flash`, fazer **uma única** retentativa com `gemini-2.5-pro` apenas para extrair esse campo (prompt focado: "Extraia apenas o NÚMERO DO MOTOR deste documento"). Já existe a constante `OCR_RETRY_MODEL` para isso.
-
-### O que NÃO vai mudar
-
-- A flag de aprovação geral do documento continua igual; apenas o motor influencia a sugestão (revisar em vez de aprovar quando ausente).
-- Documentos sem motor visível (ex.: comprovante de residência) seguem inalterados.
-- Estrutura JSON de resposta permanece compatível (campo já existe).
+- Roles e permissões: técnico Base e Rota seguem com o mesmo `role` e mesmo `tipo`. Tudo via `isBase` derivado de `alocacoes_diarias`.
+- `InstaladorLayout` (header, bottom nav, guards) — já trata Base corretamente (esconde aba Mapa).
+- Fila da base no Home (`FilaBaseSection`) e execução de vistorias seguem iguais.
+- Auto-finalização de almoço/turno não dispara para Base (já está com `!isBase` guard hoje no hook).
+- Banco de dados: nenhuma migração. O registro em `turnos_profissionais` continua sendo criado para fins de auditoria interna; só não é exposto na UI.
 
 ### Arquivos editados
 
-- `supabase/functions/document-ocr/index.ts` — reforço de prompt CRLV/ATPV-e, fallback de truncamento, validação pós-parse e retentativa direcionada.
-- `src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx` — extrair `numero_motor` também no bloco ATPV-e.
+- `src/hooks/useMonitorImprodutividade.ts` — bypass total quando `isBase`.
+- `src/pages/instalador/InstaladorHome.tsx` — esconder `JornadaStatusBar` e `ModalResumoDia` para Base.
+- `src/pages/instalador/InstaladorPerfil.tsx` — esconder card "Minha Jornada" e aba "Histórico" para Base; substituir por bloco informativo simples.
+- `src/hooks/useJornadaTrabalho.ts` — não disparar `mostrarResumoDia` para Base.
 
 ### Riscos
 
-- A retentativa com `gemini-2.5-pro` adiciona ~2-4s de latência quando disparada (apenas se o flash falhar). Mitigação: limite a 1 retry e somente para o motor.
-- Falsos positivos de "ilegivel": o modelo pode preferir essa resposta a tentar ler. Mitigação: o usuário ainda pode digitar manualmente no campo dedicado do cadastro.
+- Se um técnico mudar de Base para Rota no meio do dia (improvável, mas possível), a UI atualiza junto com `useAlocacaoDiaria` (cache de 60s). Sem efeitos colaterais em dados.
+- Histórico de jornada continua sendo gravado no banco para Base — útil se o gestor quiser auditar tempo presencial depois. Apenas não fica visível para o técnico.
 
