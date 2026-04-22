@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Search, MoreVertical, Loader2, 
@@ -13,7 +13,6 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useAuth } from '@/contexts/AuthContext';
 import { BadgeCoberturaCompact } from '@/components/veiculos/BadgeCobertura';
 import { supabase } from '@/integrations/supabase/client';
-import * as XLSX from 'xlsx';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -52,6 +51,7 @@ import { useAssociados, useAssociadosContagem, useAssociadosCidades, useUpdateAs
 import { usePlanos } from '@/hooks/usePlanos';
 
 import { AssociadoFilters } from '@/components/cadastro/AssociadoFilters';
+import { ExportAssociadosDialog } from '@/components/cadastro/ExportAssociadosDialog';
 import { ConfirmacaoAcaoDialog } from '@/components/associados/ConfirmacaoAcaoDialog';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -119,12 +119,14 @@ export default function Associados() {
     nomeAssociado: string;
   } | null>(null);
   const [filtersSheetOpen, setFiltersSheetOpen] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [detalheAssociadoId, setDetalheAssociadoId] = useState<string | null>(null);
   const [sheetFilters, setSheetFilters] = useState<{
     status?: StatusAssociado[];
     plano_id?: string;
     cidade?: string;
-    periodo?: string;
+    data_adesao_inicio?: string;
+    data_adesao_fim?: string;
   }>({});
 
   // Construir filtros server-side
@@ -144,6 +146,8 @@ export default function Associados() {
       status: serverStatusList,
       plano_id: serverPlanoId,
       cidade: serverCidade,
+      data_adesao_inicio: sheetFilters.data_adesao_inicio,
+      data_adesao_fim: sheetFilters.data_adesao_fim,
     },
     pagination: { page, pageSize },
   });
@@ -159,7 +163,7 @@ export default function Associados() {
   // Reset paginação ao alterar filtros server-side
   useEffect(() => {
     setPage(1);
-  }, [search, statusFilter, planoFilter, cidadeFilter, sheetFilters.status, sheetFilters.plano_id, sheetFilters.cidade]);
+  }, [search, statusFilter, planoFilter, cidadeFilter, sheetFilters.status, sheetFilters.plano_id, sheetFilters.cidade, sheetFilters.data_adesao_inicio, sheetFilters.data_adesao_fim]);
 
   // Check if any filter is active
   const hasFilters = search || statusFilter !== 'all' || planoFilter !== 'all' || cidadeFilter !== 'all' || Object.keys(sheetFilters).length > 0;
@@ -172,38 +176,11 @@ export default function Associados() {
     ...(sheetFilters.status?.length ? [true] : []),
     sheetFilters.plano_id ? true : false,
     sheetFilters.cidade ? true : false,
-    sheetFilters.periodo ? true : false,
+    sheetFilters.data_adesao_inicio || sheetFilters.data_adesao_fim ? true : false,
   ].filter(Boolean).length;
 
-  // Filtro server-side: search/status/plano/cidade já aplicados pelo hook.
-  // Aqui aplicamos apenas o filtro de período (que não está no servidor) sobre a página atual.
-  const filteredAssociados = useMemo(() => {
-    if (!associados) return [];
-
-    if (!sheetFilters.periodo) return associados;
-
-    return associados.filter((associado) => {
-      if (!associado.data_adesao) return false;
-      const hoje = new Date();
-      const dataAdesao = new Date(associado.data_adesao);
-      let dataLimite: Date;
-
-      switch (sheetFilters.periodo) {
-        case 'ultimo_mes':
-          dataLimite = new Date(hoje.getFullYear(), hoje.getMonth() - 1, hoje.getDate());
-          break;
-        case 'ultimos_3_meses':
-          dataLimite = new Date(hoje.getFullYear(), hoje.getMonth() - 3, hoje.getDate());
-          break;
-        case 'ultimo_ano':
-          dataLimite = new Date(hoje.getFullYear() - 1, hoje.getMonth(), hoje.getDate());
-          break;
-        default:
-          dataLimite = new Date(0);
-      }
-      return dataAdesao >= dataLimite;
-    });
-  }, [associados, sheetFilters.periodo]);
+  // Filtro de data agora é server-side via hook; sem filtragem client-side adicional.
+  const filteredAssociados = useMemo(() => associados ?? [], [associados]);
 
   // Pagination — vem do servidor
   const totalPages = serverTotalPages;
@@ -376,37 +353,8 @@ export default function Associados() {
     setDetalheAssociadoId(associado.id);
   };
 
-  const exportToExcel = useCallback((format: 'xlsx' | 'csv') => {
-    const dataToExport = filteredAssociados.map((a) => ({
-      'Nome': a.nome,
-      'CPF': formatCpf(a.cpf),
-      'Telefone': formatTelefone(a.telefone),
-      'Email': a.email || '',
-      'Veículo': a.veiculos?.[0] ? `${a.veiculos[0].placa} - ${a.veiculos[0].modelo}` : '',
-      'Plano': a.planos?.nome || '',
-      'Status': STATUS_ASSOCIADO_LABELS[a.status],
-      'Data Adesão': formatDate(a.data_adesao),
-      'Cidade': a.cidade || '',
-      'UF': a.uf || '',
-    }));
+  // Exportação inteligente movida para ExportAssociadosDialog.
 
-    const ws = XLSX.utils.json_to_sheet(dataToExport);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Associados');
-
-    const fileName = `associados_${new Date().toISOString().slice(0, 10)}.${format}`;
-    
-    if (format === 'csv') {
-      XLSX.writeFile(wb, fileName, { bookType: 'csv' });
-    } else {
-      XLSX.writeFile(wb, fileName);
-    }
-
-    toast({
-      title: 'Exportação concluída',
-      description: `${filteredAssociados.length} associados exportados para ${format.toUpperCase()}.`,
-    });
-  }, [filteredAssociados, toast]);
 
   // Totals for progress bars
   const totalAssociados = useMemo(() => {
@@ -510,24 +458,14 @@ export default function Associados() {
             </div>
           </div>
           <div className="flex gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Download className="mr-2 h-4 w-4" />
-                  Exportar
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem onClick={() => exportToExcel('xlsx')}>
-                  <FileText className="mr-2 h-4 w-4" />
-                  Excel (.xlsx)
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => exportToExcel('csv')}>
-                  <FileText className="mr-2 h-4 w-4" />
-                  CSV (.csv)
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button variant="outline" size="sm" onClick={() => setFiltersSheetOpen(true)}>
+              <SlidersHorizontal className="mr-2 h-4 w-4" />
+              Filtros{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setExportDialogOpen(true)}>
+              <Download className="mr-2 h-4 w-4" />
+              Exportar
+            </Button>
           </div>
         </div>
 
@@ -1003,6 +941,20 @@ export default function Associados() {
           initialFilters={sheetFilters}
           planos={planos}
           cidades={cidades}
+        />
+
+        {/* Export Dialog */}
+        <ExportAssociadosDialog
+          open={exportDialogOpen}
+          onClose={() => setExportDialogOpen(false)}
+          screenFilters={{
+            status: serverStatusList,
+            plano_id: serverPlanoId,
+            cidade: serverCidade,
+            data_adesao_inicio: sheetFilters.data_adesao_inicio,
+            data_adesao_fim: sheetFilters.data_adesao_fim,
+          }}
+          planos={planos}
         />
 
         {/* Detalhe do Associado em Dialog centralizado */}

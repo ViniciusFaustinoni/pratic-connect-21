@@ -15,27 +15,30 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { STATUS_ASSOCIADO_LABELS, type StatusAssociado } from '@/types/database';
 
+export interface SheetFiltersValue {
+  status?: StatusAssociado[];
+  plano_id?: string;
+  cidade?: string;
+  data_adesao_inicio?: string;
+  data_adesao_fim?: string;
+}
+
 interface AssociadoFiltersProps {
   open: boolean;
   onClose: () => void;
-  onApply: (filters: {
-    status?: StatusAssociado[];
-    plano_id?: string;
-    cidade?: string;
-    periodo?: string;
-  }) => void;
+  onApply: (filters: SheetFiltersValue) => void;
   initialFilters?: {
     status?: StatusAssociado | StatusAssociado[];
     plano_id?: string;
     cidade?: string;
-    periodo?: string;
+    data_adesao_inicio?: string;
+    data_adesao_fim?: string;
   };
   planos?: { id: string; nome: string }[];
   cidades?: string[];
@@ -55,12 +58,12 @@ const STATUS_OPTIONS: { value: StatusAssociado; label: string }[] = [
   { value: 'recusado', label: 'Recusado' },
 ];
 
-const PERIODO_OPTIONS = [
-  { value: '', label: 'Qualquer período' },
-  { value: 'ultimo_mes', label: 'Último mês' },
-  { value: 'ultimos_3_meses', label: 'Últimos 3 meses' },
-  { value: 'ultimo_ano', label: 'Último ano' },
-];
+function toIso(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 export function AssociadoFilters({
   open,
@@ -71,15 +74,16 @@ export function AssociadoFilters({
   cidades,
 }: AssociadoFiltersProps) {
   const [statusSelecionados, setStatusSelecionados] = useState<StatusAssociado[]>(
-    Array.isArray(initialFilters?.status) 
-      ? initialFilters.status 
-      : initialFilters?.status 
-        ? [initialFilters.status] 
+    Array.isArray(initialFilters?.status)
+      ? initialFilters.status
+      : initialFilters?.status
+        ? [initialFilters.status]
         : []
   );
   const [plano, setPlano] = useState(initialFilters?.plano_id || '');
   const [cidade, setCidade] = useState(initialFilters?.cidade || '');
-  const [periodo, setPeriodo] = useState(initialFilters?.periodo || '');
+  const [dataInicio, setDataInicio] = useState(initialFilters?.data_adesao_inicio || '');
+  const [dataFim, setDataFim] = useState(initialFilters?.data_adesao_fim || '');
 
   const handleStatusChange = (status: StatusAssociado, checked: boolean) => {
     if (checked) {
@@ -89,26 +93,24 @@ export function AssociadoFilters({
     }
   };
 
+  const aplicarAtalho = (tipo: 'mes' | '3meses' | 'ano') => {
+    const hoje = new Date();
+    const fim = toIso(hoje);
+    let inicioDate: Date;
+    if (tipo === 'mes') inicioDate = new Date(hoje.getFullYear(), hoje.getMonth() - 1, hoje.getDate());
+    else if (tipo === '3meses') inicioDate = new Date(hoje.getFullYear(), hoje.getMonth() - 3, hoje.getDate());
+    else inicioDate = new Date(hoje.getFullYear() - 1, hoje.getMonth(), hoje.getDate());
+    setDataInicio(toIso(inicioDate));
+    setDataFim(fim);
+  };
+
   const handleApply = () => {
-    const filters: {
-      status?: StatusAssociado[];
-      plano_id?: string;
-      cidade?: string;
-      periodo?: string;
-    } = {};
-    
-    if (statusSelecionados.length > 0) {
-      filters.status = statusSelecionados;
-    }
-    if (plano && plano !== 'all') {
-      filters.plano_id = plano;
-    }
-    if (cidade) {
-      filters.cidade = cidade;
-    }
-    if (periodo) {
-      filters.periodo = periodo;
-    }
+    const filters: SheetFiltersValue = {};
+    if (statusSelecionados.length > 0) filters.status = statusSelecionados;
+    if (plano && plano !== 'all') filters.plano_id = plano;
+    if (cidade) filters.cidade = cidade;
+    if (dataInicio) filters.data_adesao_inicio = dataInicio;
+    if (dataFim) filters.data_adesao_fim = dataFim;
 
     onApply(filters);
     onClose();
@@ -118,22 +120,22 @@ export function AssociadoFilters({
     setStatusSelecionados([]);
     setPlano('');
     setCidade('');
-    setPeriodo('');
+    setDataInicio('');
+    setDataFim('');
   };
 
-  const activeCount = statusSelecionados.length + 
-    (plano && plano !== 'all' ? 1 : 0) + 
-    (cidade ? 1 : 0) + 
-    (periodo ? 1 : 0);
+  const activeCount =
+    statusSelecionados.length +
+    (plano && plano !== 'all' ? 1 : 0) +
+    (cidade ? 1 : 0) +
+    (dataInicio || dataFim ? 1 : 0);
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
       <SheetContent className="flex flex-col">
         <SheetHeader>
           <SheetTitle>Filtros Avançados</SheetTitle>
-          <SheetDescription>
-            Refine a busca de associados
-          </SheetDescription>
+          <SheetDescription>Refine a busca de associados</SheetDescription>
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto py-4 space-y-6">
@@ -150,7 +152,7 @@ export function AssociadoFilters({
                       handleStatusChange(option.value, checked as boolean)
                     }
                   />
-                  <Label 
+                  <Label
                     htmlFor={`status-${option.value}`}
                     className="text-sm font-normal cursor-pointer"
                   >
@@ -207,22 +209,48 @@ export function AssociadoFilters({
 
           <Separator />
 
-          {/* PERÍODO DE ADESÃO */}
+          {/* DATA DE ADESÃO */}
           <div className="space-y-3">
-            <Label className="text-sm font-medium">Período de Adesão</Label>
-            <RadioGroup value={periodo} onValueChange={setPeriodo}>
-              {PERIODO_OPTIONS.map((option) => (
-                <div key={option.value} className="flex items-center space-x-2">
-                  <RadioGroupItem value={option.value} id={`periodo-${option.value}`} />
-                  <Label 
-                    htmlFor={`periodo-${option.value}`}
-                    className="text-sm font-normal cursor-pointer"
-                  >
-                    {option.label}
-                  </Label>
-                </div>
-              ))}
-            </RadioGroup>
+            <Label className="text-sm font-medium">Data de Adesão</Label>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => aplicarAtalho('mes')}>
+                Último mês
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => aplicarAtalho('3meses')}>
+                Últimos 3 meses
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => aplicarAtalho('ano')}>
+                Último ano
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => { setDataInicio(''); setDataFim(''); }}
+              >
+                Limpar
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label htmlFor="data-inicio" className="text-xs text-muted-foreground">De</Label>
+                <Input
+                  id="data-inicio"
+                  type="date"
+                  value={dataInicio}
+                  onChange={(e) => setDataInicio(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="data-fim" className="text-xs text-muted-foreground">Até</Label>
+                <Input
+                  id="data-fim"
+                  type="date"
+                  value={dataFim}
+                  onChange={(e) => setDataFim(e.target.value)}
+                />
+              </div>
+            </div>
           </div>
         </div>
 
