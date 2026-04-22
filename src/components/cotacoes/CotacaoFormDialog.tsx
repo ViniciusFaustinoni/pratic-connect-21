@@ -452,6 +452,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     const faixaAtualRule = obterFaixaFipeAtual(plano?.id, planoCoberturasMap, allEligibilityRules as any, valorFipe);
     const faixaInferiorRule = obterFaixaFipeAnterior(plano?.id, planoCoberturasMap, allEligibilityRules as any, valorFipe);
 
+    // Faixa de obrigatoriedade do rastreador (R$ 30k–R$ 35k): nunca pode ser reduzida
+    const FAIXA_RASTREADOR_MIN = 30000;
+    const FAIXA_RASTREADOR_MAX = 35000;
+    const bloqueioRastreador = {
+      motivo: 'a faixa atual (R$ 30.000 – R$ 35.000) exige rastreador obrigatório. A redução não pode ser aplicada.',
+    };
+
     if (faixaAtualRule && faixaInferiorRule) {
       const mensalAtual = somarCoberturasPorValorFipe(plano.id, planoCoberturasMap, allEligibilityRules as any, valorFipe);
       const mensalInferior = somarCoberturasPorValorFipe(
@@ -461,6 +468,20 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         // valor "alvo" qualquer dentro da faixa inferior
         Math.max(0, faixaInferiorRule.de + 0.01)
       );
+
+      const faixaNaZonaRastreador =
+        faixaAtualRule.de >= FAIXA_RASTREADOR_MIN && faixaAtualRule.de < FAIXA_RASTREADOR_MAX;
+
+      if (faixaNaZonaRastreador) {
+        return {
+          elegivel: false,
+          bloqueado: bloqueioRastreador,
+          valorReduzido,
+          faixaAtual: { min: faixaAtualRule.de, max: faixaAtualRule.ate - 0.01, mensal: mensalAtual },
+          faixaInferior: { min: faixaInferiorRule.de, max: faixaInferiorRule.ate - 0.01, mensal: mensalInferior },
+          economia: mensalAtual - mensalInferior,
+        };
+      }
 
       const elegivel = valorReduzido < faixaAtualRule.de;
 
@@ -490,6 +511,20 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
     const faixaInferior = faixasInferiores[0];
     if (!faixaInferior) return null;
+
+    const faixaLegadaNaZonaRastreador =
+      faixaAtual.fipe_min >= FAIXA_RASTREADOR_MIN && faixaAtual.fipe_min < FAIXA_RASTREADOR_MAX;
+
+    if (faixaLegadaNaZonaRastreador) {
+      return {
+        elegivel: false,
+        bloqueado: bloqueioRastreador,
+        valorReduzido,
+        faixaAtual: { min: faixaAtual.fipe_min, max: faixaAtual.fipe_max, mensal: faixaAtual.valor_mensal },
+        faixaInferior: { min: faixaInferior.fipe_min, max: faixaInferior.fipe_max, mensal: faixaInferior.valor_mensal },
+        economia: faixaAtual.valor_mensal - faixaInferior.valor_mensal,
+      };
+    }
 
     const elegivel = valorReduzido <= faixaInferior.fipe_max;
 
