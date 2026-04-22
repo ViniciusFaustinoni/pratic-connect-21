@@ -49,6 +49,7 @@ interface ServicoDetailModalProps {
 
 export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetailModalProps) {
   const [fichaOpen, setFichaOpen] = useState(false);
+  const [realocarOpen, setRealocarOpen] = useState(false);
 
   if (!servico) return null;
 
