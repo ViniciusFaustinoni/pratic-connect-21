@@ -125,22 +125,31 @@ export default function FinanceiroDashboard() {
     }
   });
 
-  // Cobranças vencendo hoje/amanhã
+  // Cobranças vencendo hoje/amanhã (Asaas adesão + SGA mensalidades)
   const { data: vencendoHoje } = useQuery({
     queryKey: ['cobrancas-vencendo'],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('asaas_cobrancas')
-        .select(`
-          id, valor, data_vencimento,
-          associado:associados(nome, telefone)
-        `)
-        .in('data_vencimento', [hoje, amanha])
-        .in('status', ['PENDING', 'pendente'])
-        .order('data_vencimento')
-        .limit(10);
-      
-      return data;
+      const [asaasRes, sgaRes] = await Promise.all([
+        supabase
+          .from('asaas_cobrancas')
+          .select(`id, valor, data_vencimento, associado:associados!asaas_cobrancas_associado_id_fkey(nome, telefone)`)
+          .in('data_vencimento', [hoje, amanha])
+          .in('status', ['PENDING', 'pendente'])
+          .order('data_vencimento')
+          .limit(10),
+        supabase
+          .from('cobrancas')
+          .select(`id, valor:valor_final, data_vencimento, associado:associados(nome, telefone)`)
+          .eq('origem', 'sga_hinova')
+          .in('data_vencimento', [hoje, amanha])
+          .eq('status', 'aguardando_pagamento')
+          .order('data_vencimento')
+          .limit(10),
+      ]);
+
+      const todos = [...(asaasRes.data || []), ...(sgaRes.data || [])];
+      todos.sort((a: any, b: any) => (a.data_vencimento || '').localeCompare(b.data_vencimento || ''));
+      return todos.slice(0, 10);
     }
   });
 
