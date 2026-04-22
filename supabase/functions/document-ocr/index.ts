@@ -59,6 +59,44 @@ const DIGIT_TO_LETTER: Record<string, string> = { '0': 'O', '1': 'I', '5': 'S', 
 const LETTER_TO_DIGIT: Record<string, string> = { 'O': '0', 'I': '1', 'S': '5', 'B': '8', 'Z': '2', 'G': '6', 'T': '7', 'L': '1', 'Q': '0' };
 
 /**
+ * Gera todas as variantes plausíveis da placa para cobrir confusões OCR
+ * comuns entre Mercosul (LLL N L NN) e formato antigo (LLL NNNN).
+ * Inclui a placa original, normalização Mercosul e normalização para antiga.
+ */
+function gerarCandidatosPlaca(raw: string): string[] {
+  if (!raw) return [];
+  const cleaned = raw.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  if (cleaned.length !== 7) return [cleaned];
+  const out = new Set<string>([cleaned]);
+
+  // Variante 1: força Mercosul (5ª posição = letra)
+  const mercosul = cleaned.split('');
+  for (const i of [0, 1, 2, 4]) {
+    const ch = mercosul[i];
+    if (/[0-9]/.test(ch) && DIGIT_TO_LETTER[ch]) mercosul[i] = DIGIT_TO_LETTER[ch];
+  }
+  for (const i of [3, 5, 6]) {
+    const ch = mercosul[i];
+    if (/[A-Z]/.test(ch) && LETTER_TO_DIGIT[ch]) mercosul[i] = LETTER_TO_DIGIT[ch];
+  }
+  out.add(mercosul.join(''));
+
+  // Variante 2: força antiga (5ª posição = dígito)
+  const antiga = cleaned.split('');
+  for (const i of [0, 1, 2]) {
+    const ch = antiga[i];
+    if (/[0-9]/.test(ch) && DIGIT_TO_LETTER[ch]) antiga[i] = DIGIT_TO_LETTER[ch];
+  }
+  for (const i of [3, 4, 5, 6]) {
+    const ch = antiga[i];
+    if (/[A-Z]/.test(ch) && LETTER_TO_DIGIT[ch]) antiga[i] = LETTER_TO_DIGIT[ch];
+  }
+  out.add(antiga.join(''));
+
+  return Array.from(out);
+}
+
+/**
  * Normalização posicional Mercosul-aware (LLL N L NN).
  * Posições 0,1,2,4 → letras (corrige 0→O, 1→I, etc.)
  * Posições 3,5,6 → dígitos (corrige O→0, I→1, etc.)
@@ -218,7 +256,12 @@ Regras especiais CIN:
 placa (ABC1234/ABC1D23), renavam (11 dígitos), chassi (17 chars), marca, modelo, ano_fabricacao (int), ano_modelo (int), cor (campo "COR"/"COR PREDOMINANTE" - leia literalmente), combustivel, motor, nome_proprietario, blindado (bool)
 - "ANO FAB/MOD: 2013/2014" → ano_fabricacao:2013, ano_modelo:2014
 - Blindado: procure em OBS/TIPO por "BLINDADO/BLINDAGEM/PROTEÇÃO BALÍSTICA". Sempre inclua campo blindado.
-- ⚠️ ATENÇÃO PLACA MERCOSUL (formato LLL-NLNN, ex: RKR3I57, BRA2E19): o **5º caractere é SEMPRE uma LETRA (A-Z)**, NUNCA um dígito (0-9). Se visualmente parecer "1" → leia como "I"; "0" → "O"; "5" → "S"; "8" → "B"; "2" → "Z"; "6" → "G". Em caso de dúvida entre letra e número na 5ª posição, **escolha sempre a LETRA**. Placa antiga (LLLNNNN, ex: ABC1234) tem dígitos nas 4 últimas posições.
+- ⚠️ PLACA — REGRA OBRIGATÓRIA DE FORMATO:
+  • Existem DOIS formatos legais no Brasil. NUNCA misture os dois.
+  • **Placa ANTIGA** (LLLNNNN, ex: ABC1234, LQV3623): as **4 últimas posições são SEMPRE dígitos (0-9)**. Se a 5ª posição parecer uma letra (G/I/O/S/B/Z), é OCR errado — leia como dígito (G→6, I→1, O→0, S→5, B→8, Z→2).
+  • **Placa MERCOSUL** (LLLNLNN, ex: RKR3I57, BRA2E19): a **5ª posição é SEMPRE uma LETRA (A-Z)**. Se parecer dígito (1/0/5/8/2/6), leia como letra.
+  • COMO DECIDIR O FORMATO: o CRLV brasileiro emitido a partir de set/2018 usa Mercosul; veículos anteriores podem manter a placa antiga. Use o **campo "PLACA ANTERIOR/UF"** e o ano de fabricação como pista. Se "PLACA ANTERIOR" estiver no formato antigo e for igual à placa atual, então a placa atual também é antiga.
+  • **EM CASO DE DÚVIDA, releia a posição duvidosa caractere por caractere** comparando com letras/números vizinhos do mesmo documento (ex: outras ocorrências de "6" no Renavam ou no chassi).
 
 ### Nota Fiscal de Veículo (DANFE / NF-e com dados veiculares)
 Detectar quando o documento é uma Nota Fiscal (DANFE/NF-e) que contenha dados de veículo (chassi, motor, valor).
@@ -910,12 +953,39 @@ Use a função para retornar o CPF encontrado ou "ilegivel" se não conseguir le
           continue;
         }
 
-        // ==== Pré-tratamento PLACA: prefere Mercosul quando ambíguo ====
+        // ==== CROSS-CHECK PLACA: sempre confronta com texto nativo do PDF ====
+        // O OCR visual confunde 6↔G, 1↔I, 0↔O entre formato antigo e Mercosul.
+        // O texto nativo do PDF (quando existe) é a fonte mais confiável.
         if (v.field === 'placa') {
-          const { placa: resolved, ajustada } = resolvePlacaPreferMercosul(String(raw));
-          if (ajustada && validatePlaca(resolved)) {
-            console.log(`[OCR] Placa ajustada por normalização Mercosul: "${raw}" → "${resolved}"`);
-            d.placa = resolved;
+          const ocrPlaca = String(raw).replace(/[^A-Z0-9]/gi, '').toUpperCase();
+          const candidatosOCR = gerarCandidatosPlaca(ocrPlaca).filter(p => validatePlaca(p));
+
+          if (extractedPdfText) {
+            const candidatosNativos = extractCandidatesFromText(extractedPdfText, 'placa').filter(p => validatePlaca(p));
+
+            // 1) Se o OCR e o texto nativo coincidem em algum candidato, usa-o.
+            const match = candidatosOCR.find(c => candidatosNativos.includes(c));
+            if (match && match !== ocrPlaca) {
+              console.log(`[OCR] Placa cross-check OCR↔PDF: "${ocrPlaca}" → "${match}"`);
+              d.placa = match;
+            } else if (!match && candidatosNativos.length > 0) {
+              // 2) Se não há intersecção, prioriza o texto nativo (sempre mais confiável que visão).
+              const escolhida = candidatosNativos[0];
+              if (escolhida !== ocrPlaca) {
+                console.log(`[OCR] Placa sobrescrita pelo texto nativo do PDF: "${ocrPlaca}" → "${escolhida}"`);
+                d.placa = escolhida;
+              }
+            }
+          }
+
+          // 3) Fallback legado: prefere Mercosul se ainda não foi resolvido.
+          const atual = String(d.placa);
+          if (!validatePlaca(atual)) {
+            const { placa: resolved, ajustada } = resolvePlacaPreferMercosul(atual);
+            if (ajustada && validatePlaca(resolved)) {
+              console.log(`[OCR] Placa ajustada por normalização Mercosul: "${atual}" → "${resolved}"`);
+              d.placa = resolved;
+            }
           }
         }
 
