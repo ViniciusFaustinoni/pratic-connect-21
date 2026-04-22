@@ -159,8 +159,8 @@ export default function InstaladorHome() {
           </Avatar>
         </div>
 
-        {/* Barra de Status da Jornada */}
-        {emServico && (
+        {/* Barra de Status da Jornada — escondida para técnico Base (controle presencial) */}
+        {emServico && !isVistoriadorBase && (
           isGarantindo ? (
             <div className="bg-slate-800/80 border border-slate-700 rounded-lg p-3 flex items-center justify-center gap-2 mb-4">
               <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -253,15 +253,17 @@ export default function InstaladorHome() {
       </div>
     </div>
 
-      {/* Modal de Resumo do Dia */}
-      <ModalResumoDia
-        open={mostrarResumoDia}
-        onClose={fecharResumoDia}
-        turno={turno}
-        servicosConcluidos={servicosConcluidos}
-        servicosRecusados={servicosRecusados}
-        exibirSaldoAcumulado={exibirSaldo}
-      />
+      {/* Modal de Resumo do Dia — não exibe para técnico Base */}
+      {!isVistoriadorBase && (
+        <ModalResumoDia
+          open={mostrarResumoDia}
+          onClose={fecharResumoDia}
+          turno={turno}
+          servicosConcluidos={servicosConcluidos}
+          servicosRecusados={servicosRecusados}
+          exibirSaldoAcumulado={exibirSaldo}
+        />
+      )}
     </>
   );
 }

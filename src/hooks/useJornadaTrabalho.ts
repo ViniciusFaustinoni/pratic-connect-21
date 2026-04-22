@@ -497,6 +497,8 @@ export function useJornadaTrabalho() {
   const resumoCheckedRef = useRef<string | null>(null);
 
   useEffect(() => {
+    // Técnicos Base não veem o modal de resumo (controle de ponto presencial)
+    if (isBase) return;
     if (
       turno?.status === 'encerrado' &&
       turno?.id &&
@@ -508,7 +510,7 @@ export function useJornadaTrabalho() {
         setMostrarResumoDia(true);
       }
     }
-  }, [turno?.status, turno?.id]);
+  }, [turno?.status, turno?.id, isBase]);
 
   const fecharResumoDia = useCallback(() => {
     if (turno?.id) {
