@@ -226,7 +226,14 @@ export function VideoCapture({
         setError('Por favor, selecione um arquivo de vídeo.');
         return;
       }
-      
+      // Limite de tamanho — vídeos > 100 MB estouram memória ao decodificar preview em low-end.
+      const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
+      if (file.size > MAX_VIDEO_BYTES) {
+        toast.warning('Vídeo muito grande (>100 MB).', {
+          description: 'Grave um vídeo mais curto para evitar travamentos durante o envio.',
+        });
+      }
+
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
       setPendingFile(file);
@@ -249,6 +256,12 @@ export function VideoCapture({
     if (pendingFile) {
       onCapture(pendingFile);
       setPendingFile(null);
+      // Revoga preview agressivamente — o pai assumirá o videoUrl remoto após confirmar.
+      // Reduz pressão de memória logo após o handoff, sem esperar `confirmed`.
+      if (previewUrl) {
+        try { URL.revokeObjectURL(previewUrl); } catch {}
+        setPreviewUrl(null);
+      }
     }
   };
 

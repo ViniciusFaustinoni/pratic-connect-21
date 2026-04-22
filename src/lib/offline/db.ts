@@ -66,7 +66,12 @@ export function gerarClientId(): string {
   });
 }
 
-/** Adiciona uma mídia à fila e devolve o registro persistido */
+/** Adiciona uma mídia à fila e devolve o registro persistido.
+ *
+ * Para fotos > 250KB, comprime antes de gravar no IndexedDB para
+ * (a) evitar estourar quota de storage do Dexie em low-end e
+ * (b) reduzir a memória usada na fila offline.
+ */
 export async function enfileirarMidia(params: {
   vistoria_id: string;
   origem: 'regulador' | 'instalador';
@@ -75,15 +80,33 @@ export async function enfileirarMidia(params: {
   blob: Blob;
   mime?: string;
 }): Promise<MidiaPendente> {
+  let blobFinal = params.blob;
+  let mimeFinal = params.mime || params.blob.type || (params.tipo === 'video' ? 'video/webm' : 'image/jpeg');
+
+  if (params.tipo === 'foto' && params.blob.size > 250 * 1024) {
+    try {
+      // Import dinâmico evita ciclo (compressImage importa hooks de capability).
+      const { compressImage } = await import('@/lib/imageCompressor');
+      const fileIn = params.blob instanceof File
+        ? params.blob
+        : new File([params.blob], `foto_${Date.now()}.jpg`, { type: mimeFinal });
+      const compressed = await compressImage(fileIn);
+      blobFinal = compressed;
+      mimeFinal = 'image/jpeg';
+    } catch (err) {
+      console.warn('[enfileirarMidia] Falha ao comprimir foto, gravando original:', err);
+    }
+  }
+
   const registro: MidiaPendente = {
     id: gerarClientId(),
     vistoria_id: params.vistoria_id,
     origem: params.origem,
     tipo: params.tipo,
     slot: params.slot,
-    blob: params.blob,
-    mime: params.mime || params.blob.type || (params.tipo === 'video' ? 'video/webm' : 'image/jpeg'),
-    tamanho: params.blob.size,
+    blob: blobFinal,
+    mime: mimeFinal,
+    tamanho: blobFinal.size,
     criado_em: Date.now(),
     status: 'pendente',
     tentativas: 0,
