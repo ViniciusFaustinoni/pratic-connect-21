@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Search, MoreVertical, Loader2, 
@@ -13,7 +13,6 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useAuth } from '@/contexts/AuthContext';
 import { BadgeCoberturaCompact } from '@/components/veiculos/BadgeCobertura';
 import { supabase } from '@/integrations/supabase/client';
-import * as XLSX from 'xlsx';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
