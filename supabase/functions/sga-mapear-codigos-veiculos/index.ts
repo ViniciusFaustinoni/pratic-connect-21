@@ -63,15 +63,16 @@ serve(async (req) => {
           await supabase.from('sga_sync_logs').insert({
             action: 'buscar_veiculo_placa',
             status: found?.codigo_veiculo ? 'ok' : 'empty',
-            payload: {
-              placa: v.placa,
-              veiculo_id: v.id,
+            veiculo_id: v.id,
+            associado_id: v.associado_id,
+            request_payload: { placa: v.placa },
+            response_payload: {
               endpoint: debug.endpoint,
               http_status: debug.status,
               body_sample: debug.bodySample,
               encontrado: !!found?.codigo_veiculo,
             },
-          }).then(() => {}, () => {}); // não falhar por log
+          }).then(() => {}, (e: any) => console.warn('[SGA Mapear] log fail:', e?.message));
         }
 
         if (found?.codigo_veiculo) {
