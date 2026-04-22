@@ -294,7 +294,7 @@ A descrição vem em linha única com vários campos separados por vírgula ou e
 - \`CILINDRADAS:150\` \`POTENCIA:12CV\` \`CATEGORIA:PARTICULAR\` \`TIPO VEICULO:MOTOCICLETA\`
 
 **Extração obrigatória de numero_motor:**
-Mesmo quando o número do motor estiver concatenado na descrição com outros campos, EXTRAIA SOMENTE o valor do motor. Use o padrão mental: `MOTOR\s*:?\s*([A-Z0-9-]+)` — capture até o próximo separador (vírgula, espaço, RENAVAM, COR, etc.). Devolva apenas a sequência alfanumérica do motor (com hífen se houver).
+Mesmo quando o número do motor estiver concatenado na descrição com outros campos, EXTRAIA SOMENTE o valor do motor. Use o padrão mental: \`MOTOR\s*:?\s*([A-Z0-9-]+)\` — capture até o próximo separador (vírgula, espaço, RENAVAM, COR, etc.). Devolva apenas a sequência alfanumérica do motor (com hífen se houver).
 
 **Campos a retornar:**
 - valor_nota_fiscal: prefira "VALOR TOTAL DA NOTA" do bloco "CÁLCULO DO IMPOSTO". Se não houver, use "V. TOTAL" do produto principal (quando único). Numérico, ponto decimal (ex.: 18890.00).
