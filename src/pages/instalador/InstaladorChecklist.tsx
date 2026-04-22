@@ -1855,7 +1855,9 @@ export default function InstaladorChecklist() {
                       <div className="rounded-lg bg-green-500/10 border border-green-500/30 p-3">
                         <p className="text-sm text-green-400 flex items-center gap-2 font-medium">
                           <CheckCircle2 className="h-4 w-4" />
-                          Rastreador disponível no estoque
+                          {imeiInfo.status === 'ja_vinculado'
+                            ? 'Rastreador já vinculado a este veículo — confirmando instalação'
+                            : 'Rastreador disponível no estoque'}
                         </p>
                         <div className="mt-2 text-xs text-slate-300 space-y-1">
                           {imeiInfo.codigo && <p>Código: <span className="font-mono font-medium">{imeiInfo.codigo}</span></p>}
@@ -1883,6 +1885,7 @@ export default function InstaladorChecklist() {
                           Rastreador não disponível
                         </p>
                         <div className="mt-2 text-xs text-slate-300 space-y-1">
+                          {imeiError && <p className="text-amber-300">{imeiError}</p>}
                           {imeiInfo.codigo && <p>Código: <span className="font-mono font-medium">{imeiInfo.codigo}</span></p>}
                           <p>Status atual: <Badge variant="outline" className="text-amber-400 border-amber-400/50 ml-1">{imeiInfo.status}</Badge></p>
                         </div>
