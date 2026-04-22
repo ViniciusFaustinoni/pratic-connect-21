@@ -125,6 +125,16 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
                   <ExternalLink className="h-3.5 w-3.5" /> Ver no mapa
                 </a>
               </Button>
+              {isInstalacao && ['agendada', 'nao_compareceu', 'reagendada', 'cancelada'].includes(servico.status) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => setRealocarOpen(true)}
+                >
+                  <MapPinned className="h-3.5 w-3.5" /> Realocar
+                </Button>
+              )}
             </div>
           </DialogHeader>
 
