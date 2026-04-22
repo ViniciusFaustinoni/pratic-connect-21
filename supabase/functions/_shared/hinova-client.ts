@@ -98,10 +98,13 @@ export async function autenticarHinova(creds: HinovaCreds): Promise<HinovaSessio
 }
 
 function authHeaders(s: HinovaSession): HeadersInit {
+  // IMPORTANTE: Hinova SGA v2 espera o token de SESSÃO (token_usuario retornado por /usuario/autenticar)
+  // no header Authorization. Usar o token de aplicação aqui causa respostas vazias/200 silenciosas
+  // em rotas GET de consulta (sem 401), mascarando o erro como "não encontrado".
+  // Alinhado com sga-hinova-sync (caminho comprovadamente funcional).
   return {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${s.token}`,
-    token_usuario: s.tokenUsuario,
+    Authorization: `Bearer ${s.tokenUsuario}`,
   };
 }
 
