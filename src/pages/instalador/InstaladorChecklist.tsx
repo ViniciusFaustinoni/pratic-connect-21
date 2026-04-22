@@ -221,9 +221,9 @@ export default function InstaladorChecklist() {
   const fotosConfig = useMemo(() => getFotosByTipoVeiculo(tipoVeiculo), [tipoVeiculo]);
   const totalObrigatorias = useMemo(() => getTotalFotosObrigatorias(tipoVeiculo), [tipoVeiculo]);
   
-  // Usar categorias filtradas se não precisa de rastreador
+  // Usar categorias filtradas — incluir rastreador/instalação somente se o veículo exigir rastreador
   const categoriasComFotos = useMemo(() => {
-    return agruparFotosFiltradas(tipoVeiculo, false);
+    return agruparFotosFiltradas(tipoVeiculo, veiculoPrecisaRastreador);
   }, [tipoVeiculo, veiculoPrecisaRastreador]);
 
   // Carregar checklist, quilometragem e etapa salvos
