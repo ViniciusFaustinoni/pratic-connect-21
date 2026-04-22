@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
 
     const { data: veiculo } = await admin
       .from('veiculos')
-      .select('marca, modelo, placa, ano')
+      .select('marca, modelo, placa, ano_modelo')
       .eq('id', solicitacao.veiculo_id)
       .maybeSingle();
 
