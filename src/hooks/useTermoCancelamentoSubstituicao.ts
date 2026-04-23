@@ -84,16 +84,17 @@ export function useTermoCancelamentoSubstituicao(cotacaoId: string | undefined) 
 
       setAssociadoId(sub.associado_id);
 
-      // 2) Buscar contrato ATIVO do veículo antigo (ou do associado)
-      let contratoQuery = publicSupabase
+      // 2) Buscar contrato ATIVO do veículo antigo (ou do associado).
+      // Usamos cast para Record porque o cliente público tipa colunas via types.ts;
+      // a coluna autentique_cancelamento_assinado_em foi adicionada por migração recente.
+      const { data: contrato } = await publicSupabase
         .from('contratos')
         .select('id, autentique_cancelamento_id, autentique_cancelamento_url, autentique_cancelamento_assinado_em, status')
         .eq('associado_id', sub.associado_id)
         .in('status', ['ativo', 'assinado'])
         .order('created_at', { ascending: false })
-        .limit(1);
-
-      const { data: contrato } = await contratoQuery.maybeSingle();
+        .limit(1)
+        .maybeSingle() as { data: Record<string, any> | null };
 
       if (!contrato) {
         // Não há contrato ativo — cenário inválido para substituição
