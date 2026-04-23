@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { ArrowLeft, Plus, Infinity as InfinityIcon, AlertCircle } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { FieldHint } from '@/components/admin/planos/FieldHint';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -15,6 +16,12 @@ import { ParcelaEditor, ParcelaForm, NivelForm } from '@/components/comissoes/Pa
 import { useAuth } from '@/contexts/AuthContext';
 
 const COMMERCIAL_ROLE_KEYS = ['vendedor_clt', 'vendedor_externo', 'agencia', 'supervisor_vendas', 'gerente_comercial'];
+
+interface PlanoComissaoOption {
+  id: string;
+  nome: string;
+  linha: string | null;
+}
 
 interface GradeComissaoFormProps {
   basePath?: string;
@@ -33,7 +40,21 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
   const [parcelas, setParcelas] = useState<ParcelaForm[]>([]);
+  const [selectedPlanIds, setSelectedPlanIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+
+  const { data: planos = [] } = useQuery({
+    queryKey: ['grade-comissao-planos-options'],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('planos')
+        .select('id, nome, linha')
+        .eq('ativo', true)
+        .order('nome');
+      if (error) throw error;
+      return data as PlanoComissaoOption[];
+    },
+  });
 
   const { data: existing, isLoading } = useQuery({
     queryKey: ['grade-comissao-v2', id],
@@ -60,7 +81,22 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
         .order('ordem');
       if (nErr) throw nErr;
 
-      return { grade, parcelas: pcs || [], niveis: nvs || [] };
+      const { data: gps, error: gpErr } = await (supabase as any)
+        .from('grade_comissao_planos')
+        .select('plano_id')
+        .eq('grade_id', id!)
+        .eq('ativo', true);
+      if (gpErr) throw gpErr;
+
+      const { data: regras, error: rErr } = await (supabase as any)
+        .from('grade_comissao_plano_regras')
+        .select('*')
+        .eq('grade_id', id!)
+        .eq('ativo', true)
+        .order('ordem');
+      if (rErr) throw rErr;
+
+      return { grade, parcelas: pcs || [], niveis: nvs || [], gradePlanos: gps || [], regras: regras || [] };
     },
   });
 
@@ -68,6 +104,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
     if (existing) {
       setNome(existing.grade.nome);
       setDescricao(existing.grade.descricao || '');
+      setSelectedPlanIds((existing.gradePlanos || []).map((p: any) => p.plano_id));
       const parcs: ParcelaForm[] = (existing.parcelas || []).map((p: any) => ({
         id: p.id,
         numero_parcela: p.numero_parcela,
@@ -79,9 +116,33 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
           .filter((n: any) => n.parcela_id === p.id)
           .sort((a: any, b: any) => a.ordem - b.ordem)
           .map((n: any) => ({
-            id: n.id, nome: n.nome, percentual: Number(n.percentual), role: n.role || '',
+            id: n.id,
+            nome: n.nome,
+            percentual: Number(n.percentual),
+            tipo_comissao: 'percentual',
+            valor: Number(n.percentual),
+            role: n.role || '',
           })),
       }));
+      if ((existing.regras || []).length > 0) {
+        parcs.forEach((p: ParcelaForm) => {
+          const regraBase = (existing.regras || []).filter((r: any) =>
+            (p.vitalicia && r.vitalicia) || (!p.vitalicia && r.parcela_numero === p.numero_parcela)
+          );
+          if (regraBase.length > 0) {
+            const porRole = new Map<string, any>();
+            regraBase.forEach((r: any) => { if (!porRole.has(r.role)) porRole.set(r.role, r); });
+            p.niveis = Array.from(porRole.values()).map((r: any) => ({
+              id: r.id,
+              nome: r.nome_nivel || r.role,
+              role: r.role,
+              tipo_comissao: r.tipo_comissao,
+              valor: Number(r.valor),
+              percentual: r.tipo_comissao === 'percentual' ? Number(r.valor) : 0,
+            }));
+          }
+        });
+      }
       setParcelas(parcs);
     }
   }, [existing]);
