@@ -1542,7 +1542,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         toast.success('Cotação criada com sucesso!');
         navigate('/vendas/cotacoes');
       }
-      
+      // Cotação criada/atualizada com sucesso → descartar rascunho local
+      draft.clearOnSubmit();
+
       // Resetar estados
       form.reset();
       setVeiculoEncontrado(null);
