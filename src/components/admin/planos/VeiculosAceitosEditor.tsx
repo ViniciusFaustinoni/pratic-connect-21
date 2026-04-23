@@ -190,8 +190,30 @@ export function VeiculosAceitosEditor({ entityId }: VeiculosAceitosEditorProps) 
         <p className="text-xs text-muted-foreground italic">Nenhum modelo configurado — todos os veículos são aceitos por padrão.</p>
       )}
 
+      <div className="flex items-start gap-2 rounded-md bg-muted/40 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+        <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+        <span>
+          O modelo cadastrado funciona como prefixo: ex.: <strong>BONGO</strong> aceita BONGO K2500, BONGO 2.5 etc.
+          Use <strong>"Todos os modelos desta marca"</strong> para liberar a marca inteira.
+        </span>
+      </div>
+
       {/* Inline add form */}
-      <div className="grid grid-cols-[2fr_2fr_1fr_1fr_1fr_auto] gap-2 items-end">
+      <div className="grid grid-cols-[1.2fr_1.6fr_1.6fr_1fr_1fr_1fr_auto] gap-2 items-end">
+        <div className="space-y-1">
+          <label className="text-xs font-medium">Tipo</label>
+          <Select value={tipoVeiculo || '__ALL__'} onValueChange={(v) => handleTipoChange(v === '__ALL__' ? '' : v)}>
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue placeholder="Todos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__ALL__">Todos</SelectItem>
+              {tipoOptions.map(o => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <div className="space-y-1">
           <label className="text-xs font-medium">Marca *</label>
           <SearchableSelect
