@@ -179,17 +179,48 @@ export function VeiculosAceitosEditor({ entityId }: VeiculosAceitosEditorProps) 
             </TableHeader>
             <TableBody>
               {modelos.map((m, i) => (
-                <TableRow key={i}>
+                <TableRow key={`${m.marca}-${m.modelo}-${i}`}>
                   <TableCell className="text-xs py-1.5">{m.marca}</TableCell>
                   <TableCell className="text-xs py-1.5">
                     {m.modelo ? m.modelo : <span className="italic text-muted-foreground">Todos</span>}
                   </TableCell>
-                  <TableCell className="text-xs py-1.5">{m.ano_min ?? '—'}</TableCell>
-                  <TableCell className="text-xs py-1.5">{m.ano_max ?? '—'}</TableCell>
                   <TableCell className="py-1.5">
-                    <span className={`text-xs px-1.5 py-0.5 rounded ${statusColors[m.status] || ''}`}>
-                      {m.status}
-                    </span>
+                    <Input
+                      type="number"
+                      defaultValue={m.ano_min ?? ''}
+                      key={`min-${i}-${m.ano_min ?? ''}`}
+                      onBlur={(e) => handleUpdateField(i, 'ano_min', e.target.value)}
+                      placeholder="—"
+                      className="h-7 w-20 text-xs"
+                      disabled={isPending}
+                    />
+                  </TableCell>
+                  <TableCell className="py-1.5">
+                    <Input
+                      type="number"
+                      defaultValue={m.ano_max ?? ''}
+                      key={`max-${i}-${m.ano_max ?? ''}`}
+                      onBlur={(e) => handleUpdateField(i, 'ano_max', e.target.value)}
+                      placeholder="—"
+                      className="h-7 w-20 text-xs"
+                      disabled={isPending}
+                    />
+                  </TableCell>
+                  <TableCell className="py-1.5">
+                    <Select
+                      value={m.status}
+                      onValueChange={(v) => handleUpdateField(i, 'status', v)}
+                      disabled={isPending}
+                    >
+                      <SelectTrigger className={`h-7 w-28 text-xs ${statusColors[m.status] || ''}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STATUS_OPTIONS.map(o => (
+                          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </TableCell>
                   <TableCell className="py-1.5">
                     <Button
