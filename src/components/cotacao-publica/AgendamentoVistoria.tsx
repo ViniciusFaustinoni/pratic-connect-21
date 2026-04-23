@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
-import { Calendar, Clock, MapPin, User, Phone, CheckCircle2, Loader2, Shield, AlertTriangle, Puzzle, Sun, Sunset } from 'lucide-react';
+import { Calendar, Clock, MapPin, User, Phone, CheckCircle2, Loader2, Shield, AlertTriangle, Puzzle, Sun, Sunset, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -15,6 +15,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useFinalizarVistoriaCotacao, useAgendarVistoriaCompleta } from '@/hooks/useCotacaoVistoria';
 import { useVagasPeriodo } from '@/hooks/useVagasPeriodo';
 import { useDatasBloqueadasSet } from '@/hooks/useDatasBloqueadas';
+import { useEnriquecerEndereco } from '@/hooks/useEnriquecerEndereco';
 import { 
   isDomingo, 
   getPeriodosDisponivelsPorHora, 
@@ -68,16 +69,16 @@ export function AgendamentoVistoria({
   const [permiteEncaixe, setPermiteEncaixe] = useState(false);
   const [mostrarResumo, setMostrarResumo] = useState(false);
   const [buscandoCep, setBuscandoCep] = useState(false);
-  
-  const [endereco, setEndereco] = useState<EnderecoForm>({
-    cep: enderecoInicial?.cep || '',
-    logradouro: enderecoInicial?.logradouro || '',
-    numero: enderecoInicial?.numero || '',
-    complemento: enderecoInicial?.complemento || '',
-    bairro: enderecoInicial?.bairro || '',
-    cidade: enderecoInicial?.cidade || '',
-    estado: enderecoInicial?.estado || ''
-  });
+
+  // Endereço com enriquecimento automático via ViaCEP a partir de enderecoInicial (cotação/contrato)
+  const {
+    endereco,
+    setEndereco,
+    enriquecendo,
+    enriquecido,
+    faltaInfo,
+    veioPrePreenchido,
+  } = useEnriquecerEndereco(enderecoInicial);
 
   // Hooks de mutations
   const finalizarMutation = useFinalizarVistoriaCotacao();
@@ -121,27 +122,8 @@ export function AgendamentoVistoria({
     ? getPeriodosDisponivelsPorHora(dataSelecionada) 
     : PERIODOS_DISPONIVEIS;
 
-  // Auto-complete endereço via ViaCEP se tem CEP mas falta bairro
-  useEffect(() => {
-    const cep = endereco.cep?.replace(/\D/g, '');
-    if (cep?.length === 8 && !endereco.bairro) {
-      fetch(`https://viacep.com.br/ws/${cep}/json/`)
-        .then(r => r.json())
-        .then(data => {
-          if (!data.erro) {
-            setEndereco(prev => ({
-              ...prev,
-              bairro: prev.bairro || data.bairro || '',
-              logradouro: prev.logradouro || data.logradouro || '',
-              cidade: prev.cidade || data.localidade || '',
-              estado: prev.estado || data.uf || '',
-            }));
-          }
-        })
-        .catch(() => {});
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // (Auto-complete por ViaCEP agora é feito por useEnriquecerEndereco)
+
 
   // Reset período se mudar a data e o período selecionado não estiver disponível
   useEffect(() => {
@@ -435,7 +417,32 @@ export function AgendamentoVistoria({
                       <MapPin className="h-4 w-4" />
                       Endereço para a instalação
                     </Label>
-                    
+
+                    {/* Banner de feedback do pré-preenchimento */}
+                    {enriquecendo ? (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-md p-3 border border-border">
+                        <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
+                        <span>Buscando endereço pelo CEP…</span>
+                      </div>
+                    ) : faltaInfo ? (
+                      <div className="flex items-start gap-2 text-sm bg-warning/10 text-warning rounded-md p-3 border border-warning/30">
+                        <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                        <span>
+                          Não conseguimos identificar seu CEP/bairro a partir da cotação.
+                          Preencha os campos abaixo para continuar.
+                        </span>
+                      </div>
+                    ) : veioPrePreenchido ? (
+                      <div className="flex items-start gap-2 text-sm bg-success/10 text-success rounded-md p-3 border border-success/30">
+                        <Sparkles className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                        <span>
+                          {enriquecido
+                            ? 'Endereço completado automaticamente pelo CEP da sua cotação. Confirme os dados abaixo.'
+                            : 'Endereço pré-preenchido a partir da sua cotação. Confirme os dados abaixo.'}
+                        </span>
+                      </div>
+                    ) : null}
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="cep">CEP</Label>
