@@ -1,54 +1,43 @@
 
 
-## Corrigir mensagem de aprovação que menciona "Roubo/Furto" em planos sem essa cobertura
+## Remover notificações de "vistoriador improdutivo" para diretoria/admin
 
 ### Diagnóstico
 
-A imagem mostra **dois toasts sobrepostos** após o cadastro aprovar a proposta:
+O hook `src/hooks/useMonitorImprodutividade.ts` roda no client de cada vistoriador a cada 5 minutos. Quando detecta turno ativo sem serviços concluídos por mais de X horas (configurável via `jornada_horas_alerta_improdutividade`, default 2h), ele:
 
-1. ✅ **Toast correto** (vem do hook `useAprovarProposta`, `usePropostasPendentes.ts` linha 1462): usa a `mensagem` retornada pelo backend `aprovar-proposta`, que já distingue corretamente entre os 4 cenários:
-   - Plano sem R&F → "Plano de assistência ativado (sem cobertura de Roubo/Furto)."
-   - Plano com R&F + rastreador → "Cobertura Roubo/Furto ativada. Aguardando instalação para Proteção 360º."
-   - Plano com R&F sem necessidade de rastreador → "Proteção 360° ativada (sem necessidade de rastreador)."
-   - Instalação já concluída → "Proteção 360º ativada."
+1. Busca todos usuários com role `coordenador_monitoramento`, `admin` ou `diretor`.
+2. Insere uma notificação na tabela `notificacoes` para **cada um** desses destinatários.
 
-2. ❌ **Toast hardcoded duplicado** (`src/pages/cadastro/PropostaAnalise.tsx` linhas 202-205): dispara **sempre** a mesma frase — "Após a instalação, o monitoramento dará o segundo check para liberação total da Proteção 360 e do app do associado." — mesmo quando o plano não tem R&F, ou quando o veículo não precisa de rastreador, ou quando a instalação já foi concluída. **É esse o toast errado da captura de tela.**
+Resultado: o diretor recebe a notificação para todo vistoriador improdutivo de toda a operação, várias vezes ao dia.
 
-Além disso, há um **banner fixo** na página (`PropostaAnalise.tsx` linhas 443-456) com texto similar ("o monitoramento dará o segundo check para liberar a Proteção 360...") que também aparece para qualquer plano, inclusive os de assistência.
+O hook é chamado em algum layout/raiz (provavelmente `InstaladorLayout` ou similar). Para desativar globalmente sem perder o código (caso queira reativar depois com filtros melhores), basta neutralizar a execução do efeito.
 
 ### O que vai mudar
 
-**1. Remover o toast hardcoded duplicado** (`PropostaAnalise.tsx` linhas 202-205)
+**1. Desativar o monitor de improdutividade** (`src/hooks/useMonitorImprodutividade.ts`)
 
-O hook `useAprovarProposta` já dispara o toast com a mensagem correta vinda do backend. Deletar o `toast.success(...)` redundante da página. Apenas a navegação (`if (nextProposta) navigate(...)`) permanece.
+Adicionar um early-return logo no início do `useEffect`, com comentário explicando que está temporariamente desativado por gerar ruído excessivo na diretoria. O resto do hook (queries, lógica de cálculo) permanece intacto para reativação futura.
 
-**2. Tornar o banner "Análise documental disponível" condicional ao plano** (`PropostaAnalise.tsx` linhas 443-456)
+**2. Limpar notificações pendentes existentes** (migration DML)
 
-O banner aparece quando `aguardandoExecucao && !aprovarApenasDocumentos`. Vou:
-- Buscar do contrato/plano a flag `planoTemRouboFurto` (mesma heurística do backend: regex `/roubo|furto/i` sobre nomes das coberturas via `plano_coberturas` → `coberturas.nome`).
-- Trocar o texto fixo por uma das duas variantes:
-  - **Plano com R&F**: mantém o texto atual ("...A aprovação final será liberada após a execução da vistoria/instalação agendada. Em seguida, o monitoramento dará o segundo check para liberar a Proteção 360 e o app do associado.").
-  - **Plano só de assistência (sem R&F)**: troca para "...A aprovação final será liberada após a execução da vistoria. Não há instalação de rastreador nem segundo check de monitoramento neste plano de assistência."
+Marcar como `lida = true` (ou deletar) todas as notificações existentes com `tipo = 'improdutividade_vistoriador'` que ainda estão `lida = false`, para o diretor parar de ver o badge/lista populada com esses alertas antigos.
 
-**3. Sem mudanças no backend**
-
-A edge function `aprovar-proposta` já está correta. Nenhuma migration necessária.
-
-### Arquivos editados
-
-- `src/pages/cadastro/PropostaAnalise.tsx`:
-  - Remover `toast.success(...)` hardcoded em `handleConfirmarAprovacao` (linhas 202-205).
-  - Adicionar derivação `planoTemRouboFurto` a partir de `proposta?.plano?.coberturas` (ou fetch direto se não vier embutido).
-  - Tornar o conteúdo do banner "Análise documental disponível" (linhas 449-452) condicional a essa flag.
+Vou usar `UPDATE notificacoes SET lida = true, lida_em = now() WHERE tipo = 'improdutividade_vistoriador' AND lida = false` (preserva histórico, apenas remove do badge de não-lidas).
 
 ### O que NÃO muda
 
-- Lógica do backend `aprovar-proposta` (já distingue corretamente os 4 cenários).
-- Toast emitido pelo hook `useAprovarProposta` (já usa `data.mensagem` do backend).
-- Navegação após aprovação (próxima proposta ou volta para lista).
-- Permissões, status de contrato, geração de instalação.
+- Lógica de jornada de trabalho, almoço, turno.
+- Outros tipos de notificação (sinistros, agendamentos, etc.).
+- Roles e permissões.
+- Tabela `notificacoes` em si — só os registros desse `tipo` específico são marcados como lidos.
+
+### Arquivos editados
+
+- `src/hooks/useMonitorImprodutividade.ts` — early-return no `useEffect` desabilitando o disparo de notificações; comentário `// TODO: reativar quando houver regra mais granular (ex.: só fora de horário de pico, com cooldown maior)`.
+- **Migration nova** — `UPDATE notificacoes SET lida = true, lida_em = now() WHERE tipo = 'improdutividade_vistoriador' AND lida = false`.
 
 ### Riscos
 
-- Se `proposta?.plano` não trouxer `coberturas` no shape esperado, o banner pode cair no caso default (sem R&F) erroneamente. Mitigação: fazer fetch leve de `plano_coberturas` quando a info não estiver disponível, ou usar fallback conservador (mostrar mensagem genérica neutra).
+- Nenhum. Coordenadores/diretoria deixam de receber esses alertas até decisão futura. Vistoriador continua sem ver nada (já era silencioso para ele).
 
