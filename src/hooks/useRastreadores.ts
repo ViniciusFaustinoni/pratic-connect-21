@@ -429,9 +429,10 @@ export function useUpdateRastreadorStatus() {
 
       // 3. Atualizar banco local
       const updateData: RastreadorUpdate = { status };
-      
-      // If status is not 'instalado', clear vehicle association
-      if (status !== 'instalado') {
+
+      // Só limpa veiculo_id quando o status indica desvinculação física/terminal.
+      // manutencao / reagendar_manutencao / retirada_pendente preservam o vínculo.
+      if (deveDesvincular) {
         updateData.veiculo_id = null;
       } else if (veiculo_id !== undefined) {
         updateData.veiculo_id = veiculo_id;
