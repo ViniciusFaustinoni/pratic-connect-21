@@ -320,12 +320,32 @@ export async function buscarSituacaoFinanceiraVeiculo(s: HinovaSession, codigoVe
  * - Lança HinovaTransientError em 401/403/429/5xx/janela horária.
  * - Retorna [] APENAS quando HTTP 200 com array vazio (associado/veículo sem boletos).
  * - 404 → [] (não há boletos para esse vínculo).
+ *
+ * IMPORTANTE: A API exige `data_inicial` e `data_final` (formato dd/mm/aaaa),
+ * caso contrário responde 406 "É necessario enviar ao menos uma data inicial e uma final".
+ * Default: janela de 5 anos para trás até hoje (cobre todo histórico que a Hinova ainda guarda).
  */
+function fmtDataBR(d: Date): string {
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
 export async function listarBoletosVeiculo(
   s: HinovaSession,
   codigoAssociado: number | string,
   codigoVeiculo: number | string,
+  opts?: { dataInicial?: string; dataFinal?: string; anosTras?: number },
 ): Promise<any[]> {
+  const hoje = new Date();
+  const anosTras = opts?.anosTras ?? 5;
+  const inicio = new Date(hoje);
+  inicio.setFullYear(inicio.getFullYear() - anosTras);
+
+  const dataInicial = opts?.dataInicial ?? fmtDataBR(inicio);
+  const dataFinal = opts?.dataFinal ?? fmtDataBR(hoje);
+
   let r: Response;
   try {
     r = await fetch(`${s.apiUrl}/listar/boleto-associado-veiculo`, {
@@ -334,6 +354,8 @@ export async function listarBoletosVeiculo(
       body: JSON.stringify({
         codigo_associado: Number(codigoAssociado),
         codigo_veiculo: Number(codigoVeiculo),
+        data_inicial: dataInicial,
+        data_final: dataFinal,
       }),
     });
   } catch (e: any) {

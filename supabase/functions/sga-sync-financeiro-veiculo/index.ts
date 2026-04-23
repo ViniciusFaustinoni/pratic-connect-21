@@ -3,6 +3,7 @@
 // - Body: { veiculo_id: string, job_id?: string }
 // - Idempotente: upsert em cobrancas por nosso_numero.
 // - Distingue erros transitórios (auth/janela/5xx) → status 'pendente_retry' com proximo_retry_em.
+// v2: usa janela 5 anos em listarBoletosVeiculo (data_inicial/data_final obrigatórios pela Hinova).
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
