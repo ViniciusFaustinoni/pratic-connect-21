@@ -1,191 +1,129 @@
 
 
-## Bugs do app do instalador: tarefa fantasma após aprovação + UX confusa de "fotos faltando"
+## Trilha de auditoria para alterações de `veiculo_id` em rastreadores
 
-### Bug A — "Não foi possível carregar esta tarefa" / "Vistoria Finalizada" persistente como tarefa atual
+### Objetivo
 
-**Causa raiz** (`src/hooks/useVistoriaCompleta.ts`, função `useAprovarVeiculoVistoria` linhas 27-156):
+Registrar automaticamente toda mudança de `veiculo_id` em `rastreadores` (vínculo, desvínculo, troca) — capturando usuário, valor anterior, valor novo, status anterior, status novo e contexto — para diagnosticar incidentes do tipo "esse rastreador estava no veículo X, por que não está mais?".
 
-Quando o técnico aprova a vistoria, o hook atualiza `vistorias.status='aprovada'`, `veiculos.status='ativo'`, `associados.status='em_analise'`, `instalacoes.status='concluida'` — mas **não atualiza**:
+### Diagnóstico
 
-1. `agendamentos_base.status` para `'realizado'` (continua como `'agendado'`/`'confirmado'`).
-2. `servicos.status` para `'aprovada'` quando a tarefa veio materializada como serviço (continua em `'em_andamento'`/`'em_analise'`).
+Hoje:
+- `useAuditLog.ts` existe e grava em `logs_auditoria`, mas **só é chamado manualmente** em poucos pontos. Nenhum dos hooks que mexem em `rastreador.veiculo_id` (`useUpdateRastreadorStatus`, `useSubstituirEquipamento`, `useVistoriaManutencao`, `useVenderVeiculo`, `useDeleteBaseAntiga`, edge functions `concluir-retirada`, `delete-associado`, `delete-ativacao`, `rede-veiculos-desvincular-cliente`) registra log.
+- Resultado: quando um rastreador "some" de um veículo, não há como saber quem/quando/por qual fluxo.
 
-A RPC `buscar_tarefa_atual_profissional` (migration `20260416184325`) lê:
+### O que vai mudar
 
-- Bloco 1 (servicos): `WHERE s.status IN ('em_rota','em_andamento','agendada','em_analise')` → o serviço aprovado segue aparecendo.
-- Bloco 2 (agendamentos_base): `WHERE ab.status IN ('confirmado','em_andamento','agendado')` → o agendamento aprovado segue aparecendo.
-
-Resultado para o técnico:
-- Tela "WALLACE" (imagem 2) mostra a `vistoria_base` da KPQ8J26 já aprovada como tarefa atual.
-- Ao clicar, navega para `/instalador/vistoria/{ab.id}` (a rota usa `tarefa.id`, e para `vistoria_base` esse id é o de `agendamentos_base`).
-- `ExecutarVistoriaCompleta` resolve via `useVistoriaCompletaPorAgendamentoBase` → encontra a vistoria com `status='aprovada'` → cai no bloco "Vistoria Finalizada" (imagem 3). Em janelas de timing entre invalidações, pode ainda mostrar "Não foi possível carregar esta tarefa" (imagem 1) quando a leitura cai numa réplica desatualizada e nenhum dos 3 hooks resolve.
-
-### Bug B — Mensagem "Envie todas as fotos obrigatórias e o vídeo 360°" repetida e sem indicação do que falta (imagem 4)
-
-**Causa raiz** (`src/pages/instalador/InstaladorChecklist.tsx` linhas 2103-2118):
-
-O handler do botão "Próximo" mostra um único toast genérico "Envie todas as fotos obrigatórias e o vídeo 360°" quando `podeAvancar()` é `false` na etapa 3. Problemas:
-
-1. Quando o vídeo já está enviado (tela mostra ✓ verde), o toast continua dizendo "envie o vídeo 360°" — confunde.
-2. Não diz **quais** fotos faltam nem quantas — o técnico precisa rolar a lista inteira procurando o que está pendente.
-3. O toast aparece duplicado na imagem 4 — provável dupla invocação por re-render do React StrictMode em dev OU porque o componente está sendo desmontado/remontado e disparando de novo. Sonner não dedupa toasts idênticos por padrão.
-
-Adicionalmente, falta um sumário no topo da etapa 3 do tipo "5/7 fotos enviadas — faltam: motor_chassi, painel_km" (existe um resumo na linha 1372-1376 mas só aparece em outra etapa, não no topo da 3).
-
-### Correções
-
-**Edição A1 — `src/hooks/useVistoriaCompleta.ts`, dentro de `useAprovarVeiculoVistoria.mutationFn` (após o passo 4 / antes do 5):**
-
-Adicionar duas novas etapas:
-
-```ts
-// 4b. Marcar agendamento_base como realizado (se a vistoria veio de uma tarefa de base)
-const { data: agendVinculado } = await supabase
-  .from('agendamentos_base')
-  .select('id')
-  .eq('vistoria_id', data.vistoriaId)
-  .maybeSingle();
-
-if (agendVinculado) {
-  await supabase
-    .from('agendamentos_base')
-    .update({ status: 'realizado', updated_at: agora })
-    .eq('id', agendVinculado.id);
-}
-
-// 4c. Encerrar serviço materializado vinculado a esta vistoria
-await supabase
-  .from('servicos')
-  .update({
-    status: 'aprovada',
-    concluida_em: agora,
-    updated_at: agora,
-  })
-  .eq('vistoria_origem_id', data.vistoriaId)
-  .in('status', ['em_andamento', 'em_analise', 'em_rota', 'agendada']);
-```
-
-E em `onSuccess`, invalidar também:
-
-```ts
-queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
-queryClient.invalidateQueries({ queryKey: ['tarefa-atual-servico'] });
-queryClient.invalidateQueries({ queryKey: ['agendamentos-base-calendario'] });
-queryClient.invalidateQueries({ queryKey: ['servicos'] });
-```
-
-**Edição A2 — backfill defensivo (migration SQL):**
-
-Para limpar tarefas-fantasma já criadas (caso da KPQ8J26 das imagens):
+**1. Nova tabela `rastreadores_vinculo_historico`** (migration)
 
 ```sql
--- Encerrar agendamentos_base cuja vistoria já está aprovada/reprovada
-UPDATE public.agendamentos_base ab
-   SET status = 'realizado', updated_at = now()
-  FROM public.vistorias v
- WHERE ab.vistoria_id = v.id
-   AND v.status IN ('aprovada','reprovada')
-   AND ab.status IN ('agendado','confirmado','em_andamento');
+CREATE TABLE public.rastreadores_vinculo_historico (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  rastreador_id UUID NOT NULL REFERENCES rastreadores(id) ON DELETE CASCADE,
+  veiculo_id_anterior UUID,           -- pode ser null
+  veiculo_id_novo UUID,               -- pode ser null
+  status_anterior TEXT,
+  status_novo TEXT,
+  placa_anterior TEXT,                -- snapshot, sobrevive a delete do veículo
+  placa_nova TEXT,
+  alterado_por UUID,                  -- auth.uid()
+  alterado_por_nome TEXT,             -- snapshot do nome
+  origem TEXT,                        -- 'trigger_db', 'edge_function:xxx'
+  contexto JSONB,                     -- payload livre (motivo, vistoria_id, etc.)
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
--- Encerrar serviços cuja vistoria de origem já está aprovada/reprovada
-UPDATE public.servicos s
-   SET status = CASE WHEN v.status = 'aprovada' THEN 'aprovada'::status_servico
-                     ELSE 'reprovada'::status_servico END,
-       concluida_em = COALESCE(s.concluida_em, now()),
-       updated_at = now()
-  FROM public.vistorias v
- WHERE s.vistoria_origem_id = v.id
-   AND v.status IN ('aprovada','reprovada')
-   AND s.status IN ('em_andamento','em_analise','em_rota','agendada');
+CREATE INDEX idx_rast_vinc_hist_rastreador ON rastreadores_vinculo_historico(rastreador_id, created_at DESC);
+CREATE INDEX idx_rast_vinc_hist_veiculo_ant ON rastreadores_vinculo_historico(veiculo_id_anterior);
+CREATE INDEX idx_rast_vinc_hist_veiculo_novo ON rastreadores_vinculo_historico(veiculo_id_novo);
 ```
 
-**Edição A3 — `src/pages/instalador/ExecutarVistoriaCompleta.tsx` linha 421-435:**
+RLS:
+- SELECT: papéis com permissão de monitoramento/rastreadores (`has_role` admin/coordenador_monitoramento/operador_monitoramento/diretoria).
+- INSERT: somente via trigger/security-definer (sem policy de insert para clientes).
 
-A tela "Não foi possível carregar esta tarefa" deve ter um botão de retry explícito (já tem "Voltar para tarefas") e uma chamada manual de `refetch` antes de desistir. Adicionar:
+**2. Trigger no Postgres em `rastreadores`**
 
-```tsx
-<Button
-  variant="outline"
-  onClick={() => {
-    vistoriaPorServicoQuery.refetch();
-    vistoriaPorInstalacaoQuery.refetch();
-    vistoriaPorAgendamentoBaseQuery.refetch();
-  }}
->
-  Tentar novamente
-</Button>
+```sql
+CREATE OR REPLACE FUNCTION public.log_rastreador_vinculo_change()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_nome text;
+  v_placa_ant text;
+  v_placa_nova text;
+BEGIN
+  -- só registra quando veiculo_id OU status mudaram
+  IF (OLD.veiculo_id IS NOT DISTINCT FROM NEW.veiculo_id)
+     AND (OLD.status IS NOT DISTINCT FROM NEW.status) THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT nome INTO v_nome FROM profiles WHERE user_id = v_uid LIMIT 1;
+  IF OLD.veiculo_id IS NOT NULL THEN SELECT placa INTO v_placa_ant FROM veiculos WHERE id = OLD.veiculo_id; END IF;
+  IF NEW.veiculo_id IS NOT NULL THEN SELECT placa INTO v_placa_nova FROM veiculos WHERE id = NEW.veiculo_id; END IF;
+
+  INSERT INTO rastreadores_vinculo_historico (
+    rastreador_id, veiculo_id_anterior, veiculo_id_novo,
+    status_anterior, status_novo, placa_anterior, placa_nova,
+    alterado_por, alterado_por_nome, origem
+  ) VALUES (
+    NEW.id, OLD.veiculo_id, NEW.veiculo_id,
+    OLD.status::text, NEW.status::text, v_placa_ant, v_placa_nova,
+    v_uid, COALESCE(v_nome, 'Sistema'),
+    COALESCE(current_setting('app.audit_origem', true), 'trigger_db')
+  );
+  RETURN NEW;
+END $$;
+
+CREATE TRIGGER trg_rastreador_vinculo_audit
+AFTER UPDATE OF veiculo_id, status ON rastreadores
+FOR EACH ROW EXECUTE FUNCTION public.log_rastreador_vinculo_change();
 ```
 
-**Edição B1 — `src/pages/instalador/InstaladorChecklist.tsx` linhas 2104-2118:**
+A trigger captura **toda** alteração — independente de vir do app, edge function, SQL manual ou job. O setting `app.audit_origem` é opcional: edge functions podem fazer `SET LOCAL app.audit_origem = 'concluir-retirada'` antes do UPDATE para enriquecer a origem.
 
-Substituir o toast genérico por mensagem específica do que falta:
+**3. UI — aba "Histórico de Vínculo" no detalhe do rastreador**
 
-```tsx
-onClick={() => {
-  if (!podeAvancar()) {
-    if (etapaAtual === 2 && !checklistCompleto) {
-      const faltam = checklistItems.filter(item =>
-        checklist[item.id]?.status === 'pendente' || !checklist[item.id]
-      ).length;
-      toast.error(`Marque todos os itens do checklist (${faltam} pendente${faltam > 1 ? 's' : ''})`, { id: 'avancar-bloqueado' });
-    } else if (etapaAtual === 3) {
-      const fotosFaltam = totalObrigatorias - totalFotosEnviadas;
-      const partes: string[] = [];
-      if (fotosFaltam > 0) partes.push(`${fotosFaltam} foto${fotosFaltam > 1 ? 's' : ''}`);
-      if (!video360Enviado) partes.push('vídeo 360°');
-      toast.error(`Falta enviar: ${partes.join(' + ')}`, { id: 'avancar-bloqueado' });
-    } else {
-      toast.error('Complete todos os campos obrigatórios para avançar', { id: 'avancar-bloqueado' });
-    }
-    return;
-  }
-  avancar();
-}}
+- Novo componente `RastreadorHistoricoVinculo.tsx` em `src/components/monitoramento/estoque/`.
+- Hook `useRastreadorHistoricoVinculo(rastreadorId)` em `src/hooks/useRastreadores.ts`.
+- Adicionar nova aba no modal/drawer de detalhe do rastreador (`DetalhesRastreadorDialog` ou equivalente) listando:
+  - Data/hora · Usuário · `placa_anterior → placa_nova` · `status_anterior → status_novo` · Origem.
+- Filtrar por placa também acessível na tela de detalhe do veículo (aba "Histórico de rastreadores").
+
+**4. Enriquecimento opcional de origem em edge functions críticas**
+
+Em `supabase/functions/concluir-retirada/index.ts`, `delete-associado/index.ts`, `delete-ativacao/index.ts`, `rede-veiculos-desvincular-cliente/index.ts`, executar antes do UPDATE:
+
+```ts
+await supabase.rpc('set_audit_origem', { origem: 'concluir-retirada' });
 ```
 
-O `id: 'avancar-bloqueado'` faz o Sonner deduplicar — elimina o toast em dobro da imagem 4.
-
-**Edição B2 — adicionar resumo permanente no topo da etapa 3** (acima do `<VistoriaFotoSequencial>` linha 1300):
-
-```tsx
-<div className="rounded-lg border border-slate-700 bg-slate-800 p-3">
-  <div className="flex items-center justify-between text-sm">
-    <span className="text-slate-300">Progresso de mídias</span>
-    <span className="font-semibold text-white">
-      {totalFotosEnviadas}/{totalObrigatorias} fotos · {video360Enviado ? '✓ vídeo' : '✗ vídeo'}
-    </span>
-  </div>
-  {totalFotosEnviadas < totalObrigatorias && (
-    <p className="mt-1 text-xs text-amber-400">
-      Faltam: {fotosObrigatoriasConfig
-        .filter(f => !fotosEnviadas.some(foto => foto.tipo === f.id))
-        .slice(0, 3)
-        .map(f => f.nome)
-        .join(', ')}
-      {fotosObrigatoriasConfig.filter(f => !fotosEnviadas.some(foto => foto.tipo === f.id)).length > 3 && '…'}
-    </p>
-  )}
-</div>
+Criar a RPC auxiliar:
+```sql
+CREATE OR REPLACE FUNCTION public.set_audit_origem(origem text)
+RETURNS void LANGUAGE sql AS $$ SELECT set_config('app.audit_origem', origem, true) $$;
 ```
+
+Sem isso, a origem fica como `'trigger_db'` (ainda funciona — só perde granularidade).
+
+### O que NÃO muda
+
+- Tabela `logs_auditoria` continua existindo para o módulo Diretoria (não é substituída).
+- Hooks de mutação não precisam adicionar `registrarLog` manualmente — a trigger cobre 100%.
+- Lógica de quando desvincular (whitelist `STATUS_DESVINCULA_VEICULO`) — sem alteração.
 
 ### Arquivos editados
 
-- `src/hooks/useVistoriaCompleta.ts` — `useAprovarVeiculoVistoria`: encerrar `agendamentos_base` e `servicos` vinculados; invalidar queries de tarefa atual.
-- `src/pages/instalador/ExecutarVistoriaCompleta.tsx` — botão "Tentar novamente" na tela de erro.
-- `src/pages/instalador/InstaladorChecklist.tsx` — toast específico com `id` (dedupe) + sumário de progresso na etapa 3.
-- Nova migration SQL — backfill: agendamentos_base/servicos com vistoria já aprovada → status terminal.
-
-### Não muda
-
-- RPC `buscar_tarefa_atual_profissional` (a lógica de filtro está correta — o problema é que os registros nunca eram atualizados).
-- Hooks de resolução de vistoria (`useVistoriaCompletaPorServico`, `useVistoriaCompletaPorAgendamentoBase`).
-- Fluxo de upload de fotos/vídeo (`useUploadFotoVistoriaCompleta`, `useUploadVideo360`).
-- Tela "Vistoria Finalizada" (continua sendo o destino correto se o técnico forçar a navegação para uma vistoria já encerrada).
+- Migration nova — tabela `rastreadores_vinculo_historico`, RLS, trigger `trg_rastreador_vinculo_audit`, RPC `set_audit_origem`.
+- `src/hooks/useRastreadores.ts` — novo hook `useRastreadorHistoricoVinculo`.
+- `src/components/monitoramento/estoque/RastreadorHistoricoVinculo.tsx` (novo) — listagem.
+- Componente de detalhe do rastreador (a localizar — provavelmente `DetalhesRastreadorDialog.tsx` ou `RastreadorDetalhesDialog.tsx`) — adicionar aba "Histórico".
+- `supabase/functions/concluir-retirada/index.ts`, `delete-associado/index.ts`, `delete-ativacao/index.ts`, `rede-veiculos-desvincular-cliente/index.ts` — chamada `set_audit_origem` antes do UPDATE.
+- `mem://logic/operations/rastreador-vinculo-preservacao.md` — adicionar nota sobre a trilha de auditoria.
 
 ### Riscos
 
-- A1: caso uma vistoria seja aprovada manualmente sem ter `agendamentos_base` vinculado nem `vistoria_origem_id` em servicos, o `update` simplesmente não afeta nada — sem regressão.
-- A2 (backfill): atualiza apenas registros já com vistoria em `aprovada`/`reprovada` — comportamento equivalente ao que já deveria ter ocorrido. Não toca em registros ativos.
-- B1: Sonner com `id` reaproveita o mesmo container do toast em vez de criar outro. Comportamento desejado.
+- Volume: ~1 linha por mudança de status/veículo. Em 1 ano com 10k rastreadores e ~5 mudanças/ano cada = 50k linhas/ano. Negligenciável; índices cobrem queries por rastreador e por veículo.
+- `auth.uid()` retorna `null` quando o UPDATE vem da service role (edge function com service-role-key). Nesse caso, `alterado_por` fica null e `alterado_por_nome` = `'Sistema'` — comportamento aceitável e identificável (origem fica `concluir-retirada`, etc.).
 
