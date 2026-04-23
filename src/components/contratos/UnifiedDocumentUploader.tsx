@@ -759,4 +759,5 @@ export const UnifiedDocumentUploader = forwardRef<
       </p>
     </div>
   );
-}
+});
+UnifiedDocumentUploader.displayName = 'UnifiedDocumentUploader';
