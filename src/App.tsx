@@ -399,6 +399,10 @@ const RedirectAcordo = () => {
   const { id } = useParams();
   return <Navigate to={`/financeiro/cobrancas/recuperacao/acordos/${id}`} replace />;
 };
+const RedirectGradeComissao = () => {
+  const { id } = useParams();
+  return <Navigate to={`/comissoes/grades/${id}`} replace />;
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
