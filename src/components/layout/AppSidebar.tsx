@@ -324,6 +324,8 @@ const menuConfig: {
         { title: 'Pagamentos', url: '/comissoes/pagamentos', icon: Receipt },
       ],
     },
+    {
+      id: 'contabilidade',
       label: 'Contabilidade',
       icon: BookOpen,
       permission: 'canManageContabilidade',
