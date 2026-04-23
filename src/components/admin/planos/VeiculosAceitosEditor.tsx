@@ -88,7 +88,9 @@ export function VeiculosAceitosEditor({ entityId }: VeiculosAceitosEditorProps) 
   const handleAdd = async () => {
     if (!marca.trim() || !modeloSelecionado.trim()) return;
 
-    const modeloBase = modeloSelecionado.split(' ')[0].toUpperCase();
+    // "__TODOS__" = wildcard: aceita todas as variantes da marca (motor reconhece string vazia)
+    const isWildcard = modeloSelecionado === '__TODOS__';
+    const modeloBase = isWildcard ? '' : modeloSelecionado.split(' ')[0].toUpperCase();
 
     const newEntry: ModeloEntry = {
       marca: marca.trim().toUpperCase(),
