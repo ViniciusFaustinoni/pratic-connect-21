@@ -1,129 +1,150 @@
 
 
-## Trilha de auditoria para alterações de `veiculo_id` em rastreadores
+## Encerrar `agendamentos_base` e `servicos` ao aprovar vistoria
 
-### Objetivo
+### Já parcialmente implementado — preciso confirmar antes
 
-Registrar automaticamente toda mudança de `veiculo_id` em `rastreadores` (vínculo, desvínculo, troca) — capturando usuário, valor anterior, valor novo, status anterior, status novo e contexto — para diagnosticar incidentes do tipo "esse rastreador estava no veículo X, por que não está mais?".
+Na rodada de "Bugs do app do instalador" essa correção foi planejada e (segundo o resumo) aplicada em `useAprovarVeiculoVistoria` + backfill. Antes de re-implementar, preciso ler o código atual para ver se:
 
-### Diagnóstico
+1. A atualização de `agendamentos_base.status = 'realizado'` está mesmo lá.
+2. O `update` em `servicos` (via `vistoria_origem_id` e via `agendamento_origem_id`) está lá.
+3. A edge function `processar-vistoria` (que é o caminho real chamado por `useAnaliseVistoria` — o hook `useAprovarVeiculoVistoria` pode nem ser o ponto de entrada hoje) faz isso.
 
-Hoje:
-- `useAuditLog.ts` existe e grava em `logs_auditoria`, mas **só é chamado manualmente** em poucos pontos. Nenhum dos hooks que mexem em `rastreador.veiculo_id` (`useUpdateRastreadorStatus`, `useSubstituirEquipamento`, `useVistoriaManutencao`, `useVenderVeiculo`, `useDeleteBaseAntiga`, edge functions `concluir-retirada`, `delete-associado`, `delete-ativacao`, `rede-veiculos-desvincular-cliente`) registra log.
-- Resultado: quando um rastreador "some" de um veículo, não há como saber quem/quando/por qual fluxo.
+Se já estiver correto, a "tarefa fantasma" tem outra causa (cache do React Query, realtime não invalidando, ou serviço criado por outro fluxo). Por isso o plano abaixo cobre os dois cenários.
 
-### O que vai mudar
+### Diagnóstico a confirmar (antes de codar)
 
-**1. Nova tabela `rastreadores_vinculo_historico`** (migration)
+Pontos a inspecionar:
+- `src/hooks/useVistoriaCompleta.ts` → `useAprovarVeiculoVistoria` — verificar se já atualiza `agendamentos_base` e `servicos`.
+- `supabase/functions/processar-vistoria/index.ts` — caminho usado pelo regulador (analista) via `useAnaliseVistoria.registrarDecisao`. Esse é o fluxo de aprovação **real** em produção.
+- `src/hooks/useServicosRealtime.ts` — já invalida `tarefa-atual` em qualquer mudança de `servicos` do profissional. OK.
+- Tabela `agendamentos_base` — confirmar enum/valores válidos de `status` (`realizado` existe?).
 
-```sql
-CREATE TABLE public.rastreadores_vinculo_historico (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  rastreador_id UUID NOT NULL REFERENCES rastreadores(id) ON DELETE CASCADE,
-  veiculo_id_anterior UUID,           -- pode ser null
-  veiculo_id_novo UUID,               -- pode ser null
-  status_anterior TEXT,
-  status_novo TEXT,
-  placa_anterior TEXT,                -- snapshot, sobrevive a delete do veículo
-  placa_nova TEXT,
-  alterado_por UUID,                  -- auth.uid()
-  alterado_por_nome TEXT,             -- snapshot do nome
-  origem TEXT,                        -- 'trigger_db', 'edge_function:xxx'
-  contexto JSONB,                     -- payload livre (motivo, vistoria_id, etc.)
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+### Mudanças (condicionais ao diagnóstico)
 
-CREATE INDEX idx_rast_vinc_hist_rastreador ON rastreadores_vinculo_historico(rastreador_id, created_at DESC);
-CREATE INDEX idx_rast_vinc_hist_veiculo_ant ON rastreadores_vinculo_historico(veiculo_id_anterior);
-CREATE INDEX idx_rast_vinc_hist_veiculo_novo ON rastreadores_vinculo_historico(veiculo_id_novo);
+**1. `processar-vistoria` (edge function)** — no branch `decisao IN ('aprovada','aprovada_com_ressalvas')`, adicionar logo após gravar a decisão na vistoria:
+
+```ts
+// 1. Encerra serviço materializado da vistoria (se existir)
+await supabase.rpc('set_audit_origem', { origem: 'processar-vistoria' });
+
+const { data: servicosAfetados } = await supabase
+  .from('servicos')
+  .update({
+    status: decisao === 'reprovada' ? 'cancelada' : 'concluida',
+    finalizado_em: new Date().toISOString(),
+    observacoes_conclusao: 'Encerrado automaticamente por decisão da análise de vistoria',
+  })
+  .eq('vistoria_origem_id', vistoria_id)
+  .in('status', ['agendada','em_rota','em_andamento','pendente','reagendada'])
+  .select('id, agendamento_origem_id');
+
+// 2. Encerra agendamento_base vinculado (se existir)
+const agendamentoIds = (servicosAfetados ?? [])
+  .map(s => s.agendamento_origem_id)
+  .filter(Boolean);
+
+if (agendamentoIds.length > 0) {
+  await supabase
+    .from('agendamentos_base')
+    .update({ status: 'realizado', updated_at: new Date().toISOString() })
+    .in('id', agendamentoIds);
+}
 ```
 
-RLS:
-- SELECT: papéis com permissão de monitoramento/rastreadores (`has_role` admin/coordenador_monitoramento/operador_monitoramento/diretoria).
-- INSERT: somente via trigger/security-definer (sem policy de insert para clientes).
+Mesmo bloco (com `cancelada`/`cancelado`) no branch `reprovada`.
 
-**2. Trigger no Postgres em `rastreadores`**
+**2. `useAprovarVeiculoVistoria` (hook frontend, fluxo de vistoria de manutenção)** — replicar a mesma lógica, **se** ainda não estiver presente. Caso esteja, sem alteração.
+
+**3. Trigger SQL como rede de segurança (recomendado)** — migration:
 
 ```sql
-CREATE OR REPLACE FUNCTION public.log_rastreador_vinculo_change()
-RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE
-  v_uid uuid := auth.uid();
-  v_nome text;
-  v_placa_ant text;
-  v_placa_nova text;
+CREATE OR REPLACE FUNCTION public.sync_servico_on_vistoria_decisao()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE v_novo_status text;
 BEGIN
-  -- só registra quando veiculo_id OU status mudaram
-  IF (OLD.veiculo_id IS NOT DISTINCT FROM NEW.veiculo_id)
-     AND (OLD.status IS NOT DISTINCT FROM NEW.status) THEN
-    RETURN NEW;
+  IF NEW.status IS DISTINCT FROM OLD.status
+     AND NEW.status IN ('aprovada','aprovada_ressalvas','reprovada','cancelada') THEN
+    v_novo_status := CASE NEW.status
+                       WHEN 'reprovada' THEN 'cancelada'
+                       WHEN 'cancelada' THEN 'cancelada'
+                       ELSE 'concluida' END;
+
+    UPDATE servicos
+       SET status = v_novo_status::status_servico,
+           finalizado_em = COALESCE(finalizado_em, now()),
+           updated_at = now()
+     WHERE vistoria_origem_id = NEW.id
+       AND status IN ('agendada','em_rota','em_andamento','pendente','reagendada');
+
+    UPDATE agendamentos_base ab
+       SET status = CASE NEW.status WHEN 'reprovada' THEN 'cancelado'
+                                    WHEN 'cancelada' THEN 'cancelado'
+                                    ELSE 'realizado' END,
+           updated_at = now()
+      FROM servicos s
+     WHERE s.vistoria_origem_id = NEW.id
+       AND ab.id = s.agendamento_origem_id
+       AND ab.status NOT IN ('realizado','cancelado');
   END IF;
-
-  SELECT nome INTO v_nome FROM profiles WHERE user_id = v_uid LIMIT 1;
-  IF OLD.veiculo_id IS NOT NULL THEN SELECT placa INTO v_placa_ant FROM veiculos WHERE id = OLD.veiculo_id; END IF;
-  IF NEW.veiculo_id IS NOT NULL THEN SELECT placa INTO v_placa_nova FROM veiculos WHERE id = NEW.veiculo_id; END IF;
-
-  INSERT INTO rastreadores_vinculo_historico (
-    rastreador_id, veiculo_id_anterior, veiculo_id_novo,
-    status_anterior, status_novo, placa_anterior, placa_nova,
-    alterado_por, alterado_por_nome, origem
-  ) VALUES (
-    NEW.id, OLD.veiculo_id, NEW.veiculo_id,
-    OLD.status::text, NEW.status::text, v_placa_ant, v_placa_nova,
-    v_uid, COALESCE(v_nome, 'Sistema'),
-    COALESCE(current_setting('app.audit_origem', true), 'trigger_db')
-  );
   RETURN NEW;
 END $$;
 
-CREATE TRIGGER trg_rastreador_vinculo_audit
-AFTER UPDATE OF veiculo_id, status ON rastreadores
-FOR EACH ROW EXECUTE FUNCTION public.log_rastreador_vinculo_change();
+CREATE TRIGGER trg_sync_servico_on_vistoria_decisao
+AFTER UPDATE OF status ON vistorias
+FOR EACH ROW EXECUTE FUNCTION sync_servico_on_vistoria_decisao();
 ```
 
-A trigger captura **toda** alteração — independente de vir do app, edge function, SQL manual ou job. O setting `app.audit_origem` é opcional: edge functions podem fazer `SET LOCAL app.audit_origem = 'concluir-retirada'` antes do UPDATE para enriquecer a origem.
+A trigger garante consistência mesmo se algum fluxo futuro alterar `vistorias.status` direto sem passar pela edge function.
 
-**3. UI — aba "Histórico de Vínculo" no detalhe do rastreador**
+**4. Backfill (migration, defensivo)**:
 
-- Novo componente `RastreadorHistoricoVinculo.tsx` em `src/components/monitoramento/estoque/`.
-- Hook `useRastreadorHistoricoVinculo(rastreadorId)` em `src/hooks/useRastreadores.ts`.
-- Adicionar nova aba no modal/drawer de detalhe do rastreador (`DetalhesRastreadorDialog` ou equivalente) listando:
-  - Data/hora · Usuário · `placa_anterior → placa_nova` · `status_anterior → status_novo` · Origem.
-- Filtrar por placa também acessível na tela de detalhe do veículo (aba "Histórico de rastreadores").
-
-**4. Enriquecimento opcional de origem em edge functions críticas**
-
-Em `supabase/functions/concluir-retirada/index.ts`, `delete-associado/index.ts`, `delete-ativacao/index.ts`, `rede-veiculos-desvincular-cliente/index.ts`, executar antes do UPDATE:
-
-```ts
-await supabase.rpc('set_audit_origem', { origem: 'concluir-retirada' });
-```
-
-Criar a RPC auxiliar:
 ```sql
-CREATE OR REPLACE FUNCTION public.set_audit_origem(origem text)
-RETURNS void LANGUAGE sql AS $$ SELECT set_config('app.audit_origem', origem, true) $$;
+-- Encerra serviços ativos de vistorias já decididas
+UPDATE servicos s
+   SET status = CASE v.status
+                  WHEN 'reprovada' THEN 'cancelada'::status_servico
+                  ELSE 'concluida'::status_servico END,
+       finalizado_em = COALESCE(s.finalizado_em, now()),
+       updated_at = now()
+  FROM vistorias v
+ WHERE s.vistoria_origem_id = v.id
+   AND v.status IN ('aprovada','aprovada_ressalvas','reprovada','cancelada')
+   AND s.status IN ('agendada','em_rota','em_andamento','pendente','reagendada');
+
+-- Encerra agendamentos_base correspondentes
+UPDATE agendamentos_base ab
+   SET status = CASE v.status WHEN 'reprovada' THEN 'cancelado'
+                              WHEN 'cancelada' THEN 'cancelado'
+                              ELSE 'realizado' END,
+       updated_at = now()
+  FROM servicos s
+  JOIN vistorias v ON v.id = s.vistoria_origem_id
+ WHERE ab.id = s.agendamento_origem_id
+   AND v.status IN ('aprovada','aprovada_ressalvas','reprovada','cancelada')
+   AND ab.status NOT IN ('realizado','cancelado');
 ```
 
-Sem isso, a origem fica como `'trigger_db'` (ainda funciona — só perde granularidade).
+**5. Frontend — invalidações**: já cobertas por `useServicosRealtime` (escuta `servicos` por `profissional_id`) e `useAnaliseVistoria.onSuccess` (invalida `vistorias`/`fila-vistorias`/`instalacoes`). Sem mudança.
 
-### O que NÃO muda
+### Pré-checagem obrigatória antes de aplicar
 
-- Tabela `logs_auditoria` continua existindo para o módulo Diretoria (não é substituída).
-- Hooks de mutação não precisam adicionar `registrarLog` manualmente — a trigger cobre 100%.
-- Lógica de quando desvincular (whitelist `STATUS_DESVINCULA_VEICULO`) — sem alteração.
+1. Ler `useVistoriaCompleta.ts` e `processar-vistoria/index.ts` para descobrir o que já existe — se a lógica frontend está completa, foco vai 100% para edge function + trigger.
+2. Confirmar no schema os valores válidos de `agendamentos_base.status` (`realizado`/`cancelado`) e `servicos.status` enum.
+3. Confirmar nome da coluna `agendamento_origem_id` em `servicos` (ou variação `base_id`/`agendamento_base_id`).
+
+Se o pré-check mostrar que **tudo já está implementado** e a tarefa fantasma persiste, abro outro ciclo investigando: cache do PWA do instalador, `useServicosRealtime` não montado, ou `tarefa-atual` filtrando por critério diferente.
 
 ### Arquivos editados
 
-- Migration nova — tabela `rastreadores_vinculo_historico`, RLS, trigger `trg_rastreador_vinculo_audit`, RPC `set_audit_origem`.
-- `src/hooks/useRastreadores.ts` — novo hook `useRastreadorHistoricoVinculo`.
-- `src/components/monitoramento/estoque/RastreadorHistoricoVinculo.tsx` (novo) — listagem.
-- Componente de detalhe do rastreador (a localizar — provavelmente `DetalhesRastreadorDialog.tsx` ou `RastreadorDetalhesDialog.tsx`) — adicionar aba "Histórico".
-- `supabase/functions/concluir-retirada/index.ts`, `delete-associado/index.ts`, `delete-ativacao/index.ts`, `rede-veiculos-desvincular-cliente/index.ts` — chamada `set_audit_origem` antes do UPDATE.
-- `mem://logic/operations/rastreador-vinculo-preservacao.md` — adicionar nota sobre a trilha de auditoria.
+- `supabase/functions/processar-vistoria/index.ts` — adicionar bloco de encerramento de `servicos` + `agendamentos_base`.
+- `src/hooks/useVistoriaCompleta.ts` — completar lógica se faltar (provável que sim só para `agendamentos_base`).
+- Migration nova — trigger `trg_sync_servico_on_vistoria_decisao` + backfill.
+- `mem://logic/operations/aprovacao-vistoria-encerra-servico.md` (novo) — registra a regra "ao decidir vistoria, serviço materializado e agendamento_base devem fechar juntos".
 
 ### Riscos
 
-- Volume: ~1 linha por mudança de status/veículo. Em 1 ano com 10k rastreadores e ~5 mudanças/ano cada = 50k linhas/ano. Negligenciável; índices cobrem queries por rastreador e por veículo.
-- `auth.uid()` retorna `null` quando o UPDATE vem da service role (edge function com service-role-key). Nesse caso, `alterado_por` fica null e `alterado_por_nome` = `'Sistema'` — comportamento aceitável e identificável (origem fica `concluir-retirada`, etc.).
+- Se `agendamentos_base.status` não tiver valor `realizado` no enum, a migration falha — pré-check obrigatório.
+- Trigger pode disparar simultânea à update da edge function — idempotente (filtros `IN (status ativos)` evitam dupla escrita).
+- Backfill toca registros históricos — desejado; sem isso, tarefas fantasmas existentes continuam.
 
