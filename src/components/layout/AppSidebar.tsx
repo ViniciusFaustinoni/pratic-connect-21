@@ -76,6 +76,7 @@ import {
   GraduationCap,
   UserSearch,
   ShoppingCart,
+  CheckCircle2,
   Network,
   Coins,
 } from 'lucide-react';
