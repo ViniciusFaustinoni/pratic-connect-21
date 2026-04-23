@@ -1183,23 +1183,28 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   }, [cotacaoParaEditar, open, planosCalculados]);
 
   useEffect(() => {
-    if (planosSelecionados.length === 0 || planosCalculados.length === 0) return;
+    if (planosCalculados.length === 0) return;
 
-    const planosAtualizados = planosSelecionados.map(planoSelecionado =>
-      planosCalculados.find(plano => plano.id === planoSelecionado.id) || planoSelecionado
-    );
+    setPlanosSelecionados(prev => {
+      if (prev.length === 0) return prev;
 
-    const primeiro = planosAtualizados[0];
-    const adicional = form.getValues('valor_adicional') || 0;
+      const planosAtualizados = prev.map(planoSelecionado =>
+        planosCalculados.find(plano => plano.id === planoSelecionado.id) || planoSelecionado
+      );
 
-    form.setValue('plano_id', primeiro.id);
-    form.setValue('valor_cota', primeiro.valorCota || 0);
-    form.setValue('taxa_administrativa', primeiro.taxaAdministrativa || 0);
-    form.setValue('valor_rastreamento', primeiro.valorRastreamento || 0);
-    form.setValue('valor_total_mensal', primeiro.valorMensal + adicional);
+      const primeiro = planosAtualizados[0];
+      const adicional = form.getValues('valor_adicional') || 0;
 
-    setPlanosSelecionados(planosAtualizados);
-  }, [planosCalculados, planosSelecionados, form]);
+      form.setValue('plano_id', primeiro.id);
+      form.setValue('valor_cota', primeiro.valorCota || 0);
+      form.setValue('taxa_administrativa', primeiro.taxaAdministrativa || 0);
+      form.setValue('valor_rastreamento', primeiro.valorRastreamento || 0);
+      form.setValue('valor_total_mensal', primeiro.valorMensal + adicional);
+
+      const mudou = planosAtualizados.some((plano, index) => plano !== prev[index]);
+      return mudou ? planosAtualizados : prev;
+    });
+  }, [planosCalculados, form]);
 
   const handleTogglePlano = (plano: PlanoCotacao) => {
     setPlanosSelecionados(prev => {
