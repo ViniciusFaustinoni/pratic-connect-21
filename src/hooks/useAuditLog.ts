@@ -14,13 +14,14 @@ export type ModuloAuditoria =
   | 'vistorias' | 'instalacoes' | 'veiculos' | 'planos'
   | 'cobrancas' | 'sinistros' | 'processos' | 'documentos'
   | 'rotas' | 'usuarios' | 'configuracoes' | 'acordos'
-  | 'rh' | 'marketing' | 'monitoramento' | 'diretoria';
+  | 'rh' | 'marketing' | 'monitoramento' | 'diretoria' | 'comissoes';
 
 interface LogParams {
   acao: AcaoAuditoria;
   modulo: ModuloAuditoria;
   descricao: string;
   entidade_id?: string;
+  tabela?: string;
   dados_anteriores?: Record<string, unknown>;
   dados_novos?: Record<string, unknown>;
 }
@@ -53,6 +54,7 @@ export async function registrarLog(params: LogParams): Promise<void> {
       acao: params.acao,
       modulo: params.modulo,
       descricao: params.descricao,
+      tabela: params.tabela || null,
       registro_id: params.entidade_id || null,
       dados_anteriores: params.dados_anteriores || null,
       dados_novos: params.dados_novos || null,

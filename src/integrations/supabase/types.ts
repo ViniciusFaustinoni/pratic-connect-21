@@ -30901,6 +30901,11 @@ export type Database = {
         }
         Returns: string
       }
+      fn_auditoria_profile_snapshot: {
+        Args: { p_profile_id: string }
+        Returns: Json
+      }
+      fn_auditoria_usuario_atual: { Args: never; Returns: Json }
       fn_calcular_bonificacao_adesao: {
         Args: {
           p_ano: number
