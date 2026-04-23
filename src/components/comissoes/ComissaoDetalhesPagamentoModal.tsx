@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, GitBranch, ReceiptText } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, GitBranch, ReceiptText } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ interface ComissaoDetalhesPagamentoModalProps {
   onConfirmPayment?: (id: string) => void;
   confirming?: boolean;
   allowConfirm?: boolean;
+  onDownloadReceipt?: (item: any) => void;
 }
 
 const formatMoney = (value: unknown) =>
@@ -53,6 +54,7 @@ export function ComissaoDetalhesPagamentoModal({
   open,
   onOpenChange,
   onConfirmPayment,
+  onDownloadReceipt,
   confirming,
   allowConfirm = false,
 }: ComissaoDetalhesPagamentoModalProps) {
@@ -63,6 +65,7 @@ export function ComissaoDetalhesPagamentoModal({
   const tipoCalculo = comissao?.tipo_calculo || regra?.tipo_comissao;
   const snapshotRules = findSnapshotRules(data?.snapshot, comissao?.parcela_numero, comissao?.role_destinatario);
   const canConfirm = allowConfirm && comissaoId && comissao?.status !== 'paga';
+  const pagamento = data?.pagamento;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -117,6 +120,8 @@ export function ComissaoDetalhesPagamentoModal({
               <DetailItem label="Cobrança" value={data.cobranca?.id} />
               <DetailItem label="Plano vendido" value={data.plano?.nome || comissao.calculo_snapshot?.plano?.nome} />
               <DetailItem label="Grade utilizada" value={data.grade?.nome || comissao.calculo_snapshot?.grade?.nome} />
+              <DetailItem label="Lançamento" value={pagamento?.id || 'Ainda não registrado'} />
+              <DetailItem label="Data do pagamento" value={pagamento?.data_pagamento ? new Date(pagamento.data_pagamento).toLocaleDateString('pt-BR') : comissao.pago_em ? new Date(comissao.pago_em).toLocaleDateString('pt-BR') : '—'} />
             </section>
 
             <section className="space-y-3 rounded-md border p-4">
@@ -181,6 +186,11 @@ export function ComissaoDetalhesPagamentoModal({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
+          {comissao?.status === 'paga' && onDownloadReceipt && (
+            <Button variant="outline" onClick={() => onDownloadReceipt(data?.recibo)}>
+              <Download className="mr-2 h-4 w-4" /> Baixar recibo
+            </Button>
+          )}
           {canConfirm && (
             <Button disabled={confirming} onClick={() => comissaoId && onConfirmPayment?.(comissaoId)}>
               <CheckCircle2 className="mr-2 h-4 w-4" /> Confirmar pagamento
