@@ -1,10 +1,11 @@
 // ============================================================
 // Helper: enviarTermoFiliacaoWhatsApp
 // Envia o link de assinatura do Termo de Filiação via WhatsApp
-// usando template Meta com botão URL dinâmico (assina.ae/{{1}}).
+// usando template Meta com botão URL dinâmico (https://assina.ae/{{1}}),
+// mesmo padrão dos demais templates de assinatura aprovados pela Meta.
 //
 // Ordem de templates:
-//   1) termo_filiacao_assinatura_v1  (3 params: nome, veiculo, contrato)
+//   1) termo_filiacao_assinatura_v2  (3 params: nome, veiculo, contrato)
 //   2) assinatura_documento_v2       (2 params: nome, nomeDoc) — fallback
 //
 // Nunca lança erro: faz log e retorna { success: false, error } em
