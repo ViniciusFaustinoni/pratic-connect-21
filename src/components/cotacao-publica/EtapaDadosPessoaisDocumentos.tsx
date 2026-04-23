@@ -517,6 +517,7 @@ export function EtapaDadosPessoaisDocumentos({
 
       {/* Upload Unificado de Documentos */}
       <UnifiedDocumentUploader
+        ref={uploaderRef}
         cotacaoId={cotacaoId}
         onDocumentsChange={handleDocumentsChange}
         onOcrDataExtracted={handleOcrDataExtracted}
