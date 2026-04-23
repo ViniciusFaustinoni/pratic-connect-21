@@ -97,9 +97,9 @@ export function AtribuirGradeModal({ open, onOpenChange, linha }: AtribuirGradeM
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>Atribuir grade ao usuário e cadeia</DialogTitle>
+          <DialogTitle>Atribuir grade comercial e cadeia</DialogTitle>
           <DialogDescription>
-            {linha.usuario.nome} — a grade atribuída aqui será usada nas vendas deste usuário
+            {linha.usuario.nome} — esta é a área responsável por vincular usuário, grade vigente e hierarquia
           </DialogDescription>
         </DialogHeader>
 
@@ -118,6 +118,9 @@ export function AtribuirGradeModal({ open, onOpenChange, linha }: AtribuirGradeM
                 ))}
               </SelectContent>
             </Select>
+            <p className="mt-1 text-xs text-muted-foreground">
+              A grade selecionada define a regra usada nas vendas originadas por este usuário; os perfis pagos são resolvidos pela cadeia abaixo.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -184,7 +187,7 @@ export function AtribuirGradeModal({ open, onOpenChange, linha }: AtribuirGradeM
           </div>
 
           <p className="text-xs text-muted-foreground">
-            A grade do usuário que originou a venda define quanto toda a cadeia recebe. Supervisor, gerente e agência não usam suas próprias grades nessa venda.
+            Supervisor, gerente e agência não usam suas próprias grades nessa venda; recebem conforme a grade do usuário que originou a venda.
           </p>
         </div>
 

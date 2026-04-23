@@ -293,7 +293,6 @@ export default function UsuarioForm() {
   });
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [gradeError, setGradeError] = useState(false);
   const [novoEmail, setNovoEmail] = useState('');
   const [novaSenha, setNovaSenha] = useState('');
   const [alterandoEmail, setAlterandoEmail] = useState(false);
@@ -349,35 +348,6 @@ export default function UsuarioForm() {
     enabled: isEditing
   });
 
-  // Buscar grade atribuída ao usuário
-  const { data: userGrade } = useQuery({
-    queryKey: ['usuario-grade-comissao', usuario?.user_id],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from('usuario_grade_comissao')
-        .select('grade_id')
-        .eq('user_id', usuario!.user_id)
-        .maybeSingle();
-      if (error) throw error;
-      return data?.grade_id || '';
-    },
-    enabled: isEditing && !!usuario?.user_id,
-  });
-
-  // Buscar grades disponíveis
-  const { data: gradesDisponiveis = [] } = useQuery({
-    queryKey: ['grades-comissao-ativas'],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from('grades_comissao')
-        .select('id, nome')
-        .eq('ativo', true)
-        .order('nome');
-      if (error) throw error;
-      return data as { id: string; nome: string }[];
-    },
-  });
-
   useEffect(() => {
     if (!usuario) return;
     const next = {
@@ -389,7 +359,7 @@ export default function UsuarioForm() {
       senha: '', tipo: (usuario.roles || []).includes('agencia') ? 'agencia' : (usuario.tipo || 'funcionario'), ativo: usuario.ativo ?? true,
       perfis: usuario.roles || [], regioes_atendimento: usuario.regioes_atendimento || [],
       capacidade_diaria: usuario.capacidade_diaria || 10,
-      grade_comissao_id: userGrade || '',
+      grade_comissao_id: '',
       agencia_forma_recebimento: ((usuario as any).agencia_forma_recebimento === 'em_maos' ? 'em_maos' : 'comissao') as 'comissao' | 'em_maos',
     };
     setFormData((prev) => {
@@ -402,23 +372,14 @@ export default function UsuarioForm() {
         prev.perfis.every((p, i) => p === next.perfis[i]) &&
         prev.regioes_atendimento.length === next.regioes_atendimento.length &&
         prev.capacidade_diaria === next.capacidade_diaria &&
-        prev.grade_comissao_id === next.grade_comissao_id &&
         prev.agencia_forma_recebimento === next.agencia_forma_recebimento;
       return same ? prev : next;
     });
-  }, [usuario, userGrade]);
+  }, [usuario]);
 
   // Salvar usuário
   const saveUser = useMutation({
     mutationFn: async () => {
-      // Validação: grade obrigatória para vendedor_externo e agencia
-      const requiresGrade = formData.perfis.some(p => ['vendedor_externo', 'agencia'].includes(p));
-      if (requiresGrade && !formData.grade_comissao_id) {
-        setGradeError(true);
-        throw new Error('GRADE_REQUIRED');
-      }
-      setGradeError(false);
-
       if (isEditing && usuario) {
         const isAgencia = formData.tipo === 'agencia';
         const profileUpdate: any = {
@@ -447,17 +408,8 @@ export default function UsuarioForm() {
           if (rolesError) throw rolesError;
         }
 
-        // Salvar grade de comissão
         const isVendas = formData.perfis.some(p => ['vendedor_clt', 'vendedor_externo', 'agencia'].includes(p));
-        if (isVendas && formData.grade_comissao_id) {
-          const { data: session } = await supabase.auth.getSession();
-          await (supabase as any).from('usuario_grade_comissao').delete().eq('user_id', usuario.user_id);
-          await (supabase as any).from('usuario_grade_comissao').insert({
-            user_id: usuario.user_id,
-            grade_id: formData.grade_comissao_id,
-            atribuido_por: session?.session?.user?.id || null,
-          });
-        } else if (!isVendas) {
+        if (!isVendas) {
           await (supabase as any).from('usuario_grade_comissao').delete().eq('user_id', usuario.user_id);
         }
       } else {
@@ -481,17 +433,12 @@ export default function UsuarioForm() {
     },
     onSuccess: () => {
       setFieldErrors({});
-      setGradeError(false);
       toast.success(isEditing ? 'Usuário atualizado!' : 'Usuário criado!');
       queryClient.invalidateQueries({ queryKey: ['usuarios'] });
       navigate('/configuracoes/usuarios-acessos');
     },
     onError: (error: any) => {
       const errorMessage = error.message || 'Erro ao salvar usuário';
-      if (errorMessage === 'GRADE_REQUIRED') {
-        toast.error('Selecione uma grade de comissão para vendedor externo ou agência.');
-        return;
-      }
       if (errorMessage.includes('CPF já está cadastrado')) {
         setFieldErrors(prev => ({ ...prev, cpf: 'Este CPF já está cadastrado no sistema' }));
         toast.error('CPF já cadastrado.');
@@ -725,41 +672,6 @@ export default function UsuarioForm() {
                       onChange={(e) => setFormData({ ...formData, capacidade_diaria: parseInt(e.target.value) || 10 })}
                       className="bg-background" />
                     <p className="text-xs text-muted-foreground">Máximo de tarefas por dia (1-20)</p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Grade de Comissão — para consultores e agências */}
-            {formData.perfis.some(p => ['vendedor_clt', 'vendedor_externo', 'agencia'].includes(p)) && (
-              <Card className="border-border/50 border-green-500/30">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <TrendingUp className="w-5 h-5 text-green-500" />
-                    Grade de Comissão
-                  </CardTitle>
-                  <CardDescription>Atribua uma grade de comissionamento a este usuário</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <Label htmlFor="grade_comissao">Grade</Label>
-                    <Select
-                      value={formData.grade_comissao_id || 'none'}
-                      onValueChange={(v) => { setFormData(prev => ({ ...prev, grade_comissao_id: v === 'none' ? '' : v })); setGradeError(false); }}
-                    >
-                      <SelectTrigger className={`bg-background ${gradeError ? 'border-destructive ring-destructive' : ''}`}>
-                        <SelectValue placeholder="Selecione uma grade" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Nenhuma grade</SelectItem>
-                        {gradesDisponiveis.map((g) => (
-                          <SelectItem key={g.id} value={g.id}>{g.nome}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Define os percentuais de comissão aplicados a este consultor/agência
-                    </p>
                   </div>
                 </CardContent>
               </Card>

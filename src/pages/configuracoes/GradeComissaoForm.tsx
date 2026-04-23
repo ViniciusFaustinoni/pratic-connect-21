@@ -128,20 +128,6 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
         .single();
       if (error) throw error;
 
-      const { data: pcs, error: pErr } = await (supabase as any)
-        .from('grades_comissao_parcelas')
-        .select('*')
-        .eq('grade_id', id!)
-        .order('ordem');
-      if (pErr) throw pErr;
-
-      const { data: nvs, error: nErr } = await (supabase as any)
-        .from('grades_comissao_niveis')
-        .select('*')
-        .eq('grade_id', id!)
-        .order('ordem');
-      if (nErr) throw nErr;
-
       const { data: gps, error: gpErr } = await (supabase as any)
         .from('grade_comissao_planos')
         .select('plano_id')
@@ -157,7 +143,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
         .order('ordem');
       if (rErr) throw rErr;
 
-      return { grade, parcelas: pcs || [], niveis: nvs || [], gradePlanos: gps || [], regras: regras || [] };
+      return { grade, gradePlanos: gps || [], regras: regras || [] };
     },
   });
 
@@ -184,13 +170,12 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
         next[planoId] = Array.from(grupos.values())
           .map((grupo, ordem) => {
             const base = grupo[0];
-            const parcelaLegacy = base.parcela_id ? (existing.parcelas || []).find((p: any) => p.id === base.parcela_id) : null;
             return {
               id: base.parcela_id || undefined,
               numero_parcela: base.vitalicia ? null : base.parcela_numero,
               vitalicia: !!base.vitalicia,
               vitalicia_inicio_parcela: base.vitalicia ? base.vitalicia_inicio_parcela : null,
-              label: parcelaLegacy?.label || (base.vitalicia ? 'Vitalícia' : base.parcela_numero === 1 ? 'Taxa de Adesão' : `${base.parcela_numero}ª Parcela`),
+              label: base.vitalicia ? 'Vitalícia' : base.parcela_numero === 1 ? 'Taxa de Adesão' : `${base.parcela_numero}ª Parcela`,
               ordem,
               niveis: grupo
                 .sort((a: any, b: any) => (a.ordem || 0) - (b.ordem || 0))
@@ -210,27 +195,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
       return;
     }
 
-    const legacyParcelas: ParcelaForm[] = (existing.parcelas || []).map((p: any) => ({
-      id: p.id,
-      numero_parcela: p.numero_parcela,
-      vitalicia: p.vitalicia,
-      vitalicia_inicio_parcela: p.vitalicia_inicio_parcela,
-      label: p.label,
-      ordem: p.ordem,
-      niveis: (existing.niveis || [])
-        .filter((n: any) => n.parcela_id === p.id)
-        .sort((a: any, b: any) => a.ordem - b.ordem)
-        .map((n: any) => ({
-          id: n.id,
-          nome: n.nome,
-          percentual: Number(n.percentual),
-          tipo_comissao: 'percentual',
-          valor: Number(n.percentual),
-          role: n.role || '',
-        })),
-    }));
-
-    setRegrasPorPlano(Object.fromEntries(planIds.map((planId: string) => [planId, cloneParcelas(legacyParcelas)])));
+    setRegrasPorPlano(Object.fromEntries(planIds.map((planId: string) => [planId, []])));
   }, [existing]);
 
   const togglePlano = (planoId: string) => {
@@ -322,6 +287,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
           if (!p.numero_parcela || p.numero_parcela < 1) return `${contexto}: parcela precisa de número válido`;
         }
         const total = p.niveis.reduce((s, n) => s + (n.tipo_comissao === 'valor_fixo' ? 0 : Number(n.valor ?? n.percentual) || 0), 0);
+        if (p.niveis.length === 0) return `${contexto}: configure pelo menos um perfil remunerado`;
         if (total > 100) return `${contexto}: soma dos percentuais ultrapassa 100%`;
         for (const n of p.niveis) {
           if (!n.role) return `${contexto}: selecione o perfil de cada regra`;
@@ -358,9 +324,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
             const plano = planos.find((p) => p.id === gp.plano_id);
             return { id: gp.plano_id, nome: plano?.nome || gp.plano_id, linha: plano?.linha || null };
           }),
-          regras: existing.regras || [],
-          parcelas: existing.parcelas || [],
-          niveis: existing.niveis || [],
+          regras_por_plano: existing.regras || [],
         }
         : null;
 
@@ -528,7 +492,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
       <Alert>
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
-          Esta tela configura regras comerciais por <b>plano, parcela e perfil</b>. Ela não escolhe quem recebe a grade.
+          Esta tela configura somente quanto cada <b>plano, parcela e perfil de acesso</b> paga. Ela não atribui grade a usuário; isso é feito em Atribuição de Grades.
         </AlertDescription>
       </Alert>
 
