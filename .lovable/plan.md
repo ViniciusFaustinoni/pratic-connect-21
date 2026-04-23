@@ -1,66 +1,98 @@
 
 
-## Erro "Select.Item must have a value prop that is not an empty string" em Filtros / Exportação de Associados
+## OCR perdendo número do motor, chassi e endereço (CEP/bairro) — corrigir 4 falhas no pipeline
 
-### Diagnóstico
+### Diagnóstico (causas reais, em ordem)
 
-O erro vermelho no screenshot ("A `<Select.Item />` must have a value prop that is not an empty string") aparece quando o usuário clica em **Filtros** na tela `/cadastro/associados`. O componente `ExportAssociadosDialog` em si está OK — não usa `Select`. Quem quebra o render é o painel `AssociadoFilters` (`src/components/cadastro/AssociadoFilters.tsx`), com **dois** problemas que violam a regra do Radix Select:
+**1. Endereço (CEP, bairro, logradouro, cidade) some quando JSON do OCR vem truncado.**
+Em `supabase/functions/document-ocr/index.ts` linha 435, o fallback de extração via regex (`dadosFields`) lista campos para CNH/RG/CRLV mas **não inclui** os campos do comprovante de residência: `logradouro`, `numero`, `complemento`, `bairro`, `cidade`, `uf`, `cep`, `nome_titular`, `tipo_comprovante`. Quando o modelo retorna JSON parcialmente quebrado (acontece em PDFs grandes / imagens HEIC convertidas), esses campos ficam em branco — daí o "às vezes não puxa CEP, às vezes não puxa bairro".
 
-1. **Linha 195** — opção "Todas as cidades" usa `value=""`:
-   ```tsx
-   <SelectItem value="">Todas as cidades</SelectItem>
-   ```
-   Radix proíbe explicitamente string vazia em `<SelectItem value>` (a mensagem que apareceu na tela é literal do Radix).
+**2. Chassi não tem retry direcionado nem extração via texto nativo do PDF para CRLV digital.**
+O `numero_motor` já tem retry com `gemini-2.5-pro` (linhas 1015-1112) e fallback para texto nativo do PDF. **O chassi não tem esse retry.** Quando o modelo lê 16 dos 17 caracteres ou marca `ilegivel`, o sistema só registra o erro e sugere "revisar" (linha 1203), mas não tenta nova extração — e o usuário recebe o documento sem chassi, tendo que digitar manualmente.
 
-2. **Linha 171 + state inicial linha 84** — o `Select` de Plano recebe `value={plano}` cujo estado inicial é `''` (`useState(initialFilters?.plano_id || '')`). Isso já causa warning do Radix em algumas versões e fica fragil quando o usuário "Limpa" filtros (linha 121 reseta `plano` para `''`). O `Select` espera `undefined` para "vazio" ou um valor sentinela como `'all'`.
+**3. `numero_motor` é extraído mas nunca persistido na cotação/veículo.**
+Em `EtapaDadosPessoaisDocumentos.tsx` linhas 244-246 e 271, o componente popula `dadosExtraidos.numero_motor` corretamente. Porém em `useCotacaoContratacao.ts` linha 451-484 (`salvarDadosPessoais`), o `update` da cotação **não inclui** `veiculo_motor` nem `numero_motor`. O dado é exibido na tela mas perdido ao salvar — daí "OCR não tá puxando o número do motor". Também não vai para `DadosPessoaisForm` (linhas 327-352), que omite `veiculo_motor`/`numero_motor` no payload de submit.
 
-A consequência é o ErrorBoundary global capturar e mostrar a tela "Ocorreu um erro ao carregar a página" — daí o filtro **e** a exportação aparentam estar quebrados (a tela toda some).
+**4. Endereço da instalação cai vazio porque o associado às vezes não tem `cep`/`bairro` salvos.**
+Em `AssociadoVistoria.tsx` linha 397-406, o `enderecoInicial` vem de `contrato.associados`. Se durante a contratação o OCR do comprovante falhou (problema #1), o associado fica com `cep`/`bairro` em branco e a etapa de instalação aparece sem pré-preenchimento. Hoje há um fallback no input de CEP via ViaCEP, mas só quando o usuário digita o CEP — não há fallback para puxar do `cliente_*` da cotação ou do `proposta`.
 
-### Correção
+### O que vai mudar
 
-Apenas em `src/components/cadastro/AssociadoFilters.tsx`. Padrão sentinela `'all'` para "vazio", consistente com o que já é feito no resto da página (`statusFilter='all'`, `planoFilter='all'`, `cidadeFilter='all'` em `Associados.tsx`).
+**Edição A — `supabase/functions/document-ocr/index.ts`**
 
-**1. State inicial (linhas 83-84)**
-```tsx
-const [plano, setPlano] = useState(initialFilters?.plano_id || 'all');
-const [cidade, setCidade] = useState(initialFilters?.cidade || 'all');
+A1. Linha 435 — incluir campos do comprovante e do veículo no fallback regex de JSON truncado:
+```ts
+const dadosFields = [
+  // pessoais (já existem)
+  'nome','cpf','rg','data_nascimento','numero_registro','validade','data_expedicao','orgao_expedidor','categoria',
+  // veículo (já existem)
+  'placa','renavam','chassi','marca','modelo','cor','combustivel','motor','numero_motor','nome_proprietario',
+  // ADICIONAR — comprovante de residência:
+  'logradouro','numero','complemento','bairro','cidade','uf','cep','nome_titular','tipo_comprovante','data_emissao',
+  // ADICIONAR — ATPV-e/NF veículo:
+  'ano_fabricacao','ano_modelo','nome_comprador','cpf_comprador','cpf_cnpj_comprador','valor_nota_fiscal',
+];
+```
+(Os campos numéricos `ano_fabricacao`/`ano_modelo` já têm regex separada — manter.)
+
+A2. Após linha 1119 — adicionar **retry direcionado para chassi** (espelho do retry de motor):
+- Disparar quando `tipo ∈ {crlv, atpv_e, nota_fiscal_veiculo}` e `!validateChassi(d.chassi)`.
+- Usar `OCR_RETRY_MODEL` (`gemini-2.5-pro`) com prompt focado: "extraia APENAS o chassi (17 chars, sem I/O/Q)".
+- Tool calling `report_chassi` com schema `{chassi: string}`.
+- Antes do retry, já tentar via `extractCandidatesFromText(extractedPdfText, 'chassi')` — se houver candidato válido no texto nativo, usar direto sem chamar API.
+
+A3. Linha 1289 (`extractCandidatesFromText`) — adicionar `case 'numero_motor'` (regex `/MOTOR[^\w]{0,5}([A-Z0-9-]{6,17})/gi`) e `case 'cep'` (regex `/\b(\d{5}-?\d{3})\b/g`) para alimentar o fallback do checksum quando o PDF é nativo.
+
+A4. Validador de chassi — adicionar saneamento de OCR: trocar `0↔O`, `1↔I`, `5↔S` em posições conhecidas do chassi e retentar `validateChassi` (mesmo padrão já feito para placa).
+
+**Edição B — `src/components/cotacao-publica/FormularioDadosPessoais.tsx` + `EtapaDadosPessoaisDocumentos.tsx`**
+
+B1. Em `FormularioDadosPessoais.tsx` (schema `DadosPessoaisForm`) — adicionar `veiculo_numero_motor: z.string().optional()` (já tem `veiculo_chassi`).
+
+B2. Em `EtapaDadosPessoaisDocumentos.tsx` linha 327-352 (`handleSubmit`) — incluir no payload:
+```ts
+veiculo_numero_motor: dadosExtraidos.numero_motor || dadosExtraidos.veiculo_motor || undefined,
 ```
 
-**2. Select de Plano (já tem `<SelectItem value="all">Todos os planos</SelectItem>`) — sem mudança no JSX.**
+**Edição C — `src/hooks/useCotacaoContratacao.ts`**
 
-**3. Select de Cidade (linhas 190-200)** — trocar `value=""` por `value="all"`:
-```tsx
-<SelectItem value="all">Todas as cidades</SelectItem>
+C1. Linha 451-484 (`salvarDadosPessoais.update`) — persistir `numero_motor` na cotação:
+```ts
+veiculo_motor: dados.veiculo_numero_motor || null,  // coluna existente em cotacoes (verificar) 
 ```
-e ajustar o `<Select value={cidade}>` para nunca receber string vazia.
+Se a coluna não existir, criar migration `ALTER TABLE cotacoes ADD COLUMN IF NOT EXISTS veiculo_motor TEXT;` e equivalente em `veiculos.numero_motor` (a propagar quando o associado/veículo é criado).
 
-**4. `handleApply` (linhas 107-117)** — só envia o filtro quando ≠ `'all'`:
-```tsx
-if (plano && plano !== 'all') filters.plano_id = plano;
-if (cidade && cidade !== 'all') filters.cidade = cidade;
-```
-(`plano` já estava certo; `cidade` precisa do mesmo tratamento.)
+C2. Garantir que ao gerar/promover o associado e o veículo final, `numero_motor` é copiado da cotação para `veiculos.numero_motor` (verificar a função/edge que faz a promoção — ajustar SELECT/INSERT).
 
-**5. `handleLimpar` (linhas 119-125) e `activeCount` (linhas 127-131)** — usar `'all'` em vez de `''`:
-```tsx
-setPlano('all'); setCidade('all');
-// activeCount: (cidade && cidade !== 'all' ? 1 : 0)
-```
+**Edição D — `src/pages/public/AssociadoVistoria.tsx` linhas 397-406**
 
-**6. Fallback Input (linha 202)** — quando `cidades` está vazio, o `Input` continua aceitando string livre; não muda nada porque é um `<Input>`, não `<SelectItem>`.
+Acrescentar **fallback em cascata** ao montar `enderecoInicial`. Hoje só lê `contrato.associados`. Passar a tentar nesta ordem:
+1. `contrato.associados.cep/logradouro/...` (atual);
+2. Se vazio, ler `cotacao.cliente_cep/cliente_logradouro/...` da cotação que originou o contrato (já carregada via `contrato.cotacao_id`);
+3. Se ainda vazio, ler `proposta.endereco_*` quando aplicável.
+Adicionar `select` complementar em `useContratoLink.ts` linha 24 trazendo os campos `cliente_*` da `cotacoes` join.
 
 ### O que NÃO muda
 
-- `ExportAssociadosDialog.tsx` — já está correto, sem `Select` problemático.
-- `Associados.tsx` (página) — já usa sentinela `'all'`.
-- Tipagem `SheetFiltersValue`, hooks `useAssociados`, RLS, queries.
-- Comportamento da tela após o fix: "Todas as cidades" / "Todos os planos" continua significando "sem filtro".
+- Modelo OCR (`gemini-2.5-flash` + retry `gemini-2.5-pro`) — só ganha 1 retry novo (chassi).
+- UI do uploader unificado, validação de placa, regras de 0KM (`isPlacaPlaceholder`).
+- Schema do storage / RLS dos buckets.
+- Fluxo de assinatura Autentique e geração de contrato.
 
-### Arquivo editado
+### Arquivos editados
 
-- `src/components/cadastro/AssociadoFilters.tsx` — substituir `''` por `'all'` em state inicial, `SelectItem` da cidade, `handleApply`, `handleLimpar` e `activeCount`.
+- `supabase/functions/document-ocr/index.ts` — A1 (regex campos), A2 (retry chassi), A3 (cep/motor fallback texto nativo), A4 (saneamento OCR chassi).
+- `src/components/cotacao-publica/FormularioDadosPessoais.tsx` — schema com `veiculo_numero_motor`.
+- `src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx` — submit incluindo `veiculo_numero_motor`.
+- `src/hooks/useCotacaoContratacao.ts` — persistir `veiculo_motor`/`numero_motor` na cotação.
+- `src/hooks/useContratoLink.ts` — incluir `cotacoes.cliente_*` no select da query do contrato público.
+- `src/pages/public/AssociadoVistoria.tsx` — `enderecoInicial` em cascata (associado → cotação).
+- Migration SQL — `ALTER TABLE cotacoes ADD COLUMN IF NOT EXISTS veiculo_motor TEXT;` + `ALTER TABLE veiculos ADD COLUMN IF NOT EXISTS numero_motor TEXT;` (apenas se não existirem).
+- `mem://infrastructure/documents/ocr-resilience-and-cnh-parsing-v4` — atualizar com o novo retry de chassi e o fallback de texto nativo para CEP/motor.
 
-### Risco
+### Riscos
 
-- Nenhum. Sentinela `'all'` é o mesmo padrão já aplicado em `Associados.tsx`. Filtros pré-existentes vindos por `initialFilters` continuam funcionando (string com UUID/cidade real é diferente de `'all'`).
+- Retry de chassi adiciona ~1.5s a OCR de CRLV quando o chassi falha — aceitável (hoje o usuário precisa digitar manualmente, o que é pior).
+- Saneamento OCR de chassi pode aceitar um chassi "quase válido" — mitigado porque sempre passa por `validateChassi` (regex restrita 17 chars sem I/O/Q) antes de aceitar.
+- `numero_motor` persistido pode entrar vazio se o documento realmente não tinha o campo — comportamento equivalente ao atual.
 
