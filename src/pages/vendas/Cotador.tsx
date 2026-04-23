@@ -50,6 +50,7 @@ import { cn } from '@/lib/utils';
 import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 import { useAllLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useCriarCotacao } from '@/hooks/useCotacao';
+import { descreverErroSupabase } from '@/lib/errors';
 import { usePlanosCotacao, type PlanoCotacao, type PlanoNegadoInfo } from '@/hooks/usePlanosCotacao';
 
 import { isCoberturaRemovida } from '@/data/restricoesCategorias';
