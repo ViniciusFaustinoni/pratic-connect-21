@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { validateCPF } from '@/lib/validations';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,13 +16,17 @@ import {
   Mail,
   Phone,
   ArrowRight,
-  Car
+  Car,
+  AlertTriangle,
+  RefreshCw,
+  Search
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { DadosPessoaisForm } from './FormularioDadosPessoais';
 import { 
   UnifiedDocumentUploader, 
-  type DocumentoUnificado 
+  type DocumentoUnificado,
+  type UnifiedDocumentUploaderHandle,
 } from '@/components/contratos/UnifiedDocumentUploader';
 
 interface DadosExtraidos {
@@ -116,6 +120,13 @@ export function EtapaDadosPessoaisDocumentos({
   const [veiculoAlienado, setVeiculoAlienado] = useState(false);
   const [veiculoFinanceira, setVeiculoFinanceira] = useState('');
 
+  // Ref + estados para reprocessar OCR e buscar CEP manualmente
+  const uploaderRef = useRef<UnifiedDocumentUploaderHandle>(null);
+  const [reprocessandoCrlv, setReprocessandoCrlv] = useState(false);
+  const [reprocessandoComprovante, setReprocessandoComprovante] = useState(false);
+  const [cepManual, setCepManual] = useState('');
+  const [buscandoCep, setBuscandoCep] = useState(false);
+
   // Sincronizar email e telefone quando defaultValues mudar (dados carregados do banco)
   useEffect(() => {
     if (defaultValues?.email && !email) {
@@ -146,7 +157,15 @@ export function EtapaDadosPessoaisDocumentos({
   const temEndereco = !!(dadosExtraidos.logradouro && dadosExtraidos.cidade && dadosExtraidos.uf);
   const temDadosVeiculo = !!(dadosExtraidos.veiculo_placa || dadosExtraidos.veiculo_chassi);
   const temContato = !!(email && telefone);
-  
+
+  // Sub-flags para avisos no checklist:
+  const motorExtraido = !!(dadosExtraidos.numero_motor || dadosExtraidos.veiculo_motor);
+  const chassiExtraido = !!dadosExtraidos.veiculo_chassi;
+  // CRLV/NF/ATPV-e enviado mas faltando motor ou chassi (não bloqueia avançar — só avisa)
+  const crlvIncompleto = temCrlv && (!motorExtraido || !chassiExtraido);
+  // Comprovante enviado mas endereço incompleto (logradouro/cidade/uf/cep)
+  const enderecoIncompleto = temComprovante && (!dadosExtraidos.logradouro || !dadosExtraidos.cidade || !dadosExtraidos.uf || !dadosExtraidos.cep);
+
   const podeAvancar = temDadosPessoais && temEndereco && temDadosVeiculo && temContato && cpfValido;
 
   const formatTelefone = (value: string) => {
@@ -309,6 +328,55 @@ export function EtapaDadosPessoaisDocumentos({
     });
   }, []);
 
+  const handleReprocessarCrlv = useCallback(async () => {
+    setReprocessandoCrlv(true);
+    try {
+      await uploaderRef.current?.reprocessByType(['crlv', 'nota_fiscal_veiculo', 'atpv_e']);
+    } finally {
+      setReprocessandoCrlv(false);
+    }
+  }, []);
+
+  const handleReprocessarComprovante = useCallback(async () => {
+    setReprocessandoComprovante(true);
+    try {
+      await uploaderRef.current?.reprocessByType('comprovante_residencia');
+    } finally {
+      setReprocessandoComprovante(false);
+    }
+  }, []);
+
+  const handleBuscarCepManual = useCallback(async () => {
+    const cepLimpo = (cepManual || dadosExtraidos.cep || '').replace(/\D/g, '');
+    if (cepLimpo.length !== 8) {
+      toast.error('Digite um CEP válido (8 dígitos).');
+      return;
+    }
+    setBuscandoCep(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+      const viaCepData = await res.json();
+      if (viaCepData.erro) {
+        toast.error('CEP não encontrado.');
+        return;
+      }
+      setDadosExtraidos(prev => ({
+        ...prev,
+        cep: prev.cep || cepLimpo,
+        logradouro: prev.logradouro || viaCepData.logradouro || '',
+        bairro: prev.bairro || viaCepData.bairro || '',
+        cidade: prev.cidade || viaCepData.localidade || '',
+        uf: prev.uf || viaCepData.uf || '',
+      }));
+      toast.success('Endereço preenchido pelo CEP.');
+    } catch (err) {
+      console.error('[ViaCEP] erro:', err);
+      toast.error('Falha ao consultar o CEP. Tente novamente.');
+    } finally {
+      setBuscandoCep(false);
+    }
+  }, [cepManual, dadosExtraidos.cep]);
+
   const handleSubmit = () => {
     if (!podeAvancar) {
       toast.error('Envie todos os documentos necessários e preencha email e telefone.');
@@ -449,6 +517,7 @@ export function EtapaDadosPessoaisDocumentos({
 
       {/* Upload Unificado de Documentos */}
       <UnifiedDocumentUploader
+        ref={uploaderRef}
         cotacaoId={cotacaoId}
         onDocumentsChange={handleDocumentsChange}
         onOcrDataExtracted={handleOcrDataExtracted}
@@ -613,6 +682,122 @@ export function EtapaDadosPessoaisDocumentos({
               )}
             </div>
           </div>
+
+          {/* Aviso: CRLV/NF/ATPV-e enviado mas faltam motor ou chassi */}
+          {crlvIncompleto && (
+            <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 space-y-2">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                <div className="flex-1 space-y-1">
+                  <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                    Dados do veículo incompletos
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    A IA não conseguiu extrair{' '}
+                    {!chassiExtraido && !motorExtraido
+                      ? 'o chassi e o número do motor'
+                      : !chassiExtraido
+                        ? 'o chassi'
+                        : 'o número do motor'}{' '}
+                    do documento. Tente reprocessar a imagem — uma foto mais nítida costuma resolver.
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="w-full"
+                onClick={handleReprocessarCrlv}
+                disabled={reprocessandoCrlv}
+              >
+                {reprocessandoCrlv ? (
+                  <>
+                    <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                    Reprocessando OCR...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-3 w-3 mr-2" />
+                    Reprocessar OCR do documento do veículo
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+
+          {/* Aviso: Comprovante enviado mas endereço incompleto */}
+          {enderecoIncompleto && (
+            <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 space-y-2">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                <div className="flex-1 space-y-1">
+                  <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                    Endereço incompleto
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Não conseguimos ler{' '}
+                    {[
+                      !dadosExtraidos.logradouro && 'logradouro',
+                      !dadosExtraidos.bairro && 'bairro',
+                      !dadosExtraidos.cidade && 'cidade',
+                      !dadosExtraidos.uf && 'UF',
+                      !dadosExtraidos.cep && 'CEP',
+                    ].filter(Boolean).join(', ')}{' '}
+                    do comprovante. Você pode reprocessar o OCR ou buscar o endereço pelo CEP.
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleReprocessarComprovante}
+                  disabled={reprocessandoComprovante}
+                >
+                  {reprocessandoComprovante ? (
+                    <>
+                      <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                      Reprocessando...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-3 w-3 mr-2" />
+                      Reprocessar OCR
+                    </>
+                  )}
+                </Button>
+                <div className="flex gap-2">
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder={dadosExtraidos.cep || 'CEP'}
+                    value={cepManual}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/\D/g, '').slice(0, 8);
+                      setCepManual(v.length > 5 ? `${v.slice(0, 5)}-${v.slice(5)}` : v);
+                    }}
+                    className="h-9 text-sm"
+                    maxLength={9}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="default"
+                    onClick={handleBuscarCepManual}
+                    disabled={buscandoCep}
+                  >
+                    {buscandoCep ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Search className="h-3 w-3" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
