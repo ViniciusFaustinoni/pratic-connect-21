@@ -342,6 +342,12 @@ serve(async (req) => {
         referencia_ano: refAno,
         valor,
         valor_final: valorFinal,
+        valor_pago: status === 'pago'
+          ? toNumber(b.valor_pago_boleto ?? b.valor_recebido ?? b.valor_pago ?? valorFinal)
+          : null,
+        forma_pagamento: status === 'pago'
+          ? (b.forma_pagamento_boleto ?? b.tipo_pagamento ?? b.forma_pagamento ?? null)
+          : null,
         multa: multa || null,
         juros: juros || null,
         data_emissao: dataEmissao,
