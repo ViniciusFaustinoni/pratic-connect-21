@@ -400,7 +400,7 @@ export default function SolicitacoesMigracao() {
 
 function DocumentPreview({ doc, cpfEsperado, placaEsperada }: { doc: any; cpfEsperado: string; placaEsperada: string | null }) {
   const cpfOk = doc.cpf_detectado && doc.cpf_detectado.replace(/\D/g, '') === cpfEsperado.replace(/\D/g, '');
-  const placaOk = !placaEsperada || (doc.placa_detectada && doc.placa_detectada.toUpperCase() === placaEsperada.toUpperCase());
+  const placaOk = !placaEsperada || (doc.placa_detectada && placasEquivalentes(doc.placa_detectada, placaEsperada));
   const isImage = doc.arquivo_url?.match(/\.(jpg|jpeg|png|webp|gif)$/i);
 
   return (

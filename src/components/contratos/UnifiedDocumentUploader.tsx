@@ -197,54 +197,23 @@ export function UnifiedDocumentUploader({
 
       const ocrResult = ocrData as OcrResultadoUnificado;
 
-      // Validar placa do CRLV contra a placa esperada da cotação
+      // Validar placa do CRLV contra a placa esperada da cotação,
+      // tolerando confusões comuns de OCR (0/O, 1/I, 5/S, 6/G, 8/B...).
       if (ocrResult.tipo_detectado === 'crlv' && placaEsperada && ocrResult.dados?.placa) {
-        // Normaliza placa tolerando confusões comuns de OCR entre letras/dígitos
-        // Posições de letra (0,1,2,4 no padrão Mercosul) e dígito (3,5,6)
-        const LETTER_TO_DIGIT: Record<string, string> = {
-          O: '0', Q: '0', D: '0',
-          I: '1', L: '1',
-          Z: '2',
-          S: '5',
-          G: '6',
-          T: '7',
-          B: '8',
-        };
-        const DIGIT_TO_LETTER: Record<string, string> = {
-          '0': 'O',
-          '1': 'I',
-          '2': 'Z',
-          '5': 'S',
-          '6': 'G',
-          '8': 'B',
-        };
-        const normalizePlaca = (p: string) => {
-          const clean = p.replace(/[-\s]/g, '').toUpperCase();
-          if (clean.length === 7) {
-            return clean.split('').map((ch, i) => {
-              const isLetterPos = i <= 2 || i === 4;
-              const isDigitPos = i === 3 || i === 5 || i === 6;
-              if (isLetterPos && DIGIT_TO_LETTER[ch]) return DIGIT_TO_LETTER[ch];
-              if (isDigitPos && LETTER_TO_DIGIT[ch]) return LETTER_TO_DIGIT[ch];
-              return ch;
-            }).join('');
-          }
-          return clean;
-        };
-        const placaExtraida = normalizePlaca(ocrResult.dados.placa);
-        const placaEsperadaNorm = normalizePlaca(placaEsperada);
-        
-        if (placaExtraida && placaEsperadaNorm && placaExtraida !== placaEsperadaNorm) {
-          const errorMsg = `A placa do CRLV (${ocrResult.dados.placa.toUpperCase()}) não corresponde à placa da cotação (${placaEsperada.toUpperCase()}). Envie o CRLV do veículo correto.`;
-          
+        const detalhe = compararPlacasComDetalhe(ocrResult.dados.placa, placaEsperada);
+        console.log('[UnifiedDocumentUploader] Validação placa CRLV:', detalhe);
+
+        if (!detalhe.equivalentes) {
+          const errorMsg = `A placa do CRLV (${detalhe.placaOCR}) não corresponde à placa da cotação (${detalhe.placaEsperada}). Verifique se o CRLV é do veículo correto. Se a placa do documento estiver realmente correta, ajuste-a no cadastro.`;
+
           setDocuments(prev => {
-            const updated = prev.map(d => 
+            const updated = prev.map(d =>
               d.id === tempId ? { ...d, status: 'error' as const, error: errorMsg, tipo_detectado: ocrResult.tipo_detectado } : d
             );
             onDocumentsChange(updated);
             return updated;
           });
-          
+
           toast.error('Placa do CRLV divergente!', {
             description: errorMsg,
             duration: 8000,
