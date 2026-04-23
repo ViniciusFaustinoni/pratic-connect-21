@@ -78,6 +78,52 @@ export function SgaBackfillFinanceiroDialog() {
     }
   };
 
+  // Modo preparar base: roda apenas Mapear lote em loop até esgotar (ou erro consecutivo).
+  // NÃO dispara processamento financeiro — só popula codigo_hinova nos veículos.
+  // Observação: a busca por placa também usa a API Hinova autenticada, então sofre o
+  // mesmo bloqueio "Usuário com restrição". Quando bloqueada, o loop aborta no 1º erro.
+  const handlePrepararBase = async () => {
+    setPreparandoBase(true);
+    setPrepProgress({ lotes: 0, mapeados: 0, restantes: 0 });
+    let totalMapeados = 0;
+    let lotes = 0;
+    let errosConsecutivos = 0;
+    const MAX_LOTES = 200; // teto defensivo (10.000 veículos a 50/lote)
+    const MAX_ERROS_CONSECUTIVOS = 2;
+    try {
+      while (lotes < MAX_LOTES) {
+        const { data, error } = await supabase.functions.invoke('sga-mapear-codigos-veiculos', {
+          body: { batch_size: 50, delay_ms: 200 },
+        });
+        if (error) {
+          errosConsecutivos++;
+          if (errosConsecutivos >= MAX_ERROS_CONSECUTIVOS) {
+            toast.error(`Mapeamento abortado após ${errosConsecutivos} erros consecutivos: ${error.message || 'erro desconhecido'}`);
+            break;
+          }
+          continue;
+        }
+        errosConsecutivos = 0;
+        lotes++;
+        const mapeadosLote = data?.mapeados ?? 0;
+        const restantes = data?.restantes ?? 0;
+        const processados = data?.processados ?? 0;
+        totalMapeados += mapeadosLote;
+        setPrepProgress({ lotes, mapeados: totalMapeados, restantes });
+        // Esgotou: não há mais veículos elegíveis sem código
+        if (processados === 0 || restantes === 0) break;
+        await fetchStatus();
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      toast.success(`Base preparada: ${totalMapeados} veículos vinculados em ${lotes} lote(s).`);
+      fetchStatus();
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao preparar base');
+    } finally {
+      setPreparandoBase(false);
+    }
+  };
+
   const handleEnfileirar = async () => {
     setLoading(true);
     try {
