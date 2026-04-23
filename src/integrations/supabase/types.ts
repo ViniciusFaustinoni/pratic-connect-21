@@ -18054,6 +18054,145 @@ export type Database = {
           },
         ]
       }
+      pagamentos_sga_historico: {
+        Row: {
+          associado_id: string
+          dados_brutos_sga: Json
+          data_pagamento: string | null
+          data_vencimento: string
+          forma_pagamento: string | null
+          id: string
+          mes_referencia: string | null
+          nosso_numero: string
+          primeira_observacao_em: string
+          status: string
+          tipo_boleto_hinova: string | null
+          ultima_observacao_em: string
+          valor: number
+          valor_pago: number | null
+          veiculo_id: string
+        }
+        Insert: {
+          associado_id: string
+          dados_brutos_sga: Json
+          data_pagamento?: string | null
+          data_vencimento: string
+          forma_pagamento?: string | null
+          id?: string
+          mes_referencia?: string | null
+          nosso_numero: string
+          primeira_observacao_em?: string
+          status: string
+          tipo_boleto_hinova?: string | null
+          ultima_observacao_em?: string
+          valor: number
+          valor_pago?: number | null
+          veiculo_id: string
+        }
+        Update: {
+          associado_id?: string
+          dados_brutos_sga?: Json
+          data_pagamento?: string | null
+          data_vencimento?: string
+          forma_pagamento?: string | null
+          id?: string
+          mes_referencia?: string | null
+          nosso_numero?: string
+          primeira_observacao_em?: string
+          status?: string
+          tipo_boleto_hinova?: string | null
+          ultima_observacao_em?: string
+          valor?: number
+          valor_pago?: number | null
+          veiculo_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pagamentos_sga_historico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pagamentos_sga_historico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "pagamentos_sga_historico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "pagamentos_sga_historico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "pagamentos_sga_historico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pagamentos_sga_historico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "pagamentos_sga_historico_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "pagamentos_sga_historico_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pagamentos_sga_historico_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "pagamentos_sga_historico_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "pagamentos_sga_historico_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "pagamentos_sga_historico_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       parecer_tecnico_fotos: {
         Row: {
           arquivo_url: string
