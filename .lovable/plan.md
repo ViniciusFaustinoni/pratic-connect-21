@@ -1,353 +1,321 @@
 
-## Plano: comissionamento por plano, grade, perfil e hierarquia
+## Ajuste da lógica de grades de comissão
 
-### O que já existe e será reaproveitado
-O sistema já tem parte da base implementada:
-- cadastro de grades de comissão;
-- parcelas da grade, incluindo vitalícia;
-- níveis por perfil de acesso (`vendedor_clt`, `vendedor_externo`, `agencia`, `supervisor_vendas`, `gerente_comercial`);
-- atribuição de grade a usuários;
-- hierarquia vendedor → supervisor → gerente → agência;
-- motor que gera comissão ao pagar cobrança.
-
-O ajuste necessário é mudar o modelo para que a comissão seja entendida assim:
+### Correção conceitual
+A área de **Grades de Comissão** deve servir apenas para configurar regras comerciais:
 
 ```text
-Plano vendido
-  -> encontra a grade aplicável ao vendedor
-  -> encontra as regras daquele plano dentro da grade
-  -> calcula quanto cada perfil recebe
-  -> resolve quem são as pessoas reais na hierarquia
-  -> gera lançamentos para vendedor, supervisor, gerente e/ou agência
+Grade
+  -> Planos vinculados
+    -> Parcela
+      -> Perfil de acesso
+        -> quanto esse perfil recebe
 ```
+
+Ela **não deve atribuir a grade a usuários**.
+
+A área de **Atribuição de Grades** deve ser o único lugar para:
+
+```text
+Usuário / vendedor
+  -> grade atribuída
+  -> supervisor
+  -> gerente
+  -> agência
+```
+
+Quando um vendedor tiver uma grade atribuída, toda a cadeia hierárquica dele receberá conforme as regras daquela grade para o plano vendido.
 
 ---
 
-## 1. Tornar a grade vinculável a múltiplos planos
+## 1. Ajustar a tela “Grades de Comissão”
 
-### Banco de dados
-Criar uma tabela de vínculo entre grade e planos:
+Arquivo:
+- `src/pages/configuracoes/GradeComissaoForm.tsx`
 
-```text
-grade_comissao_planos
-- id
-- grade_id
-- plano_id
-- ativo
-- created_at
-- updated_at
-```
+### O que será alterado
+Vou reforçar visual e funcionalmente que essa tela configura **quanto cada plano paga por perfil**, e não quem recebe.
 
-Regras:
-- uma grade poderá ter vários planos;
-- um plano poderá existir em mais de uma grade, porque a grade aplicada dependerá do vendedor/hierarquia vigente;
-- o motor sempre usará a grade atribuída ao vendedor no momento da venda/pagamento.
-
-Também serão adicionados índices e políticas RLS compatíveis com as regras atuais:
-- leitura para usuários autenticados com acesso comercial/gestão;
-- escrita apenas para diretoria/admin.
-
----
-
-## 2. Fazer a grade mostrar quanto cada plano paga para cada perfil
-
-### Ajuste no modelo de níveis
-Hoje a grade define percentuais por parcela e perfil, mas não diferencia por plano.
-
-Será criado um modelo de regra por:
+A tela ficará organizada assim:
 
 ```text
-grade + plano + parcela + perfil
+Dados da grade
+- Nome
+- Descrição
+
+Planos da grade
+- Selecionar um ou mais planos
+
+Regras de pagamento por plano
+- Plano A
+  - Parcela 1 / Taxa de Adesão
+    - Vendedor CLT: 20%
+    - Supervisor: 5%
+    - Gerente: 3%
+  - Parcela 2
+    - Vendedor CLT: R$ 30,00
+    - Supervisor: R$ 10,00
+
+- Plano B
+  - Regras próprias do Plano B
 ```
 
-Estrutura proposta:
+### Mudança importante
+Hoje o formulário já permite selecionar planos, mas as regras de parcelas/perfis estão compartilhadas entre todos os planos selecionados.
 
-```text
-grade_comissao_plano_regras
-- id
-- grade_id
-- plano_id
-- parcela_id
-- role
-- nome_nivel
-- tipo_comissao: percentual | valor_fixo
-- valor
-- ativo
-- ordem
-```
-
-Exemplo visual esperado:
-
-```text
-Grade: Comercial Padrão
-
-Plano: Select Exclusive Passeio
-Parcela 1 / Adesão
-- Vendedor: 20%
-- Supervisor: 5%
-- Gerente: 3%
-
-Parcela 2 / Mensalidade
-- Vendedor: R$ 30,00
-- Supervisor: R$ 10,00
-- Gerente: R$ 5,00
-
-Vitalícia a partir da parcela 3
-- Vendedor: R$ 15,00
-- Supervisor: R$ 5,00
-```
+Vou ajustar para que cada plano possa ter regras próprias.
 
 Isso atende diretamente à regra:
 
-> O sistema deve entender quanto cada plano paga de comissão a cada perfil de acesso.
+> O diretor determina quanto cada plano paga para cada perfil de acesso.
 
 ---
 
-## 3. Atualizar a tela de Grades de Comissão
+## 2. Remover qualquer sensação de “atribuir usuário” da criação da grade
 
-Arquivos principais:
+Arquivos:
+- `src/pages/configuracoes/GradeComissaoForm.tsx`
 - `src/pages/configuracoes/GradesComissao.tsx`
+
+### Ajustes de texto e layout
+Vou alterar textos como:
+- “níveis comissionados”
+- “vincular grade”
+- “usuários atribuídos”
+- “grades com níveis”
+
+Para mensagens mais claras:
+
+```text
+Configuração comercial da grade
+Planos configurados
+Perfis remunerados
+Regras por parcela
+```
+
+Na listagem de grades, manterei a informação de quantos usuários usam aquela grade apenas como indicador, mas deixando claro:
+
+```text
+Usada por X usuário(s) na área de Atribuição
+```
+
+E não como algo gerenciado ali.
+
+---
+
+## 3. Criar editor por plano dentro da grade
+
+Arquivos:
 - `src/pages/configuracoes/GradeComissaoForm.tsx`
 - `src/components/comissoes/ParcelaEditor.tsx`
 
-### Nova experiência da grade
-Na criação/edição de uma grade, adicionar uma seção “Planos vinculados”.
-
-A tela permitirá:
-- selecionar um ou mais planos ativos;
-- visualizar cada plano dentro da grade;
-- configurar, para cada plano:
-  - parcelas comissionadas;
-  - perfil de acesso;
-  - tipo de comissão: percentual ou valor fixo;
-  - valor pago;
-  - status ativo/inativo.
-
-A listagem de grades também passará a exibir:
-- quantidade de planos vinculados;
-- quantidade de usuários atribuídos;
-- resumo dos perfis configurados;
-- indicação se a grade possui regra por plano.
-
----
-
-## 4. Migrar a tela antiga “Comissionamento por Plano”
-
-Arquivo atual:
-- `src/pages/configuracoes/ComissionamentoPlano.tsx`
-
-Essa tela já existe, mas hoje configura comissão por plano de forma separada da grade.
-
-Ela será consolidada dentro da grade, para evitar duas fontes de verdade.
-
-A rota antiga:
-- `/configuracoes/comissionamento-plano`
-
-já redireciona para:
-- `/comissoes/grades`
-
-Será mantida essa direção, mas a funcionalidade real passará a viver dentro da edição da grade.
-
----
-
-## 5. Atualizar o motor de geração de comissões
-
-Arquivo/migration relacionada:
-- função `fn_gerar_comissoes_por_pagamento`
-- função `fn_resolver_grade_vendedor_em`
-
-### Regra nova do motor
-Ao gerar comissão de uma cobrança paga:
-
-1. identificar contrato;
-2. identificar vendedor do contrato;
-3. identificar plano vendido no contrato;
-4. resolver a grade vigente atribuída ao vendedor;
-5. verificar se o plano está vinculado àquela grade;
-6. localizar a regra da parcela:
-   - parcela específica;
-   - ou regra vitalícia, se aplicável;
-7. para cada perfil configurado:
-   - se perfil for vendedor, pagar ao vendedor do contrato;
-   - se perfil for supervisor, pagar ao supervisor vigente do vendedor;
-   - se perfil for gerente, pagar ao gerente vigente do vendedor;
-   - se perfil for agência, pagar à agência vigente do vendedor;
-8. criar os lançamentos em `comissoes`.
-
-### Hierarquia obrigatória
-A grade atribuída ao vendedor será a base da cadeia.
-
-Exemplo:
+### Nova estrutura de estado no formulário
+Em vez de uma lista única de parcelas para toda a grade, o formulário passará a trabalhar com regras por plano:
 
 ```text
-Venda feita por Vendedor A
-Vendedor A tem Grade X
-Grade X tem regras para Plano Select Exclusive Passeio
+selectedPlanIds: string[]
 
-Hierarquia vigente:
-Vendedor A -> Supervisor B -> Gerente C
-
-Resultado:
-- comissão de vendedor usa regra da Grade X para o Plano vendido
-- comissão de supervisor usa regra da Grade X para o perfil supervisor
-- comissão de gerente usa regra da Grade X para o perfil gerente
+regrasPorPlano: {
+  [planoId]: {
+    parcelas: [
+      {
+        numero_parcela
+        vitalicia
+        perfis: [
+          {
+            role
+            tipo_comissao
+            valor
+          }
+        ]
+      }
+    ]
+  }
+}
 ```
 
-Ou seja: supervisor e gerente não usam as próprias grades para essa venda. A estrutura hierárquica obedece à grade do vendedor que originou a venda, como solicitado.
+### Comportamento esperado
+Ao selecionar um plano:
+- ele aparece em uma aba/card próprio;
+- o diretor configura as parcelas e perfis daquele plano;
+- outro plano pode ter valores totalmente diferentes.
+
+Ao remover um plano:
+- suas regras saem da grade;
+- o sistema não tentará gerar comissão para aquele plano nessa grade.
 
 ---
 
-## 6. Registrar mais contexto nos lançamentos de comissão
+## 4. Persistir corretamente as regras por plano
 
-Na tabela `comissoes`, adicionar ou garantir os campos necessários para relatório e auditoria:
+Tabelas já existentes e reaproveitadas:
+- `grade_comissao_planos`
+- `grade_comissao_plano_regras`
+- `grades_comissao_parcelas`
+- `grades_comissao_niveis`
+
+### Ajuste de salvamento
+Ao salvar a grade:
+
+1. Salvar a grade em `grades_comissao`.
+2. Salvar os planos em `grade_comissao_planos`.
+3. Salvar as parcelas/regras por plano em `grade_comissao_plano_regras`.
+4. Manter `grades_comissao_parcelas` e `grades_comissao_niveis` apenas como compatibilidade/estrutura auxiliar, se ainda forem usados por outras telas.
+5. Salvar o snapshot da versão com os dados separados por plano.
+
+### Resultado
+O banco conseguirá responder:
 
 ```text
-grade_id
-grade_versao_id
-plano_id
-parcela_numero
-nivel_nome
-role_destinatario
-tipo_comissao
-valor_base
-percentual_aplicado
-valor_comissao
-valor_total
-status
-```
-
-Se algum campo já existir, será reaproveitado. O objetivo é permitir rastrear:
-
-```text
-quem recebeu
-por qual perfil recebeu
-por qual plano recebeu
-por qual grade recebeu
-qual parcela gerou a comissão
-qual cálculo foi aplicado
+Na Grade X,
+para o Plano Y,
+na Parcela Z,
+quanto recebe o perfil vendedor/supervisor/gerente/agência?
 ```
 
 ---
 
-## 7. Atualizar o relatório de comissões por período
+## 5. Ajustar a área “Atribuição de Grades”
 
-Criar uma tela de relatório no módulo de Comissões, por exemplo:
+Arquivos:
+- `src/pages/configuracoes/AtribuicaoGrades.tsx`
+- `src/components/comissoes/AtribuirGradeModal.tsx`
+- `src/hooks/useAtribuicaoComissoes.ts`
+
+### O que será mantido ali
+Essa área continuará sendo o local correto para:
+
+- atribuir uma grade a um usuário;
+- definir supervisor;
+- definir gerente;
+- definir agência;
+- consultar quem está sem grade;
+- visualizar a cadeia hierárquica.
+
+### Ajustes de texto
+Vou deixar explícito que:
 
 ```text
-/comissoes/relatorio
+A grade atribuída ao vendedor define as regras de comissão para toda a hierarquia dele.
 ```
 
-Com filtros:
-- período inicial;
-- período final;
-- grade;
-- plano;
-- vendedor/destinatário;
-- perfil;
-- parcela;
-- status:
-  - gerado/pendente;
-  - pago;
-  - cancelado/contestado, se aplicável.
+Exemplo exibido na tela/modal:
 
-Exibição:
-- total gerado;
-- total pendente;
-- total pago;
-- quantidade de lançamentos;
-- tabela detalhada com:
-  - data;
-  - vendedor origem;
-  - destinatário;
-  - perfil;
-  - plano;
-  - grade;
-  - parcela;
-  - base de cálculo;
-  - percentual/valor fixo;
-  - valor calculado;
-  - status.
+```text
+Se João tem a Grade Select RJ, as comissões de João, supervisor, gerente e agência serão calculadas pelas regras da Grade Select RJ para o plano vendido.
+```
+
+### Ajuste funcional
+O modal continuará atribuindo grade ao usuário, mas com labels mais claros:
+
+```text
+Grade aplicada às vendas deste usuário
+Supervisor da cadeia
+Gerente da cadeia
+Agência da cadeia
+```
 
 ---
 
-## 8. Ajustar navegação do módulo Comissões
+## 6. Garantir a regra hierárquica no motor de cálculo
+
+Banco/função:
+- `fn_gerar_comissoes_por_pagamento`
+
+A lógica deve permanecer/ser ajustada para:
+
+```text
+Venda feita pelo vendedor A
+  -> buscar grade vigente do vendedor A
+  -> buscar plano vendido
+  -> buscar regras da grade do vendedor A para aquele plano
+  -> pagar:
+      vendedor A
+      supervisor vigente de A
+      gerente vigente de A
+      agência vigente de A
+```
+
+### Regra essencial
+Supervisor, gerente e agência **não usam suas próprias grades** para a venda do vendedor.
+
+Eles recebem conforme a grade atribuída ao vendedor que originou a venda.
+
+---
+
+## 7. Ajustar relatório para refletir a nova lógica
 
 Arquivo:
-- `src/components/layout/AppSidebar.tsx`
+- `src/pages/comissoes/Relatorio.tsx`
+- `src/hooks/useRelatorioComissoes.ts`
 
-Adicionar item no menu de Comissões:
+O relatório deve mostrar claramente:
+
+- plano vendido;
+- grade usada;
+- vendedor de origem;
+- destinatário da comissão;
+- perfil do destinatário;
+- parcela;
+- tipo de cálculo;
+- valor base;
+- percentual ou valor fixo;
+- valor calculado;
+- status.
+
+Isso permitirá auditar:
 
 ```text
-Comissões
-- Dashboard
-- Grades de Comissão
-- Atribuição de Grades
-- Relatório
-- Pagamentos
+Por que esse supervisor recebeu esse valor?
+Resposta:
+Porque o vendedor X tinha a Grade Y, vendeu o Plano Z, e a regra da Grade Y para supervisor era N%.
 ```
 
 ---
 
-## 9. Backfill/reprocessamento
+## 8. Validação esperada
 
-Atualizar o backfill existente:
-- `supabase/functions/comissoes-backfill/index.ts`
+### Cenário 1: diretor cria grade
+- Diretor cria uma grade.
+- Seleciona Plano A e Plano B.
+- Define valores diferentes para vendedor, supervisor e gerente em cada plano.
+- Nenhum usuário é escolhido nessa tela.
 
-O backfill passará a usar o novo motor por plano + grade.
+### Cenário 2: atribuição separada
+- Diretor vai em “Atribuição de Grades”.
+- Escolhe o vendedor.
+- Atribui a grade.
+- Define supervisor e gerente.
 
-Cuidados:
-- manter idempotência para não duplicar comissões;
-- respeitar cobrança já paga;
-- permitir simulação antes de executar;
-- preservar comissões antigas quando possível;
-- para reprocessamento real, gerar apenas o que estiver faltando ou substituir conforme regra segura.
+### Cenário 3: geração de comissão
+- Vendedor vende Plano A.
+- Sistema usa a grade do vendedor.
+- Comissão é gerada para vendedor, supervisor e gerente conforme as regras do Plano A dentro daquela grade.
 
----
+### Cenário 4: plano diferente
+- Mesmo vendedor vende Plano B.
+- Sistema usa a mesma grade do vendedor, mas aplica as regras específicas do Plano B.
 
-## 10. Validação esperada
-
-Validar os cenários:
-
-### Cenário 1: grade com múltiplos planos
-- Grade A possui Plano 1 e Plano 2.
-- Cada plano tem valores diferentes por perfil.
-- Sistema calcula corretamente conforme o plano vendido.
-
-### Cenário 2: vendedor com supervisor e gerente
-- Vendedor tem Grade A.
-- Supervisor e gerente estão vinculados na hierarquia.
-- Ao pagar cobrança, sistema gera comissão para os três conforme regras da Grade A.
-
-### Cenário 3: supervisor/gerente com outra grade própria
-- Supervisor tem Grade B atribuída a ele.
-- Mesmo assim, na venda do vendedor, a comissão do supervisor usa a Grade A do vendedor.
-- Isso confirma a regra hierárquica solicitada.
-
-### Cenário 4: plano não vinculado à grade
-- Venda tem plano sem regra na grade do vendedor.
-- Sistema não gera comissão e registra motivo/auditoria ou deixa visível no relatório como sem regra configurada.
-
-### Cenário 5: relatório
-- Filtrar por período, grade, vendedor, plano, parcela e status.
-- Conferir totais com a soma dos lançamentos.
+### Cenário 5: supervisor com outra grade
+- Supervisor tem outra grade própria.
+- Ainda assim, na venda do vendedor, o supervisor recebe conforme a grade do vendedor.
 
 ---
 
-## Arquivos previstos
-
-### Banco/Supabase
-- nova migration para tabelas de vínculo grade/plano e regras por plano;
-- atualização da função `fn_gerar_comissoes_por_pagamento`;
-- atualização de índices, RLS e grants;
-- ajuste do backfill.
+## Arquivos envolvidos
 
 ### Frontend
-- `src/pages/configuracoes/GradesComissao.tsx`
 - `src/pages/configuracoes/GradeComissaoForm.tsx`
+- `src/pages/configuracoes/GradesComissao.tsx`
 - `src/components/comissoes/ParcelaEditor.tsx`
-- novo componente/editor de regras por plano na grade
-- nova página de relatório em `src/pages/comissoes/Relatorio.tsx`
-- novo hook de relatório, por exemplo `src/hooks/useRelatorioComissoes.ts`
-- `src/components/layout/AppSidebar.tsx`
-- `src/App.tsx`
+- `src/pages/configuracoes/AtribuicaoGrades.tsx`
+- `src/components/comissoes/AtribuirGradeModal.tsx`
+- `src/hooks/useAtribuicaoComissoes.ts`
+- `src/pages/comissoes/Relatorio.tsx`
+- `src/hooks/useRelatorioComissoes.ts`
 
+### Banco/Supabase
+- revisar/ajustar função `fn_gerar_comissoes_por_pagamento`
+- revisar consistência de `grade_comissao_planos`
+- revisar consistência de `grade_comissao_plano_regras`
+- se necessário, criar migration apenas para campos/índices faltantes, sem duplicar estrutura já criada
