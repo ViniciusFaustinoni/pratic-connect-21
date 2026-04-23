@@ -80,8 +80,8 @@ export function AssociadoFilters({
         ? [initialFilters.status]
         : []
   );
-  const [plano, setPlano] = useState(initialFilters?.plano_id || '');
-  const [cidade, setCidade] = useState(initialFilters?.cidade || '');
+  const [plano, setPlano] = useState(initialFilters?.plano_id || 'all');
+  const [cidade, setCidade] = useState(initialFilters?.cidade || 'all');
   const [dataInicio, setDataInicio] = useState(initialFilters?.data_adesao_inicio || '');
   const [dataFim, setDataFim] = useState(initialFilters?.data_adesao_fim || '');
 
@@ -108,7 +108,7 @@ export function AssociadoFilters({
     const filters: SheetFiltersValue = {};
     if (statusSelecionados.length > 0) filters.status = statusSelecionados;
     if (plano && plano !== 'all') filters.plano_id = plano;
-    if (cidade) filters.cidade = cidade;
+    if (cidade && cidade !== 'all') filters.cidade = cidade;
     if (dataInicio) filters.data_adesao_inicio = dataInicio;
     if (dataFim) filters.data_adesao_fim = dataFim;
 
@@ -118,8 +118,8 @@ export function AssociadoFilters({
 
   const handleLimpar = () => {
     setStatusSelecionados([]);
-    setPlano('');
-    setCidade('');
+    setPlano('all');
+    setCidade('all');
     setDataInicio('');
     setDataFim('');
   };
@@ -127,7 +127,7 @@ export function AssociadoFilters({
   const activeCount =
     statusSelecionados.length +
     (plano && plano !== 'all' ? 1 : 0) +
-    (cidade ? 1 : 0) +
+    (cidade && cidade !== 'all' ? 1 : 0) +
     (dataInicio || dataFim ? 1 : 0);
 
   return (
@@ -192,7 +192,7 @@ export function AssociadoFilters({
                   <SelectValue placeholder="Todas as cidades" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todas as cidades</SelectItem>
+                  <SelectItem value="all">Todas as cidades</SelectItem>
                   {cidades.map((c) => (
                     <SelectItem key={c} value={c}>{c}</SelectItem>
                   ))}
