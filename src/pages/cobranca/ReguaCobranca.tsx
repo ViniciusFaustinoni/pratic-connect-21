@@ -183,7 +183,75 @@ export default function ReguaCobranca() {
     }
   });
 
-  // ===== Preview de mensagens =====
+  // ===== Falhas SGA (linha digitável ausente) =====
+  const seteDiasAtras = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: falhasSGA } = useQuery({
+    queryKey: ['regua-falhas-sga'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('cobranca_eventos')
+        .select('id, created_at, descricao, associado_id, dados, associados!inner(nome, cpf)')
+        .eq('tipo', 'whatsapp')
+        .eq('dados->>falta_sga', 'true')
+        .gte('created_at', seteDiasAtras)
+        .order('created_at', { ascending: false })
+        .limit(30);
+      if (error) throw error;
+      return (data ?? []) as Array<{
+        id: string;
+        created_at: string;
+        descricao: string | null;
+        associado_id: string;
+        dados: any;
+        associados: { nome: string; cpf: string | null } | null;
+      }>;
+    },
+    refetchInterval: 60_000,
+  });
+
+  const [sincronizandoId, setSincronizandoId] = useState<string | null>(null);
+  const [sincronizandoTodas, setSincronizandoTodas] = useState(false);
+
+  const sincronizarUm = async (associadoId: string, veiculoId: string | null) => {
+    const { error } = await supabase.functions.invoke('sga-sync-financeiro-veiculo', {
+      body: veiculoId ? { associado_id: associadoId, veiculo_id: veiculoId } : { associado_id: associadoId },
+    });
+    if (error) throw error;
+  };
+
+  const handleSincronizar = async (eventoId: string, associadoId: string, veiculoId: string | null) => {
+    setSincronizandoId(eventoId);
+    try {
+      await sincronizarUm(associadoId, veiculoId);
+      toast.success('SGA sincronizado — a falha some na próxima execução da régua');
+      queryClient.invalidateQueries({ queryKey: ['regua-falhas-sga'] });
+    } catch (e: any) {
+      toast.error('Falha ao sincronizar: ' + (e?.message || 'erro desconhecido'));
+    } finally {
+      setSincronizandoId(null);
+    }
+  };
+
+  const handleSincronizarTodas = async () => {
+    if (!falhasSGA?.length) return;
+    setSincronizandoTodas(true);
+    let ok = 0;
+    let erros = 0;
+    for (const f of falhasSGA) {
+      try {
+        await sincronizarUm(f.associado_id, (f.dados?.veiculo_id as string | null) ?? null);
+        ok++;
+      } catch {
+        erros++;
+      }
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    setSincronizandoTodas(false);
+    queryClient.invalidateQueries({ queryKey: ['regua-falhas-sga'] });
+    if (erros === 0) toast.success(`${ok} veículo(s) sincronizado(s) com sucesso`);
+    else toast.warning(`${ok} sincronizado(s), ${erros} falha(s)`);
+  };
   // Seletor de associado: busca rápida por nome/CPF, preview com dados reais
   const [previewAssociadoId, setPreviewAssociadoId] = useState<string>('');
   const [associadoSearch, setAssociadoSearch] = useState<string>('');
@@ -426,6 +494,26 @@ export default function ReguaCobranca() {
         </AlertDescription>
       </Alert>
 
+      {/* Banner: falhas SGA */}
+      {(falhasSGA?.length ?? 0) > 0 && (
+        <Alert className="border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-800">
+          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          <AlertDescription className="flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
+            <span className="text-amber-900 dark:text-amber-200">
+              <strong>{falhasSGA!.length}</strong>{' '}
+              {falhasSGA!.length === 1 ? 'cobrança foi bloqueada' : 'cobranças foram bloqueadas'} nos últimos 7 dias por falta de linha digitável do SGA.
+            </span>
+            <button
+              type="button"
+              onClick={() => document.getElementById('card-falhas-sga')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              className="text-sm underline text-amber-900 dark:text-amber-200 whitespace-nowrap text-left"
+            >
+              Ver lista e sincronizar
+            </button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Banner: templates não aprovados */}
       {etapasComTemplateNaoAprovado.length > 0 && (
         <Alert variant="destructive">
@@ -487,6 +575,83 @@ export default function ReguaCobranca() {
           ) : (
             <div className="text-sm text-muted-foreground">
               Nenhuma execução manual nesta sessão. Clique em "Executar Agora" para testar.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Card: Cobranças bloqueadas — falta linha digitável */}
+      <Card id="card-falhas-sga" className={(falhasSGA?.length ?? 0) > 0 ? 'border-amber-300 dark:border-amber-800' : ''}>
+        <CardHeader className="pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                Cobranças bloqueadas — falta linha digitável (SGA)
+              </CardTitle>
+              <CardDescription>
+                Mensagens não enviadas nos últimos 7 dias porque o template exige a linha digitável e o SGA ainda não retornou o boleto.
+                {(falhasSGA?.length ?? 0) > 0 && (
+                  <> {' '}<strong className="text-foreground">{falhasSGA!.length}</strong> ocorrência(s).</>
+                )}
+              </CardDescription>
+            </div>
+            {(falhasSGA?.length ?? 0) >= 2 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleSincronizarTodas}
+                disabled={sincronizandoTodas}
+              >
+                {sincronizandoTodas ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                Sincronizar todas
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {!falhasSGA || falhasSGA.length === 0 ? (
+            <div className="text-sm text-muted-foreground py-4 text-center">
+              Nenhuma cobrança bloqueada nos últimos 7 dias 🎉
+            </div>
+          ) : (
+            <div className="divide-y">
+              {falhasSGA.map((f) => {
+                const dias = typeof f.dados?.dia_regua === 'number' ? f.dados.dia_regua : null;
+                const etapa = dias === null ? '—' : dias < 0 ? `D${dias}` : dias === 0 ? 'D+0' : `D+${dias}`;
+                const template = f.dados?.template ?? '—';
+                const veiculoId = (f.dados?.veiculo_id as string | null) ?? null;
+                const isLoading = sincronizandoId === f.id;
+                return (
+                  <div key={f.id} className="py-2 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium truncate">
+                        <Link to={`/cadastro/associados/${f.associado_id}`} className="hover:underline">
+                          {f.associados?.nome ?? '(sem nome)'}
+                        </Link>
+                        {f.associados?.cpf && (
+                          <span className="text-xs text-muted-foreground ml-2">{f.associados.cpf}</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                        <span>Etapa: <strong className="text-foreground">{etapa}</strong></span>
+                        <span>Template: <code className="bg-muted px-1 rounded text-[11px]">{template}</code></span>
+                        <span>{new Date(f.created_at).toLocaleString('pt-BR')}</span>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleSincronizar(f.id, f.associado_id, veiculoId)}
+                      disabled={isLoading || sincronizandoTodas}
+                      className="whitespace-nowrap"
+                    >
+                      {isLoading ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : null}
+                      Sincronizar SGA
+                    </Button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardContent>

@@ -532,6 +532,7 @@ Deno.serve(async (req) => {
             template: etapa.template,
             template_params: templateParams,
             fonte,
+            veiculo_id: veiculo_id ?? null,
             linha_digitavel: linha_digitavel || null,
             boleto_url: boleto_url || null,
             falta_sga: faltaSGA,
