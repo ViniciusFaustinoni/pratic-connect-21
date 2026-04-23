@@ -389,6 +389,84 @@ export function toNumber(v: any): number {
   return isFinite(n) ? n : 0;
 }
 
+/**
+ * GET /associado/buscar/{cpf}/cpf
+ * Retorna dados do associado + lista de veículos vinculados (placa + codigo_veiculo).
+ * - Tenta primeiro com CPF limpo (somente dígitos), depois com CPF formatado.
+ * - Lança HinovaTransientError em 401/403/429/5xx/janela horária.
+ * - Lança HinovaNotFoundError em 404 confirmado em ambos formatos.
+ */
+export async function buscarAssociadoComVeiculosPorCpf(
+  s: HinovaSession,
+  cpf: string,
+): Promise<{ codigo_associado: number | null; veiculos: Array<{ placa: string; codigo_veiculo: number }> }> {
+  const cpfDigitos = (cpf || '').replace(/\D/g, '');
+  if (cpfDigitos.length !== 11) {
+    throw new HinovaNotFoundError(`[buscarAssociadoPorCpf] CPF inválido: ${cpf}`);
+  }
+  const cpfFormatado = `${cpfDigitos.slice(0, 3)}.${cpfDigitos.slice(3, 6)}.${cpfDigitos.slice(6, 9)}-${cpfDigitos.slice(9, 11)}`;
+  const tentativas = [cpfDigitos, cpfFormatado];
+
+  let last404Body = '';
+  for (let i = 0; i < tentativas.length; i++) {
+    const cpfTentativa = tentativas[i];
+    let r: Response;
+    try {
+      r = await fetch(`${s.apiUrl}/associado/buscar/${encodeURIComponent(cpfTentativa)}/cpf`, {
+        method: 'GET',
+        headers: authHeaders(s),
+      });
+    } catch (e: any) {
+      throw new HinovaTransientError(`[buscarAssociadoPorCpf] rede: ${String(e?.message || e)}`, {
+        httpStatus: 0,
+        reason: 'network',
+      });
+    }
+    const txt = await r.text();
+
+    if (r.status === 404) {
+      last404Body = txt.slice(0, 200);
+      continue; // tenta próximo formato
+    }
+    if (!r.ok) {
+      throwHttpError(r.status, txt, 'buscarAssociadoPorCpf');
+    }
+
+    let j: any;
+    try { j = JSON.parse(txt); } catch { j = null; }
+
+    // Normaliza retorno (Hinova pode embrulhar em {data} ou {dados} ou retornar direto)
+    const root = j?.data ?? j?.dados ?? j;
+    const associado = Array.isArray(root) ? root[0] : root;
+    if (!associado || typeof associado !== 'object') {
+      // 200 com payload vazio → trata como not found
+      last404Body = txt.slice(0, 200);
+      continue;
+    }
+
+    const codigo_associado =
+      Number(associado.codigo_associado ?? associado.codigo ?? associado.id ?? 0) || null;
+
+    const rawVeiculos: any[] =
+      (Array.isArray(associado.veiculos) && associado.veiculos) ||
+      (Array.isArray(associado.lista_veiculos) && associado.lista_veiculos) ||
+      (Array.isArray(associado.veiculos_associado) && associado.veiculos_associado) ||
+      [];
+
+    const veiculos = rawVeiculos
+      .map((v: any) => {
+        const placa = String(v?.placa ?? v?.placa_veiculo ?? '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+        const codigo = Number(v?.codigo_veiculo ?? v?.codigo ?? v?.id ?? 0);
+        return placa && codigo ? { placa, codigo_veiculo: codigo } : null;
+      })
+      .filter((x): x is { placa: string; codigo_veiculo: number } => !!x);
+
+    return { codigo_associado, veiculos };
+  }
+
+  throw new HinovaNotFoundError(`[buscarAssociadoPorCpf] CPF não encontrado em nenhum formato: ${cpfDigitos}`, last404Body);
+}
+
 /** Calcula próximo retry com base no motivo do erro transitório */
 export function calcularProximoRetry(reason: HinovaTransientError['reason']): Date {
   const now = new Date();

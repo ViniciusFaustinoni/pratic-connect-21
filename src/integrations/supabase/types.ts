@@ -23550,6 +23550,98 @@ export type Database = {
         }
         Relationships: []
       }
+      sga_reconciliacao_veiculo_jobs: {
+        Row: {
+          associado_id: string
+          codigo_hinova_associado: number
+          cpf: string
+          created_at: string
+          id: string
+          proximo_retry_em: string | null
+          status: string
+          tentativas: number
+          ultimo_erro: string | null
+          updated_at: string
+          veiculos_resolvidos: number | null
+        }
+        Insert: {
+          associado_id: string
+          codigo_hinova_associado: number
+          cpf: string
+          created_at?: string
+          id?: string
+          proximo_retry_em?: string | null
+          status?: string
+          tentativas?: number
+          ultimo_erro?: string | null
+          updated_at?: string
+          veiculos_resolvidos?: number | null
+        }
+        Update: {
+          associado_id?: string
+          codigo_hinova_associado?: number
+          cpf?: string
+          created_at?: string
+          id?: string
+          proximo_retry_em?: string | null
+          status?: string
+          tentativas?: number
+          ultimo_erro?: string | null
+          updated_at?: string
+          veiculos_resolvidos?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sga_reconciliacao_veiculo_jobs_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: true
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sga_reconciliacao_veiculo_jobs_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: true
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sga_reconciliacao_veiculo_jobs_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: true
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sga_reconciliacao_veiculo_jobs_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: true
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sga_reconciliacao_veiculo_jobs_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: true
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sga_reconciliacao_veiculo_jobs_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: true
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "sga_reconciliacao_veiculo_jobs_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: true
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+        ]
+      }
       sga_sync_financeiro_jobs: {
         Row: {
           agendado_em: string
