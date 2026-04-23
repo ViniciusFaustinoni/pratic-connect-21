@@ -1,136 +1,96 @@
 
 
-## Histórico de pagamentos SGA — situação atual e plano
+## Diagnóstico do backfill SGA — bloqueio crítico identificado
 
-### Resposta direta
+### Estado atual
 
-**Sim, é possível** e o sistema **já está parcialmente fazendo isso**, mas com 3 limitações que vou corrigir.
+| Métrica | Valor |
+|---|---|
+| Reconciliação `concluido` | 5 |
+| Reconciliação `pendente` | **4.663** |
+| Sync financeiro `pendente` | **13.610** |
+| Sync financeiro `concluido` | 10 (todos com 0 boletos) |
+| Sync financeiro `erro` | 260 (100% janela horária) |
+| Sync financeiro `sem_historico_hinova` | 2.852 |
+| **Cobranças SGA na base** | **0** |
 
-### O que já funciona
+### Há um erro real bloqueando tudo: janela horária da Hinova
 
-1. `listarBoletosVeiculo` (`POST /listar/boleto-associado-veiculo`) **retorna boletos em todos os status**: `aguardando_pagamento`, `vencido`, **`pago`** (BAIXA/LIQUIDA) e `cancelado`.
-2. O sync `sga-sync-financeiro-veiculo` já persiste em `cobrancas` os campos: `status='pago'`, `data_pagamento`, `valor_pago` (quando vier no payload), `forma_pagamento`, `nosso_numero`, `tipo_boleto_hinova`, `dados_brutos_sga` (payload completo Hinova).
-3. Upsert por `nosso_numero` é **idempotente** — pode rodar várias vezes sem duplicar.
-4. Estado atual: 0 cobranças ainda porque a fila de reconciliação (4.663 jobs) não terminou de rodar. Conforme ela drenar, as cobranças (incluindo histórico de pagamentos) vão aparecer.
+Logs de **23/04 02:03 BRT** (cron `sga-sync-financeiro-diario` rodou): **100% das chamadas retornaram 401 — "Usuário com restrição de horário"**. O cron foi planejado para mover de `0 5 * * *` (02h BRT) para `0 12 * * *` (09h BRT) no plano anterior, mas **não foi atualizado** (`SELECT FROM cron.job` confirma: `sga-sync-financeiro-diario | 0 5 * * *`).
 
-### Limitações reais que precisam ser endereçadas
+Pior: os 10 jobs `concluido` com 0 boletos foram processados em **22/04 10:42 BRT** (dentro da janela). Isso indica que para os 10 veículos testados, a Hinova respondeu autenticação OK, mas `listarBoletosVeiculo` retornou array vazio. Possíveis causas reais:
+1. Vínculo `codigo_associado × codigo_veiculo` desatualizado — o fallback CPF só dispara se `codigoAssociado` estiver vazio inicialmente (linha 217), mas no fluxo "vazio após primeira chamada" (linha 268) só refaz a chamada se o **novo** código for diferente do antigo. Se a Hinova devolver mesmo código mas a primeira foi 401 mascarado ou o vínculo está realmente vazio, fica preso.
+2. Os 10 veículos podem realmente não ter boletos (pré-cancelados, novos, etc.) — sem amostra inspecionada manualmente, não dá para confirmar. **Precisa validar com 1 veículo de teste em produção**.
 
-**1. Janela retornada pela Hinova é limitada.** O endpoint `/listar/boleto-associado-veiculo` historicamente devolve só os últimos ~12 meses (mesma observação do código antigo em `sga-hinova-sync`). Boletos pagos mais antigos não vêm. Não há endpoint público v2 para "histórico completo" — está documentado em [api.hinova.com.br/api/sga/v2/doc](https://api.hinova.com.br/api/sga/v2/doc/) e o que existe é só esse listar.
+### Bugs/lacunas identificados na pipeline atual
 
-**2. Campo `valor_pago` não está sendo persistido.** O upsert atual grava `valor` e `valor_final`, mas **não copia** `b.valor_pago_boleto` / `b.valor_recebido` quando o status é `pago`. Resultado: relatórios financeiros locais não conseguem distinguir o que foi pago do que era devido.
+1. **Cron não foi reagendado** — `sga-sync-financeiro-diario` segue em 02h BRT. Deve ir para 12h UTC (09h BRT).
+2. **Sem cron de drenagem** — só roda 1x/dia, processa máximo 1.200 jobs. Para os 13.610 pendentes = **11+ dias** de espera.
+3. **Reconciliação de códigos travada em 5/4.668** — os crons de 10h e 15h BRT existem (`jobid 25, 26`) mas só rodam dias úteis e em batches pequenos. Precisa "puxão" inicial em massa.
+4. **260 erros de janela horária NÃO foram reagendados como `pendente_retry`** — ficaram em `status='erro'` porque o reagendamento automático depende do `HinovaTransientError` ser lançado, e o autenticador antigo retornava em logs sem disparar a exceção corretamente em todos os casos.
+5. **Sem painel de execução em massa sob demanda** — botão "Forçar sync agora" no dialog limita a 100. Para 13.610 + 4.998 reconciliações, precisa orquestração server-side.
 
-**3. Campo `forma_pagamento` também não está sendo persistido** apesar de a coluna existir e a Hinova retornar `b.forma_pagamento_boleto` / `b.tipo_pagamento`.
+### Plano de correção (backend, sem frontend)
 
-### Mudanças (somente backend, sem frontend)
-
-**A. `supabase/functions/sga-sync-financeiro-veiculo/index.ts` (linhas 335–360) — completar o payload de pagamento**
-
-Adicionar 2 campos no objeto `row` do upsert:
-```ts
-valor_pago: status === 'pago' 
-  ? toNumber(b.valor_pago_boleto ?? b.valor_recebido ?? b.valor_pago ?? valorFinal) 
-  : null,
-forma_pagamento: status === 'pago' 
-  ? (b.forma_pagamento_boleto ?? b.tipo_pagamento ?? b.forma_pagamento ?? null) 
-  : null,
-```
-
-Mudança mínima, ~6 linhas. Boletos antigos que reentrarem no sync vão ser **atualizados** com esses dados (upsert por `nosso_numero`).
-
-**B. Nova tabela `pagamentos_sga_historico` para preservar pagamentos antigos que sumirem da janela Hinova**
-
-Como a Hinova só retorna ~12 meses, preciso de uma "memória local" para que pagamentos pagos há 2 anos não sumam de uma sincronização para outra. Nova tabela:
-
+**A. Corrigir cron `sga-sync-financeiro-diario`**
 ```sql
-CREATE TABLE public.pagamentos_sga_historico (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  associado_id uuid NOT NULL REFERENCES associados(id) ON DELETE CASCADE,
-  veiculo_id uuid NOT NULL REFERENCES veiculos(id) ON DELETE CASCADE,
-  nosso_numero text NOT NULL,
-  status text NOT NULL,
-  valor numeric NOT NULL,
-  valor_pago numeric NULL,
-  data_vencimento date NOT NULL,
-  data_pagamento date NULL,
-  forma_pagamento text NULL,
-  tipo_boleto_hinova text NULL,
-  mes_referencia text NULL,
-  dados_brutos_sga jsonb NOT NULL,
-  primeira_observacao_em timestamptz NOT NULL DEFAULT now(),
-  ultima_observacao_em timestamptz NOT NULL DEFAULT now(),
-  UNIQUE(nosso_numero)
-);
-CREATE INDEX idx_pag_sga_assoc ON pagamentos_sga_historico(associado_id, data_vencimento DESC);
-CREATE INDEX idx_pag_sga_veic ON pagamentos_sga_historico(veiculo_id, data_vencimento DESC);
-ALTER TABLE pagamentos_sga_historico ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "admin_read" ON pagamentos_sga_historico FOR SELECT TO authenticated USING (true);
-CREATE POLICY "service_write" ON pagamentos_sga_historico FOR ALL USING (auth.jwt()->>'role'='service_role') WITH CHECK (auth.jwt()->>'role'='service_role');
+SELECT cron.unschedule('sga-sync-financeiro-diario');
+SELECT cron.schedule('sga-sync-financeiro-09h-brt', '0 12 * * *', $$ ... net.http_post(...sga-backfill-financeiro, body:='{"acao":"processar","batch_size":50}') $$);
+SELECT cron.schedule('sga-sync-financeiro-drenagem-2h', '0 12-20/2 * * *', $$ ... mesmo body $$);
 ```
+Resultado: 5 execuções/dia × 4.000 jobs = **20.000 jobs/dia** = drena fila em 1 dia.
 
-**C. Trigger PostgreSQL para espelhar `cobrancas` SGA → `pagamentos_sga_historico`**
-
+**B. Migrar 260 erros de horário para `pendente_retry`** (botão já existe no dialog, mas vou disparar via SQL agora):
 ```sql
-CREATE OR REPLACE FUNCTION mirror_cobranca_sga_to_historico() RETURNS trigger 
-LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
-BEGIN
-  IF NEW.origem = 'sga_hinova' AND NEW.nosso_numero IS NOT NULL THEN
-    INSERT INTO pagamentos_sga_historico (
-      associado_id, veiculo_id, nosso_numero, status, valor, valor_pago,
-      data_vencimento, data_pagamento, forma_pagamento, tipo_boleto_hinova,
-      mes_referencia, dados_brutos_sga
-    ) VALUES (
-      NEW.associado_id, NEW.veiculo_id, NEW.nosso_numero, NEW.status, NEW.valor,
-      NEW.valor_pago, NEW.data_vencimento, NEW.data_pagamento, NEW.forma_pagamento,
-      NEW.tipo_boleto_hinova, NULLIF(split_part(NEW.descricao,' ',-1),''),
-      NEW.dados_brutos_sga
-    )
-    ON CONFLICT (nosso_numero) DO UPDATE SET
-      status = EXCLUDED.status,
-      valor_pago = COALESCE(EXCLUDED.valor_pago, pagamentos_sga_historico.valor_pago),
-      data_pagamento = COALESCE(EXCLUDED.data_pagamento, pagamentos_sga_historico.data_pagamento),
-      forma_pagamento = COALESCE(EXCLUDED.forma_pagamento, pagamentos_sga_historico.forma_pagamento),
-      dados_brutos_sga = EXCLUDED.dados_brutos_sga,
-      ultima_observacao_em = now();
-  END IF;
-  RETURN NEW;
-END;
-$$;
-CREATE TRIGGER trg_mirror_cobranca_sga AFTER INSERT OR UPDATE ON cobrancas
-FOR EACH ROW EXECUTE FUNCTION mirror_cobranca_sga_to_historico();
+UPDATE sga_sync_financeiro_jobs 
+SET status='pendente_retry', proximo_retry_em=(date_trunc('day', now() AT TIME ZONE 'America/Sao_Paulo') + interval '1 day 12 hours') AT TIME ZONE 'America/Sao_Paulo'
+WHERE status='erro' AND ultimo_erro ILIKE '%horari%';
 ```
 
-Resultado: tudo que entra/atualiza em `cobrancas` com origem SGA fica preservado em `pagamentos_sga_historico` para sempre, mesmo que a Hinova pare de devolver. Sem código Deno extra.
+**C. Nova edge function `sga-backfill-massa-orquestrador`** — coordena tudo em uma chamada:
 
-**D. Backfill retroativo de cobranças existentes (uma vez só)**
-
-Migration de inicialização:
-```sql
-INSERT INTO pagamentos_sga_historico (associado_id, veiculo_id, nosso_numero, status, valor, valor_pago, data_vencimento, data_pagamento, forma_pagamento, tipo_boleto_hinova, dados_brutos_sga)
-SELECT associado_id, veiculo_id, nosso_numero, status, valor, valor_pago, data_vencimento, data_pagamento, forma_pagamento, tipo_boleto_hinova, dados_brutos_sga
-FROM cobrancas WHERE origem='sga_hinova' AND nosso_numero IS NOT NULL
-ON CONFLICT (nosso_numero) DO NOTHING;
+```
+{ acao: 'executar_tudo', max_segundos: 600 }
 ```
 
-Hoje retorna 0 linhas (cobranças SGA = 0), mas garante consistência quando a fila drenar.
+Fluxo interno:
+1. **Fase 1 — Reconciliação:** Loop chamando `sga-reconciliar-codigo-veiculo` `acao=processar batch_size=80` até esvaziar fila ou esgotar 50% do tempo.
+2. **Fase 2 — Backfill financeiro:** Após reconciliação, chama `sga-backfill-financeiro acao=enfileirar` (pega novos veículos com código), depois `acao=processar batch_size=50` em loop até esgotar tempo restante.
+3. **Telemetria:** Retorna `{ reconciliados, novos_jobs_enfileirados, jobs_processados, boletos_importados, erros_transitorios }`.
 
-### O que NÃO muda
+Auto-respeita janela horária via `HinovaTransientError → pendente_retry`.
 
-- Frontend (zero alterações `.tsx`).
-- Endpoints Hinova consumidos (mesmos).
-- Tabela `cobrancas` schema (sem alteração).
-- `sga-reconciliar-codigo-veiculo` em curso — continua processando; à medida que mapeia veículos, `sga-backfill-financeiro` vai puxar histórico de pagamento de cada um automaticamente.
+**D. Diagnóstico forçado em 3 veículos amostra** — antes de rodar massa, vou disparar manualmente `sga-sync-financeiro-veiculo` em 3 dos 10 jobs `concluido com 0 boletos` para confirmar se a Hinova realmente não tem boletos OU se o fallback CPF está falhando. Se confirmar bug no fallback, ajusto a lógica do linha 268 para **sempre** refazer `listarBoletosVeiculo` quando vier vazio, mesmo com código igual.
 
-### Validação (após implementação)
+**E. Garantia da gravação correta** — tudo já está validado:
+- ✅ Trigger `trg_mirror_cobranca_sga` ativo (espelha `cobrancas` → `pagamentos_sga_historico`).
+- ✅ Upsert por `nosso_numero` idempotente.
+- ✅ Campos `valor_pago`, `forma_pagamento`, `dados_brutos_sga` sendo persistidos (linhas 345–350).
+- ✅ `HinovaTransientError` / `HinovaNotFoundError` separando erros de auth/rede de "não encontrado".
 
-1. SQL: confirmar que `pagamentos_sga_historico` foi criada e o trigger está ativo.
-2. Forçar sync de 1 veículo conhecido com pagamentos: `supabase.functions.invoke('sga-sync-financeiro-veiculo', { veiculo_id: '...' })`.
-3. Query: `SELECT status, COUNT(*), SUM(valor_pago) FROM cobrancas WHERE origem='sga_hinova' GROUP BY status` — esperado `pago` > 0 com `valor_pago` populado.
-4. Query: `SELECT COUNT(*) FROM pagamentos_sga_historico` — deve igualar a contagem em `cobrancas` SGA.
-5. Após cron diário rodar (09h BRT), conferir crescimento de `pago` em ambas as tabelas.
+### Não há erros estruturais nas buscas — há erros operacionais
+
+A **lógica de leitura está correta**: endpoints certos, parsing certo, persistência completa, espelhamento histórico ativo. O que falta é **execução em massa coordenada** + **correção do agendamento do cron** + **investigação dos 10 jobs com 0 boletos**.
+
+### Validação após implementação
+
+1. Disparar `sga-backfill-massa-orquestrador acao=executar_tudo`.
+2. Aguardar 10 minutos. Query: `SELECT COUNT(*) FROM cobrancas WHERE origem='sga_hinova'` deve ir de 0 para milhares.
+3. Query: `SELECT COUNT(*) FROM pagamentos_sga_historico` deve igualar.
+4. Repetir 3 a 5 vezes durante o dia (orquestrador é seguro/idempotente) até `pendente=0` em ambas as filas.
+
+### Ações que serão executadas no modo build
+
+1. Atualizar `cron.schedule` (12h UTC + drenagem 2x/dia).
+2. SQL pontual: reagendar 260 erros de horário.
+3. Criar `supabase/functions/sga-backfill-massa-orquestrador/index.ts`.
+4. Disparar manualmente o orquestrador 1x para validação.
+5. Inspecionar 3 dos 10 jobs com 0 boletos para confirmar se é bug ou realidade Hinova.
+6. Reportar números finais: cobranças importadas, histórico espelhado, jobs restantes.
 
 ### Riscos
 
-- **Trigger em INSERT/UPDATE de `cobrancas`** adiciona ~1ms por linha. Em batches de 4.000 por execução do backfill, é negligenciável.
-- **Hinova pode não devolver `valor_pago_boleto`** em todos os payloads. Fallback usa `valor_final`. Aceitável: dado parcial é melhor que dado nenhum.
-- **Janela de 12 meses da Hinova é hard limit do parceiro** — não tem como pegar histórico anterior à primeira sync. A tabela `pagamentos_sga_historico` mitiga daqui pra frente, mas não recupera o passado pré-implementação. Mesmo assim, a primeira sync já vai trazer o último ano de cada veículo, o que cobre 90% dos casos de uso (régua de cobrança, status atual, último pagamento).
+- **Janela horária do usuário SGA**: continua sendo uma restrição do parceiro. O orquestrador vai funcionar 100% entre 06h–22h BRT; fora disso, todo job vira `pendente_retry` automaticamente. Para resolver definitivo, usuário precisa pedir liberação 24h no painel SGA.
+- **Rate limit Hinova**: throttle 100ms já implementado. Em rajada de 4.000 jobs = 7 minutos contínuos — dentro do timeout de 600s da edge function.
+- **Boletos antigos (>12 meses)** não voltam pela API, mas a tabela `pagamentos_sga_historico` já preserva tudo que entrou pelo menos 1 vez.
 
