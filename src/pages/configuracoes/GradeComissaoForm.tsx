@@ -16,7 +16,11 @@ import { useAuth } from '@/contexts/AuthContext';
 
 const COMMERCIAL_ROLE_KEYS = ['vendedor_clt', 'vendedor_externo', 'agencia', 'supervisor_vendas', 'gerente_comercial'];
 
-export default function GradeComissaoForm() {
+interface GradeComissaoFormProps {
+  basePath?: string;
+}
+
+export default function GradeComissaoForm({ basePath = '/configuracoes/grades-comissao' }: GradeComissaoFormProps) {
   const { id } = useParams();
   const isEdit = !!id && id !== 'nova';
   const navigate = useNavigate();
