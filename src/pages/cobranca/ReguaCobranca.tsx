@@ -597,65 +597,101 @@ export default function ReguaCobranca() {
             const Icon = acaoInfo.icon;
             const mostraTemplate = acoesMensagem.includes(etapa.acao);
 
+            const tplData = etapa.template ? metaTemplates?.find((t) => t.nome === etapa.template) : null;
+            const previewText = tplData?.corpo
+              ? renderTemplatePreview(etapa.template, tplData.corpo, previewCtx)
+              : null;
+            const previewHeader = tplData?.header_texto
+              ? renderTemplatePreview(etapa.template, tplData.header_texto, previewCtx)
+              : null;
+            const previewFooter = tplData?.rodape ?? null;
+
             return (
               <div
                 key={etapa.id}
-                className={`flex flex-col sm:flex-row items-start sm:items-center gap-3 p-4 rounded-lg border ${
+                className={`flex flex-col gap-3 p-4 rounded-lg border ${
                   !etapa.ativa ? 'opacity-50 bg-muted/50' : 'bg-card'
                 }`}
               >
-                <div className="flex items-center gap-3 w-full sm:w-auto">
-                  <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
-                  <Badge className={getDiasColor(etapa.dias)}>
-                    {formatDias(etapa.dias)}
-                  </Badge>
-                </div>
-
-                <div className="flex items-center gap-2 flex-1">
-                  <div className={`p-1.5 rounded ${acaoInfo.cor}`}>
-                    <Icon className="h-3.5 w-3.5" />
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
+                    <Badge className={getDiasColor(etapa.dias)}>
+                      {formatDias(etapa.dias)}
+                    </Badge>
                   </div>
-                  <Select
-                    value={etapa.acao}
-                    onValueChange={(v) => handleChangeAcao(etapa.id, v as Etapa['acao'])}
-                  >
-                    <SelectTrigger className="w-[140px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {acoes.map((a) => (
-                        <SelectItem key={a.value} value={a.value}>
-                          {a.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+
+                  <div className="flex items-center gap-2 flex-1">
+                    <div className={`p-1.5 rounded ${acaoInfo.cor}`}>
+                      <Icon className="h-3.5 w-3.5" />
+                    </div>
+                    <Select
+                      value={etapa.acao}
+                      onValueChange={(v) => handleChangeAcao(etapa.id, v as Etapa['acao'])}
+                    >
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {acoes.map((a) => (
+                          <SelectItem key={a.value} value={a.value}>
+                            {a.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {mostraTemplate && renderTemplateSelect(
+                    etapa.template,
+                    (v) => handleChangeTemplate(etapa.id, v)
+                  )}
+
+                  <div className="flex items-center gap-3 ml-auto">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={etapa.ativa}
+                        onCheckedChange={() => handleToggleEtapa(etapa.id)}
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        {etapa.ativa ? 'Ativa' : 'Inativa'}
+                      </span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleRemoveEtapa(etapa.id)}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
 
-                {mostraTemplate && renderTemplateSelect(
-                  etapa.template,
-                  (v) => handleChangeTemplate(etapa.id, v)
+                {/* Bolha de preview WhatsApp */}
+                {mostraTemplate && previewText && (
+                  <div className="ml-7 sm:ml-12">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                      Pré-visualização — como o associado verá:
+                    </div>
+                    <div className="max-w-xl rounded-lg rounded-tl-none bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 p-3 text-sm whitespace-pre-wrap font-sans text-foreground shadow-sm">
+                      {previewHeader && (
+                        <div className="font-semibold mb-1">{previewHeader}</div>
+                      )}
+                      <div>{previewText}</div>
+                      {previewFooter && (
+                        <div className="mt-2 pt-2 border-t border-emerald-200 dark:border-emerald-900 text-[11px] text-muted-foreground italic">
+                          {previewFooter}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
-
-                <div className="flex items-center gap-3 ml-auto">
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={etapa.ativa}
-                      onCheckedChange={() => handleToggleEtapa(etapa.id)}
-                    />
-                    <span className="text-xs text-muted-foreground">
-                      {etapa.ativa ? 'Ativa' : 'Inativa'}
-                    </span>
+                {mostraTemplate && !etapa.template && (
+                  <div className="ml-7 sm:ml-12 text-xs text-muted-foreground italic">
+                    Selecione um template para visualizar a mensagem renderizada.
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleRemoveEtapa(etapa.id)}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+                )}
               </div>
             );
           })}
