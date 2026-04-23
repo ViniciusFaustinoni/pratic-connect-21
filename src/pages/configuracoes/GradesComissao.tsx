@@ -86,24 +86,60 @@ export default function GradesComissao() {
       const grade = grades.find(g => g.id === gradeId);
       if (!grade) throw new Error('Grade não encontrada');
 
-      const { data: niveis, error: nErr } = await (supabase as any)
+      // Buscar parcelas e níveis originais
+      const { data: parcOrig, error: pErr } = await (supabase as any)
+        .from('grades_comissao_parcelas')
+        .select('id, numero_parcela, vitalicia, vitalicia_inicio_parcela, label, ordem')
+        .eq('grade_id', gradeId)
+        .order('ordem');
+      if (pErr) throw pErr;
+
+      const { data: nvsOrig, error: nErr } = await (supabase as any)
         .from('grades_comissao_niveis')
-        .select('nome, percentual, ordem')
+        .select('parcela_id, nome, percentual, ordem, role')
         .eq('grade_id', gradeId)
         .order('ordem');
       if (nErr) throw nErr;
 
       const { data: newGrade, error: gErr } = await (supabase as any)
         .from('grades_comissao')
-        .insert({ nome: `${grade.nome} (Cópia)`, descricao: grade.descricao })
+        .insert({ nome: `${grade.nome} (Cópia)`, descricao: grade.descricao, versao: 1 })
         .select('id')
         .single();
       if (gErr) throw gErr;
 
-      if (niveis && niveis.length > 0) {
+      // Recriar parcelas mapeando ids antigos -> novos
+      const parcMap: Record<string, string> = {};
+      if (parcOrig && parcOrig.length > 0) {
+        for (const p of parcOrig) {
+          const { data: novaP, error: e1 } = await (supabase as any)
+            .from('grades_comissao_parcelas')
+            .insert({
+              grade_id: newGrade.id,
+              numero_parcela: p.numero_parcela,
+              vitalicia: p.vitalicia,
+              vitalicia_inicio_parcela: p.vitalicia_inicio_parcela,
+              label: p.label,
+              ordem: p.ordem,
+            })
+            .select('id')
+            .single();
+          if (e1) throw e1;
+          parcMap[p.id] = novaP.id;
+        }
+      }
+
+      if (nvsOrig && nvsOrig.length > 0) {
         const { error: iErr } = await (supabase as any)
           .from('grades_comissao_niveis')
-          .insert(niveis.map((n: any) => ({ ...n, grade_id: newGrade.id })));
+          .insert(nvsOrig.map((n: any) => ({
+            grade_id: newGrade.id,
+            parcela_id: n.parcela_id ? parcMap[n.parcela_id] : null,
+            nome: n.nome,
+            percentual: n.percentual,
+            ordem: n.ordem,
+            role: n.role,
+          })));
         if (iErr) throw iErr;
       }
     },
