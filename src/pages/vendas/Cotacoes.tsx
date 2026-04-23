@@ -1096,6 +1096,7 @@ export default function Cotacoes() {
         }}
       />
 
+      <DuplicarCotacaoDialog
         open={!!cotacaoConfirmarDuplicar}
         onOpenChange={(open) => {
           if (!open) setCotacaoConfirmarDuplicar(null);
