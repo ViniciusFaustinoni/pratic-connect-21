@@ -268,7 +268,32 @@ export function AgendamentoInstalacaoContrato({ contratoId, enderecoInicial, onC
               <MapPin className="h-4 w-4 text-primary" />
               Local da Instalação
             </label>
-            
+
+            {/* Banner de feedback do pré-preenchimento */}
+            {enriquecendo ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-md p-3 border border-border">
+                <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
+                <span>Buscando endereço pelo CEP…</span>
+              </div>
+            ) : enderecoFaltaInfo ? (
+              <div className="flex items-start gap-2 text-sm bg-warning/10 text-warning rounded-md p-3 border border-warning/30">
+                <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                <span>
+                  Não conseguimos identificar seu CEP/bairro automaticamente.
+                  Preencha os campos abaixo para continuar.
+                </span>
+              </div>
+            ) : veioPrePreenchido ? (
+              <div className="flex items-start gap-2 text-sm bg-success/10 text-success rounded-md p-3 border border-success/30">
+                <Sparkles className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                <span>
+                  {enriquecido
+                    ? 'Endereço completado automaticamente pelo CEP da sua cotação. Confirme os dados abaixo.'
+                    : 'Endereço pré-preenchido a partir da sua cotação/contrato. Confirme os dados abaixo.'}
+                </span>
+              </div>
+            ) : null}
+
             <div className="grid gap-3">
               <div>
                 <Label htmlFor="cep" className="text-xs text-muted-foreground">CEP *</Label>
