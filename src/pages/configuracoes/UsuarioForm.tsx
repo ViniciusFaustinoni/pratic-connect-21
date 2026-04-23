@@ -359,6 +359,7 @@ export default function UsuarioForm() {
       senha: '', tipo: (usuario.roles || []).includes('agencia') ? 'agencia' : (usuario.tipo || 'funcionario'), ativo: usuario.ativo ?? true,
       perfis: usuario.roles || [], regioes_atendimento: usuario.regioes_atendimento || [],
       capacidade_diaria: usuario.capacidade_diaria || 10,
+      grade_comissao_id: '',
       agencia_forma_recebimento: ((usuario as any).agencia_forma_recebimento === 'em_maos' ? 'em_maos' : 'comissao') as 'comissao' | 'em_maos',
     };
     setFormData((prev) => {
@@ -379,14 +380,6 @@ export default function UsuarioForm() {
   // Salvar usuário
   const saveUser = useMutation({
     mutationFn: async () => {
-      // Validação: grade obrigatória para vendedor_externo e agencia
-      const requiresGrade = formData.perfis.some(p => ['vendedor_externo', 'agencia'].includes(p));
-      if (requiresGrade && !formData.grade_comissao_id) {
-        setGradeError(true);
-        throw new Error('GRADE_REQUIRED');
-      }
-      setGradeError(false);
-
       if (isEditing && usuario) {
         const isAgencia = formData.tipo === 'agencia';
         const profileUpdate: any = {
@@ -449,7 +442,6 @@ export default function UsuarioForm() {
     },
     onSuccess: () => {
       setFieldErrors({});
-      setGradeError(false);
       toast.success(isEditing ? 'Usuário atualizado!' : 'Usuário criado!');
       queryClient.invalidateQueries({ queryKey: ['usuarios'] });
       navigate('/configuracoes/usuarios-acessos');
