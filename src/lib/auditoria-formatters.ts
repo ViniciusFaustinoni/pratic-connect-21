@@ -19,6 +19,39 @@ const formatGrade = (value: unknown) => {
   return `${record.nome || record.id || 'Grade'}${record.versao ? ` v${record.versao}` : ''}`;
 };
 
+const normalizeGradeRules = (snapshot: Record<string, any>) => {
+  const rules = new Map<string, { label: string; value: string }>();
+  const regrasPorPlano = asRecord(snapshot.regras_por_plano);
+
+  Object.values(regrasPorPlano).forEach((entry: any) => {
+    const plano = entry?.plano?.nome || entry?.plano?.id || 'Plano';
+    (entry?.parcelas || []).forEach((parcela: any) => {
+      const parcelaLabel = parcela.label || parcela.numero_parcela || 'Parcela';
+      (parcela?.niveis || []).forEach((nivel: any) => {
+        const key = `${entry?.plano?.id || plano}:${parcelaLabel}:${nivel.role || nivel.nome}`;
+        const suffix = nivel.tipo_comissao === 'valor_fixo' ? ' fixo' : '%';
+        rules.set(key, {
+          label: `${plano} / ${parcelaLabel} / ${nivel.nome || nivel.role}`,
+          value: `${formatValor(nivel.valor)}${suffix}`,
+        });
+      });
+    });
+  });
+
+  if (Array.isArray(snapshot.regras_por_plano)) {
+    snapshot.regras_por_plano.forEach((regra: any) => {
+      const key = `${regra.plano_id}:${regra.parcela_numero || regra.vitalicia_inicio_parcela || 'vitalicia'}:${regra.role || regra.nome_nivel}`;
+      const suffix = regra.tipo_comissao === 'valor_fixo' ? ' fixo' : '%';
+      rules.set(key, {
+        label: `${regra.plano_nome || regra.plano_id || 'Plano'} / ${regra.parcela_numero ? `${regra.parcela_numero}ª Parcela` : 'Vitalícia'} / ${regra.nome_nivel || regra.role}`,
+        value: `${formatValor(regra.valor)}${suffix}`,
+      });
+    });
+  }
+
+  return rules;
+};
+
 const extractGradeChanges = (anterior: Record<string, any>, novo: Record<string, any>) => {
   const linhas: string[] = [];
   const gradeAnterior = asRecord(anterior.grade);
@@ -35,14 +68,17 @@ const extractGradeChanges = (anterior: Record<string, any>, novo: Record<string,
   const planosNovos = Array.isArray(novo.planos) ? novo.planos.map((p: any) => p.nome || p.id).filter(Boolean) : [];
   if (planosNovos.length) linhas.push(`Planos: ${planosNovos.join(', ')}`);
 
-  const regrasPorPlano = asRecord(novo.regras_por_plano);
-  Object.values(regrasPorPlano).slice(0, 8).forEach((entry: any) => {
-    const plano = entry?.plano?.nome || entry?.plano?.id || 'Plano';
-    (entry?.parcelas || []).slice(0, 4).forEach((parcela: any) => {
-      (parcela?.niveis || []).slice(0, 6).forEach((nivel: any) => {
-        linhas.push(`${plano} / ${parcela.label || parcela.numero_parcela || 'Parcela'} / ${nivel.nome || nivel.role}: ${nivel.valor}${nivel.tipo_comissao === 'valor_fixo' ? '' : '%'}`);
-      });
-    });
+  const regrasAntigas = normalizeGradeRules(anterior);
+  const regrasNovas = normalizeGradeRules(novo);
+  const allKeys = Array.from(new Set([...regrasAntigas.keys(), ...regrasNovas.keys()]));
+
+  allKeys.slice(0, 12).forEach((key) => {
+    const oldRule = regrasAntigas.get(key);
+    const newRule = regrasNovas.get(key);
+    const label = newRule?.label || oldRule?.label || key;
+    if (!oldRule && newRule) linhas.push(`${label}: adicionado (${newRule.value})`);
+    else if (oldRule && !newRule) linhas.push(`${label}: removido (${oldRule.value})`);
+    else if (oldRule && newRule && oldRule.value !== newRule.value) linhas.push(`${label}: ${oldRule.value} → ${newRule.value}`);
   });
 
   return linhas;
