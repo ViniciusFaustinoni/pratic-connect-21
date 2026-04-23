@@ -21,7 +21,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
 import { syncCnhDataToAssociado } from '@/utils/syncCnhData';
-import { compararPlacasComDetalhe } from '@/lib/placa-utils';
+import { compararPlacasComDetalhe, isPlacaPlaceholder } from '@/lib/placa-utils';
 
 
 export type TipoDocumentoDetectado = 'cnh' | 'rg' | 'crlv' | 'nota_fiscal_veiculo' | 'atpv_e' | 'comprovante_residencia' | 'outro';
@@ -198,30 +198,60 @@ export function UnifiedDocumentUploader({
 
       const ocrResult = ocrData as OcrResultadoUnificado;
 
-      // Validar placa do CRLV contra a placa esperada da cotação,
-      // tolerando confusões comuns de OCR (0/O, 1/I, 5/S, 6/G, 8/B...).
-      if (ocrResult.tipo_detectado === 'crlv' && placaEsperada && ocrResult.dados?.placa) {
-        const detalhe = compararPlacasComDetalhe(ocrResult.dados.placa, placaEsperada);
-        console.log('[UnifiedDocumentUploader] Validação placa CRLV:', detalhe);
+      // Validar placa contra a placa esperada da cotação para qualquer documento
+      // do veículo (CRLV, ATPV-e/CRV, Nota Fiscal). Tolera confusões comuns de
+      // OCR (0/O, 1/I, 5/S, 6/G, 8/B...). Para veículos 0KM (placa = placeholder
+      // técnico "0KM..."), pula a validação porque ainda não há placa real para
+      // comparar — confiamos em chassi/marca/modelo, com revisão manual posterior.
+      const tiposDocVeiculo: TipoDocumentoDetectado[] = ['crlv', 'atpv_e', 'nota_fiscal_veiculo'];
+      const ehDocVeiculo = tiposDocVeiculo.includes(ocrResult.tipo_detectado);
+      const cotacaoEhZeroKm = isPlacaPlaceholder(placaEsperada);
 
-        if (!detalhe.equivalentes) {
-          const errorMsg = `A placa do CRLV (${detalhe.placaOCR}) não corresponde à placa da cotação (${detalhe.placaEsperada}). Verifique se o CRLV é do veículo correto. Se a placa do documento estiver realmente correta, ajuste-a no cadastro.`;
+      if (ehDocVeiculo && placaEsperada && !cotacaoEhZeroKm) {
+        const placaDoc = ocrResult.dados?.placa;
 
-          setDocuments(prev => {
-            const updated = prev.map(d =>
-              d.id === tempId ? { ...d, status: 'error' as const, error: errorMsg, tipo_detectado: ocrResult.tipo_detectado } : d
-            );
-            onDocumentsChange(updated);
-            return updated;
+        if (placaDoc) {
+          const detalhe = compararPlacasComDetalhe(placaDoc, placaEsperada);
+          console.log('[UnifiedDocumentUploader] Validação placa documento veículo:', {
+            tipo: ocrResult.tipo_detectado,
+            ...detalhe,
           });
 
-          toast.error('Placa do CRLV divergente!', {
-            description: errorMsg,
-            duration: 8000,
+          if (!detalhe.equivalentes) {
+            const tipoLabel =
+              ocrResult.tipo_detectado === 'crlv' ? 'CRLV'
+              : ocrResult.tipo_detectado === 'atpv_e' ? 'ATPV-e (CRV Digital)'
+              : 'Nota Fiscal';
+            const errorMsg = `A placa do ${tipoLabel} (${detalhe.placaOCR}) não corresponde à placa da cotação (${detalhe.placaEsperada}). Verifique se o documento é do veículo correto. Se a placa do documento estiver realmente correta, ajuste-a no cadastro.`;
+
+            setDocuments(prev => {
+              const updated = prev.map(d =>
+                d.id === tempId ? { ...d, status: 'error' as const, error: errorMsg, tipo_detectado: ocrResult.tipo_detectado } : d
+              );
+              onDocumentsChange(updated);
+              return updated;
+            });
+
+            toast.error(`Placa do ${tipoLabel} divergente!`, {
+              description: errorMsg,
+              duration: 8000,
+            });
+            return; // Bloqueia salvamento e extração de dados
+          }
+        } else {
+          // Documento sem placa (típico de NF de veículo 0km vendido com placa
+          // ainda não emitida). Aceita o documento; validação por placa não se aplica.
+          console.warn('[UnifiedDocumentUploader] Documento de veículo sem placa — validação por placa não aplicável', {
+            tipo: ocrResult.tipo_detectado,
           });
-          return; // Bloqueia salvamento e extração de dados
         }
+      } else if (ehDocVeiculo && cotacaoEhZeroKm) {
+        console.log('[UnifiedDocumentUploader] Veículo 0KM: validação de placa ignorada', {
+          tipo: ocrResult.tipo_detectado,
+          placaDoc: ocrResult.dados?.placa ?? null,
+        });
       }
+
 
       // 4. Inserir no banco com tipo detectado (usar cliente apropriado) — com retry
       // Mapear tipo detectado para valores aceitos pelo CHECK do banco
