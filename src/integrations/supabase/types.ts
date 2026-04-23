@@ -23559,6 +23559,7 @@ export type Database = {
           created_at: string
           id: string
           iniciado_em: string | null
+          proximo_retry_em: string | null
           status: string
           tentativas: number
           tipo: string
@@ -23574,6 +23575,7 @@ export type Database = {
           created_at?: string
           id?: string
           iniciado_em?: string | null
+          proximo_retry_em?: string | null
           status?: string
           tentativas?: number
           tipo: string
@@ -23589,6 +23591,7 @@ export type Database = {
           created_at?: string
           id?: string
           iniciado_em?: string | null
+          proximo_retry_em?: string | null
           status?: string
           tentativas?: number
           tipo?: string

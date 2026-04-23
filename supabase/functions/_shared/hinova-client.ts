@@ -4,6 +4,10 @@
  * - Resolve credenciais (ENV → integracoes_credenciais)
  * - Autentica e cacheia token_usuario por execução
  * - Helpers para os endpoints usados no backfill financeiro
+ *
+ * Tratamento de erros:
+ * - HinovaTransientError: erros temporários (401, 403, 5xx, restrição de horário, rate limit) — devem causar retry.
+ * - HinovaNotFoundError: o recurso realmente não existe (HTTP 404 confirmado).
  */
 
 export interface HinovaCreds {
@@ -15,6 +19,78 @@ export interface HinovaCreds {
 
 export interface HinovaSession extends HinovaCreds {
   tokenUsuario: string;
+}
+
+export class HinovaTransientError extends Error {
+  httpStatus: number;
+  reason: 'auth' | 'janela_horaria' | 'rate_limit' | 'server' | 'network';
+  bodySample: string;
+  constructor(message: string, opts: { httpStatus: number; reason: HinovaTransientError['reason']; bodySample?: string }) {
+    super(message);
+    this.name = 'HinovaTransientError';
+    this.httpStatus = opts.httpStatus;
+    this.reason = opts.reason;
+    this.bodySample = opts.bodySample ?? '';
+  }
+}
+
+export class HinovaNotFoundError extends Error {
+  bodySample: string;
+  constructor(message: string, bodySample = '') {
+    super(message);
+    this.name = 'HinovaNotFoundError';
+    this.bodySample = bodySample;
+  }
+}
+
+/** Detecta se o body indica restrição de horário do usuário SGA */
+function isJanelaHorariaError(body: string): boolean {
+  const s = (body || '').toLowerCase();
+  return /restri/.test(s) && /hor[áa]rio|hor[áa]rio/.test(s);
+}
+
+/** Classifica erro HTTP e lança a exceção apropriada */
+function throwHttpError(httpStatus: number, body: string, ctx: string): never {
+  const sample = (body || '').slice(0, 300);
+
+  if (isJanelaHorariaError(body)) {
+    throw new HinovaTransientError(`[${ctx}] Janela horária restrita: ${sample}`, {
+      httpStatus,
+      reason: 'janela_horaria',
+      bodySample: sample,
+    });
+  }
+  if (httpStatus === 401 || httpStatus === 403) {
+    throw new HinovaTransientError(`[${ctx}] Auth recusada (http=${httpStatus}): ${sample}`, {
+      httpStatus,
+      reason: 'auth',
+      bodySample: sample,
+    });
+  }
+  if (httpStatus === 429) {
+    throw new HinovaTransientError(`[${ctx}] Rate limit (http=429): ${sample}`, {
+      httpStatus,
+      reason: 'rate_limit',
+      bodySample: sample,
+    });
+  }
+  if (httpStatus >= 500 && httpStatus <= 599) {
+    throw new HinovaTransientError(`[${ctx}] Servidor Hinova indisponível (http=${httpStatus}): ${sample}`, {
+      httpStatus,
+      reason: 'server',
+      bodySample: sample,
+    });
+  }
+  // 404 → not found real
+  if (httpStatus === 404) {
+    throw new HinovaNotFoundError(`[${ctx}] Recurso não encontrado (http=404)`, sample);
+  }
+  // Outros (400, 406, 422...) — tratamos como transitório por segurança (Hinova às vezes retorna 406 para auth)
+  throw new HinovaTransientError(`[${ctx}] HTTP ${httpStatus}: ${sample}`, {
+    httpStatus,
+    reason: 'server',
+    bodySample: sample,
+  });
 }
 
 async function deriveKey(secret: string): Promise<CryptoKey> {
@@ -43,8 +119,6 @@ export async function getHinovaCreds(supabase: any): Promise<HinovaCreds | null>
       .single();
 
     if (data?.configurado && data?.credenciais_encrypted && data?.iv) {
-      // IMPORTANTE: a função `integracoes-credenciais` SEMPRE encripta com SUPABASE_SERVICE_ROLE_KEY.
-      // Manter alinhado para evitar 401 enganoso na Hinova por decriptação com chave divergente.
       const secret = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
       let creds: any;
       try {
@@ -74,19 +148,51 @@ export async function getHinovaCreds(supabase: any): Promise<HinovaCreds | null>
 }
 
 export async function autenticarHinova(creds: HinovaCreds): Promise<HinovaSession | null> {
-  const r = await fetch(`${creds.apiUrl}/usuario/autenticar`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${creds.token}` },
-    body: JSON.stringify({ usuario: creds.usuario, senha: creds.senha }),
-  });
+  let r: Response;
+  try {
+    r = await fetch(`${creds.apiUrl}/usuario/autenticar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${creds.token}` },
+      body: JSON.stringify({ usuario: creds.usuario, senha: creds.senha }),
+    });
+  } catch (e: any) {
+    throw new HinovaTransientError(`[autenticar] Erro de rede: ${String(e?.message || e)}`, {
+      httpStatus: 0,
+      reason: 'network',
+    });
+  }
+
   const txt = await r.text();
   let data: any;
   try { data = JSON.parse(txt); } catch { data = null; }
 
-  if (r.status === 401) {
+  // Detecta restrição de horário ANTES de tudo (Hinova retorna 401 para isso)
+  if (isJanelaHorariaError(txt) || isJanelaHorariaError(String(data?.mensagem || data?.message || ''))) {
+    const msg = data?.mensagem || data?.message || txt.slice(0, 200);
+    console.error('[Hinova] auth bloqueada por janela horária:', msg);
+    throw new HinovaTransientError(`Hinova janela horária: ${msg}`, {
+      httpStatus: r.status,
+      reason: 'janela_horaria',
+      bodySample: txt.slice(0, 300),
+    });
+  }
+
+  if (r.status === 401 || r.status === 403) {
     const msg = data?.mensagem || data?.message || 'Login ou senha inválido';
     console.error('[Hinova] auth 401:', msg);
-    throw new Error(`Hinova autenticação 401: ${msg}`);
+    throw new HinovaTransientError(`Hinova autenticação 401: ${msg}`, {
+      httpStatus: r.status,
+      reason: 'auth',
+      bodySample: txt.slice(0, 300),
+    });
+  }
+
+  if (r.status >= 500) {
+    throw new HinovaTransientError(`Hinova autenticação 5xx (${r.status}): ${txt.slice(0, 200)}`, {
+      httpStatus: r.status,
+      reason: 'server',
+      bodySample: txt.slice(0, 300),
+    });
   }
 
   if (!r.ok || !data?.token_usuario) {
@@ -98,10 +204,6 @@ export async function autenticarHinova(creds: HinovaCreds): Promise<HinovaSessio
 }
 
 function authHeaders(s: HinovaSession): HeadersInit {
-  // IMPORTANTE: Hinova SGA v2 espera o token de SESSÃO (token_usuario retornado por /usuario/autenticar)
-  // no header Authorization. Usar o token de aplicação aqui causa respostas vazias/200 silenciosas
-  // em rotas GET de consulta (sem 401), mascarando o erro como "não encontrado".
-  // Alinhado com sga-hinova-sync (caminho comprovadamente funcional).
   return {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${s.tokenUsuario}`,
@@ -109,11 +211,9 @@ function authHeaders(s: HinovaSession): HeadersInit {
 }
 
 /**
- * Busca veículo por placa na Hinova.
- * Endpoint primário: GET /veiculo/consultar/placa/{placa} (mesmo usado em sga-hinova-sync, comprovadamente funcional).
- * Fallback: GET /veiculo/buscar/{placa}/placa (endpoint legado, mantido por segurança).
- *
- * Retorna { found, debug } — debug usado para telemetria amostral.
+ * Busca veículo por placa.
+ * - Lança HinovaTransientError em 401/403/429/5xx ou janela horária.
+ * - Retorna { found: null } APENAS em 404 real (placa de fato não está na Hinova).
  */
 export async function buscarVeiculoPorPlaca(
   s: HinovaSession,
@@ -141,47 +241,69 @@ export async function buscarVeiculoPorPlaca(
   };
 
   // Endpoint primário (consultar/placa)
+  let r1: Response;
   try {
-    const r1 = await fetch(`${s.apiUrl}/veiculo/consultar/placa/${placaLimpa}`, { method: 'GET', headers: authHeaders(s) });
-    const txt1 = await r1.text();
-    lastDebug = { endpoint: 'consultar/placa', status: r1.status, bodySample: txt1.slice(0, 200) };
-    if (r1.ok) {
-      const found = tryParse(txt1);
-      if (found?.codigo_veiculo) return { found, debug: lastDebug };
-    } else if (r1.status !== 404) {
-      console.warn('[Hinova] consultar/placa status', r1.status);
-    }
-  } catch (e) {
-    console.warn('[Hinova] consultar/placa erro', e);
+    r1 = await fetch(`${s.apiUrl}/veiculo/consultar/placa/${placaLimpa}`, { method: 'GET', headers: authHeaders(s) });
+  } catch (e: any) {
+    throw new HinovaTransientError(`[buscarVeiculoPorPlaca] rede: ${String(e?.message || e)}`, {
+      httpStatus: 0,
+      reason: 'network',
+    });
+  }
+  const txt1 = await r1.text();
+  lastDebug = { endpoint: 'consultar/placa', status: r1.status, bodySample: txt1.slice(0, 200) };
+
+  if (r1.ok) {
+    const found = tryParse(txt1);
+    if (found?.codigo_veiculo) return { found, debug: lastDebug };
+    // 200 OK mas sem codigo_veiculo → tenta fallback
+  } else if (r1.status === 404) {
+    // Placa de fato não encontrada — tenta fallback legado e, se também 404, retorna null
+  } else {
+    // 401/403/429/5xx ou janela horária → propaga
+    throwHttpError(r1.status, txt1, 'buscarVeiculoPorPlaca/consultar');
   }
 
-  // Fallback endpoint legado (buscar/{placa}/placa)
+  // Fallback endpoint legado
+  let r2: Response;
   try {
-    const r2 = await fetch(`${s.apiUrl}/veiculo/buscar/${placaLimpa}/placa`, { method: 'GET', headers: authHeaders(s) });
-    const txt2 = await r2.text();
-    lastDebug = { endpoint: 'buscar/placa', status: r2.status, bodySample: txt2.slice(0, 200) };
-    if (r2.status === 404) return { found: null, debug: lastDebug };
-    if (r2.ok) {
-      const found = tryParse(txt2);
-      return { found, debug: lastDebug };
-    }
-  } catch (e) {
-    console.warn('[Hinova] buscar/placa erro', e);
+    r2 = await fetch(`${s.apiUrl}/veiculo/buscar/${placaLimpa}/placa`, { method: 'GET', headers: authHeaders(s) });
+  } catch (e: any) {
+    throw new HinovaTransientError(`[buscarVeiculoPorPlaca/fallback] rede: ${String(e?.message || e)}`, {
+      httpStatus: 0,
+      reason: 'network',
+    });
   }
+  const txt2 = await r2.text();
+  lastDebug = { endpoint: 'buscar/placa', status: r2.status, bodySample: txt2.slice(0, 200) };
 
-  return { found: null, debug: lastDebug };
+  if (r2.status === 404) return { found: null, debug: lastDebug };
+  if (r2.ok) {
+    const found = tryParse(txt2);
+    return { found, debug: lastDebug };
+  }
+  // Erro transitório no fallback
+  throwHttpError(r2.status, txt2, 'buscarVeiculoPorPlaca/fallback');
 }
 
 /** GET /buscar/situacao-financeira-veiculo/{codigo} */
 export async function buscarSituacaoFinanceiraVeiculo(s: HinovaSession, codigoVeiculo: number | string): Promise<string | null> {
-  const r = await fetch(`${s.apiUrl}/buscar/situacao-financeira-veiculo/${codigoVeiculo}`, {
-    method: 'GET',
-    headers: authHeaders(s),
-  });
+  let r: Response;
+  try {
+    r = await fetch(`${s.apiUrl}/buscar/situacao-financeira-veiculo/${codigoVeiculo}`, {
+      method: 'GET',
+      headers: authHeaders(s),
+    });
+  } catch (e: any) {
+    throw new HinovaTransientError(`[situacao-financeira] rede: ${String(e?.message || e)}`, {
+      httpStatus: 0,
+      reason: 'network',
+    });
+  }
   const txt = await r.text();
+  if (r.status === 404) return null; // veículo sem situação financeira registrada — tolerável
   if (!r.ok) {
-    console.warn('[Hinova] situacao-financeira-veiculo status', r.status, txt.slice(0, 200));
-    return null;
+    throwHttpError(r.status, txt, 'buscarSituacaoFinanceiraVeiculo');
   }
   try {
     const j = JSON.parse(txt);
@@ -193,24 +315,37 @@ export async function buscarSituacaoFinanceiraVeiculo(s: HinovaSession, codigoVe
   }
 }
 
-/** POST /listar/boleto-associado-veiculo */
+/**
+ * POST /listar/boleto-associado-veiculo
+ * - Lança HinovaTransientError em 401/403/429/5xx/janela horária.
+ * - Retorna [] APENAS quando HTTP 200 com array vazio (associado/veículo sem boletos).
+ * - 404 → [] (não há boletos para esse vínculo).
+ */
 export async function listarBoletosVeiculo(
   s: HinovaSession,
   codigoAssociado: number | string,
   codigoVeiculo: number | string,
 ): Promise<any[]> {
-  const r = await fetch(`${s.apiUrl}/listar/boleto-associado-veiculo`, {
-    method: 'POST',
-    headers: authHeaders(s),
-    body: JSON.stringify({
-      codigo_associado: Number(codigoAssociado),
-      codigo_veiculo: Number(codigoVeiculo),
-    }),
-  });
+  let r: Response;
+  try {
+    r = await fetch(`${s.apiUrl}/listar/boleto-associado-veiculo`, {
+      method: 'POST',
+      headers: authHeaders(s),
+      body: JSON.stringify({
+        codigo_associado: Number(codigoAssociado),
+        codigo_veiculo: Number(codigoVeiculo),
+      }),
+    });
+  } catch (e: any) {
+    throw new HinovaTransientError(`[listar boletos] rede: ${String(e?.message || e)}`, {
+      httpStatus: 0,
+      reason: 'network',
+    });
+  }
   const txt = await r.text();
+  if (r.status === 404) return [];
   if (!r.ok) {
-    console.warn('[Hinova] listar boletos status', r.status, txt.slice(0, 200));
-    return [];
+    throwHttpError(r.status, txt, 'listarBoletosVeiculo');
   }
   try {
     const j = JSON.parse(txt);
@@ -252,4 +387,24 @@ export function toNumber(v: any): number {
   const s = String(v).replace(/\./g, '').replace(',', '.').replace(/[^\d.\-]/g, '');
   const n = parseFloat(s);
   return isFinite(n) ? n : 0;
+}
+
+/** Calcula próximo retry com base no motivo do erro transitório */
+export function calcularProximoRetry(reason: HinovaTransientError['reason']): Date {
+  const now = new Date();
+  if (reason === 'janela_horaria') {
+    // Próximo dia útil às 09:00 BRT (12:00 UTC). Se já passou hoje, agenda para amanhã.
+    const next = new Date(now);
+    next.setUTCHours(12, 0, 0, 0);
+    if (next.getTime() <= now.getTime()) {
+      next.setUTCDate(next.getUTCDate() + 1);
+    }
+    return next;
+  }
+  if (reason === 'rate_limit') {
+    // 5 minutos
+    return new Date(now.getTime() + 5 * 60 * 1000);
+  }
+  // server / auth / network → 30 minutos
+  return new Date(now.getTime() + 30 * 60 * 1000);
 }

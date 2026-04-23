@@ -1,7 +1,9 @@
 // Orquestrador do backfill financeiro:
-// - Modo "enfileirar": cria jobs pendentes (backfill_inicial) para todos os veículos elegíveis
-// - Modo "processar": pega N jobs pendentes e dispara sga-sync-financeiro-veiculo com throttling
-// Body: { acao: 'enfileirar' | 'processar' | 'status', batch_size?: number, delay_ms?: number, tipo?: 'backfill_inicial'|'resync' }
+// - Modo "enfileirar": cria jobs pendentes (backfill_inicial) para veículos elegíveis
+//   (com OU sem codigo_hinova — a função sync reconcilia via placa+CPF).
+// - Modo "processar": pega N jobs pendentes/pendente_retry vencidos e dispara sga-sync-financeiro-veiculo
+// - Modo "reagendar_erros_horario": converte status='erro' por janela horária em 'pendente_retry'.
+// Body: { acao, batch_size?, delay_ms?, tipo? }
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -16,6 +18,15 @@ const json = (status: number, body: unknown) =>
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
+/** Próxima janela 09:00 BRT (12:00 UTC) — se já passou, agenda amanhã */
+function nextJanela(): Date {
+  const now = new Date();
+  const next = new Date(now);
+  next.setUTCHours(12, 0, 0, 0);
+  if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 1);
+  return next;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -29,13 +40,39 @@ serve(async (req) => {
     // -------- STATUS --------
     if (acao === 'status') {
       const counts: Record<string, number> = {};
-      for (const st of ['pendente', 'executando', 'concluido', 'erro', 'sem_historico_hinova', 'cancelado']) {
+      for (const st of ['pendente', 'pendente_retry', 'executando', 'concluido', 'erro', 'sem_historico_hinova', 'cancelado']) {
         const { count } = await supabase
           .from('sga_sync_financeiro_jobs')
           .select('id', { count: 'exact', head: true })
           .eq('status', st);
         counts[st] = count ?? 0;
       }
+
+      // Top 5 erros agrupados
+      const { data: erros } = await supabase
+        .from('sga_sync_financeiro_jobs')
+        .select('ultimo_erro')
+        .in('status', ['erro', 'pendente_retry'])
+        .not('ultimo_erro', 'is', null)
+        .limit(2000);
+      const errosMap: Record<string, number> = {};
+      for (const e of erros ?? []) {
+        const raw = String(e.ultimo_erro || '').slice(0, 80);
+        // normaliza por categoria
+        let key = raw;
+        if (/janela_horaria|horari/i.test(raw)) key = 'Janela horária restrita (Hinova)';
+        else if (/auth|401|403/i.test(raw)) key = 'Autenticação recusada (401/403)';
+        else if (/rate|429/i.test(raw)) key = 'Rate limit (429)';
+        else if (/server|5\d\d/i.test(raw)) key = 'Servidor Hinova indisponível (5xx)';
+        else if (/network|rede|fetch/i.test(raw)) key = 'Erro de rede';
+        else if (/codigo_hinova|reconciliação|n[ãa]o encontrado/i.test(raw)) key = 'Veículo/associado não encontrado na Hinova';
+        errosMap[key] = (errosMap[key] ?? 0) + 1;
+      }
+      const topErros = Object.entries(errosMap)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([motivo, qtd]) => ({ motivo, qtd }));
+
       // Apenas veículos da base antiga são elegíveis para sincronização financeira
       const { count: elegiveisSemCodigo } = await supabase
         .from('veiculos')
@@ -47,23 +84,29 @@ serve(async (req) => {
         .select('id, associados:associados!inner(origem_cadastro)', { count: 'exact', head: true })
         .not('codigo_hinova', 'is', null)
         .eq('associados.origem_cadastro', 'api_externa');
-      // Veículos do sistema novo (não sincronizam — vão ao SGA via sga-hinova-sync)
       const { count: sistemaNovo } = await supabase
         .from('veiculos')
         .select('id, associados:associados!inner(origem_cadastro)', { count: 'exact', head: true })
         .eq('associados.origem_cadastro', 'interno');
+
+      // Cobranças SGA importadas
+      const { count: cobrancasSga } = await supabase
+        .from('cobrancas')
+        .select('id', { count: 'exact', head: true })
+        .eq('origem', 'sga_hinova');
+
       return json(200, {
         success: true,
         jobs: counts,
         veiculos_sem_codigo: elegiveisSemCodigo ?? 0,
         veiculos_com_codigo: elegiveisComCodigo ?? 0,
         veiculos_sistema_novo: sistemaNovo ?? 0,
+        cobrancas_sga: cobrancasSga ?? 0,
+        top_erros: topErros,
       });
     }
 
-    // -------- CANCELAR JOBS DE VEÍCULOS INTERNOS (limpeza recorrente) --------
-    // Marca como 'cancelado' qualquer job ativo (pendente/executando/erro/sem_historico_hinova)
-    // de veículos cujo associado é 'interno'. Idempotente — pode rodar todo dia.
+    // -------- CANCELAR JOBS DE VEÍCULOS INTERNOS --------
     if (acao === 'cancelar_internos') {
       const veiculosInternos: string[] = [];
       const pageSize = 1000;
@@ -97,7 +140,7 @@ serve(async (req) => {
             concluido_em: new Date().toISOString(),
           })
           .in('veiculo_id', slice)
-          .in('status', ['pendente', 'executando', 'erro', 'sem_historico_hinova'])
+          .in('status', ['pendente', 'pendente_retry', 'executando', 'erro', 'sem_historico_hinova'])
           .select('id');
         if (error) {
           console.error('[SGA Backfill] cancelar_internos erro:', error.message);
@@ -109,19 +152,31 @@ serve(async (req) => {
       return json(200, { success: true, cancelados, veiculos_internos: veiculosInternos.length });
     }
 
+    // -------- REAGENDAR ERROS DE JANELA HORÁRIA --------
+    if (acao === 'reagendar_erros_horario') {
+      const proximo = nextJanela().toISOString();
+      // Move erros conhecidamente transitórios → pendente_retry
+      const { data, error } = await supabase
+        .from('sga_sync_financeiro_jobs')
+        .update({ status: 'pendente_retry', proximo_retry_em: proximo })
+        .eq('status', 'erro')
+        .or('ultimo_erro.ilike.%horario%,ultimo_erro.ilike.%horário%,ultimo_erro.ilike.%janela_horaria%,ultimo_erro.ilike.%401%,ultimo_erro.ilike.%restri%')
+        .select('id');
+      if (error) throw error;
+      return json(200, { success: true, reagendados: data?.length ?? 0, proximo_retry_em: proximo });
+    }
+
     // -------- ENFILEIRAR --------
     if (acao === 'enfileirar') {
       // Apenas veículos da BASE ANTIGA (origem_cadastro='api_externa').
-      // Veículos do sistema novo nasceram no Praticcar e suas cobranças vivem
-      // aqui (Asaas/Cobrancas locais), não no SGA Hinova.
+      // INCLUI veículos SEM codigo_hinova — a sync reconcilia via placa+CPF.
       const pageSize = 1000;
       let from = 0;
       let inseridos = 0;
       while (true) {
         const { data: vs, error } = await supabase
           .from('veiculos')
-          .select('id, associado_id, associados:associados!inner(codigo_hinova, origem_cadastro)')
-          .not('codigo_hinova', 'is', null)
+          .select('id, associado_id, placa, codigo_hinova, associados:associados!inner(cpf, codigo_hinova, origem_cadastro)')
           .not('associado_id', 'is', null)
           .eq('associados.origem_cadastro', 'api_externa')
           .range(from, from + pageSize - 1);
@@ -133,13 +188,15 @@ serve(async (req) => {
           .from('sga_sync_financeiro_jobs')
           .select('veiculo_id')
           .in('veiculo_id', vIds)
-          .in('status', ['pendente', 'executando']);
+          .in('status', ['pendente', 'pendente_retry', 'executando']);
         const blocked = new Set((jobsExistentes ?? []).map(j => j.veiculo_id));
 
         const novos = vs
           .filter(v => {
             const a: any = Array.isArray((v as any).associados) ? (v as any).associados[0] : (v as any).associados;
-            return a?.codigo_hinova && !blocked.has(v.id);
+            // Precisa ter ALGUMA forma de reconciliar: codigo_hinova OU (placa + cpf do associado)
+            const podeSync = v.codigo_hinova || a?.codigo_hinova || (v.placa && a?.cpf);
+            return podeSync && !blocked.has(v.id);
           })
           .map(v => ({
             veiculo_id: v.id,
@@ -161,10 +218,12 @@ serve(async (req) => {
     }
 
     // -------- PROCESSAR --------
-    const batchSize = Math.min(Math.max(parseInt(body.batch_size ?? '20'), 1), 100);
-    const delayMs = Math.max(parseInt(body.delay_ms ?? '200'), 50);
+    const batchSize = Math.min(Math.max(parseInt(body.batch_size ?? '50'), 1), 100);
+    const delayMs = Math.max(parseInt(body.delay_ms ?? '150'), 50);
 
-    const { data: jobs, error: jErr } = await supabase
+    // Pega pendentes + pendente_retry vencidos
+    const nowIso = new Date().toISOString();
+    const { data: pendentes, error: jErr } = await supabase
       .from('sga_sync_financeiro_jobs')
       .select('id, veiculo_id')
       .eq('status', 'pendente')
@@ -172,10 +231,27 @@ serve(async (req) => {
       .order('agendado_em', { ascending: true })
       .limit(batchSize);
     if (jErr) throw jErr;
-    if (!jobs?.length) return json(200, { success: true, processados: 0 });
+
+    let jobs = pendentes ?? [];
+
+    if (jobs.length < batchSize) {
+      const restante = batchSize - jobs.length;
+      const { data: retries } = await supabase
+        .from('sga_sync_financeiro_jobs')
+        .select('id, veiculo_id')
+        .eq('status', 'pendente_retry')
+        .lte('proximo_retry_em', nowIso)
+        .in('tipo', ['backfill_inicial', 'resync'])
+        .order('proximo_retry_em', { ascending: true })
+        .limit(restante);
+      jobs = jobs.concat(retries ?? []);
+    }
+
+    if (!jobs.length) return json(200, { success: true, processados: 0, ok: 0, fail: 0 });
 
     let ok = 0;
     let fail = 0;
+    let retry = 0;
 
     for (const job of jobs) {
       try {
@@ -183,7 +259,9 @@ serve(async (req) => {
           body: { veiculo_id: job.veiculo_id, job_id: job.id },
         });
         if (error) throw error;
-        if (data?.success) ok++; else fail++;
+        if (data?.success) ok++;
+        else if (data?.retry) retry++;
+        else fail++;
       } catch (e: any) {
         fail++;
         await supabase
@@ -194,7 +272,7 @@ serve(async (req) => {
       await sleep(delayMs);
     }
 
-    return json(200, { success: true, processados: jobs.length, ok, fail });
+    return json(200, { success: true, processados: jobs.length, ok, fail, retry });
   } catch (err: any) {
     console.error('[SGA Backfill] erro:', err);
     return json(500, { success: false, error: String(err?.message || err) });
