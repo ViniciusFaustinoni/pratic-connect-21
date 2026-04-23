@@ -160,6 +160,7 @@ const ComissoesDashboard = lazy(() => import("./pages/comissoes/Dashboard"));
 const ComissoesGrades = lazy(() => import("./pages/comissoes/Grades"));
 const ComissoesGradeForm = lazy(() => import("./pages/comissoes/GradeForm"));
 const ComissoesAtribuicao = lazy(() => import("./pages/comissoes/Atribuicao"));
+const ComissoesRelatorio = lazy(() => import("./pages/comissoes/Relatorio"));
 const ComissoesPagamentos = lazy(() => import("./pages/comissoes/Pagamentos"));
 const ComissionamentoPlano = lazy(() => import("./pages/configuracoes/ComissionamentoPlano"));
 const AgenteConsultorIA = lazy(() => import("./pages/configuracoes/AgenteConsultorIA"));
@@ -596,6 +597,7 @@ const App = () => (
               <Route path="/comissoes/grades/nova" element={<ComissoesGradeForm />} />
               <Route path="/comissoes/grades/:id" element={<ComissoesGradeForm />} />
               <Route path="/comissoes/atribuicao" element={<ComissoesAtribuicao />} />
+              <Route path="/comissoes/relatorio" element={<ComissoesRelatorio />} />
               <Route path="/comissoes/pagamentos" element={<ComissoesPagamentos />} />
 
               {/* Redirects das rotas antigas /cobranca/* para o módulo unificado */}
