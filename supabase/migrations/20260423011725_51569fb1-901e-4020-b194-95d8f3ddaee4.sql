@@ -1,0 +1,1 @@
+UPDATE public.notificacoes SET lida = true, lida_em = now() WHERE tipo = 'improdutividade_vistoriador' AND lida = false;
