@@ -30768,6 +30768,10 @@ export type Database = {
           valor_total: number
         }[]
       }
+      fn_determinar_numero_parcela_cobranca: {
+        Args: { p_cobranca_id: string }
+        Returns: number
+      }
       fn_fechamento_mensal_comissoes: {
         Args: { p_ano: number; p_mes: number; p_usuario_id?: string }
         Returns: Json
@@ -30779,6 +30783,10 @@ export type Database = {
           p_tipo?: string
           p_valor_pago: number
         }
+        Returns: number
+      }
+      fn_gerar_comissoes_por_pagamento: {
+        Args: { p_cobranca_id: string }
         Returns: number
       }
       fn_get_cotas_por_fipe: { Args: { p_valor_fipe: number }; Returns: number }
@@ -30796,6 +30804,14 @@ export type Database = {
           gerente_id: string
           supervisor_id: string
           vendedor_id: string
+        }[]
+      }
+      fn_resolver_grade_vendedor_em: {
+        Args: { p_data_referencia: string; p_vendedor_id: string }
+        Returns: {
+          grade_id: string
+          snapshot: Json
+          versao_id: string
         }[]
       }
       fn_resumo_saude_beneficios: {
