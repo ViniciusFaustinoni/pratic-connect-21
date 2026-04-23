@@ -86,6 +86,8 @@ import { useVerificarPlacaDuplicada, type PlacaDuplicadaInfo } from '@/hooks/use
 import { PlacaDuplicadaModal } from '@/components/cotacoes/PlacaDuplicadaModal';
 import { VeiculoSGAModal } from '@/components/cotacoes/VeiculoSGAModal';
 import { useVerificarVeiculoSGA } from '@/hooks/useVerificarVeiculoSGA';
+import { useCotacaoDraft, type DraftPayload } from '@/hooks/useCotacaoDraft';
+import { DraftRestoreBanner } from '@/components/cotacao/DraftRestoreBanner';
 
 // Regiões, tipos de uso, tipos de placa e combustíveis agora vêm do banco
 
