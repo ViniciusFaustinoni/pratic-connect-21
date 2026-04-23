@@ -1,393 +1,349 @@
 
-## Área de detalhes/auditoria antes de marcar comissão como paga
+## Implementação/ajuste da tela de Pagamentos de Comissões
 
-### Objetivo
-Adicionar uma visualização de conferência para que o diretor/gestor veja exatamente por que a comissão foi gerada antes de liquidar o pagamento.
+### Observação importante
+A tela `/comissoes/pagamentos` já existe parcialmente. Ela já lista comissões do mês, permite aprovar e abre o modal de conferência antes de marcar como paga.
 
-A ação “Pagar” deixará de marcar como paga diretamente. Primeiro abrirá um modal/drawer com:
+O ajuste será evoluir essa tela para o fluxo completo solicitado:
 
 ```text
-Comissão selecionada
-  -> plano vendido
-  -> grade aplicada
-  -> snapshot/versionamento da grade
-  -> parcela resolvida
-  -> regra aplicada ao perfil
-  -> vendedor de origem
-  -> cadeia hierárquica
-  -> valores base e cálculo
-  -> status atual
-  -> botão final "Confirmar pagamento"
+Pagamentos de Comissões
+  -> lista paginada
+  -> filtros
+  -> conferência/auditoria
+  -> marcar como paga
+  -> registrar lançamento de pagamento
+  -> gerar recibo
+  -> manter histórico auditável
 ```
 
 ---
 
-## O que já existe e será reaproveitado
+## 1. Criar hook próprio para pagamentos paginados
 
-O sistema já possui parte dos dados necessários:
+Criar/ajustar um hook específico, por exemplo:
 
-- `comissoes.grade_id`
-- `comissoes.grade_versao_id`
-- `comissoes.plano_id`
-- `comissoes.plano_regra_id`
-- `comissoes.role_destinatario`
-- `comissoes.tipo_calculo`
-- `comissoes.parcela_numero`
-- `comissoes.valor_base`
-- `comissoes.percentual_aplicado`
-- `comissoes.valor_comissao`
-- `comissoes.valor_total`
-- `grades_comissao_versoes.snapshot`
-- `grade_comissao_plano_regras`
-- `contratos.vendedor_id`
-- `hierarquia_vendas`
+- `src/hooks/usePagamentosComissoes.ts`
 
-Hoje a tela de pagamentos já mostra base, percentual e valor, mas não mostra a auditoria completa antes de pagar.
+Ele substituirá o uso atual de `useComissoesDashboard()` na tela de pagamentos, porque hoje a página carrega os itens do mês inteiro e filtra em memória.
 
----
+### O hook terá filtros server-side
+Filtros previstos:
 
-## 1. Criar componente de detalhes da comissão
-
-Novo componente:
-
-- `src/components/comissoes/ComissaoDetalhesPagamentoModal.tsx`
-
-Ele será aberto ao clicar em “Pagar” na tela:
-
-- `src/pages/comissoes/Pagamentos.tsx`
-
-### Conteúdo do modal
-
-#### Resumo principal
-Exibir:
-
-- destinatário da comissão;
-- perfil remunerado;
-- status atual;
-- valor final;
-- data de geração;
-- contrato/cobrança, quando houver;
-- plano vendido;
-- grade utilizada;
-- versão da grade.
-
-#### Regra aplicada
-Exibir a regra que gerou aquela comissão:
-
-```text
-Plano: Select Exclusive
-Grade: Grade Select RJ
-Versão: v3
-Parcela resolvida: 2ª parcela
-Perfil remunerado: Supervisor de Vendas
-Tipo de cálculo: Percentual
-Regra configurada: 5%
-Base de cálculo: R$ 250,00
-Valor calculado: R$ 12,50
-Valor final: R$ 12,50
-```
-
-Para valor fixo:
-
-```text
-Tipo de cálculo: Valor fixo
-Regra configurada: R$ 30,00
-Base de cálculo: R$ 250,00
-Valor final: R$ 30,00
-```
-
-#### Snapshot da grade
-Mostrar uma seção “Snapshot da grade no momento da geração”.
-
-Usar `grades_comissao_versoes.snapshot`, não a configuração atual da grade, para evitar divergência quando a grade já tiver sido editada depois.
-
-A visualização será resumida, por plano/parcela/perfil:
-
-```text
-Snapshot v3 — Grade Select RJ
-
-Plano vendido:
-- Select Exclusive
-
-Parcela resolvida:
-- 2ª Parcela
-
-Perfis configurados na parcela:
-- Vendedor CLT: 20%
-- Supervisor: 5%
-- Gerente: 3%
-```
-
-Se o snapshot antigo não tiver estrutura nova por plano, mostrar fallback com aviso:
-
-```text
-Snapshot antigo sem detalhamento por plano. Exibindo dados disponíveis da regra gravada.
-```
-
-#### Cadeia hierárquica
-Exibir a cadeia da venda:
-
-```text
-Vendedor origem: João
-Supervisor: Maria
-Gerente: Carlos
-Agência: Pratic Agência RJ
-Destinatário desta comissão: Maria
-```
-
-Também mostrar a regra conceitual:
-
-```text
-Esta comissão foi calculada pela grade do vendedor de origem. Supervisor, gerente e agência não usam suas próprias grades nesta venda.
-```
-
----
-
-## 2. Criar hook para buscar auditoria da comissão
-
-Novo hook:
-
-- `src/hooks/useComissaoDetalhesPagamento.ts`
-
-Esse hook receberá `comissaoId` e buscará:
-
-- dados completos da comissão;
-- destinatário (`profiles`);
-- contrato;
-- vendedor de origem do contrato;
-- plano;
+- período inicial;
+- período final;
+- status;
+- vendedor/destinatário;
 - grade;
-- versão/snapshot da grade;
-- regra aplicada (`grade_comissao_plano_regras`);
-- cobrança;
-- demais comissões irmãs da mesma cobrança para mostrar toda a cadeia remunerada;
-- hierarquia vigente como fallback quando não houver dados irmãos suficientes.
+- plano;
+- parcela;
+- busca por nome/email;
+- página;
+- quantidade por página.
 
-Consulta principal esperada:
+### Retorno
+O hook retornará:
 
 ```text
-comissoes
-  -> vendedor/destinatário
-  -> contrato
-      -> vendedor origem
-      -> associado
-      -> veiculo
-  -> plano
-  -> grade
-  -> grade_versao
-  -> plano_regra
-  -> cobranca
+items
+total
+page
+pageSize
+totalPages
+kpis
+isLoading
+marcarComoPaga
+gerarRecibo
 ```
 
-Para a cadeia hierárquica, priorizar:
-
-1. comissões irmãs da mesma `cobranca_id`, porque representam quem efetivamente recebeu nessa geração;
-2. `hierarquia_vendas` como fallback;
-3. nomes vazios como “não configurado” quando o nível não existir.
+Isso evita limite de 1000 registros e prepara a tela para volume real.
 
 ---
 
-## 3. Ajustar a tela de pagamentos para exigir conferência antes de pagar
+## 2. Ajustar a tela `/comissoes/pagamentos`
 
 Arquivo:
 
 - `src/pages/comissoes/Pagamentos.tsx`
 
-### Comportamento atual
-Hoje o botão “Pagar” executa:
+### Mudanças principais
+A tela passará a ter:
 
-```text
-updateStatus.mutate({ id, nextStatus: 'paga' })
-```
+#### Cards de resumo
+- total pendente/aprovado para pagar;
+- total pago no período;
+- quantidade de comissões;
+- quantidade de destinatários.
 
-### Novo comportamento
-O botão passará a abrir o modal:
+#### Filtros
+- busca por usuário;
+- status;
+- período;
+- plano;
+- grade;
+- parcela;
+- tamanho da página.
 
-```text
-Pagar -> abre detalhes/auditoria
-```
+#### Lista paginada
+Usar o componente já existente:
 
-Dentro do modal haverá:
+- `src/components/ui/pagination.tsx`
 
-- “Fechar”
-- “Confirmar pagamento”
+A tabela exibirá:
 
-Somente o botão “Confirmar pagamento” marcará a comissão como `paga`.
-
-Isso garante que o gestor veja as regras antes de liquidar.
-
----
-
-## 4. Adicionar snapshot de auditoria direto na comissão para novas gerações
-
-Para novas comissões, vou adicionar um campo JSONB em `comissoes`, por exemplo:
-
-```text
-calculo_snapshot jsonb
-```
-
-Esse snapshot será preenchido no motor `fn_gerar_comissoes_por_pagamento`.
-
-Conteúdo previsto:
-
-```json
-{
-  "grade": {
-    "id": "...",
-    "nome": "Grade Select RJ",
-    "versao_id": "...",
-    "versao": 3
-  },
-  "plano": {
-    "id": "...",
-    "nome": "Select Exclusive"
-  },
-  "parcela": {
-    "numero": 2,
-    "vitalicia": false,
-    "vitalicia_inicio_parcela": null
-  },
-  "regra_aplicada": {
-    "id": "...",
-    "role": "supervisor_vendas",
-    "nome_nivel": "Supervisor",
-    "tipo_comissao": "percentual",
-    "valor": 5
-  },
-  "cadeia": {
-    "vendedor_id": "...",
-    "supervisor_id": "...",
-    "gerente_id": "...",
-    "agencia_id": "..."
-  },
-  "valores": {
-    "valor_base": 250,
-    "percentual_aplicado": 5,
-    "valor_comissao": 12.5,
-    "valor_total": 12.5
-  }
-}
-```
-
-### Por que adicionar esse campo
-Embora `grade_versao_id` e `plano_regra_id` já existam, esse snapshot torna a auditoria mais forte e independente de alterações futuras em hierarquia, plano ou regra.
-
-Para comissões antigas, o modal continuará funcionando com fallback usando joins e `grades_comissao_versoes.snapshot`.
-
----
-
-## 5. Ajustar o motor de geração de comissões
-
-Banco/Supabase:
-
-- criar migration para adicionar `comissoes.calculo_snapshot`;
-- atualizar `fn_gerar_comissoes_por_pagamento`.
-
-Ao inserir cada comissão, a função também salvará:
-
-- grade usada;
-- versão da grade;
+- data de geração;
+- destinatário;
+- perfil remunerado;
+- vendedor de origem, quando disponível;
+- plano;
+- grade;
+- parcela;
+- status;
+- valor base;
 - regra aplicada;
-- parcela resolvida;
-- cadeia hierárquica resolvida na data da venda;
-- valores usados no cálculo.
-
-Isso garante que, no futuro, mesmo que a hierarquia do vendedor mude, a comissão paga continue auditável pelo cenário que existia na geração.
+- valor final;
+- pagamento/recibo;
+- ações.
 
 ---
 
-## 6. Melhorar o relatório com acesso ao detalhe
+## 3. Ajustar a ação “Marcar como paga”
 
-Arquivos:
+Hoje o botão “Pagar” abre o modal de detalhes e confirma o pagamento.
 
-- `src/pages/comissoes/Relatorio.tsx`
-- `src/hooks/useRelatorioComissoes.ts`
+Vou manter esse fluxo, mas a confirmação passará a fazer mais do que apenas atualizar `comissoes.status`.
 
-Adicionar uma ação “Detalhes” em cada linha do relatório de comissões.
+### Novo comportamento ao confirmar pagamento
 
-Assim a mesma auditoria poderá ser aberta também a partir do relatório, não apenas da tela de pagamentos.
+Ao clicar em “Confirmar pagamento”:
 
-No relatório, o botão será apenas para consulta; na tela de pagamentos, o modal também terá a ação de confirmar pagamento quando o status permitir.
+1. validar que a comissão ainda não está paga;
+2. atualizar a comissão:
+   - `status = 'paga'`;
+   - `pago_em = now()`;
+   - `updated_at = now()`;
+3. criar um lançamento em `comissoes_pagamentos`;
+4. vincular o pagamento à comissão liquidada;
+5. gerar/registrar recibo;
+6. invalidar os caches de:
+   - pagamentos de comissões;
+   - relatório de comissões;
+   - dashboard de comissões;
+   - detalhes da comissão.
 
 ---
 
-## 7. Estados e mensagens de segurança
+## 4. Completar o histórico de pagamentos
 
-O modal terá estados claros:
+A tabela `comissoes_pagamentos` já existe e será reaproveitada, mas hoje ela guarda apenas o resumo por vendedor/período.
 
-### Quando tudo estiver completo
-Mostrar:
+Para deixar o vínculo auditável, será criada uma tabela auxiliar:
 
 ```text
-Dados auditáveis encontrados.
+comissoes_pagamento_itens
+- id
+- pagamento_id
+- comissao_id
+- vendedor_id
+- valor_pago
+- status_anterior
+- created_at
 ```
 
-### Quando faltar snapshot novo
-Mostrar:
+### Motivo
+Isso permite responder:
 
 ```text
-Esta comissão foi gerada antes do snapshot detalhado. Exibindo auditoria reconstruída com os dados disponíveis.
+Qual pagamento liquidou esta comissão?
+Quais comissões compõem este recibo?
+Qual valor foi pago em cada item?
 ```
 
-### Quando faltar regra/plano/grade
-Mostrar alerta:
-
-```text
-A comissão não possui todos os vínculos de auditoria. Revise antes de marcar como paga.
-```
-
-Nesse caso, o botão “Confirmar pagamento” continuará disponível apenas se o usuário decidir prosseguir, mas com destaque visual de atenção.
+Também evita depender apenas de `status = paga` na tabela `comissoes`.
 
 ---
 
-## 8. Validação esperada
+## 5. Gerar recibo de pagamento
 
-### Cenário 1: comissão nova com snapshot completo
-- Gerar comissão por pagamento.
-- Abrir “Pagar”.
-- Confirmar que aparecem:
-  - snapshot da grade;
-  - plano;
-  - parcela resolvida;
-  - regra aplicada;
-  - cadeia hierárquica;
-  - valores base e calculado.
-- Confirmar pagamento.
+Adicionar geração de recibo em PDF no frontend usando o padrão já utilizado no projeto com:
 
-### Cenário 2: comissão antiga sem snapshot novo
-- Abrir comissão antiga.
-- Modal exibe dados reconstruídos via `grade_versao_id`, `plano_regra_id`, contrato e hierarquia.
-- Mostra aviso de fallback.
+- `jspdf`;
+- `jspdf-autotable`.
 
-### Cenário 3: comissão de supervisor
-- Abrir comissão cujo destinatário é supervisor.
-- Modal mostra:
-  - vendedor de origem;
-  - supervisor destinatário;
-  - regra do perfil supervisor;
-  - grade do vendedor de origem.
+### Conteúdo do recibo
+O recibo terá:
 
-### Cenário 4: valor fixo
-- Comissão gerada por regra de valor fixo.
-- Modal mostra “Valor fixo” e o valor configurado, sem interpretar como percentual.
+```text
+Recibo de Pagamento de Comissão
 
-### Cenário 5: relatório
-- Abrir relatório.
-- Clicar em “Detalhes”.
-- Ver a mesma auditoria, sem alterar status.
+Número do recibo/pagamento
+Data do pagamento
+Destinatário
+E-mail
+Período de referência
+Quantidade de comissões
+Valor total pago
+
+Itens:
+- comissão
+- contrato/cobrança
+- plano
+- grade
+- parcela
+- perfil
+- valor base
+- regra aplicada
+- valor pago
+```
+
+### Ações na tela
+Na tabela:
+
+- “Detalhes” abre auditoria;
+- “Pagar” abre auditoria e confirma pagamento;
+- “Recibo” baixa o PDF quando a comissão já estiver paga.
+
+Na listagem de pagamentos/histórico:
+
+- baixar recibo novamente.
 
 ---
 
-## Arquivos envolvidos
+## 6. Persistir referência do recibo
+
+A tabela `comissoes_pagamentos` já possui:
+
+```text
+comprovante_url
+observacoes
+```
+
+Para o primeiro ajuste, o recibo pode ser gerado sob demanda no navegador a partir dos dados do pagamento.
+
+Se for necessário persistir o arquivo, será usado o campo `comprovante_url` com upload em bucket de storage. Nesta etapa, a prioridade será:
+
+```text
+registrar o lançamento + permitir baixar recibo gerado com os dados auditáveis
+```
+
+Sem depender de storage para o fluxo funcionar.
+
+---
+
+## 7. Permitir pagamento individual e preparar pagamento em lote
+
+### Nesta implementação
+Foco em pagamento individual por comissão, que é o fluxo direto do botão “Pagar”.
+
+### Estrutura preparada para lote
+A tabela `comissoes_pagamentos` + `comissoes_pagamento_itens` já permitirá futuramente:
+
+```text
+selecionar várias comissões do mesmo destinatário
+-> pagar em lote
+-> gerar um único recibo consolidado
+```
+
+A interface já será organizada para não bloquear essa evolução.
+
+---
+
+## 8. Ajustar o modal de detalhes/auditoria
+
+Arquivo:
+
+- `src/components/comissoes/ComissaoDetalhesPagamentoModal.tsx`
+
+### Ajustes
+Manter o modal existente, mas adicionar:
+
+- informação se já existe pagamento registrado;
+- número/id do lançamento em `comissoes_pagamentos`;
+- botão “Baixar recibo” quando já estiver paga;
+- botão “Confirmar pagamento” apenas quando o status permitir.
+
+---
+
+## 9. Banco de dados
+
+Criar migration para:
+
+### Nova tabela
+```text
+comissoes_pagamento_itens
+```
+
+Com RLS seguindo a lógica atual:
+
+- diretor/admin/desenvolvedor/gerente podem visualizar;
+- diretor/admin/desenvolvedor podem inserir;
+- vendedor pode visualizar apenas itens próprios.
+
+### Índices
+Criar índices para:
+
+```text
+pagamento_id
+comissao_id
+vendedor_id
+created_at
+```
+
+### Unicidade
+Adicionar restrição para evitar pagamento duplicado da mesma comissão:
+
+```text
+unique (comissao_id)
+```
+
+Assim uma comissão não entra em dois recibos diferentes.
+
+---
+
+## 10. Arquivos envolvidos
 
 ### Frontend
 - `src/pages/comissoes/Pagamentos.tsx`
-- `src/pages/comissoes/Relatorio.tsx`
-- `src/hooks/useComissaoDetalhesPagamento.ts`
-- `src/hooks/useRelatorioComissoes.ts`
+- `src/hooks/usePagamentosComissoes.ts`
 - `src/components/comissoes/ComissaoDetalhesPagamentoModal.tsx`
+- novo utilitário, por exemplo:
+  - `src/lib/comissoes-recibo.ts`
 
 ### Banco/Supabase
-- nova migration para `comissoes.calculo_snapshot`
-- atualização de `fn_gerar_comissoes_por_pagamento`
-- opcional: comentário/índice para facilitar auditoria por `cobranca_id`, `grade_id`, `plano_id` e `plano_regra_id`
+- nova migration para `comissoes_pagamento_itens`;
+- RLS da nova tabela;
+- índices e constraint de unicidade.
+
+---
+
+## 11. Validação esperada
+
+### Cenário 1: lista paginada
+- Acessar `/comissoes/pagamentos`.
+- Ver lista com paginação real.
+- Trocar página sem perder filtros.
+
+### Cenário 2: filtros
+- Filtrar por status, período, vendedor, plano, grade e parcela.
+- Conferir que os totais e a tabela acompanham os filtros.
+
+### Cenário 3: marcar como paga
+- Clicar em “Pagar”.
+- Ver modal de auditoria.
+- Confirmar pagamento.
+- Comissão muda para `paga`.
+- `pago_em` é preenchido.
+- Lançamento é criado em `comissoes_pagamentos`.
+- Item é criado em `comissoes_pagamento_itens`.
+
+### Cenário 4: evitar duplicidade
+- Tentar pagar novamente a mesma comissão.
+- Sistema não duplica pagamento/recibo.
+
+### Cenário 5: recibo
+- Comissão paga exibe ação “Recibo”.
+- Baixar PDF com dados do destinatário, valor, regra, grade, plano e parcela.
+
+### Cenário 6: auditoria
+- Abrir detalhes de comissão paga.
+- Ver regra aplicada, snapshot, cadeia hierárquica e lançamento de pagamento vinculado.
