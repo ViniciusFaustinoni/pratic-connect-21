@@ -1,150 +1,79 @@
 
 
-## Encerrar `agendamentos_base` e `servicos` ao aprovar vistoria
+## Padronizar filtros de "rastreadores instalados" para usar `status='instalado'`
 
-### Já parcialmente implementado — preciso confirmar antes
+### Diagnóstico
 
-Na rodada de "Bugs do app do instalador" essa correção foi planejada e (segundo o resumo) aplicada em `useAprovarVeiculoVistoria` + backfill. Antes de re-implementar, preciso ler o código atual para ver se:
+A maior parte do código já usa `.eq('status', 'instalado')` corretamente (métricas, lista, `useRastreadoresInstalados`, `useSinistroAnalise`, mapa). Mas existem pontos onde a "presença de rastreador instalado" é inferida pelo vínculo `veiculo_id IS NOT NULL` em vez do `status` — herança da época em que `veiculo_id` era zerado em qualquer mudança. Com a regra atual de **preservação de vínculo** (`mem://logic/operations/rastreador-vinculo-preservacao.md`), `veiculo_id` permanece preenchido em `manutencao`, `retirada_pendente`, `reagendar_manutencao`, etc. — então usar só `veiculo_id` faz veículos em manutenção contarem como "tendo rastreador ativo", o que está errado.
 
-1. A atualização de `agendamentos_base.status = 'realizado'` está mesmo lá.
-2. O `update` em `servicos` (via `vistoria_origem_id` e via `agendamento_origem_id`) está lá.
-3. A edge function `processar-vistoria` (que é o caminho real chamado por `useAnaliseVistoria` — o hook `useAprovarVeiculoVistoria` pode nem ser o ponto de entrada hoje) faz isso.
+### Pontos a corrigir
 
-Se já estiver correto, a "tarefa fantasma" tem outra causa (cache do React Query, realtime não invalidando, ou serviço criado por outro fluxo). Por isso o plano abaixo cobre os dois cenários.
+**1. `src/hooks/useRastreadores.ts` — `useVeiculosSemRastreador` (linhas ~506–536)**
 
-### Diagnóstico a confirmar (antes de codar)
+Hoje:
+```ts
+.from('rastreadores').select('veiculo_id').eq('status','instalado').not('veiculo_id','is', null)
+```
+O `.not('veiculo_id','is',null)` é redundante quando `status='instalado'` (instalado sempre tem veículo). **Remover** o `.not(...)` para deixar o `status` como única regra. Comportamento idêntico para "instalado", mas explicita a intenção.
 
-Pontos a inspecionar:
-- `src/hooks/useVistoriaCompleta.ts` → `useAprovarVeiculoVistoria` — verificar se já atualiza `agendamentos_base` e `servicos`.
-- `supabase/functions/processar-vistoria/index.ts` — caminho usado pelo regulador (analista) via `useAnaliseVistoria.registrarDecisao`. Esse é o fluxo de aprovação **real** em produção.
-- `src/hooks/useServicosRealtime.ts` — já invalida `tarefa-atual` em qualquer mudança de `servicos` do profissional. OK.
-- Tabela `agendamentos_base` — confirmar enum/valores válidos de `status` (`realizado` existe?).
-
-### Mudanças (condicionais ao diagnóstico)
-
-**1. `processar-vistoria` (edge function)** — no branch `decisao IN ('aprovada','aprovada_com_ressalvas')`, adicionar logo após gravar a decisão na vistoria:
+**2. `src/hooks/useAppAssociado.ts` (linha 78)**
 
 ```ts
-// 1. Encerra serviço materializado da vistoria (se existir)
-await supabase.rpc('set_audit_origem', { origem: 'processar-vistoria' });
+tem_rastreador: Array.isArray(v.rastreadores) && v.rastreadores.length > 0,
+```
+Hoje conta qualquer rastreador vinculado (inclui `manutencao`, `retirada_pendente`). Mudar para:
+```ts
+tem_rastreador: Array.isArray(v.rastreadores) && v.rastreadores.some(r => r.status === 'instalado'),
+```
+Alinhando com a linha 79 (`rastreador_ativo`). Os dois passam a refletir a mesma verdade: "veículo tem rastreador efetivamente instalado". Fica obsoleta a distinção `tem_rastreador` vs `rastreador_ativo`, mas mantemos os dois campos na interface por compatibilidade.
 
-const { data: servicosAfetados } = await supabase
-  .from('servicos')
-  .update({
-    status: decisao === 'reprovada' ? 'cancelada' : 'concluida',
-    finalizado_em: new Date().toISOString(),
-    observacoes_conclusao: 'Encerrado automaticamente por decisão da análise de vistoria',
-  })
-  .eq('vistoria_origem_id', vistoria_id)
-  .in('status', ['agendada','em_rota','em_andamento','pendente','reagendada'])
-  .select('id, agendamento_origem_id');
+**3. `src/hooks/useChamadoPosicaoTempoReal.ts` (~linha 50)**
 
-// 2. Encerra agendamento_base vinculado (se existir)
-const agendamentoIds = (servicosAfetados ?? [])
-  .map(s => s.agendamento_origem_id)
-  .filter(Boolean);
+Verificar como decide "veículo sem rastreador instalado" — se faz `select rastreadores` sem filtro de status, adicionar `.eq('status','instalado')`. (Vou conferir o trecho exato no momento da edição.)
 
-if (agendamentoIds.length > 0) {
-  await supabase
-    .from('agendamentos_base')
-    .update({ status: 'realizado', updated_at: new Date().toISOString() })
-    .in('id', agendamentoIds);
-}
+**4. `src/components/monitoramento/estoque/ListaRastreadores.tsx` (linhas 205–208)**
+
+```ts
+.update({ status: novoStatus, veiculo_id: novoStatus !== 'instalado' ? null : undefined })
+```
+Esse update **sempre zera `veiculo_id` se novoStatus ≠ 'instalado'** — viola diretamente a regra de preservação. Substituir pela whitelist canônica (`STATUS_DESVINCULA_VEICULO`):
+
+```ts
+const desvincula = ['estoque','baixado'].includes(novoStatus);
+.update({ status: novoStatus, ...(desvincula ? { veiculo_id: null } : {}) })
 ```
 
-Mesmo bloco (com `cancelada`/`cancelado`) no branch `reprovada`.
+(Isso é fix de bug colateral encontrado durante a varredura — está na mesma linha do que o usuário pediu: parar de usar `veiculo_id` como proxy de status.)
 
-**2. `useAprovarVeiculoVistoria` (hook frontend, fluxo de vistoria de manutenção)** — replicar a mesma lógica, **se** ainda não estiver presente. Caso esteja, sem alteração.
+**5. Edge functions de backfill (`softruck-backfill-veiculos`, `rede-veiculos-backfill-veiculos`)**
 
-**3. Trigger SQL como rede de segurança (recomendado)** — migration:
+Já filtram por `.eq('status','instalado')` E `.not('veiculo_id','is', null)`. O `.not(...)` agora é redundante mas **inofensivo** (defesa em profundidade contra registros inconsistentes). **Sem mudança.**
 
-```sql
-CREATE OR REPLACE FUNCTION public.sync_servico_on_vistoria_decisao()
-RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
-DECLARE v_novo_status text;
-BEGIN
-  IF NEW.status IS DISTINCT FROM OLD.status
-     AND NEW.status IN ('aprovada','aprovada_ressalvas','reprovada','cancelada') THEN
-    v_novo_status := CASE NEW.status
-                       WHEN 'reprovada' THEN 'cancelada'
-                       WHEN 'cancelada' THEN 'cancelada'
-                       ELSE 'concluida' END;
+**6. `src/hooks/useVistoriaManutencao.ts` linha 1106–1109**
 
-    UPDATE servicos
-       SET status = v_novo_status::status_servico,
-           finalizado_em = COALESCE(finalizado_em, now()),
-           updated_at = now()
-     WHERE vistoria_origem_id = NEW.id
-       AND status IN ('agendada','em_rota','em_andamento','pendente','reagendada');
+`useRastreadoresInstalados` usa `.eq('status','instalado').not('veiculo_id','is',null)`. Mesma situação do item 5 — mantém defesa, sem mudança.
 
-    UPDATE agendamentos_base ab
-       SET status = CASE NEW.status WHEN 'reprovada' THEN 'cancelado'
-                                    WHEN 'cancelada' THEN 'cancelado'
-                                    ELSE 'realizado' END,
-           updated_at = now()
-      FROM servicos s
-     WHERE s.vistoria_origem_id = NEW.id
-       AND ab.id = s.agendamento_origem_id
-       AND ab.status NOT IN ('realizado','cancelado');
-  END IF;
-  RETURN NEW;
-END $$;
+### O que NÃO muda
 
-CREATE TRIGGER trg_sync_servico_on_vistoria_decisao
-AFTER UPDATE OF status ON vistorias
-FOR EACH ROW EXECUTE FUNCTION sync_servico_on_vistoria_decisao();
-```
+- `useInadimplenciaPorVeiculo`, `useMinhasCoberturasApp` (filtram cobranças por veículo, não rastreador — `veiculo_id` ali é correto).
+- `rede-veiculos-sincronizar-status` (filtra `rede_veiculos_veiculo_id`, outro contexto).
+- Fluxo de importação (`ImportarRastreadoresDialog`) — já decide `status` baseado em `veiculo_id` na criação, lógica correta.
+- Métricas (`useRastreadoresMetricas`) — já corretas.
 
-A trigger garante consistência mesmo se algum fluxo futuro alterar `vistorias.status` direto sem passar pela edge function.
+### Memória
 
-**4. Backfill (migration, defensivo)**:
-
-```sql
--- Encerra serviços ativos de vistorias já decididas
-UPDATE servicos s
-   SET status = CASE v.status
-                  WHEN 'reprovada' THEN 'cancelada'::status_servico
-                  ELSE 'concluida'::status_servico END,
-       finalizado_em = COALESCE(s.finalizado_em, now()),
-       updated_at = now()
-  FROM vistorias v
- WHERE s.vistoria_origem_id = v.id
-   AND v.status IN ('aprovada','aprovada_ressalvas','reprovada','cancelada')
-   AND s.status IN ('agendada','em_rota','em_andamento','pendente','reagendada');
-
--- Encerra agendamentos_base correspondentes
-UPDATE agendamentos_base ab
-   SET status = CASE v.status WHEN 'reprovada' THEN 'cancelado'
-                              WHEN 'cancelada' THEN 'cancelado'
-                              ELSE 'realizado' END,
-       updated_at = now()
-  FROM servicos s
-  JOIN vistorias v ON v.id = s.vistoria_origem_id
- WHERE ab.id = s.agendamento_origem_id
-   AND v.status IN ('aprovada','aprovada_ressalvas','reprovada','cancelada')
-   AND ab.status NOT IN ('realizado','cancelado');
-```
-
-**5. Frontend — invalidações**: já cobertas por `useServicosRealtime` (escuta `servicos` por `profissional_id`) e `useAnaliseVistoria.onSuccess` (invalida `vistorias`/`fila-vistorias`/`instalacoes`). Sem mudança.
-
-### Pré-checagem obrigatória antes de aplicar
-
-1. Ler `useVistoriaCompleta.ts` e `processar-vistoria/index.ts` para descobrir o que já existe — se a lógica frontend está completa, foco vai 100% para edge function + trigger.
-2. Confirmar no schema os valores válidos de `agendamentos_base.status` (`realizado`/`cancelado`) e `servicos.status` enum.
-3. Confirmar nome da coluna `agendamento_origem_id` em `servicos` (ou variação `base_id`/`agendamento_base_id`).
-
-Se o pré-check mostrar que **tudo já está implementado** e a tarefa fantasma persiste, abro outro ciclo investigando: cache do PWA do instalador, `useServicosRealtime` não montado, ou `tarefa-atual` filtrando por critério diferente.
+Atualizar `mem://logic/operations/rastreador-vinculo-preservacao.md` com nota de aplicação: "Filtros de UI/queries para 'rastreadores instalados' devem usar `status='instalado'` como verdade primária. `veiculo_id IS NOT NULL` sozinho inclui falsamente rastreadores em `manutencao`/`retirada_pendente`."
 
 ### Arquivos editados
 
-- `supabase/functions/processar-vistoria/index.ts` — adicionar bloco de encerramento de `servicos` + `agendamentos_base`.
-- `src/hooks/useVistoriaCompleta.ts` — completar lógica se faltar (provável que sim só para `agendamentos_base`).
-- Migration nova — trigger `trg_sync_servico_on_vistoria_decisao` + backfill.
-- `mem://logic/operations/aprovacao-vistoria-encerra-servico.md` (novo) — registra a regra "ao decidir vistoria, serviço materializado e agendamento_base devem fechar juntos".
+- `src/hooks/useRastreadores.ts` — `useVeiculosSemRastreador` (remover `.not(...)` redundante).
+- `src/hooks/useAppAssociado.ts` — `tem_rastreador` passa a checar `status === 'instalado'`.
+- `src/hooks/useChamadoPosicaoTempoReal.ts` — adicionar `.eq('status','instalado')` se faltar.
+- `src/components/monitoramento/estoque/ListaRastreadores.tsx` — usar whitelist `['estoque','baixado']` em vez de `novoStatus !== 'instalado'`.
+- `mem://logic/operations/rastreador-vinculo-preservacao.md` — nota sobre filtros.
 
 ### Riscos
 
-- Se `agendamentos_base.status` não tiver valor `realizado` no enum, a migration falha — pré-check obrigatório.
-- Trigger pode disparar simultânea à update da edge function — idempotente (filtros `IN (status ativos)` evitam dupla escrita).
-- Backfill toca registros históricos — desejado; sem isso, tarefas fantasmas existentes continuam.
+- Item 2 (`tem_rastreador` no app do associado) muda comportamento perceptível: veículos com rastreador em `manutencao` deixam de mostrar UI de "tem rastreador". Isso **é o comportamento correto** (não pode rastrear o que está em manutenção), mas vale alertar usuários do app durante a janela de manutenção. Não há mudança de UI/copy adicional necessária.
+- Item 4 corrige bug latente: hoje, mover rastreador no painel da estoque para `manutencao` zerava `veiculo_id`. Após o fix, vínculo é preservado. Se houver registros já corrompidos por esse bug, eles precisam de backfill manual (não incluso neste plano — abrir tarefa separada se relevante).
 
