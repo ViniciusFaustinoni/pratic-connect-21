@@ -411,6 +411,29 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
         </CardContent>
       </Card>
 
+      <Card>
+        <CardContent className="space-y-4 pt-6">
+          <div>
+            <h3 className="text-base font-semibold text-foreground">Planos vinculados</h3>
+            <p className="text-sm text-muted-foreground">A grade só gera comissão para os planos selecionados aqui.</p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {planos.map(plano => (
+              <label key={plano.id} className="flex items-center gap-3 rounded-md border border-border p-3 text-sm cursor-pointer hover:bg-muted/40">
+                <Checkbox checked={selectedPlanIds.includes(plano.id)} onCheckedChange={() => togglePlano(plano.id)} />
+                <span className="min-w-0">
+                  <span className="block font-medium text-foreground truncate">{plano.nome}</span>
+                  {plano.linha && <span className="block text-xs text-muted-foreground truncate">{plano.linha}</span>}
+                </span>
+              </label>
+            ))}
+          </div>
+          {selectedPlanIds.length > 0 && (
+            <p className="text-xs text-muted-foreground">{selectedPlanIds.length} plano(s) usarão as regras de parcela e perfil abaixo.</p>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-semibold">Parcelas comissionadas</h3>
