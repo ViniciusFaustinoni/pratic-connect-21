@@ -74,6 +74,152 @@ export function SgaBackfillFinanceiroDialog() {
   const [preparandoBase, setPreparandoBase] = useState(false);
   const [prepProgress, setPrepProgress] = useState<{ lotes: number; mapeados: number; restantes: number } | null>(null);
 
+  // ===== Mapeamento controlado (pausa/retomada) =====
+  const [mapState, setMapState] = useState<RunState>('idle');
+  const [progresso, setProgresso] = useState<MapearProgresso>(() => loadProgresso());
+  const [carregandoFila, setCarregandoFila] = useState(false);
+  const [batchSizeCtrl] = useState(50);
+  const pauseRef = useRef(false);
+  const runningRef = useRef(false);
+
+  // Persiste sempre que progresso mudar
+  useEffect(() => { saveProgresso(progresso); }, [progresso]);
+
+  // Carrega a fila completa de IDs elegíveis (sem codigo_hinova, origem
+  // api_externa, com placa). Pagina em chunks de 1000 (limite default do
+  // Supabase) e descarta IDs já tentados/mapeados/falhados desta sessão para
+  // evitar reprocessar veículos após um bloqueio.
+  const carregarFila = async () => {
+    setCarregandoFila(true);
+    try {
+      const ignorar = new Set<string>([...progresso.tentados, ...progresso.falhados, ...progresso.mapeados]);
+      const ids: string[] = [];
+      const PAGE = 1000;
+      let from = 0;
+      while (from < 50000) {
+        const { data, error } = await supabase
+          .from('veiculos')
+          .select('id, associados:associados!inner(origem_cadastro)')
+          .is('codigo_hinova', null)
+          .not('placa', 'is', null)
+          .eq('associados.origem_cadastro', 'api_externa')
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        for (const r of data) if (!ignorar.has(r.id)) ids.push(r.id);
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+      setProgresso((p) => ({ ...p, fila: ids, carregadoEm: new Date().toISOString(), ultimoErro: null }));
+      toast.success(`Fila carregada: ${ids.length} veículo(s) elegíveis (excluindo ${ignorar.size} já tentados).`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao carregar fila');
+    } finally {
+      setCarregandoFila(false);
+    }
+  };
+
+  // Loop principal: processa a fila em lotes respeitando pause/resume.
+  // Em caso de erro técnico do invoke (5xx, restrição Hinova) marca os IDs
+  // do lote como "falhados" — não voltam ao retomar até reiniciar.
+  const startMapearControlado = async () => {
+    if (runningRef.current) return;
+    if (progresso.fila.length === 0) {
+      toast.error('Fila vazia. Carregue a fila primeiro.');
+      return;
+    }
+    runningRef.current = true;
+    pauseRef.current = false;
+    setMapState('running');
+    try {
+      // Trabalhamos com cópia local da fila para evitar race entre setState
+      let filaLocal = [...progresso.fila];
+      while (!pauseRef.current && filaLocal.length > 0) {
+        const lote = filaLocal.slice(0, batchSizeCtrl);
+        try {
+          const { data, error } = await supabase.functions.invoke('sga-mapear-codigos-veiculos', {
+            body: { batch_size: lote.length, delay_ms: 200, veiculo_ids: lote },
+          });
+          if (error || data?.success === false) {
+            const msg = error?.message || data?.error || 'Erro desconhecido no lote';
+            filaLocal = filaLocal.filter((id) => !lote.includes(id));
+            setProgresso((p) => ({
+              ...p,
+              fila: filaLocal,
+              tentados: Array.from(new Set([...p.tentados, ...lote])),
+              falhados: Array.from(new Set([...p.falhados, ...lote])),
+              loteAtual: p.loteAtual + 1,
+              ultimoErro: msg,
+            }));
+            pauseRef.current = true;
+            setMapState('paused');
+            toast.error(`Lote falhou — pausado. ${msg}`);
+            break;
+          }
+          const mapeadosLote: number = data?.mapeados ?? 0;
+          filaLocal = filaLocal.filter((id) => !lote.includes(id));
+          setProgresso((p) => {
+            // Aproximação: marcamos os primeiros N do lote como mapeados.
+            // Fonte de verdade real é a contagem agregada em status.
+            const aprox = lote.slice(0, mapeadosLote);
+            return {
+              ...p,
+              fila: filaLocal,
+              tentados: Array.from(new Set([...p.tentados, ...lote])),
+              mapeados: Array.from(new Set([...p.mapeados, ...aprox])),
+              loteAtual: p.loteAtual + 1,
+              ultimoErro: null,
+            };
+          });
+          await fetchStatus();
+          await new Promise((r) => setTimeout(r, 250));
+        } catch (e: any) {
+          filaLocal = filaLocal.filter((id) => !lote.includes(id));
+          setProgresso((p) => ({
+            ...p,
+            fila: filaLocal,
+            tentados: Array.from(new Set([...p.tentados, ...lote])),
+            falhados: Array.from(new Set([...p.falhados, ...lote])),
+            loteAtual: p.loteAtual + 1,
+            ultimoErro: e?.message || String(e),
+          }));
+          pauseRef.current = true;
+          setMapState('paused');
+          toast.error(`Erro inesperado — pausado. ${e?.message || e}`);
+          break;
+        }
+      }
+      if (!pauseRef.current && filaLocal.length === 0) {
+        setMapState('done');
+        toast.success('Mapeamento controlado concluído — fila esgotada.');
+      }
+    } finally {
+      runningRef.current = false;
+    }
+  };
+
+  const pausarMapearControlado = () => {
+    pauseRef.current = true;
+    setMapState('paused');
+    toast.info('Pausa solicitada — finalizando lote em andamento.');
+  };
+
+  const retomarMapearControlado = () => {
+    if (progresso.fila.length === 0) {
+      toast.error('Nada a retomar — fila vazia. Carregue a fila novamente.');
+      return;
+    }
+    startMapearControlado();
+  };
+
+  const reiniciarMapearControlado = () => {
+    pauseRef.current = true;
+    runningRef.current = false;
+    setProgresso(emptyProgresso);
+    setMapState('idle');
+    toast.info('Progresso de mapeamento controlado zerado.');
+  };
+
   const fetchStatus = async () => {
     try {
       const { data, error } = await supabase.functions.invoke('sga-backfill-financeiro', {
