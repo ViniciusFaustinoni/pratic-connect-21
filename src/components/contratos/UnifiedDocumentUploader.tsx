@@ -22,6 +22,7 @@ import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
 import { syncCnhDataToAssociado } from '@/utils/syncCnhData';
 import { compararPlacasComDetalhe, isPlacaPlaceholder } from '@/lib/placa-utils';
+import { OcrDadosEditor } from '@/components/ocr/OcrDadosEditor';
 
 
 export type TipoDocumentoDetectado = 'cnh' | 'rg' | 'crlv' | 'nota_fiscal_veiculo' | 'atpv_e' | 'comprovante_residencia' | 'outro';
@@ -684,20 +685,6 @@ export const UnifiedDocumentUploader = forwardRef<
                         
                         {doc.status === 'processing' && (
                           <p className="text-xs text-amber-600 mt-1">Detectando tipo e extraindo dados...</p>
-                        )}
-                        
-                        {doc.status === 'success' && doc.ocr?.dados && (
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            {Object.entries(doc.ocr.dados).slice(0, 3).map(([key, value]) => {
-                              if (!value) return null;
-                              const label = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                              return (
-                                <span key={key} className="mr-3">
-                                  <span className="font-medium">{label}:</span> {value}
-                                </span>
-                              );
-                            })}
-                          </div>
                         )}
                         
                         {doc.status === 'error' && (
