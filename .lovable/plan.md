@@ -1,75 +1,68 @@
 
 
-## Persistência de rascunho no Cotador (antes de criar a cotação)
+## Duplicação de cotação: oferecer exclusão da original quando for o mesmo consultor
 
-### Resposta curta
-Sim, é totalmente viável e **sem sobrecarregar o sistema** — a solução é 100% client-side usando `localStorage`, sem qualquer chamada extra ao banco ou edge function. Salva localmente enquanto o consultor digita; quando a cotação é efetivamente criada, o rascunho é descartado.
+### Ajuste sobre o plano anterior
 
-### Como vai funcionar (UX)
+Mantém-se tudo que foi planejado (diálogo de confirmação, motivo, marcação de substituída, ignorar placa presa da original). A diferença está no comportamento quando **o consultor logado é o mesmo que criou a cotação original**.
 
-1. Consultor entra no cotador e começa a preencher (placa, FIPE, dados do associado, plano escolhido, etc.).
-2. A cada alteração relevante, o estado do formulário é salvo automaticamente no navegador (debounce de ~800ms para não escrever a cada tecla).
-3. Se o consultor:
-   - Trocar de aba/página, fechar o navegador, ou recarregar → ao voltar para o cotador, aparece um banner discreto no topo:
-     > "Encontramos um rascunho não finalizado de **{HH:mm} de hoje}**. Deseja continuar de onde parou?"  
-     **[ Continuar rascunho ]   [ Descartar e começar do zero ]**
-   - Clicar em "Continuar" → o formulário é re-hidratado em todas as etapas já preenchidas, inclusive a etapa atual do stepper.
-   - Clicar em "Descartar" → rascunho é apagado.
-4. Quando a cotação é **efetivamente criada** (POST bem-sucedido) → rascunho é apagado automaticamente.
-5. Rascunhos expiram sozinhos após **24h** (limpeza preguiçosa na próxima abertura do cotador).
+### Nova lógica condicional no diálogo de duplicação
 
-### Escopo e segurança
+Ao abrir o `DuplicarCotacaoDialog`, detectar se `cotacao.vendedor_id === user.id`:
 
-- **Por usuário e por dispositivo**: a chave do `localStorage` inclui o `user.id` logado, então rascunhos de um consultor não vazam para outro que use o mesmo navegador.
-- **Sem dados sensíveis bloqueantes**: armazenamos apenas o que o consultor digitou (placa, FIPE, plano, telefone, etc.) — nenhum token, senha ou dado do Autentique.
-- **Limite de tamanho**: rascunho típico < 5KB, muito abaixo do limite de 5MB do `localStorage`.
-- **Compatível com fluxos especiais**: vale para cotação normal, substituição, inclusão de veículo e externa (cada tipo com sua própria chave).
+**Caso A — Mesmo consultor (autor da cotação)**
+- Mostrar uma pergunta extra acima do botão de confirmação:
+  > "Esta cotação foi criada por você. O que deseja fazer com a original?"
+  
+  Opções (radio):
+  - 🗑️ **Excluir a cotação original** (recomendado para correções) — *padrão selecionado*
+  - 📝 **Manter como substituída** (registro de auditoria preservado)
+  
+- Se escolher **Excluir**: a original é apagada de fato (`DELETE` em `cotacoes` pelo id), liberando a placa imediatamente. Sem rastro de "substituída por".
+- Se escolher **Manter**: comportamento original do plano (status `recusada` + `substituida_por_cotacao_id` + `motivo_substituicao`).
 
-### Por que não sobrecarrega
+**Caso B — Outro consultor (gestor corrigindo cotação alheia)**
+- **Não oferecer** a opção de excluir.
+- Sempre marcar como substituída (preserva auditoria entre consultores).
+- Mantém o aviso "Esta cotação pertence a {nome}. A correção será atribuída a você."
 
-- ✅ Zero chamadas ao Supabase, zero edge functions, zero registros em tabela.
-- ✅ Debounce evita escrita excessiva mesmo durante digitação rápida.
-- ✅ Limpeza automática evita acúmulo eterno no navegador.
-- ✅ Apenas o último rascunho por tipo de cotação é mantido (não vira histórico).
+### Regras de bloqueio da exclusão
 
-### Detalhes técnicos
+A exclusão só é permitida quando a cotação original estiver em estado **seguro de descartar**:
+- ✅ Status `rascunho` ou `enviada` (sem aceite formal)
+- ❌ Status `aceita`, com contrato gerado, com agendamento, ou com pagamento → força modo "Manter como substituída" (radio da exclusão fica desabilitado com tooltip explicando)
 
-**Arquivos novos**
-- `src/hooks/useCotacaoDraft.ts` — hook genérico que recebe `(draftKey, currentState, setState)`, faz autosave com debounce, expõe `hasDraft`, `restoreDraft()`, `discardDraft()` e `clearOnSubmit()`.
-- `src/components/cotacao/DraftRestoreBanner.tsx` — banner com os dois botões.
+A verificação roda no abrir do diálogo via consulta rápida: existe `contrato` ou `agendamento_base` apontando para a cotação? Se sim, bloqueia exclusão.
 
-**Arquivos editados** (cotador principal e variantes)
-- `src/pages/vendas/Cotador.tsx` (ou equivalente atual da rota `/vendas/cotacoes`) — integra o hook e o banner no topo.
-- Se houver páginas separadas para inclusão / substituição / cotação externa, mesmo plug-in com `draftKey` distinto.
+### Campo "Motivo"
 
-**Estrutura da chave no localStorage**
-```
-praticcar:cotador-draft:{userId}:{tipo}
-  → { savedAt: ISO, version: 1, formState: {...} }
-```
+- Continua **obrigatório** em ambos os casos (excluir ou manter).
+- No caso de exclusão, o motivo vai para `system_logs` apenas (não há mais cotação para guardar o campo).
 
-**Pseudocódigo do hook**
-```ts
-useEffect(() => {
-  const t = setTimeout(() => {
-    localStorage.setItem(key, JSON.stringify({ savedAt: new Date().toISOString(), version: 1, formState: state }));
-  }, 800);
-  return () => clearTimeout(t);
-}, [state]);
-```
+### Trilha de auditoria
 
-**Limpeza**
-- Após `criarCotacao` retornar sucesso → `discardDraft()`.
-- Ao montar o cotador → se `Date.now() - savedAt > 24h`, descarta silenciosamente; senão, mostra banner.
+- **Excluir**: registrar em `system_logs` com ação `excluir_cotacao_para_duplicacao`, payload `{ cotacao_excluida_id, numero, vendedor_id, motivo, nova_cotacao_id }`. Garante rastro mesmo sem a cotação física.
+- **Manter substituída**: comportamento original (log + campos na cotação).
 
-### Fora do escopo (não vamos fazer agora)
-- Salvar rascunho no banco/Supabase (seria a opção "multi-dispositivo", mas custaria infra e foi explicitamente pedido para não sobrecarregar).
-- Histórico de múltiplos rascunhos.
-- Sincronização entre abas abertas simultaneamente (se necessário, dá para adicionar via `storage` event depois).
+### Ajustes nos arquivos do plano anterior
 
-### Validação rápida após implementação
-1. Abrir cotador, preencher placa + FIPE + plano → fechar a aba → reabrir → banner aparece → restaurar → tudo volta.
-2. Preencher, criar cotação com sucesso → reabrir cotador → banner **não** aparece.
-3. Preencher, esperar > 24h (ou simular) → banner não aparece, rascunho some.
-4. Logar com outro usuário no mesmo navegador → não vê rascunho do anterior.
+**`src/components/cotacoes/DuplicarCotacaoDialog.tsx` (novo)**
+- Adicionar prop derivada `isMesmoConsultor` e estado `acaoOriginal: 'excluir' | 'manter'`.
+- Renderizar bloco de radio condicional.
+- Consultar contratos/agendamentos para habilitar/desabilitar opção excluir.
+
+**`src/hooks/useCotacoes.ts` → `useDuplicarCotacao`**
+- Aceitar `{ cotacaoId, motivo, acaoOriginal: 'excluir' | 'manter' }`.
+- Se `acaoOriginal === 'excluir'`: criar nova + `DELETE` da original + log.
+- Se `acaoOriginal === 'manter'`: criar nova + `UPDATE` da original (status/substituida_por/motivo) + log.
+- Se `acaoOriginal` for `excluir` mas existir contrato/agendamento, retornar erro orientando a recarregar (race condition).
+
+**Sem mudanças** em `useVerificarPlaca.ts` (o `ignorarIds` continua útil, especialmente no modo "manter"; no modo "excluir" a placa é liberada naturalmente).
+
+### Validação adicional
+
+1. Vendedor A cria cotação errada → clica Duplicar → diálogo mostra "Excluir original" pré-selecionado → confirma → original some da lista, nova abre limpa, sem placa presa.
+2. Vendedor A cria cotação, gera contrato → tenta duplicar → opção "Excluir" aparece desabilitada com tooltip "Cotação já gerou contrato — apenas substituição é permitida".
+3. Gestor duplica cotação do Vendedor A → diálogo **não exibe** opção de excluir → segue fluxo de substituição.
+4. Vendedor A escolhe "Manter como substituída" mesmo sendo o autor → original fica com badge "Substituída por COT-..." na lista.
 
