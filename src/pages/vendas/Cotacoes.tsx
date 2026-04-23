@@ -95,6 +95,7 @@ export default function Cotacoes() {
   const [cotacaoParaExcluir, setCotacaoParaExcluir] = useState<string | null>(null);
   const [mesFilter, setMesFilter] = useState<string>('all');
   const [cotacaoParaDuplicar, setCotacaoParaDuplicar] = useState<CotacaoWithRelations | null>(null);
+  const [cotacaoParaContinuar, setCotacaoParaContinuar] = useState<CotacaoWithRelations | null>(null);
   const [cotacaoConfirmarDuplicar, setCotacaoConfirmarDuplicar] = useState<CotacaoWithRelations | null>(null);
   const [ignorarPlacaIds, setIgnorarPlacaIds] = useState<string[]>([]);
   const [copiandoWhatsApp, setCopiandoWhatsApp] = useState<string | null>(null);
@@ -289,6 +290,12 @@ export default function Cotacoes() {
   const handleDuplicar = (cotacao: CotacaoWithRelations) => {
     // Abre primeiro o diálogo de confirmação (motivo + ação na original)
     setCotacaoConfirmarDuplicar(cotacao);
+  };
+
+  const handleContinuarCotacao = (cotacao: CotacaoWithRelations) => {
+    setCotacaoParaContinuar(cotacao);
+    setShowDetalhesModal(false);
+    setShowCotacaoForm(true);
   };
 
   const handleConfirmarDuplicacao = async (payload: DuplicarCotacaoConfirmPayload) => {
@@ -966,6 +973,7 @@ export default function Cotacoes() {
             onCopiarWhatsApp={copiarParaWhatsApp}
             onPdf={handleBaixarPdf}
             onDuplicar={handleDuplicar}
+            onContinuar={handleContinuarCotacao}
             onExcluir={handleExcluir}
             copiandoWhatsAppId={copiandoWhatsApp}
             getPermissions={getPermissions}
@@ -997,6 +1005,7 @@ export default function Cotacoes() {
             onCopiarWhatsApp={copiarParaWhatsApp}
             onPdf={handleBaixarPdf}
             onDuplicar={handleDuplicar}
+            onContinuar={handleContinuarCotacao}
             onExcluir={handleExcluir}
             copiandoWhatsAppId={copiandoWhatsApp}
             getPermissions={getPermissions}
@@ -1020,6 +1029,7 @@ export default function Cotacoes() {
         onGerarContrato={handleOpenContratoWizard}
         onAceitar={(id) => updateCotacao.mutate({ id, status: 'aceita' })}
         onDuplicar={handleDuplicar}
+        onContinuar={handleContinuarCotacao}
         isCopiandoWhatsApp={copiandoWhatsApp === cotacaoSelecionada?.id}
         isGerandoContrato={gerarContrato.isPending}
         canGenerateContract={cotacaoSelecionada ? getPermissions(cotacaoSelecionada).canGenerateContract : false}
@@ -1034,6 +1044,7 @@ export default function Cotacoes() {
           if (!open) {
             setLeadIdFromUrl(null);
             setCotacaoParaDuplicar(null);
+            setCotacaoParaContinuar(null);
             setIgnorarPlacaIds([]);
           }
         }} 
@@ -1057,6 +1068,28 @@ export default function Cotacoes() {
           lead_id: cotacaoParaDuplicar.lead_id,
           plano_id: cotacaoParaDuplicar.plano_id,
           dados_extras: cotacaoParaDuplicar.dados_extras as any,
+        } : null}
+        cotacaoParaEditar={cotacaoParaContinuar ? {
+          id: cotacaoParaContinuar.id,
+          valor_fipe: cotacaoParaContinuar.valor_fipe,
+          valor_adicional: cotacaoParaContinuar.valor_adicional,
+          valor_adesao: cotacaoParaContinuar.valor_adesao,
+          validade_dias: cotacaoParaContinuar.validade_dias,
+          veiculo_marca: cotacaoParaContinuar.veiculo_marca,
+          veiculo_modelo: cotacaoParaContinuar.veiculo_modelo,
+          veiculo_ano: cotacaoParaContinuar.veiculo_ano,
+          veiculo_placa: cotacaoParaContinuar.veiculo_placa,
+          codigo_fipe: cotacaoParaContinuar.codigo_fipe,
+          categoria: cotacaoParaContinuar.categoria,
+          regiao: cotacaoParaContinuar.regiao,
+          nome_solicitante: cotacaoParaContinuar.nome_solicitante || cotacaoParaContinuar.leads?.nome || null,
+          telefone1_solicitante: cotacaoParaContinuar.telefone1_solicitante || cotacaoParaContinuar.leads?.telefone || null,
+          email_solicitante: cotacaoParaContinuar.email_solicitante || cotacaoParaContinuar.leads?.email || null,
+          lead_id: cotacaoParaContinuar.lead_id,
+          plano_id: cotacaoParaContinuar.plano_id,
+          indicador_id: cotacaoParaContinuar.indicador_id,
+          indicador_nome: cotacaoParaContinuar.indicador_nome,
+          dados_extras: cotacaoParaContinuar.dados_extras as any,
         } : null}
         onSuccess={() => {
           // Após criar/editar cotação, garantir que apareça: voltar para Em Andamento e limpar filtros
