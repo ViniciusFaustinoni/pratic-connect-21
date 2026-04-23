@@ -1,98 +1,70 @@
 
 
-## OCR perdendo número do motor, chassi e endereço (CEP/bairro) — corrigir 4 falhas no pipeline
+## Não desvincular rastreador do veículo durante manutenção / mudanças de status — só em cancelamento ou troca
 
-### Diagnóstico (causas reais, em ordem)
+### Diagnóstico
 
-**1. Endereço (CEP, bairro, logradouro, cidade) some quando JSON do OCR vem truncado.**
-Em `supabase/functions/document-ocr/index.ts` linha 435, o fallback de extração via regex (`dadosFields`) lista campos para CNH/RG/CRLV mas **não inclui** os campos do comprovante de residência: `logradouro`, `numero`, `complemento`, `bairro`, `cidade`, `uf`, `cep`, `nome_titular`, `tipo_comprovante`. Quando o modelo retorna JSON parcialmente quebrado (acontece em PDFs grandes / imagens HEIC convertidas), esses campos ficam em branco — daí o "às vezes não puxa CEP, às vezes não puxa bairro".
+Hoje o rastreador perde o vínculo com o veículo (`veiculo_id = null`) em vários cenários onde ele **continua sendo o mesmo equipamento daquele veículo** — só temporariamente fora de operação. Isso quebra histórico, relatórios "rastreador X esteve no veículo Y" e a UI de detalhes do rastreador, além de exigir religação manual posterior.
 
-**2. Chassi não tem retry direcionado nem extração via texto nativo do PDF para CRLV digital.**
-O `numero_motor` já tem retry com `gemini-2.5-pro` (linhas 1015-1112) e fallback para texto nativo do PDF. **O chassi não tem esse retry.** Quando o modelo lê 16 dos 17 caracteres ou marca `ilegivel`, o sistema só registra o erro e sugere "revisar" (linha 1203), mas não tenta nova extração — e o usuário recebe o documento sem chassi, tendo que digitar manualmente.
+Pontos de desvinculação encontrados:
 
-**3. `numero_motor` é extraído mas nunca persistido na cotação/veículo.**
-Em `EtapaDadosPessoaisDocumentos.tsx` linhas 244-246 e 271, o componente popula `dadosExtraidos.numero_motor` corretamente. Porém em `useCotacaoContratacao.ts` linha 451-484 (`salvarDadosPessoais`), o `update` da cotação **não inclui** `veiculo_motor` nem `numero_motor`. O dado é exibido na tela mas perdido ao salvar — daí "OCR não tá puxando o número do motor". Também não vai para `DadosPessoaisForm` (linhas 327-352), que omite `veiculo_motor`/`numero_motor` no payload de submit.
+| # | Arquivo | Linha | Cenário | Comportamento atual | Correto |
+|---|---------|-------|---------|---------------------|---------|
+| 1 | `src/hooks/useRastreadores.ts` | 423-425 | Troca de status manual (qualquer status ≠ `instalado`) via UI de estoque | `veiculo_id = null` sempre | Manter `veiculo_id` quando vai para `manutencao`, `reagendar_manutencao`, `retirada_pendente`. Limpar só quando vai para `estoque`, `baixado`, `retorno_base`, `triagem`, `em_analise_plataforma`, `em_garantia` (terminais ou pós-retirada). |
+| 2 | `src/hooks/useVistoriaManutencao.ts` | 595-599 | Substituição em campo — atualização do **rastreador antigo** | `veiculo_id = null` ao mudar para `retorno_base`/`baixado` | **Manter** — neste fluxo houve troca real de equipamento (substituição é uma das exceções que o usuário citou). |
+| 3 | `src/hooks/useSubstituirEquipamento.ts` | 127-131 | Substituição via UI de gestão | `veiculo_id = null` no antigo | **Manter** — também é troca de equipamento. |
+| 4 | `supabase/functions/concluir-retirada/index.ts` | 169-180 | Conclusão de retirada (rastreador foi fisicamente removido do veículo) | `veiculo_id = null` | **Manter** — retirada física é o equivalente operacional ao cancelamento/troca. |
+| 5 | `src/hooks/useDeleteBaseAntiga.ts` | 12-26 | Exclusão de base antiga | `veiculo_id = null` | **Manter** — equivale a cancelamento. |
+| 6 | `src/hooks/useVenderVeiculo.ts` | 114-118 | Venda de veículo (sai da proteção) | `veiculo_id = null` | **Manter** — equivale a cancelamento daquele veículo. |
+| 7 | `supabase/functions/delete-associado` / `delete-ativacao` | — | Exclusão completa | `veiculo_id = null` | **Manter** — cancelamento. |
+| 8 | `supabase/functions/rede-veiculos-desvincular-cliente` | 87-91, 135-139, 249-253 | Desvinculação na plataforma externa | `veiculo_id = null` no banco local | Revisar — só limpar quando o status final pedido for terminal. Quando a desvinculação for por **manutenção temporária**, manter o vínculo local. |
 
-**4. Endereço da instalação cai vazio porque o associado às vezes não tem `cep`/`bairro` salvos.**
-Em `AssociadoVistoria.tsx` linha 397-406, o `enderecoInicial` vem de `contrato.associados`. Se durante a contratação o OCR do comprovante falhou (problema #1), o associado fica com `cep`/`bairro` em branco e a etapa de instalação aparece sem pré-preenchimento. Hoje há um fallback no input de CEP via ViaCEP, mas só quando o usuário digita o CEP — não há fallback para puxar do `cliente_*` da cotação ou do `proposta`.
+A regra do usuário é clara: **manutenção (campo OU interna) ≠ desvinculação**. Só `estoque` (porque já voltou para o pool físico), `baixado` (descartado) e os fluxos explícitos de cancelamento/troca/retirada/venda devem zerar `veiculo_id`.
 
 ### O que vai mudar
 
-**Edição A — `supabase/functions/document-ocr/index.ts`**
+**1. `src/hooks/useRastreadores.ts` (linhas 420-428)** — substituir a regra "qualquer ≠ instalado limpa" por whitelist explícita:
 
-A1. Linha 435 — incluir campos do comprovante e do veículo no fallback regex de JSON truncado:
 ```ts
-const dadosFields = [
-  // pessoais (já existem)
-  'nome','cpf','rg','data_nascimento','numero_registro','validade','data_expedicao','orgao_expedidor','categoria',
-  // veículo (já existem)
-  'placa','renavam','chassi','marca','modelo','cor','combustivel','motor','numero_motor','nome_proprietario',
-  // ADICIONAR — comprovante de residência:
-  'logradouro','numero','complemento','bairro','cidade','uf','cep','nome_titular','tipo_comprovante','data_emissao',
-  // ADICIONAR — ATPV-e/NF veículo:
-  'ano_fabricacao','ano_modelo','nome_comprador','cpf_comprador','cpf_cnpj_comprador','valor_nota_fiscal',
+// Status que DESVINCULAM do veículo (rastreador deixa fisicamente o veículo
+// ou é descartado). Os demais (manutencao, reagendar_manutencao,
+// retirada_pendente) preservam veiculo_id para manter histórico.
+const STATUS_DESVINCULA_VEICULO: StatusRastreador[] = [
+  'estoque', 'baixado', 'retorno_base', 'triagem',
+  'em_analise_plataforma', 'em_garantia',
 ];
-```
-(Os campos numéricos `ano_fabricacao`/`ano_modelo` já têm regex separada — manter.)
 
-A2. Após linha 1119 — adicionar **retry direcionado para chassi** (espelho do retry de motor):
-- Disparar quando `tipo ∈ {crlv, atpv_e, nota_fiscal_veiculo}` e `!validateChassi(d.chassi)`.
-- Usar `OCR_RETRY_MODEL` (`gemini-2.5-pro`) com prompt focado: "extraia APENAS o chassi (17 chars, sem I/O/Q)".
-- Tool calling `report_chassi` com schema `{chassi: string}`.
-- Antes do retry, já tentar via `extractCandidatesFromText(extractedPdfText, 'chassi')` — se houver candidato válido no texto nativo, usar direto sem chamar API.
-
-A3. Linha 1289 (`extractCandidatesFromText`) — adicionar `case 'numero_motor'` (regex `/MOTOR[^\w]{0,5}([A-Z0-9-]{6,17})/gi`) e `case 'cep'` (regex `/\b(\d{5}-?\d{3})\b/g`) para alimentar o fallback do checksum quando o PDF é nativo.
-
-A4. Validador de chassi — adicionar saneamento de OCR: trocar `0↔O`, `1↔I`, `5↔S` em posições conhecidas do chassi e retentar `validateChassi` (mesmo padrão já feito para placa).
-
-**Edição B — `src/components/cotacao-publica/FormularioDadosPessoais.tsx` + `EtapaDadosPessoaisDocumentos.tsx`**
-
-B1. Em `FormularioDadosPessoais.tsx` (schema `DadosPessoaisForm`) — adicionar `veiculo_numero_motor: z.string().optional()` (já tem `veiculo_chassi`).
-
-B2. Em `EtapaDadosPessoaisDocumentos.tsx` linha 327-352 (`handleSubmit`) — incluir no payload:
-```ts
-veiculo_numero_motor: dadosExtraidos.numero_motor || dadosExtraidos.veiculo_motor || undefined,
+const updateData: RastreadorUpdate = { status };
+if (STATUS_DESVINCULA_VEICULO.includes(status)) {
+  updateData.veiculo_id = null;
+} else if (veiculo_id !== undefined) {
+  updateData.veiculo_id = veiculo_id;
+}
 ```
 
-**Edição C — `src/hooks/useCotacaoContratacao.ts`**
+E ajustar o bloco anterior (linha 381) que **chama a desvinculação na plataforma externa** quando `status !== 'instalado'`: passar a chamar **só** quando `status ∈ STATUS_DESVINCULA_VEICULO` (manutenção temporária não deve desvincular na Rede Veículos/Softruck — o equipamento volta para o mesmo veículo).
 
-C1. Linha 451-484 (`salvarDadosPessoais.update`) — persistir `numero_motor` na cotação:
-```ts
-veiculo_motor: dados.veiculo_numero_motor || null,  // coluna existente em cotacoes (verificar) 
-```
-Se a coluna não existir, criar migration `ALTER TABLE cotacoes ADD COLUMN IF NOT EXISTS veiculo_motor TEXT;` e equivalente em `veiculos.numero_motor` (a propagar quando o associado/veículo é criado).
+**2. `supabase/functions/rede-veiculos-desvincular-cliente/index.ts`** — passa a aceitar parâmetro `manterVinculoLocal: boolean` (default `false` para retrocompatibilidade) e, quando `true`, faz o `update` na plataforma externa mas **não** zera `veiculo_id` no banco local. A `useUpdateRastreadorStatus` passa `manterVinculoLocal: !STATUS_DESVINCULA_VEICULO.includes(status)`.
 
-C2. Garantir que ao gerar/promover o associado e o veículo final, `numero_motor` é copiado da cotação para `veiculos.numero_motor` (verificar a função/edge que faz a promoção — ajustar SELECT/INSERT).
+**3. `src/hooks/useVistoriaManutencao.ts` linha 299-306** — já está correto: ao abrir manutenção, só muda `status` para `'manutencao'`, **não** mexe em `veiculo_id`. Confirmar que não há outro `update` no mesmo arquivo zerando o vínculo no fluxo de "abertura". (As linhas 595-599 são do fluxo de **substituição**, que mantemos zerando — é exceção legítima.)
 
-**Edição D — `src/pages/public/AssociadoVistoria.tsx` linhas 397-406**
+**4. `src/components/monitoramento/estoque/ListaRastreadores.tsx`** — verificar e ajustar o tooltip/label das ações "Enviar para Manutenção" para deixar claro que o vínculo com o veículo é preservado. (Mudança apenas de copy.)
 
-Acrescentar **fallback em cascata** ao montar `enderecoInicial`. Hoje só lê `contrato.associados`. Passar a tentar nesta ordem:
-1. `contrato.associados.cep/logradouro/...` (atual);
-2. Se vazio, ler `cotacao.cliente_cep/cliente_logradouro/...` da cotação que originou o contrato (já carregada via `contrato.cotacao_id`);
-3. Se ainda vazio, ler `proposta.endereco_*` quando aplicável.
-Adicionar `select` complementar em `useContratoLink.ts` linha 24 trazendo os campos `cliente_*` da `cotacoes` join.
+**5. Não mudam:**
+- `useSubstituirEquipamento.ts`, `useVistoriaManutencao.ts` cenário B (substituição), `concluir-retirada`, `useVenderVeiculo`, `useDeleteBaseAntiga`, `delete-associado`, `delete-ativacao` — todos casos legítimos de desvinculação (troca, retirada física, venda, cancelamento).
+- Tipos em `src/types/rastreadores.ts` e `TRANSICOES_STATUS_RASTREADOR` — sem alteração.
 
-### O que NÃO muda
-
-- Modelo OCR (`gemini-2.5-flash` + retry `gemini-2.5-pro`) — só ganha 1 retry novo (chassi).
-- UI do uploader unificado, validação de placa, regras de 0KM (`isPlacaPlaceholder`).
-- Schema do storage / RLS dos buckets.
-- Fluxo de assinatura Autentique e geração de contrato.
+**6. Memória do projeto** — criar `mem://logic/operations/rastreador-vinculo-preservacao` documentando a regra: "Vínculo `rastreador.veiculo_id` só é zerado em (a) retirada física concluída, (b) substituição de equipamento, (c) cancelamento/exclusão do associado, (d) venda do veículo, (e) status terminal `estoque`/`baixado`/`retorno_base`/`triagem`/`em_garantia`/`em_analise_plataforma`. Manutenção em campo, reagendamento e retirada pendente preservam o vínculo."
 
 ### Arquivos editados
 
-- `supabase/functions/document-ocr/index.ts` — A1 (regex campos), A2 (retry chassi), A3 (cep/motor fallback texto nativo), A4 (saneamento OCR chassi).
-- `src/components/cotacao-publica/FormularioDadosPessoais.tsx` — schema com `veiculo_numero_motor`.
-- `src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx` — submit incluindo `veiculo_numero_motor`.
-- `src/hooks/useCotacaoContratacao.ts` — persistir `veiculo_motor`/`numero_motor` na cotação.
-- `src/hooks/useContratoLink.ts` — incluir `cotacoes.cliente_*` no select da query do contrato público.
-- `src/pages/public/AssociadoVistoria.tsx` — `enderecoInicial` em cascata (associado → cotação).
-- Migration SQL — `ALTER TABLE cotacoes ADD COLUMN IF NOT EXISTS veiculo_motor TEXT;` + `ALTER TABLE veiculos ADD COLUMN IF NOT EXISTS numero_motor TEXT;` (apenas se não existirem).
-- `mem://infrastructure/documents/ocr-resilience-and-cnh-parsing-v4` — atualizar com o novo retry de chassi e o fallback de texto nativo para CEP/motor.
+- `src/hooks/useRastreadores.ts` — whitelist de status que desvinculam + condicionar chamada à API externa.
+- `supabase/functions/rede-veiculos-desvincular-cliente/index.ts` — novo parâmetro `manterVinculoLocal`.
+- `src/components/monitoramento/estoque/ListaRastreadores.tsx` — copy das ações.
+- `mem://logic/operations/rastreador-vinculo-preservacao.md` (novo) + atualização do `mem://index.md`.
 
 ### Riscos
 
-- Retry de chassi adiciona ~1.5s a OCR de CRLV quando o chassi falha — aceitável (hoje o usuário precisa digitar manualmente, o que é pior).
-- Saneamento OCR de chassi pode aceitar um chassi "quase válido" — mitigado porque sempre passa por `validateChassi` (regex restrita 17 chars sem I/O/Q) antes de aceitar.
-- `numero_motor` persistido pode entrar vazio se o documento realmente não tinha o campo — comportamento equivalente ao atual.
+- Rastreador em `manutencao` continuará aparecendo "vinculado" ao veículo na listagem do veículo — comportamento desejado (é o equipamento daquele veículo, só está em assistência). Filtros que mostram "rastreadores instalados" devem usar `status = 'instalado'`, não `veiculo_id IS NOT NULL`. Verificar `useVeiculos`/queries do mapa de monitoramento — se filtrarem por `veiculo_id`, mostrar `status` para distinguir.
+- Plataforma externa (Rede Veículos/Softruck) pode ficar com a vinculação ativa durante manutenção — desejável, evita re-cadastro quando o rastreador volta ao mesmo veículo após o reparo.
 
