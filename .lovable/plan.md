@@ -1,321 +1,393 @@
 
-## Ajuste da lógica de grades de comissão
+## Área de detalhes/auditoria antes de marcar comissão como paga
 
-### Correção conceitual
-A área de **Grades de Comissão** deve servir apenas para configurar regras comerciais:
+### Objetivo
+Adicionar uma visualização de conferência para que o diretor/gestor veja exatamente por que a comissão foi gerada antes de liquidar o pagamento.
 
-```text
-Grade
-  -> Planos vinculados
-    -> Parcela
-      -> Perfil de acesso
-        -> quanto esse perfil recebe
-```
-
-Ela **não deve atribuir a grade a usuários**.
-
-A área de **Atribuição de Grades** deve ser o único lugar para:
+A ação “Pagar” deixará de marcar como paga diretamente. Primeiro abrirá um modal/drawer com:
 
 ```text
-Usuário / vendedor
-  -> grade atribuída
-  -> supervisor
-  -> gerente
-  -> agência
+Comissão selecionada
+  -> plano vendido
+  -> grade aplicada
+  -> snapshot/versionamento da grade
+  -> parcela resolvida
+  -> regra aplicada ao perfil
+  -> vendedor de origem
+  -> cadeia hierárquica
+  -> valores base e cálculo
+  -> status atual
+  -> botão final "Confirmar pagamento"
 ```
-
-Quando um vendedor tiver uma grade atribuída, toda a cadeia hierárquica dele receberá conforme as regras daquela grade para o plano vendido.
 
 ---
 
-## 1. Ajustar a tela “Grades de Comissão”
+## O que já existe e será reaproveitado
+
+O sistema já possui parte dos dados necessários:
+
+- `comissoes.grade_id`
+- `comissoes.grade_versao_id`
+- `comissoes.plano_id`
+- `comissoes.plano_regra_id`
+- `comissoes.role_destinatario`
+- `comissoes.tipo_calculo`
+- `comissoes.parcela_numero`
+- `comissoes.valor_base`
+- `comissoes.percentual_aplicado`
+- `comissoes.valor_comissao`
+- `comissoes.valor_total`
+- `grades_comissao_versoes.snapshot`
+- `grade_comissao_plano_regras`
+- `contratos.vendedor_id`
+- `hierarquia_vendas`
+
+Hoje a tela de pagamentos já mostra base, percentual e valor, mas não mostra a auditoria completa antes de pagar.
+
+---
+
+## 1. Criar componente de detalhes da comissão
+
+Novo componente:
+
+- `src/components/comissoes/ComissaoDetalhesPagamentoModal.tsx`
+
+Ele será aberto ao clicar em “Pagar” na tela:
+
+- `src/pages/comissoes/Pagamentos.tsx`
+
+### Conteúdo do modal
+
+#### Resumo principal
+Exibir:
+
+- destinatário da comissão;
+- perfil remunerado;
+- status atual;
+- valor final;
+- data de geração;
+- contrato/cobrança, quando houver;
+- plano vendido;
+- grade utilizada;
+- versão da grade.
+
+#### Regra aplicada
+Exibir a regra que gerou aquela comissão:
+
+```text
+Plano: Select Exclusive
+Grade: Grade Select RJ
+Versão: v3
+Parcela resolvida: 2ª parcela
+Perfil remunerado: Supervisor de Vendas
+Tipo de cálculo: Percentual
+Regra configurada: 5%
+Base de cálculo: R$ 250,00
+Valor calculado: R$ 12,50
+Valor final: R$ 12,50
+```
+
+Para valor fixo:
+
+```text
+Tipo de cálculo: Valor fixo
+Regra configurada: R$ 30,00
+Base de cálculo: R$ 250,00
+Valor final: R$ 30,00
+```
+
+#### Snapshot da grade
+Mostrar uma seção “Snapshot da grade no momento da geração”.
+
+Usar `grades_comissao_versoes.snapshot`, não a configuração atual da grade, para evitar divergência quando a grade já tiver sido editada depois.
+
+A visualização será resumida, por plano/parcela/perfil:
+
+```text
+Snapshot v3 — Grade Select RJ
+
+Plano vendido:
+- Select Exclusive
+
+Parcela resolvida:
+- 2ª Parcela
+
+Perfis configurados na parcela:
+- Vendedor CLT: 20%
+- Supervisor: 5%
+- Gerente: 3%
+```
+
+Se o snapshot antigo não tiver estrutura nova por plano, mostrar fallback com aviso:
+
+```text
+Snapshot antigo sem detalhamento por plano. Exibindo dados disponíveis da regra gravada.
+```
+
+#### Cadeia hierárquica
+Exibir a cadeia da venda:
+
+```text
+Vendedor origem: João
+Supervisor: Maria
+Gerente: Carlos
+Agência: Pratic Agência RJ
+Destinatário desta comissão: Maria
+```
+
+Também mostrar a regra conceitual:
+
+```text
+Esta comissão foi calculada pela grade do vendedor de origem. Supervisor, gerente e agência não usam suas próprias grades nesta venda.
+```
+
+---
+
+## 2. Criar hook para buscar auditoria da comissão
+
+Novo hook:
+
+- `src/hooks/useComissaoDetalhesPagamento.ts`
+
+Esse hook receberá `comissaoId` e buscará:
+
+- dados completos da comissão;
+- destinatário (`profiles`);
+- contrato;
+- vendedor de origem do contrato;
+- plano;
+- grade;
+- versão/snapshot da grade;
+- regra aplicada (`grade_comissao_plano_regras`);
+- cobrança;
+- demais comissões irmãs da mesma cobrança para mostrar toda a cadeia remunerada;
+- hierarquia vigente como fallback quando não houver dados irmãos suficientes.
+
+Consulta principal esperada:
+
+```text
+comissoes
+  -> vendedor/destinatário
+  -> contrato
+      -> vendedor origem
+      -> associado
+      -> veiculo
+  -> plano
+  -> grade
+  -> grade_versao
+  -> plano_regra
+  -> cobranca
+```
+
+Para a cadeia hierárquica, priorizar:
+
+1. comissões irmãs da mesma `cobranca_id`, porque representam quem efetivamente recebeu nessa geração;
+2. `hierarquia_vendas` como fallback;
+3. nomes vazios como “não configurado” quando o nível não existir.
+
+---
+
+## 3. Ajustar a tela de pagamentos para exigir conferência antes de pagar
 
 Arquivo:
-- `src/pages/configuracoes/GradeComissaoForm.tsx`
 
-### O que será alterado
-Vou reforçar visual e funcionalmente que essa tela configura **quanto cada plano paga por perfil**, e não quem recebe.
+- `src/pages/comissoes/Pagamentos.tsx`
 
-A tela ficará organizada assim:
+### Comportamento atual
+Hoje o botão “Pagar” executa:
 
 ```text
-Dados da grade
-- Nome
-- Descrição
-
-Planos da grade
-- Selecionar um ou mais planos
-
-Regras de pagamento por plano
-- Plano A
-  - Parcela 1 / Taxa de Adesão
-    - Vendedor CLT: 20%
-    - Supervisor: 5%
-    - Gerente: 3%
-  - Parcela 2
-    - Vendedor CLT: R$ 30,00
-    - Supervisor: R$ 10,00
-
-- Plano B
-  - Regras próprias do Plano B
+updateStatus.mutate({ id, nextStatus: 'paga' })
 ```
 
-### Mudança importante
-Hoje o formulário já permite selecionar planos, mas as regras de parcelas/perfis estão compartilhadas entre todos os planos selecionados.
+### Novo comportamento
+O botão passará a abrir o modal:
 
-Vou ajustar para que cada plano possa ter regras próprias.
+```text
+Pagar -> abre detalhes/auditoria
+```
 
-Isso atende diretamente à regra:
+Dentro do modal haverá:
 
-> O diretor determina quanto cada plano paga para cada perfil de acesso.
+- “Fechar”
+- “Confirmar pagamento”
+
+Somente o botão “Confirmar pagamento” marcará a comissão como `paga`.
+
+Isso garante que o gestor veja as regras antes de liquidar.
 
 ---
 
-## 2. Remover qualquer sensação de “atribuir usuário” da criação da grade
+## 4. Adicionar snapshot de auditoria direto na comissão para novas gerações
 
-Arquivos:
-- `src/pages/configuracoes/GradeComissaoForm.tsx`
-- `src/pages/configuracoes/GradesComissao.tsx`
-
-### Ajustes de texto e layout
-Vou alterar textos como:
-- “níveis comissionados”
-- “vincular grade”
-- “usuários atribuídos”
-- “grades com níveis”
-
-Para mensagens mais claras:
+Para novas comissões, vou adicionar um campo JSONB em `comissoes`, por exemplo:
 
 ```text
-Configuração comercial da grade
-Planos configurados
-Perfis remunerados
-Regras por parcela
+calculo_snapshot jsonb
 ```
 
-Na listagem de grades, manterei a informação de quantos usuários usam aquela grade apenas como indicador, mas deixando claro:
+Esse snapshot será preenchido no motor `fn_gerar_comissoes_por_pagamento`.
 
-```text
-Usada por X usuário(s) na área de Atribuição
-```
+Conteúdo previsto:
 
-E não como algo gerenciado ali.
-
----
-
-## 3. Criar editor por plano dentro da grade
-
-Arquivos:
-- `src/pages/configuracoes/GradeComissaoForm.tsx`
-- `src/components/comissoes/ParcelaEditor.tsx`
-
-### Nova estrutura de estado no formulário
-Em vez de uma lista única de parcelas para toda a grade, o formulário passará a trabalhar com regras por plano:
-
-```text
-selectedPlanIds: string[]
-
-regrasPorPlano: {
-  [planoId]: {
-    parcelas: [
-      {
-        numero_parcela
-        vitalicia
-        perfis: [
-          {
-            role
-            tipo_comissao
-            valor
-          }
-        ]
-      }
-    ]
+```json
+{
+  "grade": {
+    "id": "...",
+    "nome": "Grade Select RJ",
+    "versao_id": "...",
+    "versao": 3
+  },
+  "plano": {
+    "id": "...",
+    "nome": "Select Exclusive"
+  },
+  "parcela": {
+    "numero": 2,
+    "vitalicia": false,
+    "vitalicia_inicio_parcela": null
+  },
+  "regra_aplicada": {
+    "id": "...",
+    "role": "supervisor_vendas",
+    "nome_nivel": "Supervisor",
+    "tipo_comissao": "percentual",
+    "valor": 5
+  },
+  "cadeia": {
+    "vendedor_id": "...",
+    "supervisor_id": "...",
+    "gerente_id": "...",
+    "agencia_id": "..."
+  },
+  "valores": {
+    "valor_base": 250,
+    "percentual_aplicado": 5,
+    "valor_comissao": 12.5,
+    "valor_total": 12.5
   }
 }
 ```
 
-### Comportamento esperado
-Ao selecionar um plano:
-- ele aparece em uma aba/card próprio;
-- o diretor configura as parcelas e perfis daquele plano;
-- outro plano pode ter valores totalmente diferentes.
+### Por que adicionar esse campo
+Embora `grade_versao_id` e `plano_regra_id` já existam, esse snapshot torna a auditoria mais forte e independente de alterações futuras em hierarquia, plano ou regra.
 
-Ao remover um plano:
-- suas regras saem da grade;
-- o sistema não tentará gerar comissão para aquele plano nessa grade.
+Para comissões antigas, o modal continuará funcionando com fallback usando joins e `grades_comissao_versoes.snapshot`.
 
 ---
 
-## 4. Persistir corretamente as regras por plano
+## 5. Ajustar o motor de geração de comissões
 
-Tabelas já existentes e reaproveitadas:
-- `grade_comissao_planos`
-- `grade_comissao_plano_regras`
-- `grades_comissao_parcelas`
-- `grades_comissao_niveis`
+Banco/Supabase:
 
-### Ajuste de salvamento
-Ao salvar a grade:
+- criar migration para adicionar `comissoes.calculo_snapshot`;
+- atualizar `fn_gerar_comissoes_por_pagamento`.
 
-1. Salvar a grade em `grades_comissao`.
-2. Salvar os planos em `grade_comissao_planos`.
-3. Salvar as parcelas/regras por plano em `grade_comissao_plano_regras`.
-4. Manter `grades_comissao_parcelas` e `grades_comissao_niveis` apenas como compatibilidade/estrutura auxiliar, se ainda forem usados por outras telas.
-5. Salvar o snapshot da versão com os dados separados por plano.
+Ao inserir cada comissão, a função também salvará:
 
-### Resultado
-O banco conseguirá responder:
+- grade usada;
+- versão da grade;
+- regra aplicada;
+- parcela resolvida;
+- cadeia hierárquica resolvida na data da venda;
+- valores usados no cálculo.
 
-```text
-Na Grade X,
-para o Plano Y,
-na Parcela Z,
-quanto recebe o perfil vendedor/supervisor/gerente/agência?
-```
+Isso garante que, no futuro, mesmo que a hierarquia do vendedor mude, a comissão paga continue auditável pelo cenário que existia na geração.
 
 ---
 
-## 5. Ajustar a área “Atribuição de Grades”
+## 6. Melhorar o relatório com acesso ao detalhe
 
 Arquivos:
-- `src/pages/configuracoes/AtribuicaoGrades.tsx`
-- `src/components/comissoes/AtribuirGradeModal.tsx`
-- `src/hooks/useAtribuicaoComissoes.ts`
 
-### O que será mantido ali
-Essa área continuará sendo o local correto para:
-
-- atribuir uma grade a um usuário;
-- definir supervisor;
-- definir gerente;
-- definir agência;
-- consultar quem está sem grade;
-- visualizar a cadeia hierárquica.
-
-### Ajustes de texto
-Vou deixar explícito que:
-
-```text
-A grade atribuída ao vendedor define as regras de comissão para toda a hierarquia dele.
-```
-
-Exemplo exibido na tela/modal:
-
-```text
-Se João tem a Grade Select RJ, as comissões de João, supervisor, gerente e agência serão calculadas pelas regras da Grade Select RJ para o plano vendido.
-```
-
-### Ajuste funcional
-O modal continuará atribuindo grade ao usuário, mas com labels mais claros:
-
-```text
-Grade aplicada às vendas deste usuário
-Supervisor da cadeia
-Gerente da cadeia
-Agência da cadeia
-```
-
----
-
-## 6. Garantir a regra hierárquica no motor de cálculo
-
-Banco/função:
-- `fn_gerar_comissoes_por_pagamento`
-
-A lógica deve permanecer/ser ajustada para:
-
-```text
-Venda feita pelo vendedor A
-  -> buscar grade vigente do vendedor A
-  -> buscar plano vendido
-  -> buscar regras da grade do vendedor A para aquele plano
-  -> pagar:
-      vendedor A
-      supervisor vigente de A
-      gerente vigente de A
-      agência vigente de A
-```
-
-### Regra essencial
-Supervisor, gerente e agência **não usam suas próprias grades** para a venda do vendedor.
-
-Eles recebem conforme a grade atribuída ao vendedor que originou a venda.
-
----
-
-## 7. Ajustar relatório para refletir a nova lógica
-
-Arquivo:
 - `src/pages/comissoes/Relatorio.tsx`
 - `src/hooks/useRelatorioComissoes.ts`
 
-O relatório deve mostrar claramente:
+Adicionar uma ação “Detalhes” em cada linha do relatório de comissões.
 
-- plano vendido;
-- grade usada;
-- vendedor de origem;
-- destinatário da comissão;
-- perfil do destinatário;
-- parcela;
-- tipo de cálculo;
-- valor base;
-- percentual ou valor fixo;
-- valor calculado;
-- status.
+Assim a mesma auditoria poderá ser aberta também a partir do relatório, não apenas da tela de pagamentos.
 
-Isso permitirá auditar:
+No relatório, o botão será apenas para consulta; na tela de pagamentos, o modal também terá a ação de confirmar pagamento quando o status permitir.
+
+---
+
+## 7. Estados e mensagens de segurança
+
+O modal terá estados claros:
+
+### Quando tudo estiver completo
+Mostrar:
 
 ```text
-Por que esse supervisor recebeu esse valor?
-Resposta:
-Porque o vendedor X tinha a Grade Y, vendeu o Plano Z, e a regra da Grade Y para supervisor era N%.
+Dados auditáveis encontrados.
 ```
+
+### Quando faltar snapshot novo
+Mostrar:
+
+```text
+Esta comissão foi gerada antes do snapshot detalhado. Exibindo auditoria reconstruída com os dados disponíveis.
+```
+
+### Quando faltar regra/plano/grade
+Mostrar alerta:
+
+```text
+A comissão não possui todos os vínculos de auditoria. Revise antes de marcar como paga.
+```
+
+Nesse caso, o botão “Confirmar pagamento” continuará disponível apenas se o usuário decidir prosseguir, mas com destaque visual de atenção.
 
 ---
 
 ## 8. Validação esperada
 
-### Cenário 1: diretor cria grade
-- Diretor cria uma grade.
-- Seleciona Plano A e Plano B.
-- Define valores diferentes para vendedor, supervisor e gerente em cada plano.
-- Nenhum usuário é escolhido nessa tela.
+### Cenário 1: comissão nova com snapshot completo
+- Gerar comissão por pagamento.
+- Abrir “Pagar”.
+- Confirmar que aparecem:
+  - snapshot da grade;
+  - plano;
+  - parcela resolvida;
+  - regra aplicada;
+  - cadeia hierárquica;
+  - valores base e calculado.
+- Confirmar pagamento.
 
-### Cenário 2: atribuição separada
-- Diretor vai em “Atribuição de Grades”.
-- Escolhe o vendedor.
-- Atribui a grade.
-- Define supervisor e gerente.
+### Cenário 2: comissão antiga sem snapshot novo
+- Abrir comissão antiga.
+- Modal exibe dados reconstruídos via `grade_versao_id`, `plano_regra_id`, contrato e hierarquia.
+- Mostra aviso de fallback.
 
-### Cenário 3: geração de comissão
-- Vendedor vende Plano A.
-- Sistema usa a grade do vendedor.
-- Comissão é gerada para vendedor, supervisor e gerente conforme as regras do Plano A dentro daquela grade.
+### Cenário 3: comissão de supervisor
+- Abrir comissão cujo destinatário é supervisor.
+- Modal mostra:
+  - vendedor de origem;
+  - supervisor destinatário;
+  - regra do perfil supervisor;
+  - grade do vendedor de origem.
 
-### Cenário 4: plano diferente
-- Mesmo vendedor vende Plano B.
-- Sistema usa a mesma grade do vendedor, mas aplica as regras específicas do Plano B.
+### Cenário 4: valor fixo
+- Comissão gerada por regra de valor fixo.
+- Modal mostra “Valor fixo” e o valor configurado, sem interpretar como percentual.
 
-### Cenário 5: supervisor com outra grade
-- Supervisor tem outra grade própria.
-- Ainda assim, na venda do vendedor, o supervisor recebe conforme a grade do vendedor.
+### Cenário 5: relatório
+- Abrir relatório.
+- Clicar em “Detalhes”.
+- Ver a mesma auditoria, sem alterar status.
 
 ---
 
 ## Arquivos envolvidos
 
 ### Frontend
-- `src/pages/configuracoes/GradeComissaoForm.tsx`
-- `src/pages/configuracoes/GradesComissao.tsx`
-- `src/components/comissoes/ParcelaEditor.tsx`
-- `src/pages/configuracoes/AtribuicaoGrades.tsx`
-- `src/components/comissoes/AtribuirGradeModal.tsx`
-- `src/hooks/useAtribuicaoComissoes.ts`
+- `src/pages/comissoes/Pagamentos.tsx`
 - `src/pages/comissoes/Relatorio.tsx`
+- `src/hooks/useComissaoDetalhesPagamento.ts`
 - `src/hooks/useRelatorioComissoes.ts`
+- `src/components/comissoes/ComissaoDetalhesPagamentoModal.tsx`
 
 ### Banco/Supabase
-- revisar/ajustar função `fn_gerar_comissoes_por_pagamento`
-- revisar consistência de `grade_comissao_planos`
-- revisar consistência de `grade_comissao_plano_regras`
-- se necessário, criar migration apenas para campos/índices faltantes, sem duplicar estrutura já criada
+- nova migration para `comissoes.calculo_snapshot`
+- atualização de `fn_gerar_comissoes_por_pagamento`
+- opcional: comentário/índice para facilitar auditoria por `cobranca_id`, `grade_id`, `plano_id` e `plano_regra_id`
