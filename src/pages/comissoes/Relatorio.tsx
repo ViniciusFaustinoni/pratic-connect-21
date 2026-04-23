@@ -1,9 +1,13 @@
+import { useState } from 'react';
+import { Eye } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useRelatorioComissoes } from '@/hooks/useRelatorioComissoes';
+import { ComissaoDetalhesPagamentoModal } from '@/components/comissoes/ComissaoDetalhesPagamentoModal';
 
 const PERFIS = [
   { value: 'vendedor_clt', label: 'Vendedor CLT' },
@@ -18,6 +22,7 @@ const getName = (item?: { nome?: string | null; full_name?: string | null; email
 
 export default function RelatorioComissoes() {
   const { filters, setFilters, grades, planos, vendedores, linhas, resumo, isLoading } = useRelatorioComissoes();
+  const [detalheId, setDetalheId] = useState<string | null>(null);
   const update = (key: keyof typeof filters, value: string) => setFilters(prev => ({ ...prev, [key]: value }));
 
   return (
@@ -50,9 +55,9 @@ export default function RelatorioComissoes() {
       <Card>
         <CardContent className="p-0">
           <Table>
-            <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Vendedor origem</TableHead><TableHead>Destinatário</TableHead><TableHead>Perfil</TableHead><TableHead>Plano</TableHead><TableHead>Grade</TableHead><TableHead>Parcela</TableHead><TableHead>Base</TableHead><TableHead>Cálculo</TableHead><TableHead>Total</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Vendedor origem</TableHead><TableHead>Destinatário</TableHead><TableHead>Perfil</TableHead><TableHead>Plano</TableHead><TableHead>Grade</TableHead><TableHead>Parcela</TableHead><TableHead>Base</TableHead><TableHead>Cálculo</TableHead><TableHead>Total</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
             <TableBody>
-              {isLoading ? <TableRow><TableCell colSpan={11}>Carregando...</TableCell></TableRow> : linhas.map(linha => (
+              {isLoading ? <TableRow><TableCell colSpan={12}>Carregando...</TableCell></TableRow> : linhas.map(linha => (
                 <TableRow key={linha.id}>
                   <TableCell>{new Date(linha.created_at).toLocaleDateString('pt-BR')}</TableCell>
                   <TableCell>{getName(linha.contrato?.vendedor)}</TableCell>
@@ -65,13 +70,20 @@ export default function RelatorioComissoes() {
                   <TableCell>{linha.tipo_calculo === 'valor_fixo' ? formatCurrency(Number(linha.valor_comissao)) : `${Number(linha.percentual_aplicado || 0)}%`}</TableCell>
                   <TableCell className="font-medium">{formatCurrency(Number(linha.valor_total))}</TableCell>
                   <TableCell><Badge variant={linha.status === 'paga' ? 'default' : 'secondary'}>{linha.status}</Badge></TableCell>
+                  <TableCell className="text-right"><Button size="sm" variant="outline" onClick={() => setDetalheId(linha.id)}><Eye className="mr-1 h-3.5 w-3.5" /> Detalhes</Button></TableCell>
                 </TableRow>
               ))}
-              {!isLoading && linhas.length === 0 && <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground">Nenhuma comissão encontrada.</TableCell></TableRow>}
+              {!isLoading && linhas.length === 0 && <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground">Nenhuma comissão encontrada.</TableCell></TableRow>}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+
+      <ComissaoDetalhesPagamentoModal
+        open={Boolean(detalheId)}
+        comissaoId={detalheId}
+        onOpenChange={(open) => !open && setDetalheId(null)}
+      />
     </div>
   );
 }
