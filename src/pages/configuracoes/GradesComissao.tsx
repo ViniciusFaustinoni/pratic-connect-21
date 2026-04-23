@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Plus, Pencil, Copy, Power, Trash2, Layers, Users } from 'lucide-react';
+import { Plus, Pencil, Copy, Power, Trash2, Layers, Users, Infinity as InfinityIcon, ListOrdered } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -19,13 +19,21 @@ interface GradeNivel {
   percentual: number;
 }
 
+interface GradeParcela {
+  id: string;
+  vitalicia: boolean;
+  numero_parcela: number | null;
+}
+
 interface GradeComissao {
   id: string;
   nome: string;
   descricao: string | null;
   ativo: boolean;
+  versao?: number;
   created_at: string;
   grades_comissao_niveis: GradeNivel[];
+  grades_comissao_parcelas: GradeParcela[];
 }
 
 export default function GradesComissao() {
@@ -38,7 +46,7 @@ export default function GradesComissao() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('grades_comissao')
-        .select('id, nome, descricao, ativo, created_at, grades_comissao_niveis(id, percentual)')
+        .select('id, nome, descricao, ativo, versao, created_at, grades_comissao_niveis(id, percentual), grades_comissao_parcelas(id, vitalicia, numero_parcela)')
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data as GradeComissao[];
@@ -78,24 +86,60 @@ export default function GradesComissao() {
       const grade = grades.find(g => g.id === gradeId);
       if (!grade) throw new Error('Grade não encontrada');
 
-      const { data: niveis, error: nErr } = await (supabase as any)
+      // Buscar parcelas e níveis originais
+      const { data: parcOrig, error: pErr } = await (supabase as any)
+        .from('grades_comissao_parcelas')
+        .select('id, numero_parcela, vitalicia, vitalicia_inicio_parcela, label, ordem')
+        .eq('grade_id', gradeId)
+        .order('ordem');
+      if (pErr) throw pErr;
+
+      const { data: nvsOrig, error: nErr } = await (supabase as any)
         .from('grades_comissao_niveis')
-        .select('nome, percentual, ordem')
+        .select('parcela_id, nome, percentual, ordem, role')
         .eq('grade_id', gradeId)
         .order('ordem');
       if (nErr) throw nErr;
 
       const { data: newGrade, error: gErr } = await (supabase as any)
         .from('grades_comissao')
-        .insert({ nome: `${grade.nome} (Cópia)`, descricao: grade.descricao })
+        .insert({ nome: `${grade.nome} (Cópia)`, descricao: grade.descricao, versao: 1 })
         .select('id')
         .single();
       if (gErr) throw gErr;
 
-      if (niveis && niveis.length > 0) {
+      // Recriar parcelas mapeando ids antigos -> novos
+      const parcMap: Record<string, string> = {};
+      if (parcOrig && parcOrig.length > 0) {
+        for (const p of parcOrig) {
+          const { data: novaP, error: e1 } = await (supabase as any)
+            .from('grades_comissao_parcelas')
+            .insert({
+              grade_id: newGrade.id,
+              numero_parcela: p.numero_parcela,
+              vitalicia: p.vitalicia,
+              vitalicia_inicio_parcela: p.vitalicia_inicio_parcela,
+              label: p.label,
+              ordem: p.ordem,
+            })
+            .select('id')
+            .single();
+          if (e1) throw e1;
+          parcMap[p.id] = novaP.id;
+        }
+      }
+
+      if (nvsOrig && nvsOrig.length > 0) {
         const { error: iErr } = await (supabase as any)
           .from('grades_comissao_niveis')
-          .insert(niveis.map((n: any) => ({ ...n, grade_id: newGrade.id })));
+          .insert(nvsOrig.map((n: any) => ({
+            grade_id: newGrade.id,
+            parcela_id: n.parcela_id ? parcMap[n.parcela_id] : null,
+            nome: n.nome,
+            percentual: n.percentual,
+            ordem: n.ordem,
+            role: n.role,
+          })));
         if (iErr) throw iErr;
       }
     },
@@ -172,33 +216,49 @@ export default function GradesComissao() {
             const total = getTotalPercentual(grade.grades_comissao_niveis);
             const qtdNiveis = grade.grades_comissao_niveis.length;
             const qtdUsuarios = userCounts[grade.id] || 0;
+            const parcelas = grade.grades_comissao_parcelas || [];
+            const qtdParcelas = parcelas.filter(p => !p.vitalicia).length;
+            const temVitalicia = parcelas.some(p => p.vitalicia);
             return (
               <Card key={grade.id} className={!grade.ativo ? 'opacity-60' : ''}>
                 <CardContent className="flex items-center justify-between py-4 px-5">
                   <div className="flex-1 min-w-0 space-y-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-foreground truncate">{grade.nome}</span>
                       <Badge variant={grade.ativo ? 'default' : 'secondary'}>
                         {grade.ativo ? 'Ativa' : 'Inativa'}
                       </Badge>
+                      {grade.versao && grade.versao > 1 && (
+                        <Badge variant="outline">v{grade.versao}</Badge>
+                      )}
                       {qtdUsuarios > 0 && (
                         <Badge variant="outline" className="gap-1">
                           <Users className="h-3 w-3" />
                           {qtdUsuarios}
                         </Badge>
                       )}
+                      {temVitalicia && (
+                        <Badge variant="default" className="gap-1 bg-primary/15 text-primary hover:bg-primary/20">
+                          <InfinityIcon className="h-3 w-3" /> Vitalícia
+                        </Badge>
+                      )}
                     </div>
                     {grade.descricao && (
                       <p className="text-xs text-muted-foreground truncate">{grade.descricao}</p>
                     )}
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
+                      <span className="flex items-center gap-1">
+                        <ListOrdered className="h-3 w-3" />
+                        {qtdParcelas} {qtdParcelas === 1 ? 'parcela' : 'parcelas'}
+                        {temVitalicia && ' + vitalícia'}
+                      </span>
                       <span>{qtdNiveis} {qtdNiveis === 1 ? 'nível' : 'níveis'}</span>
-                      <span>Total: {total}%</span>
+                      <span>Adesão: {total}%</span>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <span className="text-primary font-medium cursor-help">Empresa: {Math.max(100 - total, 0)}%</span>
                         </TooltipTrigger>
-                        <TooltipContent>Percentual retido pela empresa</TooltipContent>
+                        <TooltipContent>Percentual retido pela empresa na taxa de adesão</TooltipContent>
                       </Tooltip>
                     </div>
                     <Progress value={Math.min(total, 100)} className="h-1.5 w-40" />

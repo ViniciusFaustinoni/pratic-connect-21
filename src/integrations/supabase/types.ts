@@ -6459,6 +6459,7 @@ export type Database = {
           contrato_id: string
           created_at: string
           deducoes_detalhes: Json | null
+          grade_versao_id: string | null
           id: string
           mes_referencia: number
           nivel_nome: string | null
@@ -6497,6 +6498,7 @@ export type Database = {
           contrato_id: string
           created_at?: string
           deducoes_detalhes?: Json | null
+          grade_versao_id?: string | null
           id?: string
           mes_referencia: number
           nivel_nome?: string | null
@@ -6535,6 +6537,7 @@ export type Database = {
           contrato_id?: string
           created_at?: string
           deducoes_detalhes?: Json | null
+          grade_versao_id?: string | null
           id?: string
           mes_referencia?: number
           nivel_nome?: string | null
@@ -6648,6 +6651,13 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "view_acompanhamento"
             referencedColumns: ["contrato_id"]
+          },
+          {
+            foreignKeyName: "comissoes_grade_versao_id_fkey"
+            columns: ["grade_versao_id"]
+            isOneToOne: false
+            referencedRelation: "grades_comissao_versoes"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "comissoes_plano_id_fkey"
@@ -13534,6 +13544,8 @@ export type Database = {
           id: string
           nome: string
           updated_at: string
+          versao: number
+          vigente_desde: string
         }
         Insert: {
           ativo?: boolean
@@ -13543,6 +13555,8 @@ export type Database = {
           id?: string
           nome: string
           updated_at?: string
+          versao?: number
+          vigente_desde?: string
         }
         Update: {
           ativo?: boolean
@@ -13552,6 +13566,8 @@ export type Database = {
           id?: string
           nome?: string
           updated_at?: string
+          versao?: number
+          vigente_desde?: string
         }
         Relationships: []
       }
@@ -13562,6 +13578,7 @@ export type Database = {
           id: string
           nome: string
           ordem: number
+          parcela_id: string | null
           percentual: number
           role: string | null
         }
@@ -13571,6 +13588,7 @@ export type Database = {
           id?: string
           nome: string
           ordem?: number
+          parcela_id?: string | null
           percentual: number
           role?: string | null
         }
@@ -13580,12 +13598,102 @@ export type Database = {
           id?: string
           nome?: string
           ordem?: number
+          parcela_id?: string | null
           percentual?: number
           role?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "grades_comissao_niveis_grade_id_fkey"
+            columns: ["grade_id"]
+            isOneToOne: false
+            referencedRelation: "grades_comissao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grades_comissao_niveis_parcela_id_fkey"
+            columns: ["parcela_id"]
+            isOneToOne: false
+            referencedRelation: "grades_comissao_parcelas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      grades_comissao_parcelas: {
+        Row: {
+          created_at: string
+          grade_id: string
+          id: string
+          label: string
+          numero_parcela: number | null
+          ordem: number
+          updated_at: string
+          vitalicia: boolean
+          vitalicia_inicio_parcela: number | null
+        }
+        Insert: {
+          created_at?: string
+          grade_id: string
+          id?: string
+          label: string
+          numero_parcela?: number | null
+          ordem?: number
+          updated_at?: string
+          vitalicia?: boolean
+          vitalicia_inicio_parcela?: number | null
+        }
+        Update: {
+          created_at?: string
+          grade_id?: string
+          id?: string
+          label?: string
+          numero_parcela?: number | null
+          ordem?: number
+          updated_at?: string
+          vitalicia?: boolean
+          vitalicia_inicio_parcela?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grades_comissao_parcelas_grade_id_fkey"
+            columns: ["grade_id"]
+            isOneToOne: false
+            referencedRelation: "grades_comissao"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      grades_comissao_versoes: {
+        Row: {
+          created_at: string
+          criado_por: string | null
+          grade_id: string
+          id: string
+          snapshot: Json
+          versao: number
+          vigente_desde: string
+        }
+        Insert: {
+          created_at?: string
+          criado_por?: string | null
+          grade_id: string
+          id?: string
+          snapshot: Json
+          versao: number
+          vigente_desde?: string
+        }
+        Update: {
+          created_at?: string
+          criado_por?: string | null
+          grade_id?: string
+          id?: string
+          snapshot?: Json
+          versao?: number
+          vigente_desde?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grades_comissao_versoes_grade_id_fkey"
             columns: ["grade_id"]
             isOneToOne: false
             referencedRelation: "grades_comissao"
