@@ -1,81 +1,56 @@
 
 
-## Corrigir instalação que termina pela metade ("rastreador já está ativo" e fluxo duplicado)
+## Aceitar "Declaração de Residência" como comprovante válido
 
-### Diagnóstico (com evidências do banco)
+### Diagnóstico
 
-Confirmei dois bugs que se combinam para travar a instalação no momento de informar o rastreador:
+Hoje o OCR (`supabase/functions/document-ocr/index.ts`, linhas 333-336) aceita como comprovante de residência apenas: contas (água/luz/gás/telefone/internet), faturas/boletos, IPTU/IPVA, IRPF, extratos, contratos de aluguel e escrituras. O enum `tipo_comprovante` lista 12 valores, **nenhum cobre "declaração de residência"** (documento auto-declarado, geralmente assinado pelo próprio associado ou por um terceiro residente do mesmo endereço).
 
-**Bug 1 — Validação rígida de IMEI bloqueia retomada**
-Em `InstaladorChecklist.tsx` linha 554 e em `useAprovarVeiculoServico` linha 897, a regra é binária:
-```
-if (rastreador.status !== 'estoque') → "indisponível" / "não está disponível"
-```
-Cenários reais que caem aqui:
-- O instalador já submeteu uma vez e o `useAprovarVeiculoServico` chegou a marcar o rastreador como `instalado` + `veiculo_id = X`, mas algum passo posterior falhou (ex.: ativação na Softruck, geração de laudo, rede caiu). O serviço continua `agendada/aprovada` e, ao reabrir, o IMEI aparece como **"indisponível: instalado"** mesmo já estando vinculado ao **mesmo veículo**.
-- O IMEI foi vinculado ao veículo previamente pelo formulário `VincularRastreadorForm` (cadastro) — o caminho duplo que o usuário citou. Quando o instalador chega na execução, vê "indisponível".
-- Status `em_porte` (rastreador entregue ao técnico mas ainda não digitado como `estoque` por configuração antiga).
-
-**Bug 2 — Caminho duplo de criação de serviço deixa órfãos**
-Consulta confirma: dos 37 serviços `tipo='instalacao'` dos últimos 30 dias, **5 (13%) têm `instalacao_origem_id = NULL`**. Exemplo concreto encontrado hoje: serviço `70abc44a-8004-4b41-a468-4ead8d796b07` (placa TUM3D59), status `aprovada`, sem instalação vinculada.
-
-Quando isso acontece, a sincronização com a tabela `instalacoes` (`useServicos.ts` linhas 932-950) é **silenciosamente pulada** — o serviço é finalizado mas a tabela `instalacoes` continua aberta. O `aprovar-proposta` lê `instalacoes` para decidir se ativa Proteção 360, então o veículo fica em `instalacao_pendente` mesmo após o técnico concluir tudo.
+Resultado: quando o associado envia uma declaração como a do exemplo (modelo livre com CPF, endereço completo e assinatura), o modelo classifica como `outro` ou reprova por não identificar tipo conhecido — e o associado é forçado a buscar uma conta em seu nome, o que muitas vezes não tem (mora com familiares, aluguel informal, etc.).
 
 ### O que vai mudar
 
-**1. Permitir rastreador já vinculado ao MESMO veículo** (ambos os pontos)
+**1. Adicionar `declaracao_residencia` ao enum de tipos aceitos** (`document-ocr/index.ts`, linha 335)
 
-Trocar a checagem binária por uma matriz de cenários, em `InstaladorChecklist.tsx` (validação visual) e em `useAprovarVeiculoServico` (validação de submit):
+Incluir `"declaracao_residencia"` na lista de valores válidos do campo `tipo_comprovante`.
 
-| `status` do rastreador | `veiculo_id` | Ação |
-|---|---|---|
-| `estoque` | qualquer | ✅ permite (caso normal) |
-| `em_porte` | qualquer | ✅ permite (entregue ao técnico) |
-| `instalado` | = veículo do serviço | ✅ permite (retomada idempotente — apenas atualiza demais campos) |
-| `instalado` | ≠ veículo do serviço | ❌ bloqueia: "Rastreador instalado em outro veículo (placa X)" |
-| `manutencao`/`baixado` | qualquer | ❌ bloqueia com mensagem clara |
+**2. Atualizar o bloco de instruções do Comprovante de Residência** (linhas 333-342)
 
-A UI passa a exibir, no caso "instalado no MESMO veículo", uma badge verde "Rastreador já vinculado a este veículo — confirmando instalação" em vez de bloquear.
+Adicionar regra explícita:
 
-No backend (`useAprovarVeiculoServico`), o `UPDATE rastreadores` continua sendo executado (idempotente: já está com `status='instalado'`, só reforça `veiculo_id`, `local_instalacao`, `descricao_instalacao`, `foto_local_instalacao_url`). A inserção em `estoque_movimentacoes` só acontece se `status_anterior === 'estoque'` (evita duplicação de movimentação).
+> **Declaração de Residência** (modelo livre, escrito pelo próprio interessado ou por terceiro):
+> - Aceitar quando contiver: título "DECLARAÇÃO DE RESIDÊNCIA" (ou variante), nome e CPF do declarante, endereço completo (CEP + logradouro + número + bairro + cidade + UF), local/data e assinatura.
+> - Extrair os campos de endereço normalmente nos campos padrão.
+> - `tipo_comprovante = "declaracao_residencia"`.
+> - `nome_titular` = nome do declarante.
+> - **Titularidade**: se o declarante = nomeEsperado → aprovar. Se for terceiro (nome diferente) com mesmo endereço, sugerir **REVISAR** (analista valida vínculo familiar/residente do mesmo lar). Se faltar assinatura ou CPF, sugerir REVISAR. Se faltar endereço completo, REPROVAR.
+> - Aceitar sem reconhecimento de firma (validação humana cobre o resto).
 
-**2. Garantir conclusão da `instalacoes` mesmo sem `instalacao_origem_id`**
+**3. Mapear o novo tipo no front-end onde aparecem labels/ícones**
 
-No `useAprovarVeiculoServico`, quando `instalacao_origem_id` for NULL, fazer um fallback:
-- Procurar uma instalação aberta (`status NOT IN ('concluida','cancelada')`) pelo `veiculo_id` do serviço.
-- Se encontrar, atualizar `status='concluida'` + `concluida_em` + `rastreador_id` e gravar `instalacao_origem_id` no serviço para consistência futura.
-- Se não encontrar nenhuma, logar warning (a instalação foi criada por fluxo legado e o `aprovar-proposta` será notificado por outro caminho).
+Apenas para exibição amigável quando o analista revisar o documento. Os arquivos abaixo já listam `tipo_comprovante` indiretamente via OCR (não é enum do banco), então o ajuste é só de label nos pontos onde mostramos a origem do comprovante:
 
-**3. Backfill manual dos casos atuais**
+- `src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx` — já trata `comprovante_residencia` genericamente; nenhum mapeamento extra necessário (o tipo continua sendo `comprovante_residencia`, só muda o `tipo_comprovante` interno).
+- Adicionar uma linha de ajuda no UI de upload (`UnifiedDocumentUploader.tsx`) explicando que **"Declaração de residência (modelo livre, com CPF e assinatura) também é aceita"** abaixo do label "Comprovante de Residência" — reduz dúvidas e re-uploads.
 
-Migration única (DML) que resolve os serviços já presos:
-- Para cada `servicos` com `tipo='instalacao'` e `instalacao_origem_id IS NULL` dos últimos 30 dias: tentar amarrar à `instalacoes` aberta do mesmo `veiculo_id` (a mais recente).
-- Para os 5 serviços identificados, isso destrava o "duplo caminho" sem precisar refazer instalação.
+**4. Política de aprovação manual**
 
-**4. Mensagens de erro acionáveis**
-
-Quando o rastreador for genuinamente bloqueado, o toast atual `"Rastreador não está disponível"` vira:
-- `"Rastreador X já instalado no veículo Y (placa ABC1234). Use outro IMEI ou solicite remoção primeiro."`
-- `"Rastreador em manutenção — solicite outro ao coordenador."`
+Conforme regra existente em `mem://logic/operations/aprovacao-manual-documentos-vistoria`, mesmo declarações com sugestão "aprovar" do OCR continuam entrando como `em_analise` para revisão humana — comportamento já garantido pelo pipeline atual, sem mudança.
 
 ### O que NÃO muda
 
-- Estrutura das tabelas `servicos`, `instalacoes` e `rastreadores`.
-- Etapas 1-3 do checklist (Dados, Checklist, Fotos).
-- Fluxo paralelo do `VincularRastreadorForm` (cadastro) — continua funcionando, agora reconhecido pelo instalador como "já vinculado".
-- Política RLS, ativação na Softruck/Rede Veículos, geração do laudo.
+- `tipo_documento` permanece `comprovante_residencia` (não criamos enum novo no banco).
+- Campos extraídos (logradouro, número, CEP, etc.) continuam alimentando o auto-preenchimento de endereço.
+- Validação de titularidade segue idêntica para os demais tipos.
+- Bucket, RLS, fluxo de upload e revisão pelo analista permanecem intactos.
 
 ### Arquivos editados
 
-- `src/pages/instalador/InstaladorChecklist.tsx` — matriz de validação do IMEI (linhas 542-575) + UI de "já vinculado a este veículo" + toasts específicos.
-- `src/hooks/useServicos.ts` — `useAprovarVeiculoServico`:
-  - validação idempotente do rastreador (linhas 884-901);
-  - `UPDATE` condicional sem repetir movimentação de estoque (linhas 980-1013);
-  - fallback para localizar `instalacoes` quando `instalacao_origem_id` for NULL (linhas 924-950).
-- **Migration nova** — backfill: vincular `servicos.instalacao_origem_id` órfãos à `instalacoes` aberta correspondente; concluir `instalacoes` cuja `servicos` correspondente já está `concluida`.
+- `supabase/functions/document-ocr/index.ts` — adicionar `declaracao_residencia` ao enum `tipo_comprovante` e bloco de regras (linhas 333-342).
+- `src/components/contratos/UnifiedDocumentUploader.tsx` — texto auxiliar no card do Comprovante de Residência indicando que declaração de residência é aceita.
 
 ### Riscos
 
-- O fallback por `veiculo_id` pode amarrar um serviço a uma instalação errada se houver duas instalações abertas para o mesmo veículo (raro). Mitigação: pegar a mais recente e logar; em caso real, o coordenador pode corrigir manualmente.
-- Permitir `status='instalado'` no MESMO veículo abre brecha teórica para "concluir" duas vezes; mitigado porque o `UPDATE` é idempotente e a movimentação de estoque só dispara se `status_anterior='estoque'`.
+- Declarações falsas: como é documento auto-declarado, o risco de fraude é maior que conta de luz. Mitigado por: (a) aprovação manual obrigatória; (b) sugestão de REVISAR sempre que titular ≠ associado; (c) o endereço extraído é cruzado com a vistoria (foto da fachada) na etapa de instalação.
+- Modelos manuscritos/ilegíveis: o OCR pode falhar; nesse caso retorna `legivel:false` e o analista trata normalmente.
 
