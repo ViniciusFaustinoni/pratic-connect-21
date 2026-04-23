@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,7 +12,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import {
-  RefreshCw, ExternalLink, Copy, Check, AlertCircle, FileText,
+  ExternalLink, Copy, Check, AlertCircle, FileText,
   CheckCircle2, Clock, XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -36,7 +36,6 @@ const statusConfig: Record<string, { label: string; className: string; icon: any
 };
 
 export function VeiculoFinanceiroSGA({ veiculoId }: Props) {
-  const queryClient = useQueryClient();
   const [filtroStatus, setFiltroStatus] = useState<string>('todos');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -69,23 +68,6 @@ export function VeiculoFinanceiroSGA({ veiculoId }: Props) {
       return data || [];
     },
     enabled: !!veiculoId,
-  });
-
-  const sincronizar = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('sga-sync-financeiro-veiculo', {
-        body: { veiculo_id: veiculoId },
-      });
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || 'Falha ao sincronizar');
-      return data;
-    },
-    onSuccess: (data) => {
-      toast.success(`Sincronizado: ${data.boletos_importados} boleto(s)`);
-      queryClient.invalidateQueries({ queryKey: ['veiculo-cobrancas-sga', veiculoId] });
-      queryClient.invalidateQueries({ queryKey: ['veiculo-sga-info', veiculoId] });
-    },
-    onError: (err: any) => toast.error(`Erro: ${err.message}`),
   });
 
   const filtradas = useMemo(() => {
@@ -126,7 +108,7 @@ export function VeiculoFinanceiroSGA({ veiculoId }: Props) {
             <h3 className="font-medium">Veículo não mapeado no SGA</h3>
             <p className="text-sm text-muted-foreground mt-1">
               Este veículo ainda não possui <code className="text-xs">codigo_hinova</code> vinculado.
-              Execute o mapeamento em "Sincronização Financeira SGA" na página da Base Antiga.
+              Para sincronizar, acesse <strong>Cobranças › Sincronizar Financeiro</strong>.
             </p>
           </div>
         </div>
@@ -136,7 +118,7 @@ export function VeiculoFinanceiroSGA({ veiculoId }: Props) {
 
   return (
     <div className="p-6 m-0 space-y-5">
-      {/* Header com situação + atualizar */}
+      {/* Header com situação (somente leitura) */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -156,15 +138,10 @@ export function VeiculoFinanceiroSGA({ veiculoId }: Props) {
               ? new Date(veiculo.situacao_financeira_sga_em).toLocaleString('pt-BR')
               : '—'}
           </p>
+          <p className="text-xs text-muted-foreground italic">
+            Para sincronizar, acesse <strong>Cobranças › Sincronizar Financeiro</strong>.
+          </p>
         </div>
-        <Button
-          size="sm"
-          onClick={() => sincronizar.mutate()}
-          disabled={sincronizar.isPending}
-        >
-          <RefreshCw className={cn('h-4 w-4 mr-2', sincronizar.isPending && 'animate-spin')} />
-          Atualizar agora
-        </Button>
       </div>
 
       {/* Cards de totais */}
@@ -215,7 +192,7 @@ export function VeiculoFinanceiroSGA({ veiculoId }: Props) {
           <FileText className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
           <p className="text-sm text-muted-foreground">
             {cobrancas?.length === 0
-              ? 'Nenhum boleto sincronizado. Clique em "Atualizar agora".'
+              ? 'Nenhum boleto sincronizado. Acesse Cobranças › Sincronizar Financeiro.'
               : 'Nenhum boleto neste filtro.'}
           </p>
         </div>
