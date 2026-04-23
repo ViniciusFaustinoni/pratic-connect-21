@@ -8828,6 +8828,51 @@ export type Database = {
           },
         ]
       }
+      cotacao_failure_metrics: {
+        Row: {
+          codigo: string
+          coluna: string | null
+          contexto: string
+          created_at: string
+          detalhes: string | null
+          id: string
+          mensagem: string | null
+          payload_resumo: Json | null
+          rota: string | null
+          user_agent: string | null
+          user_id: string | null
+          vendedor_nome: string | null
+        }
+        Insert: {
+          codigo: string
+          coluna?: string | null
+          contexto: string
+          created_at?: string
+          detalhes?: string | null
+          id?: string
+          mensagem?: string | null
+          payload_resumo?: Json | null
+          rota?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+          vendedor_nome?: string | null
+        }
+        Update: {
+          codigo?: string
+          coluna?: string | null
+          contexto?: string
+          created_at?: string
+          detalhes?: string | null
+          id?: string
+          mensagem?: string | null
+          payload_resumo?: Json | null
+          rota?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+          vendedor_nome?: string | null
+        }
+        Relationships: []
+      }
       cotacao_pdf_config: {
         Row: {
           cor_primaria: string
@@ -29861,6 +29906,20 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
         ]
+      }
+      vw_cotacao_failure_stats: {
+        Row: {
+          codigo: string | null
+          contexto: string | null
+          last_seen: string | null
+          total_24h: number | null
+          total_30d: number | null
+          total_7d: number | null
+          users_24h: number | null
+          users_30d: number | null
+          users_7d: number | null
+        }
+        Relationships: []
       }
       vw_cpfs_duplicados: {
         Row: {
