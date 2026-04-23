@@ -128,20 +128,6 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
         .single();
       if (error) throw error;
 
-      const { data: pcs, error: pErr } = await (supabase as any)
-        .from('grades_comissao_parcelas')
-        .select('*')
-        .eq('grade_id', id!)
-        .order('ordem');
-      if (pErr) throw pErr;
-
-      const { data: nvs, error: nErr } = await (supabase as any)
-        .from('grades_comissao_niveis')
-        .select('*')
-        .eq('grade_id', id!)
-        .order('ordem');
-      if (nErr) throw nErr;
-
       const { data: gps, error: gpErr } = await (supabase as any)
         .from('grade_comissao_planos')
         .select('plano_id')
@@ -157,7 +143,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
         .order('ordem');
       if (rErr) throw rErr;
 
-      return { grade, parcelas: pcs || [], niveis: nvs || [], gradePlanos: gps || [], regras: regras || [] };
+      return { grade, gradePlanos: gps || [], regras: regras || [] };
     },
   });
 
@@ -184,13 +170,12 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
         next[planoId] = Array.from(grupos.values())
           .map((grupo, ordem) => {
             const base = grupo[0];
-            const parcelaLegacy = base.parcela_id ? (existing.parcelas || []).find((p: any) => p.id === base.parcela_id) : null;
             return {
               id: base.parcela_id || undefined,
               numero_parcela: base.vitalicia ? null : base.parcela_numero,
               vitalicia: !!base.vitalicia,
               vitalicia_inicio_parcela: base.vitalicia ? base.vitalicia_inicio_parcela : null,
-              label: parcelaLegacy?.label || (base.vitalicia ? 'Vitalícia' : base.parcela_numero === 1 ? 'Taxa de Adesão' : `${base.parcela_numero}ª Parcela`),
+              label: base.vitalicia ? 'Vitalícia' : base.parcela_numero === 1 ? 'Taxa de Adesão' : `${base.parcela_numero}ª Parcela`,
               ordem,
               niveis: grupo
                 .sort((a: any, b: any) => (a.ordem || 0) - (b.ordem || 0))
@@ -210,27 +195,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
       return;
     }
 
-    const legacyParcelas: ParcelaForm[] = (existing.parcelas || []).map((p: any) => ({
-      id: p.id,
-      numero_parcela: p.numero_parcela,
-      vitalicia: p.vitalicia,
-      vitalicia_inicio_parcela: p.vitalicia_inicio_parcela,
-      label: p.label,
-      ordem: p.ordem,
-      niveis: (existing.niveis || [])
-        .filter((n: any) => n.parcela_id === p.id)
-        .sort((a: any, b: any) => a.ordem - b.ordem)
-        .map((n: any) => ({
-          id: n.id,
-          nome: n.nome,
-          percentual: Number(n.percentual),
-          tipo_comissao: 'percentual',
-          valor: Number(n.percentual),
-          role: n.role || '',
-        })),
-    }));
-
-    setRegrasPorPlano(Object.fromEntries(planIds.map((planId: string) => [planId, cloneParcelas(legacyParcelas)])));
+    setRegrasPorPlano(Object.fromEntries(planIds.map((planId: string) => [planId, []])));
   }, [existing]);
 
   const togglePlano = (planoId: string) => {
