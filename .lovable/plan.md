@@ -1,135 +1,353 @@
 
-## Correção: continuar cotação/rascunho sem perder marca, modelo e ano do veículo
+## Plano: comissionamento por plano, grade, perfil e hierarquia
 
-### Problema identificado
-A funcionalidade de rascunho já existe em `CotacaoFormDialog.tsx` via `useCotacaoDraft`, então não vou criar outro mecanismo paralelo.
+### O que já existe e será reaproveitado
+O sistema já tem parte da base implementada:
+- cadastro de grades de comissão;
+- parcelas da grade, incluindo vitalícia;
+- níveis por perfil de acesso (`vendedor_clt`, `vendedor_externo`, `agencia`, `supervisor_vendas`, `gerente_comercial`);
+- atribuição de grade a usuários;
+- hierarquia vendedor → supervisor → gerente → agência;
+- motor que gera comissão ao pagar cobrança.
 
-O problema está no que é salvo/restaurado:
+O ajuste necessário é mudar o modelo para que a comissão seja entendida assim:
 
-- O rascunho local salva `placa`, `marcaSelecionada`, `modeloSelecionado` e `anoSelecionado`.
-- Porém, quando o veículo vem pela busca de placa, os dados reais ficam em `veiculoEncontrado.vehicleData`.
-- Esse objeto não é salvo no rascunho.
-- Ao restaurar/continuar, o sistema recupera a placa, mas não reconstrói `veiculoEncontrado`.
-- Como `getMarcaNome()`, `getModeloNome()` e `getAnoNome()` dependem de `veiculoEncontrado` ou das listas FIPE carregadas, o formulário pode ficar sem marca/modelo/ano mesmo com placa e FIPE preenchidos.
-
-Além disso, para cotações já persistidas como `rascunho`, se a cotação foi salva sem `veiculo_marca`, `veiculo_modelo` ou `veiculo_ano`, a tela de detalhes mostra os campos vazios e não tenta reconsultar a placa.
-
----
-
-## Implementação proposta
-
-### 1. Salvar os dados do veículo encontrado no rascunho local
-Arquivo:
-- `src/components/cotacoes/CotacaoFormDialog.tsx`
-
-Atualizar o `draftSnapshot` para incluir um snapshot seguro de:
-- `veiculoEncontrado`
-- `vehicleData`
-- `fipeData`
-
-Com isso, quando o consultor sair da tela antes de criar a cotação e depois clicar em restaurar rascunho, o sistema terá novamente:
-- marca
-- modelo
-- ano
-- combustível
-- cor
-- código FIPE
-- valor FIPE
-
-### 2. Restaurar `veiculoEncontrado` ao continuar o rascunho
-Arquivo:
-- `src/components/cotacoes/CotacaoFormDialog.tsx`
-
-No `handleRestoreDraft`, além de restaurar os campos atuais, reconstruir `setVeiculoEncontrado(...)` quando o payload tiver dados de veículo válidos.
-
-Fluxo esperado:
-- Se o rascunho tiver `veiculoEncontrado.vehicleData`, restaurar diretamente.
-- Se tiver apenas placa e valor FIPE, manter a placa e permitir reconsulta manual.
-- Se tiver combustível no veículo, restaurar também `combustivelSelecionado`.
-
-### 3. Evitar que o reset inicial apague o rascunho restaurado
-Arquivo:
-- `src/components/cotacoes/CotacaoFormDialog.tsx`
-
-Revisar o efeito que limpa o formulário quando o modal abre sem `leadId`, `cotacaoBase` ou edição.
-
-Hoje ele reseta estados ao abrir a cotação rápida. Vou ajustar para não sobrescrever os dados logo após o usuário restaurar um rascunho.
-
-A abordagem será usar uma flag interna, por exemplo:
-- `isRestoringDraftRef`
-
-Assim:
-- abertura normal continua começando limpa;
-- restauração de rascunho não é apagada pelo reset automático.
-
-### 4. Reconsultar dados do veículo quando uma cotação rascunho persistida tiver placa, mas não tiver marca/modelo/ano
-Arquivos:
-- `src/components/cotacoes/CotacaoDetalhesModal.tsx`
-- `src/pages/vendas/Cotacoes.tsx`
-
-Adicionar uma ação clara para cotações em `rascunho`:
-- “Continuar cotação” ou reaproveitar o fluxo de edição quando disponível.
-
-Ao abrir o formulário com uma cotação base/rascunho:
-- se houver `veiculo_marca` e `veiculo_modelo`, usar os dados salvos;
-- se não houver marca/modelo/ano, mas houver `veiculo_placa`, disparar a busca por placa automaticamente ou oferecer um botão de “Buscar dados da placa”.
-
-Isso resolve cotações como a do print, onde a placa aparece (`LTB4J74`), mas marca/modelo/ano estão vazios.
-
-### 5. Garantir que a criação/atualização nunca salve veículo incompleto quando a placa foi encontrada
-Arquivo:
-- `src/components/cotacoes/CotacaoFormDialog.tsx`
-
-Antes de montar `cotacaoData`, garantir fallback robusto:
-
-- `veiculo_marca`: `getMarcaNome()` ou `veiculoEncontrado.vehicleData.marca`
-- `veiculo_modelo`: `getModeloNome()` ou `veiculoEncontrado.vehicleData.modelo`
-- `veiculo_ano`: ano extraído de `getAnoNome()` ou `veiculoEncontrado.vehicleData.ano`
-- `codigo_fipe`: `veiculoEncontrado.fipeData.codigo`, quando existir
-
-Se a placa foi buscada com sucesso, mas os dados ainda estiverem vazios, bloquear o submit com mensagem amigável:
-- “Os dados do veículo ainda não foram carregados. Clique em buscar placa novamente antes de salvar.”
-
-### 6. Melhorar a exibição no modal de detalhes
-Arquivo:
-- `src/components/cotacoes/CotacaoDetalhesModal.tsx`
-
-Quando marca/modelo/ano estiverem ausentes mas houver placa:
-- mostrar um aviso visual discreto:
-  - “Dados do veículo não carregados”
-- exibir ação:
-  - “Continuar e buscar dados”
-  
-Isso evita parecer que o sistema perdeu dados sem oferecer recuperação.
+```text
+Plano vendido
+  -> encontra a grade aplicável ao vendedor
+  -> encontra as regras daquele plano dentro da grade
+  -> calcula quanto cada perfil recebe
+  -> resolve quem são as pessoas reais na hierarquia
+  -> gera lançamentos para vendedor, supervisor, gerente e/ou agência
+```
 
 ---
 
-## Validação após implementação
+## 1. Tornar a grade vinculável a múltiplos planos
 
-Validar o cenário reportado:
+### Banco de dados
+Criar uma tabela de vínculo entre grade e planos:
 
-1. Criar/abrir uma cotação em rascunho com placa `LTB4J74`.
-2. Interromper o fluxo e restaurar/continuar.
-3. Confirmar que o formulário volta com:
-   - placa
-   - marca
-   - modelo
-   - ano
-   - FIPE
-   - combustível
-   - plano selecionado quando aplicável
-4. Confirmar que ao salvar a cotação, o detalhe exibe corretamente:
-   - Toyota
-   - Corolla XEi Flex
-   - ano do veículo
-   - placa `LTB4J74`
-5. Confirmar que uma cotação rascunho antiga, já salva apenas com placa, consegue recuperar os dados ao continuar.
+```text
+grade_comissao_planos
+- id
+- grade_id
+- plano_id
+- ativo
+- created_at
+- updated_at
+```
+
+Regras:
+- uma grade poderá ter vários planos;
+- um plano poderá existir em mais de uma grade, porque a grade aplicada dependerá do vendedor/hierarquia vigente;
+- o motor sempre usará a grade atribuída ao vendedor no momento da venda/pagamento.
+
+Também serão adicionados índices e políticas RLS compatíveis com as regras atuais:
+- leitura para usuários autenticados com acesso comercial/gestão;
+- escrita apenas para diretoria/admin.
 
 ---
 
-## Arquivos envolvidos
+## 2. Fazer a grade mostrar quanto cada plano paga para cada perfil
 
-- `src/components/cotacoes/CotacaoFormDialog.tsx`
-- `src/components/cotacoes/CotacaoDetalhesModal.tsx`
-- `src/pages/vendas/Cotacoes.tsx`
+### Ajuste no modelo de níveis
+Hoje a grade define percentuais por parcela e perfil, mas não diferencia por plano.
+
+Será criado um modelo de regra por:
+
+```text
+grade + plano + parcela + perfil
+```
+
+Estrutura proposta:
+
+```text
+grade_comissao_plano_regras
+- id
+- grade_id
+- plano_id
+- parcela_id
+- role
+- nome_nivel
+- tipo_comissao: percentual | valor_fixo
+- valor
+- ativo
+- ordem
+```
+
+Exemplo visual esperado:
+
+```text
+Grade: Comercial Padrão
+
+Plano: Select Exclusive Passeio
+Parcela 1 / Adesão
+- Vendedor: 20%
+- Supervisor: 5%
+- Gerente: 3%
+
+Parcela 2 / Mensalidade
+- Vendedor: R$ 30,00
+- Supervisor: R$ 10,00
+- Gerente: R$ 5,00
+
+Vitalícia a partir da parcela 3
+- Vendedor: R$ 15,00
+- Supervisor: R$ 5,00
+```
+
+Isso atende diretamente à regra:
+
+> O sistema deve entender quanto cada plano paga de comissão a cada perfil de acesso.
+
+---
+
+## 3. Atualizar a tela de Grades de Comissão
+
+Arquivos principais:
+- `src/pages/configuracoes/GradesComissao.tsx`
+- `src/pages/configuracoes/GradeComissaoForm.tsx`
+- `src/components/comissoes/ParcelaEditor.tsx`
+
+### Nova experiência da grade
+Na criação/edição de uma grade, adicionar uma seção “Planos vinculados”.
+
+A tela permitirá:
+- selecionar um ou mais planos ativos;
+- visualizar cada plano dentro da grade;
+- configurar, para cada plano:
+  - parcelas comissionadas;
+  - perfil de acesso;
+  - tipo de comissão: percentual ou valor fixo;
+  - valor pago;
+  - status ativo/inativo.
+
+A listagem de grades também passará a exibir:
+- quantidade de planos vinculados;
+- quantidade de usuários atribuídos;
+- resumo dos perfis configurados;
+- indicação se a grade possui regra por plano.
+
+---
+
+## 4. Migrar a tela antiga “Comissionamento por Plano”
+
+Arquivo atual:
+- `src/pages/configuracoes/ComissionamentoPlano.tsx`
+
+Essa tela já existe, mas hoje configura comissão por plano de forma separada da grade.
+
+Ela será consolidada dentro da grade, para evitar duas fontes de verdade.
+
+A rota antiga:
+- `/configuracoes/comissionamento-plano`
+
+já redireciona para:
+- `/comissoes/grades`
+
+Será mantida essa direção, mas a funcionalidade real passará a viver dentro da edição da grade.
+
+---
+
+## 5. Atualizar o motor de geração de comissões
+
+Arquivo/migration relacionada:
+- função `fn_gerar_comissoes_por_pagamento`
+- função `fn_resolver_grade_vendedor_em`
+
+### Regra nova do motor
+Ao gerar comissão de uma cobrança paga:
+
+1. identificar contrato;
+2. identificar vendedor do contrato;
+3. identificar plano vendido no contrato;
+4. resolver a grade vigente atribuída ao vendedor;
+5. verificar se o plano está vinculado àquela grade;
+6. localizar a regra da parcela:
+   - parcela específica;
+   - ou regra vitalícia, se aplicável;
+7. para cada perfil configurado:
+   - se perfil for vendedor, pagar ao vendedor do contrato;
+   - se perfil for supervisor, pagar ao supervisor vigente do vendedor;
+   - se perfil for gerente, pagar ao gerente vigente do vendedor;
+   - se perfil for agência, pagar à agência vigente do vendedor;
+8. criar os lançamentos em `comissoes`.
+
+### Hierarquia obrigatória
+A grade atribuída ao vendedor será a base da cadeia.
+
+Exemplo:
+
+```text
+Venda feita por Vendedor A
+Vendedor A tem Grade X
+Grade X tem regras para Plano Select Exclusive Passeio
+
+Hierarquia vigente:
+Vendedor A -> Supervisor B -> Gerente C
+
+Resultado:
+- comissão de vendedor usa regra da Grade X para o Plano vendido
+- comissão de supervisor usa regra da Grade X para o perfil supervisor
+- comissão de gerente usa regra da Grade X para o perfil gerente
+```
+
+Ou seja: supervisor e gerente não usam as próprias grades para essa venda. A estrutura hierárquica obedece à grade do vendedor que originou a venda, como solicitado.
+
+---
+
+## 6. Registrar mais contexto nos lançamentos de comissão
+
+Na tabela `comissoes`, adicionar ou garantir os campos necessários para relatório e auditoria:
+
+```text
+grade_id
+grade_versao_id
+plano_id
+parcela_numero
+nivel_nome
+role_destinatario
+tipo_comissao
+valor_base
+percentual_aplicado
+valor_comissao
+valor_total
+status
+```
+
+Se algum campo já existir, será reaproveitado. O objetivo é permitir rastrear:
+
+```text
+quem recebeu
+por qual perfil recebeu
+por qual plano recebeu
+por qual grade recebeu
+qual parcela gerou a comissão
+qual cálculo foi aplicado
+```
+
+---
+
+## 7. Atualizar o relatório de comissões por período
+
+Criar uma tela de relatório no módulo de Comissões, por exemplo:
+
+```text
+/comissoes/relatorio
+```
+
+Com filtros:
+- período inicial;
+- período final;
+- grade;
+- plano;
+- vendedor/destinatário;
+- perfil;
+- parcela;
+- status:
+  - gerado/pendente;
+  - pago;
+  - cancelado/contestado, se aplicável.
+
+Exibição:
+- total gerado;
+- total pendente;
+- total pago;
+- quantidade de lançamentos;
+- tabela detalhada com:
+  - data;
+  - vendedor origem;
+  - destinatário;
+  - perfil;
+  - plano;
+  - grade;
+  - parcela;
+  - base de cálculo;
+  - percentual/valor fixo;
+  - valor calculado;
+  - status.
+
+---
+
+## 8. Ajustar navegação do módulo Comissões
+
+Arquivo:
+- `src/components/layout/AppSidebar.tsx`
+
+Adicionar item no menu de Comissões:
+
+```text
+Comissões
+- Dashboard
+- Grades de Comissão
+- Atribuição de Grades
+- Relatório
+- Pagamentos
+```
+
+---
+
+## 9. Backfill/reprocessamento
+
+Atualizar o backfill existente:
+- `supabase/functions/comissoes-backfill/index.ts`
+
+O backfill passará a usar o novo motor por plano + grade.
+
+Cuidados:
+- manter idempotência para não duplicar comissões;
+- respeitar cobrança já paga;
+- permitir simulação antes de executar;
+- preservar comissões antigas quando possível;
+- para reprocessamento real, gerar apenas o que estiver faltando ou substituir conforme regra segura.
+
+---
+
+## 10. Validação esperada
+
+Validar os cenários:
+
+### Cenário 1: grade com múltiplos planos
+- Grade A possui Plano 1 e Plano 2.
+- Cada plano tem valores diferentes por perfil.
+- Sistema calcula corretamente conforme o plano vendido.
+
+### Cenário 2: vendedor com supervisor e gerente
+- Vendedor tem Grade A.
+- Supervisor e gerente estão vinculados na hierarquia.
+- Ao pagar cobrança, sistema gera comissão para os três conforme regras da Grade A.
+
+### Cenário 3: supervisor/gerente com outra grade própria
+- Supervisor tem Grade B atribuída a ele.
+- Mesmo assim, na venda do vendedor, a comissão do supervisor usa a Grade A do vendedor.
+- Isso confirma a regra hierárquica solicitada.
+
+### Cenário 4: plano não vinculado à grade
+- Venda tem plano sem regra na grade do vendedor.
+- Sistema não gera comissão e registra motivo/auditoria ou deixa visível no relatório como sem regra configurada.
+
+### Cenário 5: relatório
+- Filtrar por período, grade, vendedor, plano, parcela e status.
+- Conferir totais com a soma dos lançamentos.
+
+---
+
+## Arquivos previstos
+
+### Banco/Supabase
+- nova migration para tabelas de vínculo grade/plano e regras por plano;
+- atualização da função `fn_gerar_comissoes_por_pagamento`;
+- atualização de índices, RLS e grants;
+- ajuste do backfill.
+
+### Frontend
+- `src/pages/configuracoes/GradesComissao.tsx`
+- `src/pages/configuracoes/GradeComissaoForm.tsx`
+- `src/components/comissoes/ParcelaEditor.tsx`
+- novo componente/editor de regras por plano na grade
+- nova página de relatório em `src/pages/comissoes/Relatorio.tsx`
+- novo hook de relatório, por exemplo `src/hooks/useRelatorioComissoes.ts`
+- `src/components/layout/AppSidebar.tsx`
+- `src/App.tsx`
 
