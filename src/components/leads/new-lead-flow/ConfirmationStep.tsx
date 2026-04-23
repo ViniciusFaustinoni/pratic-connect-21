@@ -170,6 +170,55 @@ export function ConfirmationStep({ state, updateState, onBack, onSubmit, isSubmi
             />
           </div>
         </div>
+
+        {/* Campos adicionais extraídos da CNH (editáveis) */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>RG</Label>
+            <Input
+              value={state.personalData?.rg || ''}
+              onChange={(e) => updateState({ personalData: { ...state.personalData!, rg: e.target.value } })}
+              placeholder="RG"
+              className={state.personalData?.rg ? autoFilledClass : ''}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Data de nascimento</Label>
+            <Input
+              type="date"
+              value={state.personalData?.data_nascimento || ''}
+              onChange={(e) => updateState({ personalData: { ...state.personalData!, data_nascimento: e.target.value } })}
+              className={state.personalData?.data_nascimento ? autoFilledClass : ''}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Número da CNH</Label>
+            <Input
+              value={state.personalData?.cnh || ''}
+              onChange={(e) => updateState({ personalData: { ...state.personalData!, cnh: e.target.value } })}
+              placeholder="Número de registro"
+              className={state.personalData?.cnh ? autoFilledClass : ''}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Categoria CNH</Label>
+            <Input
+              value={state.personalData?.cnh_categoria || ''}
+              onChange={(e) => updateState({ personalData: { ...state.personalData!, cnh_categoria: e.target.value.toUpperCase() } })}
+              placeholder="Ex: AB"
+              className={state.personalData?.cnh_categoria ? autoFilledClass : ''}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Validade CNH</Label>
+            <Input
+              type="date"
+              value={state.personalData?.cnh_validade || ''}
+              onChange={(e) => updateState({ personalData: { ...state.personalData!, cnh_validade: e.target.value } })}
+              className={state.personalData?.cnh_validade ? autoFilledClass : ''}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Seção: Atribuição */}
