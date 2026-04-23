@@ -12,6 +12,8 @@ interface FunilCotacaoChartProps {
   className?: string;
   compact?: boolean;
   onEtapaClick?: (etapaId: string) => void;
+  /** Override do vendedor a filtrar. Sem prop = usa lógica automática (vendedor logado vê só seus números, gestor vê tudo). */
+  vendedorId?: string | null;
 }
 
 // Mapeamento de rotas por etapa do funil
@@ -31,9 +33,9 @@ const ETAPA_ROTAS: Record<EtapaFunilCotacao, string> = {
  * Componente de visualização do Funil de Cotação
  * Exibe as 9 etapas reais do processo de cotação com navegação interativa
  */
-export function FunilCotacaoChart({ periodo = '30dias', className, compact = false, onEtapaClick }: FunilCotacaoChartProps) {
+export function FunilCotacaoChart({ periodo = '30dias', className, compact = false, onEtapaClick, vendedorId }: FunilCotacaoChartProps) {
   const navigate = useNavigate();
-  const { data, isLoading } = useFunilCotacao(periodo);
+  const { data, isLoading } = useFunilCotacao(periodo, vendedorId);
 
   const handleEtapaClick = (etapaId: EtapaFunilCotacao) => {
     if (onEtapaClick) {
