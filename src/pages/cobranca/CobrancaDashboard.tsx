@@ -14,6 +14,7 @@ import { DashboardGraficos } from '@/components/cobranca/DashboardGraficos';
 import { TopDevedores } from '@/components/cobranca/TopDevedores';
 import { AlertasCobranca } from '@/components/cobranca/AlertasCobranca';
 import { SgaBackfillFinanceiroDialog } from '@/components/cobranca/SgaBackfillFinanceiroDialog';
+import { ModuloCobrancaSwitcher } from '@/components/cobranca/ModuloCobrancaSwitcher';
 import { usePermissions } from '@/hooks/usePermissions';
 
 const formatCurrency = (value: number) =>
@@ -219,6 +220,7 @@ export default function CobrancaDashboard() {
 
   return (
     <div className="space-y-6">
+      <ModuloCobrancaSwitcher />
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
