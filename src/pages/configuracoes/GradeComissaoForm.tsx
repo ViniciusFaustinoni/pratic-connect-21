@@ -1,133 +1,269 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Plus, Trash2, ArrowUp, ArrowDown, Building2 } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { ArrowLeft, Plus, Infinity as InfinityIcon, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { FieldHint } from '@/components/admin/planos/FieldHint';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAppRoles } from '@/hooks/useAppRoles';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { ParcelaEditor, ParcelaForm, NivelForm } from '@/components/comissoes/ParcelaEditor';
+import { useAuth } from '@/contexts/AuthContext';
 
-interface NivelForm {
-  id?: string;
-  nome: string;
-  percentual: number;
-  role: string;
-}
+const COMMERCIAL_ROLE_KEYS = ['vendedor_clt', 'vendedor_externo', 'agencia', 'supervisor_vendas', 'gerente_comercial'];
 
 export default function GradeComissaoForm() {
   const { id } = useParams();
   const isEdit = !!id && id !== 'nova';
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { profile } = useAuth();
   const { roles: appRoles } = useAppRoles();
 
-  // Filter to commercial roles only
-  const commercialRoles = appRoles.filter(r => ['vendedor_clt', 'vendedor_externo', 'agencia'].includes(r.role));
+  const commercialRoles = appRoles.filter(r => COMMERCIAL_ROLE_KEYS.includes(r.role));
 
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
-  const [niveis, setNiveis] = useState<NivelForm[]>([]);
+  const [parcelas, setParcelas] = useState<ParcelaForm[]>([]);
   const [saving, setSaving] = useState(false);
 
   const { data: existing, isLoading } = useQuery({
-    queryKey: ['grade-comissao', id],
+    queryKey: ['grade-comissao-v2', id],
     enabled: isEdit,
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const { data: grade, error } = await (supabase as any)
         .from('grades_comissao')
-        .select('*, grades_comissao_niveis(id, nome, percentual, ordem, role)')
+        .select('*')
         .eq('id', id!)
         .single();
       if (error) throw error;
-      return data;
+
+      const { data: pcs, error: pErr } = await (supabase as any)
+        .from('grades_comissao_parcelas')
+        .select('*')
+        .eq('grade_id', id!)
+        .order('ordem');
+      if (pErr) throw pErr;
+
+      const { data: nvs, error: nErr } = await (supabase as any)
+        .from('grades_comissao_niveis')
+        .select('*')
+        .eq('grade_id', id!)
+        .order('ordem');
+      if (nErr) throw nErr;
+
+      return { grade, parcelas: pcs || [], niveis: nvs || [] };
     },
   });
 
   useEffect(() => {
     if (existing) {
-      setNome(existing.nome);
-      setDescricao(existing.descricao || '');
-      const sorted = [...(existing.grades_comissao_niveis || [])].sort((a: any, b: any) => a.ordem - b.ordem);
-      setNiveis(sorted.map((n: any) => ({ id: n.id, nome: n.nome, percentual: Number(n.percentual), role: n.role || '' })));
+      setNome(existing.grade.nome);
+      setDescricao(existing.grade.descricao || '');
+      const parcs: ParcelaForm[] = (existing.parcelas || []).map((p: any) => ({
+        id: p.id,
+        numero_parcela: p.numero_parcela,
+        vitalicia: p.vitalicia,
+        vitalicia_inicio_parcela: p.vitalicia_inicio_parcela,
+        label: p.label,
+        ordem: p.ordem,
+        niveis: (existing.niveis || [])
+          .filter((n: any) => n.parcela_id === p.id)
+          .sort((a: any, b: any) => a.ordem - b.ordem)
+          .map((n: any) => ({
+            id: n.id, nome: n.nome, percentual: Number(n.percentual), role: n.role || '',
+          })),
+      }));
+      setParcelas(parcs);
     }
   }, [existing]);
 
-  const totalPercentual = niveis.reduce((s, n) => s + (Number(n.percentual) || 0), 0);
-  const exceedsLimit = totalPercentual > 100;
+  const hasVitalicia = parcelas.some(p => p.vitalicia);
 
-  const addNivel = () => setNiveis(prev => [...prev, { nome: '', percentual: 0, role: '' }]);
-
-  const removeNivel = (idx: number) => setNiveis(prev => prev.filter((_, i) => i !== idx));
-
-  const updateNivel = (idx: number, field: keyof NivelForm, value: string | number) => {
-    setNiveis(prev => prev.map((n, i) => i === idx ? { ...n, [field]: value } : n));
+  const addParcela = () => {
+    const usados = parcelas.filter(p => !p.vitalicia).map(p => p.numero_parcela || 0);
+    const proximo = (Math.max(0, ...usados)) + 1;
+    setParcelas(prev => [...prev, {
+      numero_parcela: proximo,
+      vitalicia: false,
+      vitalicia_inicio_parcela: null,
+      label: proximo === 1 ? 'Taxa de Adesão' : `${proximo}ª Parcela`,
+      ordem: prev.length,
+      niveis: [],
+    }]);
   };
 
-  const moveNivel = (idx: number, dir: -1 | 1) => {
+  const addVitalicia = () => {
+    if (hasVitalicia) {
+      toast.error('Já existe uma parcela vitalícia nesta grade.');
+      return;
+    }
+    const ultimaConfig = Math.max(0, ...parcelas.filter(p => !p.vitalicia).map(p => p.numero_parcela || 0));
+    setParcelas(prev => [...prev, {
+      numero_parcela: null,
+      vitalicia: true,
+      vitalicia_inicio_parcela: ultimaConfig + 1,
+      label: 'Vitalícia',
+      ordem: prev.length,
+      niveis: [],
+    }]);
+  };
+
+  const updateParcela = (idx: number, next: ParcelaForm) => {
+    setParcelas(prev => prev.map((p, i) => i === idx ? next : p));
+  };
+
+  const removeParcela = (idx: number) => {
+    setParcelas(prev => prev.filter((_, i) => i !== idx).map((p, i) => ({ ...p, ordem: i })));
+  };
+
+  const moveParcela = (idx: number, dir: -1 | 1) => {
     const newIdx = idx + dir;
-    if (newIdx < 0 || newIdx >= niveis.length) return;
-    setNiveis(prev => {
+    if (newIdx < 0 || newIdx >= parcelas.length) return;
+    setParcelas(prev => {
       const copy = [...prev];
       [copy[idx], copy[newIdx]] = [copy[newIdx], copy[idx]];
-      return copy;
+      return copy.map((p, i) => ({ ...p, ordem: i }));
     });
   };
 
+  const validate = (): string | null => {
+    if (!nome.trim()) return 'Nome é obrigatório';
+    if (parcelas.length === 0) return 'Adicione pelo menos uma parcela';
+    for (const p of parcelas) {
+      if (!p.label.trim()) return 'Cada parcela precisa de rótulo';
+      if (p.vitalicia) {
+        if (!p.vitalicia_inicio_parcela || p.vitalicia_inicio_parcela < 1) return 'Vitalícia: defina a parcela inicial';
+      } else {
+        if (!p.numero_parcela || p.numero_parcela < 1) return 'Parcela precisa de número válido';
+      }
+      const total = p.niveis.reduce((s, n) => s + (Number(n.percentual) || 0), 0);
+      if (total > 100) return `Parcela "${p.label}": soma dos níveis ultrapassa 100%`;
+      for (const n of p.niveis) {
+        if (!n.role) return `Parcela "${p.label}": selecione o perfil de cada nível`;
+        if (!n.nome.trim()) return `Parcela "${p.label}": cada nível precisa de nome`;
+      }
+      const noms = p.niveis.map(n => n.nome.trim().toLowerCase());
+      if (noms.length !== new Set(noms).size) return `Parcela "${p.label}": níveis com nomes duplicados`;
+    }
+    // duplicates entre numero_parcela
+    const nums = parcelas.filter(p => !p.vitalicia).map(p => p.numero_parcela);
+    if (nums.length !== new Set(nums).size) return 'Há parcelas com o mesmo número';
+    return null;
+  };
+
   const handleSave = async () => {
-    if (!nome.trim()) return toast.error('Nome é obrigatório');
-    if (niveis.length === 0) return toast.error('Adicione pelo menos um nível');
-    if (niveis.some(n => !n.role)) return toast.error('Selecione o perfil de cada nível');
-    if (niveis.some(n => !n.nome.trim())) return toast.error('Todos os níveis precisam de nome');
-    // Check duplicate level names
-    const namesUsed = niveis.map(n => n.nome.trim().toLowerCase());
-    const hasNameDuplicates = namesUsed.length !== new Set(namesUsed).size;
-    if (hasNameDuplicates) return toast.error('Cada nível precisa ter um nome único');
-    if (exceedsLimit) return;
+    const err = validate();
+    if (err) { toast.error(err); return; }
 
     setSaving(true);
     try {
       let gradeId = id;
+      let novaVersao = 1;
 
       if (isEdit) {
+        const { data: cur } = await (supabase as any)
+          .from('grades_comissao')
+          .select('versao')
+          .eq('id', id!)
+          .single();
+        novaVersao = (cur?.versao || 1) + 1;
+
         const { error } = await (supabase as any)
           .from('grades_comissao')
-          .update({ nome: nome.trim(), descricao: descricao.trim() || null })
+          .update({
+            nome: nome.trim(),
+            descricao: descricao.trim() || null,
+            versao: novaVersao,
+            vigente_desde: new Date().toISOString(),
+          })
           .eq('id', id!);
         if (error) throw error;
 
+        // Apaga parcelas + níveis (cascade)
+        await (supabase as any).from('grades_comissao_parcelas').delete().eq('grade_id', id!);
         await (supabase as any).from('grades_comissao_niveis').delete().eq('grade_id', id!);
       } else {
         const { data, error } = await (supabase as any)
           .from('grades_comissao')
-          .insert({ nome: nome.trim(), descricao: descricao.trim() || null })
+          .insert({ nome: nome.trim(), descricao: descricao.trim() || null, versao: 1, vigente_desde: new Date().toISOString() })
           .select('id')
           .single();
         if (error) throw error;
         gradeId = data.id;
       }
 
-      const { error: nErr } = await (supabase as any)
-        .from('grades_comissao_niveis')
-        .insert(niveis.map((n, i) => ({
-          grade_id: gradeId!,
-          nome: n.nome.trim(),
-          percentual: n.percentual,
-          ordem: i,
-          role: n.role,
-        })));
-      if (nErr) throw nErr;
+      // Insere parcelas
+      const parcelasInsert = parcelas.map((p, i) => ({
+        grade_id: gradeId!,
+        numero_parcela: p.vitalicia ? null : p.numero_parcela,
+        vitalicia: p.vitalicia,
+        vitalicia_inicio_parcela: p.vitalicia ? p.vitalicia_inicio_parcela : null,
+        label: p.label.trim(),
+        ordem: i,
+      }));
+      const { data: pcsCriadas, error: pErr } = await (supabase as any)
+        .from('grades_comissao_parcelas')
+        .insert(parcelasInsert)
+        .select('id, numero_parcela, vitalicia, ordem');
+      if (pErr) throw pErr;
+
+      // Insere níveis vinculados às parcelas criadas
+      const niveisInsert: any[] = [];
+      parcelas.forEach((p, i) => {
+        const criada = pcsCriadas.find((c: any) => c.ordem === i);
+        if (!criada) return;
+        p.niveis.forEach((n, ni) => {
+          niveisInsert.push({
+            grade_id: gradeId!,
+            parcela_id: criada.id,
+            nome: n.nome.trim(),
+            percentual: n.percentual,
+            ordem: ni,
+            role: n.role,
+          });
+        });
+      });
+      if (niveisInsert.length > 0) {
+        const { error: nErr } = await (supabase as any).from('grades_comissao_niveis').insert(niveisInsert);
+        if (nErr) throw nErr;
+      }
+
+      // Snapshot da nova versão
+      const snapshot = {
+        grade: { id: gradeId, nome: nome.trim(), descricao: descricao.trim() || null, versao: novaVersao },
+        parcelas: parcelas.map((p, i) => ({
+          parcela: {
+            numero_parcela: p.vitalicia ? null : p.numero_parcela,
+            vitalicia: p.vitalicia,
+            vitalicia_inicio_parcela: p.vitalicia ? p.vitalicia_inicio_parcela : null,
+            label: p.label.trim(),
+            ordem: i,
+          },
+          niveis: p.niveis.map((n, ni) => ({
+            nome: n.nome.trim(), percentual: n.percentual, ordem: ni, role: n.role,
+          })),
+        })),
+      };
+      await (supabase as any).from('grades_comissao_versoes').insert({
+        grade_id: gradeId,
+        versao: novaVersao,
+        snapshot,
+        vigente_desde: new Date().toISOString(),
+        criado_por: profile?.id || null,
+      });
 
       queryClient.invalidateQueries({ queryKey: ['grades-comissao'] });
-      toast.success(isEdit ? 'Grade atualizada' : 'Grade criada');
+      queryClient.invalidateQueries({ queryKey: ['grade-comissao-v2', id] });
+      toast.success(isEdit ? 'Grade atualizada (nova versão)' : 'Grade criada');
       navigate('/configuracoes/grades-comissao');
-    } catch (err) {
-      toast.error('Erro ao salvar grade');
+    } catch (e: any) {
+      console.error(e);
+      toast.error('Erro ao salvar grade: ' + (e.message || 'desconhecido'));
     } finally {
       setSaving(false);
     }
@@ -136,7 +272,7 @@ export default function GradeComissaoForm() {
   if (isEdit && isLoading) return <div className="text-sm text-muted-foreground">Carregando...</div>;
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6 max-w-4xl">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate('/configuracoes/grades-comissao')}>
           <ArrowLeft className="h-4 w-4" />
@@ -146,188 +282,85 @@ export default function GradeComissaoForm() {
         </h2>
       </div>
 
+      <Alert>
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          Alterações nesta grade só valem para <b>novas vendas</b> a partir do momento do salvamento.
+          Comissões já geradas permanecem inalteradas.
+        </AlertDescription>
+      </Alert>
+
       <Card>
         <CardContent className="space-y-4 pt-6">
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground flex items-center">
               Nome da Grade *
-              <FieldHint text="Identifique a grade de forma clara. Ex: 'Grade Agência Premium', 'Grade Vendedor Direto'." />
+              <FieldHint text="Identifique a grade de forma clara. Ex: 'Grade Agência Premium'." />
             </label>
             <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Grade Agência Premium" />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground flex items-center">
-              Descrição
-              <FieldHint text="Opcional. Use para detalhar o propósito ou público-alvo desta grade." />
-            </label>
+            <label className="text-sm font-medium text-foreground">Descrição</label>
             <Input value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Descrição opcional" />
           </div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base flex items-center">
-              Níveis de Comissão
-              <FieldHint text="Cada nível representa um participante na cadeia de vendas que recebe parte da taxa de adesão." />
-            </CardTitle>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-semibold">Parcelas comissionadas</h3>
+          <div className="flex gap-2">
             <TooltipProvider delayDuration={200}>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="outline" size="sm" onClick={addNivel}>
-                    <Plus className="h-4 w-4 mr-1" /> Adicionar Nível
+                  <Button variant="outline" size="sm" onClick={addParcela}>
+                    <Plus className="h-4 w-4 mr-1" /> Parcela
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Adicione um novo nível de comissionamento (ex: Vendedor, Supervisor, Agência).</TooltipContent>
+                <TooltipContent>Adicionar parcela específica (1ª, 2ª, …)</TooltipContent>
               </Tooltip>
-            </TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="sm" onClick={addVitalicia} disabled={hasVitalicia}>
+                    <InfinityIcon className="h-4 w-4 mr-1" /> Vitalícia
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Vitalícia: a partir da parcela X, todos os pagamentos seguintes geram comissão com este percentual.
+                </TooltipContent>
+              </Tooltip>
+          </TooltipProvider>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {niveis.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              Nenhum nível adicionado. Clique em "Adicionar Nível".
-            </p>
-          ) : (
-            niveis.map((nivel, idx) => (
-              <TooltipProvider delayDuration={200} key={idx}>
-                <div className="flex items-center gap-2 bg-muted/50 rounded-lg p-3">
-                  <div className="flex flex-col gap-0.5">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => moveNivel(idx, -1)} disabled={idx === 0}>
-                          <ArrowUp className="h-3 w-3" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Altere a ordem de prioridade deste nível na grade.</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => moveNivel(idx, 1)} disabled={idx === niveis.length - 1}>
-                          <ArrowDown className="h-3 w-3" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Altere a ordem de prioridade deste nível na grade.</TooltipContent>
-                    </Tooltip>
-                  </div>
-                  <span className="text-xs text-muted-foreground w-5 text-center">{idx + 1}</span>
-                  <div className="w-44">
-                    <Select
-                      value={nivel.role}
-                      onValueChange={(val) => {
-                        const roleConfig = commercialRoles.find(r => r.role === val);
-                        setNiveis(prev => prev.map((n, i) => i === idx ? { ...n, role: val, nome: n.nome || (roleConfig?.label || '') } : n));
-                      }}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="Perfil *" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {commercialRoles.map(r => (
-                          <SelectItem
-                            key={r.role}
-                            value={r.role}
-                          >
-                            {r.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex-1 relative">
-                    <Input
-                      className="flex-1"
-                      placeholder="Nome do nível (ex: Vendedor Principal)"
-                      value={nivel.nome}
-                      onChange={e => updateNivel(idx, 'nome', e.target.value)}
-                    />
-                  </div>
-                  <div className="flex items-center gap-1 w-28">
-                    <Input
-                      type="number"
-                      min={0}
-                      max={100}
-                      step={0.5}
-                      className="w-20"
-                      value={nivel.percentual}
-                      onChange={e => updateNivel(idx, 'percentual', parseFloat(e.target.value) || 0)}
-                    />
-                    <span className="text-sm text-muted-foreground flex items-center">
-                      %
-                      <FieldHint text="Percentual da taxa de adesão destinado a este nível. O total de todos os níveis não pode ultrapassar 100%." />
-                    </span>
-                  </div>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeNivel(idx)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Remove este nível da grade.</TooltipContent>
-                  </Tooltip>
-                </div>
-              </TooltipProvider>
-            ))
-          )}
+        </div>
 
-          {niveis.length > 0 && (
-            <div className="pt-3 border-t space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground flex items-center">
-                  Total alocado:
-                  <FieldHint text="Soma de todos os percentuais. Pode ser menor que 100%, mas nunca maior." />
-                </span>
-                <span className={exceedsLimit ? 'text-destructive font-semibold' : 'font-medium text-foreground'}>
-                  {totalPercentual}% de 100%
-                </span>
-              </div>
-              <Progress
-                value={Math.min(totalPercentual, 100)}
-                className="h-2"
-                indicatorClassName={exceedsLimit ? 'bg-destructive' : undefined}
-              />
-              <div className="flex items-center justify-between text-sm pt-1">
-                <span className="text-muted-foreground flex items-center gap-1">
-                  <Building2 className="h-3.5 w-3.5" />
-                  Percentual da empresa:
-                  <FieldHint text="Este é o percentual que permanece na empresa. Corresponde à diferença entre 100% e o total distribuído nos níveis." />
-                </span>
-                <span className="font-medium text-primary">
-                  {totalPercentual >= 100
-                    ? '0% — Todo o valor é distribuído'
-                    : totalPercentual === 0
-                      ? '100% — Nenhum nível configurado'
-                      : `${100 - totalPercentual}%`}
-                </span>
-              </div>
-              {exceedsLimit && (
-                <p className="text-xs text-destructive font-medium">
-                  A soma dos percentuais dos níveis não pode ultrapassar 100%. Total atual: {totalPercentual}%
-                </p>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        {parcelas.length === 0 ? (
+          <Card>
+            <CardContent className="py-8 text-center text-sm text-muted-foreground">
+              Nenhuma parcela configurada. Adicione a "Taxa de Adesão" e/ou parcelas mensais.
+            </CardContent>
+          </Card>
+        ) : (
+          parcelas.map((p, i) => (
+            <ParcelaEditor
+              key={p.id || `new-${i}`}
+              parcela={p}
+              index={i}
+              onChange={next => updateParcela(i, next)}
+              onRemove={() => removeParcela(i)}
+              onMove={dir => moveParcela(i, dir)}
+              canMoveUp={i > 0}
+              canMoveDown={i < parcelas.length - 1}
+              commercialRoles={commercialRoles.map(r => ({ role: r.role, label: r.label }))}
+            />
+          ))
+        )}
+      </div>
 
       <div className="flex justify-end gap-3">
-        <TooltipProvider delayDuration={200}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="outline" onClick={() => navigate('/configuracoes/grades-comissao')}>Cancelar</Button>
-            </TooltipTrigger>
-            <TooltipContent>Descarta alterações e volta para a lista de grades.</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button onClick={handleSave} disabled={saving || exceedsLimit}>
-                {saving ? 'Salvando...' : isEdit ? 'Salvar Alterações' : 'Criar Grade'}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Salva a grade com todos os níveis configurados.</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <Button variant="outline" onClick={() => navigate('/configuracoes/grades-comissao')}>Cancelar</Button>
+        <Button onClick={handleSave} disabled={saving}>
+          {saving ? 'Salvando...' : isEdit ? 'Salvar nova versão' : 'Criar Grade'}
+        </Button>
       </div>
     </div>
   );
