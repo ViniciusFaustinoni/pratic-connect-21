@@ -20,6 +20,8 @@ import {
   type TipoDocumentoContrato,
   type OcrResultado 
 } from '@/hooks/useContratoDocumentos';
+import { OcrDadosEditor } from '@/components/ocr/OcrDadosEditor';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface UploadedDocument {
   id: string;
@@ -202,8 +204,37 @@ export function DocumentUploader({
     const isDragOver = dragOver === tipo;
 
     if (doc) {
+      const handleSaveOcrEdits = async (editados: Record<string, string>) => {
+        const novoOcr = {
+          ...(doc.ocr as OcrResultado),
+          dados: { ...((doc.ocr?.dados as Record<string, string>) || {}), ...editados } as any,
+        } as OcrResultado;
+        if (!doc.id.startsWith('temp-')) {
+          const { error } = await supabase
+            .from('contratos_documentos')
+            .update({
+              ocr_resultado: {
+                ...novoOcr,
+                editado_manualmente: true,
+                editado_em: new Date().toISOString(),
+              } as any,
+            })
+            .eq('id', doc.id);
+          if (error) throw new Error('Erro ao salvar edições no banco');
+        }
+        setDocuments((prev) => {
+          const updated = prev.map((d) => (d.tipo === tipo ? { ...d, ocr: novoOcr } : d));
+          onDocumentsChange(updated);
+          return updated;
+        });
+        const limpo: Record<string, string> = {};
+        Object.entries(novoOcr.dados || {}).forEach(([k, v]) => { if (v) limpo[k] = String(v); });
+        onOcrDataExtracted(limpo);
+      };
+
       return (
-        <Card key={tipo} className={cn(
+        <div key={tipo} className="space-y-2">
+        <Card className={cn(
           "relative overflow-hidden transition-all",
           doc.status === 'uploading' && "border-blue-500 bg-blue-500/5",
           doc.status === 'success' && "border-green-500 bg-green-500/5",
@@ -284,6 +315,17 @@ export function DocumentUploader({
             </div>
           </CardContent>
         </Card>
+        {doc.status === 'success' && (tipo === 'cnh' || tipo === 'rg' || tipo === 'crlv' || tipo === 'comprovante_residencia') && (
+          <OcrDadosEditor
+            dados={doc.ocr?.dados as Record<string, unknown>}
+            tipoDocumento={tipo}
+            confianca={doc.ocr?.confianca}
+            sugestao={(doc.ocr as any)?.sugestao}
+            legivel={(doc.ocr as any)?.legivel}
+            onSave={handleSaveOcrEdits}
+          />
+        )}
+        </div>
       );
     }
 

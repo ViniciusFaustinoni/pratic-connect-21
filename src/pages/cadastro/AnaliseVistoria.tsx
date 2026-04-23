@@ -435,6 +435,11 @@ export default function AnaliseVistoria() {
                       )}
                     </div>
                   </div>
+                  <ChassiOcrEditor
+                    vistoriaId={vistoria.id}
+                    chassiOcrAtual={chassiOCR}
+                    chassiCadastro={chassiCadastro}
+                  />
                 </CardContent>
               </Card>
             );

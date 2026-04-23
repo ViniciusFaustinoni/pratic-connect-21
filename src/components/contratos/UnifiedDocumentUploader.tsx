@@ -22,6 +22,7 @@ import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
 import { syncCnhDataToAssociado } from '@/utils/syncCnhData';
 import { compararPlacasComDetalhe, isPlacaPlaceholder } from '@/lib/placa-utils';
+import { OcrDadosEditor } from '@/components/ocr/OcrDadosEditor';
 
 
 export type TipoDocumentoDetectado = 'cnh' | 'rg' | 'crlv' | 'nota_fiscal_veiculo' | 'atpv_e' | 'comprovante_residencia' | 'outro';
@@ -631,9 +632,48 @@ export const UnifiedDocumentUploader = forwardRef<
             {documents.map((doc) => {
               const tipoInfo = doc.tipo_detectado ? tipoLabels[doc.tipo_detectado] : tipoLabels.outro;
               const Icon = tipoInfo.icon;
-              
+              const isPublicFlow = !!cotacaoId && !contratoId;
+              const supabaseClient = isPublicFlow ? publicSupabase : supabase;
+
+              const handleSaveOcrEdits = async (editados: Record<string, string>) => {
+                if (!doc.ocr) return;
+                const novoOcr: OcrResultadoUnificado = {
+                  ...doc.ocr,
+                  dados: { ...(doc.ocr.dados || {}), ...editados },
+                };
+                // Persistir no banco se já foi salvo
+                if (!doc.id.startsWith('temp-')) {
+                  const { error } = await supabaseClient
+                    .from('contratos_documentos')
+                    .update({
+                      ocr_resultado: {
+                        ...novoOcr,
+                        editado_manualmente: true,
+                        editado_em: new Date().toISOString(),
+                      } as any,
+                    })
+                    .eq('id', doc.id);
+                  if (error) throw new Error('Erro ao salvar edições no banco');
+                }
+                // Atualizar state local
+                setDocuments((prev) => {
+                  const updated = prev.map((d) =>
+                    d.id === doc.id ? { ...d, ocr: novoOcr } : d,
+                  );
+                  onDocumentsChange(updated);
+                  return updated;
+                });
+                // Re-notifica dados extraídos para downstream
+                const dadosLimpos: Record<string, string> = {};
+                Object.entries(novoOcr.dados || {}).forEach(([k, v]) => {
+                  if (v) dadosLimpos[k] = String(v);
+                });
+                onOcrDataExtracted(dadosLimpos, novoOcr.tipo_detectado);
+              };
+
               return (
-                <Card key={doc.id} className={cn(
+                <div key={doc.id} className="space-y-2">
+                <Card className={cn(
                   "relative overflow-hidden transition-all",
                   doc.status === 'uploading' && "border-blue-500/50 bg-blue-500/5",
                   doc.status === 'processing' && "border-amber-500/50 bg-amber-500/5",
@@ -686,20 +726,6 @@ export const UnifiedDocumentUploader = forwardRef<
                           <p className="text-xs text-amber-600 mt-1">Detectando tipo e extraindo dados...</p>
                         )}
                         
-                        {doc.status === 'success' && doc.ocr?.dados && (
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            {Object.entries(doc.ocr.dados).slice(0, 3).map(([key, value]) => {
-                              if (!value) return null;
-                              const label = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                              return (
-                                <span key={key} className="mr-3">
-                                  <span className="font-medium">{label}:</span> {value}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        )}
-                        
                         {doc.status === 'error' && (
                           <p className="text-xs text-red-600 mt-1">{doc.error}</p>
                         )}
@@ -729,6 +755,17 @@ export const UnifiedDocumentUploader = forwardRef<
                     </div>
                   </CardContent>
                 </Card>
+                {doc.status === 'success' && doc.tipo_detectado && doc.tipo_detectado !== 'outro' && (
+                  <OcrDadosEditor
+                    dados={doc.ocr?.dados as Record<string, unknown>}
+                    tipoDocumento={doc.tipo_detectado}
+                    confianca={doc.ocr?.confianca}
+                    sugestao={doc.ocr?.sugestao}
+                    legivel={doc.ocr?.legivel}
+                    onSave={handleSaveOcrEdits}
+                  />
+                )}
+                </div>
               );
             })}
           </div>

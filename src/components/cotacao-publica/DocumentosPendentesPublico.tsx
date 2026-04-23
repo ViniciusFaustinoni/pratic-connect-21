@@ -9,6 +9,7 @@ import { AlertTriangle, Upload, FileCheck, Loader2, FileText, CheckCircle2, Cloc
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { motion } from 'framer-motion';
 import type { DocumentoPendentePublico } from '@/hooks/useCotacaoContratacao';
+import { OcrDadosEditor } from '@/components/ocr/OcrDadosEditor';
 
 // Labels para tipos de documentos
 const TIPO_DOCUMENTO_LABELS: Record<string, string> = {
@@ -53,7 +54,11 @@ interface DocUploadState {
   enviado: boolean;
   ocrTipo?: string | null;
   ocrSugestao?: string | null;
-  ocrEquivalente?: boolean; // OCR detectou tipo diferente, mas equivalente (ex.: NF para slot CRLV)
+  ocrEquivalente?: boolean;
+  ocrDados?: Record<string, unknown> | null;
+  ocrConfianca?: number | null;
+  ocrLegivel?: boolean | null;
+  documentoId?: string | null;
 }
 
 // Tipos equivalentes ao CRLV (substituem o documento do veículo)
@@ -224,6 +229,9 @@ export function DocumentosPendentesPublico({
           ocrTipo: ocrTipoDetectado,
           ocrSugestao,
           ocrEquivalente: equivalente,
+          ocrDados,
+          ocrConfianca,
+          documentoId: novoDoc.id,
         }
       }));
 
@@ -402,6 +410,37 @@ export function DocumentosPendentesPublico({
                             Reconhecido como {TIPO_DOCUMENTO_LABELS[state.ocrTipo] || state.ocrTipo}
                           </Badge>
                         )}
+                      </div>
+                    )}
+
+                    {/* Editor manual dos dados extraídos pelo OCR */}
+                    {isEnviado && state.ocrTipo && state.documentoId && (
+                      <div className="mb-3">
+                        <OcrDadosEditor
+                          dados={state.ocrDados as Record<string, unknown>}
+                          tipoDocumento={state.ocrTipo}
+                          confianca={state.ocrConfianca ?? undefined}
+                          sugestao={state.ocrSugestao as any}
+                          legivel={state.ocrLegivel ?? undefined}
+                          onSave={async (editados) => {
+                            const novosDados = { ...(state.ocrDados || {}), ...editados };
+                            const { error } = await publicSupabase
+                              .from('documentos')
+                              .update({
+                                dados_extraidos: {
+                                  ...novosDados,
+                                  editado_manualmente: true,
+                                  editado_em: new Date().toISOString(),
+                                } as any,
+                              } as any)
+                              .eq('id', state.documentoId!);
+                            if (error) throw new Error('Erro ao salvar edições');
+                            setUploadStates((prev) => ({
+                              ...prev,
+                              [doc.id]: { ...prev[doc.id], ocrDados: novosDados },
+                            }));
+                          }}
+                        />
                       </div>
                     )}
 
