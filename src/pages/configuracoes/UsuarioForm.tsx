@@ -293,7 +293,6 @@ export default function UsuarioForm() {
   });
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [gradeError, setGradeError] = useState(false);
   const [novoEmail, setNovoEmail] = useState('');
   const [novaSenha, setNovaSenha] = useState('');
   const [alterandoEmail, setAlterandoEmail] = useState(false);
@@ -349,35 +348,6 @@ export default function UsuarioForm() {
     enabled: isEditing
   });
 
-  // Buscar grade atribuída ao usuário
-  const { data: userGrade } = useQuery({
-    queryKey: ['usuario-grade-comissao', usuario?.user_id],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from('usuario_grade_comissao')
-        .select('grade_id')
-        .eq('user_id', usuario!.user_id)
-        .maybeSingle();
-      if (error) throw error;
-      return data?.grade_id || '';
-    },
-    enabled: isEditing && !!usuario?.user_id,
-  });
-
-  // Buscar grades disponíveis
-  const { data: gradesDisponiveis = [] } = useQuery({
-    queryKey: ['grades-comissao-ativas'],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from('grades_comissao')
-        .select('id, nome')
-        .eq('ativo', true)
-        .order('nome');
-      if (error) throw error;
-      return data as { id: string; nome: string }[];
-    },
-  });
-
   useEffect(() => {
     if (!usuario) return;
     const next = {
@@ -389,7 +359,6 @@ export default function UsuarioForm() {
       senha: '', tipo: (usuario.roles || []).includes('agencia') ? 'agencia' : (usuario.tipo || 'funcionario'), ativo: usuario.ativo ?? true,
       perfis: usuario.roles || [], regioes_atendimento: usuario.regioes_atendimento || [],
       capacidade_diaria: usuario.capacidade_diaria || 10,
-      grade_comissao_id: userGrade || '',
       agencia_forma_recebimento: ((usuario as any).agencia_forma_recebimento === 'em_maos' ? 'em_maos' : 'comissao') as 'comissao' | 'em_maos',
     };
     setFormData((prev) => {
@@ -402,11 +371,10 @@ export default function UsuarioForm() {
         prev.perfis.every((p, i) => p === next.perfis[i]) &&
         prev.regioes_atendimento.length === next.regioes_atendimento.length &&
         prev.capacidade_diaria === next.capacidade_diaria &&
-        prev.grade_comissao_id === next.grade_comissao_id &&
         prev.agencia_forma_recebimento === next.agencia_forma_recebimento;
       return same ? prev : next;
     });
-  }, [usuario, userGrade]);
+  }, [usuario]);
 
   // Salvar usuário
   const saveUser = useMutation({
