@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { FileText, Send, Check, X, Eye, Car, Phone, User, ClipboardCopy, ExternalLink, Link2, FileDown, Mail, FileSignature, Loader2, Calendar, DollarSign, Shield, MapPin, Copy } from 'lucide-react';
+import { FileText, Send, Check, X, Eye, Car, Phone, User, ClipboardCopy, ExternalLink, Link2, FileDown, Mail, FileSignature, Loader2, Calendar, DollarSign, Shield, MapPin, Copy, AlertTriangle, ArrowRight } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -86,6 +86,7 @@ interface CotacaoDetalhesModalProps {
   onGerarContrato: (id: string) => void;
   onAceitar: (id: string) => void;
   onDuplicar?: (cotacao: CotacaoWithRelations) => void;
+  onContinuar?: (cotacao: CotacaoWithRelations) => void;
   isCopiandoWhatsApp: boolean;
   isGerandoContrato: boolean;
   canGenerateContract: boolean;
@@ -102,6 +103,7 @@ export function CotacaoDetalhesModal({
   onGerarContrato,
   onAceitar,
   onDuplicar,
+  onContinuar,
   isCopiandoWhatsApp,
   isGerandoContrato,
   canGenerateContract,
@@ -112,6 +114,7 @@ export function CotacaoDetalhesModal({
   const status = statusConfig[cotacao.status as StatusCotacaoExtended] || statusConfig.rascunho;
   const etapaVenda = getEtapaVenda(cotacao);
   const etapaInfo = etapaVenda ? etapaVendaConfig[etapaVenda] : null;
+  const dadosVeiculoIncompletos = !!cotacao.veiculo_placa && (!cotacao.veiculo_marca || !cotacao.veiculo_modelo || !cotacao.veiculo_ano);
 
   const formatPhone = (phone?: string | null) => {
     if (!phone) return null;
@@ -168,6 +171,13 @@ export function CotacaoDetalhesModal({
           <div className="px-6 pb-6 space-y-6">
             {/* Ações principais */}
             <div className="flex flex-wrap gap-2">
+              {cotacao.status === 'rascunho' && onContinuar && (
+                <Button onClick={() => onContinuar(cotacao)}>
+                  <ArrowRight className="h-4 w-4 mr-2" />
+                  Continuar cotação
+                </Button>
+              )}
+
               <Button
                 className="bg-green-600 hover:bg-green-700 text-white"
                 onClick={() => onCopiarWhatsApp(cotacao)}
@@ -314,6 +324,19 @@ export function CotacaoDetalhesModal({
                   <p className="font-medium">{cotacao.veiculo_placa || 'Não informada'}</p>
                 </div>
               </div>
+              {dadosVeiculoIncompletos && (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm">
+                  <span className="flex items-center gap-2 text-destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    Dados do veículo não carregados
+                  </span>
+                  {onContinuar && (
+                    <Button size="sm" variant="outline" onClick={() => onContinuar(cotacao)}>
+                      Continuar e buscar dados
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
             
             {/* Valores */}

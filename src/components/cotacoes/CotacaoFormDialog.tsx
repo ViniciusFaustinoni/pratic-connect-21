@@ -331,6 +331,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // cotacaoBase / leadId pré-carregando dados.
   // ========================================================================
   const draftDisabled = isEditando || !!cotacaoBase || !!leadId;
+  const isRestoringDraftRef = useRef(false);
   const watchedFormValues = form.watch();
   const draftSnapshot = useMemo<DraftPayload | null>(() => {
     if (draftDisabled || !open) return null;
@@ -355,12 +356,19 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       cenarioExterno,
       solicitarFipeMenor,
       justificativaFipeMenor,
+      veiculoEncontrado: veiculoEncontrado ? {
+        success: veiculoEncontrado.success,
+        extractedPlate: veiculoEncontrado.extractedPlate,
+        vehicleData: veiculoEncontrado.vehicleData,
+        fipeData: veiculoEncontrado.fipeData,
+      } : null,
     };
   }, [
     draftDisabled, open, watchedFormValues, placa, marcaSelecionada, modeloSelecionado,
     anoSelecionado, tipoFipeSelecionado, regiaoSelecionada, usoVeiculo, tipoPlacaSelecionado,
     combustivelSelecionado, diaVencimento, nomeAssociado, telefoneAssociado, emailAssociado,
     isIndicacao, indicadorId, indicadorNome, cenarioExterno, solicitarFipeMenor, justificativaFipeMenor,
+    veiculoEncontrado,
   ]);
 
   const draft = useCotacaoDraft({
@@ -377,6 +385,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     const payload = draft.getDraft();
     if (!payload) return;
     try {
+      isRestoringDraftRef.current = true;
       const f = (payload.form as Partial<CotacaoFormData>) || {};
       form.reset({ ...form.getValues(), ...f });
       if (typeof payload.placa === 'string') setPlaca(payload.placa);
@@ -406,9 +415,23 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       }
       if (typeof payload.solicitarFipeMenor === 'boolean') setSolicitarFipeMenor(payload.solicitarFipeMenor);
       if (typeof payload.justificativaFipeMenor === 'string') setJustificativaFipeMenor(payload.justificativaFipeMenor);
+      const draftVehicle = payload.veiculoEncontrado as PlateResult | null | undefined;
+      if (draftVehicle?.success && draftVehicle.vehicleData) {
+        setVeiculoEncontrado(draftVehicle);
+        if (draftVehicle.vehicleData.combustivel && !payload.combustivelSelecionado) {
+          setCombustivelSelecionado(draftVehicle.vehicleData.combustivel.toLowerCase());
+        }
+        if (draftVehicle.fipeData?.valor) {
+          form.setValue('valor_fipe', draftVehicle.fipeData.valor);
+        }
+      }
       draft.dismissBanner();
       toast.success('Rascunho restaurado.');
+      window.setTimeout(() => {
+        isRestoringDraftRef.current = false;
+      }, 0);
     } catch (e) {
+      isRestoringDraftRef.current = false;
       console.error('[restoreDraft]', e);
       toast.error('Não foi possível restaurar o rascunho.');
       draft.discardDraft();
@@ -694,6 +717,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // Resetar formulário quando o modal abre sem leadId (exceto em modo edição ou duplicação)
   useEffect(() => {
     if (open && !leadId && !cotacaoParaEditar && !cotacaoBase) {
+      if (isRestoringDraftRef.current) return;
       // Resetar todos os estados para começar limpo
       form.reset({
         lead_id: null,
@@ -732,6 +756,24 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       setCombustivelSelecionado('');
     }
   }, [open, leadId, cotacaoParaEditar, cotacaoBase, form]);
+
+  const restaurarVeiculoPorPlaca = useCallback(async (placaParaBuscar: string) => {
+    const placaLimpa = placaParaBuscar.trim().toUpperCase();
+    if (!placaLimpa) return;
+    try {
+      const resultado = await getByPlaca(placaLimpa);
+      if (resultado.success && resultado.vehicleData) {
+        setVeiculoEncontrado(resultado);
+        setPlaca(resultado.extractedPlate || resultado.vehicleData.placa || placaLimpa);
+        if (resultado.fipeData?.valor) form.setValue('valor_fipe', resultado.fipeData.valor);
+        if (resultado.vehicleData.combustivel) setCombustivelSelecionado(resultado.vehicleData.combustivel.toLowerCase());
+        toast.success('Dados do veículo recuperados pela placa.');
+      }
+    } catch (error) {
+      console.warn('[restaurarVeiculoPorPlaca]', error);
+      toast.info('Não foi possível recuperar os dados do veículo automaticamente. Busque a placa novamente.');
+    }
+  }, [form, getByPlaca]);
 
   // Carregar marcas quando dialog abre
   useEffect(() => {
@@ -1082,9 +1124,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             mesReferencia: null
           } : null
         });
+      } else if (cotacaoBase.veiculo_placa) {
+        restaurarVeiculoPorPlaca(cotacaoBase.veiculo_placa);
       }
     }
-  }, [cotacaoBase, open, form]);
+  }, [cotacaoBase, open, form, restaurarVeiculoPorPlaca]);
 
   // Efeito para preencher o formulário com dados da cotação para edição
   useEffect(() => {
@@ -1158,9 +1202,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             mesReferencia: null
           } : null
         });
+      } else if (cotacaoParaEditar.veiculo_placa) {
+        restaurarVeiculoPorPlaca(cotacaoParaEditar.veiculo_placa);
       }
     }
-  }, [cotacaoParaEditar, open, form]);
+  }, [cotacaoParaEditar, open, form, restaurarVeiculoPorPlaca]);
 
   // Restaurar planos selecionados ao editar cotação (após planosCalculados carregarem)
   useEffect(() => {
@@ -1397,6 +1443,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       // Extrair ano numérico do texto (ex: "2022 Gasolina" -> 2022)
       const anoTextoLocal = getAnoNome();
       const anoNumericoLocal = anoTextoLocal ? parseInt(anoTextoLocal.split(' ')[0]) : null;
+      const marcaVeiculo = getMarcaNome() || veiculoEncontrado?.vehicleData?.marca || null;
+      const modeloVeiculo = getModeloNome() || veiculoEncontrado?.vehicleData?.modelo || null;
+      const anoVeiculo = anoNumericoLocal || Number(veiculoEncontrado?.vehicleData?.ano_modelo || veiculoEncontrado?.vehicleData?.ano?.split('/')[0]) || null;
+
+      if (veiculoEncontrado?.success && (!marcaVeiculo || !modeloVeiculo || !anoVeiculo)) {
+        toast.error('Os dados do veículo ainda não foram carregados. Clique em buscar placa novamente antes de salvar.');
+        setIsSubmitting(false);
+        return;
+      }
       
       const valorAdicionalAtual = pendingFormData.valor_adicional || 0;
       
@@ -1413,9 +1468,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         valor_assistencia: planosSelecionados[0]?.valorAssistencia || 0,
         validade_dias: pendingFormData.validade_dias,
         // Dados do veículo
-        veiculo_marca: getMarcaNome() || null,
-        veiculo_modelo: getModeloNome() || null,
-        veiculo_ano: anoNumericoLocal,
+        veiculo_marca: marcaVeiculo,
+        veiculo_modelo: modeloVeiculo,
+        veiculo_ano: anoVeiculo,
         veiculo_placa: placa || veiculoEncontrado?.extractedPlate || null,
         veiculo_cor: veiculoEncontrado?.vehicleData?.cor || null,
         codigo_fipe: veiculoEncontrado?.fipeData?.codigo || null,
