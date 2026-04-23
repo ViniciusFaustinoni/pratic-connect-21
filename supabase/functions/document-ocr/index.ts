@@ -174,6 +174,29 @@ function validateChassi(chassi: string): boolean {
   return /^[A-HJ-NPR-Z0-9]{17}$/.test(cleaned);
 }
 
+/**
+ * Tenta sanear chassis "quase válidos" do OCR trocando caracteres comumente
+ * confundidos (O→0, I→1, Q→0, S→5) que são proibidos no padrão VIN.
+ * Retorna o chassi saneado se ficar válido, ou null caso contrário.
+ */
+function sanitizeChassiOCR(raw: string): string | null {
+  if (!raw) return null;
+  const cleaned = raw.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  if (cleaned.length !== 17) return null;
+  // Já é válido
+  if (validateChassi(cleaned)) return cleaned;
+  // Substituições proibidas no VIN → dígito equivalente
+  const fixed = cleaned
+    .replace(/O/g, '0')
+    .replace(/I/g, '1')
+    .replace(/Q/g, '0');
+  if (validateChassi(fixed)) return fixed;
+  // Tentativa adicional com S→5 (menos comum mas ocorre)
+  const fixed2 = fixed.replace(/S/g, '5');
+  if (validateChassi(fixed2)) return fixed2;
+  return null;
+}
+
 // Mapa de dígitos comumente confundidos por modelos de visão
 const DIGIT_CONFUSIONS: Record<number, number[]> = {
   0: [8, 6],
@@ -432,7 +455,16 @@ function tryRepairTruncatedJSON(raw: string): object | null {
 
     if (tipoMatch) {
       const dados: Record<string, string | null> = {};
-      const dadosFields = ['nome', 'cpf', 'rg', 'placa', 'renavam', 'chassi', 'marca', 'modelo', 'cor', 'combustivel', 'motor', 'numero_motor', 'nome_proprietario', 'categoria', 'numero_registro', 'validade', 'data_expedicao', 'orgao_expedidor', 'variante'];
+      const dadosFields = [
+        // pessoais
+        'nome', 'cpf', 'rg', 'data_nascimento', 'numero_registro', 'validade', 'data_expedicao', 'orgao_expedidor', 'categoria', 'variante',
+        // veículo
+        'placa', 'renavam', 'chassi', 'marca', 'modelo', 'cor', 'combustivel', 'motor', 'numero_motor', 'nome_proprietario',
+        // comprovante de residência
+        'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'cep', 'nome_titular', 'tipo_comprovante', 'data_emissao',
+        // ATPV-e / NF veículo
+        'nome_comprador', 'cpf_comprador', 'cpf_cnpj_comprador', 'valor_nota_fiscal',
+      ];
       for (const field of dadosFields) {
         const m = raw.match(new RegExp(`"${field}"\\s*:\\s*"([^"]+)"`));
         if (m) dados[field] = m[1];
@@ -1312,6 +1344,26 @@ function extractCandidatesFromText(text: string, field: string): string[] {
       const re = /\b([A-HJ-NPR-Z0-9]{17})\b/gi;
       let m;
       while ((m = re.exec(text)) !== null) out.add(m[1].toUpperCase());
+      break;
+    }
+    case 'numero_motor':
+    case 'motor': {
+      // "MOTOR Nº ABC1234567" / "MOTOR: ABC-1234"
+      const re = /MOTOR[^\w]{0,8}([A-Z0-9-]{6,17})/gi;
+      let m;
+      while ((m = re.exec(text)) !== null) {
+        const cand = m[1].replace(/[^A-Z0-9-]/gi, '').toUpperCase();
+        if (cand.length >= 6) out.add(cand);
+      }
+      break;
+    }
+    case 'cep': {
+      const re = /\b(\d{5}-?\d{3})\b/g;
+      let m;
+      while ((m = re.exec(text)) !== null) {
+        const c = m[1].replace(/\D/g, '');
+        if (c.length === 8) out.add(`${c.slice(0, 5)}-${c.slice(5)}`);
+      }
       break;
     }
     case 'cpf_comprador':
