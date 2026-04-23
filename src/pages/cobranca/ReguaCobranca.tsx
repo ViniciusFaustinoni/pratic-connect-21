@@ -237,6 +237,17 @@ export default function ReguaCobranca() {
           </SelectContent>
         </Select>
         {status && getStatusBadge(status)}
+        {value && (
+          <Link
+            to="/configuracoes/integracoes/whatsapp?tab=templates"
+            target="_blank"
+            rel="noreferrer"
+            title="Editar template no catálogo Meta"
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+          </Link>
+        )}
       </div>
     );
   };
