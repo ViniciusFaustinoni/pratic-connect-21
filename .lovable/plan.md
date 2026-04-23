@@ -1,46 +1,110 @@
 
 
-## Paginação incremental no Histórico de Vínculo
+## Métricas de falha do fluxo de criação de cotação
 
 ### Diagnóstico
 
-`useHistoricoVinculoFiltrado` hoje busca em uma única query com `limit 200` e exibe um aviso de truncamento. Em rastreadores com muito histórico, o usuário não consegue ver registros antigos e a lista de 200 itens já é pesada de rolar.
+Hoje `useCriarCotacao` lança erro e o `Cotador.tsx` apenas mostra um toast (com `descreverErroSupabase`) e dá `console.error`. Não temos:
+- Persistência das falhas para análise temporal.
+- Agregação por código (`42501`, `23502`, `23505`, timeout, network, validação local).
+- Visibilidade para gestor monitorar a taxa de erro.
 
 ### Mudanças
 
-**A. `src/hooks/useHistoricoVinculoFiltrado.ts` — virar `useInfiniteQuery`**
+**A. Nova tabela `cotacao_failure_metrics` (migration)**
 
-- Trocar `useQuery` por `useInfiniteQuery` do `@tanstack/react-query`.
-- Tamanho de página: `PAGE_SIZE = 25`.
-- Paginação por **keyset** em `created_at` (mais robusto que offset com filtros): cada página usa `.lt('created_at', cursor)` quando há `pageParam`, mantendo `.order('created_at', { ascending: false }).limit(PAGE_SIZE + 1)`.
-  - Se vier `PAGE_SIZE + 1` linhas → existe próxima página; o cursor é o `created_at` do último item retido (descarta o extra).
-  - Se vier `≤ PAGE_SIZE` → `hasNextPage = false`.
-- Retornar `{ items, hasNextPage, fetchNextPage, isFetchingNextPage, isLoading }` (achatar páginas internamente para o componente continuar consumindo `items`).
-- `queryKey` inclui todos os filtros; mudar filtro reseta a paginação naturalmente.
-- Remover a flag `truncated` (não faz mais sentido com paginação).
+```sql
+create table public.cotacao_failure_metrics (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid,                 -- auth.uid() do solicitante (pode ser null se anon)
+  vendedor_nome text,           -- snapshot do nome do profile p/ filtro fácil
+  contexto text not null,       -- 'criar_cotacao' (extensível)
+  codigo text not null,         -- '42501' | '23502' | '23505' | 'timeout' | 'network' | 'validacao_local' | 'outro'
+  mensagem text,                -- e.message bruto (até 1000 chars)
+  detalhes text,                -- e.details/hint (até 1000 chars)
+  coluna text,                  -- coluna extraída (NOT NULL) quando disponível
+  payload_resumo jsonb,         -- snapshot mínimo: plano_id, valor_fipe, lead_id, categoria, regiao
+  user_agent text,
+  rota text,                    -- window.location.pathname
+  created_at timestamptz default now()
+);
 
-**B. `src/components/rastreadores/HistoricoVinculoSection.tsx`**
+create index on public.cotacao_failure_metrics (created_at desc);
+create index on public.cotacao_failure_metrics (codigo, created_at desc);
+create index on public.cotacao_failure_metrics (user_id, created_at desc);
 
-- Consumir o novo formato do hook.
-- Remover o aviso amarelo de "Mostrando os últimos 200 registros".
-- Contador no badge: mostrar `items.length` + sufixo `+` quando `hasNextPage`.
-- Adicionar no fim da lista um botão **"Carregar mais"** (`Button variant="outline"`, full width, com ícone de chevron) que só aparece quando `hasNextPage`. Estado de loading do botão usa `isFetchingNextPage` (texto "Carregando…" + spinner).
-- Auto-load opcional via `IntersectionObserver`: um `<div ref={sentinelRef} />` logo antes do botão dispara `fetchNextPage()` quando entra na viewport — UX de scroll infinito sem perder o botão como fallback acessível.
-- Ao trocar qualquer filtro (placa/período), o React Query recria a query (novo `queryKey`) e o scroll/contador volta ao zero — comportamento esperado.
+alter table public.cotacao_failure_metrics enable row level security;
+
+-- INSERT: qualquer autenticado (próprio user_id) ou anon (user_id null)
+create policy "Auth pode registrar próprias falhas"
+on public.cotacao_failure_metrics for insert
+to authenticated
+with check (user_id = auth.uid());
+
+create policy "Anon pode registrar falhas anônimas"
+on public.cotacao_failure_metrics for insert
+to anon
+with check (user_id is null);
+
+-- SELECT: só admin / gestor / monitoramento podem ler
+create policy "Gestores leem métricas"
+on public.cotacao_failure_metrics for select
+to authenticated
+using (
+  has_role(auth.uid(), 'admin')
+  or has_role(auth.uid(), 'diretor')
+  or has_role(auth.uid(), 'gestor')
+  or has_role(auth.uid(), 'coordenador_monitoramento')
+);
+```
+
+**B. View agregada `vw_cotacao_failure_stats`** (24h, 7d, 30d) — agrupa por código com `count`, `last_seen`, `unique_users`.
+
+**C. Hook `useRegistrarFalhaCotacao` + classificador**
+
+- Novo arquivo `src/lib/failureMetrics.ts`:
+  - `classificarErro(err): { codigo, coluna? }` — retorna chave estável (`'42501'`, `'23502'`, `'23505'`, `'timeout'`, `'network'`, `'validacao_local'`, `'outro'`).
+  - `registrarFalhaCotacao({ contexto, erro, payload })` — faz `supabase.from('cotacao_failure_metrics').insert(...)`. Truncar strings, capturar `user_id` via `supabase.auth.getUser()`. Fire-and-forget (`.then().catch(swallow)`), nunca propaga erro pra UI.
+
+**D. Instrumentação do `Cotador.tsx`**
+
+- No `catch` do `criarCotacao.mutateAsync(...)` (linhas 924-928), antes do toast, chamar `registrarFalhaCotacao({ contexto: 'criar_cotacao', erro: error, payload: { plano_id, valor_fipe, lead_id, categoria_veiculo, regiao } })`. Sem await — não bloqueia UX.
+
+**E. Painel de monitoramento (rota `/admin/monitoramento/erros-cotacao`)**
+
+- Nova página `src/pages/admin/MonitoramentoErrosCotacao.tsx` + entrada no menu admin.
+- Hook `useFailureStats(periodo: '24h'|'7d'|'30d')` que lê de `vw_cotacao_failure_stats`.
+- UI:
+  - 4 cards-resumo: total, % RLS, % NOT NULL, % duplicidade.
+  - Tabela: código, descrição amigável, contagem, última ocorrência, usuários únicos.
+  - Lista das 50 ocorrências mais recentes (timestamp, código, mensagem, vendedor, rota) — só leitura.
+  - Filtro de período (24h padrão).
+- Acesso restrito via guard `RequireRole(['admin','diretor','gestor','coordenador_monitoramento'])` (já existe pattern no projeto).
 
 ### Arquivos editados
 
-- `src/hooks/useHistoricoVinculoFiltrado.ts` — migrar para `useInfiniteQuery` + cursor por `created_at`.
-- `src/components/rastreadores/HistoricoVinculoSection.tsx` — botão "Carregar mais" + sentinel IntersectionObserver; remover aviso de truncamento.
+- **Migration nova** — tabela `cotacao_failure_metrics`, índices, RLS, view agregada.
+- **Novo** `src/lib/failureMetrics.ts` — classificador + registrador fire-and-forget.
+- **Novo** `src/hooks/useFailureStats.ts` — leitura agregada.
+- **Novo** `src/pages/admin/MonitoramentoErrosCotacao.tsx` — painel.
+- `src/pages/vendas/Cotador.tsx` — `registrarFalhaCotacao` no catch.
+- `src/App.tsx` (ou router equivalente) — registrar rota `/admin/monitoramento/erros-cotacao`.
+- Menu admin (descobrir o arquivo: `src/components/layout/AdminSidebar.tsx` ou similar) — link para o painel.
 
 ### O que NÃO muda
 
-- Tabela `rastreadores_vinculo_historico`, RLS, trigger e filtros (placa/período/IDs) — idênticos.
-- Integrações em `DetalhesRastreadorDialog` e `VeiculoDetalhesModal` — nenhuma alteração de chamada (a API do componente não muda).
+- `descreverErroSupabase` e o toast no usuário — continuam idênticos.
+- A RLS de `cotacoes` e a lógica de criação — intocadas.
+- Outros fluxos (criação de leads, contratos, etc.) — fora de escopo. A tabela `cotacao_failure_metrics` é dedicada ao fluxo de cotação (campo `contexto` permite expandir depois sem migration).
 
 ### Riscos
 
-- **Empate de `created_at`** (registros gravados no mesmo timestamp pelo trigger): keyset puro pode pular itens. Mitigação: o `.order` secundário fica em `id` desc e o cursor passa a ser composto `(created_at, id)` usando `.or('created_at.lt.X,and(created_at.eq.X,id.lt.Y)')`. Implemento já com o cursor composto para não voltar nessa tarefa.
-- IntersectionObserver em modal com scroll interno: o `root` do observer é o container scrollável da modal. Se a detecção falhar em algum browser, o botão "Carregar mais" continua funcionando — fallback garantido.
-- `placa` filtro com `or ilike` + paginação keyset: combina sem problemas (o cursor é aplicado depois dos filtros pelo Postgrest).
+- **Falha ao registrar** (RLS quebrada, rede caída): a função é fire-and-forget e nunca lança — pior caso, perdemos a métrica daquela falha (aceito).
+- **PII em `mensagem`**: erros do Postgres não costumam ter dados sensíveis, mas trunco em 1000 chars e mantenho `payload_resumo` com IDs (não com nomes/CPF).
+- **Volume**: em pior cenário (1k cotações/dia, 5% falha) ≈ 50 linhas/dia. Sem necessidade de retenção automática agora; se virar problema, adiciono job de purge >90d em outra tarefa.
+
+### Fora de escopo (mencionado, não implementado)
+
+- Alertas proativos (e-mail/WhatsApp quando taxa > X%) — pode ser próxima tarefa via cron Edge Function lendo `vw_cotacao_failure_stats`.
+- Instrumentação de outros fluxos (leads, contratos) — mesma infra serve, mas só depois de validar este.
 
