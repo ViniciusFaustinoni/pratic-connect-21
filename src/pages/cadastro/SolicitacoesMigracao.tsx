@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { differenceInHours, differenceInMinutes, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { MigracaoDiretaDialog } from '@/components/cadastro/MigracaoDiretaDialog';
+import { placasEquivalentes } from '@/lib/placa-utils';
 
 function calcPrazo(createdAt: string, prazoHoras: number) {
   const deadline = new Date(new Date(createdAt).getTime() + prazoHoras * 60 * 60 * 1000);

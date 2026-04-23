@@ -21,6 +21,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
 import { syncCnhDataToAssociado } from '@/utils/syncCnhData';
+import { compararPlacasComDetalhe } from '@/lib/placa-utils';
 
 
 export type TipoDocumentoDetectado = 'cnh' | 'rg' | 'crlv' | 'nota_fiscal_veiculo' | 'atpv_e' | 'comprovante_residencia' | 'outro';
