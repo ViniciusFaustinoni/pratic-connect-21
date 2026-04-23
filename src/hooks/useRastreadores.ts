@@ -377,8 +377,18 @@ export function useUpdateRastreadorStatus() {
 
       if (fetchError) throw fetchError;
 
-      // 2. Se estava instalado e vai para outro status, desvincular na plataforma
-      if (rastreadorAtual?.status === 'instalado' && status !== 'instalado' && rastreadorAtual.veiculo_id) {
+      // Status que DESVINCULAM o rastreador do veículo (rastreador deixa fisicamente
+      // o veículo ou é descartado). Manutenção/reagendamento/retirada pendente
+      // PRESERVAM o vínculo — é o mesmo equipamento daquele veículo, só temporariamente
+      // fora de operação.
+      const STATUS_DESVINCULA_VEICULO: StatusRastreador[] = [
+        'estoque', 'baixado', 'retorno_base', 'triagem',
+        'em_analise_plataforma', 'em_garantia',
+      ];
+      const deveDesvincular = STATUS_DESVINCULA_VEICULO.includes(status);
+
+      // 2. Se estava instalado e vai para um status que desvincula, chamar plataforma externa
+      if (rastreadorAtual?.status === 'instalado' && deveDesvincular && rastreadorAtual.veiculo_id) {
         console.log(`Desvinculando rastreador ${rastreadorAtual.imei} da plataforma ${rastreadorAtual.plataforma}...`);
         
         if (rastreadorAtual.plataforma === 'rede_veiculos') {
