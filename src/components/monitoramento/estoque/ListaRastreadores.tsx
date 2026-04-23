@@ -199,12 +199,19 @@ export function ListaRastreadores() {
 
       const statusAnterior = rastreador?.status;
 
+      // Whitelist canônica: só zera vínculo em status terminais/pós-retirada.
+      // Manutenção, retirada_pendente, reagendar_manutencao PRESERVAM veiculo_id.
+      const STATUS_DESVINCULA_VEICULO: StatusRastreador[] = [
+        'estoque', 'baixado', 'retorno_base', 'triagem', 'em_analise_plataforma', 'em_garantia',
+      ];
+      const desvincula = STATUS_DESVINCULA_VEICULO.includes(novoStatus);
+
       // Update status
       const { error: updateError } = await supabase
         .from('rastreadores')
-        .update({ 
+        .update({
           status: novoStatus,
-          veiculo_id: novoStatus !== 'instalado' ? null : undefined,
+          ...(desvincula ? { veiculo_id: null } : {}),
         })
         .eq('id', id);
 
