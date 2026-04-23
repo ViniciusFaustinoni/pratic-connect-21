@@ -80,8 +80,8 @@ export function AssociadoFilters({
         ? [initialFilters.status]
         : []
   );
-  const [plano, setPlano] = useState(initialFilters?.plano_id || '');
-  const [cidade, setCidade] = useState(initialFilters?.cidade || '');
+  const [plano, setPlano] = useState(initialFilters?.plano_id || 'all');
+  const [cidade, setCidade] = useState(initialFilters?.cidade || 'all');
   const [dataInicio, setDataInicio] = useState(initialFilters?.data_adesao_inicio || '');
   const [dataFim, setDataFim] = useState(initialFilters?.data_adesao_fim || '');
 
