@@ -269,6 +269,8 @@ export default function ReguaCobranca() {
   });
 
   const previewCtx: PreviewContexto = previewCtxData ?? {};
+
+  const handleAddEtapa = () => {
     if (novaEtapa.dias === undefined || !novaEtapa.acao) return;
     
     const nova: Etapa = {
