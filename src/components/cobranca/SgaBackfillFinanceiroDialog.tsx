@@ -358,7 +358,14 @@ export function SgaBackfillFinanceiroDialog() {
                 </li>
                 <li>
                   <span className="font-medium text-foreground">Processar fila</span> — executa lotes de 50 jobs e atualiza boletos.
-                  <Button size="sm" variant="default" className="ml-2 h-7" onClick={handleProcessar} disabled={running}>
+                  <Button
+                    size="sm"
+                    variant="default"
+                    className="ml-2 h-7"
+                    onClick={handleProcessar}
+                    disabled={running || restricaoHinovaAtiva}
+                    title={restricaoHinovaAtiva ? 'Bloqueado: usuário Hinova com restrição. Solicite liberação no painel SGA.' : undefined}
+                  >
                     {running ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />} Processar
                   </Button>
                 </li>
