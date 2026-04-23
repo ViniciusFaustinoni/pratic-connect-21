@@ -8963,6 +8963,7 @@ export type Database = {
           veiculo_financeira: string | null
           veiculo_marca: string | null
           veiculo_modelo: string | null
+          veiculo_motor: string | null
           veiculo_placa: string | null
           veiculo_procedencia: string | null
           veiculo_renavam: string | null
@@ -9086,6 +9087,7 @@ export type Database = {
           veiculo_financeira?: string | null
           veiculo_marca?: string | null
           veiculo_modelo?: string | null
+          veiculo_motor?: string | null
           veiculo_placa?: string | null
           veiculo_procedencia?: string | null
           veiculo_renavam?: string | null
@@ -9209,6 +9211,7 @@ export type Database = {
           veiculo_financeira?: string | null
           veiculo_marca?: string | null
           veiculo_modelo?: string | null
+          veiculo_motor?: string | null
           veiculo_placa?: string | null
           veiculo_procedencia?: string | null
           veiculo_renavam?: string | null
@@ -27449,6 +27452,7 @@ export type Database = {
           modelo: string
           motivo_inativacao: string | null
           motivo_recusa_veiculo: string | null
+          numero_motor: string | null
           placa: string
           placa_definitiva_atualizada_em: string | null
           placa_provisoria: string | null
@@ -27513,6 +27517,7 @@ export type Database = {
           modelo: string
           motivo_inativacao?: string | null
           motivo_recusa_veiculo?: string | null
+          numero_motor?: string | null
           placa: string
           placa_definitiva_atualizada_em?: string | null
           placa_provisoria?: string | null
@@ -27577,6 +27582,7 @@ export type Database = {
           modelo?: string
           motivo_inativacao?: string | null
           motivo_recusa_veiculo?: string | null
+          numero_motor?: string | null
           placa?: string
           placa_definitiva_atualizada_em?: string | null
           placa_provisoria?: string | null
