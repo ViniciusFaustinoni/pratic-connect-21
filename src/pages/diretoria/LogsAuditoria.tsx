@@ -213,7 +213,6 @@ export default function LogsAuditoria() {
                   const resumo = gerarResumoAuditoria(log);
                   return (
                     <>
-                      <>
                         <TableRow className="border-b-0">
                           <TableCell className="font-mono text-sm">{format(new Date(log.created_at), 'dd/MM/yy HH:mm', { locale: ptBR })}</TableCell>
                           <TableCell>{log.usuario_nome || log.usuario_id?.slice(0, 8) || '-'}</TableCell>
@@ -262,7 +261,7 @@ export default function LogsAuditoria() {
                             </TableCell>
                           </TableRow>
                         )}
-                      </>
+                    </>
                   );
                 })
               )}
