@@ -131,7 +131,7 @@ export function AssociadoFilters({
     (dataInicio || dataFim ? 1 : 0);
 
   return (
-    <Sheet open={open} onOpenChange={onClose}>
+    <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <SheetContent className="flex flex-col">
         <SheetHeader>
           <SheetTitle>Filtros Avançados</SheetTitle>
