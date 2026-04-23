@@ -98,7 +98,10 @@ const MIME_TYPE_MAP: Record<string, string> = {
   'pdf': 'application/pdf',
 };
 
-export function UnifiedDocumentUploader({
+export const UnifiedDocumentUploader = forwardRef<
+  UnifiedDocumentUploaderHandle,
+  UnifiedDocumentUploaderProps
+>(function UnifiedDocumentUploader({
   cotacaoId,
   contratoId,
   veiculoId,
@@ -107,10 +110,11 @@ export function UnifiedDocumentUploader({
   cpfEsperado,
   nomeEsperado,
   placaEsperada,
-}: UnifiedDocumentUploaderProps) {
+}, ref) {
   const [documents, setDocuments] = useState<DocumentoUnificado[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [reprocessingTipo, setReprocessingTipo] = useState<TipoDocumentoDetectado | null>(null);
   const processFile = useCallback(async (file: File) => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
     const allowedExtensions = ['jpg', 'jpeg', 'png', 'webp', 'pdf', 'jfif', 'bmp', 'gif', 'heic'];
