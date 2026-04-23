@@ -20,6 +20,8 @@ import {
   type TipoDocumentoContrato,
   type OcrResultado 
 } from '@/hooks/useContratoDocumentos';
+import { OcrDadosEditor } from '@/components/ocr/OcrDadosEditor';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface UploadedDocument {
   id: string;
