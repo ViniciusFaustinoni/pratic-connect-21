@@ -581,10 +581,18 @@ const App = () => (
               <Route path="/financeiro/extratos-bancarios" element={<ExtratosBancarios />} />
               <Route path="/financeiro/extratos/:id" element={<ExtratoDetalhe />} />
               <Route path="/financeiro/contas-bancarias" element={<ContasBancarias />} />
-              <Route path="/financeiro/configuracoes/comissionamento-externo" element={<ComissionamentoExternoConfig />} />
+              <Route path="/financeiro/configuracoes/comissionamento-externo" element={<Navigate to="/comissoes" replace />} />
               <Route path="/financeiro/venda-externa" element={<DashboardVendaExterna />} />
               <Route path="/financeiro/venda-externa/:vendedorId" element={<GestaoContaVendedor />} />
               <Route path="/perfil/conta-corrente" element={<ContaCorrenteVendedor />} />
+
+              {/* Comissões */}
+              <Route path="/comissoes" element={<ComissoesDashboard />} />
+              <Route path="/comissoes/grades" element={<ComissoesGrades />} />
+              <Route path="/comissoes/grades/nova" element={<ComissoesGradeForm />} />
+              <Route path="/comissoes/grades/:id" element={<ComissoesGradeForm />} />
+              <Route path="/comissoes/atribuicao" element={<ComissoesAtribuicao />} />
+              <Route path="/comissoes/pagamentos" element={<ComissoesPagamentos />} />
 
               {/* Redirects das rotas antigas /cobranca/* para o módulo unificado */}
               <Route path="/cobranca" element={<Navigate to="/financeiro/cobrancas/recuperacao" replace />} />
