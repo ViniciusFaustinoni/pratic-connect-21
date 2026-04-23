@@ -183,7 +183,92 @@ export default function ReguaCobranca() {
     }
   });
 
-  const handleAddEtapa = () => {
+  // ===== Preview de mensagens =====
+  // Seletor de associado: busca rápida por nome/CPF, preview com dados reais
+  const [previewAssociadoId, setPreviewAssociadoId] = useState<string>('');
+  const [associadoSearch, setAssociadoSearch] = useState<string>('');
+
+  const { data: associadosOptions } = useQuery({
+    queryKey: ['regua-preview-associados', associadoSearch],
+    queryFn: async () => {
+      let query = supabase
+        .from('associados')
+        .select('id, nome, cpf')
+        .eq('status', 'ativo')
+        .order('nome')
+        .limit(20);
+      if (associadoSearch.trim().length >= 2) {
+        const term = `%${associadoSearch.trim()}%`;
+        query = query.or(`nome.ilike.${term},cpf.ilike.${term}`);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // Dados da última cobrança pendente desse associado (SGA preferencial)
+  const { data: previewCtxData } = useQuery({
+    queryKey: ['regua-preview-ctx', previewAssociadoId],
+    enabled: !!previewAssociadoId,
+    queryFn: async () => {
+      const { data: assoc } = await supabase
+        .from('associados')
+        .select('id, nome')
+        .eq('id', previewAssociadoId)
+        .maybeSingle();
+
+      // Tenta cobrança SGA com linha digitável
+      const { data: cobSga } = await supabase
+        .from('cobrancas')
+        .select('valor_final, data_vencimento, linha_digitavel, referencia_mes, referencia_ano, veiculo_id')
+        .eq('associado_id', previewAssociadoId)
+        .eq('origem', 'sga_hinova')
+        .order('data_vencimento', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      let cobAsaas: { valor: number; data_vencimento: string; linha_digitavel: string | null; veiculo_id: string | null } | null = null;
+      if (!cobSga) {
+        const { data } = await supabase
+          .from('asaas_cobrancas')
+          .select('valor, data_vencimento, linha_digitavel, veiculo_id')
+          .eq('associado_id', previewAssociadoId)
+          .order('data_vencimento', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        cobAsaas = data as typeof cobAsaas;
+      }
+
+      const veiculoId = cobSga?.veiculo_id ?? cobAsaas?.veiculo_id ?? null;
+      let placa: string | null = null;
+      let modelo: string | null = null;
+      if (veiculoId) {
+        const { data: vei } = await supabase
+          .from('veiculos')
+          .select('placa, modelo, marca')
+          .eq('id', veiculoId)
+          .maybeSingle();
+        placa = vei?.placa ?? null;
+        modelo = vei ? [vei.marca, vei.modelo].filter(Boolean).join(' ') : null;
+      }
+
+      const ctx: PreviewContexto = {
+        nome: assoc?.nome ?? null,
+        valor: cobSga?.valor_final ?? cobAsaas?.valor ?? null,
+        vencimento: cobSga?.data_vencimento ?? cobAsaas?.data_vencimento ?? null,
+        mes_ano: cobSga?.referencia_mes && cobSga?.referencia_ano
+          ? `${String(cobSga.referencia_mes).padStart(2, '0')}/${cobSga.referencia_ano}`
+          : null,
+        placa,
+        modelo,
+        linha_digitavel: cobSga?.linha_digitavel ?? cobAsaas?.linha_digitavel ?? null,
+      };
+      return ctx;
+    },
+  });
+
+  const previewCtx: PreviewContexto = previewCtxData ?? {};
     if (novaEtapa.dias === undefined || !novaEtapa.acao) return;
     
     const nova: Etapa = {
