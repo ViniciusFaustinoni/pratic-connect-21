@@ -199,10 +199,8 @@ export default function PropostaAnalise() {
         veiculoRenavam: veiculoRenavam || undefined,
         veiculoChassi: veiculoChassi || undefined,
       });
-      toast.success('Proposta aprovada!', {
-        description: 'Após a instalação, o monitoramento dará o segundo check para liberação total da Proteção 360 e do app do associado.',
-        duration: 6000,
-      });
+      // Toast de sucesso já é disparado pelo hook useAprovarProposta com a
+      // mensagem correta vinda do backend (distingue assistência vs Proteção 360).
       // Navegar para próxima ou voltar para lista
       if (nextProposta) {
         navigate(`/cadastro/propostas/${nextProposta.id}`);
@@ -446,10 +444,17 @@ export default function PropostaAnalise() {
             <ClipboardCheck className="h-5 w-5 text-info mt-0.5 shrink-0" />
             <div className="flex-1">
               <p className="font-semibold text-info">Análise documental disponível</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Você pode revisar documentos e contrato agora. A <strong>aprovação final</strong> será liberada após a execução da vistoria/instalação agendada.
-                Em seguida, o monitoramento dará o <strong>segundo check</strong> para liberar a Proteção 360 e o app do associado.
-              </p>
+              {proposta?.plano_tem_roubo_furto ? (
+                <p className="text-sm text-muted-foreground mt-1">
+                  Você pode revisar documentos e contrato agora. A <strong>aprovação final</strong> será liberada após a execução da vistoria/instalação agendada.
+                  Em seguida, o monitoramento dará o <strong>segundo check</strong> para liberar a Proteção 360 e o app do associado.
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground mt-1">
+                  Você pode revisar documentos e contrato agora. A <strong>aprovação final</strong> será liberada após a execução da vistoria.
+                  Este plano de assistência <strong>não inclui</strong> instalação de rastreador nem segundo check de monitoramento.
+                </p>
+              )}
             </div>
           </div>
         </div>
