@@ -384,6 +384,16 @@ const ContratoRedirect = () => {
   return <Navigate to="/vendas/contratos" state={{ openContrato: id }} replace />;
 };
 
+// Redirects das rotas antigas /cobranca/* preservando o :id
+const RedirectInadimplente = () => {
+  const { id } = useParams();
+  return <Navigate to={`/financeiro/cobrancas/recuperacao/inadimplentes/${id}`} replace />;
+};
+const RedirectAcordo = () => {
+  const { id } = useParams();
+  return <Navigate to={`/financeiro/cobrancas/recuperacao/acordos/${id}`} replace />;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
