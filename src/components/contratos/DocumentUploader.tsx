@@ -205,10 +205,10 @@ export function DocumentUploader({
 
     if (doc) {
       const handleSaveOcrEdits = async (editados: Record<string, string>) => {
-        const novoOcr: OcrResultado = {
+        const novoOcr = {
           ...(doc.ocr as OcrResultado),
-          dados: { ...((doc.ocr?.dados as Record<string, unknown>) || {}), ...editados },
-        };
+          dados: { ...((doc.ocr?.dados as Record<string, string>) || {}), ...editados } as any,
+        } as OcrResultado;
         if (!doc.id.startsWith('temp-')) {
           const { error } = await supabase
             .from('contratos_documentos')
@@ -320,8 +320,8 @@ export function DocumentUploader({
             dados={doc.ocr?.dados as Record<string, unknown>}
             tipoDocumento={tipo}
             confianca={doc.ocr?.confianca}
-            sugestao={doc.ocr?.sugestao as any}
-            legivel={doc.ocr?.legivel}
+            sugestao={(doc.ocr as any)?.sugestao}
+            legivel={(doc.ocr as any)?.legivel}
             onSave={handleSaveOcrEdits}
           />
         )}
