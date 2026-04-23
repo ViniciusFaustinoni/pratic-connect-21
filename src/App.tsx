@@ -156,6 +156,11 @@ const Logs = lazy(() => import("./pages/configuracoes/Logs"));
 const GradesComissao = lazy(() => import("./pages/configuracoes/GradesComissao"));
 const GradeComissaoForm = lazy(() => import("./pages/configuracoes/GradeComissaoForm"));
 const AtribuicaoGrades = lazy(() => import("./pages/configuracoes/AtribuicaoGrades"));
+const ComissoesDashboard = lazy(() => import("./pages/comissoes/Dashboard"));
+const ComissoesGrades = lazy(() => import("./pages/comissoes/Grades"));
+const ComissoesGradeForm = lazy(() => import("./pages/comissoes/GradeForm"));
+const ComissoesAtribuicao = lazy(() => import("./pages/comissoes/Atribuicao"));
+const ComissoesPagamentos = lazy(() => import("./pages/comissoes/Pagamentos"));
 const ComissionamentoPlano = lazy(() => import("./pages/configuracoes/ComissionamentoPlano"));
 const AgenteConsultorIA = lazy(() => import("./pages/configuracoes/AgenteConsultorIA"));
 const ApiDocumentation = lazy(() => import("./pages/configuracoes/ApiDocumentation"));
@@ -394,6 +399,10 @@ const RedirectAcordo = () => {
   const { id } = useParams();
   return <Navigate to={`/financeiro/cobrancas/recuperacao/acordos/${id}`} replace />;
 };
+const RedirectGradeComissao = () => {
+  const { id } = useParams();
+  return <Navigate to={`/comissoes/grades/${id}`} replace />;
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -576,10 +585,18 @@ const App = () => (
               <Route path="/financeiro/extratos-bancarios" element={<ExtratosBancarios />} />
               <Route path="/financeiro/extratos/:id" element={<ExtratoDetalhe />} />
               <Route path="/financeiro/contas-bancarias" element={<ContasBancarias />} />
-              <Route path="/financeiro/configuracoes/comissionamento-externo" element={<ComissionamentoExternoConfig />} />
+              <Route path="/financeiro/configuracoes/comissionamento-externo" element={<Navigate to="/comissoes" replace />} />
               <Route path="/financeiro/venda-externa" element={<DashboardVendaExterna />} />
               <Route path="/financeiro/venda-externa/:vendedorId" element={<GestaoContaVendedor />} />
               <Route path="/perfil/conta-corrente" element={<ContaCorrenteVendedor />} />
+
+              {/* Comissões */}
+              <Route path="/comissoes" element={<ComissoesDashboard />} />
+              <Route path="/comissoes/grades" element={<ComissoesGrades />} />
+              <Route path="/comissoes/grades/nova" element={<ComissoesGradeForm />} />
+              <Route path="/comissoes/grades/:id" element={<ComissoesGradeForm />} />
+              <Route path="/comissoes/atribuicao" element={<ComissoesAtribuicao />} />
+              <Route path="/comissoes/pagamentos" element={<ComissoesPagamentos />} />
 
               {/* Redirects das rotas antigas /cobranca/* para o módulo unificado */}
               <Route path="/cobranca" element={<Navigate to="/financeiro/cobrancas/recuperacao" replace />} />
@@ -733,11 +750,11 @@ const App = () => (
                 <Route path="integracoes/api-keys" element={<IntegracaoApiKeys />} />
                 <Route path="integracoes/fontes-leads" element={<IntegracaoFontesLeads />} />
                 <Route path="integracoes/sga-hinova" element={<IntegracaoSGAHinova />} />
-                <Route path="grades-comissao" element={<GradesComissao />} />
-                <Route path="grades-comissao/nova" element={<GradeComissaoForm />} />
-                <Route path="grades-comissao/:id" element={<GradeComissaoForm />} />
-                <Route path="atribuicao-comissoes" element={<AtribuicaoGrades />} />
-                <Route path="comissionamento-plano" element={<ComissionamentoPlano />} />
+                <Route path="grades-comissao" element={<Navigate to="/comissoes/grades" replace />} />
+                <Route path="grades-comissao/nova" element={<Navigate to="/comissoes/grades/nova" replace />} />
+                <Route path="grades-comissao/:id" element={<RedirectGradeComissao />} />
+                <Route path="atribuicao-comissoes" element={<Navigate to="/comissoes/atribuicao" replace />} />
+                <Route path="comissionamento-plano" element={<Navigate to="/comissoes/grades" replace />} />
                 <Route path="agente-consultor-ia" element={<AgenteConsultorIA />} />
                 <Route path="api" element={<ApiDocumentation />} />
                 <Route path="sistema" element={<Sistema />} />

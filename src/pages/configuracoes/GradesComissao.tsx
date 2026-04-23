@@ -36,7 +36,11 @@ interface GradeComissao {
   grades_comissao_parcelas: GradeParcela[];
 }
 
-export default function GradesComissao() {
+interface GradesComissaoProps {
+  basePath?: string;
+}
+
+export default function GradesComissao({ basePath = '/configuracoes/grades-comissao' }: GradesComissaoProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -189,7 +193,7 @@ export default function GradesComissao() {
         <TooltipProvider delayDuration={200}>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button onClick={() => navigate('/configuracoes/grades-comissao/nova')}>
+              <Button onClick={() => navigate(`${basePath}/nova`)}>
                 <Plus className="h-4 w-4 mr-2" /> Nova Grade
               </Button>
             </TooltipTrigger>
@@ -205,7 +209,7 @@ export default function GradesComissao() {
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Layers className="h-12 w-12 text-muted-foreground/50 mb-4" />
             <p className="text-muted-foreground mb-2">Nenhuma grade cadastrada</p>
-            <Button variant="outline" onClick={() => navigate('/configuracoes/grades-comissao/nova')}>
+            <Button variant="outline" onClick={() => navigate(`${basePath}/nova`)}>
               <Plus className="h-4 w-4 mr-2" /> Criar primeira grade
             </Button>
           </CardContent>
@@ -268,7 +272,7 @@ export default function GradesComissao() {
                     <div className="flex items-center gap-1 ml-4">
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button variant="ghost" size="icon" onClick={() => navigate(`/configuracoes/grades-comissao/${grade.id}`)}>
+                          <Button variant="ghost" size="icon" onClick={() => navigate(`${basePath}/${grade.id}`)}>
                             <Pencil className="h-4 w-4" />
                           </Button>
                         </TooltipTrigger>

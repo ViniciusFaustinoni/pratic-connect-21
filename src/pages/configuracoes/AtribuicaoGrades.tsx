@@ -46,7 +46,11 @@ const ROLE_BADGE: Record<string, string> = {
   gerente_comercial: 'bg-rose-500/10 text-rose-700 dark:text-rose-300',
 };
 
-export default function AtribuicaoGrades() {
+interface AtribuicaoGradesProps {
+  gradesPath?: string;
+}
+
+export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-comissao' }: AtribuicaoGradesProps) {
   const navigate = useNavigate();
   const { data: atribuicoes = [], isLoading } = useAtribuicoesComissao();
   const [search, setSearch] = useState('');
@@ -93,7 +97,7 @@ export default function AtribuicaoGrades() {
             a cadeia hierárquica usada para gerar comissões.
           </p>
         </div>
-        <Button variant="outline" onClick={() => navigate('/configuracoes/grades-comissao')}>
+        <Button variant="outline" onClick={() => navigate(gradesPath)}>
           Gerenciar grades
         </Button>
       </div>

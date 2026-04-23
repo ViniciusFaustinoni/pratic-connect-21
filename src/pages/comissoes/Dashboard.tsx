@@ -1,0 +1,73 @@
+import { useMemo, useState } from 'react';
+import { DollarSign, CheckCircle2, Clock, Infinity as InfinityIcon, Trophy } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { KpiCard } from '@/components/comissoes/KpiCard';
+import { ComissoesDetalhesModal } from '@/components/comissoes/ComissoesDetalhesModal';
+import { useComissoesDashboard, type ComissaoDashboardItem } from '@/hooks/useComissoesDashboard';
+
+const formatMoney = (value: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
+export default function DashboardComissoes() {
+  const { items, kpis, isLoading } = useComissoesDashboard();
+  const [modal, setModal] = useState<{ title: string; items: ComissaoDashboardItem[] } | null>(null);
+
+  const pendentes = useMemo(() => items.filter(i => ['pendente', 'aprovada'].includes(i.status)), [items]);
+  const pagas = useMemo(() => items.filter(i => ['paga', 'pago'].includes(i.status) || !!i.pago_em), [items]);
+  const aguardando = useMemo(() => items.filter(i => i.status === 'pendente'), [items]);
+  const vitalicias = useMemo(() => items.filter(i => (i.tipo_comissao || '').includes('vitalicia') || (i.parcela_numero || 0) > 12), [items]);
+
+  if (isLoading) return <div className="text-sm text-muted-foreground">Carregando comissões...</div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Dashboard de Comissões</h1>
+          <p className="text-sm text-muted-foreground">Acompanhe valores gerados automaticamente por pagamento reconhecido.</p>
+        </div>
+        <Button variant="outline" asChild>
+          <a href="/comissoes/pagamentos">Pagamentos</a>
+        </Button>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard title="Total a pagar este mês" value={formatMoney(kpis.totalAPagarMes)} description={`${pendentes.length} lançamento(s)`} icon={DollarSign} onClick={() => setModal({ title: 'Total a pagar este mês', items: pendentes })} />
+        <KpiCard title="Total pago no mês" value={formatMoney(kpis.totalPagoMes)} description={`${pagas.length} lançamento(s)`} icon={CheckCircle2} onClick={() => setModal({ title: 'Total pago no mês', items: pagas })} />
+        <KpiCard title="Pendente de aprovação" value={String(kpis.pendenteAprovacao)} description="Clique para detalhar" icon={Clock} onClick={() => setModal({ title: 'Pendentes de aprovação', items: aguardando })} />
+        <KpiCard title="Comissões vitalícias" value={String(kpis.vitaliciasAtivas)} description="Lançamentos no período" icon={InfinityIcon} onClick={() => setModal({ title: 'Comissões vitalícias', items: vitalicias })} />
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><Trophy className="h-4 w-4" /> Top 5 vendedores do mês</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {kpis.topVendedores.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhuma comissão gerada neste mês.</p>
+          ) : (
+            <div className="space-y-3">
+              {kpis.topVendedores.map((v, idx) => (
+                <div key={v.vendedor_id} className="flex items-center justify-between rounded-md border p-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-sm font-semibold text-primary">{idx + 1}</span>
+                    <span className="font-medium truncate">{v.nome}</span>
+                  </div>
+                  <span className="font-semibold">{formatMoney(v.valor)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <ComissoesDetalhesModal
+        open={!!modal}
+        onOpenChange={(open) => !open && setModal(null)}
+        title={modal?.title || ''}
+        items={modal?.items || []}
+      />
+    </div>
+  );
+}
