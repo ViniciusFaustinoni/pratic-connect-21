@@ -59,13 +59,14 @@ export default function GradesComissao({ basePath = '/configuracoes/grades-comis
     },
   });
 
-  // Buscar contagem de usuários por grade
+  // Buscar contagem de atribuições ativas por grade
   const { data: userCounts = {} } = useQuery({
     queryKey: ['grades-comissao-user-counts'],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('usuario_grade_comissao')
-        .select('grade_id');
+        .select('grade_id')
+        .is('data_fim', null);
       if (error) throw error;
       const counts: Record<string, number> = {};
       (data || []).forEach((r: any) => {
@@ -185,7 +186,7 @@ export default function GradesComissao({ basePath = '/configuracoes/grades-comis
   const handleDeleteClick = async (id: string) => {
     const count = userCounts[id] || 0;
     if (count > 0) {
-      toast.error(`Esta grade é usada por ${count} usuário(s) na área de Atribuição. Remova as atribuições primeiro.`);
+      toast.error(`Esta grade possui ${count} atribuição(ões) ativa(s). Remova os vínculos na área de Atribuição de Grades antes de excluir.`);
       return;
     }
     setDeleteId(id);
@@ -247,7 +248,7 @@ export default function GradesComissao({ basePath = '/configuracoes/grades-comis
           {grades.map((grade) => {
             const total = getTotalPercentual(grade.grades_comissao_niveis);
             const qtdNiveis = grade.grades_comissao_niveis.length;
-            const qtdUsuarios = userCounts[grade.id] || 0;
+            const qtdAtribuicoes = userCounts[grade.id] || 0;
             const parcelas = grade.grades_comissao_parcelas || [];
             const qtdParcelas = parcelas.filter(p => !p.vitalicia).length;
             const temVitalicia = parcelas.some(p => p.vitalicia);
@@ -265,10 +266,10 @@ export default function GradesComissao({ basePath = '/configuracoes/grades-comis
                       {grade.versao && grade.versao > 1 && (
                         <Badge variant="outline">v{grade.versao}</Badge>
                       )}
-                      {qtdUsuarios > 0 && (
+                      {qtdAtribuicoes > 0 && (
                         <Badge variant="outline" className="gap-1">
                           <Users className="h-3 w-3" />
-                          Usada por {qtdUsuarios}
+                          {qtdAtribuicoes} atribuição{qtdAtribuicoes === 1 ? '' : 'ões'} ativa{qtdAtribuicoes === 1 ? '' : 's'}
                         </Badge>
                       )}
                       {temVitalicia && (
@@ -291,7 +292,7 @@ export default function GradesComissao({ basePath = '/configuracoes/grades-comis
                         {qtdParcelas} {qtdParcelas === 1 ? 'parcela' : 'parcelas'}
                         {temVitalicia && ' + vitalícia'}
                       </span>
-                      <span>{qtdNiveis} regra{qtdNiveis === 1 ? '' : 's'} auxiliar{qtdNiveis === 1 ? '' : 'es'}</span>
+                      <span>{grade.grade_comissao_plano_regras?.length || qtdNiveis} regra{(grade.grade_comissao_plano_regras?.length || qtdNiveis) === 1 ? '' : 's'} comercial{(grade.grade_comissao_plano_regras?.length || qtdNiveis) === 1 ? '' : 'is'}</span>
                       <span>{perfisConfigurados || qtdNiveis} perfil{(perfisConfigurados || qtdNiveis) === 1 ? '' : 'is'} remunerado{(perfisConfigurados || qtdNiveis) === 1 ? '' : 's'}</span>
                       <span>Percentual auxiliar: {total}%</span>
                       <Tooltip>
@@ -352,7 +353,7 @@ export default function GradesComissao({ basePath = '/configuracoes/grades-comis
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir grade?</AlertDialogTitle>
             <AlertDialogDescription>
-              Essa ação não pode ser desfeita. Se a grade estiver em uso, considere inativá-la.
+              Essa ação não pode ser desfeita. Grades com atribuições ativas devem ter os vínculos removidos na área de Atribuição de Grades antes da exclusão.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
