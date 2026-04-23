@@ -76,7 +76,8 @@ import {
   GraduationCap,
   UserSearch,
   ShoppingCart,
-  CheckCircle2,
+  Network,
+  Coins,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -306,12 +307,23 @@ const menuConfig: {
         { title: 'Extrato', url: '/financeiro/extrato', icon: List },
         { title: 'Extratos Bancários', url: '/financeiro/extratos-bancarios', icon: FileText },
         { title: 'Contas Bancárias', url: '/financeiro/contas-bancarias', icon: Building2 },
-        { title: 'Comissionamento Externo', url: '/financeiro/configuracoes/comissionamento-externo', icon: DollarSign },
+        { title: 'Comissões', url: '/comissoes', icon: Coins },
         { title: 'Venda Externa', url: '/financeiro/venda-externa', icon: Users },
       ],
     },
     {
-      id: 'contabilidade',
+      id: 'comissoes',
+      label: 'Comissões',
+      icon: Coins,
+      permission: 'isGerencia',
+      color: MENU_COLORS.financeiro,
+      items: [
+        { title: 'Dashboard', url: '/comissoes', icon: BarChart3 },
+        { title: 'Grades de Comissão', url: '/comissoes/grades', icon: Calculator, permission: 'isDiretor' },
+        { title: 'Atribuição de Grades', url: '/comissoes/atribuicao', icon: Network, permission: 'isDiretor' },
+        { title: 'Pagamentos', url: '/comissoes/pagamentos', icon: Receipt },
+      ],
+    },
       label: 'Contabilidade',
       icon: BookOpen,
       permission: 'canManageContabilidade',
@@ -468,7 +480,7 @@ const SUPER_GROUPS: SuperGroup[] = [
     label: 'Administrativo',
     icon: Building2,
     color: '#fbbf24',
-    moduleIds: ['financeiro', 'contabilidade', 'juridico', 'rh', 'marketing', 'diretoria', 'documentos', 'relatorios'],
+    moduleIds: ['financeiro', 'comissoes', 'contabilidade', 'juridico', 'rh', 'marketing', 'diretoria', 'documentos', 'relatorios'],
   },
 ];
 
