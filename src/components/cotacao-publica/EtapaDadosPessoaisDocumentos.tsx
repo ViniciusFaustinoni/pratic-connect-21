@@ -328,6 +328,55 @@ export function EtapaDadosPessoaisDocumentos({
     });
   }, []);
 
+  const handleReprocessarCrlv = useCallback(async () => {
+    setReprocessandoCrlv(true);
+    try {
+      await uploaderRef.current?.reprocessByType(['crlv', 'nota_fiscal_veiculo', 'atpv_e']);
+    } finally {
+      setReprocessandoCrlv(false);
+    }
+  }, []);
+
+  const handleReprocessarComprovante = useCallback(async () => {
+    setReprocessandoComprovante(true);
+    try {
+      await uploaderRef.current?.reprocessByType('comprovante_residencia');
+    } finally {
+      setReprocessandoComprovante(false);
+    }
+  }, []);
+
+  const handleBuscarCepManual = useCallback(async () => {
+    const cepLimpo = (cepManual || dadosExtraidos.cep || '').replace(/\D/g, '');
+    if (cepLimpo.length !== 8) {
+      toast.error('Digite um CEP válido (8 dígitos).');
+      return;
+    }
+    setBuscandoCep(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+      const viaCepData = await res.json();
+      if (viaCepData.erro) {
+        toast.error('CEP não encontrado.');
+        return;
+      }
+      setDadosExtraidos(prev => ({
+        ...prev,
+        cep: prev.cep || cepLimpo,
+        logradouro: prev.logradouro || viaCepData.logradouro || '',
+        bairro: prev.bairro || viaCepData.bairro || '',
+        cidade: prev.cidade || viaCepData.localidade || '',
+        uf: prev.uf || viaCepData.uf || '',
+      }));
+      toast.success('Endereço preenchido pelo CEP.');
+    } catch (err) {
+      console.error('[ViaCEP] erro:', err);
+      toast.error('Falha ao consultar o CEP. Tente novamente.');
+    } finally {
+      setBuscandoCep(false);
+    }
+  }, [cepManual, dadosExtraidos.cep]);
+
   const handleSubmit = () => {
     if (!podeAvancar) {
       toast.error('Envie todos os documentos necessários e preencha email e telefone.');
