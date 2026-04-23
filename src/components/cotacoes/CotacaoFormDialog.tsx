@@ -717,6 +717,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // Resetar formulário quando o modal abre sem leadId (exceto em modo edição ou duplicação)
   useEffect(() => {
     if (open && !leadId && !cotacaoParaEditar && !cotacaoBase) {
+      if (isRestoringDraftRef.current) return;
       // Resetar todos os estados para começar limpo
       form.reset({
         lead_id: null,
@@ -755,6 +756,24 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       setCombustivelSelecionado('');
     }
   }, [open, leadId, cotacaoParaEditar, cotacaoBase, form]);
+
+  const restaurarVeiculoPorPlaca = useCallback(async (placaParaBuscar: string) => {
+    const placaLimpa = placaParaBuscar.trim().toUpperCase();
+    if (!placaLimpa) return;
+    try {
+      const resultado = await getByPlaca(placaLimpa);
+      if (resultado.success && resultado.vehicleData) {
+        setVeiculoEncontrado(resultado);
+        setPlaca(resultado.extractedPlate || resultado.vehicleData.placa || placaLimpa);
+        if (resultado.fipeData?.valor) form.setValue('valor_fipe', resultado.fipeData.valor);
+        if (resultado.vehicleData.combustivel) setCombustivelSelecionado(resultado.vehicleData.combustivel.toLowerCase());
+        toast.success('Dados do veículo recuperados pela placa.');
+      }
+    } catch (error) {
+      console.warn('[restaurarVeiculoPorPlaca]', error);
+      toast.info('Não foi possível recuperar os dados do veículo automaticamente. Busque a placa novamente.');
+    }
+  }, [form, getByPlaca]);
 
   // Carregar marcas quando dialog abre
   useEffect(() => {
