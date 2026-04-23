@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
-import { Calendar, Clock, MapPin, User, Phone, CheckCircle2, Loader2, Shield, AlertTriangle, Puzzle, Sun, Sunset } from 'lucide-react';
+import { Calendar, Clock, MapPin, User, Phone, CheckCircle2, Loader2, Shield, AlertTriangle, Puzzle, Sun, Sunset, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -15,6 +15,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useFinalizarVistoriaCotacao, useAgendarVistoriaCompleta } from '@/hooks/useCotacaoVistoria';
 import { useVagasPeriodo } from '@/hooks/useVagasPeriodo';
 import { useDatasBloqueadasSet } from '@/hooks/useDatasBloqueadas';
+import { useEnriquecerEndereco } from '@/hooks/useEnriquecerEndereco';
 import { 
   isDomingo, 
   getPeriodosDisponivelsPorHora, 
@@ -68,16 +69,16 @@ export function AgendamentoVistoria({
   const [permiteEncaixe, setPermiteEncaixe] = useState(false);
   const [mostrarResumo, setMostrarResumo] = useState(false);
   const [buscandoCep, setBuscandoCep] = useState(false);
-  
-  const [endereco, setEndereco] = useState<EnderecoForm>({
-    cep: enderecoInicial?.cep || '',
-    logradouro: enderecoInicial?.logradouro || '',
-    numero: enderecoInicial?.numero || '',
-    complemento: enderecoInicial?.complemento || '',
-    bairro: enderecoInicial?.bairro || '',
-    cidade: enderecoInicial?.cidade || '',
-    estado: enderecoInicial?.estado || ''
-  });
+
+  // Endereço com enriquecimento automático via ViaCEP a partir de enderecoInicial (cotação/contrato)
+  const {
+    endereco,
+    setEndereco,
+    enriquecendo,
+    enriquecido,
+    faltaInfo,
+    veioPrePreenchido,
+  } = useEnriquecerEndereco(enderecoInicial);
 
   // Hooks de mutations
   const finalizarMutation = useFinalizarVistoriaCotacao();
