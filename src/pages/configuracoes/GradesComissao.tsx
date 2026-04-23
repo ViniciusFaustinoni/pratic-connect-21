@@ -36,7 +36,11 @@ interface GradeComissao {
   grades_comissao_parcelas: GradeParcela[];
 }
 
-export default function GradesComissao() {
+interface GradesComissaoProps {
+  basePath?: string;
+}
+
+export default function GradesComissao({ basePath = '/configuracoes/grades-comissao' }: GradesComissaoProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [deleteId, setDeleteId] = useState<string | null>(null);
