@@ -35,6 +35,7 @@ const schema = z.object({
   veiculo_cor: z.string().optional(),
   veiculo_combustivel: z.string().optional(),
   veiculo_ano_fabricacao: z.number().optional(),
+  veiculo_numero_motor: z.string().optional(),
 });
 
 export type DadosPessoaisForm = z.infer<typeof schema>;

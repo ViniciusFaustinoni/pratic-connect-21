@@ -349,6 +349,7 @@ export function EtapaDadosPessoaisDocumentos({
       veiculo_cor: dadosExtraidos.veiculo_cor || undefined,
       veiculo_combustivel: dadosExtraidos.veiculo_combustivel || undefined,
       veiculo_ano_fabricacao: dadosExtraidos.veiculo_ano_fabricacao || undefined,
+      veiculo_numero_motor: dadosExtraidos.numero_motor || dadosExtraidos.veiculo_motor || undefined,
     };
     onSubmit(dados);
   };

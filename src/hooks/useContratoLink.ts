@@ -24,6 +24,7 @@ export function useContratoByToken(token: string | undefined) {
           *,
           planos:plano_id (nome, descricao),
           associados:associado_id (nome, email, telefone, cpf, status, cep, logradouro, numero, complemento, bairro, cidade, uf),
+          cotacoes:cotacao_id (cliente_cep, cliente_logradouro, cliente_numero, cliente_complemento, cliente_bairro, cliente_cidade, cliente_uf),
           leads:lead_id (nome, email, telefone, cpf)
         `)
         .eq('link_token', token)
