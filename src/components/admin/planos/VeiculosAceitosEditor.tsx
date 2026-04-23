@@ -157,7 +157,9 @@ export function VeiculosAceitosEditor({ entityId }: VeiculosAceitosEditorProps) 
               {modelos.map((m, i) => (
                 <TableRow key={i}>
                   <TableCell className="text-xs py-1.5">{m.marca}</TableCell>
-                  <TableCell className="text-xs py-1.5">{m.modelo}</TableCell>
+                  <TableCell className="text-xs py-1.5">
+                    {m.modelo ? m.modelo : <span className="italic text-muted-foreground">Todos</span>}
+                  </TableCell>
                   <TableCell className="text-xs py-1.5">{m.ano_min ?? '—'}</TableCell>
                   <TableCell className="text-xs py-1.5">{m.ano_max ?? '—'}</TableCell>
                   <TableCell className="py-1.5">
