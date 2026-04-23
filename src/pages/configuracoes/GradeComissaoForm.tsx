@@ -15,6 +15,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ParcelaEditor, ParcelaForm } from '@/components/comissoes/ParcelaEditor';
 import { useAuth } from '@/contexts/AuthContext';
 import { Badge } from '@/components/ui/badge';
+import { registrarLog } from '@/hooks/useAuditLog';
 
 const COMMERCIAL_ROLE_KEYS = ['vendedor_clt', 'vendedor_externo', 'agencia', 'supervisor_vendas', 'gerente_comercial'];
 
@@ -45,6 +46,41 @@ const defaultParcela = (ordem: number, numero: number): ParcelaForm => ({
   label: numero === 1 ? 'Taxa de Adesão' : `${numero}ª Parcela`,
   ordem,
   niveis: [],
+});
+
+const buildGradeSnapshot = (
+  grade: { id?: string; nome: string; descricao: string | null; versao: number },
+  planos: PlanoComissaoOption[],
+  selectedPlanIds: string[],
+  regrasPorPlano: RegrasPorPlano,
+) => ({
+  grade,
+  planos: selectedPlanIds.map((planoId) => {
+    const plano = planos.find((p) => p.id === planoId);
+    return { id: planoId, nome: plano?.nome || planoId, linha: plano?.linha || null };
+  }),
+  regras_por_plano: Object.fromEntries(
+    selectedPlanIds.map((planoId) => {
+      const plano = planos.find((p) => p.id === planoId);
+      return [planoId, {
+        plano: { id: planoId, nome: plano?.nome || planoId, linha: plano?.linha || null },
+        parcelas: (regrasPorPlano[planoId] || []).map((parcela, parcelaIndex) => ({
+          ordem: parcelaIndex,
+          numero_parcela: parcela.numero_parcela,
+          vitalicia: parcela.vitalicia,
+          vitalicia_inicio_parcela: parcela.vitalicia_inicio_parcela,
+          label: parcela.label,
+          niveis: parcela.niveis.map((nivel, nivelIndex) => ({
+            ordem: nivelIndex,
+            role: nivel.role,
+            nome: nivel.nome,
+            tipo_comissao: nivel.tipo_comissao || 'percentual',
+            valor: Number(nivel.valor ?? nivel.percentual) || 0,
+          })),
+        })),
+      }];
+    }),
+  ),
 });
 
 export default function GradeComissaoForm({ basePath = '/configuracoes/grades-comissao' }: GradeComissaoFormProps) {
