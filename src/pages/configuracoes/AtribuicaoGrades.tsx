@@ -97,7 +97,7 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
             a cadeia hierárquica usada para gerar comissões.
           </p>
         </div>
-        <Button variant="outline" onClick={() => navigate('/configuracoes/grades-comissao')}>
+        <Button variant="outline" onClick={() => navigate(gradesPath)}>
           Gerenciar grades
         </Button>
       </div>
