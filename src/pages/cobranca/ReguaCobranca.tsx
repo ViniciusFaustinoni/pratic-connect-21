@@ -492,7 +492,62 @@ export default function ReguaCobranca() {
         </CardContent>
       </Card>
 
-      {/* Timeline Visual */}
+      {/* Card: Seletor de associado para preview */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <MessageSquare className="h-4 w-4" />
+            Pré-visualização de mensagens
+          </CardTitle>
+          <CardDescription>
+            Selecione um associado para simular como cada mensagem será renderizada com os dados reais dele (nome, valor, vencimento, placa e linha digitável). Sem associado, usa dados de exemplo.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="md:col-span-1">
+              <Label className="text-xs">Buscar associado</Label>
+              <Input
+                placeholder="Nome ou CPF (mín. 2 caracteres)"
+                value={associadoSearch}
+                onChange={(e) => setAssociadoSearch(e.target.value)}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <Label className="text-xs">Associado para preview</Label>
+              <Select
+                value={previewAssociadoId || 'mock'}
+                onValueChange={(v) => setPreviewAssociadoId(v === 'mock' ? '' : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Usar dados de exemplo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mock">— Dados de exemplo (João da Silva) —</SelectItem>
+                  {(associadosOptions ?? []).map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.nome} {a.cpf ? `· ${a.cpf}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {previewAssociadoId && previewCtxData && (
+            <div className="text-xs text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 pt-1">
+              <span><strong>Nome:</strong> {previewCtxData.nome ?? '—'}</span>
+              <span><strong>Vencimento:</strong> {previewCtxData.vencimento ?? '—'}</span>
+              <span><strong>Valor:</strong> {previewCtxData.valor != null ? previewCtxData.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</span>
+              <span><strong>Placa:</strong> {previewCtxData.placa ?? '—'}</span>
+              <span><strong>Modelo:</strong> {previewCtxData.modelo ?? '—'}</span>
+              <span className={previewCtxData.linha_digitavel ? '' : 'text-amber-600 dark:text-amber-400'}>
+                <strong>Linha digitável:</strong> {previewCtxData.linha_digitavel ? `${previewCtxData.linha_digitavel.slice(0, 20)}…` : 'sem dado SGA'}
+              </span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Linha do Tempo</CardTitle>
