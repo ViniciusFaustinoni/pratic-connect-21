@@ -251,6 +251,8 @@ export default function GradesComissao({ basePath = '/configuracoes/grades-comis
             const parcelas = grade.grades_comissao_parcelas || [];
             const qtdParcelas = parcelas.filter(p => !p.vitalicia).length;
             const temVitalicia = parcelas.some(p => p.vitalicia);
+            const qtdPlanos = grade.grade_comissao_planos?.length || 0;
+            const perfisConfigurados = Array.from(new Set((grade.grade_comissao_plano_regras || []).map(r => r.role))).length;
             return (
               <Card key={grade.id} className={!grade.ativo ? 'opacity-60' : ''}>
                 <CardContent className="flex items-center justify-between py-4 px-5">
@@ -274,6 +276,11 @@ export default function GradesComissao({ basePath = '/configuracoes/grades-comis
                           <InfinityIcon className="h-3 w-3" /> Vitalícia
                         </Badge>
                       )}
+                      {qtdPlanos > 0 && (
+                        <Badge variant="outline" className="gap-1">
+                          <Package className="h-3 w-3" /> {qtdPlanos} plano{qtdPlanos === 1 ? '' : 's'}
+                        </Badge>
+                      )}
                     </div>
                     {grade.descricao && (
                       <p className="text-xs text-muted-foreground truncate">{grade.descricao}</p>
@@ -285,6 +292,7 @@ export default function GradesComissao({ basePath = '/configuracoes/grades-comis
                         {temVitalicia && ' + vitalícia'}
                       </span>
                       <span>{qtdNiveis} {qtdNiveis === 1 ? 'nível' : 'níveis'}</span>
+                      <span>{perfisConfigurados || qtdNiveis} perfil{(perfisConfigurados || qtdNiveis) === 1 ? '' : 'is'} configurado{(perfisConfigurados || qtdNiveis) === 1 ? '' : 's'}</span>
                       <span>Adesão: {total}%</span>
                       <Tooltip>
                         <TooltipTrigger asChild>
