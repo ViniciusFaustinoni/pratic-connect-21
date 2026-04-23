@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -6,8 +6,39 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Loader2, RefreshCw, Database, AlertCircle, CheckCircle2, Clock, MinusCircle, Timer, Zap, CalendarClock, Info, ShieldAlert, Link2 } from 'lucide-react';
+import { Loader2, RefreshCw, Database, AlertCircle, CheckCircle2, Clock, MinusCircle, Timer, Zap, CalendarClock, Info, ShieldAlert, Link2, Play, Pause, RotateCcw, ListChecks } from 'lucide-react';
 import { toast } from 'sonner';
+
+// ===== Mapeamento controlado: pausa, retomada e tracking por veículo =====
+// Persistimos progresso em localStorage para que um refresh / fechamento do
+// diálogo não perca o que já foi tentado. Assim, depois de um bloqueio
+// "Usuário com restrição", quando a Hinova for liberada, podemos retomar do
+// ponto onde parou sem re-tentar veículos já marcados como falhados.
+const LS_KEY = 'sga-mapear-progresso-v1';
+type RunState = 'idle' | 'running' | 'paused' | 'done';
+interface MapearProgresso {
+  fila: string[];           // IDs ainda a processar
+  tentados: string[];       // IDs já enviados ao backend (sucesso, falha técnica ou não-encontrado)
+  mapeados: string[];       // IDs efetivamente vinculados (codigo_hinova preenchido)
+  falhados: string[];       // IDs que receberam erro técnico no lote (não confundir com não-encontrado)
+  loteAtual: number;        // contador de lotes processados
+  ultimoErro: string | null;
+  carregadoEm: string | null; // timestamp da última carga da fila
+}
+const emptyProgresso: MapearProgresso = {
+  fila: [], tentados: [], mapeados: [], falhados: [], loteAtual: 0, ultimoErro: null, carregadoEm: null,
+};
+const loadProgresso = (): MapearProgresso => {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return emptyProgresso;
+    const parsed = JSON.parse(raw);
+    return { ...emptyProgresso, ...parsed };
+  } catch { return emptyProgresso; }
+};
+const saveProgresso = (p: MapearProgresso) => {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(p)); } catch {}
+};
 
 interface JobStatus {
   pendente: number;
