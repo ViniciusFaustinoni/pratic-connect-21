@@ -78,6 +78,7 @@ import { useLead } from '@/hooks/useLeads';
 import { useFipe, type PlateResult, type FipeMarca, type FipeModelo, type FipeAno } from '@/hooks/useFipe';
 import { useVendedores } from '@/hooks/useVendedores';
 import { toast } from 'sonner';
+import { descreverErroSupabase } from '@/lib/errors';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
@@ -141,7 +142,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const { getMarcas, getModelos, getAnos, getPreco, getByPlaca, buscarPorNome, loading: fipeLoading } = useFipe();
   const { data: vendedores = [], isLoading: vendedoresLoading } = useVendedores();
   const { user, profile } = useAuth();
-  const { userId, isDiretor, isGerente, isSupervisor, isVendedorExterno } = usePermissions();
+  const { userId, isDiretor, isGerente, isSupervisor, isVendedorExterno, cotacao: cotacaoPerms, isPermissionsLoading } = usePermissions();
+  const podeOperarCotacao = !!cotacaoPerms?.canCreate;
   const { data: percentualAdesaoConfig = 1 } = useTaxaAdesaoPercentual();
   const { data: minimoAdesaoBase = 100 } = useTaxaAdesaoMinimoBase();
   const { data: minimoVolanteInterno = 50 } = useTaxaAdesaoMinimoVolanteInterno();
@@ -1366,6 +1368,16 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         if (!vendedorIdFinal) {
           toast.error('Não foi possível identificar o consultor responsável. Atualize a página ou selecione outro consultor.');
           throw new Error('vendedor_id ausente ao criar cotação');
+        }
+
+        // Pré-validação de campos NOT NULL no banco — evita INSERT que sempre falharia
+        // com 23502 (not-null violation) quando o cálculo do plano ainda não terminou.
+        const valorFipePayload = Number(cotacaoData.valor_fipe ?? 0);
+        const valorCotaPayload = Number(cotacaoData.valor_cota ?? 0);
+        const valorMensalPayload = Number(cotacaoData.valor_total_mensal ?? 0);
+        if (!(valorFipePayload > 0) || !(valorCotaPayload > 0) || !(valorMensalPayload > 0)) {
+          toast.error('Aguarde o cálculo do plano terminar antes de criar a cotação.');
+          throw new Error('Campos obrigatórios de valor ainda não calculados');
         }
 
         const novaCotacao = await createCotacao.mutateAsync({
