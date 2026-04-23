@@ -183,7 +183,75 @@ export default function ReguaCobranca() {
     }
   });
 
-  // ===== Preview de mensagens =====
+  // ===== Falhas SGA (linha digitável ausente) =====
+  const seteDiasAtras = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: falhasSGA } = useQuery({
+    queryKey: ['regua-falhas-sga'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('cobranca_eventos')
+        .select('id, created_at, descricao, associado_id, dados, associados!inner(nome, cpf)')
+        .eq('tipo', 'whatsapp')
+        .eq('dados->>falta_sga', 'true')
+        .gte('created_at', seteDiasAtras)
+        .order('created_at', { ascending: false })
+        .limit(30);
+      if (error) throw error;
+      return (data ?? []) as Array<{
+        id: string;
+        created_at: string;
+        descricao: string | null;
+        associado_id: string;
+        dados: any;
+        associados: { nome: string; cpf: string | null } | null;
+      }>;
+    },
+    refetchInterval: 60_000,
+  });
+
+  const [sincronizandoId, setSincronizandoId] = useState<string | null>(null);
+  const [sincronizandoTodas, setSincronizandoTodas] = useState(false);
+
+  const sincronizarUm = async (associadoId: string, veiculoId: string | null) => {
+    const { error } = await supabase.functions.invoke('sga-sync-financeiro-veiculo', {
+      body: veiculoId ? { associado_id: associadoId, veiculo_id: veiculoId } : { associado_id: associadoId },
+    });
+    if (error) throw error;
+  };
+
+  const handleSincronizar = async (eventoId: string, associadoId: string, veiculoId: string | null) => {
+    setSincronizandoId(eventoId);
+    try {
+      await sincronizarUm(associadoId, veiculoId);
+      toast.success('SGA sincronizado — a falha some na próxima execução da régua');
+      queryClient.invalidateQueries({ queryKey: ['regua-falhas-sga'] });
+    } catch (e: any) {
+      toast.error('Falha ao sincronizar: ' + (e?.message || 'erro desconhecido'));
+    } finally {
+      setSincronizandoId(null);
+    }
+  };
+
+  const handleSincronizarTodas = async () => {
+    if (!falhasSGA?.length) return;
+    setSincronizandoTodas(true);
+    let ok = 0;
+    let erros = 0;
+    for (const f of falhasSGA) {
+      try {
+        await sincronizarUm(f.associado_id, (f.dados?.veiculo_id as string | null) ?? null);
+        ok++;
+      } catch {
+        erros++;
+      }
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    setSincronizandoTodas(false);
+    queryClient.invalidateQueries({ queryKey: ['regua-falhas-sga'] });
+    if (erros === 0) toast.success(`${ok} veículo(s) sincronizado(s) com sucesso`);
+    else toast.warning(`${ok} sincronizado(s), ${erros} falha(s)`);
+  };
   // Seletor de associado: busca rápida por nome/CPF, preview com dados reais
   const [previewAssociadoId, setPreviewAssociadoId] = useState<string>('');
   const [associadoSearch, setAssociadoSearch] = useState<string>('');
