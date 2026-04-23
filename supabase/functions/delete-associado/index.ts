@@ -515,6 +515,8 @@ Deno.serve(async (req) => {
         await supabaseAdmin.from("acionamentos_roubo_furto").delete().eq("veiculo_id", veiculo.id);
         
         // Update rastreadores - desvincular E voltar para estoque
+        // Audit: marca origem desta alteração na trilha de auditoria
+        await supabaseAdmin.rpc('set_audit_origem', { origem: 'edge:delete-associado' });
         await supabaseAdmin
           .from("rastreadores")
           .update({ 

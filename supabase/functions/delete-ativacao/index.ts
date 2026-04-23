@@ -239,6 +239,7 @@ Deno.serve(async (req) => {
             await supabaseAdmin.from("instalacoes").delete().eq("veiculo_id", veiculo.id);
             await supabaseAdmin.from("sinistros").delete().eq("veiculo_id", veiculo.id);
             await supabaseAdmin.from("chamados_assistencia").delete().eq("veiculo_id", veiculo.id);
+            await supabaseAdmin.rpc('set_audit_origem', { origem: 'edge:delete-ativacao' });
             await supabaseAdmin.from("rastreadores").update({ veiculo_id: null }).eq("veiculo_id", veiculo.id);
           }
           await supabaseAdmin.from("veiculos").delete().eq("associado_id", contrato.associado_id);

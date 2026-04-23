@@ -164,6 +164,8 @@ Deno.serve(async (req) => {
     // Se vai para estoque (íntegro), portador_id = null (não pertence a ninguém)
     // Se vai para retorno_base (não íntegro), portador_id = profissional que o transporta
     const portadorId = novoStatusRastreador === 'estoque' ? null : profissionalId;
+    // Audit: marca origem desta alteração na trilha de auditoria
+    await supabase.rpc('set_audit_origem', { origem: 'edge:concluir-retirada' });
     const { error: updateRastreadorError } = await supabase
       .from('rastreadores')
       .update({
