@@ -1,0 +1,77 @@
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useRelatorioComissoes } from '@/hooks/useRelatorioComissoes';
+
+const PERFIS = [
+  { value: 'vendedor_clt', label: 'Vendedor CLT' },
+  { value: 'vendedor_externo', label: 'Vendedor Externo' },
+  { value: 'agencia', label: 'Agência' },
+  { value: 'supervisor_vendas', label: 'Supervisor' },
+  { value: 'gerente_comercial', label: 'Gerente' },
+];
+
+const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
+const getName = (item?: { nome?: string | null; full_name?: string | null; email?: string | null } | null) => item?.nome || item?.full_name || item?.email || '—';
+
+export default function RelatorioComissoes() {
+  const { filters, setFilters, grades, planos, vendedores, linhas, resumo, isLoading } = useRelatorioComissoes();
+  const update = (key: keyof typeof filters, value: string) => setFilters(prev => ({ ...prev, [key]: value }));
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-foreground">Relatório de Comissões</h1>
+        <p className="text-sm text-muted-foreground">Consulte valores por período, grade, plano, vendedor, perfil, parcela e status.</p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Gerado</CardTitle></CardHeader><CardContent className="text-2xl font-semibold">{formatCurrency(resumo.totalGerado)}</CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Pendente</CardTitle></CardHeader><CardContent className="text-2xl font-semibold">{formatCurrency(resumo.totalPendente)}</CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Pago</CardTitle></CardHeader><CardContent className="text-2xl font-semibold">{formatCurrency(resumo.totalPago)}</CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Lançamentos</CardTitle></CardHeader><CardContent className="text-2xl font-semibold">{resumo.quantidade}</CardContent></Card>
+      </div>
+
+      <Card>
+        <CardContent className="grid gap-3 pt-6 md:grid-cols-4">
+          <Input type="date" value={filters.dataInicio} onChange={e => update('dataInicio', e.target.value)} />
+          <Input type="date" value={filters.dataFim} onChange={e => update('dataFim', e.target.value)} />
+          <Select value={filters.gradeId} onValueChange={v => update('gradeId', v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todos">Todas as grades</SelectItem>{grades.map(g => <SelectItem key={g.id} value={g.id}>{g.nome}</SelectItem>)}</SelectContent></Select>
+          <Select value={filters.planoId} onValueChange={v => update('planoId', v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todos">Todos os planos</SelectItem>{planos.map(p => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}</SelectContent></Select>
+          <Select value={filters.vendedorId} onValueChange={v => update('vendedorId', v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todos">Todos os destinatários</SelectItem>{vendedores.map(v => <SelectItem key={v.id} value={v.id}>{getName(v)}</SelectItem>)}</SelectContent></Select>
+          <Select value={filters.role} onValueChange={v => update('role', v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todos">Todos os perfis</SelectItem>{PERFIS.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent></Select>
+          <Input placeholder="Parcela" value={filters.parcela === 'todas' ? '' : filters.parcela} onChange={e => update('parcela', e.target.value || 'todas')} />
+          <Select value={filters.status} onValueChange={v => update('status', v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todos">Todos os status</SelectItem><SelectItem value="pendente">Pendente</SelectItem><SelectItem value="aprovada">Gerado</SelectItem><SelectItem value="paga">Pago</SelectItem><SelectItem value="cancelada">Cancelado</SelectItem></SelectContent></Select>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Origem</TableHead><TableHead>Destinatário</TableHead><TableHead>Perfil</TableHead><TableHead>Plano</TableHead><TableHead>Grade</TableHead><TableHead>Parcela</TableHead><TableHead>Base</TableHead><TableHead>Cálculo</TableHead><TableHead>Total</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {isLoading ? <TableRow><TableCell colSpan={11}>Carregando...</TableCell></TableRow> : linhas.map(linha => (
+                <TableRow key={linha.id}>
+                  <TableCell>{new Date(linha.created_at).toLocaleDateString('pt-BR')}</TableCell>
+                  <TableCell>{getName(linha.contrato?.vendedor)}</TableCell>
+                  <TableCell>{getName(linha.vendedor)}</TableCell>
+                  <TableCell>{linha.nivel_nome || linha.role_destinatario || '—'}</TableCell>
+                  <TableCell>{linha.plano?.nome || '—'}</TableCell>
+                  <TableCell>{linha.grade?.nome || '—'}</TableCell>
+                  <TableCell>{linha.parcela_numero || '—'}</TableCell>
+                  <TableCell>{formatCurrency(Number(linha.valor_base))}</TableCell>
+                  <TableCell>{linha.tipo_calculo === 'valor_fixo' ? formatCurrency(Number(linha.valor_comissao)) : `${Number(linha.percentual_aplicado || 0)}%`}</TableCell>
+                  <TableCell className="font-medium">{formatCurrency(Number(linha.valor_total))}</TableCell>
+                  <TableCell><Badge variant={linha.status === 'paga' ? 'default' : 'secondary'}>{linha.status}</Badge></TableCell>
+                </TableRow>
+              ))}
+              {!isLoading && linhas.length === 0 && <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground">Nenhuma comissão encontrada.</TableCell></TableRow>}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
