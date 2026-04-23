@@ -1,68 +1,54 @@
 
 
-## Duplicação de cotação: oferecer exclusão da original quando for o mesmo consultor
+## Auditoria da linha LANÇAMENTO — Veículos Aceitos
 
-### Ajuste sobre o plano anterior
+### O que vou fazer
 
-Mantém-se tudo que foi planejado (diálogo de confirmação, motivo, marcação de substituída, ignorar placa presa da original). A diferença está no comportamento quando **o consultor logado é o mesmo que criou a cotação original**.
+Mesmo procedimento das linhas SELECT e ESPECIAL, agora para **LANÇAMENTO** usando a tabela do Guia V12 (imagem anexa).
 
-### Nova lógica condicional no diálogo de duplicação
+### Tabela de referência (imagem)
 
-Ao abrir o `DuplicarCotacaoDialog`, detectar se `cotacao.vendedor_id === user.id`:
+**Aceitação limitada** (vermelho):
+- Jeep: COMPASS FLEX (Acima de 2024), RENEGADE FLEX (Acima de 2024)
+- Chevrolet: EQUINOX TRACKER (Acima de 2024), MONTANA (Acima de 2024)
+- Fiat: TORO (Acima de 2024), PULSE (Acima de 2024), CRONOS (Acima de 2024), FASTBACK (Acima de 2024)
+- Renault: CAPTUR (Acima de 2020), OROCH (Acima de 2020), DUSTER (Acima de 2020), KARDIAN
+- VW: T-CROSS (Acima de 2024), NIVUS (Acima de 2024), VIRTUS (Acima de 2024), AMAROK (Acima de 2013), TERA
+- Citroën: C4 CACTUS C3 (Acima de 2020)
+- Nissan: KICKS (Acima de 2024)
+- Honda: CITY (Acima de 2024)
+- Peugeot: 2008 (Acima de 2015)
+- Toyota: COROLLA (Acima de 2024)
+- Hyundai: CRETA (Acima de 2022)
 
-**Caso A — Mesmo consultor (autor da cotação)**
-- Mostrar uma pergunta extra acima do botão de confirmação:
-  > "Esta cotação foi criada por você. O que deseja fazer com a original?"
-  
-  Opções (radio):
-  - 🗑️ **Excluir a cotação original** (recomendado para correções) — *padrão selecionado*
-  - 📝 **Manter como substituída** (registro de auditoria preservado)
-  
-- Se escolher **Excluir**: a original é apagada de fato (`DELETE` em `cotacoes` pelo id), liberando a placa imediatamente. Sem rastro de "substituída por".
-- Se escolher **Manter**: comportamento original do plano (status `recusada` + `substituida_por_cotacao_id` + `motivo_substituicao`).
+**Acima de 2024** (azul): regra geral da linha — todo veículo > R$ 50k com ano >= 2024 entra automaticamente (já tratado na regra de linha).
 
-**Caso B — Outro consultor (gestor corrigindo cotação alheia)**
-- **Não oferecer** a opção de excluir.
-- Sempre marcar como substituída (preserva auditoria entre consultores).
-- Mantém o aviso "Esta cotação pertence a {nome}. A correção será atribuída a você."
+### Plano
 
-### Regras de bloqueio da exclusão
+1. Login admin (`admin@teste.com` / `123456789`).
+2. Consultar `entity_eligibility_rules` da linha LANÇAMENTO e fazer diff item-a-item contra a tabela.
+3. Navegar: **Diretoria → Gestão Comercial → Linhas e Planos → LANÇAMENTO → Editar → Veículos Aceitos**.
+4. Para cada item da imagem:
+   - Existe e ano confere → manter.
+   - Falta → adicionar via UI (Tipo: Carro → Marca → Modelo + ano mínimo).
+   - Ano divergente → corrigir.
+5. Validar que regra geral "Acima de 2024 + FIPE > R$ 50k" continua ativa (memória `architecture/products/exclusive-product-lines`).
+6. Screenshot final do editor.
 
-A exclusão só é permitida quando a cotação original estiver em estado **seguro de descartar**:
-- ✅ Status `rascunho` ou `enviada` (sem aceite formal)
-- ❌ Status `aceita`, com contrato gerado, com agendamento, ou com pagamento → força modo "Manter como substituída" (radio da exclusão fica desabilitado com tooltip explicando)
+### Pontos a confirmar durante a execução
 
-A verificação roda no abrir do diálogo via consulta rápida: existe `contrato` ou `agendamento_base` apontando para a cotação? Se sim, bloqueia exclusão.
+- "EQUINOX TRACKER" no guia parece dois modelos juntos (EQUINOX e TRACKER). Vou cadastrar separadamente se confirmado pela base de marcas/modelos.
+- "C4 CACTUS C3" idem — provavelmente C4 CACTUS e C3 separados.
+- "KARDIAN" e "TERA" são lançamentos sem ano mínimo na imagem — entram como "Acima de 2024" (regra padrão da linha).
 
-### Campo "Motivo"
+### Garantias
 
-- Continua **obrigatório** em ambos os casos (excluir ou manter).
-- No caso de exclusão, o motivo vai para `system_logs` apenas (não há mais cotação para guardar o campo).
+- Nenhum hardcode — tudo via `entity_eligibility_rules` pela UI admin.
+- Não mexe em SELECT nem ESPECIAL.
+- Idempotente: se o item já existir com ano correto, não duplica.
+- Aproveita o matching por prefixo já implementado (ex.: "CRETA" cobre "CRETA SPORT", "CRETA N LINE").
 
-### Trilha de auditoria
+### Arquivos afetados
 
-- **Excluir**: registrar em `system_logs` com ação `excluir_cotacao_para_duplicacao`, payload `{ cotacao_excluida_id, numero, vendedor_id, motivo, nova_cotacao_id }`. Garante rastro mesmo sem a cotação física.
-- **Manter substituída**: comportamento original (log + campos na cotação).
-
-### Ajustes nos arquivos do plano anterior
-
-**`src/components/cotacoes/DuplicarCotacaoDialog.tsx` (novo)**
-- Adicionar prop derivada `isMesmoConsultor` e estado `acaoOriginal: 'excluir' | 'manter'`.
-- Renderizar bloco de radio condicional.
-- Consultar contratos/agendamentos para habilitar/desabilitar opção excluir.
-
-**`src/hooks/useCotacoes.ts` → `useDuplicarCotacao`**
-- Aceitar `{ cotacaoId, motivo, acaoOriginal: 'excluir' | 'manter' }`.
-- Se `acaoOriginal === 'excluir'`: criar nova + `DELETE` da original + log.
-- Se `acaoOriginal === 'manter'`: criar nova + `UPDATE` da original (status/substituida_por/motivo) + log.
-- Se `acaoOriginal` for `excluir` mas existir contrato/agendamento, retornar erro orientando a recarregar (race condition).
-
-**Sem mudanças** em `useVerificarPlaca.ts` (o `ignorarIds` continua útil, especialmente no modo "manter"; no modo "excluir" a placa é liberada naturalmente).
-
-### Validação adicional
-
-1. Vendedor A cria cotação errada → clica Duplicar → diálogo mostra "Excluir original" pré-selecionado → confirma → original some da lista, nova abre limpa, sem placa presa.
-2. Vendedor A cria cotação, gera contrato → tenta duplicar → opção "Excluir" aparece desabilitada com tooltip "Cotação já gerou contrato — apenas substituição é permitida".
-3. Gestor duplica cotação do Vendedor A → diálogo **não exibe** opção de excluir → segue fluxo de substituição.
-4. Vendedor A escolhe "Manter como substituída" mesmo sendo o autor → original fica com badge "Substituída por COT-..." na lista.
+Nenhum. Apenas dados em `entity_eligibility_rules`.
 
