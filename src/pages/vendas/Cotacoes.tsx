@@ -1071,8 +1071,31 @@ export default function Cotacoes() {
           toast.success('Cotação salva! Exibindo em "Em Andamento".');
         }}
       />
+      <ContratoWizard 
+        open={showContratoWizard} 
+        onOpenChange={setShowContratoWizard} 
+        cotacaoId={selectedCotacaoId}
+        onContratoCreated={handleContratoCreated}
+      />
+      {selectedCotacaoEmail && (
+        <EnviarEmailModal
+          open={showEmailModal}
+          onOpenChange={setShowEmailModal}
+          cotacao={selectedCotacaoEmail}
+          onSuccess={() => handleMarkAsEnviada(selectedCotacaoEmail.id, selectedCotacaoEmail.lead_id)}
+        />
+      )}
 
-      <DuplicarCotacaoDialog
+      <VincularLeadModal
+        open={showVincularModal}
+        onOpenChange={setShowVincularModal}
+        cotacaoId={cotacaoParaVincular?.id || ''}
+        leadAtualId={cotacaoParaVincular?.lead_id}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
+        }}
+      />
+
         open={!!cotacaoConfirmarDuplicar}
         onOpenChange={(open) => {
           if (!open) setCotacaoConfirmarDuplicar(null);
