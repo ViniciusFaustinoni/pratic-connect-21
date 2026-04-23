@@ -99,9 +99,9 @@ export default function AtribuicaoGrades() {
       </div>
 
       {totalSemGrade > 0 && (
-        <Card className="border-amber-500/30 bg-amber-500/5">
+        <Card className="border-warning/30 bg-warning/5">
           <CardContent className="flex items-center gap-3 py-3">
-            <AlertCircle className="h-4 w-4 text-amber-600" />
+            <AlertCircle className="h-4 w-4 text-warning" />
             <p className="text-sm">
               <strong>{totalSemGrade}</strong> usuário(s) ainda sem grade atribuída — não receberão
               comissão até serem vinculados.
