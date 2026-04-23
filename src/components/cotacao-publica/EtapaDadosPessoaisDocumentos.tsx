@@ -120,6 +120,13 @@ export function EtapaDadosPessoaisDocumentos({
   const [veiculoAlienado, setVeiculoAlienado] = useState(false);
   const [veiculoFinanceira, setVeiculoFinanceira] = useState('');
 
+  // Ref + estados para reprocessar OCR e buscar CEP manualmente
+  const uploaderRef = useRef<UnifiedDocumentUploaderHandle>(null);
+  const [reprocessandoCrlv, setReprocessandoCrlv] = useState(false);
+  const [reprocessandoComprovante, setReprocessandoComprovante] = useState(false);
+  const [cepManual, setCepManual] = useState('');
+  const [buscandoCep, setBuscandoCep] = useState(false);
+
   // Sincronizar email e telefone quando defaultValues mudar (dados carregados do banco)
   useEffect(() => {
     if (defaultValues?.email && !email) {
