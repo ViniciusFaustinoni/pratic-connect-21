@@ -413,6 +413,37 @@ export function DocumentosPendentesPublico({
                       </div>
                     )}
 
+                    {/* Editor manual dos dados extraídos pelo OCR */}
+                    {isEnviado && state.ocrTipo && state.documentoId && (
+                      <div className="mb-3">
+                        <OcrDadosEditor
+                          dados={state.ocrDados as Record<string, unknown>}
+                          tipoDocumento={state.ocrTipo}
+                          confianca={state.ocrConfianca ?? undefined}
+                          sugestao={state.ocrSugestao as any}
+                          legivel={state.ocrLegivel ?? undefined}
+                          onSave={async (editados) => {
+                            const novosDados = { ...(state.ocrDados || {}), ...editados };
+                            const { error } = await publicSupabase
+                              .from('documentos')
+                              .update({
+                                dados_extraidos: {
+                                  ...novosDados,
+                                  editado_manualmente: true,
+                                  editado_em: new Date().toISOString(),
+                                } as any,
+                              } as any)
+                              .eq('id', state.documentoId!);
+                            if (error) throw new Error('Erro ao salvar edições');
+                            setUploadStates((prev) => ({
+                              ...prev,
+                              [doc.id]: { ...prev[doc.id], ocrDados: novosDados },
+                            }));
+                          }}
+                        />
+                      </div>
+                    )}
+
                     {doc.observacao_solicitacao && (
                       <p className="text-xs text-muted-foreground mb-3">
                         <strong>Observação:</strong> {doc.observacao_solicitacao}
