@@ -313,8 +313,9 @@ export function SgaBackfillFinanceiroDialog() {
                   size="sm"
                   variant="outline"
                   onClick={handleReagendar}
-                  disabled={reagendando}
+                  disabled={reagendando || restricaoHinovaAtiva}
                   className="gap-1.5"
+                  title={restricaoHinovaAtiva ? 'Bloqueado: usuário Hinova com restrição. Solicite liberação no painel SGA.' : undefined}
                 >
                   {reagendando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CalendarClock className="h-3.5 w-3.5" />}
                   Reagendar erros (janela horária / 401)
@@ -323,13 +324,20 @@ export function SgaBackfillFinanceiroDialog() {
                   size="sm"
                   variant="default"
                   onClick={handleForcarSync}
-                  disabled={forcando}
+                  disabled={forcando || restricaoHinovaAtiva}
                   className="gap-1.5"
+                  title={restricaoHinovaAtiva ? 'Bloqueado: usuário Hinova com restrição. Solicite liberação no painel SGA.' : undefined}
                 >
                   {forcando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
                   Forçar sync agora (drenar fila)
                 </Button>
               </div>
+              {restricaoHinovaAtiva && (
+                <p className="text-xs text-red-700">
+                  ⛔ Ações desabilitadas enquanto a Hinova retornar "Usuário com restrição".
+                  Solicite à Hinova a liberação 24h ou liberação por IP do usuário da integração no painel SGA do parceiro.
+                </p>
+              )}
             </div>
 
             {/* Etapas */}
