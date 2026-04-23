@@ -1,415 +1,366 @@
 
-## Plano: auditoria de alterações em grades de comissão e atribuições
+## Revisão da lógica de Grades de Comissão e Atribuição de Grades
 
-### Objetivo
-Adicionar aos **Logs de Auditoria** rastreabilidade completa para:
+### Diagnóstico
+
+A lógica principal já foi parcialmente ajustada:
+
+- `GradeComissaoForm.tsx` já configura regras por **plano, parcela e perfil de acesso**.
+- `AtribuicaoGrades.tsx` já existe como área separada para vincular grades a usuários e configurar hierarquia.
+- O motor `fn_gerar_comissoes_por_pagamento` já calcula comissão pela **grade do vendedor de origem**, usando a cadeia hierárquica para pagar supervisor, gerente e agência.
+
+Ainda existem pontos que podem causar confusão ou inconsistência:
+
+1. A listagem de grades ainda mostra “Usada por X usuários”, o que pode parecer que a grade é criada para um usuário específico.
+2. A tela de grades ainda carrega dados auxiliares antigos (`grades_comissao_niveis`, `grades_comissao_parcelas`) junto com a nova estrutura por plano.
+3. A função antiga `fn_resolver_grade_vendedor_em` em uma migration usa `ugc.usuario_id`, mas a tabela atual usa `user_id`. Vou revisar a versão efetiva no banco e corrigir se necessário.
+4. A duplicação de grade precisa garantir que copie corretamente as regras por plano/perfil, não uma estrutura antiga incompleta.
+5. A área de atribuição precisa deixar visualmente claro que ali é o único lugar onde usuário recebe uma grade.
+
+---
+
+## Objetivo final
+
+Separar definitivamente as responsabilidades:
 
 ```text
-1. Alterações em Grades de Comissão
-   - quem alterou
-   - quando alterou
-   - qual grade/plano/parcela/perfil mudou
-   - versão anterior e nova versão
-   - dados anteriores e dados novos
+Grades de Comissão
+  -> Define regra comercial
+  -> Plano vendido
+  -> Parcela
+  -> Perfil de acesso
+  -> Percentual ou valor fixo pago
 
-2. Alterações em Atribuições
-   - quem atribuiu/alterou
-   - quando alterou
-   - usuário/vendedor afetado
-   - grade anterior e nova grade
-   - supervisor/gerente/agência anteriores e novos
-   - vigência encerrada e nova vigência
+Atribuição de Grades
+  -> Define qual grade vale para cada usuário/vendedor
+  -> Define supervisor, gerente e agência da cadeia
 ```
 
-Isso permitirá rastrear versões, mudanças retroativas e entender por que uma comissão foi calculada de determinada forma.
+---
+
+## 1. Ajustar tela de Grades de Comissão
+
+Arquivo:
+
+- `src/pages/configuracoes/GradesComissao.tsx`
+
+### Mudanças
+
+Remover qualquer leitura visual que sugira “grade criada para usuário”.
+
+A tela passará a focar em:
+
+- nome da grade;
+- versão;
+- status;
+- quantidade de planos configurados;
+- quantidade de parcelas/regras;
+- quantidade de perfis remunerados;
+- se possui regra vitalícia;
+- ações: editar, duplicar, ativar/inativar, excluir.
+
+### Ajuste de texto
+
+Trocar mensagens como:
+
+```text
+Usada por X usuários
+```
+
+por algo mais neutro:
+
+```text
+X atribuições ativas
+```
+
+ou mover essa informação para uma área secundária com tooltip:
+
+```text
+Esta informação vem da área de Atribuição de Grades.
+```
+
+### Exclusão
+
+Manter a proteção contra excluir grade com atribuição ativa, mas ajustar o texto:
+
+```text
+Esta grade possui atribuições ativas. Remova os vínculos na área de Atribuição de Grades antes de excluir.
+```
 
 ---
 
-## Situação atual
+## 2. Ajustar formulário de criação/edição de grade
 
-Já existe uma tabela e tela de auditoria:
-
-- `logs_auditoria`
-- `src/hooks/useAuditLog.ts`
-- `src/pages/diretoria/LogsAuditoria.tsx`
-
-A tela já exibe:
-
-- usuário;
-- data/hora;
-- ação;
-- módulo;
-- descrição;
-- dados anteriores;
-- dados novos.
-
-Também já existem pontos importantes para auditar:
-
-- `GradeComissaoForm.tsx`, onde grades são criadas/editadas;
-- `fn_atribuir_grade_usuario`, onde uma grade é atribuída ao usuário;
-- `fn_upsert_hierarquia_vendedor`, onde supervisor/gerente/agência são alterados.
-
-O que falta é registrar eventos detalhados nesses fluxos e melhorar a tela de auditoria para filtrar/visualizar especificamente comissões, grades, versões e atribuições.
-
----
-
-## 1. Registrar logs ao criar ou editar grades de comissão
-
-Arquivo principal:
+Arquivo:
 
 - `src/pages/configuracoes/GradeComissaoForm.tsx`
 
-### Ao criar grade
-Registrar log com:
+### Manter
+
+A estrutura atual correta:
 
 ```text
-Ação: criar
-Módulo: configuracoes ou comissoes
-Tabela: grades_comissao
-Registro: grade_id
-Descrição: Grade de comissão criada
-Dados novos:
-  - nome
-  - descrição
-  - versão
-  - planos vinculados
-  - regras por plano/parcela/perfil
+Grade
+  -> Planos configurados
+    -> Parcelas
+      -> Perfis remunerados
+        -> Percentual ou valor fixo
 ```
 
-### Ao editar grade
-Registrar log com:
+### Melhorar clareza
+
+Adicionar/ajustar textos para reforçar:
 
 ```text
-Ação: editar
-Módulo: configuracoes ou comissoes
-Tabela: grades_comissao
-Registro: grade_id
-Descrição: Grade de comissão atualizada para nova versão
-Dados anteriores:
-  - snapshot/versão anterior
-  - planos anteriores
-  - regras anteriores
-
-Dados novos:
-  - snapshot/versão nova
-  - planos atuais
-  - regras atuais
+Esta tela não define quem recebe comissão.
+Ela define quanto cada perfil recebe quando esta grade for aplicada a uma venda.
 ```
 
-### Resultado esperado
-Na auditoria será possível ver:
+### Validações
 
-```text
-Diretor X alterou a Grade Select RJ em 23/04 às 14:30
-Versão anterior: v2
-Nova versão: v3
-Plano alterado: Select Exclusive
-Parcela: 2ª
-Supervisor: 4% -> 5%
-Gerente: 2% -> 3%
-```
+Revisar:
+
+- não permitir plano selecionado sem parcela;
+- não permitir parcela sem perfil remunerado, se a intenção for gerar comissão naquela parcela;
+- não permitir perfil duplicado dentro da mesma parcela do mesmo plano;
+- manter limite de 100% apenas para regras percentuais;
+- permitir valor fixo sem afetar o percentual da empresa.
+
+### Persistência
+
+Garantir que o salvamento use como fonte principal:
+
+- `grade_comissao_planos`;
+- `grade_comissao_plano_regras`;
+- `grades_comissao_versoes.snapshot`.
+
+E que as tabelas auxiliares antigas sejam usadas apenas se ainda forem necessárias para compatibilidade visual.
 
 ---
 
-## 2. Registrar logs ao atribuir grade a usuário
-
-Banco/função:
-
-- `fn_atribuir_grade_usuario`
-
-Hoje a função fecha a atribuição vigente e cria uma nova. Vou ajustar a função para também inserir em `logs_auditoria`.
-
-### O log deverá registrar
-
-```text
-Ação: atribuir
-Módulo: comissoes
-Tabela: usuario_grade_comissao
-Registro: nova_atribuicao_id
-Descrição: Grade atribuída ao usuário/vendedor
-
-Dados anteriores:
-  - atribuição anterior
-  - grade anterior
-  - data_inicio anterior
-  - data_fim encerrada
-
-Dados novos:
-  - usuário afetado
-  - grade nova
-  - atribuído por
-  - data_inicio
-```
-
-### Importante
-Se a grade for a mesma da vigente, a função deve evitar gerar log duplicado desnecessário ou registrar como “sem alteração”, conforme a lógica atual permitir.
-
----
-
-## 3. Registrar logs ao alterar cadeia hierárquica
-
-Banco/função:
-
-- `fn_upsert_hierarquia_vendedor`
-
-Hoje a função fecha a hierarquia vigente e cria uma nova quando algo muda.
-
-Vou ajustar para gravar log quando houver alteração real em:
-
-- supervisor;
-- gerente;
-- agência;
-- observações.
-
-### O log deverá registrar
-
-```text
-Ação: editar
-Módulo: comissoes
-Tabela: hierarquia_vendas
-Registro: nova_hierarquia_id
-Descrição: Hierarquia de comissão alterada
-
-Dados anteriores:
-  - vendedor
-  - supervisor anterior
-  - gerente anterior
-  - agência anterior
-  - observações anteriores
-  - vigente_desde
-  - vigente_ate encerrado
-
-Dados novos:
-  - vendedor
-  - supervisor novo
-  - gerente novo
-  - agência nova
-  - observações novas
-  - vigente_desde
-```
-
-### Resultado esperado
-Na auditoria será possível ver:
-
-```text
-Diretor X alterou a cadeia do vendedor João
-Supervisor: Maria -> Pedro
-Gerente: Carlos -> Carlos
-Agência: nenhuma -> Agência RJ
-```
-
----
-
-## 4. Melhorar a tela de Logs de Auditoria
+## 3. Ajustar duplicação de grade
 
 Arquivo:
 
-- `src/pages/diretoria/LogsAuditoria.tsx`
+- `src/pages/configuracoes/GradesComissao.tsx`
 
-### Novos filtros
-Adicionar filtros para facilitar rastreio de comissões:
-
-```text
-Módulo:
-- Comissões
-- Configurações
-- Diretoria
-- Financeiro
-- etc.
-
-Tabela/Origem:
-- grades_comissao
-- grades_comissao_versoes
-- usuario_grade_comissao
-- hierarquia_vendas
-- comissoes
-- comissoes_pagamentos
-
-Busca:
-- nome do usuário que alterou
-- nome da grade
-- nome do vendedor afetado
-- ID do registro
-```
-
-### Novas ações visuais
-Expandir o mapa de ações para incluir:
+A duplicação deve copiar a configuração comercial completa:
 
 ```text
-atribuir
-reativar
-desativar
-configuracao
+grade_comissao_planos
+grade_comissao_plano_regras
+grades_comissao_versoes.snapshot
 ```
 
-Hoje algumas ações existem no hook, mas a tela não destaca todas.
+Sem copiar atribuições de usuários.
+
+A nova grade duplicada deve nascer como:
+
+```text
+Grade X (Cópia)
+versão 1
+sem usuários atribuídos
+mesmas regras comerciais por plano/perfil
+```
 
 ---
 
-## 5. Criar visualização amigável para diferenças
+## 4. Ajustar área de Atribuição de Grades
 
-Arquivo:
+Arquivos:
 
-- `src/pages/diretoria/LogsAuditoria.tsx`
+- `src/pages/configuracoes/AtribuicaoGrades.tsx`
+- `src/components/comissoes/AtribuirGradeModal.tsx`
+- `src/hooks/useAtribuicaoComissoes.ts`
 
-Além do JSON bruto, adicionar uma seção resumida quando o log for de comissões/grades/atribuições.
+### Mudanças visuais
 
-### Para grades
-Mostrar resumo como:
-
-```text
-Grade: Grade Select RJ
-Versão: v2 -> v3
-Planos:
-- Select Exclusive
-- Select Diesel
-
-Alterações principais:
-- Plano Select Exclusive / 2ª Parcela / Supervisor: 4% -> 5%
-- Plano Select Exclusive / 2ª Parcela / Gerente: 2% -> 3%
-- Plano Select Diesel adicionado
-```
-
-### Para atribuições
-Mostrar resumo como:
+Reforçar na tela:
 
 ```text
-Usuário afetado: João Silva
-Grade: Grade Antiga -> Grade Select RJ
-Supervisor: Maria -> Pedro
-Gerente: Carlos -> Carlos
-Agência: — -> Agência RJ
+Aqui você escolhe qual grade comercial será aplicada às vendas de cada usuário.
+A grade do vendedor de origem determina quanto vendedor, supervisor, gerente e agência recebem.
 ```
 
-### Manter JSON técnico
-A tela continuará exibindo `dados_anteriores` e `dados_novos` completos para auditoria técnica.
+### Modal
+
+O modal continuará sendo o único local para:
+
+- atribuir grade ao usuário;
+- alterar supervisor;
+- alterar gerente;
+- alterar agência;
+- registrar observações.
+
+### Melhorias
+
+Adicionar um bloco de explicação no modal:
+
+```text
+A grade selecionada não paga apenas este usuário.
+Ela define a regra usada nas vendas originadas por ele.
+Os perfis pagos serão resolvidos conforme a cadeia configurada.
+```
 
 ---
 
-## 6. Exportação CSV com detalhes de auditoria
+## 5. Revisar função de resolução da grade do vendedor
 
-Arquivo:
+Banco/Supabase:
 
-- `src/pages/diretoria/LogsAuditoria.tsx`
+- `fn_resolver_grade_vendedor_em`
 
-Atualizar exportação para incluir:
+Vou verificar a função efetiva no banco e corrigir se ela ainda usa campo incorreto.
 
-```text
-Data/Hora
-Usuário executor
-Ação
-Módulo
-Tabela
-Registro ID
-Descrição
-Resumo da alteração
-Dados anteriores
-Dados novos
-IP
+A versão correta deve buscar a grade vigente por:
+
+```sql
+usuario_grade_comissao.user_id = vendedor_id
+data_inicio <= data_referencia
+data_fim is null or data_fim > data_referencia
 ```
 
-Assim será possível exportar alterações de grades e atribuições para conferência externa.
+Não deve usar:
 
----
-
-## 7. Banco de dados / migrations
-
-Será criada uma migration para atualizar as funções:
-
-- `fn_atribuir_grade_usuario`
-- `fn_upsert_hierarquia_vendedor`
-
-Essas funções passarão a inserir registros em `logs_auditoria` com `dados_anteriores` e `dados_novos`.
-
-Não será necessário criar nova tabela, porque `logs_auditoria` já suporta:
-
-```text
-acao
-modulo
-tabela
-registro_id
-dados_anteriores
-dados_novos
+```sql
 usuario_id
-usuario_nome
-created_at
+ativo
 ```
 
-Se necessário, adicionarei apenas índices para melhorar filtros:
+a menos que essas colunas realmente existam no schema atual.
+
+---
+
+## 6. Revisar motor de geração de comissões
+
+Banco/Supabase:
+
+- `fn_gerar_comissoes_por_pagamento`
+
+Confirmar que o fluxo segue esta regra:
 
 ```text
-logs_auditoria(modulo)
-logs_auditoria(tabela)
-logs_auditoria(registro_id)
-logs_auditoria(created_at)
+1. Pega vendedor de origem do contrato.
+2. Resolve a grade atribuída a esse vendedor.
+3. Verifica se o plano vendido existe na grade.
+4. Resolve a parcela paga.
+5. Busca regras por perfil:
+   - vendedor_clt
+   - vendedor_externo
+   - supervisor_vendas
+   - gerente_comercial
+   - agencia
+6. Resolve destinatário:
+   - vendedor -> vendedor origem
+   - supervisor -> supervisor da cadeia
+   - gerente -> gerente da cadeia
+   - agência -> agência da cadeia
+7. Gera comissão com snapshot.
+```
+
+Também vou manter a regra conceitual:
+
+```text
+Supervisor, gerente e agência não usam suas próprias grades nessa venda.
+Eles recebem conforme a grade do vendedor de origem.
 ```
 
 ---
 
-## 8. Compatibilidade com versões e retroativos
+## 7. Revisar logs de auditoria
 
-A auditoria usará dois níveis de rastreabilidade:
+Como já houve implementação recente de auditoria, vou garantir que os logs reflitam a separação correta:
+
+### Alteração de grade
+
+Log deve indicar:
 
 ```text
-1. grades_comissao_versoes.snapshot
-   - preserva a configuração comercial versionada da grade
-
-2. logs_auditoria
-   - registra quem mudou, quando mudou e o que mudou
+Quem alterou
+Quando alterou
+Qual grade
+Qual plano
+Qual parcela
+Qual perfil
+Valor anterior
+Valor novo
 ```
 
-Isso permite responder:
+### Atribuição de grade
+
+Log deve indicar:
 
 ```text
-Quem mudou a regra?
-Quando mudou?
-Qual era a regra antes?
-Qual regra ficou depois?
-Essa mudança afetou novas comissões ou uma geração retroativa?
-Quem alterou a atribuição do vendedor?
-Qual hierarquia estava vigente antes?
+Quem atribuiu
+Quando atribuiu
+Usuário afetado
+Grade anterior
+Grade nova
+Hierarquia anterior/nova quando aplicável
 ```
 
 ---
 
-## Arquivos envolvidos
+## 8. Arquivos envolvidos
 
 ### Frontend
+
+- `src/pages/configuracoes/GradesComissao.tsx`
 - `src/pages/configuracoes/GradeComissaoForm.tsx`
-- `src/pages/diretoria/LogsAuditoria.tsx`
-- opcional: criar helpers em `src/lib/auditoria-formatters.ts`
+- `src/pages/configuracoes/AtribuicaoGrades.tsx`
+- `src/components/comissoes/AtribuirGradeModal.tsx`
+- `src/hooks/useAtribuicaoComissoes.ts`
 
 ### Banco/Supabase
-- migration para atualizar:
-  - `fn_atribuir_grade_usuario`
-  - `fn_upsert_hierarquia_vendedor`
-- opcional: índices em `logs_auditoria`
+
+- revisar/corrigir `fn_resolver_grade_vendedor_em`
+- revisar `fn_gerar_comissoes_por_pagamento`
+- se necessário, criar migration corretiva sem duplicar estrutura existente
 
 ---
 
 ## Validação esperada
 
 ### Cenário 1: criar grade
-- Criar uma nova grade.
-- Abrir Logs de Auditoria.
-- Filtrar por módulo “Comissões” ou tabela `grades_comissao`.
-- Ver quem criou, quando criou e snapshot da configuração.
 
-### Cenário 2: editar grade
-- Alterar percentual de um perfil em um plano.
-- Salvar nova versão.
-- Ver log com dados anteriores e novos.
-- Ver resumo da diferença.
+- Diretor acessa Grades de Comissão.
+- Cria uma grade sem escolher usuário.
+- Configura planos, parcelas e perfis remunerados.
+- Salva a grade.
 
-### Cenário 3: atribuir grade
-- Ir em Atribuição de Grades.
-- Alterar a grade de um vendedor.
-- Ver log com grade anterior e nova grade.
+Resultado esperado:
 
-### Cenário 4: alterar hierarquia
-- Alterar supervisor/gerente/agência de um vendedor.
-- Ver log com cadeia anterior e nova cadeia.
+```text
+Nenhum usuário é atribuído nessa tela.
+A grade fica disponível para atribuição depois.
+```
 
-### Cenário 5: exportação
-- Exportar logs filtrados.
-- CSV deve conter tabela, registro, descrição, dados anteriores e dados novos.
+### Cenário 2: atribuir grade
+
+- Diretor acessa Atribuição de Grades.
+- Escolhe um usuário/vendedor.
+- Seleciona a grade.
+- Define supervisor, gerente e agência.
+
+Resultado esperado:
+
+```text
+Usuário passa a ter grade vigente.
+Hierarquia fica configurada separadamente.
+```
+
+### Cenário 3: geração de comissão
+
+- Venda/pagamento de um contrato com vendedor de origem.
+- Sistema usa a grade atribuída ao vendedor.
+- Sistema paga os perfis configurados no plano/parcela.
+- Supervisor/gerente/agência recebem conforme cadeia, não conforme grades próprias.
+
+### Cenário 4: edição de grade
+
+- Diretor edita uma grade.
+- Nova versão é criada.
+- Logs mostram o que mudou.
+- Comissões futuras usam nova versão.
+- Comissões antigas continuam auditáveis pelo snapshot.
+
