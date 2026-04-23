@@ -396,13 +396,13 @@ export default function AssociadoVistoria() {
             <AgendamentoInstalacaoContrato
               contratoId={contrato.id}
               enderecoInicial={{
-                cep: contrato.associados?.cep || '',
-                logradouro: contrato.associados?.logradouro || '',
-                numero: contrato.associados?.numero || '',
-                complemento: contrato.associados?.complemento || '',
-                bairro: contrato.associados?.bairro || '',
-                cidade: contrato.associados?.cidade || '',
-                estado: contrato.associados?.uf || '',
+                cep: contrato.associados?.cep || contrato.cotacoes?.cliente_cep || '',
+                logradouro: contrato.associados?.logradouro || contrato.cotacoes?.cliente_logradouro || '',
+                numero: contrato.associados?.numero || contrato.cotacoes?.cliente_numero || '',
+                complemento: contrato.associados?.complemento || contrato.cotacoes?.cliente_complemento || '',
+                bairro: contrato.associados?.bairro || contrato.cotacoes?.cliente_bairro || '',
+                cidade: contrato.associados?.cidade || contrato.cotacoes?.cliente_cidade || '',
+                estado: contrato.associados?.uf || contrato.cotacoes?.cliente_uf || '',
               }}
               onConfirmar={() => {
                 // Após agendar, gerar link Autentique e ir para confirmação

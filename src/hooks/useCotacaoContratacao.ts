@@ -478,9 +478,10 @@ export function useCotacaoContratacao(token: string | undefined) {
           veiculo_cor: dados.veiculo_cor || null,
           veiculo_combustivel: truncar(dados.veiculo_combustivel, 50),
           veiculo_ano_fabricacao: dados.veiculo_ano_fabricacao || null,
+          veiculo_motor: dados.veiculo_numero_motor || null,
           // Persistir categoria se ainda não definida
           ...((!cotacao.categoria) ? { categoria: detectarCategoriaPorModelo(cotacao.veiculo_modelo, cotacao.veiculo_marca) } : {}),
-        })
+        } as any)
         .eq('id', cotacao.id);
 
       if (error) throw error;
