@@ -1,8 +1,13 @@
-// Cron diário (02:00): enfileira jobs de resync e processa a fila em batches.
+// Cron diário: enfileira jobs de resync e processa a fila em batches.
+//
 // IMPORTANTE: a sincronização financeira atua apenas sobre a BASE ANTIGA
 // (associados.origem_cadastro = 'api_externa'). Veículos do sistema novo
 // (origem_cadastro = 'interno') são enviados ao SGA via sga-hinova-sync e
 // suas cobranças vivem localmente — não devem ser sincronizados a partir do Hinova.
+//
+// Schedule: o cron pg_cron deve ser configurado para 12:00 UTC (09:00 BRT) — dentro
+// da janela horária comercial liberada para o usuário SGA. Crons fora da janela
+// caem em pendente_retry automaticamente.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -20,25 +25,38 @@ serve(async (req) => {
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
   try {
-    // 0) Limpeza recorrente: cancela jobs órfãos de veículos 'interno'
-    //    (caso algum tenha sido criado antes do guard, ou após migração de origem).
-    const limpeza = await supabase.functions.invoke('sga-backfill-financeiro', {
-      body: { acao: 'cancelar_internos' },
-    });
-    console.log('[Cron SGA Diario] limpeza internos:', limpeza.data);
+    // Suporta modo "drenar apenas" (cron de 2h em 2h) — pula enfileiramento.
+    const body = await req.json().catch(() => ({}));
+    const apenasProcessar: boolean = body?.apenas_processar === true;
 
-    // 1) Enfileira resync
-    const enq = await supabase.functions.invoke('sga-backfill-financeiro', {
-      body: { acao: 'enfileirar', tipo: 'resync' },
-    });
-    console.log('[Cron SGA Diario] enfileirar:', enq.data);
+    if (!apenasProcessar) {
+      // 0) Limpeza recorrente: cancela jobs órfãos de veículos 'interno'
+      const limpeza = await supabase.functions.invoke('sga-backfill-financeiro', {
+        body: { acao: 'cancelar_internos' },
+      });
+      console.log('[Cron SGA Diario] limpeza internos:', limpeza.data);
+
+      // 1) Enfileira resync (inclui veículos sem codigo_hinova)
+      const enq = await supabase.functions.invoke('sga-backfill-financeiro', {
+        body: { acao: 'enfileirar', tipo: 'resync' },
+      });
+      console.log('[Cron SGA Diario] enfileirar:', enq.data);
+
+      // 1.1) Reagenda erros de janela horária
+      const reag = await supabase.functions.invoke('sga-backfill-financeiro', {
+        body: { acao: 'reagendar_erros_horario' },
+      });
+      console.log('[Cron SGA Diario] reagendar erros horário:', reag.data);
+    }
 
     // 2) Processa em loop até esgotar (com limite de segurança)
-    const MAX_CICLOS = 60;        // ~60 ciclos x 20 jobs = 1200 veículos por execução
-    const BATCH = 20;
-    const DELAY = 200;
+    // 80 ciclos x 50 jobs = 4.000 veículos por execução (com delay 150ms ≈ 13 min)
+    const MAX_CICLOS = 80;
+    const BATCH = 50;
+    const DELAY = 150;
     let totalOk = 0;
     let totalFail = 0;
+    let totalRetry = 0;
     for (let i = 0; i < MAX_CICLOS; i++) {
       const r = await supabase.functions.invoke('sga-backfill-financeiro', {
         body: { acao: 'processar', batch_size: BATCH, delay_ms: DELAY },
@@ -47,10 +65,11 @@ serve(async (req) => {
       if (!data?.processados) break;
       totalOk += data.ok ?? 0;
       totalFail += data.fail ?? 0;
+      totalRetry += data.retry ?? 0;
       await sleep(500);
     }
 
-    return new Response(JSON.stringify({ success: true, ok: totalOk, fail: totalFail }), {
+    return new Response(JSON.stringify({ success: true, ok: totalOk, fail: totalFail, retry: totalRetry }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err: any) {

@@ -2,6 +2,7 @@
 // - Reusável para on-demand (botão "Atualizar agora") e workers do backfill.
 // - Body: { veiculo_id: string, job_id?: string }
 // - Idempotente: upsert em cobrancas por nosso_numero.
+// - Distingue erros transitórios (auth/janela/5xx) → status 'pendente_retry' com proximo_retry_em.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
@@ -13,6 +14,9 @@ import {
   parseDataHinova,
   toNumber,
   buscarVeiculoPorPlaca,
+  HinovaTransientError,
+  HinovaNotFoundError,
+  calcularProximoRetry,
 } from '../_shared/hinova-client.ts';
 
 const corsHeaders = {
@@ -62,6 +66,16 @@ async function buscarAssociadoPorCpf(session: any, cpf: string | null | undefine
   });
 
   const text = await response.text();
+
+  // Detectar janela horária / auth recusada também aqui
+  if (response.status === 401 || response.status === 403 || response.status >= 500) {
+    throw new HinovaTransientError(`[buscarAssociadoPorCpf] http=${response.status}: ${text.slice(0, 200)}`, {
+      httpStatus: response.status,
+      reason: response.status >= 500 ? 'server' : 'auth',
+      bodySample: text.slice(0, 300),
+    });
+  }
+
   if (!response.ok) {
     console.warn('[SGA Sync Veículo] busca CPF status', response.status, text.slice(0, 200));
     return null;
@@ -80,6 +94,20 @@ serve(async (req) => {
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
   let jobId: string | undefined;
   let veiculoId: string | undefined;
+
+  // Marca job como pendente_retry em vez de erro permanente
+  async function marcarRetry(err: HinovaTransientError) {
+    if (!jobId) return;
+    const proximoRetry = calcularProximoRetry(err.reason);
+    await supabase
+      .from('sga_sync_financeiro_jobs')
+      .update({
+        status: 'pendente_retry',
+        proximo_retry_em: proximoRetry.toISOString(),
+        ultimo_erro: `[${err.reason}] ${err.message}`,
+      })
+      .eq('id', jobId);
+  }
 
   try {
     const body = await req.json().catch(() => ({}));
@@ -138,72 +166,124 @@ serve(async (req) => {
     let codigoAssociado = Number(associado.codigo_hinova) || null;
 
     if (veiculo.placa) {
-      const { found, debug } = await buscarVeiculoPorPlaca(session, veiculo.placa);
-      const codigoVeiculoEncontrado = Number(found?.codigo_veiculo) || null;
-      const codigoAssociadoEncontrado = extractCodigoAssociado(found);
+      try {
+        const { found, debug } = await buscarVeiculoPorPlaca(session, veiculo.placa);
+        const codigoVeiculoEncontrado = Number(found?.codigo_veiculo) || null;
+        const codigoAssociadoEncontrado = extractCodigoAssociado(found);
 
-      await supabase.from('sga_sync_logs').insert({
-        veiculo_id: veiculo.id,
-        associado_id: associado.id,
-        action: 'reconciliar_codigos_placa',
-        status: codigoVeiculoEncontrado ? 'success' : 'info',
-        request_payload: { placa: veiculo.placa },
-        response_payload: {
-          endpoint: debug.endpoint,
-          http_status: debug.status,
-          codigo_veiculo: codigoVeiculoEncontrado,
-          codigo_associado: codigoAssociadoEncontrado,
-          body_sample: debug.bodySample,
-        },
-      });
+        await supabase.from('sga_sync_logs').insert({
+          veiculo_id: veiculo.id,
+          associado_id: associado.id,
+          action: 'reconciliar_codigos_placa',
+          status: codigoVeiculoEncontrado ? 'success' : 'info',
+          request_payload: { placa: veiculo.placa },
+          response_payload: {
+            endpoint: debug.endpoint,
+            http_status: debug.status,
+            codigo_veiculo: codigoVeiculoEncontrado,
+            codigo_associado: codigoAssociadoEncontrado,
+            body_sample: debug.bodySample,
+          },
+        });
 
-      if (codigoVeiculoEncontrado && codigoVeiculoEncontrado !== codigoVeiculo) {
-        codigoVeiculo = codigoVeiculoEncontrado;
-        await supabase.from('veiculos').update({ codigo_hinova: codigoVeiculoEncontrado }).eq('id', veiculo.id);
-      }
+        if (codigoVeiculoEncontrado && codigoVeiculoEncontrado !== codigoVeiculo) {
+          codigoVeiculo = codigoVeiculoEncontrado;
+          await supabase.from('veiculos').update({ codigo_hinova: codigoVeiculoEncontrado }).eq('id', veiculo.id);
+        }
 
-      if (codigoAssociadoEncontrado && codigoAssociadoEncontrado !== codigoAssociado) {
-        codigoAssociado = codigoAssociadoEncontrado;
-        await supabase.from('associados').update({ codigo_hinova: codigoAssociadoEncontrado }).eq('id', associado.id);
+        if (codigoAssociadoEncontrado && codigoAssociadoEncontrado !== codigoAssociado) {
+          codigoAssociado = codigoAssociadoEncontrado;
+          await supabase.from('associados').update({ codigo_hinova: codigoAssociadoEncontrado }).eq('id', associado.id);
+        }
+      } catch (e) {
+        if (e instanceof HinovaNotFoundError) {
+          // Placa não existe na Hinova — segue com o codigo que já tínhamos (se houver)
+          await supabase.from('sga_sync_logs').insert({
+            veiculo_id: veiculo.id,
+            associado_id: associado.id,
+            action: 'reconciliar_codigos_placa',
+            status: 'info',
+            request_payload: { placa: veiculo.placa },
+            response_payload: { not_found: true },
+          });
+        } else {
+          throw e; // transitório → bubble up para marcar retry
+        }
       }
     }
 
+    // Fallback CPF SEMPRE: tenta CPF se faltar codigoAssociado OU se já temos um mas pode estar desatualizado.
+    // Se já temos codigoAssociado, só fazemos a chamada se a primeira tentativa de boletos falhar (ver abaixo).
     if (!codigoAssociado && associado.cpf) {
-      const associadoPorCpf = await buscarAssociadoPorCpf(session, associado.cpf);
-      const codigoAssociadoPorCpf = extractCodigoAssociado(associadoPorCpf);
+      try {
+        const associadoPorCpf = await buscarAssociadoPorCpf(session, associado.cpf);
+        const codigoAssociadoPorCpf = extractCodigoAssociado(associadoPorCpf);
 
-      await supabase.from('sga_sync_logs').insert({
-        veiculo_id: veiculo.id,
-        associado_id: associado.id,
-        action: 'reconciliar_codigos_cpf',
-        status: codigoAssociadoPorCpf ? 'success' : 'info',
-        request_payload: { cpf: '***' },
-        response_payload: codigoAssociadoPorCpf
-          ? { codigo_associado: codigoAssociadoPorCpf, descricao_situacao: associadoPorCpf?.descricao_situacao ?? null }
-          : { descricao_situacao: associadoPorCpf?.descricao_situacao ?? null },
-      });
+        await supabase.from('sga_sync_logs').insert({
+          veiculo_id: veiculo.id,
+          associado_id: associado.id,
+          action: 'reconciliar_codigos_cpf',
+          status: codigoAssociadoPorCpf ? 'success' : 'info',
+          request_payload: { cpf: '***' },
+          response_payload: codigoAssociadoPorCpf
+            ? { codigo_associado: codigoAssociadoPorCpf, descricao_situacao: associadoPorCpf?.descricao_situacao ?? null }
+            : { descricao_situacao: associadoPorCpf?.descricao_situacao ?? null },
+        });
 
-      if (codigoAssociadoPorCpf) {
-        codigoAssociado = codigoAssociadoPorCpf;
-        await supabase.from('associados').update({ codigo_hinova: codigoAssociadoPorCpf }).eq('id', associado.id);
+        if (codigoAssociadoPorCpf) {
+          codigoAssociado = codigoAssociadoPorCpf;
+          await supabase.from('associados').update({ codigo_hinova: codigoAssociadoPorCpf }).eq('id', associado.id);
+        }
+      } catch (e) {
+        if (e instanceof HinovaTransientError) throw e;
+        // outros: ignora e segue
       }
     }
 
-    if (!codigoVeiculo) throw new Error('Veículo sem codigo_hinova válido');
-    if (!codigoAssociado) throw new Error('Associado sem codigo_hinova válido');
+    if (!codigoVeiculo) {
+      // Sem código de veículo após reconciliação → not found definitivo
+      throw new HinovaNotFoundError('Veículo sem codigo_hinova válido após reconciliação');
+    }
+    if (!codigoAssociado) {
+      throw new HinovaNotFoundError('Associado sem codigo_hinova válido após reconciliação');
+    }
 
-    const situacao = await buscarSituacaoFinanceiraVeiculo(session, codigoVeiculo);
+    let situacao: string | null = null;
+    try {
+      situacao = await buscarSituacaoFinanceiraVeiculo(session, codigoVeiculo);
+    } catch (e) {
+      if (e instanceof HinovaTransientError) throw e;
+      // Erro não-transitório de situação não bloqueia listagem de boletos
+    }
 
-    let boletos = await listarBoletosVeiculo(session, codigoAssociado, codigoVeiculo);
+    let boletos: any[] = [];
+    try {
+      boletos = await listarBoletosVeiculo(session, codigoAssociado, codigoVeiculo);
+    } catch (e) {
+      if (e instanceof HinovaTransientError) throw e;
+      throw e;
+    }
 
+    // Fallback CPF SEMPRE quando vazio — tenta reconciliar pelo CPF mesmo se já tínhamos codigoAssociado
     if ((!boletos || boletos.length === 0) && associado.cpf) {
-      const associadoPorCpf = await buscarAssociadoPorCpf(session, associado.cpf);
-      const codigoAssociadoPorCpf = extractCodigoAssociado(associadoPorCpf);
+      try {
+        const associadoPorCpf = await buscarAssociadoPorCpf(session, associado.cpf);
+        const codigoAssociadoPorCpf = extractCodigoAssociado(associadoPorCpf);
 
-      if (codigoAssociadoPorCpf && codigoAssociadoPorCpf !== codigoAssociado) {
-        codigoAssociado = codigoAssociadoPorCpf;
-        await supabase.from('associados').update({ codigo_hinova: codigoAssociadoPorCpf }).eq('id', associado.id);
-        boletos = await listarBoletosVeiculo(session, codigoAssociadoPorCpf, codigoVeiculo);
+        if (codigoAssociadoPorCpf && codigoAssociadoPorCpf !== codigoAssociado) {
+          await supabase.from('sga_sync_logs').insert({
+            veiculo_id: veiculo.id,
+            associado_id: associado.id,
+            action: 'reconciliar_codigos_cpf_fallback',
+            status: 'success',
+            response_payload: { codigo_associado_antigo: codigoAssociado, codigo_associado_novo: codigoAssociadoPorCpf },
+          });
+          codigoAssociado = codigoAssociadoPorCpf;
+          await supabase.from('associados').update({ codigo_hinova: codigoAssociadoPorCpf }).eq('id', associado.id);
+          boletos = await listarBoletosVeiculo(session, codigoAssociadoPorCpf, codigoVeiculo);
+        }
+      } catch (e) {
+        if (e instanceof HinovaTransientError) throw e;
       }
     }
 
@@ -315,6 +395,7 @@ serve(async (req) => {
           status: boletos.length > 0 ? 'concluido' : 'sem_historico_hinova',
           concluido_em: new Date().toISOString(),
           boletos_importados: importados,
+          proximo_retry_em: null,
           ultimo_erro: boletos.length > 0 ? null : 'Nenhum boleto retornado pela Hinova para o vínculo atual de associado/veículo',
         })
         .eq('id', jobId);
@@ -332,6 +413,35 @@ serve(async (req) => {
     });
   } catch (err: any) {
     console.error('[SGA Sync Veículo] erro:', err);
+
+    // Erros transitórios → pendente_retry, NÃO consome contador permanente
+    if (err instanceof HinovaTransientError) {
+      await marcarRetry(err);
+      return json(200, {
+        success: false,
+        retry: true,
+        reason: err.reason,
+        http_status: err.httpStatus,
+        error: err.message,
+      });
+    }
+
+    // Not found definitivo → sem_historico_hinova
+    if (err instanceof HinovaNotFoundError) {
+      if (jobId) {
+        await supabase
+          .from('sga_sync_financeiro_jobs')
+          .update({
+            status: 'sem_historico_hinova',
+            concluido_em: new Date().toISOString(),
+            ultimo_erro: err.message,
+          })
+          .eq('id', jobId);
+      }
+      return json(200, { success: false, not_found: true, error: err.message });
+    }
+
+    // Outros erros → erro permanente
     if (jobId) {
       await supabase
         .from('sga_sync_financeiro_jobs')
