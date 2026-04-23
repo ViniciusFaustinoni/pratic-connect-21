@@ -36,6 +36,7 @@ import {
 import { useCobrancasAssociado } from '@/hooks/useDocumentosCotacao';
 import { useAssociadoHistoricoCompleto } from '@/hooks/useAssociadoHistoricoCompleto';
 import { MapaRastreador } from '@/components/rastreadores/MapaRastreador';
+import { HistoricoVinculoSection } from '@/components/rastreadores/HistoricoVinculoSection';
 import { VincularRastreadorForm } from '@/components/cadastro/VincularRastreadorForm';
 import { VeiculoFinanceiroSGA } from '@/components/cadastro/VeiculoFinanceiroSGA';
 import { cn } from '@/lib/utils';
@@ -322,6 +323,11 @@ export function VeiculoDetalhesModal({ open, onClose, veiculoId }: VeiculoDetalh
                   ) : (
                     <EmptyState icon={WifiOff} text="Nenhum rastreador instalado neste veículo" />
                   )}
+                  <Separator />
+                  <HistoricoVinculoSection
+                    veiculoId={veiculoId}
+                    titulo="Histórico de Vínculo (este veículo)"
+                  />
                 </TabsContent>
 
                 {/* ===== EVENTOS ===== */}
