@@ -97,15 +97,15 @@ export function AtribuirGradeModal({ open, onOpenChange, linha }: AtribuirGradeM
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>Atribuir grade e hierarquia</DialogTitle>
+          <DialogTitle>Atribuir grade ao usuário e cadeia</DialogTitle>
           <DialogDescription>
-            {linha.usuario.nome} — {linha.usuario.roles.join(', ')}
+            {linha.usuario.nome} — a grade atribuída aqui será usada nas vendas deste usuário
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           <div>
-            <Label>Grade de Comissão</Label>
+            <Label>Grade aplicada às vendas deste usuário</Label>
             <Select value={gradeId} onValueChange={setGradeId}>
               <SelectTrigger>
                 <SelectValue placeholder="Selecione uma grade" />
@@ -122,7 +122,7 @@ export function AtribuirGradeModal({ open, onOpenChange, linha }: AtribuirGradeM
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <Label>Supervisor</Label>
+              <Label>Supervisor da cadeia</Label>
               <Select value={supervisorId} onValueChange={setSupervisorId}>
                 <SelectTrigger>
                   <SelectValue />
@@ -139,7 +139,7 @@ export function AtribuirGradeModal({ open, onOpenChange, linha }: AtribuirGradeM
             </div>
 
             <div>
-              <Label>Gerente</Label>
+              <Label>Gerente da cadeia</Label>
               <Select value={gerenteId} onValueChange={setGerenteId}>
                 <SelectTrigger>
                   <SelectValue />
@@ -156,7 +156,7 @@ export function AtribuirGradeModal({ open, onOpenChange, linha }: AtribuirGradeM
             </div>
 
             <div className="sm:col-span-2">
-              <Label>Agência</Label>
+              <Label>Agência da cadeia</Label>
               <Select value={agenciaId} onValueChange={setAgenciaId}>
                 <SelectTrigger>
                   <SelectValue />
@@ -184,8 +184,7 @@ export function AtribuirGradeModal({ open, onOpenChange, linha }: AtribuirGradeM
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Mudanças na hierarquia criam um novo registro de vigência. O histórico anterior é
-            preservado e usado para gerar comissões corretamente em vendas antigas.
+            A grade do usuário que originou a venda define quanto toda a cadeia recebe. Supervisor, gerente e agência não usam suas próprias grades nessa venda.
           </p>
         </div>
 
