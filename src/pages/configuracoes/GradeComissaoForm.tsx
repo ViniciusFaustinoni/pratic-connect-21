@@ -346,6 +346,19 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
     try {
       let gradeId = id;
       let novaVersao = 1;
+      const snapshotAnterior = isEdit && existing
+        ? buildGradeSnapshot(
+          {
+            id: existing.grade.id,
+            nome: existing.grade.nome,
+            descricao: existing.grade.descricao || null,
+            versao: existing.grade.versao || 1,
+          },
+          planos,
+          (existing.gradePlanos || []).map((p: any) => p.plano_id),
+          regrasPorPlano,
+        )
+        : null;
 
       if (isEdit) {
         const { data: cur } = await (supabase as any)
@@ -456,17 +469,28 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
         if (rErr) throw rErr;
       }
 
-      const snapshot = {
-        grade: { id: gradeId, nome: nome.trim(), descricao: descricao.trim() || null, versao: novaVersao },
-        planos: selectedPlanIds,
-        regras_por_plano: selectedPlanIds.reduce((acc, planoId) => ({ ...acc, [planoId]: regrasPorPlano[planoId] || [] }), {}),
-      };
+      const snapshot = buildGradeSnapshot(
+        { id: gradeId, nome: nome.trim(), descricao: descricao.trim() || null, versao: novaVersao },
+        planos,
+        selectedPlanIds,
+        regrasPorPlano,
+      );
       await (supabase as any).from('grades_comissao_versoes').insert({
         grade_id: gradeId,
         versao: novaVersao,
         snapshot,
         vigente_desde: new Date().toISOString(),
         criado_por: profile?.id || null,
+      });
+
+      await registrarLog({
+        acao: isEdit ? 'editar' : 'criar',
+        modulo: 'comissoes',
+        tabela: 'grades_comissao',
+        entidade_id: gradeId!,
+        descricao: isEdit ? 'Grade de comissão atualizada para nova versão' : 'Grade de comissão criada',
+        dados_anteriores: snapshotAnterior || undefined,
+        dados_novos: snapshot,
       });
 
       queryClient.invalidateQueries({ queryKey: ['grades-comissao'] });
