@@ -331,6 +331,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // cotacaoBase / leadId pré-carregando dados.
   // ========================================================================
   const draftDisabled = isEditando || !!cotacaoBase || !!leadId;
+  const isRestoringDraftRef = useRef(false);
   const watchedFormValues = form.watch();
   const draftSnapshot = useMemo<DraftPayload | null>(() => {
     if (draftDisabled || !open) return null;
@@ -355,12 +356,19 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       cenarioExterno,
       solicitarFipeMenor,
       justificativaFipeMenor,
+      veiculoEncontrado: veiculoEncontrado ? {
+        success: veiculoEncontrado.success,
+        extractedPlate: veiculoEncontrado.extractedPlate,
+        vehicleData: veiculoEncontrado.vehicleData,
+        fipeData: veiculoEncontrado.fipeData,
+      } : null,
     };
   }, [
     draftDisabled, open, watchedFormValues, placa, marcaSelecionada, modeloSelecionado,
     anoSelecionado, tipoFipeSelecionado, regiaoSelecionada, usoVeiculo, tipoPlacaSelecionado,
     combustivelSelecionado, diaVencimento, nomeAssociado, telefoneAssociado, emailAssociado,
     isIndicacao, indicadorId, indicadorNome, cenarioExterno, solicitarFipeMenor, justificativaFipeMenor,
+    veiculoEncontrado,
   ]);
 
   const draft = useCotacaoDraft({
@@ -377,6 +385,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     const payload = draft.getDraft();
     if (!payload) return;
     try {
+      isRestoringDraftRef.current = true;
       const f = (payload.form as Partial<CotacaoFormData>) || {};
       form.reset({ ...form.getValues(), ...f });
       if (typeof payload.placa === 'string') setPlaca(payload.placa);
@@ -406,9 +415,23 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       }
       if (typeof payload.solicitarFipeMenor === 'boolean') setSolicitarFipeMenor(payload.solicitarFipeMenor);
       if (typeof payload.justificativaFipeMenor === 'string') setJustificativaFipeMenor(payload.justificativaFipeMenor);
+      const draftVehicle = payload.veiculoEncontrado as PlateResult | null | undefined;
+      if (draftVehicle?.success && draftVehicle.vehicleData) {
+        setVeiculoEncontrado(draftVehicle);
+        if (draftVehicle.vehicleData.combustivel && !payload.combustivelSelecionado) {
+          setCombustivelSelecionado(draftVehicle.vehicleData.combustivel.toLowerCase());
+        }
+        if (draftVehicle.fipeData?.valor) {
+          form.setValue('valor_fipe', draftVehicle.fipeData.valor);
+        }
+      }
       draft.dismissBanner();
       toast.success('Rascunho restaurado.');
+      window.setTimeout(() => {
+        isRestoringDraftRef.current = false;
+      }, 0);
     } catch (e) {
+      isRestoringDraftRef.current = false;
       console.error('[restoreDraft]', e);
       toast.error('Não foi possível restaurar o rascunho.');
       draft.discardDraft();
