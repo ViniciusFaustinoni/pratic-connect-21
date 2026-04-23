@@ -199,10 +199,8 @@ export default function PropostaAnalise() {
         veiculoRenavam: veiculoRenavam || undefined,
         veiculoChassi: veiculoChassi || undefined,
       });
-      toast.success('Proposta aprovada!', {
-        description: 'Após a instalação, o monitoramento dará o segundo check para liberação total da Proteção 360 e do app do associado.',
-        duration: 6000,
-      });
+      // Toast de sucesso já é disparado pelo hook useAprovarProposta com a
+      // mensagem correta vinda do backend (distingue assistência vs Proteção 360).
       // Navegar para próxima ou voltar para lista
       if (nextProposta) {
         navigate(`/cadastro/propostas/${nextProposta.id}`);
