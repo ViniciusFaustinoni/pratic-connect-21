@@ -1,83 +1,81 @@
 
 
-## Régua de cobrança configurável
+## Cobranças via WhatsApp com dados de pagamento do SGA
 
-### Diagnóstico — situação atual
+### Diagnóstico
 
-**O que já existe e funciona:**
-- Página **`/cobranca/regua`** (`src/pages/cobranca/ReguaCobranca.tsx`) com timeline visual, lista de etapas, botão "Adicionar Etapa", switch ativa/inativa, escolha de ação (WhatsApp/SMS/Email/Ligação/Suspensão/Negativação/Cancelamento) e seletor de **template** que já lê de `whatsapp_meta_templates` (mostra status APPROVED/PENDING/REJECTED).
-- Tabela `reguas_cobranca` com 1 régua salva ("Régua Padrão", 18 etapas) — campo `etapas` é JSONB.
-- 14 templates de cobrança aprovados na Meta (`d_6_lembrete_desconto_v1` … `d14_d61_reativacao_protecao_v1`).
-- Configuração "5 dias antes / no dia / depois" funciona: campo `dias` aceita negativo (D-6) ou positivo (D+5).
-- Edge Function `executar-regua-cobranca` lê a régua e gera eventos por dia de atraso.
+A régua já dispara WhatsApp com templates Meta aprovados, **mas envia apenas 3 parâmetros fixos**: `[nome, valor, vencimento]` (em `executar-regua-cobranca/index.ts`, linha ~294). Os templates aprovados na Meta esperam **mais variáveis específicas por estágio**:
 
-**Bugs e lacunas:**
+| Template | Variáveis esperadas |
+|---|---|
+| `cobranca_mensalidade` | `{{1}} nome, {{2}} mês/ano, {{3}} vencimento` |
+| `d_6_lembrete_desconto_v1` | `{{1}} nome, {{2}} vencimento, {{3}} **linha digitável**` |
+| `d0_boleto_vence_hoje_v1` | `{{1}} nome, {{2}} valor, {{3}} vencimento, {{4}} modelo, {{5}} placa, {{6}} **linha digitável**` |
+| `d1_a_d4_boleto_vencido_v1` | `{{1}} nome, {{2}} vencimento` |
+| `d11_aviso_negativacao_v1` | `{{1}} nome, {{2}} vencimento, {{3}} valor, {{4}} placa` |
+| `d12_debito_com_multa_v1` | `{{1}} nome, {{2}} vencimento, {{3}} valor, {{4}} placa` |
 
-1. **A edge function `executar-regua-cobranca` está quebrada.** Ela faz `select('*, etapas:regua_etapas(*)')` — referencia uma tabela `regua_etapas` que **não existe**. As etapas estão em `reguas_cobranca.etapas` (JSONB). Hoje a régua nunca executa.
-2. **Nenhum cron job agendado** para `executar-regua-cobranca` — mesmo que o código fosse corrigido, ela nunca rodaria sozinha.
-3. **Apenas dias positivos são processados.** A função filtra `cobrancas_vencidas` (`< hoje`) e ignora etapas com `dias < 0` (lembretes pré-vencimento como D-6, D-3, D-1). O exemplo do usuário ("5 dias antes do vencimento dia 10") **não dispara hoje**.
-4. **Eventos são apenas registrados, não enviados.** A função insere em `cobranca_eventos` com `status: 'agendado'`, mas nada chama `whatsapp-meta-templates` / `enviar-template` para realmente disparar a mensagem.
-5. **Não há feedback visual no menu Cobranças** apontando que o cron está parado / quando rodou pela última vez.
+Resultado hoje: ou a Meta **rejeita o envio** (quantidade de variáveis errada → erro `132000` "number of parameters does not match"), ou aceita mas o associado recebe a mensagem sem **linha digitável / código de barras / placa**, justamente o que ele precisa para pagar.
 
-**Resposta direta ao usuário:** Sim, a régua **já é configurável** em `/cobranca/regua` (livremente: adicionar/remover etapas, escolher dias relativos ao vencimento, escolher template Meta). **Mas a execução automática está quebrada** — lembretes pré-vencimento nem chegam a ser considerados, e mesmo as cobranças pós-vencimento só geram registros, não disparam WhatsApp.
+### Onde estão os dados de pagamento do SGA
+
+A tabela **`cobrancas`** (origem `sga_hinova`) já é populada pela função `sga-sync-financeiro-veiculo` com os campos vindos do SGA:
+
+- `linha_digitavel` (string)
+- `codigo_barras` (string)
+- `boleto_url` (link PDF)
+- `nosso_numero`
+- `valor_final`, `data_vencimento`, `referencia_mes/ano`
+- `veiculo_id` (para puxar placa/modelo)
+- `origem = 'sga_hinova'`
+
+A régua hoje lê de **`asaas_cobrancas`** (linha 129) — outro universo de dados (Asaas, não SGA). Para associados originados da base antiga (Hinova), os boletos válidos estão em `cobrancas` e nunca são considerados pela régua.
 
 ### Mudanças
 
-**A. Corrigir e completar `supabase/functions/executar-regua-cobranca/index.ts`**
+**A. `supabase/functions/executar-regua-cobranca/index.ts` — buscar de duas fontes e montar variáveis ricas**
 
-- Trocar `select('*, etapas:regua_etapas(*)')` por `select('*')` e ler `regua.etapas` (JSONB) — alinha com o schema real e com o que `ReguaCobranca.tsx` salva.
-- Trocar `etapa.dia` por `etapa.dias` e `etapa.tipo` por `etapa.acao` (nomes que a UI grava).
-- **Adicionar suporte a `dias < 0` (lembretes pré-vencimento):** segunda passada que busca cobranças com `data_vencimento BETWEEN hoje AND hoje + |min_dias_negativos|` e dispara a etapa cujo `dias` corresponde a `data_vencimento - hoje` (ex.: D-5 → todas com vencimento daqui a 5 dias).
-- **Disparar de verdade os templates WhatsApp:** quando `etapa.acao === 'whatsapp'` e `etapa.template` definido, chamar a edge function `enviar-template-meta` (ou equivalente já existente — vou descobrir o nome real durante a implementação) passando `{ telefone, template_nome, parametros: { nome, valor, vencimento, link_boleto } }`. SMS/Email idem se houver função; senão, registrar evento e seguir.
-- Manter o anti-duplicidade (`cobranca_eventos` últimos 7 dias) já implementado.
-- Atualizar `cobranca_eventos.dados.status` para `'enviado'` / `'falhou'` conforme retorno do envio.
+1. **Pass 1 e Pass 2: ler de duas fontes** em paralelo:
+   - `asaas_cobrancas` (já existe) — para associados pagando via Asaas.
+   - `cobrancas` filtrando `origem = 'sga_hinova' AND status IN ('aguardando_pagamento','vencido')` — para associados da base SGA. Selecionar também `linha_digitavel, codigo_barras, boleto_url, valor_final, veiculo_id, referencia_mes, referencia_ano`.
+   - Unificar num único `Map<associado_id, info>` mantendo o registro de **maior atraso** (mesma lógica atual de agrupamento) e gravando `fonte: 'sga' | 'asaas'` + `linha_digitavel`, `codigo_barras`, `boleto_url`, `veiculo_id`, `referencia_label` em `info`.
 
-**B. Agendar cron job (migration nova)**
+2. **Helper `buildTemplateParams(templateName, contexto)`** com mapa explícito por template aprovado:
+   - Lê uma vez do banco `whatsapp_meta_templates.corpo` para descobrir a quantidade real de `{{N}}`.
+   - Mapa interno por nome → ordem de variáveis (ex.: `d0_boleto_vence_hoje_v1` → `[nome, valorBRL, vencimentoBR, modelo, placa, linhaDigitavel]`).
+   - Fallback genérico: monta `[nome, valorBRL, vencimentoBR, linhaDigitavel || '—', placa || '—']` truncado/preenchido para o número de slots detectado, evitando o erro `132000`.
 
-```sql
-SELECT cron.schedule(
-  'executar-regua-cobranca-diario',
-  '0 9 * * *',  -- todo dia às 09:00 BRT
-  $$ SELECT net.http_post(
-      url:='https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/executar-regua-cobranca',
-      headers:='{"Content-Type":"application/json","Authorization":"Bearer <anon_key>"}'::jsonb
-  ) $$
-);
-```
+3. **Buscar veículo (placa + modelo)** em uma query auxiliar quando o template exigir (`veiculo_id` já vem do `cobrancas`/`asaas_cobrancas` — esta última já tem `veiculo_id`).
 
-**C. Painel "Configurações da Régua" no menu Cobranças**
+4. **Persistir os parâmetros usados em `cobranca_eventos.dados`** (`template_params`, `linha_digitavel`, `boleto_url`, `fonte`) — auditoria e debugging.
 
-- A página `/cobranca/regua` já é o painel pedido. Adicionar:
-  - **Card "Última execução"** mostrando `cron.job_run_details` mais recente (status, horário, log) — read-only com botão "Executar agora" que chama `supabase.functions.invoke('executar-regua-cobranca')`.
-  - **Banner de aviso** quando uma etapa aponta para template com status ≠ `APPROVED` (já tem o badge inline; adicionar resumo no topo: "2 etapas usam templates não aprovados — não serão enviadas").
-  - **Atalho "Editar template na Meta"** ao lado do select de template — link para `/configuracoes/templates-meta?template=<nome>` (página existente — vou confirmar a rota exata na implementação) para fechar o ciclo "régua ↔ catálogo de templates Meta".
+5. **Fallback de comunicação:** se `linha_digitavel` estiver vazia para um template que a exige, **pular o disparo** e gravar evento `falhou` com motivo `"Sem linha digitável SGA disponível — sincronize o financeiro do veículo"`. Evita enviar mensagem incompleta.
 
-**D. Nada muda no catálogo de templates**
+**B. UI `src/pages/cobranca/ReguaCobranca.tsx` — feedback visual sobre variáveis**
 
-A página de **Templates Meta** continua a fonte de verdade do conteúdo (corpo, variáveis, aprovação Meta). A régua **referencia** templates por `nome` — ao editar o conteúdo na área Meta, o disparo da régua já passa a usar a versão atualizada automaticamente. Não há duplicação.
+- Ao selecionar um template numa etapa, mostrar abaixo do select um **resumo das variáveis que serão preenchidas** lendo de um pequeno `templateParamsMap` (mesmo dicionário compartilhado com a edge function via constante exportada — coloco em `src/lib/cobranca/templateParams.ts` e a edge function duplica o mapa, já que não compartilham módulos).
+- Exibir badge de aviso amarelo na etapa quando o template requer linha digitável (`d_6_…`, `d0_…`) — com tooltip "Requer cobrança SGA sincronizada (`origem='sga_hinova'`) com linha digitável preenchida".
+
+**C. Sem mudanças de schema**
+
+Todos os campos necessários já existem (`cobrancas.linha_digitavel`, `codigo_barras`, `boleto_url`). Não há migração.
 
 ### Arquivos editados
 
-- `supabase/functions/executar-regua-cobranca/index.ts` — fix do schema + suporte a D negativos + envio real via WhatsApp.
-- **Migration nova** — cron `executar-regua-cobranca-diario` 09:00 BRT.
-- `src/pages/cobranca/ReguaCobranca.tsx` — card "Última execução" + botão "Executar agora" + banner de templates não aprovados + link para editar template no catálogo Meta.
+- `supabase/functions/executar-regua-cobranca/index.ts` — leitura dual (asaas + sga), montagem de variáveis ricas por template, registro detalhado.
+- `src/pages/cobranca/ReguaCobranca.tsx` — preview de variáveis + badge de pré-requisito SGA.
+- `src/lib/cobranca/templateParams.ts` (novo) — dicionário de mapeamento template → variáveis (consumido só pela UI; a edge function carrega o mesmo mapa inline para não importar de `src/`).
 
-### O que NÃO muda
+### Validação (após implementação)
 
-- Schema de `reguas_cobranca`, `cobranca_eventos`, `cobranca_fila` — intactos.
-- Página de Templates Meta — intacta (a régua só consome).
-- Estrutura de etapas JSONB já gravada — compatível.
-
-### Validação (após implementação, em modo default)
-
-1. Login como `admin@teste.com / 123456789` → `/cobranca/regua` → adicionar uma etapa **D-5 / WhatsApp / `d_6_lembrete_desconto_v1`** → Salvar.
-2. Clicar **"Executar agora"** → conferir no card "Última execução" que rodou sem erro e contou `eventos_criados`.
-3. Conferir em `cobranca_eventos` que existem registros com `subtipo = 'regua_d-5'` para associados com vencimento daqui a 5 dias.
-4. Print da timeline mostrando D-5, D+0, D+5, D+10 funcionando lado a lado.
+1. Login `admin@teste.com / 123456789` → `/cobranca/regua` → confirmar que cada etapa mostra a lista de variáveis esperadas.
+2. Forçar um veículo SGA com cobrança vencida (já existem na base) → "Executar agora" → verificar em `cobranca_eventos.dados`: `template_params` deve conter a `linha_digitavel` real.
+3. Conferir log de `whatsapp-send-text` mostrando o `components.parameters` com 6 entradas para `d0_boleto_vence_hoje_v1`.
+4. Screenshot da UI com o preview de variáveis.
 
 ### Riscos
 
-- **Disparo em massa no primeiro run:** com 14 etapas ativas e backlog de inadimplentes, pode disparar centenas de mensagens. Mitigação: o anti-duplicidade de 7 dias já protege; adiciono também um **limite de segurança configurável** (env `REGUA_MAX_DISPAROS_POR_RUN`, default 500) que loga e para a execução se exceder.
-- **Nome da edge function de envio Meta:** preciso descobrir na implementação (`enviar-template-meta`, `whatsapp-meta-send`, etc.). Se não existir uma genérica, uso o mesmo padrão já presente em `_shared/enviar-termo-filiacao-whatsapp.ts`.
-- **Cron `pg_net` exige extensão habilitada:** se não estiver, a migration habilita (`create extension if not exists pg_net`).
+- **Quantidade de variáveis errada** continua sendo a causa #1 de rejeição Meta; o helper genérico com `slice(0, n)` + padding `'—'` blinda contra isso, mas pode mandar `'—'` no lugar de uma placa real se faltar dado — preferível a falhar o envio inteiro.
+- **Associado com múltiplas cobranças** (SGA + Asaas): vai vencer a de **maior atraso**. Documento isso em comentário; se virar problema, próxima iteração escolhe por `tipo`.
+- **Linha digitável SGA pode estar desatualizada** se o `sga-sync-financeiro-veiculo` não rodou recentemente. Mitigação: o evento `falhou` já orienta sincronizar.
 
