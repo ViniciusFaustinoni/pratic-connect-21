@@ -8099,6 +8099,7 @@ export type Database = {
           aprovado_em: string | null
           aprovado_por: string | null
           associado_id: string | null
+          autentique_cancelamento_assinado_em: string | null
           autentique_documento_id: string | null
           autentique_status: string | null
           autentique_url: string | null
@@ -8221,6 +8222,7 @@ export type Database = {
           aprovado_em?: string | null
           aprovado_por?: string | null
           associado_id?: string | null
+          autentique_cancelamento_assinado_em?: string | null
           autentique_documento_id?: string | null
           autentique_status?: string | null
           autentique_url?: string | null
@@ -8343,6 +8345,7 @@ export type Database = {
           aprovado_em?: string | null
           aprovado_por?: string | null
           associado_id?: string | null
+          autentique_cancelamento_assinado_em?: string | null
           autentique_documento_id?: string | null
           autentique_status?: string | null
           autentique_url?: string | null
