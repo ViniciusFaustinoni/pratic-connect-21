@@ -1443,6 +1443,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       // Extrair ano numérico do texto (ex: "2022 Gasolina" -> 2022)
       const anoTextoLocal = getAnoNome();
       const anoNumericoLocal = anoTextoLocal ? parseInt(anoTextoLocal.split(' ')[0]) : null;
+      const marcaVeiculo = getMarcaNome() || veiculoEncontrado?.vehicleData?.marca || null;
+      const modeloVeiculo = getModeloNome() || veiculoEncontrado?.vehicleData?.modelo || null;
+      const anoVeiculo = anoNumericoLocal || Number(veiculoEncontrado?.vehicleData?.ano_modelo || veiculoEncontrado?.vehicleData?.ano?.split('/')[0]) || null;
+
+      if (veiculoEncontrado?.success && (!marcaVeiculo || !modeloVeiculo || !anoVeiculo)) {
+        toast.error('Os dados do veículo ainda não foram carregados. Clique em buscar placa novamente antes de salvar.');
+        setIsSubmitting(false);
+        return;
+      }
       
       const valorAdicionalAtual = pendingFormData.valor_adicional || 0;
       
@@ -1459,9 +1468,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         valor_assistencia: planosSelecionados[0]?.valorAssistencia || 0,
         validade_dias: pendingFormData.validade_dias,
         // Dados do veículo
-        veiculo_marca: getMarcaNome() || null,
-        veiculo_modelo: getModeloNome() || null,
-        veiculo_ano: anoNumericoLocal,
+        veiculo_marca: marcaVeiculo,
+        veiculo_modelo: modeloVeiculo,
+        veiculo_ano: anoVeiculo,
         veiculo_placa: placa || veiculoEncontrado?.extractedPlate || null,
         veiculo_cor: veiculoEncontrado?.vehicleData?.cor || null,
         codigo_fipe: veiculoEncontrado?.fipeData?.codigo || null,
