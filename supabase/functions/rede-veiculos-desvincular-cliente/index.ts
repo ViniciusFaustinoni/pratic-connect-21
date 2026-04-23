@@ -83,6 +83,7 @@ Deno.serve(async (req) => {
       
       // Ainda atualiza o banco local se solicitado
       if (atualizarBancoLocal) {
+        await supabase.rpc('set_audit_origem', { origem: 'edge:rede-veiculos-desvincular-cliente:nao_rv' });
         await supabase
           .from('rastreadores')
           .update({
@@ -131,6 +132,7 @@ Deno.serve(async (req) => {
       console.log('Rastreador não está vinculado a veículo/associado');
       
       if (atualizarBancoLocal) {
+        await supabase.rpc('set_audit_origem', { origem: 'edge:rede-veiculos-desvincular-cliente:sem_vinculo' });
         await supabase
           .from('rastreadores')
           .update({
@@ -245,6 +247,7 @@ Deno.serve(async (req) => {
       console.log('Atualizando banco local...');
       
       // Atualizar rastreador
+      await supabase.rpc('set_audit_origem', { origem: 'edge:rede-veiculos-desvincular-cliente' });
       const { error: updateRastreadorError } = await supabase
         .from('rastreadores')
         .update({

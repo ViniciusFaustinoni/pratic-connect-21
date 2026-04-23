@@ -30,6 +30,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { usePlataformasLabels } from '@/hooks/usePlataformasCRUD';
+import { useRastreadorHistoricoVinculo } from '@/hooks/useRastreadores';
 
 interface DetalhesRastreadorDialogProps {
   open: boolean;
@@ -125,7 +126,7 @@ const TIPO_SERVICO_LABELS: Record<string, { label: string; icon: React.ElementTy
 
 interface TimelineItem {
   id: string;
-  tipo: 'movimentacao' | 'servico' | 'manutencao_interna';
+  tipo: 'movimentacao' | 'servico' | 'manutencao_interna' | 'vinculo_audit';
   label: string;
   data: string;
   detalhes?: string;
@@ -134,6 +135,8 @@ interface TimelineItem {
   color: string;
   badge?: { label: string; color: string };
   statusTransicao?: { de: string; para: string };
+  vinculoTransicao?: { de: string | null; para: string | null };
+  origem?: string | null;
 }
 
 export function DetalhesRastreadorDialog({ open, onOpenChange, rastreadorId }: DetalhesRastreadorDialogProps) {
@@ -219,7 +222,8 @@ export function DetalhesRastreadorDialog({ open, onOpenChange, rastreadorId }: D
     enabled: !!rastreadorId && open,
   });
 
-  // Query para manutenção de campo ativa
+  // Trilha de auditoria de vínculo (trigger automática)
+  const { data: historicoVinculo } = useRastreadorHistoricoVinculo(rastreadorId);
   const { data: servicoManutencao } = useQuery({
     queryKey: ['rastreador-servico-manutencao', rastreadorId],
     queryFn: async () => {
@@ -312,6 +316,33 @@ export function DetalhesRastreadorDialog({ open, onOpenChange, rastreadorId }: D
       icon: Settings,
       color: 'text-purple-600',
       badge: { label: ETAPA_MANUTENCAO_LABELS[m.etapa] || m.etapa, color: ETAPA_MANUTENCAO_COLORS[m.etapa] || 'bg-muted' },
+    });
+  });
+
+  // Trilha de auditoria — vínculo veículo / status
+  historicoVinculo?.forEach((h) => {
+    const mudouVinculo = h.veiculo_id_anterior !== h.veiculo_id_novo;
+    const mudouStatus = h.status_anterior !== h.status_novo;
+    const partes: string[] = [];
+    if (mudouVinculo) {
+      const de = h.placa_anterior || (h.veiculo_id_anterior ? '(veículo removido)' : '—');
+      const para = h.placa_nova || (h.veiculo_id_novo ? '(veículo)' : '—');
+      partes.push(`Veículo: ${de} → ${para}`);
+    }
+    timelineItems.push({
+      id: `audit-${h.id}`,
+      tipo: 'vinculo_audit',
+      label: mudouVinculo ? 'Alteração de Vínculo' : 'Alteração de Status',
+      data: h.created_at,
+      detalhes: partes.join(' • ') || undefined,
+      usuario: h.alterado_por_nome || 'Sistema',
+      icon: History,
+      color: 'text-slate-600',
+      badge: h.origem ? { label: h.origem, color: 'bg-slate-500/10 text-slate-600 border-slate-500/30' } : undefined,
+      statusTransicao: mudouStatus && h.status_anterior && h.status_novo
+        ? { de: h.status_anterior, para: h.status_novo }
+        : undefined,
+      origem: h.origem,
     });
   });
 

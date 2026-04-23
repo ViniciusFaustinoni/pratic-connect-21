@@ -644,3 +644,40 @@ export function useAlterarStatusRastreador() {
     },
   });
 }
+
+/**
+ * Histórico de mudanças de vínculo (veiculo_id) e status do rastreador.
+ * Alimentado por trigger `trg_rastreador_vinculo_audit` no banco — captura toda
+ * alteração feita por qualquer fluxo (app, edge function, SQL manual).
+ */
+export interface RastreadorVinculoHistoricoItem {
+  id: string;
+  rastreador_id: string;
+  veiculo_id_anterior: string | null;
+  veiculo_id_novo: string | null;
+  status_anterior: string | null;
+  status_novo: string | null;
+  placa_anterior: string | null;
+  placa_nova: string | null;
+  alterado_por: string | null;
+  alterado_por_nome: string | null;
+  origem: string | null;
+  contexto: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export function useRastreadorHistoricoVinculo(rastreadorId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['rastreador-vinculo-historico', rastreadorId],
+    enabled: !!rastreadorId,
+    queryFn: async (): Promise<RastreadorVinculoHistoricoItem[]> => {
+      const { data, error } = await supabase
+        .from('rastreadores_vinculo_historico' as never)
+        .select('*')
+        .eq('rastreador_id', rastreadorId!)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []) as unknown as RastreadorVinculoHistoricoItem[];
+    },
+  });
+}

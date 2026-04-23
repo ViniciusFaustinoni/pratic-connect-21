@@ -21728,6 +21728,69 @@ export type Database = {
         }
         Relationships: []
       }
+      rastreadores_vinculo_historico: {
+        Row: {
+          alterado_por: string | null
+          alterado_por_nome: string | null
+          contexto: Json | null
+          created_at: string
+          id: string
+          origem: string | null
+          placa_anterior: string | null
+          placa_nova: string | null
+          rastreador_id: string
+          status_anterior: string | null
+          status_novo: string | null
+          veiculo_id_anterior: string | null
+          veiculo_id_novo: string | null
+        }
+        Insert: {
+          alterado_por?: string | null
+          alterado_por_nome?: string | null
+          contexto?: Json | null
+          created_at?: string
+          id?: string
+          origem?: string | null
+          placa_anterior?: string | null
+          placa_nova?: string | null
+          rastreador_id: string
+          status_anterior?: string | null
+          status_novo?: string | null
+          veiculo_id_anterior?: string | null
+          veiculo_id_novo?: string | null
+        }
+        Update: {
+          alterado_por?: string | null
+          alterado_por_nome?: string | null
+          contexto?: Json | null
+          created_at?: string
+          id?: string
+          origem?: string | null
+          placa_anterior?: string | null
+          placa_nova?: string | null
+          rastreador_id?: string
+          status_anterior?: string | null
+          status_novo?: string | null
+          veiculo_id_anterior?: string | null
+          veiculo_id_novo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rastreadores_vinculo_historico_rastreador_id_fkey"
+            columns: ["rastreador_id"]
+            isOneToOne: false
+            referencedRelation: "rastreadores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rastreadores_vinculo_historico_rastreador_id_fkey"
+            columns: ["rastreador_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["rastreador_id"]
+          },
+        ]
+      }
       rateios: {
         Row: {
           ano: number
@@ -30407,6 +30470,7 @@ export type Database = {
         Returns: boolean
       }
       resetar_contadores_distribuicao: { Args: never; Returns: undefined }
+      set_audit_origem: { Args: { origem: string }; Returns: undefined }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       update_associado_contatos: {
