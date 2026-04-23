@@ -32,6 +32,11 @@ export function useMonitorImprodutividade() {
   });
 
   useEffect(() => {
+    // TEMPORARIAMENTE DESATIVADO: gerava ruído excessivo na diretoria/admin (notificação por vistoriador a cada 5min).
+    // TODO: reativar quando houver regra mais granular (ex.: só fora de horário de pico, cooldown maior, agregação diária).
+    return;
+
+    // eslint-disable-next-line no-unreachable
     if (!profile?.id || !turno) return;
     // Técnicos Base não têm cobrança de produtividade — eles atendem fila sob demanda
     if (isBase) return;
