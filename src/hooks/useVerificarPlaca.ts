@@ -28,20 +28,30 @@ const normalizarPlaca = (placa: string): string => {
  * - Período: últimas 48 horas
  * - Retorna dados do vendedor responsável se existir
  */
+export interface VerificarPlacaParams {
+  placa: string;
+  /** IDs de cotações a ignorar (ex.: cotação original em fluxo de duplicação) */
+  ignorarIds?: string[];
+}
+
 export function useVerificarPlacaDuplicada() {
   return useMutation({
-    mutationFn: async (placa: string): Promise<PlacaDuplicadaInfo | null> => {
+    mutationFn: async (
+      params: string | VerificarPlacaParams,
+    ): Promise<PlacaDuplicadaInfo | null> => {
+      const placa = typeof params === 'string' ? params : params.placa;
+      const ignorarIds = typeof params === 'string' ? [] : (params.ignorarIds ?? []);
       const placaNormalizada = normalizarPlaca(placa);
-      
+
       if (!placaNormalizada || placaNormalizada.length < 7) {
         return null;
       }
-      
+
       // Calcula data limite (48 horas atrás)
       const dataLimite = new Date();
       dataLimite.setHours(dataLimite.getHours() - 48);
-      
-      const { data, error } = await supabase
+
+      let query = supabase
         .from('cotacoes')
         .select(`
           id,
@@ -54,18 +64,22 @@ export function useVerificarPlacaDuplicada() {
         .in('status', ['rascunho', 'enviada', 'aceita'])
         .gte('created_at', dataLimite.toISOString())
         .order('created_at', { ascending: false })
-        .limit(1);
-      
+        .limit(5);
+
+      const { data, error } = await query;
+
       if (error) {
         console.error('Erro ao verificar placa duplicada:', error);
         return null;
       }
-      
-      if (!data || data.length === 0) {
+
+      const filtradas = (data ?? []).filter((c) => !ignorarIds.includes(c.id));
+
+      if (filtradas.length === 0) {
         return null;
       }
-      
-      const cotacao = data[0];
+
+      const cotacao = filtradas[0];
       
       // Buscar nome do vendedor separadamente
       let vendedorNome = 'Consultor não identificado';
