@@ -1124,9 +1124,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             mesReferencia: null
           } : null
         });
+      } else if (cotacaoBase.veiculo_placa) {
+        restaurarVeiculoPorPlaca(cotacaoBase.veiculo_placa);
       }
     }
-  }, [cotacaoBase, open, form]);
+  }, [cotacaoBase, open, form, restaurarVeiculoPorPlaca]);
 
   // Efeito para preencher o formulário com dados da cotação para edição
   useEffect(() => {
@@ -1200,9 +1202,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             mesReferencia: null
           } : null
         });
+      } else if (cotacaoParaEditar.veiculo_placa) {
+        restaurarVeiculoPorPlaca(cotacaoParaEditar.veiculo_placa);
       }
     }
-  }, [cotacaoParaEditar, open, form]);
+  }, [cotacaoParaEditar, open, form, restaurarVeiculoPorPlaca]);
 
   // Restaurar planos selecionados ao editar cotação (após planosCalculados carregarem)
   useEffect(() => {
