@@ -8973,6 +8973,7 @@ export type Database = {
           lead_id: string | null
           meses_desconto_campanha: number | null
           motivo_cancelamento: string | null
+          motivo_substituicao: string | null
           nome_solicitante: string | null
           numero: string
           plano_escolhido_id: string | null
@@ -8981,6 +8982,7 @@ export type Database = {
           solicitar_fipe_menor: boolean
           status: Database["public"]["Enums"]["status_cotacao"]
           status_contratacao: string | null
+          substituida_por_cotacao_id: string | null
           taxa_administrativa: number
           telefone1_solicitante: string | null
           telefone2_solicitante: string | null
@@ -9097,6 +9099,7 @@ export type Database = {
           lead_id?: string | null
           meses_desconto_campanha?: number | null
           motivo_cancelamento?: string | null
+          motivo_substituicao?: string | null
           nome_solicitante?: string | null
           numero: string
           plano_escolhido_id?: string | null
@@ -9105,6 +9108,7 @@ export type Database = {
           solicitar_fipe_menor?: boolean
           status?: Database["public"]["Enums"]["status_cotacao"]
           status_contratacao?: string | null
+          substituida_por_cotacao_id?: string | null
           taxa_administrativa?: number
           telefone1_solicitante?: string | null
           telefone2_solicitante?: string | null
@@ -9221,6 +9225,7 @@ export type Database = {
           lead_id?: string | null
           meses_desconto_campanha?: number | null
           motivo_cancelamento?: string | null
+          motivo_substituicao?: string | null
           nome_solicitante?: string | null
           numero?: string
           plano_escolhido_id?: string | null
@@ -9229,6 +9234,7 @@ export type Database = {
           solicitar_fipe_menor?: boolean
           status?: Database["public"]["Enums"]["status_cotacao"]
           status_contratacao?: string | null
+          substituida_por_cotacao_id?: string | null
           taxa_administrativa?: number
           telefone1_solicitante?: string | null
           telefone2_solicitante?: string | null
@@ -9408,6 +9414,13 @@ export type Database = {
             columns: ["plano_id"]
             isOneToOne: false
             referencedRelation: "vw_plans_compat"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotacoes_substituida_por_cotacao_id_fkey"
+            columns: ["substituida_por_cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "cotacoes"
             referencedColumns: ["id"]
           },
           {
