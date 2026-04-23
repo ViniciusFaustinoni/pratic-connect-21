@@ -479,6 +479,58 @@ export const UnifiedDocumentUploader = forwardRef<
   const documentosCompletos = documentosFaltantes.length === 0;
   const uploadingCount = documents.filter(d => d.status === 'uploading' || d.status === 'processing').length;
 
+  // Reprocessa o OCR do último documento de um tipo (sem novo upload).
+  const reprocessByType = useCallback(async (
+    tipo: TipoDocumentoDetectado | TipoDocumentoDetectado[],
+  ): Promise<boolean> => {
+    const tiposAlvo = Array.isArray(tipo) ? tipo : [tipo];
+    // Pega o último doc com status success do(s) tipo(s) alvo
+    const candidato = [...documents]
+      .reverse()
+      .find(d => d.status === 'success' && d.tipo_detectado && tiposAlvo.includes(d.tipo_detectado));
+
+    if (!candidato) {
+      toast.error('Envie primeiro o documento para reprocessar.');
+      return false;
+    }
+
+    setReprocessingTipo(candidato.tipo_detectado!);
+    try {
+      const ocrClient = cotacaoId && !contratoId ? publicSupabase : supabase;
+      const { data: ocrData, error: ocrError } = await ocrClient.functions.invoke('document-ocr', {
+        body: { url: candidato.arquivo_url, cpfEsperado, nomeEsperado },
+      });
+      if (ocrError) throw new Error(ocrError.message || 'Falha ao reprocessar OCR.');
+
+      const ocrResult = ocrData as OcrResultadoUnificado;
+      if (ocrResult.sucesso && ocrResult.dados) {
+        const dadosLimpos: Record<string, string> = {};
+        Object.entries(ocrResult.dados).forEach(([k, v]) => { if (v) dadosLimpos[k] = v as string; });
+        onOcrDataExtracted(dadosLimpos, ocrResult.tipo_detectado);
+        // Atualiza o doc com o novo OCR (mantém status success)
+        setDocuments(prev => {
+          const updated = prev.map(d => d.id === candidato.id
+            ? { ...d, ocr: ocrResult, tipo_detectado: ocrResult.tipo_detectado }
+            : d);
+          onDocumentsChange(updated);
+          return updated;
+        });
+        toast.success('OCR reprocessado com sucesso.');
+        return true;
+      }
+      toast.warning('Reprocessamento concluído, mas a IA não extraiu novos dados.');
+      return false;
+    } catch (err: any) {
+      console.error('[UnifiedDocumentUploader] reprocessByType erro:', err);
+      toast.error(err?.message || 'Não foi possível reprocessar o OCR.');
+      return false;
+    } finally {
+      setReprocessingTipo(null);
+    }
+  }, [documents, cotacaoId, contratoId, cpfEsperado, nomeEsperado, onOcrDataExtracted, onDocumentsChange]);
+
+  useImperativeHandle(ref, () => ({ reprocessByType }), [reprocessByType]);
+
   return (
     <div className="space-y-4">
       {/* Header com status */}
