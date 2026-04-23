@@ -1,79 +1,194 @@
 
 
-## Padronizar filtros de "rastreadores instalados" para usar `status='instalado'`
+## Deduplicar agendamentos: substituir/encerrar antigos em vez de empilhar novos
 
 ### Diagnóstico
 
-A maior parte do código já usa `.eq('status', 'instalado')` corretamente (métricas, lista, `useRastreadoresInstalados`, `useSinistroAnalise`, mapa). Mas existem pontos onde a "presença de rastreador instalado" é inferida pelo vínculo `veiculo_id IS NOT NULL` em vez do `status` — herança da época em que `veiculo_id` era zerado em qualquer mudança. Com a regra atual de **preservação de vínculo** (`mem://logic/operations/rastreador-vinculo-preservacao.md`), `veiculo_id` permanece preenchido em `manutencao`, `retirada_pendente`, `reagendar_manutencao`, etc. — então usar só `veiculo_id` faz veículos em manutenção contarem como "tendo rastreador ativo", o que está errado.
+Confirmei na base e no código múltiplas fontes de duplicação. O padrão geral é o mesmo em todos os fluxos: **insere linha nova sem fechar/atualizar a antiga**. Casos encontrados:
 
-### Pontos a corrigir
+**1. `reagendar-vistoria-publica` (edge function)** — quando o associado reagenda pelo link público:
+- ✅ Cria novo `servicos`.
+- ✅ Marca o `servicos` antigo como `reagendada`.
+- ❌ **NÃO toca em `agendamentos_base`** — o card antigo na aba "Atribuição" continua aparecendo com `status='agendado'`.
+- ❌ Se associado reagenda 2×+, o filtro `servico.status === 'reagendada'` (linha 99) já bloqueia, mas só na 2ª chamada. Se duas chamadas chegarem em paralelo (clique duplo), insere duas vezes — sem `unique` constraint.
 
-**1. `src/hooks/useRastreadores.ts` — `useVeiculosSemRastreador` (linhas ~506–536)**
+**2. `cron-reagendamento-automatico`** — marca serviço como `nao_compareceu` mas:
+- ❌ Não fecha o `agendamentos_base` correspondente (cotação/instalação/vistoria origem).
+- O `enviar-link-reagendamento` é disparado depois → quando associado reagenda, vira o caso 1.
 
-Hoje:
-```ts
-.from('rastreadores').select('veiculo_id').eq('status','instalado').not('veiculo_id','is', null)
-```
-O `.not('veiculo_id','is',null)` é redundante quando `status='instalado'` (instalado sempre tem veículo). **Remover** o `.not(...)` para deixar o `status` como única regra. Comportamento idêntico para "instalado", mas explicita a intenção.
+**3. `aprovar-proposta` + `criar-instalacao-pos-pagamento` (edge functions)** — ambas inserem em `instalacoes` sem checagem prévia. Encontrei na base **um par de duplicatas reais** (cotação `0704154f-…`, dois `instalacoes` criados com 290 ms de diferença, ambos `status='agendada'`, gerando dois `servicos` ativos). Causa: ambas funções podem rodar para o mesmo evento (ou re-aprovação manual).
 
-**2. `src/hooks/useAppAssociado.ts` (linha 78)**
+**4. `useRealocarInstalacao.realocarParaBase`** — insere `agendamentos_base` para a `instalacao_id` sem cancelar nenhum `agendamentos_base` ativo anterior da mesma instalação.
 
-```ts
-tem_rastreador: Array.isArray(v.rastreadores) && v.rastreadores.length > 0,
-```
-Hoje conta qualquer rastreador vinculado (inclui `manutencao`, `retirada_pendente`). Mudar para:
-```ts
-tem_rastreador: Array.isArray(v.rastreadores) && v.rastreadores.some(r => r.status === 'instalado'),
-```
-Alinhando com a linha 79 (`rastreador_ativo`). Os dois passam a refletir a mesma verdade: "veículo tem rastreador efetivamente instalado". Fica obsoleta a distinção `tem_rastreador` vs `rastreador_ativo`, mas mantemos os dois campos na interface por compatibilidade.
+**5. `useAlterarEnderecoTipo` (caminho `mover_para_base`)** — único lugar que **faz certo**: fecha o agendamento_base antigo (`status='cancelado'`, linha 269) e insere o novo. Vai ser nosso modelo.
 
-**3. `src/hooks/useChamadoPosicaoTempoReal.ts` (~linha 50)**
+### Princípio de correção
 
-Verificar como decide "veículo sem rastreador instalado" — se faz `select rastreadores` sem filtro de status, adicionar `.eq('status','instalado')`. (Vou conferir o trecho exato no momento da edição.)
+**Uma cotação/instalação/vistoria/sinistro só pode ter UM agendamento ativo por vez.** Antes de criar um novo `agendamentos_base` ou `instalacoes` para a mesma origem, fechar (`status='cancelado'` ou `'reagendado'`) os ativos anteriores. Quando uma origem (vistoria/instalação/serviço) muda para `nao_compareceu`/`cancelada`/`reagendada`, propagar o fechamento para `agendamentos_base`.
 
-**4. `src/components/monitoramento/estoque/ListaRastreadores.tsx` (linhas 205–208)**
+### Mudanças
 
-```ts
-.update({ status: novoStatus, veiculo_id: novoStatus !== 'instalado' ? null : undefined })
-```
-Esse update **sempre zera `veiculo_id` se novoStatus ≠ 'instalado'** — viola diretamente a regra de preservação. Substituir pela whitelist canônica (`STATUS_DESVINCULA_VEICULO`):
+**A. `supabase/functions/reagendar-vistoria-publica/index.ts`**
+
+Após linha 178 (depois de marcar `servicos` antigo como `reagendada`), adicionar:
 
 ```ts
-const desvincula = ['estoque','baixado'].includes(novoStatus);
-.update({ status: novoStatus, ...(desvincula ? { veiculo_id: null } : {}) })
+// Encerrar agendamentos_base antigos vinculados à mesma origem (cotação/instalação/vistoria)
+const filtros: Array<{ col: string; val: string }> = [];
+if (servico.cotacao_id) filtros.push({ col: 'cotacao_id', val: servico.cotacao_id });
+if (servico.instalacao_origem_id) filtros.push({ col: 'instalacao_id', val: servico.instalacao_origem_id });
+if (servico.vistoria_origem_id) filtros.push({ col: 'vistoria_id', val: servico.vistoria_origem_id });
+
+for (const f of filtros) {
+  await supabase
+    .from('agendamentos_base')
+    .update({ status: 'reagendado', updated_at: new Date().toISOString() })
+    .eq(f.col, f.val)
+    .in('status', ['agendado','pendente','confirmado']);
+}
 ```
 
-(Isso é fix de bug colateral encontrado durante a varredura — está na mesma linha do que o usuário pediu: parar de usar `veiculo_id` como proxy de status.)
+E adicionar **guard de idempotência** logo no início (após validar token), checando se já existe `servicos` em `status='agendada'` com `data_agendada=nova_data` para a mesma origem nos últimos 60 s — se sim, retornar sucesso reusando o `id`.
 
-**5. Edge functions de backfill (`softruck-backfill-veiculos`, `rede-veiculos-backfill-veiculos`)**
+**B. `supabase/functions/cron-reagendamento-automatico/index.ts`**
 
-Já filtram por `.eq('status','instalado')` E `.not('veiculo_id','is', null)`. O `.not(...)` agora é redundante mas **inofensivo** (defesa em profundidade contra registros inconsistentes). **Sem mudança.**
+No bloco que marca `nao_compareceu` (linhas 184-194 e 384-396), adicionar logo depois:
 
-**6. `src/hooks/useVistoriaManutencao.ts` linha 1106–1109**
+```ts
+// Fechar agendamentos_base vinculados (sem isso, card fantasma na atribuição)
+if (refs?.instalacao_origem_id) {
+  await supabase.from('agendamentos_base')
+    .update({ status: 'nao_compareceu', updated_at: new Date().toISOString() })
+    .eq('instalacao_id', refs.instalacao_origem_id)
+    .in('status', ['agendado','pendente','confirmado']);
+}
+if (refs?.vistoria_origem_id) {
+  await supabase.from('agendamentos_base')
+    .update({ status: 'nao_compareceu', updated_at: new Date().toISOString() })
+    .eq('vistoria_id', refs.vistoria_origem_id)
+    .in('status', ['agendado','pendente','confirmado']);
+}
+```
 
-`useRastreadoresInstalados` usa `.eq('status','instalado').not('veiculo_id','is',null)`. Mesma situação do item 5 — mantém defesa, sem mudança.
+**C. `supabase/functions/aprovar-proposta/index.ts` (linha 323) e `criar-instalacao-pos-pagamento/index.ts` (linha 423)**
 
-### O que NÃO muda
+Antes do `insert` de `instalacoes`, adicionar guard de idempotência:
 
-- `useInadimplenciaPorVeiculo`, `useMinhasCoberturasApp` (filtram cobranças por veículo, não rastreador — `veiculo_id` ali é correto).
-- `rede-veiculos-sincronizar-status` (filtra `rede_veiculos_veiculo_id`, outro contexto).
-- Fluxo de importação (`ImportarRastreadoresDialog`) — já decide `status` baseado em `veiculo_id` na criação, lógica correta.
-- Métricas (`useRastreadoresMetricas`) — já corretas.
+```ts
+const { data: jaExiste } = await supabase
+  .from('instalacoes')
+  .select('id')
+  .eq('cotacao_id', contrato.cotacao_id)
+  .eq('veiculo_id', veiculoId)
+  .in('status', ['agendada','em_andamento','em_analise'])
+  .maybeSingle();
 
-### Memória
+if (jaExiste) {
+  console.log('[…] Instalação já existe para essa cotação/veículo — pulando criação:', jaExiste.id);
+  novaInstalacaoId = jaExiste.id;
+} else {
+  // … insert atual
+}
+```
 
-Atualizar `mem://logic/operations/rastreador-vinculo-preservacao.md` com nota de aplicação: "Filtros de UI/queries para 'rastreadores instalados' devem usar `status='instalado'` como verdade primária. `veiculo_id IS NOT NULL` sozinho inclui falsamente rastreadores em `manutencao`/`retirada_pendente`."
+**D. `src/hooks/useRealocarInstalacao.ts` — `realocarParaBase`**
+
+Antes do `insert` em `agendamentos_base` (linha 168), cancelar quaisquer agendamentos_base ativos da mesma instalação:
+
+```ts
+await supabase.from('agendamentos_base')
+  .update({ status: 'cancelado', updated_at: new Date().toISOString(),
+            observacoes: 'Realocada para nova base' })
+  .eq('instalacao_id', params.instalacaoId)
+  .in('status', ['agendado','pendente','confirmado']);
+```
+
+**E. Trigger SQL — rede de segurança (migration nova)**
+
+Garantir consistência mesmo que algum fluxo futuro esqueça:
+
+```sql
+-- Quando servicos vai para status terminal/reagendamento, fechar agendamentos_base ligados
+CREATE OR REPLACE FUNCTION public.sync_agendamento_base_on_servico_terminal()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE v_novo_status text;
+BEGIN
+  IF NEW.status IS DISTINCT FROM OLD.status
+     AND NEW.status IN ('cancelada','reagendada','nao_compareceu') THEN
+    v_novo_status := CASE NEW.status
+                       WHEN 'cancelada' THEN 'cancelado'
+                       WHEN 'reagendada' THEN 'reagendado'
+                       WHEN 'nao_compareceu' THEN 'nao_compareceu'
+                     END;
+
+    UPDATE agendamentos_base SET status = v_novo_status, updated_at = now()
+     WHERE status IN ('agendado','pendente','confirmado')
+       AND ( (NEW.cotacao_id IS NOT NULL AND cotacao_id = NEW.cotacao_id)
+          OR (NEW.instalacao_origem_id IS NOT NULL AND instalacao_id = NEW.instalacao_origem_id)
+          OR (NEW.vistoria_origem_id IS NOT NULL AND vistoria_id = NEW.vistoria_origem_id) );
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE TRIGGER trg_sync_agendamento_base_on_servico_terminal
+AFTER UPDATE OF status ON servicos
+FOR EACH ROW EXECUTE FUNCTION sync_agendamento_base_on_servico_terminal();
+```
+
+**F. Backfill (na mesma migration)**
+
+Limpar duplicatas existentes:
+
+```sql
+-- Fechar agendamentos_base órfãos cuja origem já não está mais ativa
+UPDATE agendamentos_base ab SET status='cancelado', updated_at=now()
+ WHERE ab.status IN ('agendado','pendente','confirmado')
+   AND ( EXISTS (SELECT 1 FROM servicos s
+                  WHERE s.cotacao_id = ab.cotacao_id
+                    AND s.status IN ('cancelada','reagendada','nao_compareceu','concluida')
+                    AND NOT EXISTS (SELECT 1 FROM servicos s2
+                                     WHERE s2.cotacao_id = ab.cotacao_id
+                                       AND s2.status IN ('agendada','em_rota','em_andamento','pendente'))) );
+
+-- Em (cotacao_id, veiculo_id) com múltiplas instalacoes ativas, manter só a mais recente
+WITH dup AS (
+  SELECT id, ROW_NUMBER() OVER (PARTITION BY cotacao_id, veiculo_id ORDER BY created_at DESC) rn
+    FROM instalacoes
+   WHERE status IN ('agendada','em_andamento')
+)
+UPDATE instalacoes SET status='cancelada', updated_at=now()
+ WHERE id IN (SELECT id FROM dup WHERE rn > 1);
+
+-- Idem servicos órfãos das instalacoes canceladas acima
+UPDATE servicos SET status='cancelada', updated_at=now()
+ WHERE instalacao_origem_id IN (
+   SELECT id FROM instalacoes WHERE status='cancelada'
+     AND updated_at >= now() - interval '1 minute'
+ ) AND status IN ('agendada','pendente');
+```
+
+**G. Memória nova** — `mem://logic/operations/dedupe-agendamentos-rule.md`:
+> Toda criação de `agendamentos_base`/`instalacoes`/`servicos` para uma mesma origem (cotação, instalação, vistoria, sinistro) deve **fechar primeiro** (status `cancelado`/`reagendado`) qualquer linha ativa anterior. Trigger `trg_sync_agendamento_base_on_servico_terminal` é a rede de segurança. Nunca empilhar registros para a mesma origem.
 
 ### Arquivos editados
 
-- `src/hooks/useRastreadores.ts` — `useVeiculosSemRastreador` (remover `.not(...)` redundante).
-- `src/hooks/useAppAssociado.ts` — `tem_rastreador` passa a checar `status === 'instalado'`.
-- `src/hooks/useChamadoPosicaoTempoReal.ts` — adicionar `.eq('status','instalado')` se faltar.
-- `src/components/monitoramento/estoque/ListaRastreadores.tsx` — usar whitelist `['estoque','baixado']` em vez de `novoStatus !== 'instalado'`.
-- `mem://logic/operations/rastreador-vinculo-preservacao.md` — nota sobre filtros.
+- `supabase/functions/reagendar-vistoria-publica/index.ts` — fechar agendamentos_base antigos + guard de idempotência.
+- `supabase/functions/cron-reagendamento-automatico/index.ts` — propagar `nao_compareceu` para agendamentos_base.
+- `supabase/functions/aprovar-proposta/index.ts` — guard de idempotência antes do insert de `instalacoes`.
+- `supabase/functions/criar-instalacao-pos-pagamento/index.ts` — mesmo guard.
+- `src/hooks/useRealocarInstalacao.ts` — cancelar agendamentos_base ativos antes de inserir novo.
+- Migration nova — trigger `trg_sync_agendamento_base_on_servico_terminal` + backfill de duplicatas.
+- `mem://logic/operations/dedupe-agendamentos-rule.md` (nova).
+
+### O que NÃO muda
+
+- `useAlterarEnderecoTipo` já segue o padrão correto.
+- Listagens (`useAtribuicaoManual`, `CalendarioDiaModal`) já filtram por status — depois da correção, naturalmente passam a mostrar só o card vivo.
+- Realtime/invalidações já cobertas por hooks existentes.
 
 ### Riscos
 
-- Item 2 (`tem_rastreador` no app do associado) muda comportamento perceptível: veículos com rastreador em `manutencao` deixam de mostrar UI de "tem rastreador". Isso **é o comportamento correto** (não pode rastrear o que está em manutenção), mas vale alertar usuários do app durante a janela de manutenção. Não há mudança de UI/copy adicional necessária.
-- Item 4 corrige bug latente: hoje, mover rastreador no painel da estoque para `manutencao` zerava `veiculo_id`. Após o fix, vínculo é preservado. Se houver registros já corrompidos por esse bug, eles precisam de backfill manual (não incluso neste plano — abrir tarefa separada se relevante).
+- Trigger pode disparar em loop se algum hook reagir a mudança de `agendamentos_base` re-atualizando `servicos`. Não há esse caminho hoje, mas vou validar buscando triggers em `agendamentos_base` antes de aplicar.
+- Backfill toca registros históricos — efeito desejado para sumir os "vários cards iguais" já existentes; lista de IDs alterados sai no log da migration.
+- Guard de idempotência por `(cotacao_id, veiculo_id)` em `instalacoes`: se houver caso legítimo de 2 instalações para mesma cotação/veículo (ex.: substituição de equipamento), o guard bloqueia. Vou checar se a substituição cria via outro caminho (sem `cotacao_id`) — se conflitar, ajusto o guard para incluir janela de tempo (últimos N minutos) em vez de status.
 
