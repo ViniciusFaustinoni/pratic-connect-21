@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Calendar, Clock, CheckCircle2, Loader2, MapPin, User, Search, Phone, Shield, AlertTriangle, Sun, Sunset } from 'lucide-react';
+import { Calendar, Clock, CheckCircle2, Loader2, MapPin, User, Search, Phone, Shield, AlertTriangle, Sun, Sunset, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -14,6 +14,7 @@ import { isDomingo, PERIODOS_DISPONIVEIS, getPeriodosDisponivelsPorHora, type Pe
 import { useVagasPeriodo } from '@/hooks/useVagasPeriodo';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { useDatasBloqueadasSet } from '@/hooks/useDatasBloqueadas';
+import { useEnriquecerEndereco } from '@/hooks/useEnriquecerEndereco';
 
 interface PrazoEstado {
   estado: string;
@@ -39,15 +40,27 @@ interface AgendamentoInstalacaoContratoProps {
 export function AgendamentoInstalacaoContrato({ contratoId, enderecoInicial, onConfirmar }: AgendamentoInstalacaoContratoProps) {
   const [dataSelecionada, setDataSelecionada] = useState<Date | null>(null);
   const [periodoSelecionado, setPeriodoSelecionado] = useState<Periodo | null>(null);
-  
-  // Estados para endereço
-  const [cep, setCep] = useState(enderecoInicial?.cep || '');
-  const [logradouro, setLogradouro] = useState(enderecoInicial?.logradouro || '');
-  const [numero, setNumero] = useState(enderecoInicial?.numero || '');
-  const [complemento, setComplemento] = useState(enderecoInicial?.complemento || '');
-  const [bairro, setBairro] = useState(enderecoInicial?.bairro || '');
-  const [cidade, setCidade] = useState(enderecoInicial?.cidade || '');
-  const [estado, setEstado] = useState(enderecoInicial?.estado || '');
+
+  // Endereço com enriquecimento automático via ViaCEP a partir do enderecoInicial (contrato/associado/cotação)
+  const {
+    endereco,
+    setEndereco,
+    enriquecendo,
+    enriquecido,
+    faltaInfo: enderecoFaltaInfo,
+    veioPrePreenchido,
+  } = useEnriquecerEndereco(enderecoInicial);
+  const { cep, logradouro, numero, complemento, bairro, cidade, estado } = endereco;
+
+  // Setters individuais para manter o restante do componente sem alterações estruturais
+  const setCep = (v: string) => setEndereco(prev => ({ ...prev, cep: v }));
+  const setLogradouro = (v: string) => setEndereco(prev => ({ ...prev, logradouro: v }));
+  const setNumero = (v: string) => setEndereco(prev => ({ ...prev, numero: v }));
+  const setComplemento = (v: string) => setEndereco(prev => ({ ...prev, complemento: v }));
+  const setBairro = (v: string) => setEndereco(prev => ({ ...prev, bairro: v }));
+  const setCidade = (v: string) => setEndereco(prev => ({ ...prev, cidade: v }));
+  const setEstado = (v: string) => setEndereco(prev => ({ ...prev, estado: v }));
+
   const [buscandoCep, setBuscandoCep] = useState(false);
   
   // Estados para responsável
