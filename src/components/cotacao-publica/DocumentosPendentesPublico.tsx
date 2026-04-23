@@ -9,6 +9,7 @@ import { AlertTriangle, Upload, FileCheck, Loader2, FileText, CheckCircle2, Cloc
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { motion } from 'framer-motion';
 import type { DocumentoPendentePublico } from '@/hooks/useCotacaoContratacao';
+import { OcrDadosEditor } from '@/components/ocr/OcrDadosEditor';
 
 // Labels para tipos de documentos
 const TIPO_DOCUMENTO_LABELS: Record<string, string> = {
@@ -53,7 +54,11 @@ interface DocUploadState {
   enviado: boolean;
   ocrTipo?: string | null;
   ocrSugestao?: string | null;
-  ocrEquivalente?: boolean; // OCR detectou tipo diferente, mas equivalente (ex.: NF para slot CRLV)
+  ocrEquivalente?: boolean;
+  ocrDados?: Record<string, unknown> | null;
+  ocrConfianca?: number | null;
+  ocrLegivel?: boolean | null;
+  documentoId?: string | null;
 }
 
 // Tipos equivalentes ao CRLV (substituem o documento do veículo)
@@ -224,6 +229,9 @@ export function DocumentosPendentesPublico({
           ocrTipo: ocrTipoDetectado,
           ocrSugestao,
           ocrEquivalente: equivalente,
+          ocrDados,
+          ocrConfianca,
+          documentoId: novoDoc.id,
         }
       }));
 
