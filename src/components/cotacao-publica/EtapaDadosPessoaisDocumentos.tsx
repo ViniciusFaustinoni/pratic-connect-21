@@ -157,7 +157,15 @@ export function EtapaDadosPessoaisDocumentos({
   const temEndereco = !!(dadosExtraidos.logradouro && dadosExtraidos.cidade && dadosExtraidos.uf);
   const temDadosVeiculo = !!(dadosExtraidos.veiculo_placa || dadosExtraidos.veiculo_chassi);
   const temContato = !!(email && telefone);
-  
+
+  // Sub-flags para avisos no checklist:
+  const motorExtraido = !!(dadosExtraidos.numero_motor || dadosExtraidos.veiculo_motor);
+  const chassiExtraido = !!dadosExtraidos.veiculo_chassi;
+  // CRLV/NF/ATPV-e enviado mas faltando motor ou chassi (não bloqueia avançar — só avisa)
+  const crlvIncompleto = temCrlv && (!motorExtraido || !chassiExtraido);
+  // Comprovante enviado mas endereço incompleto (logradouro/cidade/uf/cep)
+  const enderecoIncompleto = temComprovante && (!dadosExtraidos.logradouro || !dadosExtraidos.cidade || !dadosExtraidos.uf || !dadosExtraidos.cep);
+
   const podeAvancar = temDadosPessoais && temEndereco && temDadosVeiculo && temContato && cpfValido;
 
   const formatTelefone = (value: string) => {
