@@ -6,7 +6,6 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -213,7 +212,7 @@ export default function LogsAuditoria() {
                 logs.map((log: any) => {
                   const resumo = gerarResumoAuditoria(log);
                   return (
-                    <Collapsible key={log.id} open={expandedRow === log.id} asChild>
+                    <>
                       <>
                         <TableRow className="border-b-0">
                           <TableCell className="font-mono text-sm">{format(new Date(log.created_at), 'dd/MM/yy HH:mm', { locale: ptBR })}</TableCell>
@@ -227,14 +226,12 @@ export default function LogsAuditoria() {
                           <TableCell className="font-mono text-xs">{log.tabela || '-'}</TableCell>
                           <TableCell className="max-w-[340px] truncate">{log.descricao}</TableCell>
                           <TableCell>
-                            <CollapsibleTrigger asChild>
-                              <Button variant="ghost" size="sm" onClick={() => setExpandedRow(expandedRow === log.id ? null : log.id)}>
-                                {expandedRow === log.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                              </Button>
-                            </CollapsibleTrigger>
+                            <Button variant="ghost" size="sm" onClick={() => setExpandedRow(expandedRow === log.id ? null : log.id)}>
+                              {expandedRow === log.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                            </Button>
                           </TableCell>
                         </TableRow>
-                        <CollapsibleContent asChild>
+                        {expandedRow === log.id && (
                           <TableRow>
                             <TableCell colSpan={7} className="bg-muted/50">
                               <div className="space-y-4 p-4">
@@ -264,9 +261,8 @@ export default function LogsAuditoria() {
                               </div>
                             </TableCell>
                           </TableRow>
-                        </CollapsibleContent>
+                        )}
                       </>
-                    </Collapsible>
                   );
                 })
               )}
