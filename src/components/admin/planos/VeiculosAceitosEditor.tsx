@@ -16,10 +16,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Info } from 'lucide-react';
 import { useRulesForEntity, useSaveRule, useUpdateRule, useDeleteRule } from '@/hooks/useEntityEligibilityRules';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { useMarcasDistintas, useModelosPorMarca } from '@/hooks/useMarcasModelos';
+import { useMarcasDistintas, useModelosPorMarca, useTiposVeiculo, TIPO_VEICULO_LABELS, type TipoVeiculo } from '@/hooks/useMarcasModelos';
 
 interface ModeloEntry {
   marca: string;
@@ -54,19 +54,31 @@ export function VeiculosAceitosEditor({ entityId }: VeiculosAceitosEditorProps) 
   const marcaModeloRule = rules?.find(r => r.rule_type === 'marca_modelo');
   const modelos: ModeloEntry[] = (marcaModeloRule?.rule_config as any)?.modelos || [];
 
+  const [tipoVeiculo, setTipoVeiculo] = useState<TipoVeiculo | ''>('');
   const [marca, setMarca] = useState('');
   const [modeloSelecionado, setModeloSelecionado] = useState('');
   const [anoMin, setAnoMin] = useState('');
   const [anoMax, setAnoMax] = useState('');
   const [status, setStatus] = useState<'aceito' | 'limitado' | 'negado'>('aceito');
 
-  const { data: marcasDistintas, isLoading: loadingMarcas } = useMarcasDistintas();
+  const { data: tiposDisponiveis } = useTiposVeiculo();
+  const { data: marcasDistintas, isLoading: loadingMarcas } = useMarcasDistintas(tipoVeiculo || null);
   const { data: modelosPorMarca, isLoading: loadingModelos } = useModelosPorMarca(marca);
 
+  const tipoOptions = (tiposDisponiveis || []).map(t => ({ value: t, label: TIPO_VEICULO_LABELS[t] }));
   const marcaOptions = (marcasDistintas || []).map(m => ({ value: m, label: m }));
-  const modeloOptions = (modelosPorMarca || []).map(m => ({ value: m, label: m }));
+  const modeloOptions = [
+    { value: '__TODOS__', label: '✓ Todos os modelos desta marca' },
+    ...(modelosPorMarca || []).map(m => ({ value: m, label: m })),
+  ];
 
   const isPending = saveRule.isPending || updateRule.isPending || deleteRule.isPending;
+
+  const handleTipoChange = (value: string) => {
+    setTipoVeiculo(value as TipoVeiculo | '');
+    setMarca('');
+    setModeloSelecionado('');
+  };
 
   const handleMarcaChange = (value: string) => {
     setMarca(value);
