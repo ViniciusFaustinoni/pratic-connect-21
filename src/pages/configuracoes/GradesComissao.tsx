@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Plus, Pencil, Copy, Power, Trash2, Layers, Users } from 'lucide-react';
+import { Plus, Pencil, Copy, Power, Trash2, Layers, Users, Infinity as InfinityIcon, ListOrdered } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -19,13 +19,21 @@ interface GradeNivel {
   percentual: number;
 }
 
+interface GradeParcela {
+  id: string;
+  vitalicia: boolean;
+  numero_parcela: number | null;
+}
+
 interface GradeComissao {
   id: string;
   nome: string;
   descricao: string | null;
   ativo: boolean;
+  versao?: number;
   created_at: string;
   grades_comissao_niveis: GradeNivel[];
+  grades_comissao_parcelas: GradeParcela[];
 }
 
 export default function GradesComissao() {
@@ -38,7 +46,7 @@ export default function GradesComissao() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('grades_comissao')
-        .select('id, nome, descricao, ativo, created_at, grades_comissao_niveis(id, percentual)')
+        .select('id, nome, descricao, ativo, versao, created_at, grades_comissao_niveis(id, percentual), grades_comissao_parcelas(id, vitalicia, numero_parcela)')
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data as GradeComissao[];
