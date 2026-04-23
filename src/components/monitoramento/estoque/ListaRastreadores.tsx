@@ -199,11 +199,10 @@ export function ListaRastreadores() {
 
       const statusAnterior = rastreador?.status;
 
-      // Whitelist canônica: só zera vínculo em status terminais/pós-retirada.
+      // Whitelist: só zera vínculo em status terminais/pós-retirada.
       // Manutenção, retirada_pendente, reagendar_manutencao PRESERVAM veiculo_id.
-      const STATUS_DESVINCULA_VEICULO: StatusRastreador[] = [
-        'estoque', 'baixado', 'retorno_base', 'triagem', 'em_analise_plataforma', 'em_garantia',
-      ];
+      // Este componente só permite seleção manual de estoque/instalado/manutencao/baixado.
+      const STATUS_DESVINCULA_VEICULO: StatusRastreador[] = ['estoque', 'baixado'];
       const desvincula = STATUS_DESVINCULA_VEICULO.includes(novoStatus);
 
       // Update status
