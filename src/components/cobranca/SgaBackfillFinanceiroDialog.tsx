@@ -604,6 +604,124 @@ export function SgaBackfillFinanceiroDialog() {
               </div>
             </div>
 
+            {/* Mapeamento controlado — pausa, retomada e tracking por veículo */}
+            <div className="rounded-md border border-indigo-300 bg-indigo-50/50 p-3 space-y-3">
+              <div className="flex items-start gap-2">
+                <ListChecks className="h-4 w-4 text-indigo-700 mt-0.5 shrink-0" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-indigo-900">Mapear lote — controlado (pausa / retomada)</p>
+                  <p className="text-xs text-indigo-800">
+                    Carrega a fila de veículos elegíveis e processa em lotes de {batchSizeCtrl}. Você pode <strong>pausar a qualquer momento</strong>
+                    {' '}e <strong>retomar mais tarde</strong>. O progresso (tentados, vinculados, falhados) é salvo no navegador, então
+                    veículos já processados <strong>não são reprocessados</strong> mesmo após um bloqueio Hinova ou refresh da página.
+                  </p>
+                </div>
+              </div>
+
+              {/* Métricas de progresso */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+                <div className="rounded border bg-card p-2">
+                  <p className="text-muted-foreground">Na fila</p>
+                  <p className="text-base font-semibold">{progresso.fila.length}</p>
+                </div>
+                <div className="rounded border bg-card p-2">
+                  <p className="text-muted-foreground">Tentados</p>
+                  <p className="text-base font-semibold">{progresso.tentados.length}</p>
+                </div>
+                <div className="rounded border bg-card p-2">
+                  <p className="text-muted-foreground">Vinculados</p>
+                  <p className="text-base font-semibold text-emerald-700">{progresso.mapeados.length}</p>
+                </div>
+                <div className="rounded border bg-card p-2">
+                  <p className="text-muted-foreground">Falhados (lote)</p>
+                  <p className="text-base font-semibold text-red-700">{progresso.falhados.length}</p>
+                </div>
+                <div className="rounded border bg-card p-2">
+                  <p className="text-muted-foreground">Lotes</p>
+                  <p className="text-base font-semibold">{progresso.loteAtual}</p>
+                </div>
+              </div>
+
+              {/* Barra de progresso */}
+              {(progresso.tentados.length > 0 || progresso.fila.length > 0) && (
+                <Progress
+                  value={(() => {
+                    const total = progresso.tentados.length + progresso.fila.length;
+                    return total > 0 ? Math.round((progresso.tentados.length / total) * 100) : 0;
+                  })()}
+                />
+              )}
+
+              {progresso.ultimoErro && (
+                <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1">
+                  <strong>Último erro:</strong> {progresso.ultimoErro}
+                </div>
+              )}
+
+              {progresso.carregadoEm && (
+                <p className="text-[11px] text-muted-foreground">
+                  Fila carregada em {new Date(progresso.carregadoEm).toLocaleString('pt-BR')}
+                  {' · '}Estado: <strong>{mapState}</strong>
+                </p>
+              )}
+
+              {/* Controles */}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={carregarFila}
+                  disabled={carregandoFila || mapState === 'running'}
+                  className="gap-1.5"
+                >
+                  {carregandoFila ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                  Carregar fila
+                </Button>
+
+                {mapState !== 'running' && (
+                  <Button
+                    size="sm"
+                    variant="default"
+                    onClick={mapState === 'paused' ? retomarMapearControlado : startMapearControlado}
+                    disabled={progresso.fila.length === 0}
+                    className="gap-1.5"
+                  >
+                    <Play className="h-3.5 w-3.5" />
+                    {mapState === 'paused' ? 'Retomar' : 'Iniciar'}
+                  </Button>
+                )}
+
+                {mapState === 'running' && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={pausarMapearControlado}
+                    className="gap-1.5"
+                  >
+                    <Pause className="h-3.5 w-3.5" />
+                    Pausar
+                  </Button>
+                )}
+
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={reiniciarMapearControlado}
+                  disabled={mapState === 'running'}
+                  className="gap-1.5 text-muted-foreground"
+                  title="Zera tentados/vinculados/falhados desta sessão. A próxima carga da fila trará todos os elegíveis novamente."
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Reiniciar progresso
+                </Button>
+              </div>
+
+              <p className="text-[11px] text-muted-foreground">
+                Dica: após um bloqueio Hinova, basta clicar em <strong>Retomar</strong> quando a liberação chegar — os veículos do lote
+                que falhou ficam isolados em "Falhados" e não voltam até você reiniciar o progresso.
+              </p>
+            </div>
+
             {/* Etapas */}
             <div className="space-y-2 rounded-md border p-3 text-sm">
               <p className="font-medium">Etapas (executar nesta ordem):</p>
