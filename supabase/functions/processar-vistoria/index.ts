@@ -107,6 +107,42 @@ serve(async (req) => {
 
     console.log(`[processar-vistoria] Vistoria atualizada com status: ${statusFinal}`);
 
+    // 3.1 Encerrar serviço materializado e agendamento_base vinculados à vistoria
+    // (defesa em profundidade — a trigger trg_sync_servico_on_vistoria_decisao também cobre)
+    try {
+      const novoStatusServico = decisao === 'reprovada' ? 'cancelada' : 'concluida';
+      const novoStatusAgend = decisao === 'reprovada' ? 'cancelado' : 'realizado';
+      const agora = new Date().toISOString();
+
+      const { data: servicosFechados, error: servErr } = await supabase
+        .from('servicos')
+        .update({ status: novoStatusServico, concluida_em: agora, updated_at: agora })
+        .eq('vistoria_origem_id', vistoria_id)
+        .in('status', ['agendada','em_rota','em_andamento','pendente','reagendada','em_analise'])
+        .select('id');
+
+      if (servErr) {
+        console.error('[processar-vistoria] Erro ao encerrar serviços:', servErr);
+      } else {
+        console.log(`[processar-vistoria] ${servicosFechados?.length ?? 0} serviço(s) encerrado(s)`);
+      }
+
+      const { data: agendsFechados, error: agendErr } = await supabase
+        .from('agendamentos_base')
+        .update({ status: novoStatusAgend, updated_at: agora })
+        .eq('vistoria_id', vistoria_id)
+        .not('status', 'in', '(realizado,cancelado)')
+        .select('id');
+
+      if (agendErr) {
+        console.error('[processar-vistoria] Erro ao encerrar agendamentos_base:', agendErr);
+      } else {
+        console.log(`[processar-vistoria] ${agendsFechados?.length ?? 0} agendamento(s) encerrado(s)`);
+      }
+    } catch (encErr) {
+      console.error('[processar-vistoria] Erro ao encerrar tarefas vinculadas (não bloqueante):', encErr);
+    }
+
     let instalacao_id: string | null = null;
     let nova_vistoria_id: string | null = null;
 
