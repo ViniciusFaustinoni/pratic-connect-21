@@ -6,7 +6,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Loader2, RefreshCw, Database, AlertCircle, CheckCircle2, Clock, MinusCircle, Timer, Zap, CalendarClock, Info } from 'lucide-react';
+import { Loader2, RefreshCw, Database, AlertCircle, CheckCircle2, Clock, MinusCircle, Timer, Zap, CalendarClock, Info, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface JobStatus {
@@ -162,6 +162,15 @@ export function SgaBackfillFinanceiroDialog() {
 
   const motivoPredominante = status?.top_erros?.[0]?.motivo || null;
 
+  // Detecta bloqueio "Usuário com restrição" da Hinova — quando ativo, processar a fila
+  // só multiplica jobs em pendente_retry sem produzir resultado. Bloqueia ações de execução.
+  const restricaoHinovaAtiva = !!status?.top_erros?.some((e) =>
+    /restri[cç][aã]o|usu[aá]rio com restri/i.test(e.motivo)
+  );
+  const qtdJobsRestricao = status?.top_erros
+    ?.filter((e) => /restri[cç][aã]o|usu[aá]rio com restri/i.test(e.motivo))
+    .reduce((sum, e) => sum + e.qtd, 0) ?? 0;
+
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)} className="gap-1.5">
@@ -190,6 +199,36 @@ export function SgaBackfillFinanceiroDialog() {
                 Sincronizações fora da janela são automaticamente adiadas para o próximo dia útil às 09:00 BRT.
               </AlertDescription>
             </Alert>
+
+            {/* Bloqueio crítico: Usuário com restrição (Hinova rejeita autenticação) */}
+            {restricaoHinovaAtiva && (
+              <Alert className="border-red-400 bg-red-50">
+                <ShieldAlert className="h-4 w-4 text-red-700" />
+                <AlertTitle className="text-red-900">
+                  Backfill bloqueado pela Hinova — "Usuário com restrição"
+                </AlertTitle>
+                <AlertDescription className="text-red-800 space-y-2">
+                  <p>
+                    A API Hinova está rejeitando a autenticação do usuário da integração com o erro
+                    <strong> "Usuário com restrição"</strong>
+                    {qtdJobsRestricao > 0 && (
+                      <> (<strong>{qtdJobsRestricao}</strong> jobs afetados).</>
+                    )}
+                    {' '}Enquanto esse erro estiver ativo, <strong>a fila não vai concluir</strong>: cada nova tentativa
+                    apenas reagenda os jobs para retry, sem importar boletos.
+                  </p>
+                  <p>
+                    <strong>Como resolver:</strong> abra um chamado com a Hinova solicitando a
+                    <strong> liberação 24h e/ou liberação por IP</strong> do usuário usado pela integração no painel SGA do parceiro.
+                    Não há ação no sistema que destrave esse bloqueio — é configuração externa.
+                  </p>
+                  <p className="text-xs text-red-700">
+                    Os botões de execução (Forçar sync, Reagendar, Processar) ficam desabilitados até
+                    o erro deixar de aparecer no topo das causas de falha.
+                  </p>
+                </AlertDescription>
+              </Alert>
+            )}
 
             {/* Métricas principais */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -274,8 +313,9 @@ export function SgaBackfillFinanceiroDialog() {
                   size="sm"
                   variant="outline"
                   onClick={handleReagendar}
-                  disabled={reagendando}
+                  disabled={reagendando || restricaoHinovaAtiva}
                   className="gap-1.5"
+                  title={restricaoHinovaAtiva ? 'Bloqueado: usuário Hinova com restrição. Solicite liberação no painel SGA.' : undefined}
                 >
                   {reagendando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CalendarClock className="h-3.5 w-3.5" />}
                   Reagendar erros (janela horária / 401)
@@ -284,13 +324,20 @@ export function SgaBackfillFinanceiroDialog() {
                   size="sm"
                   variant="default"
                   onClick={handleForcarSync}
-                  disabled={forcando}
+                  disabled={forcando || restricaoHinovaAtiva}
                   className="gap-1.5"
+                  title={restricaoHinovaAtiva ? 'Bloqueado: usuário Hinova com restrição. Solicite liberação no painel SGA.' : undefined}
                 >
                   {forcando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
                   Forçar sync agora (drenar fila)
                 </Button>
               </div>
+              {restricaoHinovaAtiva && (
+                <p className="text-xs text-red-700">
+                  ⛔ Ações desabilitadas enquanto a Hinova retornar "Usuário com restrição".
+                  Solicite à Hinova a liberação 24h ou liberação por IP do usuário da integração no painel SGA do parceiro.
+                </p>
+              )}
             </div>
 
             {/* Etapas */}
@@ -311,7 +358,14 @@ export function SgaBackfillFinanceiroDialog() {
                 </li>
                 <li>
                   <span className="font-medium text-foreground">Processar fila</span> — executa lotes de 50 jobs e atualiza boletos.
-                  <Button size="sm" variant="default" className="ml-2 h-7" onClick={handleProcessar} disabled={running}>
+                  <Button
+                    size="sm"
+                    variant="default"
+                    className="ml-2 h-7"
+                    onClick={handleProcessar}
+                    disabled={running || restricaoHinovaAtiva}
+                    title={restricaoHinovaAtiva ? 'Bloqueado: usuário Hinova com restrição. Solicite liberação no painel SGA.' : undefined}
+                  >
                     {running ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />} Processar
                   </Button>
                 </li>
