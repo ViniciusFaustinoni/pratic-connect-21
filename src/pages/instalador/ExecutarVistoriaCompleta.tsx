@@ -429,7 +429,22 @@ export default function ExecutarVistoriaCompleta() {
           pode não ter acesso a esta tarefa específica. Volte para a lista
           de tarefas e tente novamente.
         </p>
-        <Button onClick={() => navigate('/vistoriador/tarefas')}>Voltar para tarefas</Button>
+        <div className="flex flex-col gap-2 w-full max-w-xs">
+          <Button
+            variant="outline"
+            onClick={() => {
+              vistoriaPorServicoQuery.refetch();
+              vistoriaPorInstalacaoQuery.refetch();
+              vistoriaPorAgendamentoBaseQuery.refetch();
+            }}
+            className="w-full"
+          >
+            Tentar novamente
+          </Button>
+          <Button onClick={() => navigate('/vistoriador/tarefas')} className="w-full">
+            Voltar para tarefas
+          </Button>
+        </div>
       </div>
     );
   }
