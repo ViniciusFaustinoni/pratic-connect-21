@@ -78,6 +78,7 @@ import { useLead } from '@/hooks/useLeads';
 import { useFipe, type PlateResult, type FipeMarca, type FipeModelo, type FipeAno } from '@/hooks/useFipe';
 import { useVendedores } from '@/hooks/useVendedores';
 import { toast } from 'sonner';
+import { descreverErroSupabase } from '@/lib/errors';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
@@ -141,7 +142,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const { getMarcas, getModelos, getAnos, getPreco, getByPlaca, buscarPorNome, loading: fipeLoading } = useFipe();
   const { data: vendedores = [], isLoading: vendedoresLoading } = useVendedores();
   const { user, profile } = useAuth();
-  const { userId, isDiretor, isGerente, isSupervisor, isVendedorExterno } = usePermissions();
+  const { userId, isDiretor, isGerente, isSupervisor, isVendedorExterno, cotacao: cotacaoPerms, isPermissionsLoading } = usePermissions();
+  const podeOperarCotacao = !!cotacaoPerms?.canCreate;
   const { data: percentualAdesaoConfig = 1 } = useTaxaAdesaoPercentual();
   const { data: minimoAdesaoBase = 100 } = useTaxaAdesaoMinimoBase();
   const { data: minimoVolanteInterno = 50 } = useTaxaAdesaoMinimoVolanteInterno();
@@ -1368,6 +1370,16 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           throw new Error('vendedor_id ausente ao criar cotação');
         }
 
+        // Pré-validação de campos NOT NULL no banco — evita INSERT que sempre falharia
+        // com 23502 (not-null violation) quando o cálculo do plano ainda não terminou.
+        const valorFipePayload = Number(cotacaoData.valor_fipe ?? 0);
+        const valorCotaPayload = Number(cotacaoData.valor_cota ?? 0);
+        const valorMensalPayload = Number(cotacaoData.valor_total_mensal ?? 0);
+        if (!(valorFipePayload > 0) || !(valorCotaPayload > 0) || !(valorMensalPayload > 0)) {
+          toast.error('Aguarde o cálculo do plano terminar antes de criar a cotação.');
+          throw new Error('Campos obrigatórios de valor ainda não calculados');
+        }
+
         const novaCotacao = await createCotacao.mutateAsync({
           ...cotacaoData,
           solicitar_fipe_menor: solicitarFipeMenor,
@@ -1468,9 +1480,24 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
       setShowConfirmDialog(false);
       onOpenChange(false);
-    } catch (error) {
-      toast.error(isEditando ? 'Erro ao atualizar cotação' : 'Erro ao criar cotação');
-      console.error(error);
+    } catch (error: any) {
+      // Log estruturado para diagnóstico (sem valores sensíveis — só chaves do payload)
+      try {
+        const payloadKeys = pendingFormData ? Object.keys(pendingFormData) : [];
+        console.error('[criarCotacao]', {
+          code: error?.code,
+          message: error?.message,
+          details: error?.details,
+          hint: error?.hint,
+          payloadKeys,
+        });
+      } catch {
+        console.error(error);
+      }
+
+      const ctx = isEditando ? 'atualizar cotação' : 'criar cotação';
+      const msg = descreverErroSupabase(error, { contexto: ctx });
+      toast.error(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -1493,7 +1520,17 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
             <div className="flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] px-4 pb-4 sm:px-6 space-y-5">
-            
+
+            {/* Banner: usuário sem permissão para criar cotação */}
+            {!isPermissionsLoading && !isEditando && !podeOperarCotacao && (
+              <Alert variant="default" className="border-warning bg-warning/10">
+                <AlertTriangle className="h-4 w-4 text-warning" />
+                <AlertDescription className="text-warning-foreground">
+                  Seu papel atual não permite criar cotações. Contate o administrador para liberar a permissão de Vendedor ou Gerência.
+                </AlertDescription>
+              </Alert>
+            )}
+
             {/* BLOCO 0: DADOS DO ASSOCIADO */}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold flex items-center gap-2">

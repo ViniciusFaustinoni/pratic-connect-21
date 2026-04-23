@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import type { StatusCotacao } from '@/types/vendas';
 import { registrarLog } from './useAuditLog';
+import { isUniqueViolation } from '@/lib/errors';
 
 type Cotacao = Tables<'cotacoes'>;
 type CotacaoInsert = TablesInsert<'cotacoes'>;
@@ -226,19 +227,28 @@ export function useCreateCotacao() {
       // Gera token público para link do cliente
       const tokenPublico = crypto.randomUUID().replace(/-/g, '') + 
                           crypto.randomUUID().replace(/-/g, '').slice(0, 32);
-      
-      const { data, error } = await supabase
-        .from('cotacoes')
-        .insert({
-          ...cotacao,
-          numero: gerarNumeroCotacao(),
-          token_publico: tokenPublico,
-        })
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return data as Cotacao;
+
+      // Tenta inserir até 2x se houver colisão de número (23505)
+      let lastError: unknown = null;
+      for (let tentativa = 0; tentativa < 2; tentativa++) {
+        const { data, error } = await supabase
+          .from('cotacoes')
+          .insert({
+            ...cotacao,
+            numero: gerarNumeroCotacao(),
+            token_publico: tokenPublico,
+          })
+          .select()
+          .single();
+
+        if (!error) return data as Cotacao;
+        lastError = error;
+
+        // Só faz retry se for colisão de unique (numero)
+        if (!isUniqueViolation(error)) break;
+        console.warn('[useCreateCotacao] Conflito de número da cotação, regenerando e tentando novamente...', error);
+      }
+      throw lastError;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
