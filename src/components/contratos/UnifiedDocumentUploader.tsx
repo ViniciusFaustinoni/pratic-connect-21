@@ -528,6 +528,9 @@ export function UnifiedDocumentUploader({
             <p className="text-xs text-muted-foreground">
               A IA detectará automaticamente cada tipo de documento
             </p>
+            <p className="text-xs text-muted-foreground italic">
+              💡 Como comprovante de residência, também aceitamos <strong>declaração de residência</strong> (modelo livre, com CPF e assinatura)
+            </p>
 
             <input
               type="file"
