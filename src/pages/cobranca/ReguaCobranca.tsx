@@ -141,6 +141,40 @@ export default function ReguaCobranca() {
     }
   });
 
+  // Estado da última execução manual
+  const [ultimaExecucao, setUltimaExecucao] = useState<null | {
+    quando: string;
+    processados?: number;
+    eventos_criados?: number;
+    whatsapp_enviados?: number;
+    whatsapp_falhas?: number;
+    limite_atingido?: boolean;
+    error?: string;
+  }>(null);
+
+  const executarAgora = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('executar-regua-cobranca', { body: {} });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data: any) => {
+      setUltimaExecucao({
+        quando: new Date().toISOString(),
+        processados: data?.processados,
+        eventos_criados: data?.eventos_criados,
+        whatsapp_enviados: data?.whatsapp_enviados,
+        whatsapp_falhas: data?.whatsapp_falhas,
+        limite_atingido: data?.limite_atingido,
+      });
+      toast.success(`Régua executada — ${data?.eventos_criados ?? 0} eventos, ${data?.whatsapp_enviados ?? 0} WhatsApp enviados`);
+    },
+    onError: (err: any) => {
+      setUltimaExecucao({ quando: new Date().toISOString(), error: err?.message || 'Erro desconhecido' });
+      toast.error('Falha ao executar régua: ' + (err?.message || ''));
+    }
+  });
+
   const handleAddEtapa = () => {
     if (novaEtapa.dias === undefined || !novaEtapa.acao) return;
     
