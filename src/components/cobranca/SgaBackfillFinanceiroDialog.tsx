@@ -388,6 +388,45 @@ export function SgaBackfillFinanceiroDialog() {
               )}
             </div>
 
+            {/* Modo preparar base — apenas mapeamento, sem processamento financeiro */}
+            <div className="rounded-md border border-blue-300 bg-blue-50/50 p-3 space-y-2">
+              <div className="flex items-start gap-2">
+                <Link2 className="h-4 w-4 text-blue-700 mt-0.5 shrink-0" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-blue-900">Modo preparar base (apenas mapeamento)</p>
+                  <p className="text-xs text-blue-800">
+                    Roda <strong>somente</strong> o passo 1 (Mapear códigos Hinova) em loop até esgotar os
+                    veículos sem <code>codigo_hinova</code>. <strong>Não dispara</strong> o processamento financeiro,
+                    então não enfileira nem executa jobs de boletos.
+                  </p>
+                  {restricaoHinovaAtiva && (
+                    <p className="text-xs text-amber-800 bg-amber-50 border border-amber-300 rounded px-2 py-1">
+                      ⚠️ Aviso: o mapeamento também usa a API Hinova autenticada. Com "Usuário com restrição" ativo
+                      o loop pode abortar logo no 1º lote. Use este botão para <strong>testar manualmente</strong>
+                      se a Hinova já liberou — se rodar, ótimo; se falhar, o status acima vai confirmar o bloqueio.
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={handlePrepararBase}
+                  disabled={preparandoBase}
+                  className="gap-1.5"
+                >
+                  {preparandoBase ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
+                  {preparandoBase ? 'Preparando base…' : 'Preparar base (apenas mapeamento)'}
+                </Button>
+                {prepProgress && (
+                  <span className="text-xs text-blue-900">
+                    Lotes: <strong>{prepProgress.lotes}</strong> · Vinculados: <strong>{prepProgress.mapeados}</strong> · Restantes: <strong>{prepProgress.restantes}</strong>
+                  </span>
+                )}
+              </div>
+            </div>
+
             {/* Etapas */}
             <div className="space-y-2 rounded-md border p-3 text-sm">
               <p className="font-medium">Etapas (executar nesta ordem):</p>
