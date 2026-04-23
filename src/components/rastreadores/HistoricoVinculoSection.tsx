@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { DateRange } from 'react-day-picker';
-import { ArrowRight, ChevronDown, ChevronRight, History, Search, User, X } from 'lucide-react';
+import { ArrowRight, ChevronDown, ChevronRight, History, Loader2, Search, User, X } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -32,16 +32,13 @@ export function HistoricoVinculoSection({
 
   const placaDebounced = useDebounce(placaFiltro, 250);
 
-  const { data, isLoading } = useHistoricoVinculoFiltrado({
+  const { items, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useHistoricoVinculoFiltrado({
     rastreadorId,
     veiculoId,
     placa: placaDebounced,
     dataInicio: periodo?.from,
     dataFim: periodo?.to,
   });
-
-  const items = data?.items ?? [];
-  const truncated = data?.truncated ?? false;
 
   const temFiltros = useMemo(
     () => Boolean(placaFiltro.trim()) || Boolean(periodo?.from) || Boolean(periodo?.to),
@@ -52,6 +49,24 @@ export function HistoricoVinculoSection({
     setPlacaFiltro('');
     setPeriodo(undefined);
   };
+
+  // Auto-load via IntersectionObserver — botão "Carregar mais" continua como fallback acessível.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !hasNextPage || isFetchingNextPage) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          fetchNextPage();
+        }
+      },
+      { rootMargin: '120px 0px' },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, items.length]);
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="space-y-3">
@@ -65,7 +80,7 @@ export function HistoricoVinculoSection({
             {titulo}
             <Badge variant="secondary" className="ml-1">
               {items.length}
-              {truncated ? '+' : ''}
+              {hasNextPage ? '+' : ''}
             </Badge>
           </h3>
           {open ? (
@@ -99,12 +114,6 @@ export function HistoricoVinculoSection({
             </Button>
           )}
         </div>
-
-        {truncated && (
-          <p className="text-xs text-amber-600">
-            Mostrando os últimos 200 registros — refine os filtros para resultados mais precisos.
-          </p>
-        )}
 
         {/* Lista */}
         {isLoading ? (
@@ -167,6 +176,31 @@ export function HistoricoVinculoSection({
                 </div>
               );
             })}
+
+            {hasNextPage && (
+              <>
+                <div ref={sentinelRef} aria-hidden className="h-1 w-full" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => fetchNextPage()}
+                  disabled={isFetchingNextPage}
+                >
+                  {isFetchingNextPage ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Carregando…
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-4 w-4 mr-2" />
+                      Carregar mais
+                    </>
+                  )}
+                </Button>
+              </>
+            )}
           </div>
         )}
       </CollapsibleContent>
