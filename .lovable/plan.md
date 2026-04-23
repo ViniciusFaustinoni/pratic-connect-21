@@ -1,82 +1,76 @@
 
 
-## Corrigir URL do template `termo_filiacao_assinatura_v2` para o link real da Autentique
+## Filtros (placa + período) no Histórico de Vínculo
 
 ### Diagnóstico
 
-Confirmado o bug que você apontou. O template **`termo_filiacao_assinatura_v2`** (migration `20260421233246`) foi cadastrado com:
+- **Detalhe do rastreador** (`DetalhesRastreadorDialog.tsx`): a "Trilha de auditoria de vínculo" hoje vem de `useRastreadorHistoricoVinculo` e é mesclada na timeline unificada (linhas 322-347), sem filtros próprios. Em rastreadores com muitos eventos, vira ruído.
+- **Detalhe do veículo** (`VeiculoDetalhesModal.tsx`, aba "Rastreador"): hoje **só mostra o rastreador atual**, sem nenhum histórico de vínculos passados. Não existe seção de "Histórico de Vínculo" nessa modal — precisa ser criada.
+- A tabela `rastreadores_vinculo_historico` tem `placa_anterior`, `placa_nova`, `created_at` e `veiculo_id_anterior` / `veiculo_id_novo` — campos suficientes para filtros por placa e período em ambos os lados.
 
-```json
-{ "url": "https://app.praticcar.org/contrato/{{1}}",
-  "exemplo": "https://app.praticcar.org/contrato/abc123" }
+### Mudanças
+
+**A. Novo componente compartilhado** — `src/components/rastreadores/HistoricoVinculoSection.tsx`
+
+Bloco reutilizável que renderiza a lista filtrada com seu próprio cabeçalho de filtros:
+
+- Props: `{ rastreadorId?: string; veiculoId?: string; titulo?: string }`. Pelo menos um dos dois IDs é obrigatório.
+- UI:
+  - Cabeçalho colapsável "Histórico de Vínculo" + contador.
+  - Linha de filtros: `Input` busca por placa (controlado, debounce 250 ms) + `DatePickerWithRange` (componente já existente em `src/components/ui/date-range-picker.tsx`) + botão "Limpar".
+  - Lista cronológica (mais recente primeiro) com ícone, placa anterior → nova, transição de status, autor, origem, data/hora.
+  - `EmptyState` quando nenhum registro casa com filtros.
+- Lógica:
+  - Estado local: `placaFiltro: string`, `periodo: DateRange | undefined`.
+  - Hook de dados: novo `useHistoricoVinculoFiltrado` (ver item B) que aceita `rastreadorId | veiculoId` + filtros.
+
+**B. Hook novo** — `src/hooks/useHistoricoVinculoFiltrado.ts`
+
+```ts
+useHistoricoVinculoFiltrado({ rastreadorId?, veiculoId?, placa?, dataInicio?, dataFim? })
 ```
 
-E o helper `supabase/functions/_shared/enviar-termo-filiacao-whatsapp.ts` (linha 61) extrai apenas o **último segmento** da URL Autentique (`https://assina.ae/<token>`) e injeta esse token como `{{1}}`. Resultado: o cliente recebe um link `https://app.praticcar.org/contrato/<token-da-autentique>` — **rota inexistente no app**, não abre Autentique e não permite assinatura.
+- Query base em `rastreadores_vinculo_historico`.
+- Se `rastreadorId`: `.eq('rastreador_id', rastreadorId)`.
+- Se `veiculoId`: `.or('veiculo_id_anterior.eq.<id>,veiculo_id_novo.eq.<id>')`.
+- Se `placa`: `.or('placa_anterior.ilike.%X%,placa_nova.ilike.%X%')` (uppercase, sem máscara).
+- Se `dataInicio`/`dataFim`: `.gte('created_at', startOfDay)` / `.lte('created_at', endOfDay)`.
+- Ordenado `created_at desc`, limit 200.
+- `queryKey` inclui todos os filtros para cache correto.
 
-**Padrão Meta-aprovado já usado no projeto** (e que é o modelo correto):
+**C. Integração no detalhe do rastreador** — `DetalhesRastreadorDialog.tsx`
 
-| Template (já aprovado) | URL do botão |
-|---|---|
-| `assinatura_documento_v2` (migration 20260316212103) | `https://assina.ae/{{1}}` |
-| Termo de filiação v1 (migration 20260420200536) | `https://assina.ae/{{1}}` |
+- Antes da seção "Histórico Completo" (timeline unificada, linha 543), adicionar:
+  ```tsx
+  <HistoricoVinculoSection rastreadorId={rastreadorId} titulo="Histórico de Vínculo" />
+  ```
+- **Remover** a inclusão de `historicoVinculo` na timeline unificada (linhas 322-347 + import e query) — passa a viver só na nova seção dedicada com filtros, evitando duplicação visual.
 
-→ A Autentique encurta o link de assinatura para `https://assina.ae/<token>`. Esse é o domínio padrão e foi o usado em todas as aprovações Meta anteriores. **`v2` divergiu sem motivo** e ficou com URL inválida.
+**D. Integração no detalhe do veículo** — `VeiculoDetalhesModal.tsx`, aba "Rastreador"
 
-### Correção
-
-**1. Recriar `termo_filiacao_assinatura_v2` com a URL correta** (nova migration)
-
-- `DELETE` do registro atual em `whatsapp_meta_templates` (status `DRAFT`/`RASCUNHO`, ainda não foi aprovado pela Meta — confirmar status antes do delete).
-- `INSERT` da nova versão idêntica em corpo/rodapé/variáveis, **trocando apenas o botão URL**:
-
-```json
-[{
-  "tipo": "url",
-  "texto": "Assinar termo",
-  "url":   "https://assina.ae/{{1}}",
-  "exemplo": "https://assina.ae/abc123"
-}]
-```
-
-Status inicial `RASCUNHO` (precisa ser submetido à Meta novamente — ciclo padrão).
-
-**2. Helper `enviar-termo-filiacao-whatsapp.ts` — sem mudança funcional**
-
-Já extrai corretamente o token da `autentiqueUrl` (`https://assina.ae/abc123` → `abc123`) e passa em `template_button_params: [token]`. Com a URL do template apontando agora para `https://assina.ae/{{1}}`, o link final renderizado pela Meta volta a ser exatamente o link Autentique original. Apenas atualizar o comentário do topo (linha 4) que ainda referencia o template v1.
-
-**3. Aplicar o mesmo padrão em `autorizacao_fipe_diretoria_v4` (mesma migration `…233246`)**
-
-Esse template é diferente — não é assinatura Autentique, é link interno do painel admin. URL `https://app.praticcar.org/vendas/aprovacoes-fipe/{{1}}` está correta (rota existe em `src/pages/vendas/AprovacoesFipe.tsx`). **Sem alteração.**
-
-**4. Auditoria rápida dos demais templates de assinatura/link**
-
-Já validei (ver tabela do diagnóstico): todos os outros templates de **assinatura** já usam `https://assina.ae/{{1}}`. Templates de painel interno (`/acompanhar/{{1}}`, `/primeiro-acesso?id={{1}}`, `/aprovacoes-fipe`) apontam para rotas reais do app — corretos. **Não há outros templates a corrigir nesta tarefa.**
-
-### Checklist Meta (regras já conhecidas, garantindo aprovação)
-
-- ✅ Categoria `UTILITY` (notificação transacional pós-cadastro).
-- ✅ Domínio do botão URL = mesmo de outros templates já aprovados (`assina.ae`).
-- ✅ Variável dinâmica do botão `{{1}}` com `exemplo` preenchido (`https://assina.ae/abc123`).
-- ✅ Corpo/rodapé sem CTA promocional, sem emoji excessivo, com variáveis exemplificadas.
+- Após o bloco do rastreador atual (após linha 324, antes do fechamento do `TabsContent`), adicionar:
+  ```tsx
+  <Separator />
+  <HistoricoVinculoSection veiculoId={veiculoId} titulo="Histórico de Vínculo (este veículo)" />
+  ```
+- Funciona mesmo quando o veículo não tem rastreador atual (mostra rastreadores que já passaram por ele).
 
 ### Arquivos editados
 
-- **Nova migration** — `DELETE` + `INSERT` corrigindo `termo_filiacao_assinatura_v2` (URL = `https://assina.ae/{{1}}`).
-- `supabase/functions/_shared/enviar-termo-filiacao-whatsapp.ts` — atualizar comentário do topo (linhas 4 e 7-8) para refletir v2 e padrão `assina.ae`.
+- **Novo** `src/components/rastreadores/HistoricoVinculoSection.tsx` — UI compartilhada com filtros.
+- **Novo** `src/hooks/useHistoricoVinculoFiltrado.ts` — query parametrizada.
+- `src/components/monitoramento/estoque/DetalhesRastreadorDialog.tsx` — adiciona seção; remove vínculo da timeline unificada.
+- `src/components/cadastro/VeiculoDetalhesModal.tsx` — adiciona seção na aba "Rastreador".
 
 ### O que NÃO muda
 
-- Helper continua extraindo o token da `autentique_url` salva em `contratos.autentique_url`.
-- Edge function `enviar-termo-filiacao-whatsapp/index.ts` (orquestração) — sem alteração.
-- Fallback para `assinatura_documento_v2` permanece (já está com `assina.ae`).
-- `autorizacao_fipe_diretoria_v4` — URL interna do painel já é a rota correta.
-
-### Próximo passo após o deploy
-
-Você precisa **submeter `termo_filiacao_assinatura_v2` à Meta novamente** (botão "Submeter para aprovação" na tela de templates WhatsApp). Como a estrutura agora bate com `assinatura_documento_v2` (já aprovado), a aprovação tende a ser rápida.
+- Tabela `rastreadores_vinculo_historico` e trigger continuam idênticos.
+- Hook `useRastreadorHistoricoVinculo` permanece (não é usado depois da remoção, posso depreciar em outra tarefa — mantenho por agora para evitar quebrar usos eventuais).
+- RLS já permite leitura pelos roles certos (admin/monitoramento) e não muda.
 
 ### Riscos
 
-- Se algum cliente já recebeu o template v2 com URL quebrada, ele precisa ser reenviado depois da nova aprovação. Backfill manual (não incluso) — basta listar contratos com `autentique_url IS NOT NULL` e `status='aguardando_assinatura'` criados após `2026-04-21` e disparar reenvio.
-- A nova versão fica em `RASCUNHO` até aprovação Meta — durante esse período, o helper cai no fallback `assinatura_documento_v2` (já aprovado), então **nenhum cliente fica sem mensagem**.
+- Filtro `or` no Postgrest com `ilike` em duas colunas é seguro (já usamos esse padrão em outras buscas). Se a placa for digitada vazia, o filtro é ignorado.
+- Um rastreador que entrou e saiu várias vezes do mesmo veículo aparecerá várias vezes — esperado (cada linha é uma transição).
+- Limite 200 cobre o caso comum; se algum rastreador antigo passar disso, exibimos um aviso "Mostrando últimos 200 — refine os filtros". Sem paginação nesta tarefa.
 
