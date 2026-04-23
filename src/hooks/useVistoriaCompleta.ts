@@ -80,6 +80,32 @@ export function useAprovarVeiculoVistoria() {
         if (instalacaoError) throw instalacaoError;
       }
 
+      // 4b. Marcar agendamento_base vinculado como realizado
+      // (sem isso, a tarefa segue aparecendo como "atual" para o instalador)
+      const { data: agendVinculado } = await supabase
+        .from('agendamentos_base')
+        .select('id')
+        .eq('vistoria_id', data.vistoriaId)
+        .maybeSingle();
+
+      if (agendVinculado) {
+        await supabase
+          .from('agendamentos_base')
+          .update({ status: 'realizado', updated_at: agora })
+          .eq('id', agendVinculado.id);
+      }
+
+      // 4c. Encerrar serviço materializado vinculado a esta vistoria
+      await supabase
+        .from('servicos')
+        .update({
+          status: 'aprovada',
+          concluida_em: agora,
+          updated_at: agora,
+        })
+        .eq('vistoria_origem_id', data.vistoriaId)
+        .in('status', ['em_andamento', 'em_analise', 'em_rota', 'agendada']);
+
       // 5. Registrar no histórico
       await supabase.from('associados_historico').insert({
         associado_id: data.associadoId,
@@ -146,6 +172,10 @@ export function useAprovarVeiculoVistoria() {
       queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
       queryClient.invalidateQueries({ queryKey: ['veiculos'] });
       queryClient.invalidateQueries({ queryKey: ['associados'] });
+      queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+      queryClient.invalidateQueries({ queryKey: ['tarefa-atual-servico'] });
+      queryClient.invalidateQueries({ queryKey: ['agendamentos-base-calendario'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
       toast.success('Instalação concluída! Aguardando aprovação do monitoramento.');
     },
     onError: (error) => {

@@ -2107,11 +2107,25 @@ export default function InstaladorChecklist() {
                     const faltam = checklistItems.filter(item => 
                       checklist[item.id]?.status === 'pendente' || !checklist[item.id]
                     ).length;
-                    toast.error(`Marque todos os itens do checklist (${faltam} pendente${faltam > 1 ? 's' : ''})`);
+                    toast.error(
+                      `Marque todos os itens do checklist (${faltam} pendente${faltam > 1 ? 's' : ''})`,
+                      { id: 'avancar-bloqueado' }
+                    );
                   } else if (etapaAtual === 3) {
-                    toast.error('Envie todas as fotos obrigatórias e o vídeo 360°');
+                    const fotosFaltam = totalObrigatorias - totalFotosEnviadas;
+                    const partes: string[] = [];
+                    if (fotosFaltam > 0) partes.push(`${fotosFaltam} foto${fotosFaltam > 1 ? 's' : ''}`);
+                    if (!video360Enviado) partes.push('vídeo 360°');
+                    toast.error(
+                      partes.length > 0
+                        ? `Falta enviar: ${partes.join(' + ')}`
+                        : 'Complete os itens pendentes para avançar',
+                      { id: 'avancar-bloqueado' }
+                    );
                   } else {
-                    toast.error('Complete todos os campos obrigatórios para avançar');
+                    toast.error('Complete todos os campos obrigatórios para avançar', {
+                      id: 'avancar-bloqueado',
+                    });
                   }
                   return;
                 }
