@@ -15664,6 +15664,7 @@ export type Database = {
           id: string
           marca: string
           modelo: string | null
+          tipo_veiculo: string | null
         }
         Insert: {
           ativo?: boolean | null
@@ -15671,6 +15672,7 @@ export type Database = {
           id?: string
           marca: string
           modelo?: string | null
+          tipo_veiculo?: string | null
         }
         Update: {
           ativo?: boolean | null
@@ -15678,6 +15680,7 @@ export type Database = {
           id?: string
           marca?: string
           modelo?: string | null
+          tipo_veiculo?: string | null
         }
         Relationships: []
       }
