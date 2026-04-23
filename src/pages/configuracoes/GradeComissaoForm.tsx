@@ -264,7 +264,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
       queryClient.invalidateQueries({ queryKey: ['grades-comissao'] });
       queryClient.invalidateQueries({ queryKey: ['grade-comissao-v2', id] });
       toast.success(isEdit ? 'Grade atualizada (nova versão)' : 'Grade criada');
-      navigate('/configuracoes/grades-comissao');
+      navigate(basePath);
     } catch (e: any) {
       console.error(e);
       toast.error('Erro ao salvar grade: ' + (e.message || 'desconhecido'));
@@ -278,7 +278,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
   return (
     <div className="space-y-6 max-w-4xl">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/configuracoes/grades-comissao')}>
+        <Button variant="ghost" size="icon" onClick={() => navigate(basePath)}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <h2 className="text-lg font-semibold text-foreground">
@@ -361,7 +361,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
       </div>
 
       <div className="flex justify-end gap-3">
-        <Button variant="outline" onClick={() => navigate('/configuracoes/grades-comissao')}>Cancelar</Button>
+        <Button variant="outline" onClick={() => navigate(basePath)}>Cancelar</Button>
         <Button onClick={handleSave} disabled={saving}>
           {saving ? 'Salvando...' : isEdit ? 'Salvar nova versão' : 'Criar Grade'}
         </Button>
