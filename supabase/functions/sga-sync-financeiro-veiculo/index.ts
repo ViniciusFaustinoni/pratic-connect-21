@@ -3,7 +3,7 @@
 // - Body: { veiculo_id: string, job_id?: string }
 // - Idempotente: upsert em cobrancas por nosso_numero.
 // - Distingue erros transitórios (auth/janela/5xx) → status 'pendente_retry' com proximo_retry_em.
-// v2: usa janela 5 anos em listarBoletosVeiculo (data_inicial/data_final obrigatórios pela Hinova).
+// v3: janela de 5 meses passados em listarBoletosVeiculo (data_inicial/data_final obrigatórios pela Hinova).
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
@@ -30,6 +30,25 @@ const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
 const cleanCPF = (value: string | null | undefined) => String(value || '').replace(/\D/g, '');
+
+// Formato dd/mm/aaaa (mesmo padrão do hinova-client)
+const fmtBR = (d: Date) => {
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+};
+
+// Janela de 5 meses passados → hoje
+function janela5Meses() {
+  const hoje = new Date();
+  const inicio = new Date(hoje);
+  inicio.setMonth(inicio.getMonth() - 5);
+  return {
+    dataInicial: fmtBR(inicio),
+    dataFinal: fmtBR(hoje),
+  };
+}
 
 function extractCodigoAssociado(payload: any): number | null {
   const candidates = [
@@ -257,9 +276,10 @@ serve(async (req) => {
       // Erro não-transitório de situação não bloqueia listagem de boletos
     }
 
+    const janela = janela5Meses();
     let boletos: any[] = [];
     try {
-      boletos = await listarBoletosVeiculo(session, codigoAssociado, codigoVeiculo);
+      boletos = await listarBoletosVeiculo(session, codigoAssociado, codigoVeiculo, janela);
     } catch (e) {
       if (e instanceof HinovaTransientError) throw e;
       throw e;
@@ -281,7 +301,7 @@ serve(async (req) => {
           });
           codigoAssociado = codigoAssociadoPorCpf;
           await supabase.from('associados').update({ codigo_hinova: codigoAssociadoPorCpf }).eq('id', associado.id);
-          boletos = await listarBoletosVeiculo(session, codigoAssociadoPorCpf, codigoVeiculo);
+          boletos = await listarBoletosVeiculo(session, codigoAssociadoPorCpf, codigoVeiculo, janela);
         }
       } catch (e) {
         if (e instanceof HinovaTransientError) throw e;
