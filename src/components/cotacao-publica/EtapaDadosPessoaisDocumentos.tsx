@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { validateCPF } from '@/lib/validations';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,13 +16,17 @@ import {
   Mail,
   Phone,
   ArrowRight,
-  Car
+  Car,
+  AlertTriangle,
+  RefreshCw,
+  Search
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { DadosPessoaisForm } from './FormularioDadosPessoais';
 import { 
   UnifiedDocumentUploader, 
-  type DocumentoUnificado 
+  type DocumentoUnificado,
+  type UnifiedDocumentUploaderHandle,
 } from '@/components/contratos/UnifiedDocumentUploader';
 
 interface DadosExtraidos {
