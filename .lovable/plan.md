@@ -1,349 +1,415 @@
 
-## Implementação/ajuste da tela de Pagamentos de Comissões
+## Plano: auditoria de alterações em grades de comissão e atribuições
 
-### Observação importante
-A tela `/comissoes/pagamentos` já existe parcialmente. Ela já lista comissões do mês, permite aprovar e abre o modal de conferência antes de marcar como paga.
-
-O ajuste será evoluir essa tela para o fluxo completo solicitado:
+### Objetivo
+Adicionar aos **Logs de Auditoria** rastreabilidade completa para:
 
 ```text
-Pagamentos de Comissões
-  -> lista paginada
-  -> filtros
-  -> conferência/auditoria
-  -> marcar como paga
-  -> registrar lançamento de pagamento
-  -> gerar recibo
-  -> manter histórico auditável
+1. Alterações em Grades de Comissão
+   - quem alterou
+   - quando alterou
+   - qual grade/plano/parcela/perfil mudou
+   - versão anterior e nova versão
+   - dados anteriores e dados novos
+
+2. Alterações em Atribuições
+   - quem atribuiu/alterou
+   - quando alterou
+   - usuário/vendedor afetado
+   - grade anterior e nova grade
+   - supervisor/gerente/agência anteriores e novos
+   - vigência encerrada e nova vigência
+```
+
+Isso permitirá rastrear versões, mudanças retroativas e entender por que uma comissão foi calculada de determinada forma.
+
+---
+
+## Situação atual
+
+Já existe uma tabela e tela de auditoria:
+
+- `logs_auditoria`
+- `src/hooks/useAuditLog.ts`
+- `src/pages/diretoria/LogsAuditoria.tsx`
+
+A tela já exibe:
+
+- usuário;
+- data/hora;
+- ação;
+- módulo;
+- descrição;
+- dados anteriores;
+- dados novos.
+
+Também já existem pontos importantes para auditar:
+
+- `GradeComissaoForm.tsx`, onde grades são criadas/editadas;
+- `fn_atribuir_grade_usuario`, onde uma grade é atribuída ao usuário;
+- `fn_upsert_hierarquia_vendedor`, onde supervisor/gerente/agência são alterados.
+
+O que falta é registrar eventos detalhados nesses fluxos e melhorar a tela de auditoria para filtrar/visualizar especificamente comissões, grades, versões e atribuições.
+
+---
+
+## 1. Registrar logs ao criar ou editar grades de comissão
+
+Arquivo principal:
+
+- `src/pages/configuracoes/GradeComissaoForm.tsx`
+
+### Ao criar grade
+Registrar log com:
+
+```text
+Ação: criar
+Módulo: configuracoes ou comissoes
+Tabela: grades_comissao
+Registro: grade_id
+Descrição: Grade de comissão criada
+Dados novos:
+  - nome
+  - descrição
+  - versão
+  - planos vinculados
+  - regras por plano/parcela/perfil
+```
+
+### Ao editar grade
+Registrar log com:
+
+```text
+Ação: editar
+Módulo: configuracoes ou comissoes
+Tabela: grades_comissao
+Registro: grade_id
+Descrição: Grade de comissão atualizada para nova versão
+Dados anteriores:
+  - snapshot/versão anterior
+  - planos anteriores
+  - regras anteriores
+
+Dados novos:
+  - snapshot/versão nova
+  - planos atuais
+  - regras atuais
+```
+
+### Resultado esperado
+Na auditoria será possível ver:
+
+```text
+Diretor X alterou a Grade Select RJ em 23/04 às 14:30
+Versão anterior: v2
+Nova versão: v3
+Plano alterado: Select Exclusive
+Parcela: 2ª
+Supervisor: 4% -> 5%
+Gerente: 2% -> 3%
 ```
 
 ---
 
-## 1. Criar hook próprio para pagamentos paginados
+## 2. Registrar logs ao atribuir grade a usuário
 
-Criar/ajustar um hook específico, por exemplo:
+Banco/função:
 
-- `src/hooks/usePagamentosComissoes.ts`
+- `fn_atribuir_grade_usuario`
 
-Ele substituirá o uso atual de `useComissoesDashboard()` na tela de pagamentos, porque hoje a página carrega os itens do mês inteiro e filtra em memória.
+Hoje a função fecha a atribuição vigente e cria uma nova. Vou ajustar a função para também inserir em `logs_auditoria`.
 
-### O hook terá filtros server-side
-Filtros previstos:
-
-- período inicial;
-- período final;
-- status;
-- vendedor/destinatário;
-- grade;
-- plano;
-- parcela;
-- busca por nome/email;
-- página;
-- quantidade por página.
-
-### Retorno
-O hook retornará:
+### O log deverá registrar
 
 ```text
-items
-total
-page
-pageSize
-totalPages
-kpis
-isLoading
-marcarComoPaga
-gerarRecibo
+Ação: atribuir
+Módulo: comissoes
+Tabela: usuario_grade_comissao
+Registro: nova_atribuicao_id
+Descrição: Grade atribuída ao usuário/vendedor
+
+Dados anteriores:
+  - atribuição anterior
+  - grade anterior
+  - data_inicio anterior
+  - data_fim encerrada
+
+Dados novos:
+  - usuário afetado
+  - grade nova
+  - atribuído por
+  - data_inicio
 ```
 
-Isso evita limite de 1000 registros e prepara a tela para volume real.
+### Importante
+Se a grade for a mesma da vigente, a função deve evitar gerar log duplicado desnecessário ou registrar como “sem alteração”, conforme a lógica atual permitir.
 
 ---
 
-## 2. Ajustar a tela `/comissoes/pagamentos`
+## 3. Registrar logs ao alterar cadeia hierárquica
+
+Banco/função:
+
+- `fn_upsert_hierarquia_vendedor`
+
+Hoje a função fecha a hierarquia vigente e cria uma nova quando algo muda.
+
+Vou ajustar para gravar log quando houver alteração real em:
+
+- supervisor;
+- gerente;
+- agência;
+- observações.
+
+### O log deverá registrar
+
+```text
+Ação: editar
+Módulo: comissoes
+Tabela: hierarquia_vendas
+Registro: nova_hierarquia_id
+Descrição: Hierarquia de comissão alterada
+
+Dados anteriores:
+  - vendedor
+  - supervisor anterior
+  - gerente anterior
+  - agência anterior
+  - observações anteriores
+  - vigente_desde
+  - vigente_ate encerrado
+
+Dados novos:
+  - vendedor
+  - supervisor novo
+  - gerente novo
+  - agência nova
+  - observações novas
+  - vigente_desde
+```
+
+### Resultado esperado
+Na auditoria será possível ver:
+
+```text
+Diretor X alterou a cadeia do vendedor João
+Supervisor: Maria -> Pedro
+Gerente: Carlos -> Carlos
+Agência: nenhuma -> Agência RJ
+```
+
+---
+
+## 4. Melhorar a tela de Logs de Auditoria
 
 Arquivo:
 
-- `src/pages/comissoes/Pagamentos.tsx`
+- `src/pages/diretoria/LogsAuditoria.tsx`
 
-### Mudanças principais
-A tela passará a ter:
+### Novos filtros
+Adicionar filtros para facilitar rastreio de comissões:
 
-#### Cards de resumo
-- total pendente/aprovado para pagar;
-- total pago no período;
-- quantidade de comissões;
-- quantidade de destinatários.
+```text
+Módulo:
+- Comissões
+- Configurações
+- Diretoria
+- Financeiro
+- etc.
 
-#### Filtros
-- busca por usuário;
-- status;
-- período;
-- plano;
-- grade;
-- parcela;
-- tamanho da página.
+Tabela/Origem:
+- grades_comissao
+- grades_comissao_versoes
+- usuario_grade_comissao
+- hierarquia_vendas
+- comissoes
+- comissoes_pagamentos
 
-#### Lista paginada
-Usar o componente já existente:
+Busca:
+- nome do usuário que alterou
+- nome da grade
+- nome do vendedor afetado
+- ID do registro
+```
 
-- `src/components/ui/pagination.tsx`
+### Novas ações visuais
+Expandir o mapa de ações para incluir:
 
-A tabela exibirá:
+```text
+atribuir
+reativar
+desativar
+configuracao
+```
 
-- data de geração;
-- destinatário;
-- perfil remunerado;
-- vendedor de origem, quando disponível;
-- plano;
-- grade;
-- parcela;
-- status;
-- valor base;
-- regra aplicada;
-- valor final;
-- pagamento/recibo;
-- ações.
+Hoje algumas ações existem no hook, mas a tela não destaca todas.
 
 ---
 
-## 3. Ajustar a ação “Marcar como paga”
-
-Hoje o botão “Pagar” abre o modal de detalhes e confirma o pagamento.
-
-Vou manter esse fluxo, mas a confirmação passará a fazer mais do que apenas atualizar `comissoes.status`.
-
-### Novo comportamento ao confirmar pagamento
-
-Ao clicar em “Confirmar pagamento”:
-
-1. validar que a comissão ainda não está paga;
-2. atualizar a comissão:
-   - `status = 'paga'`;
-   - `pago_em = now()`;
-   - `updated_at = now()`;
-3. criar um lançamento em `comissoes_pagamentos`;
-4. vincular o pagamento à comissão liquidada;
-5. gerar/registrar recibo;
-6. invalidar os caches de:
-   - pagamentos de comissões;
-   - relatório de comissões;
-   - dashboard de comissões;
-   - detalhes da comissão.
-
----
-
-## 4. Completar o histórico de pagamentos
-
-A tabela `comissoes_pagamentos` já existe e será reaproveitada, mas hoje ela guarda apenas o resumo por vendedor/período.
-
-Para deixar o vínculo auditável, será criada uma tabela auxiliar:
-
-```text
-comissoes_pagamento_itens
-- id
-- pagamento_id
-- comissao_id
-- vendedor_id
-- valor_pago
-- status_anterior
-- created_at
-```
-
-### Motivo
-Isso permite responder:
-
-```text
-Qual pagamento liquidou esta comissão?
-Quais comissões compõem este recibo?
-Qual valor foi pago em cada item?
-```
-
-Também evita depender apenas de `status = paga` na tabela `comissoes`.
-
----
-
-## 5. Gerar recibo de pagamento
-
-Adicionar geração de recibo em PDF no frontend usando o padrão já utilizado no projeto com:
-
-- `jspdf`;
-- `jspdf-autotable`.
-
-### Conteúdo do recibo
-O recibo terá:
-
-```text
-Recibo de Pagamento de Comissão
-
-Número do recibo/pagamento
-Data do pagamento
-Destinatário
-E-mail
-Período de referência
-Quantidade de comissões
-Valor total pago
-
-Itens:
-- comissão
-- contrato/cobrança
-- plano
-- grade
-- parcela
-- perfil
-- valor base
-- regra aplicada
-- valor pago
-```
-
-### Ações na tela
-Na tabela:
-
-- “Detalhes” abre auditoria;
-- “Pagar” abre auditoria e confirma pagamento;
-- “Recibo” baixa o PDF quando a comissão já estiver paga.
-
-Na listagem de pagamentos/histórico:
-
-- baixar recibo novamente.
-
----
-
-## 6. Persistir referência do recibo
-
-A tabela `comissoes_pagamentos` já possui:
-
-```text
-comprovante_url
-observacoes
-```
-
-Para o primeiro ajuste, o recibo pode ser gerado sob demanda no navegador a partir dos dados do pagamento.
-
-Se for necessário persistir o arquivo, será usado o campo `comprovante_url` com upload em bucket de storage. Nesta etapa, a prioridade será:
-
-```text
-registrar o lançamento + permitir baixar recibo gerado com os dados auditáveis
-```
-
-Sem depender de storage para o fluxo funcionar.
-
----
-
-## 7. Permitir pagamento individual e preparar pagamento em lote
-
-### Nesta implementação
-Foco em pagamento individual por comissão, que é o fluxo direto do botão “Pagar”.
-
-### Estrutura preparada para lote
-A tabela `comissoes_pagamentos` + `comissoes_pagamento_itens` já permitirá futuramente:
-
-```text
-selecionar várias comissões do mesmo destinatário
--> pagar em lote
--> gerar um único recibo consolidado
-```
-
-A interface já será organizada para não bloquear essa evolução.
-
----
-
-## 8. Ajustar o modal de detalhes/auditoria
+## 5. Criar visualização amigável para diferenças
 
 Arquivo:
 
-- `src/components/comissoes/ComissaoDetalhesPagamentoModal.tsx`
+- `src/pages/diretoria/LogsAuditoria.tsx`
 
-### Ajustes
-Manter o modal existente, mas adicionar:
+Além do JSON bruto, adicionar uma seção resumida quando o log for de comissões/grades/atribuições.
 
-- informação se já existe pagamento registrado;
-- número/id do lançamento em `comissoes_pagamentos`;
-- botão “Baixar recibo” quando já estiver paga;
-- botão “Confirmar pagamento” apenas quando o status permitir.
+### Para grades
+Mostrar resumo como:
+
+```text
+Grade: Grade Select RJ
+Versão: v2 -> v3
+Planos:
+- Select Exclusive
+- Select Diesel
+
+Alterações principais:
+- Plano Select Exclusive / 2ª Parcela / Supervisor: 4% -> 5%
+- Plano Select Exclusive / 2ª Parcela / Gerente: 2% -> 3%
+- Plano Select Diesel adicionado
+```
+
+### Para atribuições
+Mostrar resumo como:
+
+```text
+Usuário afetado: João Silva
+Grade: Grade Antiga -> Grade Select RJ
+Supervisor: Maria -> Pedro
+Gerente: Carlos -> Carlos
+Agência: — -> Agência RJ
+```
+
+### Manter JSON técnico
+A tela continuará exibindo `dados_anteriores` e `dados_novos` completos para auditoria técnica.
 
 ---
 
-## 9. Banco de dados
+## 6. Exportação CSV com detalhes de auditoria
 
-Criar migration para:
+Arquivo:
 
-### Nova tabela
+- `src/pages/diretoria/LogsAuditoria.tsx`
+
+Atualizar exportação para incluir:
+
 ```text
-comissoes_pagamento_itens
+Data/Hora
+Usuário executor
+Ação
+Módulo
+Tabela
+Registro ID
+Descrição
+Resumo da alteração
+Dados anteriores
+Dados novos
+IP
 ```
 
-Com RLS seguindo a lógica atual:
+Assim será possível exportar alterações de grades e atribuições para conferência externa.
 
-- diretor/admin/desenvolvedor/gerente podem visualizar;
-- diretor/admin/desenvolvedor podem inserir;
-- vendedor pode visualizar apenas itens próprios.
+---
 
-### Índices
-Criar índices para:
+## 7. Banco de dados / migrations
+
+Será criada uma migration para atualizar as funções:
+
+- `fn_atribuir_grade_usuario`
+- `fn_upsert_hierarquia_vendedor`
+
+Essas funções passarão a inserir registros em `logs_auditoria` com `dados_anteriores` e `dados_novos`.
+
+Não será necessário criar nova tabela, porque `logs_auditoria` já suporta:
 
 ```text
-pagamento_id
-comissao_id
-vendedor_id
+acao
+modulo
+tabela
+registro_id
+dados_anteriores
+dados_novos
+usuario_id
+usuario_nome
 created_at
 ```
 
-### Unicidade
-Adicionar restrição para evitar pagamento duplicado da mesma comissão:
+Se necessário, adicionarei apenas índices para melhorar filtros:
 
 ```text
-unique (comissao_id)
+logs_auditoria(modulo)
+logs_auditoria(tabela)
+logs_auditoria(registro_id)
+logs_auditoria(created_at)
 ```
 
-Assim uma comissão não entra em dois recibos diferentes.
+---
+
+## 8. Compatibilidade com versões e retroativos
+
+A auditoria usará dois níveis de rastreabilidade:
+
+```text
+1. grades_comissao_versoes.snapshot
+   - preserva a configuração comercial versionada da grade
+
+2. logs_auditoria
+   - registra quem mudou, quando mudou e o que mudou
+```
+
+Isso permite responder:
+
+```text
+Quem mudou a regra?
+Quando mudou?
+Qual era a regra antes?
+Qual regra ficou depois?
+Essa mudança afetou novas comissões ou uma geração retroativa?
+Quem alterou a atribuição do vendedor?
+Qual hierarquia estava vigente antes?
+```
 
 ---
 
-## 10. Arquivos envolvidos
+## Arquivos envolvidos
 
 ### Frontend
-- `src/pages/comissoes/Pagamentos.tsx`
-- `src/hooks/usePagamentosComissoes.ts`
-- `src/components/comissoes/ComissaoDetalhesPagamentoModal.tsx`
-- novo utilitário, por exemplo:
-  - `src/lib/comissoes-recibo.ts`
+- `src/pages/configuracoes/GradeComissaoForm.tsx`
+- `src/pages/diretoria/LogsAuditoria.tsx`
+- opcional: criar helpers em `src/lib/auditoria-formatters.ts`
 
 ### Banco/Supabase
-- nova migration para `comissoes_pagamento_itens`;
-- RLS da nova tabela;
-- índices e constraint de unicidade.
+- migration para atualizar:
+  - `fn_atribuir_grade_usuario`
+  - `fn_upsert_hierarquia_vendedor`
+- opcional: índices em `logs_auditoria`
 
 ---
 
-## 11. Validação esperada
+## Validação esperada
 
-### Cenário 1: lista paginada
-- Acessar `/comissoes/pagamentos`.
-- Ver lista com paginação real.
-- Trocar página sem perder filtros.
+### Cenário 1: criar grade
+- Criar uma nova grade.
+- Abrir Logs de Auditoria.
+- Filtrar por módulo “Comissões” ou tabela `grades_comissao`.
+- Ver quem criou, quando criou e snapshot da configuração.
 
-### Cenário 2: filtros
-- Filtrar por status, período, vendedor, plano, grade e parcela.
-- Conferir que os totais e a tabela acompanham os filtros.
+### Cenário 2: editar grade
+- Alterar percentual de um perfil em um plano.
+- Salvar nova versão.
+- Ver log com dados anteriores e novos.
+- Ver resumo da diferença.
 
-### Cenário 3: marcar como paga
-- Clicar em “Pagar”.
-- Ver modal de auditoria.
-- Confirmar pagamento.
-- Comissão muda para `paga`.
-- `pago_em` é preenchido.
-- Lançamento é criado em `comissoes_pagamentos`.
-- Item é criado em `comissoes_pagamento_itens`.
+### Cenário 3: atribuir grade
+- Ir em Atribuição de Grades.
+- Alterar a grade de um vendedor.
+- Ver log com grade anterior e nova grade.
 
-### Cenário 4: evitar duplicidade
-- Tentar pagar novamente a mesma comissão.
-- Sistema não duplica pagamento/recibo.
+### Cenário 4: alterar hierarquia
+- Alterar supervisor/gerente/agência de um vendedor.
+- Ver log com cadeia anterior e nova cadeia.
 
-### Cenário 5: recibo
-- Comissão paga exibe ação “Recibo”.
-- Baixar PDF com dados do destinatário, valor, regra, grade, plano e parcela.
-
-### Cenário 6: auditoria
-- Abrir detalhes de comissão paga.
-- Ver regra aplicada, snapshot, cadeia hierárquica e lançamento de pagamento vinculado.
+### Cenário 5: exportação
+- Exportar logs filtrados.
+- CSV deve conter tabela, registro, descrição, dados anteriores e dados novos.
