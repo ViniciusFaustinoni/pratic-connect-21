@@ -138,6 +138,30 @@ export function VeiculosAceitosEditor({ entityId }: VeiculosAceitosEditorProps) 
     }
   };
 
+  const handleUpdateField = async (
+    index: number,
+    field: 'ano_min' | 'ano_max' | 'status',
+    rawValue: string,
+  ) => {
+    if (!marcaModeloRule) return;
+    const current = modelos[index];
+    let nextValue: any;
+    if (field === 'status') {
+      nextValue = rawValue;
+    } else {
+      const parsed = rawValue.trim() === '' ? null : parseInt(rawValue, 10);
+      nextValue = Number.isNaN(parsed as number) ? null : parsed;
+    }
+    if (current[field] === nextValue) return;
+    const updatedModelos = modelos.map((m, i) =>
+      i === index ? { ...m, [field]: nextValue } : m,
+    );
+    await updateRule.mutateAsync({
+      id: marcaModeloRule.id,
+      rule_config: { modelos: updatedModelos },
+    });
+  };
+
   return (
     <div className="space-y-3">
       {modelos.length > 0 && (
