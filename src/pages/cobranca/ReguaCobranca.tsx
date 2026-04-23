@@ -98,7 +98,7 @@ export default function ReguaCobranca() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('whatsapp_meta_templates')
-        .select('id, nome, status, categoria')
+        .select('id, nome, status, categoria, corpo, header_texto, rodape')
         .order('nome');
       if (error) throw error;
       return data || [];
