@@ -196,8 +196,13 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
     });
   };
 
+  const togglePlano = (planoId: string) => {
+    setSelectedPlanIds(prev => prev.includes(planoId) ? prev.filter(id => id !== planoId) : [...prev, planoId]);
+  };
+
   const validate = (): string | null => {
     if (!nome.trim()) return 'Nome é obrigatório';
+    if (selectedPlanIds.length === 0) return 'Selecione pelo menos um plano para a grade';
     if (parcelas.length === 0) return 'Adicione pelo menos uma parcela';
     for (const p of parcelas) {
       if (!p.label.trim()) return 'Cada parcela precisa de rótulo';
@@ -206,11 +211,12 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
       } else {
         if (!p.numero_parcela || p.numero_parcela < 1) return 'Parcela precisa de número válido';
       }
-      const total = p.niveis.reduce((s, n) => s + (Number(n.percentual) || 0), 0);
+      const total = p.niveis.reduce((s, n) => s + (n.tipo_comissao === 'valor_fixo' ? 0 : Number(n.valor ?? n.percentual) || 0), 0);
       if (total > 100) return `Parcela "${p.label}": soma dos níveis ultrapassa 100%`;
       for (const n of p.niveis) {
         if (!n.role) return `Parcela "${p.label}": selecione o perfil de cada nível`;
         if (!n.nome.trim()) return `Parcela "${p.label}": cada nível precisa de nome`;
+        if (Number(n.valor ?? n.percentual) < 0) return `Parcela "${p.label}": valor de comissão inválido`;
       }
       const noms = p.niveis.map(n => n.nome.trim().toLowerCase());
       if (noms.length !== new Set(noms).size) return `Parcela "${p.label}": níveis com nomes duplicados`;
@@ -252,6 +258,8 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
         // Apaga parcelas + níveis (cascade)
         await (supabase as any).from('grades_comissao_parcelas').delete().eq('grade_id', id!);
         await (supabase as any).from('grades_comissao_niveis').delete().eq('grade_id', id!);
+        await (supabase as any).from('grade_comissao_planos').delete().eq('grade_id', id!);
+        await (supabase as any).from('grade_comissao_plano_regras').delete().eq('grade_id', id!);
       } else {
         const { data, error } = await (supabase as any)
           .from('grades_comissao')
@@ -298,9 +306,41 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
         if (nErr) throw nErr;
       }
 
+      const gradePlanosInsert = selectedPlanIds.map(planoId => ({ grade_id: gradeId!, plano_id: planoId, ativo: true }));
+      const { error: gpErr } = await (supabase as any).from('grade_comissao_planos').insert(gradePlanosInsert);
+      if (gpErr) throw gpErr;
+
+      const regrasInsert: any[] = [];
+      selectedPlanIds.forEach(planoId => {
+        parcelas.forEach((p, i) => {
+          const criada = pcsCriadas.find((c: any) => c.ordem === i);
+          p.niveis.forEach((n, ni) => {
+            regrasInsert.push({
+              grade_id: gradeId!,
+              plano_id: planoId,
+              parcela_id: criada?.id || null,
+              parcela_numero: p.vitalicia ? null : p.numero_parcela,
+              vitalicia: p.vitalicia,
+              vitalicia_inicio_parcela: p.vitalicia ? p.vitalicia_inicio_parcela : null,
+              role: n.role,
+              nome_nivel: n.nome.trim(),
+              tipo_comissao: n.tipo_comissao || 'percentual',
+              valor: Number(n.valor ?? n.percentual) || 0,
+              ordem: ni,
+              ativo: true,
+            });
+          });
+        });
+      });
+      if (regrasInsert.length > 0) {
+        const { error: rErr } = await (supabase as any).from('grade_comissao_plano_regras').insert(regrasInsert);
+        if (rErr) throw rErr;
+      }
+
       // Snapshot da nova versão
       const snapshot = {
         grade: { id: gradeId, nome: nome.trim(), descricao: descricao.trim() || null, versao: novaVersao },
+        planos: selectedPlanIds,
         parcelas: parcelas.map((p, i) => ({
           parcela: {
             numero_parcela: p.vitalicia ? null : p.numero_parcela,
@@ -310,7 +350,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
             ordem: i,
           },
           niveis: p.niveis.map((n, ni) => ({
-            nome: n.nome.trim(), percentual: n.percentual, ordem: ni, role: n.role,
+            nome: n.nome.trim(), percentual: n.tipo_comissao === 'percentual' ? Number(n.valor ?? n.percentual) || 0 : 0, tipo_comissao: n.tipo_comissao || 'percentual', valor: Number(n.valor ?? n.percentual) || 0, ordem: ni, role: n.role,
           })),
         })),
       };
