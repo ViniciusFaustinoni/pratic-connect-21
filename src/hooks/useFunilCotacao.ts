@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { startOfMonth, startOfDay, subDays, startOfYear } from 'date-fns';
+import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 
 export type Periodo = 'hoje' | '7dias' | '30dias' | 'ano';
 
@@ -58,60 +60,115 @@ function calcularPeriodo(periodo: Periodo): { inicio: Date; fim: Date } {
 }
 
 /**
- * Hook para buscar dados do funil de cotação com as 9 etapas corretas
+ * Hook para buscar dados do funil de cotação com as 9 etapas corretas.
+ *
+ * Filtragem automática por vendedor:
+ * - Se o usuário logado for vendedor (CLT/Externo) e NÃO for gestor (diretor/gerente/supervisor/admin),
+ *   filtra automaticamente por `vendedor_id = profile.id`.
+ * - Gestores e diretoria veem visão agregada (total).
+ * - Pode ser sobrescrito explicitamente passando `vendedorIdOverride`.
  */
-export function useFunilCotacao(periodo: Periodo = '30dias') {
+export function useFunilCotacao(periodo: Periodo = '30dias', vendedorIdOverride?: string | null) {
+  const { profile } = useAuth();
+  const {
+    isVendedorClt,
+    isVendedorExterno,
+    isDiretor,
+    isGerente,
+    isSupervisor,
+    isAdminMaster,
+    isDesenvolvedor,
+  } = usePermissions();
+
+  const isGestor = isDiretor || isGerente || isSupervisor || isAdminMaster || isDesenvolvedor;
+  const isVendedor = isVendedorClt || isVendedorExterno;
+
+  // Decide vendedor a filtrar: override > automático (vendedor logado não-gestor) > nenhum
+  const vendedorIdFiltro: string | null =
+    vendedorIdOverride !== undefined
+      ? vendedorIdOverride
+      : isVendedor && !isGestor && profile?.id
+        ? profile.id
+        : null;
+
   return useQuery({
-    queryKey: ['funil-cotacao', periodo],
+    queryKey: ['funil-cotacao', periodo, vendedorIdFiltro],
     queryFn: async (): Promise<FunilCotacaoData> => {
       const { inicio, fim } = calcularPeriodo(periodo);
 
-      // Buscar dados em paralelo
-      const [
-        leadsResult,
-        cotacoesResult,
-        contratosResult,
-        vistoriasResult,
-        associadosResult,
-      ] = await Promise.all([
-        // Leads do período
-        supabase
-          .from('leads')
-          .select('id, etapa')
-          .gte('created_at', inicio.toISOString())
-          .lte('created_at', fim.toISOString()),
-        // Cotações do período (inclui com e sem lead)
-        supabase
-          .from('cotacoes')
-          .select('id, lead_id, status, status_contratacao')
-          .neq('status', 'rascunho')
-          .gte('created_at', inicio.toISOString())
-          .lte('created_at', fim.toISOString()),
-        // Contratos assinados/ativos do período
-        supabase
-          .from('contratos')
-          .select('id, status, adesao_paga')
-          .gte('created_at', inicio.toISOString())
-          .lte('created_at', fim.toISOString()),
-        // Vistorias/Instalações agendadas do período
-        supabase
-          .from('instalacoes')
-          .select('id, status')
-          .in('status', ['agendada', 'em_rota', 'em_andamento'])
-          .gte('created_at', inicio.toISOString())
-          .lte('created_at', fim.toISOString()),
-        // Associados ativos do período
-        supabase
-          .from('associados')
-          .select('id, status')
-          .eq('status', 'ativo')
-          .gte('created_at', inicio.toISOString())
-          .lte('created_at', fim.toISOString()),
+      // Builders com filtro condicional por vendedor
+      const leadsQuery = supabase
+        .from('leads')
+        .select('id, etapa')
+        .gte('created_at', inicio.toISOString())
+        .lte('created_at', fim.toISOString());
+      if (vendedorIdFiltro) leadsQuery.eq('vendedor_id', vendedorIdFiltro);
+
+      const cotacoesQuery = supabase
+        .from('cotacoes')
+        .select('id, lead_id, status, status_contratacao')
+        .neq('status', 'rascunho')
+        .gte('created_at', inicio.toISOString())
+        .lte('created_at', fim.toISOString());
+      if (vendedorIdFiltro) cotacoesQuery.eq('vendedor_id', vendedorIdFiltro);
+
+      const contratosQuery = supabase
+        .from('contratos')
+        .select('id, status, adesao_paga, cotacao_id')
+        .gte('created_at', inicio.toISOString())
+        .lte('created_at', fim.toISOString());
+      if (vendedorIdFiltro) contratosQuery.eq('vendedor_id', vendedorIdFiltro);
+
+      // Buscar leads, cotações e contratos primeiro (para subqueries de instalações/associados)
+      const [leadsResult, cotacoesResult, contratosResult] = await Promise.all([
+        leadsQuery,
+        cotacoesQuery,
+        contratosQuery,
       ]);
 
       const leads = leadsResult.data || [];
       const cotacoes = cotacoesResult.data || [];
       const contratos = contratosResult.data || [];
+
+      const cotacaoIds = cotacoes.map(c => c.id);
+      const contratoIds = contratos.map(c => c.id);
+
+      // Vistorias/Instalações agendadas do período
+      const vistoriasQuery = supabase
+        .from('instalacoes')
+        .select('id, status, cotacao_id')
+        .in('status', ['agendada', 'em_rota', 'em_andamento'])
+        .gte('created_at', inicio.toISOString())
+        .lte('created_at', fim.toISOString());
+      if (vendedorIdFiltro) {
+        if (cotacaoIds.length === 0) {
+          // Vendedor sem cotações no período → instalações = 0
+          vistoriasQuery.eq('id', '00000000-0000-0000-0000-000000000000');
+        } else {
+          vistoriasQuery.in('cotacao_id', cotacaoIds);
+        }
+      }
+
+      // Associados ativos do período
+      const associadosQuery = supabase
+        .from('associados')
+        .select('id, status, contrato_id')
+        .eq('status', 'ativo')
+        .gte('created_at', inicio.toISOString())
+        .lte('created_at', fim.toISOString());
+      if (vendedorIdFiltro) {
+        if (contratoIds.length === 0) {
+          associadosQuery.eq('id', '00000000-0000-0000-0000-000000000000');
+        } else {
+          associadosQuery.in('contrato_id', contratoIds);
+        }
+      }
+
+      const [vistoriasResult, associadosResult] = await Promise.all([
+        vistoriasQuery,
+        associadosQuery,
+      ]);
+
       const vistorias = vistoriasResult.data || [];
       const associados = associadosResult.data || [];
 
@@ -123,15 +180,15 @@ export function useFunilCotacao(periodo: Periodo = '30dias') {
         novo: leads.filter(l => l.etapa === 'novo').length,
         contato: leads.filter(l => ['contato', 'contato_inicial'].includes(l.etapa)).length,
         cotacao_gerada: cotacoes.length, // Todas as cotações (com ou sem lead)
-        escolhendo_plano: cotacoes.filter(c => 
-          c.status_contratacao === 'plano_escolhido' || 
+        escolhendo_plano: cotacoes.filter(c =>
+          c.status_contratacao === 'plano_escolhido' ||
           c.status_contratacao === 'escolhendo_plano'
         ).length,
-        enviando_docs: cotacoes.filter(c => 
+        enviando_docs: cotacoes.filter(c =>
           c.status_contratacao === 'dados_preenchidos' ||
           c.status_contratacao === 'enviando_documentos'
         ).length,
-        termo_assinado: contratos.filter(c => 
+        termo_assinado: contratos.filter(c =>
           c.status === 'assinado' || c.status === 'ativo'
         ).length,
         pagamento_efetuado: contratos.filter(c => c.adesao_paga === true).length,
@@ -143,8 +200,8 @@ export function useFunilCotacao(periodo: Periodo = '30dias') {
       const totalCotacoes = cotacoes.length;
 
       // Taxa de conversão: Propostas Concluídas / Total de Cotações
-      const taxaConversao = totalCotacoes > 0 
-        ? (contagens.proposta_concluida / totalCotacoes) * 100 
+      const taxaConversao = totalCotacoes > 0
+        ? (contagens.proposta_concluida / totalCotacoes) * 100
         : 0;
 
       // Montar array de etapas com percentuais
@@ -154,8 +211,8 @@ export function useFunilCotacao(periodo: Periodo = '30dias') {
         cor: config.cor,
         descricao: config.descricao,
         quantidade: contagens[config.id],
-        percentual: totalCotacoes > 0 
-          ? (contagens[config.id] / totalCotacoes) * 100 
+        percentual: totalCotacoes > 0
+          ? (contagens[config.id] / totalCotacoes) * 100
           : 0,
       }));
 
