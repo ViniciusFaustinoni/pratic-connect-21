@@ -14,7 +14,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { TEMPLATE_PARAMS_MAP, VAR_LABELS, type CobrancaVar } from '@/lib/cobranca/templateParams';
+import {
+  TEMPLATE_PARAMS_MAP,
+  VAR_LABELS,
+  renderTemplatePreview,
+  type CobrancaVar,
+  type PreviewContexto,
+} from '@/lib/cobranca/templateParams';
 
 interface Etapa {
   id: string;
@@ -92,7 +98,7 @@ export default function ReguaCobranca() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('whatsapp_meta_templates')
-        .select('id, nome, status, categoria')
+        .select('id, nome, status, categoria, corpo, header_texto, rodape')
         .order('nome');
       if (error) throw error;
       return data || [];
@@ -176,6 +182,93 @@ export default function ReguaCobranca() {
       toast.error('Falha ao executar régua: ' + (err?.message || ''));
     }
   });
+
+  // ===== Preview de mensagens =====
+  // Seletor de associado: busca rápida por nome/CPF, preview com dados reais
+  const [previewAssociadoId, setPreviewAssociadoId] = useState<string>('');
+  const [associadoSearch, setAssociadoSearch] = useState<string>('');
+
+  const { data: associadosOptions } = useQuery({
+    queryKey: ['regua-preview-associados', associadoSearch],
+    queryFn: async () => {
+      let query = supabase
+        .from('associados')
+        .select('id, nome, cpf')
+        .eq('status', 'ativo')
+        .order('nome')
+        .limit(20);
+      if (associadoSearch.trim().length >= 2) {
+        const term = `%${associadoSearch.trim()}%`;
+        query = query.or(`nome.ilike.${term},cpf.ilike.${term}`);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // Dados da última cobrança pendente desse associado (SGA preferencial)
+  const { data: previewCtxData } = useQuery({
+    queryKey: ['regua-preview-ctx', previewAssociadoId],
+    enabled: !!previewAssociadoId,
+    queryFn: async () => {
+      const { data: assoc } = await supabase
+        .from('associados')
+        .select('id, nome')
+        .eq('id', previewAssociadoId)
+        .maybeSingle();
+
+      // Tenta cobrança SGA com linha digitável
+      const { data: cobSga } = await supabase
+        .from('cobrancas')
+        .select('valor_final, data_vencimento, linha_digitavel, referencia_mes, referencia_ano, veiculo_id')
+        .eq('associado_id', previewAssociadoId)
+        .eq('origem', 'sga_hinova')
+        .order('data_vencimento', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      let cobAsaas: { valor: number; data_vencimento: string; linha_digitavel: string | null; veiculo_id: string | null } | null = null;
+      if (!cobSga) {
+        const { data } = await supabase
+          .from('asaas_cobrancas')
+          .select('valor, data_vencimento, linha_digitavel, veiculo_id')
+          .eq('associado_id', previewAssociadoId)
+          .order('data_vencimento', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        cobAsaas = data as typeof cobAsaas;
+      }
+
+      const veiculoId = cobSga?.veiculo_id ?? cobAsaas?.veiculo_id ?? null;
+      let placa: string | null = null;
+      let modelo: string | null = null;
+      if (veiculoId) {
+        const { data: vei } = await supabase
+          .from('veiculos')
+          .select('placa, modelo, marca')
+          .eq('id', veiculoId)
+          .maybeSingle();
+        placa = vei?.placa ?? null;
+        modelo = vei ? [vei.marca, vei.modelo].filter(Boolean).join(' ') : null;
+      }
+
+      const ctx: PreviewContexto = {
+        nome: assoc?.nome ?? null,
+        valor: cobSga?.valor_final ?? cobAsaas?.valor ?? null,
+        vencimento: cobSga?.data_vencimento ?? cobAsaas?.data_vencimento ?? null,
+        mes_ano: cobSga?.referencia_mes && cobSga?.referencia_ano
+          ? `${String(cobSga.referencia_mes).padStart(2, '0')}/${cobSga.referencia_ano}`
+          : null,
+        placa,
+        modelo,
+        linha_digitavel: cobSga?.linha_digitavel ?? cobAsaas?.linha_digitavel ?? null,
+      };
+      return ctx;
+    },
+  });
+
+  const previewCtx: PreviewContexto = previewCtxData ?? {};
 
   const handleAddEtapa = () => {
     if (novaEtapa.dias === undefined || !novaEtapa.acao) return;
@@ -399,7 +492,62 @@ export default function ReguaCobranca() {
         </CardContent>
       </Card>
 
-      {/* Timeline Visual */}
+      {/* Card: Seletor de associado para preview */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <MessageSquare className="h-4 w-4" />
+            Pré-visualização de mensagens
+          </CardTitle>
+          <CardDescription>
+            Selecione um associado para simular como cada mensagem será renderizada com os dados reais dele (nome, valor, vencimento, placa e linha digitável). Sem associado, usa dados de exemplo.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="md:col-span-1">
+              <Label className="text-xs">Buscar associado</Label>
+              <Input
+                placeholder="Nome ou CPF (mín. 2 caracteres)"
+                value={associadoSearch}
+                onChange={(e) => setAssociadoSearch(e.target.value)}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <Label className="text-xs">Associado para preview</Label>
+              <Select
+                value={previewAssociadoId || 'mock'}
+                onValueChange={(v) => setPreviewAssociadoId(v === 'mock' ? '' : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Usar dados de exemplo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mock">— Dados de exemplo (João da Silva) —</SelectItem>
+                  {(associadosOptions ?? []).map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.nome} {a.cpf ? `· ${a.cpf}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {previewAssociadoId && previewCtxData && (
+            <div className="text-xs text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 pt-1">
+              <span><strong>Nome:</strong> {previewCtxData.nome ?? '—'}</span>
+              <span><strong>Vencimento:</strong> {previewCtxData.vencimento ?? '—'}</span>
+              <span><strong>Valor:</strong> {previewCtxData.valor != null ? previewCtxData.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</span>
+              <span><strong>Placa:</strong> {previewCtxData.placa ?? '—'}</span>
+              <span><strong>Modelo:</strong> {previewCtxData.modelo ?? '—'}</span>
+              <span className={previewCtxData.linha_digitavel ? '' : 'text-amber-600 dark:text-amber-400'}>
+                <strong>Linha digitável:</strong> {previewCtxData.linha_digitavel ? `${previewCtxData.linha_digitavel.slice(0, 20)}…` : 'sem dado SGA'}
+              </span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Linha do Tempo</CardTitle>
@@ -449,65 +597,101 @@ export default function ReguaCobranca() {
             const Icon = acaoInfo.icon;
             const mostraTemplate = acoesMensagem.includes(etapa.acao);
 
+            const tplData = etapa.template ? metaTemplates?.find((t) => t.nome === etapa.template) : null;
+            const previewText = tplData?.corpo
+              ? renderTemplatePreview(etapa.template, tplData.corpo, previewCtx)
+              : null;
+            const previewHeader = tplData?.header_texto
+              ? renderTemplatePreview(etapa.template, tplData.header_texto, previewCtx)
+              : null;
+            const previewFooter = tplData?.rodape ?? null;
+
             return (
               <div
                 key={etapa.id}
-                className={`flex flex-col sm:flex-row items-start sm:items-center gap-3 p-4 rounded-lg border ${
+                className={`flex flex-col gap-3 p-4 rounded-lg border ${
                   !etapa.ativa ? 'opacity-50 bg-muted/50' : 'bg-card'
                 }`}
               >
-                <div className="flex items-center gap-3 w-full sm:w-auto">
-                  <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
-                  <Badge className={getDiasColor(etapa.dias)}>
-                    {formatDias(etapa.dias)}
-                  </Badge>
-                </div>
-
-                <div className="flex items-center gap-2 flex-1">
-                  <div className={`p-1.5 rounded ${acaoInfo.cor}`}>
-                    <Icon className="h-3.5 w-3.5" />
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
+                    <Badge className={getDiasColor(etapa.dias)}>
+                      {formatDias(etapa.dias)}
+                    </Badge>
                   </div>
-                  <Select
-                    value={etapa.acao}
-                    onValueChange={(v) => handleChangeAcao(etapa.id, v as Etapa['acao'])}
-                  >
-                    <SelectTrigger className="w-[140px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {acoes.map((a) => (
-                        <SelectItem key={a.value} value={a.value}>
-                          {a.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+
+                  <div className="flex items-center gap-2 flex-1">
+                    <div className={`p-1.5 rounded ${acaoInfo.cor}`}>
+                      <Icon className="h-3.5 w-3.5" />
+                    </div>
+                    <Select
+                      value={etapa.acao}
+                      onValueChange={(v) => handleChangeAcao(etapa.id, v as Etapa['acao'])}
+                    >
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {acoes.map((a) => (
+                          <SelectItem key={a.value} value={a.value}>
+                            {a.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {mostraTemplate && renderTemplateSelect(
+                    etapa.template,
+                    (v) => handleChangeTemplate(etapa.id, v)
+                  )}
+
+                  <div className="flex items-center gap-3 ml-auto">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={etapa.ativa}
+                        onCheckedChange={() => handleToggleEtapa(etapa.id)}
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        {etapa.ativa ? 'Ativa' : 'Inativa'}
+                      </span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleRemoveEtapa(etapa.id)}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
 
-                {mostraTemplate && renderTemplateSelect(
-                  etapa.template,
-                  (v) => handleChangeTemplate(etapa.id, v)
+                {/* Bolha de preview WhatsApp */}
+                {mostraTemplate && previewText && (
+                  <div className="ml-7 sm:ml-12">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                      Pré-visualização — como o associado verá:
+                    </div>
+                    <div className="max-w-xl rounded-lg rounded-tl-none bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 p-3 text-sm whitespace-pre-wrap font-sans text-foreground shadow-sm">
+                      {previewHeader && (
+                        <div className="font-semibold mb-1">{previewHeader}</div>
+                      )}
+                      <div>{previewText}</div>
+                      {previewFooter && (
+                        <div className="mt-2 pt-2 border-t border-emerald-200 dark:border-emerald-900 text-[11px] text-muted-foreground italic">
+                          {previewFooter}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
-
-                <div className="flex items-center gap-3 ml-auto">
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={etapa.ativa}
-                      onCheckedChange={() => handleToggleEtapa(etapa.id)}
-                    />
-                    <span className="text-xs text-muted-foreground">
-                      {etapa.ativa ? 'Ativa' : 'Inativa'}
-                    </span>
+                {mostraTemplate && !etapa.template && (
+                  <div className="ml-7 sm:ml-12 text-xs text-muted-foreground italic">
+                    Selecione um template para visualizar a mensagem renderizada.
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleRemoveEtapa(etapa.id)}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+                )}
               </div>
             );
           })}
