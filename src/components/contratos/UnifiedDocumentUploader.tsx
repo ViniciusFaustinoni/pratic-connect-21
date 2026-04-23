@@ -58,6 +58,16 @@ interface UnifiedDocumentUploaderProps {
   placaEsperada?: string; // Placa da cotação para validar CRLV
 }
 
+export interface UnifiedDocumentUploaderHandle {
+  /**
+   * Reprocessa o OCR do último documento enviado de um tipo específico.
+   * Útil para recuperar campos que não foram extraídos na primeira tentativa
+   * (ex.: motor/chassi do CRLV, endereço do comprovante) sem exigir novo upload.
+   * Retorna `true` quando há documento elegível para reprocessar.
+   */
+  reprocessByType: (tipo: TipoDocumentoDetectado | TipoDocumentoDetectado[]) => Promise<boolean>;
+}
+
 const tipoLabels: Record<TipoDocumentoDetectado, { label: string; icon: typeof FileText }> = {
   cnh: { label: 'CNH', icon: User },
   rg: { label: 'RG / CIN', icon: User },
