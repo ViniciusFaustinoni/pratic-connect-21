@@ -21,7 +21,9 @@ export interface ComissaoDetalhesPagamento {
   grade: Named | null;
   gradeVersao: Named | null;
   regra: any | null;
+  pagamento: any | null;
   comissoesIrmas: any[];
+  recibo: any | null;
   snapshot: any | null;
   possuiSnapshotCalculo: boolean;
   possuiSnapshotGrade: boolean;
@@ -126,6 +128,13 @@ export function useComissaoDetalhesPagamento(comissaoId?: string | null) {
       const agenciaId = snapshotCadeia.agencia_id || siblingByRole.get('agencia') || hierarquia?.agencia_id;
 
       const snapshot = comissao.calculo_snapshot || gradeVersao?.snapshot || null;
+      const pagamentoItem = await safeSingle(
+        (supabase as any)
+          .from('comissoes_pagamento_itens')
+          .select('pagamento_id, valor_pago, created_at, pagamento:comissoes_pagamentos(id, data_pagamento, valor_total, quantidade_comissoes, comprovante_url, observacoes)')
+          .eq('comissao_id', comissao.id)
+      ).catch(() => null);
+      const pagamento = pagamentoItem?.pagamento || null;
 
       return {
         comissao,
@@ -144,7 +153,28 @@ export function useComissaoDetalhesPagamento(comissaoId?: string | null) {
         grade,
         gradeVersao,
         regra,
+        pagamento,
         comissoesIrmas: comissoesIrmas || [],
+        recibo: {
+          id: comissao.id,
+          pagamento_id: pagamento?.id || pagamentoItem?.pagamento_id || null,
+          data_pagamento: comissao.pago_em || pagamento?.data_pagamento || null,
+          destinatario_nome: comissao.vendedor_id ? profiles.get(comissao.vendedor_id)?.nome || profiles.get(comissao.vendedor_id)?.full_name || profiles.get(comissao.vendedor_id)?.email : null,
+          destinatario_email: comissao.vendedor_id ? profiles.get(comissao.vendedor_id)?.email : null,
+          mes_referencia: comissao.mes_referencia,
+          ano_referencia: comissao.ano_referencia,
+          contrato: contrato?.numero || comissao.contrato_id,
+          cobranca: comissao.cobranca_id,
+          plano: plano?.nome || comissao.calculo_snapshot?.plano?.nome,
+          grade: grade?.nome || comissao.calculo_snapshot?.grade?.nome,
+          parcela: comissao.parcela_numero,
+          perfil: comissao.nivel_nome || comissao.role_destinatario,
+          valor_base: comissao.valor_base,
+          tipo_calculo: comissao.tipo_calculo,
+          percentual_aplicado: comissao.percentual_aplicado,
+          regra_valor: regra?.valor ?? comissao.percentual_aplicado,
+          valor_pago: comissao.valor_total ?? comissao.valor_comissao,
+        },
         snapshot,
         possuiSnapshotCalculo: Boolean(comissao.calculo_snapshot),
         possuiSnapshotGrade: Boolean(gradeVersao?.snapshot || comissao.calculo_snapshot?.snapshot_grade),
