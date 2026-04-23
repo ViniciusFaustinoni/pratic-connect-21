@@ -1,69 +1,70 @@
 
 
-## OCR confunde letras e dígitos na validação de placa (CRLV)
+## Erro genérico "Erro ao criar cotação" — expor causa real e blindar pontos frágeis
 
-### Diagnóstico (caso da imagem)
+### Diagnóstico
 
-- Placa da cotação: `LQV3623` (formato **antigo** — 4 dígitos no final).
-- Placa lida pelo OCR no CRLV: `LQV3G23`.
-- O CRLV real anexado mostra `LQV3623` correto. O OCR confundiu **6 → G** na 5ª posição.
-- O sistema bloqueou o upload com "A placa do CRLV (LQV3G23) não corresponde à placa da cotação (LQV3623)".
+O toast "Erro ao criar cotação" aparece de forma recorrente sem indicar a causa porque o `catch` em `CotacaoFormDialog.tsx` (linhas 1471-1473) faz apenas `toast.error('Erro ao criar cotação')` + `console.error(error)`. O erro real do Supabase (mensagem, code, hint, details) só fica no console — usuário e suporte ficam às cegas, e o problema se repete.
 
-A causa está em `src/components/contratos/UnifiedDocumentUploader.tsx` (linhas 200-254). A função `normalizePlaca` ali assume **apenas o padrão Mercosul** (posição 4 = letra, posições 3/5/6 = dígitos). Resultado: para placa antiga, a 5ª posição é dígito, mas a normalização tenta converter para letra (mantém `G`) e o `!=` dispara.
+Dos pontos onde o INSERT pode falhar silenciosamente:
 
-O backend (`document-ocr/index.ts`) já tem funções corretas: `gerarCandidatosPlaca`, `normalizePlacaMercosul`, regex para placa antiga e Mercosul. **A correção é só replicar essa lógica resiliente no front, antes da comparação.**
+1. **RLS de INSERT em `cotacoes`** exige `is_vendedor(auth.uid()) OR is_gerencia(auth.uid())`. Usuários com outros papéis (coordenador, atendente, agência sem vendas) recebem `403`/`new row violates row-level security` e o front mostra só o toast genérico.
+2. **Campos NOT NULL** (`valor_cota`, `valor_total_mensal`, `valor_adesao`, `valor_fipe`) vêm direto de `pendingFormData`. Se o cálculo do plano ainda não populou (ex.: usuário clica "Criar Cotação" antes do `useEffect` de cálculo terminar em mobile lento), o INSERT cai com `null value in column ... violates not-null constraint`.
+3. **Número da cotação gerado no client** (`gerarNumeroCotacao()` baseado em timestamp/random) pode colidir se houver índice único; o erro `23505` (duplicate key) também cai no toast genérico hoje.
 
-Confusões comuns OCR a tratar nas duas direções:
-- Letra → Dígito: O→0, Q→0, D→0, I→1, L→1, Z→2, S→5, G→6, T→7, B→8
-- Dígito → Letra: 0→O, 1→I, 2→Z, 5→S, 6→G, 8→B
+A correção é (a) deixar o erro real visível e logado; (b) blindar os 3 pontos frágeis com pré-validação clara antes do submit; (c) traduzir os códigos de erro mais comuns (RLS, not-null, unique) em mensagens de ação para o usuário.
 
 ### O que vai mudar
 
-**1. Comparação resiliente de placa por geração de candidatos** (`src/components/contratos/UnifiedDocumentUploader.tsx`, linhas 200-254)
+**1. Expor o erro real do Supabase no toast** (`src/components/cotacoes/CotacaoFormDialog.tsx`, linhas 1471-1476)
 
-Trocar a normalização atual (que assume só Mercosul) por uma função `placasEquivalentes(placaOCR, placaEsperada)` que:
+Substituir o catch genérico por um helper `descreverErroCotacao(error)` que:
+- Para `error.code === '42501'` ou mensagem com `row-level security` → `"Seu usuário não tem permissão para criar cotações. Peça ao administrador para liberar o papel de Vendedor."`
+- Para `error.code === '23502'` (not-null) → `"Faltam dados do plano selecionado. Recarregue a página, escolha o plano novamente e tente outra vez. (campo: {column})"`
+- Para `error.code === '23505'` (unique) → `"Conflito ao gerar número da cotação. Tente novamente em alguns segundos."` (e dispara um retry automático único, regenerando o número).
+- Para timeout / network → `"Sem resposta do servidor. Verifique sua conexão e tente novamente."`
+- Fallback: `"Erro ao criar cotação: {error.message}"` (mostra a mensagem real, nunca mais um toast cego).
 
-a. Limpa ambas (uppercase, sem hífen/espaço) e exige 7 caracteres.
-b. Detecta o **formato esperado** (antigo `^[A-Z]{3}[0-9]{4}$` vs Mercosul `^[A-Z]{3}[0-9][A-Z][0-9]{2}$`) a partir da `placaEsperada` (que é a referência confiável vinda da cotação).
-c. Sanea a placa do OCR usando o **mapa correto para o formato detectado**:
-   - **Antigo**: posições 0,1,2 → letras; posições 3,4,5,6 → dígitos. Aplica `LETTER_TO_DIGIT` nas 4 últimas posições.
-   - **Mercosul**: posições 0,1,2,4 → letras; posições 3,5,6 → dígitos. Aplica os dois mapas conforme posição.
-d. Compara saneada com esperada. Se igual → ok.
-e. Fallback extra: se ainda diferente, gera candidatos cruzados (testa também o outro formato) só para evitar falso negativo quando o OCR errar mais de uma posição.
+Sempre logar `console.error('[criarCotacao]', { code, message, details, hint, payloadKeys })` com as chaves do payload (sem valores sensíveis) para diagnóstico futuro.
 
-**2. Mensagem de erro mais útil**
+**2. Pré-validar campos NOT NULL antes do INSERT** (mesmo arquivo, antes da chamada `createCotacao.mutateAsync`, linha ~1371)
 
-Quando ainda assim divergir após o saneamento, manter o bloqueio mas trocar o texto para:
+Bloquear envio com toast específico se algum dos seguintes estiver faltando/zero:
+- `valor_fipe`, `valor_cota`, `valor_total_mensal` → `"Aguarde o cálculo do plano terminar antes de criar a cotação."`
+- `vendedor_id` → mensagem já existente (manter).
 
-> "A placa do CRLV (`{placa_lida}`) não corresponde à placa da cotação (`{placa_esperada}`). Verifique se o CRLV é do veículo correto. Se a placa do documento estiver realmente correta, ajuste-a no cadastro."
+Isso impede o INSERT que sempre falha e deixa claro ao consultor o que ainda está pendente.
 
-E logar no console o par `(placaOCR, placaSaneada, placaEsperada, formatoDetectado)` para facilitar diagnósticos futuros.
+**3. Retry automático no conflito de número** (`src/hooks/useCotacoes.ts`, função `useCreateCotacao`)
 
-**3. Validação equivalente em outros pontos** (varredura)
+Envolver o INSERT em uma função que, se o erro for `23505` na coluna `numero`, regenera `gerarNumeroCotacao()` e tenta UMA vez mais antes de propagar o erro. Sem loop infinito.
 
-Aplicar a mesma função utilitária em:
-- `src/pages/cadastro/SolicitacoesMigracao.tsx` linha 403 (`placaOk`), que hoje compara só com `toUpperCase()` e nem trata confusões — vai marcar OK falso ou divergente falso.
-- Extrair a função para `src/lib/placa-utils.ts` (já existe, hoje só com `formatPlacaExibicao`/`isPlacaPlaceholder`) como `placasEquivalentes(a, b)` exportada, reusando em ambos os lugares.
+**4. Sinalizar usuário sem permissão antes de abrir o modal**
 
-**4. Backend: nenhum ajuste necessário**
-
-O prompt em `document-ocr/index.ts` já instrui Gemini sobre os dois formatos e a regra "as 4 últimas posições da placa antiga são sempre dígitos" (linhas 273-278). Mantém-se. Esta correção é defesa em profundidade no consumidor do resultado.
+Em `CotacaoFormDialog`, no `useEffect` de inicialização, conferir se `canCreateCotacoes` (já calculado por `usePermissions`/`useUserRole` em outros lugares — verificar se existe; se não, criar um `useCanCreateCotacao` hook que faz `select 1 from public... where is_vendedor or is_gerencia`). Se o usuário não puder, mostrar banner amarelo no topo do dialog: *"Seu papel atual não permite criar cotações. Contate o administrador."* e desabilitar o botão de submit. Isso evita o erro acontecer.
 
 ### O que NÃO muda
 
-- Edge function `document-ocr` e seu prompt.
-- Lógica de upload, RLS, bucket, OCR em si.
-- Outros campos extraídos (chassi, renavam, nome).
-- Comportamento quando a placa lida e a esperada são realmente diferentes (continua bloqueando).
+- Esquema de `cotacoes`, RLS, enums — já estão corretos.
+- Lógica de cálculo de plano, FIPE menor, FIPE limite, vendedor externo, cenários.
+- Geração de `token_publico`.
+- Tabela `cotacoes` continua com NOT NULL nos mesmos campos.
 
 ### Arquivos editados
 
-- `src/lib/placa-utils.ts` — adicionar `placasEquivalentes(a, b)` com detecção de formato e saneamento bidirecional.
-- `src/components/contratos/UnifiedDocumentUploader.tsx` (linhas 200-254) — substituir `normalizePlaca` local por `placasEquivalentes`; melhorar mensagem de erro e log.
-- `src/pages/cadastro/SolicitacoesMigracao.tsx` (linha 403) — usar `placasEquivalentes` no lugar do `===` direto.
+- `src/components/cotacoes/CotacaoFormDialog.tsx`:
+  - Adicionar helper `descreverErroCotacao(err)` no topo (ou importar de `lib/errors.ts`).
+  - Linhas 1369-1376: pré-validar `valor_fipe > 0`, `valor_cota > 0`, `valor_total_mensal > 0` antes do `createCotacao.mutateAsync`, com toast específico.
+  - Linhas 1471-1476: substituir toast genérico pelo helper, mostrando mensagem real e logando contexto estruturado.
+  - Render: banner amarelo no topo do dialog quando o usuário não tem papel de vendedor/gerência.
+
+- `src/hooks/useCotacoes.ts`:
+  - `useCreateCotacao`: envolver INSERT em loop de até 2 tentativas se o erro for `23505` (regenerar `numero`).
+
+- `src/lib/errors.ts` (novo, pequeno): função `descreverErroSupabase(err, contexto)` reutilizável (pode ser usada em outros mutations futuros).
 
 ### Riscos
 
-- Aceitar como equivalente um par que de fato é diferente (falso positivo) — mitigado porque a detecção de formato usa a placa esperada (confiável) como âncora e a saneamento só substitui caracteres conhecidamente ambíguos. Em caso real de placa errada (ex.: `LQV3623` vs `MNO1234`), nenhum saneamento aproxima, segue bloqueando.
-- Placa antiga "ABC1G34" onde G está numa posição válida de letra — não existe esse caso (posição 4 do antigo é sempre dígito, por definição).
+- O usuário passa a ver mensagens técnicas ocasionais (ex.: nome de coluna), mas preferível ao toast cego que esconde a causa.
+- Banner de "sem permissão" pode aparecer indevidamente se o hook de papel ainda não carregou — mitigado mostrando o banner só após `isLoading=false` da query de papéis.
 
