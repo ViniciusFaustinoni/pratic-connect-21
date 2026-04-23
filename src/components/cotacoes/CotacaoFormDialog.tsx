@@ -86,6 +86,8 @@ import { useVerificarPlacaDuplicada, type PlacaDuplicadaInfo } from '@/hooks/use
 import { PlacaDuplicadaModal } from '@/components/cotacoes/PlacaDuplicadaModal';
 import { VeiculoSGAModal } from '@/components/cotacoes/VeiculoSGAModal';
 import { useVerificarVeiculoSGA } from '@/hooks/useVerificarVeiculoSGA';
+import { useCotacaoDraft, type DraftPayload } from '@/hooks/useCotacaoDraft';
+import { DraftRestoreBanner } from '@/components/cotacao/DraftRestoreBanner';
 
 // Regiões, tipos de uso, tipos de placa e combustíveis agora vêm do banco
 
@@ -319,6 +321,97 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const planoId = form.watch('plano_id');
   const validadeDias = form.watch('validade_dias');
   const valorAdesao = form.watch('valor_adesao');
+
+  // ========================================================================
+  // RASCUNHO LOCAL (localStorage) — preserva o que foi preenchido se o
+  // consultor sair da página antes de criar a cotação. 100% client-side.
+  // Desligado em modo edição (já há cotação no banco) e quando há
+  // cotacaoBase / leadId pré-carregando dados.
+  // ========================================================================
+  const draftDisabled = isEditando || !!cotacaoBase || !!leadId;
+  const watchedFormValues = form.watch();
+  const draftSnapshot = useMemo<DraftPayload | null>(() => {
+    if (draftDisabled || !open) return null;
+    return {
+      form: watchedFormValues,
+      placa,
+      marcaSelecionada,
+      modeloSelecionado,
+      anoSelecionado,
+      tipoFipeSelecionado,
+      regiaoSelecionada,
+      usoVeiculo,
+      tipoPlacaSelecionado,
+      combustivelSelecionado,
+      diaVencimento,
+      nomeAssociado,
+      telefoneAssociado,
+      emailAssociado,
+      isIndicacao,
+      indicadorId,
+      indicadorNome,
+      cenarioExterno,
+      solicitarFipeMenor,
+      justificativaFipeMenor,
+    };
+  }, [
+    draftDisabled, open, watchedFormValues, placa, marcaSelecionada, modeloSelecionado,
+    anoSelecionado, tipoFipeSelecionado, regiaoSelecionada, usoVeiculo, tipoPlacaSelecionado,
+    combustivelSelecionado, diaVencimento, nomeAssociado, telefoneAssociado, emailAssociado,
+    isIndicacao, indicadorId, indicadorNome, cenarioExterno, solicitarFipeMenor, justificativaFipeMenor,
+  ]);
+
+  const draft = useCotacaoDraft({
+    tipo: 'novo',
+    disabled: draftDisabled,
+    snapshot: draftSnapshot,
+    isMeaningful: (s) => {
+      const f = (s.form as any) || {};
+      return !!(s.placa || s.nomeAssociado || s.telefoneAssociado || f.valor_fipe);
+    },
+  });
+
+  const handleRestoreDraft = useCallback(() => {
+    const payload = draft.getDraft();
+    if (!payload) return;
+    try {
+      const f = (payload.form as Partial<CotacaoFormData>) || {};
+      form.reset({ ...form.getValues(), ...f });
+      if (typeof payload.placa === 'string') setPlaca(payload.placa);
+      if (typeof payload.marcaSelecionada === 'string') setMarcaSelecionada(payload.marcaSelecionada);
+      if (typeof payload.modeloSelecionado === 'string') setModeloSelecionado(payload.modeloSelecionado);
+      if (typeof payload.anoSelecionado === 'string') setAnoSelecionado(payload.anoSelecionado);
+      if (payload.tipoFipeSelecionado === 'carros' || payload.tipoFipeSelecionado === 'motos') {
+        setTipoFipeSelecionado(payload.tipoFipeSelecionado);
+      }
+      if (typeof payload.regiaoSelecionada === 'string') setRegiaoSelecionada(payload.regiaoSelecionada);
+      if (typeof payload.usoVeiculo === 'string') setUsoVeiculo(payload.usoVeiculo);
+      if (typeof payload.tipoPlacaSelecionado === 'string') setTipoPlacaSelecionado(payload.tipoPlacaSelecionado);
+      if (typeof payload.combustivelSelecionado === 'string') setCombustivelSelecionado(payload.combustivelSelecionado);
+      if (typeof payload.diaVencimento === 'number' || payload.diaVencimento === null) {
+        setDiaVencimento(payload.diaVencimento as number | null);
+      }
+      if (typeof payload.nomeAssociado === 'string') setNomeAssociado(payload.nomeAssociado);
+      if (typeof payload.telefoneAssociado === 'string') setTelefoneAssociado(payload.telefoneAssociado);
+      if (typeof payload.emailAssociado === 'string') setEmailAssociado(payload.emailAssociado);
+      if (typeof payload.isIndicacao === 'boolean') setIsIndicacao(payload.isIndicacao);
+      if (typeof payload.indicadorId === 'string' || payload.indicadorId === null) {
+        setIndicadorId(payload.indicadorId as string | null);
+      }
+      if (typeof payload.indicadorNome === 'string') setIndicadorNome(payload.indicadorNome);
+      if (payload.cenarioExterno === null || typeof payload.cenarioExterno === 'string') {
+        setCenarioExterno(payload.cenarioExterno as any);
+      }
+      if (typeof payload.solicitarFipeMenor === 'boolean') setSolicitarFipeMenor(payload.solicitarFipeMenor);
+      if (typeof payload.justificativaFipeMenor === 'string') setJustificativaFipeMenor(payload.justificativaFipeMenor);
+      draft.dismissBanner();
+      toast.success('Rascunho restaurado.');
+    } catch (e) {
+      console.error('[restoreDraft]', e);
+      toast.error('Não foi possível restaurar o rascunho.');
+      draft.discardDraft();
+    }
+  }, [draft, form]);
 
   // Guard: só auto-preencher adesão se o consultor não editou manualmente
   const adesaoEditadaManualmente = useRef(false);
@@ -1449,7 +1542,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         toast.success('Cotação criada com sucesso!');
         navigate('/vendas/cotacoes');
       }
-      
+      // Cotação criada/atualizada com sucesso → descartar rascunho local
+      draft.clearOnSubmit();
+
       // Resetar estados
       form.reset();
       setVeiculoEncontrado(null);
@@ -1520,6 +1615,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
             <div className="flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] px-4 pb-4 sm:px-6 space-y-5">
+
+            {/* Banner: rascunho local não finalizado */}
+            {draft.hasDraft && draft.savedAt && (
+              <DraftRestoreBanner
+                savedAt={draft.savedAt}
+                onRestore={handleRestoreDraft}
+                onDiscard={draft.discardDraft}
+              />
+            )}
 
             {/* Banner: usuário sem permissão para criar cotação */}
             {!isPermissionsLoading && !isEditando && !podeOperarCotacao && (
