@@ -331,14 +331,25 @@ numero_crv, codigo_seguranca_crv, numero_atpv
 - NÃO confundir com CRLV (que tem título "CERTIFICADO DE REGISTRO E LICENCIAMENTO DE VEÍCULO") nem com Nota Fiscal.
 
 ### Comprovante de Residência
-Aceitar: contas (água/luz/gás/telefone/internet), faturas/boletos, IPTU/IPVA, IRPF, extratos, contratos aluguel, escrituras.
-Campos: logradouro, numero, complemento, bairro, cidade, uf (2 letras), cep, nome_titular, tipo_comprovante ("conta_luz"|"conta_agua"|"conta_gas"|"conta_telefone"|"conta_internet"|"fatura_cartao"|"boleto_plano_saude"|"boleto_condominio"|"iptu"|"ipva"|"extrato_bancario"|"contrato_aluguel"|"outro"), data_emissao
+Aceitar: contas (água/luz/gás/telefone/internet), faturas/boletos, IPTU/IPVA, IRPF, extratos, contratos aluguel, escrituras, **declaração de residência (modelo livre)**.
+Campos: logradouro, numero, complemento, bairro, cidade, uf (2 letras), cep, nome_titular, tipo_comprovante ("conta_luz"|"conta_agua"|"conta_gas"|"conta_telefone"|"conta_internet"|"fatura_cartao"|"boleto_plano_saude"|"boleto_condominio"|"iptu"|"ipva"|"extrato_bancario"|"contrato_aluguel"|"declaracao_residencia"|"outro"), data_emissao
 - Aceitar sem data de emissão. IPTU/IPVA do ano vigente/anterior válidos.
+
+#### Declaração de Residência (modelo livre, escrito pelo próprio interessado ou por terceiro)
+- Detectar pelo título "DECLARAÇÃO DE RESIDÊNCIA" (ou variantes como "DECLARAÇÃO DE DOMICÍLIO", "DECLARAÇÃO DE COMPROVAÇÃO DE RESIDÊNCIA").
+- Aceitar quando contiver: nome e CPF do declarante, endereço completo (CEP + logradouro + número + bairro + cidade + UF), local/data e assinatura (manuscrita, digitalizada ou eletrônica).
+- Extrair campos de endereço normalmente nos campos padrão.
+- tipo_comprovante = "declaracao_residencia".
+- nome_titular = nome do declarante (quem assina/declara residir no endereço).
+- **Aceitar sem reconhecimento de firma** — a validação humana posterior cobre o restante.
+- Se faltar assinatura OU CPF do declarante → sugerir REVISAR (não reprovar).
+- Se faltar endereço completo (sem CEP ou sem logradouro/número) → REPROVAR.
 
 #### Titularidade (quando nomeEsperado fornecido)
 Compare nome_titular com nomeEsperado:
 - Ignore case/acentos. Aceite abreviações (M.=Mario, D.=Da/De). Sobrenome obrigatório.
 - Correspondência OK → aprovar. Não corresponde → reprovar. Ilegível → revisar. Mesmo sobrenome, nome diferente → revisar (cônjuge).
+- **Exceção para declaracao_residencia**: se declarante ≠ nomeEsperado, sempre sugerir REVISAR (analista valida vínculo familiar/coabitação) em vez de reprovar.
 - Inclua campo "validacao_titularidade": {nome_titular_extraido, nome_esperado, correspondencia, tipo_correspondencia, observacao}
 
 ## Regras gerais:
