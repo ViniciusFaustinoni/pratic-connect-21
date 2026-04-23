@@ -13,6 +13,37 @@ interface Etapa {
   ativa?: boolean
 }
 
+// ============================================================
+// MAPA DE TEMPLATES → VARIÁVEIS (sincronizado com
+// src/lib/cobranca/templateParams.ts — duplicado inline porque
+// edge functions não importam de src/).
+// ============================================================
+type CobrancaVar =
+  | 'nome'
+  | 'valor'
+  | 'vencimento'
+  | 'mes_ano'
+  | 'placa'
+  | 'modelo'
+  | 'linha_digitavel'
+
+const TEMPLATE_PARAMS_MAP: Record<string, CobrancaVar[]> = {
+  cobranca_mensalidade: ['nome', 'mes_ano', 'vencimento'],
+  d_6_lembrete_desconto_v1: ['nome', 'vencimento', 'linha_digitavel'],
+  d0_boleto_vence_hoje_v1: ['nome', 'valor', 'vencimento', 'modelo', 'placa', 'linha_digitavel'],
+  d1_a_d4_boleto_vencido_v1: ['nome'],
+  d5_ultimo_dia_sem_revistoria_v1: ['vencimento'],
+  d6_impedimento_pagamento_v1: ['nome', 'vencimento', 'valor', 'placa'],
+  d7_reforco_contato_v1: ['nome', 'vencimento'],
+  d8_urgencia_revistoria_v1: ['nome'],
+  d9_alerta_retirada_v1: ['nome', 'vencimento'],
+  d10_ultima_tentativa_v1: ['nome'],
+  d11_aviso_negativacao_v1: ['nome', 'vencimento', 'valor', 'placa'],
+  d12_debito_com_multa_v1: ['nome', 'vencimento', 'valor', 'placa'],
+  d13_regularize_cadastro_v1: ['nome', 'vencimento'],
+  d14_d61_reativacao_protecao_v1: ['nome'],
+}
+
 function calcularPrioridade(diasAtraso: number, valor: number): number {
   let prioridade = 3
   if (diasAtraso > 30) prioridade = 9
@@ -23,12 +54,74 @@ function calcularPrioridade(diasAtraso: number, valor: number): number {
 }
 
 function formatBRL(v: number): string {
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function formatDate(iso: string): string {
   const [y, m, d] = iso.split('T')[0].split('-')
   return `${d}/${m}/${y}`
+}
+
+function formatMesAno(vencimento: string): string {
+  const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+  const [y, m] = vencimento.split('T')[0].split('-')
+  return `${meses[parseInt(m, 10) - 1]}/${y}`
+}
+
+interface ContextoEnvio {
+  nome: string
+  valor: number
+  vencimento: string
+  placa?: string | null
+  modelo?: string | null
+  linha_digitavel?: string | null
+  boleto_url?: string | null
+}
+
+/**
+ * Monta o array de parâmetros conforme o template configurado.
+ * Para templates não mapeados explicitamente, devolve um fallback
+ * genérico [nome, valor, vencimento, linha_digitavel?, placa?] que
+ * será truncado conforme a contagem de slots detectados.
+ */
+function buildTemplateParams(
+  templateName: string,
+  ctx: ContextoEnvio,
+  slotsDetectados: number
+): { params: string[]; faltaSGA: boolean } {
+  const mapping = TEMPLATE_PARAMS_MAP[templateName]
+  let faltaSGA = false
+
+  const valorOf = (v: CobrancaVar): string => {
+    switch (v) {
+      case 'nome': return ctx.nome || 'Associado'
+      case 'valor': return formatBRL(Number(ctx.valor || 0))
+      case 'vencimento': return formatDate(ctx.vencimento)
+      case 'mes_ano': return formatMesAno(ctx.vencimento)
+      case 'placa': return ctx.placa || '—'
+      case 'modelo': return ctx.modelo || '—'
+      case 'linha_digitavel':
+        if (!ctx.linha_digitavel) faltaSGA = true
+        return ctx.linha_digitavel || '—'
+    }
+  }
+
+  let params: string[]
+  if (mapping) {
+    params = mapping.map(valorOf)
+  } else {
+    // Fallback genérico
+    const fallbackOrder: CobrancaVar[] = ['nome', 'valor', 'vencimento', 'linha_digitavel', 'placa']
+    params = fallbackOrder.map(valorOf)
+  }
+
+  // Ajustar pelo número real de slots detectados no corpo (defesa contra erro 132000)
+  if (slotsDetectados > 0) {
+    if (params.length > slotsDetectados) params = params.slice(0, slotsDetectados)
+    while (params.length < slotsDetectados) params.push('—')
+  }
+
+  return { params, faltaSGA }
 }
 
 Deno.serve(async (req) => {
@@ -51,7 +144,7 @@ Deno.serve(async (req) => {
     const hojeISO = hoje.toISOString().split('T')[0]
     const seteDiasAtras = new Date(Date.now() - 7 * 86400000).toISOString()
 
-    // 1. Buscar régua ativa (etapas é coluna JSONB em reguas_cobranca)
+    // 1. Buscar régua ativa
     const { data: regua, error: errRegua } = await supabase
       .from('reguas_cobranca')
       .select('*')
@@ -77,7 +170,25 @@ Deno.serve(async (req) => {
     const etapas = [...etapasAtivas].sort((a, b) => a.dias - b.dias)
     console.log(`Régua "${regua.nome}" com ${etapas.length} etapas ativas (${etapasRaw.length} total)`)
 
-    // Calcular janela de pré-vencimento (etapas com dias < 0)
+    // 2. Pré-carregar contagem de variáveis dos templates Meta usados
+    const templatesUsados = Array.from(new Set(
+      etapas.map((e) => e.template).filter((t): t is string => !!t)
+    ))
+    const slotsPorTemplate = new Map<string, number>()
+    if (templatesUsados.length > 0) {
+      const { data: tmpls } = await supabase
+        .from('whatsapp_meta_templates')
+        .select('nome, corpo')
+        .in('nome', templatesUsados)
+      for (const t of tmpls || []) {
+        const matches = (t.corpo as string || '').match(/\{\{\d+\}\}/g) || []
+        // Quantos slots únicos?
+        const unique = new Set(matches.map((m) => m))
+        slotsPorTemplate.set(t.nome as string, unique.size)
+      }
+    }
+
+    // Janela de pré-vencimento
     const etapasPre = etapas.filter((e) => e.dias < 0)
     const maxDiasAntes = etapasPre.length > 0 ? Math.abs(Math.min(...etapasPre.map((e) => e.dias))) : 0
 
@@ -89,7 +200,7 @@ Deno.serve(async (req) => {
     let limitAtingido = false
 
     // ============================================================
-    // HELPER: enviar WhatsApp via whatsapp-send-text (Meta template)
+    // HELPER: enviar WhatsApp via whatsapp-send-text
     // ============================================================
     async function enviarTemplateWhatsapp(opts: {
       telefone: string
@@ -100,18 +211,14 @@ Deno.serve(async (req) => {
         const resp = await supabase.functions.invoke('whatsapp-send-text', {
           body: {
             telefone: opts.telefone,
-            mensagem: '', // ignorado quando há template
+            mensagem: '',
             template_name: opts.templateName,
             template_params: opts.params,
           },
         })
-        if (resp.error) {
-          return { ok: false, erro: resp.error.message || String(resp.error) }
-        }
+        if (resp.error) return { ok: false, erro: resp.error.message || String(resp.error) }
         const data: any = resp.data || {}
-        if (data.success === false) {
-          return { ok: false, erro: data.error || 'Falha desconhecida' }
-        }
+        if (data.success === false) return { ok: false, erro: data.error || 'Falha desconhecida' }
         return { ok: true, message_id: data.message_id }
       } catch (err: any) {
         return { ok: false, erro: err?.message || String(err) }
@@ -119,197 +226,290 @@ Deno.serve(async (req) => {
     }
 
     // ============================================================
-    // PASS 1 — Cobranças VENCIDAS (dias positivos / D+0)
+    // BUSCA UNIFICADA — Asaas + SGA Hinova
     // ============================================================
-    let offset = 0
-    const batchSize = 100
+    type CobrancaUnif = {
+      id: string
+      associado_id: string
+      veiculo_id: string | null
+      valor: number
+      data_vencimento: string
+      linha_digitavel: string | null
+      boleto_url: string | null
+      fonte: 'asaas' | 'sga'
+    }
 
-    while (true) {
-      const { data: cobrancasVencidas, error: errCobrancas } = await supabase
-        .from('asaas_cobrancas')
-        .select('id, associado_id, valor, data_vencimento')
-        .in('status', ['PENDING', 'OVERDUE'])
-        .not('asaas_id', 'like', 'LOCAL-%')
-        .lte('data_vencimento', hojeISO)
-        .order('data_vencimento')
-        .range(offset, offset + batchSize - 1)
+    /**
+     * Busca cobranças (asaas + sga) num intervalo de vencimento.
+     * `start`/`end` são datas ISO (YYYY-MM-DD), inclusivas.
+     */
+    async function buscarCobrancas(start: string, end: string): Promise<CobrancaUnif[]> {
+      const [asaas, sga] = await Promise.all([
+        supabase
+          .from('asaas_cobrancas')
+          .select('id, associado_id, veiculo_id, valor, data_vencimento, linha_digitavel, boleto_url')
+          .in('status', ['PENDING', 'OVERDUE'])
+          .not('asaas_id', 'like', 'LOCAL-%')
+          .gte('data_vencimento', start)
+          .lte('data_vencimento', end)
+          .order('data_vencimento')
+          .limit(1000),
+        supabase
+          .from('cobrancas')
+          .select('id, associado_id, veiculo_id, valor_final, valor, data_vencimento, linha_digitavel, boleto_url')
+          .eq('origem', 'sga_hinova')
+          .in('status', ['aguardando_pagamento', 'vencido'])
+          .gte('data_vencimento', start)
+          .lte('data_vencimento', end)
+          .order('data_vencimento')
+          .limit(1000),
+      ])
 
-      if (errCobrancas) {
-        console.error('Erro ao buscar cobranças vencidas:', errCobrancas)
-        break
+      const out: CobrancaUnif[] = []
+      for (const r of asaas.data || []) {
+        out.push({
+          id: r.id as string,
+          associado_id: r.associado_id as string,
+          veiculo_id: (r.veiculo_id as string | null) ?? null,
+          valor: Number(r.valor || 0),
+          data_vencimento: r.data_vencimento as string,
+          linha_digitavel: (r.linha_digitavel as string | null) ?? null,
+          boleto_url: (r.boleto_url as string | null) ?? null,
+          fonte: 'asaas',
+        })
       }
+      for (const r of sga.data || []) {
+        out.push({
+          id: r.id as string,
+          associado_id: r.associado_id as string,
+          veiculo_id: (r.veiculo_id as string | null) ?? null,
+          valor: Number((r as any).valor_final || (r as any).valor || 0),
+          data_vencimento: r.data_vencimento as string,
+          linha_digitavel: (r.linha_digitavel as string | null) ?? null,
+          boleto_url: (r.boleto_url as string | null) ?? null,
+          fonte: 'sga',
+        })
+      }
+      return out
+    }
 
-      if (!cobrancasVencidas || cobrancasVencidas.length === 0) break
+    // Cache de associado e veículo
+    const associadoCache = new Map<string, { nome: string; telefone: string | null }>()
+    const veiculoCache = new Map<string, { placa: string | null; modelo: string | null }>()
 
-      // Agrupar por associado (manter o maior atraso e somar valores)
-      const porAssociado = new Map<string, { diasAtraso: number; valorTotal: number; vencimento: string; cobrancaIds: string[] }>()
+    async function getAssociado(id: string) {
+      if (associadoCache.has(id)) return associadoCache.get(id)!
+      const { data } = await supabase
+        .from('associados')
+        .select('nome, whatsapp, telefone')
+        .eq('id', id)
+        .maybeSingle()
+      const info = {
+        nome: (data?.nome as string) || 'Associado',
+        telefone: (data?.whatsapp as string) || (data?.telefone as string) || null,
+      }
+      associadoCache.set(id, info)
+      return info
+    }
 
-      for (const cob of cobrancasVencidas) {
-        const dias = Math.floor((Date.now() - new Date(cob.data_vencimento).getTime()) / 86400000)
-        const existing = porAssociado.get(cob.associado_id)
-        if (!existing) {
-          porAssociado.set(cob.associado_id, {
+    async function getVeiculo(id: string | null) {
+      if (!id) return { placa: null, modelo: null }
+      if (veiculoCache.has(id)) return veiculoCache.get(id)!
+      const { data } = await supabase
+        .from('veiculos')
+        .select('placa, modelo')
+        .eq('id', id)
+        .maybeSingle()
+      const info = {
+        placa: (data?.placa as string | null) ?? null,
+        modelo: (data?.modelo as string | null) ?? null,
+      }
+      veiculoCache.set(id, info)
+      return info
+    }
+
+    // ============================================================
+    // PASS 1 — Cobranças VENCIDAS (dias >= 0)
+    // ============================================================
+    {
+      // Janela: de 60 dias atrás até hoje
+      const inicio = new Date(hoje.getTime() - 90 * 86400000).toISOString().split('T')[0]
+      const cobrs = await buscarCobrancas(inicio, hojeISO)
+
+      // Agrupar por associado: maior atraso, somando valores; preserva veiculo_id/linha_digitavel da MAIS antiga (= maior atraso)
+      const porAssociado = new Map<string, {
+        diasAtraso: number
+        valorTotal: number
+        vencimento: string
+        veiculo_id: string | null
+        linha_digitavel: string | null
+        boleto_url: string | null
+        fonte: 'asaas' | 'sga'
+      }>()
+
+      for (const c of cobrs) {
+        const dias = Math.floor((Date.now() - new Date(c.data_vencimento).getTime()) / 86400000)
+        const cur = porAssociado.get(c.associado_id)
+        if (!cur) {
+          porAssociado.set(c.associado_id, {
             diasAtraso: dias,
-            valorTotal: Number(cob.valor || 0),
-            vencimento: cob.data_vencimento,
-            cobrancaIds: [cob.id],
+            valorTotal: c.valor,
+            vencimento: c.data_vencimento,
+            veiculo_id: c.veiculo_id,
+            linha_digitavel: c.linha_digitavel,
+            boleto_url: c.boleto_url,
+            fonte: c.fonte,
           })
         } else {
-          existing.valorTotal += Number(cob.valor || 0)
-          existing.cobrancaIds.push(cob.id)
-          if (dias > existing.diasAtraso) {
-            existing.diasAtraso = dias
-            existing.vencimento = cob.data_vencimento
+          cur.valorTotal += c.valor
+          if (dias > cur.diasAtraso) {
+            cur.diasAtraso = dias
+            cur.vencimento = c.data_vencimento
+            cur.veiculo_id = c.veiculo_id
+            cur.linha_digitavel = c.linha_digitavel
+            cur.boleto_url = c.boleto_url
+            cur.fonte = c.fonte
           }
         }
       }
 
       for (const [associadoId, info] of porAssociado) {
-        const { diasAtraso, valorTotal } = info
-
         for (const etapa of etapas) {
-          // Apenas etapas pós-vencimento neste pass (dias >= 0) e que já "venceram"
           if (etapa.dias < 0) continue
-          if (diasAtraso < etapa.dias) continue
+          if (info.diasAtraso < etapa.dias) continue
 
-          // Anti-duplicidade — já executou nos últimos 7 dias?
-          const { data: eventoExistente } = await supabase
+          const { data: existe } = await supabase
             .from('cobranca_eventos')
             .select('id')
             .eq('associado_id', associadoId)
             .eq('subtipo', `regua_d${etapa.dias}`)
             .gte('created_at', seteDiasAtras)
             .limit(1)
+          if (existe && existe.length > 0) continue
 
-          if (eventoExistente && eventoExistente.length > 0) continue
-
-          const prioridade = calcularPrioridade(diasAtraso, valorTotal)
+          const prioridade = calcularPrioridade(info.diasAtraso, info.valorTotal)
           await processarEtapa({
             associadoId,
             etapa,
-            diasAtraso,
-            valorTotal,
+            diasAtraso: info.diasAtraso,
+            valorTotal: info.valorTotal,
             vencimento: info.vencimento,
+            veiculo_id: info.veiculo_id,
+            linha_digitavel: info.linha_digitavel,
+            boleto_url: info.boleto_url,
+            fonte: info.fonte,
             prioridade,
           })
         }
         totalProcessados++
       }
-
-      if (cobrancasVencidas.length < batchSize) break
-      offset += batchSize
     }
 
     // ============================================================
-    // PASS 2 — Cobranças A VENCER (lembretes pré-vencimento, dias < 0)
+    // PASS 2 — Cobranças A VENCER (dias < 0)
     // ============================================================
     if (maxDiasAntes > 0) {
       const limiteFuturo = new Date(hoje.getTime() + maxDiasAntes * 86400000).toISOString().split('T')[0]
       const amanhaISO = new Date(hoje.getTime() + 86400000).toISOString().split('T')[0]
+      const cobrs = await buscarCobrancas(amanhaISO, limiteFuturo)
 
-      let offsetPre = 0
-      while (true) {
-        const { data: cobrancasFuturas, error: errPre } = await supabase
-          .from('asaas_cobrancas')
-          .select('id, associado_id, valor, data_vencimento')
-          .in('status', ['PENDING'])
-          .not('asaas_id', 'like', 'LOCAL-%')
-          .gte('data_vencimento', amanhaISO)
-          .lte('data_vencimento', limiteFuturo)
-          .order('data_vencimento')
-          .range(offsetPre, offsetPre + batchSize - 1)
+      for (const c of cobrs) {
+        const diasAteVencer = Math.ceil((new Date(c.data_vencimento).getTime() - hoje.getTime()) / 86400000)
+        const diasRelativos = -diasAteVencer
+        const etapaMatch = etapas.find((e) => e.dias === diasRelativos)
+        if (!etapaMatch) continue
 
-        if (errPre) {
-          console.error('Erro ao buscar cobranças a vencer:', errPre)
-          break
-        }
-        if (!cobrancasFuturas || cobrancasFuturas.length === 0) break
+        const { data: existe } = await supabase
+          .from('cobranca_eventos')
+          .select('id')
+          .eq('associado_id', c.associado_id)
+          .eq('subtipo', `regua_d${etapaMatch.dias}`)
+          .gte('created_at', seteDiasAtras)
+          .limit(1)
+        if (existe && existe.length > 0) continue
 
-        for (const cob of cobrancasFuturas) {
-          const diasAteVencer = Math.ceil(
-            (new Date(cob.data_vencimento).getTime() - hoje.getTime()) / 86400000
-          )
-          const diasRelativos = -diasAteVencer // ex.: vence em 5 dias => etapa.dias === -5
-
-          // Procurar etapa exata para esse dia
-          const etapaMatch = etapas.find((e) => e.dias === diasRelativos)
-          if (!etapaMatch) continue
-
-          // Anti-duplicidade por cobrança
-          const { data: eventoExistente } = await supabase
-            .from('cobranca_eventos')
-            .select('id')
-            .eq('associado_id', cob.associado_id)
-            .eq('subtipo', `regua_d${etapaMatch.dias}`)
-            .gte('created_at', seteDiasAtras)
-            .limit(1)
-
-          if (eventoExistente && eventoExistente.length > 0) continue
-
-          await processarEtapa({
-            associadoId: cob.associado_id,
-            etapa: etapaMatch,
-            diasAtraso: diasRelativos, // negativo: lembrete
-            valorTotal: Number(cob.valor || 0),
-            vencimento: cob.data_vencimento,
-            prioridade: 3,
-          })
-          totalProcessados++
-        }
-
-        if (cobrancasFuturas.length < batchSize) break
-        offsetPre += batchSize
+        await processarEtapa({
+          associadoId: c.associado_id,
+          etapa: etapaMatch,
+          diasAtraso: diasRelativos,
+          valorTotal: c.valor,
+          vencimento: c.data_vencimento,
+          veiculo_id: c.veiculo_id,
+          linha_digitavel: c.linha_digitavel,
+          boleto_url: c.boleto_url,
+          fonte: c.fonte,
+          prioridade: 3,
+        })
+        totalProcessados++
       }
     }
 
     // ============================================================
-    // PROCESSADOR DE ETAPA (compartilhado entre os dois passes)
+    // PROCESSADOR DE ETAPA
     // ============================================================
-    async function processarEtapa(params: {
+    async function processarEtapa(p: {
       associadoId: string
       etapa: Etapa
       diasAtraso: number
       valorTotal: number
       vencimento: string
+      veiculo_id: string | null
+      linha_digitavel: string | null
+      boleto_url: string | null
+      fonte: 'asaas' | 'sga'
       prioridade: number
     }) {
-      const { associadoId, etapa, diasAtraso, valorTotal, vencimento, prioridade } = params
+      const { associadoId, etapa, diasAtraso, valorTotal, vencimento, veiculo_id, linha_digitavel, boleto_url, fonte, prioridade } = p
       const subtipo = `regua_d${etapa.dias}`
 
-      // ---- AÇÕES DE MENSAGEM ----
       if (etapa.acao === 'whatsapp') {
-        // Buscar telefone + nome do associado
-        const { data: assoc } = await supabase
-          .from('associados')
-          .select('nome, whatsapp, telefone')
-          .eq('id', associadoId)
-          .maybeSingle()
+        const assoc = await getAssociado(associadoId)
+        const veic = await getVeiculo(veiculo_id)
+        const telefone = assoc.telefone
 
-        const telefone = assoc?.whatsapp || assoc?.telefone
         let envioStatus: 'enviado' | 'falhou' | 'agendado' = 'agendado'
         let envioErro: string | null = null
         let messageId: string | null = null
+        let templateParams: string[] = []
+        let faltaSGA = false
 
         if (etapa.template && telefone && disparosWhatsapp < MAX_DISPAROS) {
-          const params = [
-            assoc?.nome || 'Associado',
-            formatBRL(valorTotal),
-            formatDate(vencimento),
-          ]
-          const result = await enviarTemplateWhatsapp({
-            telefone,
-            templateName: etapa.template,
-            params,
-          })
-          disparosWhatsapp++
-          if (result.ok) {
-            envioStatus = 'enviado'
-            messageId = result.message_id || null
-            totalEnviadosWA++
-          } else {
+          const slots = slotsPorTemplate.get(etapa.template) ?? 0
+          const built = buildTemplateParams(etapa.template, {
+            nome: assoc.nome,
+            valor: valorTotal,
+            vencimento,
+            placa: veic.placa,
+            modelo: veic.modelo,
+            linha_digitavel,
+            boleto_url,
+          }, slots)
+          templateParams = built.params
+          faltaSGA = built.faltaSGA
+
+          // Bloquear envio se template exige linha_digitavel e não temos
+          const mapping = TEMPLATE_PARAMS_MAP[etapa.template]
+          const exigeSGA = mapping?.includes('linha_digitavel') ?? false
+          if (exigeSGA && !linha_digitavel) {
             envioStatus = 'falhou'
-            envioErro = result.erro || 'Erro desconhecido'
+            envioErro = 'Sem linha digitável SGA disponível — sincronize o financeiro do veículo'
             totalFalhasWA++
+          } else {
+            const result = await enviarTemplateWhatsapp({
+              telefone,
+              templateName: etapa.template,
+              params: templateParams,
+            })
+            disparosWhatsapp++
+            if (result.ok) {
+              envioStatus = 'enviado'
+              messageId = result.message_id || null
+              totalEnviadosWA++
+            } else {
+              envioStatus = 'falhou'
+              envioErro = result.erro || 'Erro desconhecido'
+              totalFalhasWA++
+            }
           }
         } else if (disparosWhatsapp >= MAX_DISPAROS) {
           limitAtingido = true
@@ -330,6 +530,11 @@ Deno.serve(async (req) => {
             valor_total: valorTotal,
             dias_atraso: diasAtraso,
             template: etapa.template,
+            template_params: templateParams,
+            fonte,
+            linha_digitavel: linha_digitavel || null,
+            boleto_url: boleto_url || null,
+            falta_sga: faltaSGA,
             status: envioStatus,
             message_id: messageId,
             erro: envioErro,
@@ -338,13 +543,12 @@ Deno.serve(async (req) => {
         })
         totalEventos++
       } else if (etapa.acao === 'sms' || etapa.acao === 'email') {
-        // SMS/Email: ainda sem provedor — apenas registra
         await supabase.from('cobranca_eventos').insert({
           associado_id: associadoId,
           tipo: etapa.acao,
           subtipo,
           descricao: `${etapa.acao.toUpperCase()} ${etapa.dias < 0 ? `D${etapa.dias}` : `D+${etapa.dias}`} agendado (provedor não configurado)`,
-          dados: { dia_regua: etapa.dias, valor_total: valorTotal, dias_atraso: diasAtraso, status: 'agendado' },
+          dados: { dia_regua: etapa.dias, valor_total: valorTotal, dias_atraso: diasAtraso, fonte, status: 'agendado' },
           automatico: true,
         })
         totalEventos++
@@ -373,7 +577,7 @@ Deno.serve(async (req) => {
           tipo: 'ligacao',
           subtipo,
           descricao: `Tarefa de ligação D+${etapa.dias}`,
-          dados: { dia_regua: etapa.dias, prioridade },
+          dados: { dia_regua: etapa.dias, prioridade, fonte },
           automatico: true,
         })
         totalEventos++
@@ -382,8 +586,8 @@ Deno.serve(async (req) => {
           associado_id: associadoId,
           tipo: 'status',
           subtipo: 'suspensao',
-          descricao: `Suspensão automática D+${etapa.dias} (${diasAtraso} dias / R$ ${formatBRL(valorTotal)})`,
-          dados: { dia_regua: etapa.dias, valor_total: valorTotal, dias_atraso: diasAtraso },
+          descricao: `Suspensão automática D+${etapa.dias} (${diasAtraso} dias / ${formatBRL(valorTotal)})`,
+          dados: { dia_regua: etapa.dias, valor_total: valorTotal, dias_atraso: diasAtraso, fonte },
           automatico: true,
         })
         totalEventos++
@@ -401,7 +605,7 @@ Deno.serve(async (req) => {
             motivo: 'decisao_negativacao',
             prioridade: 9,
             status: 'pendente',
-            observacao: `D+${etapa.dias}: decisão de negativação (R$ ${formatBRL(valorTotal)})`,
+            observacao: `D+${etapa.dias}: decisão de negativação (${formatBRL(valorTotal)})`,
             data_agendamento: new Date().toISOString(),
           })
           totalTarefas++
@@ -411,7 +615,7 @@ Deno.serve(async (req) => {
           tipo: 'negativacao',
           subtipo,
           descricao: `Candidato a negativação D+${etapa.dias}`,
-          dados: { dia_regua: etapa.dias, valor_total: valorTotal },
+          dados: { dia_regua: etapa.dias, valor_total: valorTotal, fonte },
           automatico: true,
         })
         totalEventos++
@@ -429,7 +633,7 @@ Deno.serve(async (req) => {
             motivo: 'decisao_exclusao',
             prioridade: 9,
             status: 'pendente',
-            observacao: `D+${etapa.dias}: decisão de exclusão (R$ ${formatBRL(valorTotal)})`,
+            observacao: `D+${etapa.dias}: decisão de exclusão (${formatBRL(valorTotal)})`,
             data_agendamento: new Date().toISOString(),
           })
           totalTarefas++
@@ -439,7 +643,7 @@ Deno.serve(async (req) => {
           tipo: 'status',
           subtipo,
           descricao: `Candidato a exclusão D+${etapa.dias}`,
-          dados: { dia_regua: etapa.dias, valor_total: valorTotal },
+          dados: { dia_regua: etapa.dias, valor_total: valorTotal, fonte },
           automatico: true,
         })
         totalEventos++

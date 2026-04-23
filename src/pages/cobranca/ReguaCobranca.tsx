@@ -13,6 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { TEMPLATE_PARAMS_MAP, VAR_LABELS, type CobrancaVar } from '@/lib/cobranca/templateParams';
 
 interface Etapa {
   id: string;
@@ -220,33 +222,64 @@ export default function ReguaCobranca() {
 
   const renderTemplateSelect = (value: string | undefined, onChange: (v: string) => void) => {
     const status = getTemplateStatus(value);
+    const vars: CobrancaVar[] | null = value ? (TEMPLATE_PARAMS_MAP[value] ?? null) : null;
+    const exigeSGA = !!vars?.includes('linha_digitavel');
     return (
-      <div className="flex items-center gap-2">
-        <Select value={value || ''} onValueChange={onChange}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Selecionar template" />
-          </SelectTrigger>
-          <SelectContent>
-            {metaTemplates?.map((t) => (
-              <SelectItem key={t.nome} value={t.nome}>
-                <div className="flex items-center gap-2">
-                  <span>{t.nome}</span>
-                </div>
-              </SelectItem>
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={value || ''} onValueChange={onChange}>
+            <SelectTrigger className="w-[220px]">
+              <SelectValue placeholder="Selecionar template" />
+            </SelectTrigger>
+            <SelectContent>
+              {metaTemplates?.map((t) => (
+                <SelectItem key={t.nome} value={t.nome}>
+                  <div className="flex items-center gap-2">
+                    <span>{t.nome}</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {status && getStatusBadge(status)}
+          {exigeSGA && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300 text-[10px] px-1.5 cursor-help">
+                    Requer SGA
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  Este template usa a <strong>linha digitável</strong> do boleto.
+                  O envio só ocorre se a cobrança SGA (origem <code>sga_hinova</code>) tiver linha digitável sincronizada.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+          {value && (
+            <Link
+              to="/configuracoes/integracoes/whatsapp?tab=templates"
+              target="_blank"
+              rel="noreferrer"
+              title="Editar template no catálogo Meta"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </Link>
+          )}
+        </div>
+        {vars && vars.length > 0 && (
+          <div className="text-[11px] text-muted-foreground flex flex-wrap gap-1">
+            <span className="font-medium">Variáveis:</span>
+            {vars.map((v, idx) => (
+              <span key={idx} className="inline-flex items-center gap-0.5">
+                <code className="bg-muted px-1 rounded">{`{{${idx + 1}}}`}</code>
+                <span>{VAR_LABELS[v]}</span>
+                {idx < vars.length - 1 && <span>·</span>}
+              </span>
             ))}
-          </SelectContent>
-        </Select>
-        {status && getStatusBadge(status)}
-        {value && (
-          <Link
-            to="/configuracoes/integracoes/whatsapp?tab=templates"
-            target="_blank"
-            rel="noreferrer"
-            title="Editar template no catálogo Meta"
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-          </Link>
+          </div>
         )}
       </div>
     );
