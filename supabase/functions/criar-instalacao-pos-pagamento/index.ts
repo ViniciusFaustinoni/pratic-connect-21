@@ -420,19 +420,34 @@ serve(async (req) => {
       
       console.log('[CriarInstalacaoPosPagamento] Criando instalação:', JSON.stringify(instalacaoData));
 
-      const { data: novaInstalacao, error: instalacaoError } = await supabase
+      // Guard de idempotência: se já há instalação ativa para mesma cotação+veículo, reusar
+      const { data: instExistente } = await supabase
         .from('instalacoes')
-        .insert(instalacaoData)
         .select('id')
-        .single();
+        .eq('cotacao_id', cotacaoId)
+        .eq('veiculo_id', veiculoIdFinal)
+        .in('status', ['agendada', 'em_andamento', 'em_analise'])
+        .limit(1)
+        .maybeSingle();
 
-      if (instalacaoError) {
-        console.error('[CriarInstalacaoPosPagamento] Erro ao criar instalação:', instalacaoError);
-        throw new Error(`Erro ao criar instalação: ${instalacaoError.message}`);
+      if (instExistente?.id) {
+        novaInstalacaoId = instExistente.id;
+        console.log(`[CriarInstalacaoPosPagamento] Instalação já existe (${novaInstalacaoId}), reusando.`);
+      } else {
+        const { data: novaInstalacao, error: instalacaoError } = await supabase
+          .from('instalacoes')
+          .insert(instalacaoData)
+          .select('id')
+          .single();
+
+        if (instalacaoError) {
+          console.error('[CriarInstalacaoPosPagamento] Erro ao criar instalação:', instalacaoError);
+          throw new Error(`Erro ao criar instalação: ${instalacaoError.message}`);
+        }
+
+        novaInstalacaoId = novaInstalacao.id;
+        console.log('[CriarInstalacaoPosPagamento] Instalação criada com sucesso:', novaInstalacaoId);
       }
-
-      novaInstalacaoId = novaInstalacao.id;
-      console.log('[CriarInstalacaoPosPagamento] Instalação criada com sucesso:', novaInstalacaoId);
     }
 
     // 6.1 GERAR LANÇAMENTOS FINANCEIROS (consultor + módulo Financeiro empresa)

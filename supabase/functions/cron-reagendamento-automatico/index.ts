@@ -210,6 +210,13 @@ Deno.serve(async (req) => {
               updated_at: new Date().toISOString(),
             })
             .eq("id", refs.instalacao_origem_id);
+
+          // Fechar cards de agendamentos_base ligados a essa instalação
+          await supabase
+            .from("agendamentos_base")
+            .update({ status: "nao_compareceu", updated_at: new Date().toISOString() })
+            .eq("instalacao_id", refs.instalacao_origem_id)
+            .in("status", ["agendado", "pendente", "confirmado"]);
         }
         if (refs?.vistoria_origem_id) {
           await supabase
@@ -221,6 +228,12 @@ Deno.serve(async (req) => {
               updated_at: new Date().toISOString(),
             })
             .eq("id", refs.vistoria_origem_id);
+
+          await supabase
+            .from("agendamentos_base")
+            .update({ status: "nao_compareceu", updated_at: new Date().toISOString() })
+            .eq("vistoria_id", refs.vistoria_origem_id)
+            .in("status", ["agendado", "pendente", "confirmado"]);
         }
 
         await supabase.functions.invoke("enviar-link-reagendamento", {
@@ -391,6 +404,32 @@ Deno.serve(async (req) => {
             updated_at: new Date().toISOString(),
           })
           .eq("id", servico.id);
+
+        // Fechar agendamentos_base vinculados (defesa em profundidade — trigger também cobre)
+        const { data: refs2 } = await supabase
+          .from("servicos")
+          .select("instalacao_origem_id, vistoria_origem_id, cotacao_id")
+          .eq("id", servico.id)
+          .maybeSingle();
+
+        if (refs2?.instalacao_origem_id) {
+          await supabase.from("agendamentos_base")
+            .update({ status: "nao_compareceu", updated_at: new Date().toISOString() })
+            .eq("instalacao_id", refs2.instalacao_origem_id)
+            .in("status", ["agendado", "pendente", "confirmado"]);
+        }
+        if (refs2?.vistoria_origem_id) {
+          await supabase.from("agendamentos_base")
+            .update({ status: "nao_compareceu", updated_at: new Date().toISOString() })
+            .eq("vistoria_id", refs2.vistoria_origem_id)
+            .in("status", ["agendado", "pendente", "confirmado"]);
+        }
+        if (refs2?.cotacao_id) {
+          await supabase.from("agendamentos_base")
+            .update({ status: "nao_compareceu", updated_at: new Date().toISOString() })
+            .eq("cotacao_id", refs2.cotacao_id)
+            .in("status", ["agendado", "pendente", "confirmado"]);
+        }
 
         // Cancelar entradas em fila ligadas ao serviço
         await supabase

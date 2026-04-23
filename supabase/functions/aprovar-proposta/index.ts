@@ -320,26 +320,40 @@ serve(async (req) => {
           }
         }
 
-        await supabase.from('instalacoes').insert({
-          associado_id: associadoId,
-          veiculo_id: veiculoId,
-          contrato_id: contrato_id,
-          cotacao_id: contrato.cotacao_id || null,
-          status: 'agendada',
-          data_agendada: dataAgendada,
-          periodo: ['manha', 'tarde'].includes(periodoPreferido) ? periodoPreferido : 'manha',
-          logradouro: enderecoLogradouro,
-          numero: enderecoNumero,
-          bairro: enderecoBairro,
-          cidade: enderecoCidade,
-          uf: enderecoUf,
-          cep: enderecoCep,
-          endereco_latitude,
-          endereco_longitude,
-          local_vistoria: 'cliente',
-          permite_encaixe: permiteEncaixe,
-        });
-        console.log(`[aprovar-proposta] Instalação criada para veículo ${veiculo.placa}`);
+        // Guard de idempotência: não criar nova instalação se já existe ativa para a mesma cotação+veículo
+        const { data: instJaExiste } = await supabase
+          .from('instalacoes')
+          .select('id')
+          .eq('cotacao_id', contrato.cotacao_id || '')
+          .eq('veiculo_id', veiculoId)
+          .in('status', ['agendada', 'em_andamento', 'em_analise'])
+          .limit(1)
+          .maybeSingle();
+
+        if (instJaExiste?.id) {
+          console.log(`[aprovar-proposta] Instalação já existe (${instJaExiste.id}) — pulando criação para veículo ${veiculo.placa}`);
+        } else {
+          await supabase.from('instalacoes').insert({
+            associado_id: associadoId,
+            veiculo_id: veiculoId,
+            contrato_id: contrato_id,
+            cotacao_id: contrato.cotacao_id || null,
+            status: 'agendada',
+            data_agendada: dataAgendada,
+            periodo: ['manha', 'tarde'].includes(periodoPreferido) ? periodoPreferido : 'manha',
+            logradouro: enderecoLogradouro,
+            numero: enderecoNumero,
+            bairro: enderecoBairro,
+            cidade: enderecoCidade,
+            uf: enderecoUf,
+            cep: enderecoCep,
+            endereco_latitude,
+            endereco_longitude,
+            local_vistoria: 'cliente',
+            permite_encaixe: permiteEncaixe,
+          });
+          console.log(`[aprovar-proposta] Instalação criada para veículo ${veiculo.placa}`);
+        }
       } else if (!veiculoPrecisaRastreador) {
         supabase.functions.invoke('notificar-cliente', {
           body: { tipo: 'cobertura_total_ativada', associado_id: associadoId, dados: { placa: veiculo.placa || '', marca: (veiculo as any).marca || '', modelo: veiculo.modelo || '' } },
