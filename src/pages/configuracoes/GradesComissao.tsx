@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Plus, Pencil, Copy, Power, Trash2, Layers, Users, Infinity as InfinityIcon, ListOrdered } from 'lucide-react';
+import { Plus, Pencil, Copy, Power, Trash2, Layers, Users, Infinity as InfinityIcon, ListOrdered, Package } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -34,6 +34,8 @@ interface GradeComissao {
   created_at: string;
   grades_comissao_niveis: GradeNivel[];
   grades_comissao_parcelas: GradeParcela[];
+  grade_comissao_planos?: { plano_id: string }[];
+  grade_comissao_plano_regras?: { role: string; tipo_comissao: string }[];
 }
 
 interface GradesComissaoProps {
@@ -50,7 +52,7 @@ export default function GradesComissao({ basePath = '/configuracoes/grades-comis
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('grades_comissao')
-        .select('id, nome, descricao, ativo, versao, created_at, grades_comissao_niveis(id, percentual), grades_comissao_parcelas(id, vitalicia, numero_parcela)')
+        .select('id, nome, descricao, ativo, versao, created_at, grades_comissao_niveis(id, percentual), grades_comissao_parcelas(id, vitalicia, numero_parcela), grade_comissao_planos(plano_id), grade_comissao_plano_regras(role, tipo_comissao)')
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data as GradeComissao[];
@@ -105,6 +107,18 @@ export default function GradesComissao({ basePath = '/configuracoes/grades-comis
         .order('ordem');
       if (nErr) throw nErr;
 
+      const { data: planosOrig, error: gpErr } = await (supabase as any)
+        .from('grade_comissao_planos')
+        .select('plano_id, ativo')
+        .eq('grade_id', gradeId);
+      if (gpErr) throw gpErr;
+
+      const { data: regrasOrig, error: rErr } = await (supabase as any)
+        .from('grade_comissao_plano_regras')
+        .select('plano_id, parcela_numero, vitalicia, vitalicia_inicio_parcela, role, nome_nivel, tipo_comissao, valor, ativo, ordem')
+        .eq('grade_id', gradeId);
+      if (rErr) throw rErr;
+
       const { data: newGrade, error: gErr } = await (supabase as any)
         .from('grades_comissao')
         .insert({ nome: `${grade.nome} (Cópia)`, descricao: grade.descricao, versao: 1 })
@@ -145,6 +159,20 @@ export default function GradesComissao({ basePath = '/configuracoes/grades-comis
             role: n.role,
           })));
         if (iErr) throw iErr;
+      }
+
+      if (planosOrig && planosOrig.length > 0) {
+        const { error: gpiErr } = await (supabase as any).from('grade_comissao_planos').insert(
+          planosOrig.map((p: any) => ({ grade_id: newGrade.id, plano_id: p.plano_id, ativo: p.ativo }))
+        );
+        if (gpiErr) throw gpiErr;
+      }
+
+      if (regrasOrig && regrasOrig.length > 0) {
+        const { error: riErr } = await (supabase as any).from('grade_comissao_plano_regras').insert(
+          regrasOrig.map((r: any) => ({ ...r, grade_id: newGrade.id, parcela_id: null }))
+        );
+        if (riErr) throw riErr;
       }
     },
     onSuccess: () => {
