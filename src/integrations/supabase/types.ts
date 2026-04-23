@@ -13701,6 +13701,48 @@ export type Database = {
           },
         ]
       }
+      hierarquia_vendas: {
+        Row: {
+          agencia_id: string | null
+          created_at: string
+          created_by: string | null
+          gerente_id: string | null
+          id: string
+          observacoes: string | null
+          supervisor_id: string | null
+          updated_at: string
+          vendedor_id: string
+          vigente_ate: string | null
+          vigente_desde: string
+        }
+        Insert: {
+          agencia_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          gerente_id?: string | null
+          id?: string
+          observacoes?: string | null
+          supervisor_id?: string | null
+          updated_at?: string
+          vendedor_id: string
+          vigente_ate?: string | null
+          vigente_desde?: string
+        }
+        Update: {
+          agencia_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          gerente_id?: string | null
+          id?: string
+          observacoes?: string | null
+          supervisor_id?: string | null
+          updated_at?: string
+          vendedor_id?: string
+          vigente_ate?: string | null
+          vigente_desde?: string
+        }
+        Relationships: []
+      }
       hinova_mapeamentos: {
         Row: {
           ativo: boolean | null
@@ -27654,22 +27696,31 @@ export type Database = {
         Row: {
           atribuido_por: string | null
           created_at: string | null
+          data_fim: string | null
+          data_inicio: string
           grade_id: string
           id: string
+          papel_no_nivel: string | null
           user_id: string
         }
         Insert: {
           atribuido_por?: string | null
           created_at?: string | null
+          data_fim?: string | null
+          data_inicio?: string
           grade_id: string
           id?: string
+          papel_no_nivel?: string | null
           user_id: string
         }
         Update: {
           atribuido_por?: string | null
           created_at?: string | null
+          data_fim?: string | null
+          data_inicio?: string
           grade_id?: string
           id?: string
+          papel_no_nivel?: string | null
           user_id?: string
         }
         Relationships: [
@@ -30643,6 +30694,14 @@ export type Database = {
       }
       data_esta_bloqueada: { Args: { _data: string }; Returns: boolean }
       expirar_encaixes_urgentes: { Args: never; Returns: number }
+      fn_atribuir_grade_usuario: {
+        Args: {
+          p_grade_id: string
+          p_papel_no_nivel?: string
+          p_user_id: string
+        }
+        Returns: string
+      }
       fn_calcular_bonificacao_adesao: {
         Args: {
           p_ano: number
@@ -30730,6 +30789,15 @@ export type Database = {
         Args: { p_vendedor_id: string }
         Returns: number
       }
+      fn_resolver_cadeia: {
+        Args: { p_data_referencia?: string; p_vendedor_id: string }
+        Returns: {
+          agencia_id: string
+          gerente_id: string
+          supervisor_id: string
+          vendedor_id: string
+        }[]
+      }
       fn_resumo_saude_beneficios: {
         Args: never
         Returns: {
@@ -30745,6 +30813,16 @@ export type Database = {
         Returns: string
       }
       fn_tipo_consultor: { Args: { p_vendedor_id: string }; Returns: string }
+      fn_upsert_hierarquia_vendedor: {
+        Args: {
+          p_agencia_id?: string
+          p_gerente_id?: string
+          p_observacoes?: string
+          p_supervisor_id?: string
+          p_vendedor_id: string
+        }
+        Returns: string
+      }
       fn_verificar_almoco_profissional: {
         Args: { p_profissional_id: string }
         Returns: boolean

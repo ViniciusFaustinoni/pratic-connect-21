@@ -155,6 +155,7 @@ const Sistema = lazy(() => import("./pages/configuracoes/Sistema"));
 const Logs = lazy(() => import("./pages/configuracoes/Logs"));
 const GradesComissao = lazy(() => import("./pages/configuracoes/GradesComissao"));
 const GradeComissaoForm = lazy(() => import("./pages/configuracoes/GradeComissaoForm"));
+const AtribuicaoGrades = lazy(() => import("./pages/configuracoes/AtribuicaoGrades"));
 const ComissionamentoPlano = lazy(() => import("./pages/configuracoes/ComissionamentoPlano"));
 const AgenteConsultorIA = lazy(() => import("./pages/configuracoes/AgenteConsultorIA"));
 const ApiDocumentation = lazy(() => import("./pages/configuracoes/ApiDocumentation"));
@@ -735,6 +736,7 @@ const App = () => (
                 <Route path="grades-comissao" element={<GradesComissao />} />
                 <Route path="grades-comissao/nova" element={<GradeComissaoForm />} />
                 <Route path="grades-comissao/:id" element={<GradeComissaoForm />} />
+                <Route path="atribuicao-comissoes" element={<AtribuicaoGrades />} />
                 <Route path="comissionamento-plano" element={<ComissionamentoPlano />} />
                 <Route path="agente-consultor-ia" element={<AgenteConsultorIA />} />
                 <Route path="api" element={<ApiDocumentation />} />
