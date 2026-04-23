@@ -12,6 +12,8 @@ export interface NivelForm {
   id?: string;
   nome: string;
   percentual: number;
+  tipo_comissao?: 'percentual' | 'valor_fixo';
+  valor?: number;
   role: string;
 }
 
@@ -40,7 +42,7 @@ export function ParcelaEditor({
   parcela, index, onChange, onRemove, onMove, canMoveUp, canMoveDown, commercialRoles,
 }: ParcelaEditorProps) {
   const [open, setOpen] = useState(true);
-  const total = parcela.niveis.reduce((s, n) => s + (Number(n.percentual) || 0), 0);
+  const total = parcela.niveis.reduce((s, n) => s + (n.tipo_comissao === 'valor_fixo' ? 0 : Number(n.valor ?? n.percentual) || 0), 0);
   const exceeds = total > 100;
 
   const updateNivel = (idx: number, field: keyof NivelForm, value: string | number) => {
@@ -49,7 +51,7 @@ export function ParcelaEditor({
       niveis: parcela.niveis.map((n, i) => i === idx ? { ...n, [field]: value } : n),
     });
   };
-  const addNivel = () => onChange({ ...parcela, niveis: [...parcela.niveis, { nome: '', percentual: 0, role: '' }] });
+  const addNivel = () => onChange({ ...parcela, niveis: [...parcela.niveis, { nome: '', percentual: 0, tipo_comissao: 'percentual', valor: 0, role: '' }] });
   const removeNivel = (idx: number) => onChange({ ...parcela, niveis: parcela.niveis.filter((_, i) => i !== idx) });
   const moveNivel = (idx: number, dir: -1 | 1) => {
     const newIdx = idx + dir;
@@ -168,14 +170,34 @@ export function ParcelaEditor({
                     value={nivel.nome}
                     onChange={e => updateNivel(idx, 'nome', e.target.value)}
                   />
-                  <div className="flex items-center gap-1 w-24">
+                  <div className="w-32">
+                    <Select
+                      value={nivel.tipo_comissao || 'percentual'}
+                      onValueChange={(val: 'percentual' | 'valor_fixo') => updateNivel(idx, 'tipo_comissao' as keyof NivelForm, val)}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="percentual">Percentual</SelectItem>
+                        <SelectItem value="valor_fixo">Valor fixo</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-1 w-28">
                     <Input
-                      type="number" min={0} max={100} step={0.5}
+                      type="number" min={0} max={nivel.tipo_comissao === 'valor_fixo' ? undefined : 100} step={0.5}
                       className="h-9 w-20"
-                      value={nivel.percentual}
-                      onChange={e => updateNivel(idx, 'percentual', parseFloat(e.target.value) || 0)}
+                      value={nivel.valor ?? nivel.percentual}
+                      onChange={e => {
+                        const value = parseFloat(e.target.value) || 0;
+                        onChange({
+                          ...parcela,
+                          niveis: parcela.niveis.map((n, i) => i === idx ? { ...n, valor: value, percentual: n.tipo_comissao === 'valor_fixo' ? 0 : value } : n),
+                        });
+                      }}
                     />
-                    <span className="text-sm text-muted-foreground">%</span>
+                    <span className="text-sm text-muted-foreground">{nivel.tipo_comissao === 'valor_fixo' ? 'R$' : '%'}</span>
                   </div>
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeNivel(idx)}>
                     <Trash2 className="h-4 w-4 text-destructive" />

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { ArrowLeft, Plus, Infinity as InfinityIcon, AlertCircle } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { FieldHint } from '@/components/admin/planos/FieldHint';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -15,6 +16,12 @@ import { ParcelaEditor, ParcelaForm, NivelForm } from '@/components/comissoes/Pa
 import { useAuth } from '@/contexts/AuthContext';
 
 const COMMERCIAL_ROLE_KEYS = ['vendedor_clt', 'vendedor_externo', 'agencia', 'supervisor_vendas', 'gerente_comercial'];
+
+interface PlanoComissaoOption {
+  id: string;
+  nome: string;
+  linha: string | null;
+}
 
 interface GradeComissaoFormProps {
   basePath?: string;
@@ -33,7 +40,21 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
   const [parcelas, setParcelas] = useState<ParcelaForm[]>([]);
+  const [selectedPlanIds, setSelectedPlanIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+
+  const { data: planos = [] } = useQuery({
+    queryKey: ['grade-comissao-planos-options'],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('planos')
+        .select('id, nome, linha')
+        .eq('ativo', true)
+        .order('nome');
+      if (error) throw error;
+      return data as PlanoComissaoOption[];
+    },
+  });
 
   const { data: existing, isLoading } = useQuery({
     queryKey: ['grade-comissao-v2', id],
@@ -60,7 +81,22 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
         .order('ordem');
       if (nErr) throw nErr;
 
-      return { grade, parcelas: pcs || [], niveis: nvs || [] };
+      const { data: gps, error: gpErr } = await (supabase as any)
+        .from('grade_comissao_planos')
+        .select('plano_id')
+        .eq('grade_id', id!)
+        .eq('ativo', true);
+      if (gpErr) throw gpErr;
+
+      const { data: regras, error: rErr } = await (supabase as any)
+        .from('grade_comissao_plano_regras')
+        .select('*')
+        .eq('grade_id', id!)
+        .eq('ativo', true)
+        .order('ordem');
+      if (rErr) throw rErr;
+
+      return { grade, parcelas: pcs || [], niveis: nvs || [], gradePlanos: gps || [], regras: regras || [] };
     },
   });
 
@@ -68,6 +104,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
     if (existing) {
       setNome(existing.grade.nome);
       setDescricao(existing.grade.descricao || '');
+      setSelectedPlanIds((existing.gradePlanos || []).map((p: any) => p.plano_id));
       const parcs: ParcelaForm[] = (existing.parcelas || []).map((p: any) => ({
         id: p.id,
         numero_parcela: p.numero_parcela,
@@ -79,9 +116,33 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
           .filter((n: any) => n.parcela_id === p.id)
           .sort((a: any, b: any) => a.ordem - b.ordem)
           .map((n: any) => ({
-            id: n.id, nome: n.nome, percentual: Number(n.percentual), role: n.role || '',
+            id: n.id,
+            nome: n.nome,
+            percentual: Number(n.percentual),
+            tipo_comissao: 'percentual',
+            valor: Number(n.percentual),
+            role: n.role || '',
           })),
       }));
+      if ((existing.regras || []).length > 0) {
+        parcs.forEach((p: ParcelaForm) => {
+          const regraBase = (existing.regras || []).filter((r: any) =>
+            (p.vitalicia && r.vitalicia) || (!p.vitalicia && r.parcela_numero === p.numero_parcela)
+          );
+          if (regraBase.length > 0) {
+            const porRole = new Map<string, any>();
+            regraBase.forEach((r: any) => { if (!porRole.has(r.role)) porRole.set(r.role, r); });
+            p.niveis = Array.from(porRole.values()).map((r: any) => ({
+              id: r.id,
+              nome: r.nome_nivel || r.role,
+              role: r.role,
+              tipo_comissao: r.tipo_comissao,
+              valor: Number(r.valor),
+              percentual: r.tipo_comissao === 'percentual' ? Number(r.valor) : 0,
+            }));
+          }
+        });
+      }
       setParcelas(parcs);
     }
   }, [existing]);
@@ -135,8 +196,13 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
     });
   };
 
+  const togglePlano = (planoId: string) => {
+    setSelectedPlanIds(prev => prev.includes(planoId) ? prev.filter(id => id !== planoId) : [...prev, planoId]);
+  };
+
   const validate = (): string | null => {
     if (!nome.trim()) return 'Nome é obrigatório';
+    if (selectedPlanIds.length === 0) return 'Selecione pelo menos um plano para a grade';
     if (parcelas.length === 0) return 'Adicione pelo menos uma parcela';
     for (const p of parcelas) {
       if (!p.label.trim()) return 'Cada parcela precisa de rótulo';
@@ -145,11 +211,12 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
       } else {
         if (!p.numero_parcela || p.numero_parcela < 1) return 'Parcela precisa de número válido';
       }
-      const total = p.niveis.reduce((s, n) => s + (Number(n.percentual) || 0), 0);
+      const total = p.niveis.reduce((s, n) => s + (n.tipo_comissao === 'valor_fixo' ? 0 : Number(n.valor ?? n.percentual) || 0), 0);
       if (total > 100) return `Parcela "${p.label}": soma dos níveis ultrapassa 100%`;
       for (const n of p.niveis) {
         if (!n.role) return `Parcela "${p.label}": selecione o perfil de cada nível`;
         if (!n.nome.trim()) return `Parcela "${p.label}": cada nível precisa de nome`;
+        if (Number(n.valor ?? n.percentual) < 0) return `Parcela "${p.label}": valor de comissão inválido`;
       }
       const noms = p.niveis.map(n => n.nome.trim().toLowerCase());
       if (noms.length !== new Set(noms).size) return `Parcela "${p.label}": níveis com nomes duplicados`;
@@ -191,6 +258,8 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
         // Apaga parcelas + níveis (cascade)
         await (supabase as any).from('grades_comissao_parcelas').delete().eq('grade_id', id!);
         await (supabase as any).from('grades_comissao_niveis').delete().eq('grade_id', id!);
+        await (supabase as any).from('grade_comissao_planos').delete().eq('grade_id', id!);
+        await (supabase as any).from('grade_comissao_plano_regras').delete().eq('grade_id', id!);
       } else {
         const { data, error } = await (supabase as any)
           .from('grades_comissao')
@@ -237,9 +306,41 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
         if (nErr) throw nErr;
       }
 
+      const gradePlanosInsert = selectedPlanIds.map(planoId => ({ grade_id: gradeId!, plano_id: planoId, ativo: true }));
+      const { error: gpErr } = await (supabase as any).from('grade_comissao_planos').insert(gradePlanosInsert);
+      if (gpErr) throw gpErr;
+
+      const regrasInsert: any[] = [];
+      selectedPlanIds.forEach(planoId => {
+        parcelas.forEach((p, i) => {
+          const criada = pcsCriadas.find((c: any) => c.ordem === i);
+          p.niveis.forEach((n, ni) => {
+            regrasInsert.push({
+              grade_id: gradeId!,
+              plano_id: planoId,
+              parcela_id: criada?.id || null,
+              parcela_numero: p.vitalicia ? null : p.numero_parcela,
+              vitalicia: p.vitalicia,
+              vitalicia_inicio_parcela: p.vitalicia ? p.vitalicia_inicio_parcela : null,
+              role: n.role,
+              nome_nivel: n.nome.trim(),
+              tipo_comissao: n.tipo_comissao || 'percentual',
+              valor: Number(n.valor ?? n.percentual) || 0,
+              ordem: ni,
+              ativo: true,
+            });
+          });
+        });
+      });
+      if (regrasInsert.length > 0) {
+        const { error: rErr } = await (supabase as any).from('grade_comissao_plano_regras').insert(regrasInsert);
+        if (rErr) throw rErr;
+      }
+
       // Snapshot da nova versão
       const snapshot = {
         grade: { id: gradeId, nome: nome.trim(), descricao: descricao.trim() || null, versao: novaVersao },
+        planos: selectedPlanIds,
         parcelas: parcelas.map((p, i) => ({
           parcela: {
             numero_parcela: p.vitalicia ? null : p.numero_parcela,
@@ -249,7 +350,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
             ordem: i,
           },
           niveis: p.niveis.map((n, ni) => ({
-            nome: n.nome.trim(), percentual: n.percentual, ordem: ni, role: n.role,
+            nome: n.nome.trim(), percentual: n.tipo_comissao === 'percentual' ? Number(n.valor ?? n.percentual) || 0 : 0, tipo_comissao: n.tipo_comissao || 'percentual', valor: Number(n.valor ?? n.percentual) || 0, ordem: ni, role: n.role,
           })),
         })),
       };
@@ -307,6 +408,29 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
             <label className="text-sm font-medium text-foreground">Descrição</label>
             <Input value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Descrição opcional" />
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-4 pt-6">
+          <div>
+            <h3 className="text-base font-semibold text-foreground">Planos vinculados</h3>
+            <p className="text-sm text-muted-foreground">A grade só gera comissão para os planos selecionados aqui.</p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {planos.map(plano => (
+              <label key={plano.id} className="flex items-center gap-3 rounded-md border border-border p-3 text-sm cursor-pointer hover:bg-muted/40">
+                <Checkbox checked={selectedPlanIds.includes(plano.id)} onCheckedChange={() => togglePlano(plano.id)} />
+                <span className="min-w-0">
+                  <span className="block font-medium text-foreground truncate">{plano.nome}</span>
+                  {plano.linha && <span className="block text-xs text-muted-foreground truncate">{plano.linha}</span>}
+                </span>
+              </label>
+            ))}
+          </div>
+          {selectedPlanIds.length > 0 && (
+            <p className="text-xs text-muted-foreground">{selectedPlanIds.length} plano(s) usarão as regras de parcela e perfil abaixo.</p>
+          )}
         </CardContent>
       </Card>
 

@@ -322,6 +322,7 @@ const menuConfig: {
         { title: 'Dashboard', url: '/comissoes', icon: BarChart3 },
         { title: 'Grades de Comissão', url: '/comissoes/grades', icon: Calculator, permission: 'isDiretor' },
         { title: 'Atribuição de Grades', url: '/comissoes/atribuicao', icon: Network, permission: 'isDiretor' },
+        { title: 'Relatório', url: '/comissoes/relatorio', icon: FileText },
         { title: 'Pagamentos', url: '/comissoes/pagamentos', icon: Receipt },
       ],
     },

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Plus, Pencil, Copy, Power, Trash2, Layers, Users, Infinity as InfinityIcon, ListOrdered } from 'lucide-react';
+import { Plus, Pencil, Copy, Power, Trash2, Layers, Users, Infinity as InfinityIcon, ListOrdered, Package } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -34,6 +34,8 @@ interface GradeComissao {
   created_at: string;
   grades_comissao_niveis: GradeNivel[];
   grades_comissao_parcelas: GradeParcela[];
+  grade_comissao_planos?: { plano_id: string }[];
+  grade_comissao_plano_regras?: { role: string; tipo_comissao: string }[];
 }
 
 interface GradesComissaoProps {
@@ -50,7 +52,7 @@ export default function GradesComissao({ basePath = '/configuracoes/grades-comis
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('grades_comissao')
-        .select('id, nome, descricao, ativo, versao, created_at, grades_comissao_niveis(id, percentual), grades_comissao_parcelas(id, vitalicia, numero_parcela)')
+        .select('id, nome, descricao, ativo, versao, created_at, grades_comissao_niveis(id, percentual), grades_comissao_parcelas(id, vitalicia, numero_parcela), grade_comissao_planos(plano_id), grade_comissao_plano_regras(role, tipo_comissao)')
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data as GradeComissao[];
@@ -105,6 +107,18 @@ export default function GradesComissao({ basePath = '/configuracoes/grades-comis
         .order('ordem');
       if (nErr) throw nErr;
 
+      const { data: planosOrig, error: gpErr } = await (supabase as any)
+        .from('grade_comissao_planos')
+        .select('plano_id, ativo')
+        .eq('grade_id', gradeId);
+      if (gpErr) throw gpErr;
+
+      const { data: regrasOrig, error: rErr } = await (supabase as any)
+        .from('grade_comissao_plano_regras')
+        .select('plano_id, parcela_numero, vitalicia, vitalicia_inicio_parcela, role, nome_nivel, tipo_comissao, valor, ativo, ordem')
+        .eq('grade_id', gradeId);
+      if (rErr) throw rErr;
+
       const { data: newGrade, error: gErr } = await (supabase as any)
         .from('grades_comissao')
         .insert({ nome: `${grade.nome} (Cópia)`, descricao: grade.descricao, versao: 1 })
@@ -145,6 +159,20 @@ export default function GradesComissao({ basePath = '/configuracoes/grades-comis
             role: n.role,
           })));
         if (iErr) throw iErr;
+      }
+
+      if (planosOrig && planosOrig.length > 0) {
+        const { error: gpiErr } = await (supabase as any).from('grade_comissao_planos').insert(
+          planosOrig.map((p: any) => ({ grade_id: newGrade.id, plano_id: p.plano_id, ativo: p.ativo }))
+        );
+        if (gpiErr) throw gpiErr;
+      }
+
+      if (regrasOrig && regrasOrig.length > 0) {
+        const { error: riErr } = await (supabase as any).from('grade_comissao_plano_regras').insert(
+          regrasOrig.map((r: any) => ({ ...r, grade_id: newGrade.id, parcela_id: null }))
+        );
+        if (riErr) throw riErr;
       }
     },
     onSuccess: () => {
@@ -223,6 +251,8 @@ export default function GradesComissao({ basePath = '/configuracoes/grades-comis
             const parcelas = grade.grades_comissao_parcelas || [];
             const qtdParcelas = parcelas.filter(p => !p.vitalicia).length;
             const temVitalicia = parcelas.some(p => p.vitalicia);
+            const qtdPlanos = grade.grade_comissao_planos?.length || 0;
+            const perfisConfigurados = Array.from(new Set((grade.grade_comissao_plano_regras || []).map(r => r.role))).length;
             return (
               <Card key={grade.id} className={!grade.ativo ? 'opacity-60' : ''}>
                 <CardContent className="flex items-center justify-between py-4 px-5">
@@ -246,6 +276,11 @@ export default function GradesComissao({ basePath = '/configuracoes/grades-comis
                           <InfinityIcon className="h-3 w-3" /> Vitalícia
                         </Badge>
                       )}
+                      {qtdPlanos > 0 && (
+                        <Badge variant="outline" className="gap-1">
+                          <Package className="h-3 w-3" /> {qtdPlanos} plano{qtdPlanos === 1 ? '' : 's'}
+                        </Badge>
+                      )}
                     </div>
                     {grade.descricao && (
                       <p className="text-xs text-muted-foreground truncate">{grade.descricao}</p>
@@ -257,6 +292,7 @@ export default function GradesComissao({ basePath = '/configuracoes/grades-comis
                         {temVitalicia && ' + vitalícia'}
                       </span>
                       <span>{qtdNiveis} {qtdNiveis === 1 ? 'nível' : 'níveis'}</span>
+                      <span>{perfisConfigurados || qtdNiveis} perfil{(perfisConfigurados || qtdNiveis) === 1 ? '' : 'is'} configurado{(perfisConfigurados || qtdNiveis) === 1 ? '' : 's'}</span>
                       <span>Adesão: {total}%</span>
                       <Tooltip>
                         <TooltipTrigger asChild>
