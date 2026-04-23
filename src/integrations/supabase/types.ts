@@ -6449,6 +6449,7 @@ export type Database = {
           aprovado_por: string | null
           associado_id: string | null
           bonus_meta: number | null
+          calculo_snapshot: Json | null
           campanha_id: string | null
           cobranca_id: string | null
           config_id: string | null
@@ -6492,6 +6493,7 @@ export type Database = {
           aprovado_por?: string | null
           associado_id?: string | null
           bonus_meta?: number | null
+          calculo_snapshot?: Json | null
           campanha_id?: string | null
           cobranca_id?: string | null
           config_id?: string | null
@@ -6535,6 +6537,7 @@ export type Database = {
           aprovado_por?: string | null
           associado_id?: string | null
           bonus_meta?: number | null
+          calculo_snapshot?: Json | null
           campanha_id?: string | null
           cobranca_id?: string | null
           config_id?: string | null

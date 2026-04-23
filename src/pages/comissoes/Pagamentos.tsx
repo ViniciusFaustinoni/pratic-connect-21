@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, PlayCircle, RefreshCw } from 'lucide-react';
+import { CheckCircle2, Eye, PlayCircle, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useComissoesDashboard } from '@/hooks/useComissoesDashboard';
 import { useComissoesBackfill } from '@/hooks/useComissoesBackfill';
+import { ComissaoDetalhesPagamentoModal } from '@/components/comissoes/ComissaoDetalhesPagamentoModal';
 import { toast } from 'sonner';
 
 const formatMoney = (value: number | null | undefined) =>
@@ -21,6 +22,7 @@ export default function PagamentosComissoes() {
   const { executar, loading: backfillLoading, resultado } = useComissoesBackfill();
   const [status, setStatus] = useState('todos');
   const [search, setSearch] = useState('');
+  const [comissaoEmConferencia, setComissaoEmConferencia] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     return items.filter((item) => {
@@ -39,7 +41,9 @@ export default function PagamentosComissoes() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['comissoes-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['relatorio-comissoes'] });
       toast.success('Comissão atualizada');
+      setComissaoEmConferencia(null);
     },
     onError: () => toast.error('Não foi possível atualizar a comissão'),
   });
@@ -125,8 +129,8 @@ export default function PagamentosComissoes() {
                           <Button size="sm" variant="outline" onClick={() => updateStatus.mutate({ id: item.id, nextStatus: 'aprovada' })}>Aprovar</Button>
                         )}
                         {item.status !== 'paga' && (
-                          <Button size="sm" onClick={() => updateStatus.mutate({ id: item.id, nextStatus: 'paga' })}>
-                            <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Pagar
+                          <Button size="sm" onClick={() => setComissaoEmConferencia(item.id)}>
+                            <Eye className="h-3.5 w-3.5 mr-1" /> Pagar
                           </Button>
                         )}
                       </div>
@@ -138,6 +142,15 @@ export default function PagamentosComissoes() {
           </div>
         </CardContent>
       </Card>
+
+      <ComissaoDetalhesPagamentoModal
+        open={Boolean(comissaoEmConferencia)}
+        comissaoId={comissaoEmConferencia}
+        onOpenChange={(open) => !open && setComissaoEmConferencia(null)}
+        allowConfirm
+        confirming={updateStatus.isPending}
+        onConfirmPayment={(id) => updateStatus.mutate({ id, nextStatus: 'paga' })}
+      />
     </div>
   );
 }
