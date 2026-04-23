@@ -1,56 +1,54 @@
 
 
-## Aceitar "Declaração de Residência" como comprovante válido
+## Corrigir mensagem de aprovação que menciona "Roubo/Furto" em planos sem essa cobertura
 
 ### Diagnóstico
 
-Hoje o OCR (`supabase/functions/document-ocr/index.ts`, linhas 333-336) aceita como comprovante de residência apenas: contas (água/luz/gás/telefone/internet), faturas/boletos, IPTU/IPVA, IRPF, extratos, contratos de aluguel e escrituras. O enum `tipo_comprovante` lista 12 valores, **nenhum cobre "declaração de residência"** (documento auto-declarado, geralmente assinado pelo próprio associado ou por um terceiro residente do mesmo endereço).
+A imagem mostra **dois toasts sobrepostos** após o cadastro aprovar a proposta:
 
-Resultado: quando o associado envia uma declaração como a do exemplo (modelo livre com CPF, endereço completo e assinatura), o modelo classifica como `outro` ou reprova por não identificar tipo conhecido — e o associado é forçado a buscar uma conta em seu nome, o que muitas vezes não tem (mora com familiares, aluguel informal, etc.).
+1. ✅ **Toast correto** (vem do hook `useAprovarProposta`, `usePropostasPendentes.ts` linha 1462): usa a `mensagem` retornada pelo backend `aprovar-proposta`, que já distingue corretamente entre os 4 cenários:
+   - Plano sem R&F → "Plano de assistência ativado (sem cobertura de Roubo/Furto)."
+   - Plano com R&F + rastreador → "Cobertura Roubo/Furto ativada. Aguardando instalação para Proteção 360º."
+   - Plano com R&F sem necessidade de rastreador → "Proteção 360° ativada (sem necessidade de rastreador)."
+   - Instalação já concluída → "Proteção 360º ativada."
+
+2. ❌ **Toast hardcoded duplicado** (`src/pages/cadastro/PropostaAnalise.tsx` linhas 202-205): dispara **sempre** a mesma frase — "Após a instalação, o monitoramento dará o segundo check para liberação total da Proteção 360 e do app do associado." — mesmo quando o plano não tem R&F, ou quando o veículo não precisa de rastreador, ou quando a instalação já foi concluída. **É esse o toast errado da captura de tela.**
+
+Além disso, há um **banner fixo** na página (`PropostaAnalise.tsx` linhas 443-456) com texto similar ("o monitoramento dará o segundo check para liberar a Proteção 360...") que também aparece para qualquer plano, inclusive os de assistência.
 
 ### O que vai mudar
 
-**1. Adicionar `declaracao_residencia` ao enum de tipos aceitos** (`document-ocr/index.ts`, linha 335)
+**1. Remover o toast hardcoded duplicado** (`PropostaAnalise.tsx` linhas 202-205)
 
-Incluir `"declaracao_residencia"` na lista de valores válidos do campo `tipo_comprovante`.
+O hook `useAprovarProposta` já dispara o toast com a mensagem correta vinda do backend. Deletar o `toast.success(...)` redundante da página. Apenas a navegação (`if (nextProposta) navigate(...)`) permanece.
 
-**2. Atualizar o bloco de instruções do Comprovante de Residência** (linhas 333-342)
+**2. Tornar o banner "Análise documental disponível" condicional ao plano** (`PropostaAnalise.tsx` linhas 443-456)
 
-Adicionar regra explícita:
+O banner aparece quando `aguardandoExecucao && !aprovarApenasDocumentos`. Vou:
+- Buscar do contrato/plano a flag `planoTemRouboFurto` (mesma heurística do backend: regex `/roubo|furto/i` sobre nomes das coberturas via `plano_coberturas` → `coberturas.nome`).
+- Trocar o texto fixo por uma das duas variantes:
+  - **Plano com R&F**: mantém o texto atual ("...A aprovação final será liberada após a execução da vistoria/instalação agendada. Em seguida, o monitoramento dará o segundo check para liberar a Proteção 360 e o app do associado.").
+  - **Plano só de assistência (sem R&F)**: troca para "...A aprovação final será liberada após a execução da vistoria. Não há instalação de rastreador nem segundo check de monitoramento neste plano de assistência."
 
-> **Declaração de Residência** (modelo livre, escrito pelo próprio interessado ou por terceiro):
-> - Aceitar quando contiver: título "DECLARAÇÃO DE RESIDÊNCIA" (ou variante), nome e CPF do declarante, endereço completo (CEP + logradouro + número + bairro + cidade + UF), local/data e assinatura.
-> - Extrair os campos de endereço normalmente nos campos padrão.
-> - `tipo_comprovante = "declaracao_residencia"`.
-> - `nome_titular` = nome do declarante.
-> - **Titularidade**: se o declarante = nomeEsperado → aprovar. Se for terceiro (nome diferente) com mesmo endereço, sugerir **REVISAR** (analista valida vínculo familiar/residente do mesmo lar). Se faltar assinatura ou CPF, sugerir REVISAR. Se faltar endereço completo, REPROVAR.
-> - Aceitar sem reconhecimento de firma (validação humana cobre o resto).
+**3. Sem mudanças no backend**
 
-**3. Mapear o novo tipo no front-end onde aparecem labels/ícones**
-
-Apenas para exibição amigável quando o analista revisar o documento. Os arquivos abaixo já listam `tipo_comprovante` indiretamente via OCR (não é enum do banco), então o ajuste é só de label nos pontos onde mostramos a origem do comprovante:
-
-- `src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx` — já trata `comprovante_residencia` genericamente; nenhum mapeamento extra necessário (o tipo continua sendo `comprovante_residencia`, só muda o `tipo_comprovante` interno).
-- Adicionar uma linha de ajuda no UI de upload (`UnifiedDocumentUploader.tsx`) explicando que **"Declaração de residência (modelo livre, com CPF e assinatura) também é aceita"** abaixo do label "Comprovante de Residência" — reduz dúvidas e re-uploads.
-
-**4. Política de aprovação manual**
-
-Conforme regra existente em `mem://logic/operations/aprovacao-manual-documentos-vistoria`, mesmo declarações com sugestão "aprovar" do OCR continuam entrando como `em_analise` para revisão humana — comportamento já garantido pelo pipeline atual, sem mudança.
-
-### O que NÃO muda
-
-- `tipo_documento` permanece `comprovante_residencia` (não criamos enum novo no banco).
-- Campos extraídos (logradouro, número, CEP, etc.) continuam alimentando o auto-preenchimento de endereço.
-- Validação de titularidade segue idêntica para os demais tipos.
-- Bucket, RLS, fluxo de upload e revisão pelo analista permanecem intactos.
+A edge function `aprovar-proposta` já está correta. Nenhuma migration necessária.
 
 ### Arquivos editados
 
-- `supabase/functions/document-ocr/index.ts` — adicionar `declaracao_residencia` ao enum `tipo_comprovante` e bloco de regras (linhas 333-342).
-- `src/components/contratos/UnifiedDocumentUploader.tsx` — texto auxiliar no card do Comprovante de Residência indicando que declaração de residência é aceita.
+- `src/pages/cadastro/PropostaAnalise.tsx`:
+  - Remover `toast.success(...)` hardcoded em `handleConfirmarAprovacao` (linhas 202-205).
+  - Adicionar derivação `planoTemRouboFurto` a partir de `proposta?.plano?.coberturas` (ou fetch direto se não vier embutido).
+  - Tornar o conteúdo do banner "Análise documental disponível" (linhas 449-452) condicional a essa flag.
+
+### O que NÃO muda
+
+- Lógica do backend `aprovar-proposta` (já distingue corretamente os 4 cenários).
+- Toast emitido pelo hook `useAprovarProposta` (já usa `data.mensagem` do backend).
+- Navegação após aprovação (próxima proposta ou volta para lista).
+- Permissões, status de contrato, geração de instalação.
 
 ### Riscos
 
-- Declarações falsas: como é documento auto-declarado, o risco de fraude é maior que conta de luz. Mitigado por: (a) aprovação manual obrigatória; (b) sugestão de REVISAR sempre que titular ≠ associado; (c) o endereço extraído é cruzado com a vistoria (foto da fachada) na etapa de instalação.
-- Modelos manuscritos/ilegíveis: o OCR pode falhar; nesse caso retorna `legivel:false` e o analista trata normalmente.
+- Se `proposta?.plano` não trouxer `coberturas` no shape esperado, o banner pode cair no caso default (sem R&F) erroneamente. Mitigação: fazer fetch leve de `plano_coberturas` quando a info não estiver disponível, ou usar fallback conservador (mostrar mensagem genérica neutra).
 
