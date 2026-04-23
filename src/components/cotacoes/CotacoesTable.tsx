@@ -288,6 +288,7 @@ interface CotacoesTableProps {
   onCopiarWhatsApp: (cotacao: CotacaoWithRelations) => void;
   onPdf: (cotacao: CotacaoWithRelations) => void;
   onDuplicar: (cotacao: CotacaoWithRelations) => void;
+  onContinuar?: (cotacao: CotacaoWithRelations) => void;
   onExcluir: (id: string) => void;
   copiandoWhatsAppId: string | null;
   getPermissions: (cotacao: CotacaoWithRelations) => CotacoesTablePermissions;
@@ -328,6 +329,7 @@ export function CotacoesTable({
   onCopiarWhatsApp,
   onPdf,
   onDuplicar,
+  onContinuar,
   onExcluir,
   copiandoWhatsAppId,
   getPermissions,
@@ -598,6 +600,13 @@ export function CotacoesTable({
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          {cotacao.status === 'rascunho' && onContinuar && (
+                            <DropdownMenuItem onClick={() => onContinuar(cotacao)}>
+                              <ArrowRight className="h-4 w-4 mr-2" />
+                              Continuar cotação
+                            </DropdownMenuItem>
+                          )}
+
                           <DropdownMenuItem onClick={() => onRowClick(cotacao)}>
                             <Eye className="h-4 w-4 mr-2" />
                             Ver Detalhes
