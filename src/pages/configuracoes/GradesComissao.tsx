@@ -180,33 +180,49 @@ export default function GradesComissao() {
             const total = getTotalPercentual(grade.grades_comissao_niveis);
             const qtdNiveis = grade.grades_comissao_niveis.length;
             const qtdUsuarios = userCounts[grade.id] || 0;
+            const parcelas = grade.grades_comissao_parcelas || [];
+            const qtdParcelas = parcelas.filter(p => !p.vitalicia).length;
+            const temVitalicia = parcelas.some(p => p.vitalicia);
             return (
               <Card key={grade.id} className={!grade.ativo ? 'opacity-60' : ''}>
                 <CardContent className="flex items-center justify-between py-4 px-5">
                   <div className="flex-1 min-w-0 space-y-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-foreground truncate">{grade.nome}</span>
                       <Badge variant={grade.ativo ? 'default' : 'secondary'}>
                         {grade.ativo ? 'Ativa' : 'Inativa'}
                       </Badge>
+                      {grade.versao && grade.versao > 1 && (
+                        <Badge variant="outline">v{grade.versao}</Badge>
+                      )}
                       {qtdUsuarios > 0 && (
                         <Badge variant="outline" className="gap-1">
                           <Users className="h-3 w-3" />
                           {qtdUsuarios}
                         </Badge>
                       )}
+                      {temVitalicia && (
+                        <Badge variant="default" className="gap-1 bg-primary/15 text-primary hover:bg-primary/20">
+                          <InfinityIcon className="h-3 w-3" /> Vitalícia
+                        </Badge>
+                      )}
                     </div>
                     {grade.descricao && (
                       <p className="text-xs text-muted-foreground truncate">{grade.descricao}</p>
                     )}
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
+                      <span className="flex items-center gap-1">
+                        <ListOrdered className="h-3 w-3" />
+                        {qtdParcelas} {qtdParcelas === 1 ? 'parcela' : 'parcelas'}
+                        {temVitalicia && ' + vitalícia'}
+                      </span>
                       <span>{qtdNiveis} {qtdNiveis === 1 ? 'nível' : 'níveis'}</span>
-                      <span>Total: {total}%</span>
+                      <span>Adesão: {total}%</span>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <span className="text-primary font-medium cursor-help">Empresa: {Math.max(100 - total, 0)}%</span>
                         </TooltipTrigger>
-                        <TooltipContent>Percentual retido pela empresa</TooltipContent>
+                        <TooltipContent>Percentual retido pela empresa na taxa de adesão</TooltipContent>
                       </Tooltip>
                     </div>
                     <Progress value={Math.min(total, 100)} className="h-1.5 w-40" />
