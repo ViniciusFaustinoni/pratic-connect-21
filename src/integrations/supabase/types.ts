@@ -7278,6 +7278,51 @@ export type Database = {
         }
         Relationships: []
       }
+      comissoes_pagamento_itens: {
+        Row: {
+          comissao_id: string
+          created_at: string
+          id: string
+          pagamento_id: string
+          status_anterior: string
+          valor_pago: number
+          vendedor_id: string
+        }
+        Insert: {
+          comissao_id: string
+          created_at?: string
+          id?: string
+          pagamento_id: string
+          status_anterior: string
+          valor_pago?: number
+          vendedor_id: string
+        }
+        Update: {
+          comissao_id?: string
+          created_at?: string
+          id?: string
+          pagamento_id?: string
+          status_anterior?: string
+          valor_pago?: number
+          vendedor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comissoes_pagamento_itens_comissao_id_fkey"
+            columns: ["comissao_id"]
+            isOneToOne: true
+            referencedRelation: "comissoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_pagamento_itens_pagamento_id_fkey"
+            columns: ["pagamento_id"]
+            isOneToOne: false
+            referencedRelation: "comissoes_pagamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       comissoes_pagamentos: {
         Row: {
           ano_referencia: number
@@ -30946,6 +30991,13 @@ export type Database = {
       fn_get_cotas_por_fipe: { Args: { p_valor_fipe: number }; Returns: number }
       fn_get_cotas_veiculo: { Args: { p_veiculo_id: string }; Returns: number }
       fn_limpar_tokens_expirados: { Args: never; Returns: undefined }
+      fn_marcar_comissao_paga: {
+        Args: { p_comissao_id: string }
+        Returns: {
+          comissao_id: string
+          pagamento_id: string
+        }[]
+      }
       fn_parametro_comissao: { Args: { p_chave: string }; Returns: number }
       fn_placas_ativas_consultor: {
         Args: { p_vendedor_id: string }
