@@ -1,109 +1,136 @@
 
 
-## Reconciliar `veiculos.codigo_hinova` em massa via CPF (sem tocar Hinova por veículo, sem mudar frontend)
+## Histórico de pagamentos SGA — situação atual e plano
 
-### Diagnóstico
+### Resposta direta
 
-| Métrica | Valor |
-|---|---|
-| Associados base antiga | 9.495 |
-| ↳ **com `codigo_hinova` preenchido** | **9.495 (100%)** ✅ |
-| Veículos base antiga | 9.623 |
-| ↳ com `codigo_hinova` preenchido | 4.624 |
-| ↳ **sem `codigo_hinova` (mas com placa)** | **4.999** ❌ |
-| Associados únicos a consultar (cobre os 4.999 veículos) | **4.678** |
+**Sim, é possível** e o sistema **já está parcialmente fazendo isso**, mas com 3 limitações que vou corrigir.
 
-A boa notícia: como **todo associado já tem código**, o endpoint `GET /associado/buscar/{cpf}/cpf` da Hinova retorna no mesmo payload **a lista de veículos com `codigo_veiculo` + `placa`**. Já é usado em `sga-hinova-sync/index.ts` linha 1392 como "Estratégia 2". Logo: **1 chamada por associado resolve N veículos dele**, em vez de 1 chamada por veículo.
+### O que já funciona
 
-Total: ~4.700 chamadas (não 4.999). E elas atacam só o gargalo do `veiculos.codigo_hinova` — depois disso a `sga-sync-financeiro-veiculo` (que é por-veículo) tem o vínculo certo e pode fazer o trabalho dela.
+1. `listarBoletosVeiculo` (`POST /listar/boleto-associado-veiculo`) **retorna boletos em todos os status**: `aguardando_pagamento`, `vencido`, **`pago`** (BAIXA/LIQUIDA) e `cancelado`.
+2. O sync `sga-sync-financeiro-veiculo` já persiste em `cobrancas` os campos: `status='pago'`, `data_pagamento`, `valor_pago` (quando vier no payload), `forma_pagamento`, `nosso_numero`, `tipo_boleto_hinova`, `dados_brutos_sga` (payload completo Hinova).
+3. Upsert por `nosso_numero` é **idempotente** — pode rodar várias vezes sem duplicar.
+4. Estado atual: 0 cobranças ainda porque a fila de reconciliação (4.663 jobs) não terminou de rodar. Conforme ela drenar, as cobranças (incluindo histórico de pagamentos) vão aparecer.
 
-### Mudanças (somente backend, **sem frontend**)
+### Limitações reais que precisam ser endereçadas
 
-**A. Nova edge function `sga-reconciliar-codigo-veiculo`**
+**1. Janela retornada pela Hinova é limitada.** O endpoint `/listar/boleto-associado-veiculo` historicamente devolve só os últimos ~12 meses (mesma observação do código antigo em `sga-hinova-sync`). Boletos pagos mais antigos não vêm. Não há endpoint público v2 para "histórico completo" — está documentado em [api.hinova.com.br/api/sga/v2/doc](https://api.hinova.com.br/api/sga/v2/doc/) e o que existe é só esse listar.
 
-Em `supabase/functions/sga-reconciliar-codigo-veiculo/index.ts`. Aceita `{ acao: 'enfileirar' | 'processar', batch_size?: number, delay_ms?: number, limit?: number }`.
+**2. Campo `valor_pago` não está sendo persistido.** O upsert atual grava `valor` e `valor_final`, mas **não copia** `b.valor_pago_boleto` / `b.valor_recebido` quando o status é `pago`. Resultado: relatórios financeiros locais não conseguem distinguir o que foi pago do que era devido.
 
-Fluxo:
+**3. Campo `forma_pagamento` também não está sendo persistido** apesar de a coluna existir e a Hinova retornar `b.forma_pagamento_boleto` / `b.tipo_pagamento`.
 
-1. **`enfileirar`** — popula nova tabela `sga_reconciliacao_veiculo_jobs` com 1 linha por associado pendente:
-   ```sql
-   SELECT DISTINCT v.associado_id, a.cpf, a.codigo_hinova
-   FROM veiculos v JOIN associados a ON a.id=v.associado_id
-   WHERE a.origem_cadastro='api_externa'
-     AND v.codigo_hinova IS NULL AND v.placa IS NOT NULL
-     AND a.cpf IS NOT NULL AND a.codigo_hinova IS NOT NULL
-   ```
-   Esperado: ~4.678 jobs.
+### Mudanças (somente backend, sem frontend)
 
-2. **`processar`** — para cada job pendente:
-   - `GET {hinovaApiUrl}/associado/buscar/{cpfLimpo}/cpf` (com fallback CPF formatado, igual ao código existente).
-   - Se retornar `veiculos[]`, para cada `{placa, codigo_veiculo}` faz:
-     ```sql
-     UPDATE veiculos SET codigo_hinova = $codigo, sincronizado_hinova = true,
-       sincronizado_hinova_em = now()
-     WHERE associado_id = $aid AND placa = $placa AND codigo_hinova IS NULL
-     ```
-   - Marca o job como `concluido` + grava `veiculos_resolvidos` no payload.
-   - Trata `HinovaTransientError` (401/janela horária/5xx) → `pendente_retry` + `proximo_retry_em` (mesma política da régua financeira).
-   - Trata 404 real → `nao_encontrado_hinova`.
-   - Throttle: `delay_ms` (default 100ms) entre chamadas. Reusa `getHinovaCreds`/`autenticarHinova` do `_shared/hinova-client.ts`.
+**A. `supabase/functions/sga-sync-financeiro-veiculo/index.ts` (linhas 335–360) — completar o payload de pagamento**
 
-3. **Idempotente:** o `WHERE codigo_hinova IS NULL` no UPDATE garante que reexecuções não sobrescrevem códigos já corretos.
-
-**B. Adicionar helper `buscarAssociadoComVeiculosPorCpf` em `_shared/hinova-client.ts`**
-
-Wrapper que chama `/associado/buscar/{cpf}/cpf` (com retry no formato), parseia retorno e devolve `{ codigo_associado, veiculos: [{placa, codigo_veiculo}] }`. Usa `HinovaTransientError`/`HinovaNotFoundError` já existentes para classificar erros corretamente (mesma lógica robusta da iteração anterior).
-
-**C. Migration mínima — nova tabela de fila**
-
-```sql
-CREATE TABLE public.sga_reconciliacao_veiculo_jobs (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  associado_id uuid NOT NULL REFERENCES associados(id) ON DELETE CASCADE,
-  cpf text NOT NULL,
-  codigo_hinova_associado integer NOT NULL,
-  status text NOT NULL DEFAULT 'pendente',  -- pendente | concluido | nao_encontrado_hinova | pendente_retry | erro
-  proximo_retry_em timestamptz NULL,
-  veiculos_resolvidos integer NULL DEFAULT 0,
-  ultimo_erro text NULL,
-  tentativas integer NOT NULL DEFAULT 0,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (associado_id)
-);
-CREATE INDEX idx_recon_pendente ON sga_reconciliacao_veiculo_jobs(created_at) WHERE status='pendente';
-CREATE INDEX idx_recon_retry ON sga_reconciliacao_veiculo_jobs(proximo_retry_em) WHERE status='pendente_retry';
-ALTER TABLE sga_reconciliacao_veiculo_jobs ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "admin_all" ON sga_reconciliacao_veiculo_jobs FOR ALL TO authenticated USING (has_role(auth.uid(),'admin')) WITH CHECK (has_role(auth.uid(),'admin'));
+Adicionar 2 campos no objeto `row` do upsert:
+```ts
+valor_pago: status === 'pago' 
+  ? toNumber(b.valor_pago_boleto ?? b.valor_recebido ?? b.valor_pago ?? valorFinal) 
+  : null,
+forma_pagamento: status === 'pago' 
+  ? (b.forma_pagamento_boleto ?? b.tipo_pagamento ?? b.forma_pagamento ?? null) 
+  : null,
 ```
 
-**D. Cron `cron-sga-reconciliar-codigo-veiculo`**
+Mudança mínima, ~6 linhas. Boletos antigos que reentrarem no sync vão ser **atualizados** com esses dados (upsert por `nosso_numero`).
 
-Edge function que invoca `sga-reconciliar-codigo-veiculo` com `acao=processar`, `batch_size=80`. Agendado via `pg_cron` para rodar **2x ao dia dentro da janela comercial** (10h e 15h BRT) até a fila esvaziar. Depois pode ser desligado manualmente.
+**B. Nova tabela `pagamentos_sga_historico` para preservar pagamentos antigos que sumirem da janela Hinova**
 
-**E. Bonus operacional**
+Como a Hinova só retorna ~12 meses, preciso de uma "memória local" para que pagamentos pagos há 2 anos não sumam de uma sincronização para outra. Nova tabela:
 
-Após processar a fila, dispara automaticamente `sga-backfill-financeiro` com `acao=enfileirar` para que os 4.999 veículos (agora com código) entrem na fila de boletos da próxima execução do cron financeiro existente.
+```sql
+CREATE TABLE public.pagamentos_sga_historico (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  associado_id uuid NOT NULL REFERENCES associados(id) ON DELETE CASCADE,
+  veiculo_id uuid NOT NULL REFERENCES veiculos(id) ON DELETE CASCADE,
+  nosso_numero text NOT NULL,
+  status text NOT NULL,
+  valor numeric NOT NULL,
+  valor_pago numeric NULL,
+  data_vencimento date NOT NULL,
+  data_pagamento date NULL,
+  forma_pagamento text NULL,
+  tipo_boleto_hinova text NULL,
+  mes_referencia text NULL,
+  dados_brutos_sga jsonb NOT NULL,
+  primeira_observacao_em timestamptz NOT NULL DEFAULT now(),
+  ultima_observacao_em timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(nosso_numero)
+);
+CREATE INDEX idx_pag_sga_assoc ON pagamentos_sga_historico(associado_id, data_vencimento DESC);
+CREATE INDEX idx_pag_sga_veic ON pagamentos_sga_historico(veiculo_id, data_vencimento DESC);
+ALTER TABLE pagamentos_sga_historico ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "admin_read" ON pagamentos_sga_historico FOR SELECT TO authenticated USING (true);
+CREATE POLICY "service_write" ON pagamentos_sga_historico FOR ALL USING (auth.jwt()->>'role'='service_role') WITH CHECK (auth.jwt()->>'role'='service_role');
+```
+
+**C. Trigger PostgreSQL para espelhar `cobrancas` SGA → `pagamentos_sga_historico`**
+
+```sql
+CREATE OR REPLACE FUNCTION mirror_cobranca_sga_to_historico() RETURNS trigger 
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+BEGIN
+  IF NEW.origem = 'sga_hinova' AND NEW.nosso_numero IS NOT NULL THEN
+    INSERT INTO pagamentos_sga_historico (
+      associado_id, veiculo_id, nosso_numero, status, valor, valor_pago,
+      data_vencimento, data_pagamento, forma_pagamento, tipo_boleto_hinova,
+      mes_referencia, dados_brutos_sga
+    ) VALUES (
+      NEW.associado_id, NEW.veiculo_id, NEW.nosso_numero, NEW.status, NEW.valor,
+      NEW.valor_pago, NEW.data_vencimento, NEW.data_pagamento, NEW.forma_pagamento,
+      NEW.tipo_boleto_hinova, NULLIF(split_part(NEW.descricao,' ',-1),''),
+      NEW.dados_brutos_sga
+    )
+    ON CONFLICT (nosso_numero) DO UPDATE SET
+      status = EXCLUDED.status,
+      valor_pago = COALESCE(EXCLUDED.valor_pago, pagamentos_sga_historico.valor_pago),
+      data_pagamento = COALESCE(EXCLUDED.data_pagamento, pagamentos_sga_historico.data_pagamento),
+      forma_pagamento = COALESCE(EXCLUDED.forma_pagamento, pagamentos_sga_historico.forma_pagamento),
+      dados_brutos_sga = EXCLUDED.dados_brutos_sga,
+      ultima_observacao_em = now();
+  END IF;
+  RETURN NEW;
+END;
+$$;
+CREATE TRIGGER trg_mirror_cobranca_sga AFTER INSERT OR UPDATE ON cobrancas
+FOR EACH ROW EXECUTE FUNCTION mirror_cobranca_sga_to_historico();
+```
+
+Resultado: tudo que entra/atualiza em `cobrancas` com origem SGA fica preservado em `pagamentos_sga_historico` para sempre, mesmo que a Hinova pare de devolver. Sem código Deno extra.
+
+**D. Backfill retroativo de cobranças existentes (uma vez só)**
+
+Migration de inicialização:
+```sql
+INSERT INTO pagamentos_sga_historico (associado_id, veiculo_id, nosso_numero, status, valor, valor_pago, data_vencimento, data_pagamento, forma_pagamento, tipo_boleto_hinova, dados_brutos_sga)
+SELECT associado_id, veiculo_id, nosso_numero, status, valor, valor_pago, data_vencimento, data_pagamento, forma_pagamento, tipo_boleto_hinova, dados_brutos_sga
+FROM cobrancas WHERE origem='sga_hinova' AND nosso_numero IS NOT NULL
+ON CONFLICT (nosso_numero) DO NOTHING;
+```
+
+Hoje retorna 0 linhas (cobranças SGA = 0), mas garante consistência quando a fila drenar.
 
 ### O que NÃO muda
 
-- Frontend (zero alterações em `.tsx`).
-- `sga-sync-financeiro-veiculo` — já consome `veiculos.codigo_hinova`; vai funcionar automaticamente assim que reconciliação rodar.
-- `sga-hinova-sync` — segue cuidando de novos cadastros.
-- Schema de `veiculos`, `associados`, `cobrancas` — só dados.
+- Frontend (zero alterações `.tsx`).
+- Endpoints Hinova consumidos (mesmos).
+- Tabela `cobrancas` schema (sem alteração).
+- `sga-reconciliar-codigo-veiculo` em curso — continua processando; à medida que mapeia veículos, `sga-backfill-financeiro` vai puxar histórico de pagamento de cada um automaticamente.
 
 ### Validação (após implementação)
 
-1. Login `admin@teste.com / 123456789` (consulta SQL via tool, não UI).
-2. Disparar `acao=enfileirar` → conferir ~4.678 jobs `pendente`.
-3. Disparar `acao=processar` em batches → acompanhar `concluido` crescendo e `veiculos_resolvidos` somando.
-4. Query final: `SELECT COUNT(*) FROM veiculos v JOIN associados a ON a.id=v.associado_id WHERE a.origem_cadastro='api_externa' AND v.codigo_hinova IS NOT NULL` deve subir de 4.624 para ~9.000+.
-5. Disparar `sga-backfill-financeiro` `acao=processar` → cobranças SGA começam a popular `cobrancas`.
+1. SQL: confirmar que `pagamentos_sga_historico` foi criada e o trigger está ativo.
+2. Forçar sync de 1 veículo conhecido com pagamentos: `supabase.functions.invoke('sga-sync-financeiro-veiculo', { veiculo_id: '...' })`.
+3. Query: `SELECT status, COUNT(*), SUM(valor_pago) FROM cobrancas WHERE origem='sga_hinova' GROUP BY status` — esperado `pago` > 0 com `valor_pago` populado.
+4. Query: `SELECT COUNT(*) FROM pagamentos_sga_historico` — deve igualar a contagem em `cobrancas` SGA.
+5. Após cron diário rodar (09h BRT), conferir crescimento de `pago` em ambas as tabelas.
 
 ### Riscos
 
-- **CPF divergente entre local e Hinova** (~5–10% histórico): job vira `nao_encontrado_hinova`. Não bloqueia os outros. Esses casos viram backlog manual igual aos 2.852 atuais — política inalterada.
-- **Veículo existe na Hinova com placa diferente** (renovação/troca): UPDATE casa por placa, então não matcha. Aceitável: melhor não-fazer-nada do que vincular código errado.
-- **Janela horária**: mesma política `pendente_retry → 09h BRT seguinte` já implementada na régua financeira — reaproveitada via `calcularProximoRetry`.
-- **Rate limit Hinova**: `delay_ms=100` + exponential backoff em 429 (já no client compartilhado).
+- **Trigger em INSERT/UPDATE de `cobrancas`** adiciona ~1ms por linha. Em batches de 4.000 por execução do backfill, é negligenciável.
+- **Hinova pode não devolver `valor_pago_boleto`** em todos os payloads. Fallback usa `valor_final`. Aceitável: dado parcial é melhor que dado nenhum.
+- **Janela de 12 meses da Hinova é hard limit do parceiro** — não tem como pegar histórico anterior à primeira sync. A tabela `pagamentos_sga_historico` mitiga daqui pra frente, mas não recupera o passado pré-implementação. Mesmo assim, a primeira sync já vai trazer o último ano de cada veículo, o que cobre 90% dos casos de uso (régua de cobrança, status atual, último pagamento).
 
