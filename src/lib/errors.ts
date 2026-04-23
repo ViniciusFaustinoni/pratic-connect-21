@@ -60,7 +60,14 @@ export function descreverErroSupabase(
 
   // Unique violation
   if (code === '23505') {
-    return `Conflito de dados duplicados${ctx}. Tente novamente em alguns segundos.`;
+    const fontes = `${e.message || ''} ${e.details || ''}`.toLowerCase();
+    if (fontes.includes('numero')) {
+      return `Já existe um registro com este número${ctx}. Aguarde alguns segundos e tente novamente — o número será regenerado.`;
+    }
+    const col = extrairColuna(e);
+    return col
+      ? `Conflito de dados duplicados${ctx}: já existe registro com o mesmo "${col}". Verifique e tente novamente.`
+      : `Conflito de dados duplicados${ctx}. ${e.details || e.message || ''}`.trim();
   }
 
   // Foreign key violation

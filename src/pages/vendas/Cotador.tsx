@@ -923,7 +923,9 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
       toast.success('Cotação salva e enviada com sucesso!');
     } catch (error) {
       console.error('Erro ao salvar cotação:', error);
-      toast.error('Erro ao salvar cotação. Tente novamente.');
+      toast.error(descreverErroSupabase(error, { contexto: 'criar cotação' }), {
+        duration: 8000,
+      });
     } finally {
       setSalvandoCotacao(false);
     }
