@@ -241,6 +241,14 @@ export default function ReguaCobranca() {
     );
   };
 
+  // Etapas WhatsApp/SMS/Email com template não aprovado
+  const etapasComTemplateNaoAprovado = etapas.filter((e) => {
+    if (!acoesMensagem.includes(e.acao)) return false;
+    if (!e.template) return false;
+    const status = getTemplateStatus(e.template);
+    return status !== 'APPROVED';
+  });
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -249,10 +257,24 @@ export default function ReguaCobranca() {
           <h1 className="text-2xl font-bold">Régua de Relacionamento</h1>
           <p className="text-muted-foreground">Configure o fluxo automatizado de relacionamento</p>
         </div>
-        <Button onClick={() => salvarRegua.mutate()} disabled={salvarRegua.isPending}>
-          <Save className="h-4 w-4 mr-2" />
-          Salvar Configuração
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => executarAgora.mutate()}
+            disabled={executarAgora.isPending}
+          >
+            {executarAgora.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Play className="h-4 w-4 mr-2" />
+            )}
+            Executar Agora
+          </Button>
+          <Button onClick={() => salvarRegua.mutate()} disabled={salvarRegua.isPending}>
+            <Save className="h-4 w-4 mr-2" />
+            Salvar Configuração
+          </Button>
+        </div>
       </div>
 
       {/* Alerta Explicativo */}
