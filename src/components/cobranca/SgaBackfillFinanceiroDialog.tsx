@@ -40,6 +40,8 @@ export function SgaBackfillFinanceiroDialog() {
   const [running, setRunning] = useState(false);
   const [reagendando, setReagendando] = useState(false);
   const [forcando, setForcando] = useState(false);
+  const [preparandoBase, setPreparandoBase] = useState(false);
+  const [prepProgress, setPrepProgress] = useState<{ lotes: number; mapeados: number; restantes: number } | null>(null);
 
   const fetchStatus = async () => {
     try {
