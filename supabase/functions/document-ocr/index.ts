@@ -1209,6 +1209,18 @@ Use a função para retornar o número do motor encontrado, ou "ilegivel" se ide
           }
         }
 
+        // ==== SANEAMENTO CHASSI: tentar corrigir confusões O↔0, I↔1, Q↔0, S↔5 ====
+        if (v.field === 'chassi') {
+          const atual = String(d.chassi || '');
+          if (!validateChassi(atual)) {
+            const saneado = sanitizeChassiOCR(atual);
+            if (saneado) {
+              console.log(`[OCR] Chassi saneado por confusão de caracteres: "${atual}" → "${saneado}"`);
+              d.chassi = saneado;
+            }
+          }
+        }
+
         const currentVal = String(d[v.field]);
         const ok = v.validate(currentVal);
         checksumResults.push({ field: v.field, ok, value: d[v.field] });
@@ -1225,6 +1237,109 @@ Use a função para retornar o número do motor encontrado, ou "ilegivel" se ide
                 checksumResults[checksumResults.length - 1] = { field: v.field, ok: true, value: cand };
                 break;
               }
+            }
+          }
+
+          // ==== RETRY DIRECIONADO PARA CHASSI ====
+          // Espelha o retry de numero_motor: se ainda inválido, chama gemini-2.5-pro
+          // pedindo APENAS o chassi com prompt focado.
+          const stillInvalid = !v.validate(String(d[v.field] || ''));
+          if (
+            v.field === 'chassi' &&
+            stillInvalid &&
+            ['crlv', 'atpv_e', 'nota_fiscal_veiculo'].includes(tipo) &&
+            contentParts && contentParts[1]
+          ) {
+            console.log(`[OCR] chassi inválido em ${tipo} — disparando retry direcionado com ${OCR_RETRY_MODEL}`);
+            try {
+              const chassiRetryPrompt = `TAREFA ÚNICA: Extraia APENAS o CHASSI (VIN) deste documento de veículo brasileiro.
+
+Regras do chassi/VIN:
+- EXATAMENTE 17 caracteres alfanuméricos
+- Letras MAIÚSCULAS + dígitos
+- NUNCA contém as letras I, O ou Q (são proibidas — se ler "O" geralmente é "0", se ler "I" geralmente é "1")
+- Aparece com rótulo "CHASSI", "CHASSI Nº", "VIN", "N° DO CHASSI"
+
+Procure ATIVAMENTE por esse campo no documento. Se ler 16 caracteres, releia com atenção — pode haver um separador ou caractere mascarado.
+
+NÃO confunda com:
+- Renavam (apenas dígitos, 9-11 chars)
+- Número do motor (geralmente menor, com hífen)
+
+Use a função para retornar o chassi encontrado, ou "ilegivel" se identificar o campo mas não conseguir lê-lo.`;
+
+              const chassiRetryUserContent: any[] = [
+                { type: 'text', text: 'Extraia o chassi (VIN) deste documento.' },
+                contentParts[1],
+              ];
+              if (extractedPdfText) {
+                chassiRetryUserContent[0] = {
+                  type: 'text',
+                  text: `Extraia o chassi (VIN) deste documento.\n\nTexto nativo do PDF (use como referência):\n${extractedPdfText.substring(0, 2000)}`,
+                };
+              }
+
+              const chassiRetryResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  model: OCR_RETRY_MODEL,
+                  messages: [
+                    { role: 'system', content: chassiRetryPrompt },
+                    { role: 'user', content: chassiRetryUserContent },
+                  ],
+                  max_tokens: 200,
+                  temperature: 0,
+                  tools: [{
+                    type: 'function',
+                    function: {
+                      name: 'report_chassi',
+                      description: 'Reportar o chassi (VIN) extraído do documento',
+                      parameters: {
+                        type: 'object',
+                        properties: {
+                          chassi: {
+                            type: 'string',
+                            description: 'Chassi de 17 caracteres (sem I, O, Q) ou "ilegivel" se não conseguir ler',
+                          },
+                        },
+                        required: ['chassi'],
+                        additionalProperties: false,
+                      },
+                    },
+                  }],
+                  tool_choice: { type: 'function', function: { name: 'report_chassi' } },
+                }),
+              });
+
+              if (chassiRetryResp.ok) {
+                const chassiRetryData = await chassiRetryResp.json();
+                const toolCall = chassiRetryData.choices?.[0]?.message?.tool_calls?.[0];
+                if (toolCall?.function?.arguments) {
+                  try {
+                    const args = JSON.parse(toolCall.function.arguments);
+                    const retryChassi = args.chassi;
+                    if (retryChassi && retryChassi !== 'ilegivel') {
+                      const cleaned = String(retryChassi).replace(/[^A-Z0-9]/gi, '').toUpperCase();
+                      const final = validateChassi(cleaned) ? cleaned : sanitizeChassiOCR(cleaned);
+                      if (final) {
+                        console.log(`[OCR] chassi recuperado via retry: "${retryChassi}" → "${final}"`);
+                        d.chassi = final;
+                        checksumResults[checksumResults.length - 1] = { field: 'chassi', ok: true, value: final };
+                      }
+                    }
+                  } catch (e) {
+                    console.warn('[OCR] Falha ao parsear tool call do retry de chassi:', e);
+                  }
+                }
+              } else {
+                console.warn('[OCR] Retry de chassi falhou:', chassiRetryResp.status);
+              }
+            } catch (chassiRetryErr) {
+              console.warn('[OCR] Erro no retry de chassi:', chassiRetryErr);
             }
           }
         }
