@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -6,8 +6,39 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Loader2, RefreshCw, Database, AlertCircle, CheckCircle2, Clock, MinusCircle, Timer, Zap, CalendarClock, Info, ShieldAlert, Link2 } from 'lucide-react';
+import { Loader2, RefreshCw, Database, AlertCircle, CheckCircle2, Clock, MinusCircle, Timer, Zap, CalendarClock, Info, ShieldAlert, Link2, Play, Pause, RotateCcw, ListChecks } from 'lucide-react';
 import { toast } from 'sonner';
+
+// ===== Mapeamento controlado: pausa, retomada e tracking por veículo =====
+// Persistimos progresso em localStorage para que um refresh / fechamento do
+// diálogo não perca o que já foi tentado. Assim, depois de um bloqueio
+// "Usuário com restrição", quando a Hinova for liberada, podemos retomar do
+// ponto onde parou sem re-tentar veículos já marcados como falhados.
+const LS_KEY = 'sga-mapear-progresso-v1';
+type RunState = 'idle' | 'running' | 'paused' | 'done';
+interface MapearProgresso {
+  fila: string[];           // IDs ainda a processar
+  tentados: string[];       // IDs já enviados ao backend (sucesso, falha técnica ou não-encontrado)
+  mapeados: string[];       // IDs efetivamente vinculados (codigo_hinova preenchido)
+  falhados: string[];       // IDs que receberam erro técnico no lote (não confundir com não-encontrado)
+  loteAtual: number;        // contador de lotes processados
+  ultimoErro: string | null;
+  carregadoEm: string | null; // timestamp da última carga da fila
+}
+const emptyProgresso: MapearProgresso = {
+  fila: [], tentados: [], mapeados: [], falhados: [], loteAtual: 0, ultimoErro: null, carregadoEm: null,
+};
+const loadProgresso = (): MapearProgresso => {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return emptyProgresso;
+    const parsed = JSON.parse(raw);
+    return { ...emptyProgresso, ...parsed };
+  } catch { return emptyProgresso; }
+};
+const saveProgresso = (p: MapearProgresso) => {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(p)); } catch {}
+};
 
 interface JobStatus {
   pendente: number;
@@ -42,6 +73,152 @@ export function SgaBackfillFinanceiroDialog() {
   const [forcando, setForcando] = useState(false);
   const [preparandoBase, setPreparandoBase] = useState(false);
   const [prepProgress, setPrepProgress] = useState<{ lotes: number; mapeados: number; restantes: number } | null>(null);
+
+  // ===== Mapeamento controlado (pausa/retomada) =====
+  const [mapState, setMapState] = useState<RunState>('idle');
+  const [progresso, setProgresso] = useState<MapearProgresso>(() => loadProgresso());
+  const [carregandoFila, setCarregandoFila] = useState(false);
+  const [batchSizeCtrl] = useState(50);
+  const pauseRef = useRef(false);
+  const runningRef = useRef(false);
+
+  // Persiste sempre que progresso mudar
+  useEffect(() => { saveProgresso(progresso); }, [progresso]);
+
+  // Carrega a fila completa de IDs elegíveis (sem codigo_hinova, origem
+  // api_externa, com placa). Pagina em chunks de 1000 (limite default do
+  // Supabase) e descarta IDs já tentados/mapeados/falhados desta sessão para
+  // evitar reprocessar veículos após um bloqueio.
+  const carregarFila = async () => {
+    setCarregandoFila(true);
+    try {
+      const ignorar = new Set<string>([...progresso.tentados, ...progresso.falhados, ...progresso.mapeados]);
+      const ids: string[] = [];
+      const PAGE = 1000;
+      let from = 0;
+      while (from < 50000) {
+        const { data, error } = await supabase
+          .from('veiculos')
+          .select('id, associados:associados!inner(origem_cadastro)')
+          .is('codigo_hinova', null)
+          .not('placa', 'is', null)
+          .eq('associados.origem_cadastro', 'api_externa')
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        for (const r of data) if (!ignorar.has(r.id)) ids.push(r.id);
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+      setProgresso((p) => ({ ...p, fila: ids, carregadoEm: new Date().toISOString(), ultimoErro: null }));
+      toast.success(`Fila carregada: ${ids.length} veículo(s) elegíveis (excluindo ${ignorar.size} já tentados).`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao carregar fila');
+    } finally {
+      setCarregandoFila(false);
+    }
+  };
+
+  // Loop principal: processa a fila em lotes respeitando pause/resume.
+  // Em caso de erro técnico do invoke (5xx, restrição Hinova) marca os IDs
+  // do lote como "falhados" — não voltam ao retomar até reiniciar.
+  const startMapearControlado = async () => {
+    if (runningRef.current) return;
+    if (progresso.fila.length === 0) {
+      toast.error('Fila vazia. Carregue a fila primeiro.');
+      return;
+    }
+    runningRef.current = true;
+    pauseRef.current = false;
+    setMapState('running');
+    try {
+      // Trabalhamos com cópia local da fila para evitar race entre setState
+      let filaLocal = [...progresso.fila];
+      while (!pauseRef.current && filaLocal.length > 0) {
+        const lote = filaLocal.slice(0, batchSizeCtrl);
+        try {
+          const { data, error } = await supabase.functions.invoke('sga-mapear-codigos-veiculos', {
+            body: { batch_size: lote.length, delay_ms: 200, veiculo_ids: lote },
+          });
+          if (error || data?.success === false) {
+            const msg = error?.message || data?.error || 'Erro desconhecido no lote';
+            filaLocal = filaLocal.filter((id) => !lote.includes(id));
+            setProgresso((p) => ({
+              ...p,
+              fila: filaLocal,
+              tentados: Array.from(new Set([...p.tentados, ...lote])),
+              falhados: Array.from(new Set([...p.falhados, ...lote])),
+              loteAtual: p.loteAtual + 1,
+              ultimoErro: msg,
+            }));
+            pauseRef.current = true;
+            setMapState('paused');
+            toast.error(`Lote falhou — pausado. ${msg}`);
+            break;
+          }
+          const mapeadosLote: number = data?.mapeados ?? 0;
+          filaLocal = filaLocal.filter((id) => !lote.includes(id));
+          setProgresso((p) => {
+            // Aproximação: marcamos os primeiros N do lote como mapeados.
+            // Fonte de verdade real é a contagem agregada em status.
+            const aprox = lote.slice(0, mapeadosLote);
+            return {
+              ...p,
+              fila: filaLocal,
+              tentados: Array.from(new Set([...p.tentados, ...lote])),
+              mapeados: Array.from(new Set([...p.mapeados, ...aprox])),
+              loteAtual: p.loteAtual + 1,
+              ultimoErro: null,
+            };
+          });
+          await fetchStatus();
+          await new Promise((r) => setTimeout(r, 250));
+        } catch (e: any) {
+          filaLocal = filaLocal.filter((id) => !lote.includes(id));
+          setProgresso((p) => ({
+            ...p,
+            fila: filaLocal,
+            tentados: Array.from(new Set([...p.tentados, ...lote])),
+            falhados: Array.from(new Set([...p.falhados, ...lote])),
+            loteAtual: p.loteAtual + 1,
+            ultimoErro: e?.message || String(e),
+          }));
+          pauseRef.current = true;
+          setMapState('paused');
+          toast.error(`Erro inesperado — pausado. ${e?.message || e}`);
+          break;
+        }
+      }
+      if (!pauseRef.current && filaLocal.length === 0) {
+        setMapState('done');
+        toast.success('Mapeamento controlado concluído — fila esgotada.');
+      }
+    } finally {
+      runningRef.current = false;
+    }
+  };
+
+  const pausarMapearControlado = () => {
+    pauseRef.current = true;
+    setMapState('paused');
+    toast.info('Pausa solicitada — finalizando lote em andamento.');
+  };
+
+  const retomarMapearControlado = () => {
+    if (progresso.fila.length === 0) {
+      toast.error('Nada a retomar — fila vazia. Carregue a fila novamente.');
+      return;
+    }
+    startMapearControlado();
+  };
+
+  const reiniciarMapearControlado = () => {
+    pauseRef.current = true;
+    runningRef.current = false;
+    setProgresso(emptyProgresso);
+    setMapState('idle');
+    toast.info('Progresso de mapeamento controlado zerado.');
+  };
 
   const fetchStatus = async () => {
     try {
@@ -425,6 +602,124 @@ export function SgaBackfillFinanceiroDialog() {
                   </span>
                 )}
               </div>
+            </div>
+
+            {/* Mapeamento controlado — pausa, retomada e tracking por veículo */}
+            <div className="rounded-md border border-indigo-300 bg-indigo-50/50 p-3 space-y-3">
+              <div className="flex items-start gap-2">
+                <ListChecks className="h-4 w-4 text-indigo-700 mt-0.5 shrink-0" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-indigo-900">Mapear lote — controlado (pausa / retomada)</p>
+                  <p className="text-xs text-indigo-800">
+                    Carrega a fila de veículos elegíveis e processa em lotes de {batchSizeCtrl}. Você pode <strong>pausar a qualquer momento</strong>
+                    {' '}e <strong>retomar mais tarde</strong>. O progresso (tentados, vinculados, falhados) é salvo no navegador, então
+                    veículos já processados <strong>não são reprocessados</strong> mesmo após um bloqueio Hinova ou refresh da página.
+                  </p>
+                </div>
+              </div>
+
+              {/* Métricas de progresso */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+                <div className="rounded border bg-card p-2">
+                  <p className="text-muted-foreground">Na fila</p>
+                  <p className="text-base font-semibold">{progresso.fila.length}</p>
+                </div>
+                <div className="rounded border bg-card p-2">
+                  <p className="text-muted-foreground">Tentados</p>
+                  <p className="text-base font-semibold">{progresso.tentados.length}</p>
+                </div>
+                <div className="rounded border bg-card p-2">
+                  <p className="text-muted-foreground">Vinculados</p>
+                  <p className="text-base font-semibold text-emerald-700">{progresso.mapeados.length}</p>
+                </div>
+                <div className="rounded border bg-card p-2">
+                  <p className="text-muted-foreground">Falhados (lote)</p>
+                  <p className="text-base font-semibold text-red-700">{progresso.falhados.length}</p>
+                </div>
+                <div className="rounded border bg-card p-2">
+                  <p className="text-muted-foreground">Lotes</p>
+                  <p className="text-base font-semibold">{progresso.loteAtual}</p>
+                </div>
+              </div>
+
+              {/* Barra de progresso */}
+              {(progresso.tentados.length > 0 || progresso.fila.length > 0) && (
+                <Progress
+                  value={(() => {
+                    const total = progresso.tentados.length + progresso.fila.length;
+                    return total > 0 ? Math.round((progresso.tentados.length / total) * 100) : 0;
+                  })()}
+                />
+              )}
+
+              {progresso.ultimoErro && (
+                <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1">
+                  <strong>Último erro:</strong> {progresso.ultimoErro}
+                </div>
+              )}
+
+              {progresso.carregadoEm && (
+                <p className="text-[11px] text-muted-foreground">
+                  Fila carregada em {new Date(progresso.carregadoEm).toLocaleString('pt-BR')}
+                  {' · '}Estado: <strong>{mapState}</strong>
+                </p>
+              )}
+
+              {/* Controles */}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={carregarFila}
+                  disabled={carregandoFila || mapState === 'running'}
+                  className="gap-1.5"
+                >
+                  {carregandoFila ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                  Carregar fila
+                </Button>
+
+                {mapState !== 'running' && (
+                  <Button
+                    size="sm"
+                    variant="default"
+                    onClick={mapState === 'paused' ? retomarMapearControlado : startMapearControlado}
+                    disabled={progresso.fila.length === 0}
+                    className="gap-1.5"
+                  >
+                    <Play className="h-3.5 w-3.5" />
+                    {mapState === 'paused' ? 'Retomar' : 'Iniciar'}
+                  </Button>
+                )}
+
+                {mapState === 'running' && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={pausarMapearControlado}
+                    className="gap-1.5"
+                  >
+                    <Pause className="h-3.5 w-3.5" />
+                    Pausar
+                  </Button>
+                )}
+
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={reiniciarMapearControlado}
+                  disabled={mapState === 'running'}
+                  className="gap-1.5 text-muted-foreground"
+                  title="Zera tentados/vinculados/falhados desta sessão. A próxima carga da fila trará todos os elegíveis novamente."
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Reiniciar progresso
+                </Button>
+              </div>
+
+              <p className="text-[11px] text-muted-foreground">
+                Dica: após um bloqueio Hinova, basta clicar em <strong>Retomar</strong> quando a liberação chegar — os veículos do lote
+                que falhou ficam isolados em "Falhados" e não voltam até você reiniciar o progresso.
+              </p>
             </div>
 
             {/* Etapas */}
