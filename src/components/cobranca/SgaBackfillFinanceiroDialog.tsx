@@ -6,7 +6,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Loader2, RefreshCw, Database, AlertCircle, CheckCircle2, Clock, MinusCircle, Timer, Zap, CalendarClock, Info, ShieldAlert } from 'lucide-react';
+import { Loader2, RefreshCw, Database, AlertCircle, CheckCircle2, Clock, MinusCircle, Timer, Zap, CalendarClock, Info, ShieldAlert, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface JobStatus {
@@ -40,6 +40,8 @@ export function SgaBackfillFinanceiroDialog() {
   const [running, setRunning] = useState(false);
   const [reagendando, setReagendando] = useState(false);
   const [forcando, setForcando] = useState(false);
+  const [preparandoBase, setPreparandoBase] = useState(false);
+  const [prepProgress, setPrepProgress] = useState<{ lotes: number; mapeados: number; restantes: number } | null>(null);
 
   const fetchStatus = async () => {
     try {
@@ -73,6 +75,52 @@ export function SgaBackfillFinanceiroDialog() {
       toast.error(e?.message || 'Erro no mapeamento');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Modo preparar base: roda apenas Mapear lote em loop até esgotar (ou erro consecutivo).
+  // NÃO dispara processamento financeiro — só popula codigo_hinova nos veículos.
+  // Observação: a busca por placa também usa a API Hinova autenticada, então sofre o
+  // mesmo bloqueio "Usuário com restrição". Quando bloqueada, o loop aborta no 1º erro.
+  const handlePrepararBase = async () => {
+    setPreparandoBase(true);
+    setPrepProgress({ lotes: 0, mapeados: 0, restantes: 0 });
+    let totalMapeados = 0;
+    let lotes = 0;
+    let errosConsecutivos = 0;
+    const MAX_LOTES = 200; // teto defensivo (10.000 veículos a 50/lote)
+    const MAX_ERROS_CONSECUTIVOS = 2;
+    try {
+      while (lotes < MAX_LOTES) {
+        const { data, error } = await supabase.functions.invoke('sga-mapear-codigos-veiculos', {
+          body: { batch_size: 50, delay_ms: 200 },
+        });
+        if (error) {
+          errosConsecutivos++;
+          if (errosConsecutivos >= MAX_ERROS_CONSECUTIVOS) {
+            toast.error(`Mapeamento abortado após ${errosConsecutivos} erros consecutivos: ${error.message || 'erro desconhecido'}`);
+            break;
+          }
+          continue;
+        }
+        errosConsecutivos = 0;
+        lotes++;
+        const mapeadosLote = data?.mapeados ?? 0;
+        const restantes = data?.restantes ?? 0;
+        const processados = data?.processados ?? 0;
+        totalMapeados += mapeadosLote;
+        setPrepProgress({ lotes, mapeados: totalMapeados, restantes });
+        // Esgotou: não há mais veículos elegíveis sem código
+        if (processados === 0 || restantes === 0) break;
+        await fetchStatus();
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      toast.success(`Base preparada: ${totalMapeados} veículos vinculados em ${lotes} lote(s).`);
+      fetchStatus();
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao preparar base');
+    } finally {
+      setPreparandoBase(false);
     }
   };
 
@@ -338,6 +386,45 @@ export function SgaBackfillFinanceiroDialog() {
                   Solicite à Hinova a liberação 24h ou liberação por IP do usuário da integração no painel SGA do parceiro.
                 </p>
               )}
+            </div>
+
+            {/* Modo preparar base — apenas mapeamento, sem processamento financeiro */}
+            <div className="rounded-md border border-blue-300 bg-blue-50/50 p-3 space-y-2">
+              <div className="flex items-start gap-2">
+                <Link2 className="h-4 w-4 text-blue-700 mt-0.5 shrink-0" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-blue-900">Modo preparar base (apenas mapeamento)</p>
+                  <p className="text-xs text-blue-800">
+                    Roda <strong>somente</strong> o passo 1 (Mapear códigos Hinova) em loop até esgotar os
+                    veículos sem <code>codigo_hinova</code>. <strong>Não dispara</strong> o processamento financeiro,
+                    então não enfileira nem executa jobs de boletos.
+                  </p>
+                  {restricaoHinovaAtiva && (
+                    <p className="text-xs text-amber-800 bg-amber-50 border border-amber-300 rounded px-2 py-1">
+                      ⚠️ Aviso: o mapeamento também usa a API Hinova autenticada. Com "Usuário com restrição" ativo
+                      o loop pode abortar logo no 1º lote. Use este botão para <strong>testar manualmente</strong>
+                      se a Hinova já liberou — se rodar, ótimo; se falhar, o status acima vai confirmar o bloqueio.
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={handlePrepararBase}
+                  disabled={preparandoBase}
+                  className="gap-1.5"
+                >
+                  {preparandoBase ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
+                  {preparandoBase ? 'Preparando base…' : 'Preparar base (apenas mapeamento)'}
+                </Button>
+                {prepProgress && (
+                  <span className="text-xs text-blue-900">
+                    Lotes: <strong>{prepProgress.lotes}</strong> · Vinculados: <strong>{prepProgress.mapeados}</strong> · Restantes: <strong>{prepProgress.restantes}</strong>
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Etapas */}
