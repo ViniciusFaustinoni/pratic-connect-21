@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { differenceInHours, differenceInMinutes, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { MigracaoDiretaDialog } from '@/components/cadastro/MigracaoDiretaDialog';
+import { placasEquivalentes } from '@/lib/placa-utils';
 
 function calcPrazo(createdAt: string, prazoHoras: number) {
   const deadline = new Date(new Date(createdAt).getTime() + prazoHoras * 60 * 60 * 1000);
@@ -400,7 +401,7 @@ export default function SolicitacoesMigracao() {
 
 function DocumentPreview({ doc, cpfEsperado, placaEsperada }: { doc: any; cpfEsperado: string; placaEsperada: string | null }) {
   const cpfOk = doc.cpf_detectado && doc.cpf_detectado.replace(/\D/g, '') === cpfEsperado.replace(/\D/g, '');
-  const placaOk = !placaEsperada || (doc.placa_detectada && doc.placa_detectada.toUpperCase() === placaEsperada.toUpperCase());
+  const placaOk = !placaEsperada || (doc.placa_detectada && placasEquivalentes(doc.placa_detectada, placaEsperada));
   const isImage = doc.arquivo_url?.match(/\.(jpg|jpeg|png|webp|gif)$/i);
 
   return (
