@@ -100,6 +100,32 @@ Deno.serve(async (req) => {
       throw new Error("Esta vistoria já foi reagendada");
     }
 
+    // Guard de idempotência: se já existe um serviço criado nos últimos 60s
+    // para a mesma origem/data, reusar (evita duplicação por clique duplo).
+    {
+      const sinceIso = new Date(Date.now() - 60_000).toISOString();
+      let q = supabase
+        .from("servicos")
+        .select("id")
+        .eq("status", "agendada")
+        .eq("data_agendada", nova_data)
+        .gte("created_at", sinceIso)
+        .limit(1);
+      if (servico.cotacao_id) q = q.eq("cotacao_id", servico.cotacao_id);
+      else if (servico.instalacao_origem_id) q = q.eq("instalacao_origem_id", servico.instalacao_origem_id);
+      else if (servico.vistoria_origem_id) q = q.eq("vistoria_origem_id", servico.vistoria_origem_id);
+      else q = q.eq("associado_id", servico.associado_id).eq("veiculo_id", servico.veiculo_id);
+
+      const { data: jaCriado } = await q.maybeSingle();
+      if (jaCriado?.id) {
+        console.log(`[reagendar] Idempotência: reusando serviço ${jaCriado.id}`);
+        return new Response(
+          JSON.stringify({ success: true, novo_servico_id: jaCriado.id, reused: true }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     // Validar vagas (skip for encaixe)
     if (!permite_encaixe) {
       const { data: servicosExistentes, error: vagasErr } = await supabase
@@ -176,6 +202,23 @@ Deno.serve(async (req) => {
         updated_at: new Date().toISOString(),
       })
       .eq("id", servico_id);
+
+    // Encerrar agendamentos_base antigos vinculados à mesma origem
+    // (a trigger trg_sync_agendamento_base_on_servico_terminal já cobre isso a partir
+    // do update acima, mas mantemos esta varredura defensiva para origens não cobertas
+    // por colunas atuais e para garantir o fechamento mesmo se a trigger for desligada).
+    const filtros: Array<{ col: string; val: string }> = [];
+    if (servico.cotacao_id) filtros.push({ col: 'cotacao_id', val: servico.cotacao_id });
+    if (servico.instalacao_origem_id) filtros.push({ col: 'instalacao_id', val: servico.instalacao_origem_id });
+    if (servico.vistoria_origem_id) filtros.push({ col: 'vistoria_id', val: servico.vistoria_origem_id });
+
+    for (const f of filtros) {
+      await supabase
+        .from('agendamentos_base')
+        .update({ status: 'reagendado', updated_at: new Date().toISOString() })
+        .eq(f.col, f.val)
+        .in('status', ['agendado', 'pendente', 'confirmado']);
+    }
 
     console.log(`[reagendar] Sucesso: ${servico_id} -> ${novoServico.id} (encaixe: ${!!permite_encaixe}, coords: ${coords.latitude ? 'sim' : 'não'})`);
 

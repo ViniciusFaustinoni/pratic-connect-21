@@ -164,6 +164,18 @@ export function useRealocarInstalacao() {
         ? `${veiculo.marca || ''} ${veiculo.modelo || ''} ${veiculo.ano_modelo || ''}`.trim()
         : null;
 
+      // 0) Cancelar quaisquer agendamentos_base ativos da mesma instalação
+      // para garantir uma única fonte da verdade após a realocação.
+      await (supabase as any)
+        .from('agendamentos_base')
+        .update({
+          status: 'cancelado',
+          updated_at: new Date().toISOString(),
+          observacoes: 'Realocada para nova base',
+        })
+        .eq('instalacao_id', params.instalacaoId)
+        .in('status', ['agendado', 'pendente', 'confirmado']);
+
       // 1) Insert agendamentos_base com horario = canônico do período
       const { error: agErr } = await (supabase as any)
         .from('agendamentos_base')
