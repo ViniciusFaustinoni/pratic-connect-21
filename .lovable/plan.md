@@ -1,70 +1,191 @@
 
 
-## Não desvincular rastreador do veículo durante manutenção / mudanças de status — só em cancelamento ou troca
+## Bugs do app do instalador: tarefa fantasma após aprovação + UX confusa de "fotos faltando"
 
-### Diagnóstico
+### Bug A — "Não foi possível carregar esta tarefa" / "Vistoria Finalizada" persistente como tarefa atual
 
-Hoje o rastreador perde o vínculo com o veículo (`veiculo_id = null`) em vários cenários onde ele **continua sendo o mesmo equipamento daquele veículo** — só temporariamente fora de operação. Isso quebra histórico, relatórios "rastreador X esteve no veículo Y" e a UI de detalhes do rastreador, além de exigir religação manual posterior.
+**Causa raiz** (`src/hooks/useVistoriaCompleta.ts`, função `useAprovarVeiculoVistoria` linhas 27-156):
 
-Pontos de desvinculação encontrados:
+Quando o técnico aprova a vistoria, o hook atualiza `vistorias.status='aprovada'`, `veiculos.status='ativo'`, `associados.status='em_analise'`, `instalacoes.status='concluida'` — mas **não atualiza**:
 
-| # | Arquivo | Linha | Cenário | Comportamento atual | Correto |
-|---|---------|-------|---------|---------------------|---------|
-| 1 | `src/hooks/useRastreadores.ts` | 423-425 | Troca de status manual (qualquer status ≠ `instalado`) via UI de estoque | `veiculo_id = null` sempre | Manter `veiculo_id` quando vai para `manutencao`, `reagendar_manutencao`, `retirada_pendente`. Limpar só quando vai para `estoque`, `baixado`, `retorno_base`, `triagem`, `em_analise_plataforma`, `em_garantia` (terminais ou pós-retirada). |
-| 2 | `src/hooks/useVistoriaManutencao.ts` | 595-599 | Substituição em campo — atualização do **rastreador antigo** | `veiculo_id = null` ao mudar para `retorno_base`/`baixado` | **Manter** — neste fluxo houve troca real de equipamento (substituição é uma das exceções que o usuário citou). |
-| 3 | `src/hooks/useSubstituirEquipamento.ts` | 127-131 | Substituição via UI de gestão | `veiculo_id = null` no antigo | **Manter** — também é troca de equipamento. |
-| 4 | `supabase/functions/concluir-retirada/index.ts` | 169-180 | Conclusão de retirada (rastreador foi fisicamente removido do veículo) | `veiculo_id = null` | **Manter** — retirada física é o equivalente operacional ao cancelamento/troca. |
-| 5 | `src/hooks/useDeleteBaseAntiga.ts` | 12-26 | Exclusão de base antiga | `veiculo_id = null` | **Manter** — equivale a cancelamento. |
-| 6 | `src/hooks/useVenderVeiculo.ts` | 114-118 | Venda de veículo (sai da proteção) | `veiculo_id = null` | **Manter** — equivale a cancelamento daquele veículo. |
-| 7 | `supabase/functions/delete-associado` / `delete-ativacao` | — | Exclusão completa | `veiculo_id = null` | **Manter** — cancelamento. |
-| 8 | `supabase/functions/rede-veiculos-desvincular-cliente` | 87-91, 135-139, 249-253 | Desvinculação na plataforma externa | `veiculo_id = null` no banco local | Revisar — só limpar quando o status final pedido for terminal. Quando a desvinculação for por **manutenção temporária**, manter o vínculo local. |
+1. `agendamentos_base.status` para `'realizado'` (continua como `'agendado'`/`'confirmado'`).
+2. `servicos.status` para `'aprovada'` quando a tarefa veio materializada como serviço (continua em `'em_andamento'`/`'em_analise'`).
 
-A regra do usuário é clara: **manutenção (campo OU interna) ≠ desvinculação**. Só `estoque` (porque já voltou para o pool físico), `baixado` (descartado) e os fluxos explícitos de cancelamento/troca/retirada/venda devem zerar `veiculo_id`.
+A RPC `buscar_tarefa_atual_profissional` (migration `20260416184325`) lê:
 
-### O que vai mudar
+- Bloco 1 (servicos): `WHERE s.status IN ('em_rota','em_andamento','agendada','em_analise')` → o serviço aprovado segue aparecendo.
+- Bloco 2 (agendamentos_base): `WHERE ab.status IN ('confirmado','em_andamento','agendado')` → o agendamento aprovado segue aparecendo.
 
-**1. `src/hooks/useRastreadores.ts` (linhas 420-428)** — substituir a regra "qualquer ≠ instalado limpa" por whitelist explícita:
+Resultado para o técnico:
+- Tela "WALLACE" (imagem 2) mostra a `vistoria_base` da KPQ8J26 já aprovada como tarefa atual.
+- Ao clicar, navega para `/instalador/vistoria/{ab.id}` (a rota usa `tarefa.id`, e para `vistoria_base` esse id é o de `agendamentos_base`).
+- `ExecutarVistoriaCompleta` resolve via `useVistoriaCompletaPorAgendamentoBase` → encontra a vistoria com `status='aprovada'` → cai no bloco "Vistoria Finalizada" (imagem 3). Em janelas de timing entre invalidações, pode ainda mostrar "Não foi possível carregar esta tarefa" (imagem 1) quando a leitura cai numa réplica desatualizada e nenhum dos 3 hooks resolve.
+
+### Bug B — Mensagem "Envie todas as fotos obrigatórias e o vídeo 360°" repetida e sem indicação do que falta (imagem 4)
+
+**Causa raiz** (`src/pages/instalador/InstaladorChecklist.tsx` linhas 2103-2118):
+
+O handler do botão "Próximo" mostra um único toast genérico "Envie todas as fotos obrigatórias e o vídeo 360°" quando `podeAvancar()` é `false` na etapa 3. Problemas:
+
+1. Quando o vídeo já está enviado (tela mostra ✓ verde), o toast continua dizendo "envie o vídeo 360°" — confunde.
+2. Não diz **quais** fotos faltam nem quantas — o técnico precisa rolar a lista inteira procurando o que está pendente.
+3. O toast aparece duplicado na imagem 4 — provável dupla invocação por re-render do React StrictMode em dev OU porque o componente está sendo desmontado/remontado e disparando de novo. Sonner não dedupa toasts idênticos por padrão.
+
+Adicionalmente, falta um sumário no topo da etapa 3 do tipo "5/7 fotos enviadas — faltam: motor_chassi, painel_km" (existe um resumo na linha 1372-1376 mas só aparece em outra etapa, não no topo da 3).
+
+### Correções
+
+**Edição A1 — `src/hooks/useVistoriaCompleta.ts`, dentro de `useAprovarVeiculoVistoria.mutationFn` (após o passo 4 / antes do 5):**
+
+Adicionar duas novas etapas:
 
 ```ts
-// Status que DESVINCULAM do veículo (rastreador deixa fisicamente o veículo
-// ou é descartado). Os demais (manutencao, reagendar_manutencao,
-// retirada_pendente) preservam veiculo_id para manter histórico.
-const STATUS_DESVINCULA_VEICULO: StatusRastreador[] = [
-  'estoque', 'baixado', 'retorno_base', 'triagem',
-  'em_analise_plataforma', 'em_garantia',
-];
+// 4b. Marcar agendamento_base como realizado (se a vistoria veio de uma tarefa de base)
+const { data: agendVinculado } = await supabase
+  .from('agendamentos_base')
+  .select('id')
+  .eq('vistoria_id', data.vistoriaId)
+  .maybeSingle();
 
-const updateData: RastreadorUpdate = { status };
-if (STATUS_DESVINCULA_VEICULO.includes(status)) {
-  updateData.veiculo_id = null;
-} else if (veiculo_id !== undefined) {
-  updateData.veiculo_id = veiculo_id;
+if (agendVinculado) {
+  await supabase
+    .from('agendamentos_base')
+    .update({ status: 'realizado', updated_at: agora })
+    .eq('id', agendVinculado.id);
 }
+
+// 4c. Encerrar serviço materializado vinculado a esta vistoria
+await supabase
+  .from('servicos')
+  .update({
+    status: 'aprovada',
+    concluida_em: agora,
+    updated_at: agora,
+  })
+  .eq('vistoria_origem_id', data.vistoriaId)
+  .in('status', ['em_andamento', 'em_analise', 'em_rota', 'agendada']);
 ```
 
-E ajustar o bloco anterior (linha 381) que **chama a desvinculação na plataforma externa** quando `status !== 'instalado'`: passar a chamar **só** quando `status ∈ STATUS_DESVINCULA_VEICULO` (manutenção temporária não deve desvincular na Rede Veículos/Softruck — o equipamento volta para o mesmo veículo).
+E em `onSuccess`, invalidar também:
 
-**2. `supabase/functions/rede-veiculos-desvincular-cliente/index.ts`** — passa a aceitar parâmetro `manterVinculoLocal: boolean` (default `false` para retrocompatibilidade) e, quando `true`, faz o `update` na plataforma externa mas **não** zera `veiculo_id` no banco local. A `useUpdateRastreadorStatus` passa `manterVinculoLocal: !STATUS_DESVINCULA_VEICULO.includes(status)`.
+```ts
+queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+queryClient.invalidateQueries({ queryKey: ['tarefa-atual-servico'] });
+queryClient.invalidateQueries({ queryKey: ['agendamentos-base-calendario'] });
+queryClient.invalidateQueries({ queryKey: ['servicos'] });
+```
 
-**3. `src/hooks/useVistoriaManutencao.ts` linha 299-306** — já está correto: ao abrir manutenção, só muda `status` para `'manutencao'`, **não** mexe em `veiculo_id`. Confirmar que não há outro `update` no mesmo arquivo zerando o vínculo no fluxo de "abertura". (As linhas 595-599 são do fluxo de **substituição**, que mantemos zerando — é exceção legítima.)
+**Edição A2 — backfill defensivo (migration SQL):**
 
-**4. `src/components/monitoramento/estoque/ListaRastreadores.tsx`** — verificar e ajustar o tooltip/label das ações "Enviar para Manutenção" para deixar claro que o vínculo com o veículo é preservado. (Mudança apenas de copy.)
+Para limpar tarefas-fantasma já criadas (caso da KPQ8J26 das imagens):
 
-**5. Não mudam:**
-- `useSubstituirEquipamento.ts`, `useVistoriaManutencao.ts` cenário B (substituição), `concluir-retirada`, `useVenderVeiculo`, `useDeleteBaseAntiga`, `delete-associado`, `delete-ativacao` — todos casos legítimos de desvinculação (troca, retirada física, venda, cancelamento).
-- Tipos em `src/types/rastreadores.ts` e `TRANSICOES_STATUS_RASTREADOR` — sem alteração.
+```sql
+-- Encerrar agendamentos_base cuja vistoria já está aprovada/reprovada
+UPDATE public.agendamentos_base ab
+   SET status = 'realizado', updated_at = now()
+  FROM public.vistorias v
+ WHERE ab.vistoria_id = v.id
+   AND v.status IN ('aprovada','reprovada')
+   AND ab.status IN ('agendado','confirmado','em_andamento');
 
-**6. Memória do projeto** — criar `mem://logic/operations/rastreador-vinculo-preservacao` documentando a regra: "Vínculo `rastreador.veiculo_id` só é zerado em (a) retirada física concluída, (b) substituição de equipamento, (c) cancelamento/exclusão do associado, (d) venda do veículo, (e) status terminal `estoque`/`baixado`/`retorno_base`/`triagem`/`em_garantia`/`em_analise_plataforma`. Manutenção em campo, reagendamento e retirada pendente preservam o vínculo."
+-- Encerrar serviços cuja vistoria de origem já está aprovada/reprovada
+UPDATE public.servicos s
+   SET status = CASE WHEN v.status = 'aprovada' THEN 'aprovada'::status_servico
+                     ELSE 'reprovada'::status_servico END,
+       concluida_em = COALESCE(s.concluida_em, now()),
+       updated_at = now()
+  FROM public.vistorias v
+ WHERE s.vistoria_origem_id = v.id
+   AND v.status IN ('aprovada','reprovada')
+   AND s.status IN ('em_andamento','em_analise','em_rota','agendada');
+```
+
+**Edição A3 — `src/pages/instalador/ExecutarVistoriaCompleta.tsx` linha 421-435:**
+
+A tela "Não foi possível carregar esta tarefa" deve ter um botão de retry explícito (já tem "Voltar para tarefas") e uma chamada manual de `refetch` antes de desistir. Adicionar:
+
+```tsx
+<Button
+  variant="outline"
+  onClick={() => {
+    vistoriaPorServicoQuery.refetch();
+    vistoriaPorInstalacaoQuery.refetch();
+    vistoriaPorAgendamentoBaseQuery.refetch();
+  }}
+>
+  Tentar novamente
+</Button>
+```
+
+**Edição B1 — `src/pages/instalador/InstaladorChecklist.tsx` linhas 2104-2118:**
+
+Substituir o toast genérico por mensagem específica do que falta:
+
+```tsx
+onClick={() => {
+  if (!podeAvancar()) {
+    if (etapaAtual === 2 && !checklistCompleto) {
+      const faltam = checklistItems.filter(item =>
+        checklist[item.id]?.status === 'pendente' || !checklist[item.id]
+      ).length;
+      toast.error(`Marque todos os itens do checklist (${faltam} pendente${faltam > 1 ? 's' : ''})`, { id: 'avancar-bloqueado' });
+    } else if (etapaAtual === 3) {
+      const fotosFaltam = totalObrigatorias - totalFotosEnviadas;
+      const partes: string[] = [];
+      if (fotosFaltam > 0) partes.push(`${fotosFaltam} foto${fotosFaltam > 1 ? 's' : ''}`);
+      if (!video360Enviado) partes.push('vídeo 360°');
+      toast.error(`Falta enviar: ${partes.join(' + ')}`, { id: 'avancar-bloqueado' });
+    } else {
+      toast.error('Complete todos os campos obrigatórios para avançar', { id: 'avancar-bloqueado' });
+    }
+    return;
+  }
+  avancar();
+}}
+```
+
+O `id: 'avancar-bloqueado'` faz o Sonner deduplicar — elimina o toast em dobro da imagem 4.
+
+**Edição B2 — adicionar resumo permanente no topo da etapa 3** (acima do `<VistoriaFotoSequencial>` linha 1300):
+
+```tsx
+<div className="rounded-lg border border-slate-700 bg-slate-800 p-3">
+  <div className="flex items-center justify-between text-sm">
+    <span className="text-slate-300">Progresso de mídias</span>
+    <span className="font-semibold text-white">
+      {totalFotosEnviadas}/{totalObrigatorias} fotos · {video360Enviado ? '✓ vídeo' : '✗ vídeo'}
+    </span>
+  </div>
+  {totalFotosEnviadas < totalObrigatorias && (
+    <p className="mt-1 text-xs text-amber-400">
+      Faltam: {fotosObrigatoriasConfig
+        .filter(f => !fotosEnviadas.some(foto => foto.tipo === f.id))
+        .slice(0, 3)
+        .map(f => f.nome)
+        .join(', ')}
+      {fotosObrigatoriasConfig.filter(f => !fotosEnviadas.some(foto => foto.tipo === f.id)).length > 3 && '…'}
+    </p>
+  )}
+</div>
+```
 
 ### Arquivos editados
 
-- `src/hooks/useRastreadores.ts` — whitelist de status que desvinculam + condicionar chamada à API externa.
-- `supabase/functions/rede-veiculos-desvincular-cliente/index.ts` — novo parâmetro `manterVinculoLocal`.
-- `src/components/monitoramento/estoque/ListaRastreadores.tsx` — copy das ações.
-- `mem://logic/operations/rastreador-vinculo-preservacao.md` (novo) + atualização do `mem://index.md`.
+- `src/hooks/useVistoriaCompleta.ts` — `useAprovarVeiculoVistoria`: encerrar `agendamentos_base` e `servicos` vinculados; invalidar queries de tarefa atual.
+- `src/pages/instalador/ExecutarVistoriaCompleta.tsx` — botão "Tentar novamente" na tela de erro.
+- `src/pages/instalador/InstaladorChecklist.tsx` — toast específico com `id` (dedupe) + sumário de progresso na etapa 3.
+- Nova migration SQL — backfill: agendamentos_base/servicos com vistoria já aprovada → status terminal.
+
+### Não muda
+
+- RPC `buscar_tarefa_atual_profissional` (a lógica de filtro está correta — o problema é que os registros nunca eram atualizados).
+- Hooks de resolução de vistoria (`useVistoriaCompletaPorServico`, `useVistoriaCompletaPorAgendamentoBase`).
+- Fluxo de upload de fotos/vídeo (`useUploadFotoVistoriaCompleta`, `useUploadVideo360`).
+- Tela "Vistoria Finalizada" (continua sendo o destino correto se o técnico forçar a navegação para uma vistoria já encerrada).
 
 ### Riscos
 
-- Rastreador em `manutencao` continuará aparecendo "vinculado" ao veículo na listagem do veículo — comportamento desejado (é o equipamento daquele veículo, só está em assistência). Filtros que mostram "rastreadores instalados" devem usar `status = 'instalado'`, não `veiculo_id IS NOT NULL`. Verificar `useVeiculos`/queries do mapa de monitoramento — se filtrarem por `veiculo_id`, mostrar `status` para distinguir.
-- Plataforma externa (Rede Veículos/Softruck) pode ficar com a vinculação ativa durante manutenção — desejável, evita re-cadastro quando o rastreador volta ao mesmo veículo após o reparo.
+- A1: caso uma vistoria seja aprovada manualmente sem ter `agendamentos_base` vinculado nem `vistoria_origem_id` em servicos, o `update` simplesmente não afeta nada — sem regressão.
+- A2 (backfill): atualiza apenas registros já com vistoria em `aprovada`/`reprovada` — comportamento equivalente ao que já deveria ter ocorrido. Não toca em registros ativos.
+- B1: Sonner com `id` reaproveita o mesmo container do toast em vez de criar outro. Comportamento desejado.
 
