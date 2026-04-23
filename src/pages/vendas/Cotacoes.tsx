@@ -1034,9 +1034,11 @@ export default function Cotacoes() {
           if (!open) {
             setLeadIdFromUrl(null);
             setCotacaoParaDuplicar(null);
+            setIgnorarPlacaIds([]);
           }
         }} 
         leadId={leadIdFromUrl || undefined}
+        ignorarPlacaDuplicadaIds={ignorarPlacaIds}
         cotacaoBase={cotacaoParaDuplicar ? {
           valor_fipe: cotacaoParaDuplicar.valor_fipe,
           valor_adicional: cotacaoParaDuplicar.valor_adicional,
@@ -1069,31 +1071,24 @@ export default function Cotacoes() {
           toast.success('Cotação salva! Exibindo em "Em Andamento".');
         }}
       />
-      <ContratoWizard 
-        open={showContratoWizard} 
-        onOpenChange={setShowContratoWizard} 
-        cotacaoId={selectedCotacaoId}
-        onContratoCreated={handleContratoCreated}
-      />
-      {selectedCotacaoEmail && (
-        <EnviarEmailModal
-          open={showEmailModal}
-          onOpenChange={setShowEmailModal}
-          cotacao={selectedCotacaoEmail}
-          onSuccess={() => handleMarkAsEnviada(selectedCotacaoEmail.id, selectedCotacaoEmail.lead_id)}
-        />
-      )}
-      
-      <VincularLeadModal
-        open={showVincularModal}
-        onOpenChange={setShowVincularModal}
-        cotacaoId={cotacaoParaVincular?.id || ''}
-        leadAtualId={cotacaoParaVincular?.lead_id}
-        onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
+
+      <DuplicarCotacaoDialog
+        open={!!cotacaoConfirmarDuplicar}
+        onOpenChange={(open) => {
+          if (!open) setCotacaoConfirmarDuplicar(null);
         }}
+        cotacao={cotacaoConfirmarDuplicar ? {
+          id: cotacaoConfirmarDuplicar.id,
+          numero: cotacaoConfirmarDuplicar.numero,
+          vendedor_id: cotacaoConfirmarDuplicar.vendedor_id,
+          status: cotacaoConfirmarDuplicar.status,
+        } : null}
+        vendedorOriginalNome={cotacaoConfirmarDuplicar?.vendedor?.nome || null}
+        currentUserId={user?.id}
+        isSubmitting={duplicarCotacao.isPending}
+        onConfirm={handleConfirmarDuplicacao}
       />
-      
+
       <ConfirmacaoExclusaoCotacaoDialog
         open={showExclusaoLoteDialog}
         onOpenChange={(open) => {
