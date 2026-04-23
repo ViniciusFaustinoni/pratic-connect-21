@@ -570,6 +570,21 @@ Ficou com alguma dúvida? Estou à disposição!
           }}
         />
       )}
+
+      <DuplicarCotacaoDialog
+        open={showDuplicarDialog}
+        onOpenChange={setShowDuplicarDialog}
+        cotacao={cotacao ? {
+          id: cotacao.id,
+          numero: cotacao.numero,
+          vendedor_id: cotacao.vendedor_id,
+          status: cotacao.status,
+        } : null}
+        vendedorOriginalNome={cotacao?.vendedor?.nome || null}
+        currentUserId={profile?.id}
+        isSubmitting={duplicarMutation.isPending}
+        onConfirm={handleConfirmarDuplicacao}
+      />
     </div>
   );
 }
