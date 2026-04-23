@@ -412,42 +412,137 @@ export function useCotacaoActions() {
   };
 }
 
-// Hook para duplicar cotação
+// Hook para duplicar cotação (com fluxo de correção: excluir ou substituir a original)
+export interface DuplicarCotacaoParams {
+  cotacaoId: string;
+  motivo?: string;
+  acaoOriginal?: 'excluir' | 'manter' | 'none';
+}
+
 export function useDuplicarCotacao() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
-    mutationFn: async (cotacaoId: string) => {
+    mutationFn: async (params: string | DuplicarCotacaoParams) => {
+      const cotacaoId = typeof params === 'string' ? params : params.cotacaoId;
+      const motivo = typeof params === 'string' ? undefined : params.motivo;
+      const acaoOriginal = typeof params === 'string' ? 'none' : (params.acaoOriginal ?? 'none');
+
       // Buscar cotação original
       const { data: original, error: fetchError } = await supabase
         .from('cotacoes')
         .select('*')
         .eq('id', cotacaoId)
         .single();
-      
+
       if (fetchError) throw fetchError;
       if (!original) throw new Error('Cotação não encontrada');
-      
+
+      // Se for excluir, validar que não há contrato/agendamento (race-safety)
+      if (acaoOriginal === 'excluir') {
+        const [contratoRes, agendRes] = await Promise.all([
+          supabase.from('contratos').select('id').eq('cotacao_id', cotacaoId).limit(1),
+          supabase.from('agendamentos_base').select('id').eq('cotacao_id', cotacaoId).limit(1),
+        ]);
+        if ((contratoRes.data?.length ?? 0) > 0 || (agendRes.data?.length ?? 0) > 0) {
+          throw new Error('Esta cotação já possui contrato ou agendamento. Recarregue a página e duplique novamente usando "Manter como substituída".');
+        }
+        if (!['rascunho', 'enviada'].includes(original.status as string)) {
+          throw new Error('Cotações neste status não podem ser excluídas — use "Manter como substituída".');
+        }
+      }
+
       // Remover campos que serão gerados novamente
-      const { id, numero, created_at, updated_at, ...cotacaoData } = original;
-      
-      // Criar cópia com novo número e status rascunho
-      const { data, error } = await supabase
+      const {
+        id,
+        numero,
+        created_at,
+        updated_at,
+        substituida_por_cotacao_id,
+        motivo_substituicao,
+        token_publico,
+        ...cotacaoData
+      } = original as any;
+
+      // Gera token público novo para a duplicata
+      const tokenPublico = crypto.randomUUID().replace(/-/g, '') +
+                          crypto.randomUUID().replace(/-/g, '').slice(0, 32);
+
+      // Atribuir vendedor_id ao usuário atual (ex.: gestor corrigindo cotação alheia)
+      const { data: { user } } = await supabase.auth.getUser();
+      const novoVendedorId = user?.id ?? cotacaoData.vendedor_id;
+
+      const { data: nova, error } = await supabase
         .from('cotacoes')
         .insert({
           ...cotacaoData,
-          numero: `COT-${Date.now()}-${Math.random().toString(36).substr(2, 3).toUpperCase()}`,
+          vendedor_id: novoVendedorId,
+          numero: gerarNumeroCotacao(),
           status: 'rascunho',
+          token_publico: tokenPublico,
         })
         .select()
         .single();
-      
+
       if (error) throw error;
-      return data;
+
+      // Pós-processamento na original conforme acaoOriginal
+      if (acaoOriginal === 'manter') {
+        await supabase
+          .from('cotacoes')
+          .update({
+            status: 'recusada',
+            substituida_por_cotacao_id: nova.id,
+            motivo_substituicao: motivo ?? null,
+          })
+          .eq('id', cotacaoId);
+      } else if (acaoOriginal === 'excluir') {
+        // Tenta exclusão via Edge Function (cascata segura). Fallback: DELETE direto.
+        try {
+          const { data: delData, error: delErr } = await supabase.functions.invoke('delete-cotacao', {
+            body: { cotacaoId, motivo: motivo ? `[Duplicação] ${motivo}` : '[Duplicação]' },
+          });
+          if (delErr || !delData?.success) {
+            throw new Error(delErr?.message || delData?.error || 'Falha ao excluir original');
+          }
+        } catch (e) {
+          console.warn('[useDuplicarCotacao] delete-cotacao falhou, tentando DELETE direto:', e);
+          const { error: directDelErr } = await supabase
+            .from('cotacoes')
+            .delete()
+            .eq('id', cotacaoId);
+          if (directDelErr) {
+            console.error('[useDuplicarCotacao] DELETE direto também falhou:', directDelErr);
+            toast.warning('Duplicata criada, mas não foi possível excluir a original. Você pode excluí-la manualmente.');
+          }
+        }
+      }
+
+      return { ...nova, _originalId: cotacaoId, _acaoOriginal: acaoOriginal, _motivo: motivo };
     },
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
       toast.success('Cotação duplicada com sucesso!');
+
+      const acao = data._acaoOriginal as 'excluir' | 'manter' | 'none';
+      if (acao === 'excluir') {
+        registrarLog({
+          acao: 'excluir',
+          modulo: 'cotacoes',
+          descricao: `Cotação original excluída em duplicação. Nova: ${data.numero}. Motivo: ${data._motivo ?? '—'}`,
+          entidade_id: data._originalId,
+          dados_novos: { nova_cotacao_id: data.id, motivo: data._motivo },
+        });
+      } else if (acao === 'manter') {
+        registrarLog({
+          acao: 'duplicar',
+          modulo: 'cotacoes',
+          descricao: `Cotação substituída por ${data.numero}. Motivo: ${data._motivo ?? '—'}`,
+          entidade_id: data._originalId,
+          dados_novos: { nova_cotacao_id: data.id, motivo: data._motivo },
+        });
+      }
+
       registrarLog({
         acao: 'duplicar',
         modulo: 'cotacoes',
@@ -455,8 +550,8 @@ export function useDuplicarCotacao() {
         entidade_id: data.id,
       });
     },
-    onError: () => {
-      toast.error('Erro ao duplicar cotação');
+    onError: (e: Error) => {
+      toast.error(e.message || 'Erro ao duplicar cotação');
     },
   });
 }

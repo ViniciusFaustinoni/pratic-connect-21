@@ -131,11 +131,13 @@ export interface CotacaoFormDialogProps {
   cotacaoBase?: CotacaoBaseParaFormulario | null;
   /** Cotação existente para edição (qualquer status, exceto após contrato assinado) */
   cotacaoParaEditar?: CotacaoBaseParaFormulario & { id: string } | null;
+  /** IDs de cotações a ignorar na verificação de placa duplicada (ex.: original em duplicação) */
+  ignorarPlacaDuplicadaIds?: string[];
   /** Callback após salvar com sucesso */
   onSuccess?: () => void;
 }
 
-export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cotacaoParaEditar, onSuccess }: CotacaoFormDialogProps) {
+export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cotacaoParaEditar, ignorarPlacaDuplicadaIds, onSuccess }: CotacaoFormDialogProps) {
   const navigate = useNavigate();
   const createCotacao = useCreateCotacao();
   const updateCotacao = useUpdateCotacao();
@@ -876,7 +878,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     setBuscandoPlaca(true);
     try {
       // Primeiro, verificar se a placa já está em cotação de outro vendedor
-      const placaDuplicada = await verificarPlacaDuplicada.mutateAsync(placa);
+      const placaDuplicada = await verificarPlacaDuplicada.mutateAsync({ placa, ignorarIds: ignorarPlacaDuplicadaIds });
       
       if (placaDuplicada) {
         // Verifica se é do mesmo vendedor ou de outro

@@ -35,6 +35,7 @@ import { gerarPdfCotacao, gerarPdfCotacaoComparativa, type PlanoParaPdf, type Co
 import { CotacoesTable, type CotacoesTablePermissions } from '@/components/cotacoes/CotacoesTable';
 import { CotacaoDetalhesModal } from '@/components/cotacoes/CotacaoDetalhesModal';
 import { ConfirmacaoExclusaoCotacaoDialog } from '@/components/cotacoes/ConfirmacaoExclusaoCotacaoDialog';
+import { DuplicarCotacaoDialog, type DuplicarCotacaoConfirmPayload } from '@/components/cotacoes/DuplicarCotacaoDialog';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
@@ -94,6 +95,8 @@ export default function Cotacoes() {
   const [cotacaoParaExcluir, setCotacaoParaExcluir] = useState<string | null>(null);
   const [mesFilter, setMesFilter] = useState<string>('all');
   const [cotacaoParaDuplicar, setCotacaoParaDuplicar] = useState<CotacaoWithRelations | null>(null);
+  const [cotacaoConfirmarDuplicar, setCotacaoConfirmarDuplicar] = useState<CotacaoWithRelations | null>(null);
+  const [ignorarPlacaIds, setIgnorarPlacaIds] = useState<string[]>([]);
   const [copiandoWhatsApp, setCopiandoWhatsApp] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>('em_andamento');
   
@@ -284,8 +287,29 @@ export default function Cotacoes() {
   };
 
   const handleDuplicar = (cotacao: CotacaoWithRelations) => {
-    setCotacaoParaDuplicar(cotacao);
-    setShowCotacaoForm(true);
+    // Abre primeiro o diálogo de confirmação (motivo + ação na original)
+    setCotacaoConfirmarDuplicar(cotacao);
+  };
+
+  const handleConfirmarDuplicacao = async (payload: DuplicarCotacaoConfirmPayload) => {
+    if (!cotacaoConfirmarDuplicar) return;
+    const original = cotacaoConfirmarDuplicar;
+    try {
+      const nova = await duplicarCotacao.mutateAsync({
+        cotacaoId: original.id,
+        motivo: payload.motivo,
+        acaoOriginal: payload.acaoOriginal,
+      });
+      setCotacaoConfirmarDuplicar(null);
+      // Se "manter": ignorar a placa da original (continua existindo no banco)
+      // Se "excluir": original já foi removida, sem necessidade de ignorar.
+      setIgnorarPlacaIds(payload.acaoOriginal === 'manter' ? [original.id] : []);
+      // Abre o formulário com os dados da nova cotação para refinamento
+      setCotacaoParaDuplicar({ ...original, ...nova } as CotacaoWithRelations);
+      setShowCotacaoForm(true);
+    } catch {
+      // toast de erro já tratado no hook
+    }
   };
 
   const handleExcluir = (id: string) => {
@@ -1010,9 +1034,11 @@ export default function Cotacoes() {
           if (!open) {
             setLeadIdFromUrl(null);
             setCotacaoParaDuplicar(null);
+            setIgnorarPlacaIds([]);
           }
         }} 
         leadId={leadIdFromUrl || undefined}
+        ignorarPlacaDuplicadaIds={ignorarPlacaIds}
         cotacaoBase={cotacaoParaDuplicar ? {
           valor_fipe: cotacaoParaDuplicar.valor_fipe,
           valor_adicional: cotacaoParaDuplicar.valor_adicional,
@@ -1059,7 +1085,7 @@ export default function Cotacoes() {
           onSuccess={() => handleMarkAsEnviada(selectedCotacaoEmail.id, selectedCotacaoEmail.lead_id)}
         />
       )}
-      
+
       <VincularLeadModal
         open={showVincularModal}
         onOpenChange={setShowVincularModal}
@@ -1069,7 +1095,24 @@ export default function Cotacoes() {
           queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
         }}
       />
-      
+
+      <DuplicarCotacaoDialog
+        open={!!cotacaoConfirmarDuplicar}
+        onOpenChange={(open) => {
+          if (!open) setCotacaoConfirmarDuplicar(null);
+        }}
+        cotacao={cotacaoConfirmarDuplicar ? {
+          id: cotacaoConfirmarDuplicar.id,
+          numero: cotacaoConfirmarDuplicar.numero,
+          vendedor_id: cotacaoConfirmarDuplicar.vendedor_id,
+          status: cotacaoConfirmarDuplicar.status,
+        } : null}
+        vendedorOriginalNome={cotacaoConfirmarDuplicar?.vendedor?.nome || null}
+        currentUserId={user?.id}
+        isSubmitting={duplicarCotacao.isPending}
+        onConfirm={handleConfirmarDuplicacao}
+      />
+
       <ConfirmacaoExclusaoCotacaoDialog
         open={showExclusaoLoteDialog}
         onOpenChange={(open) => {
