@@ -13,6 +13,8 @@ import { RecuperacaoKPIs } from '@/components/cobranca/RecuperacaoKPIs';
 import { DashboardGraficos } from '@/components/cobranca/DashboardGraficos';
 import { TopDevedores } from '@/components/cobranca/TopDevedores';
 import { AlertasCobranca } from '@/components/cobranca/AlertasCobranca';
+import { SgaBackfillFinanceiroDialog } from '@/components/cobranca/SgaBackfillFinanceiroDialog';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -62,6 +64,7 @@ const getResultadoBadge = (resultado: string) => {
 
 export default function CobrancaDashboard() {
   const navigate = useNavigate();
+  const { isDiretor, isAdminMaster, isDesenvolvedor } = usePermissions();
 
   // Estatísticas de inadimplência
   const { data: estatisticas, isLoading: loadingStats } = useQuery({
@@ -228,6 +231,7 @@ export default function CobrancaDashboard() {
           <Button variant="outline" onClick={() => navigate('/cobranca/fila')}>Fila de Trabalho</Button>
           <Button variant="outline" onClick={() => navigate('/cobranca/acordos/novo')}>Novo Acordo</Button>
           <Button variant="outline" onClick={() => navigate('/cobranca/regua')}>Régua de Cobrança</Button>
+          {(isDiretor || isAdminMaster || isDesenvolvedor) && <SgaBackfillFinanceiroDialog />}
         </div>
       </div>
 

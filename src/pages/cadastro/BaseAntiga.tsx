@@ -13,7 +13,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Search, Database, ChevronLeft, ChevronRight, User, Car, Radio, Receipt, Trash2, WifiOff } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { VeiculoDetalhesModal } from '@/components/cadastro/VeiculoDetalhesModal';
-import { SgaBackfillFinanceiroDialog } from '@/components/cadastro/SgaBackfillFinanceiroDialog';
 
 const STATUS_COLORS: Record<string, string> = {
   ativo: 'bg-green-100 text-green-800',
@@ -94,7 +93,6 @@ export default function BaseAntiga() {
           </h1>
           <p className="text-sm text-muted-foreground">Associados e Veículos importados do sistema SGA/Hinova</p>
         </div>
-        {(isDiretor || isAdminMaster || isDesenvolvedor) && <SgaBackfillFinanceiroDialog />}
       </div>
 
       <Tabs value={mainTab} onValueChange={setMainTab}>
