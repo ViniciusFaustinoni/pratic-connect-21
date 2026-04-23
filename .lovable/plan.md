@@ -1,61 +1,82 @@
 
 
-## Visibilidade do botão de menu + Funil filtrado por consultor
+## Corrigir URL do template `termo_filiacao_assinatura_v2` para o link real da Autentique
 
-### 1. Ícone do menu (SidebarTrigger) mais visível
+### Diagnóstico
 
-Hoje em `src/components/layout/AppHeader.tsx:37` o trigger usa `text-muted-foreground` (cinza fraco) e `<PanelLeft />` em tamanho padrão dentro de `h-7 w-7` — quase invisível em mobile contra o fundo escuro do header.
+Confirmado o bug que você apontou. O template **`termo_filiacao_assinatura_v2`** (migration `20260421233246`) foi cadastrado com:
 
-**Mudanças em `src/components/layout/AppHeader.tsx`:**
-- Trocar variant ghost discreto por um botão de contraste alto:
-  - Adicionar `border border-border bg-card-hover` para criar moldura visível.
-  - Trocar cor para `text-foreground` (não `muted-foreground`).
-  - Aumentar ícone para `h-5 w-5` via classe filha (override no SidebarTrigger por estilo já permitido).
-- Adicionar um pequeno indicador visual de estado (quando colapsado, um traço acentuado) usando o estado `state` do `useSidebar`.
-- Manter área de toque 44×44 já existente.
+```json
+{ "url": "https://app.praticcar.org/contrato/{{1}}",
+  "exemplo": "https://app.praticcar.org/contrato/abc123" }
+```
 
-Resultado: ícone branco com contorno claro, claramente clicável tanto em dark quanto mobile.
+E o helper `supabase/functions/_shared/enviar-termo-filiacao-whatsapp.ts` (linha 61) extrai apenas o **último segmento** da URL Autentique (`https://assina.ae/<token>`) e injeta esse token como `{{1}}`. Resultado: o cliente recebe um link `https://app.praticcar.org/contrato/<token-da-autentique>` — **rota inexistente no app**, não abre Autentique e não permite assinatura.
 
-### 2. Funil de Cotação filtrado pelo consultor logado
+**Padrão Meta-aprovado já usado no projeto** (e que é o modelo correto):
 
-**Diagnóstico.** `useFunilCotacao` (`src/hooks/useFunilCotacao.ts`) consulta `leads`, `cotacoes`, `contratos`, `instalacoes`, `associados` **sem nenhum filtro de `vendedor_id`**. Resultado: vendedor externo vê números globais da empresa (1000 propostas, etc.), idêntico ao screenshot.
+| Template (já aprovado) | URL do botão |
+|---|---|
+| `assinatura_documento_v2` (migration 20260316212103) | `https://assina.ae/{{1}}` |
+| Termo de filiação v1 (migration 20260420200536) | `https://assina.ae/{{1}}` |
 
-Todas as tabelas envolvidas já têm a coluna `vendedor_id` (confirmado em `types.ts` e em `useNewLeadFlow`, `ContratoFormDialog`, `useLeads`). `instalacoes` e `associados` não têm `vendedor_id` direto — precisam ser ligadas por `cotacao_id`/`contrato_id`.
+→ A Autentique encurta o link de assinatura para `https://assina.ae/<token>`. Esse é o domínio padrão e foi o usado em todas as aprovações Meta anteriores. **`v2` divergiu sem motivo** e ficou com URL inválida.
 
-**Princípio.** Quando o usuário logado for **vendedor** (`isVendedorClt` ou `isVendedorExterno`) e **NÃO for gestor** (não diretor/gerente/supervisor/admin), o funil filtra por `vendedor_id = profile.id`. Para gestores e diretoria, comportamento atual (visão total) é mantido.
+### Correção
 
-**Mudanças:**
+**1. Recriar `termo_filiacao_assinatura_v2` com a URL correta** (nova migration)
 
-**A. `src/hooks/useFunilCotacao.ts`**
-- Receber `vendedorId?: string | null` como parâmetro opcional, ou deduzir internamente via `useAuth` + `usePermissions`:
-  - Se `(isVendedorClt || isVendedorExterno) && !isGestor` → aplicar filtro `vendedor_id = profile.id` em `leads`, `cotacoes`, `contratos`.
-  - Para `instalacoes` e `associados`: filtrar via subquery — buscar IDs de cotações/contratos do vendedor e usar `.in('cotacao_id', …)` / `.in('contrato_id', …)`.
-- Adicionar `vendedorId` na `queryKey` para cache correto por usuário.
+- `DELETE` do registro atual em `whatsapp_meta_templates` (status `DRAFT`/`RASCUNHO`, ainda não foi aprovado pela Meta — confirmar status antes do delete).
+- `INSERT` da nova versão idêntica em corpo/rodapé/variáveis, **trocando apenas o botão URL**:
 
-**B. `src/components/vendas/FunilCotacaoChart.tsx`**
-- Aceitar prop opcional `vendedorId` e repassar para o hook. Sem prop = usa lógica automática do hook (vendedor logado).
+```json
+[{
+  "tipo": "url",
+  "texto": "Assinar termo",
+  "url":   "https://assina.ae/{{1}}",
+  "exemplo": "https://assina.ae/abc123"
+}]
+```
 
-**C. `src/pages/Dashboard.tsx`**
-- Nenhuma mudança necessária — `<FunilCotacaoChart periodo="30dias" />` continua igual; o hook se ajusta sozinho conforme o role.
+Status inicial `RASCUNHO` (precisa ser submetido à Meta novamente — ciclo padrão).
 
-**D. `src/pages/vendas/VendasDashboard.tsx`**
-- Mesma coisa: o `<FunilCotacaoChart periodo={periodo} />` da linha 383 continua sem prop, mas como essa página já é por consultor (e gestores veem total), o hook decide sozinho. Comportamento idêntico para gestor; correto para vendedor.
+**2. Helper `enviar-termo-filiacao-whatsapp.ts` — sem mudança funcional**
+
+Já extrai corretamente o token da `autentiqueUrl` (`https://assina.ae/abc123` → `abc123`) e passa em `template_button_params: [token]`. Com a URL do template apontando agora para `https://assina.ae/{{1}}`, o link final renderizado pela Meta volta a ser exatamente o link Autentique original. Apenas atualizar o comentário do topo (linha 4) que ainda referencia o template v1.
+
+**3. Aplicar o mesmo padrão em `autorizacao_fipe_diretoria_v4` (mesma migration `…233246`)**
+
+Esse template é diferente — não é assinatura Autentique, é link interno do painel admin. URL `https://app.praticcar.org/vendas/aprovacoes-fipe/{{1}}` está correta (rota existe em `src/pages/vendas/AprovacoesFipe.tsx`). **Sem alteração.**
+
+**4. Auditoria rápida dos demais templates de assinatura/link**
+
+Já validei (ver tabela do diagnóstico): todos os outros templates de **assinatura** já usam `https://assina.ae/{{1}}`. Templates de painel interno (`/acompanhar/{{1}}`, `/primeiro-acesso?id={{1}}`, `/aprovacoes-fipe`) apontam para rotas reais do app — corretos. **Não há outros templates a corrigir nesta tarefa.**
+
+### Checklist Meta (regras já conhecidas, garantindo aprovação)
+
+- ✅ Categoria `UTILITY` (notificação transacional pós-cadastro).
+- ✅ Domínio do botão URL = mesmo de outros templates já aprovados (`assina.ae`).
+- ✅ Variável dinâmica do botão `{{1}}` com `exemplo` preenchido (`https://assina.ae/abc123`).
+- ✅ Corpo/rodapé sem CTA promocional, sem emoji excessivo, com variáveis exemplificadas.
 
 ### Arquivos editados
 
-- `src/components/layout/AppHeader.tsx` — destacar SidebarTrigger.
-- `src/hooks/useFunilCotacao.ts` — filtro automático por `vendedor_id` quando vendedor logado.
-- `src/components/vendas/FunilCotacaoChart.tsx` — aceitar prop opcional `vendedorId` (futuro override por gestor).
+- **Nova migration** — `DELETE` + `INSERT` corrigindo `termo_filiacao_assinatura_v2` (URL = `https://assina.ae/{{1}}`).
+- `supabase/functions/_shared/enviar-termo-filiacao-whatsapp.ts` — atualizar comentário do topo (linhas 4 e 7-8) para refletir v2 e padrão `assina.ae`.
 
 ### O que NÃO muda
 
-- Visão de gestores (diretor/gerente/supervisor/admin) e diretoria continua agregada (sem filtro).
-- KPIs de “Minhas Comissões” já são por vendedor (via `useMinhasComissoes*`) — sem alteração.
-- Outros dashboards específicos (analista cadastro/eventos/monitoramento) não usam `FunilCotacaoChart`.
+- Helper continua extraindo o token da `autentique_url` salva em `contratos.autentique_url`.
+- Edge function `enviar-termo-filiacao-whatsapp/index.ts` (orquestração) — sem alteração.
+- Fallback para `assinatura_documento_v2` permanece (já está com `assina.ae`).
+- `autorizacao_fipe_diretoria_v4` — URL interna do painel já é a rota correta.
+
+### Próximo passo após o deploy
+
+Você precisa **submeter `termo_filiacao_assinatura_v2` à Meta novamente** (botão "Submeter para aprovação" na tela de templates WhatsApp). Como a estrutura agora bate com `assinatura_documento_v2` (já aprovado), a aprovação tende a ser rápida.
 
 ### Riscos
 
-- Subquery `instalacoes`/`associados` por `IN (cotacoes_do_vendedor)` pode trazer 0 resultados em vendedor novo — esperado, exibe “0”.
-- Se algum vendedor tem cotações antigas migradas sem `vendedor_id`, elas ficam fora do funil dele (correto: não foram dele formalmente). Sem backfill no escopo desta tarefa.
-- Nenhum impacto em RLS — todas essas tabelas já têm RLS que permite vendedor ver suas próprias linhas; o filtro adiciona precisão, não permissão.
+- Se algum cliente já recebeu o template v2 com URL quebrada, ele precisa ser reenviado depois da nova aprovação. Backfill manual (não incluso) — basta listar contratos com `autentique_url IS NOT NULL` e `status='aguardando_assinatura'` criados após `2026-04-21` e disparar reenvio.
+- A nova versão fica em `RASCUNHO` até aprovação Meta — durante esse período, o helper cai no fallback `assinatura_documento_v2` (já aprovado), então **nenhum cliente fica sem mensagem**.
 
