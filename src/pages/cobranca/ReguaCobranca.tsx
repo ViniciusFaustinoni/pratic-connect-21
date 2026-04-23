@@ -300,6 +300,72 @@ export default function ReguaCobranca() {
         </AlertDescription>
       </Alert>
 
+      {/* Banner: templates não aprovados */}
+      {etapasComTemplateNaoAprovado.length > 0 && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription className="flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
+            <span>
+              <strong>{etapasComTemplateNaoAprovado.length}</strong>{' '}
+              {etapasComTemplateNaoAprovado.length === 1 ? 'etapa usa template' : 'etapas usam templates'} não aprovados pela Meta — não serão enviadas até a aprovação.
+            </span>
+            <Link
+              to="/configuracoes/integracoes/whatsapp?tab=templates"
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm underline inline-flex items-center gap-1 whitespace-nowrap"
+            >
+              Abrir catálogo de templates Meta <ExternalLink className="h-3 w-3" />
+            </Link>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Card: Última execução */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Play className="h-4 w-4" />
+            Execução automática
+          </CardTitle>
+          <CardDescription>
+            Roda diariamente às 09:00 (BRT). Use "Executar Agora" para disparar manualmente.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {ultimaExecucao ? (
+            ultimaExecucao.error ? (
+              <div className="text-sm text-destructive">
+                Última execução em {new Date(ultimaExecucao.quando).toLocaleString('pt-BR')} — <strong>falhou:</strong> {ultimaExecucao.error}
+              </div>
+            ) : (
+              <div className="text-sm space-y-1">
+                <div className="text-muted-foreground">
+                  Última execução: <strong className="text-foreground">{new Date(ultimaExecucao.quando).toLocaleString('pt-BR')}</strong>
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  <span>Associados processados: <strong>{ultimaExecucao.processados ?? 0}</strong></span>
+                  <span>Eventos: <strong>{ultimaExecucao.eventos_criados ?? 0}</strong></span>
+                  <span className="text-green-700 dark:text-green-400">WhatsApp enviados: <strong>{ultimaExecucao.whatsapp_enviados ?? 0}</strong></span>
+                  {(ultimaExecucao.whatsapp_falhas ?? 0) > 0 && (
+                    <span className="text-destructive">Falhas: <strong>{ultimaExecucao.whatsapp_falhas}</strong></span>
+                  )}
+                </div>
+                {ultimaExecucao.limite_atingido && (
+                  <div className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                    ⚠️ Limite de disparos por execução atingido — restante será processado na próxima rodada.
+                  </div>
+                )}
+              </div>
+            )
+          ) : (
+            <div className="text-sm text-muted-foreground">
+              Nenhuma execução manual nesta sessão. Clique em "Executar Agora" para testar.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Timeline Visual */}
       <Card>
         <CardHeader>
