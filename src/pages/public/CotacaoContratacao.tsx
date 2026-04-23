@@ -10,6 +10,7 @@ import { StepperCotacao, type Step } from '@/components/cotacao-publica/StepperC
 import { EscolhaPlano } from '@/components/cotacao-publica/EscolhaPlano';
 import { EtapaDadosPessoaisDocumentos } from '@/components/cotacao-publica/EtapaDadosPessoaisDocumentos';
 import { EtapaAssinaturaContrato } from '@/components/cotacao-publica/EtapaAssinaturaContrato';
+import { EtapaAssinaturaSubstituicao } from '@/components/cotacao-publica/EtapaAssinaturaSubstituicao';
 import { EtapaVistoria } from '@/components/cotacao-publica/EtapaVistoria';
 import { EtapaPagamentoCotacao } from '@/components/cotacao-publica/EtapaPagamentoCotacao';
 import { AgendamentoVistoriaCompleta } from '@/components/cotacao-publica/AgendamentoVistoriaCompleta';
@@ -473,6 +474,24 @@ export default function CotacaoContratacao() {
                     termoAssinadoEm={solicitacaoTroca?.termo_cancelamento_assinado_em}
                     aprovadoCadastroEm={solicitacaoTroca?.aprovado_cadastro_em}
                     aprovadoMonitoramentoEm={solicitacaoTroca?.aprovado_monitoramento_em}
+                  />
+                ) : isSubstituicao ? (
+                  <EtapaAssinaturaSubstituicao
+                    cotacaoId={cotacao.id}
+                    tokenPublico={token || cotacao.token_publico || ''}
+                    clienteNome={cotacao.nome_solicitante || ''}
+                    clienteEmail={cotacao.email_solicitante || ''}
+                    onContratoAssinado={() => setEtapaAtual(3)}
+                    readOnly={isEtapaConcluida(2)}
+                    contratoInicial={contratoFallback ? {
+                      id: contratoFallback.id,
+                      numero: (contratoFallback as any).numero,
+                      autentique_url: (contratoFallback as any).autentique_url,
+                      autentique_documento_id: (contratoFallback as any).autentique_documento_id,
+                      status: (contratoFallback as any).status,
+                    } : undefined}
+                    veiculoAntigoPlaca={dadosExtras?.veiculo_antigo_placa}
+                    veiculoAntigoModelo={dadosExtras?.veiculo_antigo_modelo}
                   />
                 ) : (
                   <EtapaAssinaturaContrato

@@ -920,6 +920,18 @@ serve(async (req) => {
         if (eventType === "signature.accepted" || (eventType === "signature.updated" && payload.event?.data?.signed)) {
           console.log(`[autentique-webhook] 🎉 Termo de Cancelamento ASSINADO por ${signerName}`);
 
+          // Persistir data de assinatura no contrato (usado pelo fluxo de substituição
+          // para liberar a etapa de assinatura da filiação do veículo novo)
+          if (!cancelamentoContrato.autentique_cancelamento_assinado_em) {
+            await supabase
+              .from("contratos")
+              .update({
+                autentique_cancelamento_assinado_em: payload.event?.data?.signed || new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", cancelamentoContrato.id);
+          }
+
           await supabase.from("contratos_historico").insert({
             contrato_id: cancelamentoContrato.id,
             evento: "cancelamento_assinado",
