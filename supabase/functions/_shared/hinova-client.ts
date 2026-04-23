@@ -351,11 +351,20 @@ export async function listarBoletosVeiculo(
     r = await fetch(`${s.apiUrl}/listar/boleto-associado-veiculo`, {
       method: 'POST',
       headers: authHeaders(s),
+      // Envia múltiplas variações dos nomes dos campos de data porque o
+      // endpoint da Hinova oscila entre snake_case e camelCase entre versões
+      // (já vimos 406 "É necessario enviar ao menos uma data inicial e uma final"
+      // mesmo enviando data_inicial/data_final). Enviar tudo é seguro: a API
+      // ignora chaves desconhecidas.
       body: JSON.stringify({
         codigo_associado: Number(codigoAssociado),
         codigo_veiculo: Number(codigoVeiculo),
         data_inicial: dataInicial,
         data_final: dataFinal,
+        dataInicial,
+        dataFinal,
+        data_ini: dataInicial,
+        data_fim: dataFinal,
       }),
     });
   } catch (e: any) {
