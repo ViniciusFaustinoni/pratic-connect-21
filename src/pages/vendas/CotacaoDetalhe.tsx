@@ -31,6 +31,7 @@ import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
 import { VincularLeadModal } from '@/components/cotacoes/VincularLeadModal';
 import { ContratoWizard } from '@/components/contratos/ContratoWizard';
 import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
+import { DuplicarCotacaoDialog, type DuplicarCotacaoConfirmPayload } from '@/components/cotacoes/DuplicarCotacaoDialog';
 import { isCoberturaRemovida } from '@/data/restricoesCategorias';
 import { gerarPdfCotacaoComparativa } from '@/lib/gerarPdfCotacao';
 import type { StatusCotacao } from '@/types/vendas';
@@ -74,6 +75,7 @@ export default function CotacaoDetalhe() {
   const [showEditarModal, setShowEditarModal] = useState(false);
   const [planoDetalhesModal, setPlanoDetalhesModal] = useState<PlanoComparativo | null>(null);
   const [isGerando, setIsGerando] = useState(false);
+  const [showDuplicarDialog, setShowDuplicarDialog] = useState(false);
 
   // Hooks de dados
   const { data: cotacao, isLoading, error } = useCotacao(id);
@@ -163,22 +165,38 @@ Ficou com alguma dúvida? Estou à disposição!
 
   const handleDuplicar = () => {
     if (!cotacao) return;
-    
-    duplicarMutation.mutate(cotacao.id, {
-      onSuccess: (novaCotacao) => {
-        // Registrar evento no histórico da cotação original
+    setShowDuplicarDialog(true);
+  };
+
+  const handleConfirmarDuplicacao = async (payload: DuplicarCotacaoConfirmPayload) => {
+    if (!cotacao) return;
+    try {
+      const novaCotacao: any = await duplicarMutation.mutateAsync({
+        cotacaoId: cotacao.id,
+        motivo: payload.motivo,
+        acaoOriginal: payload.acaoOriginal,
+      });
+
+      // Registrar evento no histórico da cotação original (apenas se mantida)
+      if (payload.acaoOriginal === 'manter') {
         registrarEventoCotacao({
           cotacaoId: cotacao.id,
           acao: 'duplicada',
-          detalhes: { nova_cotacao_id: novaCotacao.id, nova_cotacao_numero: novaCotacao.numero },
+          detalhes: {
+            nova_cotacao_id: novaCotacao.id,
+            nova_cotacao_numero: novaCotacao.numero,
+            motivo: payload.motivo,
+          },
           autorId: profile?.id,
           autorNome: profile?.nome,
         });
-        
-        // Navegar para a nova cotação
-        navigate(`/vendas/cotacoes/${novaCotacao.id}`);
-      },
-    });
+      }
+
+      setShowDuplicarDialog(false);
+      navigate(`/vendas/cotacoes/${novaCotacao.id}`);
+    } catch {
+      // toast já tratado no hook
+    }
   };
 
   // Verificar se contrato foi assinado/ativo (bloqueia edição)
