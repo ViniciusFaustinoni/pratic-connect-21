@@ -19,7 +19,6 @@ import { toast } from 'sonner';
 import { NovaCobrancaModal } from '@/components/financeiro/NovaCobrancaModal';
 import { RegistrarPagamentoModal } from '@/components/financeiro/RegistrarPagamentoModal';
 import { BatchActionsBar } from '@/components/financeiro/BatchActionsBar';
-import { ModuloCobrancaSwitcher } from '@/components/cobranca/ModuloCobrancaSwitcher';
 
 const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   'PENDING': { label: 'Pendente', variant: 'secondary' },
@@ -469,7 +468,6 @@ export default function CobrancasList() {
 
   return (
     <div className="space-y-6">
-      <ModuloCobrancaSwitcher />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
