@@ -1182,6 +1182,25 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     }
   }, [cotacaoParaEditar, open, planosCalculados]);
 
+  useEffect(() => {
+    if (planosSelecionados.length === 0 || planosCalculados.length === 0) return;
+
+    const planosAtualizados = planosSelecionados.map(planoSelecionado =>
+      planosCalculados.find(plano => plano.id === planoSelecionado.id) || planoSelecionado
+    );
+
+    const primeiro = planosAtualizados[0];
+    const adicional = form.getValues('valor_adicional') || 0;
+
+    form.setValue('plano_id', primeiro.id);
+    form.setValue('valor_cota', primeiro.valorCota || 0);
+    form.setValue('taxa_administrativa', primeiro.taxaAdministrativa || 0);
+    form.setValue('valor_rastreamento', primeiro.valorRastreamento || 0);
+    form.setValue('valor_total_mensal', primeiro.valorMensal + adicional);
+
+    setPlanosSelecionados(planosAtualizados);
+  }, [planosCalculados, planosSelecionados, form]);
+
   const handleTogglePlano = (plano: PlanoCotacao) => {
     setPlanosSelecionados(prev => {
       const jaExiste = prev.some(p => p.id === plano.id);
