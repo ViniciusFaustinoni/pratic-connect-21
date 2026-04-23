@@ -347,17 +347,21 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
       let gradeId = id;
       let novaVersao = 1;
       const snapshotAnterior = isEdit && existing
-        ? buildGradeSnapshot(
-          {
+        ? {
+          grade: {
             id: existing.grade.id,
             nome: existing.grade.nome,
             descricao: existing.grade.descricao || null,
             versao: existing.grade.versao || 1,
           },
-          planos,
-          (existing.gradePlanos || []).map((p: any) => p.plano_id),
-          regrasPorPlano,
-        )
+          planos: (existing.gradePlanos || []).map((gp: any) => {
+            const plano = planos.find((p) => p.id === gp.plano_id);
+            return { id: gp.plano_id, nome: plano?.nome || gp.plano_id, linha: plano?.linha || null };
+          }),
+          regras: existing.regras || [],
+          parcelas: existing.parcelas || [],
+          niveis: existing.niveis || [],
+        }
         : null;
 
       if (isEdit) {
