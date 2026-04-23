@@ -1616,6 +1616,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
             <div className="flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] px-4 pb-4 sm:px-6 space-y-5">
 
+            {/* Banner: rascunho local não finalizado */}
+            {draft.hasDraft && draft.savedAt && (
+              <DraftRestoreBanner
+                savedAt={draft.savedAt}
+                onRestore={handleRestoreDraft}
+                onDiscard={draft.discardDraft}
+              />
+            )}
+
             {/* Banner: usuário sem permissão para criar cotação */}
             {!isPermissionsLoading && !isEditando && !podeOperarCotacao && (
               <Alert variant="default" className="border-warning bg-warning/10">
