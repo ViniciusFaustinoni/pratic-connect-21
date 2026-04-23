@@ -93,7 +93,7 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
         <div>
           <h2 className="text-lg font-semibold">Atribuição de Grades & Hierarquia</h2>
           <p className="text-sm text-muted-foreground">
-            Atribua uma grade ao usuário e defina a cadeia hierárquica. A grade aplicada ao vendedor define as comissões de vendedor, supervisor, gerente e agência conforme o plano vendido.
+            Aqui você escolhe qual grade comercial será aplicada às vendas de cada usuário. A grade do vendedor de origem determina quanto vendedor, supervisor, gerente e agência recebem conforme o plano vendido.
           </p>
         </div>
         <Button variant="outline" onClick={() => navigate(gradesPath)}>
@@ -116,7 +116,7 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <Users2 className="h-4 w-4" /> Usuários da equipe de vendas
+            <Users2 className="h-4 w-4" /> Usuários da equipe de vendas e grade vigente
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
