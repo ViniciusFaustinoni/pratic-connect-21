@@ -1,89 +1,135 @@
 
-## Correção do erro na cotação: “Campos obrigatórios de valor ainda não calculados”
+## Correção: continuar cotação/rascunho sem perder marca, modelo e ano do veículo
 
-### Diagnóstico confirmado
-O erro está no fluxo já existente da cotação rápida, não na criação da cotação em si.
+### Problema identificado
+A funcionalidade de rascunho já existe em `CotacaoFormDialog.tsx` via `useCotacaoDraft`, então não vou criar outro mecanismo paralelo.
 
-Hoje o `CotacaoFormDialog.tsx` bloqueia a criação quando qualquer um destes campos está zerado:
-- `valor_fipe`
-- `valor_cota`
-- `valor_total_mensal`
+O problema está no que é salvo/restaurado:
 
-Esse bloqueio acontece aqui:
-- `src/components/cotacoes/CotacaoFormDialog.tsx` linhas ~1470–1475
+- O rascunho local salva `placa`, `marcaSelecionada`, `modeloSelecionado` e `anoSelecionado`.
+- Porém, quando o veículo vem pela busca de placa, os dados reais ficam em `veiculoEncontrado.vehicleData`.
+- Esse objeto não é salvo no rascunho.
+- Ao restaurar/continuar, o sistema recupera a placa, mas não reconstrói `veiculoEncontrado`.
+- Como `getMarcaNome()`, `getModeloNome()` e `getAnoNome()` dependem de `veiculoEncontrado` ou das listas FIPE carregadas, o formulário pode ficar sem marca/modelo/ano mesmo com placa e FIPE preenchidos.
 
-O problema raiz está no hook moderno que calcula os planos:
-- `src/hooks/usePlanosCotacao.ts`
+Além disso, para cotações já persistidas como `rascunho`, se a cotação foi salva sem `veiculo_marca`, `veiculo_modelo` ou `veiculo_ano`, a tela de detalhes mostra os campos vazios e não tenta reconsultar a placa.
 
-Nele, os valores detalhados são montados assim:
-- `taxaAdministrativa` calculada
-- `valorRastreamento` calculado
-- `valorAssistencia` calculado
-- `valorCota` está fixo em `0`
+---
 
-Ou seja:
-- a mensalidade aparece corretamente no card
-- o formulário copia `valorCota = 0` para o estado interno
-- ao confirmar, a pré-validação entende que “o cálculo não terminou”
-- por isso a cotação é barrada com exatamente o erro do print
+## Implementação proposta
 
-### Implementação proposta
-#### 1. Corrigir a decomposição financeira no hook de planos
-Arquivo:
-- `src/hooks/usePlanosCotacao.ts`
-
-Ajustar a montagem dos campos derivados para seguir o mesmo padrão já usado no fluxo legado/avançado:
-- `valorCota = valorMensal * decomposicao.cota`
-- `taxaAdministrativa = valorMensal * decomposicao.admin`
-- `valorRastreamento = valorMensal * decomposicao.rastreamento`
-- `valorAssistencia = valorMensal * decomposicao.assistencia`
-
-Isso elimina a origem do `valor_cota = 0` e centraliza a correção em um único lugar.
-
-#### 2. Manter a pré-validação de criação
+### 1. Salvar os dados do veículo encontrado no rascunho local
 Arquivo:
 - `src/components/cotacoes/CotacaoFormDialog.tsx`
 
-Não vou remover a trava de `valor_cota > 0` neste primeiro ajuste, porque ela está correta como proteção contra payload incompleto.
+Atualizar o `draftSnapshot` para incluir um snapshot seguro de:
+- `veiculoEncontrado`
+- `vehicleData`
+- `fipeData`
 
-Com a correção no hook, o fluxo deve voltar a funcionar sem precisar afrouxar a regra.
+Com isso, quando o consultor sair da tela antes de criar a cotação e depois clicar em restaurar rascunho, o sistema terá novamente:
+- marca
+- modelo
+- ano
+- combustível
+- cor
+- código FIPE
+- valor FIPE
 
-#### 3. Garantir que o formulário continue recebendo os valores recalculados
+### 2. Restaurar `veiculoEncontrado` ao continuar o rascunho
 Arquivo:
 - `src/components/cotacoes/CotacaoFormDialog.tsx`
 
-Validar o ponto em que o plano selecionado é copiado para o form:
-- `form.setValue('valor_cota', plano.valorCota || 0)`
-- `form.setValue('taxa_administrativa', ...)`
-- `form.setValue('valor_rastreamento', ...)`
-- `form.setValue('valor_total_mensal', ...)`
+No `handleRestoreDraft`, além de restaurar os campos atuais, reconstruir `setVeiculoEncontrado(...)` quando o payload tiver dados de veículo válidos.
 
-Se necessário, complementar a sincronização para evitar que o modal de confirmação use snapshot desatualizado quando o plano recalcula após mudança de cenário/região/FIPE.
+Fluxo esperado:
+- Se o rascunho tiver `veiculoEncontrado.vehicleData`, restaurar diretamente.
+- Se tiver apenas placa e valor FIPE, manter a placa e permitir reconsulta manual.
+- Se tiver combustível no veículo, restaurar também `combustivelSelecionado`.
 
-### Validação após a correção
-Revalidar exatamente o cenário reportado:
-- veículo: Toyota Corolla XEi Flex 2014
-- FIPE: R$ 72.122,00
-- plano: Select Exclusive Passeio
-- vencimento: 25
-- cenário: Isenta adesão + base
-
-Confirmar que:
-- o card continua mostrando a mensalidade correta
-- `valor_cota` deixa de ir zerado
-- o erro “Campos obrigatórios de valor ainda não calculados” desaparece
-- a cotação é criada com sucesso
-- `cenario_adesao = isenta_base`
-- `tipo_instalacao = base`
-- `dia_vencimento = 25`
-- `valor_adesao = 0`
-
-### Impacto esperado
-A correção é localizada e de baixo risco:
-- resolve a falha da cotação rápida
-- preserva a validação defensiva já existente
-- beneficia qualquer tela que consome `usePlanosCotacao` e usa os campos detalhados do plano
-
-### Arquivos envolvidos
-- `src/hooks/usePlanosCotacao.ts`
+### 3. Evitar que o reset inicial apague o rascunho restaurado
+Arquivo:
 - `src/components/cotacoes/CotacaoFormDialog.tsx`
+
+Revisar o efeito que limpa o formulário quando o modal abre sem `leadId`, `cotacaoBase` ou edição.
+
+Hoje ele reseta estados ao abrir a cotação rápida. Vou ajustar para não sobrescrever os dados logo após o usuário restaurar um rascunho.
+
+A abordagem será usar uma flag interna, por exemplo:
+- `isRestoringDraftRef`
+
+Assim:
+- abertura normal continua começando limpa;
+- restauração de rascunho não é apagada pelo reset automático.
+
+### 4. Reconsultar dados do veículo quando uma cotação rascunho persistida tiver placa, mas não tiver marca/modelo/ano
+Arquivos:
+- `src/components/cotacoes/CotacaoDetalhesModal.tsx`
+- `src/pages/vendas/Cotacoes.tsx`
+
+Adicionar uma ação clara para cotações em `rascunho`:
+- “Continuar cotação” ou reaproveitar o fluxo de edição quando disponível.
+
+Ao abrir o formulário com uma cotação base/rascunho:
+- se houver `veiculo_marca` e `veiculo_modelo`, usar os dados salvos;
+- se não houver marca/modelo/ano, mas houver `veiculo_placa`, disparar a busca por placa automaticamente ou oferecer um botão de “Buscar dados da placa”.
+
+Isso resolve cotações como a do print, onde a placa aparece (`LTB4J74`), mas marca/modelo/ano estão vazios.
+
+### 5. Garantir que a criação/atualização nunca salve veículo incompleto quando a placa foi encontrada
+Arquivo:
+- `src/components/cotacoes/CotacaoFormDialog.tsx`
+
+Antes de montar `cotacaoData`, garantir fallback robusto:
+
+- `veiculo_marca`: `getMarcaNome()` ou `veiculoEncontrado.vehicleData.marca`
+- `veiculo_modelo`: `getModeloNome()` ou `veiculoEncontrado.vehicleData.modelo`
+- `veiculo_ano`: ano extraído de `getAnoNome()` ou `veiculoEncontrado.vehicleData.ano`
+- `codigo_fipe`: `veiculoEncontrado.fipeData.codigo`, quando existir
+
+Se a placa foi buscada com sucesso, mas os dados ainda estiverem vazios, bloquear o submit com mensagem amigável:
+- “Os dados do veículo ainda não foram carregados. Clique em buscar placa novamente antes de salvar.”
+
+### 6. Melhorar a exibição no modal de detalhes
+Arquivo:
+- `src/components/cotacoes/CotacaoDetalhesModal.tsx`
+
+Quando marca/modelo/ano estiverem ausentes mas houver placa:
+- mostrar um aviso visual discreto:
+  - “Dados do veículo não carregados”
+- exibir ação:
+  - “Continuar e buscar dados”
+  
+Isso evita parecer que o sistema perdeu dados sem oferecer recuperação.
+
+---
+
+## Validação após implementação
+
+Validar o cenário reportado:
+
+1. Criar/abrir uma cotação em rascunho com placa `LTB4J74`.
+2. Interromper o fluxo e restaurar/continuar.
+3. Confirmar que o formulário volta com:
+   - placa
+   - marca
+   - modelo
+   - ano
+   - FIPE
+   - combustível
+   - plano selecionado quando aplicável
+4. Confirmar que ao salvar a cotação, o detalhe exibe corretamente:
+   - Toyota
+   - Corolla XEi Flex
+   - ano do veículo
+   - placa `LTB4J74`
+5. Confirmar que uma cotação rascunho antiga, já salva apenas com placa, consegue recuperar os dados ao continuar.
+
+---
+
+## Arquivos envolvidos
+
+- `src/components/cotacoes/CotacaoFormDialog.tsx`
+- `src/components/cotacoes/CotacaoDetalhesModal.tsx`
+- `src/pages/vendas/Cotacoes.tsx`
+
