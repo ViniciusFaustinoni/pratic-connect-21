@@ -16,10 +16,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Info } from 'lucide-react';
 import { useRulesForEntity, useSaveRule, useUpdateRule, useDeleteRule } from '@/hooks/useEntityEligibilityRules';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { useMarcasDistintas, useModelosPorMarca } from '@/hooks/useMarcasModelos';
+import { useMarcasDistintas, useModelosPorMarca, useTiposVeiculo, TIPO_VEICULO_LABELS, type TipoVeiculo } from '@/hooks/useMarcasModelos';
 
 interface ModeloEntry {
   marca: string;
@@ -54,19 +54,31 @@ export function VeiculosAceitosEditor({ entityId }: VeiculosAceitosEditorProps) 
   const marcaModeloRule = rules?.find(r => r.rule_type === 'marca_modelo');
   const modelos: ModeloEntry[] = (marcaModeloRule?.rule_config as any)?.modelos || [];
 
+  const [tipoVeiculo, setTipoVeiculo] = useState<TipoVeiculo | ''>('');
   const [marca, setMarca] = useState('');
   const [modeloSelecionado, setModeloSelecionado] = useState('');
   const [anoMin, setAnoMin] = useState('');
   const [anoMax, setAnoMax] = useState('');
   const [status, setStatus] = useState<'aceito' | 'limitado' | 'negado'>('aceito');
 
-  const { data: marcasDistintas, isLoading: loadingMarcas } = useMarcasDistintas();
+  const { data: tiposDisponiveis } = useTiposVeiculo();
+  const { data: marcasDistintas, isLoading: loadingMarcas } = useMarcasDistintas(tipoVeiculo || null);
   const { data: modelosPorMarca, isLoading: loadingModelos } = useModelosPorMarca(marca);
 
+  const tipoOptions = (tiposDisponiveis || []).map(t => ({ value: t, label: TIPO_VEICULO_LABELS[t] }));
   const marcaOptions = (marcasDistintas || []).map(m => ({ value: m, label: m }));
-  const modeloOptions = (modelosPorMarca || []).map(m => ({ value: m, label: m }));
+  const modeloOptions = [
+    { value: '__TODOS__', label: '✓ Todos os modelos desta marca' },
+    ...(modelosPorMarca || []).map(m => ({ value: m, label: m })),
+  ];
 
   const isPending = saveRule.isPending || updateRule.isPending || deleteRule.isPending;
+
+  const handleTipoChange = (value: string) => {
+    setTipoVeiculo(value as TipoVeiculo | '');
+    setMarca('');
+    setModeloSelecionado('');
+  };
 
   const handleMarcaChange = (value: string) => {
     setMarca(value);
@@ -76,7 +88,9 @@ export function VeiculosAceitosEditor({ entityId }: VeiculosAceitosEditorProps) 
   const handleAdd = async () => {
     if (!marca.trim() || !modeloSelecionado.trim()) return;
 
-    const modeloBase = modeloSelecionado.split(' ')[0].toUpperCase();
+    // "__TODOS__" = wildcard: aceita todas as variantes da marca (motor reconhece string vazia)
+    const isWildcard = modeloSelecionado === '__TODOS__';
+    const modeloBase = isWildcard ? '' : modeloSelecionado.split(' ')[0].toUpperCase();
 
     const newEntry: ModeloEntry = {
       marca: marca.trim().toUpperCase(),
@@ -143,7 +157,9 @@ export function VeiculosAceitosEditor({ entityId }: VeiculosAceitosEditorProps) 
               {modelos.map((m, i) => (
                 <TableRow key={i}>
                   <TableCell className="text-xs py-1.5">{m.marca}</TableCell>
-                  <TableCell className="text-xs py-1.5">{m.modelo}</TableCell>
+                  <TableCell className="text-xs py-1.5">
+                    {m.modelo ? m.modelo : <span className="italic text-muted-foreground">Todos</span>}
+                  </TableCell>
                   <TableCell className="text-xs py-1.5">{m.ano_min ?? '—'}</TableCell>
                   <TableCell className="text-xs py-1.5">{m.ano_max ?? '—'}</TableCell>
                   <TableCell className="py-1.5">
@@ -174,8 +190,30 @@ export function VeiculosAceitosEditor({ entityId }: VeiculosAceitosEditorProps) 
         <p className="text-xs text-muted-foreground italic">Nenhum modelo configurado — todos os veículos são aceitos por padrão.</p>
       )}
 
+      <div className="flex items-start gap-2 rounded-md bg-muted/40 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+        <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+        <span>
+          O modelo cadastrado funciona como prefixo: ex.: <strong>BONGO</strong> aceita BONGO K2500, BONGO 2.5 etc.
+          Use <strong>"Todos os modelos desta marca"</strong> para liberar a marca inteira.
+        </span>
+      </div>
+
       {/* Inline add form */}
-      <div className="grid grid-cols-[2fr_2fr_1fr_1fr_1fr_auto] gap-2 items-end">
+      <div className="grid grid-cols-[1.2fr_1.6fr_1.6fr_1fr_1fr_1fr_auto] gap-2 items-end">
+        <div className="space-y-1">
+          <label className="text-xs font-medium">Tipo</label>
+          <Select value={tipoVeiculo || '__ALL__'} onValueChange={(v) => handleTipoChange(v === '__ALL__' ? '' : v)}>
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue placeholder="Todos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__ALL__">Todos</SelectItem>
+              {tipoOptions.map(o => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <div className="space-y-1">
           <label className="text-xs font-medium">Marca *</label>
           <SearchableSelect
