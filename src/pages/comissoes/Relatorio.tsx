@@ -24,7 +24,7 @@ export default function RelatorioComissoes() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Relatório de Comissões</h1>
-        <p className="text-sm text-muted-foreground">Consulte valores por período, grade, plano, vendedor, perfil, parcela e status.</p>
+        <p className="text-sm text-muted-foreground">Audite plano vendido, grade usada pelo vendedor de origem, destinatário, perfil, cálculo e status.</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
@@ -50,7 +50,7 @@ export default function RelatorioComissoes() {
       <Card>
         <CardContent className="p-0">
           <Table>
-            <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Origem</TableHead><TableHead>Destinatário</TableHead><TableHead>Perfil</TableHead><TableHead>Plano</TableHead><TableHead>Grade</TableHead><TableHead>Parcela</TableHead><TableHead>Base</TableHead><TableHead>Cálculo</TableHead><TableHead>Total</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Vendedor origem</TableHead><TableHead>Destinatário</TableHead><TableHead>Perfil</TableHead><TableHead>Plano</TableHead><TableHead>Grade</TableHead><TableHead>Parcela</TableHead><TableHead>Base</TableHead><TableHead>Cálculo</TableHead><TableHead>Total</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
             <TableBody>
               {isLoading ? <TableRow><TableCell colSpan={11}>Carregando...</TableCell></TableRow> : linhas.map(linha => (
                 <TableRow key={linha.id}>

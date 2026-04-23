@@ -27,7 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Pencil, Search, Users2, AlertCircle } from 'lucide-react';
 import { useAtribuicoesComissao } from '@/hooks/useAtribuicaoComissoes';
-import { AtribuirGradeModal } from '@/components/comissoes/AtribuirGradeModal';
+import { AtribuirGrade aplicada às vendasModal } from '@/components/comissoes/AtribuirGrade aplicada às vendasModal';
 import type { AtribuicaoLinha } from '@/types/atribuicaoComissao';
 
 const ROLE_LABEL: Record<string, string> = {
@@ -46,11 +46,11 @@ const ROLE_BADGE: Record<string, string> = {
   gerente_comercial: 'bg-rose-500/10 text-rose-700 dark:text-rose-300',
 };
 
-interface AtribuicaoGradesProps {
+interface AtribuicaoGrade aplicada às vendassProps {
   gradesPath?: string;
 }
 
-export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-comissao' }: AtribuicaoGradesProps) {
+export default function AtribuicaoGrade aplicada às vendass({ gradesPath = '/configuracoes/grades-comissao' }: AtribuicaoGrade aplicada às vendassProps) {
   const navigate = useNavigate();
   const { data: atribuicoes = [], isLoading } = useAtribuicoesComissao();
   const [search, setSearch] = useState('');
@@ -80,7 +80,7 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
     });
   }, [atribuicoes, search, roleFilter, statusFilter]);
 
-  const totalSemGrade = atribuicoes.filter((a) => !a.gradeAtual).length;
+  const totalSemGrade aplicada às vendas = atribuicoes.filter((a) => !a.gradeAtual).length;
 
   const handleEdit = (linha: AtribuicaoLinha) => {
     setEditing(linha);
@@ -91,23 +91,22 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="text-lg font-semibold">Atribuição de Grades & Hierarquia</h2>
+          <h2 className="text-lg font-semibold">Atribuição de Grade aplicada às vendass & Hierarquia</h2>
           <p className="text-sm text-muted-foreground">
-            Vincule cada vendedor, supervisor, gerente e agência a uma grade de comissão e defina
-            a cadeia hierárquica usada para gerar comissões.
+            Atribua uma grade ao usuário e defina a cadeia hierárquica. A grade aplicada ao vendedor define as comissões de vendedor, supervisor, gerente e agência conforme o plano vendido.
           </p>
         </div>
         <Button variant="outline" onClick={() => navigate(gradesPath)}>
-          Gerenciar grades
+          Configurar regras das grades
         </Button>
       </div>
 
-      {totalSemGrade > 0 && (
+      {totalSemGrade aplicada às vendas > 0 && (
         <Card className="border-warning/30 bg-warning/5">
           <CardContent className="flex items-center gap-3 py-3">
             <AlertCircle className="h-4 w-4 text-warning" />
             <p className="text-sm">
-              <strong>{totalSemGrade}</strong> usuário(s) ainda sem grade atribuída — não receberão
+              <strong>{totalSemGrade aplicada às vendas}</strong> usuário(s) ainda sem grade atribuída — não receberão
               comissão até serem vinculados.
             </p>
           </CardContent>
@@ -162,7 +161,7 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
                 <TableRow>
                   <TableHead>Usuário</TableHead>
                   <TableHead>Perfil</TableHead>
-                  <TableHead>Grade</TableHead>
+                  <TableHead>Grade aplicada às vendas</TableHead>
                   <TableHead>Supervisor</TableHead>
                   <TableHead>Gerente</TableHead>
                   <TableHead>Agência</TableHead>
@@ -269,7 +268,7 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
         </CardContent>
       </Card>
 
-      <AtribuirGradeModal
+      <AtribuirGrade aplicada às vendasModal
         open={modalOpen}
         onOpenChange={setModalOpen}
         linha={editing}

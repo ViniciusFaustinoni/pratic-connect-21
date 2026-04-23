@@ -1,21 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
-import { ArrowLeft, Plus, Infinity as InfinityIcon, AlertCircle } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ArrowLeft, Plus, Infinity as InfinityIcon, AlertCircle, Package } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { FieldHint } from '@/components/admin/planos/FieldHint';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAppRoles } from '@/hooks/useAppRoles';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ParcelaEditor, ParcelaForm, NivelForm } from '@/components/comissoes/ParcelaEditor';
+import { ParcelaEditor, ParcelaForm } from '@/components/comissoes/ParcelaEditor';
 import { useAuth } from '@/contexts/AuthContext';
+import { Badge } from '@/components/ui/badge';
 
 const COMMERCIAL_ROLE_KEYS = ['vendedor_clt', 'vendedor_externo', 'agencia', 'supervisor_vendas', 'gerente_comercial'];
+
+type RegrasPorPlano = Record<string, ParcelaForm[]>;
 
 interface PlanoComissaoOption {
   id: string;
@@ -26,6 +29,23 @@ interface PlanoComissaoOption {
 interface GradeComissaoFormProps {
   basePath?: string;
 }
+
+const cloneParcelas = (parcelas: ParcelaForm[]): ParcelaForm[] =>
+  parcelas.map((p, idx) => ({
+    ...p,
+    id: undefined,
+    ordem: idx,
+    niveis: p.niveis.map((n) => ({ ...n, id: undefined })),
+  }));
+
+const defaultParcela = (ordem: number, numero: number): ParcelaForm => ({
+  numero_parcela: numero,
+  vitalicia: false,
+  vitalicia_inicio_parcela: null,
+  label: numero === 1 ? 'Taxa de Adesão' : `${numero}ª Parcela`,
+  ordem,
+  niveis: [],
+});
 
 export default function GradeComissaoForm({ basePath = '/configuracoes/grades-comissao' }: GradeComissaoFormProps) {
   const { id } = useParams();
@@ -39,8 +59,8 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
 
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
-  const [parcelas, setParcelas] = useState<ParcelaForm[]>([]);
   const [selectedPlanIds, setSelectedPlanIds] = useState<string[]>([]);
+  const [regrasPorPlano, setRegrasPorPlano] = useState<RegrasPorPlano>({});
   const [saving, setSaving] = useState(false);
 
   const { data: planos = [] } = useQuery({
@@ -55,6 +75,11 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
       return data as PlanoComissaoOption[];
     },
   });
+
+  const planosSelecionados = useMemo(
+    () => selectedPlanIds.map((planId) => planos.find((p) => p.id === planId)).filter(Boolean) as PlanoComissaoOption[],
+    [planos, selectedPlanIds],
+  );
 
   const { data: existing, isLoading } = useQuery({
     queryKey: ['grade-comissao-v2', id],
@@ -101,74 +126,121 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
   });
 
   useEffect(() => {
-    if (existing) {
-      setNome(existing.grade.nome);
-      setDescricao(existing.grade.descricao || '');
-      setSelectedPlanIds((existing.gradePlanos || []).map((p: any) => p.plano_id));
-      const parcs: ParcelaForm[] = (existing.parcelas || []).map((p: any) => ({
-        id: p.id,
-        numero_parcela: p.numero_parcela,
-        vitalicia: p.vitalicia,
-        vitalicia_inicio_parcela: p.vitalicia_inicio_parcela,
-        label: p.label,
-        ordem: p.ordem,
-        niveis: (existing.niveis || [])
-          .filter((n: any) => n.parcela_id === p.id)
-          .sort((a: any, b: any) => a.ordem - b.ordem)
-          .map((n: any) => ({
-            id: n.id,
-            nome: n.nome,
-            percentual: Number(n.percentual),
-            tipo_comissao: 'percentual',
-            valor: Number(n.percentual),
-            role: n.role || '',
-          })),
-      }));
-      if ((existing.regras || []).length > 0) {
-        parcs.forEach((p: ParcelaForm) => {
-          const regraBase = (existing.regras || []).filter((r: any) =>
-            (p.vitalicia && r.vitalicia) || (!p.vitalicia && r.parcela_numero === p.numero_parcela)
-          );
-          if (regraBase.length > 0) {
-            const porRole = new Map<string, any>();
-            regraBase.forEach((r: any) => { if (!porRole.has(r.role)) porRole.set(r.role, r); });
-            p.niveis = Array.from(porRole.values()).map((r: any) => ({
-              id: r.id,
-              nome: r.nome_nivel || r.role,
-              role: r.role,
-              tipo_comissao: r.tipo_comissao,
-              valor: Number(r.valor),
-              percentual: r.tipo_comissao === 'percentual' ? Number(r.valor) : 0,
-            }));
-          }
+    if (!existing) return;
+
+    setNome(existing.grade.nome);
+    setDescricao(existing.grade.descricao || '');
+
+    const planIds = (existing.gradePlanos || []).map((p: any) => p.plano_id);
+    setSelectedPlanIds(planIds);
+
+    const regras = existing.regras || [];
+    if (regras.length > 0) {
+      const next: RegrasPorPlano = {};
+      planIds.forEach((planoId: string) => {
+        const regrasPlano = regras.filter((r: any) => r.plano_id === planoId);
+        const grupos = new Map<string, any[]>();
+        regrasPlano.forEach((r: any) => {
+          const key = r.vitalicia ? `vitalicia-${r.vitalicia_inicio_parcela || r.parcela_numero || 2}` : `parcela-${r.parcela_numero}`;
+          grupos.set(key, [...(grupos.get(key) || []), r]);
         });
-      }
-      setParcelas(parcs);
+
+        next[planoId] = Array.from(grupos.values())
+          .map((grupo, ordem) => {
+            const base = grupo[0];
+            const parcelaLegacy = base.parcela_id ? (existing.parcelas || []).find((p: any) => p.id === base.parcela_id) : null;
+            return {
+              id: base.parcela_id || undefined,
+              numero_parcela: base.vitalicia ? null : base.parcela_numero,
+              vitalicia: !!base.vitalicia,
+              vitalicia_inicio_parcela: base.vitalicia ? base.vitalicia_inicio_parcela : null,
+              label: parcelaLegacy?.label || (base.vitalicia ? 'Vitalícia' : base.parcela_numero === 1 ? 'Taxa de Adesão' : `${base.parcela_numero}ª Parcela`),
+              ordem,
+              niveis: grupo
+                .sort((a: any, b: any) => (a.ordem || 0) - (b.ordem || 0))
+                .map((r: any) => ({
+                  id: r.id,
+                  nome: r.nome_nivel || r.role,
+                  role: r.role,
+                  tipo_comissao: r.tipo_comissao || 'percentual',
+                  valor: Number(r.valor) || 0,
+                  percentual: r.tipo_comissao === 'valor_fixo' ? 0 : Number(r.valor) || 0,
+                })),
+            } as ParcelaForm;
+          })
+          .sort((a, b) => (a.vitalicia ? 999 : a.numero_parcela || 0) - (b.vitalicia ? 999 : b.numero_parcela || 0));
+      });
+      setRegrasPorPlano(next);
+      return;
     }
+
+    const legacyParcelas: ParcelaForm[] = (existing.parcelas || []).map((p: any) => ({
+      id: p.id,
+      numero_parcela: p.numero_parcela,
+      vitalicia: p.vitalicia,
+      vitalicia_inicio_parcela: p.vitalicia_inicio_parcela,
+      label: p.label,
+      ordem: p.ordem,
+      niveis: (existing.niveis || [])
+        .filter((n: any) => n.parcela_id === p.id)
+        .sort((a: any, b: any) => a.ordem - b.ordem)
+        .map((n: any) => ({
+          id: n.id,
+          nome: n.nome,
+          percentual: Number(n.percentual),
+          tipo_comissao: 'percentual',
+          valor: Number(n.percentual),
+          role: n.role || '',
+        })),
+    }));
+
+    setRegrasPorPlano(Object.fromEntries(planIds.map((planId: string) => [planId, cloneParcelas(legacyParcelas)])));
   }, [existing]);
 
-  const hasVitalicia = parcelas.some(p => p.vitalicia);
+  const togglePlano = (planoId: string) => {
+    setSelectedPlanIds(prev => {
+      if (prev.includes(planoId)) {
+        setRegrasPorPlano(current => {
+          const { [planoId]: _, ...rest } = current;
+          return rest;
+        });
+        return prev.filter(id => id !== planoId);
+      }
 
-  const addParcela = () => {
-    const usados = parcelas.filter(p => !p.vitalicia).map(p => p.numero_parcela || 0);
-    const proximo = (Math.max(0, ...usados)) + 1;
-    setParcelas(prev => [...prev, {
-      numero_parcela: proximo,
-      vitalicia: false,
-      vitalicia_inicio_parcela: null,
-      label: proximo === 1 ? 'Taxa de Adesão' : `${proximo}ª Parcela`,
-      ordem: prev.length,
-      niveis: [],
-    }]);
+      setRegrasPorPlano(current => {
+        const primeiraGrade = Object.values(current).find((parcelas) => parcelas.length > 0);
+        return {
+          ...current,
+          [planoId]: primeiraGrade ? cloneParcelas(primeiraGrade) : [defaultParcela(0, 1)],
+        };
+      });
+      return [...prev, planoId];
+    });
   };
 
-  const addVitalicia = () => {
-    if (hasVitalicia) {
-      toast.error('Já existe uma parcela vitalícia nesta grade.');
+  const updatePlanoParcelas = (planoId: string, updater: (parcelas: ParcelaForm[]) => ParcelaForm[]) => {
+    setRegrasPorPlano(prev => ({
+      ...prev,
+      [planoId]: updater(prev[planoId] || []),
+    }));
+  };
+
+  const addParcela = (planoId: string) => {
+    updatePlanoParcelas(planoId, (parcelas) => {
+      const usados = parcelas.filter(p => !p.vitalicia).map(p => p.numero_parcela || 0);
+      const proximo = (Math.max(0, ...usados)) + 1;
+      return [...parcelas, defaultParcela(parcelas.length, proximo)];
+    });
+  };
+
+  const addVitalicia = (planoId: string) => {
+    const parcelas = regrasPorPlano[planoId] || [];
+    if (parcelas.some(p => p.vitalicia)) {
+      toast.error('Já existe uma regra vitalícia para este plano.');
       return;
     }
     const ultimaConfig = Math.max(0, ...parcelas.filter(p => !p.vitalicia).map(p => p.numero_parcela || 0));
-    setParcelas(prev => [...prev, {
+    updatePlanoParcelas(planoId, (prev) => [...prev, {
       numero_parcela: null,
       vitalicia: true,
       vitalicia_inicio_parcela: ultimaConfig + 1,
@@ -178,52 +250,55 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
     }]);
   };
 
-  const updateParcela = (idx: number, next: ParcelaForm) => {
-    setParcelas(prev => prev.map((p, i) => i === idx ? next : p));
+  const updateParcela = (planoId: string, idx: number, next: ParcelaForm) => {
+    updatePlanoParcelas(planoId, (prev) => prev.map((p, i) => i === idx ? next : p));
   };
 
-  const removeParcela = (idx: number) => {
-    setParcelas(prev => prev.filter((_, i) => i !== idx).map((p, i) => ({ ...p, ordem: i })));
+  const removeParcela = (planoId: string, idx: number) => {
+    updatePlanoParcelas(planoId, (prev) => prev.filter((_, i) => i !== idx).map((p, i) => ({ ...p, ordem: i })));
   };
 
-  const moveParcela = (idx: number, dir: -1 | 1) => {
-    const newIdx = idx + dir;
-    if (newIdx < 0 || newIdx >= parcelas.length) return;
-    setParcelas(prev => {
+  const moveParcela = (planoId: string, idx: number, dir: -1 | 1) => {
+    updatePlanoParcelas(planoId, (prev) => {
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= prev.length) return prev;
       const copy = [...prev];
       [copy[idx], copy[newIdx]] = [copy[newIdx], copy[idx]];
       return copy.map((p, i) => ({ ...p, ordem: i }));
     });
   };
 
-  const togglePlano = (planoId: string) => {
-    setSelectedPlanIds(prev => prev.includes(planoId) ? prev.filter(id => id !== planoId) : [...prev, planoId]);
-  };
-
   const validate = (): string | null => {
     if (!nome.trim()) return 'Nome é obrigatório';
     if (selectedPlanIds.length === 0) return 'Selecione pelo menos um plano para a grade';
-    if (parcelas.length === 0) return 'Adicione pelo menos uma parcela';
-    for (const p of parcelas) {
-      if (!p.label.trim()) return 'Cada parcela precisa de rótulo';
-      if (p.vitalicia) {
-        if (!p.vitalicia_inicio_parcela || p.vitalicia_inicio_parcela < 1) return 'Vitalícia: defina a parcela inicial';
-      } else {
-        if (!p.numero_parcela || p.numero_parcela < 1) return 'Parcela precisa de número válido';
+
+    for (const planoId of selectedPlanIds) {
+      const plano = planos.find(p => p.id === planoId);
+      const parcelas = regrasPorPlano[planoId] || [];
+      if (parcelas.length === 0) return `Configure pelo menos uma parcela para o plano ${plano?.nome || planoId}`;
+
+      for (const p of parcelas) {
+        const contexto = `${plano?.nome || 'Plano'} / ${p.label || 'Parcela'}`;
+        if (!p.label.trim()) return `${contexto}: informe o rótulo da parcela`;
+        if (p.vitalicia) {
+          if (!p.vitalicia_inicio_parcela || p.vitalicia_inicio_parcela < 1) return `${contexto}: defina a parcela inicial da regra vitalícia`;
+        } else {
+          if (!p.numero_parcela || p.numero_parcela < 1) return `${contexto}: parcela precisa de número válido`;
+        }
+        const total = p.niveis.reduce((s, n) => s + (n.tipo_comissao === 'valor_fixo' ? 0 : Number(n.valor ?? n.percentual) || 0), 0);
+        if (total > 100) return `${contexto}: soma dos percentuais ultrapassa 100%`;
+        for (const n of p.niveis) {
+          if (!n.role) return `${contexto}: selecione o perfil de cada regra`;
+          if (!n.nome.trim()) return `${contexto}: cada regra precisa de nome`;
+          if ((Number(n.valor ?? n.percentual) || 0) < 0) return `${contexto}: valor de comissão inválido`;
+        }
+        const roles = p.niveis.map(n => n.role).filter(Boolean);
+        if (roles.length !== new Set(roles).size) return `${contexto}: há perfis duplicados na mesma parcela`;
       }
-      const total = p.niveis.reduce((s, n) => s + (n.tipo_comissao === 'valor_fixo' ? 0 : Number(n.valor ?? n.percentual) || 0), 0);
-      if (total > 100) return `Parcela "${p.label}": soma dos níveis ultrapassa 100%`;
-      for (const n of p.niveis) {
-        if (!n.role) return `Parcela "${p.label}": selecione o perfil de cada nível`;
-        if (!n.nome.trim()) return `Parcela "${p.label}": cada nível precisa de nome`;
-        if (Number(n.valor ?? n.percentual) < 0) return `Parcela "${p.label}": valor de comissão inválido`;
-      }
-      const noms = p.niveis.map(n => n.nome.trim().toLowerCase());
-      if (noms.length !== new Set(noms).size) return `Parcela "${p.label}": níveis com nomes duplicados`;
+
+      const nums = parcelas.filter(p => !p.vitalicia).map(p => p.numero_parcela);
+      if (nums.length !== new Set(nums).size) return `${plano?.nome || 'Plano'}: há parcelas com o mesmo número`;
     }
-    // duplicates entre numero_parcela
-    const nums = parcelas.filter(p => !p.vitalicia).map(p => p.numero_parcela);
-    if (nums.length !== new Set(nums).size) return 'Há parcelas com o mesmo número';
     return null;
   };
 
@@ -255,7 +330,6 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
           .eq('id', id!);
         if (error) throw error;
 
-        // Apaga parcelas + níveis (cascade)
         await (supabase as any).from('grades_comissao_parcelas').delete().eq('grade_id', id!);
         await (supabase as any).from('grades_comissao_niveis').delete().eq('grade_id', id!);
         await (supabase as any).from('grade_comissao_planos').delete().eq('grade_id', id!);
@@ -270,34 +344,43 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
         gradeId = data.id;
       }
 
-      // Insere parcelas
-      const parcelasInsert = parcelas.map((p, i) => ({
-        grade_id: gradeId!,
-        numero_parcela: p.vitalicia ? null : p.numero_parcela,
-        vitalicia: p.vitalicia,
-        vitalicia_inicio_parcela: p.vitalicia ? p.vitalicia_inicio_parcela : null,
-        label: p.label.trim(),
-        ordem: i,
-      }));
+      const parcelaIdByKey = new Map<string, string>();
+      const parcelasInsert = selectedPlanIds.flatMap((planoId) =>
+        (regrasPorPlano[planoId] || []).map((p, i) => ({
+          grade_id: gradeId!,
+          numero_parcela: p.vitalicia ? null : p.numero_parcela,
+          vitalicia: p.vitalicia,
+          vitalicia_inicio_parcela: p.vitalicia ? p.vitalicia_inicio_parcela : null,
+          label: p.label.trim(),
+          ordem: selectedPlanIds.indexOf(planoId) * 1000 + i,
+          __key: `${planoId}:${i}`,
+        }))
+      );
+
       const { data: pcsCriadas, error: pErr } = await (supabase as any)
         .from('grades_comissao_parcelas')
-        .insert(parcelasInsert)
-        .select('id, numero_parcela, vitalicia, ordem');
+        .insert(parcelasInsert.map(({ __key, ...row }) => row))
+        .select('id, ordem');
       if (pErr) throw pErr;
 
-      // Insere níveis vinculados às parcelas criadas
+      (pcsCriadas || []).forEach((p: any) => {
+        const original = parcelasInsert.find((row) => row.ordem === p.ordem);
+        if (original) parcelaIdByKey.set(original.__key, p.id);
+      });
+
       const niveisInsert: any[] = [];
-      parcelas.forEach((p, i) => {
-        const criada = pcsCriadas.find((c: any) => c.ordem === i);
-        if (!criada) return;
-        p.niveis.forEach((n, ni) => {
-          niveisInsert.push({
-            grade_id: gradeId!,
-            parcela_id: criada.id,
-            nome: n.nome.trim(),
-            percentual: n.percentual,
-            ordem: ni,
-            role: n.role,
+      selectedPlanIds.forEach((planoId) => {
+        (regrasPorPlano[planoId] || []).forEach((p, i) => {
+          const parcelaId = parcelaIdByKey.get(`${planoId}:${i}`);
+          p.niveis.forEach((n, ni) => {
+            niveisInsert.push({
+              grade_id: gradeId!,
+              parcela_id: parcelaId,
+              nome: n.nome.trim(),
+              percentual: n.tipo_comissao === 'valor_fixo' ? 0 : Number(n.valor ?? n.percentual) || 0,
+              ordem: ni,
+              role: n.role,
+            });
           });
         });
       });
@@ -312,13 +395,13 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
 
       const regrasInsert: any[] = [];
       selectedPlanIds.forEach(planoId => {
-        parcelas.forEach((p, i) => {
-          const criada = pcsCriadas.find((c: any) => c.ordem === i);
+        (regrasPorPlano[planoId] || []).forEach((p, i) => {
+          const parcelaId = parcelaIdByKey.get(`${planoId}:${i}`);
           p.niveis.forEach((n, ni) => {
             regrasInsert.push({
               grade_id: gradeId!,
               plano_id: planoId,
-              parcela_id: criada?.id || null,
+              parcela_id: parcelaId || null,
               parcela_numero: p.vitalicia ? null : p.numero_parcela,
               vitalicia: p.vitalicia,
               vitalicia_inicio_parcela: p.vitalicia ? p.vitalicia_inicio_parcela : null,
@@ -337,22 +420,10 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
         if (rErr) throw rErr;
       }
 
-      // Snapshot da nova versão
       const snapshot = {
         grade: { id: gradeId, nome: nome.trim(), descricao: descricao.trim() || null, versao: novaVersao },
         planos: selectedPlanIds,
-        parcelas: parcelas.map((p, i) => ({
-          parcela: {
-            numero_parcela: p.vitalicia ? null : p.numero_parcela,
-            vitalicia: p.vitalicia,
-            vitalicia_inicio_parcela: p.vitalicia ? p.vitalicia_inicio_parcela : null,
-            label: p.label.trim(),
-            ordem: i,
-          },
-          niveis: p.niveis.map((n, ni) => ({
-            nome: n.nome.trim(), percentual: n.tipo_comissao === 'percentual' ? Number(n.valor ?? n.percentual) || 0 : 0, tipo_comissao: n.tipo_comissao || 'percentual', valor: Number(n.valor ?? n.percentual) || 0, ordem: ni, role: n.role,
-          })),
-        })),
+        regras_por_plano: selectedPlanIds.reduce((acc, planoId) => ({ ...acc, [planoId]: regrasPorPlano[planoId] || [] }), {}),
       };
       await (supabase as any).from('grades_comissao_versoes').insert({
         grade_id: gradeId,
@@ -377,21 +448,23 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
   if (isEdit && isLoading) return <div className="text-sm text-muted-foreground">Carregando...</div>;
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 max-w-5xl">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate(basePath)}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h2 className="text-lg font-semibold text-foreground">
-          {isEdit ? 'Editar Grade' : 'Nova Grade de Comissão'}
-        </h2>
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">
+            {isEdit ? 'Editar configuração comercial da grade' : 'Nova configuração comercial de comissão'}
+          </h2>
+          <p className="text-sm text-muted-foreground">Defina quanto cada plano paga para cada perfil. A atribuição a usuários fica na área de Atribuição de Grades.</p>
+        </div>
       </div>
 
       <Alert>
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
-          Alterações nesta grade só valem para <b>novas vendas</b> a partir do momento do salvamento.
-          Comissões já geradas permanecem inalteradas.
+          Esta tela configura regras comerciais por <b>plano, parcela e perfil</b>. Ela não escolhe quem recebe a grade.
         </AlertDescription>
       </Alert>
 
@@ -400,13 +473,13 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground flex items-center">
               Nome da Grade *
-              <FieldHint text="Identifique a grade de forma clara. Ex: 'Grade Agência Premium'." />
+              <FieldHint text="Identifique a regra comercial. Ex: 'Grade Select RJ'." />
             </label>
-            <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Grade Agência Premium" />
+            <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Grade Select RJ" />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Descrição</label>
-            <Input value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Descrição opcional" />
+            <Input value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Descrição opcional da regra comercial" />
           </div>
         </CardContent>
       </Card>
@@ -414,8 +487,8 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
       <Card>
         <CardContent className="space-y-4 pt-6">
           <div>
-            <h3 className="text-base font-semibold text-foreground">Planos vinculados</h3>
-            <p className="text-sm text-muted-foreground">A grade só gera comissão para os planos selecionados aqui.</p>
+            <h3 className="text-base font-semibold text-foreground">Planos configurados na grade</h3>
+            <p className="text-sm text-muted-foreground">Selecione os planos e configure regras próprias para cada um.</p>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             {planos.map(plano => (
@@ -428,61 +501,78 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
               </label>
             ))}
           </div>
-          {selectedPlanIds.length > 0 && (
-            <p className="text-xs text-muted-foreground">{selectedPlanIds.length} plano(s) usarão as regras de parcela e perfil abaixo.</p>
-          )}
         </CardContent>
       </Card>
 
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold">Parcelas comissionadas</h3>
-          <div className="flex gap-2">
-            <TooltipProvider delayDuration={200}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="outline" size="sm" onClick={addParcela}>
-                    <Plus className="h-4 w-4 mr-1" /> Parcela
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Adicionar parcela específica (1ª, 2ª, …)</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="outline" size="sm" onClick={addVitalicia} disabled={hasVitalicia}>
-                    <InfinityIcon className="h-4 w-4 mr-1" /> Vitalícia
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  Vitalícia: a partir da parcela X, todos os pagamentos seguintes geram comissão com este percentual.
-                </TooltipContent>
-              </Tooltip>
-          </TooltipProvider>
-          </div>
-        </div>
+      {planosSelecionados.length === 0 ? (
+        <Card>
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">
+            Selecione um plano para configurar quanto cada perfil recebe.
+          </CardContent>
+        </Card>
+      ) : (
+        planosSelecionados.map((plano) => {
+          const parcelas = regrasPorPlano[plano.id] || [];
+          const hasVitalicia = parcelas.some(p => p.vitalicia);
+          return (
+            <Card key={plano.id}>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Package className="h-4 w-4" /> {plano.nome}
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">Regras de pagamento por parcela e perfil para este plano.</p>
+                  </div>
+                  <Badge variant="outline">{parcelas.length} regra{parcelas.length === 1 ? '' : 's'} de parcela</Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex justify-end gap-2">
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="sm" onClick={() => addParcela(plano.id)}>
+                          <Plus className="h-4 w-4 mr-1" /> Parcela
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Adicionar parcela específica para este plano.</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="sm" onClick={() => addVitalicia(plano.id)} disabled={hasVitalicia}>
+                          <InfinityIcon className="h-4 w-4 mr-1" /> Vitalícia
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Regra recorrente a partir de uma parcela para este plano.</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
 
-        {parcelas.length === 0 ? (
-          <Card>
-            <CardContent className="py-8 text-center text-sm text-muted-foreground">
-              Nenhuma parcela configurada. Adicione a "Taxa de Adesão" e/ou parcelas mensais.
-            </CardContent>
-          </Card>
-        ) : (
-          parcelas.map((p, i) => (
-            <ParcelaEditor
-              key={p.id || `new-${i}`}
-              parcela={p}
-              index={i}
-              onChange={next => updateParcela(i, next)}
-              onRemove={() => removeParcela(i)}
-              onMove={dir => moveParcela(i, dir)}
-              canMoveUp={i > 0}
-              canMoveDown={i < parcelas.length - 1}
-              commercialRoles={commercialRoles.map(r => ({ role: r.role, label: r.label }))}
-            />
-          ))
-        )}
-      </div>
+                {parcelas.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
+                    Nenhuma parcela configurada para este plano.
+                  </div>
+                ) : (
+                  parcelas.map((p, i) => (
+                    <ParcelaEditor
+                      key={p.id || `${plano.id}-${i}`}
+                      parcela={p}
+                      index={i}
+                      onChange={next => updateParcela(plano.id, i, next)}
+                      onRemove={() => removeParcela(plano.id, i)}
+                      onMove={dir => moveParcela(plano.id, i, dir)}
+                      canMoveUp={i > 0}
+                      canMoveDown={i < parcelas.length - 1}
+                      commercialRoles={commercialRoles.map(r => ({ role: r.role, label: r.label }))}
+                    />
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          );
+        })
+      )}
 
       <div className="flex justify-end gap-3">
         <Button variant="outline" onClick={() => navigate(basePath)}>Cancelar</Button>

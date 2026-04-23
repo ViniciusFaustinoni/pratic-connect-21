@@ -121,15 +121,15 @@ export function ParcelaEditor({
       {open && (
         <CardContent className="space-y-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm">Níveis comissionados</CardTitle>
+            <CardTitle className="text-sm">Perfis remunerados nesta parcela</CardTitle>
             <Button variant="outline" size="sm" onClick={addNivel}>
-              <Plus className="h-4 w-4 mr-1" /> Nível
+              <Plus className="h-4 w-4 mr-1" /> Perfil
             </Button>
           </div>
 
           {parcela.niveis.length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-3">
-              Nenhum nível nesta parcela. O valor inteiro vai para a empresa.
+              Nenhum perfil configurado nesta parcela.
             </p>
           ) : (
             parcela.niveis.map((nivel, idx) => (
@@ -166,7 +166,7 @@ export function ParcelaEditor({
                   </div>
                   <Input
                     className="flex-1 h-9"
-                    placeholder="Nome do nível"
+                    placeholder="Nome da regra"
                     value={nivel.nome}
                     onChange={e => updateNivel(idx, 'nome', e.target.value)}
                   />
@@ -209,7 +209,7 @@ export function ParcelaEditor({
 
           <div className="pt-2 border-t space-y-2">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">Total alocado:</span>
+              <span className="text-muted-foreground">Percentual alocado:</span>
               <span className={exceeds ? 'text-destructive font-semibold' : 'font-medium text-foreground'}>
                 {total}% de 100%
               </span>

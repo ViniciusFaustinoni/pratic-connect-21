@@ -185,7 +185,7 @@ export default function GradesComissao({ basePath = '/configuracoes/grades-comis
   const handleDeleteClick = async (id: string) => {
     const count = userCounts[id] || 0;
     if (count > 0) {
-      toast.error(`Esta grade está atribuída a ${count} usuário(s) e não pode ser excluída. Remova as atribuições primeiro.`);
+      toast.error(`Esta grade é usada por ${count} usuário(s) na área de Atribuição. Remova as atribuições primeiro.`);
       return;
     }
     setDeleteId(id);
@@ -216,7 +216,7 @@ export default function GradesComissao({ basePath = '/configuracoes/grades-comis
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-foreground">Grades de Comissão</h2>
-          <p className="text-sm text-muted-foreground">Configure grades com níveis de comissionamento sobre taxa de adesão</p>
+          <p className="text-sm text-muted-foreground">Configure quanto cada plano paga para cada perfil de acesso. Usuários são vinculados somente em Atribuição de Grades.</p>
         </div>
         <TooltipProvider delayDuration={200}>
           <Tooltip>
@@ -268,7 +268,7 @@ export default function GradesComissao({ basePath = '/configuracoes/grades-comis
                       {qtdUsuarios > 0 && (
                         <Badge variant="outline" className="gap-1">
                           <Users className="h-3 w-3" />
-                          {qtdUsuarios}
+                          Usada por {qtdUsuarios}
                         </Badge>
                       )}
                       {temVitalicia && (
@@ -291,14 +291,14 @@ export default function GradesComissao({ basePath = '/configuracoes/grades-comis
                         {qtdParcelas} {qtdParcelas === 1 ? 'parcela' : 'parcelas'}
                         {temVitalicia && ' + vitalícia'}
                       </span>
-                      <span>{qtdNiveis} {qtdNiveis === 1 ? 'nível' : 'níveis'}</span>
-                      <span>{perfisConfigurados || qtdNiveis} perfil{(perfisConfigurados || qtdNiveis) === 1 ? '' : 'is'} configurado{(perfisConfigurados || qtdNiveis) === 1 ? '' : 's'}</span>
-                      <span>Adesão: {total}%</span>
+                      <span>{qtdNiveis} regra{qtdNiveis === 1 ? '' : 's'} auxiliar{qtdNiveis === 1 ? '' : 'es'}</span>
+                      <span>{perfisConfigurados || qtdNiveis} perfil{(perfisConfigurados || qtdNiveis) === 1 ? '' : 'is'} remunerado{(perfisConfigurados || qtdNiveis) === 1 ? '' : 's'}</span>
+                      <span>Percentual auxiliar: {total}%</span>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <span className="text-primary font-medium cursor-help">Empresa: {Math.max(100 - total, 0)}%</span>
                         </TooltipTrigger>
-                        <TooltipContent>Percentual retido pela empresa na taxa de adesão</TooltipContent>
+                        <TooltipContent>Percentual auxiliar retido pela empresa nas regras percentuais</TooltipContent>
                       </Tooltip>
                     </div>
                     <Progress value={Math.min(total, 100)} className="h-1.5 w-40" />
@@ -312,7 +312,7 @@ export default function GradesComissao({ basePath = '/configuracoes/grades-comis
                             <Pencil className="h-4 w-4" />
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent>Editar os níveis e configurações desta grade</TooltipContent>
+                        <TooltipContent>Editar regras comerciais por plano e perfil</TooltipContent>
                       </Tooltip>
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -320,7 +320,7 @@ export default function GradesComissao({ basePath = '/configuracoes/grades-comis
                             <Copy className="h-4 w-4" />
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent>Criar uma cópia desta grade com os mesmos níveis</TooltipContent>
+                        <TooltipContent>Criar uma cópia desta grade com as mesmas regras comerciais</TooltipContent>
                       </Tooltip>
                       <Tooltip>
                         <TooltipTrigger asChild>
