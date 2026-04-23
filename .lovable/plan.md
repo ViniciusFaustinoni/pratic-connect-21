@@ -1,94 +1,102 @@
 
 
-## Painel de falhas por falta de linha digitável (SGA)
+## Sincronização financeira SGA — diagnóstico e correção da população
 
-### Diagnóstico
+### Fotografia atual do banco
 
-O fallback no backend **já está implementado** em `supabase/functions/executar-regua-cobranca/index.ts` (linhas 491–496):
+| Métrica | Valor |
+|---|---|
+| Veículos elegíveis (base antiga, `origem_cadastro='api_externa'`) | **9.623** |
+| ↳ com `codigo_hinova` mapeado | 4.624 |
+| ↳ sem `codigo_hinova` (mas com placa + CPF) | **4.999** |
+| Jobs `pendente` | **13.610** |
+| Jobs `erro` | 260 (todos `401 — restrição de horário`) |
+| Jobs `sem_historico_hinova` | 2.852 |
+| Jobs `concluido` | 10 (e **importaram 0 boletos cada**) |
+| **Cobranças SGA na tabela `cobrancas`** | **0** ❌ |
 
-- Quando o template exige `linha_digitavel` (mapa em `TEMPLATE_PARAMS_MAP`) e a cobrança SGA não tem o código,
-- O envio é **bloqueado** (não vai mensagem incompleta para a Meta),
-- Um evento é gravado em `cobranca_eventos` com `dados.status = 'falhou'`, `dados.falta_sga = true` e `dados.erro = 'Sem linha digitável SGA disponível — sincronize o financeiro do veículo'`,
-- O contador `whatsapp_falhas` é incrementado e exibido no card "Execução automática".
+Em produção há 9.623 veículos da base antiga e **nenhum** boleto SGA salvo localmente. A régua de cobrança não tem o que enviar para esses associados. Os jobs estão rodando, mas falhando silenciosamente.
 
-**O que falta:** o usuário só vê um número agregado ("Falhas: 12"). Não vê **quais associados/veículos** falharam nem **o que precisa sincronizar**. Hoje precisa abrir o banco para descobrir.
+### Causas raízes (4 bugs reais)
+
+1. **Erro 401 mascarado como "placa não encontrada"** (`_shared/hinova-client.ts` linhas 145–172).
+   `buscarVeiculoPorPlaca` trata HTTP 401 / 502 / 406 igual a 404 e devolve `null`. O orquestrador grava `"Placa não encontrada (http=401)"` em 2.687 jobs. **Não é placa errada — é token expirado / sessão recusada / Hinova fora do ar**.
+
+2. **Restrição de horário no usuário Hinova SGA.**
+   260 jobs falharam com `"Usuário com restrição de horário"`. O cron diário roda às **05:00 UTC = 02:00 BRT** — fora do horário comercial liberado para o usuário no painel SGA. **Solução do lado deles** (liberar 24h ou ajustar janela), mas o sistema precisa **detectar e adiar** em vez de marcar `erro` permanente.
+
+3. **Reconciliação por CPF não dispara quando codigo_hinova já existe.**
+   Em `sga-sync-financeiro-veiculo` linhas 137–193, se `codigo_associado` já está preenchido (mesmo desatualizado), nunca tenta o fallback CPF. E a função `listarBoletosVeiculo` retorna `[]` em **qualquer** erro HTTP — sem distinguir "associado sem boletos" de "401 / 5xx". Resultado: 10 jobs marcados como `concluido` com 0 boletos quando provavelmente houve 401 silencioso.
+
+4. **Throughput insuficiente.** Cron processa no máximo 1.200/dia. Para 13.610 jobs pendentes + 4.999 ainda sem mapeamento = **~18.600 tentativas necessárias → 16 dias** mesmo com 100% de sucesso.
 
 ### Mudanças
 
-**A. Novo card "Cobranças bloqueadas — falta linha digitável" em `src/pages/cobranca/ReguaCobranca.tsx`**
+**A. `supabase/functions/_shared/hinova-client.ts` — propagar erros de auth e rede**
 
-Inserir entre o card "Execução automática" (linha 493) e "Pré-visualização de mensagens" (linha 495). Lista as últimas 30 falhas por `falta_sga` dos últimos 7 dias.
+- `buscarVeiculoPorPlaca`: separar 404 (não encontrado) de 401/403/5xx. Lançar `HinovaTransientError` para 401/5xx (com `httpStatus`), retornar `null` só em 404 real.
+- `listarBoletosVeiculo`: idem — só devolve `[]` em 200 com array vazio. Em 401/5xx, lança `HinovaTransientError`. Em 404, lança `HinovaNotFoundError`.
+- `buscarSituacaoFinanceiraVeiculo`: idem.
+- Detectar a string `"restri" + "hor"` no body de auth/listagem e marcar `error.transient = true, error.reason = 'janela_horaria'`.
 
-Query (React Query, key `regua-falhas-sga`):
-```ts
-supabase.from('cobranca_eventos')
-  .select('id, created_at, descricao, associado_id, dados, associados!inner(nome, cpf)')
-  .eq('tipo', 'whatsapp')
-  .eq('dados->>falta_sga', 'true')
-  .gte('created_at', seteDiasAtras)
-  .order('created_at', { ascending: false })
-  .limit(30)
-```
+**B. `supabase/functions/sga-sync-financeiro-veiculo/index.ts` — política de retry e fallback CPF sempre**
 
-Cada linha mostra:
-- **Associado** (nome + CPF, link para `/cadastro/associados/:id`)
-- **Etapa** (`dados.dia_regua` formatado: `D-6`, `D+0`…)
-- **Template** que tentou disparar (`dados.template`)
-- **Quando** (`created_at` formatado pt-BR)
-- Botão **"Sincronizar SGA"** que chama `supabase.functions.invoke('sga-sync-financeiro-veiculo', { body: { associado_id, veiculo_id: dados.veiculo_id } })`. Em caso de sucesso, toast verde + `queryClient.invalidateQueries(['regua-falhas-sga'])`. Em caso de erro, toast vermelho com a mensagem.
+- **Sempre** tentar CPF como segunda fonte de `codigo_associado` quando a primeira chamada de boletos retornar vazio/erro, mesmo se já houver `codigo_hinova` (hoje só tenta se `!codigoAssociado`). Atualiza `associados.codigo_hinova` se divergir.
+- Tratar exceções `HinovaTransientError`:
+  - Marcar job como `pendente_retry` (novo status — abaixo).
+  - Gravar `proximo_retry_em = now() + interval` calculado: 30min para 5xx, **next 09:00 BRT** para `janela_horaria`.
+  - Não consumir `tentativas` do contador de erro permanente.
+- `HinovaNotFoundError` real (404) → marca `sem_historico_hinova` (igual hoje).
+- Após upsert dos boletos, gravar **resumo no veículo** (`total_aberto_sga`, `total_vencido_sga`, `situacao_financeira_sga`) — já existe, manter.
 
-Cabeçalho do card com:
-- Ícone `AlertTriangle` âmbar
-- Total de falhas no período
-- Botão **"Sincronizar todas"** (loop com `Promise.allSettled`, throttled de 1 em 1, mostra progresso) — só aparece quando há ≥ 2 falhas.
+**C. Migration mínima**
 
-Quando lista vazia: estado vazio amigável ("Nenhuma cobrança bloqueada nos últimos 7 dias 🎉").
+- Adicionar status `pendente_retry` ao enum `sga_sync_financeiro_jobs.status` (se for enum) ou apenas valor textual permitido (já é texto livre — só ajustar filtros).
+- Adicionar coluna `proximo_retry_em timestamptz null` em `sga_sync_financeiro_jobs`.
+- Índice `idx_jobs_pendente_retry on sga_sync_financeiro_jobs(proximo_retry_em) where status='pendente_retry'`.
 
-**B. Garantir gravação de `veiculo_id` no evento de falha**
+**D. `supabase/functions/sga-backfill-financeiro/index.ts` — fila incluir retries vencidos**
 
-A edge function já passa `veiculo_id` no contexto, mas hoje grava só `linha_digitavel` e `boleto_url` em `dados` (linhas 535-536). Adicionar `veiculo_id` ao payload (linha 535-536) para o botão "Sincronizar SGA" funcionar sem query extra:
+- Em `acao=processar`, além de `status='pendente'`, também pegar `status='pendente_retry' and proximo_retry_em <= now()`.
+- Em `acao=enfileirar`, **também enfileirar veículos sem `codigo_hinova` mas com placa+CPF** (hoje exclui via `.not('codigo_hinova','is',null)`). A função sync já reconcilia via placa/CPF — basta dar a chance.
+- Aumentar `batch_size` default no cron de 20 → 50 e ciclos de 60 → 80. Com 50ms entre chamadas (limite Hinova razoável), processa ~4.000/execução.
 
-```ts
-dados: {
-  ...
-  veiculo_id,        // ← adicionar
-  fonte,
-  linha_digitavel: linha_digitavel || null,
-  ...
-}
-```
+**E. `supabase/functions/cron-sga-sync-financeiro-diario/index.ts` — janela segura + escalonamento**
 
-Mudança mínima, 1 linha. Eventos antigos (sem `veiculo_id`) continuam funcionando — o botão faz fallback buscando o veículo principal do associado.
+- Mover schedule do cron de `0 5 * * *` (02h BRT, fora da janela horária) para `0 12 * * *` (09h BRT — horário comercial garantido).
+- Adicionar segundo cron `0 12-20/2 * * *` (a cada 2h entre 09h–17h BRT) que só roda `acao=processar` para drenar a fila acumulada nas primeiras semanas.
 
-**C. Banner no topo da página**
+**F. UI — `src/components/cadastro/SgaBackfillFinanceiroDialog.tsx` (e badge no menu Cobranças)**
 
-Quando `falhas_sga > 0` no período, banner amarelo no topo (acima do card "Templates não aprovados" já existente):
-
-> ⚠️ **N cobranças foram bloqueadas hoje por falta de linha digitável do SGA.** Veja a lista abaixo e sincronize os veículos afetados.
-
-Clica → scroll suave até o card.
-
-### Arquivos editados
-
-- `src/pages/cobranca/ReguaCobranca.tsx` — novo card + query + banner + botão sincronizar.
-- `supabase/functions/executar-regua-cobranca/index.ts` — adicionar `veiculo_id` ao payload de `cobranca_eventos.dados`.
+- Mostrar nova métrica: `pendente_retry` + tooltip explicando o motivo predominante (janela horária / 5xx).
+- Card de erros agrupados por causa: já tem `ultimo_erro` na tabela — agregar top-5.
+- Botão **"Reagendar erros para próxima janela"** que move `status='erro' and ultimo_erro ilike '%horario%'` para `pendente_retry` com `proximo_retry_em = next 09:00 BRT`.
+- Botão **"Forçar sync agora (top 100 vencidos)"** para validação após o fix.
 
 ### O que NÃO muda
 
-- O fallback de bloqueio do envio (já funciona).
-- O contador de falhas no card "Execução automática" (já funciona).
-- A edge function `sga-sync-financeiro-veiculo` (já existe e é chamada como está).
-- Schema, migrations, RLS — nenhuma alteração.
+- Endpoints Hinova consumidos (`/buscar/situacao-financeira-veiculo`, `/listar/boleto-associado-veiculo`, `/veiculo/consultar/placa`, `/associado/buscar/{cpf}/cpf`) — todos já estão corretos conforme [doc oficial v2](https://api.hinova.com.br/api/sga/v2/doc/).
+- Tabela `cobrancas` schema — campos `linha_digitavel`, `codigo_barras`, `boleto_url`, `nosso_numero` já existem.
+- Régua de cobrança (`executar-regua-cobranca`) — já lê de `cobrancas` com `origem='sga_hinova'` (implementado em iteração anterior). Vai começar a ter dados assim que o backfill rodar.
+- Veículos da base nova (`origem_cadastro='interno'`) — continuam fora do escopo (suas cobranças nascem locais via Asaas).
+
+### Ações operacionais paralelas (do lado do usuário, fora do código)
+
+> **Pré-requisito crítico:** o usuário Hinova/SGA configurado em `integracoes_credenciais` precisa ter a **restrição de horário removida** no painel SGA (ou janela liberada das 06h às 22h BRT). Sem isso, o cron das 09h ainda funciona, mas resyncs sob demanda fora dessa janela vão ficar em `pendente_retry`. Vou documentar isso na UI do dialog.
 
 ### Validação (após implementação)
 
-1. Login `admin@teste.com / 123456789` → `/cobranca/regua`.
-2. Conferir: se houver falhas SGA dos últimos 7 dias, o card aparece listando associados + botão "Sincronizar SGA".
-3. Clicar em uma linha → confirmar que o sync roda e a falha some da lista após próxima execução da régua.
-4. Screenshot do card populado.
+1. Login `admin@teste.com / 123456789` → `Cadastro → Backfill SGA`.
+2. Clicar **"Reagendar erros"** → confirmar que 260 + 2.687 jobs viram `pendente_retry`.
+3. Disparar manualmente `cron-sga-sync-financeiro-diario` → conferir nos logs `boletos_importados > 0` em pelo menos 80% dos jobs concluídos.
+4. Query `select count(*) from cobrancas where origem='sga_hinova'` → deve passar de 0 para milhares.
+5. Abrir `/cobranca/regua` → o card de "Cobranças bloqueadas por falta de SGA" deve esvaziar nos próximos disparos.
+6. Screenshot do dialog populado + count de cobranças importadas.
 
 ### Riscos
 
-- **Botão "Sincronizar todas"** pode disparar muitas chamadas SGA em sequência. Mitigação: throttle de 1 chamada por segundo, hard cap de 30 (mesmo limite da query).
-- Eventos antigos sem `veiculo_id` no payload: fallback busca veículo principal via `associados.veiculo_principal_id` (ou primeiro veículo ativo).
+- **Rate limit Hinova:** 4.000 chamadas/execução em rajada pode estourar limite não documentado. Mitigação: `delay_ms=100` e exponential backoff em 429. O `HinovaTransientError` já cobre esse caso.
+- **Cobranças duplicadas:** já há `onConflict: 'nosso_numero'` no upsert — idempotente.
+- **Liberação da janela horária do usuário SGA depende do parceiro.** Se demorar, o cron diário ainda roda às 09h dentro da janela atual; processo só fica lento, mas não trava.
+- **4.999 veículos sem `codigo_hinova`:** a reconciliação por placa+CPF tem ~70% de sucesso histórico (visto em `sga-hinova-sync`). Os 30% restantes (cadastros divergentes na Hinova) ficam em `sem_historico_hinova` para revisão manual — mesma política de hoje.
 
