@@ -75,7 +75,8 @@ export function useVeiculosApp() {
 
       return (data || []).map(v => ({
         ...v,
-        tem_rastreador: Array.isArray(v.rastreadores) && v.rastreadores.length > 0,
+        // Ambos refletem "rastreador efetivamente instalado" — manutencao/retirada_pendente NÃO contam.
+        tem_rastreador: Array.isArray(v.rastreadores) && v.rastreadores.some(r => r.status === 'instalado'),
         rastreador_ativo: Array.isArray(v.rastreadores) && v.rastreadores.some(r => r.status === 'instalado'),
         cobertura_roubo_furto: v.cobertura_roubo_furto || false,
         cobertura_total: v.cobertura_total || false,

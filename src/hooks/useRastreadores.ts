@@ -508,11 +508,12 @@ export function useVeiculosSemRastreador() {
     queryKey: ['veiculos-sem-rastreador'],
     queryFn: async () => {
       // Get vehicles that don't have an installed tracker
+      // status='instalado' é a verdade primária — sempre tem veiculo_id preenchido.
+      // Não filtramos por veiculo_id IS NOT NULL para deixar a regra explícita.
       const { data: veiculosComRastreador, error: rastrError } = await supabase
         .from('rastreadores')
         .select('veiculo_id')
-        .eq('status', 'instalado')
-        .not('veiculo_id', 'is', null);
+        .eq('status', 'instalado');
 
       if (rastrError) throw rastrError;
 
