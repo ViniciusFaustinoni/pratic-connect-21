@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { FileText, Download, ChevronDown, ChevronUp } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -80,7 +80,7 @@ export default function LogsAuditoria() {
       if (filters.dataFim) query = query.lte('created_at', `${filters.dataFim}T23:59:59`);
       if (filters.busca.trim()) {
         const term = filters.busca.trim().replace(/[%_]/g, '');
-        query = query.or(`descricao.ilike.%${term}%,usuario_nome.ilike.%${term}%,tabela.ilike.%${term}%,modulo.ilike.%${term}%`);
+        query = query.or(`descricao.ilike.%${term}%,usuario_nome.ilike.%${term}%,tabela.ilike.%${term}%,modulo.ilike.%${term}%,registro_id.eq.${term}`);
       }
 
       const { data, error } = await query;
@@ -212,7 +212,7 @@ export default function LogsAuditoria() {
                 logs.map((log: any) => {
                   const resumo = gerarResumoAuditoria(log);
                   return (
-                    <>
+                    <Fragment key={log.id}>
                         <TableRow className="border-b-0">
                           <TableCell className="font-mono text-sm">{format(new Date(log.created_at), 'dd/MM/yy HH:mm', { locale: ptBR })}</TableCell>
                           <TableCell>{log.usuario_nome || log.usuario_id?.slice(0, 8) || '-'}</TableCell>
@@ -261,7 +261,7 @@ export default function LogsAuditoria() {
                             </TableCell>
                           </TableRow>
                         )}
-                    </>
+                    </Fragment>
                   );
                 })
               )}
