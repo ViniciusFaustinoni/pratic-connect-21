@@ -408,17 +408,8 @@ export default function UsuarioForm() {
           if (rolesError) throw rolesError;
         }
 
-        // Salvar grade de comissão
         const isVendas = formData.perfis.some(p => ['vendedor_clt', 'vendedor_externo', 'agencia'].includes(p));
-        if (isVendas && formData.grade_comissao_id) {
-          const { data: session } = await supabase.auth.getSession();
-          await (supabase as any).from('usuario_grade_comissao').delete().eq('user_id', usuario.user_id);
-          await (supabase as any).from('usuario_grade_comissao').insert({
-            user_id: usuario.user_id,
-            grade_id: formData.grade_comissao_id,
-            atribuido_por: session?.session?.user?.id || null,
-          });
-        } else if (!isVendas) {
+        if (!isVendas) {
           await (supabase as any).from('usuario_grade_comissao').delete().eq('user_id', usuario.user_id);
         }
       } else {
@@ -448,10 +439,6 @@ export default function UsuarioForm() {
     },
     onError: (error: any) => {
       const errorMessage = error.message || 'Erro ao salvar usuário';
-      if (errorMessage === 'GRADE_REQUIRED') {
-        toast.error('Selecione uma grade de comissão para vendedor externo ou agência.');
-        return;
-      }
       if (errorMessage.includes('CPF já está cadastrado')) {
         setFieldErrors(prev => ({ ...prev, cpf: 'Este CPF já está cadastrado no sistema' }));
         toast.error('CPF já cadastrado.');
