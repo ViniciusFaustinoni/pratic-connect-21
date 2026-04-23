@@ -2,13 +2,25 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+export type TipoVeiculo = 'carro' | 'moto' | 'caminhao' | 'onibus' | 'utilitario' | 'outros';
+
 export interface MarcaModelo {
   id: string;
   marca: string;
   modelo: string | null;
   ativo: boolean;
+  tipo_veiculo: TipoVeiculo | null;
   created_at: string;
 }
+
+export const TIPO_VEICULO_LABELS: Record<TipoVeiculo, string> = {
+  carro: 'Carro',
+  moto: 'Moto',
+  caminhao: 'Caminhão',
+  onibus: 'Ônibus',
+  utilitario: 'Utilitário',
+  outros: 'Outros',
+};
 
 export function useMarcasModelos() {
   return useQuery({
@@ -48,20 +60,22 @@ export function useToggleMarcaModelo() {
   });
 }
 
-export function useMarcasDistintas() {
+export function useMarcasDistintas(tipo?: TipoVeiculo | null) {
   return useQuery({
-    queryKey: ['marcas_distintas'],
+    queryKey: ['marcas_distintas', tipo ?? 'all'],
     queryFn: async () => {
       const all: string[] = [];
       let from = 0;
       const pageSize = 1000;
       while (true) {
-        const { data, error } = await supabase
+        let q = supabase
           .from('marcas_modelos')
           .select('marca')
           .eq('ativo', true)
           .order('marca')
           .range(from, from + pageSize - 1);
+        if (tipo) q = q.eq('tipo_veiculo', tipo);
+        const { data, error } = await q;
         if (error) throw error;
         if (!data || data.length === 0) break;
         all.push(...data.map(d => d.marca));
@@ -70,6 +84,24 @@ export function useMarcasDistintas() {
       }
       return [...new Set(all)].sort();
     },
+  });
+}
+
+export function useTiposVeiculo() {
+  return useQuery({
+    queryKey: ['tipos_veiculo_distintos'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('marcas_modelos')
+        .select('tipo_veiculo')
+        .eq('ativo', true)
+        .not('tipo_veiculo', 'is', null);
+      if (error) throw error;
+      const set = new Set<TipoVeiculo>();
+      (data ?? []).forEach((d: any) => d.tipo_veiculo && set.add(d.tipo_veiculo));
+      return Array.from(set).sort();
+    },
+    staleTime: 1000 * 60 * 10,
   });
 }
 
