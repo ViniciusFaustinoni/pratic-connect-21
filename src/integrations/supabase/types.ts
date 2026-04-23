@@ -6459,6 +6459,7 @@ export type Database = {
           contrato_id: string
           created_at: string
           deducoes_detalhes: Json | null
+          grade_id: string | null
           grade_versao_id: string | null
           id: string
           mes_referencia: number
@@ -6469,10 +6470,13 @@ export type Database = {
           parcela_total: number | null
           percentual_aplicado: number
           plano_id: string | null
+          plano_regra_id: string | null
           recalculada: boolean | null
           recalculada_em: string | null
           recalculada_motivo: string | null
+          role_destinatario: string | null
           status: string
+          tipo_calculo: string | null
           tipo_comissao: string | null
           updated_at: string
           valor_base: number
@@ -6498,6 +6502,7 @@ export type Database = {
           contrato_id: string
           created_at?: string
           deducoes_detalhes?: Json | null
+          grade_id?: string | null
           grade_versao_id?: string | null
           id?: string
           mes_referencia: number
@@ -6508,10 +6513,13 @@ export type Database = {
           parcela_total?: number | null
           percentual_aplicado?: number
           plano_id?: string | null
+          plano_regra_id?: string | null
           recalculada?: boolean | null
           recalculada_em?: string | null
           recalculada_motivo?: string | null
+          role_destinatario?: string | null
           status?: string
+          tipo_calculo?: string | null
           tipo_comissao?: string | null
           updated_at?: string
           valor_base?: number
@@ -6537,6 +6545,7 @@ export type Database = {
           contrato_id?: string
           created_at?: string
           deducoes_detalhes?: Json | null
+          grade_id?: string | null
           grade_versao_id?: string | null
           id?: string
           mes_referencia?: number
@@ -6547,10 +6556,13 @@ export type Database = {
           parcela_total?: number | null
           percentual_aplicado?: number
           plano_id?: string | null
+          plano_regra_id?: string | null
           recalculada?: boolean | null
           recalculada_em?: string | null
           recalculada_motivo?: string | null
+          role_destinatario?: string | null
           status?: string
+          tipo_calculo?: string | null
           tipo_comissao?: string | null
           updated_at?: string
           valor_base?: number
@@ -6653,6 +6665,13 @@ export type Database = {
             referencedColumns: ["contrato_id"]
           },
           {
+            foreignKeyName: "comissoes_grade_id_fkey"
+            columns: ["grade_id"]
+            isOneToOne: false
+            referencedRelation: "grades_comissao"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "comissoes_grade_versao_id_fkey"
             columns: ["grade_versao_id"]
             isOneToOne: false
@@ -6671,6 +6690,13 @@ export type Database = {
             columns: ["plano_id"]
             isOneToOne: false
             referencedRelation: "vw_plans_compat"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_plano_regra_id_fkey"
+            columns: ["plano_regra_id"]
+            isOneToOne: false
+            referencedRelation: "grade_comissao_plano_regras"
             referencedColumns: ["id"]
           },
           {
@@ -13531,6 +13557,131 @@ export type Database = {
             columns: ["sinistro_id"]
             isOneToOne: false
             referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      grade_comissao_plano_regras: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          grade_id: string
+          id: string
+          nome_nivel: string | null
+          ordem: number
+          parcela_id: string | null
+          parcela_numero: number | null
+          plano_id: string
+          role: string
+          tipo_comissao: string
+          updated_at: string
+          valor: number
+          vitalicia: boolean
+          vitalicia_inicio_parcela: number | null
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          grade_id: string
+          id?: string
+          nome_nivel?: string | null
+          ordem?: number
+          parcela_id?: string | null
+          parcela_numero?: number | null
+          plano_id: string
+          role: string
+          tipo_comissao?: string
+          updated_at?: string
+          valor?: number
+          vitalicia?: boolean
+          vitalicia_inicio_parcela?: number | null
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          grade_id?: string
+          id?: string
+          nome_nivel?: string | null
+          ordem?: number
+          parcela_id?: string | null
+          parcela_numero?: number | null
+          plano_id?: string
+          role?: string
+          tipo_comissao?: string
+          updated_at?: string
+          valor?: number
+          vitalicia?: boolean
+          vitalicia_inicio_parcela?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grade_comissao_plano_regras_grade_id_fkey"
+            columns: ["grade_id"]
+            isOneToOne: false
+            referencedRelation: "grades_comissao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grade_comissao_plano_regras_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grade_comissao_plano_regras_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "vw_plans_compat"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      grade_comissao_planos: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          grade_id: string
+          id: string
+          plano_id: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          grade_id: string
+          id?: string
+          plano_id: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          grade_id?: string
+          id?: string
+          plano_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grade_comissao_planos_grade_id_fkey"
+            columns: ["grade_id"]
+            isOneToOne: false
+            referencedRelation: "grades_comissao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grade_comissao_planos_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grade_comissao_planos_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "vw_plans_compat"
             referencedColumns: ["id"]
           },
         ]
@@ -30944,6 +31095,7 @@ export type Database = {
         | { Args: { _role: string; _user_id: string }; Returns: boolean }
       is_admin_master: { Args: { _user_id: string }; Returns: boolean }
       is_associado: { Args: { _user_id: string }; Returns: boolean }
+      is_comissao_manager: { Args: never; Returns: boolean }
       is_desenvolvedor: { Args: { _user_id: string }; Returns: boolean }
       is_diretor: { Args: { _user_id: string }; Returns: boolean }
       is_diretor_for_crud: { Args: { _user_id: string }; Returns: boolean }
