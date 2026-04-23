@@ -494,6 +494,26 @@ export default function ReguaCobranca() {
         </AlertDescription>
       </Alert>
 
+      {/* Banner: falhas SGA */}
+      {(falhasSGA?.length ?? 0) > 0 && (
+        <Alert className="border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-800">
+          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          <AlertDescription className="flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
+            <span className="text-amber-900 dark:text-amber-200">
+              <strong>{falhasSGA!.length}</strong>{' '}
+              {falhasSGA!.length === 1 ? 'cobrança foi bloqueada' : 'cobranças foram bloqueadas'} nos últimos 7 dias por falta de linha digitável do SGA.
+            </span>
+            <button
+              type="button"
+              onClick={() => document.getElementById('card-falhas-sga')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              className="text-sm underline text-amber-900 dark:text-amber-200 whitespace-nowrap text-left"
+            >
+              Ver lista e sincronizar
+            </button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Banner: templates não aprovados */}
       {etapasComTemplateNaoAprovado.length > 0 && (
         <Alert variant="destructive">
