@@ -511,6 +511,11 @@ export function DetalhesRastreadorDialog({ open, onOpenChange, rastreadorId }: D
 
               <Separator />
 
+              {/* Histórico de Vínculo (com filtros) */}
+              <HistoricoVinculoSection rastreadorId={rastreadorId} titulo="Histórico de Vínculo" />
+
+              <Separator />
+
               {/* Timeline Unificada */}
               <div className="space-y-3">
                 <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
