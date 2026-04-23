@@ -1480,9 +1480,24 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
       setShowConfirmDialog(false);
       onOpenChange(false);
-    } catch (error) {
-      toast.error(isEditando ? 'Erro ao atualizar cotação' : 'Erro ao criar cotação');
-      console.error(error);
+    } catch (error: any) {
+      // Log estruturado para diagnóstico (sem valores sensíveis — só chaves do payload)
+      try {
+        const payloadKeys = pendingFormData ? Object.keys(pendingFormData) : [];
+        console.error('[criarCotacao]', {
+          code: error?.code,
+          message: error?.message,
+          details: error?.details,
+          hint: error?.hint,
+          payloadKeys,
+        });
+      } catch {
+        console.error(error);
+      }
+
+      const ctx = isEditando ? 'atualizar cotação' : 'criar cotação';
+      const msg = descreverErroSupabase(error, { contexto: ctx });
+      toast.error(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -1505,7 +1520,17 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
             <div className="flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] px-4 pb-4 sm:px-6 space-y-5">
-            
+
+            {/* Banner: usuário sem permissão para criar cotação */}
+            {!isPermissionsLoading && !isEditando && !podeOperarCotacao && (
+              <Alert variant="default" className="border-warning bg-warning/10">
+                <AlertTriangle className="h-4 w-4 text-warning" />
+                <AlertDescription className="text-warning-foreground">
+                  Seu papel atual não permite criar cotações. Contate o administrador para liberar a permissão de Vendedor ou Gerência.
+                </AlertDescription>
+              </Alert>
+            )}
+
             {/* BLOCO 0: DADOS DO ASSOCIADO */}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold flex items-center gap-2">
