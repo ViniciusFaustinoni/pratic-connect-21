@@ -200,6 +200,36 @@ export function SgaBackfillFinanceiroDialog() {
               </AlertDescription>
             </Alert>
 
+            {/* Bloqueio crítico: Usuário com restrição (Hinova rejeita autenticação) */}
+            {restricaoHinovaAtiva && (
+              <Alert className="border-red-400 bg-red-50">
+                <ShieldAlert className="h-4 w-4 text-red-700" />
+                <AlertTitle className="text-red-900">
+                  Backfill bloqueado pela Hinova — "Usuário com restrição"
+                </AlertTitle>
+                <AlertDescription className="text-red-800 space-y-2">
+                  <p>
+                    A API Hinova está rejeitando a autenticação do usuário da integração com o erro
+                    <strong> "Usuário com restrição"</strong>
+                    {qtdJobsRestricao > 0 && (
+                      <> (<strong>{qtdJobsRestricao}</strong> jobs afetados).</>
+                    )}
+                    {' '}Enquanto esse erro estiver ativo, <strong>a fila não vai concluir</strong>: cada nova tentativa
+                    apenas reagenda os jobs para retry, sem importar boletos.
+                  </p>
+                  <p>
+                    <strong>Como resolver:</strong> abra um chamado com a Hinova solicitando a
+                    <strong> liberação 24h e/ou liberação por IP</strong> do usuário usado pela integração no painel SGA do parceiro.
+                    Não há ação no sistema que destrave esse bloqueio — é configuração externa.
+                  </p>
+                  <p className="text-xs text-red-700">
+                    Os botões de execução (Forçar sync, Reagendar, Processar) ficam desabilitados até
+                    o erro deixar de aparecer no topo das causas de falha.
+                  </p>
+                </AlertDescription>
+              </Alert>
+            )}
+
             {/* Métricas principais */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="rounded-md border bg-card p-3">
