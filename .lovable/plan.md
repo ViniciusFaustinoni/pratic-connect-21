@@ -1,81 +1,94 @@
 
 
-## Cobranças via WhatsApp com dados de pagamento do SGA
+## Painel de falhas por falta de linha digitável (SGA)
 
 ### Diagnóstico
 
-A régua já dispara WhatsApp com templates Meta aprovados, **mas envia apenas 3 parâmetros fixos**: `[nome, valor, vencimento]` (em `executar-regua-cobranca/index.ts`, linha ~294). Os templates aprovados na Meta esperam **mais variáveis específicas por estágio**:
+O fallback no backend **já está implementado** em `supabase/functions/executar-regua-cobranca/index.ts` (linhas 491–496):
 
-| Template | Variáveis esperadas |
-|---|---|
-| `cobranca_mensalidade` | `{{1}} nome, {{2}} mês/ano, {{3}} vencimento` |
-| `d_6_lembrete_desconto_v1` | `{{1}} nome, {{2}} vencimento, {{3}} **linha digitável**` |
-| `d0_boleto_vence_hoje_v1` | `{{1}} nome, {{2}} valor, {{3}} vencimento, {{4}} modelo, {{5}} placa, {{6}} **linha digitável**` |
-| `d1_a_d4_boleto_vencido_v1` | `{{1}} nome, {{2}} vencimento` |
-| `d11_aviso_negativacao_v1` | `{{1}} nome, {{2}} vencimento, {{3}} valor, {{4}} placa` |
-| `d12_debito_com_multa_v1` | `{{1}} nome, {{2}} vencimento, {{3}} valor, {{4}} placa` |
+- Quando o template exige `linha_digitavel` (mapa em `TEMPLATE_PARAMS_MAP`) e a cobrança SGA não tem o código,
+- O envio é **bloqueado** (não vai mensagem incompleta para a Meta),
+- Um evento é gravado em `cobranca_eventos` com `dados.status = 'falhou'`, `dados.falta_sga = true` e `dados.erro = 'Sem linha digitável SGA disponível — sincronize o financeiro do veículo'`,
+- O contador `whatsapp_falhas` é incrementado e exibido no card "Execução automática".
 
-Resultado hoje: ou a Meta **rejeita o envio** (quantidade de variáveis errada → erro `132000` "number of parameters does not match"), ou aceita mas o associado recebe a mensagem sem **linha digitável / código de barras / placa**, justamente o que ele precisa para pagar.
-
-### Onde estão os dados de pagamento do SGA
-
-A tabela **`cobrancas`** (origem `sga_hinova`) já é populada pela função `sga-sync-financeiro-veiculo` com os campos vindos do SGA:
-
-- `linha_digitavel` (string)
-- `codigo_barras` (string)
-- `boleto_url` (link PDF)
-- `nosso_numero`
-- `valor_final`, `data_vencimento`, `referencia_mes/ano`
-- `veiculo_id` (para puxar placa/modelo)
-- `origem = 'sga_hinova'`
-
-A régua hoje lê de **`asaas_cobrancas`** (linha 129) — outro universo de dados (Asaas, não SGA). Para associados originados da base antiga (Hinova), os boletos válidos estão em `cobrancas` e nunca são considerados pela régua.
+**O que falta:** o usuário só vê um número agregado ("Falhas: 12"). Não vê **quais associados/veículos** falharam nem **o que precisa sincronizar**. Hoje precisa abrir o banco para descobrir.
 
 ### Mudanças
 
-**A. `supabase/functions/executar-regua-cobranca/index.ts` — buscar de duas fontes e montar variáveis ricas**
+**A. Novo card "Cobranças bloqueadas — falta linha digitável" em `src/pages/cobranca/ReguaCobranca.tsx`**
 
-1. **Pass 1 e Pass 2: ler de duas fontes** em paralelo:
-   - `asaas_cobrancas` (já existe) — para associados pagando via Asaas.
-   - `cobrancas` filtrando `origem = 'sga_hinova' AND status IN ('aguardando_pagamento','vencido')` — para associados da base SGA. Selecionar também `linha_digitavel, codigo_barras, boleto_url, valor_final, veiculo_id, referencia_mes, referencia_ano`.
-   - Unificar num único `Map<associado_id, info>` mantendo o registro de **maior atraso** (mesma lógica atual de agrupamento) e gravando `fonte: 'sga' | 'asaas'` + `linha_digitavel`, `codigo_barras`, `boleto_url`, `veiculo_id`, `referencia_label` em `info`.
+Inserir entre o card "Execução automática" (linha 493) e "Pré-visualização de mensagens" (linha 495). Lista as últimas 30 falhas por `falta_sga` dos últimos 7 dias.
 
-2. **Helper `buildTemplateParams(templateName, contexto)`** com mapa explícito por template aprovado:
-   - Lê uma vez do banco `whatsapp_meta_templates.corpo` para descobrir a quantidade real de `{{N}}`.
-   - Mapa interno por nome → ordem de variáveis (ex.: `d0_boleto_vence_hoje_v1` → `[nome, valorBRL, vencimentoBR, modelo, placa, linhaDigitavel]`).
-   - Fallback genérico: monta `[nome, valorBRL, vencimentoBR, linhaDigitavel || '—', placa || '—']` truncado/preenchido para o número de slots detectado, evitando o erro `132000`.
+Query (React Query, key `regua-falhas-sga`):
+```ts
+supabase.from('cobranca_eventos')
+  .select('id, created_at, descricao, associado_id, dados, associados!inner(nome, cpf)')
+  .eq('tipo', 'whatsapp')
+  .eq('dados->>falta_sga', 'true')
+  .gte('created_at', seteDiasAtras)
+  .order('created_at', { ascending: false })
+  .limit(30)
+```
 
-3. **Buscar veículo (placa + modelo)** em uma query auxiliar quando o template exigir (`veiculo_id` já vem do `cobrancas`/`asaas_cobrancas` — esta última já tem `veiculo_id`).
+Cada linha mostra:
+- **Associado** (nome + CPF, link para `/cadastro/associados/:id`)
+- **Etapa** (`dados.dia_regua` formatado: `D-6`, `D+0`…)
+- **Template** que tentou disparar (`dados.template`)
+- **Quando** (`created_at` formatado pt-BR)
+- Botão **"Sincronizar SGA"** que chama `supabase.functions.invoke('sga-sync-financeiro-veiculo', { body: { associado_id, veiculo_id: dados.veiculo_id } })`. Em caso de sucesso, toast verde + `queryClient.invalidateQueries(['regua-falhas-sga'])`. Em caso de erro, toast vermelho com a mensagem.
 
-4. **Persistir os parâmetros usados em `cobranca_eventos.dados`** (`template_params`, `linha_digitavel`, `boleto_url`, `fonte`) — auditoria e debugging.
+Cabeçalho do card com:
+- Ícone `AlertTriangle` âmbar
+- Total de falhas no período
+- Botão **"Sincronizar todas"** (loop com `Promise.allSettled`, throttled de 1 em 1, mostra progresso) — só aparece quando há ≥ 2 falhas.
 
-5. **Fallback de comunicação:** se `linha_digitavel` estiver vazia para um template que a exige, **pular o disparo** e gravar evento `falhou` com motivo `"Sem linha digitável SGA disponível — sincronize o financeiro do veículo"`. Evita enviar mensagem incompleta.
+Quando lista vazia: estado vazio amigável ("Nenhuma cobrança bloqueada nos últimos 7 dias 🎉").
 
-**B. UI `src/pages/cobranca/ReguaCobranca.tsx` — feedback visual sobre variáveis**
+**B. Garantir gravação de `veiculo_id` no evento de falha**
 
-- Ao selecionar um template numa etapa, mostrar abaixo do select um **resumo das variáveis que serão preenchidas** lendo de um pequeno `templateParamsMap` (mesmo dicionário compartilhado com a edge function via constante exportada — coloco em `src/lib/cobranca/templateParams.ts` e a edge function duplica o mapa, já que não compartilham módulos).
-- Exibir badge de aviso amarelo na etapa quando o template requer linha digitável (`d_6_…`, `d0_…`) — com tooltip "Requer cobrança SGA sincronizada (`origem='sga_hinova'`) com linha digitável preenchida".
+A edge function já passa `veiculo_id` no contexto, mas hoje grava só `linha_digitavel` e `boleto_url` em `dados` (linhas 535-536). Adicionar `veiculo_id` ao payload (linha 535-536) para o botão "Sincronizar SGA" funcionar sem query extra:
 
-**C. Sem mudanças de schema**
+```ts
+dados: {
+  ...
+  veiculo_id,        // ← adicionar
+  fonte,
+  linha_digitavel: linha_digitavel || null,
+  ...
+}
+```
 
-Todos os campos necessários já existem (`cobrancas.linha_digitavel`, `codigo_barras`, `boleto_url`). Não há migração.
+Mudança mínima, 1 linha. Eventos antigos (sem `veiculo_id`) continuam funcionando — o botão faz fallback buscando o veículo principal do associado.
+
+**C. Banner no topo da página**
+
+Quando `falhas_sga > 0` no período, banner amarelo no topo (acima do card "Templates não aprovados" já existente):
+
+> ⚠️ **N cobranças foram bloqueadas hoje por falta de linha digitável do SGA.** Veja a lista abaixo e sincronize os veículos afetados.
+
+Clica → scroll suave até o card.
 
 ### Arquivos editados
 
-- `supabase/functions/executar-regua-cobranca/index.ts` — leitura dual (asaas + sga), montagem de variáveis ricas por template, registro detalhado.
-- `src/pages/cobranca/ReguaCobranca.tsx` — preview de variáveis + badge de pré-requisito SGA.
-- `src/lib/cobranca/templateParams.ts` (novo) — dicionário de mapeamento template → variáveis (consumido só pela UI; a edge function carrega o mesmo mapa inline para não importar de `src/`).
+- `src/pages/cobranca/ReguaCobranca.tsx` — novo card + query + banner + botão sincronizar.
+- `supabase/functions/executar-regua-cobranca/index.ts` — adicionar `veiculo_id` ao payload de `cobranca_eventos.dados`.
+
+### O que NÃO muda
+
+- O fallback de bloqueio do envio (já funciona).
+- O contador de falhas no card "Execução automática" (já funciona).
+- A edge function `sga-sync-financeiro-veiculo` (já existe e é chamada como está).
+- Schema, migrations, RLS — nenhuma alteração.
 
 ### Validação (após implementação)
 
-1. Login `admin@teste.com / 123456789` → `/cobranca/regua` → confirmar que cada etapa mostra a lista de variáveis esperadas.
-2. Forçar um veículo SGA com cobrança vencida (já existem na base) → "Executar agora" → verificar em `cobranca_eventos.dados`: `template_params` deve conter a `linha_digitavel` real.
-3. Conferir log de `whatsapp-send-text` mostrando o `components.parameters` com 6 entradas para `d0_boleto_vence_hoje_v1`.
-4. Screenshot da UI com o preview de variáveis.
+1. Login `admin@teste.com / 123456789` → `/cobranca/regua`.
+2. Conferir: se houver falhas SGA dos últimos 7 dias, o card aparece listando associados + botão "Sincronizar SGA".
+3. Clicar em uma linha → confirmar que o sync roda e a falha some da lista após próxima execução da régua.
+4. Screenshot do card populado.
 
 ### Riscos
 
-- **Quantidade de variáveis errada** continua sendo a causa #1 de rejeição Meta; o helper genérico com `slice(0, n)` + padding `'—'` blinda contra isso, mas pode mandar `'—'` no lugar de uma placa real se faltar dado — preferível a falhar o envio inteiro.
-- **Associado com múltiplas cobranças** (SGA + Asaas): vai vencer a de **maior atraso**. Documento isso em comentário; se virar problema, próxima iteração escolhe por `tipo`.
-- **Linha digitável SGA pode estar desatualizada** se o `sga-sync-financeiro-veiculo` não rodou recentemente. Mitigação: o evento `falhou` já orienta sincronizar.
+- **Botão "Sincronizar todas"** pode disparar muitas chamadas SGA em sequência. Mitigação: throttle de 1 chamada por segundo, hard cap de 30 (mesmo limite da query).
+- Eventos antigos sem `veiculo_id` no payload: fallback busca veículo principal via `associados.veiculo_principal_id` (ou primeiro veículo ativo).
 
