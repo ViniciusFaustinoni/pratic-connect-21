@@ -195,14 +195,14 @@ export function BotaoEnviarSGA({
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
             <Upload className="h-5 w-5 text-blue-600" />
-            Enviar para o SGA Hinova
+            Enviar para o SGA Hinova como pendente
           </AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div className="space-y-3">
               <p>
                 {isError 
-                  ? 'Deseja tentar enviar novamente os dados para o sistema SGA Hinova?'
-                  : 'Deseja enviar os dados deste associado e veículo para o sistema SGA Hinova?'
+                  ? 'Deseja tentar reenviar os dados como pendente para o sistema SGA Hinova?'
+                  : 'Deseja enviar os dados deste associado e veículo para o sistema SGA Hinova como pendente?'
                 }
               </p>
 
@@ -230,6 +230,9 @@ export function BotaoEnviarSGA({
                   <li>Dados do veículo (placa, chassi, modelo, ano)</li>
                   <li>Fotos da vistoria (se disponíveis)</li>
                 </ul>
+                <p className="mt-2 text-xs">
+                  A ativação definitiva no SGA ocorre automaticamente após instalação do rastreador e aprovação técnica.
+                </p>
               </div>
             </div>
           </AlertDialogDescription>
@@ -240,7 +243,7 @@ export function BotaoEnviarSGA({
             onClick={handleEnviar}
             className="bg-blue-600 hover:bg-blue-700"
           >
-            {isLoading ? 'Enviando...' : 'Confirmar Envio'}
+            {isLoading ? 'Enviando...' : 'Confirmar Envio Pendente'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
