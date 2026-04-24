@@ -428,26 +428,43 @@ export async function listarBoletosVeiculo(
   const dedup = new Map<string, any>();
   let cursorFim = new Date(hoje);
 
+  let janelasComErro = 0;
+  let ultimoErro: any = null;
   while (cursorFim >= inicioGeral) {
     const cursorIni = new Date(cursorFim);
     cursorIni.setDate(cursorIni.getDate() - (diasJanela - 1));
     const ini = cursorIni < inicioGeral ? new Date(inicioGeral) : cursorIni;
 
-    const { boletos } = await listarBoletosVeiculoJanela(s, codigoAssociado, codigoVeiculo, {
-      dataInicial: ini,
-      dataFinal: cursorFim,
-      linkBoleto,
-    });
+    try {
+      const { boletos } = await listarBoletosVeiculoJanela(s, codigoAssociado, codigoVeiculo, {
+        dataInicial: ini,
+        dataFinal: cursorFim,
+        linkBoleto,
+      });
 
-    for (const b of boletos) {
-      const key = String(b?.nosso_numero ?? b?.nossoNumero ?? '').trim();
-      if (key && !dedup.has(key)) dedup.set(key, b);
+      for (const b of boletos) {
+        const key = String(b?.nosso_numero ?? b?.nossoNumero ?? '').trim();
+        if (key && !dedup.has(key)) dedup.set(key, b);
+      }
+    } catch (e: any) {
+      // Janela individual falhou — registra mas continua varrendo as outras
+      janelasComErro++;
+      ultimoErro = e;
+      // Se for erro de auth ou rate limit, propaga para o caller decidir (parar tudo)
+      if (e?.reason === 'auth' || e?.reason === 'rate_limit' || e?.reason === 'janela_horaria') {
+        throw e;
+      }
     }
 
     // próxima janela: vai 1 dia antes do início desta
     const proxFim = new Date(ini);
     proxFim.setDate(proxFim.getDate() - 1);
     cursorFim = proxFim;
+  }
+
+  // Se TODAS as janelas falharam e nada foi coletado, propaga o último erro
+  if (janelasComErro > 0 && dedup.size === 0 && ultimoErro) {
+    throw ultimoErro;
   }
 
   return Array.from(dedup.values());
