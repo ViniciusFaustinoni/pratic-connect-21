@@ -101,7 +101,7 @@ export function useSGASync({
         body: {
           veiculo_id: veiculoId,
           associado_id: associadoId,
-          status_sga_destino: 'ativo',
+          status_sga_destino: 'pendente',
         },
       });
 
