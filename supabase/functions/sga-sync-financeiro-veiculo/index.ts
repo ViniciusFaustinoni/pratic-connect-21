@@ -39,16 +39,8 @@ const fmtBR = (d: Date) => {
   return `${dd}/${mm}/${yyyy}`;
 };
 
-// Janela de 5 meses passados → hoje
-function janela5Meses() {
-  const hoje = new Date();
-  const inicio = new Date(hoje);
-  inicio.setMonth(inicio.getMonth() - 5);
-  return {
-    dataInicial: fmtBR(inicio),
-    dataFinal: fmtBR(hoje),
-  };
-}
+// (Antiga função janela5Meses removida — agora usamos listarBoletosVeiculo,
+// que itera internamente em janelas de 90 dias respeitando o limite documentado da Hinova.)
 
 function extractCodigoAssociado(payload: any): number | null {
   const candidates = [
@@ -276,10 +268,12 @@ serve(async (req) => {
       // Erro não-transitório de situação não bloqueia listagem de boletos
     }
 
-    const janela = janela5Meses();
+    // Cobertura: 3 anos para trás, em janelas iterativas de 90 dias (limite Hinova),
+    // com link_boleto=true para já gravar a URL do boleto.
+    const opcoesBoletos = { anosTras: 3, diasJanela: 90, linkBoleto: true } as const;
     let boletos: any[] = [];
     try {
-      boletos = await listarBoletosVeiculo(session, codigoAssociado, codigoVeiculo, janela);
+      boletos = await listarBoletosVeiculo(session, codigoAssociado, codigoVeiculo, opcoesBoletos);
     } catch (e) {
       if (e instanceof HinovaTransientError) throw e;
       throw e;
@@ -301,7 +295,7 @@ serve(async (req) => {
           });
           codigoAssociado = codigoAssociadoPorCpf;
           await supabase.from('associados').update({ codigo_hinova: codigoAssociadoPorCpf }).eq('id', associado.id);
-          boletos = await listarBoletosVeiculo(session, codigoAssociadoPorCpf, codigoVeiculo, janela);
+          boletos = await listarBoletosVeiculo(session, codigoAssociadoPorCpf, codigoVeiculo, opcoesBoletos);
         }
       } catch (e) {
         if (e instanceof HinovaTransientError) throw e;
