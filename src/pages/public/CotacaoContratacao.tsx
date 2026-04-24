@@ -79,6 +79,7 @@ export default function CotacaoContratacao() {
     contratoLinkToken,
     contratoFallback,
     docsPendentes,
+    isLoadingDocs,
     refetch,
     refetchDocs,
   } = useCotacaoContratacao(token);
@@ -282,7 +283,7 @@ export default function CotacaoContratacao() {
                 refetchDocs();
               }}
             />
-          ) : (
+          ) : isLoadingDocs ? (
             <Card className="border-amber-500/30 bg-card/80 backdrop-blur-xl">
               <CardContent className="py-10 text-center space-y-4">
                 <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-500/10">
@@ -297,6 +298,18 @@ export default function CotacaoContratacao() {
                     O setor de cadastro solicitou ajustes. Estamos atualizando a lista para você enviar os arquivos corretos.
                   </p>
                 </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="border-amber-500/30 bg-card/80 backdrop-blur-xl">
+              <CardContent className="py-10 text-center space-y-4">
+                <Badge className="mb-3 bg-amber-500/20 text-amber-400 border-amber-500/30">
+                  Documentação pendente
+                </Badge>
+                <h1 className="text-xl font-bold text-foreground">Nenhum documento pendente encontrado</h1>
+                <p className="text-sm text-muted-foreground">
+                  Atualize a página em alguns instantes ou entre em contato com o Cadastro para reenviar o link correto.
+                </p>
               </CardContent>
             </Card>
           )}
