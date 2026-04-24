@@ -77,8 +77,16 @@ export interface UseCotacoesOptions {
 
 export function useCotacoes(options?: UseCotacoesOptions) {
   const search = (options?.searchTerm || '').trim();
+  // Defesa em profundidade: se o caller não declarou explicitamente um escopo
+  // amplo ('team' ou 'all'), forçamos filtro por vendedor_id do usuário logado.
+  // Mesmo que a UI esqueça de passar viewScope, o consultor nunca verá cotações
+  // de outros consultores. A RLS no banco garante a regra final.
+  const effectiveScope: 'own' | 'team' | 'all' =
+    options?.viewScope === 'all' || options?.viewScope === 'team' ? options.viewScope : 'own';
+  const effectiveVendedorId = effectiveScope === 'own' ? options?.vendedorId : undefined;
+
   return useQuery({
-    queryKey: ['cotacoes', options?.viewScope, options?.vendedorId, search],
+    queryKey: ['cotacoes', effectiveScope, effectiveVendedorId, search],
     queryFn: async () => {
       let query = supabase
         .from('cotacoes')
@@ -97,10 +105,11 @@ export function useCotacoes(options?: UseCotacoesOptions) {
         `)
         .order('created_at', { ascending: false })
         .limit(1000);
-      
-      // Filtrar por vendedor se viewScope = 'own'
-      if (options?.viewScope === 'own' && options?.vendedorId) {
-        query = query.eq('vendedor_id', options.vendedorId);
+
+      // Escopo "own": filtra explicitamente por vendedor logado.
+      // Escopo "team"/"all": confia na RLS para liberar somente quem tem permissão.
+      if (effectiveScope === 'own' && effectiveVendedorId) {
+        query = query.eq('vendedor_id', effectiveVendedorId);
       }
 
       // Busca server-side (sem isso, busca em campos como `numero` ficava limitada
