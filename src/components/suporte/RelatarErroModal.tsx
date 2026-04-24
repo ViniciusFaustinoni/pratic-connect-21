@@ -97,7 +97,7 @@ export function RelatarErroModal({ open, onOpenChange }: Props) {
           </div>
 
           <div className="space-y-1.5">
-            <Label>Prints do erro (opcional)</Label>
+            <Label>Prints do erro <span className="text-destructive">*</span></Label>
             <label
               htmlFor="erro-files"
               className="flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border p-4 text-muted-foreground hover:border-primary hover:text-primary cursor-pointer transition-colors"
@@ -113,6 +113,11 @@ export function RelatarErroModal({ open, onOpenChange }: Props) {
                 onChange={(e) => handleFiles(e.target.files)}
               />
             </label>
+            {!hasImage && (
+              <p className="text-xs text-muted-foreground">
+                É obrigatório anexar pelo menos 1 print (imagem) mostrando o erro.
+              </p>
+            )}
 
             {files.length > 0 && (
               <div className="grid grid-cols-3 gap-2 mt-2">
