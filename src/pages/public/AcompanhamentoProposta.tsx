@@ -250,6 +250,13 @@ function useAcompanhamentoProposta(token: string | undefined) {
         cotacaoStatusContratacao = (cotacaoData as any)?.status_contratacao || null;
       }
 
+      const { data: documentosPendentes } = await supabase
+        .from('documentos_solicitados')
+        .select('id, associado_id, tipo_documento, descricao, status, observacao_solicitacao, created_at')
+        .eq('associado_id', contrato.associado_id)
+        .eq('status', 'pendente')
+        .order('created_at', { ascending: true });
+
       return {
         ...associado,
         primeiro_acesso: primeiroAcesso,
@@ -263,6 +270,7 @@ function useAcompanhamentoProposta(token: string | undefined) {
         servicoInstalacao,
         cotacaoTokenPublico,
         cotacaoStatusContratacao,
+        documentosPendentes: (documentosPendentes || []) as DocumentoPendentePublico[],
       };
     },
     enabled: !!token,
