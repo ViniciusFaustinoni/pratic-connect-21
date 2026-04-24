@@ -492,6 +492,36 @@ export default function PropostaAnalise() {
         </div>
       )}
 
+      {linkPendenciasGerado && (
+        <div className="rounded-lg border-2 border-warning/30 bg-warning/10 p-4 space-y-3">
+          <div className="flex items-start gap-3">
+            <FileText className="h-5 w-5 text-warning mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-warning">Link público para envio das pendências</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Você também pode enviar manualmente este link ao associado para anexar as documentações pendentes.
+              </p>
+              <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                <div className="flex-1 truncate rounded-md border bg-card px-3 py-2 text-xs text-muted-foreground">
+                  {linkPendenciasGerado}
+                </div>
+                <Button
+                  variant="outline"
+                  className="border-warning/50 text-warning hover:bg-warning/10"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(linkPendenciasGerado);
+                    toast.success('Link público copiado');
+                  }}
+                >
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copiar link
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ZONA 2: Stepper de Aprovação por Etapas */}
       <PropostaApprovalStepper
         proposta={proposta}
