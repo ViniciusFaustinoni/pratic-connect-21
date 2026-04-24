@@ -207,7 +207,7 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
     queryFn: async () => {
       const { data: rows, error } = await supabase
         .from('agendamentos_base')
-        .select('id, status, data_agendada, horario, cliente_nome, veiculo_placa, veiculo_descricao, atendido_por, oficina_id, vistoria_id, tecnico:profiles!agendamentos_base_atendido_por_fkey(nome), oficina:oficinas!agendamentos_base_oficina_id_fkey(nome_fantasia, razao_social), vistoria:vistorias!agendamentos_base_vistoria_id_fkey(local_vistoria, status, iniciada_em, concluida_em)')
+        .select('id, status, data_agendada, horario, cliente_nome, veiculo_placa, veiculo_descricao, atendido_por, oficina_id, vistoria_id, tecnico:profiles!agendamentos_base_atendido_por_fkey(nome), oficina:oficinas!agendamentos_base_oficina_id_fkey(nome_fantasia, razao_social), vistoria:vistorias!agendamentos_base_vistoria_id_fkey(local_vistoria, status, iniciada_em, concluida_em, endereco_cep, endereco_logradouro, endereco_numero, endereco_complemento, endereco_bairro, endereco_cidade, endereco_uf)')
         .eq('data_agendada', data)
         .order('horario');
       if (error) throw error;
