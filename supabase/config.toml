@@ -60,6 +60,9 @@ verify_jwt = false
 [functions.cron-sga-retry]
 verify_jwt = false
 
+[functions.sga-reprocessar-cotacoes-ativacoes]
+verify_jwt = false
+
 [functions.extract-orcamento-pdf]
 verify_jwt = false
 
