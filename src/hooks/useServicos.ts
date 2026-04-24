@@ -256,7 +256,6 @@ export const STATUS_SERVICO_COLORS: Record<StatusServico, string> = {
 export const PERIODO_LABELS: Record<PeriodoServico, string> = {
   manha: 'Manhã',
   tarde: 'Tarde',
-  noite: 'Noite',
 };
 
 // ============================================
