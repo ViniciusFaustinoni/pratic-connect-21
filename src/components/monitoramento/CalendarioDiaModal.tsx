@@ -10,13 +10,14 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { MapPin, Building2, Clock, User, Car, CalendarClock, Loader2, ChevronRight, Map as MapIcon, Wrench, Lock } from 'lucide-react';
+import { MapPin, Building2, Clock, User, Car, CalendarClock, Loader2, ChevronRight, Map as MapIcon, Wrench, Lock, MapPinned } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useProfissionaisEquipe } from '@/hooks/useEquipe';
 import { toast } from 'sonner';
 import { STATUS_INSTALACAO_COLORS } from '@/types/monitoramento';
 import { useDatasBloqueadasSet } from '@/hooks/useDatasBloqueadas';
+import { AlterarEnderecoTipoDialog } from '@/components/mapa/AlterarEnderecoTipoDialog';
 
 interface CalendarioDiaModalProps {
   open: boolean;
@@ -154,6 +155,7 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
   const [anteciparId, setAnteciparId] = useState<string | null>(null);
   const [atribuirId, setAtribuirId] = useState<string | null>(null);
   const [tecnicoSelecionado, setTecnicoSelecionado] = useState<string>('');
+  const [alterarBase, setAlterarBase] = useState<any | null>(null);
 
   const hoje = format(new Date(), 'yyyy-MM-dd');
   const parsedData = data ? parseISO(data) : new Date();
