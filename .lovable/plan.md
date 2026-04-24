@@ -1,107 +1,53 @@
-## Contexto: o que o SGA Hinova exige (fonte: `https://api.hinova.com.br/api/sga/v2/doc/`)
+# Correção: erro ao realocar serviço para a base
 
-Toda nova adesão dispara dois POSTs na ordem:
+## Causa raiz
 
-**1) `/associado/cadastrar`** — campos obrigatórios e códigos exigidos:
-- `codigo_conta` (Number) — obrigatório quando há mais de uma conta na regional
-- `codigo_regional` (opcional)
-- `codigo_cooperativa` (opcional)
-- `codigo_voluntario` (opcional, mas é assim que a Hinova vincula a venda ao consultor — sem ele a comissão fica órfã)
-- `codigo_profissao` (opcional)
-- `codigo_como_conheceu` (opcional)
-- `codigo_tipo_cobranca_recorrente` (opcional)
-- `beneficios[].codigo_beneficio` (opcional, vincula benefícios direto no associado)
+O dialog **Realocar serviço** chama `useRealocarInstalacao.realocarParaBase`, que insere em `agendamentos_base` com:
 
-**2) `/veiculo/cadastrar`** — campos obrigatórios e códigos exigidos:
-- `codigo_associado` (retorno do POST anterior — automático)
-- `codigo_conta`, `codigo_voluntario`, `codigo_cooperativa`
-- `codigo_cor`, `codigo_combustivel`, `codigo_tipo_veiculo` (de-para via `hinova_mapeamentos` — ✅ já populado)
-- `codigo_plano` (Hinova) — define produto comercializado
-- `produtos_vinculados[{codigo_produto, valor}]` — coberturas + benefícios do plano expandidos como produtos
-- `codigo_situacao` (pendente/ativo — opcional, vem das credenciais)
+```ts
+instalacao_id: params.instalacaoId
+```
 
----
+Mas o ID que chega do modal de Serviços de Campo (`ServicoDetailModal`) é o `servicos.id` — não o `instalacoes.id`.
 
-## Onde precisa haver código manual no nosso sistema
+A constraint do banco é clara:
 
-| Entidade | Campo no banco | UI hoje | Bloqueia sync? | Pendentes |
-|---|---|---|---|---|
-| **Plano** | `planos.codigo_sga_plano` | ✅ `PlanFormModal` | **SIM** | 287/287 vazios |
-| **Vendedor / Agência / Supervisor / Gerente** | `profiles.codigo_sga_voluntario` | ✅ `ConsultorEditSheet` | **SIM** | 9 ativos sem código |
-| **Cobertura** | `coberturas.codigo_sga` | ✅ `CoberturaUnificadaFormModal` | Não (omite a cobertura no payload) | 2.865/2.865 vazios |
-| **Benefício** | `benefits.codigo_sga` | ✅ `BeneficioFormModal` | Não (omite o benefício no payload) | 1.770/1.770 vazios |
-| **Cor / Combustível / Tipo de veículo / Tipo de foto** | `hinova_mapeamentos` | ❌ sem tela admin | Não (vai `null`) | ✅ todos populados via seed |
-| **Conta bancária / Regional / Cooperativa / Situação Pendente / Situação Ativo** | `integracoes_credenciais` (JSON) | ⚠️ parcial — só `codigo_conta` e `codigo_voluntario` | **SIM se houver mais de uma conta** | a definir |
-| **Forma de pagamento (`codigo_tipo_cobranca_recorrente`)** | nenhum | ❌ inexistente | Não (Hinova usa default) | n/d |
-| **Como conheceu (`codigo_como_conheceu`)** | nenhum | ❌ inexistente | Não | n/d |
-| **Profissão (`codigo_profissao`)** | nenhum | ❌ inexistente | Não | n/d |
+```
+agendamentos_base_instalacao_id_fkey
+FOREIGN KEY (instalacao_id) REFERENCES instalacoes(id)
+```
 
----
+→ Postgres rejeita o insert com o erro de foreign key visto na tela.
 
-## Plano de implementação (4 frentes, ordem por impacto)
+O fluxo "realocar para rota" não quebra porque ele só faz UPDATE em `servicos` (não toca em `agendamentos_base`).
 
-### Frente 1 — Completar formulário de credenciais Hinova (rápido, alto impacto)
-Arquivo: `src/components/integracoes/ConfigurarIntegracaoSheet.tsx`
+## Correção
 
-Adicionar ao array `camposPorIntegracao.hinova`:
-- `codigo_regional` (text, opcional)
-- `codigo_cooperativa` (text, opcional)
-- `codigo_situacao_pendente` (text, opcional, default 1)
-- `codigo_situacao_ativo` (text, opcional, default 2)
-- Manter `codigo_conta` (✅ já existe)
-- **Remover** `codigo_voluntario` daqui — voluntário é por vendedor, não global. Se quiser manter como **fallback** quando vendedor não tem código, renomear o label para "Código Voluntário Padrão (fallback)".
+Em `src/hooks/useRealocarInstalacao.ts`, dentro de `realocarParaBase`:
 
-A edge `sga-hinova-sync` já lê esses campos do `credenciais_integracao` (linhas 333–341), então só faltava expor na UI.
+1. Ao buscar o serviço, incluir o campo `instalacao_origem_id`:
+   ```ts
+   .select(`id, status, associado_id, instalacao_origem_id, associados:..., veiculos:...`)
+   ```
 
-### Frente 2 — Tela admin para mapeamentos de domínio (médio)
-Nova rota: `/configuracoes/integracoes/hinova/mapeamentos`
+2. Resolver o ID real de `instalacoes`:
+   - Se `serv.instalacao_origem_id` existir → usar esse valor.
+   - Senão → fazer fallback consultando `instalacoes` por `servico_id` (ou pelo `associado_id` + `veiculo_id` em aberto), e se ainda assim não houver vínculo, lançar erro amigável: "Este serviço não possui instalação vinculada — não é possível realocá-lo para uma base."
 
-CRUD da tabela `hinova_mapeamentos` (tipo, codigo_local, codigo_hinova, ativo) com:
-- Filtro por `tipo` (combustivel, cor, tipo_veiculo, tipo_foto)
-- Edição inline
-- Botão "Adicionar mapeamento"
+3. Usar o ID resolvido tanto no UPDATE de cancelamento dos `agendamentos_base` ativos (linha ~176) quanto no INSERT (linha ~183):
+   ```ts
+   .eq('instalacao_id', instalacaoIdReal)
+   instalacao_id: instalacaoIdReal,
+   ```
 
-Já populado por seed mas hoje não há onde editar — se a Hinova mudar um código, exige migração SQL manual.
+4. Manter o UPDATE de `servicos` usando o `params.instalacaoId` original (que é o `servicos.id`) — esse já está correto.
 
-### Frente 3 — Forma de pagamento, profissão e "como conheceu" (médio, opcional Hinova)
-Como esses três são opcionais no payload e a Hinova usa defaults, propor:
+## Arquivos alterados
 
-3.1 **Configuração global** em `Configurações > Integrações > Hinova > Defaults`:
-- `codigo_tipo_cobranca_recorrente_padrao` (Number) — usado em todo associado novo
-- `codigo_como_conheceu_padrao` (Number)
-- `codigo_profissao_padrao` (Number)
+- `src/hooks/useRealocarInstalacao.ts` — única mudança necessária.
 
-3.2 Edge passa a injetar esses defaults no payload de `/associado/cadastrar` quando definidos.
+## Validação após implementar
 
-(Não precisa de tela de profissão/cidade/parentesco completa — a Hinova só precisa do código numérico que ela mantém do lado dela; a equipe Pratic configura uma vez por conta.)
-
-### Frente 4 — Validação preventiva no fluxo de venda (alto impacto)
-Antes de permitir confirmar venda, bloquear com mensagem clara quando:
-1. **Plano** sem `codigo_sga_plano` → "Plano X ainda não está mapeado no SGA. Avise a coordenação."
-2. **Vendedor** sem `codigo_sga_voluntario` → bloqueia ao selecionar consultor.
-3. **Credenciais Hinova** sem `codigo_conta` (quando >1 conta) → mostra alerta no painel admin.
-
-Componentes alvo:
-- `src/hooks/usePlansAdmin.ts` — exibir badge "Sem código SGA" ao lado de cada plano.
-- `src/pages/vendas/Consultores.tsx` — destacar consultores ativos sem código.
-- Já existe `useChecklistSGA` e `useVendedoresSemCodigoSga` — expandir para incluir planos.
-
----
-
-## Backfill em massa (apoio operacional, fora de código)
-
-Para os **287 planos** + **2.865 coberturas** + **1.770 benefícios** sem código, criar:
-- Tela de import via CSV em `Configurações > Planos > Importar Códigos SGA` aceitando colunas `nome,codigo_sga`, com matching por nome.
-- Botão "Aplicar mesmo código a todas as variantes da linha" (ex.: Select SP, Select RJ etc. compartilham `codigo_sga_plano` quando representam o mesmo produto Hinova).
-
----
-
-## Resumo do que entra em código
-
-1. Adicionar 4 campos ao `ConfigurarIntegracaoSheet.tsx` (Frente 1).
-2. Criar página/rota admin de `hinova_mapeamentos` (Frente 2).
-3. Adicionar 3 campos default + uso na edge `sga-hinova-sync` (Frente 3).
-4. Adicionar guards visuais nos formulários de plano/consultor + alerta global de credenciais (Frente 4).
-5. (Opcional) Criar tela de import CSV para backfill (Frente 5).
-
-Aprovação para executar todas as 4 frentes? Ou prefere começar só pela Frente 1 + Frente 4 (correção mínima para destravar vendas com vendedor correto) e deixar 2/3/5 para depois?
+- Reproduzir o fluxo: Serviços de Campo → abrir serviço de instalação → Realocar → aba Base → confirmar.
+- Esperado: toast "Instalação realocada para a base!" e novo registro em `agendamentos_base` com `instalacao_id` válido.
+- Verificar que o caso de serviço sem `instalacao_origem_id` mostra mensagem amigável (não o erro técnico de FK).
