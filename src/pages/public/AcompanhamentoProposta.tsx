@@ -599,6 +599,34 @@ export default function AcompanhamentoProposta() {
   const queryClient = useQueryClient();
   const { data: associado, isLoading, error } = useAcompanhamentoProposta(token);
 
+  useEffect(() => {
+    if (!token || !associado?.id) return;
+
+    const channel = supabase
+      .channel(`acompanhamento-pendencias-${token}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'documentos_solicitados',
+        filter: `associado_id=eq.${associado.id}`,
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta', token] });
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'associados',
+        filter: `id=eq.${associado.id}`,
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta', token] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [token, associado?.id, queryClient]);
+
   // Se o fluxo de contratação ainda não foi concluído, redirecionar de volta para a cotação
   const statusFluxoIncompleto = ['plano_escolhido', 'dados_preenchidos', 'documentos_ok', 'contrato_gerado'];
   useEffect(() => {
