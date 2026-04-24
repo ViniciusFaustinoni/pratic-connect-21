@@ -79,6 +79,17 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
     setObservacoes(linha.hierarquia?.observacoes || '');
   }, [open, linha]);
 
+  // Sincroniza gerente quando ele é herdado do supervisor selecionado
+  useEffect(() => {
+    if (!open || !linha) return;
+    const supId = supervisorId === 'none' ? null : supervisorId;
+    if (!supId) return;
+    const herdado = atribuicoes.find((a) => a.usuario.id === supId)?.hierarquia?.gerente_id ?? null;
+    if (herdado && gerenteId !== herdado) {
+      setGerenteId(herdado);
+    }
+  }, [open, linha, supervisorId, atribuicoes, gerenteId]);
+
   const usuariosMap = useMemo(() => {
     const map = new Map<string, UsuarioVendas>();
     usuarios.forEach((u) => map.set(u.id, u));
@@ -100,13 +111,19 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
   const subordinadosDiretos = subordinados.filter((item) => item.hierarquia?.supervisor_id === selectedUserId);
   const subordinadosGerenciais = subordinados.filter((item) => item.hierarquia?.gerente_id === selectedUserId);
   const atribuicaoPorUsuario = new Map(atribuicoes.map((item) => [item.usuario.id, item]));
-  const gerenteSelecionado = gerenteId === 'none' ? null : gerenteId;
   const supervisorSelecionado = supervisorId === 'none' ? null : supervisorId;
+  // Gerente herdado do supervisor (quando o supervisor já tem gerente atribuído na hierarquia dele)
+  const gerenteHerdadoDoSupervisor = supervisorSelecionado
+    ? atribuicaoPorUsuario.get(supervisorSelecionado)?.hierarquia?.gerente_id ?? null
+    : null;
+  const gerenteEffectiveId = gerenteHerdadoDoSupervisor ?? (gerenteId === 'none' ? null : gerenteId);
+  const gerenteSelecionado = gerenteEffectiveId;
+  const gerenteBloqueado = !!gerenteHerdadoDoSupervisor;
   const supervisorPertenceAoGerente = (supervisorUserId: string, gerenteUserId: string) => {
     const supervisorHierarquiaAtual = atribuicaoPorUsuario.get(supervisorUserId)?.hierarquia;
     return !supervisorHierarquiaAtual?.gerente_id || supervisorHierarquiaAtual.gerente_id === gerenteUserId;
   };
-  const supervisoresCompativeis = gerenteSelecionado
+  const supervisoresCompativeis = gerenteSelecionado && !gerenteBloqueado
     ? supervisores.filter((u) => supervisorPertenceAoGerente(u.id, gerenteSelecionado))
     : supervisores;
   const gerenteOptions = [
@@ -170,7 +187,7 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
       await upsertHierarquia.mutateAsync({
         vendedor_id: selectedUserId,
         supervisor_id: supervisorId === 'none' ? null : supervisorId,
-        gerente_id: gerenteId === 'none' ? null : gerenteId,
+        gerente_id: gerenteEffectiveId,
         agencia_id: null,
         observacoes: observacoes.trim() || null,
       });
@@ -244,7 +261,7 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
                   Nenhum usuário disponível para formar vínculos.
                 </div>
               )}
-              <ChainNode label="Gerente" name={userName(usuariosMap, gerenteId === 'none' ? null : gerenteId)} icon={UserRound} loading={loadingVinculos} />
+              <ChainNode label={gerenteBloqueado ? 'Gerente (herdado do supervisor)' : 'Gerente'} name={userName(usuariosMap, gerenteEffectiveId)} icon={UserRound} loading={loadingVinculos} />
               <div className="flex justify-center text-muted-foreground"><ArrowDown className="h-4 w-4" /></div>
               <ChainNode label="Supervisor" name={userName(usuariosMap, supervisorId === 'none' ? null : supervisorId)} icon={Users2} loading={loadingVinculos} />
               <div className="flex justify-center text-muted-foreground"><ArrowDown className="h-4 w-4" /></div>
@@ -293,18 +310,24 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
 
             <div className="grid grid-cols-1 gap-4">
               <div className="space-y-1.5">
-                <Label>Gerente superior</Label>
+                <Label>Gerente superior {gerenteBloqueado && <span className="ml-1 text-xs font-normal text-muted-foreground">(herdado do supervisor)</span>}</Label>
                 <SearchableSelect
-                  value={gerenteId}
+                  value={gerenteBloqueado ? (gerenteEffectiveId || 'none') : gerenteId}
                   onValueChange={handleGerenteChange}
                   options={gerenteOptions}
                   placeholder="Buscar gerente por nome ou e-mail"
                   searchPlaceholder="Digite nome ou e-mail do gerente..."
-                  disabled={saving || erroUsuarios}
+                  disabled={saving || erroUsuarios || gerenteBloqueado}
                   loading={loadingVinculos}
                   className="h-11"
                 />
-                {!loadingVinculos && gerentes.length === 0 && <p className="text-xs text-muted-foreground">Nenhum gerente disponível.</p>}
+                {gerenteBloqueado ? (
+                  <p className="text-xs text-muted-foreground">
+                    O gerente é definido pelo supervisor selecionado. Para alterá-lo, edite a hierarquia do supervisor.
+                  </p>
+                ) : (
+                  !loadingVinculos && gerentes.length === 0 && <p className="text-xs text-muted-foreground">Nenhum gerente disponível.</p>
+                )}
               </div>
 
               <div className="space-y-1.5">
