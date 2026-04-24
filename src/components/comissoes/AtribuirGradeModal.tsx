@@ -76,7 +76,7 @@ export function AtribuirGradeModal({ open, onOpenChange, linha }: AtribuirGradeM
         vendedor_id: linha.usuario.id,
         supervisor_id: supervisorId === 'none' ? null : supervisorId,
         gerente_id: gerenteId === 'none' ? null : gerenteId,
-        agencia_id: agenciaId === 'none' ? null : agenciaId,
+        agencia_id: null,
         observacoes: observacoes.trim() || null,
       });
 
