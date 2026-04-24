@@ -106,25 +106,21 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
   const supervisorSelecionado = supervisorId === 'none' ? null : supervisorId;
   const agenciaSelecionada = agenciaId === 'none' ? null : agenciaId;
 
-  const validationErrors = useMemo(() => {
-    const errors: string[] = [];
-    const supervisorHierarquia = supervisorSelecionado ? atribuicaoPorUsuario.get(supervisorSelecionado)?.hierarquia : null;
-    const agenciaHierarquia = agenciaSelecionada ? atribuicaoPorUsuario.get(agenciaSelecionada)?.hierarquia : null;
+  const validationErrors: string[] = [];
+  const supervisorHierarquia = supervisorSelecionado ? atribuicaoPorUsuario.get(supervisorSelecionado)?.hierarquia : null;
+  const agenciaHierarquia = agenciaSelecionada ? atribuicaoPorUsuario.get(agenciaSelecionada)?.hierarquia : null;
 
-    if (gerenteSelecionado && supervisorSelecionado && supervisorHierarquia?.gerente_id && supervisorHierarquia.gerente_id !== gerenteSelecionado) {
-      errors.push('O supervisor selecionado já pertence a outro gerente. Escolha um supervisor vinculado ao gerente informado.');
-    }
+  if (gerenteSelecionado && supervisorSelecionado && supervisorHierarquia?.gerente_id && supervisorHierarquia.gerente_id !== gerenteSelecionado) {
+    validationErrors.push('O supervisor selecionado já pertence a outro gerente. Escolha um supervisor vinculado ao gerente informado.');
+  }
 
-    if (gerenteSelecionado && agenciaSelecionada && agenciaHierarquia?.gerente_id && agenciaHierarquia.gerente_id !== gerenteSelecionado) {
-      errors.push('A agência selecionada já pertence a outro gerente. Escolha uma agência compatível com o gerente informado.');
-    }
+  if (gerenteSelecionado && agenciaSelecionada && agenciaHierarquia?.gerente_id && agenciaHierarquia.gerente_id !== gerenteSelecionado) {
+    validationErrors.push('A agência selecionada já pertence a outro gerente. Escolha uma agência compatível com o gerente informado.');
+  }
 
-    if (supervisorSelecionado && agenciaSelecionada && agenciaHierarquia?.supervisor_id && agenciaHierarquia.supervisor_id !== supervisorSelecionado) {
-      errors.push('A agência selecionada já pertence a outro supervisor. Escolha uma agência compatível com o supervisor informado.');
-    }
-
-    return errors;
-  }, [agenciaSelecionada, atribuicaoPorUsuario, gerenteSelecionado, supervisorSelecionado]);
+  if (supervisorSelecionado && agenciaSelecionada && agenciaHierarquia?.supervisor_id && agenciaHierarquia.supervisor_id !== supervisorSelecionado) {
+    validationErrors.push('A agência selecionada já pertence a outro supervisor. Escolha uma agência compatível com o supervisor informado.');
+  }
 
   const hasValidationErrors = validationErrors.length > 0;
   const relacaoSubordinado = (item: AtribuicaoLinha) => {
