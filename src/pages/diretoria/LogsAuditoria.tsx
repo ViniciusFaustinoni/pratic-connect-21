@@ -130,8 +130,8 @@ export default function LogsAuditoria() {
         : { data: [], error: null };
       if (profilesError) throw profilesError;
 
-      const profileById = new Map((profiles || []).map((profile: any) => [profile.id, profile]));
-      const snapshot = (id?: string | null) => id ? (profileById.get(id) || { id }) : null;
+      const profileById = new Map<string, any>((profiles || []).map((profile: any) => [profile.id, profile]));
+      const snapshot = (id?: string | null): any => id ? (profileById.get(id) || { id }) : null;
       const previousByVendor = new Map<string, any>();
       const syntheticLogs = (hierarquias || []).map((hierarquia: any) => {
         const anterior = previousByVendor.get(hierarquia.vendedor_id) || null;
