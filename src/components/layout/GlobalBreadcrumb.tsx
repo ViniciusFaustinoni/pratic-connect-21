@@ -61,6 +61,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/financeiro/contas-bancarias': { label: 'Contas Bancárias' },
   '/financeiro/configuracoes/comissionamento-externo': { label: 'Comissionamento Externo' },
   '/financeiro/venda-externa': { label: 'Venda Externa' },
+  '/financeiro/conta-corrente-comissoes': { label: 'Conta Corrente de Comissões' },
   '/perfil/conta-corrente': { label: 'Conta Corrente' },
   
   // Cobrança
