@@ -10,6 +10,10 @@ interface SyncRequest {
   veiculo_id: string;
   associado_id: string;
   status_sga_destino?: 'pendente' | 'ativo';
+  usuario_id?: string | null;
+  usuario_nome?: string | null;
+  etapa_origem?: string | null;
+  motivo_decisao?: string | null;
 }
 
 interface HinovaAuthResponse {
@@ -393,7 +397,8 @@ serve(async (req) => {
     }
 
     const requestBody = await req.json();
-    const { veiculo_id, associado_id, action, bypass_guard_base_antiga } = requestBody as SyncRequest & { action?: string; bypass_guard_base_antiga?: boolean };
+    const { veiculo_id, associado_id, action, bypass_guard_base_antiga, usuario_id, usuario_nome, etapa_origem, motivo_decisao } = requestBody as SyncRequest & { action?: string; bypass_guard_base_antiga?: boolean };
+    const statusSgaSolicitado = requestBody.status_sga_destino === 'ativo' ? 'ativo' : 'pendente';
     let statusSgaDestino: 'pendente' | 'ativo' = requestBody.status_sga_destino === 'ativo' ? 'ativo' : 'pendente';
 
     // ========================================
@@ -452,6 +457,8 @@ serve(async (req) => {
       );
     }
 
+    let motivoDecisaoFinal = motivo_decisao || (statusSgaDestino === 'ativo' ? 'Regra solicitou envio ativo ao SGA.' : 'Regra solicitou envio pendente ao SGA.');
+
     if (statusSgaDestino === 'ativo') {
       const { data: regraVeiculo } = await supabase
         .from('veiculos')
@@ -463,7 +470,40 @@ serve(async (req) => {
       if (!podeAtivarDefinitivo) {
         console.warn(`[SGA Sync] Ativação definitiva bloqueada para veículo ${veiculo_id}. Enviando como pendente até aprovação técnica.`);
         statusSgaDestino = 'pendente';
+        motivoDecisaoFinal = 'Ativação definitiva bloqueada: veículo com Roubo/Furto sem cobertura_total/aprovação técnica. Enviado como pendente.';
       }
+    }
+
+    try {
+      let usuarioNomeAuditoria = usuario_nome || 'Sistema';
+      if (usuario_id && !usuario_nome) {
+        const { data: profileAuditoria } = await supabase
+          .from('profiles')
+          .select('nome, email')
+          .eq('id', usuario_id)
+          .maybeSingle();
+        usuarioNomeAuditoria = profileAuditoria?.nome || profileAuditoria?.email || 'Sistema';
+      }
+
+      await supabase.from('logs_auditoria').insert({
+        usuario_id: usuario_id || null,
+        usuario_nome: usuarioNomeAuditoria,
+        acao: 'decisao_sga',
+        modulo: 'diretoria',
+        tabela: 'sga_sync_logs',
+        registro_id: veiculo_id,
+        descricao: `Regra decidiu enviar para o SGA como ${statusSgaDestino}`,
+        dados_novos: {
+          etapa: etapa_origem || 'sga-hinova-sync',
+          motivo: motivoDecisaoFinal,
+          status_sga_solicitado: statusSgaSolicitado,
+          status_sga_destino: statusSgaDestino,
+          veiculo_id,
+          associado_id,
+        },
+      });
+    } catch (auditErr) {
+      console.error('[SGA Sync] Erro ao registrar auditoria da decisão SGA:', auditErr);
     }
 
     console.log(`[SGA Sync] Iniciando sincronização - Veículo: ${veiculo_id}, Associado: ${associado_id}, destino=${statusSgaDestino}`);
