@@ -19,7 +19,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ArrowDown, Building2, Loader2, Network, UserRound, Users2 } from 'lucide-react';
+import { AlertCircle, ArrowDown, Building2, Loader2, Network, RefreshCw, UserRound, Users2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUpsertHierarquia, useUsuariosVendas } from '@/hooks/useAtribuicaoComissoes';
 import type { AtribuicaoLinha, UsuarioVendas } from '@/types/atribuicaoComissao';
@@ -42,11 +42,11 @@ const initials = (nome: string) =>
 const userName = (usuariosMap: Map<string, UsuarioVendas>, id?: string | null) =>
   id ? usuariosMap.get(id)?.nome || 'Usuário não localizado' : 'Não definido';
 
-function ChainNode({ label, name, icon: Icon }: { label: string; name: string; icon: typeof UserRound }) {
+function ChainNode({ label, name, icon: Icon, loading = false }: { label: string; name: string; icon: typeof UserRound; loading?: boolean }) {
   return (
     <div className="flex items-center gap-3 rounded-md border bg-muted/30 p-3">
       <div className="flex h-9 w-9 items-center justify-center rounded-md bg-background border">
-        <Icon className="h-4 w-4 text-muted-foreground" />
+        {loading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : <Icon className="h-4 w-4 text-muted-foreground" />}
       </div>
       <div className="min-w-0">
         <div className="text-xs text-muted-foreground">{label}</div>
@@ -57,7 +57,14 @@ function ChainNode({ label, name, icon: Icon }: { label: string; name: string; i
 }
 
 export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }: EditarHierarquiaModalProps) {
-  const { data: usuarios = [], isLoading: loadingUsuarios, isFetching: fetchingUsuarios } = useUsuariosVendas();
+  const {
+    data: usuarios = [],
+    isLoading: loadingUsuarios,
+    isFetching: fetchingUsuarios,
+    isError: erroUsuarios,
+    error: usuariosError,
+    refetch: refetchUsuarios,
+  } = useUsuariosVendas();
   const upsertHierarquia = useUpsertHierarquia();
 
   const [supervisorId, setSupervisorId] = useState<string>('none');
@@ -87,7 +94,7 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
   const gerentes = superiores.filter((u) => u.roles.includes('gerente_comercial'));
   const agencias = superiores.filter((u) => u.roles.includes('agencia'));
 
-  const subordinados = atribuicoes.filter((item) => {
+  const subordinados = (atribuicoes || []).filter((item) => {
     const h = item.hierarquia;
     return h?.supervisor_id === selectedUserId || h?.gerente_id === selectedUserId || h?.agencia_id === selectedUserId;
   });
@@ -122,6 +129,8 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
 
   const saving = upsertHierarquia.isPending;
   const loadingVinculos = loadingUsuarios || fetchingUsuarios;
+  const hasUsuarios = usuarios.length > 0;
+  const errorMessage = usuariosError instanceof Error ? usuariosError.message : 'Não foi possível carregar os vínculos existentes.';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
