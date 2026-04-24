@@ -852,35 +852,40 @@ serve(async (req) => {
       console.log(`[SGA Sync] Contrato fallback por associado_id: ${_aid}`);
     }
     
+    // CONSULTOR — usar SOMENTE o vendedor real do contrato.
+    // Sem fallback "qualquer vendedor" para evitar atribuir a venda
+    // ao consultor errado no SGA.
+    let vendedorNomeLog: string | null = null;
     if (contrato?.vendedor_id) {
       console.log(`[SGA Sync] Vendedor do contrato: ${contrato.vendedor_id}`);
-      
+
       const { data: vendedor } = await supabase
         .from('profiles')
         .select('codigo_sga_voluntario, nome')
         .eq('id', contrato.vendedor_id)
         .single();
-      
+
+      vendedorNomeLog = vendedor?.nome || null;
+
       if (vendedor?.codigo_sga_voluntario) {
         hinovaCodigoVoluntario = vendedor.codigo_sga_voluntario;
         console.log(`[SGA Sync] Usando código voluntário do vendedor ${vendedor.nome}: ${hinovaCodigoVoluntario}`);
       } else {
-        console.log(`[SGA Sync] Vendedor ${vendedor?.nome || 'desconhecido'} não possui código SGA configurado`);
+        const msg = `Vendedor ${vendedor?.nome || contrato.vendedor_id} não possui codigo_sga_voluntario configurado.`;
+        console.warn(`[SGA Sync] ${msg} — bloqueando sync para evitar atribuição incorreta.`);
+        await logSync(_vid, _aid, 'resolver_vendedor', 'error',
+          { vendedor_id: contrato.vendedor_id, nome: vendedor?.nome }, null, msg);
+        await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
+        await upsertSyncQueue(supabase, _vid, _aid, 'vendedor_sem_codigo_sga', msg, codigoAssociadoHinova);
+        return;
       }
-    }
-
-    if (!hinovaCodigoVoluntario) {
-      const { data: qualquerVendedor } = await supabase
-        .from('profiles')
-        .select('codigo_sga_voluntario, nome')
-        .not('codigo_sga_voluntario', 'is', null)
-        .limit(1)
-        .maybeSingle();
-
-      if (qualquerVendedor?.codigo_sga_voluntario) {
-        hinovaCodigoVoluntario = qualquerVendedor.codigo_sga_voluntario;
-        console.log(`[SGA Sync] Fallback: usando código voluntário de ${qualquerVendedor.nome}: ${hinovaCodigoVoluntario}`);
-      }
+    } else {
+      const msg = 'Contrato sem vendedor_id — não é possível identificar o consultor para o SGA.';
+      console.warn(`[SGA Sync] ${msg}`);
+      await logSync(_vid, _aid, 'resolver_vendedor', 'error', { veiculo_id: _vid, associado_id: _aid }, null, msg);
+      await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
+      await upsertSyncQueue(supabase, _vid, _aid, 'contrato_sem_vendedor', msg, codigoAssociadoHinova);
+      return;
     }
 
     // ========================================
