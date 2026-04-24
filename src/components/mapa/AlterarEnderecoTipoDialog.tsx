@@ -129,6 +129,15 @@ export function AlterarEnderecoTipoDialog({
   };
 
   const handleSalvar = async () => {
+    if (tipoNovo === 'rota' && (!logradouro.trim() || !cidade.trim() || !uf.trim())) {
+      toast.error('Informe logradouro, cidade e UF para converter para rota.');
+      return;
+    }
+    if (tipoNovo === 'base' && (!oficinaId || !horario)) {
+      toast.error('Selecione a base e o horário para converter para base.');
+      return;
+    }
+
     try {
       await mutation.mutateAsync({
         origem,
