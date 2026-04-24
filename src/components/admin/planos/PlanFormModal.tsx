@@ -396,6 +396,20 @@ export function PlanFormModal({
                           />
                         </div>
                       </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="plan-codigo-sga">Código SGA do Plano (Hinova)</Label>
+                        <Input
+                          id="plan-codigo-sga"
+                          value={formData.codigo_sga_plano}
+                          onChange={(event) => setFormData((previous) => ({ ...previous, codigo_sga_plano: event.target.value }))}
+                          placeholder="Ex: 1234"
+                          inputMode="numeric"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Código do plano no painel Hinova. Sem este código, a sincronização de novos contratos com SGA será bloqueada com erro <code>plano_sem_codigo_sga</code>.
+                        </p>
+                      </div>
                     </section>
 
                     {/* Coberturas e Benefícios inline — só em modo edição */}
