@@ -57,7 +57,7 @@ function ChainNode({ label, name, icon: Icon }: { label: string; name: string; i
 }
 
 export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }: EditarHierarquiaModalProps) {
-  const { data: usuarios = [] } = useUsuariosVendas();
+  const { data: usuarios = [], isLoading: loadingUsuarios, isFetching: fetchingUsuarios } = useUsuariosVendas();
   const upsertHierarquia = useUpsertHierarquia();
 
   const [supervisorId, setSupervisorId] = useState<string>('none');
@@ -121,20 +121,31 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
   };
 
   const saving = upsertHierarquia.isPending;
+  const loadingVinculos = loadingUsuarios || fetchingUsuarios;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>Configurar equipe e hierarquia</DialogTitle>
-          <DialogDescription>
-            Visualize a cadeia atual e ajuste os vínculos superiores e inferiores de {linha.usuario.nome}.
-          </DialogDescription>
+      <DialogContent className="max-w-4xl gap-0 overflow-hidden p-0">
+        <DialogHeader className="border-b px-6 py-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-1">
+              <DialogTitle>Configurar equipe e hierarquia</DialogTitle>
+              <DialogDescription>
+                Ajuste os vínculos superiores e acompanhe quem está conectado a {linha.usuario.nome}.
+              </DialogDescription>
+            </div>
+            {loadingVinculos && (
+              <Badge variant="secondary" className="w-fit gap-1.5 font-normal">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Buscando vínculos
+              </Badge>
+            )}
+          </div>
         </DialogHeader>
 
-        <div className="grid gap-5 lg:grid-cols-[1fr_1.05fr]">
-          <div className="space-y-3">
-            <div className="rounded-md border p-4">
+        <div className="grid max-h-[72vh] gap-0 overflow-y-auto lg:grid-cols-[0.95fr_1.15fr]">
+          <div className="space-y-4 border-b bg-muted/20 p-6 lg:border-b-0 lg:border-r">
+            <div className="rounded-md border bg-background p-4 shadow-sm">
               <div className="flex items-center gap-3">
                 <Avatar className="h-10 w-10">
                   <AvatarImage src={linha.usuario.avatar_url || undefined} />
@@ -147,7 +158,11 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-medium">Cadeia atual</div>
+                <Badge variant="outline" className="font-normal">Prévia</Badge>
+              </div>
               <ChainNode label="Gerente" name={userName(usuariosMap, gerenteId === 'none' ? null : gerenteId)} icon={UserRound} />
               <div className="flex justify-center text-muted-foreground"><ArrowDown className="h-4 w-4" /></div>
               <ChainNode label="Supervisor" name={userName(usuariosMap, supervisorId === 'none' ? null : supervisorId)} icon={Users2} />
@@ -162,12 +177,17 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
             </div>
           </div>
 
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-3">
-              <div>
+          <div className="space-y-5 p-6">
+            <div className="space-y-1">
+              <div className="text-sm font-medium">Vínculos superiores</div>
+              <p className="text-xs text-muted-foreground">Selecione apenas os vínculos que devem participar da cadeia comercial deste usuário.</p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              <div className="space-y-1.5">
                 <Label>Gerente superior</Label>
-                <Select value={gerenteId} onValueChange={setGerenteId}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Select value={gerenteId} onValueChange={setGerenteId} disabled={loadingVinculos || saving}>
+                  <SelectTrigger className="h-11"><SelectValue placeholder="Selecione um gerente" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Nenhum gerente</SelectItem>
                     {gerentes.map((u) => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
@@ -175,10 +195,10 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
                 </Select>
               </div>
 
-              <div>
+              <div className="space-y-1.5">
                 <Label>Supervisor superior</Label>
-                <Select value={supervisorId} onValueChange={setSupervisorId}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Select value={supervisorId} onValueChange={setSupervisorId} disabled={loadingVinculos || saving}>
+                  <SelectTrigger className="h-11"><SelectValue placeholder="Selecione um supervisor" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Nenhum supervisor</SelectItem>
                     {supervisores.map((u) => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
@@ -186,10 +206,10 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
                 </Select>
               </div>
 
-              <div>
+              <div className="space-y-1.5">
                 <Label>Agência vinculada</Label>
-                <Select value={agenciaId} onValueChange={setAgenciaId}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Select value={agenciaId} onValueChange={setAgenciaId} disabled={loadingVinculos || saving}>
+                  <SelectTrigger className="h-11"><SelectValue placeholder="Selecione uma agência" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Nenhuma agência</SelectItem>
                     {agencias.map((u) => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
@@ -198,23 +218,32 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
               </div>
             </div>
 
-            <div>
+            <div className="space-y-1.5">
               <Label>Observações</Label>
               <Textarea
                 value={observacoes}
                 onChange={(e) => setObservacoes(e.target.value)}
                 placeholder="Notas sobre a estrutura desta equipe"
                 rows={3}
+                disabled={saving}
               />
             </div>
 
-            <div className="rounded-md border p-3">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <div className="text-sm font-medium">Equipe inferior vinculada</div>
-                <Badge variant="secondary">{subordinados.length}</Badge>
+            <div className="rounded-md border bg-background p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-sm font-medium">Equipe inferior vinculada</div>
+                  <div className="text-xs text-muted-foreground">Usuários que dependem desta posição na hierarquia.</div>
+                </div>
+                <Badge variant="secondary" className="shrink-0">{subordinados.length}</Badge>
               </div>
-              {subordinados.length === 0 ? (
-                <div className="text-sm text-muted-foreground">Nenhum usuário abaixo desta posição.</div>
+              {loadingVinculos ? (
+                <div className="flex items-center gap-2 rounded-md bg-muted/40 px-3 py-4 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Carregando usuários e vínculos...
+                </div>
+              ) : subordinados.length === 0 ? (
+                <div className="rounded-md bg-muted/40 px-3 py-4 text-sm text-muted-foreground">Nenhum usuário abaixo desta posição.</div>
               ) : (
                 <div className="space-y-3 max-h-52 overflow-y-auto pr-1">
                   <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
