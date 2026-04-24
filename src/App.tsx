@@ -384,14 +384,10 @@ const ContratoRedirect = () => {
   return <Navigate to="/vendas/contratos" state={{ openContrato: id }} replace />;
 };
 
-// Redirects das rotas antigas /cobranca/* preservando o :id
-const RedirectInadimplente = () => {
+// Redirects de rotas antigas preservando o :id
+const RedirectGradeComissao = () => {
   const { id } = useParams();
-  return <Navigate to={`/financeiro/cobrancas/recuperacao/inadimplentes/${id}`} replace />;
-};
-const RedirectAcordo = () => {
-  const { id } = useParams();
-  return <Navigate to={`/financeiro/cobrancas/recuperacao/acordos/${id}`} replace />;
+  return <Navigate to={`/comissoes/grades/${id}`} replace />;
 };
 const RedirectGradeComissao = () => {
   const { id } = useParams();
