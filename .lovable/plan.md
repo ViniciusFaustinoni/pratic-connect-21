@@ -1,44 +1,72 @@
-## Problema
+## Diagnóstico
 
-No modal "Configurar equipe e hierarquia" (e no modal de Atribuir Grade) existe o campo **Agência vinculada**, que permite anexar uma agência como parte da cadeia comercial de qualquer vendedor. Isso não condiz com o modelo de negócio: **agência é um tipo de vendedor** (role `agencia`). Quem fecha a venda como agência já é a própria agência — não faz sentido um vendedor CLT/externo "ter uma agência vinculada" como entidade separada da sua hierarquia.
+A tela **Configurações → Usuários e Acessos** está listando associados como se fossem funcionários. Investigando:
 
-## Objetivo
+### Causa raiz (duas camadas)
 
-Remover qualquer ponto da UI que permita atribuir uma agência a um vendedor, mantendo intacta a lógica que paga comissão à agência quando ela é a vendedora da venda.
+**1. Dados corrompidos no banco** — `profiles.tipo` está errado para a maioria dos associados:
+```
+funcionario: 9755 perfis
+associado:     25 perfis  ← deveria ser ~9519
+agencia:        2 perfis
+```
 
-## O que muda
+Cruzando com a tabela `associados` + role `associado` + e-mail `@associado.pratic.com.br`:
+- **9494 dos 9755 "funcionários" são, comprovadamente, associados** (têm registro na tabela `associados`, role `associado` e e-mail no domínio de associado).
+- Restam ~261 funcionários reais.
 
-### 1. `src/components/comissoes/EditarHierarquiaModal.tsx`
-- Remover o estado `agenciaId` e todo o seletor "Agência vinculada".
-- Remover a lista `agencias` e validações que cruzam agência ↔ supervisor/gerente.
-- Remover o nó "Agência vinculada" da prévia da cadeia (Gerente → Supervisor → Usuário).
-- Remover a relação "Agência" da função `relacaoSubordinado` (subordinados continuam sendo apenas quem tem `supervisor_id` ou `gerente_id` apontando para o usuário).
-- Ao salvar, enviar `agencia_id: null` sempre, garantindo que vínculos antigos sejam zerados ao reeditar.
+Isso é resíduo de import em massa / trigger antiga que default-ou `tipo='funcionario'` em vez de `'associado'` na criação dos perfis.
 
-### 2. `src/components/comissoes/AtribuirGradeModal.tsx`
-- Remover o estado `agenciaId` e o seletor "Agência da cadeia".
-- Ao salvar via `upsertHierarquia`, enviar `agencia_id: null`.
+**2. Filtro permissivo no front** — `useUsuarios` (`src/hooks/useUsuarios.ts`) e `UsuariosAcessos.tsx` aceitam o filtro `tipo='associado'` e **não excluem associados por padrão**. A tela tem inclusive um item "Associado legado" no select de tipo (linha 201). Mas ainda que os dados estivessem corretos, hoje qualquer associado com `tipo='associado'` apareceria na lista — o que vai contra a regra "somente usuários criados pelo diretor, funcionários, técnicos, equipe comercial".
 
-### 3. `src/pages/configuracoes/AtribuicaoGrades.tsx`
-- Remover a coluna/exibição de "Agência" na tabela.
-- Remover o filtro de subordinados que considera `agencia_id`.
+### Impacto colateral
+Várias RLS policies e funções SQL concedem acesso interno via `profiles.tipo = 'funcionario'` (ouvidoria, manifestações, jurídico, etc.). Significa que **9494 associados podem estar com permissões internas indevidas hoje**. Corrigir o `tipo` desses perfis é a coisa certa a fazer — vai restaurar a separação correta entre acesso interno e acesso de associado.
 
-### 4. Lógica de pagamento (sem alteração)
-- `useComissaoDetalhesPagamento.ts` continua funcionando: quando a venda é originada por um usuário com role `agencia`, o snapshot `vendedor_id` já é a própria agência — a parte de "agência" é resolvida pelo próprio vendedor da venda. Não mexemos nesse arquivo.
-- O campo `agencia_id` na tabela `comissoes_hierarquia` permanece (sem migration de schema), apenas deixa de ser populado pela UI.
+## O que vai mudar
 
-### 5. Tipos
-- `HierarquiaVendas.agencia_id` permanece como `string | null` no tipo (mantém compatibilidade com snapshots históricos), mas a UI nunca mais grava valor não-nulo.
+### 1. Migration de correção de dados (`profiles.tipo`)
+Reclassificar como `tipo='associado'` todo perfil que satisfaça **qualquer** dos critérios:
+- Tem registro em `associados` vinculado pelo `user_id`, OU
+- Tem role `associado` em `user_roles`, OU
+- E-mail no domínio `@associado.pratic.com.br`
+
+Com `WHERE tipo <> 'associado'` para não tocar nos já corretos. Estimado: ~9494 linhas.
+
+Não vai mexer nos 261 perfis que **não** caem em nenhum critério (continuam como `funcionario` — a tela vai poder revisá-los caso a caso).
+
+### 2. Hook `useUsuarios` — excluir associados por padrão
+Em `src/hooks/useUsuarios.ts`, adicionar exclusão de `tipo='associado'` exceto quando o filtro explícito for `tipo='associado'`:
+
+```ts
+if (filters.tipo && filters.tipo !== 'todos') {
+  query = query.eq('tipo', filters.tipo);
+} else {
+  query = query.neq('tipo', 'associado');
+}
+```
+
+Também excluir do filtro server-side por `perfil`: se o filtro de perfil for `associado`, retornar vazio (essa tela não deve nem permitir consultar associados). Como `roleOptions` no front já filtra `role !== 'associado'` (linha 96 de `UsuariosAcessos.tsx`), isso já está alinhado.
+
+### 3. UI `UsuariosAcessos.tsx` — remover opção "Associado legado" do filtro
+Remover a `<SelectItem value="associado">Associado legado</SelectItem>` (linha 201) e ajustar o texto descritivo do card. A tela passa a listar apenas: funcionário, prestador, agência (e equivalentes vinculados às roles internas).
+
+### 4. Texto/copy
+Ajustar a `CardDescription` (linha 181-183) para refletir a nova regra: "Tela exclusiva para usuários internos: funcionários, prestadores, agências e equipe comercial. Associados são gerenciados em Associados."
 
 ## O que NÃO muda
 
-- A role `agencia` continua existindo e segue sendo um vendedor que pode originar vendas.
-- Cadeia comercial continua: Gerente → Supervisor → Vendedor (incluindo vendedor com role `agencia`).
-- Histórico de comissões já pagas com `agencia_id` preenchido continua íntegro nos snapshots.
-- Sem migrations de banco nesta etapa (apenas UI/lógica de escrita).
+- Nenhuma RLS policy é alterada — apenas os dados são corrigidos para o estado correto.
+- Nenhum acesso legítimo de funcionário é afetado (os 261 perfis sem critério associado permanecem `funcionario`).
+- A tela de Associados continua independente e exibindo os 9519 associados normalmente (a partir da tabela `associados`).
+- A role `associado` em `user_roles` permanece intocada — é só o campo `profiles.tipo` que muda.
 
 ## Resultado esperado
 
-- O modal "Configurar equipe e hierarquia" passa a mostrar apenas Gerente superior e Supervisor superior — sem o campo Agência.
-- Não é possível mais (acidentalmente) anexar uma agência a um vendedor pela interface.
-- Comissões de venda originadas por uma agência continuam sendo pagas corretamente, pois o motor já trata a agência como o próprio vendedor da venda.
+- Tela Usuários e Acessos: mostra apenas usuários internos. Os ~9494 associados que apareciam "como funcionário" somem.
+- Métricas no topo (Total/Ativos/Inativos/Perfis) refletem só usuários internos.
+- Permissões internas atribuídas indevidamente via `profiles.tipo='funcionario'` aos associados deixam de existir — separação de acesso interno vs. associado fica íntegra.
+
+## Pontos de atenção
+
+- Após a migration, alguns associados podem ter perdido um acesso a tela interna que vinham usando indevidamente. Isso é correção, não regressão.
+- Os 261 perfis que continuam como `funcionario` devem ser revisados manualmente pelo time se houver suspeita — a tela já permite filtrar e editar caso a caso.

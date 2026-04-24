@@ -54,6 +54,12 @@ export function useUsuarios({
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['usuarios', filters, pagination],
     queryFn: async () => {
+      // Esta tela é exclusiva de usuários internos. Associados nunca aparecem aqui,
+      // independente do filtro de perfil/tipo (são geridos em /associados).
+      if (filters.perfil === 'associado') {
+        return { usuarios: [], total: 0 };
+      }
+
       // Se filtro de perfil ativo, buscar user_ids com esse role primeiro (server-side)
       let perfilUserIds: string[] | null = null;
       if (filters.perfil && filters.perfil !== 'todos') {
@@ -71,18 +77,19 @@ export function useUsuarios({
         }
       }
 
-      // Construir query base
+      // Construir query base — sempre exclui associados desta listagem
       let query = supabase
         .from('profiles')
-        .select('*', { count: 'exact' });
+        .select('*', { count: 'exact' })
+        .neq('tipo', 'associado');
 
       // Filtro server-side por perfil (via user_ids)
       if (perfilUserIds) {
         query = query.in('user_id', perfilUserIds);
       }
 
-      // Filtro por tipo
-      if (filters.tipo && filters.tipo !== 'todos') {
+      // Filtro por tipo (já garantido != 'associado' acima)
+      if (filters.tipo && filters.tipo !== 'todos' && filters.tipo !== 'associado') {
         query = query.eq('tipo', filters.tipo);
       }
 

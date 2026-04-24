@@ -65,7 +65,6 @@ const tipoLabel: Record<string, string> = {
   funcionario: 'Funcionário',
   prestador: 'Prestador',
   agencia: 'Agência',
-  associado: 'Associado legado',
 };
 
 function getInitials(nome?: string | null) {
@@ -179,7 +178,7 @@ export default function UsuariosAcessos() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Gerenciamento</CardTitle>
               <CardDescription>
-                Tipos disponíveis para criação: funcionário, prestador e agência. Associados existentes permanecem preservados como legado.
+                Tela exclusiva para usuários internos: funcionários, prestadores, agências, técnicos e equipe comercial. Associados são geridos em Associados.
               </CardDescription>
               <div className="grid gap-2 pt-2 md:grid-cols-[1fr_180px_180px_220px]">
                 <div className="relative">
@@ -198,7 +197,6 @@ export default function UsuariosAcessos() {
                     {TIPOS_GERENCIAVEIS.map(option => (
                       <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                     ))}
-                    <SelectItem value="associado">Associado legado</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={status} onValueChange={value => { setStatus(value); setPage(1); }}>
