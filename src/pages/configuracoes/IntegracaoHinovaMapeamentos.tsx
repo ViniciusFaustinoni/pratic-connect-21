@@ -214,19 +214,63 @@ export default function IntegracaoHinovaMapeamentos() {
         </Dialog>
       </header>
 
-      <Tabs value={tipoAtivo} onValueChange={(v) => setTipoAtivo(v as Tipo)}>
+      <Tabs value={tipoAtivo} onValueChange={(v) => {
+        const next = v as Tipo;
+        setTipoAtivo(next);
+        const sp = new URLSearchParams(searchParams);
+        sp.set('tipo', next);
+        sp.delete('valor');
+        setSearchParams(sp, { replace: true });
+      }}>
         <TabsList>
           {TIPOS.map((t) => (
             <TabsTrigger key={t} value={t}>{TIPO_LABELS[t]}</TabsTrigger>
           ))}
         </TabsList>
 
-        {TIPOS.map((t) => (
-          <TabsContent key={t} value={t}>
+        {TIPOS.map((t) => {
+          const tipoItens = itens.filter((i) => i.tipo === t);
+          const mapeados = new Set(tipoItens.map((i) => i.codigo_local.trim().toLowerCase()));
+          const usados = valoresEmUso?.[t] ?? new Set<string>();
+          const faltantes = Array.from(usados).filter((v) => v && !mapeados.has(v));
+
+          return (
+          <TabsContent key={t} value={t} className="space-y-3">
+            {faltantes.length > 0 && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>
+                  {faltantes.length} valor(es) sem código Hinova cadastrado
+                </AlertTitle>
+                <AlertDescription className="space-y-2">
+                  <p className="text-sm">
+                    Estes valores aparecem no sistema mas não têm código Hinova mapeado — adesões serão bloqueadas no envio ao SGA:
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {faltantes.map((v) => (
+                      <Button
+                        key={v}
+                        size="sm"
+                        variant="outline"
+                        className="h-7"
+                        onClick={() => {
+                          setNovo({ tipo: t, codigo_local: v, codigo_hinova: '', descricao: '' });
+                          setNovoOpen(true);
+                        }}
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        {v}
+                      </Button>
+                    ))}
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+
             <Card className="p-4">
               {isLoading ? (
                 <p className="text-sm text-muted-foreground">Carregando…</p>
-              ) : itensFiltrados.length === 0 ? (
+              ) : tipoItens.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Nenhum mapeamento para este tipo.</p>
               ) : (
                 <div className="space-y-2">
