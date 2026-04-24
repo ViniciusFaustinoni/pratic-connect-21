@@ -18,6 +18,27 @@ serve(async (req) => {
   console.log('[Cron SGA Retry] Iniciando processamento da fila de reenvio...');
 
   try {
+    const staleThreshold = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    await supabase
+      .from('sga_sync_queue')
+      .update({
+        status: 'pendente',
+        proximo_reenvio_em: new Date().toISOString(),
+        erro_ultimo: 'Reaberto automaticamente: processamento travado há mais de 10 minutos',
+      })
+      .eq('status', 'processando')
+      .lt('ultima_tentativa_em', staleThreshold);
+
+    await supabase
+      .from('sga_sync_queue')
+      .update({
+        status: 'pendente',
+        proximo_reenvio_em: new Date().toISOString(),
+        erro_ultimo: 'Reaberto automaticamente: falha recuperável SGA',
+      })
+      .eq('status', 'falha_permanente')
+      .or('erro_ultimo.ilike.%Placa duplicada%,erro_ultimo.ilike.%HTML%,erro_ultimo.ilike.%502%,erro_ultimo.ilike.%rate%,erro_ultimo.ilike.%token%,erro_ultimo.ilike.%autorizado%');
+
     // Buscar registros pendentes prontos para reenvio
     const { data: pendentes, error: fetchError } = await supabase
       .from('sga_sync_queue')
@@ -84,12 +105,21 @@ serve(async (req) => {
         .eq('id', item.id);
 
       try {
+        const { data: veiculoRetry } = await supabase
+          .from('veiculos')
+          .select('cobertura_total')
+          .eq('id', item.veiculo_id)
+          .maybeSingle();
+
         // Chamar a função sga-hinova-sync que já tem toda a lógica
         // Ela vai: buscar por CPF primeiro (backup), cadastrar se necessário, etc.
         const { data, error } = await supabase.functions.invoke('sga-hinova-sync', {
           body: {
             veiculo_id: item.veiculo_id,
             associado_id: item.associado_id,
+            status_sga_destino: veiculoRetry?.cobertura_total === true ? 'ativo' : 'pendente',
+            force_resync_media: item.etapa_parou === 'fotos',
+            etapa_origem: 'cron-sga-retry',
           },
         });
 
