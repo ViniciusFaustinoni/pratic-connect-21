@@ -394,6 +394,7 @@ serve(async (req) => {
 
     const requestBody = await req.json();
     const { veiculo_id, associado_id, action, bypass_guard_base_antiga } = requestBody as SyncRequest & { action?: string; bypass_guard_base_antiga?: boolean };
+    const statusSgaDestino: 'pendente' | 'ativo' = requestBody.status_sga_destino === 'ativo' ? 'ativo' : 'pendente';
 
     // ========================================
     // MODO TESTE DE CONEXÃO
@@ -451,7 +452,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[SGA Sync] Iniciando sincronização - Veículo: ${veiculo_id}, Associado: ${associado_id}`);
+    console.log(`[SGA Sync] Iniciando sincronização - Veículo: ${veiculo_id}, Associado: ${associado_id}, destino=${statusSgaDestino}`);
 
     // ========================================
     // GUARD DE IDEMPOTÊNCIA
@@ -463,9 +464,9 @@ serve(async (req) => {
       .single();
 
     // Se já está sincronizado com sucesso, retornar sem chamar Hinova
-    if (veiculoCheck?.sincronizado_hinova && veiculoCheck?.codigo_hinova) {
+    if (veiculoCheck?.sincronizado_hinova && veiculoCheck?.codigo_hinova && (statusSgaDestino !== 'ativo' || veiculoCheck?.status_sga === 'ativado_sga')) {
       console.log(`[SGA Sync] Veículo ${veiculo_id} já sincronizado (codigo_hinova=${veiculoCheck.codigo_hinova}). Retornando sucesso.`);
-      await logSync(veiculo_id, associado_id, 'idempotency_guard', 'skipped', { veiculo_id, associado_id }, { codigo_hinova: veiculoCheck.codigo_hinova });
+      await logSync(veiculo_id, associado_id, 'idempotency_guard', 'skipped', { veiculo_id, associado_id, status_sga_destino: statusSgaDestino }, { codigo_hinova: veiculoCheck.codigo_hinova, status_sga: veiculoCheck.status_sga });
       await markQueueCompleted(supabase, veiculo_id, associado_id);
       return new Response(
         JSON.stringify({
