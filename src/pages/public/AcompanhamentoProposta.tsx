@@ -885,18 +885,6 @@ export default function AcompanhamentoProposta() {
             </motion.div>
           )}
 
-          {/* Documentos Pendentes */}
-          {((statusInfo as any).showDocumentosPendentes || associado.status === 'documentacao_pendente') && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-              <DocumentosPendentes 
-                associadoId={associado.id}
-                onTodosEnviados={() => {
-                  queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta', token] });
-                }}
-              />
-            </motion.div>
-          )}
-
           {/* Orientações pós-Recusa */}
           {(statusInfo as any).showRecusaOrientacoes && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
