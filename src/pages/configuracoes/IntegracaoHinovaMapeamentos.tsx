@@ -69,6 +69,29 @@ export default function IntegracaoHinovaMapeamentos() {
     },
   });
 
+  // Query: valores em USO no sistema (cores/combustíveis/tipos de veículo) que ainda NÃO têm mapeamento
+  const { data: valoresEmUso } = useQuery({
+    queryKey: ['hinova_valores_em_uso'],
+    queryFn: async () => {
+      const [veiculosRes, contratosRes] = await Promise.all([
+        supabase.from('veiculos').select('cor, combustivel').limit(5000),
+        supabase.from('contratos').select('veiculo_categoria').limit(5000),
+      ]);
+      const cores = new Set<string>();
+      const combs = new Set<string>();
+      const tipos = new Set<string>();
+      for (const v of veiculosRes.data || []) {
+        if (v.cor) cores.add(String(v.cor).trim().toLowerCase());
+        if (v.combustivel) combs.add(String(v.combustivel).trim().toLowerCase());
+      }
+      for (const c of contratosRes.data || []) {
+        if (c.veiculo_categoria) tipos.add(String(c.veiculo_categoria).trim().toLowerCase());
+      }
+      return { cor: cores, combustivel: combs, tipo_veiculo: tipos, tipo_foto: new Set<string>() } as Record<Tipo, Set<string>>;
+    },
+    staleTime: 60_000,
+  });
+
   const updateMut = useMutation({
     mutationFn: async (m: Partial<Mapeamento> & { id: string }) => {
       const { error } = await supabase
