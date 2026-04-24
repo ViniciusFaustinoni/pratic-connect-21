@@ -168,7 +168,7 @@ export function AtribuirGradeModal({ open, onOpenChange, linha }: AtribuirGradeM
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Supervisor, gerente e agência não usam suas próprias grades nessa venda; recebem conforme a grade do usuário que originou a venda.
+            Supervisor e gerente não usam suas próprias grades nessa venda; recebem conforme a grade do usuário que originou a venda.
           </p>
         </div>
 
