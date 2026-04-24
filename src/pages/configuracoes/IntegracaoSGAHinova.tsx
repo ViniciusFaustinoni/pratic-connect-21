@@ -379,6 +379,11 @@ export default function IntegracaoSGAHinova() {
         <TabsContent value="health">
           <IntegracaoHealthPanel integracao="hinova" titulo="Conexão API Hinova" />
         </TabsContent>
+
+        {/* Teste de boletos por veículo */}
+        <TabsContent value="teste-boletos">
+          <TesteBoletoVeiculoHinova />
+        </TabsContent>
       </Tabs>
 
       {/* Credentials Sheet */}
