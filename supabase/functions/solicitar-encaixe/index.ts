@@ -5,6 +5,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -192,7 +196,7 @@ Aguardamos sua confirmação! ⚡`;
 
   } catch (error) {
     console.error('[solicitar-encaixe] Erro:', error);
-    return new Response(JSON.stringify({ success: false, error: error.message || 'Erro interno' }), {
+    return new Response(JSON.stringify({ success: false, error: getErrorMessage(error) || 'Erro interno' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

@@ -8,6 +8,10 @@ const corsHeaders = {
 
 const VIDEO_EXTENSIONS = /\.(mp4|webm|mov|avi|mkv)$/i;
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function isVideoUrl(url: string): boolean {
   return VIDEO_EXTENSIONS.test(url);
 }
@@ -224,7 +228,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error("salvar-etapa-evento error:", error);
     return new Response(
-      JSON.stringify({ error: error.message || "Erro interno" }),
+      JSON.stringify({ error: getErrorMessage(error) || "Erro interno" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

@@ -5,6 +5,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -229,7 +233,7 @@ _Dúvidas? Entre em contato com o coordenador._`
           whatsappEnviado = true
         }
       } catch (e) {
-        whatsappErro = e.message || 'Erro inesperado ao enviar WhatsApp'
+        whatsappErro = getErrorMessage(e) || 'Erro inesperado ao enviar WhatsApp'
         console.error('Erro WhatsApp (catch):', e)
       }
     }
@@ -329,7 +333,7 @@ _Dúvidas? Entre em contato com o coordenador._`
   } catch (error) {
     console.error('Erro geral:', error)
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ success: false, error: getErrorMessage(error) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }

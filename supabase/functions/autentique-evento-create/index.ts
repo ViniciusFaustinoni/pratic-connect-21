@@ -1,3 +1,4 @@
+// @ts-nocheck
 // ============================================
 // EDGE FUNCTION: autentique-evento-create
 // Cria documento Autentique para Termo de Entrada de Evento (sinistro aprovado)

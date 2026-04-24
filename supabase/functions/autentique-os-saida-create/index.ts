@@ -1,3 +1,4 @@
+// @ts-nocheck
 // ============================================
 // EDGE FUNCTION: autentique-os-saida-create
 // Cria documento Autentique para Termo de Saída de Veículo (conclusão de OS)

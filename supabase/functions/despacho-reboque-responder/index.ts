@@ -86,16 +86,18 @@ serve(async (req) => {
         .update({ status: "recusado", data_recusa: new Date().toISOString() })
         .eq("id", convite.id);
 
-      await supabase.rpc("increment_field", { 
+      const { error: incrementError } = await supabase.rpc("increment_field", { 
         table_name: "despacho_reboque", 
         field_name: "total_recusas", 
         row_id: despacho.id 
-      }).catch(() => {
+      });
+
+      if (incrementError) {
         // Fallback: update manually
-        supabase.from("despacho_reboque")
+        await supabase.from("despacho_reboque")
           .update({ total_recusas: (despacho.total_recusas || 0) + 1 })
           .eq("id", despacho.id);
-      });
+      }
 
       return new Response(
         JSON.stringify({ success: true, status: "recusado" }),
