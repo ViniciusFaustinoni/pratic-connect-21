@@ -116,7 +116,7 @@ export function BotaoEnviarSGA({
     setIsLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('sga-hinova-sync', {
-        body: { veiculo_id: veiculoId, associado_id: associadoId },
+        body: { veiculo_id: veiculoId, associado_id: associadoId, status_sga_destino: 'ativo' },
       });
 
       if (error) {
