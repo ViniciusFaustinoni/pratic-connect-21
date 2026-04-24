@@ -281,7 +281,7 @@ export default function IntegracaoHinovaMapeamentos() {
                     <span className="col-span-2">Ativo</span>
                     <span className="col-span-1 text-right">Ações</span>
                   </div>
-                  {itensFiltrados.map((m) => (
+                  {tipoItens.map((m) => (
                     <LinhaEditavel
                       key={m.id}
                       item={m}
@@ -293,7 +293,8 @@ export default function IntegracaoHinovaMapeamentos() {
               )}
             </Card>
           </TabsContent>
-        ))}
+          );
+        })}
       </Tabs>
     </div>
   );
