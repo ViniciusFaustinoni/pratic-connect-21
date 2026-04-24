@@ -62,7 +62,7 @@ export function BotaoAtivarSGA({
 
     try {
       const { data, error } = await supabase.functions.invoke('sga-hinova-sync', {
-        body: { veiculo_id: veiculoId, associado_id: associadoId, status_sga_destino: 'ativo' },
+        body: { veiculo_id: veiculoId, associado_id: associadoId, status_sga_destino: 'pendente' },
       });
 
       if (error) throw error;
@@ -75,8 +75,8 @@ export function BotaoAtivarSGA({
           });
           // Status stays 'sincronizando' - parent polling will update via statusAtual prop
         } else {
-          setStatus('ativado_sga');
-          toast.success('Associado ativado com sucesso no SGA Hinova!', {
+          setStatus('pendente_sga');
+          toast.success('Associado enviado ao SGA como pendente!', {
             description: `Código Hinova: ${data.data?.codigo_veiculo_hinova}`,
           });
           onSuccess?.();
@@ -177,12 +177,13 @@ export function BotaoAtivarSGA({
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <Upload className="w-5 h-5 text-blue-600" />
-              Ativar Associado no SGA Hinova?
+            Enviar Associado ao SGA Hinova como pendente?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-left space-y-2">
               <p>
                 Esta ação irá enviar todos os dados do associado, veículo e documentos para o
-                sistema SGA Hinova.
+                sistema SGA Hinova como pendente. A ativação definitiva ocorre automaticamente
+                após a instalação do rastreador e aprovação técnica.
               </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -196,7 +197,7 @@ export function BotaoAtivarSGA({
               onClick={handleAtivar}
               className="bg-blue-600 hover:bg-blue-700"
             >
-              Confirmar Ativação
+              Confirmar Envio Pendente
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
