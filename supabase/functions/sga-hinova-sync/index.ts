@@ -101,6 +101,20 @@ function formatPhone(phone: string | null): string {
   return phone;
 }
 
+function normalizeText(text: string | null | undefined): string {
+  return (text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function parseValorFipe(valor: string | null | undefined): number | null {
+  if (!valor) return null;
+  const parsed = Number(valor.replace('R$', '').replace(/\./g, '').replace(',', '.').trim());
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 // Retry com backoff exponencial
 async function fetchWithRetry(
   url: string, 
