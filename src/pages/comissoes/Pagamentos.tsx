@@ -10,6 +10,7 @@ import { Pagination, PaginationContent, PaginationItem, PaginationLink, Paginati
 import { ComissaoDetalhesPagamentoModal } from '@/components/comissoes/ComissaoDetalhesPagamentoModal';
 import { useComissoesBackfill } from '@/hooks/useComissoesBackfill';
 import { usePagamentosComissoes } from '@/hooks/usePagamentosComissoes';
+import { COMISSOES_STATUS_OPTIONS, COMISSOES_TIPO_LANCAMENTO_OPTIONS } from '@/lib/comissoes-filtros';
 
 const money = (value: number | null | undefined) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0));
@@ -79,7 +80,11 @@ export default function PagamentosComissoes() {
             <Input type="date" value={filters.dataFim} onChange={(e) => updateFilter({ dataFim: e.target.value })} />
             <Select value={filters.status} onValueChange={(status) => updateFilter({ status })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="todos">Todos status</SelectItem><SelectItem value="pendente">Pendente</SelectItem><SelectItem value="aprovada">Aprovada</SelectItem><SelectItem value="paga">Paga</SelectItem><SelectItem value="cancelada">Cancelada</SelectItem></SelectContent>
+              <SelectContent>{COMISSOES_STATUS_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select value={filters.tipoLancamento} onValueChange={(tipoLancamento) => updateFilter({ tipoLancamento })}>
+              <SelectTrigger><SelectValue placeholder="Tipo" /></SelectTrigger>
+              <SelectContent>{COMISSOES_TIPO_LANCAMENTO_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={filters.vendedorId} onValueChange={(vendedorId) => updateFilter({ vendedorId })}>
               <SelectTrigger><SelectValue placeholder="Destinatário" /></SelectTrigger>

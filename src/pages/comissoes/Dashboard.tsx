@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { KpiCard } from '@/components/comissoes/KpiCard';
 import { ComissoesDetalhesModal } from '@/components/comissoes/ComissoesDetalhesModal';
 import { useComissoesDashboard, type ComissaoDashboardItem } from '@/hooks/useComissoesDashboard';
+import { COMISSOES_STATUS_OPTIONS, COMISSOES_TIPO_LANCAMENTO_OPTIONS, isComissaoVitalicia } from '@/lib/comissoes-filtros';
 import type { DateRange } from 'react-day-picker';
 
 const formatMoney = (value: number) =>
@@ -31,7 +32,7 @@ export default function DashboardComissoes() {
   const pendentes = useMemo(() => items.filter(i => ['pendente', 'aprovada'].includes(i.status)), [items]);
   const pagas = useMemo(() => items.filter(i => ['paga', 'pago'].includes(i.status) || !!i.pago_em), [items]);
   const aguardando = useMemo(() => items.filter(i => i.status === 'pendente'), [items]);
-  const vitalicias = useMemo(() => items.filter(i => (i.tipo_comissao || '').toLowerCase().includes('vitalicia') || (i.parcela_numero || 0) > 12), [items]);
+  const vitalicias = useMemo(() => items.filter(isComissaoVitalicia), [items]);
 
   if (isLoading) return <div className="text-sm text-muted-foreground">Carregando comissões...</div>;
 
@@ -63,12 +64,7 @@ export default function DashboardComissoes() {
                 <SelectValue placeholder="Todos" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                <SelectItem value="pendente">Pendente</SelectItem>
-                <SelectItem value="aprovada">Aprovada</SelectItem>
-                <SelectItem value="paga">Paga</SelectItem>
-                <SelectItem value="contestada">Contestada</SelectItem>
-                <SelectItem value="cancelada">Cancelada</SelectItem>
+                {COMISSOES_STATUS_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -79,11 +75,7 @@ export default function DashboardComissoes() {
                 <SelectValue placeholder="Todos" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                <SelectItem value="comum">Comum/recorrente</SelectItem>
-                <SelectItem value="vitalicia">Vitalícia</SelectItem>
-                <SelectItem value="valor_fixo">Valor fixo</SelectItem>
-                <SelectItem value="percentual">Percentual</SelectItem>
+                {COMISSOES_TIPO_LANCAMENTO_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -103,7 +95,7 @@ export default function DashboardComissoes() {
         </CardHeader>
         <CardContent>
           {kpis.topVendedores.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhuma comissão gerada neste mês.</p>
+            <p className="text-sm text-muted-foreground">Nenhuma comissão gerada no período.</p>
           ) : (
             <div className="space-y-3">
               {kpis.topVendedores.map((v, idx) => (
