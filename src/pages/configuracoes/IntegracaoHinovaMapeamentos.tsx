@@ -147,7 +147,7 @@ export default function IntegracaoHinovaMapeamentos() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const itensFiltrados = itens.filter((i) => i.tipo === tipoAtivo);
+  
 
   return (
     <div className="space-y-4">
