@@ -364,6 +364,13 @@ serve(async (req) => {
 
     const deveAguardarInstalacao = algumPrecisouRastreador && !jaTemInstalacaoConcluida;
     const statusSgaDestino = deveAguardarInstalacao ? 'pendente' : 'ativo';
+    const motivoDecisaoSga = deveAguardarInstalacao
+      ? 'Veículo exige rastreador e ainda não possui instalação concluída; envio ao SGA deve ficar pendente.'
+      : jaTemInstalacaoConcluida
+        ? 'Instalação já concluída; envio ao SGA pode seguir como ativo.'
+        : !algumPrecisouRastreador
+          ? 'Nenhum veículo exige rastreador; envio ao SGA pode seguir como ativo.'
+          : 'Regra de aprovação liberou envio ativo ao SGA.';
 
     if (deveAguardarInstalacao) {
       await Promise.all([
@@ -419,7 +426,14 @@ serve(async (req) => {
         fetch(`${supabaseUrl}/functions/v1/sga-hinova-sync`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
-          body: JSON.stringify({ veiculo_id: veiculoParaSGA.id, associado_id: associadoId, status_sga_destino: statusSgaDestino }),
+          body: JSON.stringify({
+            veiculo_id: veiculoParaSGA.id,
+            associado_id: associadoId,
+            status_sga_destino: statusSgaDestino,
+            usuario_id: aprovado_por,
+            etapa_origem: 'aprovar-proposta',
+            motivo_decisao: motivoDecisaoSga,
+          }),
         }).catch(e => console.warn('[aprovar-proposta] SGA falhou:', e));
       }
     } catch (e) {
