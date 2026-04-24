@@ -20,7 +20,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { AlertCircle, ArrowDown, Building2, Loader2, Network, RefreshCw, UserRound, Users2 } from 'lucide-react';
+import { AlertCircle, ArrowDown, Loader2, Network, RefreshCw, UserRound, Users2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUpsertHierarquia, useUsuariosVendas } from '@/hooks/useAtribuicaoComissoes';
 import type { AtribuicaoLinha, UsuarioVendas } from '@/types/atribuicaoComissao';
