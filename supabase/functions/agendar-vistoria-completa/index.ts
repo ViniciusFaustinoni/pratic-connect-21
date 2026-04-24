@@ -171,8 +171,8 @@ serve(async (req) => {
       longitude: finalLongitude
     });
 
-    // NÃO criar vistoria nem instalação aqui
-    // A instalação será criada em criar-instalacao-pos-pagamento após o pagamento ser confirmado
+    // NÃO criar vistoria nem instalação aqui.
+    // A instalação será criada somente após aprovação do Cadastro.
 
     // Enviar confirmação WhatsApp imediata se permiteEncaixe = true
     if (permiteEncaixe) {
@@ -228,7 +228,7 @@ O técnico mais próximo será designado em breve.
     return new Response(JSON.stringify({
       success: true,
       instalacaoId: null, // Será criada após pagamento
-      message: 'Agendamento salvo com sucesso. A instalação será criada após o pagamento.'
+      message: 'Agendamento salvo com sucesso. A instalação será criada após aprovação do cadastro.'
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

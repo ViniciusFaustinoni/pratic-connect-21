@@ -1,138 +1,127 @@
-Plano para ajustar a área de Atribuição de Grades
+## Plano para corrigir o fluxo de cadastro do novo associado
 
 ## Objetivo
-Separar a tela atual em duas abas claras:
+Garantir que o fluxo siga exatamente esta ordem:
 
 ```text
-Atribuição
-├─ Equipes / Hierarquia
-│  └─ Editável: define supervisor, gerente e agência de cada usuário
-└─ Grades
-   └─ Somente visualização: mostra a grade automática aplicada por perfil/role
+Agendamento / Auto vistoria
+        ↓
+Entrada na fila do Cadastro
+        ↓
+Aprovação do Cadastro
+        ↓
+Criação/liberação do serviço de instalação
+        ↓
+Instalação concluída
+        ↓
+Aprovação do Monitoramento
+        ↓
+Associado ativo + tela pública atualizada + mensagem "Proteção 360 ativada" + SGA ativo
 ```
 
-## 1. Criar abas na tela de Atribuição
-Na página `AtribuicaoGrades`, substituir a tabela única por um layout com abas:
+Também garantir que:
+- reprovação no Cadastro não envie o associado ao SGA como ativo;
+- reprovação no Monitoramento não envie o associado ao SGA como ativo;
+- a tela pública mostre claramente cada etapa e cada reprovação.
 
-- Aba `Equipes / Hierarquia`
-- Aba `Grades aplicadas`
+## Diferenças encontradas hoje
+- A instalação ainda pode ser criada antes da aprovação do Cadastro.
+- `aprovar-proposta` ainda ativa contrato/associado temporariamente antes de voltar para `aguardando_instalacao`.
+- A aprovação do monitoramento envia mensagem e ativa localmente, mas não fecha o fluxo garantindo SGA como `ativo`.
+- A reprovação do monitoramento não aparece de forma clara na tela pública.
 
-A tela continuará acessível pelo mesmo menu atual: `/comissoes/atribuicao`.
+## Implementação
 
-## 2. Aba Equipes / Hierarquia
-Essa aba será focada apenas na montagem da cadeia comercial.
+### 1. Travar a criação antecipada da instalação
+Ajustar o fluxo para que agendamento e autovistoria apenas salvem os dados necessários, sem materializar instalação antes da aprovação do Cadastro.
 
-Ela deve exibir:
+Arquivos:
+- `supabase/functions/criar-instalacao-pos-pagamento/index.ts`
+- `supabase/functions/agendar-vistoria-presencial/index.ts`
+- `supabase/functions/agendar-vistoria-completa/index.ts`
 
-- usuário;
-- perfil do usuário;
-- supervisor atual;
-- gerente atual;
-- agência atual;
-- ação para editar hierarquia.
+Mudanças:
+- impedir que `criar-instalacao-pos-pagamento` crie instalação enquanto o contrato ainda estiver pendente de aprovação cadastral;
+- remover o comportamento opcional que hoje cria instalação logo após o agendamento se o pagamento já estiver confirmado;
+- manter apenas o salvamento do agendamento/cotação nessa fase.
 
-A coluna de grade não será o foco dessa aba.
+### 2. Corrigir a aprovação do Cadastro
+Refatorar `aprovar-proposta` para não fazer ativação temporária e depois desfazer.
 
-## 3. Novo modal visual para configuração de equipe
-Refatorar o modal atual `AtribuirGradeModal` para deixar de editar grade e virar um modal específico de hierarquia, por exemplo `EditarHierarquiaModal`.
+Arquivo:
+- `supabase/functions/aprovar-proposta/index.ts`
 
-Ao abrir, o modal deve carregar e exibir os dados já salvos:
+Mudanças:
+- se o veículo exigir rastreador, ao aprovar o cadastro:
+  - manter contrato fora de `ativo` até a etapa final;
+  - colocar associado em `aguardando_instalacao`;
+  - manter SGA como `pendente`;
+  - somente então liberar/criar a instalação;
+- se o veículo não exigir rastreador, manter a ativação direta como exceção válida;
+- padronizar histórico e mensagens para refletir a etapa correta.
 
-- supervisor já vinculado;
-- gerente já vinculado;
-- agência já vinculada;
-- observações já salvas.
+### 3. Tornar o Monitoramento o ponto final de ativação
+Mover a ativação definitiva para a aprovação do monitoramento.
 
-O modal será mais visual e intuitivo, com uma representação da cadeia:
+Arquivo:
+- `src/hooks/useAprovacaoMonitoramento.ts`
 
-```text
-Gerente
-   ↓
-Supervisor
-   ↓
-Vendedor / Agência / Usuário selecionado
-   ↓
-Equipe inferior vinculada, quando existir
-```
+Mudanças:
+- ao aprovar no monitoramento:
+  - ativar veículo/associado/contrato/cotação de forma definitiva;
+  - chamar `sga-hinova-sync` com `status_sga_destino: 'ativo'`;
+  - só depois disparar a mensagem de “Proteção 360 ativada”; 
+- ao reprovar no monitoramento:
+  - impedir qualquer ativação final;
+  - persistir status e histórico de reprovação de forma rastreável;
+  - manter o associado fora do estado ativo.
 
-Também terá seletores separados por tipo de perfil:
+### 4. Atualizar a tela pública
+Deixar a jornada pública coerente com o novo funil.
 
-- selecionar gerente entre usuários com role `gerente_comercial`;
-- selecionar supervisor entre usuários com role `supervisor_vendas`;
-- selecionar agência entre usuários com role `agencia`.
+Arquivo:
+- `src/pages/public/AcompanhamentoProposta.tsx`
 
-Para evitar confusão, o próprio usuário editado não aparecerá como opção de superior dele mesmo.
+Mudanças:
+- exibir estados distintos para:
+  - em análise cadastral;
+  - cadastro aprovado / aguardando instalação;
+  - instalação concluída / aguardando monitoramento;
+  - proteção 360 ativada;
+  - cadastro reprovado;
+  - monitoramento reprovado;
+- ajustar textos para não indicar ativação antes da hora;
+- manter o aviso correto quando houver pendência ou reprovação.
 
-## 4. Exibir hierarquia inferior quando aplicável
-Na configuração de equipe, além dos superiores, mostrar uma área informativa de subordinados já relacionados ao usuário selecionado.
+### 5. Ajustar a fila operacional do Cadastro
+Garantir que a listagem e as ações da análise cadastral continuem coerentes após a mudança da ordem do funil.
 
-Exemplos:
+Arquivo:
+- `src/hooks/usePropostasPendentes.ts`
 
-- se abrir um gerente, mostrar supervisores/vendedores/agências vinculados a ele;
-- se abrir um supervisor, mostrar vendedores vinculados a ele;
-- se abrir uma agência, mostrar vendedores vinculados à agência.
+Mudanças:
+- revisar os critérios da fila para continuar exibindo corretamente propostas aguardando análise;
+- garantir que aprovação, solicitação de documentos e reprovação reflitam o novo encadeamento;
+- manter a reprovação cadastral encerrando o fluxo sem ativação SGA.
 
-Essa parte será inicialmente visual, para ajudar o diretor a entender a estrutura antes de salvar.
-
-## 5. Aba Grades aplicadas somente leitura
-Criar uma aba separada para grades com a finalidade de consulta.
-
-Ela deve exibir:
-
-- usuário;
-- perfil/role comercial;
-- grade vigente aplicada;
-- data de início, se existir;
-- status: com grade / sem grade.
-
-Não haverá botão de edição de vínculo de grade nessa aba.
-
-Essa área deve deixar claro que a grade é definida automaticamente conforme o perfil selecionado na criação/configuração da grade, e não editada manualmente aqui.
-
-## 6. Remover edição manual de grade da Atribuição
-O modal atual permite selecionar `Grade aplicada às vendas deste usuário`. Isso será removido da área de Atribuição.
-
-A tela não chamará mais `useAtribuirGrade` pelo modal.
-
-Atribuição manual de grade ficará fora desse fluxo para não contradizer a regra atual:
-
-> A grade vem da criação da grade, quando o diretor seleciona o perfil de acesso e configura as comissões.
-
-## 7. Ajustar textos e alertas
-Atualizar os textos da tela para refletir a nova lógica:
-
-- onde hoje diz que a tela escolhe a grade comercial de cada usuário, trocar para explicar que:
-  - a aba Equipes define hierarquia;
-  - a aba Grades mostra a grade já calculada/aplicada pelo perfil;
-  - usuários sem grade exibidos ali precisam ter seu perfil contemplado em alguma grade ativa.
-
-O alerta de “usuários sem grade” continuará existindo, mas será tratado como alerta de configuração ausente, não como convite para editar manualmente ali.
-
-## 8. Ajustes técnicos previstos
-Arquivos principais:
-
-- `src/pages/configuracoes/AtribuicaoGrades.tsx`
-- `src/components/comissoes/AtribuirGradeModal.tsx` ou criação de novo `EditarHierarquiaModal.tsx`
-- `src/hooks/useAtribuicaoComissoes.ts`
-- `src/types/atribuicaoComissao.ts`
-
-Mudanças técnicas:
-
-- manter a consulta atual de usuários, grades vigentes e hierarquia;
-- adicionar derivação de subordinados por `supervisor_id`, `gerente_id` e `agencia_id`;
-- manter `useUpsertHierarquia` para salvar hierarquia;
-- deixar `useAtribuirGrade` sem uso nessa tela;
-- manter filtros por busca, perfil e status na aba de grades;
-- adaptar filtros da aba de equipes para busca/perfil.
-
-## 9. Validação esperada
+## Validação esperada
 Após a alteração:
+- o agendamento pode acontecer antes, mas a instalação só nasce/libera depois da aprovação do Cadastro;
+- aprovação do Cadastro não ativa temporariamente o associado;
+- após aprovação cadastral, o associado vai para `aguardando_instalacao` e SGA `pendente` quando aplicável;
+- a ativação final só acontece após instalação concluída e aprovação do Monitoramento;
+- a mensagem “Proteção 360 ativada” só sai no momento correto;
+- reprovação no Cadastro ou no Monitoramento impede SGA `ativo`;
+- a tela pública passa a mostrar claramente o estágio real do associado.
 
-- a tela terá duas abas separadas;
-- a aba de Equipes permitirá editar apenas hierarquia;
-- o modal abrirá preenchido com os dados já salvos;
-- o modal será visual, mostrando superiores e subordinados;
-- a aba de Grades será somente leitura;
-- não será possível editar vínculo de grade manualmente nessa área;
-- usuários com grade automática continuarão aparecendo com a grade vigente;
-- usuários sem grade aparecerão como alerta de configuração pendente.
+## Detalhes técnicos
+Arquivos principais:
+- `supabase/functions/aprovar-proposta/index.ts`
+- `supabase/functions/criar-instalacao-pos-pagamento/index.ts`
+- `supabase/functions/agendar-vistoria-presencial/index.ts`
+- `supabase/functions/agendar-vistoria-completa/index.ts`
+- `src/hooks/useAprovacaoMonitoramento.ts`
+- `src/hooks/usePropostasPendentes.ts`
+- `src/pages/public/AcompanhamentoProposta.tsx`
+
+Sem mudança de schema prevista neste ajuste, a princípio. O foco é corrigir a orquestração do fluxo, os gatilhos de ativação e os estados exibidos.

@@ -163,12 +163,25 @@ export function useAprovarInstalacaoMonitoramento() {
         if (instalacao?.contrato_id) {
           await supabase
             .from('contratos')
-            .update({ status: 'ativo' })
+            .update({ status: 'ativo', data_ativacao: agora })
             .eq('id', instalacao.contrato_id);
         }
       }
 
-      // 4. Registrar histórico
+      // 4. Garantir ativação no SGA somente no fechamento do Monitoramento
+      try {
+        await supabase.functions.invoke('sga-hinova-sync', {
+          body: {
+            veiculo_id: data.veiculoId,
+            associado_id: data.associadoId,
+            status_sga_destino: 'ativo',
+          },
+        });
+      } catch (err) {
+        console.warn('[aprovar-monitoramento] Erro ao sincronizar SGA como ativo:', err);
+      }
+
+      // 5. Registrar histórico
       await supabase.from('associados_historico').insert({
         associado_id: data.associadoId,
         tipo: 'protecao_360_aprovada_monitoramento',
@@ -181,7 +194,7 @@ export function useAprovarInstalacaoMonitoramento() {
         usuario_id: profile?.id,
       });
 
-      // 5. Enviar notificação de cobertura total ativada
+      // 6. Enviar notificação de cobertura total ativada
       try {
         const { data: veiculoInfo } = await supabase
           .from('veiculos')
@@ -250,7 +263,30 @@ export function useReprovarInstalacaoMonitoramento() {
 
       if (servicoError) throw servicoError;
 
-      // 2. Registrar histórico
+      // 2. Refletir reprovação no veículo/associado para a tela pública e impedir ativação
+      const { error: veiculoError } = await supabase
+        .from('veiculos')
+        .update({
+          status: 'recusado',
+          cobertura_total: false,
+          motivo_recusa_veiculo: `Monitoramento: ${data.motivo}`,
+          updated_at: agora,
+        })
+        .eq('id', data.veiculoId);
+
+      if (veiculoError) throw veiculoError;
+
+      const { error: associadoError } = await supabase
+        .from('associados')
+        .update({
+          status: 'recusado',
+          updated_at: agora,
+        })
+        .eq('id', data.associadoId);
+
+      if (associadoError) throw associadoError;
+
+      // 3. Registrar histórico
       await supabase.from('associados_historico').insert({
         associado_id: data.associadoId,
         tipo: 'protecao_360_reprovada_monitoramento',
@@ -269,6 +305,8 @@ export function useReprovarInstalacaoMonitoramento() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['instalacoes-aguardando-aprovacao-monitoramento'] });
       queryClient.invalidateQueries({ queryKey: ['aprovacao-monitoramento-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['veiculos'] });
+      queryClient.invalidateQueries({ queryKey: ['associados'] });
       toast.success('Instalação reprovada. Coordenador será notificado.');
     },
     onError: (error) => {
