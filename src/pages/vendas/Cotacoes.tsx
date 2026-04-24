@@ -1018,22 +1018,41 @@ export default function Cotacoes() {
               </Button>
             </div>
           )}
-          <CotacoesTable 
-            cotacoes={cotacoesFinalizadas}
-            onRowClick={handleRowClick}
-            onCopiarWhatsApp={copiarParaWhatsApp}
-            onPdf={handleBaixarPdf}
-            onDuplicar={handleDuplicar}
-            onContinuar={handleContinuarCotacao}
-            onExcluir={handleExcluir}
-            copiandoWhatsAppId={copiandoWhatsApp}
-            getPermissions={getPermissions}
-            selectable={true}
-            selectedIds={selectedIds}
-            onToggleSelect={toggleSelect}
-            onToggleAll={toggleSelectAll}
-            groupByDate={true}
-          />
+          <div className="hidden md:block">
+            <CotacoesTable 
+              cotacoes={cotacoesFinalizadas}
+              onRowClick={handleRowClick}
+              onCopiarWhatsApp={copiarParaWhatsApp}
+              onPdf={handleBaixarPdf}
+              onDuplicar={handleDuplicar}
+              onContinuar={handleContinuarCotacao}
+              onExcluir={handleExcluir}
+              copiandoWhatsAppId={copiandoWhatsApp}
+              getPermissions={getPermissions}
+              selectable={true}
+              selectedIds={selectedIds}
+              onToggleSelect={toggleSelect}
+              onToggleAll={toggleSelectAll}
+              groupByDate={true}
+            />
+          </div>
+          <div className="md:hidden">
+            <CotacoesMobileList
+              cotacoes={cotacoesFinalizadas}
+              onRowClick={handleRowClick}
+              onCopiarWhatsApp={copiarParaWhatsApp}
+              onPdf={handleBaixarPdf}
+              onDuplicar={handleDuplicar}
+              onContinuar={handleContinuarCotacao}
+              onExcluir={handleExcluir}
+              copiandoWhatsAppId={copiandoWhatsApp}
+              getPermissions={getPermissions}
+              selectable={true}
+              selectedIds={selectedIds}
+              onToggleSelect={toggleSelect}
+              groupByDate={true}
+            />
+          </div>
         </TabsContent>
       </Tabs>
 
