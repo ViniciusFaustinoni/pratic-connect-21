@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useComissaoDetalhesPagamento } from '@/hooks/useComissaoDetalhesPagamento';
+import { getComissaoStatusBadgeVariant, getComissaoStatusLabel, isComissaoAutoPagaAgenciaAdesaoDinheiro } from '@/lib/comissoes-filtros';
 
 interface ComissaoDetalhesPagamentoModalProps {
   comissaoId: string | null;
@@ -66,6 +67,7 @@ export function ComissaoDetalhesPagamentoModal({
   const snapshotRules = findSnapshotRules(data?.snapshot, comissao?.parcela_numero, comissao?.role_destinatario);
   const canConfirm = allowConfirm && comissaoId && comissao?.status !== 'paga';
   const pagamento = data?.pagamento;
+  const autoPagaAgenciaAdesaoDinheiro = comissao ? isComissaoAutoPagaAgenciaAdesaoDinheiro(comissao) : false;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -111,10 +113,18 @@ export function ComissaoDetalhesPagamentoModal({
               </Alert>
             )}
 
+            {autoPagaAgenciaAdesaoDinheiro && (
+              <Alert>
+                <CheckCircle2 className="h-4 w-4" />
+                <AlertTitle>Comissão paga automaticamente</AlertTitle>
+                <AlertDescription>Esta comissão foi marcada como paga automaticamente porque se trata de taxa de adesão recebida em dinheiro por agência.</AlertDescription>
+              </Alert>
+            )}
+
             <section className="grid gap-4 rounded-md border p-4 md:grid-cols-4">
               <DetailItem label="Destinatário" value={getName(data.destinatario)} />
               <DetailItem label="Perfil remunerado" value={comissao.nivel_nome || comissao.role_destinatario} />
-              <DetailItem label="Status atual" value={<Badge variant="outline">{comissao.status}</Badge>} />
+              <DetailItem label="Status atual" value={<Badge variant={getComissaoStatusBadgeVariant(comissao)}>{getComissaoStatusLabel(comissao)}</Badge>} />
               <DetailItem label="Valor final" value={formatMoney(comissao.valor_total ?? comissao.valor_comissao)} />
               <DetailItem label="Contrato" value={data.contrato?.numero || data.contrato?.id} />
               <DetailItem label="Cobrança" value={data.cobranca?.id} />

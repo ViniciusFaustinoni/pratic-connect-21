@@ -24,6 +24,9 @@ export interface ComissaoDashboardItem {
   ano_referencia: number | null;
   created_at: string | null;
   pago_em: string | null;
+  role_destinatario: string | null;
+  observacoes: string | null;
+  calculo_snapshot: any | null;
   usuario_nome: string;
   usuario_email: string;
   usuario_avatar_url: string | null;
@@ -70,7 +73,7 @@ export function useComissoesDashboard(filters: ComissoesDashboardFilters = {}) {
     queryFn: async () => {
       let builder = (supabase as any)
         .from('comissoes')
-        .select('id, vendedor_id, contrato_id, associado_id, cobranca_id, nivel_nome, tipo_comissao, tipo_calculo, parcela_numero, valor_base, percentual_aplicado, valor_comissao, valor_total, status, mes_referencia, ano_referencia, created_at, pago_em')
+        .select('id, vendedor_id, contrato_id, associado_id, cobranca_id, nivel_nome, role_destinatario, tipo_comissao, tipo_calculo, parcela_numero, valor_base, percentual_aplicado, valor_comissao, valor_total, status, mes_referencia, ano_referencia, created_at, pago_em, observacoes, calculo_snapshot')
         .gte('created_at', startOfDayIso(dataInicio))
         .lte('created_at', endOfDayIso(dataFim));
 

@@ -1,283 +1,183 @@
-
-## Filtros de período e status no Dashboard de Comissões
+## Plano: comissão de adesão em dinheiro para vendedor do tipo Agência
 
 ### Objetivo
-Adicionar filtros no `/comissoes/dashboard` para que o diretor visualize KPIs, ranking e detalhes das comissões por:
+Quando o vendedor de origem for do tipo `agencia` e a cobrança for de **taxa de adesão** recebida em **dinheiro**, a comissão deve nascer já quitada:
 
 ```text
-Período de geração
-Status da comissão
-Tipo de lançamento
+Gerar comissão -> status paga imediatamente -> exibir badge informativo
 ```
 
-A tela deixará de mostrar apenas “mês atual” e passará a trabalhar com intervalo selecionável.
+Essa regra será exceção apenas para adesão em dinheiro de agência; as demais comissões continuam no fluxo normal de conferência/pagamento.
 
 ---
 
-## 1. Ajustar o hook do dashboard
+## 1. Ajustar a geração automática das comissões
 
-Arquivo:
+Arquivo/migration da função:
 
-- `src/hooks/useComissoesDashboard.ts`
+- `public.fn_gerar_comissoes_por_pagamento(p_cobranca_id)`
 
-### Mudanças
-Trocar o parâmetro atual baseado em um único mês:
-
-```text
-periodo = new Date()
-```
-
-por filtros explícitos:
+### Regra nova
+Durante o insert em `comissoes`, detectar:
 
 ```text
-dataInicio
-dataFim
-status
-tipoLancamento
+v_cobranca.tipo = adesao / taxa_adesao
+v_cobranca.forma_pagamento = CASH / dinheiro
+role_destinatario = agencia
 ```
 
-### Consulta
-A query em `comissoes` passará a filtrar por:
+Quando verdadeiro:
 
 ```text
-created_at >= dataInicio 00:00:00
-created_at <= dataFim 23:59:59
-status, quando diferente de "todos"
-tipo_comissao, quando diferente de "todos"
+status = 'paga'
+pago_em = data_pagamento da cobrança ou now()
+observacoes = informação de que a comissão foi quitada automaticamente por adesão em dinheiro recebida pela agência
+calculo_snapshot.autopagamento_agencia_adesao_dinheiro = true
 ```
 
-### Retorno
-O hook continuará retornando:
-
-```text
-items
-kpis
-isLoading
-```
-
-mas também poderá retornar os filtros aplicados para textos de apoio, se necessário.
+### Importante
+A comissão continuará sendo registrada normalmente, com grade, plano, regra, parcela, valores e snapshot. A diferença será somente o estado inicial e a marcação auditável.
 
 ---
 
-## 2. Atualizar os KPIs para respeitar filtros
+## 2. Garantir que apenas agência receba esse tratamento
 
-Arquivo:
-
-- `src/hooks/useComissoesDashboard.ts`
-
-Os indicadores serão calculados apenas sobre os itens filtrados:
+A exceção será aplicada quando a regra remunerada for do perfil:
 
 ```text
-Total a pagar no período
-Total pago no período
-Pendente de aprovação
-Comissões vitalícias
-Top 5 vendedores no período
+role_destinatario = 'agencia'
 ```
 
-### Ajuste de nomenclatura
-Trocar textos fixos como:
+Não será aplicada para:
 
 ```text
-este mês
-no mês
-Top 5 vendedores do mês
+vendedor_clt
+vendedor_externo
+supervisor_vendas
+gerente_comercial
 ```
 
-por:
-
-```text
-no período
-Top 5 vendedores no período
-```
-
-Assim a tela fica coerente para intervalos maiores ou menores que um mês.
+Mesmo que a cobrança seja adesão em dinheiro, esses perfis seguem como `pendente`.
 
 ---
 
-## 3. Adicionar filtros visuais no dashboard
+## 3. Padronizar helpers de status/badge
 
 Arquivo:
 
-- `src/pages/comissoes/Dashboard.tsx`
+- `src/lib/comissoes-filtros.ts`
 
-Adicionar um card/bloco de filtros acima dos KPIs com:
+Adicionar helpers reutilizáveis:
 
 ```text
-Período
-- Data inicial
-- Data final
-
-Status
-- Todos
-- Pendente
-- Aprovada
-- Paga
-- Contestada
-- Cancelada, se existir no fluxo
-
-Tipo de lançamento
-- Todos
-- Comissão comum/recorrente
-- Vitalícia
-- Valor fixo
-- Percentual
+isComissaoAutoPagaAgenciaAdesaoDinheiro(item)
+getComissaoStatusLabel(item)
+getComissaoStatusBadgeVariant(item)
 ```
 
-### Componente de data
-Usar o padrão existente do projeto:
-
-- `src/components/ui/date-range-picker.tsx`
-
-Também ajustar o `Calendar` para incluir `pointer-events-auto`, conforme padrão necessário em popovers/dialogs:
+A detecção usará preferencialmente:
 
 ```text
-className="p-3 pointer-events-auto"
+calculo_snapshot.autopagamento_agencia_adesao_dinheiro = true
+```
+
+Com fallback por segurança:
+
+```text
+role_destinatario = agencia
+tipo_comissao = adesao
+status = paga
+observacoes contém indicação de adesão/dinheiro/agência
 ```
 
 ---
 
-## 4. Ajustar detalhamento por card
+## 4. Exibir badge informativo nas telas de comissões
 
-Arquivo:
+Atualizar:
 
-- `src/pages/comissoes/Dashboard.tsx`
-
-Os cards continuarão clicáveis, mas agora os modais mostrarão apenas os lançamentos dentro dos filtros selecionados.
-
-Exemplos:
-
-```text
-Total a pagar no período
-  -> abre pendentes/aprovadas dentro do período e tipo selecionados
-
-Total pago no período
-  -> abre pagas dentro do período e tipo selecionados
-
-Pendente de aprovação
-  -> abre somente pendentes dentro do período e tipo selecionados
-
-Comissões vitalícias
-  -> abre vitalícias dentro do período e status selecionado
-```
-
-O título do modal indicará o filtro aplicado:
-
-```text
-Total pago no período selecionado
-Pendentes de aprovação no período selecionado
-```
-
----
-
-## 5. Melhorar o modal de detalhes
-
-Arquivo:
-
+- `src/pages/comissoes/Pagamentos.tsx`
+- `src/pages/comissoes/Relatorio.tsx`
 - `src/components/comissoes/ComissoesDetalhesModal.tsx`
+- `src/components/comissoes/ComissaoDetalhesPagamentoModal.tsx`
 
-Adicionar colunas úteis para conferência do intervalo:
+### Visual esperado
+Onde hoje aparece apenas:
 
 ```text
-Data
-Tipo de lançamento
-Status
+paga
 ```
 
-A tabela ficará mais adequada para auditoria quando o intervalo tiver muitos dias.
-
-Também manter:
+Para esse caso aparecerá algo como:
 
 ```text
-Usuário
-Nível/perfil
-Parcela
-Base
-Percentual
-Comissão
+Paga
+Autoquitada: adesão em dinheiro da agência
+```
+
+ou um badge secundário:
+
+```text
+Paga automaticamente
+```
+
+No modal de detalhes, adicionar um alerta informativo explicando:
+
+```text
+Esta comissão foi marcada como paga automaticamente porque se trata de taxa de adesão recebida em dinheiro por agência.
 ```
 
 ---
 
-## 6. Tipos de lançamento
+## 5. Ajustar dados carregados pelos hooks
 
-A base já possui campos relevantes em `comissoes`:
+Atualizar os selects para carregar os campos necessários à detecção:
 
-```text
-tipo_comissao
-tipo_calculo
-parcela_numero
-```
+- `calculo_snapshot`
+- `observacoes`
+- `role_destinatario`
+- `tipo_comissao`
+- `status`
+- `pago_em`
 
-A primeira versão usará esses campos para classificar:
+Hooks envolvidos:
 
-```text
-vitalícia:
-  tipo_comissao contém "vitalicia" ou parcela_numero > 12
-
-valor fixo:
-  tipo_calculo = "valor_fixo" ou tipo_comissao = "valor_fixo"
-
-percentual:
-  tipo_calculo = "percentual" ou percentual_aplicado > 0
-
-todos:
-  sem filtro adicional
-```
-
-Se houver outros valores reais em produção, a interface continuará exibindo os status/tipos encontrados sem quebrar.
-
----
-
-## 7. Estado inicial
-
-Ao abrir o dashboard:
-
-```text
-dataInicio = primeiro dia do mês atual
-dataFim = último dia do mês atual
-status = todos
-tipoLancamento = todos
-```
-
-Ou seja, o comportamento visual inicial continuará equivalente ao atual, mas agora poderá ser alterado pelo diretor.
-
----
-
-## 8. Arquivos envolvidos
-
-### Frontend
-- `src/pages/comissoes/Dashboard.tsx`
 - `src/hooks/useComissoesDashboard.ts`
-- `src/components/comissoes/ComissoesDetalhesModal.tsx`
-- `src/components/ui/calendar.tsx`
-- opcional: `src/components/ui/date-range-picker.tsx`
-
-### Banco/Supabase
-Não será necessário criar tabela nem migration. A mudança usa campos já existentes em `comissoes`.
+- `src/hooks/useRelatorioComissoes.ts`
+- `src/hooks/usePagamentosComissoes.ts`
+- `src/hooks/useComissaoDetalhesPagamento.ts`
 
 ---
 
-## 9. Validação esperada
+## 6. Conferir recibo e ação de pagamento
 
-### Cenário 1: período
-- Abrir `/comissoes/dashboard`.
-- Selecionar um intervalo diferente do mês atual.
-- KPIs e Top 5 devem recalcular conforme o intervalo.
+Na tela de Pagamentos:
 
-### Cenário 2: status
-- Filtrar por `paga`.
-- Total pago deve refletir apenas comissões pagas.
-- Detalhes dos cards não devem listar pendentes fora do filtro.
+- comissão autoquitada deve mostrar ação de recibo, não botão `Pagar`;
+- deve entrar nos totais de `Pago no período`;
+- não deve entrar em `A pagar`;
+- filtro por status `Paga` deve encontrá-la.
 
-### Cenário 3: tipo de lançamento
-- Filtrar por `vitalícia`.
-- Cards e modal devem mostrar apenas lançamentos vitalícios.
+---
 
-### Cenário 4: filtros combinados
-- Selecionar período + status + tipo.
-- Todos os cards, ranking e detalhes devem respeitar a combinação.
+## 7. Validação esperada
 
-### Cenário 5: estado vazio
-- Selecionar um intervalo sem lançamentos.
-- Dashboard deve mostrar zeros e mensagem de ausência no ranking/modal.
+### Cenário 1: agência + adesão + dinheiro
+- Gerar pagamento de taxa de adesão em dinheiro.
+- Comissão do perfil `agencia` nasce com status `paga`.
+- `pago_em` fica preenchido.
+- Tela mostra badge informativo de autoquitação.
+
+### Cenário 2: agência + adesão + PIX/boleto/cartão
+- Comissão segue fluxo normal como `pendente`.
+
+### Cenário 3: vendedor/supervisor/gerente + adesão em dinheiro
+- Não autoquita.
+- Continua no fluxo normal.
+
+### Cenário 4: Dashboard/Relatório/Pagamentos
+- Filtros por período, status e tipo continuam funcionando.
+- Comissão autoquitada aparece como paga nos três módulos.
+
+### Cenário 5: detalhes
+- Modal mostra alerta explicando a regra especial.

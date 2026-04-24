@@ -1,4 +1,13 @@
 export type TipoLancamentoComissao = 'todos' | 'comum' | 'vitalicia' | 'valor_fixo' | 'percentual' | string;
+type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
+
+type ComissaoStatusLike = {
+  status?: string | null;
+  role_destinatario?: string | null;
+  tipo_comissao?: string | null;
+  observacoes?: string | null;
+  calculo_snapshot?: any | null;
+};
 
 export const COMISSOES_STATUS_OPTIONS = [
   { value: 'todos', label: 'Todos' },
@@ -35,6 +44,32 @@ export const matchesTipoLancamentoComissao = (
   if (tipo === 'comum') return !isComissaoVitalicia(item) && tipoCalculo !== 'valor_fixo' && tipoComissao !== 'valor_fixo';
 
   return tipoComissao === tipo || tipoCalculo === tipo;
+};
+
+export const isComissaoAutoPagaAgenciaAdesaoDinheiro = (item: ComissaoStatusLike) => {
+  if (item?.calculo_snapshot?.autopagamento_agencia_adesao_dinheiro === true) return true;
+
+  const observacoes = (item?.observacoes || '').toLowerCase();
+  return (item?.status || '').toLowerCase() === 'paga'
+    && (item?.role_destinatario || '').toLowerCase() === 'agencia'
+    && (item?.tipo_comissao || '').toLowerCase() === 'adesao'
+    && observacoes.includes('autoquitada')
+    && observacoes.includes('ades')
+    && observacoes.includes('dinheiro');
+};
+
+export const getComissaoStatusLabel = (item: ComissaoStatusLike) => {
+  if (isComissaoAutoPagaAgenciaAdesaoDinheiro(item)) return 'Paga automaticamente';
+  const status = item?.status || '—';
+  return status.charAt(0).toUpperCase() + status.slice(1);
+};
+
+export const getComissaoStatusBadgeVariant = (item: ComissaoStatusLike): BadgeVariant => {
+  if (isComissaoAutoPagaAgenciaAdesaoDinheiro(item)) return 'default';
+  if (item?.status === 'paga') return 'default';
+  if (item?.status === 'contestada' || item?.status === 'cancelada') return 'destructive';
+  if (item?.status === 'pendente' || item?.status === 'aprovada') return 'secondary';
+  return 'outline';
 };
 
 export const dateStringToDate = (value: string) => new Date(`${value}T00:00:00`);
