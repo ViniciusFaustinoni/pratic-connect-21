@@ -44,9 +44,13 @@ export function RelatarErroModal({ open, onOpenChange }: Props) {
 
   const removeFile = (i: number) => setFiles((prev) => prev.filter((_, idx) => idx !== i));
 
+  const hasImage = files.some((f) => f.type.startsWith('image/'));
+
   const submit = async () => {
     if (area.trim().length < 2) return toast.error('Informe a área');
     if (descricao.trim().length < 20) return toast.error('Descreva com pelo menos 20 caracteres');
+    if (files.length === 0) return toast.error('Anexe pelo menos 1 print do erro');
+    if (!hasImage) return toast.error('Pelo menos 1 anexo precisa ser uma imagem (print)');
     await create.mutateAsync({ area, descricao, files });
     reset();
     onOpenChange(false);
