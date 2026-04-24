@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Separator } from '@/components/ui/separator';
-import { Clock, Filter, Landmark, Search, TrendingUp, Wallet } from 'lucide-react';
+import { ArrowDownCircle, ArrowUpCircle, Clock, Landmark, Search, Wallet } from 'lucide-react';
 import { getComissaoStatusBadgeVariant, getComissaoStatusLabel } from '@/lib/comissoes-filtros';
 import { getContaCorrentePeriodoRange, useContaCorrenteComissoes, type ContaCorrentePeriodo } from '@/hooks/useContaCorrenteComissoes';
 
@@ -67,7 +67,7 @@ export default function ContaCorrenteComissoes() {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-5">
+      <div className="grid gap-3 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm">Saldo atual</CardTitle>
@@ -77,32 +77,36 @@ export default function ContaCorrenteComissoes() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm">Comissões pagas</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm">Total creditado no período</CardTitle>
+            <ArrowUpCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent><div className="text-2xl font-bold text-foreground">{money(resumo.totalPago)}</div></CardContent>
+          <CardContent><div className="text-2xl font-bold text-foreground">{money(resumo.totalCreditadoPeriodo)}</div></CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm">A receber</CardTitle>
+            <CardTitle className="text-sm">Total debitado no período</CardTitle>
+            <ArrowDownCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent><div className="text-2xl font-bold text-foreground">{money(resumo.totalDebitadoPeriodo)}</div><p className="text-xs text-muted-foreground">{resumo.quantidade} lançamento(s) filtrado(s)</p></CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="rounded-md border bg-card px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-muted-foreground">A receber no período</span>
             <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent><div className="text-2xl font-bold text-foreground">{money(resumo.totalAReceber)}</div></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm">Pendentes</CardTitle>
-            <Filter className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent><div className="text-2xl font-bold text-foreground">{money(resumo.totalPendente)}</div></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm">Total filtrado</CardTitle>
-            <Wallet className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent><div className="text-2xl font-bold text-foreground">{money(resumo.totalPeriodo)}</div><p className="text-xs text-muted-foreground">{resumo.quantidade} lançamento(s)</p></CardContent>
-        </Card>
+          </div>
+          <p className="mt-1 text-lg font-semibold text-foreground">{money(resumo.totalAReceber)}</p>
+        </div>
+        <div className="rounded-md border bg-card px-4 py-3">
+          <span className="text-sm text-muted-foreground">Pendentes no período</span>
+          <p className="mt-1 text-lg font-semibold text-foreground">{money(resumo.totalPendente)}</p>
+        </div>
+        <div className="rounded-md border bg-card px-4 py-3">
+          <span className="text-sm text-muted-foreground">Total filtrado</span>
+          <p className="mt-1 text-lg font-semibold text-foreground">{money(resumo.totalPeriodo)}</p>
+        </div>
       </div>
 
       <Card>
