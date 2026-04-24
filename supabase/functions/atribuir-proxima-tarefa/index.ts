@@ -233,86 +233,12 @@ serve(async (req) => {
     const profissionalId = profile.id;
     console.log(`[atribuir-proxima-tarefa] Perfil verificado: ${profile.nome} (authUserId=${authUserId}, profileId=${profissionalId})`);
 
-    // ========== VERIFICAR STATUS DE JORNADA (ALMOÇO) ==========
+    // ========== ALMOÇO ==========
+    // Lógica automática de almoço DESATIVADA para todos os técnicos.
+    // Não há mais bloqueio de atribuição por estar em almoço, nem auto-finalização.
+    // O status de almoço é puramente informativo e gerenciado manualmente pelo técnico via UI.
+
     const hoje = new Date().toISOString().split('T')[0];
-    const { data: turnoHoje, error: turnoError } = await supabase
-      .from('turnos_profissionais')
-      .select('id, status, inicio_almoco, inicio_turno, fim_almoco')
-      .eq('profissional_id', profissionalId)
-      .eq('data', hoje)
-      .maybeSingle();
-
-    if (turnoError) {
-      console.error('[atribuir-proxima-tarefa] Erro ao buscar turno:', turnoError);
-    }
-
-    // Verificar tipo de alocação do dia (Base = bate ponto externamente, sem auto-almoço)
-    const { data: alocHoje } = await supabase
-      .from('alocacoes_diarias')
-      .select('tipo_alocacao')
-      .eq('profissional_id', profissionalId)
-      .eq('data', hoje)
-      .maybeSingle();
-    const isBase = alocHoje?.tipo_alocacao === 'base';
-    if (isBase) {
-      console.log(`[atribuir-proxima-tarefa] Profissional ${profissionalId} é BASE — almoço gerido manualmente.`);
-    }
-
-    // Se está em almoço (iniciado manualmente pelo técnico), bloquear atribuição.
-    // Após 60min, auto-finalizar como rede de segurança (exceto para Base, que finaliza manualmente).
-    if (turnoHoje?.status === 'em_almoco' && turnoHoje.inicio_almoco) {
-      const inicioAlmoco = new Date(turnoHoje.inicio_almoco);
-      const agora = new Date();
-      const minutosEmAlmoco = Math.floor((agora.getTime() - inicioAlmoco.getTime()) / 60000);
-
-      if (minutosEmAlmoco < 60) {
-        const minutosRestantes = 60 - minutosEmAlmoco;
-        console.log(`[atribuir-proxima-tarefa] Profissional em almoço há ${minutosEmAlmoco} minutos.`);
-
-        return new Response(
-          JSON.stringify({
-            resultado: 'em_almoco',
-            mensagem: `Você está em horário de almoço. Aguarde ${minutosRestantes} minutos para receber novas tarefas.`,
-            minutos_restantes: minutosRestantes,
-            em_atraso: false,
-            minutos_atraso: 0
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      // Almoço expirado (>60min) — Base não auto-finaliza (controle manual)
-      if (isBase) {
-        const minutosRestantes = Math.max(0, 60 - minutosEmAlmoco);
-        return new Response(
-          JSON.stringify({
-            resultado: 'em_almoco',
-            mensagem: 'Você está em almoço. Finalize manualmente para receber novas tarefas.',
-            minutos_restantes: minutosRestantes,
-            em_atraso: minutosEmAlmoco > 60,
-            minutos_atraso: Math.max(0, minutosEmAlmoco - 60),
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      const minutosAtraso = Math.max(0, minutosEmAlmoco - 60);
-      console.log(`[atribuir-proxima-tarefa] ALMOÇO expirado (${minutosEmAlmoco}min) — finalizando server-side. Atraso: ${minutosAtraso}min`);
-
-      await supabase
-        .from('turnos_profissionais')
-        .update({
-          status: 'ativo',
-          fim_almoco: agora.toISOString(),
-          minutos_atraso_almoco: minutosAtraso,
-        })
-        .eq('id', turnoHoje.id);
-      // Prosseguir normalmente para atribuir tarefa
-    }
-
-    // ⚠️ NÃO há mais início automático de almoço.
-    // Almoço é 100% manual: o técnico inicia/finaliza pela UI.
-    // Se ele esquecer de finalizar, o bloco acima auto-finaliza após 60min (rede de segurança).
 
     // Get request body
     const { latitude, longitude, acao } = await req.json();
