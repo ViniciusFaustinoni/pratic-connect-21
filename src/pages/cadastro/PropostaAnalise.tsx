@@ -27,6 +27,7 @@ import {
   Ban,
   ExternalLink,
   ClipboardCheck,
+  Copy,
 } from 'lucide-react';
 import {
   useProposta,
@@ -62,6 +63,7 @@ export default function PropostaAnalise() {
   const [showConfirmAprovar, setShowConfirmAprovar] = useState(false);
   const [showConfirmAtivacaoSoftruck, setShowConfirmAtivacaoSoftruck] = useState(false);
   const [documentoVisualizar, setDocumentoVisualizar] = useState<DocumentoAnexadoCompleto | null>(null);
+  const [linkPendenciasGerado, setLinkPendenciasGerado] = useState<string | null>(null);
   
   // Campos editáveis do veículo para SGA Hinova
   const [veiculoRenavam, setVeiculoRenavam] = useState('');
@@ -217,19 +219,16 @@ export default function PropostaAnalise() {
 
   const handleSolicitarDocumentos = async (documentos: string[], observacoes: string) => {
     if (!proposta?.associado_id || !id) return;
-    await solicitarDocsMutation.mutateAsync({
+    const result = await solicitarDocsMutation.mutateAsync({
       contratoId: id,
       associadoId: proposta.associado_id,
       documentos,
       observacoes,
     });
+    setLinkPendenciasGerado(result.linkPendencias || null);
     setShowSolicitarDocs(false);
-    // Navegar para próxima ou voltar para lista
-    if (nextProposta) {
-      navigate(`/cadastro/propostas/${nextProposta.id}`);
-    } else {
-      navigate('/cadastro/propostas');
-    }
+    queryClient.invalidateQueries({ queryKey: ['proposta', id] });
+    queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
   };
 
   const handleReprovar = async (motivo: string, justificativa: string) => {
