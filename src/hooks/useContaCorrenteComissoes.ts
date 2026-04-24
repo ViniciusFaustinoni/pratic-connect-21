@@ -260,10 +260,9 @@ export function useContaCorrenteComissoes() {
       const valor = moneyValue(item.valor_total);
       acc.totalPeriodo += valor;
       acc.quantidade += 1;
-      if (isPago(item)) {
-        acc.totalPago += valor;
-        acc.totalCreditadoPeriodo += valor;
-      }
+      if (item.tipo_movimento === 'credito') acc.totalCreditadoPeriodo += valor;
+      if (item.tipo_movimento === 'debito') acc.totalDebitadoPeriodo += valor;
+      if (isPago(item)) acc.totalPago += valor;
       if (isAReceber(item.status)) acc.totalAReceber += valor;
       if (item.status === 'pendente') acc.totalPendente += valor;
       acc.saldoAtual = item.saldo_apos;
