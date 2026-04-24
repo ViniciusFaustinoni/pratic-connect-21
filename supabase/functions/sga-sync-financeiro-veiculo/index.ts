@@ -7,8 +7,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
-  getHinovaCreds,
-  autenticarHinova,
+  getHinovaSession,
   buscarSituacaoFinanceiraVeiculo,
   listarBoletosVeiculo,
   mapStatusBoleto,
@@ -18,6 +17,7 @@ import {
   HinovaTransientError,
   HinovaNotFoundError,
   calcularProximoRetry,
+  invalidateHinovaSession,
 } from '../_shared/hinova-client.ts';
 
 const corsHeaders = {
