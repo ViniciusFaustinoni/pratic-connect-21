@@ -175,7 +175,7 @@ export type TipoVistoria = 'saida' | 'sinistro';
 
 export type TipoSinistro = 'roubo' | 'furto' | 'colisao' | 'incendio' | 'alagamento' | 'outro';
 
-export type PeriodoInstalacao = 'manha' | 'tarde' | 'noite';
+export type PeriodoInstalacao = 'manha' | 'tarde';
 
 // Interfaces para as tabelas existentes
 export interface Profile {
