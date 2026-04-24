@@ -305,32 +305,31 @@ export function useAtivarContrato() {
 
         // 4. Enviar automaticamente ao SGA (fire-and-forget)
         // Priorizar veiculo_id do contrato (determinístico)
-        let veiculo: { id: string; sincronizado_hinova: boolean | null } | null = null;
+        let veiculo: { id: string; sincronizado_hinova: boolean | null; status_sga: string | null } | null = null;
         
         if (contrato.veiculo_id) {
           const { data } = await supabase
             .from('veiculos')
-            .select('id, sincronizado_hinova')
+            .select('id, sincronizado_hinova, status_sga')
             .eq('id', contrato.veiculo_id)
-            .eq('sincronizado_hinova', false)
             .maybeSingle();
           veiculo = data;
         } else {
           const { data } = await supabase
             .from('veiculos')
-            .select('id, sincronizado_hinova')
+            .select('id, sincronizado_hinova, status_sga')
             .eq('associado_id', contrato.associado_id)
-            .eq('sincronizado_hinova', false)
             .limit(1)
             .maybeSingle();
           veiculo = data;
         }
 
-        if (veiculo) {
+        if (veiculo && veiculo.status_sga !== 'ativado_sga') {
           supabase.functions.invoke('sga-hinova-sync', {
             body: {
               veiculo_id: veiculo.id,
               associado_id: contrato.associado_id,
+              status_sga_destino: 'ativo',
             },
           }).then(({ data, error }) => {
             if (error || !data?.success) {
