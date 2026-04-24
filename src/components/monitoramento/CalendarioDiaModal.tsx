@@ -704,6 +704,30 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
             </TabsContent>
           </Tabs>
         )}
+
+        <AlterarEnderecoTipoDialog
+          open={!!alterarBase}
+          onOpenChange={(open) => !open && setAlterarBase(null)}
+          origem="base"
+          agendamentoBaseId={alterarBase?.id || null}
+          resumo={{
+            placa: alterarBase?.veiculo_placa,
+            associadoNome: alterarBase?.cliente_nome,
+          }}
+          initialEndereco={{
+            cep: alterarBase?.vistoria?.endereco_cep,
+            logradouro: alterarBase?.vistoria?.endereco_logradouro,
+            numero: alterarBase?.vistoria?.endereco_numero,
+            complemento: alterarBase?.vistoria?.endereco_complemento,
+            bairro: alterarBase?.vistoria?.endereco_bairro,
+            cidade: alterarBase?.vistoria?.endereco_cidade,
+            uf: alterarBase?.vistoria?.endereco_uf,
+          }}
+          initialProfissionalId={alterarBase?.atendido_por || null}
+          initialOficinaId={alterarBase?.oficina_id || null}
+          initialHorario={alterarBase?.horario || null}
+          onSuccess={() => setAlterarBase(null)}
+        />
       </DialogContent>
     </Dialog>
   );
