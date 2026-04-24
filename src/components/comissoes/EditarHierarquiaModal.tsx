@@ -149,6 +149,12 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
                 Buscando vínculos
               </Badge>
             )}
+            {erroUsuarios && (
+              <Badge variant="destructive" className="w-fit gap-1.5 font-normal">
+                <AlertCircle className="h-3.5 w-3.5" />
+                Erro ao carregar
+              </Badge>
+            )}
           </div>
         </DialogHeader>
 
@@ -172,9 +178,19 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
                 <div className="text-sm font-medium">Cadeia atual</div>
                 <Badge variant="outline" className="font-normal">Prévia</Badge>
               </div>
-              <ChainNode label="Gerente" name={userName(usuariosMap, gerenteId === 'none' ? null : gerenteId)} icon={UserRound} />
+              {erroUsuarios && (
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                  {errorMessage}
+                </div>
+              )}
+              {!loadingVinculos && !erroUsuarios && !hasUsuarios && (
+                <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+                  Nenhum usuário disponível para formar vínculos.
+                </div>
+              )}
+              <ChainNode label="Gerente" name={userName(usuariosMap, gerenteId === 'none' ? null : gerenteId)} icon={UserRound} loading={loadingVinculos} />
               <div className="flex justify-center text-muted-foreground"><ArrowDown className="h-4 w-4" /></div>
-              <ChainNode label="Supervisor" name={userName(usuariosMap, supervisorId === 'none' ? null : supervisorId)} icon={Users2} />
+              <ChainNode label="Supervisor" name={userName(usuariosMap, supervisorId === 'none' ? null : supervisorId)} icon={Users2} loading={loadingVinculos} />
               <div className="flex justify-center text-muted-foreground"><ArrowDown className="h-4 w-4" /></div>
               <ChainNode label="Usuário selecionado" name={linha.usuario.nome} icon={Network} />
               {agenciaId !== 'none' && (
