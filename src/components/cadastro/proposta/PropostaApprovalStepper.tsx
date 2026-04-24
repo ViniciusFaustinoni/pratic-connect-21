@@ -349,7 +349,8 @@ export function PropostaApprovalStepper({
                         <p className="text-xs text-muted-foreground mt-0.5">
                           Este plano não inclui Roubo/Furto. A análise documental é
                           suficiente para liberar a contratação — não é necessário
-                          revisar fotos do veículo.
+                          revisar fotos do veículo. <strong>Após aprovar, o associado
+                          segue para o Monitoramento atribuir a instalação.</strong>
                         </p>
                       </div>
                     </div>
@@ -372,7 +373,9 @@ export function PropostaApprovalStepper({
                               {proposta.vistoria_base_info.horario && <> — <strong className="text-foreground">{formatPeriodoLabel(proposta.vistoria_base_info.horario)}</strong></>}
                             </>
                           )}
-                          . Aprove apenas a documentação para liberar o agendamento.
+                          . Aprove apenas a documentação para liberar o associado
+                          para o <strong>Monitoramento</strong> (a Cobertura Roubo &amp;
+                          Furto será ativada depois, na conclusão da vistoria).
                         </p>
                       </div>
                     </div>
