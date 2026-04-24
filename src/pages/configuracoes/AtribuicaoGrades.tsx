@@ -59,6 +59,7 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [editing, setEditing] = useState<AtribuicaoLinha | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [selectedEquipeId, setSelectedEquipeId] = useState<string | null>(null);
 
   const usuariosMap = useMemo(() => {
     const m = new Map<string, AtribuicaoLinha>();
@@ -125,6 +126,29 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
 
   const nomeHierarquia = (id?: string | null) =>
     id ? usuariosMap.get(id)?.usuario.nome || 'Usuário não localizado' : null;
+
+  const getSubordinados = (userId: string) =>
+    atribuicoes.filter((item) => {
+      const h = item.hierarquia;
+      return item.usuario.id !== userId && (
+        h?.supervisor_id === userId ||
+        h?.gerente_id === userId ||
+        h?.agencia_id === userId
+      );
+    });
+
+  const getRelacaoSubordinado = (linha: AtribuicaoLinha, superiorId: string) => {
+    const relacoes: string[] = [];
+    if (linha.hierarquia?.gerente_id === superiorId) relacoes.push('Gerente');
+    if (linha.hierarquia?.supervisor_id === superiorId) relacoes.push('Supervisor');
+    if (linha.hierarquia?.agencia_id === superiorId) relacoes.push('Agência');
+    return relacoes.join(' / ') || 'Vínculo';
+  };
+
+  const selectedEquipe = selectedEquipeId
+    ? atribuicoes.find((a) => a.usuario.id === selectedEquipeId) || null
+    : null;
+  const selectedSubordinados = selectedEquipe ? getSubordinados(selectedEquipe.usuario.id) : [];
 
   return (
     <div className="space-y-6">
