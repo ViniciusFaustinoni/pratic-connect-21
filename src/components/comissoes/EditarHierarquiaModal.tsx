@@ -208,13 +208,33 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
               <p className="text-xs text-muted-foreground">Selecione apenas os vínculos que devem participar da cadeia comercial deste usuário.</p>
             </div>
 
+            {erroUsuarios && (
+              <div className="flex flex-col gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{errorMessage}</span>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={() => refetchUsuarios()} disabled={loadingVinculos}>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Tentar novamente
+                </Button>
+              </div>
+            )}
+
+            {!loadingVinculos && !erroUsuarios && !hasUsuarios && (
+              <div className="rounded-md border bg-muted/30 p-4 text-sm text-muted-foreground">
+                Nenhum usuário de vendas foi encontrado. Você ainda pode salvar sem vínculos superiores.
+              </div>
+            )}
+
             <div className="grid grid-cols-1 gap-4">
               <div className="space-y-1.5">
                 <Label>Gerente superior</Label>
-                <Select value={gerenteId} onValueChange={setGerenteId} disabled={loadingVinculos || saving}>
+                <Select value={gerenteId} onValueChange={setGerenteId} disabled={loadingVinculos || saving || erroUsuarios}>
                   <SelectTrigger className="h-11"><SelectValue placeholder="Selecione um gerente" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Nenhum gerente</SelectItem>
+                    {!loadingVinculos && gerentes.length === 0 && <SelectItem value="empty-gerentes" disabled>Nenhum gerente disponível</SelectItem>}
                     {gerentes.map((u) => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -222,10 +242,11 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
 
               <div className="space-y-1.5">
                 <Label>Supervisor superior</Label>
-                <Select value={supervisorId} onValueChange={setSupervisorId} disabled={loadingVinculos || saving}>
+                <Select value={supervisorId} onValueChange={setSupervisorId} disabled={loadingVinculos || saving || erroUsuarios}>
                   <SelectTrigger className="h-11"><SelectValue placeholder="Selecione um supervisor" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Nenhum supervisor</SelectItem>
+                    {!loadingVinculos && supervisores.length === 0 && <SelectItem value="empty-supervisores" disabled>Nenhum supervisor disponível</SelectItem>}
                     {supervisores.map((u) => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -233,10 +254,11 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
 
               <div className="space-y-1.5">
                 <Label>Agência vinculada</Label>
-                <Select value={agenciaId} onValueChange={setAgenciaId} disabled={loadingVinculos || saving}>
+                <Select value={agenciaId} onValueChange={setAgenciaId} disabled={loadingVinculos || saving || erroUsuarios}>
                   <SelectTrigger className="h-11"><SelectValue placeholder="Selecione uma agência" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Nenhuma agência</SelectItem>
+                    {!loadingVinculos && agencias.length === 0 && <SelectItem value="empty-agencias" disabled>Nenhuma agência disponível</SelectItem>}
                     {agencias.map((u) => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
                   </SelectContent>
                 </Select>
