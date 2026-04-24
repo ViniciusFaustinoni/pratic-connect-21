@@ -1,12 +1,12 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import {
-  getHinovaCreds,
-  autenticarHinova,
+  getHinovaSession,
   buscarAssociadoComVeiculosPorCpf,
   HinovaTransientError,
   HinovaNotFoundError,
   calcularProximoRetry,
+  isBackfillFinanceiroAtivo,
 } from '../_shared/hinova-client.ts';
 
 const corsHeaders = {
