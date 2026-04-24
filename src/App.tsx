@@ -188,7 +188,7 @@ const FaturamentoMensal = lazy(() => import("./pages/financeiro/FaturamentoMensa
 const ReguaPage = lazy(() => import("./pages/financeiro/ReguaPage"));
 const ContasPagar = lazy(() => import("./pages/financeiro/ContasPagar"));
 const Extrato = lazy(() => import("./pages/financeiro/Extrato"));
-const ExtratosBancarios = lazy(() => import("./pages/financeiro/ExtratosBancarios"));
+// ExtratosBancarios removido — consolidado em /financeiro/extrato
 const ExtratoDetalhe = lazy(() => import("./pages/financeiro/ExtratoDetalhe"));
 const ContasBancarias = lazy(() => import("./pages/financeiro/ContasBancarias"));
 const ComissionamentoExternoConfig = lazy(() => import("./pages/financeiro/ComissionamentoExternoConfig"));
@@ -196,16 +196,7 @@ const ContaCorrenteVendedor = lazy(() => import("./pages/financeiro/ContaCorrent
 const GestaoContaVendedor = lazy(() => import("./pages/financeiro/GestaoContaVendedor"));
 const DashboardVendaExterna = lazy(() => import("./pages/financeiro/DashboardVendaExterna"));
 
-// Cobrança
-const CobrancaDashboard = lazy(() => import("./pages/cobranca/CobrancaDashboard"));
-const InadimplentesList = lazy(() => import("./pages/cobranca/InadimplentesList"));
-const InadimplenteDetalhe = lazy(() => import("./pages/cobranca/InadimplenteDetalhe"));
-const FilaTrabalho = lazy(() => import("./pages/cobranca/FilaTrabalho"));
-const ReguaCobranca = lazy(() => import("./pages/cobranca/ReguaCobranca"));
-const Negativacao = lazy(() => import("./pages/cobranca/Negativacao"));
-const AcordosList = lazy(() => import("./pages/cobranca/AcordosList"));
-const NovoAcordo = lazy(() => import("./pages/cobranca/NovoAcordo"));
-const AcordoDetalhe = lazy(() => import("./pages/cobranca/AcordoDetalhe"));
+// Cobrança — apenas Régua continua roteada (dentro de /financeiro/cobrancas/regua via ReguaPage)
 const TrocaTitularidade = lazy(() => import("./pages/cobranca/TrocaTitularidade"));
 const AprovacoesTroca = lazy(() => import("./pages/monitoramento/AprovacoesTroca"));
 
