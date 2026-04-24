@@ -7,6 +7,7 @@ import { StatusOperacional } from "./useEquipe";
 export interface VistoriadorLocalizacao {
   vistoriador_id: string;
   vistoriador_nome: string;
+  role_operacional: 'instalador_vistoriador' | 'vistoriador_base' | string | null;
   latitude: number;
   longitude: number;
   em_servico: boolean;
@@ -68,6 +69,13 @@ export function useVistoriadoresRealtime() {
 
       // Buscar tarefas ativas dos profissionais para determinar status operacional
       const profissionalIds = dataFiltrada.map((item: any) => item.vistoriador_id);
+      const { data: coberturas } = await (supabase as any)
+        .from('tecnico_perfil_operacional')
+        .select('profissional_id, role_operacional')
+        .in('profissional_id', profissionalIds)
+        .eq('ativo', true);
+      const roleOperacionalPorProf = new Map((coberturas || []).map((c: any) => [c.profissional_id, c.role_operacional]));
+
       const { data: tarefasAtivas } = await supabase
         .from('servicos')
         .select('profissional_id, status, contato_realizado_em')
@@ -110,6 +118,7 @@ export function useVistoriadoresRealtime() {
         return {
           vistoriador_id: item.vistoriador_id,
           vistoriador_nome: item.profiles?.nome || 'Vistoriador',
+          role_operacional: roleOperacionalPorProf.get(item.vistoriador_id) || null,
           latitude: item.latitude,
           longitude: item.longitude,
           em_servico: item.em_servico,
