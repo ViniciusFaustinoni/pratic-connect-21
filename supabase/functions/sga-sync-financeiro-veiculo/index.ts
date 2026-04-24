@@ -31,24 +31,8 @@ const json = (status: number, body: unknown) =>
 
 const cleanCPF = (value: string | null | undefined) => String(value || '').replace(/\D/g, '');
 
-// Formato dd/mm/aaaa (mesmo padrão do hinova-client)
-const fmtBR = (d: Date) => {
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const yyyy = d.getFullYear();
-  return `${dd}/${mm}/${yyyy}`;
-};
-
-// Janela de 5 meses passados → hoje
-function janela5Meses() {
-  const hoje = new Date();
-  const inicio = new Date(hoje);
-  inicio.setMonth(inicio.getMonth() - 5);
-  return {
-    dataInicial: fmtBR(inicio),
-    dataFinal: fmtBR(hoje),
-  };
-}
+// listarBoletosVeiculo já cuida da janela: itera em chunks de 90 dias (limite documentado da Hinova)
+// cobrindo até 3 anos para trás, com link_boleto=true para já gravar a URL do boleto.
 
 function extractCodigoAssociado(payload: any): number | null {
   const candidates = [
@@ -276,10 +260,12 @@ serve(async (req) => {
       // Erro não-transitório de situação não bloqueia listagem de boletos
     }
 
-    const janela = janela5Meses();
+    // Cobertura: 3 anos para trás, em janelas iterativas de 90 dias (limite Hinova),
+    // com link_boleto=true para já gravar a URL do boleto.
+    const opcoesBoletos = { anosTras: 3, diasJanela: 90, linkBoleto: true } as const;
     let boletos: any[] = [];
     try {
-      boletos = await listarBoletosVeiculo(session, codigoAssociado, codigoVeiculo, janela);
+      boletos = await listarBoletosVeiculo(session, codigoAssociado, codigoVeiculo, opcoesBoletos);
     } catch (e) {
       if (e instanceof HinovaTransientError) throw e;
       throw e;
@@ -301,7 +287,7 @@ serve(async (req) => {
           });
           codigoAssociado = codigoAssociadoPorCpf;
           await supabase.from('associados').update({ codigo_hinova: codigoAssociadoPorCpf }).eq('id', associado.id);
-          boletos = await listarBoletosVeiculo(session, codigoAssociadoPorCpf, codigoVeiculo, janela);
+          boletos = await listarBoletosVeiculo(session, codigoAssociadoPorCpf, codigoVeiculo, opcoesBoletos);
         }
       } catch (e) {
         if (e instanceof HinovaTransientError) throw e;

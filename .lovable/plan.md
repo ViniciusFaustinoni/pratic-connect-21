@@ -1,80 +1,60 @@
 
-## Problema identificado
+## Diagnóstico
 
-A integração de busca de boletos (`POST /listar/boleto-associado-veiculo`) **já existe** (`supabase/functions/_shared/hinova-client.ts` → `listarBoletosVeiculo`), mas está **violando regras obrigatórias da API documentada**, o que causa erros silenciosos / 406:
+Revisei a implementação atual contra a documentação que você passou e contra o modal do backfill (imagem):
 
-| Item | Doc Hinova | Implementação atual | Status |
-|---|---|---|---|
-| Janela máxima | **90 dias** | 5 anos (default) e 5 meses (sync) | ❌ Erro |
-| `data_inicial` / `data_final` | obrigatório, dd/mm/aaaa | ok | ✅ |
-| `link_boleto` | opcional, retorna URL | nunca enviado | ⚠️ Faltando |
-| Identificador (`codigo_associado` ou `placa` ou `cpf` ou `codigo_veiculo`) | basta um par | enviamos os 2 códigos | ✅ |
-| Janela do filtro | usar par vencimento OR pagamento OR emissão | só `data_inicial`/`data_final` (genérico) | ⚠️ Frágil |
+### O que JÁ está correto ✅
+- **Cliente Hinova (`hinova-client.ts`)**: `listarBoletosVeiculoJanela` envia o body **exatamente** como a doc exige — `codigo_associado`, `codigo_veiculo`, `data_vencimento_inicial/_final`, `data_inicial/_final` (compat) e `link_boleto: true`. Respeita o limite de **90 dias** por chamada.
+- **Função iteradora `listarBoletosVeiculo`**: itera em janelas de 90d cobrindo até 3 anos para trás, deduplicando por `nosso_numero`.
+- **Função de teste `sga-testar-boletos-veiculo`** (read-only, sem efeito no banco): usa a assinatura nova corretamente. UI já existe na aba "Teste Boletos" em `/configuracoes/integracoes-sga-hinova`.
 
-Resultado: como o sistema dispara janelas de 150 dias / 1825 dias, a Hinova devolve 406 ou ignora o filtro, e os boletos chegam parciais ou vazios — o que explica o backfill ter "muitos vazios" mesmo com `codigo_hinova` correto.
+### O bug que explica os "0 cobranças importadas" da imagem ❌
+O **`sga-sync-financeiro-veiculo`** (a função que o **modal de backfill** dispara para cada veículo) ainda usa o código antigo:
 
-## Plano (3 partes)
+```ts
+const janela = janela5Meses();   // retorna { dataInicial: "23/05/2024", dataFinal: "23/04/2025" } (strings)
+boletos = await listarBoletosVeiculo(session, codigoAssociado, codigoVeiculo, janela);
+```
 
-### 1. Corrigir o cliente Hinova (`supabase/functions/_shared/hinova-client.ts`)
+Mas a **nova assinatura** de `listarBoletosVeiculo` é:
+```ts
+opts?: { anosTras?: number; diasJanela?: number; linkBoleto?: boolean }
+```
 
-- Em `listarBoletosVeiculo`, **trocar a janela única de 5 anos por janelas iterativas de 90 dias** cobrindo até N anos para trás (default 3 anos = ~12 chamadas) e concatenando resultados, deduplicados por `nosso_numero`.
-- Aceitar `linkBoleto?: boolean` (default `true`) e enviar `link_boleto: true` no body — assim já gravamos `boleto_url` direto da Hinova.
-- Aceitar `codigoSituacaoBoleto?: number` opcional para filtros pontuais (ex.: somente abertos = `1`).
-- Usar **`data_vencimento_inicial` / `data_vencimento_final`** (par mais semântico para "boletos do veículo no período") em vez do par genérico `data_inicial`/`data_final`, mantendo compatibilidade enviando ambos.
-- Limitar tamanho do payload em logs (continuar com `bodySample`).
+→ As strings `dataInicial`/`dataFinal` são **silenciosamente ignoradas** (TypeScript estrutural não cobre isso em runtime), e a função cai nos defaults — o que ainda funcionaria, MAS:
 
-### 2. Criar nova edge function `sga-testar-boletos-veiculo`
+1. Sem `linkBoleto: true` explícito (pega o default `true`, ok).
+2. **A janela de 5 meses pretendida virou 3 anos** (12 chamadas/veículo). Isso explica também a lentidão e o estouro de janela horária visível na sua imagem ("Hinova autenticação falhou (200): Usuário com restri\... — 260").
+3. Pior: como nenhuma versão antiga compatível existe mais, dependendo de combinações de retry, o request pode ser disparado com payload incompleto e levar a 406.
 
-Função simples, **somente leitura, sem efeitos colaterais no banco** (não grava em `cobrancas`, não cria job), para validação isolada com 1 veículo:
+Resultado prático na sua tela: **205.878 jobs pendentes, 10 concluídos, 0 cobranças importadas** — o sync está rodando mas não retornando nada útil.
 
-- **Input:** `{ veiculo_id?: string, placa?: string, codigo_veiculo?: number, dias?: number }` (default 90 dias).
-- **Fluxo:**
-  1. Carrega o veículo + associado (resolve `codigo_hinova` em ambos).
-  2. Autentica na Hinova.
-  3. Se faltar `codigo_veiculo`, reconcilia por placa; se faltar `codigo_associado`, reconcilia por CPF.
-  4. Chama `listarBoletosVeiculo` com janela de exatamente `dias` (≤90) e `link_boleto: true`.
-  5. **Retorna o JSON cru da Hinova + um resumo normalizado** (status mapeado, valores parseados) — sem persistir.
-- **Saída:** `{ success, codigo_associado, codigo_veiculo, janela: { inicio, fim }, request_payload, raw_response, boletos_normalizados, hinova_http_status }`.
-- Loga em `sga_sync_logs` com `action: 'teste_listar_boletos'` para auditoria.
+## Correções propostas
 
-### 3. UI de teste em `Configurações > Integrações > Hinova`
+### 1. `supabase/functions/sga-sync-financeiro-veiculo/index.ts`
+- Remover a função morta `janela5Meses()`.
+- Substituir as **2 chamadas** de `listarBoletosVeiculo(...)` para usar a nova assinatura:
+  ```ts
+  const opcoesBoletos = { anosTras: 3, diasJanela: 90, linkBoleto: true };
+  boletos = await listarBoletosVeiculo(session, codigoAssociado, codigoVeiculo, opcoesBoletos);
+  ```
+- Manter idempotência por `nosso_numero` (já existe no upsert).
 
-Adicionar um card "Teste de Boletos por Veículo" em `src/pages/configuracoes/IntegracaoHinovaMapeamentos.tsx` (ou na página principal de Integrações Hinova — confirmar o melhor local após abrir a tela):
+### 2. Verificar se há outros consumidores desatualizados
+Vou checar `sga-backfill-financeiro`, `sga-backfill-massa-orquestrador`, `cron-sga-sync-financeiro-diario`, `disparar-boletos-lote` e `emitir-boleto-individual` — se algum chamar `listarBoletosVeiculo` com a assinatura antiga, aplico a mesma correção.
 
-- Campo de busca por **placa** (autocomplete em `veiculos` com `codigo_hinova` not null).
-- Seletor de janela: 30 / 60 / 90 dias.
-- Botão **"Testar busca"** → chama `sga-testar-boletos-veiculo`.
-- Exibe lado a lado:
-  - **Request enviado** (codigo_associado, codigo_veiculo, datas, link_boleto).
-  - **Resposta crua da Hinova** (JSON colapsável).
-  - **Tabela normalizada**: nosso_numero, vencimento, valor, status, link.
-- Mostra erros transitórios com `reason` (`janela_horaria`, `auth`, etc.) e botão "Repetir".
+### 3. Reagendar a fila atual
+Não precisa migration nem nova tabela. Após o deploy, a UI do modal de backfill já tem o botão **"Reagendar erros (janela horária / 401)"** e **"Forçar sync agora (drenar fila)"** — basta clicar para começar a drenar com a função corrigida. A função é idempotente por `nosso_numero`, então re-rodar é seguro.
 
-### 4. Após validar com 1 veículo, ajustar o sync de produção
+## Validação (passo a passo após o deploy)
 
-- `supabase/functions/sga-sync-financeiro-veiculo/index.ts`: substituir `janela5Meses()` por chamada à nova versão de `listarBoletosVeiculo` que já itera internamente em janelas de 90 dias (não precisa mais montar janela manualmente). Manter cobertura de ~3 anos para histórico inicial.
-- Idempotência por `nosso_numero` já existe (upsert), então re-rodar é seguro.
+1. **Teste isolado primeiro** (já implementado): `/configuracoes/integracoes-sga-hinova → aba "Teste Boletos"` → digitar uma placa real → janela 90 dias → conferir que a tela mostra request enviado, resposta crua e tabela com pelo menos 1 boleto. ➜ **Sem isso passar, não tocamos no backfill.**
+2. **Dry-run em 1 veículo**: na fila do backfill, marcar 1 veículo como pendente e clicar em "Forçar sync agora". Conferir nos logs (`sga_sync_logs`) que `action=listar_boletos_financeiro` retornou `quantidade > 0` e que a tabela `cobrancas` ganhou a linha (filtrar por `origem='sga_hinova'`).
+3. **Rodar backfill completo** apenas após (1) e (2) confirmados.
 
 ## Arquivos afetados
 
-- `supabase/functions/_shared/hinova-client.ts` — janela 90d iterativa + `link_boleto` + filtro vencimento.
-- `supabase/functions/sga-testar-boletos-veiculo/index.ts` — **novo** (read-only, sem grava nada).
-- `supabase/functions/sga-sync-financeiro-veiculo/index.ts` — usa nova assinatura.
-- `src/pages/configuracoes/IntegracaoHinovaMapeamentos.tsx` (ou página equivalente) — card de teste.
+- `supabase/functions/sga-sync-financeiro-veiculo/index.ts` — corrige assinatura.
+- (possivelmente) `supabase/functions/sga-backfill-financeiro/index.ts`, `sga-backfill-massa-orquestrador/index.ts`, `cron-sga-sync-financeiro-diario/index.ts`, `disparar-boletos-lote/index.ts`, `emitir-boleto-individual/index.ts` — se alguma usar a assinatura antiga, mesma correção.
 
-## Detalhes técnicos
-
-- **Por que 90 dias é hard-cap:** documentação literal — *"O limite do intervalo de tempo é de, no máximo, 90 dias"*. A Hinova retorna 406 com payloads maiores; tem sido a causa de chamadas que devolvem 0 boletos para veículos que claramente têm cobranças.
-- **Iteração:** loop `for` de hoje → N anos atrás, em passos de 90 dias, com `await` sequencial (não paralelo) para não estourar rate limit. Cada iteração soma ao set por `nosso_numero` (chave única já existente em `cobrancas`).
-- **Sem novas tabelas/migrations.** O endpoint de teste apenas lê e loga em `sga_sync_logs` (já existe).
-- **Sem novos secrets.** Reusa credenciais Hinova já configuradas via `getHinovaCreds`.
-- **CORS padrão** + handler OPTIONS na nova função.
-
-## Critério de sucesso
-
-Você acessa o card de teste, escolhe uma placa qualquer (com `codigo_hinova` preenchido), clica em "Testar busca 90 dias" e a tela mostra:
-1. Request enviado (com `data_vencimento_inicial`/`data_vencimento_final` válidos e `link_boleto: true`).
-2. Resposta crua da Hinova (JSON inteiro).
-3. Tabela com pelo menos 1 boleto recente, contendo `nosso_numero`, `linha_digitavel`, `valor_boleto`, `data_vencimento`, `situacao_boleto` e `link_boleto`.
-
-Após esse OK manual, libero o ajuste para o sync em massa.
+Sem novas tabelas, sem novos secrets, sem mudança de UI. É uma correção cirúrgica num único ponto que destrava o backfill da imagem.
