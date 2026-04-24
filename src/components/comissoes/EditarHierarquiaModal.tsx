@@ -314,26 +314,35 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
             <div className="grid grid-cols-1 gap-4">
               <div className="space-y-1.5">
                 <Label>Gerente superior</Label>
-                <Select value={gerenteId} onValueChange={setGerenteId} disabled={loadingVinculos || saving || erroUsuarios}>
-                  <SelectTrigger className="h-11"><SelectValue placeholder="Selecione um gerente" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhum gerente</SelectItem>
-                    {!loadingVinculos && gerentes.length === 0 && <SelectItem value="empty-gerentes" disabled>Nenhum gerente disponível</SelectItem>}
-                    {gerentes.map((u) => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={gerenteId}
+                  onValueChange={handleGerenteChange}
+                  options={gerenteOptions}
+                  placeholder="Buscar gerente por nome ou e-mail"
+                  searchPlaceholder="Digite nome ou e-mail do gerente..."
+                  disabled={saving || erroUsuarios}
+                  loading={loadingVinculos}
+                  className="h-11"
+                />
+                {!loadingVinculos && gerentes.length === 0 && <p className="text-xs text-muted-foreground">Nenhum gerente disponível.</p>}
               </div>
 
               <div className="space-y-1.5">
                 <Label>Supervisor superior</Label>
-                <Select value={supervisorId} onValueChange={setSupervisorId} disabled={loadingVinculos || saving || erroUsuarios}>
-                  <SelectTrigger className="h-11"><SelectValue placeholder="Selecione um supervisor" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhum supervisor</SelectItem>
-                    {!loadingVinculos && supervisores.length === 0 && <SelectItem value="empty-supervisores" disabled>Nenhum supervisor disponível</SelectItem>}
-                    {supervisores.map((u) => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={supervisorId}
+                  onValueChange={handleSupervisorChange}
+                  options={supervisorOptions}
+                  placeholder="Buscar supervisor por nome ou e-mail"
+                  searchPlaceholder="Digite nome ou e-mail do supervisor..."
+                  disabled={saving || erroUsuarios || (!!gerenteSelecionado && supervisoresCompativeis.length === 0)}
+                  loading={loadingVinculos}
+                  className="h-11"
+                />
+                {!loadingVinculos && supervisores.length === 0 && <p className="text-xs text-muted-foreground">Nenhum supervisor disponível.</p>}
+                {!loadingVinculos && !!gerenteSelecionado && supervisores.length > 0 && supervisoresCompativeis.length === 0 && (
+                  <p className="text-xs text-muted-foreground">Nenhum supervisor compatível com o gerente selecionado.</p>
+                )}
               </div>
 
               <div className="space-y-1.5">
