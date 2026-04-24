@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Settings, User, Wrench } from 'lucide-react';
+import { LogOut, Settings, User, Wrench, Bug } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -18,12 +19,15 @@ import { UserAvatar } from '@/components/UserAvatar';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { GlobalSearch } from '@/components/layout/GlobalSearch';
 import { GlobalBreadcrumb } from '@/components/layout/GlobalBreadcrumb';
+import { RelatarErroModal } from '@/components/suporte/RelatarErroModal';
+import { TestarCorrecoesButton } from '@/components/suporte/TestarCorrecoesButton';
 
 export function AppHeader() {
   const navigate = useNavigate();
   const { profile, roles, signOut } = useAuth();
   const { isPerfilLimitado } = usePermissions();
   const { getRoleLabel } = useAppRoles();
+  const [relatarOpen, setRelatarOpen] = useState(false);
 
   const handleSignOut = async () => {
     await signOut();
@@ -47,7 +51,9 @@ export function AppHeader() {
 
       {/* Lado Direito - Ações */}
       <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-        
+
+        <TestarCorrecoesButton />
+
         {/* Theme Toggle - esconde em mobile */}
         <div className="hidden sm:flex">
           <ThemeToggle />
@@ -90,6 +96,10 @@ export function AppHeader() {
               <User className="mr-2 h-4 w-4" />
               Meu Perfil
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setRelatarOpen(true)} className="cursor-pointer">
+              <Bug className="mr-2 h-4 w-4" />
+              Relatar Erro
+            </DropdownMenuItem>
             {!isPerfilLimitado && (
               <DropdownMenuItem onClick={() => navigate('/configuracoes')} className="cursor-pointer">
                 <Settings className="mr-2 h-4 w-4" />
@@ -110,6 +120,7 @@ export function AppHeader() {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      <RelatarErroModal open={relatarOpen} onOpenChange={setRelatarOpen} />
     </header>
   );
 }

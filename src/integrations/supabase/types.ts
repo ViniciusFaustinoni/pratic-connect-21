@@ -11711,6 +11711,98 @@ export type Database = {
         }
         Relationships: []
       }
+      error_report_files: {
+        Row: {
+          created_at: string
+          id: string
+          mime_type: string | null
+          nome_original: string | null
+          report_id: string
+          storage_path: string
+          tamanho_bytes: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          mime_type?: string | null
+          nome_original?: string | null
+          report_id: string
+          storage_path: string
+          tamanho_bytes?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          mime_type?: string | null
+          nome_original?: string | null
+          report_id?: string
+          storage_path?: string
+          tamanho_bytes?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "error_report_files_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "error_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      error_reports: {
+        Row: {
+          area: string
+          concluido_em: string | null
+          concluido_por: string | null
+          created_at: string
+          descricao: string
+          id: string
+          observacao_diretor: string | null
+          reporter_email: string | null
+          reporter_id: string
+          reporter_nome: string | null
+          status: Database["public"]["Enums"]["error_report_status"]
+          tratado_em: string | null
+          tratado_por: string | null
+          updated_at: string
+          validado_em: string | null
+        }
+        Insert: {
+          area: string
+          concluido_em?: string | null
+          concluido_por?: string | null
+          created_at?: string
+          descricao: string
+          id?: string
+          observacao_diretor?: string | null
+          reporter_email?: string | null
+          reporter_id: string
+          reporter_nome?: string | null
+          status?: Database["public"]["Enums"]["error_report_status"]
+          tratado_em?: string | null
+          tratado_por?: string | null
+          updated_at?: string
+          validado_em?: string | null
+        }
+        Update: {
+          area?: string
+          concluido_em?: string | null
+          concluido_por?: string | null
+          created_at?: string
+          descricao?: string
+          id?: string
+          observacao_diretor?: string | null
+          reporter_email?: string | null
+          reporter_id?: string
+          reporter_nome?: string | null
+          status?: Database["public"]["Enums"]["error_report_status"]
+          tratado_em?: string | null
+          tratado_por?: string | null
+          updated_at?: string
+          validado_em?: string | null
+        }
+        Relationships: []
+      }
       estoque_movimentacoes: {
         Row: {
           created_at: string | null
@@ -31373,6 +31465,7 @@ export type Database = {
       is_diretor: { Args: { _user_id: string }; Returns: boolean }
       is_diretor_for_crud: { Args: { _user_id: string }; Returns: boolean }
       is_diretor_or_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_error_reports_admin: { Args: { _user_id: string }; Returns: boolean }
       is_funcionario: { Args: { _user_id: string }; Returns: boolean }
       is_gerencia: { Args: { _user_id: string }; Returns: boolean }
       is_prestador: { Args: { _user_id: string }; Returns: boolean }
@@ -31460,6 +31553,7 @@ export type Database = {
         | "em_abatimento"
       cc_tipo_lancamento: "credito" | "debito"
       cobranca_origem: "sistema" | "sga_hinova"
+      error_report_status: "aberto" | "em_tratamento" | "concluido" | "validado"
       etapa_lead:
         | "novo"
         | "contato_inicial"
@@ -31890,6 +31984,7 @@ export const Constants = {
       ],
       cc_tipo_lancamento: ["credito", "debito"],
       cobranca_origem: ["sistema", "sga_hinova"],
+      error_report_status: ["aberto", "em_tratamento", "concluido", "validado"],
       etapa_lead: [
         "novo",
         "contato_inicial",

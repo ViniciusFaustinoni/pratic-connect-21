@@ -294,6 +294,7 @@ const UsuarioDetalhePage = lazy(() => import("./pages/diretoria/UsuarioDetalhe")
 const UsuarioEditarPage = lazy(() => import("./pages/diretoria/UsuarioEditar"));
 const LogsAuditoria = lazy(() => import("./pages/diretoria/LogsAuditoria"));
 const RelatoriosGerenciais = lazy(() => import("./pages/diretoria/RelatoriosGerenciais"));
+const RelatosErros = lazy(() => import("./pages/diretoria/RelatosErros"));
 const FaixasCotas = lazy(() => import("./pages/diretoria/FaixasCotas"));
 const SolicitacoesIA = lazy(() => import("./pages/diretoria/SolicitacoesIA"));
 const CampanhasDesconto = lazy(() => import("./pages/diretoria/CampanhasDesconto"));
@@ -718,6 +719,7 @@ const App = () => (
               <Route path="/diretoria/produtos/:id" element={<ProdutoDetalhe />} />
               <Route path="/diretoria/rateios" element={<RateioSinistros />} />
               <Route path="/diretoria/indicadores" element={<IndicadoresAtuariais />} />
+              <Route path="/diretoria/relatos-erros" element={<RelatosErros />} />
               <Route path="/diretoria/configuracoes" element={<ConfiguracoesSistema />} />
               <Route path="/diretoria/perfis" element={<Navigate to="/configuracoes/usuarios-acessos?tab=visibilidade" replace />} />
               <Route path="/diretoria/usuarios" element={<UsuariosPage />} />

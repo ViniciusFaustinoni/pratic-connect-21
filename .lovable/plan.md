@@ -1,103 +1,136 @@
-# Por que a credencial "falha" (mesmo funcionando em outras ocasiões)
+# Sistema de Relatos de Erros
 
-## Resumo do diagnóstico
+Implementar um canal interno onde qualquer usuário (qualquer perfil) pode relatar bugs com prints, e o Diretor gerencia o ciclo de vida do reporte (Aberto → Em tratamento → Concluído → Validado pelo autor).
 
-A credencial **NÃO está errada**. O erro `"Acesso não autorizado. Verifique seu token de acesso" / "Login ou senha inválido"` que aparece em massa **não vem do `/usuario/autenticar`** — vem das chamadas seguintes (`/veiculo/consultar/placa/...`, `/buscar/situacao-financeira-veiculo/...`, `/listar/boleto-associado-veiculo`).
-
-O erro é causado por **duas falhas estruturais introduzidas na última refatoração**, não pela credencial.
-
-## Evidências (fila atual de 208k jobs)
-
-| Erro | Ocorrências | Causa real |
-|---|---|---|
-| `Hinova autenticação falhou (200): Usuário com restrição de horário` | 260 | Janela horária do usuário SGA (a Hinova classifica isso como sucesso HTTP=200, com erro embarcado no body) — **nada a ver com credencial** |
-| `[server] HTTP 406: É necessário enviar ao menos uma data inicial e uma final` | 131 | Endpoint `listar/boleto-associado-veiculo` rejeitou os parâmetros de data — **bug de payload em janela específica**, não credencial |
-| `[auth] Auth recusada (http=401)` em vários helpers (`listarBoletos`, `buscarSituacaoFinanceira`, `buscarVeiculoPorPlaca`) | **210 somados** | **Token cacheado invalidado por outra instância (race condition do cache global)** |
-| `Edge Function returned a non-2xx status code` | 2 | Cold start / timeout |
-| `Falha ao gravar 28 boletos: ON CONFLICT…` | 1 | Resíduo do bug anterior, já corrigido |
-
-**Total já importado**: 536 cobranças do SGA (até o momento). O sistema **funciona**, mas a taxa de erro da camada de auth é alta demais.
-
-## Causa raiz dos 401
-
-1. **Cache global de `tokenUsuario` (`SESSION_TTL_MS = 25min`) é incompatível com o backfill paralelo.** A Hinova é stateful — cada novo `/usuario/autenticar` invalida o token anterior. Quando um cron ou outra instância da Edge Function faz um login novo, o token cacheado dentro de outra instância vira lixo. As próximas chamadas dessa instância pegam 401.
-
-2. **Os helpers `buscarVeiculoPorPlaca`, `buscarSituacaoFinanceiraVeiculo`, `listarBoletosVeiculoJanela` usam `fetch` direto, não o wrapper `hinovaFetch`.** O wrapper foi escrito (linhas 224-259 de `hinova-client.ts`) e tem reauth automática em 401, **mas nenhum helper o usa**. Resultado: quando o token cacheado morre, o 401 é apenas lançado como `HinovaTransientError` e o job vai para `pendente_retry` em vez de reautenticar e prosseguir.
-
-3. **Não há reauth no helper `buscarAssociadoPorCpf`** dentro de `sga-sync-financeiro-veiculo/index.ts` (linhas 60-93) — chama `fetch` cru com `session.tokenUsuario`.
-
-## Por que `sga-hinova-sync` (cadastro de associado/veículo) "sempre funciona"
-
-Porque ele faz `autenticarHinova` **uma vez por requisição** (linhas 910-937) e usa o token recém-obtido até o fim da requisição. Não compartilha cache entre instâncias, então não sofre invalidação cruzada.
-
----
-
-# Plano de correção
-
-## 1. Remover o cache global de `tokenUsuario` para o backfill financeiro
-Trocar a estratégia: **uma autenticação por execução de job**, igual ao `sga-hinova-sync`. Isso elimina 100% dos 401 cruzados.
-
-- `getHinovaSession` continua existindo, mas adiciona parâmetro `noCache?: boolean`.
-- `sga-sync-financeiro-veiculo/index.ts` chama `getHinovaSession(supabase, { noCache: true })` para sempre autenticar fresco.
-- Trade-off: aumenta logins (~1 por job), mas elimina o "Login ou senha inválido". Com 9.6k veículos e 1 login por job, são ~9.6k logins ao longo do backfill — distribuídos no tempo, sem contenção.
-
-## 2. Wrapper `hinovaFetch` aplicado nos 3 helpers críticos
-Refatorar para usar `hinovaFetch` (que já tem reauth em 401):
-- `buscarVeiculoPorPlaca` (consultar + fallback)
-- `buscarSituacaoFinanceiraVeiculo`
-- `listarBoletosVeiculoJanela`
-- `buscarAssociadoComVeiculosPorCpf`
-
-Para suportar isso, `hinovaFetch` precisa receber a `session` opcional (para não disparar nova auth quando o caller já tem uma sessão fresca).
-
-## 3. Refatorar `buscarAssociadoPorCpf` local em `sga-sync-financeiro-veiculo`
-Trocar o `fetch` cru pelo helper `buscarAssociadoComVeiculosPorCpf` do shared (que já será wrappado).
-
-## 4. Corrigir o 406 "É necessário enviar ao menos uma data inicial e uma final" (131 ocorrências)
-Investigar `listarBoletosVeiculoJanela`: hoje envia 4 campos de data (`data_vencimento_inicial/final` + `data_inicial/final`). Algumas versões da API rejeitam o conjunto. Ajustar para enviar **apenas** `data_inicial` + `data_final` (formato dd/mm/aaaa) — a documentação base confirma esse par.
-
-## 5. Resetar jobs `pendente_retry` causados por auth para `pendente`
-Migration única para limpar a fila contaminada:
-
-```sql
-UPDATE sga_sync_financeiro_jobs
-SET status = 'pendente',
-    proximo_retry_em = NULL,
-    ultimo_erro = NULL
-WHERE status = 'pendente_retry'
-  AND ultimo_erro LIKE '%[auth]%';
-```
-
-(NÃO resetar os de `restrição de horário` — esses precisam aguardar a janela do usuário SGA reabrir.)
-
-## 6. (Opcional, recomendado) Pedir ao SGA Hinova para ampliar a janela horária do usuário
-260 falhas hoje são literalmente porque o usuário SGA configurado tem **horário restrito de operação**. A Hinova retorna HTTP 200 com `{"mensagem":"Usuário com restrição de horário..."}`. Isso não é bug nosso — é configuração do usuário no painel SGA. Vale validar com o suporte Hinova se o usuário do backfill pode ficar 24/7.
-
----
-
-# Arquivos afetados
+## Fluxo geral
 
 ```text
-supabase/functions/_shared/hinova-client.ts            (refatoração principal)
-supabase/functions/sga-sync-financeiro-veiculo/index.ts (noCache + usar helper compartilhado)
-supabase/migrations/<novo>.sql                          (reset jobs pendente_retry de auth)
+Usuário              Diretor                  Usuário (autor)
+  │                     │                         │
+  ▼                     ▼                         ▼
+Relatar erro  ─►  Aberto  ─►  Em tratamento  ─►  Concluído
+(área, descrição,                                  │
+ prints multi-arquivo)                             ▼
+                                          Badge "TESTAR" (piscando)
+                                                   │
+                                                   ▼
+                                              Validado!
 ```
 
----
+## 1. Backend (Lovable Cloud / Supabase)
 
-# Validação após deploy
+**Migration nova** com:
 
-1. Limpar contadores antigos e disparar "Forçar sync agora".
-2. Em 5 min, esperar:
-   - **Zero** ocorrências de `[auth] Auth recusada (http=401)` em `sga_sync_financeiro_jobs.ultimo_erro`.
-   - **Zero** ocorrências de `HTTP 406: É necessário enviar... data inicial`.
-   - `cobrancas` (origem=sga_hinova) crescendo a cada minuto.
-   - `concluido` subindo de 17 → centenas.
-3. Os 260 jobs com "restrição de horário" devem permanecer em `pendente_retry` até a janela do usuário Hinova abrir — comportamento esperado.
+- Enum `error_report_status`: `aberto`, `em_tratamento`, `concluido`, `validado`.
+- Tabela `public.error_reports`:
+  - `id uuid pk`, `created_at`, `updated_at`
+  - `reporter_id uuid` (auth.users) — autor
+  - `reporter_nome text`, `reporter_email text` (snapshot)
+  - `area text not null` (texto livre informado pelo usuário)
+  - `descricao text not null`
+  - `status error_report_status default 'aberto'`
+  - `tratado_por uuid`, `tratado_em timestamptz`
+  - `concluido_por uuid`, `concluido_em timestamptz`
+  - `validado_em timestamptz`
+  - `observacao_diretor text` (opcional para resposta)
+- Tabela `public.error_report_files`:
+  - `id`, `report_id fk`, `storage_path text`, `mime_type`, `tamanho_bytes`, `nome_original`, `created_at`.
+- **Bucket de storage** novo `relatos-erros` (privado).
+- **RLS**:
+  - `error_reports` SELECT: autor vê só os seus; `has_role(auth.uid(),'diretor')` ou `desenvolvedor` vê todos.
+  - INSERT: qualquer usuário autenticado, com `reporter_id = auth.uid()`.
+  - UPDATE: Diretor/Desenvolvedor pode mudar para `em_tratamento`/`concluido`; autor pode mudar de `concluido` → `validado` (somente os seus).
+  - `error_report_files`: mesma regra via join.
+- **Storage policies** no bucket `relatos-erros`:
+  - INSERT: autenticado, prefixo do path = `auth.uid()/...`.
+  - SELECT: dono do path **OU** Diretor/Desenvolvedor.
 
----
+## 2. Hook compartilhado
 
-# Riscos / Reversão
+`src/hooks/useErrorReports.ts`:
+- `useMyPendingValidations()` — conta reports do usuário com `status = 'concluido'` (alimenta o efeito "piscando").
+- `useErrorReportsList(filtros)` — usado pela tela do Diretor.
+- `useCreateErrorReport()` — insere registro + faz upload dos arquivos para `relatos-erros/{user_id}/{report_id}/{filename}` e cria linhas em `error_report_files`.
+- `useUpdateErrorReportStatus()` — transições conforme papel.
+- `useErrorReportFiles(reportId)` — gera signed URLs para visualização/download.
 
-- **Risco**: aumento de logins (1 por job em vez de 1 por instância). Mitigação: a Hinova não documenta rate limit em `/usuario/autenticar`, e o `sga-hinova-sync` já opera nesse modelo desde sempre sem problema.
-- **Reversível**: basta restaurar `getHinovaSession` para ignorar `noCache`.
+## 3. Modal "Relatar Erro" (todos os perfis)
+
+Novo componente `src/components/suporte/RelatarErroModal.tsx`:
+- Campos:
+  - **Área** — `Input` texto (obrigatório, máx 120).
+  - **Descrição / Passo a passo** — `Textarea` (obrigatório, mín 20 / máx 4000).
+  - **Prints do erro** — `Input type="file" multiple accept="image/*,application/pdf"` com preview em grid e botão remover. Limite: 10 arquivos, 10MB cada.
+- Validação com `zod`.
+- Botão **Enviar** → chama `useCreateErrorReport`, exibe toast de sucesso e fecha.
+
+Adicionar item **"Relatar Erro"** (ícone `Bug`) **logo abaixo de "Meu Perfil"** em:
+- `src/components/layout/AppHeader.tsx` (dropdown principal — usado pela maioria dos perfis incluindo Diretor).
+- `src/components/app/AppUserDropdown.tsx` (associado/PWA).
+- Outros dropdowns de perfis especiais que estendem header próprio (Instalador, Regulador, Analista de Eventos) — adicionar mesmo item para garantir cobertura "todo perfil".
+
+O item abre o `RelatarErroModal` (estado local).
+
+## 4. Badge "TESTAR" piscando (autor)
+
+- Hook `useMyPendingValidations` retorna `count`.
+- Quando `count > 0`, exibir um botão/badge no header (próximo ao `NotificationBell`) chamado **"Testar correções"** com pulso (`animate-pulse` + cor `bg-warning`).
+- Clique → abre `Sheet/Dialog` listando reports `concluido` do usuário, com botão **"Validado!"** por item, que chama `updateStatus → 'validado'`.
+- Esse mesmo indicador entra no `AppUserDropdown` (mobile) como item "Testar correções (N)" piscando.
+
+## 5. Tela do Diretor — "Relatórios de Erros"
+
+Nova rota `/diretoria/relatos-erros` e nova página `src/pages/diretoria/RelatosErros.tsx`.
+
+Adicionar entrada no `AppSidebar.tsx`, módulo **Diretoria**, **acima de "Configurações"**:
+```ts
+{ title: 'Relatos de Erros', url: '/diretoria/relatos-erros', icon: Bug },
+```
+Registrar a rota em `src/App.tsx` com guard de Diretor/Desenvolvedor.
+
+Conteúdo da página:
+- Cards de resumo: Aberto / Em tratamento / Concluído / Validado.
+- Filtros: status, busca por área/descrição/autor, range de datas.
+- Tabela: data, autor, área, status (badge), nº de arquivos, ação "Ver detalhes".
+- **Modal de detalhes** (`DetalheRelatoModal.tsx`):
+  - Cabeçalho com autor, e-mail, área, criado em, status.
+  - Descrição completa.
+  - Galeria de arquivos: thumbnails (imagens) com clique para abrir em nova aba via signed URL; ícone para PDFs/outros com botão "Abrir".
+  - Campo **Observação do Diretor** (opcional).
+  - Botões de transição:
+    - Em **Aberto**: "Iniciar tratamento" → `em_tratamento`.
+    - Em **Em tratamento**: "Marcar como Concluído" → `concluido`.
+    - Em **Concluído / Validado**: somente leitura (badge final).
+  - Timeline lateral: Aberto em / Em tratamento em / Concluído em / Validado em.
+
+## 6. Detalhes técnicos
+
+- Ícone `Bug` do `lucide-react`.
+- Animação piscante: classe utilitária Tailwind `animate-pulse` combinada com `ring-2 ring-warning`.
+- Upload usa `supabase.storage.from('relatos-erros').upload(path, file)` em paralelo com `Promise.all`, depois insere registros em `error_report_files`. Em caso de falha parcial, remover arquivos órfãos e marcar erro.
+- Signed URLs: `createSignedUrl(path, 3600)` ao abrir o modal de detalhes.
+- Realtime opcional: subscribe em `error_reports` filtrando por `reporter_id` para refletir mudança de status (Concluído) sem refresh — usar canal já existente do projeto.
+- Reaproveitar componentes: `Dialog`, `Sheet`, `Badge`, `Button`, `Input`, `Textarea`, `DataTable` simples com `Table` shadcn.
+
+## Arquivos a criar / editar
+
+**Criar**
+- `supabase/migrations/<ts>_error_reports.sql`
+- `src/hooks/useErrorReports.ts`
+- `src/components/suporte/RelatarErroModal.tsx`
+- `src/components/suporte/TestarCorrecoesButton.tsx`
+- `src/components/suporte/TestarCorrecoesSheet.tsx`
+- `src/pages/diretoria/RelatosErros.tsx`
+- `src/components/diretoria/DetalheRelatoModal.tsx`
+
+**Editar**
+- `src/components/layout/AppHeader.tsx` (item Relatar Erro + botão Testar)
+- `src/components/layout/AppSidebar.tsx` (entrada "Relatos de Erros" no grupo Diretoria, acima de "Configurações")
+- `src/components/app/AppUserDropdown.tsx` (item Relatar Erro + indicador Testar)
+- Dropdowns equivalentes em layouts especiais (Instalador/Regulador/Analista de Eventos) — incluir o item Relatar Erro
+- `src/App.tsx` (rota `/diretoria/relatos-erros`)
+- `src/integrations/supabase/types.ts` (regenerado pela migration)
+
+## Fora do escopo
+- Notificações por e-mail/WhatsApp ao Diretor (pode ser adicionado depois).
+- Comentários/threads dentro do report (somente uma observação do Diretor por enquanto).
