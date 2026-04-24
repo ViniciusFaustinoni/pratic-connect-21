@@ -93,7 +93,7 @@ async function gerarRespostaConfirmacaoIA(
  * Processa resposta de confirmação de agendamento recebida via Meta API
  */
 async function processarRespostaConfirmacaoMeta(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   supabaseUrl: string,
   serviceKey: string,
   confirmacao: any,
@@ -229,7 +229,7 @@ async function processarRespostaConfirmacaoMeta(
  * Processa mensagem de usuário (associado, lead ou desconhecido) via IA
  */
 async function processarMensagemUsuario(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   supabaseUrl: string,
   serviceKey: string,
   telefone: string,
@@ -423,7 +423,7 @@ async function processarMensagemUsuario(
  * Processa resposta de um prestador no fluxo de despacho de reboque
  */
 async function processarRespostaPrestador(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   supabaseUrl: string,
   serviceKey: string,
   telefone: string,
@@ -704,7 +704,7 @@ Seu aceite foi enviado ao analista de eventos. Aguarde a confirmação da atribu
  * Processa resposta de diretor no fluxo de aprovação FIPE
  */
 async function processarRespostaDiretorFipe(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   supabaseUrl: string,
   serviceKey: string,
   telefone: string,
@@ -811,7 +811,7 @@ async function processarRespostaDiretorFipe(
 serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const supabase = createClient(supabaseUrl, serviceKey);
+  const supabase = createClient(supabaseUrl, serviceKey) as any;
 
   // GET - Verificação do webhook pela Meta
   if (req.method === "GET") {
