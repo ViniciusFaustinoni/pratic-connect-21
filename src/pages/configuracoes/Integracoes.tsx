@@ -133,6 +133,14 @@ const categorias: Categoria[] = [
         integracaoTipo: 'hinova',
         statusKey: 'hinova',
       },
+      {
+        id: 'hinova-mapeamentos',
+        nome: 'Hinova — Mapeamentos',
+        descricao: 'De-para de cor, combustível e tipo de veículo para os códigos do SGA',
+        icon: Building2,
+        href: '/configuracoes/integracoes/hinova-mapeamentos',
+        sempreAtivo: true,
+      },
     ],
   },
   {
