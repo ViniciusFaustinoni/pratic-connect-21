@@ -1,72 +1,78 @@
 ## Diagnóstico
 
-A tela **Configurações → Usuários e Acessos** está listando associados como se fossem funcionários. Investigando:
+Vendedores como **MARIA GLEICIELE BATISTA DOS SANTOS** aparecem com perfil `Supervisor de Vendas` em **Usuários e Acessos**, mas somem na tela de **Hierarquia de Comissões**.
 
-### Causa raiz (duas camadas)
+### Causa raiz
 
-**1. Dados corrompidos no banco** — `profiles.tipo` está errado para a maioria dos associados:
+Bug em `src/hooks/useAtribuicaoComissoes.ts` (função `useUsuariosVendas`, linha 35):
+
+```ts
+const userIds = Array.from(new Set((roles || []).map(r => r.user_id))); // ← auth.users.id
+const { data: profiles } = await supabase
+  .from('profiles')
+  .select('id, nome, email, avatar_url')
+  .in('id', userIds); // ❌ filtrando profiles.id por auth.users.id
 ```
-funcionario: 9755 perfis
-associado:     25 perfis  ← deveria ser ~9519
-agencia:        2 perfis
-```
 
-Cruzando com a tabela `associados` + role `associado` + e-mail `@associado.pratic.com.br`:
-- **9494 dos 9755 "funcionários" são, comprovadamente, associados** (têm registro na tabela `associados`, role `associado` e e-mail no domínio de associado).
-- Restam ~261 funcionários reais.
+`user_roles.user_id` aponta para `auth.users.id` (que corresponde a `profiles.user_id`), **não** a `profiles.id`. O filtro só "casa" por coincidência quando `profiles.id == profiles.user_id`. Confirmado em DB:
 
-Isso é resíduo de import em massa / trigger antiga que default-ou `tipo='funcionario'` em vez de `'associado'` na criação dos perfis.
+| Usuário | profile.id | profile.user_id | Aparece? |
+|---|---|---|---|
+| Rogério Jotta | `e495f375…` | `e495f375…` (igual) | ✅ |
+| Supervisor [teste] | `a549b8bd…` | `a549b8bd…` (igual) | ✅ |
+| Maria Gleiciele | `ceaa9ea5…` | `5c8f8a45…` (diferente) | ❌ |
+| Joanna | `bd5d987d…` | `b38f2395…` (diferente) | ❌ aparece o homônimo legado |
 
-**2. Filtro permissivo no front** — `useUsuarios` (`src/hooks/useUsuarios.ts`) e `UsuariosAcessos.tsx` aceitam o filtro `tipo='associado'` e **não excluem associados por padrão**. A tela tem inclusive um item "Associado legado" no select de tipo (linha 201). Mas ainda que os dados estivessem corretos, hoje qualquer associado com `tipo='associado'` apareceria na lista — o que vai contra a regra "somente usuários criados pelo diretor, funcionários, técnicos, equipe comercial".
+Pior ainda: existe um perfil legado de associado homônimo da Joanna cujo `id == user_id` — o filtro errado pega o **perfil errado** em casos de homonímia.
 
-### Impacto colateral
-Várias RLS policies e funções SQL concedem acesso interno via `profiles.tipo = 'funcionario'` (ouvidoria, manifestações, jurídico, etc.). Significa que **9494 associados podem estar com permissões internas indevidas hoje**. Corrigir o `tipo` desses perfis é a coisa certa a fazer — vai restaurar a separação correta entre acesso interno e acesso de associado.
+A convenção correta do schema é: `hierarquia_vendas.vendedor_id`, `usuario_grade_comissao.user_id` e o parâmetro `p_vendedor_id` da RPC armazenam **`profile.id`** (confirmado em `fn_auditoria_profile_snapshot`, que faz `WHERE profiles.id = p_profile_id`).
 
 ## O que vai mudar
 
-### 1. Migration de correção de dados (`profiles.tipo`)
-Reclassificar como `tipo='associado'` todo perfil que satisfaça **qualquer** dos critérios:
-- Tem registro em `associados` vinculado pelo `user_id`, OU
-- Tem role `associado` em `user_roles`, OU
-- E-mail no domínio `@associado.pratic.com.br`
+### Único arquivo: `src/hooks/useAtribuicaoComissoes.ts` (função `useUsuariosVendas`)
 
-Com `WHERE tipo <> 'associado'` para não tocar nos já corretos. Estimado: ~9494 linhas.
-
-Não vai mexer nos 261 perfis que **não** caem em nenhum critério (continuam como `funcionario` — a tela vai poder revisá-los caso a caso).
-
-### 2. Hook `useUsuarios` — excluir associados por padrão
-Em `src/hooks/useUsuarios.ts`, adicionar exclusão de `tipo='associado'` exceto quando o filtro explícito for `tipo='associado'`:
+1. Trocar `.in('id', userIds)` por `.in('user_id', authUserIds)` (filtro correto).
+2. Adicionar `.neq('tipo', 'associado')` na busca de profiles — segurança extra para que associados nunca apareçam na esteira de comissão (nem mesmo se algum profile legado tiver role indevida).
+3. Agrupar roles por `auth.user_id` e mapear para o `profile` certo via `profile.user_id`.
+4. Usar `profile.id` como chave canônica retornada (compatível com tudo que já existe nas queries de `hierarquia_vendas` e `usuario_grade_comissao`).
+5. Filtrar usuários sem nenhuma role após o agrupamento (defensivo).
 
 ```ts
-if (filters.tipo && filters.tipo !== 'todos') {
-  query = query.eq('tipo', filters.tipo);
-} else {
-  query = query.neq('tipo', 'associado');
-}
+const { data: profiles } = await supabase
+  .from('profiles')
+  .select('id, user_id, nome, email, avatar_url, tipo')
+  .in('user_id', authUserIds)
+  .neq('tipo', 'associado');
+
+const rolesByAuthUser = new Map<string, string[]>();
+roles.forEach(r => {
+  const arr = rolesByAuthUser.get(r.user_id) || [];
+  arr.push(r.role);
+  rolesByAuthUser.set(r.user_id, arr);
+});
+
+return profiles.map(p => ({
+  id: p.id, // profile.id (chave canônica em hierarquia_vendas/usuario_grade_comissao)
+  nome: p.nome || '(sem nome)',
+  email: p.email || '',
+  avatar_url: p.avatar_url,
+  roles: rolesByAuthUser.get(p.user_id) || [],
+})).filter(u => u.roles.length > 0);
 ```
-
-Também excluir do filtro server-side por `perfil`: se o filtro de perfil for `associado`, retornar vazio (essa tela não deve nem permitir consultar associados). Como `roleOptions` no front já filtra `role !== 'associado'` (linha 96 de `UsuariosAcessos.tsx`), isso já está alinhado.
-
-### 3. UI `UsuariosAcessos.tsx` — remover opção "Associado legado" do filtro
-Remover a `<SelectItem value="associado">Associado legado</SelectItem>` (linha 201) e ajustar o texto descritivo do card. A tela passa a listar apenas: funcionário, prestador, agência (e equivalentes vinculados às roles internas).
-
-### 4. Texto/copy
-Ajustar a `CardDescription` (linha 181-183) para refletir a nova regra: "Tela exclusiva para usuários internos: funcionários, prestadores, agências e equipe comercial. Associados são gerenciados em Associados."
 
 ## O que NÃO muda
 
-- Nenhuma RLS policy é alterada — apenas os dados são corrigidos para o estado correto.
-- Nenhum acesso legítimo de funcionário é afetado (os 261 perfis sem critério associado permanecem `funcionario`).
-- A tela de Associados continua independente e exibindo os 9519 associados normalmente (a partir da tabela `associados`).
-- A role `associado` em `user_roles` permanece intocada — é só o campo `profiles.tipo` que muda.
+- Nenhuma migration. Os dados em `hierarquia_vendas` e `usuario_grade_comissao` já estão corretos (usam `profile.id`).
+- Nenhuma RPC alterada (`fn_upsert_hierarquia_vendedor`, `fn_atribuir_grade_usuario`).
+- Nenhum outro componente.
 
 ## Resultado esperado
 
-- Tela Usuários e Acessos: mostra apenas usuários internos. Os ~9494 associados que apareciam "como funcionário" somem.
-- Métricas no topo (Total/Ativos/Inativos/Perfis) refletem só usuários internos.
-- Permissões internas atribuídas indevidamente via `profiles.tipo='funcionario'` aos associados deixam de existir — separação de acesso interno vs. associado fica íntegra.
+- Maria Gleiciele e todos os outros vendedores/supervisores/gerentes/agências cujo `profile.id ≠ profile.user_id` passam a aparecer na Hierarquia de Comissões.
+- Casos de homonímia (associado legado com mesmo nome) deixam de "sequestrar" a linha do usuário comercial real.
+- Associados (mesmo se tiverem role de vendas por engano) continuam fora da esteira de comissão.
 
 ## Pontos de atenção
 
-- Após a migration, alguns associados podem ter perdido um acesso a tela interna que vinham usando indevidamente. Isso é correção, não regressão.
-- Os 261 perfis que continuam como `funcionario` devem ser revisados manualmente pelo time se houver suspeita — a tela já permite filtrar e editar caso a caso.
+- O contador "X usuário(s) ainda sem grade atribuída" no topo da tela vai aumentar — agora reflete a realidade. É correção, não regressão.
+- Vou registrar memória explicitando que `profile.id` é a chave canônica em hierarquia_vendas / usuario_grade_comissao para evitar reincidência do bug.
