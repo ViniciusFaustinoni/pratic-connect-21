@@ -58,7 +58,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   global: {
     fetch: fetchWithTimeout,
   },
-}) as any;
+});
 
 // Inicializa o flush periódico (5 min) da telemetria
 initTelemetry(supabase);
