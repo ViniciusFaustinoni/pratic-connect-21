@@ -745,7 +745,6 @@ export const TIPO_SINISTRO_LABELS: Record<TipoSinistro, string> = {
 export const PERIODO_INSTALACAO_LABELS: Record<PeriodoInstalacao, string> = {
   manha: 'Manhã',
   tarde: 'Tarde',
-  noite: 'Noite',
 };
 
 // Motivos de reprovação de documento
