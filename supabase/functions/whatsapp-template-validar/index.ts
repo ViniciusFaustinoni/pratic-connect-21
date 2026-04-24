@@ -6,6 +6,10 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -141,7 +145,7 @@ Avalie se este template será aprovado pela Meta e forneça feedback detalhado.`
     });
   } catch (e) {
     console.error("Erro validação template:", e);
-    return new Response(JSON.stringify({ error: e.message || "Erro interno" }), {
+    return new Response(JSON.stringify({ error: getErrorMessage(e) || "Erro interno" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
