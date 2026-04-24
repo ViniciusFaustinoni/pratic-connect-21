@@ -120,6 +120,7 @@ export function AppHeader() {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      <RelatarErroModal open={relatarOpen} onOpenChange={setRelatarOpen} />
     </header>
   );
 }
