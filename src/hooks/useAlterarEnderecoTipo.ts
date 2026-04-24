@@ -94,16 +94,16 @@ export function useAlterarEnderecoTipo() {
       if (tipoNovo === 'base' && !input.horario) {
         throw new Error('Informe o horário/período do atendimento na base.');
       }
-      // Normaliza período (input.horario pode vir como 'manha'/'tarde' ou HH:MM legado)
+      // Normaliza período (input.horario pode vir como 'manha'/'tarde' ou HH:MM/'noite' legado)
       const periodoCanonico = (() => {
         const v = String(input.horario || '').toLowerCase();
-        if (v === 'manha' || v === 'tarde' || v === 'noite') return v as 'manha' | 'tarde' | 'noite';
+        if (v === 'manha' || v === 'tarde') return v as 'manha' | 'tarde';
+        if (v === 'noite') return 'tarde'; // legado: noite vira tarde
         const m = /^(\d{1,2}):/.exec(v);
         if (m) {
           const h = parseInt(m[1], 10);
           if (h < 12) return 'manha';
-          if (h < 18) return 'tarde';
-          return 'noite';
+          return 'tarde';
         }
         return 'manha';
       })();
