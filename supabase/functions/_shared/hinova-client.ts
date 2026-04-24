@@ -481,13 +481,13 @@ export async function listarBoletosVeiculoJanela(
   const dataInicialBR = fmtDataBR(opts.dataInicial);
   const dataFinalBR = fmtDataBR(opts.dataFinal);
 
+  // Payload mínimo conforme documentação Hinova:
+  // exige `data_inicial` + `data_final` (dd/mm/aaaa). Versões anteriores enviavam
+  // também `data_vencimento_inicial/final`, o que causava 406 "necessario enviar
+  // ao menos uma data inicial e uma final" em algumas versões da API.
   const payload: Record<string, any> = {
     codigo_associado: Number(codigoAssociado),
     codigo_veiculo: Number(codigoVeiculo),
-    // Filtro semântico (vencimento) — par mais aderente ao caso "boletos do veículo no período"
-    data_vencimento_inicial: dataInicialBR,
-    data_vencimento_final: dataFinalBR,
-    // Compat genérico (algumas versões só reconhecem este par)
     data_inicial: dataInicialBR,
     data_final: dataFinalBR,
     link_boleto: opts.linkBoleto ?? true,
