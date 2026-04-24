@@ -818,11 +818,11 @@ serve(async (req) => {
     console.log('[SGA Sync] Buscando código voluntário do vendedor...');
     
     // Priorizar contrato pelo veiculo_id (determinístico), fallback por associado_id
-    let contrato: { vendedor_id: string | null; veiculo_categoria: string | null } | null = null;
+    let contrato: { vendedor_id: string | null; veiculo_categoria: string | null; cotacao_id?: string | null } | null = null;
     
     const { data: contratoByVeiculo } = await supabase
       .from('contratos')
-      .select('vendedor_id, veiculo_categoria')
+      .select('vendedor_id, veiculo_categoria, cotacao_id')
       .eq('veiculo_id', _vid)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -834,7 +834,7 @@ serve(async (req) => {
     } else {
       const { data: contratoByAssociado } = await supabase
         .from('contratos')
-        .select('vendedor_id, veiculo_categoria')
+        .select('vendedor_id, veiculo_categoria, cotacao_id')
         .eq('associado_id', _aid)
         .order('created_at', { ascending: false })
         .limit(1)
