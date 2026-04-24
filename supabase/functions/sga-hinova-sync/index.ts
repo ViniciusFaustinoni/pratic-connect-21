@@ -101,6 +101,40 @@ function formatPhone(phone: string | null): string {
   return phone;
 }
 
+function normalizeText(text: string | null | undefined): string {
+  return (text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function parseValorFipe(valor: string | null | undefined): number | null {
+  if (!valor) return null;
+  const parsed = Number(valor.replace('R$', '').replace(/\./g, '').replace(',', '.').trim());
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function resolverFipePorNome(tipo: string, marca: string | null, modelo: string | null, ano: number | null): Promise<{ codigoFipe: string; valorFipe: number | null } | null> {
+  if (!marca || !modelo) return null;
+  const base = `https://parallelum.com.br/fipe/api/v1/${tipo}`;
+  const marcas = await (await fetch(`${base}/marcas`)).json();
+  const marcaEncontrada = marcas.find((m: any) => normalizeText(marca).includes(normalizeText(m.nome)) || normalizeText(m.nome).includes(normalizeText(marca)));
+  if (!marcaEncontrada) return null;
+  const modelosData = await (await fetch(`${base}/marcas/${marcaEncontrada.codigo}/modelos`)).json();
+  const alvoTokens = normalizeText(modelo).match(/[a-z0-9]+/g) || [];
+  const modelos = modelosData?.modelos || [];
+  const modeloEncontrado = modelos
+    .map((m: any) => ({ item: m, score: alvoTokens.filter(t => normalizeText(m.nome).includes(t)).length }))
+    .sort((a: any, b: any) => b.score - a.score)[0]?.item;
+  if (!modeloEncontrado) return null;
+  const anos = await (await fetch(`${base}/marcas/${marcaEncontrada.codigo}/modelos/${modeloEncontrado.codigo}/anos`)).json();
+  const anoEncontrado = (anos || []).find((a: any) => String(a.nome).includes(String(ano))) || anos?.[0];
+  if (!anoEncontrado) return null;
+  const preco = await (await fetch(`${base}/marcas/${marcaEncontrada.codigo}/modelos/${modeloEncontrado.codigo}/anos/${anoEncontrado.codigo}`)).json();
+  return preco?.CodigoFipe ? { codigoFipe: preco.CodigoFipe, valorFipe: parseValorFipe(preco.Valor) } : null;
+}
+
 // Retry com backoff exponencial
 async function fetchWithRetry(
   url: string, 
@@ -784,11 +818,11 @@ serve(async (req) => {
     console.log('[SGA Sync] Buscando código voluntário do vendedor...');
     
     // Priorizar contrato pelo veiculo_id (determinístico), fallback por associado_id
-    let contrato: { vendedor_id: string | null; veiculo_categoria: string | null } | null = null;
+    let contrato: { vendedor_id: string | null; veiculo_categoria: string | null; cotacao_id?: string | null } | null = null;
     
     const { data: contratoByVeiculo } = await supabase
       .from('contratos')
-      .select('vendedor_id, veiculo_categoria')
+      .select('vendedor_id, veiculo_categoria, cotacao_id')
       .eq('veiculo_id', _vid)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -800,7 +834,7 @@ serve(async (req) => {
     } else {
       const { data: contratoByAssociado } = await supabase
         .from('contratos')
-        .select('vendedor_id, veiculo_categoria')
+        .select('vendedor_id, veiculo_categoria, cotacao_id')
         .eq('associado_id', _aid)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -1367,7 +1401,27 @@ serve(async (req) => {
     }
 
     const combustivelNormalizado = normalizarCombustivel(veiculo.combustivel);
-    const tipoVeiculoInferido = await inferirTipoVeiculo(contrato?.veiculo_categoria, veiculo.marca, veiculo.modelo);
+    const tipoVeiculoInferido = await inferirTipoVeiculo(contrato?.veiculo_categoria || null, veiculo.marca, veiculo.modelo);
+    let codigoFipeResolvido = veiculo.codigo_fipe || '';
+    let valorFipeResolvido = veiculo.valor_fipe || 0;
+
+    if (!codigoFipeResolvido) {
+      try {
+        const tipoFipe = tipoVeiculoInferido === 2 ? 'motos' : tipoVeiculoInferido === 3 ? 'caminhoes' : 'carros';
+        const fipe = await resolverFipePorNome(tipoFipe, veiculo.marca, veiculo.modelo, veiculo.ano_modelo || veiculo.ano_fabricacao || null);
+        if (fipe?.codigoFipe) {
+          codigoFipeResolvido = fipe.codigoFipe;
+          valorFipeResolvido = fipe.valorFipe || valorFipeResolvido;
+          await logSync(_vid, _aid, 'resolver_fipe_veiculo', 'success',
+            { marca: veiculo.marca, modelo: veiculo.modelo, ano: veiculo.ano_modelo, tipo: tipoFipe },
+            { codigo_fipe: codigoFipeResolvido, valor_fipe: valorFipeResolvido });
+        }
+      } catch (e) {
+        await logSync(_vid, _aid, 'resolver_fipe_veiculo', 'error',
+          { marca: veiculo.marca, modelo: veiculo.modelo, ano: veiculo.ano_modelo }, null,
+          e instanceof Error ? e.message : 'Falha ao resolver FIPE');
+      }
+    }
 
     const codigoSituacaoDestino = _statusDestino === 'ativo'
       ? Number.parseInt(hinovaCodigoSituacaoAtivo || '', 10)
@@ -1380,15 +1434,15 @@ serve(async (req) => {
       renavam: veiculo.renavam.trim(),
       ano_fabricacao: veiculo.ano_fabricacao || veiculo.ano_modelo,
       ano_modelo: veiculo.ano_modelo,
-      codigo_fipe: veiculo.codigo_fipe || '',
-      valor_fipe: veiculo.valor_fipe || 0,
+      codigo_fipe: codigoFipeResolvido,
+      valor_fipe: valorFipeResolvido,
       kilometragem: 0,
       numero_motor: '',
       dia_vencimento: associado.dia_vencimento || 10,
       codigo_conta: codigoContaResolvido,
       codigo_cor: getMapeamento('cor', veiculo.cor),
       codigo_combustivel: getMapeamento('combustivel', combustivelNormalizado),
-      codigo_tipo_veiculo: getMapeamento('tipo_veiculo', contrato?.veiculo_categoria?.toLowerCase()) || tipoVeiculoInferido,
+      codigo_tipo_veiculo: getMapeamento('tipo_veiculo', contrato?.veiculo_categoria?.toLowerCase() || null) || tipoVeiculoInferido,
       codigo_voluntario: parseInt(hinovaCodigoVoluntario),
       ...(Number.isFinite(codigoSituacaoDestino) && codigoSituacaoDestino > 0 && { codigo_situacao: codigoSituacaoDestino }),
       ...(hinovaCodigoCooperativa && { codigo_cooperativa: parseInt(hinovaCodigoCooperativa) }),
@@ -1605,12 +1659,30 @@ serve(async (req) => {
       .or(`associado_id.eq.${_aid},veiculo_id.eq.${_vid}`)
       .eq('status', 'aprovado');
 
-    if (documentos && documentos.length > 0 && codigoVeiculoHinova) {
-      console.log(`[SGA Sync] Enviando ${documentos.length} documentos/fotos...`);
+    const { data: documentosContrato } = contrato?.cotacao_id
+      ? await supabase
+          .from('contratos_documentos')
+          .select('id, tipo, arquivo_nome, arquivo_url, status')
+          .eq('cotacao_id', contrato.cotacao_id)
+          .eq('status', 'aprovado')
+      : { data: [] };
+
+    const documentosParaEnvio = [
+      ...(documentos || []),
+      ...((documentosContrato || []).map((doc: any) => ({
+        id: doc.id,
+        tipo: doc.tipo,
+        nome_arquivo: doc.arquivo_nome,
+        arquivo_url: doc.arquivo_url,
+      }))),
+    ];
+
+    if (documentosParaEnvio.length > 0 && codigoVeiculoHinova) {
+      console.log(`[SGA Sync] Enviando ${documentosParaEnvio.length} documentos/fotos...`);
 
       const batchSize = 50;
-      for (let i = 0; i < documentos.length; i += batchSize) {
-        const batch = documentos.slice(i, i + batchSize);
+      for (let i = 0; i < documentosParaEnvio.length; i += batchSize) {
+        const batch = documentosParaEnvio.slice(i, i + batchSize);
         
         const fotos = batch.map(doc => {
           const tipoFoto = getMapeamento('tipo_foto', doc.tipo) || 1;
