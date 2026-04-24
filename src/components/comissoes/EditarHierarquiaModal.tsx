@@ -101,6 +101,32 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
 
   const subordinadosDiretos = subordinados.filter((item) => item.hierarquia?.supervisor_id === selectedUserId || item.hierarquia?.agencia_id === selectedUserId);
   const subordinadosGerenciais = subordinados.filter((item) => item.hierarquia?.gerente_id === selectedUserId);
+  const atribuicaoPorUsuario = new Map(atribuicoes.map((item) => [item.usuario.id, item]));
+  const gerenteSelecionado = gerenteId === 'none' ? null : gerenteId;
+  const supervisorSelecionado = supervisorId === 'none' ? null : supervisorId;
+  const agenciaSelecionada = agenciaId === 'none' ? null : agenciaId;
+
+  const validationErrors = useMemo(() => {
+    const errors: string[] = [];
+    const supervisorHierarquia = supervisorSelecionado ? atribuicaoPorUsuario.get(supervisorSelecionado)?.hierarquia : null;
+    const agenciaHierarquia = agenciaSelecionada ? atribuicaoPorUsuario.get(agenciaSelecionada)?.hierarquia : null;
+
+    if (gerenteSelecionado && supervisorSelecionado && supervisorHierarquia?.gerente_id && supervisorHierarquia.gerente_id !== gerenteSelecionado) {
+      errors.push('O supervisor selecionado já pertence a outro gerente. Escolha um supervisor vinculado ao gerente informado.');
+    }
+
+    if (gerenteSelecionado && agenciaSelecionada && agenciaHierarquia?.gerente_id && agenciaHierarquia.gerente_id !== gerenteSelecionado) {
+      errors.push('A agência selecionada já pertence a outro gerente. Escolha uma agência compatível com o gerente informado.');
+    }
+
+    if (supervisorSelecionado && agenciaSelecionada && agenciaHierarquia?.supervisor_id && agenciaHierarquia.supervisor_id !== supervisorSelecionado) {
+      errors.push('A agência selecionada já pertence a outro supervisor. Escolha uma agência compatível com o supervisor informado.');
+    }
+
+    return errors;
+  }, [agenciaSelecionada, atribuicaoPorUsuario, gerenteSelecionado, supervisorSelecionado]);
+
+  const hasValidationErrors = validationErrors.length > 0;
   const relacaoSubordinado = (item: AtribuicaoLinha) => {
     const relacoes: string[] = [];
     if (item.hierarquia?.gerente_id === selectedUserId) relacoes.push('Gerente');
@@ -110,6 +136,11 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
   };
 
   const handleSave = async () => {
+    if (hasValidationErrors) {
+      toast.error(validationErrors[0]);
+      return;
+    }
+
     try {
       await upsertHierarquia.mutateAsync({
         vendedor_id: selectedUserId,
