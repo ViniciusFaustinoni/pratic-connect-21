@@ -24195,6 +24195,30 @@ export type Database = {
           },
         ]
       }
+      sga_runtime_state: {
+        Row: {
+          backfill_expira_em: string | null
+          backfill_financeiro_ativo: boolean
+          backfill_iniciado_em: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          backfill_expira_em?: string | null
+          backfill_financeiro_ativo?: boolean
+          backfill_iniciado_em?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          backfill_expira_em?: string | null
+          backfill_financeiro_ativo?: boolean
+          backfill_iniciado_em?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sga_sync_financeiro_jobs: {
         Row: {
           agendado_em: string

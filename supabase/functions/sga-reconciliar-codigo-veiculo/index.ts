@@ -1,12 +1,12 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import {
-  getHinovaCreds,
-  autenticarHinova,
+  getHinovaSession,
   buscarAssociadoComVeiculosPorCpf,
   HinovaTransientError,
   HinovaNotFoundError,
   calcularProximoRetry,
+  isBackfillFinanceiroAtivo,
 } from '../_shared/hinova-client.ts';
 
 const corsHeaders = {
@@ -127,6 +127,15 @@ async function processar(supabase: any, body: ReqBody): Promise<Response> {
   const delayMs = Math.max(body.delay_ms ?? 100, 0);
   const triggerBackfill = body.trigger_backfill !== false; // default true
 
+  // 0) Coordenação: se backfill financeiro está ativo, NÃO concorre por sessão Hinova
+  if (await isBackfillFinanceiroAtivo(supabase)) {
+    console.log('[processar] pulando — backfill financeiro ativo');
+    return new Response(
+      JSON.stringify({ ok: true, skipped: true, reason: 'backfill_financeiro_ativo' }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
+  }
+
   // 1) Pega jobs pendentes + retries vencidos
   const nowIso = new Date().toISOString();
   const { data: jobs, error: errJobs } = await supabase
@@ -146,21 +155,12 @@ async function processar(supabase: any, body: ReqBody): Promise<Response> {
     );
   }
 
-  // 2) Auth Hinova (compartilhada)
-  const creds = await getHinovaCreds(supabase);
-  if (!creds) {
-    return new Response(
-      JSON.stringify({ ok: false, error: 'Credenciais Hinova não configuradas' }),
-      { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    );
-  }
-
+  // 2) Auth Hinova (cache global de sessão)
   let session: any;
   try {
-    session = await autenticarHinova(creds);
+    session = await getHinovaSession(supabase);
   } catch (e: any) {
     if (e instanceof HinovaTransientError) {
-      // Auth falhou (provavelmente janela horária) → reagenda TODOS os jobs deste batch
       const proximo = calcularProximoRetry(e.reason).toISOString();
       const ids = jobs.map((j: any) => j.id);
       await supabase
@@ -172,7 +172,11 @@ async function processar(supabase: any, body: ReqBody): Promise<Response> {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
-    throw e;
+    // Erro não-transiente (ex.: credenciais não configuradas)
+    return new Response(
+      JSON.stringify({ ok: false, error: String(e?.message || e) }),
+      { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
   }
 
   // 3) Processa job a job

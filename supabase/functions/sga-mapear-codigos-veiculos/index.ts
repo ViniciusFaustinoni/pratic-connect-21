@@ -3,7 +3,7 @@
 // Body opcional: { batch_size?: number, delay_ms?: number, veiculo_ids?: string[] }
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getHinovaCreds, autenticarHinova, buscarVeiculoPorPlaca } from '../_shared/hinova-client.ts';
+import { getHinovaSession, buscarVeiculoPorPlaca, isBackfillFinanceiroAtivo } from '../_shared/hinova-client.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -22,6 +22,11 @@ serve(async (req) => {
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
   try {
+    // Coordenação: pula se backfill financeiro está ativo
+    if (await isBackfillFinanceiroAtivo(supabase)) {
+      return json(200, { success: true, skipped: true, reason: 'backfill_financeiro_ativo' });
+    }
+
     const body = await req.json().catch(() => ({}));
     const batchSize = Math.min(Math.max(parseInt(body.batch_size ?? '50'), 1), 200);
     const delayMs = Math.max(parseInt(body.delay_ms ?? '250'), 50);
@@ -41,10 +46,8 @@ serve(async (req) => {
     if (error) throw error;
     if (!veiculos?.length) return json(200, { success: true, processados: 0, mapeados: 0, restantes: 0 });
 
-    const creds = await getHinovaCreds(supabase);
-    if (!creds) throw new Error('Credenciais Hinova não configuradas');
-    const session = await autenticarHinova(creds);
-    if (!session) throw new Error('Falha ao autenticar na Hinova');
+    const session = await getHinovaSession(supabase);
+    if (!session) throw new Error('Falha ao obter sessão Hinova');
 
     let mapeados = 0;
     let nao_encontrados = 0;

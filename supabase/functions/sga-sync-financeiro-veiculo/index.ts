@@ -7,8 +7,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
-  getHinovaCreds,
-  autenticarHinova,
+  getHinovaSession,
   buscarSituacaoFinanceiraVeiculo,
   listarBoletosVeiculo,
   mapStatusBoleto,
@@ -18,6 +17,7 @@ import {
   HinovaTransientError,
   HinovaNotFoundError,
   calcularProximoRetry,
+  invalidateHinovaSession,
 } from '../_shared/hinova-client.ts';
 
 const corsHeaders = {
@@ -141,10 +141,8 @@ serve(async (req) => {
     const authStart = Date.now();
     let session;
     try {
-      const creds = await getHinovaCreds(supabase);
-      if (!creds) throw new Error('Credenciais Hinova não configuradas');
-      session = await autenticarHinova(creds);
-      if (!session) throw new Error('Falha ao autenticar na Hinova');
+      session = await getHinovaSession(supabase);
+      if (!session) throw new Error('Falha ao obter sessão Hinova');
 
       await supabase.from('sga_sync_logs').insert({
         veiculo_id: veiculoId,
@@ -155,6 +153,10 @@ serve(async (req) => {
       });
     } catch (authErr: any) {
       const msg = String(authErr?.message || authErr);
+      // Se foi 401 do cache, invalida e propaga (próximo job revalida)
+      if (authErr instanceof HinovaTransientError && authErr.reason === 'auth') {
+        invalidateHinovaSession();
+      }
       await supabase.from('sga_sync_logs').insert({
         veiculo_id: veiculoId,
         associado_id: associado.id,

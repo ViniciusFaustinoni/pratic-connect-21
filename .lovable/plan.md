@@ -1,60 +1,69 @@
+# Resolver 401 intermitente Hinova — Sessão compartilhada + retry + coordenação
 
-## Diagnóstico
+## Problema
+Cada chamada hoje faz `autenticarHinova` própria. Como Hinova é stateful (novo login invalida token anterior), com ~28 logins/min entre `sga-sync-financeiro-veiculo`, `cron-sga-reconciliar-codigo-veiculo` e outros, sessões em voo levam 401 "Login ou senha inválido". Resultado: 110 falhas 401 + 260 falhas de auth nos últimos minutos, travando o backfill (205.790 jobs pendentes).
 
-Revisei a implementação atual contra a documentação que você passou e contra o modal do backfill (imagem):
+## Solução — 3 camadas
 
-### O que JÁ está correto ✅
-- **Cliente Hinova (`hinova-client.ts`)**: `listarBoletosVeiculoJanela` envia o body **exatamente** como a doc exige — `codigo_associado`, `codigo_veiculo`, `data_vencimento_inicial/_final`, `data_inicial/_final` (compat) e `link_boleto: true`. Respeita o limite de **90 dias** por chamada.
-- **Função iteradora `listarBoletosVeiculo`**: itera em janelas de 90d cobrindo até 3 anos para trás, deduplicando por `nosso_numero`.
-- **Função de teste `sga-testar-boletos-veiculo`** (read-only, sem efeito no banco): usa a assinatura nova corretamente. UI já existe na aba "Teste Boletos" em `/configuracoes/integracoes-sga-hinova`.
+### 1) Cache global de sessão em `_shared/hinova-client.ts`
+- Adicionar singleton em escopo de módulo: `let cachedSession: { session, expiresAt } | null`.
+- Nova função `getHinovaSession(supabase, { force?: boolean })`:
+  - Se `cachedSession` válido (TTL 25 min) e não `force`, retorna o mesmo `tokenUsuario`.
+  - Caso contrário, chama `getHinovaCreds` + `autenticarHinova` e cacheia.
+  - Lock simples via `pendingAuthPromise` para evitar autenticações paralelas dentro da MESMA instância da Edge Function (várias `Promise.all` autenticando ao mesmo tempo).
+- Como cada instância de Edge Function tem seu próprio módulo, o cache é **por instância**. Reduz ~95% dos logins (de ~28/min para ~1 a cada 25 min por instância ativa).
 
-### O bug que explica os "0 cobranças importadas" da imagem ❌
-O **`sga-sync-financeiro-veiculo`** (a função que o **modal de backfill** dispara para cada veículo) ainda usa o código antigo:
+### 2) Auto-reautenticação em 401 dentro do client
+- Criar wrapper `hinovaFetch(s, url, init, ctx)` que:
+  - Faz a chamada normal.
+  - Se resposta for 401/403 (e mensagem não for janela horária), invalida o cache (`cachedSession = null`), chama `getHinovaSession({ force: true })` UMA vez, e refaz a chamada com o novo `tokenUsuario`.
+  - Se ainda 401, aí sim lança `HinovaTransientError`.
+- Refatorar `buscarVeiculoPorPlaca`, `buscarSituacaoFinanceiraVeiculo`, `listarBoletosVeiculoJanela`, `buscarAssociadoComVeiculosPorCpf` para usarem `hinovaFetch` em vez de `fetch` direto.
 
-```ts
-const janela = janela5Meses();   // retorna { dataInicial: "23/05/2024", dataFinal: "23/04/2025" } (strings)
-boletos = await listarBoletosVeiculo(session, codigoAssociado, codigoVeiculo, janela);
-```
-
-Mas a **nova assinatura** de `listarBoletosVeiculo` é:
-```ts
-opts?: { anosTras?: number; diasJanela?: number; linkBoleto?: boolean }
-```
-
-→ As strings `dataInicial`/`dataFinal` são **silenciosamente ignoradas** (TypeScript estrutural não cobre isso em runtime), e a função cai nos defaults — o que ainda funcionaria, MAS:
-
-1. Sem `linkBoleto: true` explícito (pega o default `true`, ok).
-2. **A janela de 5 meses pretendida virou 3 anos** (12 chamadas/veículo). Isso explica também a lentidão e o estouro de janela horária visível na sua imagem ("Hinova autenticação falhou (200): Usuário com restri\... — 260").
-3. Pior: como nenhuma versão antiga compatível existe mais, dependendo de combinações de retry, o request pode ser disparado com payload incompleto e levar a 406.
-
-Resultado prático na sua tela: **205.878 jobs pendentes, 10 concluídos, 0 cobranças importadas** — o sync está rodando mas não retornando nada útil.
-
-## Correções propostas
-
-### 1. `supabase/functions/sga-sync-financeiro-veiculo/index.ts`
-- Remover a função morta `janela5Meses()`.
-- Substituir as **2 chamadas** de `listarBoletosVeiculo(...)` para usar a nova assinatura:
-  ```ts
-  const opcoesBoletos = { anosTras: 3, diasJanela: 90, linkBoleto: true };
-  boletos = await listarBoletosVeiculo(session, codigoAssociado, codigoVeiculo, opcoesBoletos);
-  ```
-- Manter idempotência por `nosso_numero` (já existe no upsert).
-
-### 2. Verificar se há outros consumidores desatualizados
-Vou checar `sga-backfill-financeiro`, `sga-backfill-massa-orquestrador`, `cron-sga-sync-financeiro-diario`, `disparar-boletos-lote` e `emitir-boleto-individual` — se algum chamar `listarBoletosVeiculo` com a assinatura antiga, aplico a mesma correção.
-
-### 3. Reagendar a fila atual
-Não precisa migration nem nova tabela. Após o deploy, a UI do modal de backfill já tem o botão **"Reagendar erros (janela horária / 401)"** e **"Forçar sync agora (drenar fila)"** — basta clicar para começar a drenar com a função corrigida. A função é idempotente por `nosso_numero`, então re-rodar é seguro.
-
-## Validação (passo a passo após o deploy)
-
-1. **Teste isolado primeiro** (já implementado): `/configuracoes/integracoes-sga-hinova → aba "Teste Boletos"` → digitar uma placa real → janela 90 dias → conferir que a tela mostra request enviado, resposta crua e tabela com pelo menos 1 boleto. ➜ **Sem isso passar, não tocamos no backfill.**
-2. **Dry-run em 1 veículo**: na fila do backfill, marcar 1 veículo como pendente e clicar em "Forçar sync agora". Conferir nos logs (`sga_sync_logs`) que `action=listar_boletos_financeiro` retornou `quantidade > 0` e que a tabela `cobrancas` ganhou a linha (filtrar por `origem='sga_hinova'`).
-3. **Rodar backfill completo** apenas após (1) e (2) confirmados.
+### 3) Coordenação backfill ↔ crons
+- Adicionar flag em `integracoes_config` (ou criar `sga_runtime_state`): `backfill_financeiro_ativo BOOLEAN DEFAULT false`, `backfill_iniciado_em TIMESTAMPTZ`.
+- `sga-backfill-financeiro` seta `true` ao enfileirar/iniciar e `false` ao concluir/parar (ou TTL 60 min).
+- Cron `cron-sga-reconciliar-codigo-veiculo` e `cron-sga-mapear-codigos-veiculos` checam a flag no início; se ativa, retornam `{ skipped: true, reason: 'backfill_ativo' }` sem rodar.
+- Botão "Forçar sync agora" também desabilita crons via mesma flag.
 
 ## Arquivos afetados
 
-- `supabase/functions/sga-sync-financeiro-veiculo/index.ts` — corrige assinatura.
-- (possivelmente) `supabase/functions/sga-backfill-financeiro/index.ts`, `sga-backfill-massa-orquestrador/index.ts`, `cron-sga-sync-financeiro-diario/index.ts`, `disparar-boletos-lote/index.ts`, `emitir-boleto-individual/index.ts` — se alguma usar a assinatura antiga, mesma correção.
+```text
+supabase/functions/_shared/hinova-client.ts          (refatoração principal)
+supabase/functions/sga-sync-financeiro-veiculo/index.ts   (usar getHinovaSession)
+supabase/functions/sga-testar-boletos-veiculo/index.ts    (usar getHinovaSession)
+supabase/functions/sga-reconciliar-codigo-veiculo/index.ts (checar flag + cache)
+supabase/functions/sga-mapear-codigos-veiculos/index.ts   (checar flag + cache)
+supabase/functions/sga-backfill-financeiro/index.ts       (setar/limpar flag)
+supabase/functions/hinova-diag-placa/index.ts             (usar getHinovaSession)
+```
 
-Sem novas tabelas, sem novos secrets, sem mudança de UI. É uma correção cirúrgica num único ponto que destrava o backfill da imagem.
+## Migração SQL
+
+```sql
+-- Tabela de estado de runtime do SGA (singleton)
+CREATE TABLE IF NOT EXISTS public.sga_runtime_state (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  backfill_financeiro_ativo boolean NOT NULL DEFAULT false,
+  backfill_iniciado_em timestamptz,
+  backfill_expira_em timestamptz, -- TTL 60min anti-deadlock
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+INSERT INTO public.sga_runtime_state (backfill_financeiro_ativo) VALUES (false);
+ALTER TABLE public.sga_runtime_state ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Diretores podem gerenciar" ON public.sga_runtime_state
+  FOR ALL USING (has_role(auth.uid(), 'diretor'));
+```
+
+## Validação após deploy
+1. Deploy automático das 7 edge functions.
+2. Clicar "Forçar sync agora" em /financeiro/cobrancas/recuperacao.
+3. Em 5 min observar logs de `sga-sync-financeiro-veiculo`:
+   - Esperado: ≤2 chamadas a `/usuario/autenticar` por instância.
+   - Esperado: queda de erros "Hinova autenticação 401" para perto de 0.
+4. Status do backfill deve começar a movimentar `concluido` (>38 atual) e `cobrancas_sga` (>0).
+
+## Observações
+- O cache é em memória da instância da edge function — não persiste entre cold starts, mas isso é OK: cold start gera 1 login, depois reusa.
+- Não mexe em RLS, schema de cobranças nem na lógica de janelas de 90 dias já corrigida.
+- Reversível: basta remover o singleton e voltar a chamar `autenticarHinova` direto.

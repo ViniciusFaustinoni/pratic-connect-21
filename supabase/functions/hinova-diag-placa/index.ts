@@ -2,7 +2,7 @@
 // retorna o body cru de cada chamada para inspeção.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getHinovaCreds, autenticarHinova } from '../_shared/hinova-client.ts';
+import { getHinovaSession } from '../_shared/hinova-client.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -19,9 +19,7 @@ serve(async (req) => {
   const cpfs: string[] = body.cpfs ?? [];
 
   try {
-    const creds = await getHinovaCreds(supabase);
-    if (!creds) throw new Error('sem creds');
-    const session = await autenticarHinova(creds);
+    const session = await getHinovaSession(supabase);
     if (!session) throw new Error('sem session');
 
     const headers = {

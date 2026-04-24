@@ -221,58 +221,84 @@ serve(async (req) => {
     const batchSize = Math.min(Math.max(parseInt(body.batch_size ?? '50'), 1), 100);
     const delayMs = Math.max(parseInt(body.delay_ms ?? '150'), 50);
 
-    // Pega pendentes + pendente_retry vencidos
-    const nowIso = new Date().toISOString();
-    const { data: pendentes, error: jErr } = await supabase
-      .from('sga_sync_financeiro_jobs')
-      .select('id, veiculo_id')
-      .eq('status', 'pendente')
-      .in('tipo', ['backfill_inicial', 'resync'])
-      .order('agendado_em', { ascending: true })
-      .limit(batchSize);
-    if (jErr) throw jErr;
+    // Marca backfill ativo (TTL 30min) para pausar crons concorrentes
+    const ttlExpira = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    await supabase
+      .from('sga_runtime_state')
+      .update({
+        backfill_financeiro_ativo: true,
+        backfill_iniciado_em: new Date().toISOString(),
+        backfill_expira_em: ttlExpira,
+      })
+      .gte('id', '00000000-0000-0000-0000-000000000000');
 
-    let jobs = pendentes ?? [];
-
-    if (jobs.length < batchSize) {
-      const restante = batchSize - jobs.length;
-      const { data: retries } = await supabase
+    try {
+      // Pega pendentes + pendente_retry vencidos
+      const nowIso = new Date().toISOString();
+      const { data: pendentes, error: jErr } = await supabase
         .from('sga_sync_financeiro_jobs')
         .select('id, veiculo_id')
-        .eq('status', 'pendente_retry')
-        .lte('proximo_retry_em', nowIso)
+        .eq('status', 'pendente')
         .in('tipo', ['backfill_inicial', 'resync'])
-        .order('proximo_retry_em', { ascending: true })
-        .limit(restante);
-      jobs = jobs.concat(retries ?? []);
-    }
+        .order('agendado_em', { ascending: true })
+        .limit(batchSize);
+      if (jErr) throw jErr;
 
-    if (!jobs.length) return json(200, { success: true, processados: 0, ok: 0, fail: 0 });
+      let jobs = pendentes ?? [];
 
-    let ok = 0;
-    let fail = 0;
-    let retry = 0;
-
-    for (const job of jobs) {
-      try {
-        const { data, error } = await supabase.functions.invoke('sga-sync-financeiro-veiculo', {
-          body: { veiculo_id: job.veiculo_id, job_id: job.id },
-        });
-        if (error) throw error;
-        if (data?.success) ok++;
-        else if (data?.retry) retry++;
-        else fail++;
-      } catch (e: any) {
-        fail++;
-        await supabase
+      if (jobs.length < batchSize) {
+        const restante = batchSize - jobs.length;
+        const { data: retries } = await supabase
           .from('sga_sync_financeiro_jobs')
-          .update({ status: 'erro', concluido_em: new Date().toISOString(), ultimo_erro: String(e?.message || e) })
-          .eq('id', job.id);
+          .select('id, veiculo_id')
+          .eq('status', 'pendente_retry')
+          .lte('proximo_retry_em', nowIso)
+          .in('tipo', ['backfill_inicial', 'resync'])
+          .order('proximo_retry_em', { ascending: true })
+          .limit(restante);
+        jobs = jobs.concat(retries ?? []);
       }
-      await sleep(delayMs);
-    }
 
-    return json(200, { success: true, processados: jobs.length, ok, fail, retry });
+      if (!jobs.length) {
+        // Fila vazia → desmarca flag para liberar crons
+        await supabase
+          .from('sga_runtime_state')
+          .update({ backfill_financeiro_ativo: false, backfill_expira_em: null })
+          .gte('id', '00000000-0000-0000-0000-000000000000');
+        return json(200, { success: true, processados: 0, ok: 0, fail: 0 });
+      }
+
+      let ok = 0;
+      let fail = 0;
+      let retry = 0;
+
+      for (const job of jobs) {
+        try {
+          const { data, error } = await supabase.functions.invoke('sga-sync-financeiro-veiculo', {
+            body: { veiculo_id: job.veiculo_id, job_id: job.id },
+          });
+          if (error) throw error;
+          if (data?.success) ok++;
+          else if (data?.retry) retry++;
+          else fail++;
+        } catch (e: any) {
+          fail++;
+          await supabase
+            .from('sga_sync_financeiro_jobs')
+            .update({ status: 'erro', concluido_em: new Date().toISOString(), ultimo_erro: String(e?.message || e) })
+            .eq('id', job.id);
+        }
+        await sleep(delayMs);
+      }
+
+      return json(200, { success: true, processados: jobs.length, ok, fail, retry });
+    } finally {
+      // Renova TTL para o próximo batch (não desmarca — o TTL de 30min cuida disso se o cron parar)
+      await supabase
+        .from('sga_runtime_state')
+        .update({ backfill_expira_em: new Date(Date.now() + 10 * 60 * 1000).toISOString() })
+        .gte('id', '00000000-0000-0000-0000-000000000000');
+    }
   } catch (err: any) {
     console.error('[SGA Backfill] erro:', err);
     return json(500, { success: false, error: String(err?.message || err) });

@@ -4,8 +4,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
-  getHinovaCreds,
-  autenticarHinova,
+  getHinovaSession,
   buscarVeiculoPorPlaca,
   listarBoletosVeiculoJanela,
   mapStatusBoleto,
@@ -97,10 +96,13 @@ serve(async (req) => {
     const associado: any = Array.isArray(veiculo.associados) ? veiculo.associados[0] : veiculo.associados;
     if (!associado) return json(404, { success: false, error: 'Associado vinculado não encontrado' });
 
-    // Autentica
-    const creds = await getHinovaCreds(supabase);
-    if (!creds) return json(500, { success: false, error: 'Credenciais Hinova não configuradas' });
-    const session = await autenticarHinova(creds);
+    // Autentica (cache global de sessão)
+    let session;
+    try {
+      session = await getHinovaSession(supabase);
+    } catch (e: any) {
+      return json(500, { success: false, error: `Falha ao autenticar Hinova: ${e?.message || e}` });
+    }
     if (!session) return json(500, { success: false, error: 'Falha ao autenticar Hinova' });
 
     let codigoVeiculo = Number(veiculo.codigo_hinova) || null;

@@ -147,6 +147,117 @@ export async function getHinovaCreds(supabase: any): Promise<HinovaCreds | null>
   return { apiUrl, token, usuario, senha };
 }
 
+// ===================================================================
+// CACHE GLOBAL DE SESSÃO (por instância da Edge Function)
+// ===================================================================
+// Hinova é stateful: cada novo login invalida o token anterior.
+// Cachear a sessão por instância reduz drasticamente os 401 causados
+// por contenção entre chamadas concorrentes (backfill, crons, etc).
+// TTL conservador de 25 min (token Hinova dura ~30 min em produção).
+// ===================================================================
+
+const SESSION_TTL_MS = 25 * 60 * 1000;
+
+interface CachedSession {
+  session: HinovaSession;
+  expiresAt: number;
+}
+
+let cachedSession: CachedSession | null = null;
+let pendingAuth: Promise<HinovaSession> | null = null;
+
+/** Invalida cache (chamado quando 401 indica token morto) */
+export function invalidateHinovaSession(): void {
+  cachedSession = null;
+}
+
+/**
+ * Retorna sessão Hinova reutilizando cache quando válido.
+ * Serializa autenticações concorrentes via `pendingAuth` (sem race).
+ *
+ * @param force ignora cache e força nova autenticação
+ */
+export async function getHinovaSession(
+  supabase: any,
+  opts?: { force?: boolean },
+): Promise<HinovaSession> {
+  const force = !!opts?.force;
+  const now = Date.now();
+
+  if (!force && cachedSession && cachedSession.expiresAt > now) {
+    return cachedSession.session;
+  }
+
+  // Se já há uma autenticação em andamento, aguarda ela
+  if (pendingAuth) {
+    return pendingAuth;
+  }
+
+  pendingAuth = (async () => {
+    try {
+      const creds = await getHinovaCreds(supabase);
+      if (!creds) {
+        throw new Error('Credenciais Hinova não configuradas');
+      }
+      const session = await autenticarHinova(creds);
+      if (!session) {
+        throw new Error('autenticarHinova retornou null');
+      }
+      cachedSession = { session, expiresAt: Date.now() + SESSION_TTL_MS };
+      return session;
+    } finally {
+      pendingAuth = null;
+    }
+  })();
+
+  return pendingAuth;
+}
+
+/**
+ * Wrapper de fetch para chamadas autenticadas Hinova.
+ * Em 401/403 (sem ser janela horária), invalida o cache, reautentica UMA vez
+ * e refaz a requisição. Reduz quase 100% dos falsos positivos de auth.
+ *
+ * `buildRequest(token)` deve retornar { url, init } para a chamada,
+ * usando o `token` recebido como Authorization Bearer.
+ */
+export async function hinovaFetch(
+  supabase: any,
+  buildRequest: (token: string) => { url: string; init: RequestInit },
+  ctx: string,
+): Promise<{ response: Response; bodyText: string; session: HinovaSession }> {
+  let session = await getHinovaSession(supabase);
+
+  const doFetch = async (s: HinovaSession) => {
+    const { url, init } = buildRequest(s.tokenUsuario);
+    let r: Response;
+    try {
+      r = await fetch(url, init);
+    } catch (e: any) {
+      throw new HinovaTransientError(`[${ctx}] rede: ${String(e?.message || e)}`, {
+        httpStatus: 0,
+        reason: 'network',
+      });
+    }
+    const txt = await r.text();
+    return { r, txt };
+  };
+
+  let { r, txt } = await doFetch(session);
+
+  // Se 401/403 e NÃO for janela horária, tenta reautenticar uma única vez
+  if ((r.status === 401 || r.status === 403) && !isJanelaHorariaError(txt)) {
+    console.warn(`[${ctx}] 401/403 detectado — invalidando cache e reautenticando`);
+    invalidateHinovaSession();
+    session = await getHinovaSession(supabase, { force: true });
+    const retry = await doFetch(session);
+    r = retry.r;
+    txt = retry.txt;
+  }
+
+  return { response: r, bodyText: txt, session };
+}
+
 export async function autenticarHinova(creds: HinovaCreds): Promise<HinovaSession | null> {
   let r: Response;
   try {
@@ -598,3 +709,78 @@ export function calcularProximoRetry(reason: HinovaTransientError['reason']): Da
   // server / auth / network → 30 minutos
   return new Date(now.getTime() + 30 * 60 * 1000);
 }
+
+/**
+ * Executa `op(session)` reusando o cache de sessão. Em caso de
+ * `HinovaTransientError reason='auth'`, invalida o cache, força nova
+ * autenticação e tenta UMA vez mais. Outros erros propagam direto.
+ *
+ * Use isto como wrapper padrão em todas as chamadas a helpers
+ * (buscarVeiculoPorPlaca, listarBoletosVeiculo, etc).
+ */
+export async function withHinovaAuthRetry<T>(
+  supabase: any,
+  op: (s: HinovaSession) => Promise<T>,
+): Promise<T> {
+  let session = await getHinovaSession(supabase);
+  try {
+    return await op(session);
+  } catch (e: any) {
+    if (e instanceof HinovaTransientError && e.reason === 'auth') {
+      console.warn('[withHinovaAuthRetry] auth falhou — invalidando cache e tentando 1x mais');
+      invalidateHinovaSession();
+      session = await getHinovaSession(supabase, { force: true });
+      return await op(session);
+    }
+    throw e;
+  }
+}
+
+/**
+ * Verifica se o backfill financeiro está ativo (pausa crons concorrentes).
+ * Crons de SGA devem chamar isto e pular execução quando true.
+ */
+export async function isBackfillFinanceiroAtivo(supabase: any): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('sga_runtime_state')
+      .select('backfill_financeiro_ativo, backfill_expira_em')
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return false;
+    if (!data.backfill_financeiro_ativo) return false;
+    // TTL: se expirou, considera inativo (anti-deadlock)
+    if (data.backfill_expira_em && new Date(data.backfill_expira_em).getTime() < Date.now()) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Marca backfill como ativo por `ttlMinutes` (default 60min) */
+export async function marcarBackfillAtivo(supabase: any, ttlMinutes = 60): Promise<void> {
+  const now = new Date();
+  const expira = new Date(now.getTime() + ttlMinutes * 60 * 1000);
+  await supabase
+    .from('sga_runtime_state')
+    .update({
+      backfill_financeiro_ativo: true,
+      backfill_iniciado_em: now.toISOString(),
+      backfill_expira_em: expira.toISOString(),
+    })
+    .gte('id', '00000000-0000-0000-0000-000000000000'); // update-all (singleton)
+}
+
+/** Limpa flag de backfill ativo */
+export async function marcarBackfillInativo(supabase: any): Promise<void> {
+  await supabase
+    .from('sga_runtime_state')
+    .update({
+      backfill_financeiro_ativo: false,
+      backfill_expira_em: null,
+    })
+    .gte('id', '00000000-0000-0000-0000-000000000000');
+}
+
