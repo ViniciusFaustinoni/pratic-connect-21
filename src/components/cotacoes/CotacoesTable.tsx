@@ -20,7 +20,7 @@ import type { CotacaoWithRelations } from '@/hooks/useCotacoes';
 import type { StatusCotacao } from '@/types/database';
 import { toast } from 'sonner';
 
-type StatusCotacaoExtended = StatusCotacao | 'visualizada';
+export type StatusCotacaoExtended = StatusCotacao | 'visualizada';
 
 // Etapas da venda
 type EtapaVenda = 
