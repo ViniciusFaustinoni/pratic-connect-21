@@ -92,7 +92,7 @@ export function useAlterarEnderecoTipo() {
         throw new Error('Selecione a oficina/base.');
       }
       if (tipoNovo === 'base' && !input.horario) {
-        throw new Error('Informe o período do atendimento na base.');
+        throw new Error('Informe o horário/período do atendimento na base.');
       }
       // Normaliza período (input.horario pode vir como 'manha'/'tarde' ou HH:MM legado)
       const periodoCanonico = (() => {
@@ -150,7 +150,7 @@ export function useAlterarEnderecoTipo() {
         if (!input.servicoId) throw new Error('servicoId obrigatório.');
         const { data: srv, error: errSrv } = await supabase
           .from('servicos')
-          .select('id, data_agendada, cotacao_id, instalacao_origem_id, vistoria_origem_id, observacoes, associado_id')
+          .select('id, data_agendada, cotacao_id, instalacao_origem_id, vistoria_origem_id, observacoes, associado_id, veiculo_id')
           .eq('id', input.servicoId)
           .maybeSingle();
         if (errSrv || !srv) throw errSrv || new Error('Serviço não encontrado.');
@@ -171,6 +171,17 @@ export function useAlterarEnderecoTipo() {
             cliente_telefone = assoc.telefone || null;
           }
         }
+        if ((srv as any).veiculo_id) {
+          const { data: veiculo } = await supabase
+            .from('veiculos')
+            .select('placa, marca, modelo, ano_modelo')
+            .eq('id', (srv as any).veiculo_id)
+            .maybeSingle();
+          veiculo_placa = veiculo?.placa || null;
+          veiculo_descricao = veiculo
+            ? `${veiculo.marca || ''} ${veiculo.modelo || ''} ${veiculo.ano_modelo || ''}`.trim()
+            : null;
+        }
 
         const { error: errIns } = await supabase.from('agendamentos_base').insert({
           cotacao_id: srv.cotacao_id,
@@ -185,7 +196,7 @@ export function useAlterarEnderecoTipo() {
           oficina_id: input.oficinaId!,
           atendido_por: input.profissionalId ?? null,
           status: input.profissionalId ? 'confirmado' : 'agendado',
-          observacoes: 'Convertido de rota',
+            observacoes: `Convertido de rota${srv.observacoes ? ` — ${srv.observacoes}` : ''}`,
         });
         if (errIns) throw errIns;
 
@@ -265,6 +276,9 @@ export function useAlterarEnderecoTipo() {
           .select('id')
           .single();
         if (errIns) throw errIns;
+        if (!latitude || !longitude) {
+          toast.warning('Convertido para rota, mas sem coordenadas. Corrija o endereço para liberar no mapa.');
+        }
 
         const { error: errUpd } = await supabase
           .from('agendamentos_base')
@@ -287,6 +301,7 @@ export function useAlterarEnderecoTipo() {
     onSuccess: () => {
       toast.success('Alteração realizada com sucesso');
       qc.invalidateQueries({ queryKey: ['vistorias-mapa'] });
+      qc.invalidateQueries({ queryKey: ['mapa-vistorias'] });
       qc.invalidateQueries({ queryKey: ['servicos-para-atribuir-manual'] });
       qc.invalidateQueries({ queryKey: ['vistoriadores-ativos-manual'] });
       qc.invalidateQueries({ queryKey: ['tarefa-atual'] });

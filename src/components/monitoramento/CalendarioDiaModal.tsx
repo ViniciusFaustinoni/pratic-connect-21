@@ -10,13 +10,14 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { MapPin, Building2, Clock, User, Car, CalendarClock, Loader2, ChevronRight, Map as MapIcon, Wrench, Lock } from 'lucide-react';
+import { MapPin, Building2, Clock, User, Car, CalendarClock, Loader2, ChevronRight, Map as MapIcon, Wrench, Lock, MapPinned } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useProfissionaisEquipe } from '@/hooks/useEquipe';
 import { toast } from 'sonner';
 import { STATUS_INSTALACAO_COLORS } from '@/types/monitoramento';
 import { useDatasBloqueadasSet } from '@/hooks/useDatasBloqueadas';
+import { AlterarEnderecoTipoDialog } from '@/components/mapa/AlterarEnderecoTipoDialog';
 
 interface CalendarioDiaModalProps {
   open: boolean;
@@ -154,6 +155,7 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
   const [anteciparId, setAnteciparId] = useState<string | null>(null);
   const [atribuirId, setAtribuirId] = useState<string | null>(null);
   const [tecnicoSelecionado, setTecnicoSelecionado] = useState<string>('');
+  const [alterarBase, setAlterarBase] = useState<any | null>(null);
 
   const hoje = format(new Date(), 'yyyy-MM-dd');
   const parsedData = data ? parseISO(data) : new Date();
@@ -205,7 +207,7 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
     queryFn: async () => {
       const { data: rows, error } = await supabase
         .from('agendamentos_base')
-        .select('id, status, data_agendada, horario, cliente_nome, veiculo_placa, veiculo_descricao, atendido_por, oficina_id, vistoria_id, tecnico:profiles!agendamentos_base_atendido_por_fkey(nome), oficina:oficinas!agendamentos_base_oficina_id_fkey(nome_fantasia, razao_social), vistoria:vistorias!agendamentos_base_vistoria_id_fkey(local_vistoria, status, iniciada_em, concluida_em)')
+        .select('id, status, data_agendada, horario, cliente_nome, veiculo_placa, veiculo_descricao, atendido_por, oficina_id, vistoria_id, tecnico:profiles!agendamentos_base_atendido_por_fkey(nome), oficina:oficinas!agendamentos_base_oficina_id_fkey(nome_fantasia, razao_social), vistoria:vistorias!agendamentos_base_vistoria_id_fkey(local_vistoria, status, iniciada_em, concluida_em, endereco_cep, endereco_logradouro, endereco_numero, endereco_complemento, endereco_bairro, endereco_cidade, endereco_uf)')
         .eq('data_agendada', data)
         .order('horario');
       if (error) throw error;
@@ -595,6 +597,18 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
                               </Button>
                             )}
 
+                            {ag.status !== 'cancelado' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="shrink-0 gap-1 text-purple-600 border-purple-300 hover:bg-purple-50"
+                                onClick={() => setAlterarBase(ag)}
+                              >
+                                <MapPinned className="h-3.5 w-3.5" />
+                                Rota/Base
+                              </Button>
+                            )}
+
                             {/* Botão Antecipar: só para tarefas futuras */}
                             {dataFutura && ag.status !== 'cancelado' && (
                               <Button
@@ -690,6 +704,30 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
             </TabsContent>
           </Tabs>
         )}
+
+        <AlterarEnderecoTipoDialog
+          open={!!alterarBase}
+          onOpenChange={(open) => !open && setAlterarBase(null)}
+          origem="base"
+          agendamentoBaseId={alterarBase?.id || null}
+          resumo={{
+            placa: alterarBase?.veiculo_placa,
+            associadoNome: alterarBase?.cliente_nome,
+          }}
+          initialEndereco={{
+            cep: alterarBase?.vistoria?.endereco_cep,
+            logradouro: alterarBase?.vistoria?.endereco_logradouro,
+            numero: alterarBase?.vistoria?.endereco_numero,
+            complemento: alterarBase?.vistoria?.endereco_complemento,
+            bairro: alterarBase?.vistoria?.endereco_bairro,
+            cidade: alterarBase?.vistoria?.endereco_cidade,
+            uf: alterarBase?.vistoria?.endereco_uf,
+          }}
+          initialProfissionalId={alterarBase?.atendido_por || null}
+          initialOficinaId={alterarBase?.oficina_id || null}
+          initialHorario={alterarBase?.horario || null}
+          onSuccess={() => setAlterarBase(null)}
+        />
       </DialogContent>
     </Dialog>
   );
