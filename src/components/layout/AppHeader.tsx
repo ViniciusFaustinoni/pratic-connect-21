@@ -19,12 +19,15 @@ import { UserAvatar } from '@/components/UserAvatar';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { GlobalSearch } from '@/components/layout/GlobalSearch';
 import { GlobalBreadcrumb } from '@/components/layout/GlobalBreadcrumb';
+import { RelatarErroModal } from '@/components/suporte/RelatarErroModal';
+import { TestarCorrecoesButton } from '@/components/suporte/TestarCorrecoesButton';
 
 export function AppHeader() {
   const navigate = useNavigate();
   const { profile, roles, signOut } = useAuth();
   const { isPerfilLimitado } = usePermissions();
   const { getRoleLabel } = useAppRoles();
+  const [relatarOpen, setRelatarOpen] = useState(false);
 
   const handleSignOut = async () => {
     await signOut();
@@ -90,6 +93,10 @@ export function AppHeader() {
             <DropdownMenuItem onClick={() => navigate('/perfil')} className="cursor-pointer">
               <User className="mr-2 h-4 w-4" />
               Meu Perfil
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setRelatarOpen(true)} className="cursor-pointer">
+              <Bug className="mr-2 h-4 w-4" />
+              Relatar Erro
             </DropdownMenuItem>
             {!isPerfilLimitado && (
               <DropdownMenuItem onClick={() => navigate('/configuracoes')} className="cursor-pointer">
