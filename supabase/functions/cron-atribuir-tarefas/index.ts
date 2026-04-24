@@ -224,6 +224,9 @@ serve(async (req) => {
         // Não dar continue — prosseguir para atribuir tarefa
       }
 
+      // ⚠️ NÃO há mais início automático de almoço.
+      // O técnico inicia o almoço manualmente pelo app; o bloco acima
+      // apenas auto-finaliza almoços expirados (>60min) como rede de segurança.
 
       // Verificar se profissional já tem tarefa em andamento
       const { data: tarefaAtual } = await supabase.rpc('buscar_tarefa_atual_profissional', {
