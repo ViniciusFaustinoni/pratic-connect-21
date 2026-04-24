@@ -116,6 +116,8 @@ export function AppUserDropdown() {
       open={showIOSInstructions} 
       onOpenChange={setShowIOSInstructions} 
     />
+    <RelatarErroModal open={relatarOpen} onOpenChange={setRelatarOpen} />
+    <TestarCorrecoesSheet open={testarOpen} onOpenChange={setTestarOpen} />
     </>
   );
 }
