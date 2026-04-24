@@ -100,13 +100,19 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
   const subordinadosDiretos = subordinados.filter((item) => item.hierarquia?.supervisor_id === selectedUserId);
   const subordinadosGerenciais = subordinados.filter((item) => item.hierarquia?.gerente_id === selectedUserId);
   const atribuicaoPorUsuario = new Map(atribuicoes.map((item) => [item.usuario.id, item]));
-  const gerenteSelecionado = gerenteId === 'none' ? null : gerenteId;
   const supervisorSelecionado = supervisorId === 'none' ? null : supervisorId;
+  // Gerente herdado do supervisor (quando o supervisor já tem gerente atribuído na hierarquia dele)
+  const gerenteHerdadoDoSupervisor = supervisorSelecionado
+    ? atribuicaoPorUsuario.get(supervisorSelecionado)?.hierarquia?.gerente_id ?? null
+    : null;
+  const gerenteEffectiveId = gerenteHerdadoDoSupervisor ?? (gerenteId === 'none' ? null : gerenteId);
+  const gerenteSelecionado = gerenteEffectiveId;
+  const gerenteBloqueado = !!gerenteHerdadoDoSupervisor;
   const supervisorPertenceAoGerente = (supervisorUserId: string, gerenteUserId: string) => {
     const supervisorHierarquiaAtual = atribuicaoPorUsuario.get(supervisorUserId)?.hierarquia;
     return !supervisorHierarquiaAtual?.gerente_id || supervisorHierarquiaAtual.gerente_id === gerenteUserId;
   };
-  const supervisoresCompativeis = gerenteSelecionado
+  const supervisoresCompativeis = gerenteSelecionado && !gerenteBloqueado
     ? supervisores.filter((u) => supervisorPertenceAoGerente(u.id, gerenteSelecionado))
     : supervisores;
   const gerenteOptions = [
