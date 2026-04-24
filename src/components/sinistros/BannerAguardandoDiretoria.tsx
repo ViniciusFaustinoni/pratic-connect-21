@@ -138,7 +138,7 @@ export function BannerAguardandoDiretoria({ sinistro }: BannerAguardandoDiretori
         resultado_sindicancia: null,
         parecer_sindicancia: null,
         updated_at: new Date().toISOString(),
-      }).eq('id', sinistro.id);
+      } as any).eq('id', sinistro.id);
 
       await supabase.from('sinistro_historico').insert({
         sinistro_id: sinistro.id,
