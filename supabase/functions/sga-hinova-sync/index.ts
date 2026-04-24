@@ -394,7 +394,7 @@ serve(async (req) => {
 
     const requestBody = await req.json();
     const { veiculo_id, associado_id, action, bypass_guard_base_antiga } = requestBody as SyncRequest & { action?: string; bypass_guard_base_antiga?: boolean };
-    const statusSgaDestino: 'pendente' | 'ativo' = requestBody.status_sga_destino === 'ativo' ? 'ativo' : 'pendente';
+    let statusSgaDestino: 'pendente' | 'ativo' = requestBody.status_sga_destino === 'ativo' ? 'ativo' : 'pendente';
 
     // ========================================
     // MODO TESTE DE CONEXÃO
@@ -450,6 +450,20 @@ serve(async (req) => {
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    if (statusSgaDestino === 'ativo') {
+      const { data: regraVeiculo } = await supabase
+        .from('veiculos')
+        .select('cobertura_roubo_furto, cobertura_total, status')
+        .eq('id', veiculo_id)
+        .maybeSingle();
+
+      const podeAtivarDefinitivo = regraVeiculo?.cobertura_total === true || regraVeiculo?.cobertura_roubo_furto !== true;
+      if (!podeAtivarDefinitivo) {
+        console.warn(`[SGA Sync] Ativação definitiva bloqueada para veículo ${veiculo_id}. Enviando como pendente até aprovação técnica.`);
+        statusSgaDestino = 'pendente';
+      }
     }
 
     console.log(`[SGA Sync] Iniciando sincronização - Veículo: ${veiculo_id}, Associado: ${associado_id}, destino=${statusSgaDestino}`);
