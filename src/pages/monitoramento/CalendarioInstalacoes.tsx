@@ -281,8 +281,8 @@ export default function CalendarioInstalacoesPage() {
           <div className="grid grid-cols-7">
             {diasCalendario.map((dia, index) => {
               const dataStr = dia.data.toISOString().split('T')[0];
-              const instalacoesDia = instalacoesPorData.get(dataStr) || { manha: [], tarde: [], noite: [] };
-              const temInstalacoes = instalacoesDia.manha.length > 0 || instalacoesDia.tarde.length > 0 || instalacoesDia.noite.length > 0;
+              const instalacoesDia = instalacoesPorData.get(dataStr) || { manha: [], tarde: [] };
+              const temInstalacoes = instalacoesDia.manha.length > 0 || instalacoesDia.tarde.length > 0;
               
               const vistoriasDia = vistoriasPorData.get(dataStr) || { base: [], campo: [] };
               const temVistorias = vistoriasDia.base.length > 0 || vistoriasDia.campo.length > 0;
