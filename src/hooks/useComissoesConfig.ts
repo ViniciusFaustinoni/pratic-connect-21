@@ -37,7 +37,7 @@ export function useComissoesConfig() {
     mutationFn: async (formData: ComissaoConfigFormData) => {
       const { data, error } = await supabase
         .from('comissoes_config')
-        .insert([formData])
+        .insert([formData as any])
         .select()
         .single();
 
