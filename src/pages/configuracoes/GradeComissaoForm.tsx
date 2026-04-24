@@ -117,6 +117,15 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
     [planos, selectedPlanIds],
   );
   const todosPlanosSelecionados = planos.length > 0 && selectedPlanIds.length === planos.length;
+  const configuracaoCompartilhada = selectedPlanIds.length > 1;
+  const planoConfiguracaoId = selectedPlanIds[0] || '';
+
+  const getRegrasParaSalvar = (): RegrasPorPlano => {
+    if (!configuracaoCompartilhada) return regrasPorPlano;
+
+    const modelo = cloneParcelas(regrasPorPlano[planoConfiguracaoId] || []);
+    return Object.fromEntries(selectedPlanIds.map((planoId) => [planoId, cloneParcelas(modelo)]));
+  };
 
   const { data: existing, isLoading } = useQuery({
     queryKey: ['grade-comissao-v2', id],
@@ -236,10 +245,19 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
   };
 
   const updatePlanoParcelas = (planoId: string, updater: (parcelas: ParcelaForm[]) => ParcelaForm[]) => {
-    setRegrasPorPlano(prev => ({
-      ...prev,
-      [planoId]: updater(prev[planoId] || []),
-    }));
+    setRegrasPorPlano(prev => {
+      const basePlanoId = configuracaoCompartilhada ? planoConfiguracaoId : planoId;
+      const nextParcelas = updater(prev[basePlanoId] || []);
+
+      if (!configuracaoCompartilhada) {
+        return { ...prev, [planoId]: nextParcelas };
+      }
+
+      return {
+        ...prev,
+        ...Object.fromEntries(selectedPlanIds.map((id) => [id, cloneParcelas(nextParcelas)])),
+      };
+    });
   };
 
   const addParcela = (planoId: string) => {
