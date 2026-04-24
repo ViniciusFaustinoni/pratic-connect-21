@@ -144,22 +144,24 @@ export function CotacaoDetalhesModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] p-0">
-        <DialogHeader className="p-6 pb-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <DialogTitle className="text-xl">Cotação {cotacao.numero}</DialogTitle>
-              <DialogDescription className="mt-1">
+      <DialogContent className="w-[calc(100vw-1rem)] sm:w-auto max-w-2xl max-h-[92vh] sm:max-h-[90vh] p-0 gap-0">
+        <DialogHeader className="p-4 sm:p-6 pb-3 sm:pb-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="text-base sm:text-xl truncate">
+                Cotação {cotacao.numero}
+              </DialogTitle>
+              <DialogDescription className="mt-1 text-xs sm:text-sm">
                 Criada {formatDistanceToNow(new Date(cotacao.created_at), { addSuffix: true, locale: ptBR })}
               </DialogDescription>
             </div>
-            <div className="flex flex-col gap-1 items-end">
-              <Badge className={cn(status.bgColor, status.color, "font-medium border-0")}>
+            <div className="flex flex-col gap-1 items-end shrink-0">
+              <Badge className={cn(status.bgColor, status.color, "font-medium border-0 text-[10px] sm:text-xs")}>
                 <status.icon className="h-3 w-3 mr-1" />
                 {status.label.toUpperCase()}
               </Badge>
               {etapaInfo && (
-                <Badge className={cn(etapaInfo.bgColor, etapaInfo.color, "font-medium border-0 text-[10px]")}>
+                <Badge className={cn(etapaInfo.bgColor, etapaInfo.color, "font-medium border-0 text-[9px] sm:text-[10px]")}>
                   {etapaInfo.label}
                 </Badge>
               )}
@@ -167,8 +169,8 @@ export function CotacaoDetalhesModal({
           </div>
         </DialogHeader>
         
-        <ScrollArea className="max-h-[calc(90vh-200px)]">
-          <div className="px-6 pb-6 space-y-6">
+        <ScrollArea className="max-h-[calc(92vh-140px)] sm:max-h-[calc(90vh-200px)]">
+          <div className="px-4 sm:px-6 pb-4 sm:pb-6 space-y-5 sm:space-y-6">
             {/* Ações principais */}
             <div className="flex flex-wrap gap-2">
               {cotacao.status === 'rascunho' && onContinuar && (
