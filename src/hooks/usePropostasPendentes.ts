@@ -664,6 +664,7 @@ export function usePropostasPendentes() {
             tipo_vistoria: tipoVistoriaCotacao,
             veiculo_id: null, // Não disponível na lista resumida
             veiculo_cobertura_total: null, // Não disponível na lista resumida
+            contrato_link_token: (contrato as any).link_token || null,
             veiculo_renavam: null, // Não disponível na lista resumida
             veiculo_chassi: null, // Não disponível na lista resumida
             veiculo_blindado: veiculoBlindadoCot,
@@ -1304,6 +1305,7 @@ export function useProposta(contratoId: string | undefined) {
         tipo_vistoria: tipoVistoriaCotacao,
         veiculo_id: veiculoId,
         veiculo_cobertura_total: veiculoCoberturaTotal,
+        contrato_link_token: (contrato as any).link_token || null,
         veiculo_renavam: veiculoRenavam,
         veiculo_chassi: veiculoChassi,
         veiculo_blindado: veiculoBlindadoCot,
