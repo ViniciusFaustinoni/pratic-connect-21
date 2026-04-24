@@ -33,7 +33,7 @@ export function useChecklistSGA(veiculoId: string, associadoId: string): Checkli
       const [veiculoRes, associadoRes, contratoRes, credenciaisRes, mapeamentosRes] = await Promise.all([
         supabase.from('veiculos').select('placa, chassi, renavam, cor, combustivel, ano_modelo, codigo_fipe, valor_fipe, marca, modelo').eq('id', veiculoId).single(),
         supabase.from('associados').select('nome, cpf, rg, data_nascimento, email, telefone, whatsapp, cep, logradouro, numero, bairro, cidade, uf, dia_vencimento').eq('id', associadoId).single(),
-        supabase.from('contratos').select('vendedor_id, veiculo_categoria').eq('veiculo_id', veiculoId).eq('associado_id', associadoId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('contratos').select('vendedor_id, veiculo_categoria, plano_id').eq('veiculo_id', veiculoId).eq('associado_id', associadoId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
         supabase.from('integracoes_credenciais').select('configurado, teste_sucesso').eq('integracao', 'hinova').maybeSingle(),
         supabase.from('hinova_mapeamentos').select('tipo, codigo_local').eq('ativo', true),
       ]);
@@ -58,6 +58,30 @@ export function useChecklistSGA(veiculoId: string, associadoId: string): Checkli
       // Verificar mapeamentos
       const coresDisponiveis = mapeamentos.filter(m => m.tipo === 'cor').map(m => m.codigo_local.toLowerCase());
       const combustiveisDisponiveis = mapeamentos.filter(m => m.tipo === 'combustivel').map(m => m.codigo_local.toLowerCase());
+      const tiposVeiculoDisponiveis = mapeamentos.filter(m => m.tipo === 'tipo_veiculo').map(m => m.codigo_local.toLowerCase());
+
+      // Resolver plano + coberturas/benefícios sem código_sga
+      let planoNome: string | null = null;
+      let planoCodigoSga: string | null = null;
+      let coberturasSemCodigo: string[] = [];
+      let beneficiosSemCodigo: string[] = [];
+      if (contrato?.plano_id) {
+        const [planoRes, coberturasRes, beneficiosRes] = await Promise.all([
+          supabase.from('planos').select('nome, codigo_sga_plano').eq('id', contrato.plano_id).maybeSingle(),
+          supabase.from('planos_coberturas').select('coberturas!inner(nome, codigo_sga)').eq('plano_id', contrato.plano_id),
+          supabase.from('planos_beneficios').select('benefits!inner(name, codigo_sga)').eq('plano_id', contrato.plano_id),
+        ]);
+        planoNome = (planoRes.data as any)?.nome ?? null;
+        planoCodigoSga = (planoRes.data as any)?.codigo_sga_plano ?? null;
+        coberturasSemCodigo = ((coberturasRes.data || []) as any[])
+          .filter(r => !r.coberturas?.codigo_sga)
+          .map(r => r.coberturas?.nome)
+          .filter(Boolean);
+        beneficiosSemCodigo = ((beneficiosRes.data || []) as any[])
+          .filter(r => !r.benefits?.codigo_sga)
+          .map(r => r.benefits?.name)
+          .filter(Boolean);
+      }
 
       const itens: ChecklistSGAItem[] = [];
 
@@ -138,7 +162,52 @@ export function useChecklistSGA(veiculoId: string, associadoId: string): Checkli
           : (!combMapeado ? `Combustível "${veiculo?.combustivel}" sem mapeamento na tabela hinova_mapeamentos` : undefined),
       });
 
-      // === SISTEMA ===
+      // Tipo de veículo (categoria do contrato) — verificar mapeamento Hinova
+      const tipoVeiculo = contrato?.veiculo_categoria ? String(contrato.veiculo_categoria).toLowerCase() : null;
+      const tipoVeiculoMapeado = tipoVeiculo && tiposVeiculoDisponiveis.includes(tipoVeiculo);
+      itens.push({
+        campo: 'tipo_veiculo', label: 'Tipo de veículo (mapeamento Hinova)', secao: 'veiculo', critico: true,
+        status: tipoVeiculoMapeado ? 'ok' : 'faltando',
+        valor: tipoVeiculo,
+        detalhe: !tipoVeiculo
+          ? 'Categoria do veículo ausente no contrato'
+          : (!tipoVeiculoMapeado ? `Tipo "${tipoVeiculo}" sem código Hinova em Configurações > Mapeamentos` : undefined),
+      });
+
+      // Plano + codigo_sga_plano
+      if (contrato?.plano_id) {
+        const planoOk = !!planoCodigoSga && String(planoCodigoSga).trim() !== '';
+        itens.push({
+          campo: 'codigo_plano', label: `Plano "${planoNome ?? '?'}" — Código Hinova`, secao: 'sistema', critico: true,
+          status: planoOk ? 'ok' : 'faltando',
+          valor: planoCodigoSga,
+          detalhe: planoOk ? undefined : `Plano "${planoNome}" sem codigo_sga_plano — cadastre em Planos > Editar`,
+        });
+
+        if (coberturasSemCodigo.length > 0) {
+          itens.push({
+            campo: 'coberturas_sem_codigo', label: 'Coberturas sem Código Hinova', secao: 'sistema',
+            status: 'risco',
+            valor: coberturasSemCodigo.join(', '),
+            detalhe: `${coberturasSemCodigo.length} cobertura(s) do plano serão omitidas do envio: ${coberturasSemCodigo.join(', ')}`,
+          });
+        }
+        if (beneficiosSemCodigo.length > 0) {
+          itens.push({
+            campo: 'beneficios_sem_codigo', label: 'Benefícios sem Código Hinova', secao: 'sistema',
+            status: 'risco',
+            valor: beneficiosSemCodigo.join(', '),
+            detalhe: `${beneficiosSemCodigo.length} benefício(s) do plano serão omitidos do envio: ${beneficiosSemCodigo.join(', ')}`,
+          });
+        }
+      } else {
+        itens.push({
+          campo: 'codigo_plano', label: 'Plano contratado', secao: 'sistema', critico: true,
+          status: 'faltando',
+          detalhe: 'Contrato sem plano vinculado — Hinova exige codigo_plano',
+        });
+      }
+
       // Credenciais Hinova
       const hinovaConfigurado = credenciais?.configurado === true;
       itens.push({

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -6,8 +7,10 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Card } from '@/components/ui/card';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Save, Trash2 } from 'lucide-react';
+import { Plus, Save, Trash2, AlertTriangle } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
 } from '@/components/ui/dialog';
@@ -37,9 +40,21 @@ const TIPO_LABELS: Record<Tipo, string> = {
 
 export default function IntegracaoHinovaMapeamentos() {
   const qc = useQueryClient();
-  const [tipoAtivo, setTipoAtivo] = useState<Tipo>('cor');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tipoFromUrl = (searchParams.get('tipo') || 'cor') as Tipo;
+  const valorFromUrl = searchParams.get('valor') || '';
+  const [tipoAtivo, setTipoAtivo] = useState<Tipo>(TIPOS.includes(tipoFromUrl) ? tipoFromUrl : 'cor');
   const [novoOpen, setNovoOpen] = useState(false);
-  const [novo, setNovo] = useState({ tipo: 'cor' as Tipo, codigo_local: '', codigo_hinova: '', descricao: '' });
+  const [novo, setNovo] = useState({ tipo: tipoFromUrl as Tipo, codigo_local: valorFromUrl, codigo_hinova: '', descricao: '' });
+
+  // Abre o dialog automaticamente quando vier ?valor=xxx pré-preenchido na URL
+  useEffect(() => {
+    if (valorFromUrl) {
+      setNovo((n) => ({ ...n, tipo: tipoFromUrl, codigo_local: valorFromUrl }));
+      setNovoOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valorFromUrl, tipoFromUrl]);
 
   const { data: itens = [], isLoading } = useQuery({
     queryKey: ['hinova_mapeamentos'],
@@ -52,6 +67,29 @@ export default function IntegracaoHinovaMapeamentos() {
       if (error) throw error;
       return data as Mapeamento[];
     },
+  });
+
+  // Query: valores em USO no sistema (cores/combustíveis/tipos de veículo) que ainda NÃO têm mapeamento
+  const { data: valoresEmUso } = useQuery({
+    queryKey: ['hinova_valores_em_uso'],
+    queryFn: async () => {
+      const [veiculosRes, contratosRes] = await Promise.all([
+        supabase.from('veiculos').select('cor, combustivel').limit(5000),
+        supabase.from('contratos').select('veiculo_categoria').limit(5000),
+      ]);
+      const cores = new Set<string>();
+      const combs = new Set<string>();
+      const tipos = new Set<string>();
+      for (const v of veiculosRes.data || []) {
+        if (v.cor) cores.add(String(v.cor).trim().toLowerCase());
+        if (v.combustivel) combs.add(String(v.combustivel).trim().toLowerCase());
+      }
+      for (const c of contratosRes.data || []) {
+        if (c.veiculo_categoria) tipos.add(String(c.veiculo_categoria).trim().toLowerCase());
+      }
+      return { cor: cores, combustivel: combs, tipo_veiculo: tipos, tipo_foto: new Set<string>() } as Record<Tipo, Set<string>>;
+    },
+    staleTime: 60_000,
   });
 
   const updateMut = useMutation({
@@ -109,7 +147,7 @@ export default function IntegracaoHinovaMapeamentos() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const itensFiltrados = itens.filter((i) => i.tipo === tipoAtivo);
+  
 
   return (
     <div className="space-y-4">
@@ -176,19 +214,63 @@ export default function IntegracaoHinovaMapeamentos() {
         </Dialog>
       </header>
 
-      <Tabs value={tipoAtivo} onValueChange={(v) => setTipoAtivo(v as Tipo)}>
+      <Tabs value={tipoAtivo} onValueChange={(v) => {
+        const next = v as Tipo;
+        setTipoAtivo(next);
+        const sp = new URLSearchParams(searchParams);
+        sp.set('tipo', next);
+        sp.delete('valor');
+        setSearchParams(sp, { replace: true });
+      }}>
         <TabsList>
           {TIPOS.map((t) => (
             <TabsTrigger key={t} value={t}>{TIPO_LABELS[t]}</TabsTrigger>
           ))}
         </TabsList>
 
-        {TIPOS.map((t) => (
-          <TabsContent key={t} value={t}>
+        {TIPOS.map((t) => {
+          const tipoItens = itens.filter((i) => i.tipo === t);
+          const mapeados = new Set(tipoItens.map((i) => i.codigo_local.trim().toLowerCase()));
+          const usados = valoresEmUso?.[t] ?? new Set<string>();
+          const faltantes = Array.from(usados).filter((v) => v && !mapeados.has(v));
+
+          return (
+          <TabsContent key={t} value={t} className="space-y-3">
+            {faltantes.length > 0 && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>
+                  {faltantes.length} valor(es) sem código Hinova cadastrado
+                </AlertTitle>
+                <AlertDescription className="space-y-2">
+                  <p className="text-sm">
+                    Estes valores aparecem no sistema mas não têm código Hinova mapeado — adesões serão bloqueadas no envio ao SGA:
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {faltantes.map((v) => (
+                      <Button
+                        key={v}
+                        size="sm"
+                        variant="outline"
+                        className="h-7"
+                        onClick={() => {
+                          setNovo({ tipo: t, codigo_local: v, codigo_hinova: '', descricao: '' });
+                          setNovoOpen(true);
+                        }}
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        {v}
+                      </Button>
+                    ))}
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+
             <Card className="p-4">
               {isLoading ? (
                 <p className="text-sm text-muted-foreground">Carregando…</p>
-              ) : itensFiltrados.length === 0 ? (
+              ) : tipoItens.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Nenhum mapeamento para este tipo.</p>
               ) : (
                 <div className="space-y-2">
@@ -199,7 +281,7 @@ export default function IntegracaoHinovaMapeamentos() {
                     <span className="col-span-2">Ativo</span>
                     <span className="col-span-1 text-right">Ações</span>
                   </div>
-                  {itensFiltrados.map((m) => (
+                  {tipoItens.map((m) => (
                     <LinhaEditavel
                       key={m.id}
                       item={m}
@@ -211,7 +293,8 @@ export default function IntegracaoHinovaMapeamentos() {
               )}
             </Card>
           </TabsContent>
-        ))}
+          );
+        })}
       </Tabs>
     </div>
   );
