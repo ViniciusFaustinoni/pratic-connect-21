@@ -187,7 +187,7 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
       await upsertHierarquia.mutateAsync({
         vendedor_id: selectedUserId,
         supervisor_id: supervisorId === 'none' ? null : supervisorId,
-        gerente_id: gerenteId === 'none' ? null : gerenteId,
+        gerente_id: gerenteEffectiveId,
         agencia_id: null,
         observacoes: observacoes.trim() || null,
       });
