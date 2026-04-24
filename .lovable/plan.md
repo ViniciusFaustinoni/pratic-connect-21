@@ -1,366 +1,283 @@
 
-## Revisão da lógica de Grades de Comissão e Atribuição de Grades
+## Filtros de período e status no Dashboard de Comissões
 
-### Diagnóstico
-
-A lógica principal já foi parcialmente ajustada:
-
-- `GradeComissaoForm.tsx` já configura regras por **plano, parcela e perfil de acesso**.
-- `AtribuicaoGrades.tsx` já existe como área separada para vincular grades a usuários e configurar hierarquia.
-- O motor `fn_gerar_comissoes_por_pagamento` já calcula comissão pela **grade do vendedor de origem**, usando a cadeia hierárquica para pagar supervisor, gerente e agência.
-
-Ainda existem pontos que podem causar confusão ou inconsistência:
-
-1. A listagem de grades ainda mostra “Usada por X usuários”, o que pode parecer que a grade é criada para um usuário específico.
-2. A tela de grades ainda carrega dados auxiliares antigos (`grades_comissao_niveis`, `grades_comissao_parcelas`) junto com a nova estrutura por plano.
-3. A função antiga `fn_resolver_grade_vendedor_em` em uma migration usa `ugc.usuario_id`, mas a tabela atual usa `user_id`. Vou revisar a versão efetiva no banco e corrigir se necessário.
-4. A duplicação de grade precisa garantir que copie corretamente as regras por plano/perfil, não uma estrutura antiga incompleta.
-5. A área de atribuição precisa deixar visualmente claro que ali é o único lugar onde usuário recebe uma grade.
-
----
-
-## Objetivo final
-
-Separar definitivamente as responsabilidades:
+### Objetivo
+Adicionar filtros no `/comissoes/dashboard` para que o diretor visualize KPIs, ranking e detalhes das comissões por:
 
 ```text
-Grades de Comissão
-  -> Define regra comercial
-  -> Plano vendido
-  -> Parcela
-  -> Perfil de acesso
-  -> Percentual ou valor fixo pago
-
-Atribuição de Grades
-  -> Define qual grade vale para cada usuário/vendedor
-  -> Define supervisor, gerente e agência da cadeia
+Período de geração
+Status da comissão
+Tipo de lançamento
 ```
+
+A tela deixará de mostrar apenas “mês atual” e passará a trabalhar com intervalo selecionável.
 
 ---
 
-## 1. Ajustar tela de Grades de Comissão
+## 1. Ajustar o hook do dashboard
 
 Arquivo:
 
-- `src/pages/configuracoes/GradesComissao.tsx`
+- `src/hooks/useComissoesDashboard.ts`
 
 ### Mudanças
-
-Remover qualquer leitura visual que sugira “grade criada para usuário”.
-
-A tela passará a focar em:
-
-- nome da grade;
-- versão;
-- status;
-- quantidade de planos configurados;
-- quantidade de parcelas/regras;
-- quantidade de perfis remunerados;
-- se possui regra vitalícia;
-- ações: editar, duplicar, ativar/inativar, excluir.
-
-### Ajuste de texto
-
-Trocar mensagens como:
+Trocar o parâmetro atual baseado em um único mês:
 
 ```text
-Usada por X usuários
+periodo = new Date()
 ```
 
-por algo mais neutro:
+por filtros explícitos:
 
 ```text
-X atribuições ativas
+dataInicio
+dataFim
+status
+tipoLancamento
 ```
 
-ou mover essa informação para uma área secundária com tooltip:
+### Consulta
+A query em `comissoes` passará a filtrar por:
 
 ```text
-Esta informação vem da área de Atribuição de Grades.
+created_at >= dataInicio 00:00:00
+created_at <= dataFim 23:59:59
+status, quando diferente de "todos"
+tipo_comissao, quando diferente de "todos"
 ```
 
-### Exclusão
-
-Manter a proteção contra excluir grade com atribuição ativa, mas ajustar o texto:
+### Retorno
+O hook continuará retornando:
 
 ```text
-Esta grade possui atribuições ativas. Remova os vínculos na área de Atribuição de Grades antes de excluir.
+items
+kpis
+isLoading
 ```
+
+mas também poderá retornar os filtros aplicados para textos de apoio, se necessário.
 
 ---
 
-## 2. Ajustar formulário de criação/edição de grade
+## 2. Atualizar os KPIs para respeitar filtros
 
 Arquivo:
 
-- `src/pages/configuracoes/GradeComissaoForm.tsx`
+- `src/hooks/useComissoesDashboard.ts`
 
-### Manter
-
-A estrutura atual correta:
+Os indicadores serão calculados apenas sobre os itens filtrados:
 
 ```text
-Grade
-  -> Planos configurados
-    -> Parcelas
-      -> Perfis remunerados
-        -> Percentual ou valor fixo
+Total a pagar no período
+Total pago no período
+Pendente de aprovação
+Comissões vitalícias
+Top 5 vendedores no período
 ```
 
-### Melhorar clareza
-
-Adicionar/ajustar textos para reforçar:
+### Ajuste de nomenclatura
+Trocar textos fixos como:
 
 ```text
-Esta tela não define quem recebe comissão.
-Ela define quanto cada perfil recebe quando esta grade for aplicada a uma venda.
+este mês
+no mês
+Top 5 vendedores do mês
 ```
 
-### Validações
+por:
 
-Revisar:
+```text
+no período
+Top 5 vendedores no período
+```
 
-- não permitir plano selecionado sem parcela;
-- não permitir parcela sem perfil remunerado, se a intenção for gerar comissão naquela parcela;
-- não permitir perfil duplicado dentro da mesma parcela do mesmo plano;
-- manter limite de 100% apenas para regras percentuais;
-- permitir valor fixo sem afetar o percentual da empresa.
-
-### Persistência
-
-Garantir que o salvamento use como fonte principal:
-
-- `grade_comissao_planos`;
-- `grade_comissao_plano_regras`;
-- `grades_comissao_versoes.snapshot`.
-
-E que as tabelas auxiliares antigas sejam usadas apenas se ainda forem necessárias para compatibilidade visual.
+Assim a tela fica coerente para intervalos maiores ou menores que um mês.
 
 ---
 
-## 3. Ajustar duplicação de grade
+## 3. Adicionar filtros visuais no dashboard
 
 Arquivo:
 
-- `src/pages/configuracoes/GradesComissao.tsx`
+- `src/pages/comissoes/Dashboard.tsx`
 
-A duplicação deve copiar a configuração comercial completa:
+Adicionar um card/bloco de filtros acima dos KPIs com:
 
 ```text
-grade_comissao_planos
-grade_comissao_plano_regras
-grades_comissao_versoes.snapshot
+Período
+- Data inicial
+- Data final
+
+Status
+- Todos
+- Pendente
+- Aprovada
+- Paga
+- Contestada
+- Cancelada, se existir no fluxo
+
+Tipo de lançamento
+- Todos
+- Comissão comum/recorrente
+- Vitalícia
+- Valor fixo
+- Percentual
 ```
 
-Sem copiar atribuições de usuários.
+### Componente de data
+Usar o padrão existente do projeto:
 
-A nova grade duplicada deve nascer como:
+- `src/components/ui/date-range-picker.tsx`
+
+Também ajustar o `Calendar` para incluir `pointer-events-auto`, conforme padrão necessário em popovers/dialogs:
 
 ```text
-Grade X (Cópia)
-versão 1
-sem usuários atribuídos
-mesmas regras comerciais por plano/perfil
+className="p-3 pointer-events-auto"
 ```
 
 ---
 
-## 4. Ajustar área de Atribuição de Grades
+## 4. Ajustar detalhamento por card
 
-Arquivos:
+Arquivo:
 
-- `src/pages/configuracoes/AtribuicaoGrades.tsx`
-- `src/components/comissoes/AtribuirGradeModal.tsx`
-- `src/hooks/useAtribuicaoComissoes.ts`
+- `src/pages/comissoes/Dashboard.tsx`
 
-### Mudanças visuais
+Os cards continuarão clicáveis, mas agora os modais mostrarão apenas os lançamentos dentro dos filtros selecionados.
 
-Reforçar na tela:
+Exemplos:
 
 ```text
-Aqui você escolhe qual grade comercial será aplicada às vendas de cada usuário.
-A grade do vendedor de origem determina quanto vendedor, supervisor, gerente e agência recebem.
+Total a pagar no período
+  -> abre pendentes/aprovadas dentro do período e tipo selecionados
+
+Total pago no período
+  -> abre pagas dentro do período e tipo selecionados
+
+Pendente de aprovação
+  -> abre somente pendentes dentro do período e tipo selecionados
+
+Comissões vitalícias
+  -> abre vitalícias dentro do período e status selecionado
 ```
 
-### Modal
-
-O modal continuará sendo o único local para:
-
-- atribuir grade ao usuário;
-- alterar supervisor;
-- alterar gerente;
-- alterar agência;
-- registrar observações.
-
-### Melhorias
-
-Adicionar um bloco de explicação no modal:
+O título do modal indicará o filtro aplicado:
 
 ```text
-A grade selecionada não paga apenas este usuário.
-Ela define a regra usada nas vendas originadas por ele.
-Os perfis pagos serão resolvidos conforme a cadeia configurada.
+Total pago no período selecionado
+Pendentes de aprovação no período selecionado
 ```
 
 ---
 
-## 5. Revisar função de resolução da grade do vendedor
+## 5. Melhorar o modal de detalhes
 
-Banco/Supabase:
+Arquivo:
 
-- `fn_resolver_grade_vendedor_em`
+- `src/components/comissoes/ComissoesDetalhesModal.tsx`
 
-Vou verificar a função efetiva no banco e corrigir se ela ainda usa campo incorreto.
-
-A versão correta deve buscar a grade vigente por:
-
-```sql
-usuario_grade_comissao.user_id = vendedor_id
-data_inicio <= data_referencia
-data_fim is null or data_fim > data_referencia
-```
-
-Não deve usar:
-
-```sql
-usuario_id
-ativo
-```
-
-a menos que essas colunas realmente existam no schema atual.
-
----
-
-## 6. Revisar motor de geração de comissões
-
-Banco/Supabase:
-
-- `fn_gerar_comissoes_por_pagamento`
-
-Confirmar que o fluxo segue esta regra:
+Adicionar colunas úteis para conferência do intervalo:
 
 ```text
-1. Pega vendedor de origem do contrato.
-2. Resolve a grade atribuída a esse vendedor.
-3. Verifica se o plano vendido existe na grade.
-4. Resolve a parcela paga.
-5. Busca regras por perfil:
-   - vendedor_clt
-   - vendedor_externo
-   - supervisor_vendas
-   - gerente_comercial
-   - agencia
-6. Resolve destinatário:
-   - vendedor -> vendedor origem
-   - supervisor -> supervisor da cadeia
-   - gerente -> gerente da cadeia
-   - agência -> agência da cadeia
-7. Gera comissão com snapshot.
+Data
+Tipo de lançamento
+Status
 ```
 
-Também vou manter a regra conceitual:
+A tabela ficará mais adequada para auditoria quando o intervalo tiver muitos dias.
+
+Também manter:
 
 ```text
-Supervisor, gerente e agência não usam suas próprias grades nessa venda.
-Eles recebem conforme a grade do vendedor de origem.
+Usuário
+Nível/perfil
+Parcela
+Base
+Percentual
+Comissão
 ```
 
 ---
 
-## 7. Revisar logs de auditoria
+## 6. Tipos de lançamento
 
-Como já houve implementação recente de auditoria, vou garantir que os logs reflitam a separação correta:
-
-### Alteração de grade
-
-Log deve indicar:
+A base já possui campos relevantes em `comissoes`:
 
 ```text
-Quem alterou
-Quando alterou
-Qual grade
-Qual plano
-Qual parcela
-Qual perfil
-Valor anterior
-Valor novo
+tipo_comissao
+tipo_calculo
+parcela_numero
 ```
 
-### Atribuição de grade
-
-Log deve indicar:
+A primeira versão usará esses campos para classificar:
 
 ```text
-Quem atribuiu
-Quando atribuiu
-Usuário afetado
-Grade anterior
-Grade nova
-Hierarquia anterior/nova quando aplicável
+vitalícia:
+  tipo_comissao contém "vitalicia" ou parcela_numero > 12
+
+valor fixo:
+  tipo_calculo = "valor_fixo" ou tipo_comissao = "valor_fixo"
+
+percentual:
+  tipo_calculo = "percentual" ou percentual_aplicado > 0
+
+todos:
+  sem filtro adicional
 ```
+
+Se houver outros valores reais em produção, a interface continuará exibindo os status/tipos encontrados sem quebrar.
+
+---
+
+## 7. Estado inicial
+
+Ao abrir o dashboard:
+
+```text
+dataInicio = primeiro dia do mês atual
+dataFim = último dia do mês atual
+status = todos
+tipoLancamento = todos
+```
+
+Ou seja, o comportamento visual inicial continuará equivalente ao atual, mas agora poderá ser alterado pelo diretor.
 
 ---
 
 ## 8. Arquivos envolvidos
 
 ### Frontend
-
-- `src/pages/configuracoes/GradesComissao.tsx`
-- `src/pages/configuracoes/GradeComissaoForm.tsx`
-- `src/pages/configuracoes/AtribuicaoGrades.tsx`
-- `src/components/comissoes/AtribuirGradeModal.tsx`
-- `src/hooks/useAtribuicaoComissoes.ts`
+- `src/pages/comissoes/Dashboard.tsx`
+- `src/hooks/useComissoesDashboard.ts`
+- `src/components/comissoes/ComissoesDetalhesModal.tsx`
+- `src/components/ui/calendar.tsx`
+- opcional: `src/components/ui/date-range-picker.tsx`
 
 ### Banco/Supabase
-
-- revisar/corrigir `fn_resolver_grade_vendedor_em`
-- revisar `fn_gerar_comissoes_por_pagamento`
-- se necessário, criar migration corretiva sem duplicar estrutura existente
+Não será necessário criar tabela nem migration. A mudança usa campos já existentes em `comissoes`.
 
 ---
 
-## Validação esperada
+## 9. Validação esperada
 
-### Cenário 1: criar grade
+### Cenário 1: período
+- Abrir `/comissoes/dashboard`.
+- Selecionar um intervalo diferente do mês atual.
+- KPIs e Top 5 devem recalcular conforme o intervalo.
 
-- Diretor acessa Grades de Comissão.
-- Cria uma grade sem escolher usuário.
-- Configura planos, parcelas e perfis remunerados.
-- Salva a grade.
+### Cenário 2: status
+- Filtrar por `paga`.
+- Total pago deve refletir apenas comissões pagas.
+- Detalhes dos cards não devem listar pendentes fora do filtro.
 
-Resultado esperado:
+### Cenário 3: tipo de lançamento
+- Filtrar por `vitalícia`.
+- Cards e modal devem mostrar apenas lançamentos vitalícios.
 
-```text
-Nenhum usuário é atribuído nessa tela.
-A grade fica disponível para atribuição depois.
-```
+### Cenário 4: filtros combinados
+- Selecionar período + status + tipo.
+- Todos os cards, ranking e detalhes devem respeitar a combinação.
 
-### Cenário 2: atribuir grade
-
-- Diretor acessa Atribuição de Grades.
-- Escolhe um usuário/vendedor.
-- Seleciona a grade.
-- Define supervisor, gerente e agência.
-
-Resultado esperado:
-
-```text
-Usuário passa a ter grade vigente.
-Hierarquia fica configurada separadamente.
-```
-
-### Cenário 3: geração de comissão
-
-- Venda/pagamento de um contrato com vendedor de origem.
-- Sistema usa a grade atribuída ao vendedor.
-- Sistema paga os perfis configurados no plano/parcela.
-- Supervisor/gerente/agência recebem conforme cadeia, não conforme grades próprias.
-
-### Cenário 4: edição de grade
-
-- Diretor edita uma grade.
-- Nova versão é criada.
-- Logs mostram o que mudou.
-- Comissões futuras usam nova versão.
-- Comissões antigas continuam auditáveis pelo snapshot.
-
+### Cenário 5: estado vazio
+- Selecionar um intervalo sem lançamentos.
+- Dashboard deve mostrar zeros e mensagem de ausência no ranking/modal.
