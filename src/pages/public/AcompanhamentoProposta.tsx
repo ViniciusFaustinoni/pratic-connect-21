@@ -37,8 +37,9 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
 import { CriarContaAssociadoForm } from '@/components/public/CriarContaAssociadoForm';
-import { DocumentosPendentes } from '@/components/associado/DocumentosPendentes';
+import { DocumentosPendentesPublico } from '@/components/cotacao-publica/DocumentosPendentesPublico';
 import { getOrientacoesRecusa } from '@/utils/orientacoesRecusa';
+import type { DocumentoPendentePublico } from '@/hooks/useCotacaoContratacao';
 
 import { toast } from 'sonner';
 
@@ -104,6 +105,7 @@ interface AssociadoData {
   servicoInstalacao?: ServicoInstalacao | null;
   cotacaoTokenPublico?: string | null;
   cotacaoStatusContratacao?: string | null;
+  documentosPendentes: DocumentoPendentePublico[];
 }
 
 function useAcompanhamentoProposta(token: string | undefined) {
