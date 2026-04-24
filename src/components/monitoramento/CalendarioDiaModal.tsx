@@ -597,6 +597,18 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
                               </Button>
                             )}
 
+                            {ag.status !== 'cancelado' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="shrink-0 gap-1 text-purple-600 border-purple-300 hover:bg-purple-50"
+                                onClick={() => setAlterarBase(ag)}
+                              >
+                                <MapPinned className="h-3.5 w-3.5" />
+                                Rota/Base
+                              </Button>
+                            )}
+
                             {/* Botão Antecipar: só para tarefas futuras */}
                             {dataFutura && ag.status !== 'cancelado' && (
                               <Button
