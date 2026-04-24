@@ -24,6 +24,8 @@ export interface PagamentoComissaoItem extends ReciboComissaoItem {
   status: string;
   role_destinatario?: string | null;
   nivel_nome?: string | null;
+  observacoes?: string | null;
+  calculo_snapshot?: any | null;
   valor_total: number;
   valor_comissao: number;
   vendedor_origem_nome?: string | null;
@@ -75,7 +77,7 @@ export function usePagamentosComissoes() {
         .select(`
           id, created_at, vendedor_id, contrato_id, cobranca_id, mes_referencia, ano_referencia,
           valor_base, percentual_aplicado, valor_comissao, valor_total, status, pago_em,
-          parcela_numero, nivel_nome, role_destinatario, tipo_calculo, tipo_comissao,
+          parcela_numero, nivel_nome, role_destinatario, tipo_calculo, tipo_comissao, observacoes, calculo_snapshot,
           vendedor:profiles!comissoes_vendedor_id_fkey(nome, full_name, email),
           grade:grades_comissao(nome),
           plano:planos(nome),
@@ -119,6 +121,8 @@ export function usePagamentosComissoes() {
           perfil: row.nivel_nome || row.role_destinatario,
           role_destinatario: row.role_destinatario,
           nivel_nome: row.nivel_nome,
+          observacoes: row.observacoes,
+          calculo_snapshot: row.calculo_snapshot,
           valor_base: Number(row.valor_base || 0),
           tipo_calculo: row.tipo_calculo,
           percentual_aplicado: Number(row.percentual_aplicado || 0),

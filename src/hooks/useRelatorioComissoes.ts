@@ -30,6 +30,9 @@ export interface RelatorioComissaoLinha {
   role_destinatario: string | null;
   tipo_calculo: string | null;
   tipo_comissao: string | null;
+  pago_em: string | null;
+  observacoes: string | null;
+  calculo_snapshot: any | null;
   vendedor?: { nome: string | null; full_name?: string | null; email?: string | null } | null;
   grade?: { nome: string | null } | null;
   plano?: { nome: string | null } | null;
@@ -87,7 +90,7 @@ export function useRelatorioComissoes() {
         .from('comissoes')
         .select(`
           id, created_at, vendedor_id, contrato_id, valor_base, percentual_aplicado, valor_comissao, valor_total,
-          status, parcela_numero, nivel_nome, role_destinatario, tipo_calculo, tipo_comissao,
+          status, pago_em, parcela_numero, nivel_nome, role_destinatario, tipo_calculo, tipo_comissao, observacoes, calculo_snapshot,
           vendedor:profiles!comissoes_vendedor_id_fkey(nome, full_name, email),
           grade:grades_comissao(nome),
           plano:planos(nome),
