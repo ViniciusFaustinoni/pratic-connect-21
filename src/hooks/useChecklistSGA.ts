@@ -83,6 +83,8 @@ export function useChecklistSGA(veiculoId: string, associadoId: string): Checkli
           .filter(Boolean);
       }
 
+      const itens: ChecklistSGAItem[] = [];
+
       // === ASSOCIADO ===
       const addAssociado = (campo: string, label: string, valor: unknown, critico = false, detalhe?: string) => {
         const preenchido = valor !== null && valor !== undefined && String(valor).trim() !== '';
