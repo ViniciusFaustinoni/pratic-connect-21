@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { matchesTipoLancamentoComissao } from '@/lib/comissoes-filtros';
 
 export interface RelatorioComissoesFilters {
   dataInicio: string;
@@ -11,6 +12,7 @@ export interface RelatorioComissoesFilters {
   role: string;
   parcela: string;
   status: string;
+  tipoLancamento: string;
 }
 
 export interface RelatorioComissaoLinha {
@@ -48,6 +50,7 @@ export function useRelatorioComissoes() {
     role: 'todos',
     parcela: 'todas',
     status: 'todos',
+    tipoLancamento: 'todos',
   });
 
   const { data: grades = [] } = useQuery({
@@ -103,7 +106,7 @@ export function useRelatorioComissoes() {
 
       const { data, error } = await query;
       if (error) throw error;
-      return data as RelatorioComissaoLinha[];
+      return (data as RelatorioComissaoLinha[]).filter((linha) => matchesTipoLancamentoComissao(linha, filters.tipoLancamento));
     },
   });
 
