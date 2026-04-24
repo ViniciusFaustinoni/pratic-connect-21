@@ -17,4 +17,4 @@ export const publicSupabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBL
     autoRefreshToken: false,
     storage: undefined,
   }
-});
+}) as any;
