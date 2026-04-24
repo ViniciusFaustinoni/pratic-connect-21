@@ -100,6 +100,82 @@ export default function LogsAuditoria() {
     },
   });
 
+  const { data: historicoHierarquia = [], isLoading: isLoadingHierarquia } = useQuery({
+    queryKey: ['logs-auditoria-hierarquia'],
+    queryFn: async () => {
+      const [{ data: logsHierarquia, error: logsError }, { data: hierarquias, error: hierError }] = await Promise.all([
+        (supabase as any)
+          .from('logs_auditoria')
+          .select('*')
+          .eq('tabela', 'hierarquia_vendas')
+          .order('created_at', { ascending: false })
+          .limit(200),
+        (supabase as any)
+          .from('hierarquia_vendas')
+          .select('*')
+          .order('vigente_desde', { ascending: true })
+          .limit(500),
+      ]);
+
+      if (logsError) throw logsError;
+      if (hierError) throw hierError;
+
+      const loggedIds = new Set((logsHierarquia || []).map((log: any) => log.registro_id).filter(Boolean));
+      const profileIds = Array.from(new Set((hierarquias || []).flatMap((h: any) => [
+        h.vendedor_id, h.supervisor_id, h.gerente_id, h.agencia_id, h.created_by,
+      ]).filter(Boolean)));
+
+      const { data: profiles, error: profilesError } = profileIds.length
+        ? await (supabase as any).from('profiles').select('id, nome, email').in('id', profileIds)
+        : { data: [], error: null };
+      if (profilesError) throw profilesError;
+
+      const profileById = new Map((profiles || []).map((profile: any) => [profile.id, profile]));
+      const snapshot = (id?: string | null) => id ? (profileById.get(id) || { id }) : null;
+      const previousByVendor = new Map<string, any>();
+      const syntheticLogs = (hierarquias || []).map((hierarquia: any) => {
+        const anterior = previousByVendor.get(hierarquia.vendedor_id) || null;
+        previousByVendor.set(hierarquia.vendedor_id, hierarquia);
+
+        return {
+          id: `hierarquia-${hierarquia.id}`,
+          created_at: hierarquia.vigente_desde || hierarquia.created_at,
+          usuario_nome: snapshot(hierarquia.created_by)?.nome || snapshot(hierarquia.created_by)?.email || 'Sistema',
+          usuario_id: hierarquia.created_by,
+          acao: 'editar',
+          modulo: 'comissoes',
+          tabela: 'hierarquia_vendas',
+          registro_id: hierarquia.id,
+          descricao: 'Histórico de alteração de hierarquia',
+          dados_anteriores: anterior ? {
+            hierarquia_id: anterior.id,
+            vendedor: snapshot(anterior.vendedor_id),
+            supervisor: snapshot(anterior.supervisor_id),
+            gerente: snapshot(anterior.gerente_id),
+            agencia: snapshot(anterior.agencia_id),
+            observacoes: anterior.observacoes,
+            vigente_desde: anterior.vigente_desde,
+            vigente_ate: anterior.vigente_ate,
+          } : null,
+          dados_novos: {
+            hierarquia_id: hierarquia.id,
+            vendedor: snapshot(hierarquia.vendedor_id),
+            supervisor: snapshot(hierarquia.supervisor_id),
+            gerente: snapshot(hierarquia.gerente_id),
+            agencia: snapshot(hierarquia.agencia_id),
+            observacoes: hierarquia.observacoes,
+            vigente_desde: hierarquia.vigente_desde,
+            vigente_ate: hierarquia.vigente_ate,
+            alterado_por: snapshot(hierarquia.created_by),
+          },
+        };
+      }).filter((log: any) => !loggedIds.has(log.registro_id));
+
+      return [...(logsHierarquia || []), ...syntheticLogs]
+        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    },
+  });
+
   const handleExport = () => {
     if (!logs?.length) return;
 
