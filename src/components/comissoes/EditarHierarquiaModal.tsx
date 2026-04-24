@@ -79,6 +79,17 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
     setObservacoes(linha.hierarquia?.observacoes || '');
   }, [open, linha]);
 
+  // Sincroniza gerente quando ele é herdado do supervisor selecionado
+  useEffect(() => {
+    if (!open || !linha) return;
+    const supId = supervisorId === 'none' ? null : supervisorId;
+    if (!supId) return;
+    const herdado = atribuicoes.find((a) => a.usuario.id === supId)?.hierarquia?.gerente_id ?? null;
+    if (herdado && gerenteId !== herdado) {
+      setGerenteId(herdado);
+    }
+  }, [open, linha, supervisorId, atribuicoes, gerenteId]);
+
   const usuariosMap = useMemo(() => {
     const map = new Map<string, UsuarioVendas>();
     usuarios.forEach((u) => map.set(u.id, u));
