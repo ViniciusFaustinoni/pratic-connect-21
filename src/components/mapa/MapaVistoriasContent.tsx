@@ -1745,6 +1745,7 @@ function AtribuirTecnicoPopover({ servicoId, alocacoesHoje, atribuirMutation }: 
                     const tipoAloc = aloc?.tipo_alocacao as 'rota' | 'base' | undefined;
                     const isPending = pendingId === t.id;
                     const isBusy = atribuirMutation.isPending;
+                    const isBase = t.role_operacional === 'vistoriador_base' || t.disponibilidadeTipo === 'base';
                     const iniciais = (t.nome || '?')
                       .split(' ')
                       .map((n: string) => n[0])
@@ -1767,13 +1768,24 @@ function AtribuirTecnicoPopover({ servicoId, alocacoesHoje, atribuirMutation }: 
                             iniciais
                           )}
                         </div>
-                        <span className="flex-1 truncate text-sm">{t.nome}</span>
-                        {tipoAloc === 'base' && (
-                          <Badge variant="outline" className="text-[10px] h-4 bg-amber-50 text-amber-700 border-amber-200">Base</Badge>
-                        )}
-                        {tipoAloc === 'rota' && (
-                          <Badge variant="outline" className="text-[10px] h-4 bg-blue-50 text-blue-700 border-blue-200">Rota</Badge>
-                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="truncate text-sm">{t.nome}</span>
+                            <Badge variant="outline" className="h-4 text-[10px]">
+                              {t.perfilAtualLabel || (isBase ? 'Base' : 'Rota')}
+                            </Badge>
+                          </div>
+                          <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
+                            <span className={cn(
+                              'h-1.5 w-1.5 rounded-full',
+                              isBase ? 'bg-primary' : 'bg-emerald-500'
+                            )} />
+                            <span>{t.fonteDisponibilidade || (isBase ? 'Na base' : 'Online')}</span>
+                            {tipoAloc && tipoAloc !== (isBase ? 'base' : 'rota') && (
+                              <span>· Aloc. {tipoAloc === 'base' ? 'base' : 'rota'}</span>
+                            )}
+                          </div>
+                        </div>
                         {isPending && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
                       </CommandItem>
                     );
