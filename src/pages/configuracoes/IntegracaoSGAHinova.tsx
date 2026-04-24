@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { TesteBoletoVeiculoHinova } from '@/components/integracoes/TesteBoletoVeiculoHinova';
 import { cn } from '@/lib/utils';
 import { useSGAHealthCheck } from '@/hooks/useSGAHealthCheck';
 import { ConfigurarIntegracaoSheet } from '@/components/integracoes/ConfigurarIntegracaoSheet';
@@ -204,6 +205,9 @@ export default function IntegracaoSGAHinova() {
           <TabsTrigger value="health" className="gap-1.5">
             <HeartPulse className="h-4 w-4" /> Health Check
           </TabsTrigger>
+          <TabsTrigger value="teste-boletos" className="gap-1.5">
+            <Send className="h-4 w-4" /> Teste Boletos
+          </TabsTrigger>
         </TabsList>
 
         {/* Queue Tab */}
@@ -374,6 +378,11 @@ export default function IntegracaoSGAHinova() {
         {/* Health Check Tab — Generic Panel */}
         <TabsContent value="health">
           <IntegracaoHealthPanel integracao="hinova" titulo="Conexão API Hinova" />
+        </TabsContent>
+
+        {/* Teste de boletos por veículo */}
+        <TabsContent value="teste-boletos">
+          <TesteBoletoVeiculoHinova />
         </TabsContent>
       </Tabs>
 
