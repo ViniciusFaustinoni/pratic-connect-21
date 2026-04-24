@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table,
   TableBody,
@@ -25,9 +26,9 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Pencil, Search, Users2, AlertCircle } from 'lucide-react';
+import { Eye, Network, Pencil, Search, Users2, AlertCircle } from 'lucide-react';
 import { useAtribuicoesComissao } from '@/hooks/useAtribuicaoComissoes';
-import { AtribuirGradeModal } from '@/components/comissoes/AtribuirGradeModal';
+import { EditarHierarquiaModal } from '@/components/comissoes/EditarHierarquiaModal';
 import type { AtribuicaoLinha } from '@/types/atribuicaoComissao';
 
 const ROLE_LABEL: Record<string, string> = {
@@ -87,13 +88,51 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
     setModalOpen(true);
   };
 
+  const renderUserCell = (linha: AtribuicaoLinha) => {
+    const u = linha.usuario;
+    const initials = u.nome
+      .split(' ')
+      .slice(0, 2)
+      .map((s) => s[0])
+      .join('')
+      .toUpperCase();
+
+    return (
+      <div className="flex items-center gap-2">
+        <Avatar className="h-8 w-8">
+          <AvatarImage src={u.avatar_url || undefined} />
+          <AvatarFallback>{initials}</AvatarFallback>
+        </Avatar>
+        <div className="min-w-0">
+          <div className="font-medium truncate">{u.nome}</div>
+          <div className="text-xs text-muted-foreground truncate">{u.email}</div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderRoles = (linha: AtribuicaoLinha) => (
+    <div className="flex flex-wrap gap-1">
+      {linha.usuario.roles
+        .filter((r) => ROLE_LABEL[r])
+        .map((r) => (
+          <Badge key={r} variant="secondary" className={ROLE_BADGE[r] || ''}>
+            {ROLE_LABEL[r] || r}
+          </Badge>
+        ))}
+    </div>
+  );
+
+  const nomeHierarquia = (id?: string | null) =>
+    id ? usuariosMap.get(id)?.usuario.nome || 'Usuário não localizado' : null;
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-lg font-semibold">Atribuição de Grades & Hierarquia</h2>
           <p className="text-sm text-muted-foreground">
-            Aqui você escolhe qual grade comercial será aplicada às vendas de cada usuário. A grade do vendedor de origem determina quanto vendedor, supervisor, gerente e agência recebem conforme o plano vendido.
+            Configure a hierarquia da equipe e consulte as grades aplicadas automaticamente pelos perfis contemplados nas regras de comissão.
           </p>
         </div>
         <Button variant="outline" onClick={() => navigate(gradesPath)}>
@@ -107,19 +146,25 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
             <AlertCircle className="h-4 w-4 text-warning" />
             <p className="text-sm">
               <strong>{totalSemGrade}</strong> usuário(s) ainda sem grade atribuída — não receberão
-              comissão até serem vinculados.
+              comissão até que seus perfis sejam contemplados em uma grade ativa.
             </p>
           </CardContent>
         </Card>
       )}
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Users2 className="h-4 w-4" /> Usuários da equipe de vendas e grade vigente
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <Tabs defaultValue="equipes" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-2 sm:w-auto">
+          <TabsTrigger value="equipes" className="gap-2"><Network className="h-4 w-4" /> Equipes / Hierarquia</TabsTrigger>
+          <TabsTrigger value="grades" className="gap-2"><Eye className="h-4 w-4" /> Grades aplicadas</TabsTrigger>
+        </TabsList>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Users2 className="h-4 w-4" /> Filtros da equipe comercial
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="relative sm:col-span-1">
               <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -154,7 +199,68 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
               </SelectContent>
             </Select>
           </div>
+          </CardContent>
+        </Card>
 
+        <TabsContent value="equipes" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Network className="h-4 w-4" /> Configuração de equipes
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Usuário</TableHead>
+                      <TableHead>Perfil</TableHead>
+                      <TableHead>Supervisor</TableHead>
+                      <TableHead>Gerente</TableHead>
+                      <TableHead>Agência</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoading ? (
+                      <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Carregando...</TableCell></TableRow>
+                    ) : filtered.length === 0 ? (
+                      <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Nenhum usuário encontrado</TableCell></TableRow>
+                    ) : (
+                      filtered.map((linha) => (
+                        <TableRow key={linha.usuario.id}>
+                          <TableCell>{renderUserCell(linha)}</TableCell>
+                          <TableCell>{renderRoles(linha)}</TableCell>
+                          <TableCell className="text-sm">{nomeHierarquia(linha.hierarquia?.supervisor_id) || <span className="text-muted-foreground">—</span>}</TableCell>
+                          <TableCell className="text-sm">{nomeHierarquia(linha.hierarquia?.gerente_id) || <span className="text-muted-foreground">—</span>}</TableCell>
+                          <TableCell className="text-sm">{nomeHierarquia(linha.hierarquia?.agencia_id) || <span className="text-muted-foreground">—</span>}</TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="icon" onClick={() => handleEdit(linha)} aria-label="Editar hierarquia">
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="grades" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Eye className="h-4 w-4" /> Grades aplicadas automaticamente
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Consulta somente leitura das grades vigentes. O vínculo é resolvido pela configuração da grade e pelos perfis de acesso contemplados nas comissões.
+              </p>
           <div className="rounded-md border overflow-x-auto">
             <Table>
               <TableHeader>
@@ -162,75 +268,28 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
                   <TableHead>Usuário</TableHead>
                   <TableHead>Perfil</TableHead>
                   <TableHead>Grade aplicada às vendas</TableHead>
-                  <TableHead>Supervisor</TableHead>
-                  <TableHead>Gerente</TableHead>
-                  <TableHead>Agência</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
+                  <TableHead>Início</TableHead>
+                  <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                       Carregando...
                     </TableCell>
                   </TableRow>
                 ) : filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                       Nenhum usuário encontrado
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filtered.map((linha) => {
-                    const u = linha.usuario;
-                    const initials = u.nome
-                      .split(' ')
-                      .slice(0, 2)
-                      .map((s) => s[0])
-                      .join('')
-                      .toUpperCase();
-                    const sup = linha.hierarquia?.supervisor_id
-                      ? usuariosMap.get(linha.hierarquia.supervisor_id)?.usuario.nome
-                      : null;
-                    const ger = linha.hierarquia?.gerente_id
-                      ? usuariosMap.get(linha.hierarquia.gerente_id)?.usuario.nome
-                      : null;
-                    const ag = linha.hierarquia?.agencia_id
-                      ? usuariosMap.get(linha.hierarquia.agencia_id)?.usuario.nome
-                      : null;
-
-                    return (
-                      <TableRow key={u.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage src={u.avatar_url || undefined} />
-                              <AvatarFallback>{initials}</AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0">
-                              <div className="font-medium truncate">{u.nome}</div>
-                              <div className="text-xs text-muted-foreground truncate">
-                                {u.email}
-                              </div>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            {u.roles
-                              .filter((r) => ROLE_LABEL[r])
-                              .map((r) => (
-                                <Badge
-                                  key={r}
-                                  variant="secondary"
-                                  className={ROLE_BADGE[r] || ''}
-                                >
-                                  {ROLE_LABEL[r] || r}
-                                </Badge>
-                              ))}
-                          </div>
-                        </TableCell>
+                  filtered.map((linha) => (
+                      <TableRow key={linha.usuario.id}>
+                        <TableCell>{renderUserCell(linha)}</TableCell>
+                        <TableCell>{renderRoles(linha)}</TableCell>
                         <TableCell>
                           {linha.gradeAtual?.grade ? (
                             <Badge variant="outline" className="font-normal">
@@ -240,38 +299,28 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
                             <span className="text-xs text-muted-foreground">—</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-sm">
-                          {sup || <span className="text-muted-foreground">—</span>}
+                        <TableCell className="text-sm text-muted-foreground">
+                          {linha.gradeAtual?.data_inicio ? new Date(linha.gradeAtual.data_inicio).toLocaleDateString('pt-BR') : '—'}
                         </TableCell>
-                        <TableCell className="text-sm">
-                          {ger || <span className="text-muted-foreground">—</span>}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {ag || <span className="text-muted-foreground">—</span>}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(linha)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
+                        <TableCell>
+                          {linha.gradeAtual ? <Badge variant="secondary">Com grade</Badge> : <Badge variant="destructive">Sem grade</Badge>}
                         </TableCell>
                       </TableRow>
-                    );
-                  })
+                    ))
                 )}
               </TableBody>
             </Table>
           </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
-      <AtribuirGradeModal
+      <EditarHierarquiaModal
         open={modalOpen}
         onOpenChange={setModalOpen}
         linha={editing}
+        atribuicoes={atribuicoes}
       />
     </div>
   );
