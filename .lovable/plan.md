@@ -1,187 +1,126 @@
-## Mapa encontrado nas últimas semanas
+Plano para implementar a rotina de reprocessamento automático SGA
 
-Período revisado: últimos 21 dias, cruzando `associados`, `veiculos`, `contratos`, `sga_sync_logs` e `sga_sync_queue`.
+Objetivo
+Garantir, de forma recorrente e auditável, que todo associado que entrou no SGA também tenha seu veículo, fotos e documentos vinculados corretamente, respeitando as duas regras de negócio:
 
-Resumo:
+1. Se o veículo foi ativado para Roubo/Furto ou Proteção 360, ele deve estar no SGA.
+2. Se for apenas instalação/assistência sem Roubo/Furto, a sincronização completa deve acontecer logo após a instalação concluída.
 
-```text
-Associados sincronizados no SGA com veículo vinculado localmente: 20
-Veículos corretamente vinculados no SGA:                         16
-Veículos com associado no SGA, mas veículo sem código SGA:       4
-  - em erro_sincronizacao:                                      3
-  - preso como sincronizando/processando:                        1
-```
+Mapa encontrado agora
 
-Inconsistências identificadas:
+- A função principal `sga-hinova-sync` já cadastra associado, veículo e envia fotos/documentos, inclusive buscando documentos de `documentos` e `contratos_documentos`.
+- Existem gaps operacionais:
+  - veículos com associado já vinculado ao SGA, mas sem `veiculos.codigo_hinova`;
+  - itens parados em `sga_sync_queue` como `processando` por erro transitório/HTML/502;
+  - itens em `falha_permanente` por placa duplicada sem recuperação completa;
+  - ativações feitas por alguns fluxos frontend/client-side podem não garantir reprocessamento se a chamada falhar silenciosamente;
+  - quando o veículo já está sincronizado, o guard de idempotência pode pular o reenviar de fotos/documentos, então a reconciliação precisa diferenciar “veículo existe” de “documentos/fotos foram enviados”.
 
-```text
-1) DANIEL FERREIRA DA SILVA - QPC3C40
-   Associado SGA: 30060
-   Veículo SGA local: ausente
-   Status: erro_sincronizacao / falha_permanente
-   Erro SGA: "Já existe um veículo com a placa QPC3C40 cadastrado no sistema"
-   Diagnóstico: veículo existe no SGA, mas o código não foi recuperado/salvo localmente.
+Correções propostas
 
-2) VENILTON AUGUSTO DA SILVA - HAT3D43
-   Associado SGA: 30030
-   Veículo SGA local: ausente
-   Status: sincronizando / fila processando
-   Erro principal: veículo já existe com a placa HAT3D43; houve também retorno HTML/502 da Hinova.
-   Diagnóstico: lock/status ficou preso e precisa recuperação idempotente.
+1. Criar uma Edge Function de reconciliação automática
 
-3) CLEBER LUIZ DE OLIVEIRA LIMA - LRA9681
-   Associado SGA: 30002
-   Veículo SGA local: ausente
-   Status: erro_sincronizacao / falha_permanente
-   Erro SGA: "O ano 2013 não foi encontrado para o codigo fipe 827088-0"
-   Diagnóstico: payload enviado com FIPE/ano incompatível para a validação da Hinova; após tentativas virou falha permanente.
+Nova função: `sga-reprocessar-cotacoes-ativacoes`
 
-4) VITÓRIA ANTÔNIA DO NASCIMENTO RODRIGUES - KXD6881
-   Associado SGA: 30000
-   Veículo SGA local: ausente
-   Status: erro_sincronizacao / falha_permanente
-   Erro SGA: "O ano 2014 não foi encontrado para o codigo fipe 011145-7"
-   Diagnóstico: payload enviado com FIPE/ano incompatível para a validação da Hinova; após tentativas virou falha permanente.
-```
+Ela fará varredura em janela configurável, por padrão últimas 4 semanas, e processará em lotes pequenos:
 
-Padrão do problema:
+- associados com `associados.codigo_hinova` preenchido;
+- veículos sem `codigo_hinova` ou com `sincronizado_hinova != true`;
+- veículos com `status_sga` em `erro_sincronizacao` ou `sincronizando` antigo;
+- veículos com Roubo/Furto/Proteção 360 ativos que não estejam no SGA;
+- veículos de instalação concluída, mesmo sem Roubo/Furto, que ainda não estejam sincronizados completamente;
+- veículos já cadastrados no SGA, mas sem log recente/sucesso de envio de fotos/documentos.
+
+A função não duplicará associado/veículo: ela chamará `sga-hinova-sync`, que já tem recuperação por CPF e placa, e registrará tudo em logs.
+
+2. Melhorar `sga-hinova-sync` para reenvio completo de fotos/documentos
+
+Adicionar suporte a um parâmetro seguro, por exemplo:
 
 ```text
-Cotação/Ativação aprovada
-        ↓
-Associado é criado/encontrado no SGA e salvo com codigo_hinova
-        ↓
-Cadastro do veículo falha por:
-  A) placa já existente no SGA, mas função não recupera código em todos os formatos/endpoints
-  B) FIPE/ano rejeitado pela Hinova
-  C) erro transitório/HTML 502 da Hinova deixa fila/status preso
-        ↓
-Sistema preserva associado como sincronizado, mas veículo fica sem codigo_hinova
+force_resync_media: true
 ```
 
-## Plano de correção
+Quando esse parâmetro for enviado:
 
-### 1) Corrigir a recuperação de veículo já existente por placa
+- se o veículo já tiver `codigo_hinova`, a função não deve parar no guard de idempotência;
+- deve pular recadastro desnecessário e executar a etapa de fotos/documentos;
+- deve registrar `enviar_fotos` e `sync_completo` novamente;
+- deve manter `codigo_hinova` e status local intactos, apenas corrigindo vínculo/documentação.
 
-Atualizar `sga-hinova-sync` para usar o cliente compartilhado `buscarVeiculoPorPlaca` também quando o cadastro retorna “placa já existe”. Hoje a função tenta alguns endpoints, mas não reaproveita a lógica mais robusta já existente em `_shared/hinova-client.ts`.
+Também vou revisar o tratamento de erro de `errorMessages.some is not a function`, normalizando `error` da Hinova para array/string seguro.
 
-Comportamento esperado:
+3. Corrigir recuperação de placa duplicada
 
-```text
-Se /veiculo/cadastrar retornar "placa já cadastrada/existe":
-  1. buscar veículo por placa no SGA
-  2. extrair codigo_veiculo em múltiplos formatos de resposta
-  3. salvar veiculos.codigo_hinova
-  4. marcar veiculos.sincronizado_hinova = true
-  5. marcar status_sga conforme destino: pendente_sga ou ativado_sga
-  6. concluir fila sga_sync_queue
-  7. continuar envio de fotos/documentos
-```
+No caso “placa já cadastrada”, reforçar a busca por placa usando o helper compartilhado `buscarVeiculoPorPlaca` de `_shared/hinova-client.ts`, que já possui endpoint primário e fallback.
 
-Isso deve resolver casos como DANIEL/QPC3C40 e provavelmente VENILTON/HAT3D43 se a placa estiver consultável.
+Se encontrar o código:
 
-### 2) Corrigir payload de FIPE/ano antes do envio
+- salvar `veiculos.codigo_hinova`;
+- salvar `associados.codigo_hinova` quando vier no retorno;
+- continuar para envio de fotos/documentos;
+- concluir a fila.
 
-Reforçar a resolução de FIPE no `sga-hinova-sync`:
+4. Fortalecer `cron-sga-retry`
 
-- validar se `codigo_fipe` informado realmente possui o `ano_modelo`/`ano_fabricacao` exigido pela Hinova;
-- se a Hinova rejeitar “ano não encontrado para o código FIPE”, tentar automaticamente resolver uma FIPE compatível por marca/modelo/ano antes de desistir;
-- registrar no log `resolver_fipe_veiculo` a FIPE original, FIPE corrigida e ano usado;
-- reenviar o cadastro do veículo uma vez com a FIPE corrigida.
+Ajustar o cron atual para:
 
-Isso mira diretamente CLEBER/LRA9681 e VITÓRIA/KXD6881.
+- destravar registros `processando` antigos;
+- reabrir falhas permanentes recuperáveis, principalmente:
+  - placa duplicada;
+  - HTML/502/rate limit;
+  - auth temporário/janela horária;
+- preservar falhas realmente manuais como permanentes;
+- chamar `sga-hinova-sync` com o status correto: `ativo` para veículos com `cobertura_total = true`, e `pendente` nos demais.
 
-### 3) Destravar fila e statuses presos
+5. Disparar SGA após instalação concluída
 
-Ajustar `cron-sga-retry` e a função principal para não deixar itens indefinidamente em `processando`/`sincronizando` quando a Hinova retorna HTML/502 ou quando a execução cai no meio.
+Atualizar o fluxo `concluir-instalacao-prestador` para chamar a sincronização SGA após a instalação:
 
-Regras propostas:
+- se veículo já tiver Roubo/Furto/Proteção 360, enviar como `ativo` quando aplicável;
+- se for apenas instalação/assistência sem Roubo/Furto, enviar como `pendente`, porém com veículo/fotos/documentos completos;
+- em caso de falha, não bloquear conclusão da instalação, mas enfileirar/reprocessar automaticamente.
 
-```text
-- status_sga='sincronizando' com log antigo sem sucesso → volta para erro_sincronizacao ou pendente de retry
-- sga_sync_queue.status='processando' antigo → volta para pendente com próxima tentativa
-- falha_permanente por placa duplicada/ano FIPE → pode ser reaberta após a correção de lógica
-- erros 5xx/HTML/rate limit → tratados como transitórios, nunca como falha definitiva imediata
-```
+Também vou revisar os hooks de aprovação/ativação existentes para garantir que a rotina cubra os fluxos em que a chamada SGA é feita no cliente.
 
-### 4) Criar uma reconciliação segura para o legado recente
+6. Agendar rotina automática
 
-Adicionar uma Edge Function de reconciliação, ou ampliar `sga-mapear-codigos-veiculos`, para processar somente o recorte crítico:
+Adicionar configuração em `supabase/config.toml` para a nova função, sem JWT obrigatório, seguindo o padrão atual das funções cron.
 
-```text
-associado.sincronizado_hinova = true
-AND associado.codigo_hinova is not null
-AND veículo.codigo_hinova is null
-AND veículo criado/sincronizado nas últimas semanas
-```
+Depois da implementação, a rotina pode ser chamada por cron Supabase/pg_cron nos horários seguros da Hinova, por exemplo dentro da janela comercial, e também poderá ser executada manualmente via Edge Function para auditoria.
 
-Fluxo da reconciliação:
+7. Executar backfill/reprocessamento inicial
 
-```text
-Para cada veículo inconsistente:
-  1. consultar veículo por placa no SGA
-  2. se encontrado, salvar codigo_hinova e marcar sincronizado
-  3. se não encontrado, chamar sga-hinova-sync com retry controlado
-  4. se erro for FIPE/ano, resolver FIPE e reenviar
-  5. enviar/reenviar fotos aprovadas de documentos e contratos_documentos
-  6. registrar auditoria em sga_sync_logs
-```
+Após implementar e publicar as funções, executar uma rodada controlada:
 
-### 5) Rodar correção nos 4 casos encontrados
+- `dry_run: true` para retornar o mapa dos casos;
+- depois `dry_run: false` em batches pequenos;
+- priorizar os casos críticos já conhecidos/observados:
+  - DANIEL / QPC3C40;
+  - VENILTON / HAT3D43;
+  - VITÓRIA / KXD6881;
+  - demais veículos recentes com `associado.codigo_hinova` mas `veiculo.codigo_hinova` ausente.
 
-Após implementar, executar a reconciliação inicialmente para estes IDs:
+Validações finais
 
-```text
-QPC3C40 - aa9989a2-2fd7-4db3-ab06-e16e27913f8b
-HAT3D43 - 0357a7f9-bcaf-434c-a89b-e90528269b63
-LRA9681 - a474e4d6-b6fb-4bbd-bbc0-7e58402b1ab2
-KXD6881 - 2f162355-b89d-462b-92ce-a76f7e979049
-```
+- Rodar validação de Deno/TypeScript das Edge Functions alteradas.
+- Testar a nova função com `dry_run`.
+- Testar lote real pequeno.
+- Consultar banco após execução para confirmar:
+  - associados no SGA com veículo no SGA;
+  - veículos de Roubo/Furto/Proteção 360 com `status_sga` coerente;
+  - instalações concluídas sem Roubo/Furto com veículo/documentos sincronizados;
+  - filas antigas destravadas ou encerradas corretamente;
+  - logs `enviar_fotos`/`sync_completo` gravados.
 
-Depois rodar para todo o recorte dos últimos 21 dias e confirmar que o contador final fique:
+Arquivos a alterar
 
-```text
-Associado SGA com veículo sem SGA: 0
-```
+- `supabase/functions/sga-hinova-sync/index.ts`
+- `supabase/functions/cron-sga-retry/index.ts`
+- `supabase/functions/concluir-instalacao-prestador/index.ts`
+- `supabase/functions/sga-reprocessar-cotacoes-ativacoes/index.ts` novo
+- `supabase/config.toml`
 
-### 6) Garantia preventiva daqui para frente
+Possível ajuste de banco
 
-Adicionar uma checagem de consistência no fim da sincronização:
-
-```text
-Se associado.codigo_hinova existe e veículo.codigo_hinova não existe:
-  - não tratar como sucesso completo
-  - registrar log explícito de inconsistência
-  - manter/reabrir fila de correção
-```
-
-Também ajustar o retorno da função para diferenciar:
-
-```text
-success: true, sync_completo: true       → associado + veículo + fotos processados
-success: true, parcial: true             → associado criado, veículo pendente de retry
-success: false                           → falha bloqueante antes de salvar associado/veículo
-```
-
-## Validação pós-correção
-
-Após a implementação, validar com consultas no banco e logs:
-
-```text
-1. Nenhum associado sincronizado no SGA nas últimas semanas com veículo sem codigo_hinova.
-2. Os 4 casos listados passam a ter veiculos.codigo_hinova preenchido ou erro final claro e acionável.
-3. Fotos/documentos aprovados são enviados após recuperação do código do veículo.
-4. Fila sga_sync_queue não mantém itens antigos em processando.
-5. Novas ativações não ficam em estado parcial silencioso.
-```
-
-## Arquivos que devem ser alterados
-
-```text
-supabase/functions/sga-hinova-sync/index.ts
-supabase/functions/cron-sga-retry/index.ts
-supabase/functions/sga-mapear-codigos-veiculos/index.ts ou nova função dedicada de reconciliação
-supabase/functions/_shared/hinova-client.ts, se precisar ampliar parser de respostas da Hinova
-```
-
-Nenhuma mudança de estrutura de tabelas parece obrigatória para corrigir estes casos. A correção pode ser feita com lógica de Edge Functions e atualização controlada dos registros já existentes.
+A princípio, não é obrigatório criar tabela nova. Usarei `sga_sync_logs` e `sga_sync_queue` já existentes. Só adicionarei migração se, durante a implementação, for necessário persistir um controle formal de execuções de reconciliação; caso contrário, manterei sem mudança estrutural.

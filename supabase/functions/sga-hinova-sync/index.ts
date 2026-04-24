@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { buscarVeiculoPorPlaca } from '../_shared/hinova-client.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -113,6 +114,13 @@ function parseValorFipe(valor: string | null | undefined): number | null {
   if (!valor) return null;
   const parsed = Number(valor.replace('R$', '').replace(/\./g, '').replace(',', '.').trim());
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeErrorMessages(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((v) => String(v));
+  if (typeof value === 'string') return [value];
+  if (value && typeof value === 'object') return [JSON.stringify(value)];
+  return [];
 }
 
 async function resolverFipePorNome(tipo: string, marca: string | null, modelo: string | null, ano: number | null): Promise<{ codigoFipe: string; valorFipe: number | null } | null> {
@@ -431,7 +439,8 @@ serve(async (req) => {
     }
 
     const requestBody = await req.json();
-    const { veiculo_id, associado_id, action, bypass_guard_base_antiga, usuario_id, usuario_nome, etapa_origem, motivo_decisao } = requestBody as SyncRequest & { action?: string; bypass_guard_base_antiga?: boolean };
+    const { veiculo_id, associado_id, action, bypass_guard_base_antiga, usuario_id, usuario_nome, etapa_origem, motivo_decisao } = requestBody as SyncRequest & { action?: string; bypass_guard_base_antiga?: boolean; force_resync_media?: boolean };
+    const forceResyncMedia = requestBody.force_resync_media === true;
     const statusSgaSolicitado = requestBody.status_sga_destino === 'ativo' ? 'ativo' : 'pendente';
     let statusSgaDestino: 'pendente' | 'ativo' = requestBody.status_sga_destino === 'ativo' ? 'ativo' : 'pendente';
 
@@ -552,7 +561,7 @@ serve(async (req) => {
       .single();
 
     // Se já está sincronizado com sucesso, retornar sem chamar Hinova
-    if (veiculoCheck?.sincronizado_hinova && veiculoCheck?.codigo_hinova && (statusSgaDestino !== 'ativo' || veiculoCheck?.status_sga === 'ativado_sga')) {
+    if (!forceResyncMedia && veiculoCheck?.sincronizado_hinova && veiculoCheck?.codigo_hinova && (statusSgaDestino !== 'ativo' || veiculoCheck?.status_sga === 'ativado_sga')) {
       console.log(`[SGA Sync] Veículo ${veiculo_id} já sincronizado (codigo_hinova=${veiculoCheck.codigo_hinova}). Retornando sucesso.`);
       await logSync(veiculo_id, associado_id, 'idempotency_guard', 'skipped', { veiculo_id, associado_id, status_sga_destino: statusSgaDestino }, { codigo_hinova: veiculoCheck.codigo_hinova, status_sga: veiculoCheck.status_sga });
       await markQueueCompleted(supabase, veiculo_id, associado_id);
@@ -1464,7 +1473,7 @@ serve(async (req) => {
       console.log(`[SGA Sync] Resposta cadastrar_veiculo (${veiculoResponse.status}):`, JSON.stringify(veiculoData));
       const statusCode = veiculoResponse.status;
       const mensagem = veiculoData.mensagem?.toLowerCase() || '';
-      const errorMessages: string[] = (veiculoData as any).error || [];
+      const errorMessages: string[] = normalizeErrorMessages((veiculoData as any).error);
       
       // Check if this is a validation error (not a duplicate)
       const isValidationError = errorMessages.some((e: string) => 
@@ -1492,8 +1501,35 @@ serve(async (req) => {
         
         let codigoVeiculoExistente: number | null = null;
 
-        // Estratégia 1: GET /veiculo/consultar/placa/{placa}
+        // Estratégia 0: helper compartilhado com endpoint primário + fallback legado
         try {
+          const { found, debug } = await buscarVeiculoPorPlaca({
+            apiUrl: hinovaApiUrl,
+            token: hinovaToken || '',
+            usuario: hinovaUsuario || '',
+            senha: hinovaSenha || '',
+            tokenUsuario,
+          }, veiculo.placa);
+
+          await logSync(_vid, _aid, 'buscar_veiculo_placa_shared', found?.codigo_veiculo ? 'success' : 'empty',
+            { placa: veiculo.placa }, { debug, found }, null);
+
+          if (found?.codigo_veiculo) {
+            codigoVeiculoExistente = parseInt(String(found.codigo_veiculo));
+            const codAssocEncontrado = found.codigo_associado || found.codigo_associado_pf;
+            if (codAssocEncontrado) {
+              codigoAssociadoHinova = parseInt(String(codAssocEncontrado));
+              await supabase.from('associados').update({
+                codigo_hinova: codigoAssociadoHinova,
+                sincronizado_hinova: true,
+                sincronizado_hinova_em: new Date().toISOString()
+              }).eq('id', _aid);
+            }
+          }
+        } catch (e) { console.log('[SGA Sync] Busca placa shared falhou:', e); }
+
+        // Estratégia 1: GET /veiculo/consultar/placa/{placa}
+        if (!codigoVeiculoExistente) try {
           const buscaResponse = await fetchWithRetry(
             `${hinovaApiUrl}/veiculo/consultar/placa/${veiculo.placa}`,
             { method: 'GET', headers: operationHeaders }

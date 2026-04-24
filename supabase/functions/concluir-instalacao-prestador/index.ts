@@ -127,6 +127,33 @@ Deno.serve(async (req) => {
       console.warn('[concluir-instalacao] Erro no disparo de sync (não bloqueante):', syncErr)
     }
 
+    // ── DISPARO AUTOMÁTICO: garantir sincronização completa no SGA após instalação ──
+    try {
+      const { data: instalSga } = await supabase
+        .from('instalacoes')
+        .select('veiculo_id, associado_id, veiculos:veiculo_id(cobertura_total, cobertura_roubo_furto)')
+        .eq('id', link.instalacao_id)
+        .maybeSingle()
+
+      const veiculoSga = instalSga?.veiculos as any
+      if (instalSga?.veiculo_id && instalSga?.associado_id) {
+        await supabase.functions.invoke('sga-hinova-sync', {
+          body: {
+            veiculo_id: instalSga.veiculo_id,
+            associado_id: instalSga.associado_id,
+            status_sga_destino: veiculoSga?.cobertura_total === true ? 'ativo' : 'pendente',
+            force_resync_media: true,
+            etapa_origem: 'concluir-instalacao-prestador',
+            motivo_decisao: veiculoSga?.cobertura_total === true
+              ? 'Instalação concluída: Proteção 360 liberada, garantir veículo ativo e documentos no SGA.'
+              : 'Instalação concluída: garantir veículo, fotos e documentos vinculados no SGA.',
+          },
+        })
+      }
+    } catch (sgaErr) {
+      console.warn('[concluir-instalacao] Falha ao sincronizar SGA pós-instalação (não bloqueante):', sgaErr)
+    }
+
     // ── Buscar dados completos ──
     const { data: instalacao } = await supabase
       .from('instalacoes')
