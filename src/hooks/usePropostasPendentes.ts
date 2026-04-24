@@ -137,6 +137,7 @@ export interface PropostaPendente {
   cotacao_id: string | null;
   veiculo_id: string | null; // ID do veículo vinculado
   veiculo_cobertura_total: boolean | null; // Se veículo tem cobertura total ativada
+  contrato_link_token: string | null;
   associado: Associado | null;
   plano: { nome: string } | null;
   plano_nome: string | null; // Fallback do nome do plano
@@ -198,6 +199,7 @@ export function usePropostasPendentes() {
         .from('contratos')
         .select(`
           id,
+          link_token,
           numero,
           data_assinatura,
           valor_mensal,
@@ -691,6 +693,7 @@ export function useProposta(contratoId: string | undefined) {
         .from('contratos')
         .select(`
           id,
+          link_token,
           numero,
           data_assinatura,
           valor_mensal,
