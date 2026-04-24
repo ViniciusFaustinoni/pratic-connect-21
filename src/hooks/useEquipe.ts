@@ -389,3 +389,26 @@ export function useToggleProfissionalStatus() {
     },
   });
 }
+
+// Alternar perfil operacional temporário (rota ↔ base) sem alterar user_roles permanente
+export function useAlternarPerfilOperacional() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ profissionalId }: { profissionalId: string }) => {
+      const { data, error } = await (supabase as any).rpc('alternar_perfil_operacional_tecnico', {
+        _profissional_id: profissionalId,
+      });
+
+      if (error) throw error;
+      return Array.isArray(data) ? data[0] : data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profissionais-equipe'] });
+      queryClient.invalidateQueries({ queryKey: ['instaladores'] });
+      queryClient.invalidateQueries({ queryKey: ['vistoriadores-localizacao-realtime'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos-atribuidos'] });
+      queryClient.invalidateQueries({ queryKey: ['alocacoes-dia'] });
+    },
+  });
+}
