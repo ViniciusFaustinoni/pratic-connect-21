@@ -1401,7 +1401,7 @@ serve(async (req) => {
     }
 
     const combustivelNormalizado = normalizarCombustivel(veiculo.combustivel);
-    const tipoVeiculoInferido = await inferirTipoVeiculo(contrato?.veiculo_categoria, veiculo.marca, veiculo.modelo);
+    const tipoVeiculoInferido = await inferirTipoVeiculo(contrato?.veiculo_categoria || null, veiculo.marca, veiculo.modelo);
     let codigoFipeResolvido = veiculo.codigo_fipe || '';
     let valorFipeResolvido = veiculo.valor_fipe || 0;
 
@@ -1442,7 +1442,7 @@ serve(async (req) => {
       codigo_conta: codigoContaResolvido,
       codigo_cor: getMapeamento('cor', veiculo.cor),
       codigo_combustivel: getMapeamento('combustivel', combustivelNormalizado),
-      codigo_tipo_veiculo: getMapeamento('tipo_veiculo', contrato?.veiculo_categoria?.toLowerCase()) || tipoVeiculoInferido,
+      codigo_tipo_veiculo: getMapeamento('tipo_veiculo', contrato?.veiculo_categoria?.toLowerCase() || null) || tipoVeiculoInferido,
       codigo_voluntario: parseInt(hinovaCodigoVoluntario),
       ...(Number.isFinite(codigoSituacaoDestino) && codigoSituacaoDestino > 0 && { codigo_situacao: codigoSituacaoDestino }),
       ...(hinovaCodigoCooperativa && { codigo_cooperativa: parseInt(hinovaCodigoCooperativa) }),
