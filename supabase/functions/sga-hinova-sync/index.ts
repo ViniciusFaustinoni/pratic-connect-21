@@ -1536,7 +1536,7 @@ serve(async (req) => {
       codigo_hinova: codigoVeiculoHinova,
       sincronizado_hinova: true,
       sincronizado_hinova_em: new Date().toISOString(),
-      status_sga: 'ativado_sga'
+      status_sga: _statusDestino === 'ativo' ? 'ativado_sga' : 'pendente_sga'
     }).eq('id', _vid);
 
     // ========================================
@@ -1614,6 +1614,8 @@ serve(async (req) => {
     await logSync(_vid, _aid, 'sync_completo', 'success', null, {
       codigo_associado_hinova: codigoAssociadoHinova,
       codigo_veiculo_hinova: codigoVeiculoHinova,
+      status_sga_destino: _statusDestino,
+      status_sga_local: _statusDestino === 'ativo' ? 'ativado_sga' : 'pendente_sga',
       fotos_enviadas: fotosEnviadas,
       fotos_com_erro: fotosComErro.length
     }, null);
