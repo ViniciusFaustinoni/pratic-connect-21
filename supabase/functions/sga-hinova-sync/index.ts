@@ -1402,6 +1402,26 @@ serve(async (req) => {
 
     const combustivelNormalizado = normalizarCombustivel(veiculo.combustivel);
     const tipoVeiculoInferido = await inferirTipoVeiculo(contrato?.veiculo_categoria, veiculo.marca, veiculo.modelo);
+    let codigoFipeResolvido = veiculo.codigo_fipe || '';
+    let valorFipeResolvido = veiculo.valor_fipe || 0;
+
+    if (!codigoFipeResolvido) {
+      try {
+        const tipoFipe = tipoVeiculoInferido === 2 ? 'motos' : tipoVeiculoInferido === 3 ? 'caminhoes' : 'carros';
+        const fipe = await resolverFipePorNome(tipoFipe, veiculo.marca, veiculo.modelo, veiculo.ano_modelo || veiculo.ano_fabricacao || null);
+        if (fipe?.codigoFipe) {
+          codigoFipeResolvido = fipe.codigoFipe;
+          valorFipeResolvido = fipe.valorFipe || valorFipeResolvido;
+          await logSync(_vid, _aid, 'resolver_fipe_veiculo', 'success',
+            { marca: veiculo.marca, modelo: veiculo.modelo, ano: veiculo.ano_modelo, tipo: tipoFipe },
+            { codigo_fipe: codigoFipeResolvido, valor_fipe: valorFipeResolvido });
+        }
+      } catch (e) {
+        await logSync(_vid, _aid, 'resolver_fipe_veiculo', 'error',
+          { marca: veiculo.marca, modelo: veiculo.modelo, ano: veiculo.ano_modelo }, null,
+          e instanceof Error ? e.message : 'Falha ao resolver FIPE');
+      }
+    }
 
     const codigoSituacaoDestino = _statusDestino === 'ativo'
       ? Number.parseInt(hinovaCodigoSituacaoAtivo || '', 10)
@@ -1414,8 +1434,8 @@ serve(async (req) => {
       renavam: veiculo.renavam.trim(),
       ano_fabricacao: veiculo.ano_fabricacao || veiculo.ano_modelo,
       ano_modelo: veiculo.ano_modelo,
-      codigo_fipe: veiculo.codigo_fipe || '',
-      valor_fipe: veiculo.valor_fipe || 0,
+      codigo_fipe: codigoFipeResolvido,
+      valor_fipe: valorFipeResolvido,
       kilometragem: 0,
       numero_motor: '',
       dia_vencimento: associado.dia_vencimento || 10,
