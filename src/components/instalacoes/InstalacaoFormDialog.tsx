@@ -118,7 +118,7 @@ export function InstalacaoFormDialog({ open, onOpenChange, instalacaoId }: Insta
           associado_id: instalacao.associado_id,
           veiculo_id: instalacao.veiculo_id,
           data_agendada: new Date(instalacao.data_agendada),
-          periodo: instalacao.periodo,
+          periodo: (instalacao.periodo === 'noite' ? 'tarde' : instalacao.periodo) as 'manha' | 'tarde',
           rastreador_id: instalacao.rastreador_id || null,
           instalador_id: instalacao.instalador_id || null,
           cep: instalacao.cep || '',
