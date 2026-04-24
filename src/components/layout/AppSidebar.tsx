@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -679,17 +679,10 @@ export function AppSidebar() {
   const showConfigModule = visibleModules.length === 0 || visibleModules.includes('configuracoes');
   const visibleConfigItems = (permissions.isPerfilLimitado || !showConfigModule) ? [] : filterByPermission(configItems);
 
-  const [openGroups, setOpenGroups] = useState<string[]>(() => 
-    visibleGroups.filter(g => isGroupActive(g.items)).map(g => g.id)
-  );
+  const [openGroups, setOpenGroups] = useState<string[]>([]);
 
   // Super-group state for directors
-  const [openSuperGroups, setOpenSuperGroups] = useState<string[]>(() => {
-    const activeGroup = visibleGroups.find(g => isGroupActive(g.items));
-    if (!activeGroup) return [];
-    const sg = SUPER_GROUPS.find(s => s.moduleIds.includes(activeGroup.id));
-    return sg ? [sg.id] : [];
-  });
+  const [openSuperGroups, setOpenSuperGroups] = useState<string[]>([]);
 
   const toggleGroup = (groupId: string) => {
     setOpenGroups(prev => 
@@ -706,33 +699,6 @@ export function AppSidebar() {
         : [...prev, sgId]
     );
   };
-
-  useEffect(() => {
-    const activeGroup = visibleGroups.find(g => isGroupActive(g.items));
-    if (activeGroup && !openGroups.includes(activeGroup.id)) {
-      setOpenGroups(prev => [...prev, activeGroup.id]);
-    }
-    // Auto-open super-group for active route
-    if (activeGroup) {
-      const sg = SUPER_GROUPS.find(s => s.moduleIds.includes(activeGroup.id));
-      if (sg && !openSuperGroups.includes(sg.id)) {
-        setOpenSuperGroups(prev => [...prev, sg.id]);
-      }
-    }
-  }, [location.pathname]);
-
-  // Re-sync openGroups when permissions finish loading
-  useEffect(() => {
-    if (!isDataLoading && visibleGroups.length > 0) {
-      setOpenGroups(prev => {
-        const activeIds = visibleGroups
-          .filter(g => isGroupActive(g.items))
-          .map(g => g.id);
-        const merged = [...new Set([...prev, ...activeIds])];
-        return merged;
-      });
-    }
-  }, [isDataLoading, visibleGroups.length]);
 
   // Build super-groups with their visible sub-groups (for all users)
   const superGroups = useMemo(() => {
