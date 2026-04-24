@@ -261,6 +261,50 @@ export default function CotacaoContratacao() {
     );
   }
 
+  const hasDocsPendentes = !!associadoId && docsPendentes.length > 0;
+  const shouldPrioritizeDocsPendentes = !!associadoId && (hasDocsPendentes || associadoStatus === 'documentacao_pendente');
+
+  if (shouldPrioritizeDocsPendentes) {
+    return (
+      <div className="dark min-h-screen public-premium-bg flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+          className="w-full max-w-2xl"
+        >
+          {hasDocsPendentes ? (
+            <DocumentosPendentesPublico
+              associadoId={associadoId}
+              docsPendentes={docsPendentes}
+              onTodosEnviados={() => {
+                refetch();
+                refetchDocs();
+              }}
+            />
+          ) : (
+            <Card className="border-amber-500/30 bg-card/80 backdrop-blur-xl">
+              <CardContent className="py-10 text-center space-y-4">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-500/10">
+                  <Loader2 className="h-7 w-7 animate-spin text-amber-500" />
+                </div>
+                <div>
+                  <Badge className="mb-3 bg-amber-500/20 text-amber-400 border-amber-500/30">
+                    Documentação pendente
+                  </Badge>
+                  <h1 className="text-xl font-bold text-foreground">Carregando documentos solicitados</h1>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    O setor de cadastro solicitou ajustes. Estamos atualizando a lista para você enviar os arquivos corretos.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </motion.div>
+      </div>
+    );
+  }
+
   // Contrato já gerado
   if (cotacao.status_contratacao === 'contrato_gerado' && cotacao.contrato_gerado_id) {
     return (

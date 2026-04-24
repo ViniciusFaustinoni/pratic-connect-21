@@ -9,6 +9,8 @@ type Contrato = Database['public']['Tables']['contratos']['Row'];
 type Associado = Database['public']['Tables']['associados']['Row'];
 type Plano = Database['public']['Tables']['planos']['Row'];
 
+const APP_BASE_URL = 'https://app.praticcar.org';
+
 export interface DocumentoAnexado {
   id: string;
   tipo: string;
@@ -1550,10 +1552,10 @@ export function useSolicitarDocumentos() {
 
       // 4. NOVO: Enviar notificação via WhatsApp com link de acompanhamento
       try {
-        // Buscar link_token do contrato para incluir na mensagem
+        // Buscar tokens do contrato para incluir o link correto de upload público
         const { data: contratoComLink } = await supabase
           .from('contratos')
-          .select('link_token')
+          .select('link_token, cotacao_token_publico')
           .eq('id', contratoId)
           .single();
 
@@ -1586,10 +1588,11 @@ export function useSolicitarDocumentos() {
           .map((id) => `• ${DOCUMENTO_LABELS[id] || id}`)
           .join('\n');
 
-        // Gerar link de acompanhamento
-        const linkAcompanhamento = contratoComLink?.link_token 
-          ? `${window.location.origin}/acompanhar/${contratoComLink.link_token}`
-          : null;
+        const linkPendencias = contratoComLink?.cotacao_token_publico
+          ? `${APP_BASE_URL}/cotacao/${contratoComLink.cotacao_token_publico}`
+          : contratoComLink?.link_token
+            ? `${APP_BASE_URL}/acompanhar/${contratoComLink.link_token}`
+            : null;
 
         await supabase.functions.invoke('notificar-cliente', {
           body: {
@@ -1598,11 +1601,11 @@ export function useSolicitarDocumentos() {
             dados: {
               documentos: docsFormatados,
               observacoes: observacoes ? `📝 Obs: ${observacoes}` : '',
-              link_acompanhamento: linkAcompanhamento || 'Acesse pelo link enviado anteriormente',
+              link_acompanhamento: linkPendencias || 'Acesse pelo link enviado anteriormente',
             },
           },
         });
-        console.log('[useSolicitarDocumentos] Notificação WhatsApp enviada com link:', linkAcompanhamento);
+        console.log('[useSolicitarDocumentos] Notificação WhatsApp enviada com link:', linkPendencias);
       } catch (notifError) {
         console.warn('[useSolicitarDocumentos] Erro ao enviar notificação (não crítico):', notifError);
         // Não falhar por causa da notificação

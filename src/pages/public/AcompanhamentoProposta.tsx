@@ -37,8 +37,9 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
 import { CriarContaAssociadoForm } from '@/components/public/CriarContaAssociadoForm';
-import { DocumentosPendentes } from '@/components/associado/DocumentosPendentes';
+import { DocumentosPendentesPublico } from '@/components/cotacao-publica/DocumentosPendentesPublico';
 import { getOrientacoesRecusa } from '@/utils/orientacoesRecusa';
+import type { DocumentoPendentePublico } from '@/hooks/useCotacaoContratacao';
 
 import { toast } from 'sonner';
 
@@ -104,6 +105,7 @@ interface AssociadoData {
   servicoInstalacao?: ServicoInstalacao | null;
   cotacaoTokenPublico?: string | null;
   cotacaoStatusContratacao?: string | null;
+  documentosPendentes: DocumentoPendentePublico[];
 }
 
 function useAcompanhamentoProposta(token: string | undefined) {
@@ -248,6 +250,13 @@ function useAcompanhamentoProposta(token: string | undefined) {
         cotacaoStatusContratacao = (cotacaoData as any)?.status_contratacao || null;
       }
 
+      const { data: documentosPendentes } = await supabase
+        .from('documentos_solicitados')
+        .select('id, associado_id, tipo_documento, descricao, status, observacao_solicitacao, created_at')
+        .eq('associado_id', contrato.associado_id)
+        .eq('status', 'pendente')
+        .order('created_at', { ascending: true });
+
       return {
         ...associado,
         primeiro_acesso: primeiroAcesso,
@@ -261,6 +270,7 @@ function useAcompanhamentoProposta(token: string | undefined) {
         servicoInstalacao,
         cotacaoTokenPublico,
         cotacaoStatusContratacao,
+        documentosPendentes: (documentosPendentes || []) as DocumentoPendentePublico[],
       };
     },
     enabled: !!token,
@@ -714,6 +724,8 @@ export default function AcompanhamentoProposta() {
   const instalacao = associado.instalacoes[0];
   const StatusIcon = statusInfo.icon;
   const servico = associado.servicoInstalacao;
+  const hasDocsPendentes = associado.documentosPendentes.length > 0;
+  const shouldPrioritizeDocsPendentes = hasDocsPendentes || associado.status === 'documentacao_pendente';
 
   const showChecklistSection = !!(statusInfo as any).showChecklist && servico;
   const itensOk = checklistItems.filter(i => i.status === 'ok').length;
@@ -759,6 +771,39 @@ export default function AcompanhamentoProposta() {
   };
 
   const colors = colorClasses[statusInfo.color as keyof typeof colorClasses];
+
+  if (shouldPrioritizeDocsPendentes) {
+    return (
+      <div className="dark min-h-screen public-premium-bg flex items-center justify-center p-4">
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-2xl">
+          {hasDocsPendentes ? (
+            <DocumentosPendentesPublico
+              associadoId={associado.id}
+              docsPendentes={associado.documentosPendentes}
+              onTodosEnviados={() => {
+                queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta', token] });
+              }}
+            />
+          ) : (
+            <Card className="border-warning/30 bg-card/80 backdrop-blur-xl">
+              <CardContent className="py-10 text-center space-y-4">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-warning/10">
+                  <Loader2 className="h-7 w-7 animate-spin text-warning" />
+                </div>
+                <div>
+                  <Badge className="mb-3 bg-warning/20 text-warning border-warning/30">Documentação pendente</Badge>
+                  <h1 className="text-xl font-bold text-foreground">Carregando documentos solicitados</h1>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    O setor de cadastro solicitou ajustes. Estamos atualizando a lista para você enviar os arquivos corretos.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="dark min-h-screen public-premium-bg relative">
@@ -836,18 +881,6 @@ export default function AcompanhamentoProposta() {
                 associadoId={associado.id}
                 nomeAssociado={associado.nome}
                 emailCadastrado={associado.email}
-              />
-            </motion.div>
-          )}
-
-          {/* Documentos Pendentes */}
-          {((statusInfo as any).showDocumentosPendentes || associado.status === 'documentacao_pendente') && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-              <DocumentosPendentes 
-                associadoId={associado.id}
-                onTodosEnviados={() => {
-                  queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta', token] });
-                }}
               />
             </motion.div>
           )}
