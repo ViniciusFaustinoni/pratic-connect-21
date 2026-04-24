@@ -325,17 +325,6 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
                 )}
               </div>
 
-              <div className="space-y-1.5">
-                <Label>Agência vinculada</Label>
-                <Select value={agenciaId} onValueChange={setAgenciaId} disabled={loadingVinculos || saving || erroUsuarios}>
-                  <SelectTrigger className="h-11"><SelectValue placeholder="Selecione uma agência" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhuma agência</SelectItem>
-                    {!loadingVinculos && agencias.length === 0 && <SelectItem value="empty-agencias" disabled>Nenhuma agência disponível</SelectItem>}
-                    {agencias.map((u) => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
 
             <div className="space-y-1.5">
