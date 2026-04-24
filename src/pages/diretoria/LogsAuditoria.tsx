@@ -343,7 +343,7 @@ export default function LogsAuditoria() {
                 <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas</SelectItem>
-                  {tabelaOptions.map((tabela) => <SelectItem key={tabela} value={tabela}>{tabela}</SelectItem>)}
+                  {tabelaOptions.map((tabela) => <SelectItem key={tabela} value={tabela}>{tabelaLabels[tabela] || tabela}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -359,91 +359,24 @@ export default function LogsAuditoria() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[150px]">Data/Hora</TableHead>
-                <TableHead>Usuário</TableHead>
-                <TableHead className="w-[115px]">Ação</TableHead>
-                <TableHead className="w-[120px]">Módulo</TableHead>
-                <TableHead className="w-[190px]">Origem</TableHead>
-                <TableHead>Descrição</TableHead>
-                <TableHead className="w-[80px]">Detalhes</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow><TableCell colSpan={7} className="py-8 text-center">Carregando...</TableCell></TableRow>
-              ) : !logs?.length ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
-                    <FileText className="mx-auto mb-2 h-8 w-8 opacity-50" />
-                    Nenhum log encontrado
-                  </TableCell>
-                </TableRow>
-              ) : (
-                logs.map((log: any) => {
-                  const resumo = gerarResumoAuditoria(log);
-                  return (
-                    <Fragment key={log.id}>
-                        <TableRow className="border-b-0">
-                          <TableCell className="font-mono text-sm">{format(new Date(log.created_at), 'dd/MM/yy HH:mm', { locale: ptBR })}</TableCell>
-                          <TableCell>{log.usuario_nome || log.usuario_id?.slice(0, 8) || '-'}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={acaoConfig[log.acao]?.className || 'border-border bg-muted text-muted-foreground'}>
-                              {acaoConfig[log.acao]?.label || log.acao}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="capitalize">{log.modulo || '-'}</TableCell>
-                          <TableCell className="font-mono text-xs">{log.tabela || '-'}</TableCell>
-                          <TableCell className="max-w-[340px] truncate">{log.descricao}</TableCell>
-                          <TableCell>
-                            <Button variant="ghost" size="sm" onClick={() => setExpandedRow(expandedRow === log.id ? null : log.id)}>
-                              {expandedRow === log.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                        {expandedRow === log.id && (
-                          <TableRow>
-                            <TableCell colSpan={7} className="bg-muted/50">
-                              <div className="space-y-4 p-4">
-                                <div className="grid gap-3 text-sm md:grid-cols-3">
-                                  <div><span className="text-muted-foreground">Registro:</span> <span className="font-mono">{log.registro_id || '-'}</span></div>
-                                  <div><span className="text-muted-foreground">IP:</span> <span className="font-mono">{log.ip_address || '-'}</span></div>
-                                  <div><span className="text-muted-foreground">Origem:</span> <span className="font-mono">{log.tabela || '-'}</span></div>
-                                </div>
-                                {resumo && (
-                                  <div className="rounded-md border bg-background p-3">
-                                    <h4 className="mb-2 font-medium">{resumo.titulo}</h4>
-                                    <ul className="space-y-1 text-sm text-muted-foreground">
-                                      {resumo.linhas.map((linha, idx) => <li key={idx}>{linha}</li>)}
-                                    </ul>
-                                  </div>
-                                )}
-                                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                                  <div>
-                                    <h4 className="mb-2 font-medium">Dados Anteriores</h4>
-                                    <pre className="max-h-64 overflow-auto rounded border bg-background p-3 text-xs">{formatJSON(log.dados_anteriores)}</pre>
-                                  </div>
-                                  <div>
-                                    <h4 className="mb-2 font-medium">Dados Novos</h4>
-                                    <pre className="max-h-64 overflow-auto rounded border bg-background p-3 text-xs">{formatJSON(log.dados_novos)}</pre>
-                                  </div>
-                                </div>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        )}
-                    </Fragment>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="todos" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="todos" className="gap-2">
+            <FileText className="h-4 w-4" />
+            Todos os logs
+          </TabsTrigger>
+          <TabsTrigger value="hierarquia" className="gap-2">
+            <GitBranch className="h-4 w-4" />
+            Histórico de Hierarquia ({historicoHierarquia.length})
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="todos">
+          {renderLogsTable(logs, isLoading, 'Nenhum log encontrado')}
+        </TabsContent>
+        <TabsContent value="hierarquia">
+          {renderLogsTable(historicoHierarquia, isLoadingHierarquia, 'Nenhum histórico de hierarquia encontrado')}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
