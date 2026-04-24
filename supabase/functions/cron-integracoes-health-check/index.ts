@@ -108,8 +108,8 @@ async function testOpenAI() {
     const resp = await fetch('https://api.openai.com/v1/models', { headers: { 'Authorization': `Bearer ${key}` } });
     const ms = Date.now() - start;
     return { conexao_ok: resp.ok, tempo_resposta_ms: ms, erro_mensagem: resp.ok ? null : `Status ${resp.status}`, detalhes: {} };
-  } catch (e) {
-    return { conexao_ok: false, tempo_resposta_ms: Date.now() - start, erro_mensagem: `Rede: ${e.message}`, detalhes: {} };
+  } catch (e: any) {
+    return { conexao_ok: false, tempo_resposta_ms: Date.now() - start, erro_mensagem: `Rede: ${e?.message || 'erro desconhecido'}`, detalhes: {} };
   }
 }
 
@@ -196,9 +196,9 @@ serve(async (req) => {
     return new Response(JSON.stringify({ success: true, results }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('[cron-integracoes-health-check] Error:', error);
-    return new Response(JSON.stringify({ success: false, error: error.message }), {
+    return new Response(JSON.stringify({ success: false, error: error?.message || 'Erro interno' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
