@@ -1473,7 +1473,7 @@ serve(async (req) => {
       console.log(`[SGA Sync] Resposta cadastrar_veiculo (${veiculoResponse.status}):`, JSON.stringify(veiculoData));
       const statusCode = veiculoResponse.status;
       const mensagem = veiculoData.mensagem?.toLowerCase() || '';
-      const errorMessages: string[] = (veiculoData as any).error || [];
+      const errorMessages: string[] = normalizeErrorMessages((veiculoData as any).error);
       
       // Check if this is a validation error (not a duplicate)
       const isValidationError = errorMessages.some((e: string) => 
@@ -1501,8 +1501,35 @@ serve(async (req) => {
         
         let codigoVeiculoExistente: number | null = null;
 
-        // Estratégia 1: GET /veiculo/consultar/placa/{placa}
+        // Estratégia 0: helper compartilhado com endpoint primário + fallback legado
         try {
+          const { found, debug } = await buscarVeiculoPorPlaca({
+            apiUrl: hinovaApiUrl,
+            token: hinovaToken || '',
+            usuario: hinovaUsuario || '',
+            senha: hinovaSenha || '',
+            tokenUsuario,
+          }, veiculo.placa);
+
+          await logSync(_vid, _aid, 'buscar_veiculo_placa_shared', found?.codigo_veiculo ? 'success' : 'empty',
+            { placa: veiculo.placa }, { debug, found }, null);
+
+          if (found?.codigo_veiculo) {
+            codigoVeiculoExistente = parseInt(String(found.codigo_veiculo));
+            const codAssocEncontrado = found.codigo_associado || found.codigo_associado_pf;
+            if (codAssocEncontrado) {
+              codigoAssociadoHinova = parseInt(String(codAssocEncontrado));
+              await supabase.from('associados').update({
+                codigo_hinova: codigoAssociadoHinova,
+                sincronizado_hinova: true,
+                sincronizado_hinova_em: new Date().toISOString()
+              }).eq('id', _aid);
+            }
+          }
+        } catch (e) { console.log('[SGA Sync] Busca placa shared falhou:', e); }
+
+        // Estratégia 1: GET /veiculo/consultar/placa/{placa}
+        if (!codigoVeiculoExistente) try {
           const buscaResponse = await fetchWithRetry(
             `${hinovaApiUrl}/veiculo/consultar/placa/${veiculo.placa}`,
             { method: 'GET', headers: operationHeaders }
