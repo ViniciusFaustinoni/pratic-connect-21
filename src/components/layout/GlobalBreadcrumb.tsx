@@ -54,14 +54,13 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/financeiro': { label: 'Financeiro' },
   
   '/financeiro/cobrancas': { label: 'Cobranças' },
+  '/financeiro/cobrancas/regua': { label: 'Régua' },
   '/financeiro/faturamento': { label: 'Faturamento Mensal' },
   '/financeiro/contas-pagar': { label: 'Contas a Pagar' },
   '/financeiro/extrato': { label: 'Extrato' },
-  '/financeiro/extratos-bancarios': { label: 'Extratos Bancários' },
   '/financeiro/contas-bancarias': { label: 'Contas Bancárias' },
   '/financeiro/configuracoes/comissionamento-externo': { label: 'Comissionamento Externo' },
   '/financeiro/venda-externa': { label: 'Venda Externa' },
-  '/financeiro/conta-corrente-comissoes': { label: 'Conta Corrente de Comissões' },
   '/perfil/conta-corrente': { label: 'Conta Corrente' },
   
   // Cobrança

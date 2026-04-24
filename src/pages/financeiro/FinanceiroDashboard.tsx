@@ -478,7 +478,7 @@ export default function FinanceiroDashboard() {
               <Button 
                 variant="outline" 
                 className="w-full justify-start"
-                onClick={() => navigate('/financeiro/extratos-bancarios')}
+                onClick={() => navigate('/financeiro/extrato')}
               >
                 <List className="mr-2 h-4 w-4" />
                 Conciliação Bancária

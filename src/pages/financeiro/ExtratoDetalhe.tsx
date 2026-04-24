@@ -65,7 +65,7 @@ export default function ExtratoDetalhe() {
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <FileSpreadsheet className="h-12 w-12 text-muted-foreground mb-4" />
         <h2 className="text-xl font-semibold">Extrato não encontrado</h2>
-        <Button variant="outline" className="mt-4" onClick={() => navigate('/financeiro/extratos-bancarios')}>
+        <Button variant="outline" className="mt-4" onClick={() => navigate('/financeiro/extrato')}>
           <ArrowLeft className="mr-2 h-4 w-4" />
           Voltar
         </Button>
@@ -79,7 +79,7 @@ export default function ExtratoDetalhe() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/financeiro/extratos-bancarios')}>
+        <Button variant="ghost" size="icon" onClick={() => navigate('/financeiro/extrato')}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1">
