@@ -48,6 +48,8 @@ export interface ContaCorrenteComissaoItem {
 
 export interface ContaCorrenteResumo {
   saldoAtual: number;
+  totalCreditadoPeriodo: number;
+  totalDebitadoPeriodo: number;
   totalPago: number;
   totalAReceber: number;
   totalPendente: number;
@@ -216,12 +218,15 @@ export function useContaCorrenteComissoes() {
       const valor = moneyValue(item.valor_total);
       acc.totalPeriodo += valor;
       acc.quantidade += 1;
-      if (isPago(item)) acc.totalPago += valor;
+      if (isPago(item)) {
+        acc.totalPago += valor;
+        acc.totalCreditadoPeriodo += valor;
+      }
       if (isAReceber(item.status)) acc.totalAReceber += valor;
       if (item.status === 'pendente') acc.totalPendente += valor;
       acc.saldoAtual = item.saldo_apos;
       return acc;
-    }, { saldoAtual: 0, totalPago: 0, totalAReceber: 0, totalPendente: 0, totalPeriodo: 0, quantidade: 0 });
+    }, { saldoAtual: 0, totalCreditadoPeriodo: 0, totalDebitadoPeriodo: 0, totalPago: 0, totalAReceber: 0, totalPendente: 0, totalPeriodo: 0, quantidade: 0 });
   }, [query.data?.allItems]);
 
   return {
