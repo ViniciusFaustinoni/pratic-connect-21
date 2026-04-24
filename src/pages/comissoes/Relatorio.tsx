@@ -6,8 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { useRelatorioComissoes } from '@/hooks/useRelatorioComissoes';
 import { ComissaoDetalhesPagamentoModal } from '@/components/comissoes/ComissaoDetalhesPagamentoModal';
+import { COMISSOES_STATUS_OPTIONS, COMISSOES_TIPO_LANCAMENTO_OPTIONS, dateStringToDate, dateToDateString } from '@/lib/comissoes-filtros';
 
 const PERFIS = [
   { value: 'vendedor_clt', label: 'Vendedor CLT' },
@@ -24,6 +26,10 @@ export default function RelatorioComissoes() {
   const { filters, setFilters, grades, planos, vendedores, linhas, resumo, isLoading } = useRelatorioComissoes();
   const [detalheId, setDetalheId] = useState<string | null>(null);
   const update = (key: keyof typeof filters, value: string) => setFilters(prev => ({ ...prev, [key]: value }));
+  const updatePeriodo = (range: { from?: Date; to?: Date } | undefined) => {
+    if (!range?.from) return;
+    setFilters(prev => ({ ...prev, dataInicio: dateToDateString(range.from!), dataFim: dateToDateString(range.to || range.from!) }));
+  };
 
   return (
     <div className="space-y-6">
@@ -41,14 +47,14 @@ export default function RelatorioComissoes() {
 
       <Card>
         <CardContent className="grid gap-3 pt-6 md:grid-cols-4">
-          <Input type="date" value={filters.dataInicio} onChange={e => update('dataInicio', e.target.value)} />
-          <Input type="date" value={filters.dataFim} onChange={e => update('dataFim', e.target.value)} />
+          <div className="md:col-span-2"><DatePickerWithRange date={{ from: dateStringToDate(filters.dataInicio), to: dateStringToDate(filters.dataFim) }} onDateChange={updatePeriodo} /></div>
+          <Select value={filters.status} onValueChange={v => update('status', v)}><SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger><SelectContent>{COMISSOES_STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent></Select>
+          <Select value={filters.tipoLancamento} onValueChange={v => update('tipoLancamento', v)}><SelectTrigger><SelectValue placeholder="Tipo de lançamento" /></SelectTrigger><SelectContent>{COMISSOES_TIPO_LANCAMENTO_OPTIONS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent></Select>
           <Select value={filters.gradeId} onValueChange={v => update('gradeId', v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todos">Todas as grades</SelectItem>{grades.map(g => <SelectItem key={g.id} value={g.id}>{g.nome}</SelectItem>)}</SelectContent></Select>
           <Select value={filters.planoId} onValueChange={v => update('planoId', v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todos">Todos os planos</SelectItem>{planos.map(p => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}</SelectContent></Select>
           <Select value={filters.vendedorId} onValueChange={v => update('vendedorId', v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todos">Todos os destinatários</SelectItem>{vendedores.map(v => <SelectItem key={v.id} value={v.id}>{getName(v)}</SelectItem>)}</SelectContent></Select>
           <Select value={filters.role} onValueChange={v => update('role', v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todos">Todos os perfis</SelectItem>{PERFIS.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent></Select>
           <Input placeholder="Parcela" value={filters.parcela === 'todas' ? '' : filters.parcela} onChange={e => update('parcela', e.target.value || 'todas')} />
-          <Select value={filters.status} onValueChange={v => update('status', v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todos">Todos os status</SelectItem><SelectItem value="pendente">Pendente</SelectItem><SelectItem value="aprovada">Gerado</SelectItem><SelectItem value="paga">Pago</SelectItem><SelectItem value="cancelada">Cancelado</SelectItem></SelectContent></Select>
         </CardContent>
       </Card>
 

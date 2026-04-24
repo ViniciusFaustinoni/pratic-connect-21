@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { baixarReciboComissao, type ReciboComissaoItem } from '@/lib/comissoes-recibo';
+import { matchesTipoLancamentoComissao } from '@/lib/comissoes-filtros';
 import { toast } from 'sonner';
 
 export interface PagamentosComissoesFilters {
@@ -11,6 +12,7 @@ export interface PagamentosComissoesFilters {
   vendedorId: string;
   gradeId: string;
   planoId: string;
+  tipoLancamento: string;
   parcela: string;
   search: string;
   page: number;
@@ -43,6 +45,7 @@ export function usePagamentosComissoes() {
     vendedorId: 'todos',
     gradeId: 'todos',
     planoId: 'todos',
+    tipoLancamento: 'todos',
     parcela: 'todas',
     search: '',
     page: 1,
@@ -67,8 +70,6 @@ export function usePagamentosComissoes() {
   const query = useQuery({
     queryKey: ['pagamentos-comissoes', filters],
     queryFn: async () => {
-      const from = (filters.page - 1) * filters.pageSize;
-      const to = from + filters.pageSize - 1;
       let base = (supabase as any)
         .from('comissoes')
         .select(`
@@ -80,11 +81,11 @@ export function usePagamentosComissoes() {
           plano:planos(nome),
           contrato:contratos(numero, vendedor:profiles!contratos_vendedor_id_fkey(nome, full_name, email)),
           pagamento_itens:comissoes_pagamento_itens(pagamento_id, created_at, pagamento:comissoes_pagamentos(data_pagamento))
-        `, { count: 'exact' })
+        `)
         .gte('created_at', `${filters.dataInicio}T00:00:00`)
         .lte('created_at', `${filters.dataFim}T23:59:59`)
         .order('created_at', { ascending: false })
-        .range(from, to);
+        .limit(5000);
 
       if (filters.status !== 'todos') base = base.eq('status', filters.status);
       if (filters.vendedorId !== 'todos') base = base.eq('vendedor_id', filters.vendedorId);
@@ -93,10 +94,10 @@ export function usePagamentosComissoes() {
       if (filters.parcela !== 'todas') base = base.eq('parcela_numero', Number(filters.parcela));
       if (filters.search.trim()) base = base.or(`nivel_nome.ilike.%${filters.search.trim()}%,role_destinatario.ilike.%${filters.search.trim()}%`);
 
-      const { data, error, count } = await base;
+      const { data, error } = await base;
       if (error) throw error;
 
-      const items: PagamentoComissaoItem[] = (data || []).map((row: any) => {
+      const allItems: PagamentoComissaoItem[] = (data || []).filter((row: any) => matchesTipoLancamentoComissao(row, filters.tipoLancamento)).map((row: any) => {
         const pagamentoItem = row.pagamento_itens?.[0];
         return {
           id: row.id,
@@ -127,8 +128,10 @@ export function usePagamentosComissoes() {
           valor_comissao: Number(row.valor_comissao || 0),
         };
       });
+      const from = (filters.page - 1) * filters.pageSize;
+      const items = allItems.slice(from, from + filters.pageSize);
 
-      return { items, total: count || 0 };
+      return { items, total: allItems.length };
     },
   });
 
