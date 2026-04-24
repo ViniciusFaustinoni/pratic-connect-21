@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
+import type { TablesInsert } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { Download, Upload, Loader2, FileSpreadsheet, CheckCircle2 } from 'lucide-react';
@@ -168,8 +169,7 @@ export function ImportarLinhasModal({ open, onClose }: ImportarLinhasModalProps)
         for (const [planoName, items] of planMap) {
           // Create plan
           const codigo = planoName.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30);
-          const { data: newPlano, error: pe } = await supabase
-            .from('planos').insert({
+          const planoPayload: TablesInsert<'planos'> = {
               nome: planoName,
               codigo,
               slug: codigo,
@@ -179,7 +179,9 @@ export function ImportarLinhasModal({ open, onClose }: ImportarLinhasModalProps)
               visivel_gestao: true,
               valor_adesao: 0,
               ordem: 99,
-            }).select('id').single();
+            };
+          const { data: newPlano, error: pe } = await supabase
+            .from('planos').insert(planoPayload).select('id').single();
           if (pe) throw pe;
           counts.planos++;
 
