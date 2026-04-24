@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { baixarReciboComissao, type ReciboComissaoItem } from '@/lib/comissoes-recibo';
+import { matchesTipoLancamentoComissao } from '@/lib/comissoes-filtros';
 import { toast } from 'sonner';
 
 export interface PagamentosComissoesFilters {
@@ -11,6 +12,7 @@ export interface PagamentosComissoesFilters {
   vendedorId: string;
   gradeId: string;
   planoId: string;
+  tipoLancamento: string;
   parcela: string;
   search: string;
   page: number;
@@ -43,6 +45,7 @@ export function usePagamentosComissoes() {
     vendedorId: 'todos',
     gradeId: 'todos',
     planoId: 'todos',
+    tipoLancamento: 'todos',
     parcela: 'todas',
     search: '',
     page: 1,
@@ -96,7 +99,7 @@ export function usePagamentosComissoes() {
       const { data, error, count } = await base;
       if (error) throw error;
 
-      const items: PagamentoComissaoItem[] = (data || []).map((row: any) => {
+      const items: PagamentoComissaoItem[] = (data || []).filter((row: any) => matchesTipoLancamentoComissao(row, filters.tipoLancamento)).map((row: any) => {
         const pagamentoItem = row.pagamento_itens?.[0];
         return {
           id: row.id,
