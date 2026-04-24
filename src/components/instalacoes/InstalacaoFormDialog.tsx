@@ -49,7 +49,7 @@ const instalacaoSchema = z.object({
   associado_id: z.string().min(1, 'Selecione um associado'),
   veiculo_id: z.string().min(1, 'Selecione um veículo'),
   data_agendada: z.date({ required_error: 'Informe a data' }),
-  periodo: z.enum(['manha', 'tarde', 'noite']),
+  periodo: z.enum(['manha', 'tarde']),
   rastreador_id: z.string().optional().nullable(),
   instalador_id: z.string().optional().nullable(),
   cep: z.string().optional(),
