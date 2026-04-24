@@ -254,6 +254,20 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
               </div>
             )}
 
+            {hasValidationErrors && (
+              <div className="space-y-2 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+                <div className="flex items-center gap-2 font-medium">
+                  <AlertCircle className="h-4 w-4" />
+                  Hierarquia inválida
+                </div>
+                <ul className="list-disc space-y-1 pl-5">
+                  {validationErrors.map((message) => (
+                    <li key={message}>{message}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 gap-4">
               <div className="space-y-1.5">
                 <Label>Gerente superior</Label>
@@ -346,7 +360,7 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
 
         <DialogFooter className="border-t px-6 py-4">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={saving || loadingVinculos || erroUsuarios}>
+          <Button onClick={handleSave} disabled={saving || loadingVinculos || erroUsuarios || hasValidationErrors}>
             {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Salvar hierarquia
           </Button>
