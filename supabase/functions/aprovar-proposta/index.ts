@@ -361,15 +361,14 @@ serve(async (req) => {
       }
     }
 
-    // Criar acesso do associado se nenhuma instalação concluída
-    if (!jaTemInstalacaoConcluida && veiculoPrincipal) {
-      try {
-        await supabase.functions.invoke('ativar-associado', {
-          body: { associado_id: associadoId, veiculo_id: veiculoPrincipal.id },
-        });
-      } catch (e) {
-        console.warn('[aprovar-proposta] Erro criar acesso:', e);
-      }
+    const deveAguardarInstalacao = algumPrecisouRastreador && !jaTemInstalacaoConcluida;
+    const statusSgaDestino = deveAguardarInstalacao ? 'pendente' : 'ativo';
+
+    if (deveAguardarInstalacao) {
+      await Promise.all([
+        supabase.from('contratos').update({ status: 'assinado', data_ativacao: null }).eq('id', contrato_id),
+        supabase.from('associados').update({ status: 'aguardando_instalacao' }).eq('id', associadoId),
+      ]);
     }
 
     // 5. Histórico + documentos + SGA
@@ -414,7 +413,7 @@ serve(async (req) => {
         fetch(`${supabaseUrl}/functions/v1/sga-hinova-sync`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
-          body: JSON.stringify({ veiculo_id: veiculoParaSGA.id, associado_id: associadoId }),
+          body: JSON.stringify({ veiculo_id: veiculoParaSGA.id, associado_id: associadoId, status_sga_destino: statusSgaDestino }),
         }).catch(e => console.warn('[aprovar-proposta] SGA falhou:', e));
       }
     } catch (e) {

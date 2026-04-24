@@ -9,6 +9,7 @@ const corsHeaders = {
 interface SyncRequest {
   veiculo_id: string;
   associado_id: string;
+  status_sga_destino?: 'pendente' | 'ativo';
 }
 
 interface HinovaAuthResponse {
@@ -272,6 +273,8 @@ serve(async (req) => {
   let hinovaCodigoRegional = Deno.env.get('HINOVA_CODIGO_REGIONAL');
   let hinovaCodigoCooperativa = Deno.env.get('HINOVA_CODIGO_COOPERATIVA');
   let hinovaCodigoVoluntario = Deno.env.get('HINOVA_CODIGO_VOLUNTARIO');
+  let hinovaCodigoSituacaoPendente = Deno.env.get('HINOVA_CODIGO_SITUACAO_PENDENTE');
+  let hinovaCodigoSituacaoAtivo = Deno.env.get('HINOVA_CODIGO_SITUACAO_ATIVO');
   let codigoContaOrigem: 'env' | 'database' | 'historico' | 'fallback' = hinovaCodigoConta ? 'env' : 'fallback';
 
   if (!hinovaToken || !hinovaUsuario || !hinovaSenha || !hinovaCodigoConta) {
@@ -288,6 +291,8 @@ serve(async (req) => {
       hinovaCodigoRegional = credBanco.codigo_regional || hinovaCodigoRegional;
       hinovaCodigoCooperativa = credBanco.codigo_cooperativa || hinovaCodigoCooperativa;
       hinovaCodigoVoluntario = credBanco.codigo_voluntario || hinovaCodigoVoluntario;
+      hinovaCodigoSituacaoPendente = credBanco.codigo_situacao_pendente || hinovaCodigoSituacaoPendente;
+      hinovaCodigoSituacaoAtivo = credBanco.codigo_situacao_ativo || hinovaCodigoSituacaoAtivo;
       if (credBanco.api_url) hinovaApiUrl = credBanco.api_url;
       console.log('[SGA Sync] Credenciais carregadas do banco');
     }
@@ -389,6 +394,7 @@ serve(async (req) => {
 
     const requestBody = await req.json();
     const { veiculo_id, associado_id, action, bypass_guard_base_antiga } = requestBody as SyncRequest & { action?: string; bypass_guard_base_antiga?: boolean };
+    const statusSgaDestino: 'pendente' | 'ativo' = requestBody.status_sga_destino === 'ativo' ? 'ativo' : 'pendente';
 
     // ========================================
     // MODO TESTE DE CONEXÃO
@@ -446,7 +452,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[SGA Sync] Iniciando sincronização - Veículo: ${veiculo_id}, Associado: ${associado_id}`);
+    console.log(`[SGA Sync] Iniciando sincronização - Veículo: ${veiculo_id}, Associado: ${associado_id}, destino=${statusSgaDestino}`);
 
     // ========================================
     // GUARD DE IDEMPOTÊNCIA
@@ -458,9 +464,9 @@ serve(async (req) => {
       .single();
 
     // Se já está sincronizado com sucesso, retornar sem chamar Hinova
-    if (veiculoCheck?.sincronizado_hinova && veiculoCheck?.codigo_hinova) {
+    if (veiculoCheck?.sincronizado_hinova && veiculoCheck?.codigo_hinova && (statusSgaDestino !== 'ativo' || veiculoCheck?.status_sga === 'ativado_sga')) {
       console.log(`[SGA Sync] Veículo ${veiculo_id} já sincronizado (codigo_hinova=${veiculoCheck.codigo_hinova}). Retornando sucesso.`);
-      await logSync(veiculo_id, associado_id, 'idempotency_guard', 'skipped', { veiculo_id, associado_id }, { codigo_hinova: veiculoCheck.codigo_hinova });
+      await logSync(veiculo_id, associado_id, 'idempotency_guard', 'skipped', { veiculo_id, associado_id, status_sga_destino: statusSgaDestino }, { codigo_hinova: veiculoCheck.codigo_hinova, status_sga: veiculoCheck.status_sga });
       await markQueueCompleted(supabase, veiculo_id, associado_id);
       return new Response(
         JSON.stringify({
@@ -517,6 +523,7 @@ serve(async (req) => {
       // ⚡ Capture IDs explicitly to prevent stale closures in EdgeRuntime.waitUntil
       const _vid = veiculo_id;
       const _aid = associado_id;
+      const _statusDestino = statusSgaDestino;
       try {
 
     // ========================================
@@ -923,7 +930,7 @@ serve(async (req) => {
                       codigo_hinova: parseInt(veiculoExistente.codigo_veiculo),
                       sincronizado_hinova: true,
                       sincronizado_hinova_em: new Date().toISOString(),
-                      status_sga: 'ativado_sga'
+                      status_sga: _statusDestino === 'ativo' ? 'ativado_sga' : 'pendente_sga'
                     }).eq('id', _vid);
 
                     await markQueueCompleted(supabase, _vid, _aid);
@@ -1308,6 +1315,10 @@ serve(async (req) => {
     const combustivelNormalizado = normalizarCombustivel(veiculo.combustivel);
     const tipoVeiculoInferido = await inferirTipoVeiculo(contrato?.veiculo_categoria, veiculo.marca, veiculo.modelo);
 
+    const codigoSituacaoDestino = _statusDestino === 'ativo'
+      ? Number.parseInt(hinovaCodigoSituacaoAtivo || '', 10)
+      : Number.parseInt(hinovaCodigoSituacaoPendente || '', 10);
+
     const veiculoPayload = {
       codigo_associado: codigoAssociadoHinova,
       placa: veiculo.placa || '',
@@ -1325,6 +1336,7 @@ serve(async (req) => {
       codigo_combustivel: getMapeamento('combustivel', combustivelNormalizado),
       codigo_tipo_veiculo: getMapeamento('tipo_veiculo', contrato?.veiculo_categoria?.toLowerCase()) || tipoVeiculoInferido,
       codigo_voluntario: parseInt(hinovaCodigoVoluntario),
+      ...(Number.isFinite(codigoSituacaoDestino) && codigoSituacaoDestino > 0 && { codigo_situacao: codigoSituacaoDestino }),
       ...(hinovaCodigoCooperativa && { codigo_cooperativa: parseInt(hinovaCodigoCooperativa) }),
     };
 
@@ -1524,7 +1536,7 @@ serve(async (req) => {
       codigo_hinova: codigoVeiculoHinova,
       sincronizado_hinova: true,
       sincronizado_hinova_em: new Date().toISOString(),
-      status_sga: 'ativado_sga'
+      status_sga: _statusDestino === 'ativo' ? 'ativado_sga' : 'pendente_sga'
     }).eq('id', _vid);
 
     // ========================================
@@ -1602,6 +1614,8 @@ serve(async (req) => {
     await logSync(_vid, _aid, 'sync_completo', 'success', null, {
       codigo_associado_hinova: codigoAssociadoHinova,
       codigo_veiculo_hinova: codigoVeiculoHinova,
+      status_sga_destino: _statusDestino,
+      status_sga_local: _statusDestino === 'ativo' ? 'ativado_sga' : 'pendente_sga',
       fotos_enviadas: fotosEnviadas,
       fotos_com_erro: fotosComErro.length
     }, null);

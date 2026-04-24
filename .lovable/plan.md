@@ -1,58 +1,72 @@
-## Plano: configuração única para múltiplos planos na Grade de Comissão
+Plano para corrigir o fluxo SGA após auto vistoria
 
-### Objetivo
-Alterar a tela de criação/edição de grade para que, quando mais de um plano estiver selecionado, as parcelas e comissões sejam configuradas uma única vez e aplicadas a todos os planos selecionados.
+Diagnóstico confirmado
+- Hoje a aprovação de proposta em `supabase/functions/aprovar-proposta/index.ts` atualiza o contrato e o associado como `ativo` e dispara `sga-hinova-sync` logo após a aprovação de cadastro.
+- A função `sga-hinova-sync` cadastra associado e veículo no Hinova, mas não diferencia o status operacional desejado para o SGA entre “pendente” e “ativo”. Ao fim, grava localmente `veiculos.status_sga = 'ativado_sga'`.
+- Existe outro ponto de ativação em `src/hooks/useAtivacoes.ts` que ativa contrato/associado e envia ao SGA; este fluxo deve continuar sendo o ponto correto para ativação final após instalação do rastreador, mas precisa evitar enviar como ativo antes da hora.
 
-Fluxo esperado:
-
+Regra desejada
 ```text
-Seleciona 1 plano  -> configura regras daquele plano
-Seleciona 2+ planos -> configura um único modelo de regras
-Salvar -> replica o modelo para todos os planos selecionados no banco
+Auto vistoria realizada/aprovada
+  -> enviar ao SGA como PENDENTE
+  -> NÃO ativar associado no SGA
+  -> NÃO considerar Proteção 360 ativa por isso
+
+Instalação do rastreador concluída
+  -> ativar contrato/associado no sistema
+  -> atualizar/enviar ao SGA como ATIVO
+  -> liberar Proteção 360 e mensagem de ativação
 ```
 
-### Ajustes na tela
-1. Trocar o texto da seleção de planos para deixar claro que os planos selecionados compartilharão a mesma configuração quando houver mais de um.
-2. Quando `selectedPlanIds.length > 1`, renderizar apenas um card de configuração, por exemplo:
-   - “Configuração compartilhada”
-   - badge com “Aplicada a X planos”
-   - lista/resumo dos planos selecionados
-3. Manter o comportamento atual para apenas 1 plano selecionado.
-4. Botões “Parcela”, “Vitalícia”, editar, remover e reordenar passarão a alterar esse modelo único quando houver múltiplos planos.
+Implementação proposta
 
-### Ajustes de estado e regra
-1. Manter um modelo base de parcelas para a configuração compartilhada.
-2. Ao selecionar/desselecionar planos, não duplicar cards de configuração na interface.
-3. Ao salvar, replicar a configuração compartilhada para cada `plano_id` selecionado, preservando a estrutura atual do banco:
-   - `grade_comissao_planos`
-   - `grades_comissao_parcelas`
-   - `grades_comissao_niveis`
-   - `grade_comissao_plano_regras`
-   - snapshot de versão
+1. Ajustar a função `sga-hinova-sync`
+- Adicionar um parâmetro explícito no body, por exemplo `status_sga_destino: 'pendente' | 'ativo'`.
+- Quando chamado com `pendente`:
+  - cadastrar/garantir o associado e o veículo no Hinova;
+  - enviar o payload com o status/código de situação pendente conforme mapeamento Hinova já disponível no projeto;
+  - gravar localmente `veiculos.status_sga = 'pendente_sga'`;
+  - manter `sincronizado_hinova = true` apenas para indicar que o cadastro existe no Hinova, não que está ativo.
+- Quando chamado com `ativo`:
+  - manter o comportamento de ativação final;
+  - gravar `veiculos.status_sga = 'ativado_sga'`.
+- Registrar nos `sga_sync_logs` qual modo foi usado, para auditoria: `pendente` ou `ativo`.
 
-### Compatibilidade com edição
-1. Ao editar uma grade já existente com múltiplos planos:
-   - usar as regras do primeiro plano como modelo inicial;
-   - se as regras existentes forem iguais entre os planos, a edição será naturalmente compartilhada;
-   - se houver divergências antigas, a próxima gravação padronizará todos os planos selecionados com o modelo exibido.
-2. Exibir uma mensagem informativa discreta quando houver múltiplos planos, explicando que salvar irá refletir a configuração em todos.
+2. Corrigir `aprovar-proposta`
+- Remover a ativação antecipada do associado/contrato quando ainda não há instalação concluída e o plano exige rastreador.
+- Para caso com auto vistoria e rastreador pendente:
+  - deixar associado em status intermediário, como `aguardando_instalacao`;
+  - deixar contrato assinado/aprovado, mas não como ativação final se ainda depende da instalação;
+  - chamar `sga-hinova-sync` com `status_sga_destino: 'pendente'`.
+- Se a instalação já estiver concluída no momento da aprovação, chamar como `ativo`, preservando o caso excepcional já existente.
+- Para plano sem necessidade de rastreador, manter ativação imediata se essa for a regra atual do produto.
 
-### Validações
-1. Validar a configuração apenas uma vez quando houver múltiplos planos, evitando mensagens repetidas por plano.
-2. Garantir que pelo menos uma parcela e um perfil remunerado sejam configurados.
-3. Preservar validações atuais de:
-   - rótulo da parcela;
-   - número da parcela;
-   - vitalícia com início válido;
-   - soma percentual até 100%;
-   - perfis duplicados na mesma parcela.
+3. Corrigir o fluxo de ativação pós-instalação
+- Em `src/hooks/useAtivacoes.ts`, ao concluir/ativar após instalação do rastreador:
+  - atualizar contrato/associado para `ativo`;
+  - chamar `sga-hinova-sync` com `status_sga_destino: 'ativo'`;
+  - exibir mensagem de sucesso apenas quando for ativação final.
+- Se o veículo já tiver sido cadastrado no SGA como pendente, a função deve reaproveitar `codigo_hinova` e apenas atualizar a situação para ativo, sem duplicar cadastro.
 
-### Arquivo principal
-- `src/pages/configuracoes/GradeComissaoForm.tsx`
+4. Ajustar UI/status público se necessário
+- Garantir que a tela pública não mostre “ativo” apenas porque a auto vistoria foi concluída ou enviada ao SGA como pendente.
+- Mostrar mensagem compatível: “Cadastro aprovado. Aguardando instalação do rastreador para ativação da Proteção 360.”
+- A mensagem “Proteção 360 ativada” deve aparecer somente após instalação/ativação final.
 
-### Testes após implementação
-1. Criar grade com apenas 1 plano e confirmar que continua configurando individualmente.
-2. Criar grade com 2 ou mais planos e confirmar que aparece apenas um card de configuração.
-3. Usar “Selecionar todos” e confirmar que continua aparecendo apenas uma configuração compartilhada.
-4. Salvar e verificar se todos os planos selecionados recebem as mesmas regras.
-5. Editar uma grade com múltiplos planos e confirmar que a edição compartilhada é persistida para todos.
+5. Auditoria de compatibilidade
+- Revisar chamadas existentes de `sga-hinova-sync` para definir explicitamente o modo correto:
+  - aprovação de cadastro/auto vistoria: `pendente`;
+  - ativação pós-instalação: `ativo`;
+  - ações manuais de sincronização devem informar claramente se são pendente ou ativo, ou manter padrão seguro como pendente quando ainda não houver instalação.
+
+Arquivos principais
+- `supabase/functions/sga-hinova-sync/index.ts`
+- `supabase/functions/aprovar-proposta/index.ts`
+- `src/hooks/useAtivacoes.ts`
+- Possíveis ajustes pontuais na tela pública de acompanhamento, se ela depender diretamente de `associados.status` ou `contratos.status` para mostrar ativação.
+
+Validação
+- Testar cenário com auto vistoria + rastreador obrigatório: SGA recebe/cadastra como pendente, associado não fica ativo antes da instalação.
+- Testar instalação concluída: associado fica ativo, SGA muda para ativo, tela pública mostra Proteção 360 ativada.
+- Testar plano sem rastreador obrigatório: fluxo atual de ativação imediata permanece funcional.
+- Conferir logs `sga_sync_logs` para garantir que não há duplicidade no SGA e que o modo enviado está auditável.

@@ -101,6 +101,7 @@ export function useSGASync({
         body: {
           veiculo_id: veiculoId,
           associado_id: associadoId,
+          status_sga_destino: 'ativo',
         },
       });
 
@@ -145,6 +146,7 @@ export function useSGASync({
     const veiculo = veiculoQuery.data;
     if (!veiculo) return 'pendente';
     
+    if (veiculo.status_sga === 'pendente_sga') return 'pendente_sga';
     if (veiculo.sincronizado_hinova) return 'ativado_sga';
     if (veiculo.status_sga === 'erro_sincronizacao') return 'erro_sincronizacao';
     if (veiculo.status_sga === 'sincronizando') return 'sincronizando';
