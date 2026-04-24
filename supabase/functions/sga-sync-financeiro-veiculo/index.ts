@@ -308,6 +308,8 @@ serve(async (req) => {
     let importados = 0;
     let totalAberto = 0;
     let totalVencido = 0;
+    let upsertFalhas = 0;
+    let ultimoErroUpsert: string | null = null;
     const hoje = new Date().toISOString().slice(0, 10);
 
     for (const b of boletos) {
