@@ -590,6 +590,7 @@ const App = () => (
               <Route path="/financeiro/configuracoes/comissionamento-externo" element={<Navigate to="/comissoes" replace />} />
               <Route path="/financeiro/venda-externa" element={<DashboardVendaExterna />} />
               <Route path="/financeiro/venda-externa/:vendedorId" element={<GestaoContaVendedor />} />
+              <Route path="/financeiro/conta-corrente-comissoes" element={<ComissoesContaCorrente />} />
               <Route path="/perfil/conta-corrente" element={<ContaCorrenteVendedor />} />
 
               {/* Comissões */}
@@ -600,7 +601,7 @@ const App = () => (
               <Route path="/comissoes/atribuicao" element={<ComissoesAtribuicao />} />
               <Route path="/comissoes/relatorio" element={<ComissoesRelatorio />} />
               <Route path="/comissoes/pagamentos" element={<ComissoesPagamentos />} />
-              <Route path="/comissoes/conta-corrente" element={<ComissoesContaCorrente />} />
+              <Route path="/comissoes/conta-corrente" element={<Navigate to="/financeiro/conta-corrente-comissoes" replace />} />
 
               {/* Redirects das rotas antigas /cobranca/* para o módulo unificado */}
               <Route path="/cobranca" element={<Navigate to="/financeiro/cobrancas/recuperacao" replace />} />
