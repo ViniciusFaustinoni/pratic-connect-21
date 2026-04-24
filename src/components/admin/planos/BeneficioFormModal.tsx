@@ -224,6 +224,22 @@ export function BeneficioFormModal({
             />
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="codigo_sga">Código SGA (Hinova)</Label>
+            <Input
+              id="codigo_sga"
+              value={formData.codigo_sga}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, codigo_sga: e.target.value }))
+              }
+              placeholder="Código do produto vinculado no Hinova"
+              className="font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">
+              Sem este código, o benefício não será enviado ao SGA na sincronização do veículo.
+            </p>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="display_order">Ordem</Label>
