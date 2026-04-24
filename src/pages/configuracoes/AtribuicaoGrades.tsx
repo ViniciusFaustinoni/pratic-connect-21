@@ -194,6 +194,19 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
         </Card>
       )}
 
+      {!!semCodigoSga?.total && semCodigoSga.total > 0 && (
+        <Card className="border-warning/40 bg-warning/5">
+          <CardContent className="flex items-start gap-3 py-3">
+            <AlertTriangle className="h-4 w-4 text-warning mt-0.5" />
+            <p className="text-sm">
+              <strong>{semCodigoSga.total}</strong> vendedor(es) ativo(s) sem <strong>Código SGA Voluntário</strong> cadastrado.
+              Cadastros de novos contratos atribuídos a esses vendedores serão bloqueados na sincronização com o Hinova
+              (erro <code>vendedor_sem_codigo_sga</code>). Edite o perfil do usuário em <em>Configurações &gt; Usuários e Acessos</em> para preencher o código.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       <Tabs defaultValue="equipes" className="space-y-4">
         <TabsList className="grid w-full grid-cols-2 sm:w-auto">
           <TabsTrigger value="equipes" className="gap-2"><Network className="h-4 w-4" /> Equipes / Hierarquia</TabsTrigger>
