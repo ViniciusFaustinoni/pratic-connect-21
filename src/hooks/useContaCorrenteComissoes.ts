@@ -20,11 +20,15 @@ export interface ContaCorrenteComissoesFilters {
 export interface ContaCorrenteComissaoItem {
   id: string;
   vendedor_id: string;
+  comissao_id: string | null;
   contrato_id: string | null;
   associado_id: string | null;
   created_at: string;
   pago_em: string | null;
   status: string;
+  tipo_movimento: 'credito' | 'debito';
+  categoria: string | null;
+  descricao: string | null;
   tipo_comissao: string | null;
   tipo_calculo: string | null;
   parcela_numero: number | null;
@@ -145,25 +149,24 @@ export function useContaCorrenteComissoes() {
     queryKey: ['conta-corrente-comissoes', 'extrato', filters],
     queryFn: async () => {
       let builder = (supabase as any)
-        .from('comissoes')
+        .from('cc_vendedor_lancamentos')
         .select(`
-          id, vendedor_id, contrato_id, associado_id, created_at, pago_em, status, tipo_comissao, tipo_calculo,
-          parcela_numero, parcela_total, valor_base, valor_comissao, valor_total, nivel_nome, role_destinatario,
-          calculo_snapshot, plano_id,
-          vendedor:profiles!comissoes_vendedor_id_fkey(nome, full_name, email),
-          plano:planos(id, nome, linha),
+          id, vendedor_id, associado_id, contrato_id, comissao_id, tipo, categoria, descricao,
+          valor_bruto, valor_abatimento, valor_liquido, saldo_apos, parcela_numero, parcela_total,
+          status, data_lancamento, data_pagamento, created_at,
+          vendedor:profiles!cc_vendedor_lancamentos_vendedor_id_fkey(nome, full_name, email),
           associado:associados(nome),
-          contrato:contratos(numero, vendedor:profiles!contratos_vendedor_id_fkey(nome, full_name, email))
+          contrato:contratos(numero, plano_id, plano:planos!contratos_plano_id_fkey(id, nome, linha), vendedor:profiles!contratos_vendedor_id_fkey(nome, full_name, email)),
+          comissao:comissoes(id, status, tipo_comissao, tipo_calculo, valor_base, valor_comissao, valor_total, nivel_nome, role_destinatario, calculo_snapshot, plano_id, plano:planos(id, nome, linha))
         `)
-        .gte('created_at', `${filters.dataInicio}T00:00:00`)
-        .lte('created_at', `${filters.dataFim}T23:59:59`)
+        .gte('data_lancamento', filters.dataInicio)
+        .lte('data_lancamento', filters.dataFim)
+        .order('data_lancamento', { ascending: true })
         .order('created_at', { ascending: true })
         .limit(5000);
 
       if (filters.status !== 'todos') builder = builder.eq('status', filters.status);
       if (filters.vendedorId !== 'todos') builder = builder.eq('vendedor_id', filters.vendedorId);
-      if (filters.planoId !== 'todos') builder = builder.eq('plano_id', filters.planoId);
-      if (filters.linha !== 'todas') builder = builder.eq('plano.linha', filters.linha);
 
       const { data, error } = await builder;
       if (error) throw error;
@@ -197,41 +200,52 @@ export function useContaCorrenteComissoes() {
       const search = filters.search.trim().toLowerCase();
       let saldo = 0;
       const mapped: ContaCorrenteComissaoItem[] = (data || []).map((row: any) => {
-        const valor = moneyValue(row.valor_total ?? row.valor_comissao);
-        if (row.status !== 'cancelada' && row.status !== 'cancelado' && isPago(row)) saldo += valor;
+        const comissao = row.comissao || {};
+        const plano = comissao.plano || row.contrato?.plano || null;
+        const planoId = comissao.plano_id || row.contrato?.plano_id || null;
+        const valor = moneyValue(row.valor_liquido);
+        if (row.status !== 'cancelada' && row.status !== 'cancelado') {
+          saldo += row.tipo === 'debito' ? -valor : valor;
+        }
 
         return {
           id: row.id,
           vendedor_id: row.vendedor_id,
+          comissao_id: row.comissao_id,
           contrato_id: row.contrato_id,
           associado_id: row.associado_id,
-          created_at: row.created_at,
-          pago_em: row.pago_em,
+          created_at: row.data_lancamento || row.created_at,
+          pago_em: row.data_pagamento,
           status: row.status,
-          tipo_comissao: row.tipo_comissao,
-          tipo_calculo: row.tipo_calculo,
+          tipo_movimento: row.tipo,
+          categoria: row.categoria,
+          descricao: row.descricao,
+          tipo_comissao: comissao.tipo_comissao || row.categoria,
+          tipo_calculo: comissao.tipo_calculo || null,
           parcela_numero: row.parcela_numero,
           parcela_total: row.parcela_total,
-          valor_base: moneyValue(row.valor_base),
-          valor_comissao: moneyValue(row.valor_comissao),
+          valor_base: moneyValue(comissao.valor_base || row.valor_bruto),
+          valor_comissao: moneyValue(comissao.valor_comissao || row.valor_liquido),
           valor_total: valor,
-          nivel_nome: row.nivel_nome,
-          role_destinatario: row.role_destinatario,
-          calculo_snapshot: row.calculo_snapshot,
+          nivel_nome: comissao.nivel_nome || null,
+          role_destinatario: comissao.role_destinatario || null,
+          calculo_snapshot: comissao.calculo_snapshot || null,
           vendedor_nome: nameOf(row.vendedor),
           vendedor_email: row.vendedor?.email || null,
           origem_nome: nameOf(row.contrato?.vendedor) || null,
           contrato_numero: row.contrato?.numero || null,
           associado_nome: row.associado?.nome || null,
-          plano_id: row.plano_id,
-          plano_nome: row.plano?.nome || null,
-          plano_linha: row.plano?.linha || null,
+          plano_id: planoId,
+          plano_nome: plano?.nome || null,
+          plano_linha: plano?.linha || null,
           instalacao_resumo: row.contrato_id ? instalacoesPorContrato.get(row.contrato_id) || null : null,
-          saldo_apos: saldo,
+          saldo_apos: moneyValue(row.saldo_apos) || saldo,
         };
       }).filter((item) => {
+        if (filters.planoId !== 'todos' && item.plano_id !== filters.planoId) return false;
+        if (filters.linha !== 'todas' && item.plano_linha !== filters.linha) return false;
         if (!search) return true;
-        return [item.vendedor_nome, item.vendedor_email, item.associado_nome, item.contrato_numero, item.plano_nome, item.plano_linha, item.instalacao_resumo, item.role_destinatario, item.nivel_nome]
+        return [item.vendedor_nome, item.vendedor_email, item.associado_nome, item.contrato_numero, item.plano_nome, item.plano_linha, item.instalacao_resumo, item.role_destinatario, item.nivel_nome, item.descricao, item.categoria]
           .some((value) => String(value || '').toLowerCase().includes(search));
       });
 
