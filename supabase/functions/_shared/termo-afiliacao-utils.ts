@@ -62,6 +62,7 @@ export interface VeiculoData {
   flag_chassi_remarcado?: boolean;
   flag_ex_ressarcido?: boolean;
   flag_avarias_vistoria?: boolean;
+  blindado?: boolean;
 }
 
 export interface CoberturaDetalhada {
@@ -92,7 +93,7 @@ export interface PlanoData {
   carencia?: string;
 }
 
-export type TipoOperacao = 'adesao' | 'migracao' | 'inclusao' | 'troca_titularidade' | 'reativacao' | 'substituicao_placa';
+export type TipoOperacao = 'adesao' | 'nova' | 'migracao' | 'inclusao' | 'troca_titularidade' | 'reativacao' | 'substituicao_placa';
 
 export interface ContratoData {
   numero: string;
@@ -188,6 +189,7 @@ export interface TermoAfiliacaoData {
   substituicao?: SubstituicaoData;
   trocaTitularidade?: TrocaTitularidadeData;
   oficina?: OficinaData;
+  prazo_instalacao?: string;
 }
 
 export interface OficinaData {
