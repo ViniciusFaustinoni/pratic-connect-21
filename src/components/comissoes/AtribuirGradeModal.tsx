@@ -42,7 +42,6 @@ export function AtribuirGradeModal({ open, onOpenChange, linha }: AtribuirGradeM
   const [gradeId, setGradeId] = useState<string>('');
   const [supervisorId, setSupervisorId] = useState<string>('none');
   const [gerenteId, setGerenteId] = useState<string>('none');
-  const [agenciaId, setAgenciaId] = useState<string>('none');
   const [observacoes, setObservacoes] = useState<string>('');
 
   // Reset ao abrir
@@ -51,7 +50,6 @@ export function AtribuirGradeModal({ open, onOpenChange, linha }: AtribuirGradeM
       setGradeId(linha.gradeAtual?.grade_id || '');
       setSupervisorId(linha.hierarquia?.supervisor_id || 'none');
       setGerenteId(linha.hierarquia?.gerente_id || 'none');
-      setAgenciaId(linha.hierarquia?.agencia_id || 'none');
       setObservacoes(linha.hierarquia?.observacoes || '');
     }
     onOpenChange(o);
@@ -61,7 +59,6 @@ export function AtribuirGradeModal({ open, onOpenChange, linha }: AtribuirGradeM
 
   const supervisores = usuarios.filter((u) => u.roles.includes('supervisor_vendas'));
   const gerentes = usuarios.filter((u) => u.roles.includes('gerente_comercial'));
-  const agencias = usuarios.filter((u) => u.roles.includes('agencia'));
 
   const handleSave = async () => {
     try {
@@ -79,7 +76,7 @@ export function AtribuirGradeModal({ open, onOpenChange, linha }: AtribuirGradeM
         vendedor_id: linha.usuario.id,
         supervisor_id: supervisorId === 'none' ? null : supervisorId,
         gerente_id: gerenteId === 'none' ? null : gerenteId,
-        agencia_id: agenciaId === 'none' ? null : agenciaId,
+        agencia_id: null,
         observacoes: observacoes.trim() || null,
       });
 
@@ -158,22 +155,6 @@ export function AtribuirGradeModal({ open, onOpenChange, linha }: AtribuirGradeM
               </Select>
             </div>
 
-            <div className="sm:col-span-2">
-              <Label>Agência da cadeia</Label>
-              <Select value={agenciaId} onValueChange={setAgenciaId}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">— Nenhuma —</SelectItem>
-                  {agencias.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
           </div>
 
           <div>
@@ -187,7 +168,7 @@ export function AtribuirGradeModal({ open, onOpenChange, linha }: AtribuirGradeM
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Supervisor, gerente e agência não usam suas próprias grades nessa venda; recebem conforme a grade do usuário que originou a venda.
+            Supervisor e gerente não usam suas próprias grades nessa venda; recebem conforme a grade do usuário que originou a venda.
           </p>
         </div>
 

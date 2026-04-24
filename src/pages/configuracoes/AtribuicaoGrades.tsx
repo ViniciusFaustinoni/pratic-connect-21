@@ -132,8 +132,7 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
       const h = item.hierarquia;
       return item.usuario.id !== userId && (
         h?.supervisor_id === userId ||
-        h?.gerente_id === userId ||
-        h?.agencia_id === userId
+        h?.gerente_id === userId
       );
     });
 
@@ -141,7 +140,6 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
     const relacoes: string[] = [];
     if (linha.hierarquia?.gerente_id === superiorId) relacoes.push('Gerente');
     if (linha.hierarquia?.supervisor_id === superiorId) relacoes.push('Supervisor');
-    if (linha.hierarquia?.agencia_id === superiorId) relacoes.push('Agência');
     return relacoes.join(' / ') || 'Vínculo';
   };
 
@@ -242,15 +240,14 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
                       <TableHead>Perfil</TableHead>
                       <TableHead>Supervisor</TableHead>
                       <TableHead>Gerente</TableHead>
-                      <TableHead>Agência</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {isLoading ? (
-                      <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Carregando...</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Carregando...</TableCell></TableRow>
                     ) : filtered.length === 0 ? (
-                      <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Nenhum usuário encontrado</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Nenhum usuário encontrado</TableCell></TableRow>
                     ) : (
                       filtered.map((linha) => {
                         const subordinados = getSubordinados(linha.usuario.id);
@@ -266,7 +263,6 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
                           <TableCell>{renderRoles(linha)}</TableCell>
                           <TableCell className="text-sm">{nomeHierarquia(linha.hierarquia?.supervisor_id) || <span className="text-muted-foreground">—</span>}</TableCell>
                           <TableCell className="text-sm">{nomeHierarquia(linha.hierarquia?.gerente_id) || <span className="text-muted-foreground">—</span>}</TableCell>
-                          <TableCell className="text-sm">{nomeHierarquia(linha.hierarquia?.agencia_id) || <span className="text-muted-foreground">—</span>}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-2">
                               <Badge variant="outline" className="font-normal">{subordinados.length} inferior(es)</Badge>

@@ -20,7 +20,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { AlertCircle, ArrowDown, Building2, Loader2, Network, RefreshCw, UserRound, Users2 } from 'lucide-react';
+import { AlertCircle, ArrowDown, Loader2, Network, RefreshCw, UserRound, Users2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUpsertHierarquia, useUsuariosVendas } from '@/hooks/useAtribuicaoComissoes';
 import type { AtribuicaoLinha, UsuarioVendas } from '@/types/atribuicaoComissao';
@@ -70,14 +70,12 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
 
   const [supervisorId, setSupervisorId] = useState<string>('none');
   const [gerenteId, setGerenteId] = useState<string>('none');
-  const [agenciaId, setAgenciaId] = useState<string>('none');
   const [observacoes, setObservacoes] = useState<string>('');
 
   useEffect(() => {
     if (!open || !linha) return;
     setSupervisorId(linha.hierarquia?.supervisor_id || 'none');
     setGerenteId(linha.hierarquia?.gerente_id || 'none');
-    setAgenciaId(linha.hierarquia?.agencia_id || 'none');
     setObservacoes(linha.hierarquia?.observacoes || '');
   }, [open, linha]);
 
@@ -93,19 +91,17 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
   const superiores = usuarios.filter((u) => u.id !== selectedUserId);
   const supervisores = superiores.filter((u) => u.roles.includes('supervisor_vendas'));
   const gerentes = superiores.filter((u) => u.roles.includes('gerente_comercial'));
-  const agencias = superiores.filter((u) => u.roles.includes('agencia'));
 
   const subordinados = (atribuicoes || []).filter((item) => {
     const h = item.hierarquia;
-    return h?.supervisor_id === selectedUserId || h?.gerente_id === selectedUserId || h?.agencia_id === selectedUserId;
+    return h?.supervisor_id === selectedUserId || h?.gerente_id === selectedUserId;
   });
 
-  const subordinadosDiretos = subordinados.filter((item) => item.hierarquia?.supervisor_id === selectedUserId || item.hierarquia?.agencia_id === selectedUserId);
+  const subordinadosDiretos = subordinados.filter((item) => item.hierarquia?.supervisor_id === selectedUserId);
   const subordinadosGerenciais = subordinados.filter((item) => item.hierarquia?.gerente_id === selectedUserId);
   const atribuicaoPorUsuario = new Map(atribuicoes.map((item) => [item.usuario.id, item]));
   const gerenteSelecionado = gerenteId === 'none' ? null : gerenteId;
   const supervisorSelecionado = supervisorId === 'none' ? null : supervisorId;
-  const agenciaSelecionada = agenciaId === 'none' ? null : agenciaId;
   const supervisorPertenceAoGerente = (supervisorUserId: string, gerenteUserId: string) => {
     const supervisorHierarquiaAtual = atribuicaoPorUsuario.get(supervisorUserId)?.hierarquia;
     return !supervisorHierarquiaAtual?.gerente_id || supervisorHierarquiaAtual.gerente_id === gerenteUserId;
@@ -124,18 +120,9 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
 
   const validationErrors: string[] = [];
   const supervisorHierarquia = supervisorSelecionado ? atribuicaoPorUsuario.get(supervisorSelecionado)?.hierarquia : null;
-  const agenciaHierarquia = agenciaSelecionada ? atribuicaoPorUsuario.get(agenciaSelecionada)?.hierarquia : null;
 
   if (gerenteSelecionado && supervisorSelecionado && supervisorHierarquia?.gerente_id && supervisorHierarquia.gerente_id !== gerenteSelecionado) {
     validationErrors.push('O supervisor selecionado já pertence a outro gerente. Escolha um supervisor vinculado ao gerente informado.');
-  }
-
-  if (gerenteSelecionado && agenciaSelecionada && agenciaHierarquia?.gerente_id && agenciaHierarquia.gerente_id !== gerenteSelecionado) {
-    validationErrors.push('A agência selecionada já pertence a outro gerente. Escolha uma agência compatível com o gerente informado.');
-  }
-
-  if (supervisorSelecionado && agenciaSelecionada && agenciaHierarquia?.supervisor_id && agenciaHierarquia.supervisor_id !== supervisorSelecionado) {
-    validationErrors.push('A agência selecionada já pertence a outro supervisor. Escolha uma agência compatível com o supervisor informado.');
   }
 
   const hasValidationErrors = validationErrors.length > 0;
@@ -143,7 +130,6 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
     const relacoes: string[] = [];
     if (item.hierarquia?.gerente_id === selectedUserId) relacoes.push('Gerente');
     if (item.hierarquia?.supervisor_id === selectedUserId) relacoes.push('Supervisor');
-    if (item.hierarquia?.agencia_id === selectedUserId) relacoes.push('Agência');
     return relacoes.join(' / ') || 'Vínculo';
   };
 
@@ -185,7 +171,7 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
         vendedor_id: selectedUserId,
         supervisor_id: supervisorId === 'none' ? null : supervisorId,
         gerente_id: gerenteId === 'none' ? null : gerenteId,
-        agencia_id: agenciaId === 'none' ? null : agenciaId,
+        agencia_id: null,
         observacoes: observacoes.trim() || null,
       });
 
@@ -263,12 +249,6 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
               <ChainNode label="Supervisor" name={userName(usuariosMap, supervisorId === 'none' ? null : supervisorId)} icon={Users2} loading={loadingVinculos} />
               <div className="flex justify-center text-muted-foreground"><ArrowDown className="h-4 w-4" /></div>
               <ChainNode label="Usuário selecionado" name={linha.usuario.nome} icon={Network} />
-              {agenciaId !== 'none' && (
-                <>
-                  <div className="flex justify-center text-muted-foreground"><ArrowDown className="h-4 w-4" /></div>
-                  <ChainNode label="Agência vinculada" name={userName(usuariosMap, agenciaId)} icon={Building2} />
-                </>
-              )}
             </div>
           </div>
 
@@ -345,17 +325,6 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
                 )}
               </div>
 
-              <div className="space-y-1.5">
-                <Label>Agência vinculada</Label>
-                <Select value={agenciaId} onValueChange={setAgenciaId} disabled={loadingVinculos || saving || erroUsuarios}>
-                  <SelectTrigger className="h-11"><SelectValue placeholder="Selecione uma agência" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhuma agência</SelectItem>
-                    {!loadingVinculos && agencias.length === 0 && <SelectItem value="empty-agencias" disabled>Nenhuma agência disponível</SelectItem>}
-                    {agencias.map((u) => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
 
             <div className="space-y-1.5">
