@@ -309,6 +309,7 @@ const menuConfig: {
         { title: 'Extrato', url: '/financeiro/extrato', icon: List },
         { title: 'Extratos Bancários', url: '/financeiro/extratos-bancarios', icon: FileText },
         { title: 'Contas Bancárias', url: '/financeiro/contas-bancarias', icon: Building2 },
+        { title: 'Conta Corrente de Comissões', url: '/financeiro/conta-corrente-comissoes', icon: Wallet },
         { title: 'Comissões', url: '/comissoes', icon: Coins },
         { title: 'Venda Externa', url: '/financeiro/venda-externa', icon: Users },
       ],
@@ -325,7 +326,6 @@ const menuConfig: {
         { title: 'Hierarquia de Comissões', url: '/comissoes/atribuicao', icon: Network, permission: 'isDiretor' },
         { title: 'Relatório', url: '/comissoes/relatorio', icon: FileText },
         { title: 'Pagamentos', url: '/comissoes/pagamentos', icon: Receipt },
-        { title: 'Conta Corrente', url: '/comissoes/conta-corrente', icon: Wallet },
       ],
     },
     {
