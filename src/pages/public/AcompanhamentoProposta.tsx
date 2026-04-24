@@ -724,6 +724,8 @@ export default function AcompanhamentoProposta() {
   const instalacao = associado.instalacoes[0];
   const StatusIcon = statusInfo.icon;
   const servico = associado.servicoInstalacao;
+  const hasDocsPendentes = associado.documentosPendentes.length > 0;
+  const shouldPrioritizeDocsPendentes = hasDocsPendentes || associado.status === 'documentacao_pendente';
 
   const showChecklistSection = !!(statusInfo as any).showChecklist && servico;
   const itensOk = checklistItems.filter(i => i.status === 'ok').length;
@@ -769,6 +771,39 @@ export default function AcompanhamentoProposta() {
   };
 
   const colors = colorClasses[statusInfo.color as keyof typeof colorClasses];
+
+  if (shouldPrioritizeDocsPendentes) {
+    return (
+      <div className="dark min-h-screen public-premium-bg flex items-center justify-center p-4">
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-2xl">
+          {hasDocsPendentes ? (
+            <DocumentosPendentesPublico
+              associadoId={associado.id}
+              docsPendentes={associado.documentosPendentes}
+              onTodosEnviados={() => {
+                queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta', token] });
+              }}
+            />
+          ) : (
+            <Card className="border-warning/30 bg-card/80 backdrop-blur-xl">
+              <CardContent className="py-10 text-center space-y-4">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-warning/10">
+                  <Loader2 className="h-7 w-7 animate-spin text-warning" />
+                </div>
+                <div>
+                  <Badge className="mb-3 bg-warning/20 text-warning border-warning/30">Documentação pendente</Badge>
+                  <h1 className="text-xl font-bold text-foreground">Carregando documentos solicitados</h1>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    O setor de cadastro solicitou ajustes. Estamos atualizando a lista para você enviar os arquivos corretos.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="dark min-h-screen public-premium-bg relative">
