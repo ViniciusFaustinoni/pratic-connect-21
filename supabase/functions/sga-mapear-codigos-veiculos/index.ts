@@ -3,7 +3,7 @@
 // Body opcional: { batch_size?: number, delay_ms?: number, veiculo_ids?: string[] }
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getHinovaCreds, autenticarHinova, buscarVeiculoPorPlaca } from '../_shared/hinova-client.ts';
+import { getHinovaSession, buscarVeiculoPorPlaca, isBackfillFinanceiroAtivo } from '../_shared/hinova-client.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
