@@ -742,18 +742,17 @@ export function useAgendarInstalacaoContrato() {
         console.warn('Erro ao geocodificar endereço:', err);
       }
       
-      // Normalizar período (aceita 'manha'/'tarde' ou legado HH:MM)
+      // Normalizar período (aceita 'manha'/'tarde' ou legado HH:MM/'noite')
       const periodoCanonico = (() => {
         const v = (horarioAgendado || '').trim().toLowerCase();
         if (v === 'manha' || v === 'manhã') return 'manha';
         if (v === 'tarde') return 'tarde';
-        if (v === 'noite') return 'noite';
+        if (v === 'noite') return 'tarde'; // legado: noite vira tarde
         const m = /^(\d{1,2}):/.exec(v);
         if (m) {
           const h = parseInt(m[1], 10);
           if (h < 12) return 'manha';
-          if (h < 18) return 'tarde';
-          return 'noite';
+          return 'tarde';
         }
         return 'manha';
       })();
