@@ -1,82 +1,27 @@
-Plano para criar a área “Conta Corrente de Comissões”
+Plano de ajuste: Conta Corrente de Comissões no Financeiro
 
-1. Consolidar a área no módulo de Comissões
-- Criar/renomear a rota visual para “Conta Corrente” dentro do módulo Comissões.
-- Reaproveitar a estrutura já existente de conta corrente (`cc_vendedor_lancamentos`) quando fizer sentido, mas adaptar para o novo fluxo de comissões oficiais da tabela `comissoes`.
-- Manter a área do perfil do vendedor como visão própria, mas a nova área será mais completa e respeitará hierarquia.
+1. Reposicionar a área no menu
+- Adicionar “Conta Corrente de Comissões” dentro do grupo “Financeiro” no sidebar.
+- Remover/ocultar o item duplicado “Conta Corrente” do grupo “Comissões”, para a área ficar centralizada em Financeiro.
+- Atualizar breadcrumb para a nova rota financeira.
 
-2. Regras de visibilidade por perfil logado
-- Diretor / admin / desenvolvedor: vê todas as contas correntes e todas as comissões.
-- Gerente comercial: vê a própria conta e os usuários abaixo dele na hierarquia (`hierarquia_vendas.gerente_id`).
-- Supervisor: vê a própria conta e os usuários abaixo dele (`hierarquia_vendas.supervisor_id`).
-- Agência: vê a própria conta e os usuários vinculados à agência (`hierarquia_vendas.agencia_id`).
-- Vendedor CLT / externo: vê somente a própria conta.
-- A tela não permitirá selecionar vendedores fora do escopo permitido.
+2. Ajustar a rota
+- Criar a rota principal `/financeiro/conta-corrente-comissoes` apontando para a página já existente de Conta Corrente de Comissões.
+- Manter `/comissoes/conta-corrente` como redirecionamento para a nova rota, evitando links quebrados.
 
-3. Criar extrato completo
-- Listar todos os lançamentos de comissão por usuário com:
-  - data do lançamento;
-  - data de pagamento quando houver;
-  - usuário destinatário;
-  - role/perfil da comissão;
-  - origem/vendedor do contrato quando disponível;
-  - associado/contrato;
-  - plano;
-  - linha do plano;
-  - parcela;
-  - status;
-  - valor da comissão;
-  - saldo acumulado visual no extrato.
-- O extrato será somente visualização para vendedores/supervisores/gerentes/agências; ações financeiras sensíveis continuam restritas à diretoria/gestão permitida.
+3. Garantir visão completa para Diretor
+- Revisar o hook da tela para que, quando o usuário logado for Diretor/Admin/Desenvolvedor, o filtro padrão “Todos usuários visíveis” carregue o extrato completo de movimentações de comissões.
+- Manter RBAC/hierarquia para os demais perfis: gerentes/supervisores/agências veem apenas seus escopos; vendedores veem apenas seus próprios lançamentos.
 
-4. Saldo do usuário
-- Mostrar cards de resumo:
-  - Saldo atual;
-  - Comissões pagas;
-  - Comissões aprovadas/a pagar;
-  - Comissões pendentes;
-  - Total no período filtrado.
-- Regra de saldo: quando uma comissão for marcada como `paga`, ela passa a compor o saldo disponível/recebido do usuário.
-- Comissões pendentes/aprovadas aparecem como “a receber”, mas não entram no saldo pago até serem liquidadas.
+4. Corrigir a origem dos dados do extrato
+- Ajustar a tela para consultar a conta corrente real (`cc_vendedor_lancamentos`) como fonte do extrato completo de movimentações, incluindo créditos e débitos.
+- Manter o resumo da comissão associada quando houver `comissao_id`, exibindo cliente, plano, linha, contrato e instalação.
+- Para débitos ou lançamentos sem comissão vinculada, exibir a descrição/categoria do próprio lançamento sem quebrar a tabela.
 
-5. Vincular pagamento de comissão ao saldo
-- Ajustar a função de pagamento `fn_marcar_comissao_paga` para também gerar, de forma idempotente, um lançamento correspondente na conta corrente quando uma comissão for marcada como paga.
-- Evitar duplicidade: a mesma comissão não poderá gerar dois lançamentos de conta corrente.
-- Incluir referência à `comissao_id` no lançamento de conta corrente ou criar tabela/visão de extrato que una comissão + pagamento de forma segura.
+5. Resumos com filtros aplicados
+- Recalcular no topo: saldo atual, total creditado no período e total debitado no período usando os lançamentos filtrados da conta corrente.
+- Preservar filtros por data/período, usuário, plano, linha, status e busca.
 
-6. Filtros solicitados
-- Data início e data fim.
-- Período rápido: mês atual, mês anterior, últimos 30 dias, ano atual e personalizado.
-- Plano.
-- Linha do plano.
-- Status da comissão.
-- Usuário/destinatário, limitado ao escopo permitido.
-- Busca por associado/contrato quando os dados estiverem disponíveis.
-
-7. Segurança e RLS
-- Criar uma função segura no banco para retornar os IDs visíveis do usuário logado conforme hierarquia.
-- Ajustar políticas/consultas para impedir que um usuário veja comissões de outros fora da sua hierarquia.
-- Não depender apenas de filtro no frontend para segurança.
-- Corrigir inconsistências atuais onde algumas políticas antigas permitem supervisor/gerente verem mais do que deveriam.
-
-8. Navegação
-- Adicionar item “Conta Corrente” no grupo “Comissões” do sidebar.
-- Opcionalmente, manter redirects das rotas antigas (`/perfil/conta-corrente` e `/financeiro/venda-externa`) para não quebrar links existentes, mas apontando para a nova experiência quando aplicável.
-
-Detalhes técnicos previstos
-- Criar um hook novo, por exemplo `useContaCorrenteComissoes`, para buscar extrato, resumo, filtros e usuários visíveis.
-- Criar uma página nova, por exemplo `src/pages/comissoes/ContaCorrente.tsx`.
-- Alterar `App.tsx` para registrar `/comissoes/conta-corrente`.
-- Alterar `AppSidebar.tsx` para exibir o novo item.
-- Criar migração para:
-  - garantir referência idempotente entre conta corrente e comissão paga;
-  - criar função de escopo hierárquico;
-  - ajustar `fn_marcar_comissao_paga` para alimentar o saldo;
-  - reforçar RLS/policies necessárias.
-
-Resultado esperado
-- Cada usuário verá uma área de conta corrente com extrato completo e saldo.
-- Vendedores verão somente suas próprias comissões.
-- Supervisores, gerentes, agências e diretoria verão conforme sua hierarquia/permissão.
-- Ao marcar uma comissão como paga, ela entra automaticamente no saldo/extrato do usuário.
-- A tela terá filtros por data, período, plano e linha.
+Detalhes técnicos
+- Arquivos principais: `src/components/layout/AppSidebar.tsx`, `src/App.tsx`, `src/components/layout/GlobalBreadcrumb.tsx`, `src/hooks/useContaCorrenteComissoes.ts`, `src/pages/comissoes/ContaCorrente.tsx`.
+- A função SQL existente `fn_comissoes_usuarios_visiveis` já contempla Diretor/Admin/Desenvolvedor com todos os usuários; só será necessário ajustar a consulta frontend para consumir os lançamentos da conta corrente real e respeitar as políticas RLS existentes.

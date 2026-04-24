@@ -149,7 +149,7 @@ export default function ContaCorrenteComissoes() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Extrato completo</CardTitle>
+            <CardTitle className="text-base">Extrato completo de movimentações de comissões</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -160,6 +160,7 @@ export default function ContaCorrenteComissoes() {
                   <TableHead>Pagamento</TableHead>
                   <TableHead>Usuário</TableHead>
                   <TableHead>Origem</TableHead>
+                  <TableHead>Movimento</TableHead>
                   <TableHead>Resumo da comissão</TableHead>
                   <TableHead>Parcela</TableHead>
                   <TableHead>Status</TableHead>
@@ -178,8 +179,10 @@ export default function ContaCorrenteComissoes() {
                     <TableCell className="whitespace-nowrap">{date(item.pago_em)}</TableCell>
                     <TableCell><div className="font-medium text-foreground">{item.vendedor_nome}</div><div className="text-xs text-muted-foreground">{item.vendedor_email || item.role_destinatario || '—'}</div></TableCell>
                     <TableCell>{item.origem_nome || '—'}</TableCell>
+                    <TableCell><Badge variant={item.tipo_movimento === 'credito' ? 'default' : 'secondary'}>{item.tipo_movimento === 'credito' ? 'Crédito' : 'Débito'}</Badge><div className="mt-1 text-xs text-muted-foreground">{item.categoria || 'comissão'}</div></TableCell>
                     <TableCell className="min-w-[260px]">
                       <div className="font-medium text-foreground">{item.associado_nome || 'Cliente não informado'}</div>
+                      {item.descricao && <div className="text-xs text-muted-foreground">{item.descricao}</div>}
                       <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
                         <span>Plano: {item.plano_nome || '—'}</span>
                         <span>Linha: {item.plano_linha || '—'}</span>
@@ -192,7 +195,7 @@ export default function ContaCorrenteComissoes() {
                     </TableCell>
                     <TableCell>{item.parcela_numero ? `${item.parcela_numero}${item.parcela_total ? `/${item.parcela_total}` : ''}` : '—'}</TableCell>
                     <TableCell><Badge variant={getComissaoStatusBadgeVariant(item as any)}>{getComissaoStatusLabel(item as any)}</Badge></TableCell>
-                    <TableCell className="text-right font-medium">{money(item.valor_total)}</TableCell>
+                    <TableCell className="text-right font-medium">{item.tipo_movimento === 'debito' ? '-' : '+'}{money(item.valor_total)}</TableCell>
                     <TableCell className="text-right font-medium">{money(item.saldo_apos)}</TableCell>
                   </TableRow>
                 ))}
