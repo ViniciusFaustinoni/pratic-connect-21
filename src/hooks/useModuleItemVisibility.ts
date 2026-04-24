@@ -86,6 +86,7 @@ export const MENU_ITEM_IDS: Record<string, string> = {
   '/financeiro/extrato': 'extrato',
   '/financeiro/extratos-bancarios': 'extratos_bancarios',
   '/financeiro/contas-bancarias': 'contas_bancarias',
+  '/financeiro/conta-corrente-comissoes': 'conta_corrente_comissoes',
   // Cobrança
   '/cobranca': 'dashboard',
   '/cobranca/inadimplentes': 'inadimplentes',
