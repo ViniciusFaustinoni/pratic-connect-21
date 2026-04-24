@@ -342,6 +342,9 @@ serve(async (req) => {
       hinovaCodigoVoluntario = credBanco.codigo_voluntario || hinovaCodigoVoluntario;
       hinovaCodigoSituacaoPendente = credBanco.codigo_situacao_pendente || hinovaCodigoSituacaoPendente;
       hinovaCodigoSituacaoAtivo = credBanco.codigo_situacao_ativo || hinovaCodigoSituacaoAtivo;
+      hinovaCodigoTipoCobrancaPadrao = credBanco.codigo_tipo_cobranca_recorrente_padrao || hinovaCodigoTipoCobrancaPadrao;
+      hinovaCodigoComoConheceuPadrao = credBanco.codigo_como_conheceu_padrao || hinovaCodigoComoConheceuPadrao;
+      hinovaCodigoProfissaoPadrao = credBanco.codigo_profissao_padrao || hinovaCodigoProfissaoPadrao;
       if (credBanco.api_url) hinovaApiUrl = credBanco.api_url;
       console.log('[SGA Sync] Credenciais carregadas do banco');
     }
