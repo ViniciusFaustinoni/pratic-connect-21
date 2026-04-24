@@ -23,7 +23,6 @@ import { PWAInstallPromptProfissional } from '@/components/pwa/PWAInstallPromptP
 import { PushNotificationBanner } from './PushNotificationBanner';
 import { SyncStatusBanner } from '@/components/profissional/SyncStatusBanner';
 import { useAppResume } from '@/hooks/useAppResume';
-import { AlmocoBloqueioOverlay } from '@/components/vistoriador/AlmocoBloqueioOverlay';
 import logoFullDark from '@/assets/logos/logo-full-dark.png';
 
 const NAV_ITEMS = [

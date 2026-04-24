@@ -514,6 +514,7 @@ export function useJornadaTrabalho() {
     // Flags de UI
     temTarefaEmExecucao,
     isBase,
+    podeIniciarAlmoco,
 
     // Helpers
     formatarMinutos,
