@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Settings, User, Wrench } from 'lucide-react';
+import { LogOut, Settings, User, Wrench, Bug } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
