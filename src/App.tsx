@@ -162,7 +162,7 @@ const ComissoesGradeForm = lazy(() => import("./pages/comissoes/GradeForm"));
 const ComissoesAtribuicao = lazy(() => import("./pages/comissoes/Atribuicao"));
 const ComissoesRelatorio = lazy(() => import("./pages/comissoes/Relatorio"));
 const ComissoesPagamentos = lazy(() => import("./pages/comissoes/Pagamentos"));
-const ComissoesContaCorrente = lazy(() => import("./pages/comissoes/ContaCorrente"));
+const ComissoesContaCorrente = lazy(() => import("./pages/financeiro/ContaCorrenteComissoes"));
 const ComissionamentoPlano = lazy(() => import("./pages/configuracoes/ComissionamentoPlano"));
 const AgenteConsultorIA = lazy(() => import("./pages/configuracoes/AgenteConsultorIA"));
 const ApiDocumentation = lazy(() => import("./pages/configuracoes/ApiDocumentation"));
