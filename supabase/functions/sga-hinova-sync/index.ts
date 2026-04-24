@@ -1104,6 +1104,9 @@ serve(async (req) => {
         ...(hinovaCodigoRegional && { codigo_regional: parseInt(hinovaCodigoRegional) }),
         ...(hinovaCodigoCooperativa && { codigo_cooperativa: parseInt(hinovaCodigoCooperativa) }),
         ...(hinovaCodigoVoluntario && { codigo_voluntario: parseInt(hinovaCodigoVoluntario) }),
+        ...(hinovaCodigoTipoCobrancaPadrao && { codigo_tipo_cobranca_recorrente: parseInt(hinovaCodigoTipoCobrancaPadrao) }),
+        ...(hinovaCodigoComoConheceuPadrao && { codigo_como_conheceu: parseInt(hinovaCodigoComoConheceuPadrao) }),
+        ...(hinovaCodigoProfissaoPadrao && { codigo_profissao: parseInt(hinovaCodigoProfissaoPadrao) }),
       };
       console.log(`[SGA Sync] Payload associado: codigo_conta=${codigoContaResolvido}`);
 
