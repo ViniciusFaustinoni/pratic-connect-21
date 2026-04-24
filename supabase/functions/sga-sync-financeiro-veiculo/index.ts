@@ -31,16 +31,8 @@ const json = (status: number, body: unknown) =>
 
 const cleanCPF = (value: string | null | undefined) => String(value || '').replace(/\D/g, '');
 
-// Formato dd/mm/aaaa (mesmo padrão do hinova-client)
-const fmtBR = (d: Date) => {
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const yyyy = d.getFullYear();
-  return `${dd}/${mm}/${yyyy}`;
-};
-
-// (Antiga função janela5Meses removida — agora usamos listarBoletosVeiculo,
-// que itera internamente em janelas de 90 dias respeitando o limite documentado da Hinova.)
+// listarBoletosVeiculo já cuida da janela: itera em chunks de 90 dias (limite documentado da Hinova)
+// cobrindo até 3 anos para trás, com link_boleto=true para já gravar a URL do boleto.
 
 function extractCodigoAssociado(payload: any): number | null {
   const candidates = [
