@@ -289,6 +289,11 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Carregando usuários e vínculos...
                 </div>
+              ) : erroUsuarios ? (
+                <div className="flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-4 text-sm text-destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  Não foi possível carregar a equipe inferior.
+                </div>
               ) : subordinados.length === 0 ? (
                 <div className="rounded-md bg-muted/40 px-3 py-4 text-sm text-muted-foreground">Nenhum usuário abaixo desta posição.</div>
               ) : (
@@ -314,7 +319,7 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
 
         <DialogFooter className="border-t px-6 py-4">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={saving || loadingVinculos}>
+          <Button onClick={handleSave} disabled={saving || loadingVinculos || erroUsuarios}>
             {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Salvar hierarquia
           </Button>
