@@ -80,6 +80,7 @@ import {
   Network,
   Coins,
   Wallet,
+  Bug,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
