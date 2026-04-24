@@ -104,7 +104,6 @@ serve(async (req) => {
       return json(500, { success: false, error: `Falha ao autenticar Hinova: ${e?.message || e}` });
     }
     if (!session) return json(500, { success: false, error: 'Falha ao autenticar Hinova' });
-    if (!session) return json(500, { success: false, error: 'Falha ao autenticar Hinova' });
 
     let codigoVeiculo = Number(veiculo.codigo_hinova) || null;
     let codigoAssociado = Number(associado.codigo_hinova) || null;
