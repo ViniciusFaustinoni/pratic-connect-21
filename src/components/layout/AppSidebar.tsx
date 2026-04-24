@@ -79,6 +79,7 @@ import {
   CheckCircle2,
   Network,
   Coins,
+  Wallet,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
