@@ -10,6 +10,10 @@ const FIPE_BASE = "https://fipe.parallelum.com.br/api/v2";
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 interface FipeBrand {
   code: string;
   name: string;
@@ -48,7 +52,7 @@ Deno.serve(async (req) => {
       try {
         brands = await fetchJson<FipeBrand[]>(`${FIPE_BASE}/${tipo}/brands`);
       } catch (e) {
-        errors.push(`${tipo}/brands: ${e.message}`);
+        errors.push(`${tipo}/brands: ${getErrorMessage(e)}`);
         continue;
       }
 
@@ -67,7 +71,7 @@ Deno.serve(async (req) => {
             });
           }
         } catch (e) {
-          errors.push(`${tipo}/${brand.name}: ${e.message}`);
+          errors.push(`${tipo}/${brand.name}: ${getErrorMessage(e)}`);
         }
       }
 
@@ -99,7 +103,7 @@ Deno.serve(async (req) => {
     );
   } catch (e) {
     return new Response(
-      JSON.stringify({ success: false, error: e.message }),
+      JSON.stringify({ success: false, error: getErrorMessage(e) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
