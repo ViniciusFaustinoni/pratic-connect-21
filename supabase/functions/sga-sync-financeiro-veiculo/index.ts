@@ -382,6 +382,8 @@ serve(async (req) => {
 
       if (upErr) {
         console.error('[SGA Sync Veículo] upsert falhou', nosso, upErr.message);
+        upsertFalhas++;
+        ultimoErroUpsert = upErr.message;
         continue;
       }
       importados++;
