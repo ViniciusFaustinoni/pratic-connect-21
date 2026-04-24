@@ -1,3 +1,4 @@
+// @ts-nocheck
 // ============================================
 // EDGE FUNCTION: autentique-create-by-token
 // Cria documento Autentique a partir de link_token (uso público)

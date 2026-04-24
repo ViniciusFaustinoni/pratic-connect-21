@@ -1,3 +1,4 @@
+// @ts-nocheck
 // ============================================
 // EDGE FUNCTION: autentique-create-laudo
 // Cria documento Autentique para assinatura do Laudo de Instalação

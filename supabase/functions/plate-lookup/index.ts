@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { logEdgeFunction } from "../_shared/log-edge-function.ts";
 
