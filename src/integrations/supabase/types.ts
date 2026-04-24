@@ -4780,6 +4780,7 @@ export type Database = {
           abate_recorrente: boolean
           associado_id: string | null
           categoria: string
+          comissao_id: string | null
           contrato_id: string | null
           created_at: string | null
           data_lancamento: string
@@ -4804,6 +4805,7 @@ export type Database = {
           abate_recorrente?: boolean
           associado_id?: string | null
           categoria: string
+          comissao_id?: string | null
           contrato_id?: string | null
           created_at?: string | null
           data_lancamento?: string
@@ -4828,6 +4830,7 @@ export type Database = {
           abate_recorrente?: boolean
           associado_id?: string | null
           categoria?: string
+          comissao_id?: string | null
           contrato_id?: string | null
           created_at?: string | null
           data_lancamento?: string
@@ -4897,6 +4900,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cc_vendedor_lancamentos_comissao_id_fkey"
+            columns: ["comissao_id"]
+            isOneToOne: false
+            referencedRelation: "comissoes"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "cc_vendedor_lancamentos_contrato_id_fkey"
@@ -30972,6 +30982,12 @@ export type Database = {
           valor_total: number
         }[]
       }
+      fn_comissoes_usuarios_visiveis: {
+        Args: { p_user_id?: string }
+        Returns: {
+          user_id: string
+        }[]
+      }
       fn_determinar_numero_parcela_cobranca: {
         Args: { p_cobranca_id: string }
         Returns: number
@@ -31007,6 +31023,10 @@ export type Database = {
       fn_placas_ativas_consultor: {
         Args: { p_vendedor_id: string }
         Returns: number
+      }
+      fn_recalcular_cc_saldos: {
+        Args: { p_vendedor_id: string }
+        Returns: undefined
       }
       fn_resolver_cadeia: {
         Args: { p_data_referencia?: string; p_vendedor_id: string }
