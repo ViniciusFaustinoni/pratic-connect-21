@@ -1,136 +1,93 @@
-# Sistema de Relatos de Erros
+# Limpeza do menu Financeiro — consolidar em Cobranças
 
-Implementar um canal interno onde qualquer usuário (qualquer perfil) pode relatar bugs com prints, e o Diretor gerencia o ciclo de vida do reporte (Aberto → Em tratamento → Concluído → Validado pelo autor).
+Remover do sidebar e do roteador os itens redundantes do módulo Financeiro, consolidando o fluxo de cobrança em duas abas dentro de **Cobranças**: **Faturas** e **Régua** (com Emissão como sub-aba).
 
-## Fluxo geral
+## O que fica
+
+**Sidebar → Financeiro:**
+- Dashboard
+- Cobranças (Faturas) — `/financeiro/cobrancas`
+- Régua — `/financeiro/cobrancas/regua` (nova rota — engloba Régua + Emissão)
+- Chat Cobrança
+- Contas a Pagar
+- Faturamento
+- Extrato
+- Contas Bancárias
+- Venda Externa
+
+**Sidebar → Comissões:** sem alteração (já tem grupo próprio).
+
+## O que sai do menu (e do roteamento principal)
+
+- Recuperação (`/financeiro/cobrancas/recuperacao`)
+- Inadimplentes (`/financeiro/cobrancas/recuperacao/inadimplentes`)
+- Fila de Trabalho (`/financeiro/cobrancas/recuperacao/fila`)
+- Acordos (`/financeiro/cobrancas/recuperacao/acordos` + `/novo` + `/:id`)
+- Negativação (`/financeiro/cobrancas/recuperacao/negativacao`)
+- Emissão de Cobranças (`/financeiro/emissao`) → vira **sub-aba** dentro da Régua
+- Notificações Cobrança (`/financeiro/notificacoes-cobranca`)
+- Extratos Bancários (`/financeiro/extratos-bancarios`)
+- Conta Corrente de Comissões (`/financeiro/conta-corrente-comissoes`)
+- Comissões (item duplicado dentro do grupo Financeiro)
+
+## Estrutura nova da Régua
 
 ```text
-Usuário              Diretor                  Usuário (autor)
-  │                     │                         │
-  ▼                     ▼                         ▼
-Relatar erro  ─►  Aberto  ─►  Em tratamento  ─►  Concluído
-(área, descrição,                                  │
- prints multi-arquivo)                             ▼
-                                          Badge "TESTAR" (piscando)
-                                                   │
-                                                   ▼
-                                              Validado!
+/financeiro/cobrancas
+ ├── (aba Faturas)  → CobrancasList
+ └── /regua  (aba Régua)
+       ├── sub-aba "Régua"     → ReguaCobranca (existente)
+       └── sub-aba "Emissão"   → EmissaoCobrancas (existente)
 ```
 
-## 1. Backend (Lovable Cloud / Supabase)
+## Mudanças de código
 
-**Migration nova** com:
+**`src/components/layout/AppSidebar.tsx`**
+- Em `id: 'financeiro'`, remover os items listados acima.
+- Renomear destino de "Régua" para `/financeiro/cobrancas/regua`.
 
-- Enum `error_report_status`: `aberto`, `em_tratamento`, `concluido`, `validado`.
-- Tabela `public.error_reports`:
-  - `id uuid pk`, `created_at`, `updated_at`
-  - `reporter_id uuid` (auth.users) — autor
-  - `reporter_nome text`, `reporter_email text` (snapshot)
-  - `area text not null` (texto livre informado pelo usuário)
-  - `descricao text not null`
-  - `status error_report_status default 'aberto'`
-  - `tratado_por uuid`, `tratado_em timestamptz`
-  - `concluido_por uuid`, `concluido_em timestamptz`
-  - `validado_em timestamptz`
-  - `observacao_diretor text` (opcional para resposta)
-- Tabela `public.error_report_files`:
-  - `id`, `report_id fk`, `storage_path text`, `mime_type`, `tamanho_bytes`, `nome_original`, `created_at`.
-- **Bucket de storage** novo `relatos-erros` (privado).
-- **RLS**:
-  - `error_reports` SELECT: autor vê só os seus; `has_role(auth.uid(),'diretor')` ou `desenvolvedor` vê todos.
-  - INSERT: qualquer usuário autenticado, com `reporter_id = auth.uid()`.
-  - UPDATE: Diretor/Desenvolvedor pode mudar para `em_tratamento`/`concluido`; autor pode mudar de `concluido` → `validado` (somente os seus).
-  - `error_report_files`: mesma regra via join.
-- **Storage policies** no bucket `relatos-erros`:
-  - INSERT: autenticado, prefixo do path = `auth.uid()/...`.
-  - SELECT: dono do path **OU** Diretor/Desenvolvedor.
+**`src/App.tsx`**
+- Remover rotas: `recuperacao`, `recuperacao/fila`, `recuperacao/inadimplentes`, `recuperacao/inadimplentes/:id`, `recuperacao/negativacao`, `recuperacao/acordos`, `recuperacao/acordos/novo`, `recuperacao/acordos/:id`, `/financeiro/emissao`, `/financeiro/notificacoes-cobranca`, `/financeiro/extratos-bancarios`, `/financeiro/conta-corrente-comissoes`, `recuperacao/regua`.
+- Remover `RedirectInadimplente` e `RedirectAcordo` (componentes de redirect antigos).
+- Adicionar nova rota: `<Route path="regua" element={<ReguaPage />} />` dentro de `/financeiro/cobrancas`.
+- **Redirects de compatibilidade** (preservar links externos / e-mails antigos):
+  - `/financeiro/cobrancas/recuperacao*` → `/financeiro/cobrancas/regua`
+  - `/financeiro/emissao` → `/financeiro/cobrancas/regua` (cai na sub-aba Régua; usuário troca para Emissão)
+  - `/financeiro/notificacoes-cobranca` → `/financeiro/cobrancas/regua`
+  - `/financeiro/extratos-bancarios` → `/financeiro/extrato`
+  - `/financeiro/conta-corrente-comissoes` → `/comissoes`
+  - `/cobranca/*` antigos: redirecionar para `/financeiro/cobrancas/regua` (em vez do antigo `/recuperacao`).
+- Remover imports `lazy(...)` que ficarem sem uso após a limpeza: `CobrancaDashboard`, `FilaTrabalho`, `InadimplentesList`, `InadimplenteDetalhe`, `Negativacao`, `AcordosList`, `NovoAcordo`, `AcordoDetalhe`, `NotificacoesCobranca`, `ExtratosBancarios`, `ComissoesContaCorrente`. (Os arquivos das páginas ficam no projeto, apenas não são roteados — evita risco caso algum hook compartilhado importe deles.)
 
-## 2. Hook compartilhado
+**`src/pages/financeiro/CobrancasLayout.tsx`**
+- Substituir abas "Faturas | Recuperação" por "Faturas | Régua".
+- Aba Régua aponta para `/financeiro/cobrancas/regua`.
 
-`src/hooks/useErrorReports.ts`:
-- `useMyPendingValidations()` — conta reports do usuário com `status = 'concluido'` (alimenta o efeito "piscando").
-- `useErrorReportsList(filtros)` — usado pela tela do Diretor.
-- `useCreateErrorReport()` — insere registro + faz upload dos arquivos para `relatos-erros/{user_id}/{report_id}/{filename}` e cria linhas em `error_report_files`.
-- `useUpdateErrorReportStatus()` — transições conforme papel.
-- `useErrorReportFiles(reportId)` — gera signed URLs para visualização/download.
+**`src/pages/financeiro/ReguaPage.tsx` (NOVO)**
+- Wrapper com `Tabs` shadcn (sub-abas):
+  - "Régua" → renderiza `<ReguaCobranca />`
+  - "Emissão de Cobranças" → renderiza `<EmissaoCobrancas />`
 
-## 3. Modal "Relatar Erro" (todos os perfis)
-
-Novo componente `src/components/suporte/RelatarErroModal.tsx`:
-- Campos:
-  - **Área** — `Input` texto (obrigatório, máx 120).
-  - **Descrição / Passo a passo** — `Textarea` (obrigatório, mín 20 / máx 4000).
-  - **Prints do erro** — `Input type="file" multiple accept="image/*,application/pdf"` com preview em grid e botão remover. Limite: 10 arquivos, 10MB cada.
-- Validação com `zod`.
-- Botão **Enviar** → chama `useCreateErrorReport`, exibe toast de sucesso e fecha.
-
-Adicionar item **"Relatar Erro"** (ícone `Bug`) **logo abaixo de "Meu Perfil"** em:
-- `src/components/layout/AppHeader.tsx` (dropdown principal — usado pela maioria dos perfis incluindo Diretor).
-- `src/components/app/AppUserDropdown.tsx` (associado/PWA).
-- Outros dropdowns de perfis especiais que estendem header próprio (Instalador, Regulador, Analista de Eventos) — adicionar mesmo item para garantir cobertura "todo perfil".
-
-O item abre o `RelatarErroModal` (estado local).
-
-## 4. Badge "TESTAR" piscando (autor)
-
-- Hook `useMyPendingValidations` retorna `count`.
-- Quando `count > 0`, exibir um botão/badge no header (próximo ao `NotificationBell`) chamado **"Testar correções"** com pulso (`animate-pulse` + cor `bg-warning`).
-- Clique → abre `Sheet/Dialog` listando reports `concluido` do usuário, com botão **"Validado!"** por item, que chama `updateStatus → 'validado'`.
-- Esse mesmo indicador entra no `AppUserDropdown` (mobile) como item "Testar correções (N)" piscando.
-
-## 5. Tela do Diretor — "Relatórios de Erros"
-
-Nova rota `/diretoria/relatos-erros` e nova página `src/pages/diretoria/RelatosErros.tsx`.
-
-Adicionar entrada no `AppSidebar.tsx`, módulo **Diretoria**, **acima de "Configurações"**:
-```ts
-{ title: 'Relatos de Erros', url: '/diretoria/relatos-erros', icon: Bug },
-```
-Registrar a rota em `src/App.tsx` com guard de Diretor/Desenvolvedor.
-
-Conteúdo da página:
-- Cards de resumo: Aberto / Em tratamento / Concluído / Validado.
-- Filtros: status, busca por área/descrição/autor, range de datas.
-- Tabela: data, autor, área, status (badge), nº de arquivos, ação "Ver detalhes".
-- **Modal de detalhes** (`DetalheRelatoModal.tsx`):
-  - Cabeçalho com autor, e-mail, área, criado em, status.
-  - Descrição completa.
-  - Galeria de arquivos: thumbnails (imagens) com clique para abrir em nova aba via signed URL; ícone para PDFs/outros com botão "Abrir".
-  - Campo **Observação do Diretor** (opcional).
-  - Botões de transição:
-    - Em **Aberto**: "Iniciar tratamento" → `em_tratamento`.
-    - Em **Em tratamento**: "Marcar como Concluído" → `concluido`.
-    - Em **Concluído / Validado**: somente leitura (badge final).
-  - Timeline lateral: Aberto em / Em tratamento em / Concluído em / Validado em.
-
-## 6. Detalhes técnicos
-
-- Ícone `Bug` do `lucide-react`.
-- Animação piscante: classe utilitária Tailwind `animate-pulse` combinada com `ring-2 ring-warning`.
-- Upload usa `supabase.storage.from('relatos-erros').upload(path, file)` em paralelo com `Promise.all`, depois insere registros em `error_report_files`. Em caso de falha parcial, remover arquivos órfãos e marcar erro.
-- Signed URLs: `createSignedUrl(path, 3600)` ao abrir o modal de detalhes.
-- Realtime opcional: subscribe em `error_reports` filtrando por `reporter_id` para refletir mudança de status (Concluído) sem refresh — usar canal já existente do projeto.
-- Reaproveitar componentes: `Dialog`, `Sheet`, `Badge`, `Button`, `Input`, `Textarea`, `DataTable` simples com `Table` shadcn.
-
-## Arquivos a criar / editar
-
-**Criar**
-- `supabase/migrations/<ts>_error_reports.sql`
-- `src/hooks/useErrorReports.ts`
-- `src/components/suporte/RelatarErroModal.tsx`
-- `src/components/suporte/TestarCorrecoesButton.tsx`
-- `src/components/suporte/TestarCorrecoesSheet.tsx`
-- `src/pages/diretoria/RelatosErros.tsx`
-- `src/components/diretoria/DetalheRelatoModal.tsx`
-
-**Editar**
-- `src/components/layout/AppHeader.tsx` (item Relatar Erro + botão Testar)
-- `src/components/layout/AppSidebar.tsx` (entrada "Relatos de Erros" no grupo Diretoria, acima de "Configurações")
-- `src/components/app/AppUserDropdown.tsx` (item Relatar Erro + indicador Testar)
-- Dropdowns equivalentes em layouts especiais (Instalador/Regulador/Analista de Eventos) — incluir o item Relatar Erro
-- `src/App.tsx` (rota `/diretoria/relatos-erros`)
-- `src/integrations/supabase/types.ts` (regenerado pela migration)
+**Pequenos ajustes**
+- `src/components/layout/GlobalBreadcrumb.tsx`: remover entradas de breadcrumb dos paths removidos; adicionar `'/financeiro/cobrancas/regua': { label: 'Régua' }`.
+- `src/hooks/useModuleItemVisibility.ts`: remover entradas `'/financeiro/extratos-bancarios'` e `'/financeiro/conta-corrente-comissoes'`; adicionar `'/financeiro/cobrancas/regua'` se necessário.
+- `src/pages/financeiro/FinanceiroDashboard.tsx`: trocar `navigate('/financeiro/extratos-bancarios')` por `navigate('/financeiro/extrato')`.
+- `src/pages/financeiro/ExtratoDetalhe.tsx`: idem (2 ocorrências).
 
 ## Fora do escopo
-- Notificações por e-mail/WhatsApp ao Diretor (pode ser adicionado depois).
-- Comentários/threads dentro do report (somente uma observação do Diretor por enquanto).
+- Não vou apagar os arquivos `.tsx` das páginas removidas (Inadimplentes, Acordos, Negativação, Notificações Cobrança, Extratos Bancários, ContaCorrenteComissoes) — só removê-los do roteamento e do sidebar. Isso evita quebrar qualquer import lateral. Posso deletar depois se confirmar que não há referência cruzada.
+- Não vou mexer no menu **Comissões** — ele continua intacto.
+
+## Arquivos a editar / criar
+
+**Editar**
+- `src/components/layout/AppSidebar.tsx`
+- `src/App.tsx`
+- `src/pages/financeiro/CobrancasLayout.tsx`
+- `src/components/layout/GlobalBreadcrumb.tsx`
+- `src/hooks/useModuleItemVisibility.ts`
+- `src/pages/financeiro/FinanceiroDashboard.tsx`
+- `src/pages/financeiro/ExtratoDetalhe.tsx`
+
+**Criar**
+- `src/pages/financeiro/ReguaPage.tsx`

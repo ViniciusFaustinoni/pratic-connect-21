@@ -163,7 +163,7 @@ const ComissoesGradeForm = lazy(() => import("./pages/comissoes/GradeForm"));
 const ComissoesAtribuicao = lazy(() => import("./pages/comissoes/Atribuicao"));
 const ComissoesRelatorio = lazy(() => import("./pages/comissoes/Relatorio"));
 const ComissoesPagamentos = lazy(() => import("./pages/comissoes/Pagamentos"));
-const ComissoesContaCorrente = lazy(() => import("./pages/financeiro/ContaCorrenteComissoes"));
+// const ComissoesContaCorrente removido — rota deslocada para /comissoes
 const ComissionamentoPlano = lazy(() => import("./pages/configuracoes/ComissionamentoPlano"));
 const AgenteConsultorIA = lazy(() => import("./pages/configuracoes/AgenteConsultorIA"));
 const ApiDocumentation = lazy(() => import("./pages/configuracoes/ApiDocumentation"));
@@ -185,11 +185,10 @@ const CobrancasLayout = lazy(() => import("./pages/financeiro/CobrancasLayout"))
 const CobrancasList = lazy(() => import("./pages/financeiro/CobrancasList"));
 const CobrancaDetalhe = lazy(() => import("./pages/financeiro/CobrancaDetalhe"));
 const FaturamentoMensal = lazy(() => import("./pages/financeiro/FaturamentoMensal"));
-const EmissaoCobrancas = lazy(() => import("./pages/financeiro/EmissaoCobrancas"));
-const NotificacoesCobranca = lazy(() => import("./pages/financeiro/NotificacoesCobranca"));
+const ReguaPage = lazy(() => import("./pages/financeiro/ReguaPage"));
 const ContasPagar = lazy(() => import("./pages/financeiro/ContasPagar"));
 const Extrato = lazy(() => import("./pages/financeiro/Extrato"));
-const ExtratosBancarios = lazy(() => import("./pages/financeiro/ExtratosBancarios"));
+// ExtratosBancarios removido — consolidado em /financeiro/extrato
 const ExtratoDetalhe = lazy(() => import("./pages/financeiro/ExtratoDetalhe"));
 const ContasBancarias = lazy(() => import("./pages/financeiro/ContasBancarias"));
 const ComissionamentoExternoConfig = lazy(() => import("./pages/financeiro/ComissionamentoExternoConfig"));
@@ -197,16 +196,7 @@ const ContaCorrenteVendedor = lazy(() => import("./pages/financeiro/ContaCorrent
 const GestaoContaVendedor = lazy(() => import("./pages/financeiro/GestaoContaVendedor"));
 const DashboardVendaExterna = lazy(() => import("./pages/financeiro/DashboardVendaExterna"));
 
-// Cobrança
-const CobrancaDashboard = lazy(() => import("./pages/cobranca/CobrancaDashboard"));
-const InadimplentesList = lazy(() => import("./pages/cobranca/InadimplentesList"));
-const InadimplenteDetalhe = lazy(() => import("./pages/cobranca/InadimplenteDetalhe"));
-const FilaTrabalho = lazy(() => import("./pages/cobranca/FilaTrabalho"));
-const ReguaCobranca = lazy(() => import("./pages/cobranca/ReguaCobranca"));
-const Negativacao = lazy(() => import("./pages/cobranca/Negativacao"));
-const AcordosList = lazy(() => import("./pages/cobranca/AcordosList"));
-const NovoAcordo = lazy(() => import("./pages/cobranca/NovoAcordo"));
-const AcordoDetalhe = lazy(() => import("./pages/cobranca/AcordoDetalhe"));
+// Cobrança — apenas Régua continua roteada (dentro de /financeiro/cobrancas/regua via ReguaPage)
 const TrocaTitularidade = lazy(() => import("./pages/cobranca/TrocaTitularidade"));
 const AprovacoesTroca = lazy(() => import("./pages/monitoramento/AprovacoesTroca"));
 
@@ -394,15 +384,7 @@ const ContratoRedirect = () => {
   return <Navigate to="/vendas/contratos" state={{ openContrato: id }} replace />;
 };
 
-// Redirects das rotas antigas /cobranca/* preservando o :id
-const RedirectInadimplente = () => {
-  const { id } = useParams();
-  return <Navigate to={`/financeiro/cobrancas/recuperacao/inadimplentes/${id}`} replace />;
-};
-const RedirectAcordo = () => {
-  const { id } = useParams();
-  return <Navigate to={`/financeiro/cobrancas/recuperacao/acordos/${id}`} replace />;
-};
+// Redirects de rotas antigas preservando o :id
 const RedirectGradeComissao = () => {
   const { id } = useParams();
   return <Navigate to={`/comissoes/grades/${id}`} replace />;
@@ -567,33 +549,29 @@ const App = () => (
               
               {/* Financeiro */}
               <Route path="/financeiro" element={<FinanceiroDashboard />} />
-              {/* Módulo unificado de Cobranças (Faturas + Recuperação) */}
+              {/* Módulo unificado de Cobranças (Faturas + Régua) */}
               <Route path="/financeiro/cobrancas" element={<CobrancasLayout />}>
                 <Route index element={<CobrancasList />} />
-                <Route path="recuperacao" element={<CobrancaDashboard />} />
-                <Route path="recuperacao/fila" element={<FilaTrabalho />} />
-                <Route path="recuperacao/inadimplentes" element={<InadimplentesList />} />
-                <Route path="recuperacao/inadimplentes/:id" element={<InadimplenteDetalhe />} />
-                <Route path="recuperacao/regua" element={<ReguaCobranca />} />
-                <Route path="recuperacao/negativacao" element={<Negativacao />} />
-                <Route path="recuperacao/acordos" element={<AcordosList />} />
-                <Route path="recuperacao/acordos/novo" element={<NovoAcordo />} />
-                <Route path="recuperacao/acordos/:id" element={<AcordoDetalhe />} />
+                <Route path="regua" element={<ReguaPage />} />
               </Route>
               <Route path="/financeiro/cobrancas/:id" element={<CobrancaDetalhe />} />
               <Route path="/financeiro/faturamento" element={<FaturamentoMensal />} />
-              <Route path="/financeiro/emissao" element={<EmissaoCobrancas />} />
-              <Route path="/financeiro/notificacoes-cobranca" element={<NotificacoesCobranca />} />
               <Route path="/financeiro/contas-pagar" element={<ContasPagar />} />
               <Route path="/financeiro/extrato" element={<Extrato />} />
-              <Route path="/financeiro/extratos-bancarios" element={<ExtratosBancarios />} />
               <Route path="/financeiro/extratos/:id" element={<ExtratoDetalhe />} />
               <Route path="/financeiro/contas-bancarias" element={<ContasBancarias />} />
               <Route path="/financeiro/configuracoes/comissionamento-externo" element={<Navigate to="/comissoes" replace />} />
               <Route path="/financeiro/venda-externa" element={<DashboardVendaExterna />} />
               <Route path="/financeiro/venda-externa/:vendedorId" element={<GestaoContaVendedor />} />
-              <Route path="/financeiro/conta-corrente-comissoes" element={<ComissoesContaCorrente />} />
               <Route path="/perfil/conta-corrente" element={<ContaCorrenteVendedor />} />
+
+              {/* Redirects de compatibilidade — rotas antigas removidas */}
+              <Route path="/financeiro/cobrancas/recuperacao" element={<Navigate to="/financeiro/cobrancas/regua" replace />} />
+              <Route path="/financeiro/cobrancas/recuperacao/*" element={<Navigate to="/financeiro/cobrancas/regua" replace />} />
+              <Route path="/financeiro/emissao" element={<Navigate to="/financeiro/cobrancas/regua" replace />} />
+              <Route path="/financeiro/notificacoes-cobranca" element={<Navigate to="/financeiro/cobrancas/regua" replace />} />
+              <Route path="/financeiro/extratos-bancarios" element={<Navigate to="/financeiro/extrato" replace />} />
+              <Route path="/financeiro/conta-corrente-comissoes" element={<Navigate to="/comissoes" replace />} />
 
               {/* Comissões */}
               <Route path="/comissoes" element={<ComissoesDashboard />} />
@@ -603,18 +581,18 @@ const App = () => (
               <Route path="/comissoes/atribuicao" element={<ComissoesAtribuicao />} />
               <Route path="/comissoes/relatorio" element={<ComissoesRelatorio />} />
               <Route path="/comissoes/pagamentos" element={<ComissoesPagamentos />} />
-              <Route path="/comissoes/conta-corrente" element={<Navigate to="/financeiro/conta-corrente-comissoes" replace />} />
+              <Route path="/comissoes/conta-corrente" element={<Navigate to="/comissoes" replace />} />
 
-              {/* Redirects das rotas antigas /cobranca/* para o módulo unificado */}
-              <Route path="/cobranca" element={<Navigate to="/financeiro/cobrancas/recuperacao" replace />} />
-              <Route path="/cobranca/fila" element={<Navigate to="/financeiro/cobrancas/recuperacao/fila" replace />} />
-              <Route path="/cobranca/inadimplentes" element={<Navigate to="/financeiro/cobrancas/recuperacao/inadimplentes" replace />} />
-              <Route path="/cobranca/inadimplentes/:id" element={<RedirectInadimplente />} />
-              <Route path="/cobranca/regua" element={<Navigate to="/financeiro/cobrancas/recuperacao/regua" replace />} />
-              <Route path="/cobranca/negativacao" element={<Navigate to="/financeiro/cobrancas/recuperacao/negativacao" replace />} />
-              <Route path="/cobranca/acordos" element={<Navigate to="/financeiro/cobrancas/recuperacao/acordos" replace />} />
-              <Route path="/cobranca/acordos/novo" element={<Navigate to="/financeiro/cobrancas/recuperacao/acordos/novo" replace />} />
-              <Route path="/cobranca/acordos/:id" element={<RedirectAcordo />} />
+              {/* Redirects das rotas antigas /cobranca/* */}
+              <Route path="/cobranca" element={<Navigate to="/financeiro/cobrancas/regua" replace />} />
+              <Route path="/cobranca/fila" element={<Navigate to="/financeiro/cobrancas/regua" replace />} />
+              <Route path="/cobranca/inadimplentes" element={<Navigate to="/financeiro/cobrancas" replace />} />
+              <Route path="/cobranca/inadimplentes/:id" element={<Navigate to="/financeiro/cobrancas" replace />} />
+              <Route path="/cobranca/regua" element={<Navigate to="/financeiro/cobrancas/regua" replace />} />
+              <Route path="/cobranca/negativacao" element={<Navigate to="/financeiro/cobrancas/regua" replace />} />
+              <Route path="/cobranca/acordos" element={<Navigate to="/financeiro/cobrancas/regua" replace />} />
+              <Route path="/cobranca/acordos/novo" element={<Navigate to="/financeiro/cobrancas/regua" replace />} />
+              <Route path="/cobranca/acordos/:id" element={<Navigate to="/financeiro/cobrancas/regua" replace />} />
               <Route path="/relacionamento/troca-titularidade" element={<TrocaTitularidade />} />
               <Route path="/cobranca/troca-titularidade" element={<Navigate to="/relacionamento/troca-titularidade" replace />} />
               

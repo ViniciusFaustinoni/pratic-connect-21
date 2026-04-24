@@ -81,12 +81,11 @@ export const MENU_ITEM_IDS: Record<string, string> = {
   // Financeiro
   '/financeiro': 'dashboard',
   '/financeiro/cobrancas': 'cobrancas',
+  '/financeiro/cobrancas/regua': 'regua',
   '/financeiro/contas-pagar': 'contas_pagar',
   '/financeiro/faturamento': 'faturamento',
   '/financeiro/extrato': 'extrato',
-  '/financeiro/extratos-bancarios': 'extratos_bancarios',
   '/financeiro/contas-bancarias': 'contas_bancarias',
-  '/financeiro/conta-corrente-comissoes': 'conta_corrente_comissoes',
   // Cobrança
   '/cobranca': 'dashboard',
   '/cobranca/inadimplentes': 'inadimplentes',
