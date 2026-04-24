@@ -68,6 +68,7 @@ export function BeneficioFormModal({
     carencia_tipo: '',
     carencia_multiplicador: '',
     is_active: true,
+    codigo_sga: '',
   });
 
   useEffect(() => {
@@ -85,6 +86,7 @@ export function BeneficioFormModal({
         carencia_tipo: b.carencia_tipo || '',
         carencia_multiplicador: b.carencia_multiplicador?.toString() || '',
         is_active: benefit.is_active ?? true,
+        codigo_sga: b.codigo_sga || '',
       });
     } else {
       setFormData({
@@ -99,6 +101,7 @@ export function BeneficioFormModal({
         carencia_tipo: '',
         carencia_multiplicador: '',
         is_active: true,
+        codigo_sga: '',
       });
     }
   }, [benefit]);
@@ -127,6 +130,7 @@ export function BeneficioFormModal({
       carencia_multiplicador: formData.carencia_tipo === 'multiplicadora_cota' && formData.carencia_multiplicador
         ? parseFloat(formData.carencia_multiplicador) : null,
       is_active: formData.is_active,
+      codigo_sga: formData.codigo_sga.trim() || null,
     };
 
     try {
@@ -218,6 +222,22 @@ export function BeneficioFormModal({
               }
               rows={3}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="codigo_sga">Código SGA (Hinova)</Label>
+            <Input
+              id="codigo_sga"
+              value={formData.codigo_sga}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, codigo_sga: e.target.value }))
+              }
+              placeholder="Código do produto vinculado no Hinova"
+              className="font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">
+              Sem este código, o benefício não será enviado ao SGA na sincronização do veículo.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

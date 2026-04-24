@@ -34,6 +34,7 @@ export function CoberturaUnificadaFormModal({
   const [formData, setFormData] = useState({
     nome: '',
     codigo: '',
+    codigo_sga: '',
     descricao: '',
     icon: '',
     subtitle: '',
@@ -51,6 +52,7 @@ export function CoberturaUnificadaFormModal({
       setFormData({
         nome: cobertura.nome || '',
         codigo: cobertura.codigo || '',
+        codigo_sga: c.codigo_sga || '',
         descricao: cobertura.descricao || '',
         icon: cobertura.icon || '',
         subtitle: cobertura.subtitle || '',
@@ -65,6 +67,7 @@ export function CoberturaUnificadaFormModal({
       setFormData({
         nome: '',
         codigo: '',
+        codigo_sga: '',
         descricao: '',
         icon: '',
         subtitle: '',
@@ -84,6 +87,7 @@ export function CoberturaUnificadaFormModal({
     const payload = {
       nome: formData.nome,
       codigo: formData.codigo || undefined,
+      codigo_sga: formData.codigo_sga.trim() || null,
       descricao: formData.descricao || null,
       icon: formData.icon || null,
       subtitle: formData.subtitle || null,
@@ -171,6 +175,20 @@ export function CoberturaUnificadaFormModal({
               placeholder="Descrição detalhada da cobertura"
               rows={3}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="codigo_sga">Código SGA (Hinova)</Label>
+            <Input
+              id="codigo_sga"
+              value={formData.codigo_sga}
+              onChange={(e) => setFormData(prev => ({ ...prev, codigo_sga: e.target.value }))}
+              placeholder="Código do produto vinculado no Hinova"
+              className="font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">
+              Sem este código, a cobertura não será enviada como produto vinculado ao SGA.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

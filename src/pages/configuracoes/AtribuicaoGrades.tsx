@@ -26,9 +26,11 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Eye, Network, Pencil, Search, Users2, AlertCircle } from 'lucide-react';
+import { Eye, Network, Pencil, Search, Users2, AlertCircle, AlertTriangle } from 'lucide-react';
 import { useAtribuicoesComissao } from '@/hooks/useAtribuicaoComissoes';
+import { useVendedoresSemCodigoSga } from '@/hooks/useVendedoresSemCodigoSga';
 import { EditarHierarquiaModal } from '@/components/comissoes/EditarHierarquiaModal';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { AtribuicaoLinha } from '@/types/atribuicaoComissao';
 
 const ROLE_LABEL: Record<string, string> = {
@@ -54,6 +56,7 @@ interface AtribuicaoGradesProps {
 export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-comissao' }: AtribuicaoGradesProps) {
   const navigate = useNavigate();
   const { data: atribuicoes = [], isLoading } = useAtribuicoesComissao();
+  const { data: semCodigoSga } = useVendedoresSemCodigoSga();
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('todos');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
@@ -98,6 +101,9 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
       .join('')
       .toUpperCase();
 
+    const isVendedor = u.roles.some((r) => ['vendedor_clt', 'vendedor_externo', 'agencia'].includes(r));
+    const semSga = isVendedor && semCodigoSga?.ids.has(u.id);
+
     return (
       <div className="flex items-center gap-2">
         <Avatar className="h-8 w-8">
@@ -105,7 +111,21 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
           <AvatarFallback>{initials}</AvatarFallback>
         </Avatar>
         <div className="min-w-0">
-          <div className="font-medium truncate">{u.nome}</div>
+          <div className="font-medium truncate flex items-center gap-1.5">
+            <span className="truncate">{u.nome}</span>
+            {semSga && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" />
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    Vendedor sem <strong>Código SGA Voluntário</strong>. Sincronizações com o SGA serão bloqueadas.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
           <div className="text-xs text-muted-foreground truncate">{u.email}</div>
         </div>
       </div>
@@ -169,6 +189,19 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
             <p className="text-sm">
               <strong>{totalSemGrade}</strong> usuário(s) ainda sem grade atribuída — não receberão
               comissão até que seus perfis sejam contemplados em uma grade ativa.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {!!semCodigoSga?.total && semCodigoSga.total > 0 && (
+        <Card className="border-warning/40 bg-warning/5">
+          <CardContent className="flex items-start gap-3 py-3">
+            <AlertTriangle className="h-4 w-4 text-warning mt-0.5" />
+            <p className="text-sm">
+              <strong>{semCodigoSga.total}</strong> vendedor(es) ativo(s) sem <strong>Código SGA Voluntário</strong> cadastrado.
+              Cadastros de novos contratos atribuídos a esses vendedores serão bloqueados na sincronização com o Hinova
+              (erro <code>vendedor_sem_codigo_sga</code>). Edite o perfil do usuário em <em>Configurações &gt; Usuários e Acessos</em> para preencher o código.
             </p>
           </CardContent>
         </Card>
