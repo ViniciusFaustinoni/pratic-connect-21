@@ -530,9 +530,15 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
 
       <Card>
         <CardContent className="space-y-4 pt-6">
-          <div>
-            <h3 className="text-base font-semibold text-foreground">Planos configurados na grade</h3>
-            <p className="text-sm text-muted-foreground">Selecione os planos e configure regras próprias para cada um.</p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-foreground">Planos configurados na grade</h3>
+              <p className="text-sm text-muted-foreground">Selecione os planos e configure regras próprias para cada um.</p>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={toggleTodosPlanos} disabled={planos.length === 0}>
+              {todosPlanosSelecionados ? <Square className="mr-2 h-4 w-4" /> : <CheckSquare className="mr-2 h-4 w-4" />}
+              {todosPlanosSelecionados ? 'Desmarcar todos' : 'Selecionar todos'}
+            </Button>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             {planos.map(plano => (
