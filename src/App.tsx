@@ -163,7 +163,7 @@ const ComissoesGradeForm = lazy(() => import("./pages/comissoes/GradeForm"));
 const ComissoesAtribuicao = lazy(() => import("./pages/comissoes/Atribuicao"));
 const ComissoesRelatorio = lazy(() => import("./pages/comissoes/Relatorio"));
 const ComissoesPagamentos = lazy(() => import("./pages/comissoes/Pagamentos"));
-const ComissoesContaCorrente = lazy(() => import("./pages/financeiro/ContaCorrenteComissoes"));
+// const ComissoesContaCorrente removido — rota deslocada para /comissoes
 const ComissionamentoPlano = lazy(() => import("./pages/configuracoes/ComissionamentoPlano"));
 const AgenteConsultorIA = lazy(() => import("./pages/configuracoes/AgenteConsultorIA"));
 const ApiDocumentation = lazy(() => import("./pages/configuracoes/ApiDocumentation"));
@@ -185,8 +185,7 @@ const CobrancasLayout = lazy(() => import("./pages/financeiro/CobrancasLayout"))
 const CobrancasList = lazy(() => import("./pages/financeiro/CobrancasList"));
 const CobrancaDetalhe = lazy(() => import("./pages/financeiro/CobrancaDetalhe"));
 const FaturamentoMensal = lazy(() => import("./pages/financeiro/FaturamentoMensal"));
-const EmissaoCobrancas = lazy(() => import("./pages/financeiro/EmissaoCobrancas"));
-const NotificacoesCobranca = lazy(() => import("./pages/financeiro/NotificacoesCobranca"));
+const ReguaPage = lazy(() => import("./pages/financeiro/ReguaPage"));
 const ContasPagar = lazy(() => import("./pages/financeiro/ContasPagar"));
 const Extrato = lazy(() => import("./pages/financeiro/Extrato"));
 const ExtratosBancarios = lazy(() => import("./pages/financeiro/ExtratosBancarios"));
