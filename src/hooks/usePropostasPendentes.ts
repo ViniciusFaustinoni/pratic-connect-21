@@ -1633,7 +1633,7 @@ export function useSolicitarDocumentos() {
           notificacao_resultado: notificacaoResultado,
           notificacao_erro: notificacaoErro,
         },
-      });
+      } as any);
 
       return { contratoId, associadoId, linkPendencias };
     },
