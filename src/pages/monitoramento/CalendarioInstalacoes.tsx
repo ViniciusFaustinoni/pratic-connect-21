@@ -143,18 +143,20 @@ export default function CalendarioInstalacoesPage() {
 
   // Agrupar instalações por data E período
   const instalacoesPorData = useMemo(() => {
-    const map = new Map<string, { manha: typeof instalacoes; tarde: typeof instalacoes; noite: typeof instalacoes }>();
+    const map = new Map<string, { manha: typeof instalacoes; tarde: typeof instalacoes }>();
     
     instalacoes.forEach((inst) => {
       const dataStr = inst.data_agendada;
       if (!dataStr) return;
       
       if (!map.has(dataStr)) {
-        map.set(dataStr, { manha: [], tarde: [], noite: [] });
+        map.set(dataStr, { manha: [], tarde: [] });
       }
       
       const grupo = map.get(dataStr)!;
-      const periodo = (inst.periodo || 'manha') as 'manha' | 'tarde' | 'noite';
+      // Legacy: registros 'noite' caem em 'tarde'
+      const rawPeriodo = (inst.periodo || 'manha') as string;
+      const periodo: 'manha' | 'tarde' = rawPeriodo === 'manha' ? 'manha' : 'tarde';
       grupo[periodo].push(inst);
     });
     
