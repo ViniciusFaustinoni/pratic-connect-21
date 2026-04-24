@@ -141,7 +141,9 @@ serve(async (req) => {
     const authStart = Date.now();
     let session;
     try {
-      session = await getHinovaSession(supabase);
+      // noCache: true → autenticação fresca por job. Hinova é stateful;
+      // cache global causa 401 cruzados quando outra instância autentica em paralelo.
+      session = await getHinovaSession(supabase, { noCache: true });
       if (!session) throw new Error('Falha ao obter sessão Hinova');
 
       await supabase.from('sga_sync_logs').insert({
@@ -153,10 +155,6 @@ serve(async (req) => {
       });
     } catch (authErr: any) {
       const msg = String(authErr?.message || authErr);
-      // Se foi 401 do cache, invalida e propaga (próximo job revalida)
-      if (authErr instanceof HinovaTransientError && authErr.reason === 'auth') {
-        invalidateHinovaSession();
-      }
       await supabase.from('sga_sync_logs').insert({
         veiculo_id: veiculoId,
         associado_id: associado.id,
