@@ -19,6 +19,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { AlertCircle, ArrowDown, Building2, Loader2, Network, RefreshCw, UserRound, Users2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUpsertHierarquia, useUsuariosVendas } from '@/hooks/useAtribuicaoComissoes';
@@ -105,6 +106,21 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
   const gerenteSelecionado = gerenteId === 'none' ? null : gerenteId;
   const supervisorSelecionado = supervisorId === 'none' ? null : supervisorId;
   const agenciaSelecionada = agenciaId === 'none' ? null : agenciaId;
+  const supervisorPertenceAoGerente = (supervisorUserId: string, gerenteUserId: string) => {
+    const supervisorHierarquiaAtual = atribuicaoPorUsuario.get(supervisorUserId)?.hierarquia;
+    return !supervisorHierarquiaAtual?.gerente_id || supervisorHierarquiaAtual.gerente_id === gerenteUserId;
+  };
+  const supervisoresCompativeis = gerenteSelecionado
+    ? supervisores.filter((u) => supervisorPertenceAoGerente(u.id, gerenteSelecionado))
+    : supervisores;
+  const gerenteOptions = [
+    { value: 'none', label: 'Nenhum gerente' },
+    ...gerentes.map((u) => ({ value: u.id, label: `${u.nome} · ${u.email}` })),
+  ];
+  const supervisorOptions = [
+    { value: 'none', label: 'Nenhum supervisor' },
+    ...supervisoresCompativeis.map((u) => ({ value: u.id, label: `${u.nome} · ${u.email}` })),
+  ];
 
   const validationErrors: string[] = [];
   const supervisorHierarquia = supervisorSelecionado ? atribuicaoPorUsuario.get(supervisorSelecionado)?.hierarquia : null;
@@ -129,6 +145,33 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
     if (item.hierarquia?.supervisor_id === selectedUserId) relacoes.push('Supervisor');
     if (item.hierarquia?.agencia_id === selectedUserId) relacoes.push('Agência');
     return relacoes.join(' / ') || 'Vínculo';
+  };
+
+  const handleGerenteChange = (nextGerenteId: string) => {
+    setGerenteId(nextGerenteId);
+
+    if (nextGerenteId !== 'none' && supervisorId !== 'none' && !supervisorPertenceAoGerente(supervisorId, nextGerenteId)) {
+      setSupervisorId('none');
+      toast.info('Supervisor removido para manter a cadeia Gerente → Supervisor → Usuário.');
+    }
+  };
+
+  const handleSupervisorChange = (nextSupervisorId: string) => {
+    if (nextSupervisorId === 'none') {
+      setSupervisorId('none');
+      return;
+    }
+
+    const supervisorHierarquiaAtual = atribuicaoPorUsuario.get(nextSupervisorId)?.hierarquia;
+    if (gerenteId !== 'none' && supervisorHierarquiaAtual?.gerente_id && supervisorHierarquiaAtual.gerente_id !== gerenteId) {
+      toast.error('Este supervisor pertence a outro gerente. Escolha um supervisor compatível.');
+      return;
+    }
+
+    setSupervisorId(nextSupervisorId);
+    if (gerenteId === 'none' && supervisorHierarquiaAtual?.gerente_id) {
+      setGerenteId(supervisorHierarquiaAtual.gerente_id);
+    }
   };
 
   const handleSave = async () => {
@@ -271,26 +314,35 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
             <div className="grid grid-cols-1 gap-4">
               <div className="space-y-1.5">
                 <Label>Gerente superior</Label>
-                <Select value={gerenteId} onValueChange={setGerenteId} disabled={loadingVinculos || saving || erroUsuarios}>
-                  <SelectTrigger className="h-11"><SelectValue placeholder="Selecione um gerente" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhum gerente</SelectItem>
-                    {!loadingVinculos && gerentes.length === 0 && <SelectItem value="empty-gerentes" disabled>Nenhum gerente disponível</SelectItem>}
-                    {gerentes.map((u) => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={gerenteId}
+                  onValueChange={handleGerenteChange}
+                  options={gerenteOptions}
+                  placeholder="Buscar gerente por nome ou e-mail"
+                  searchPlaceholder="Digite nome ou e-mail do gerente..."
+                  disabled={saving || erroUsuarios}
+                  loading={loadingVinculos}
+                  className="h-11"
+                />
+                {!loadingVinculos && gerentes.length === 0 && <p className="text-xs text-muted-foreground">Nenhum gerente disponível.</p>}
               </div>
 
               <div className="space-y-1.5">
                 <Label>Supervisor superior</Label>
-                <Select value={supervisorId} onValueChange={setSupervisorId} disabled={loadingVinculos || saving || erroUsuarios}>
-                  <SelectTrigger className="h-11"><SelectValue placeholder="Selecione um supervisor" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhum supervisor</SelectItem>
-                    {!loadingVinculos && supervisores.length === 0 && <SelectItem value="empty-supervisores" disabled>Nenhum supervisor disponível</SelectItem>}
-                    {supervisores.map((u) => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={supervisorId}
+                  onValueChange={handleSupervisorChange}
+                  options={supervisorOptions}
+                  placeholder="Buscar supervisor por nome ou e-mail"
+                  searchPlaceholder="Digite nome ou e-mail do supervisor..."
+                  disabled={saving || erroUsuarios || (!!gerenteSelecionado && supervisoresCompativeis.length === 0)}
+                  loading={loadingVinculos}
+                  className="h-11"
+                />
+                {!loadingVinculos && supervisores.length === 0 && <p className="text-xs text-muted-foreground">Nenhum supervisor disponível.</p>}
+                {!loadingVinculos && !!gerenteSelecionado && supervisores.length > 0 && supervisoresCompativeis.length === 0 && (
+                  <p className="text-xs text-muted-foreground">Nenhum supervisor compatível com o gerente selecionado.</p>
+                )}
               </div>
 
               <div className="space-y-1.5">
