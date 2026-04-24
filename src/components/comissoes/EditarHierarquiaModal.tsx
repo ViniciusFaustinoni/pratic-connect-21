@@ -310,18 +310,24 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
 
             <div className="grid grid-cols-1 gap-4">
               <div className="space-y-1.5">
-                <Label>Gerente superior</Label>
+                <Label>Gerente superior {gerenteBloqueado && <span className="ml-1 text-xs font-normal text-muted-foreground">(herdado do supervisor)</span>}</Label>
                 <SearchableSelect
-                  value={gerenteId}
+                  value={gerenteBloqueado ? (gerenteEffectiveId || 'none') : gerenteId}
                   onValueChange={handleGerenteChange}
                   options={gerenteOptions}
                   placeholder="Buscar gerente por nome ou e-mail"
                   searchPlaceholder="Digite nome ou e-mail do gerente..."
-                  disabled={saving || erroUsuarios}
+                  disabled={saving || erroUsuarios || gerenteBloqueado}
                   loading={loadingVinculos}
                   className="h-11"
                 />
-                {!loadingVinculos && gerentes.length === 0 && <p className="text-xs text-muted-foreground">Nenhum gerente disponível.</p>}
+                {gerenteBloqueado ? (
+                  <p className="text-xs text-muted-foreground">
+                    O gerente é definido pelo supervisor selecionado. Para alterá-lo, edite a hierarquia do supervisor.
+                  </p>
+                ) : (
+                  !loadingVinculos && gerentes.length === 0 && <p className="text-xs text-muted-foreground">Nenhum gerente disponível.</p>
+                )}
               </div>
 
               <div className="space-y-1.5">
