@@ -175,7 +175,6 @@ export function ImportarLinhasModal({ open, onClose }: ImportarLinhasModalProps)
               slug: codigo,
               product_line_id: lineId,
               ativo: true,
-              visivel_cotacao: true,
               visivel_gestao: true,
               valor_adesao: 0,
               ordem: 99,

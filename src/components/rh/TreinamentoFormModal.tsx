@@ -92,10 +92,19 @@ export function TreinamentoFormModal({ open, onOpenChange, treinamento }: Treina
   const saveMutation = useMutation({
     mutationFn: async (data: TreinamentoFormData) => {
       const payload = {
-        ...data,
+        nome: data.nome,
+        tipo: data.tipo,
+        modalidade: data.modalidade,
+        data_inicio: data.data_inicio,
+        data_fim: data.data_fim,
+        instrutor_nome: data.instrutor_nome,
+        instrutor_tipo: data.instrutor_tipo,
+        local_treinamento: data.local,
+        link_online: data.link_online,
+        conteudo: data.conteudo,
         carga_horaria: Number(data.carga_horaria) || null,
         valor_investimento: Number(data.valor_investimento) || null,
-        status: 'planejado',
+        status_treinamento: 'planejado',
       };
 
       if (isEditing) {
