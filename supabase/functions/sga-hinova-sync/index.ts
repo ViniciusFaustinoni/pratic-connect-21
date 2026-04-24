@@ -827,28 +827,38 @@ serve(async (req) => {
     console.log('[SGA Sync] Buscando código voluntário do vendedor...');
     
     // Priorizar contrato pelo veiculo_id (determinístico), fallback por associado_id
-    let contrato: { vendedor_id: string | null; veiculo_categoria: string | null; cotacao_id?: string | null } | null = null;
-    
+    let contrato: {
+      vendedor_id: string | null;
+      veiculo_categoria: string | null;
+      cotacao_id?: string | null;
+      plano_id: string | null;
+      valor_mensal: number | null;
+      valor_adesao: number | null;
+      valor_adicional: number | null;
+    } | null = null;
+
+    const contratoSelect = 'vendedor_id, veiculo_categoria, cotacao_id, plano_id, valor_mensal, valor_adesao, valor_adicional';
+
     const { data: contratoByVeiculo } = await supabase
       .from('contratos')
-      .select('vendedor_id, veiculo_categoria, cotacao_id')
+      .select(contratoSelect)
       .eq('veiculo_id', _vid)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-    
+
     if (contratoByVeiculo) {
-      contrato = contratoByVeiculo;
+      contrato = contratoByVeiculo as any;
       console.log(`[SGA Sync] Contrato encontrado por veiculo_id: ${_vid}`);
     } else {
       const { data: contratoByAssociado } = await supabase
         .from('contratos')
-        .select('vendedor_id, veiculo_categoria, cotacao_id')
+        .select(contratoSelect)
         .eq('associado_id', _aid)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      contrato = contratoByAssociado;
+      contrato = contratoByAssociado as any;
       console.log(`[SGA Sync] Contrato fallback por associado_id: ${_aid}`);
     }
     
