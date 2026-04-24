@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Plus, Infinity as InfinityIcon, AlertCircle, Package } from 'lucide-react';
+import { ArrowLeft, Plus, Infinity as InfinityIcon, AlertCircle, Package, CheckSquare, Square } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { FieldHint } from '@/components/admin/planos/FieldHint';
@@ -116,6 +116,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
     () => selectedPlanIds.map((planId) => planos.find((p) => p.id === planId)).filter(Boolean) as PlanoComissaoOption[],
     [planos, selectedPlanIds],
   );
+  const todosPlanosSelecionados = planos.length > 0 && selectedPlanIds.length === planos.length;
 
   const { data: existing, isLoading } = useQuery({
     queryKey: ['grade-comissao-v2', id],
@@ -216,6 +217,21 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
         };
       });
       return [...prev, planoId];
+    });
+  };
+
+  const toggleTodosPlanos = () => {
+    if (todosPlanosSelecionados) {
+      setSelectedPlanIds([]);
+      setRegrasPorPlano({});
+      return;
+    }
+
+    setSelectedPlanIds(planos.map((plano) => plano.id));
+    setRegrasPorPlano(current => {
+      const primeiraGrade = Object.values(current).find((parcelas) => parcelas.length > 0);
+      const modelo = primeiraGrade ? cloneParcelas(primeiraGrade) : [defaultParcela(0, 1)];
+      return Object.fromEntries(planos.map((plano) => [plano.id, current[plano.id] || cloneParcelas(modelo)]));
     });
   };
 
