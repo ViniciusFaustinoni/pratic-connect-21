@@ -42,7 +42,6 @@ export function AtribuirGradeModal({ open, onOpenChange, linha }: AtribuirGradeM
   const [gradeId, setGradeId] = useState<string>('');
   const [supervisorId, setSupervisorId] = useState<string>('none');
   const [gerenteId, setGerenteId] = useState<string>('none');
-  const [agenciaId, setAgenciaId] = useState<string>('none');
   const [observacoes, setObservacoes] = useState<string>('');
 
   // Reset ao abrir
@@ -51,7 +50,6 @@ export function AtribuirGradeModal({ open, onOpenChange, linha }: AtribuirGradeM
       setGradeId(linha.gradeAtual?.grade_id || '');
       setSupervisorId(linha.hierarquia?.supervisor_id || 'none');
       setGerenteId(linha.hierarquia?.gerente_id || 'none');
-      setAgenciaId(linha.hierarquia?.agencia_id || 'none');
       setObservacoes(linha.hierarquia?.observacoes || '');
     }
     onOpenChange(o);
