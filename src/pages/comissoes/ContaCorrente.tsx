@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Separator } from '@/components/ui/separator';
-import { ArrowDownCircle, ArrowUpCircle, Clock, Landmark, Search, Wallet } from 'lucide-react';
+import { ArrowDownCircle, ArrowUpCircle, Clock, Landmark, Search, Wallet, Wrench } from 'lucide-react';
 import { getComissaoStatusBadgeVariant, getComissaoStatusLabel } from '@/lib/comissoes-filtros';
 import { getContaCorrentePeriodoRange, useContaCorrenteComissoes, type ContaCorrentePeriodo } from '@/hooks/useContaCorrenteComissoes';
 
@@ -160,8 +160,7 @@ export default function ContaCorrenteComissoes() {
                   <TableHead>Pagamento</TableHead>
                   <TableHead>Usuário</TableHead>
                   <TableHead>Origem</TableHead>
-                  <TableHead>Associado/Contrato</TableHead>
-                  <TableHead>Plano/Linha</TableHead>
+                  <TableHead>Resumo da comissão</TableHead>
                   <TableHead>Parcela</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
@@ -179,8 +178,18 @@ export default function ContaCorrenteComissoes() {
                     <TableCell className="whitespace-nowrap">{date(item.pago_em)}</TableCell>
                     <TableCell><div className="font-medium text-foreground">{item.vendedor_nome}</div><div className="text-xs text-muted-foreground">{item.vendedor_email || item.role_destinatario || '—'}</div></TableCell>
                     <TableCell>{item.origem_nome || '—'}</TableCell>
-                    <TableCell><div>{item.associado_nome || '—'}</div><div className="text-xs text-muted-foreground">{item.contrato_numero || item.contrato_id || '—'}</div></TableCell>
-                    <TableCell><div>{item.plano_nome || '—'}</div><div className="text-xs text-muted-foreground">{item.plano_linha || '—'}</div></TableCell>
+                    <TableCell className="min-w-[260px]">
+                      <div className="font-medium text-foreground">{item.associado_nome || 'Cliente não informado'}</div>
+                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                        <span>Plano: {item.plano_nome || '—'}</span>
+                        <span>Linha: {item.plano_linha || '—'}</span>
+                        <span>Contrato: {item.contrato_numero || item.contrato_id || '—'}</span>
+                      </div>
+                      <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                        <Wrench className="h-3 w-3" />
+                        <span>Instalação: {item.instalacao_resumo || 'não localizada'}</span>
+                      </div>
+                    </TableCell>
                     <TableCell>{item.parcela_numero ? `${item.parcela_numero}${item.parcela_total ? `/${item.parcela_total}` : ''}` : '—'}</TableCell>
                     <TableCell><Badge variant={getComissaoStatusBadgeVariant(item as any)}>{getComissaoStatusLabel(item as any)}</Badge></TableCell>
                     <TableCell className="text-right font-medium">{money(item.valor_total)}</TableCell>
