@@ -238,6 +238,7 @@ serve(async (req) => {
     // Não há mais bloqueio de atribuição por estar em almoço, nem auto-finalização.
     // O status de almoço é puramente informativo e gerenciado manualmente pelo técnico via UI.
 
+    const hoje = new Date().toISOString().split('T')[0];
 
     // Get request body
     const { latitude, longitude, acao } = await req.json();
