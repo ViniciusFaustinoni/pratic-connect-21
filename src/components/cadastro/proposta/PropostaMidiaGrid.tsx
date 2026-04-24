@@ -94,6 +94,7 @@ interface PropostaMidiaGridProps {
   documentosSolicitados?: DocumentoSolicitadoEnviado[];
   documentosSolicitadosPendentes?: DocumentoSolicitadoPendente[];
   contratoId?: string;
+  contratoLinkToken?: string | null;
   associadoId?: string;
 }
 
@@ -106,6 +107,7 @@ export function PropostaMidiaGrid({
   documentosSolicitados,
   documentosSolicitadosPendentes,
   contratoId,
+  contratoLinkToken,
   associadoId,
 }: PropostaMidiaGridProps) {
   const [showVideo, setShowVideo] = useState(false);
@@ -262,6 +264,7 @@ export function PropostaMidiaGrid({
             documentosSolicitados={documentosSolicitados || []}
             documentosPendentes={documentosSolicitadosPendentes}
             contratoId={contratoId}
+            contratoLinkToken={contratoLinkToken}
             associadoId={associadoId}
           />
         </div>
