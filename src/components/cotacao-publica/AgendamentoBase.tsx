@@ -12,7 +12,7 @@ import { useOficina } from '@/hooks/useOficinas';
 import { cn } from '@/lib/utils';
 import { isDomingo, isSabado } from '@/data/autovistoriaConfig';
 import { useDatasBloqueadasSet } from '@/hooks/useDatasBloqueadas';
-import { normalizePeriodo, PERIODO_LABEL, PERIODO_FAIXA, type PeriodoCanonico } from '@/lib/periodo-utils';
+import { normalizePeriodo, periodoToTime, PERIODO_LABEL, PERIODO_FAIXA, type PeriodoCanonico } from '@/lib/periodo-utils';
 
 interface AgendamentoBaseProps {
   cotacaoId: string;
