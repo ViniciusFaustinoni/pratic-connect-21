@@ -15,6 +15,7 @@ export interface ComissaoDashboardItem {
   parcela_numero: number | null;
   valor_base: number | null;
   percentual_aplicado: number | null;
+  tipo_calculo: string | null;
   valor_comissao: number | null;
   valor_total: number | null;
   status: ComissaoStatus;
@@ -27,6 +28,13 @@ export interface ComissaoDashboardItem {
   usuario_avatar_url: string | null;
 }
 
+export interface ComissoesDashboardFilters {
+  dataInicio?: Date;
+  dataFim?: Date;
+  status?: string;
+  tipoLancamento?: 'todos' | 'comum' | 'vitalicia' | 'valor_fixo' | 'percentual' | string;
+}
+
 export interface ComissaoKpis {
   totalAPagarMes: number;
   totalPagoMes: number;
@@ -37,18 +45,53 @@ export interface ComissaoKpis {
 
 const money = (value: number | null | undefined) => Number(value || 0);
 
-export function useComissoesDashboard(periodo = new Date()) {
-  const mes = periodo.getMonth() + 1;
-  const ano = periodo.getFullYear();
+const startOfDayIso = (date: Date) => {
+  const value = new Date(date);
+  value.setHours(0, 0, 0, 0);
+  return value.toISOString();
+};
+
+const endOfDayIso = (date: Date) => {
+  const value = new Date(date);
+  value.setHours(23, 59, 59, 999);
+  return value.toISOString();
+};
+
+const isVitalicia = (item: ComissaoDashboardItem) =>
+  (item.tipo_comissao || '').toLowerCase().includes('vitalicia') || (item.parcela_numero || 0) > 12;
+
+const matchesTipoLancamento = (item: ComissaoDashboardItem, tipo: string) => {
+  if (!tipo || tipo === 'todos') return true;
+  const tipoComissao = (item.tipo_comissao || '').toLowerCase();
+  const tipoCalculo = (item.tipo_calculo || '').toLowerCase();
+
+  if (tipo === 'vitalicia') return isVitalicia(item);
+  if (tipo === 'valor_fixo') return tipoCalculo === 'valor_fixo' || tipoComissao === 'valor_fixo';
+  if (tipo === 'percentual') return tipoCalculo === 'percentual' || money(item.percentual_aplicado) > 0;
+  if (tipo === 'comum') return !isVitalicia(item) && tipoCalculo !== 'valor_fixo' && tipoComissao !== 'valor_fixo';
+
+  return tipoComissao === tipo || tipoCalculo === tipo;
+};
+
+export function useComissoesDashboard(filters: ComissoesDashboardFilters = {}) {
+  const hoje = new Date();
+  const dataInicio = filters.dataInicio || new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const dataFim = filters.dataFim || new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+  const status = filters.status || 'todos';
+  const tipoLancamento = filters.tipoLancamento || 'todos';
 
   const query = useQuery({
-    queryKey: ['comissoes-dashboard', mes, ano],
+    queryKey: ['comissoes-dashboard', startOfDayIso(dataInicio), endOfDayIso(dataFim), status, tipoLancamento],
     queryFn: async () => {
-      const { data: comissoes, error } = await (supabase as any)
+      let builder = (supabase as any)
         .from('comissoes')
-        .select('id, vendedor_id, contrato_id, associado_id, cobranca_id, nivel_nome, tipo_comissao, parcela_numero, valor_base, percentual_aplicado, valor_comissao, valor_total, status, mes_referencia, ano_referencia, created_at, pago_em')
-        .eq('mes_referencia', mes)
-        .eq('ano_referencia', ano)
+        .select('id, vendedor_id, contrato_id, associado_id, cobranca_id, nivel_nome, tipo_comissao, tipo_calculo, parcela_numero, valor_base, percentual_aplicado, valor_comissao, valor_total, status, mes_referencia, ano_referencia, created_at, pago_em')
+        .gte('created_at', startOfDayIso(dataInicio))
+        .lte('created_at', endOfDayIso(dataFim));
+
+      if (status !== 'todos') builder = builder.eq('status', status);
+
+      const { data: comissoes, error } = await builder
         .order('created_at', { ascending: false });
       if (error) throw error;
 
@@ -69,13 +112,14 @@ export function useComissoesDashboard(periodo = new Date()) {
           ...c,
           valor_base: c.valor_base === null ? null : Number(c.valor_base),
           percentual_aplicado: c.percentual_aplicado === null ? null : Number(c.percentual_aplicado),
+          tipo_calculo: c.tipo_calculo || null,
           valor_comissao: c.valor_comissao === null ? null : Number(c.valor_comissao),
           valor_total: c.valor_total === null ? null : Number(c.valor_total),
           usuario_nome: profile?.nome || 'Usuário não identificado',
           usuario_email: profile?.email || '',
           usuario_avatar_url: profile?.avatar_url || null,
         } as ComissaoDashboardItem;
-      });
+      }).filter((item: ComissaoDashboardItem) => matchesTipoLancamento(item, tipoLancamento));
     },
   });
 
@@ -93,7 +137,7 @@ export function useComissoesDashboard(periodo = new Date()) {
       .reduce((sum, i) => sum + money(i.valor_total ?? i.valor_comissao), 0);
 
     const pendenteAprovacao = items.filter(i => i.status === 'pendente').length;
-    const vitaliciasAtivas = items.filter(i => (i.tipo_comissao || '').includes('vitalicia') || (i.parcela_numero || 0) > 12).length;
+    const vitaliciasAtivas = items.filter(isVitalicia).length;
 
     const topMap = new Map<string, { vendedor_id: string; nome: string; valor: number }>();
     items.forEach((i) => {
@@ -112,5 +156,5 @@ export function useComissoesDashboard(periodo = new Date()) {
     };
   }, [query.data]);
 
-  return { ...query, items: query.data || [], kpis, mes, ano };
+  return { ...query, items: query.data || [], kpis, dataInicio, dataFim, status, tipoLancamento };
 }

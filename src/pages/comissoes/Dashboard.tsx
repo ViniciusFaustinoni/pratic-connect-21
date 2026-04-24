@@ -2,21 +2,36 @@ import { useMemo, useState } from 'react';
 import { DollarSign, CheckCircle2, Clock, Infinity as InfinityIcon, Trophy } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { DatePickerWithRange } from '@/components/ui/date-range-picker';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { KpiCard } from '@/components/comissoes/KpiCard';
 import { ComissoesDetalhesModal } from '@/components/comissoes/ComissoesDetalhesModal';
 import { useComissoesDashboard, type ComissaoDashboardItem } from '@/hooks/useComissoesDashboard';
+import type { DateRange } from 'react-day-picker';
 
 const formatMoney = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 export default function DashboardComissoes() {
-  const { items, kpis, isLoading } = useComissoesDashboard();
+  const hoje = new Date();
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: new Date(hoje.getFullYear(), hoje.getMonth(), 1),
+    to: new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0),
+  });
+  const [status, setStatus] = useState('todos');
+  const [tipoLancamento, setTipoLancamento] = useState('todos');
+  const { items, kpis, isLoading } = useComissoesDashboard({
+    dataInicio: dateRange?.from,
+    dataFim: dateRange?.to || dateRange?.from,
+    status,
+    tipoLancamento,
+  });
   const [modal, setModal] = useState<{ title: string; items: ComissaoDashboardItem[] } | null>(null);
 
   const pendentes = useMemo(() => items.filter(i => ['pendente', 'aprovada'].includes(i.status)), [items]);
   const pagas = useMemo(() => items.filter(i => ['paga', 'pago'].includes(i.status) || !!i.pago_em), [items]);
   const aguardando = useMemo(() => items.filter(i => i.status === 'pendente'), [items]);
-  const vitalicias = useMemo(() => items.filter(i => (i.tipo_comissao || '').includes('vitalicia') || (i.parcela_numero || 0) > 12), [items]);
+  const vitalicias = useMemo(() => items.filter(i => (i.tipo_comissao || '').toLowerCase().includes('vitalicia') || (i.parcela_numero || 0) > 12), [items]);
 
   if (isLoading) return <div className="text-sm text-muted-foreground">Carregando comissões...</div>;
 
@@ -32,16 +47,59 @@ export default function DashboardComissoes() {
         </Button>
       </div>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Filtros</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-[minmax(260px,1fr)_220px_220px]">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">Período</label>
+            <DatePickerWithRange date={dateRange} onDateChange={setDateRange} />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">Status</label>
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger>
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="pendente">Pendente</SelectItem>
+                <SelectItem value="aprovada">Aprovada</SelectItem>
+                <SelectItem value="paga">Paga</SelectItem>
+                <SelectItem value="contestada">Contestada</SelectItem>
+                <SelectItem value="cancelada">Cancelada</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">Tipo de lançamento</label>
+            <Select value={tipoLancamento} onValueChange={setTipoLancamento}>
+              <SelectTrigger>
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="comum">Comum/recorrente</SelectItem>
+                <SelectItem value="vitalicia">Vitalícia</SelectItem>
+                <SelectItem value="valor_fixo">Valor fixo</SelectItem>
+                <SelectItem value="percentual">Percentual</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard title="Total a pagar este mês" value={formatMoney(kpis.totalAPagarMes)} description={`${pendentes.length} lançamento(s)`} icon={DollarSign} onClick={() => setModal({ title: 'Total a pagar este mês', items: pendentes })} />
-        <KpiCard title="Total pago no mês" value={formatMoney(kpis.totalPagoMes)} description={`${pagas.length} lançamento(s)`} icon={CheckCircle2} onClick={() => setModal({ title: 'Total pago no mês', items: pagas })} />
+        <KpiCard title="Total a pagar no período" value={formatMoney(kpis.totalAPagarMes)} description={`${pendentes.length} lançamento(s)`} icon={DollarSign} onClick={() => setModal({ title: 'Total a pagar no período selecionado', items: pendentes })} />
+        <KpiCard title="Total pago no período" value={formatMoney(kpis.totalPagoMes)} description={`${pagas.length} lançamento(s)`} icon={CheckCircle2} onClick={() => setModal({ title: 'Total pago no período selecionado', items: pagas })} />
         <KpiCard title="Pendente de aprovação" value={String(kpis.pendenteAprovacao)} description="Clique para detalhar" icon={Clock} onClick={() => setModal({ title: 'Pendentes de aprovação', items: aguardando })} />
         <KpiCard title="Comissões vitalícias" value={String(kpis.vitaliciasAtivas)} description="Lançamentos no período" icon={InfinityIcon} onClick={() => setModal({ title: 'Comissões vitalícias', items: vitalicias })} />
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2"><Trophy className="h-4 w-4" /> Top 5 vendedores do mês</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2"><Trophy className="h-4 w-4" /> Top 5 vendedores no período</CardTitle>
         </CardHeader>
         <CardContent>
           {kpis.topVendedores.length === 0 ? (
