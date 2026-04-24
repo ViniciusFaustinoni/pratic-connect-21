@@ -98,8 +98,7 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
       // Registrar status de conclusão no log do reboque
       await supabase.from('despacho_reboque_status_log').insert({
         chamado_id: chamadoId,
-        despacho_id: null,
-        prestador_id: null,
+        prestador_id: despacho?.prestador_atribuido_id,
         status: 'concluido',
         observacao: observacaoConclusao || 'Serviço concluído',
       });

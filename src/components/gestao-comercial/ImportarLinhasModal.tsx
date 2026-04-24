@@ -169,7 +169,7 @@ export function ImportarLinhasModal({ open, onClose }: ImportarLinhasModalProps)
           // Create plan
           const codigo = planoName.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30);
           const { data: newPlano, error: pe } = await supabase
-            .from('planos').insert([{
+            .from('planos').insert({
               nome: planoName,
               codigo,
               slug: codigo,
@@ -179,7 +179,7 @@ export function ImportarLinhasModal({ open, onClose }: ImportarLinhasModalProps)
               visivel_gestao: true,
               valor_adesao: 0,
               ordem: 99,
-            }]).select('id').single();
+            }).select('id').single();
           if (pe) throw pe;
           counts.planos++;
 

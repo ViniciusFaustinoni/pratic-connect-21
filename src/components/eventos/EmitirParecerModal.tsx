@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { TablesUpdate } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Loader2, CheckCircle, XCircle, Car, AlertTriangle, Wrench, ShieldAlert } from 'lucide-react';
@@ -242,9 +243,9 @@ export function EmitirParecerModal({ open, onClose, sinistro }: EmitirParecerMod
             .from('veiculos')
             .update({
               ativo: false,
-              observacoes: `Baixado por perda total - Sinistro ${sinistro.protocolo}`,
+              motivo_inativacao: `Baixado por perda total - Sinistro ${sinistro.protocolo}`,
               updated_at: new Date().toISOString(),
-            })
+            } satisfies TablesUpdate<'veiculos'>)
             .eq('id', sinistro.veiculo_id);
         }
       }
