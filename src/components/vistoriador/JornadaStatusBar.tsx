@@ -10,7 +10,10 @@ interface JornadaStatusBarProps {
 
 /**
  * Barra de status de jornada de trabalho
- * Mostra tempo trabalhado, tempo restante e progresso do dia
+ * Mostra tempo trabalhado, tempo restante e progresso do dia.
+ *
+ * Almoço é 100% manual: o técnico inicia e finaliza pelos botões aqui.
+ * Não há mais início automático de almoço para nenhum tipo de técnico.
  */
 export function JornadaStatusBar({ className }: JornadaStatusBarProps) {
   const {
@@ -21,13 +24,9 @@ export function JornadaStatusBar({ className }: JornadaStatusBarProps) {
     saldoAnterior,
     emAlmoco,
     minutosAlmoco,
-    minutosAlmocoRestantes,
-    minutosAtrasoAlmoco,
     turno,
     isLoading,
-    almocoAdiado,
-    isBase,
-    deveIniciarAlmoco,
+    podeIniciarAlmoco,
     iniciarAlmoco,
     finalizarAlmoco,
     isIniciandoAlmoco,
@@ -75,67 +74,43 @@ export function JornadaStatusBar({ className }: JornadaStatusBarProps) {
     );
   }
 
-  // Se em almoço, mostrar contador de almoço
+  // Se em almoço, mostrar contador crescente + botão "Finalizar almoço".
+  // Comportamento unificado: todo técnico controla manualmente.
   if (emAlmoco) {
-    // Técnico Base: contador crescente + botão "Finalizar almoço"
-    if (isBase) {
-      const passouDoLimite = minutosAlmoco > 60;
-      const minutosAcrescimo = Math.max(0, minutosAlmoco - 60);
-      return (
-        <div className={cn(
-          passouDoLimite
-            ? "bg-red-900/30 border-red-700/50"
-            : "bg-amber-900/30 border-amber-700/50",
-          "border rounded-lg p-3 space-y-2",
-          className
-        )}>
-          <div className="flex items-center justify-between">
-            <div className={cn("flex items-center gap-2", passouDoLimite ? "text-red-400" : "text-amber-400")}>
-              <Coffee className="h-4 w-4" />
-              <span className="text-sm font-medium">Em almoço (manual)</span>
-            </div>
-            <span className={cn("text-sm font-mono", passouDoLimite ? "text-red-300" : "text-amber-300")}>
-              {formatarMinutos(minutosAlmoco)}
-            </span>
-          </div>
-          {passouDoLimite && (
-            <div className="flex items-center gap-1 text-xs text-red-400">
-              <AlertTriangle className="h-3 w-3" />
-              <span>+{formatarMinutos(minutosAcrescimo)} de acréscimo na jornada</span>
-            </div>
-          )}
-          <Button
-            onClick={() => finalizarAlmoco()}
-            disabled={isFinalizandoAlmoco}
-            size="sm"
-            className="w-full bg-green-600 hover:bg-green-700 text-white"
-          >
-            <Square className="h-4 w-4 mr-2" />
-            {isFinalizandoAlmoco ? 'Finalizando...' : 'Finalizar almoço'}
-          </Button>
-        </div>
-      );
-    }
-
-    // Técnico Rota: comportamento atual (contador regressivo automático)
+    const passouDoLimite = minutosAlmoco > 60;
+    const minutosAcrescimo = Math.max(0, minutosAlmoco - 60);
     return (
       <div className={cn(
-        "bg-amber-900/30 border border-amber-700/50 rounded-lg p-3",
+        passouDoLimite
+          ? "bg-red-900/30 border-red-700/50"
+          : "bg-amber-900/30 border-amber-700/50",
+        "border rounded-lg p-3 space-y-2",
         className
       )}>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2 text-amber-400">
+        <div className="flex items-center justify-between">
+          <div className={cn("flex items-center gap-2", passouDoLimite ? "text-red-400" : "text-amber-400")}>
             <Coffee className="h-4 w-4" />
-            <span className="text-sm font-medium">Horário de Almoço</span>
+            <span className="text-sm font-medium">Em almoço</span>
           </div>
-          <span className="text-sm text-amber-300">
-            Retorno em: {formatarMinutos(minutosAlmocoRestantes)}
+          <span className={cn("text-sm font-mono", passouDoLimite ? "text-red-300" : "text-amber-300")}>
+            {formatarMinutos(minutosAlmoco)}
           </span>
         </div>
-        <Progress 
-          value={((60 - minutosAlmocoRestantes) / 60) * 100} 
-          className="h-2 bg-amber-900/50"
-        />
+        {passouDoLimite && (
+          <div className="flex items-center gap-1 text-xs text-red-400">
+            <AlertTriangle className="h-3 w-3" />
+            <span>+{formatarMinutos(minutosAcrescimo)} de acréscimo na jornada</span>
+          </div>
+        )}
+        <Button
+          onClick={() => finalizarAlmoco()}
+          disabled={isFinalizandoAlmoco}
+          size="sm"
+          className="w-full bg-green-600 hover:bg-green-700 text-white"
+        >
+          <Square className="h-4 w-4 mr-2" />
+          {isFinalizandoAlmoco ? 'Finalizando...' : 'Finalizar almoço'}
+        </Button>
       </div>
     );
   }
@@ -166,8 +141,8 @@ export function JornadaStatusBar({ className }: JornadaStatusBarProps) {
         className="h-2"
       />
 
-      {/* Botão manual "Iniciar almoço" para técnicos Base após 4h */}
-      {isBase && deveIniciarAlmoco && (
+      {/* Botão manual "Iniciar almoço" disponível para qualquer técnico em turno ativo */}
+      {podeIniciarAlmoco && (
         <Button
           onClick={() => iniciarAlmoco()}
           disabled={isIniciandoAlmoco}
@@ -177,16 +152,6 @@ export function JornadaStatusBar({ className }: JornadaStatusBarProps) {
           <Play className="h-4 w-4 mr-2" />
           {isIniciandoAlmoco ? 'Iniciando...' : 'Iniciar almoço'}
         </Button>
-      )}
-
-      {/* Almoço adiado: passou de 4h mas técnico está em tarefa */}
-      {almocoAdiado && (
-        <div className="flex items-center justify-center gap-1 text-xs">
-          <Coffee className="h-3 w-3 text-amber-400" />
-          <span className="text-amber-400">
-            Almoço aguardando finalização da tarefa atual
-          </span>
-        </div>
       )}
 
       {/* Acréscimo por atraso de almoço */}
