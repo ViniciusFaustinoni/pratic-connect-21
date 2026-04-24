@@ -276,6 +276,9 @@ export function useAlterarEnderecoTipo() {
           .select('id')
           .single();
         if (errIns) throw errIns;
+        if (!latitude || !longitude) {
+          toast.warning('Convertido para rota, mas sem coordenadas. Corrija o endereço para liberar no mapa.');
+        }
 
         const { error: errUpd } = await supabase
           .from('agendamentos_base')
@@ -298,6 +301,7 @@ export function useAlterarEnderecoTipo() {
     onSuccess: () => {
       toast.success('Alteração realizada com sucesso');
       qc.invalidateQueries({ queryKey: ['vistorias-mapa'] });
+      qc.invalidateQueries({ queryKey: ['mapa-vistorias'] });
       qc.invalidateQueries({ queryKey: ['servicos-para-atribuir-manual'] });
       qc.invalidateQueries({ queryKey: ['vistoriadores-ativos-manual'] });
       qc.invalidateQueries({ queryKey: ['tarefa-atual'] });
