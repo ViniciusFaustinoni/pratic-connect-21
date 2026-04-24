@@ -183,7 +183,6 @@ serve(async (req) => {
 
     // 2. Para cada profissional, verificar se já tem tarefa e tentar atribuir
     for (const prof of profissionais as ProfissionalDisponivel[]) {
-      const isBase = baseSet.has(prof.vistoriador_id);
       // ========== ALMOÇO ==========
       // Lógica automática de almoço DESATIVADA para todos os técnicos.
       // Não há mais bloqueio de atribuição por estar em almoço, nem auto-finalização server-side.
