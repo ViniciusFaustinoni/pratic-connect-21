@@ -123,7 +123,7 @@ export function AgendamentoBase({
     await criarAgendamento.mutateAsync({
       cotacaoId,
       dataAgendada: format(dataSelecionada, 'yyyy-MM-dd'),
-      horario: periodoSelecionado, // grava 'manha' | 'tarde'
+      horario: periodoToTime(periodoSelecionado), // converte 'manha'|'tarde' em HH:MM:SS
       clienteNome,
       clienteTelefone,
       clienteEmail,
