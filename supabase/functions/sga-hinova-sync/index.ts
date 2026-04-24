@@ -115,6 +115,26 @@ function parseValorFipe(valor: string | null | undefined): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+async function resolverFipePorNome(tipo: string, marca: string | null, modelo: string | null, ano: number | null): Promise<{ codigoFipe: string; valorFipe: number | null } | null> {
+  if (!marca || !modelo) return null;
+  const base = `https://parallelum.com.br/fipe/api/v1/${tipo}`;
+  const marcas = await (await fetch(`${base}/marcas`)).json();
+  const marcaEncontrada = marcas.find((m: any) => normalizeText(marca).includes(normalizeText(m.nome)) || normalizeText(m.nome).includes(normalizeText(marca)));
+  if (!marcaEncontrada) return null;
+  const modelosData = await (await fetch(`${base}/marcas/${marcaEncontrada.codigo}/modelos`)).json();
+  const alvoTokens = normalizeText(modelo).match(/[a-z0-9]+/g) || [];
+  const modelos = modelosData?.modelos || [];
+  const modeloEncontrado = modelos
+    .map((m: any) => ({ item: m, score: alvoTokens.filter(t => normalizeText(m.nome).includes(t)).length }))
+    .sort((a: any, b: any) => b.score - a.score)[0]?.item;
+  if (!modeloEncontrado) return null;
+  const anos = await (await fetch(`${base}/marcas/${marcaEncontrada.codigo}/modelos/${modeloEncontrado.codigo}/anos`)).json();
+  const anoEncontrado = (anos || []).find((a: any) => String(a.nome).includes(String(ano))) || anos?.[0];
+  if (!anoEncontrado) return null;
+  const preco = await (await fetch(`${base}/marcas/${marcaEncontrada.codigo}/modelos/${modeloEncontrado.codigo}/anos/${anoEncontrado.codigo}`)).json();
+  return preco?.CodigoFipe ? { codigoFipe: preco.CodigoFipe, valorFipe: parseValorFipe(preco.Valor) } : null;
+}
+
 // Retry com backoff exponencial
 async function fetchWithRetry(
   url: string, 
