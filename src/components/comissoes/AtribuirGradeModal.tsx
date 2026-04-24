@@ -155,22 +155,6 @@ export function AtribuirGradeModal({ open, onOpenChange, linha }: AtribuirGradeM
               </Select>
             </div>
 
-            <div className="sm:col-span-2">
-              <Label>Agência da cadeia</Label>
-              <Select value={agenciaId} onValueChange={setAgenciaId}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">— Nenhuma —</SelectItem>
-                  {agencias.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
           </div>
 
           <div>
