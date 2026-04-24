@@ -321,6 +321,9 @@ serve(async (req) => {
   let hinovaCodigoVoluntario = Deno.env.get('HINOVA_CODIGO_VOLUNTARIO');
   let hinovaCodigoSituacaoPendente = Deno.env.get('HINOVA_CODIGO_SITUACAO_PENDENTE');
   let hinovaCodigoSituacaoAtivo = Deno.env.get('HINOVA_CODIGO_SITUACAO_ATIVO');
+  let hinovaCodigoTipoCobrancaPadrao: string | undefined;
+  let hinovaCodigoComoConheceuPadrao: string | undefined;
+  let hinovaCodigoProfissaoPadrao: string | undefined;
   let codigoContaOrigem: 'env' | 'database' | 'historico' | 'fallback' = hinovaCodigoConta ? 'env' : 'fallback';
 
   if (!hinovaToken || !hinovaUsuario || !hinovaSenha || !hinovaCodigoConta) {
@@ -339,6 +342,9 @@ serve(async (req) => {
       hinovaCodigoVoluntario = credBanco.codigo_voluntario || hinovaCodigoVoluntario;
       hinovaCodigoSituacaoPendente = credBanco.codigo_situacao_pendente || hinovaCodigoSituacaoPendente;
       hinovaCodigoSituacaoAtivo = credBanco.codigo_situacao_ativo || hinovaCodigoSituacaoAtivo;
+      hinovaCodigoTipoCobrancaPadrao = credBanco.codigo_tipo_cobranca_recorrente_padrao || hinovaCodigoTipoCobrancaPadrao;
+      hinovaCodigoComoConheceuPadrao = credBanco.codigo_como_conheceu_padrao || hinovaCodigoComoConheceuPadrao;
+      hinovaCodigoProfissaoPadrao = credBanco.codigo_profissao_padrao || hinovaCodigoProfissaoPadrao;
       if (credBanco.api_url) hinovaApiUrl = credBanco.api_url;
       console.log('[SGA Sync] Credenciais carregadas do banco');
     }
@@ -1098,6 +1104,9 @@ serve(async (req) => {
         ...(hinovaCodigoRegional && { codigo_regional: parseInt(hinovaCodigoRegional) }),
         ...(hinovaCodigoCooperativa && { codigo_cooperativa: parseInt(hinovaCodigoCooperativa) }),
         ...(hinovaCodigoVoluntario && { codigo_voluntario: parseInt(hinovaCodigoVoluntario) }),
+        ...(hinovaCodigoTipoCobrancaPadrao && { codigo_tipo_cobranca_recorrente: parseInt(hinovaCodigoTipoCobrancaPadrao) }),
+        ...(hinovaCodigoComoConheceuPadrao && { codigo_como_conheceu: parseInt(hinovaCodigoComoConheceuPadrao) }),
+        ...(hinovaCodigoProfissaoPadrao && { codigo_profissao: parseInt(hinovaCodigoProfissaoPadrao) }),
       };
       console.log(`[SGA Sync] Payload associado: codigo_conta=${codigoContaResolvido}`);
 

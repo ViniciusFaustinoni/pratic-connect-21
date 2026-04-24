@@ -135,6 +135,15 @@ export function PlanCard({ plan, lineColor, onEdit, onDuplicate, onDelete, canDe
                     Agente IA
                   </Badge>
                 )}
+                {!(plan as any).codigo_sga_plano && (
+                  <Badge
+                    variant="outline"
+                    className="text-xs border-amber-400 text-amber-600 bg-amber-50"
+                    title="Plano sem código SGA Hinova — não será sincronizado em novas adesões"
+                  >
+                    Sem código SGA
+                  </Badge>
+                )}
               </div>
             </div>
 
