@@ -510,10 +510,15 @@ serve(async (req) => {
           // Documentação → documentacao_pendente ({{1}} nome, {{2}} documentos)
           documentos_solicitados: {
             template_name: 'documentacao_pendente',
-            getParams: () => [
-              primeiroNome,
-              (dados?.documentos as string) || 'documentos pendentes',
-            ],
+            getParams: () => {
+              const documentos = (dados?.documentos as string) || 'documentos pendentes';
+              const link = dados?.link_acompanhamento as string | undefined;
+              const observacoes = dados?.observacoes as string | undefined;
+              return [
+                primeiroNome,
+                [documentos, observacoes, link ? `Link para envio: ${link}` : null].filter(Boolean).join('\n'),
+              ];
+            },
           },
           lembrete_documentos: {
             template_name: 'documentacao_pendente',
@@ -601,6 +606,12 @@ serve(async (req) => {
           const mapping = META_TEMPLATE_MAP[tipo];
           sendBody.template_name = mapping.template_name;
           sendBody.template_params = await Promise.resolve(mapping.getParams());
+          console.log('[notificar-cliente] Payload documentos/link:', {
+            tipo,
+            associado_id: associadoId,
+            link_acompanhamento: dados?.link_acompanhamento || null,
+            template_params: sendBody.template_params,
+          });
           
           // Enviar button params explicitamente se disponível
           if (mapping.getButtonParams) {
