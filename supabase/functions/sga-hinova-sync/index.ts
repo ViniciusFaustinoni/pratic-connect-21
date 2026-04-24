@@ -1659,12 +1659,30 @@ serve(async (req) => {
       .or(`associado_id.eq.${_aid},veiculo_id.eq.${_vid}`)
       .eq('status', 'aprovado');
 
-    if (documentos && documentos.length > 0 && codigoVeiculoHinova) {
-      console.log(`[SGA Sync] Enviando ${documentos.length} documentos/fotos...`);
+    const { data: documentosContrato } = contrato?.cotacao_id
+      ? await supabase
+          .from('contratos_documentos')
+          .select('id, tipo, arquivo_nome, arquivo_url, status')
+          .eq('cotacao_id', contrato.cotacao_id)
+          .eq('status', 'aprovado')
+      : { data: [] };
+
+    const documentosParaEnvio = [
+      ...(documentos || []),
+      ...((documentosContrato || []).map((doc: any) => ({
+        id: doc.id,
+        tipo: doc.tipo,
+        nome_arquivo: doc.arquivo_nome,
+        arquivo_url: doc.arquivo_url,
+      }))),
+    ];
+
+    if (documentosParaEnvio.length > 0 && codigoVeiculoHinova) {
+      console.log(`[SGA Sync] Enviando ${documentosParaEnvio.length} documentos/fotos...`);
 
       const batchSize = 50;
-      for (let i = 0; i < documentos.length; i += batchSize) {
-        const batch = documentos.slice(i, i + batchSize);
+      for (let i = 0; i < documentosParaEnvio.length; i += batchSize) {
+        const batch = documentosParaEnvio.slice(i, i + batchSize);
         
         const fotos = batch.map(doc => {
           const tipoFoto = getMapeamento('tipo_foto', doc.tipo) || 1;
