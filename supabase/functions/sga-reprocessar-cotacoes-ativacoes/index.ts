@@ -44,7 +44,7 @@ serve(async (req) => {
       .eq('status', 'falha_permanente')
       .or('erro_ultimo.ilike.%Placa duplicada%,erro_ultimo.ilike.%HTML%,erro_ultimo.ilike.%502%,erro_ultimo.ilike.%rate%,erro_ultimo.ilike.%token%,erro_ultimo.ilike.%autorizado%');
 
-    const { data: candidatos, error } = await supabase
+    const { data: candidatosBase, error } = await supabase
       .from('veiculos')
       .select(`
         id, placa, codigo_hinova, sincronizado_hinova, status_sga, cobertura_roubo_furto, cobertura_total, created_at,
@@ -57,6 +57,41 @@ serve(async (req) => {
       .limit(batchSize * 3);
 
     if (error) throw error;
+
+    const { data: filaAberta } = await supabase
+      .from('sga_sync_queue')
+      .select('veiculo_id')
+      .in('status', ['pendente', 'processando', 'falha_permanente'])
+      .limit(batchSize * 3);
+
+    const { data: instalacoesRecentes } = await supabase
+      .from('instalacoes')
+      .select('veiculo_id')
+      .eq('status', 'concluida')
+      .gte('concluida_em', desde)
+      .limit(batchSize * 3);
+
+    const idsExtras = Array.from(new Set([
+      ...((filaAberta || []).map((i: any) => i.veiculo_id).filter(Boolean)),
+      ...((instalacoesRecentes || []).map((i: any) => i.veiculo_id).filter(Boolean)),
+    ]));
+
+    const idsJaCarregados = new Set((candidatosBase || []).map((v: any) => v.id));
+    const idsParaCarregar = idsExtras.filter((id) => !idsJaCarregados.has(id));
+
+    const { data: candidatosExtras } = idsParaCarregar.length
+      ? await supabase
+          .from('veiculos')
+          .select(`
+            id, placa, codigo_hinova, sincronizado_hinova, status_sga, cobertura_roubo_furto, cobertura_total, created_at,
+            associados:associado_id!inner(id, nome, codigo_hinova, sincronizado_hinova),
+            instalacoes:instalacoes(id, status, concluida_em)
+          `)
+          .in('id', idsParaCarregar)
+          .not('associados.codigo_hinova', 'is', null)
+      : { data: [] };
+
+    const candidatos = [...(candidatosBase || []), ...(candidatosExtras || [])];
 
     const selecionados = (candidatos || [])
       .map((v: any) => {
@@ -75,7 +110,7 @@ serve(async (req) => {
         success: true,
         dry_run: true,
         dias,
-        total_candidatos: candidatos?.length || 0,
+        total_candidatos: candidatos.length,
         selecionados: selecionados.map((v: any) => ({
           veiculo_id: v.id,
           associado_id: v.associados?.id,
@@ -117,7 +152,7 @@ serve(async (req) => {
       await sleep(delayMs);
     }
 
-    return json(200, { success: true, dias, avaliados: candidatos?.length || 0, selecionados: selecionados.length, disparados, erros, resultados });
+    return json(200, { success: true, dias, avaliados: candidatos.length, selecionados: selecionados.length, disparados, erros, resultados });
   } catch (err: any) {
     console.error('[sga-reprocessar-cotacoes-ativacoes] erro:', err);
     return json(500, { success: false, error: String(err?.message || err) });
