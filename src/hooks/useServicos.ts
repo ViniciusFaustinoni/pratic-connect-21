@@ -32,7 +32,7 @@ export type StatusServico =
   | 'nao_compareceu'
   | 'cancelada';
 
-export type PeriodoServico = 'manha' | 'tarde' | 'noite';
+export type PeriodoServico = 'manha' | 'tarde';
 
 export interface Servico {
   id: string;
