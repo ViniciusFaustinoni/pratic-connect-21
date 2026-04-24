@@ -171,7 +171,7 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
         vendedor_id: selectedUserId,
         supervisor_id: supervisorId === 'none' ? null : supervisorId,
         gerente_id: gerenteId === 'none' ? null : gerenteId,
-        agencia_id: agenciaId === 'none' ? null : agenciaId,
+        agencia_id: null,
         observacoes: observacoes.trim() || null,
       });
 
