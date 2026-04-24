@@ -647,8 +647,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
             </CardContent>
           </Card>
         );
-      })())
-      ) : (
+      })()) : (
         planosSelecionados.map((plano) => {
           const parcelas = regrasPorPlano[plano.id] || [];
           const hasVitalicia = parcelas.some(p => p.vitalicia);
