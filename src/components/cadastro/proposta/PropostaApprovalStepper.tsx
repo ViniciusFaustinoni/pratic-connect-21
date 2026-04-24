@@ -256,6 +256,7 @@ export function PropostaApprovalStepper({
               documentosSolicitados={proposta.documentos_solicitados_enviados}
               documentosSolicitadosPendentes={proposta.documentos_solicitados_pendentes}
               contratoId={proposta.id}
+              contratoLinkToken={proposta.contrato_link_token}
               associadoId={proposta.associado_id || undefined}
             />
 
