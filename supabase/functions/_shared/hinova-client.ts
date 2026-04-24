@@ -147,6 +147,117 @@ export async function getHinovaCreds(supabase: any): Promise<HinovaCreds | null>
   return { apiUrl, token, usuario, senha };
 }
 
+// ===================================================================
+// CACHE GLOBAL DE SESSÃO (por instância da Edge Function)
+// ===================================================================
+// Hinova é stateful: cada novo login invalida o token anterior.
+// Cachear a sessão por instância reduz drasticamente os 401 causados
+// por contenção entre chamadas concorrentes (backfill, crons, etc).
+// TTL conservador de 25 min (token Hinova dura ~30 min em produção).
+// ===================================================================
+
+const SESSION_TTL_MS = 25 * 60 * 1000;
+
+interface CachedSession {
+  session: HinovaSession;
+  expiresAt: number;
+}
+
+let cachedSession: CachedSession | null = null;
+let pendingAuth: Promise<HinovaSession> | null = null;
+
+/** Invalida cache (chamado quando 401 indica token morto) */
+export function invalidateHinovaSession(): void {
+  cachedSession = null;
+}
+
+/**
+ * Retorna sessão Hinova reutilizando cache quando válido.
+ * Serializa autenticações concorrentes via `pendingAuth` (sem race).
+ *
+ * @param force ignora cache e força nova autenticação
+ */
+export async function getHinovaSession(
+  supabase: any,
+  opts?: { force?: boolean },
+): Promise<HinovaSession> {
+  const force = !!opts?.force;
+  const now = Date.now();
+
+  if (!force && cachedSession && cachedSession.expiresAt > now) {
+    return cachedSession.session;
+  }
+
+  // Se já há uma autenticação em andamento, aguarda ela
+  if (pendingAuth) {
+    return pendingAuth;
+  }
+
+  pendingAuth = (async () => {
+    try {
+      const creds = await getHinovaCreds(supabase);
+      if (!creds) {
+        throw new Error('Credenciais Hinova não configuradas');
+      }
+      const session = await autenticarHinova(creds);
+      if (!session) {
+        throw new Error('autenticarHinova retornou null');
+      }
+      cachedSession = { session, expiresAt: Date.now() + SESSION_TTL_MS };
+      return session;
+    } finally {
+      pendingAuth = null;
+    }
+  })();
+
+  return pendingAuth;
+}
+
+/**
+ * Wrapper de fetch para chamadas autenticadas Hinova.
+ * Em 401/403 (sem ser janela horária), invalida o cache, reautentica UMA vez
+ * e refaz a requisição. Reduz quase 100% dos falsos positivos de auth.
+ *
+ * `buildRequest(token)` deve retornar { url, init } para a chamada,
+ * usando o `token` recebido como Authorization Bearer.
+ */
+export async function hinovaFetch(
+  supabase: any,
+  buildRequest: (token: string) => { url: string; init: RequestInit },
+  ctx: string,
+): Promise<{ response: Response; bodyText: string; session: HinovaSession }> {
+  let session = await getHinovaSession(supabase);
+
+  const doFetch = async (s: HinovaSession) => {
+    const { url, init } = buildRequest(s.tokenUsuario);
+    let r: Response;
+    try {
+      r = await fetch(url, init);
+    } catch (e: any) {
+      throw new HinovaTransientError(`[${ctx}] rede: ${String(e?.message || e)}`, {
+        httpStatus: 0,
+        reason: 'network',
+      });
+    }
+    const txt = await r.text();
+    return { r, txt };
+  };
+
+  let { r, txt } = await doFetch(session);
+
+  // Se 401/403 e NÃO for janela horária, tenta reautenticar uma única vez
+  if ((r.status === 401 || r.status === 403) && !isJanelaHorariaError(txt)) {
+    console.warn(`[${ctx}] 401/403 detectado — invalidando cache e reautenticando`);
+    invalidateHinovaSession();
+    session = await getHinovaSession(supabase, { force: true });
+    const retry = await doFetch(session);
+    r = retry.r;
+    txt = retry.txt;
+  }
+
+  return { response: r, bodyText: txt, session };
+}
+
 export async function autenticarHinova(creds: HinovaCreds): Promise<HinovaSession | null> {
   let r: Response;
   try {
