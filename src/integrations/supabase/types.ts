@@ -14303,6 +14303,7 @@ export type Database = {
       instalacao_prestador_links: {
         Row: {
           aceito_em: string | null
+          atribuido_por: string | null
           chegada_em: string | null
           concluida_em: string | null
           created_at: string | null
@@ -14322,9 +14323,11 @@ export type Database = {
           status: string
           token: string
           updated_at: string | null
+          valor: number | null
         }
         Insert: {
           aceito_em?: string | null
+          atribuido_por?: string | null
           chegada_em?: string | null
           concluida_em?: string | null
           created_at?: string | null
@@ -14344,9 +14347,11 @@ export type Database = {
           status?: string
           token?: string
           updated_at?: string | null
+          valor?: number | null
         }
         Update: {
           aceito_em?: string | null
+          atribuido_por?: string | null
           chegada_em?: string | null
           concluida_em?: string | null
           created_at?: string | null
@@ -14366,8 +14371,30 @@ export type Database = {
           status?: string
           token?: string
           updated_at?: string | null
+          valor?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "instalacao_prestador_links_atribuido_por_fkey"
+            columns: ["atribuido_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instalacao_prestador_links_atribuido_por_fkey"
+            columns: ["atribuido_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "instalacao_prestador_links_atribuido_por_fkey"
+            columns: ["atribuido_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
           {
             foreignKeyName: "instalacao_prestador_links_instalacao_id_fkey"
             columns: ["instalacao_id"]
