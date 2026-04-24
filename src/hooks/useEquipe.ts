@@ -11,6 +11,10 @@ export interface ProfissionalEquipe {
   id: string;
   user_id: string;
   role: RoleEquipe;
+  role_permanente: RoleEquipe;
+  role_operacional: RoleEquipe;
+  em_cobertura: boolean;
+  tipo_cobertura: 'base' | 'rota' | null;
   categoria: CategoriaEquipe;
   nome: string;
   email: string;
@@ -68,7 +72,7 @@ export function useProfissionaisEquipe() {
         rolesByUserId[r.user_id].add(r.role as string);
       });
 
-      // Role principal: prioriza instalador_vistoriador > vistoriador_base > analista_monitoramento
+      // Role permanente: prioriza técnico de rota > base > administrativo.
       const principalRole = (set: Set<string>): string => {
         if (set.has('instalador_vistoriador')) return 'instalador_vistoriador';
         if (set.has('vistoriador_base')) return 'vistoriador_base';
@@ -87,6 +91,21 @@ export function useProfissionaisEquipe() {
       if (!profiles?.length) return [];
 
       const profileIds = profiles.map(p => p.id);
+
+      // 2b. Buscar coberturas operacionais ativas (não altera perfil permanente)
+      const { data: coberturasAtivas } = await (supabase as any)
+        .from('tecnico_perfil_operacional')
+        .select('profissional_id, role_permanente, role_operacional, ativo')
+        .in('profissional_id', profileIds)
+        .eq('ativo', true);
+
+      const coberturaPorProfissional: Record<string, { role_permanente: string; role_operacional: string }> = {};
+      (coberturasAtivas || []).forEach((c: any) => {
+        coberturaPorProfissional[c.profissional_id] = {
+          role_permanente: c.role_permanente,
+          role_operacional: c.role_operacional,
+        };
+      });
 
       // 3. Buscar contagem de tarefas hoje para cada profissional (tabela `servicos`)
       const hoje = format(new Date(), 'yyyy-MM-dd');
@@ -225,15 +244,23 @@ export function useProfissionaisEquipe() {
         }
 
         const userRoles = rolesByUserId[profile.user_id] || new Set<string>();
+        const rolePermanente = principalRole(userRoles);
+        const cobertura = coberturaPorProfissional[profile.id];
+        const roleOperacional = cobertura?.role_operacional || rolePermanente;
+        const emCobertura = Boolean(cobertura && cobertura.role_operacional !== rolePermanente);
         const categoria: CategoriaEquipe =
-          userRoles.has('instalador_vistoriador') || userRoles.has('vistoriador_base')
+          roleOperacional === 'instalador_vistoriador' || roleOperacional === 'vistoriador_base'
             ? 'instalador'
             : 'administrativo';
 
         return {
           id: profile.id,
           user_id: profile.user_id,
-          role: principalRole(userRoles),
+          role: roleOperacional,
+          role_permanente: rolePermanente,
+          role_operacional: roleOperacional,
+          em_cobertura: emCobertura,
+          tipo_cobertura: emCobertura ? (roleOperacional === 'vistoriador_base' ? 'base' : 'rota') : null,
           categoria,
           nome: profile.nome || 'Sem nome',
           email: profile.email || '',
@@ -359,6 +386,29 @@ export function useToggleProfissionalStatus() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profissionais-equipe'] });
       queryClient.invalidateQueries({ queryKey: ['instaladores'] });
+    },
+  });
+}
+
+// Alternar perfil operacional temporário (rota ↔ base) sem alterar user_roles permanente
+export function useAlternarPerfilOperacional() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ profissionalId }: { profissionalId: string }) => {
+      const { data, error } = await (supabase as any).rpc('alternar_perfil_operacional_tecnico', {
+        _profissional_id: profissionalId,
+      });
+
+      if (error) throw error;
+      return Array.isArray(data) ? data[0] : data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profissionais-equipe'] });
+      queryClient.invalidateQueries({ queryKey: ['instaladores'] });
+      queryClient.invalidateQueries({ queryKey: ['vistoriadores-localizacao-realtime'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos-atribuidos'] });
+      queryClient.invalidateQueries({ queryKey: ['alocacoes-dia'] });
     },
   });
 }

@@ -1,126 +1,197 @@
-Plano para implementar a rotina de reprocessamento automático SGA
+## Plano de implementação — Alternância temporária Instalador/Vistoriador ↔ Vistoriador Base
 
-Objetivo
-Garantir, de forma recorrente e auditável, que todo associado que entrou no SGA também tenha seu veículo, fotos e documentos vinculados corretamente, respeitando as duas regras de negócio:
+### Objetivo
+Adicionar, na aba existente **Monitoramento → Equipe**, um controle seguro para o Coordenador de Monitoramento alternar o perfil operacional atual de um técnico entre:
 
-1. Se o veículo foi ativado para Roubo/Furto ou Proteção 360, ele deve estar no SGA.
-2. Se for apenas instalação/assistência sem Roubo/Furto, a sincronização completa deve acontecer logo após a instalação concluída.
+- **Instalador/Vistoriador**: operação em rota/campo.
+- **Vistoriador Base**: operação na base administrativa.
 
-Mapa encontrado agora
+A alternância será persistente até reversão manual, sem alterar o perfil permanente do cadastro e sem redistribuir serviços já atribuídos.
 
-- A função principal `sga-hinova-sync` já cadastra associado, veículo e envia fotos/documentos, inclusive buscando documentos de `documentos` e `contratos_documentos`.
-- Existem gaps operacionais:
-  - veículos com associado já vinculado ao SGA, mas sem `veiculos.codigo_hinova`;
-  - itens parados em `sga_sync_queue` como `processando` por erro transitório/HTML/502;
-  - itens em `falha_permanente` por placa duplicada sem recuperação completa;
-  - ativações feitas por alguns fluxos frontend/client-side podem não garantir reprocessamento se a chamada falhar silenciosamente;
-  - quando o veículo já está sincronizado, o guard de idempotência pode pular o reenviar de fotos/documentos, então a reconciliação precisa diferenciar “veículo existe” de “documentos/fotos foram enviados”.
+---
 
-Correções propostas
+### Mapa do que já existe
 
-1. Criar uma Edge Function de reconciliação automática
+- A tela principal é `src/pages/monitoramento/Equipe.tsx`.
+- Cada técnico é exibido por `src/components/equipe/EquipeCard.tsx`.
+- A lista de equipe vem de `src/hooks/useEquipe.ts`, hoje lendo `user_roles` e priorizando `instalador_vistoriador` sobre `vistoriador_base`.
+- Os papéis `instalador_vistoriador` e `vistoriador_base` já existem e não serão recriados.
+- Já existe lógica operacional por alocação/base em `alocacoes_diarias`, mas ela é diária e não resolve a troca persistente de perfil operacional.
+- Existem pontos que consultam diretamente `user_roles` para decidir “instalador” ou “base”; esses pontos precisam passar por uma camada única de “perfil operacional efetivo”.
 
-Nova função: `sga-reprocessar-cotacoes-ativacoes`
+---
 
-Ela fará varredura em janela configurável, por padrão últimas 4 semanas, e processará em lotes pequenos:
+### Banco de dados
 
-- associados com `associados.codigo_hinova` preenchido;
-- veículos sem `codigo_hinova` ou com `sincronizado_hinova != true`;
-- veículos com `status_sga` em `erro_sincronizacao` ou `sincronizando` antigo;
-- veículos com Roubo/Furto/Proteção 360 ativos que não estejam no SGA;
-- veículos de instalação concluída, mesmo sem Roubo/Furto, que ainda não estejam sincronizados completamente;
-- veículos já cadastrados no SGA, mas sem log recente/sucesso de envio de fotos/documentos.
-
-A função não duplicará associado/veículo: ela chamará `sga-hinova-sync`, que já tem recuperação por CPF e placa, e registrará tudo em logs.
-
-2. Melhorar `sga-hinova-sync` para reenvio completo de fotos/documentos
-
-Adicionar suporte a um parâmetro seguro, por exemplo:
+Criar uma tabela nova apenas para o estado temporário da cobertura, preservando `user_roles` como perfil permanente:
 
 ```text
-force_resync_media: true
+tecnico_perfil_operacional
+- id
+- profissional_id          referência ao profiles.id do técnico
+- role_permanente          instalador_vistoriador | vistoriador_base
+- role_operacional         instalador_vistoriador | vistoriador_base
+- ativo                    true/false
+- criado_por               usuário que iniciou a cobertura
+- encerrado_por            usuário que reverteu
+- criado_em
+- encerrado_em
+- observacoes
 ```
 
-Quando esse parâmetro for enviado:
+Regras:
+- Apenas um registro ativo por técnico.
+- Se não houver registro ativo, o perfil operacional efetivo é o perfil permanente em `user_roles`.
+- A alternância não altera nem remove `user_roles`.
 
-- se o veículo já tiver `codigo_hinova`, a função não deve parar no guard de idempotência;
-- deve pular recadastro desnecessário e executar a etapa de fotos/documentos;
-- deve registrar `enviar_fotos` e `sync_completo` novamente;
-- deve manter `codigo_hinova` e status local intactos, apenas corrigindo vínculo/documentação.
+Criar também a tabela de auditoria:
 
-Também vou revisar o tratamento de erro de `errorMessages.some is not a function`, normalizando `error` da Hinova para array/string seguro.
+```text
+tecnico_perfil_operacional_historico
+- id
+- profissional_id
+- alterado_por
+- role_anterior
+- role_novo
+- acao                    ativar_cobertura | reverter_cobertura
+- criado_em
+```
 
-3. Corrigir recuperação de placa duplicada
+RLS:
+- Coordenador de Monitoramento, Diretor, Admin Master e Desenvolvedor podem consultar e alterar.
+- Técnicos podem, no máximo, consultar o próprio estado operacional se necessário para o app profissional.
+- Histórico consultável por Coordenação/Diretoria/Admin/Desenvolvedor.
 
-No caso “placa já cadastrada”, reforçar a busca por placa usando o helper compartilhado `buscarVeiculoPorPlaca` de `_shared/hinova-client.ts`, que já possui endpoint primário e fallback.
+---
 
-Se encontrar o código:
+### Camada central de perfil efetivo
 
-- salvar `veiculos.codigo_hinova`;
-- salvar `associados.codigo_hinova` quando vier no retorno;
-- continuar para envio de fotos/documentos;
-- concluir a fila.
+Criar uma função/hook central para resolver o perfil operacional efetivo, evitando espalhar regras em vários módulos:
 
-4. Fortalecer `cron-sga-retry`
+```text
+perfil efetivo = registro ativo em tecnico_perfil_operacional.role_operacional
+                 senão perfil permanente em user_roles
+```
 
-Ajustar o cron atual para:
+No frontend, `useProfissionaisEquipe()` será atualizado para retornar:
 
-- destravar registros `processando` antigos;
-- reabrir falhas permanentes recuperáveis, principalmente:
-  - placa duplicada;
-  - HTML/502/rate limit;
-  - auth temporário/janela horária;
-- preservar falhas realmente manuais como permanentes;
-- chamar `sga-hinova-sync` com o status correto: `ativo` para veículos com `cobertura_total = true`, e `pendente` nos demais.
+```text
+role_permanente
+role_operacional
+em_cobertura
+tipo_cobertura: base | rota | null
+```
 
-5. Disparar SGA após instalação concluída
+Isso permite que qualquer componente use `role_operacional` sem recalcular a regra.
 
-Atualizar o fluxo `concluir-instalacao-prestador` para chamar a sincronização SGA após a instalação:
+---
 
-- se veículo já tiver Roubo/Furto/Proteção 360, enviar como `ativo` quando aplicável;
-- se for apenas instalação/assistência sem Roubo/Furto, enviar como `pendente`, porém com veículo/fotos/documentos completos;
-- em caso de falha, não bloquear conclusão da instalação, mas enfileirar/reprocessar automaticamente.
+### Interface na aba Equipe
 
-Também vou revisar os hooks de aprovação/ativação existentes para garantir que a rotina cubra os fluxos em que a chamada SGA é feita no cliente.
+Atualizar os cards existentes, sem criar rota/tela nova:
 
-6. Agendar rotina automática
+1. Exibir selo de perfil atual:
+   - “Instalador/Vistoriador”
+   - “Vistoriador Base”
 
-Adicionar configuração em `supabase/config.toml` para a nova função, sem JWT obrigatório, seguindo o padrão atual das funções cron.
+2. Se estiver em cobertura, destacar:
+   - Permanente: Instalador/Vistoriador → Atual: Vistoriador Base = “Em cobertura de Base”
+   - Permanente: Vistoriador Base → Atual: Instalador/Vistoriador = “Em cobertura de Rota”
 
-Depois da implementação, a rotina pode ser chamada por cron Supabase/pg_cron nos horários seguros da Hinova, por exemplo dentro da janela comercial, e também poderá ser executada manualmente via Edge Function para auditoria.
+3. Exibir o botão somente para usuários com permissão:
+   - `coordenador_monitoramento`
+   - `diretor`
+   - `admin_master`
+   - `desenvolvedor`
+   - ou capability equivalente já existente, como `canManageEquipe`, se estiver configurada no banco.
 
-7. Executar backfill/reprocessamento inicial
+4. Ao clicar, abrir confirmação curta:
 
-Após implementar e publicar as funções, executar uma rodada controlada:
+```text
+Confirmar alternância?
+Mover [Nome do técnico] de [Perfil atual] para [Novo perfil]?
+```
 
-- `dry_run: true` para retornar o mapa dos casos;
-- depois `dry_run: false` em batches pequenos;
-- priorizar os casos críticos já conhecidos/observados:
-  - DANIEL / QPC3C40;
-  - VENILTON / HAT3D43;
-  - VITÓRIA / KXD6881;
-  - demais veículos recentes com `associado.codigo_hinova` mas `veiculo.codigo_hinova` ausente.
+5. Após confirmar:
+   - aplicar cobertura se estiver no perfil permanente;
+   - reverter cobertura se já estiver alternado;
+   - invalidar queries da equipe, alocações, vistoriadores realtime e serviços para refletir imediatamente.
 
-Validações finais
+---
 
-- Rodar validação de Deno/TypeScript das Edge Functions alteradas.
-- Testar a nova função com `dry_run`.
-- Testar lote real pequeno.
-- Consultar banco após execução para confirmar:
-  - associados no SGA com veículo no SGA;
-  - veículos de Roubo/Furto/Proteção 360 com `status_sga` coerente;
-  - instalações concluídas sem Roubo/Furto com veículo/documentos sincronizados;
-  - filas antigas destravadas ou encerradas corretamente;
-  - logs `enviar_fotos`/`sync_completo` gravados.
+### Mutation / segurança da ação
 
-Arquivos a alterar
+Implementar a alternância preferencialmente por RPC SQL `alternar_perfil_operacional_tecnico(profissional_id)` com `SECURITY DEFINER`, para garantir:
 
-- `supabase/functions/sga-hinova-sync/index.ts`
-- `supabase/functions/cron-sga-retry/index.ts`
-- `supabase/functions/concluir-instalacao-prestador/index.ts`
-- `supabase/functions/sga-reprocessar-cotacoes-ativacoes/index.ts` novo
-- `supabase/config.toml`
+- validação server-side de permissão;
+- validação de que o técnico possui perfil permanente técnico (`instalador_vistoriador` ou `vistoriador_base`);
+- alternância simétrica;
+- escrita atômica do estado atual e do histórico;
+- proteção contra manipulação via frontend.
 
-Possível ajuste de banco
+Fluxo da função:
 
-A princípio, não é obrigatório criar tabela nova. Usarei `sga_sync_logs` e `sga_sync_queue` já existentes. Só adicionarei migração se, durante a implementação, for necessário persistir um controle formal de execuções de reconciliação; caso contrário, manterei sem mudança estrutural.
+```text
+1. Verifica se auth.uid() é coordenador/diretor/admin/desenvolvedor.
+2. Busca profile do técnico.
+3. Descobre perfil permanente em user_roles.
+4. Se não há cobertura ativa:
+   cria cobertura ativa para o outro perfil.
+5. Se há cobertura ativa:
+   encerra cobertura e volta ao permanente.
+6. Registra histórico.
+7. Retorna o novo perfil operacional.
+```
+
+---
+
+### Integração com o restante do sistema
+
+Atualizar os pontos que hoje usam `user_roles` diretamente para lógica operacional de técnico:
+
+- `src/hooks/useEquipe.ts`
+  - passa a exibir o perfil operacional efetivo.
+
+- `src/hooks/useServicosAtribuidos.ts`
+  - modo “todos instaladores” deve considerar técnicos cujo perfil operacional atual seja `instalador_vistoriador`, não apenas `user_roles` fixo.
+
+- `src/hooks/useVistoriadoresRealtime.ts`
+  - incluir o perfil operacional efetivo para permitir filtrar/ocultar base ou rota corretamente nos mapas.
+
+- `src/components/mapa/MapaVistoriasContent.tsx`
+  - manter a lógica existente de `alocacoes_diarias`, mas considerar o perfil operacional efetivo ao decidir quem aparece como equipe de rota/base.
+
+- `src/hooks/useAtribuicaoManual.ts`
+  - validar atribuição com base no perfil operacional efetivo quando a decisão depender de rota/base.
+
+- `src/hooks/useAlocacaoDiaria.ts` e `src/hooks/useIniciarServico.ts`
+  - manter a lógica diária existente, mas complementar com perfil operacional efetivo para que um técnico em cobertura de base herde regras de base até reversão.
+
+Importante: serviços já atribuídos permanecem como estão. A alteração afeta apenas novas decisões, filtros e validações feitas após o clique.
+
+---
+
+### O que não será feito
+
+- Não recriar os perfis existentes.
+- Não alterar o perfil permanente em `user_roles`.
+- Não redistribuir serviços, instalações ou vistorias antigas.
+- Não criar nova tela, nova rota ou novo menu.
+- Não embutir regras de negócio dos perfis no código; o sistema apenas resolverá qual perfil existente está ativo operacionalmente.
+
+---
+
+### Validação
+
+Após implementar:
+
+1. Verificar build TypeScript.
+2. Testar na tela **Monitoramento → Equipe**:
+   - card de técnico com perfil permanente de rota;
+   - alternância para base;
+   - selo “Em cobertura de Base”;
+   - reversão para rota;
+   - técnico permanente base alternando para rota.
+3. Confirmar que usuário sem permissão não vê o botão.
+4. Confirmar registro em histórico.
+5. Confirmar que consultas operacionais passam a usar o perfil efetivo.

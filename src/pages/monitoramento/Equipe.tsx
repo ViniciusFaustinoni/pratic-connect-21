@@ -16,7 +16,8 @@ import { ProfissionalModal, ProfissionalFormData } from '@/components/monitorame
 import { RelatorioTarefasModal } from '@/components/monitoramento/RelatorioTarefasModal';
 import { ServicosAtribuidosModal } from '@/components/monitoramento/ServicosAtribuidosModal';
 import { EquipeCard, EquipeFilters, EquipeMetrics } from '@/components/equipe';
-import { useProfissionaisEquipe, useSaveProfissional, useToggleProfissionalStatus, ProfissionalEquipe } from '@/hooks/useEquipe';
+import { useProfissionaisEquipe, useSaveProfissional, useToggleProfissionalStatus, useAlternarPerfilOperacional, ProfissionalEquipe } from '@/hooks/useEquipe';
+import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -40,6 +41,9 @@ export default function Equipe() {
   const { data: profissionais, isLoading, error } = useProfissionaisEquipe();
   const { mutate: saveProfissional } = useSaveProfissional();
   const { mutate: toggleStatus } = useToggleProfissionalStatus();
+  const { mutate: alternarPerfil, isPending: alternandoPerfil } = useAlternarPerfilOperacional();
+  const { isCoordenadorMonitoramento, isDiretor, isAdminMaster, isDesenvolvedor, canManageEquipe } = usePermissions();
+  const canAlternarPerfil = isCoordenadorMonitoramento || isDiretor || isAdminMaster || isDesenvolvedor || canManageEquipe;
 
   const handleNovoProfissional = () => {
     setProfissionalSelecionado(null);
@@ -78,6 +82,21 @@ export default function Equipe() {
       setServicosModalCtx({ modo: 'todos_instaladores', profissional: prof });
     }
     setServicosModalOpen(true);
+  };
+
+  const handleAlternarPerfil = (prof: ProfissionalEquipe) => {
+    alternarPerfil(
+      { profissionalId: prof.id },
+      {
+        onSuccess: (result: any) => {
+          const label = result?.role_operacional === 'vistoriador_base' ? 'Vistoriador Base' : 'Instalador/Vistoriador';
+          toast.success(`Perfil operacional atualizado para ${label}`);
+        },
+        onError: (err) => {
+          toast.error('Erro ao alternar perfil: ' + (err as Error).message);
+        },
+      }
+    );
   };
 
   const handleSave = (data: ProfissionalFormData) => {
@@ -274,6 +293,9 @@ export default function Equipe() {
                     onDesativar={handleDesativar}
                     onRelatorio={handleRelatorio}
                     onVerServicos={handleVerServicos}
+                    onAlternarPerfil={handleAlternarPerfil}
+                    canAlternarPerfil={canAlternarPerfil}
+                    alternandoPerfil={alternandoPerfil}
                   />
                 ))
               )}
