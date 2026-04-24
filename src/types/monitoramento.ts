@@ -15,7 +15,7 @@ export {
 
 import type { StatusInstalacao } from './database';
 
-export type PeriodoInstalacao = 'manha' | 'tarde' | 'noite';
+export type PeriodoInstalacao = 'manha' | 'tarde';
 
 export type StatusRota = 'pendente' | 'em_andamento' | 'concluida' | 'cancelada';
 
