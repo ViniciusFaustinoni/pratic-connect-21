@@ -10,7 +10,7 @@ import { Pagination, PaginationContent, PaginationItem, PaginationLink, Paginati
 import { ComissaoDetalhesPagamentoModal } from '@/components/comissoes/ComissaoDetalhesPagamentoModal';
 import { useComissoesBackfill } from '@/hooks/useComissoesBackfill';
 import { usePagamentosComissoes } from '@/hooks/usePagamentosComissoes';
-import { COMISSOES_STATUS_OPTIONS, COMISSOES_TIPO_LANCAMENTO_OPTIONS } from '@/lib/comissoes-filtros';
+import { COMISSOES_STATUS_OPTIONS, COMISSOES_TIPO_LANCAMENTO_OPTIONS, getComissaoStatusBadgeVariant, getComissaoStatusLabel, isComissaoAutoPagaAgenciaAdesaoDinheiro } from '@/lib/comissoes-filtros';
 
 const money = (value: number | null | undefined) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0));
@@ -123,7 +123,7 @@ export default function PagamentosComissoes() {
                     <TableCell>{item.vendedor_origem_nome || '—'}</TableCell>
                     <TableCell><div>{item.plano || '—'}</div><div className="text-xs text-muted-foreground">{item.grade || '—'}</div></TableCell>
                     <TableCell>{item.parcela ? `${item.parcela}ª` : '—'}</TableCell>
-                    <TableCell><Badge variant="outline">{item.status}</Badge></TableCell>
+                    <TableCell><div className="flex flex-col items-start gap-1"><Badge variant={getComissaoStatusBadgeVariant(item)}>{getComissaoStatusLabel(item)}</Badge>{isComissaoAutoPagaAgenciaAdesaoDinheiro(item) && <span className="text-xs text-muted-foreground">Adesão em dinheiro da agência</span>}</div></TableCell>
                     <TableCell className="text-right">{money(item.valor_base)}</TableCell>
                     <TableCell className="text-right">{item.tipo_calculo === 'valor_fixo' ? money(item.regra_valor) : `${Number(item.percentual_aplicado || 0).toFixed(2)}%`}</TableCell>
                     <TableCell className="text-right font-medium">{money(item.valor_pago)}</TableCell>

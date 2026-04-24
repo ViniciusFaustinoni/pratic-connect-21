@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { useRelatorioComissoes } from '@/hooks/useRelatorioComissoes';
 import { ComissaoDetalhesPagamentoModal } from '@/components/comissoes/ComissaoDetalhesPagamentoModal';
-import { COMISSOES_STATUS_OPTIONS, COMISSOES_TIPO_LANCAMENTO_OPTIONS, dateStringToDate, dateToDateString } from '@/lib/comissoes-filtros';
+import { COMISSOES_STATUS_OPTIONS, COMISSOES_TIPO_LANCAMENTO_OPTIONS, dateStringToDate, dateToDateString, getComissaoStatusBadgeVariant, getComissaoStatusLabel, isComissaoAutoPagaAgenciaAdesaoDinheiro } from '@/lib/comissoes-filtros';
 
 const PERFIS = [
   { value: 'vendedor_clt', label: 'Vendedor CLT' },
@@ -75,7 +75,7 @@ export default function RelatorioComissoes() {
                   <TableCell>{formatCurrency(Number(linha.valor_base))}</TableCell>
                   <TableCell>{linha.tipo_calculo === 'valor_fixo' ? formatCurrency(Number(linha.valor_comissao)) : `${Number(linha.percentual_aplicado || 0)}%`}</TableCell>
                   <TableCell className="font-medium">{formatCurrency(Number(linha.valor_total))}</TableCell>
-                  <TableCell><Badge variant={linha.status === 'paga' ? 'default' : 'secondary'}>{linha.status}</Badge></TableCell>
+                  <TableCell><div className="flex flex-col items-start gap-1"><Badge variant={getComissaoStatusBadgeVariant(linha)}>{getComissaoStatusLabel(linha)}</Badge>{isComissaoAutoPagaAgenciaAdesaoDinheiro(linha) && <span className="text-xs text-muted-foreground">Adesão em dinheiro da agência</span>}</div></TableCell>
                   <TableCell className="text-right"><Button size="sm" variant="outline" onClick={() => setDetalheId(linha.id)}><Eye className="mr-1 h-3.5 w-3.5" /> Detalhes</Button></TableCell>
                 </TableRow>
               ))}

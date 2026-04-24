@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { ComissaoDashboardItem } from '@/hooks/useComissoesDashboard';
+import { getComissaoStatusBadgeVariant, getComissaoStatusLabel, isComissaoAutoPagaAgenciaAdesaoDinheiro } from '@/lib/comissoes-filtros';
 
 interface Props {
   open: boolean;
@@ -77,7 +78,12 @@ export function ComissoesDetalhesModal({ open, onOpenChange, title, items }: Pro
                     <TableCell>{formatTipo(item)}</TableCell>
                     <TableCell>{item.nivel_nome || '—'}</TableCell>
                     <TableCell>{item.parcela_numero ? `${item.parcela_numero}ª` : '—'}</TableCell>
-                    <TableCell><Badge variant="outline">{item.status}</Badge></TableCell>
+                    <TableCell>
+                      <div className="flex flex-col items-start gap-1">
+                        <Badge variant={getComissaoStatusBadgeVariant(item)}>{getComissaoStatusLabel(item)}</Badge>
+                        {isComissaoAutoPagaAgenciaAdesaoDinheiro(item) && <span className="text-xs text-muted-foreground">Adesão em dinheiro da agência</span>}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-right">{formatMoney(item.valor_base)}</TableCell>
                     <TableCell className="text-right">{Number(item.percentual_aplicado || 0).toFixed(2)}%</TableCell>
                     <TableCell className="text-right font-medium">{formatMoney(item.valor_total ?? item.valor_comissao)}</TableCell>
