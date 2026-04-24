@@ -1,50 +1,63 @@
-Confirmei no código: o sistema tem parte da regra, mas ainda não está 100% conforme os 3 pontos.
+Plano para corrigir o fluxo de pendências documentais no link público e facilitar o envio manual pelo Cadastro.
 
-Situação atual:
+Diagnóstico confirmado
+- Existe 1 pendência real recente para ALEX DE OLIVEIRA SILVA: documento `chassi`, status `pendente`, associado em `documentacao_pendente`.
+- O WhatsApp enviado em 22/04 usou `https://app.praticcar.org/acompanhar/09fe56fe-30ce-4d2d-adc0-64a971a372f3` e foi registrado como `enviada` via Meta.
+- O payload/mensagem possui o link, mas o template Meta `documentacao_pendente` só recebe nome + documentos; o botão dinâmico não recebe link específico de pendências.
+- Há histórico antigo com URLs de preview/lovableproject e um erro Meta `132018` por incompatibilidade de parâmetros do template.
+- A tela pública já tenta priorizar pendências, mas precisa ficar mais resiliente para `/cotacao/:token` e `/acompanhar/:token`, especialmente quando o status muda e a query de documentos ainda não carregou.
 
-1. Coordenador de monitoramento pode realocar?
-   - Parcialmente sim. No Mapa de Atribuições, `isCoordenadorMonitoramento` já libera ações como reagendar/alterar endereço/tipo.
-   - Porém a realocação completa rota/base está desigual: o botão/modal de “Realocar” aparece principalmente para `instalacao`, não para todos os tipos de vistoria/serviço.
+Implementação proposta
 
-2. Rota → Base com seleção da base e aplicação imediata?
-   - Existe fluxo em `AlterarEnderecoTipoDialog` e `useAlterarEnderecoTipo` que converte rota para base, cria `agendamentos_base`, cancela o serviço de rota e exige selecionar base/horário.
-   - Também existe `RealocarInstalacaoDialog` para instalação, mas focado em instalação e com lógica separada.
-   - Risco atual: o acesso ao fluxo não está exposto de forma consistente para todos os tipos de vistoria no mapa/calendário.
+1. Corrigir a URL padrão das pendências
+- Centralizar a montagem do link público em `useSolicitarDocumentos` usando sempre `https://app.praticcar.org`.
+- Priorizar `/acompanhar/:link_token` quando existir, pois é o token do contrato já assinado e é o link usado para acompanhamento.
+- Usar `/cotacao/:cotacao_token_publico` apenas como fallback.
+- Retornar o `linkPendencias` no resultado da mutation para a tela de Cadastro conseguir exibir/copiar o link após solicitar documentos.
 
-3. Base → Rota pedindo endereço, coordenadas e exibindo no mapa?
-   - A lógica backend/frontend existe em `useAlterarEnderecoTipo`: ao converter base para rota, pede endereço, chama `geocode-endereco`, grava latitude/longitude em `servicos` e cria serviço de rota.
-   - Mas encontrei uma lacuna importante: `AlterarEnderecoTipoDialog` hoje só é chamado no mapa com `origem="rota"`. Não há botão equivalente na aba Base do calendário/modal para abrir o diálogo com `origem="base"` e `agendamentoBaseId`.
-   - Além disso, a view do mapa (`view_vistorias_mapa`) mostra serviços convertidos quando têm coordenadas, mas se a geocodificação falhar, a tarefa pode ficar sem aparecer no mapa até corrigir o endereço.
+2. Mostrar link copiável para o analista de Cadastro
+- Após criar pendências, manter o analista na proposta ou exibir feedback antes de navegar, com um bloco destacado:
+  - “Link público para envio das pendências”
+  - campo com URL completa
+  - botão “Copiar link”
+  - orientação: “Você também pode enviar manualmente este link ao associado.”
+- Incluir o mesmo link no card de solicitações pendentes (`DocumentosSolicitadosCard`) quando houver `contratoId`/`associadoId`, para o analista poder copiar depois, não só no momento da solicitação.
+- Evitar ação destrutiva; apenas copiar para clipboard e exibir toast.
 
-Plano de ajuste para ficar 100% conforme a regra:
+3. Garantir que o link público atualize para pendências
+- Em `/cotacao/:token`, manter a prioridade das pendências antes das demais etapas, mas ajustar o estado `documentacao_pendente` para não ficar preso em “carregando” se a consulta retornar vazia/erro.
+- Em `/acompanhar/:token`, adicionar refetch/realtime/invalidação para `documentos_solicitados` e `associados`, não depender só do polling de 30s.
+- Ao receber alteração realtime, invalidar `acompanhamento-proposta` e atualizar imediatamente a tela.
+- Garantir que `DocumentosPendentesPublico` seja exibido quando existirem pendências, independentemente da etapa atual do fluxo.
 
-1. Unificar a ação “Alterar tipo rota/base” para vistorias e instalações
-   - Expor a ação para todos os serviços elegíveis, não apenas instalação.
-   - Usar o fluxo existente de `AlterarEnderecoTipoDialog` como padrão para mudança de tipo.
+4. Ajustar payload de WhatsApp/Meta para não perder o link
+- Atualizar `notificar-cliente` para que `documentos_solicitados` envie o link completo no corpo da mensagem e, se o template tiver botão dinâmico, usar `link_token` correto como `template_button_params`.
+- Registrar logs mais claros no console da Edge Function: tipo, associado, documentos, link recebido, template usado e retorno do envio.
+- Não alterar template Meta em banco sem necessidade; a correção principal será garantir payload consistente e fallback textual com link completo.
 
-2. Corrigir Rota → Base
-   - Ao selecionar “Base”, exigir base e horário/período.
-   - Salvar imediatamente criando/atualizando o registro em `agendamentos_base` e retirando a tarefa da rota/mapa.
-   - Invalidar as queries corretas para refletir imediatamente no Mapa e no Calendário da Base.
+5. Auditoria nos logs do sistema
+- Registrar em `logs_auditoria` quando uma solicitação de documentos for criada:
+  - usuário/analista (`profile.id`, nome se disponível)
+  - contrato/associado
+  - documentos solicitados
+  - motivo/observação
+  - link público gerado
+  - status da notificação quando disponível
+- Isso permitirá a Diretoria rastrear quando e qual link foi disponibilizado/enviado.
 
-3. Implementar acesso Base → Rota na UI
-   - Na aba Base do `CalendarioDiaModal`, adicionar botão “Alterar para Rota” ou “Alterar endereço/tipo”.
-   - Abrir `AlterarEnderecoTipoDialog` com `origem="base"` e `agendamentoBaseId`.
-   - Pedir endereço completo antes de salvar.
+6. Validação pós-implementação
+- Conferir a query de pendências para um contrato com `documentacao_pendente`.
+- Testar que o card no Cadastro mostra o link copiável.
+- Testar que `/acompanhar/:link_token` e `/cotacao/:cotacao_token_publico` exibem `DocumentosPendentesPublico` quando há `documentos_solicitados.status = pendente`.
+- Revisar logs/payloads de WhatsApp e auditoria para confirmar URL de produção e dados da decisão.
 
-4. Garantir coordenadas e aparição no mapa
-   - Manter chamada à Edge Function `geocode-endereco` ao salvar Base → Rota.
-   - Se obtiver latitude/longitude, a nova tarefa entra no `view_vistorias_mapa` e aparece no mapa.
-   - Se não obtiver coordenadas, mostrar aviso claro e deixar a tarefa na lista “sem GPS” com atalho para corrigir endereço, em vez de parecer que sumiu.
+Arquivos previstos
+- `src/hooks/usePropostasPendentes.ts`
+- `src/pages/cadastro/PropostaAnalise.tsx`
+- `src/components/cadastro/DocumentosSolicitadosCard.tsx`
+- `src/pages/public/AcompanhamentoProposta.tsx`
+- `src/pages/public/CotacaoContratacao.tsx`
+- `supabase/functions/notificar-cliente/index.ts`
 
-5. Permissões
-   - Garantir que `coordenador_monitoramento` tenha acesso à ação, junto com Diretor/Admin/Desenvolvedor e, se mantido, Analista de Monitoramento.
-   - Não depender de localStorage ou regra client-side sensível; apenas usar as permissões já vindas do sistema de roles.
-
-Arquivos que serão ajustados:
-- `src/components/mapa/MapaVistoriasContent.tsx`
-- `src/components/mapa/AlterarEnderecoTipoDialog.tsx`
-- `src/hooks/useAlterarEnderecoTipo.ts`
-- `src/components/monitoramento/CalendarioDiaModal.tsx`
-
-Se aprovado, implemento esses ajustes e valido com build.
+Observação
+- Não vou criar nova tabela inicialmente. A estrutura existente (`documentos_solicitados`, `logs_auditoria`, `link_token` e `cotacao_token_publico`) já atende à correção.
