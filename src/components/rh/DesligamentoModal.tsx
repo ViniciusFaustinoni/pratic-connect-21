@@ -13,6 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { AlertTriangle, Calculator, FileText, CheckCircle2 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { TablesUpdate } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
 import { format, differenceInMonths, differenceInDays, parseISO } from 'date-fns';
 
@@ -184,11 +185,10 @@ export function DesligamentoModal({ open, onOpenChange, funcionario }: Desligame
         .from('funcionarios')
         .update({
           status: 'desligado',
-          data_desligamento: dataDesligamento,
-          motivo_desligamento: motivo,
-          tipo_desligamento: tipoDesligamento,
+          data_demissao: dataDesligamento,
+          motivo_demissao: motivo,
           updated_at: new Date().toISOString()
-        })
+        } satisfies TablesUpdate<'funcionarios'>)
         .eq('id', funcionario.id);
       
       if (updateError) throw updateError;
