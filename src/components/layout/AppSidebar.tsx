@@ -309,7 +309,7 @@ const menuConfig: {
         { title: 'Extrato', url: '/financeiro/extrato', icon: List },
         { title: 'Extratos Bancários', url: '/financeiro/extratos-bancarios', icon: FileText },
         { title: 'Contas Bancárias', url: '/financeiro/contas-bancarias', icon: Building2 },
-        { title: 'Conta Corrente de Comissões', url: '/financeiro/conta-corrente-comissoes', icon: Wallet },
+        { title: 'Conta Corrente de Comissões', url: '/financeiro/conta-corrente-comissoes', icon: Wallet, permission: 'isDiretor' },
         { title: 'Comissões', url: '/comissoes', icon: Coins },
         { title: 'Venda Externa', url: '/financeiro/venda-externa', icon: Users },
       ],
