@@ -1,21 +1,39 @@
-Plano para corrigir o comportamento do sidebar:
+Plano para incluir o histórico completo de alterações de hierarquia na área da Diretoria > Logs de Auditoria.
 
-1. Ajustar a lógica de autoabertura do menu
-   - Hoje o `AppSidebar` abre automaticamente o grupo que contém a rota ativa.
-   - Como a página atual está dentro de `/financeiro/...`, o grupo Financeiro é reaberto em toda atualização da página.
-   - Vou remover esse comportamento de autoabrir grupos normais no refresh.
+1. Ajustar a consulta dos logs
+- Manter a tela atual de Logs de Auditoria como fonte principal.
+- Garantir que alterações com `tabela = 'hierarquia_vendas'` apareçam claramente nos filtros e na listagem.
+- Caso existam registros históricos em `hierarquia_vendas` sem log correspondente, criar uma consulta complementar para exibi-los como histórico de hierarquia, sem depender apenas de `logs_auditoria`.
 
-2. Preservar apenas o estado escolhido pelo usuário
-   - O módulo só deve abrir quando o usuário clicar nele.
-   - Se o usuário fechar Financeiro, ele deve permanecer fechado durante a navegação interna, sem reabrir sozinho.
+2. Criar um bloco/aba específica para “Histórico de Hierarquia”
+- Dentro da página de Logs de Auditoria da Diretoria, adicionar uma seção visual dedicada às alterações de hierarquia.
+- Mostrar para cada alteração:
+  - usuário executor;
+  - data/hora;
+  - vendedor afetado;
+  - campos alterados;
+  - valores anteriores e novos para supervisor, gerente, agência e observações.
 
-3. Manter funcionamento visual e navegação
-   - A rota ativa continuará destacada quando o grupo estiver aberto.
-   - O clique em links e o fechamento no mobile continuarão funcionando.
-   - Para diretores, o supergrupo Administrativo também não deve ser reaberto automaticamente apenas por estar em uma rota financeira.
+3. Melhorar o resumo dos campos alterados
+- Reaproveitar e ampliar o formatter existente de auditoria para `hierarquia_vendas`.
+- Exibir somente campos que realmente mudaram, por exemplo:
+  - Supervisor: João → Maria
+  - Gerente: — → Carlos
+  - Agência: Agência A → Agência B
+  - Observações: texto antigo → texto novo
+- Manter os dados brutos em JSON no detalhe expandido para auditoria completa.
 
-Detalhes técnicos:
-- Arquivo principal: `src/components/layout/AppSidebar.tsx`.
-- Remover/ajustar os `useEffect` que fazem merge automático do grupo ativo em `openGroups` e `openSuperGroups` após mudança de rota/carregamento de permissões.
-- Inicializar os grupos fechados por padrão, ou no máximo preservar estado manual do usuário, evitando autoabertura baseada em `location.pathname`.
-- Depois da alteração, validar que atualizar uma página financeira não abre o Financeiro sem clique.
+4. Garantir registros futuros completos
+- Revisar a função de banco `fn_upsert_hierarquia_vendedor`, que já registra mudanças em `logs_auditoria`, para garantir que ela salve snapshots completos do antes/depois com usuário executor e data.
+- Se necessário, criar uma migração para reforçar esse log de auditoria sem alterar a tabela `profiles` nem armazenar papéis nela.
+
+5. Filtros e exportação
+- Adicionar filtro rápido/tabela “hierarquia_vendas” já destacado como “Hierarquia de vendas”.
+- Incluir o resumo das alterações de hierarquia no CSV exportado, preservando usuário, data e campos alterados.
+
+Arquivos previstos:
+- `src/pages/diretoria/LogsAuditoria.tsx`
+- `src/lib/auditoria-formatters.ts`
+- Possível migração Supabase para reforçar `fn_upsert_hierarquia_vendedor`, se necessário.
+
+Observação: no banco atual não encontrei registros em `logs_auditoria` nem em `hierarquia_vendas` para demonstrar dados existentes, então a implementação também deve preparar a tela para mostrar corretamente os próximos registros gerados.

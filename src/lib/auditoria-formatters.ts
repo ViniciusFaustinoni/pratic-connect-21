@@ -19,6 +19,14 @@ const formatGrade = (value: unknown) => {
   return `${record.nome || record.id || 'Grade'}${record.versao ? ` v${record.versao}` : ''}`;
 };
 
+const formatPessoa = (value: unknown) => nomeEntidade(value);
+
+const addIfChanged = (linhas: string[], label: string, anterior: unknown, novo: unknown, formatter = formatValor) => {
+  const oldText = formatter(anterior);
+  const newText = formatter(novo);
+  if (oldText !== newText) linhas.push(`${label}: ${oldText} → ${newText}`);
+};
+
 const normalizeGradeRules = (snapshot: Record<string, any>) => {
   const rules = new Map<string, { label: string; value: string }>();
   const regrasPorPlano = asRecord(snapshot.regras_por_plano);
@@ -114,15 +122,22 @@ export const gerarResumoAuditoria = (log: {
   }
 
   if (log.tabela === 'hierarquia_vendas') {
+    const linhas: string[] = [
+      `Vendedor: ${nomeEntidade(novo.vendedor || anterior.vendedor)}`,
+    ];
+
+    addIfChanged(linhas, 'Supervisor', anterior.supervisor, novo.supervisor, formatPessoa);
+    addIfChanged(linhas, 'Gerente', anterior.gerente, novo.gerente, formatPessoa);
+    addIfChanged(linhas, 'Agência', anterior.agencia, novo.agencia, formatPessoa);
+    addIfChanged(linhas, 'Observações', anterior.observacoes, novo.observacoes);
+
+    if (novo.alterado_por || anterior.alterado_por) {
+      linhas.push(`Alterado por: ${nomeEntidade(novo.alterado_por || anterior.alterado_por)}`);
+    }
+
     return {
       titulo: 'Resumo da hierarquia',
-      linhas: [
-        `Vendedor: ${nomeEntidade(novo.vendedor || anterior.vendedor)}`,
-        `Supervisor: ${nomeEntidade(anterior.supervisor)} → ${nomeEntidade(novo.supervisor)}`,
-        `Gerente: ${nomeEntidade(anterior.gerente)} → ${nomeEntidade(novo.gerente)}`,
-        `Agência: ${nomeEntidade(anterior.agencia)} → ${nomeEntidade(novo.agencia)}`,
-        `Observações: ${formatValor(anterior.observacoes)} → ${formatValor(novo.observacoes)}`,
-      ],
+      linhas,
     };
   }
 
