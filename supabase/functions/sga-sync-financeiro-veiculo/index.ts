@@ -408,14 +408,41 @@ serve(async (req) => {
       .eq('id', veiculo.id);
 
     if (jobId) {
+      // Determina status final com base no resultado real do upsert,
+      // não apenas na resposta da Hinova.
+      let statusFinal: string;
+      let erroFinal: string | null = null;
+      const proximoRetry = upsertFalhas > 0
+        ? new Date(Date.now() + 60_000).toISOString()
+        : null;
+
+      if (upsertFalhas > 0 && importados === 0) {
+        statusFinal = 'pendente_retry';
+        erroFinal = `Falha ao gravar ${upsertFalhas} boleto(s) em cobrancas: ${ultimoErroUpsert}`;
+      } else if (upsertFalhas > 0) {
+        statusFinal = 'pendente_retry';
+        erroFinal = `Importados ${importados}, mas ${upsertFalhas} falha(s) de upsert: ${ultimoErroUpsert}`;
+      } else if (importados > 0) {
+        statusFinal = 'concluido';
+      } else if (boletos.length === 0) {
+        statusFinal = 'sem_historico_hinova';
+        erroFinal = 'Nenhum boleto retornado pela Hinova para o vínculo atual de associado/veículo';
+      } else {
+        // boletos retornados mas todos sem nosso_numero válido
+        statusFinal = 'sem_historico_hinova';
+        erroFinal = `Hinova retornou ${boletos.length} boleto(s) mas nenhum com nosso_numero válido`;
+      }
+
       await supabase
         .from('sga_sync_financeiro_jobs')
         .update({
-          status: boletos.length > 0 ? 'concluido' : 'sem_historico_hinova',
-          concluido_em: new Date().toISOString(),
+          status: statusFinal,
+          concluido_em: statusFinal === 'concluido' || statusFinal === 'sem_historico_hinova'
+            ? new Date().toISOString()
+            : null,
           boletos_importados: importados,
-          proximo_retry_em: null,
-          ultimo_erro: boletos.length > 0 ? null : 'Nenhum boleto retornado pela Hinova para o vínculo atual de associado/veículo',
+          proximo_retry_em: proximoRetry,
+          ultimo_erro: erroFinal,
         })
         .eq('id', jobId);
     }
