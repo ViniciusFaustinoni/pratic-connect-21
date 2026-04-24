@@ -258,9 +258,8 @@ serve(async (req) => {
       console.log(`[atribuir-proxima-tarefa] Profissional ${profissionalId} é BASE — almoço gerido manualmente.`);
     }
 
-    // Se está em almoço, verificar se já expirou (60+ min)
-    // Para Base: se ele iniciou manualmente, bloqueamos atribuição enquanto em_almoco,
-    // mas NÃO auto-finalizamos (ele finaliza pelo botão).
+    // Se está em almoço (iniciado manualmente pelo técnico), bloquear atribuição.
+    // Após 60min, auto-finalizar como rede de segurança (exceto para Base, que finaliza manualmente).
     if (turnoHoje?.status === 'em_almoco' && turnoHoje.inicio_almoco) {
       const inicioAlmoco = new Date(turnoHoje.inicio_almoco);
       const agora = new Date();
@@ -282,7 +281,7 @@ serve(async (req) => {
         );
       }
 
-      // Almoço expirado — finalizar automaticamente no servidor (NÃO para Base)
+      // Almoço expirado (>60min) — Base não auto-finaliza (controle manual)
       if (isBase) {
         const minutosRestantes = Math.max(0, 60 - minutosEmAlmoco);
         return new Response(
@@ -311,54 +310,9 @@ serve(async (req) => {
       // Prosseguir normalmente para atribuir tarefa
     }
 
-    // Forçar almoço se atingiu limite configurado sem iniciar (NÃO para Base)
-    if (!isBase && turnoHoje && turnoHoje.status === 'ativo' && !turnoHoje.inicio_almoco && turnoHoje.inicio_turno) {
-      const inicioTurno = new Date(turnoHoje.inicio_turno);
-      const agora = new Date();
-      const minutosTrabalhados = Math.floor((agora.getTime() - inicioTurno.getTime()) / 60000);
-
-      // Ler limite configurável do banco (fallback 4h = 240min)
-      const { data: cfgAlmoco } = await supabase
-        .from('configuracoes')
-        .select('valor')
-        .eq('chave', 'jornada_horas_ate_almoco')
-        .maybeSingle();
-      const limiteAlmocoMinutos = cfgAlmoco?.valor ? Math.round(parseFloat(cfgAlmoco.valor) * 60) : 240;
-
-      if (minutosTrabalhados >= limiteAlmocoMinutos) {
-        // ⚠️ Antes de forçar almoço, checar se há serviço em execução.
-        // Se houver, adiar o início do almoço — esperar o técnico finalizar.
-        const { data: servicosEmExecucao } = await supabase
-          .from('servicos')
-          .select('id')
-          .eq('profissional_id', profissionalId)
-          .in('status', ['em_rota', 'em_andamento'])
-          .limit(1);
-
-        if (servicosEmExecucao && servicosEmExecucao.length > 0) {
-          console.log(`[atribuir-proxima-tarefa] Almoço adiado — profissional em tarefa ${servicosEmExecucao[0].id}`);
-          // Não muda status; cai no fluxo abaixo que devolverá ja_tem_tarefa.
-        } else {
-          console.log(`[atribuir-proxima-tarefa] Profissional trabalhou ${minutosTrabalhados} min (limite: ${limiteAlmocoMinutos}). Forçando almoço.`);
-
-          await supabase
-            .from('turnos_profissionais')
-            .update({
-              status: 'em_almoco',
-              inicio_almoco: new Date().toISOString()
-            })
-            .eq('id', turnoHoje.id);
-
-          return new Response(
-            JSON.stringify({
-              resultado: 'almoco_iniciado',
-              mensagem: 'Você completou 4 horas de trabalho. Horário de almoço iniciado automaticamente (1 hora).'
-            }),
-            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-      }
-    }
+    // ⚠️ NÃO há mais início automático de almoço.
+    // Almoço é 100% manual: o técnico inicia/finaliza pela UI.
+    // Se ele esquecer de finalizar, o bloco acima auto-finaliza após 60min (rede de segurança).
 
     // Get request body
     const { latitude, longitude, acao } = await req.json();
