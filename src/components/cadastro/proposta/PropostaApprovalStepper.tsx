@@ -427,7 +427,11 @@ export function PropostaApprovalStepper({
                   ) : (
                     <>
                       <ShieldCheck className="mr-2 h-5 w-5" />
-                      {isAutovistoria && !ocultarEtapaFotos && planoTemRouboFurto ? 'Liberar Cobertura Roubo e Furto' : 'Aprovar Proposta'}
+                      {isAutovistoria && !ocultarEtapaFotos && planoTemRouboFurto
+                        ? 'Liberar Cobertura Roubo e Furto'
+                        : ocultarEtapaFotos
+                          ? 'Aprovar documentação e liberar para Monitoramento'
+                          : 'Aprovar Proposta'}
                     </>
                   )}
                 </Button>
