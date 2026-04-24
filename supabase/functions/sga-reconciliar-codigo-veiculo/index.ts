@@ -127,6 +127,15 @@ async function processar(supabase: any, body: ReqBody): Promise<Response> {
   const delayMs = Math.max(body.delay_ms ?? 100, 0);
   const triggerBackfill = body.trigger_backfill !== false; // default true
 
+  // 0) Coordenação: se backfill financeiro está ativo, NÃO concorre por sessão Hinova
+  if (await isBackfillFinanceiroAtivo(supabase)) {
+    console.log('[processar] pulando — backfill financeiro ativo');
+    return new Response(
+      JSON.stringify({ ok: true, skipped: true, reason: 'backfill_financeiro_ativo' }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
+  }
+
   // 1) Pega jobs pendentes + retries vencidos
   const nowIso = new Date().toISOString();
   const { data: jobs, error: errJobs } = await supabase
