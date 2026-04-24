@@ -91,19 +91,17 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
   const superiores = usuarios.filter((u) => u.id !== selectedUserId);
   const supervisores = superiores.filter((u) => u.roles.includes('supervisor_vendas'));
   const gerentes = superiores.filter((u) => u.roles.includes('gerente_comercial'));
-  const agencias = superiores.filter((u) => u.roles.includes('agencia'));
 
   const subordinados = (atribuicoes || []).filter((item) => {
     const h = item.hierarquia;
-    return h?.supervisor_id === selectedUserId || h?.gerente_id === selectedUserId || h?.agencia_id === selectedUserId;
+    return h?.supervisor_id === selectedUserId || h?.gerente_id === selectedUserId;
   });
 
-  const subordinadosDiretos = subordinados.filter((item) => item.hierarquia?.supervisor_id === selectedUserId || item.hierarquia?.agencia_id === selectedUserId);
+  const subordinadosDiretos = subordinados.filter((item) => item.hierarquia?.supervisor_id === selectedUserId);
   const subordinadosGerenciais = subordinados.filter((item) => item.hierarquia?.gerente_id === selectedUserId);
   const atribuicaoPorUsuario = new Map(atribuicoes.map((item) => [item.usuario.id, item]));
   const gerenteSelecionado = gerenteId === 'none' ? null : gerenteId;
   const supervisorSelecionado = supervisorId === 'none' ? null : supervisorId;
-  const agenciaSelecionada = agenciaId === 'none' ? null : agenciaId;
   const supervisorPertenceAoGerente = (supervisorUserId: string, gerenteUserId: string) => {
     const supervisorHierarquiaAtual = atribuicaoPorUsuario.get(supervisorUserId)?.hierarquia;
     return !supervisorHierarquiaAtual?.gerente_id || supervisorHierarquiaAtual.gerente_id === gerenteUserId;
@@ -122,18 +120,9 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
 
   const validationErrors: string[] = [];
   const supervisorHierarquia = supervisorSelecionado ? atribuicaoPorUsuario.get(supervisorSelecionado)?.hierarquia : null;
-  const agenciaHierarquia = agenciaSelecionada ? atribuicaoPorUsuario.get(agenciaSelecionada)?.hierarquia : null;
 
   if (gerenteSelecionado && supervisorSelecionado && supervisorHierarquia?.gerente_id && supervisorHierarquia.gerente_id !== gerenteSelecionado) {
     validationErrors.push('O supervisor selecionado já pertence a outro gerente. Escolha um supervisor vinculado ao gerente informado.');
-  }
-
-  if (gerenteSelecionado && agenciaSelecionada && agenciaHierarquia?.gerente_id && agenciaHierarquia.gerente_id !== gerenteSelecionado) {
-    validationErrors.push('A agência selecionada já pertence a outro gerente. Escolha uma agência compatível com o gerente informado.');
-  }
-
-  if (supervisorSelecionado && agenciaSelecionada && agenciaHierarquia?.supervisor_id && agenciaHierarquia.supervisor_id !== supervisorSelecionado) {
-    validationErrors.push('A agência selecionada já pertence a outro supervisor. Escolha uma agência compatível com o supervisor informado.');
   }
 
   const hasValidationErrors = validationErrors.length > 0;
@@ -141,7 +130,6 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
     const relacoes: string[] = [];
     if (item.hierarquia?.gerente_id === selectedUserId) relacoes.push('Gerente');
     if (item.hierarquia?.supervisor_id === selectedUserId) relacoes.push('Supervisor');
-    if (item.hierarquia?.agencia_id === selectedUserId) relacoes.push('Agência');
     return relacoes.join(' / ') || 'Vínculo';
   };
 
