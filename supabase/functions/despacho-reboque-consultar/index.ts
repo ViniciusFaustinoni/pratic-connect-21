@@ -22,12 +22,12 @@ serve(async (req) => {
     const { data: convite, error } = await supabase
       .from("despacho_reboque_convites")
       .select(`
-        id, token, status, token_expira_em, valor_saida, valor_km,
+        id, token, status, token_expira_em, valor_saida, valor_km, prestador_id,
         latitude_prestador, longitude_prestador, distancia_km, valor_calculado,
         data_aceite, data_recusa, data_visualizacao,
         prestador:prestadores_assistencia(id, razao_social, nome_fantasia),
         despacho:despacho_reboque(
-          id, chamado_id, hora_disparo, hora_limite, status as despacho_status,
+          id, chamado_id, hora_disparo, hora_limite, despacho_status:status,
           total_aceites, total_enviados, prestador_atribuido_id,
           valor_atribuido, distancia_atribuida_km
         )
