@@ -19,37 +19,43 @@ export function useUsuariosVendas() {
   return useQuery({
     queryKey: ['atribuicao-comissoes', 'usuarios-vendas'],
     queryFn: async (): Promise<UsuarioVendas[]> => {
-      // Buscar todos user_roles com roles de vendas
+      // 1) Buscar user_roles com perfis de vendas (user_id = auth.users.id)
       const { data: roles, error: rolesErr } = await (supabase as any)
         .from('user_roles')
         .select('user_id, role')
         .in('role', ROLES_VENDAS);
       if (rolesErr) throw rolesErr;
 
-      const userIds = Array.from(new Set((roles || []).map((r: any) => r.user_id)));
-      if (userIds.length === 0) return [];
+      const authUserIds = Array.from(new Set((roles || []).map((r: any) => r.user_id)));
+      if (authUserIds.length === 0) return [];
 
+      // 2) Buscar profiles por profiles.user_id (NÃO por profiles.id).
+      //    O schema de comissões usa profile.id como chave canônica em
+      //    hierarquia_vendas e usuario_grade_comissao.
       const { data: profiles, error: profErr } = await (supabase as any)
         .from('profiles')
-        .select('id, nome, email, avatar_url')
-        .in('id', userIds);
+        .select('id, user_id, nome, email, avatar_url, tipo')
+        .in('user_id', authUserIds)
+        .neq('tipo', 'associado'); // segurança: associados nunca entram na esteira de comissão
       if (profErr) throw profErr;
 
-      const rolesByUser = new Map<string, string[]>();
+      // 3) Agrupar roles por auth.user_id e mapear para o profile correto
+      const rolesByAuthUser = new Map<string, string[]>();
       (roles || []).forEach((r: any) => {
-        const arr = rolesByUser.get(r.user_id) || [];
+        const arr = rolesByAuthUser.get(r.user_id) || [];
         arr.push(r.role);
-        rolesByUser.set(r.user_id, arr);
+        rolesByAuthUser.set(r.user_id, arr);
       });
 
       return (profiles || [])
         .map((p: any) => ({
-          id: p.id,
+          id: p.id, // profile.id é a chave usada em hierarquia_vendas/usuario_grade_comissao
           nome: p.nome || '(sem nome)',
           email: p.email || '',
           avatar_url: p.avatar_url,
-          roles: rolesByUser.get(p.id) || [],
+          roles: rolesByAuthUser.get(p.user_id) || [],
         }))
+        .filter((u: UsuarioVendas) => u.roles.length > 0)
         .sort((a: UsuarioVendas, b: UsuarioVendas) => a.nome.localeCompare(b.nome));
     },
   });
