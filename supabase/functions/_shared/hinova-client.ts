@@ -332,61 +332,120 @@ function fmtDataBR(d: Date): string {
   return `${dd}/${mm}/${yyyy}`;
 }
 
-export async function listarBoletosVeiculo(
+/**
+ * Faz UMA chamada ao endpoint /listar/boleto-associado-veiculo respeitando
+ * a janela máxima de 90 dias documentada pela Hinova.
+ *
+ * Use diretamente quando quiser uma janela específica (ex.: a função de teste).
+ * Para histórico longo, use `listarBoletosVeiculo` que itera em janelas de 90d.
+ *
+ * Retorna { boletos, raw, request_payload, http_status } para permitir
+ * inspeção crua do que veio da Hinova.
+ */
+export async function listarBoletosVeiculoJanela(
   s: HinovaSession,
   codigoAssociado: number | string,
   codigoVeiculo: number | string,
-  opts?: { dataInicial?: string; dataFinal?: string; anosTras?: number },
-): Promise<any[]> {
-  const hoje = new Date();
-  const anosTras = opts?.anosTras ?? 5;
-  const inicio = new Date(hoje);
-  inicio.setFullYear(inicio.getFullYear() - anosTras);
+  opts: {
+    dataInicial: Date;
+    dataFinal: Date;
+    linkBoleto?: boolean;
+    codigoSituacaoBoleto?: number;
+  },
+): Promise<{ boletos: any[]; raw: any; request_payload: any; http_status: number }> {
+  const dataInicialBR = fmtDataBR(opts.dataInicial);
+  const dataFinalBR = fmtDataBR(opts.dataFinal);
 
-  const dataInicial = opts?.dataInicial ?? fmtDataBR(inicio);
-  const dataFinal = opts?.dataFinal ?? fmtDataBR(hoje);
+  const payload: Record<string, any> = {
+    codigo_associado: Number(codigoAssociado),
+    codigo_veiculo: Number(codigoVeiculo),
+    // Filtro semântico (vencimento) — par mais aderente ao caso "boletos do veículo no período"
+    data_vencimento_inicial: dataInicialBR,
+    data_vencimento_final: dataFinalBR,
+    // Compat genérico (algumas versões só reconhecem este par)
+    data_inicial: dataInicialBR,
+    data_final: dataFinalBR,
+    link_boleto: opts.linkBoleto ?? true,
+  };
+  if (opts.codigoSituacaoBoleto !== undefined) {
+    payload.codigo_situacao_boleto = opts.codigoSituacaoBoleto;
+  }
 
   let r: Response;
   try {
     r = await fetch(`${s.apiUrl}/listar/boleto-associado-veiculo`, {
       method: 'POST',
       headers: authHeaders(s),
-      // Envia múltiplas variações dos nomes dos campos de data porque o
-      // endpoint da Hinova oscila entre snake_case e camelCase entre versões
-      // (já vimos 406 "É necessario enviar ao menos uma data inicial e uma final"
-      // mesmo enviando data_inicial/data_final). Enviar tudo é seguro: a API
-      // ignora chaves desconhecidas.
-      body: JSON.stringify({
-        codigo_associado: Number(codigoAssociado),
-        codigo_veiculo: Number(codigoVeiculo),
-        data_inicial: dataInicial,
-        data_final: dataFinal,
-        dataInicial,
-        dataFinal,
-        data_ini: dataInicial,
-        data_fim: dataFinal,
-      }),
+      body: JSON.stringify(payload),
     });
   } catch (e: any) {
-    throw new HinovaTransientError(`[listar boletos] rede: ${String(e?.message || e)}`, {
+    throw new HinovaTransientError(`[listar boletos janela] rede: ${String(e?.message || e)}`, {
       httpStatus: 0,
       reason: 'network',
     });
   }
   const txt = await r.text();
-  if (r.status === 404) return [];
+  let raw: any = null;
+  try { raw = JSON.parse(txt); } catch { raw = txt; }
+
+  if (r.status === 404) {
+    return { boletos: [], raw, request_payload: payload, http_status: 404 };
+  }
   if (!r.ok) {
-    throwHttpError(r.status, txt, 'listarBoletosVeiculo');
+    throwHttpError(r.status, txt, 'listarBoletosVeiculoJanela');
   }
-  try {
-    const j = JSON.parse(txt);
-    if (Array.isArray(j)) return j;
-    if (Array.isArray(j?.boletos)) return j.boletos;
-    if (Array.isArray(j?.dados)) return j.dados;
-    return [];
-  } catch {
-    return [];
+  let boletos: any[] = [];
+  if (Array.isArray(raw)) boletos = raw;
+  else if (Array.isArray(raw?.boletos)) boletos = raw.boletos;
+  else if (Array.isArray(raw?.dados)) boletos = raw.dados;
+  return { boletos, raw, request_payload: payload, http_status: r.status };
+}
+
+/**
+ * Lista boletos cobrindo um período arbitrário (default: 3 anos para trás)
+ * iterando em janelas de até 90 dias (limite máximo da Hinova).
+ * Deduplica por nosso_numero.
+ */
+export async function listarBoletosVeiculo(
+  s: HinovaSession,
+  codigoAssociado: number | string,
+  codigoVeiculo: number | string,
+  opts?: { anosTras?: number; diasJanela?: number; linkBoleto?: boolean },
+): Promise<any[]> {
+  const anosTras = Math.max(0.1, opts?.anosTras ?? 3);
+  const diasJanela = Math.min(90, Math.max(7, opts?.diasJanela ?? 90));
+  const linkBoleto = opts?.linkBoleto ?? true;
+
+  const hoje = new Date();
+  const inicioGeral = new Date(hoje);
+  inicioGeral.setDate(inicioGeral.getDate() - Math.floor(anosTras * 365));
+
+  const dedup = new Map<string, any>();
+  let cursorFim = new Date(hoje);
+
+  while (cursorFim >= inicioGeral) {
+    const cursorIni = new Date(cursorFim);
+    cursorIni.setDate(cursorIni.getDate() - (diasJanela - 1));
+    const ini = cursorIni < inicioGeral ? new Date(inicioGeral) : cursorIni;
+
+    const { boletos } = await listarBoletosVeiculoJanela(s, codigoAssociado, codigoVeiculo, {
+      dataInicial: ini,
+      dataFinal: cursorFim,
+      linkBoleto,
+    });
+
+    for (const b of boletos) {
+      const key = String(b?.nosso_numero ?? b?.nossoNumero ?? '').trim();
+      if (key && !dedup.has(key)) dedup.set(key, b);
+    }
+
+    // próxima janela: vai 1 dia antes do início desta
+    const proxFim = new Date(ini);
+    proxFim.setDate(proxFim.getDate() - 1);
+    cursorFim = proxFim;
   }
+
+  return Array.from(dedup.values());
 }
 
 /** Mapeia situação textual da Hinova para o status interno de cobrancas */
