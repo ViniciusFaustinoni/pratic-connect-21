@@ -18,8 +18,9 @@ async function anexarContratoAssinado(
   signedFileUrl: string,
   signerName: string = "Cliente"
 ): Promise<{ success: boolean; url?: string; error?: string }> {
+  const _startTime = Date.now();
+
   try {
-    const _startTime = Date.now();
     console.log("[autentique-sync-contrato] Baixando PDF assinado de:", signedFileUrl);
 
     const pdfResponse = await fetch(signedFileUrl);
