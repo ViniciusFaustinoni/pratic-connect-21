@@ -1505,6 +1505,18 @@ export function useSolicitarDocumentos() {
         throw new Error('Usuário não autenticado');
       }
 
+      const { data: contratoComLink } = await supabase
+        .from('contratos')
+        .select('link_token, cotacao_token_publico')
+        .eq('id', contratoId)
+        .single();
+
+      const linkPendencias = contratoComLink?.link_token
+        ? `${APP_BASE_URL}/acompanhar/${contratoComLink.link_token}`
+        : contratoComLink?.cotacao_token_publico
+          ? `${APP_BASE_URL}/cotacao/${contratoComLink.cotacao_token_publico}`
+          : null;
+
       // 1. Criar registros na tabela documentos_solicitados
       const docsParaInserir = documentos.map((tipo) => ({
         associado_id: associadoId,
@@ -1550,15 +1562,11 @@ export function useSolicitarDocumentos() {
         // Não falhar por causa do histórico
       }
 
-      // 4. NOVO: Enviar notificação via WhatsApp com link de acompanhamento
-      try {
-        // Buscar tokens do contrato para incluir o link correto de upload público
-        const { data: contratoComLink } = await supabase
-          .from('contratos')
-          .select('link_token, cotacao_token_publico')
-          .eq('id', contratoId)
-          .single();
+      let notificacaoResultado: unknown = null;
+      let notificacaoErro: string | null = null;
 
+      // 4. Enviar notificação via WhatsApp com link de acompanhamento
+      try {
         // Mapa de labels para documentos
         const DOCUMENTO_LABELS: Record<string, string> = {
           cnh: 'CNH',
@@ -1588,13 +1596,7 @@ export function useSolicitarDocumentos() {
           .map((id) => `• ${DOCUMENTO_LABELS[id] || id}`)
           .join('\n');
 
-        const linkPendencias = contratoComLink?.cotacao_token_publico
-          ? `${APP_BASE_URL}/cotacao/${contratoComLink.cotacao_token_publico}`
-          : contratoComLink?.link_token
-            ? `${APP_BASE_URL}/acompanhar/${contratoComLink.link_token}`
-            : null;
-
-        await supabase.functions.invoke('notificar-cliente', {
+        const { data: notifData, error: notifError } = await supabase.functions.invoke('notificar-cliente', {
           body: {
             tipo: 'documentos_solicitados',
             associado_id: associadoId,
@@ -1605,13 +1607,35 @@ export function useSolicitarDocumentos() {
             },
           },
         });
+        if (notifError) throw notifError;
+        notificacaoResultado = notifData;
         console.log('[useSolicitarDocumentos] Notificação WhatsApp enviada com link:', linkPendencias);
       } catch (notifError) {
+        notificacaoErro = notifError instanceof Error ? notifError.message : 'Erro desconhecido na notificação';
         console.warn('[useSolicitarDocumentos] Erro ao enviar notificação (não crítico):', notifError);
         // Não falhar por causa da notificação
       }
 
-      return { contratoId, associadoId };
+      await supabase.from('logs_auditoria').insert({
+        usuario_id: profile.id,
+        usuario_nome: (profile as any)?.nome || (profile as any)?.email || 'Cadastro',
+        acao: 'documentos_solicitados_criados',
+        modulo: 'cadastro',
+        tabela: 'documentos_solicitados',
+        registro_id: contratoId,
+        descricao: `Cadastro solicitou ${documentos.length} pendência(s) documental(is) ao associado`,
+        dados_novos: {
+          contrato_id: contratoId,
+          associado_id: associadoId,
+          documentos,
+          observacoes: observacoes || null,
+          link_publico: linkPendencias,
+          notificacao_resultado: notificacaoResultado,
+          notificacao_erro: notificacaoErro,
+        },
+      });
+
+      return { contratoId, associadoId, linkPendencias };
     },
     onSuccess: () => {
       toast.success('Documentos solicitados! O cliente será notificado no link de acompanhamento.');
