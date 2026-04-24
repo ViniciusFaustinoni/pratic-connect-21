@@ -324,6 +324,7 @@ const menuConfig: {
         { title: 'Hierarquia de Comissões', url: '/comissoes/atribuicao', icon: Network, permission: 'isDiretor' },
         { title: 'Relatório', url: '/comissoes/relatorio', icon: FileText },
         { title: 'Pagamentos', url: '/comissoes/pagamentos', icon: Receipt },
+        { title: 'Conta Corrente', url: '/comissoes/conta-corrente', icon: Wallet },
       ],
     },
     {
