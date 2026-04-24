@@ -9,6 +9,7 @@ const corsHeaders = {
 interface SyncRequest {
   veiculo_id: string;
   associado_id: string;
+  status_sga_destino?: 'pendente' | 'ativo';
 }
 
 interface HinovaAuthResponse {
@@ -272,6 +273,8 @@ serve(async (req) => {
   let hinovaCodigoRegional = Deno.env.get('HINOVA_CODIGO_REGIONAL');
   let hinovaCodigoCooperativa = Deno.env.get('HINOVA_CODIGO_COOPERATIVA');
   let hinovaCodigoVoluntario = Deno.env.get('HINOVA_CODIGO_VOLUNTARIO');
+  let hinovaCodigoSituacaoPendente = Deno.env.get('HINOVA_CODIGO_SITUACAO_PENDENTE');
+  let hinovaCodigoSituacaoAtivo = Deno.env.get('HINOVA_CODIGO_SITUACAO_ATIVO');
   let codigoContaOrigem: 'env' | 'database' | 'historico' | 'fallback' = hinovaCodigoConta ? 'env' : 'fallback';
 
   if (!hinovaToken || !hinovaUsuario || !hinovaSenha || !hinovaCodigoConta) {
@@ -288,6 +291,8 @@ serve(async (req) => {
       hinovaCodigoRegional = credBanco.codigo_regional || hinovaCodigoRegional;
       hinovaCodigoCooperativa = credBanco.codigo_cooperativa || hinovaCodigoCooperativa;
       hinovaCodigoVoluntario = credBanco.codigo_voluntario || hinovaCodigoVoluntario;
+      hinovaCodigoSituacaoPendente = credBanco.codigo_situacao_pendente || hinovaCodigoSituacaoPendente;
+      hinovaCodigoSituacaoAtivo = credBanco.codigo_situacao_ativo || hinovaCodigoSituacaoAtivo;
       if (credBanco.api_url) hinovaApiUrl = credBanco.api_url;
       console.log('[SGA Sync] Credenciais carregadas do banco');
     }
