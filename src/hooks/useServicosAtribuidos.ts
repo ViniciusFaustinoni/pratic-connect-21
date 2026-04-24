@@ -60,18 +60,31 @@ export function useServicosAtribuidos(opts: UseServicosAtribuidosOpts) {
       if (modo === 'profissional' && profissionalId) {
         profissionaisIds = [profissionalId];
       } else {
-        // todos os instaladores ativos
-        const { data: instaladoresRoles } = await supabase
+        // Todos com perfil operacional efetivo de rota (perfil fixo ou cobertura temporária)
+        const { data: tecnicosRoles } = await supabase
           .from('user_roles')
           .select('user_id')
-          .eq('role', 'instalador_vistoriador' as any);
-        const userIds = (instaladoresRoles || []).map(r => r.user_id);
+          .in('role', ['instalador_vistoriador', 'vistoriador_base'] as any[]);
+        const userIds = Array.from(new Set((tecnicosRoles || []).map(r => r.user_id)));
         if (userIds.length === 0) return [];
         const { data: profs } = await supabase
           .from('profiles')
-          .select('id, nome')
+          .select('id, nome, user_id')
           .in('user_id', userIds);
+        const profIds = (profs || []).map(p => p.id);
+        const { data: coberturas } = profIds.length
+          ? await (supabase as any)
+              .from('tecnico_perfil_operacional')
+              .select('profissional_id, role_operacional')
+              .in('profissional_id', profIds)
+              .eq('ativo', true)
+          : { data: [] };
+        const roleFixoPorUser = new Map((tecnicosRoles || []).map((r: any) => [r.user_id, r.role]));
+        const roleOperacionalPorProf = new Map((coberturas || []).map((c: any) => [c.profissional_id, c.role_operacional]));
+
         (profs || []).forEach(p => {
+          const roleEfetivo = roleOperacionalPorProf.get(p.id) || roleFixoPorUser.get(p.user_id);
+          if (roleEfetivo !== 'instalador_vistoriador') return;
           profissionaisIds.push(p.id);
           profMap[p.id] = p.nome || 'Sem nome';
         });
