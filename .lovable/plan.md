@@ -1,183 +1,58 @@
-## Plano: comissão de adesão em dinheiro para vendedor do tipo Agência
+## Plano: configuração única para múltiplos planos na Grade de Comissão
 
 ### Objetivo
-Quando o vendedor de origem for do tipo `agencia` e a cobrança for de **taxa de adesão** recebida em **dinheiro**, a comissão deve nascer já quitada:
+Alterar a tela de criação/edição de grade para que, quando mais de um plano estiver selecionado, as parcelas e comissões sejam configuradas uma única vez e aplicadas a todos os planos selecionados.
+
+Fluxo esperado:
 
 ```text
-Gerar comissão -> status paga imediatamente -> exibir badge informativo
+Seleciona 1 plano  -> configura regras daquele plano
+Seleciona 2+ planos -> configura um único modelo de regras
+Salvar -> replica o modelo para todos os planos selecionados no banco
 ```
 
-Essa regra será exceção apenas para adesão em dinheiro de agência; as demais comissões continuam no fluxo normal de conferência/pagamento.
+### Ajustes na tela
+1. Trocar o texto da seleção de planos para deixar claro que os planos selecionados compartilharão a mesma configuração quando houver mais de um.
+2. Quando `selectedPlanIds.length > 1`, renderizar apenas um card de configuração, por exemplo:
+   - “Configuração compartilhada”
+   - badge com “Aplicada a X planos”
+   - lista/resumo dos planos selecionados
+3. Manter o comportamento atual para apenas 1 plano selecionado.
+4. Botões “Parcela”, “Vitalícia”, editar, remover e reordenar passarão a alterar esse modelo único quando houver múltiplos planos.
 
----
+### Ajustes de estado e regra
+1. Manter um modelo base de parcelas para a configuração compartilhada.
+2. Ao selecionar/desselecionar planos, não duplicar cards de configuração na interface.
+3. Ao salvar, replicar a configuração compartilhada para cada `plano_id` selecionado, preservando a estrutura atual do banco:
+   - `grade_comissao_planos`
+   - `grades_comissao_parcelas`
+   - `grades_comissao_niveis`
+   - `grade_comissao_plano_regras`
+   - snapshot de versão
 
-## 1. Ajustar a geração automática das comissões
+### Compatibilidade com edição
+1. Ao editar uma grade já existente com múltiplos planos:
+   - usar as regras do primeiro plano como modelo inicial;
+   - se as regras existentes forem iguais entre os planos, a edição será naturalmente compartilhada;
+   - se houver divergências antigas, a próxima gravação padronizará todos os planos selecionados com o modelo exibido.
+2. Exibir uma mensagem informativa discreta quando houver múltiplos planos, explicando que salvar irá refletir a configuração em todos.
 
-Arquivo/migration da função:
+### Validações
+1. Validar a configuração apenas uma vez quando houver múltiplos planos, evitando mensagens repetidas por plano.
+2. Garantir que pelo menos uma parcela e um perfil remunerado sejam configurados.
+3. Preservar validações atuais de:
+   - rótulo da parcela;
+   - número da parcela;
+   - vitalícia com início válido;
+   - soma percentual até 100%;
+   - perfis duplicados na mesma parcela.
 
-- `public.fn_gerar_comissoes_por_pagamento(p_cobranca_id)`
+### Arquivo principal
+- `src/pages/configuracoes/GradeComissaoForm.tsx`
 
-### Regra nova
-Durante o insert em `comissoes`, detectar:
-
-```text
-v_cobranca.tipo = adesao / taxa_adesao
-v_cobranca.forma_pagamento = CASH / dinheiro
-role_destinatario = agencia
-```
-
-Quando verdadeiro:
-
-```text
-status = 'paga'
-pago_em = data_pagamento da cobrança ou now()
-observacoes = informação de que a comissão foi quitada automaticamente por adesão em dinheiro recebida pela agência
-calculo_snapshot.autopagamento_agencia_adesao_dinheiro = true
-```
-
-### Importante
-A comissão continuará sendo registrada normalmente, com grade, plano, regra, parcela, valores e snapshot. A diferença será somente o estado inicial e a marcação auditável.
-
----
-
-## 2. Garantir que apenas agência receba esse tratamento
-
-A exceção será aplicada quando a regra remunerada for do perfil:
-
-```text
-role_destinatario = 'agencia'
-```
-
-Não será aplicada para:
-
-```text
-vendedor_clt
-vendedor_externo
-supervisor_vendas
-gerente_comercial
-```
-
-Mesmo que a cobrança seja adesão em dinheiro, esses perfis seguem como `pendente`.
-
----
-
-## 3. Padronizar helpers de status/badge
-
-Arquivo:
-
-- `src/lib/comissoes-filtros.ts`
-
-Adicionar helpers reutilizáveis:
-
-```text
-isComissaoAutoPagaAgenciaAdesaoDinheiro(item)
-getComissaoStatusLabel(item)
-getComissaoStatusBadgeVariant(item)
-```
-
-A detecção usará preferencialmente:
-
-```text
-calculo_snapshot.autopagamento_agencia_adesao_dinheiro = true
-```
-
-Com fallback por segurança:
-
-```text
-role_destinatario = agencia
-tipo_comissao = adesao
-status = paga
-observacoes contém indicação de adesão/dinheiro/agência
-```
-
----
-
-## 4. Exibir badge informativo nas telas de comissões
-
-Atualizar:
-
-- `src/pages/comissoes/Pagamentos.tsx`
-- `src/pages/comissoes/Relatorio.tsx`
-- `src/components/comissoes/ComissoesDetalhesModal.tsx`
-- `src/components/comissoes/ComissaoDetalhesPagamentoModal.tsx`
-
-### Visual esperado
-Onde hoje aparece apenas:
-
-```text
-paga
-```
-
-Para esse caso aparecerá algo como:
-
-```text
-Paga
-Autoquitada: adesão em dinheiro da agência
-```
-
-ou um badge secundário:
-
-```text
-Paga automaticamente
-```
-
-No modal de detalhes, adicionar um alerta informativo explicando:
-
-```text
-Esta comissão foi marcada como paga automaticamente porque se trata de taxa de adesão recebida em dinheiro por agência.
-```
-
----
-
-## 5. Ajustar dados carregados pelos hooks
-
-Atualizar os selects para carregar os campos necessários à detecção:
-
-- `calculo_snapshot`
-- `observacoes`
-- `role_destinatario`
-- `tipo_comissao`
-- `status`
-- `pago_em`
-
-Hooks envolvidos:
-
-- `src/hooks/useComissoesDashboard.ts`
-- `src/hooks/useRelatorioComissoes.ts`
-- `src/hooks/usePagamentosComissoes.ts`
-- `src/hooks/useComissaoDetalhesPagamento.ts`
-
----
-
-## 6. Conferir recibo e ação de pagamento
-
-Na tela de Pagamentos:
-
-- comissão autoquitada deve mostrar ação de recibo, não botão `Pagar`;
-- deve entrar nos totais de `Pago no período`;
-- não deve entrar em `A pagar`;
-- filtro por status `Paga` deve encontrá-la.
-
----
-
-## 7. Validação esperada
-
-### Cenário 1: agência + adesão + dinheiro
-- Gerar pagamento de taxa de adesão em dinheiro.
-- Comissão do perfil `agencia` nasce com status `paga`.
-- `pago_em` fica preenchido.
-- Tela mostra badge informativo de autoquitação.
-
-### Cenário 2: agência + adesão + PIX/boleto/cartão
-- Comissão segue fluxo normal como `pendente`.
-
-### Cenário 3: vendedor/supervisor/gerente + adesão em dinheiro
-- Não autoquita.
-- Continua no fluxo normal.
-
-### Cenário 4: Dashboard/Relatório/Pagamentos
-- Filtros por período, status e tipo continuam funcionando.
-- Comissão autoquitada aparece como paga nos três módulos.
-
-### Cenário 5: detalhes
-- Modal mostra alerta explicando a regra especial.
+### Testes após implementação
+1. Criar grade com apenas 1 plano e confirmar que continua configurando individualmente.
+2. Criar grade com 2 ou mais planos e confirmar que aparece apenas um card de configuração.
+3. Usar “Selecionar todos” e confirmar que continua aparecendo apenas uma configuração compartilhada.
+4. Salvar e verificar se todos os planos selecionados recebem as mesmas regras.
+5. Editar uma grade com múltiplos planos e confirmar que a edição compartilhada é persistida para todos.

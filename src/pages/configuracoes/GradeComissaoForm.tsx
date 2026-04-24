@@ -117,6 +117,15 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
     [planos, selectedPlanIds],
   );
   const todosPlanosSelecionados = planos.length > 0 && selectedPlanIds.length === planos.length;
+  const configuracaoCompartilhada = selectedPlanIds.length > 1;
+  const planoConfiguracaoId = selectedPlanIds[0] || '';
+
+  const getRegrasParaSalvar = (): RegrasPorPlano => {
+    if (!configuracaoCompartilhada) return regrasPorPlano;
+
+    const modelo = cloneParcelas(regrasPorPlano[planoConfiguracaoId] || []);
+    return Object.fromEntries(selectedPlanIds.map((planoId) => [planoId, cloneParcelas(modelo)]));
+  };
 
   const { data: existing, isLoading } = useQuery({
     queryKey: ['grade-comissao-v2', id],
@@ -236,10 +245,19 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
   };
 
   const updatePlanoParcelas = (planoId: string, updater: (parcelas: ParcelaForm[]) => ParcelaForm[]) => {
-    setRegrasPorPlano(prev => ({
-      ...prev,
-      [planoId]: updater(prev[planoId] || []),
-    }));
+    setRegrasPorPlano(prev => {
+      const basePlanoId = configuracaoCompartilhada ? planoConfiguracaoId : planoId;
+      const nextParcelas = updater(prev[basePlanoId] || []);
+
+      if (!configuracaoCompartilhada) {
+        return { ...prev, [planoId]: nextParcelas };
+      }
+
+      return {
+        ...prev,
+        ...Object.fromEntries(selectedPlanIds.map((id) => [id, cloneParcelas(nextParcelas)])),
+      };
+    });
   };
 
   const addParcela = (planoId: string) => {
@@ -289,13 +307,16 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
     if (!nome.trim()) return 'Nome é obrigatório';
     if (selectedPlanIds.length === 0) return 'Selecione pelo menos um plano para a grade';
 
-    for (const planoId of selectedPlanIds) {
+    const regrasValidacao = getRegrasParaSalvar();
+    const planosParaValidar = configuracaoCompartilhada ? [planoConfiguracaoId] : selectedPlanIds;
+
+    for (const planoId of planosParaValidar) {
       const plano = planos.find(p => p.id === planoId);
-      const parcelas = regrasPorPlano[planoId] || [];
-      if (parcelas.length === 0) return `Configure pelo menos uma parcela para o plano ${plano?.nome || planoId}`;
+      const parcelas = regrasValidacao[planoId] || [];
+      if (parcelas.length === 0) return configuracaoCompartilhada ? 'Configure pelo menos uma parcela para os planos selecionados' : `Configure pelo menos uma parcela para o plano ${plano?.nome || planoId}`;
 
       for (const p of parcelas) {
-        const contexto = `${plano?.nome || 'Plano'} / ${p.label || 'Parcela'}`;
+        const contexto = `${configuracaoCompartilhada ? 'Configuração compartilhada' : plano?.nome || 'Plano'} / ${p.label || 'Parcela'}`;
         if (!p.label.trim()) return `${contexto}: informe o rótulo da parcela`;
         if (p.vitalicia) {
           if (!p.vitalicia_inicio_parcela || p.vitalicia_inicio_parcela < 1) return `${contexto}: defina a parcela inicial da regra vitalícia`;
@@ -315,7 +336,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
       }
 
       const nums = parcelas.filter(p => !p.vitalicia).map(p => p.numero_parcela);
-      if (nums.length !== new Set(nums).size) return `${plano?.nome || 'Plano'}: há parcelas com o mesmo número`;
+      if (nums.length !== new Set(nums).size) return `${configuracaoCompartilhada ? 'Configuração compartilhada' : plano?.nome || 'Plano'}: há parcelas com o mesmo número`;
     }
     return null;
   };
@@ -377,9 +398,10 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
         gradeId = data.id;
       }
 
+      const regrasParaSalvar = getRegrasParaSalvar();
       const parcelaIdByKey = new Map<string, string>();
       const parcelasInsert = selectedPlanIds.flatMap((planoId) =>
-        (regrasPorPlano[planoId] || []).map((p, i) => ({
+        (regrasParaSalvar[planoId] || []).map((p, i) => ({
           grade_id: gradeId!,
           numero_parcela: p.vitalicia ? null : p.numero_parcela,
           vitalicia: p.vitalicia,
@@ -403,7 +425,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
 
       const niveisInsert: any[] = [];
       selectedPlanIds.forEach((planoId) => {
-        (regrasPorPlano[planoId] || []).forEach((p, i) => {
+        (regrasParaSalvar[planoId] || []).forEach((p, i) => {
           const parcelaId = parcelaIdByKey.get(`${planoId}:${i}`);
           p.niveis.forEach((n, ni) => {
             niveisInsert.push({
@@ -428,7 +450,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
 
       const regrasInsert: any[] = [];
       selectedPlanIds.forEach(planoId => {
-        (regrasPorPlano[planoId] || []).forEach((p, i) => {
+        (regrasParaSalvar[planoId] || []).forEach((p, i) => {
           const parcelaId = parcelaIdByKey.get(`${planoId}:${i}`);
           p.niveis.forEach((n, ni) => {
             regrasInsert.push({
@@ -457,7 +479,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
         { id: gradeId, nome: nome.trim(), descricao: descricao.trim() || null, versao: novaVersao },
         planos,
         selectedPlanIds,
-        regrasPorPlano,
+        regrasParaSalvar,
       );
       await (supabase as any).from('grades_comissao_versoes').insert({
         grade_id: gradeId,
@@ -533,7 +555,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h3 className="text-base font-semibold text-foreground">Planos configurados na grade</h3>
-              <p className="text-sm text-muted-foreground">Selecione os planos e configure regras próprias para cada um.</p>
+              <p className="text-sm text-muted-foreground">Selecione os planos. Com mais de um plano, a mesma configuração de parcelas e comissões será aplicada a todos.</p>
             </div>
             <Button type="button" variant="outline" size="sm" onClick={toggleTodosPlanos} disabled={planos.length === 0}>
               {todosPlanosSelecionados ? <Square className="mr-2 h-4 w-4" /> : <CheckSquare className="mr-2 h-4 w-4" />}
@@ -560,7 +582,72 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
             Selecione um plano para configurar quanto cada perfil recebe.
           </CardContent>
         </Card>
-      ) : (
+      ) : configuracaoCompartilhada ? ((() => {
+        const parcelas = regrasPorPlano[planoConfiguracaoId] || [];
+        const hasVitalicia = parcelas.some(p => p.vitalicia);
+        return (
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Package className="h-4 w-4" /> Configuração compartilhada
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">Estas regras serão refletidas em todos os planos selecionados ao salvar.</p>
+                  <div className="flex flex-wrap gap-2">
+                    {planosSelecionados.map((plano) => (
+                      <Badge key={plano.id} variant="secondary">{plano.nome}</Badge>
+                    ))}
+                  </div>
+                </div>
+                <Badge variant="outline">Aplicada a {planosSelecionados.length} planos</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex justify-end gap-2">
+                <TooltipProvider delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="outline" size="sm" onClick={() => addParcela(planoConfiguracaoId)}>
+                        <Plus className="h-4 w-4 mr-1" /> Parcela
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Adicionar parcela para todos os planos selecionados.</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="outline" size="sm" onClick={() => addVitalicia(planoConfiguracaoId)} disabled={hasVitalicia}>
+                        <InfinityIcon className="h-4 w-4 mr-1" /> Vitalícia
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Regra recorrente compartilhada entre todos os planos selecionados.</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+
+              {parcelas.length === 0 ? (
+                <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
+                  Nenhuma parcela configurada para os planos selecionados.
+                </div>
+              ) : (
+                parcelas.map((p, i) => (
+                  <ParcelaEditor
+                    key={p.id || `compartilhada-${i}`}
+                    parcela={p}
+                    index={i}
+                    onChange={next => updateParcela(planoConfiguracaoId, i, next)}
+                    onRemove={() => removeParcela(planoConfiguracaoId, i)}
+                    onMove={dir => moveParcela(planoConfiguracaoId, i, dir)}
+                    canMoveUp={i > 0}
+                    canMoveDown={i < parcelas.length - 1}
+                    commercialRoles={commercialRoles.map(r => ({ role: r.role, label: r.label }))}
+                  />
+                ))
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()) : (
         planosSelecionados.map((plano) => {
           const parcelas = regrasPorPlano[plano.id] || [];
           const hasVitalicia = parcelas.some(p => p.vitalicia);
