@@ -1,10 +1,11 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Eye, FileText, Calendar, MessageSquare, AlertCircle, Clock, X, XCircle } from 'lucide-react';
+import { RefreshCw, Eye, FileText, Calendar, MessageSquare, AlertCircle, Clock, X, XCircle, Copy, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useCancelarDocumentosSolicitados } from '@/hooks/useCancelarDocumentosSolicitados';
+import { toast } from 'sonner';
 
 // Labels para tipos de documentos (cobre cadastrais e fotos de vistoria)
 const TIPO_DOCUMENTO_LABELS: Record<string, string> = {
@@ -76,6 +77,7 @@ export function DocumentosSolicitadosCard({
   const cancelarMutation = useCancelarDocumentosSolicitados();
   const temEnviados = documentosSolicitados && documentosSolicitados.length > 0;
   const temPendentes = documentosPendentes && documentosPendentes.length > 0;
+  const linkPublico = contratoId ? `https://app.praticcar.org/acompanhar/${contratoId}` : null;
 
   if (!temEnviados && !temPendentes) {
     return null;
@@ -101,6 +103,12 @@ export function DocumentosSolicitadosCard({
       associadoId,
       contratoId,
     });
+  };
+
+  const handleCopiarLink = async () => {
+    if (!linkPublico) return;
+    await navigator.clipboard.writeText(linkPublico);
+    toast.success('Link público copiado');
   };
 
   // Cor base depende do que existe: pendentes (warning) tem prioridade visual sobre reanálise
@@ -169,6 +177,28 @@ export function DocumentosSolicitadosCard({
                 Cancelar todas
               </Button>
             )}
+          </div>
+        )}
+
+        {temPendentes && linkPublico && (
+          <div className="mt-3 rounded-lg border border-warning/30 bg-card p-3 space-y-2">
+            <p className="text-xs font-semibold text-foreground">Link público para envio das pendências</p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="flex-1 truncate rounded-md border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                {linkPublico}
+              </div>
+              <Button size="sm" variant="outline" className="border-warning/50 text-warning hover:bg-warning/10" onClick={handleCopiarLink}>
+                <Copy className="h-3.5 w-3.5 mr-1" />
+                Copiar link
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => window.open(linkPublico, '_blank')}>
+                <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                Abrir
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              O Cadastro também pode enviar este link manualmente para o associado anexar os itens pendentes.
+            </p>
           </div>
         )}
 
