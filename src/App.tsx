@@ -389,10 +389,6 @@ const RedirectGradeComissao = () => {
   const { id } = useParams();
   return <Navigate to={`/comissoes/grades/${id}`} replace />;
 };
-const RedirectGradeComissao = () => {
-  const { id } = useParams();
-  return <Navigate to={`/comissoes/grades/${id}`} replace />;
-};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
