@@ -19,7 +19,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ArrowDown, Building2, Loader2, Network, UserRound, Users2 } from 'lucide-react';
+import { AlertCircle, ArrowDown, Building2, Loader2, Network, RefreshCw, UserRound, Users2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUpsertHierarquia, useUsuariosVendas } from '@/hooks/useAtribuicaoComissoes';
 import type { AtribuicaoLinha, UsuarioVendas } from '@/types/atribuicaoComissao';
@@ -42,11 +42,11 @@ const initials = (nome: string) =>
 const userName = (usuariosMap: Map<string, UsuarioVendas>, id?: string | null) =>
   id ? usuariosMap.get(id)?.nome || 'Usuário não localizado' : 'Não definido';
 
-function ChainNode({ label, name, icon: Icon }: { label: string; name: string; icon: typeof UserRound }) {
+function ChainNode({ label, name, icon: Icon, loading = false }: { label: string; name: string; icon: typeof UserRound; loading?: boolean }) {
   return (
     <div className="flex items-center gap-3 rounded-md border bg-muted/30 p-3">
       <div className="flex h-9 w-9 items-center justify-center rounded-md bg-background border">
-        <Icon className="h-4 w-4 text-muted-foreground" />
+        {loading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : <Icon className="h-4 w-4 text-muted-foreground" />}
       </div>
       <div className="min-w-0">
         <div className="text-xs text-muted-foreground">{label}</div>
@@ -57,7 +57,14 @@ function ChainNode({ label, name, icon: Icon }: { label: string; name: string; i
 }
 
 export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }: EditarHierarquiaModalProps) {
-  const { data: usuarios = [], isLoading: loadingUsuarios, isFetching: fetchingUsuarios } = useUsuariosVendas();
+  const {
+    data: usuarios = [],
+    isLoading: loadingUsuarios,
+    isFetching: fetchingUsuarios,
+    isError: erroUsuarios,
+    error: usuariosError,
+    refetch: refetchUsuarios,
+  } = useUsuariosVendas();
   const upsertHierarquia = useUpsertHierarquia();
 
   const [supervisorId, setSupervisorId] = useState<string>('none');
@@ -87,7 +94,7 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
   const gerentes = superiores.filter((u) => u.roles.includes('gerente_comercial'));
   const agencias = superiores.filter((u) => u.roles.includes('agencia'));
 
-  const subordinados = atribuicoes.filter((item) => {
+  const subordinados = (atribuicoes || []).filter((item) => {
     const h = item.hierarquia;
     return h?.supervisor_id === selectedUserId || h?.gerente_id === selectedUserId || h?.agencia_id === selectedUserId;
   });
@@ -122,6 +129,8 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
 
   const saving = upsertHierarquia.isPending;
   const loadingVinculos = loadingUsuarios || fetchingUsuarios;
+  const hasUsuarios = usuarios.length > 0;
+  const errorMessage = usuariosError instanceof Error ? usuariosError.message : 'Não foi possível carregar os vínculos existentes.';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -138,6 +147,12 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
               <Badge variant="secondary" className="w-fit gap-1.5 font-normal">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 Buscando vínculos
+              </Badge>
+            )}
+            {erroUsuarios && (
+              <Badge variant="destructive" className="w-fit gap-1.5 font-normal">
+                <AlertCircle className="h-3.5 w-3.5" />
+                Erro ao carregar
               </Badge>
             )}
           </div>
@@ -163,9 +178,19 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
                 <div className="text-sm font-medium">Cadeia atual</div>
                 <Badge variant="outline" className="font-normal">Prévia</Badge>
               </div>
-              <ChainNode label="Gerente" name={userName(usuariosMap, gerenteId === 'none' ? null : gerenteId)} icon={UserRound} />
+              {erroUsuarios && (
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                  {errorMessage}
+                </div>
+              )}
+              {!loadingVinculos && !erroUsuarios && !hasUsuarios && (
+                <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+                  Nenhum usuário disponível para formar vínculos.
+                </div>
+              )}
+              <ChainNode label="Gerente" name={userName(usuariosMap, gerenteId === 'none' ? null : gerenteId)} icon={UserRound} loading={loadingVinculos} />
               <div className="flex justify-center text-muted-foreground"><ArrowDown className="h-4 w-4" /></div>
-              <ChainNode label="Supervisor" name={userName(usuariosMap, supervisorId === 'none' ? null : supervisorId)} icon={Users2} />
+              <ChainNode label="Supervisor" name={userName(usuariosMap, supervisorId === 'none' ? null : supervisorId)} icon={Users2} loading={loadingVinculos} />
               <div className="flex justify-center text-muted-foreground"><ArrowDown className="h-4 w-4" /></div>
               <ChainNode label="Usuário selecionado" name={linha.usuario.nome} icon={Network} />
               {agenciaId !== 'none' && (
@@ -183,13 +208,33 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
               <p className="text-xs text-muted-foreground">Selecione apenas os vínculos que devem participar da cadeia comercial deste usuário.</p>
             </div>
 
+            {erroUsuarios && (
+              <div className="flex flex-col gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{errorMessage}</span>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={() => refetchUsuarios()} disabled={loadingVinculos}>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Tentar novamente
+                </Button>
+              </div>
+            )}
+
+            {!loadingVinculos && !erroUsuarios && !hasUsuarios && (
+              <div className="rounded-md border bg-muted/30 p-4 text-sm text-muted-foreground">
+                Nenhum usuário de vendas foi encontrado. Você ainda pode salvar sem vínculos superiores.
+              </div>
+            )}
+
             <div className="grid grid-cols-1 gap-4">
               <div className="space-y-1.5">
                 <Label>Gerente superior</Label>
-                <Select value={gerenteId} onValueChange={setGerenteId} disabled={loadingVinculos || saving}>
+                <Select value={gerenteId} onValueChange={setGerenteId} disabled={loadingVinculos || saving || erroUsuarios}>
                   <SelectTrigger className="h-11"><SelectValue placeholder="Selecione um gerente" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Nenhum gerente</SelectItem>
+                    {!loadingVinculos && gerentes.length === 0 && <SelectItem value="empty-gerentes" disabled>Nenhum gerente disponível</SelectItem>}
                     {gerentes.map((u) => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -197,10 +242,11 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
 
               <div className="space-y-1.5">
                 <Label>Supervisor superior</Label>
-                <Select value={supervisorId} onValueChange={setSupervisorId} disabled={loadingVinculos || saving}>
+                <Select value={supervisorId} onValueChange={setSupervisorId} disabled={loadingVinculos || saving || erroUsuarios}>
                   <SelectTrigger className="h-11"><SelectValue placeholder="Selecione um supervisor" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Nenhum supervisor</SelectItem>
+                    {!loadingVinculos && supervisores.length === 0 && <SelectItem value="empty-supervisores" disabled>Nenhum supervisor disponível</SelectItem>}
                     {supervisores.map((u) => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -208,10 +254,11 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
 
               <div className="space-y-1.5">
                 <Label>Agência vinculada</Label>
-                <Select value={agenciaId} onValueChange={setAgenciaId} disabled={loadingVinculos || saving}>
+                <Select value={agenciaId} onValueChange={setAgenciaId} disabled={loadingVinculos || saving || erroUsuarios}>
                   <SelectTrigger className="h-11"><SelectValue placeholder="Selecione uma agência" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Nenhuma agência</SelectItem>
+                    {!loadingVinculos && agencias.length === 0 && <SelectItem value="empty-agencias" disabled>Nenhuma agência disponível</SelectItem>}
                     {agencias.map((u) => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -242,6 +289,11 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Carregando usuários e vínculos...
                 </div>
+              ) : erroUsuarios ? (
+                <div className="flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-4 text-sm text-destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  Não foi possível carregar a equipe inferior.
+                </div>
               ) : subordinados.length === 0 ? (
                 <div className="rounded-md bg-muted/40 px-3 py-4 text-sm text-muted-foreground">Nenhum usuário abaixo desta posição.</div>
               ) : (
@@ -267,7 +319,7 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
 
         <DialogFooter className="border-t px-6 py-4">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={saving || loadingVinculos}>
+          <Button onClick={handleSave} disabled={saving || loadingVinculos || erroUsuarios}>
             {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Salvar hierarquia
           </Button>
