@@ -3781,6 +3781,7 @@ export type Database = {
           carencia_multiplicador: number | null
           carencia_tipo: string | null
           category: string | null
+          codigo_sga: string | null
           created_at: string | null
           description: string | null
           display_order: number | null
@@ -3797,6 +3798,7 @@ export type Database = {
           carencia_multiplicador?: number | null
           carencia_tipo?: string | null
           category?: string | null
+          codigo_sga?: string | null
           created_at?: string | null
           description?: string | null
           display_order?: number | null
@@ -3813,6 +3815,7 @@ export type Database = {
           carencia_multiplicador?: number | null
           carencia_tipo?: string | null
           category?: string | null
+          codigo_sga?: string | null
           created_at?: string | null
           description?: string | null
           display_order?: number | null
@@ -5652,6 +5655,7 @@ export type Database = {
           carencia_multiplicador: number | null
           carencia_tipo: string | null
           codigo: string
+          codigo_sga: string | null
           created_at: string | null
           descricao: string | null
           display_order: number | null
@@ -5673,6 +5677,7 @@ export type Database = {
           carencia_multiplicador?: number | null
           carencia_tipo?: string | null
           codigo: string
+          codigo_sga?: string | null
           created_at?: string | null
           descricao?: string | null
           display_order?: number | null
@@ -5694,6 +5699,7 @@ export type Database = {
           carencia_multiplicador?: number | null
           carencia_tipo?: string | null
           codigo?: string
+          codigo_sga?: string | null
           created_at?: string | null
           descricao?: string | null
           display_order?: number | null
@@ -19070,6 +19076,7 @@ export type Database = {
           cobertura_fipe: number | null
           coberturas: string[] | null
           codigo: string
+          codigo_sga_plano: string | null
           cota_app_min: number | null
           cota_app_percent: number | null
           cota_desagio: number | null
@@ -19122,6 +19129,7 @@ export type Database = {
           cobertura_fipe?: number | null
           coberturas?: string[] | null
           codigo: string
+          codigo_sga_plano?: string | null
           cota_app_min?: number | null
           cota_app_percent?: number | null
           cota_desagio?: number | null
@@ -19174,6 +19182,7 @@ export type Database = {
           cobertura_fipe?: number | null
           coberturas?: string[] | null
           codigo?: string
+          codigo_sga_plano?: string | null
           cota_app_min?: number | null
           cota_app_percent?: number | null
           cota_desagio?: number | null
