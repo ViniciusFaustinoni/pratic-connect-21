@@ -82,9 +82,9 @@ function DraggableServico({ servico }: { servico: any }) {
                 <Car className="h-3 w-3" /> {veic.placa}
               </span>
             )}
-            {servico.bairro && (
+            {servico.localizacaoFormatada && (
               <span className="flex items-center gap-1">
-                <MapPin className="h-3 w-3" /> {servico.bairro}
+                <MapPin className="h-3 w-3" /> {servico.localizacaoFormatada}
               </span>
             )}
           </div>
@@ -112,7 +112,7 @@ function DragOverlayCard({ servico }: { servico: any }) {
         <GripVertical className="h-4 w-4 text-muted-foreground" />
         <div>
           <p className="text-sm font-medium">{assoc?.nome || 'Sem nome'}</p>
-          <p className="text-xs text-muted-foreground">{getTipoLabel(servico.tipo)} · {servico.bairro}</p>
+          <p className="text-xs text-muted-foreground">{getTipoLabel(servico.tipo)} · {servico.localizacaoFormatada || servico.bairro || servico.cidade || 'Sem local'}</p>
         </div>
       </div>
     </div>
@@ -165,7 +165,7 @@ function DroppableVistoriador({ vistoriador }: { vistoriador: any }) {
           {vistoriador.tarefas.map((t: any) => (
             <div key={t.id} className="flex items-center gap-2 text-xs p-2 rounded bg-muted/50">
               {getTipoIcon(t.tipo)}
-              <span className="truncate">{t.bairro || t.cidade || 'Sem local'}</span>
+              <span className="truncate">{t.localizacaoFormatada || t.bairro || t.cidade || 'Sem local'}</span>
               <Badge variant="outline" className="ml-auto text-[9px]">{t.status}</Badge>
             </div>
           ))}
@@ -255,7 +255,9 @@ export default function AtribuicaoManualTab() {
       if (
         !(assoc?.nome || '').toLowerCase().includes(term) &&
         !(veic?.placa || '').toLowerCase().includes(term) &&
-        !(s.bairro || '').toLowerCase().includes(term)
+        !(s.bairro || '').toLowerCase().includes(term) &&
+        !(s.cidade || '').toLowerCase().includes(term) &&
+        !(s.zona || '').toLowerCase().includes(term)
       ) return false;
     }
     return true;
@@ -358,7 +360,7 @@ export default function AtribuicaoManualTab() {
                 <div className="relative flex-1">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Buscar por nome, placa ou bairro..."
+                    placeholder="Buscar por nome, placa, bairro, cidade ou zona..."
                     value={busca}
                     onChange={e => setBusca(e.target.value)}
                     className="pl-9 h-9"

@@ -124,7 +124,7 @@ export function ServicosAtribuidosModal({
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar associado, placa ou técnico..."
+              placeholder="Buscar associado, placa, técnico, cidade ou zona..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="pl-8"
@@ -199,7 +199,7 @@ function ListaServicos({ itens, mostrarTecnico }: { itens: ServicoAtribuido[]; m
             <th className="px-3 py-2 font-medium">Tipo</th>
             <th className="px-3 py-2 font-medium">Associado</th>
             <th className="px-3 py-2 font-medium">Veículo</th>
-            <th className="px-3 py-2 font-medium hidden md:table-cell">Bairro</th>
+            <th className="px-3 py-2 font-medium hidden md:table-cell">Local</th>
             {mostrarTecnico && <th className="px-3 py-2 font-medium">Técnico</th>}
             <th className="px-3 py-2 font-medium">Status</th>
             <th className="px-3 py-2 font-medium"></th>
@@ -226,7 +226,7 @@ function ListaServicos({ itens, mostrarTecnico }: { itens: ServicoAtribuido[]; m
                   </div>
                 ) : '—'}
               </td>
-              <td className="px-3 py-2 hidden md:table-cell">{s.bairro || '—'}</td>
+              <td className="px-3 py-2 hidden md:table-cell">{s.localizacao_formatada || s.bairro || s.cidade || '—'}</td>
               {mostrarTecnico && <td className="px-3 py-2">{s.profissional_nome}</td>}
               <td className="px-3 py-2">
                 <Badge variant="outline" className={cn('text-[10px]', STATUS_BADGE[s.status] || '')}>
