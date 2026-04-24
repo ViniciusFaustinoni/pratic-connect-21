@@ -92,6 +92,16 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
     return h?.supervisor_id === selectedUserId || h?.gerente_id === selectedUserId || h?.agencia_id === selectedUserId;
   });
 
+  const subordinadosDiretos = subordinados.filter((item) => item.hierarquia?.supervisor_id === selectedUserId || item.hierarquia?.agencia_id === selectedUserId);
+  const subordinadosGerenciais = subordinados.filter((item) => item.hierarquia?.gerente_id === selectedUserId);
+  const relacaoSubordinado = (item: AtribuicaoLinha) => {
+    const relacoes: string[] = [];
+    if (item.hierarquia?.gerente_id === selectedUserId) relacoes.push('Gerente');
+    if (item.hierarquia?.supervisor_id === selectedUserId) relacoes.push('Supervisor');
+    if (item.hierarquia?.agencia_id === selectedUserId) relacoes.push('Agência');
+    return relacoes.join(' / ') || 'Vínculo';
+  };
+
   const handleSave = async () => {
     try {
       await upsertHierarquia.mutateAsync({
@@ -206,11 +216,18 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
               {subordinados.length === 0 ? (
                 <div className="text-sm text-muted-foreground">Nenhum usuário abaixo desta posição.</div>
               ) : (
-                <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                <div className="space-y-3 max-h-52 overflow-y-auto pr-1">
+                  <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                    <div className="rounded-md bg-muted/40 px-2 py-1">Diretos: {subordinadosDiretos.length}</div>
+                    <div className="rounded-md bg-muted/40 px-2 py-1">Por gerência: {subordinadosGerenciais.length}</div>
+                  </div>
                   {subordinados.map((item) => (
                     <div key={item.usuario.id} className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-3 py-2">
-                      <span className="text-sm truncate">{item.usuario.nome}</span>
-                      <span className="text-xs text-muted-foreground truncate">{item.usuario.email}</span>
+                      <div className="min-w-0">
+                        <div className="text-sm truncate">{item.usuario.nome}</div>
+                        <div className="text-xs text-muted-foreground truncate">{item.usuario.email}</div>
+                      </div>
+                      <Badge variant="outline" className="shrink-0 font-normal">{relacaoSubordinado(item)}</Badge>
                     </div>
                   ))}
                 </div>

@@ -59,6 +59,7 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [editing, setEditing] = useState<AtribuicaoLinha | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [selectedEquipeId, setSelectedEquipeId] = useState<string | null>(null);
 
   const usuariosMap = useMemo(() => {
     const m = new Map<string, AtribuicaoLinha>();
@@ -125,6 +126,29 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
 
   const nomeHierarquia = (id?: string | null) =>
     id ? usuariosMap.get(id)?.usuario.nome || 'Usuário não localizado' : null;
+
+  const getSubordinados = (userId: string) =>
+    atribuicoes.filter((item) => {
+      const h = item.hierarquia;
+      return item.usuario.id !== userId && (
+        h?.supervisor_id === userId ||
+        h?.gerente_id === userId ||
+        h?.agencia_id === userId
+      );
+    });
+
+  const getRelacaoSubordinado = (linha: AtribuicaoLinha, superiorId: string) => {
+    const relacoes: string[] = [];
+    if (linha.hierarquia?.gerente_id === superiorId) relacoes.push('Gerente');
+    if (linha.hierarquia?.supervisor_id === superiorId) relacoes.push('Supervisor');
+    if (linha.hierarquia?.agencia_id === superiorId) relacoes.push('Agência');
+    return relacoes.join(' / ') || 'Vínculo';
+  };
+
+  const selectedEquipe = selectedEquipeId
+    ? atribuicoes.find((a) => a.usuario.id === selectedEquipeId) || null
+    : null;
+  const selectedSubordinados = selectedEquipe ? getSubordinados(selectedEquipe.usuario.id) : [];
 
   return (
     <div className="space-y-6">
@@ -228,23 +252,62 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
                     ) : filtered.length === 0 ? (
                       <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Nenhum usuário encontrado</TableCell></TableRow>
                     ) : (
-                      filtered.map((linha) => (
-                        <TableRow key={linha.usuario.id}>
+                      filtered.map((linha) => {
+                        const subordinados = getSubordinados(linha.usuario.id);
+                        const isSelected = selectedEquipeId === linha.usuario.id;
+
+                        return (
+                        <TableRow
+                          key={linha.usuario.id}
+                          className={isSelected ? 'bg-muted/50' : undefined}
+                          onClick={() => setSelectedEquipeId(linha.usuario.id)}
+                        >
                           <TableCell>{renderUserCell(linha)}</TableCell>
                           <TableCell>{renderRoles(linha)}</TableCell>
                           <TableCell className="text-sm">{nomeHierarquia(linha.hierarquia?.supervisor_id) || <span className="text-muted-foreground">—</span>}</TableCell>
                           <TableCell className="text-sm">{nomeHierarquia(linha.hierarquia?.gerente_id) || <span className="text-muted-foreground">—</span>}</TableCell>
                           <TableCell className="text-sm">{nomeHierarquia(linha.hierarquia?.agencia_id) || <span className="text-muted-foreground">—</span>}</TableCell>
                           <TableCell className="text-right">
-                            <Button variant="ghost" size="icon" onClick={() => handleEdit(linha)} aria-label="Editar hierarquia">
+                            <div className="flex items-center justify-end gap-2">
+                              <Badge variant="outline" className="font-normal">{subordinados.length} inferior(es)</Badge>
+                              <Button variant="ghost" size="icon" onClick={(event) => { event.stopPropagation(); handleEdit(linha); }} aria-label="Editar hierarquia">
                               <Pencil className="h-4 w-4" />
-                            </Button>
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
-                      ))
+                        );
+                      })
                     )}
                   </TableBody>
                 </Table>
+              </div>
+
+              <div className="mt-4 rounded-md border bg-muted/20 p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-medium">Subordinados inferiores</h3>
+                    <p className="text-xs text-muted-foreground">
+                      {selectedEquipe ? `Vínculos abaixo de ${selectedEquipe.usuario.nome}` : 'Selecione um usuário da tabela para visualizar a equipe vinculada.'}
+                    </p>
+                  </div>
+                  <Badge variant="secondary">{selectedSubordinados.length}</Badge>
+                </div>
+                {selectedSubordinados.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nenhum subordinado relacionado ao usuário selecionado.</p>
+                ) : (
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {selectedSubordinados.map((item) => (
+                      <div key={item.usuario.id} className="rounded-md border bg-background p-3">
+                        <div className="text-sm font-medium truncate">{item.usuario.nome}</div>
+                        <div className="text-xs text-muted-foreground truncate">{item.usuario.email}</div>
+                        <Badge variant="outline" className="mt-2 font-normal">
+                          {getRelacaoSubordinado(item, selectedEquipe!.usuario.id)}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
