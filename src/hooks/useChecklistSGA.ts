@@ -162,7 +162,52 @@ export function useChecklistSGA(veiculoId: string, associadoId: string): Checkli
           : (!combMapeado ? `Combustível "${veiculo?.combustivel}" sem mapeamento na tabela hinova_mapeamentos` : undefined),
       });
 
-      // === SISTEMA ===
+      // Tipo de veículo (categoria do contrato) — verificar mapeamento Hinova
+      const tipoVeiculo = contrato?.veiculo_categoria ? String(contrato.veiculo_categoria).toLowerCase() : null;
+      const tipoVeiculoMapeado = tipoVeiculo && tiposVeiculoDisponiveis.includes(tipoVeiculo);
+      itens.push({
+        campo: 'tipo_veiculo', label: 'Tipo de veículo (mapeamento Hinova)', secao: 'veiculo', critico: true,
+        status: tipoVeiculoMapeado ? 'ok' : 'faltando',
+        valor: tipoVeiculo,
+        detalhe: !tipoVeiculo
+          ? 'Categoria do veículo ausente no contrato'
+          : (!tipoVeiculoMapeado ? `Tipo "${tipoVeiculo}" sem código Hinova em Configurações > Mapeamentos` : undefined),
+      });
+
+      // Plano + codigo_sga_plano
+      if (contrato?.plano_id) {
+        const planoOk = !!planoCodigoSga && String(planoCodigoSga).trim() !== '';
+        itens.push({
+          campo: 'codigo_plano', label: `Plano "${planoNome ?? '?'}" — Código Hinova`, secao: 'sistema', critico: true,
+          status: planoOk ? 'ok' : 'faltando',
+          valor: planoCodigoSga,
+          detalhe: planoOk ? undefined : `Plano "${planoNome}" sem codigo_sga_plano — cadastre em Planos > Editar`,
+        });
+
+        if (coberturasSemCodigo.length > 0) {
+          itens.push({
+            campo: 'coberturas_sem_codigo', label: 'Coberturas sem Código Hinova', secao: 'sistema',
+            status: 'risco',
+            valor: coberturasSemCodigo.join(', '),
+            detalhe: `${coberturasSemCodigo.length} cobertura(s) do plano serão omitidas do envio: ${coberturasSemCodigo.join(', ')}`,
+          });
+        }
+        if (beneficiosSemCodigo.length > 0) {
+          itens.push({
+            campo: 'beneficios_sem_codigo', label: 'Benefícios sem Código Hinova', secao: 'sistema',
+            status: 'risco',
+            valor: beneficiosSemCodigo.join(', '),
+            detalhe: `${beneficiosSemCodigo.length} benefício(s) do plano serão omitidos do envio: ${beneficiosSemCodigo.join(', ')}`,
+          });
+        }
+      } else {
+        itens.push({
+          campo: 'codigo_plano', label: 'Plano contratado', secao: 'sistema', critico: true,
+          status: 'faltando',
+          detalhe: 'Contrato sem plano vinculado — Hinova exige codigo_plano',
+        });
+      }
+
       // Credenciais Hinova
       const hinovaConfigurado = credenciais?.configurado === true;
       itens.push({
