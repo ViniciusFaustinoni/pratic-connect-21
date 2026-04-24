@@ -329,7 +329,7 @@ export function useAtivarContrato() {
             body: {
               veiculo_id: veiculo.id,
               associado_id: contrato.associado_id,
-              status_sga_destino: 'ativo',
+              status_sga_destino: 'pendente',
             },
           }).then(({ data, error }) => {
             if (error || !data?.success) {
@@ -337,7 +337,7 @@ export function useAtivarContrato() {
               // A própria função sga-hinova-sync já grava na fila de reenvio
               toast.warning('Contrato ativado, mas envio ao SGA falhou. O sistema tentará reenviar automaticamente.');
             } else {
-              toast.success('Enviado ao SGA automaticamente!');
+              toast.success('Enviado ao SGA automaticamente como pendente!');
             }
           }).catch(async (err) => {
             console.warn('[Ativacao] Erro ao enviar ao SGA:', err);
