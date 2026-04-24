@@ -321,6 +321,9 @@ serve(async (req) => {
   let hinovaCodigoVoluntario = Deno.env.get('HINOVA_CODIGO_VOLUNTARIO');
   let hinovaCodigoSituacaoPendente = Deno.env.get('HINOVA_CODIGO_SITUACAO_PENDENTE');
   let hinovaCodigoSituacaoAtivo = Deno.env.get('HINOVA_CODIGO_SITUACAO_ATIVO');
+  let hinovaCodigoTipoCobrancaPadrao: string | undefined;
+  let hinovaCodigoComoConheceuPadrao: string | undefined;
+  let hinovaCodigoProfissaoPadrao: string | undefined;
   let codigoContaOrigem: 'env' | 'database' | 'historico' | 'fallback' = hinovaCodigoConta ? 'env' : 'fallback';
 
   if (!hinovaToken || !hinovaUsuario || !hinovaSenha || !hinovaCodigoConta) {
