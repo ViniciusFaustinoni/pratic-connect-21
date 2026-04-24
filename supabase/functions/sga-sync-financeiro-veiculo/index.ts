@@ -17,7 +17,7 @@ import {
   HinovaTransientError,
   HinovaNotFoundError,
   calcularProximoRetry,
-  invalidateHinovaSession,
+  type HinovaSession,
 } from '../_shared/hinova-client.ts';
 
 const corsHeaders = {
