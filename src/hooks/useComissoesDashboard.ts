@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { isComissaoVitalicia, matchesTipoLancamentoComissao, type TipoLancamentoComissao } from '@/lib/comissoes-filtros';
 
 export type ComissaoStatus = 'pendente' | 'aprovada' | 'paga' | 'contestada' | string;
 
@@ -32,7 +33,7 @@ export interface ComissoesDashboardFilters {
   dataInicio?: Date;
   dataFim?: Date;
   status?: string;
-  tipoLancamento?: 'todos' | 'comum' | 'vitalicia' | 'valor_fixo' | 'percentual' | string;
+  tipoLancamento?: TipoLancamentoComissao;
 }
 
 export interface ComissaoKpis {
@@ -55,22 +56,6 @@ const endOfDayIso = (date: Date) => {
   const value = new Date(date);
   value.setHours(23, 59, 59, 999);
   return value.toISOString();
-};
-
-const isVitalicia = (item: ComissaoDashboardItem) =>
-  (item.tipo_comissao || '').toLowerCase().includes('vitalicia') || (item.parcela_numero || 0) > 12;
-
-const matchesTipoLancamento = (item: ComissaoDashboardItem, tipo: string) => {
-  if (!tipo || tipo === 'todos') return true;
-  const tipoComissao = (item.tipo_comissao || '').toLowerCase();
-  const tipoCalculo = (item.tipo_calculo || '').toLowerCase();
-
-  if (tipo === 'vitalicia') return isVitalicia(item);
-  if (tipo === 'valor_fixo') return tipoCalculo === 'valor_fixo' || tipoComissao === 'valor_fixo';
-  if (tipo === 'percentual') return tipoCalculo === 'percentual' || money(item.percentual_aplicado) > 0;
-  if (tipo === 'comum') return !isVitalicia(item) && tipoCalculo !== 'valor_fixo' && tipoComissao !== 'valor_fixo';
-
-  return tipoComissao === tipo || tipoCalculo === tipo;
 };
 
 export function useComissoesDashboard(filters: ComissoesDashboardFilters = {}) {
@@ -119,7 +104,7 @@ export function useComissoesDashboard(filters: ComissoesDashboardFilters = {}) {
           usuario_email: profile?.email || '',
           usuario_avatar_url: profile?.avatar_url || null,
         } as ComissaoDashboardItem;
-      }).filter((item: ComissaoDashboardItem) => matchesTipoLancamento(item, tipoLancamento));
+      }).filter((item: ComissaoDashboardItem) => matchesTipoLancamentoComissao(item, tipoLancamento));
     },
   });
 
@@ -137,7 +122,7 @@ export function useComissoesDashboard(filters: ComissoesDashboardFilters = {}) {
       .reduce((sum, i) => sum + money(i.valor_total ?? i.valor_comissao), 0);
 
     const pendenteAprovacao = items.filter(i => i.status === 'pendente').length;
-    const vitaliciasAtivas = items.filter(isVitalicia).length;
+    const vitaliciasAtivas = items.filter(isComissaoVitalicia).length;
 
     const topMap = new Map<string, { vendedor_id: string; nome: string; valor: number }>();
     items.forEach((i) => {
