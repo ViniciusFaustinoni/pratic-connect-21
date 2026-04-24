@@ -523,6 +523,7 @@ serve(async (req) => {
       // ⚡ Capture IDs explicitly to prevent stale closures in EdgeRuntime.waitUntil
       const _vid = veiculo_id;
       const _aid = associado_id;
+      const _statusDestino = statusSgaDestino;
       try {
 
     // ========================================
@@ -929,7 +930,7 @@ serve(async (req) => {
                       codigo_hinova: parseInt(veiculoExistente.codigo_veiculo),
                       sincronizado_hinova: true,
                       sincronizado_hinova_em: new Date().toISOString(),
-                      status_sga: 'ativado_sga'
+                      status_sga: _statusDestino === 'ativo' ? 'ativado_sga' : 'pendente_sga'
                     }).eq('id', _vid);
 
                     await markQueueCompleted(supabase, _vid, _aid);
@@ -1314,6 +1315,10 @@ serve(async (req) => {
     const combustivelNormalizado = normalizarCombustivel(veiculo.combustivel);
     const tipoVeiculoInferido = await inferirTipoVeiculo(contrato?.veiculo_categoria, veiculo.marca, veiculo.modelo);
 
+    const codigoSituacaoDestino = _statusDestino === 'ativo'
+      ? Number.parseInt(hinovaCodigoSituacaoAtivo || '', 10)
+      : Number.parseInt(hinovaCodigoSituacaoPendente || '', 10);
+
     const veiculoPayload = {
       codigo_associado: codigoAssociadoHinova,
       placa: veiculo.placa || '',
@@ -1331,6 +1336,7 @@ serve(async (req) => {
       codigo_combustivel: getMapeamento('combustivel', combustivelNormalizado),
       codigo_tipo_veiculo: getMapeamento('tipo_veiculo', contrato?.veiculo_categoria?.toLowerCase()) || tipoVeiculoInferido,
       codigo_voluntario: parseInt(hinovaCodigoVoluntario),
+      ...(Number.isFinite(codigoSituacaoDestino) && codigoSituacaoDestino > 0 && { codigo_situacao: codigoSituacaoDestino }),
       ...(hinovaCodigoCooperativa && { codigo_cooperativa: parseInt(hinovaCodigoCooperativa) }),
     };
 
