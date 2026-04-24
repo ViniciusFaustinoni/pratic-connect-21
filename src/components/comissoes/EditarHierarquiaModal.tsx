@@ -249,12 +249,6 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
               <ChainNode label="Supervisor" name={userName(usuariosMap, supervisorId === 'none' ? null : supervisorId)} icon={Users2} loading={loadingVinculos} />
               <div className="flex justify-center text-muted-foreground"><ArrowDown className="h-4 w-4" /></div>
               <ChainNode label="Usuário selecionado" name={linha.usuario.nome} icon={Network} />
-              {agenciaId !== 'none' && (
-                <>
-                  <div className="flex justify-center text-muted-foreground"><ArrowDown className="h-4 w-4" /></div>
-                  <ChainNode label="Agência vinculada" name={userName(usuariosMap, agenciaId)} icon={Building2} />
-                </>
-              )}
             </div>
           </div>
 
