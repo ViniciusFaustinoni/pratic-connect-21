@@ -419,7 +419,6 @@ export default function CalendarioInstalacoesPage() {
                     <div className="mt-1 space-y-1.5">
                       {renderPeriodo(instalacoesDia.manha, 'Manhã', '☀️')}
                       {renderPeriodo(instalacoesDia.tarde, 'Tarde', '🌅')}
-                      {renderPeriodo(instalacoesDia.noite, 'Noite', '🌙')}
                       {renderVistoriasGrupo(vistoriasDia.base, 'Base', true)}
                       {renderVistoriasGrupo(vistoriasDia.campo, 'Campo', false)}
                     </div>
