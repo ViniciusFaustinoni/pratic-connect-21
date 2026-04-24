@@ -488,7 +488,7 @@ export function useAssociadoActions() {
 
   const atualizarStatus = useMutation({
     mutationFn: async ({ id, status, motivo }: { id: string; status: StatusAssociado; motivo?: string }) => {
-      const updateData: Record<string, unknown> = {
+      const updateData: TablesUpdate<'associados'> = {
         status,
         updated_at: new Date().toISOString(),
       };

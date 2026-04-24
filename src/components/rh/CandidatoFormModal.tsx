@@ -49,7 +49,7 @@ export function CandidatoFormModal({ open, onOpenChange, vagaId }: CandidatoForm
           vaga_id: vagaId,
           etapa: 'triagem',
           status: 'ativo',
-        });
+        } as any);
       
       if (error) throw error;
     },

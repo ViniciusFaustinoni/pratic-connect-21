@@ -181,8 +181,7 @@ export function CardControleReparo({ sinistro, onOpenAtribuirFornecedores }: Car
       await supabase.from('sinistro_historico').insert({
         sinistro_id: sinistro.id,
         usuario_id: user?.id,
-        acao: 'enviar_para_oficina',
-        descricao: `Veículo enviado para oficina ${oficina.nome_fantasia}. Chamado de guincho criado.`,
+        observacao: `Veículo enviado para oficina ${oficina.nome_fantasia}. Chamado de guincho criado.`,
         status_anterior: sinistro.status,
         status_novo: 'em_reparo',
       });

@@ -3,6 +3,7 @@ import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { TablesUpdate } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -249,7 +250,7 @@ export function ImportarRastreadoresDialog({
 
           if (item.acao === 'atualizar') {
             // Update existing tracker
-            const updateData: Record<string, unknown> = {
+            const updateData: TablesUpdate<'rastreadores'> = {
               plataforma: plataformaSelecionada,
             };
             if (item.veiculo_id) updateData.veiculo_id = item.veiculo_id;

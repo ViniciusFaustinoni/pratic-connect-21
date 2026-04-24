@@ -102,13 +102,18 @@ export function VagaFormModal({ open, onOpenChange, vaga }: VagaFormModalProps) 
   const saveMutation = useMutation({
     mutationFn: async (data: VagaFormData) => {
       const payload = {
-        ...data,
+        titulo: data.titulo,
+        tipo_contrato: data.tipo_contrato,
+        requisitos: data.requisitos,
+        atividades: data.atividades,
+        beneficios_vaga: data.beneficios,
+        urgencia: data.urgencia,
         quantidade: Number(data.quantidade) || 1,
         salario_min: Number(data.salario_min) || null,
         salario_max: Number(data.salario_max) || null,
         departamento_id: data.departamento_id || null,
         cargo_id: data.cargo_id || null,
-        status: 'aberta',
+        status_vaga: 'aberta',
       };
 
       if (isEditing) {

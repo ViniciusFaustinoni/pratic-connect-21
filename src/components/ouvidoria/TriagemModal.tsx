@@ -20,6 +20,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesUpdate } from "@/integrations/supabase/types";
 import { useQueryClient } from "@tanstack/react-query";
 import { categoriasManifestacao, prioridades, analistasOuvidoria } from "@/constants/ouvidoria";
 import type { CategoriaManifestacao, PrioridadeManifestacao } from "@/types/ouvidoria";
@@ -77,7 +78,7 @@ export function TriagemModal({
       }
 
       // Atualizar manifestação
-      const updates: Record<string, unknown> = {
+      const updates: TablesUpdate<'ouvidoria_manifestacoes'> = {
         prioridade: form.prioridade,
         status: "em_analise",
       };

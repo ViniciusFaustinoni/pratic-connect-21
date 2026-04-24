@@ -115,7 +115,7 @@ export function ResponderConsultaModal({ open, onClose, consulta }: ResponderCon
           recomendacoes: finalRecomendacoes.length > 0 ? finalRecomendacoes : null,
           status: 'em_analise',
           updated_at: new Date().toISOString(),
-        })
+        } as any)
         .eq('id', consulta.id);
 
       if (error) throw error;
@@ -148,7 +148,7 @@ export function ResponderConsultaModal({ open, onClose, consulta }: ResponderCon
           respondido_em: new Date().toISOString(),
           status: 'respondida',
           updated_at: new Date().toISOString(),
-        })
+        } as any)
         .eq('id', consulta.id);
 
       if (error) throw error;

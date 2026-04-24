@@ -118,7 +118,7 @@ export function useVistoriadoresRealtime() {
         return {
           vistoriador_id: item.vistoriador_id,
           vistoriador_nome: item.profiles?.nome || 'Vistoriador',
-          role_operacional: roleOperacionalPorProf.get(item.vistoriador_id) || null,
+          role_operacional: (roleOperacionalPorProf.get(item.vistoriador_id) as string | undefined) || null,
           latitude: item.latitude,
           longitude: item.longitude,
           em_servico: item.em_servico,

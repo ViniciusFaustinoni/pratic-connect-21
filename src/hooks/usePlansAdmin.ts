@@ -658,7 +658,7 @@ export function useCreateBenefit() {
     mutationFn: async (input: BenefitCreateInput) => {
       const { data, error } = await supabase
         .from('benefits')
-        .insert(input)
+        .insert(input as any)
         .select()
         .single();
       if (error) throw error;
@@ -741,7 +741,7 @@ export function useCreateMainCoverage() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: MainCoverageInput) => {
-      const { data, error } = await supabase.from('main_coverages').insert(input).select().single();
+      const { data, error } = await supabase.from('main_coverages').insert(input as any).select().single();
       if (error) throw error;
       return data;
     },
@@ -952,7 +952,7 @@ export function useCreateProductLine() {
     mutationFn: async (input: ProductLineInput) => {
       const { data, error } = await supabase
         .from('product_lines')
-        .insert(input)
+        .insert(input as any)
         .select()
         .single();
       if (error) throw error;

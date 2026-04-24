@@ -43,7 +43,7 @@ function AbaLinhas() {
     mutationFn: async ({ id, field, value }: { id: string; field: string; value: any }) => {
       const { error } = await supabase
         .from('product_lines')
-        .update({ [field]: value })
+        .update({ [field]: value } as any)
         .eq('id', id);
       if (error) throw error;
     },

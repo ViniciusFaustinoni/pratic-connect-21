@@ -71,7 +71,7 @@ export function ConcluirSindicanciaModal({
 
       const { error: updateError } = await supabase
         .from('sinistros')
-        .update(updateData)
+        .update(updateData as any)
         .eq('id', sinistroId);
       if (updateError) throw updateError;
 

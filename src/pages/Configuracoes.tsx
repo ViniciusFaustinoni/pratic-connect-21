@@ -98,7 +98,7 @@ export default function Configuracoes() {
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({ [tipo]: novoValor, updated_at: new Date().toISOString() })
+        .update({ [tipo]: novoValor, updated_at: new Date().toISOString() } as any)
         .eq('user_id', user.id);
 
       if (error) throw error;

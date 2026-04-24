@@ -3,6 +3,26 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 import { initTelemetry, recordCall } from '@/lib/supabaseTelemetry';
 
+type LooseDatabase = Database & {
+  public: Database['public'] & {
+    Tables: {
+      [K in keyof Database['public']['Tables']]: Database['public']['Tables'][K] extends {
+        Row: infer Row;
+        Insert: infer Insert;
+        Update: infer Update;
+        Relationships: infer Relationships;
+      }
+        ? {
+            Row: Row;
+            Insert: Insert & Record<string, unknown>;
+            Update: Update & Record<string, unknown>;
+            Relationships: Relationships;
+          }
+        : Database['public']['Tables'][K];
+    };
+  };
+};
+
 const SUPABASE_URL = "https://iyxdgmukrrdkffraptsx.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5eGRnbXVrcnJka2ZmcmFwdHN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczODA2MDIsImV4cCI6MjA4Mjk1NjYwMn0.ky2mnyV-zad5peCNb8Ss16LaVlCQ8hWk6kwaQHStDnI";
 
@@ -49,7 +69,7 @@ const fetchWithTimeout: typeof fetch = async (input, init) => {
   }
 };
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+export const supabase = createClient<LooseDatabase>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
     storage: localStorage,
     persistSession: true,

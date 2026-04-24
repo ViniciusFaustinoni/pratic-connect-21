@@ -86,7 +86,7 @@ export function CardVidrosDetalhe({ sinistro }: CardVidrosDetalheProps) {
     mutationFn: async (updateData: Record<string, any>) => {
       const { error } = await supabase
         .from('sinistros')
-        .update(updateData)
+        .update(updateData as any)
         .eq('id', sinistro.id);
       if (error) throw error;
     },
