@@ -17,7 +17,7 @@ interface CreateUserRequest {
   senha?: string;
   perfil?: string;
   perfis?: string[];
-  tipo: 'funcionario' | 'associado' | 'prestador' | 'agencia';
+  tipo: 'funcionario' | 'prestador' | 'agencia';
   regioes_atendimento?: string[];
   capacidade_diaria?: number;
 }
@@ -82,6 +82,12 @@ serve(async (req) => {
 
     const body: CreateUserRequest = await req.json();
     const { nome, email, cpf, cnpj, razao_social, nome_fantasia, telefone, senha, perfil, perfis, tipo, regioes_atendimento, capacidade_diaria } = body;
+    if ((tipo as string) === 'associado' || perfis?.includes('associado') || perfil === 'associado') {
+      return new Response(
+        JSON.stringify({ error: 'Associados não podem ser criados por esta área administrativa' }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     
     // Determinar perfis a adicionar
     const perfisParaAdicionar = perfis?.length ? perfis : (perfil ? [perfil] : ['vendedor_clt']);

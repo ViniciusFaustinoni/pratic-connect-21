@@ -382,6 +382,9 @@ export default function UsuarioForm() {
     mutationFn: async () => {
       if (isEditing && usuario) {
         const isAgencia = formData.tipo === 'agencia';
+        if (formData.tipo === 'associado') {
+          throw new Error('Associados não podem ser criados ou editados por esta área.');
+        }
         const profileUpdate: any = {
           nome: formData.nome, telefone: formData.telefone,
           tipo: formData.tipo as any, ativo: formData.ativo,
@@ -414,6 +417,9 @@ export default function UsuarioForm() {
         }
       } else {
         setFieldErrors({});
+        if (formData.tipo === 'associado') {
+          throw new Error('Associados não podem ser criados por esta área.');
+        }
         const isVistoriador = formData.perfis.some(p => ['instalador_vistoriador', 'vistoriador_base'].includes(p));
         const isAgenciaNew = formData.tipo === 'agencia';
         const { data, error } = await supabase.functions.invoke('create-user', {
@@ -498,18 +504,11 @@ export default function UsuarioForm() {
               <CardContent>
                 <Select value={formData.tipo} onValueChange={(v) => {
                   const updates: any = { tipo: v };
-                  if (v === 'agencia' && !formData.perfis.includes('agencia')) {
-                    updates.perfis = [...formData.perfis.filter(p => p !== 'agencia'), 'agencia'];
-                  }
-                  if (v !== 'agencia') {
-                    updates.perfis = formData.perfis.filter(p => p !== 'agencia');
-                  }
                   setFormData(prev => ({ ...prev, ...updates }));
                 }}>
                   <SelectTrigger className="bg-background"><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="funcionario">Funcionário</SelectItem>
-                    <SelectItem value="associado">Associado</SelectItem>
                     <SelectItem value="prestador">Prestador</SelectItem>
                     <SelectItem value="agencia">Agência</SelectItem>
                   </SelectContent>
