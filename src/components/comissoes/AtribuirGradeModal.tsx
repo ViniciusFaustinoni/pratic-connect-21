@@ -59,7 +59,6 @@ export function AtribuirGradeModal({ open, onOpenChange, linha }: AtribuirGradeM
 
   const supervisores = usuarios.filter((u) => u.roles.includes('supervisor_vendas'));
   const gerentes = usuarios.filter((u) => u.roles.includes('gerente_comercial'));
-  const agencias = usuarios.filter((u) => u.roles.includes('agencia'));
 
   const handleSave = async () => {
     try {
