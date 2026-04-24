@@ -582,7 +582,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
             Selecione um plano para configurar quanto cada perfil recebe.
           </CardContent>
         </Card>
-      ) : configuracaoCompartilhada ? (() => {
+      ) : configuracaoCompartilhada ? ((() => {
         const parcelas = regrasPorPlano[planoConfiguracaoId] || [];
         const hasVitalicia = parcelas.some(p => p.vitalicia);
         return (
@@ -647,7 +647,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
             </CardContent>
           </Card>
         );
-      })()
+      })())
       ) : (
         planosSelecionados.map((plano) => {
           const parcelas = regrasPorPlano[plano.id] || [];
