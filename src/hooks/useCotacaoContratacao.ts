@@ -613,7 +613,8 @@ export function useCotacaoContratacao(token: string | undefined) {
 
   return {
     cotacao,
-    isLoading: isLoading || isLoadingDocs,
+    isLoading,
+    isLoadingDocs,
     error,
     planosDisponiveis,
     etapaAtual,
