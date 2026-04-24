@@ -74,7 +74,6 @@ const periodoOptions = [
 const periodoDiaOptions = [
   { value: 'manha', label: 'Manhã (06h-12h)' },
   { value: 'tarde', label: 'Tarde (12h-18h)' },
-  { value: 'noite', label: 'Noite (18h-22h)' },
 ];
 
 const instaladorOptions = [
