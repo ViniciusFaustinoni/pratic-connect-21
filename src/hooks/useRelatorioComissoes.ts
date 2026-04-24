@@ -88,7 +88,7 @@ export function useRelatorioComissoes() {
           vendedor:profiles!comissoes_vendedor_id_fkey(nome, full_name, email),
           grade:grades_comissao(nome),
           plano:planos(nome),
-          contrato:contratos(vendedor:profiles(nome, full_name, email))
+          contrato:contratos(vendedor:profiles!contratos_vendedor_id_fkey(nome, full_name, email))
         `)
         .gte('created_at', `${filters.dataInicio}T00:00:00`)
         .lte('created_at', `${filters.dataFim}T23:59:59`)
