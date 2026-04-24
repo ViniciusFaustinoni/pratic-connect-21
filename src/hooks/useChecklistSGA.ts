@@ -33,8 +33,8 @@ export function useChecklistSGA(veiculoId: string, associadoId: string): Checkli
       const [veiculoRes, associadoRes, contratoRes, credenciaisRes, mapeamentosRes] = await Promise.all([
         supabase.from('veiculos').select('placa, chassi, renavam, cor, combustivel, ano_modelo, codigo_fipe, valor_fipe, marca, modelo').eq('id', veiculoId).single(),
         supabase.from('associados').select('nome, cpf, rg, data_nascimento, email, telefone, whatsapp, cep, logradouro, numero, bairro, cidade, uf, dia_vencimento').eq('id', associadoId).single(),
-        supabase.from('contratos').select('vendedor_id, veiculo_categoria').eq('veiculo_id', veiculoId).eq('associado_id', associadoId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-        supabase.from('integracoes_credenciais').select('configurado, teste_sucesso').eq('integracao', 'hinova').maybeSingle(),
+        supabase.from('contratos').select('vendedor_id, veiculo_categoria, plano_id').eq('veiculo_id', veiculoId).eq('associado_id', associadoId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('integracoes_credenciais').select('configurado, teste_sucesso, configuracao').eq('integracao', 'hinova').maybeSingle(),
         supabase.from('hinova_mapeamentos').select('tipo, codigo_local').eq('ativo', true),
       ]);
 
