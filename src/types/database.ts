@@ -690,7 +690,6 @@ export const STATUS_ROTA_LABELS: Record<StatusRota, string> = {
 export const PERIODO_LABELS = {
   manha: 'Manhã (08h - 12h)',
   tarde: 'Tarde (13h - 17h)',
-  noite: 'Noite (18h - 21h)',
 } as const;
 
 export const STATUS_VISTORIA_LABELS: Record<StatusVistoria, string> = {
