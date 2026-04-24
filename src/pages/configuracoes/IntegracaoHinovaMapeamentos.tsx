@@ -40,9 +40,21 @@ const TIPO_LABELS: Record<Tipo, string> = {
 
 export default function IntegracaoHinovaMapeamentos() {
   const qc = useQueryClient();
-  const [tipoAtivo, setTipoAtivo] = useState<Tipo>('cor');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tipoFromUrl = (searchParams.get('tipo') || 'cor') as Tipo;
+  const valorFromUrl = searchParams.get('valor') || '';
+  const [tipoAtivo, setTipoAtivo] = useState<Tipo>(TIPOS.includes(tipoFromUrl) ? tipoFromUrl : 'cor');
   const [novoOpen, setNovoOpen] = useState(false);
-  const [novo, setNovo] = useState({ tipo: 'cor' as Tipo, codigo_local: '', codigo_hinova: '', descricao: '' });
+  const [novo, setNovo] = useState({ tipo: tipoFromUrl as Tipo, codigo_local: valorFromUrl, codigo_hinova: '', descricao: '' });
+
+  // Abre o dialog automaticamente quando vier ?valor=xxx pré-preenchido na URL
+  useEffect(() => {
+    if (valorFromUrl) {
+      setNovo((n) => ({ ...n, tipo: tipoFromUrl, codigo_local: valorFromUrl }));
+      setNovoOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valorFromUrl, tipoFromUrl]);
 
   const { data: itens = [], isLoading } = useQuery({
     queryKey: ['hinova_mapeamentos'],
