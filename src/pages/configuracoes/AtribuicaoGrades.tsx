@@ -26,9 +26,11 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Eye, Network, Pencil, Search, Users2, AlertCircle } from 'lucide-react';
+import { Eye, Network, Pencil, Search, Users2, AlertCircle, AlertTriangle } from 'lucide-react';
 import { useAtribuicoesComissao } from '@/hooks/useAtribuicaoComissoes';
+import { useVendedoresSemCodigoSga } from '@/hooks/useVendedoresSemCodigoSga';
 import { EditarHierarquiaModal } from '@/components/comissoes/EditarHierarquiaModal';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { AtribuicaoLinha } from '@/types/atribuicaoComissao';
 
 const ROLE_LABEL: Record<string, string> = {
@@ -54,6 +56,7 @@ interface AtribuicaoGradesProps {
 export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-comissao' }: AtribuicaoGradesProps) {
   const navigate = useNavigate();
   const { data: atribuicoes = [], isLoading } = useAtribuicoesComissao();
+  const { data: semCodigoSga } = useVendedoresSemCodigoSga();
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('todos');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
