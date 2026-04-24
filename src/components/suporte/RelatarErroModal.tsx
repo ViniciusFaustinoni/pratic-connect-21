@@ -44,9 +44,13 @@ export function RelatarErroModal({ open, onOpenChange }: Props) {
 
   const removeFile = (i: number) => setFiles((prev) => prev.filter((_, idx) => idx !== i));
 
+  const hasImage = files.some((f) => f.type.startsWith('image/'));
+
   const submit = async () => {
     if (area.trim().length < 2) return toast.error('Informe a área');
     if (descricao.trim().length < 20) return toast.error('Descreva com pelo menos 20 caracteres');
+    if (files.length === 0) return toast.error('Anexe pelo menos 1 print do erro');
+    if (!hasImage) return toast.error('Pelo menos 1 anexo precisa ser uma imagem (print)');
     await create.mutateAsync({ area, descricao, files });
     reset();
     onOpenChange(false);
@@ -93,7 +97,7 @@ export function RelatarErroModal({ open, onOpenChange }: Props) {
           </div>
 
           <div className="space-y-1.5">
-            <Label>Prints do erro (opcional)</Label>
+            <Label>Prints do erro <span className="text-destructive">*</span></Label>
             <label
               htmlFor="erro-files"
               className="flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border p-4 text-muted-foreground hover:border-primary hover:text-primary cursor-pointer transition-colors"
@@ -109,6 +113,11 @@ export function RelatarErroModal({ open, onOpenChange }: Props) {
                 onChange={(e) => handleFiles(e.target.files)}
               />
             </label>
+            {!hasImage && (
+              <p className="text-xs text-muted-foreground">
+                É obrigatório anexar pelo menos 1 print (imagem) mostrando o erro.
+              </p>
+            )}
 
             {files.length > 0 && (
               <div className="grid grid-cols-3 gap-2 mt-2">
@@ -142,7 +151,7 @@ export function RelatarErroModal({ open, onOpenChange }: Props) {
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={submit} disabled={create.isPending}>
+          <Button onClick={submit} disabled={create.isPending || !hasImage}>
             {create.isPending ? 'Enviando...' : 'Enviar'}
           </Button>
         </DialogFooter>
