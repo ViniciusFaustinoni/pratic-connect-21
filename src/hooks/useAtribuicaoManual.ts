@@ -87,7 +87,7 @@ export function useServicosParaAtribuir() {
       }));
 
       // Merge and sort by date
-      const merged = [...(servicos || []), ...baseNormalized].sort((a, b) => {
+      const merged = [...servicosFiltrados, ...baseNormalized].sort((a, b) => {
         const dateCompare = (a.data_agendada || '').localeCompare(b.data_agendada || '');
         if (dateCompare !== 0) return dateCompare;
         return (a.hora_agendada || '').localeCompare(b.hora_agendada || '');
