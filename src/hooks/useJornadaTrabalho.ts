@@ -395,67 +395,13 @@ export function useJornadaTrabalho() {
   // Checar se há tarefa em execução (em_rota / em_andamento)
   const temTarefaEmExecucao = useTemTarefaEmExecucao();
 
-  // Tipo de alocação do dia (rota vs base). Base = controla almoço manualmente.
+  // Tipo de alocação do dia (rota vs base). Mantido apenas para metadata/UI.
   const { isBase } = useAlocacaoDiaria();
 
-  // Verificar se deve iniciar almoço automaticamente
-  // ⚠️ NÃO inicia se houver tarefa em execução — espera o técnico finalizar.
-  // ⚠️ NÃO inicia para técnicos Base — eles iniciam manualmente.
-  useEffect(() => {
-    if (
-      turno?.status === 'ativo' &&
-      !turno.inicio_almoco &&
-      tempoReal.minutosTrabalhados >= TEMPO_ATE_ALMOCO_MINUTOS &&
-      !isBase
-    ) {
-      if (temTarefaEmExecucao) {
-        console.log('[useJornadaTrabalho] Almoço adiado — tarefa em execução');
-        return;
-      }
-      console.log('[useJornadaTrabalho] 4 horas trabalhadas - iniciando almoço automaticamente');
-      iniciarAlmocoMutation.mutate();
-    }
-  }, [turno?.status, turno?.inicio_almoco, tempoReal.minutosTrabalhados, temTarefaEmExecucao, isBase]);
-
-  // Flag exposta para UI: passou de 4h mas almoço foi adiado por tarefa em execução
-  const almocoAdiado =
-    turno?.status === 'ativo' &&
-    !turno.inicio_almoco &&
-    tempoReal.minutosTrabalhados >= TEMPO_ATE_ALMOCO_MINUTOS &&
-    temTarefaEmExecucao;
-
-  // Rollback de segurança: se o servidor já flipou para 'em_almoco' mas há tarefa em execução,
-  // reverter para 'ativo' para liberar a tela do técnico.
-  useEffect(() => {
-    if (turno?.status === 'em_almoco' && turno?.id && temTarefaEmExecucao) {
-      console.log('[useJornadaTrabalho] Rollback de almoço — tarefa em execução detectada');
-      supabase
-        .from('turnos_profissionais')
-        .update({ status: 'ativo', inicio_almoco: null })
-        .eq('id', turno.id)
-        .then(({ error }) => {
-          if (error) {
-            console.error('[useJornadaTrabalho] Falha no rollback de almoço:', error);
-          } else {
-            refetchTurno();
-          }
-        });
-    }
-  }, [turno?.status, turno?.id, temTarefaEmExecucao, refetchTurno]);
-
-  // Auto-finalizar almoço quando os 60 minutos se completam
-  // ⚠️ NÃO finaliza para técnicos Base — eles finalizam manualmente.
-  useEffect(() => {
-    if (
-      turno?.status === 'em_almoco' &&
-      tempoReal.minutosAlmoco >= DURACAO_ALMOCO_MINUTOS &&
-      !finalizarAlmocoMutation.isPending &&
-      !isBase
-    ) {
-      console.log('[useJornadaTrabalho] Almoço de 60min completo - finalizando automaticamente');
-      finalizarAlmocoMutation.mutate();
-    }
-  }, [turno?.status, tempoReal.minutosAlmoco, isBase]);
+  // ⚠️ NÃO há mais início automático de almoço para nenhum tipo de técnico.
+  // O almoço é 100% manual — o técnico inicia e finaliza pelos botões da UI.
+  // Caso esqueça de finalizar, a auto-finalização defensiva acontece no servidor
+  // (edge functions atribuir-proxima-tarefa e cron-atribuir-tarefas) após 60min.
 
   // Calcular atraso de almoço em tempo real
   const calcularAtrasoAlmocoAtual = (): number => {
@@ -479,7 +425,9 @@ export function useJornadaTrabalho() {
   const minutosRestantes = Math.max(0, jornadaAjustada - tempoReal.minutosTrabalhados);
   const percentualJornada = jornadaAjustada > 0 ? Math.min(100, (tempoReal.minutosTrabalhados / jornadaAjustada) * 100) : 0;
   const minutosAlmocoRestantes = Math.max(0, DURACAO_ALMOCO_MINUTOS - tempoReal.minutosAlmoco);
-  const deveIniciarAlmoco = turno?.status === 'ativo' && !turno?.inicio_almoco && tempoReal.minutosTrabalhados >= TEMPO_ATE_ALMOCO_MINUTOS;
+  // Botão "Iniciar almoço" disponível para qualquer técnico em turno ativo sem almoço.
+  const podeIniciarAlmoco = turno?.status === 'ativo' && !turno?.inicio_almoco;
+  const deveIniciarAlmoco = podeIniciarAlmoco && tempoReal.minutosTrabalhados >= TEMPO_ATE_ALMOCO_MINUTOS;
 
   // Verificar se deve encerrar turno automaticamente quando jornada está completa
   useEffect(() => {
@@ -564,7 +512,6 @@ export function useJornadaTrabalho() {
     isEncerrando: encerrarTurnoMutation.isPending,
 
     // Flags de UI
-    almocoAdiado,
     temTarefaEmExecucao,
     isBase,
 
