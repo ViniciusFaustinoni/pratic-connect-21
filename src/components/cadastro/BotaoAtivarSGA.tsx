@@ -24,7 +24,7 @@ import { ptBR } from 'date-fns/locale';
 import { useChecklistSGA } from '@/hooks/useChecklistSGA';
 import { ChecklistSGA } from '@/components/ativacao/ChecklistSGA';
 
-export type StatusSGA = 'pendente' | 'sincronizando' | 'ativado_sga' | 'erro_sincronizacao';
+export type StatusSGA = 'pendente' | 'pendente_sga' | 'sincronizando' | 'ativado_sga' | 'erro_sincronizacao';
 
 interface BotaoAtivarSGAProps {
   veiculoId: string;
@@ -62,7 +62,7 @@ export function BotaoAtivarSGA({
 
     try {
       const { data, error } = await supabase.functions.invoke('sga-hinova-sync', {
-        body: { veiculo_id: veiculoId, associado_id: associadoId },
+        body: { veiculo_id: veiculoId, associado_id: associadoId, status_sga_destino: 'ativo' },
       });
 
       if (error) throw error;
@@ -141,6 +141,14 @@ export function BotaoAtivarSGA({
           >
             <RefreshCw className="w-4 h-4" />
             Erro - Tentar Novamente
+          </Button>
+        );
+
+      case 'pendente_sga':
+        return (
+          <Button variant="secondary" className="gap-2" onClick={() => setDialogOpen(true)} disabled={disabled}>
+            <RefreshCw className="w-4 h-4" />
+            Pendente no SGA — Ativar
           </Button>
         );
 
