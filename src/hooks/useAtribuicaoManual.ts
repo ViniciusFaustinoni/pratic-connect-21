@@ -92,6 +92,24 @@ export function useServicosParaAtribuir() {
   });
 }
 
+export interface TecnicoAtribuicaoManual {
+  id: string;
+  nome: string | null;
+  avatar_url: string | null;
+  telefone: string | null;
+  role_permanente: string;
+  role_operacional: string;
+  perfilAtualLabel: 'Rota' | 'Base';
+  fonteDisponibilidade: 'Online' | 'Na base' | 'Na base • App ativo';
+  disponibilidadeTipo: 'rota_online' | 'base';
+  appAtivo: boolean;
+  latitude: number | null;
+  longitude: number | null;
+  ultimaAtualizacao: string | null;
+  bairroAtual: string | null;
+  tarefas: any[];
+}
+
 async function reverseGeocodeBairro(lat: number, lng: number): Promise<string | null> {
   try {
     const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1&accept-language=pt-BR`;
@@ -117,7 +135,51 @@ export function useVistoriadoresAtivos() {
   return useQuery({
     queryKey: ['vistoriadores-ativos-manual'],
     queryFn: async () => {
-      // 1) Buscar profissionais com turno aberto hoje
+      // 1) Buscar técnicos elegíveis pelo perfil cadastrado
+      const { data: roles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id, role')
+        .in('role', ['instalador_vistoriador', 'vistoriador_base'] as any[]);
+
+      if (rolesError) throw rolesError;
+      if (!roles?.length) return [];
+
+      const rolesByUserId: Record<string, Set<string>> = {};
+      roles.forEach((r: any) => {
+        if (!rolesByUserId[r.user_id]) rolesByUserId[r.user_id] = new Set();
+        rolesByUserId[r.user_id].add(r.role as string);
+      });
+
+      const userIds = Object.keys(rolesByUserId);
+      const { data: profiles, error: profErr } = await supabase
+        .from('profiles')
+        .select('id, user_id, nome, avatar_url, telefone, ativo')
+        .in('user_id', userIds)
+        .neq('ativo', false)
+        .order('nome');
+
+      if (profErr) throw profErr;
+      if (!profiles?.length) return [];
+
+      const profileIds = profiles.map(p => p.id);
+
+      const principalRole = (set: Set<string>): string => {
+        if (set.has('instalador_vistoriador')) return 'instalador_vistoriador';
+        if (set.has('vistoriador_base')) return 'vistoriador_base';
+        return Array.from(set)[0] || 'instalador_vistoriador';
+      };
+
+      const { data: coberturas } = await (supabase as any)
+        .from('tecnico_perfil_operacional')
+        .select('profissional_id, role_operacional')
+        .in('profissional_id', profileIds)
+        .eq('ativo', true);
+
+      const roleOperacionalPorProf = new Map(
+        (coberturas || []).map((c: any) => [c.profissional_id, c.role_operacional as string])
+      );
+
+      // 2) Buscar profissionais com turno aberto hoje
       const hojeStr = new Date().toISOString().split('T')[0];
       const { data: turnosAbertos } = await supabase
         .from('turnos_profissionais')
@@ -127,53 +189,74 @@ export function useVistoriadoresAtivos() {
 
       const idsComTurnoAberto = new Set((turnosAbertos || []).map(t => t.profissional_id));
 
-      // 2) Buscar localizações recentes (até 30 min) — sem filtro estrito de em_servico
+      // 3) Buscar localizações recentes (até 30 min) — rota depende do app ativo; base não depende
       const cutoff30min = new Date(Date.now() - 30 * 60 * 1000).toISOString();
       const { data: localizacoesRaw, error: locErr } = await supabase
         .from('vistoriadores_localizacao')
         .select('vistoriador_id, latitude, longitude, em_servico, updated_at')
+        .in('vistoriador_id', profileIds)
         .gte('updated_at', cutoff30min);
 
       if (locErr) throw locErr;
-      if (!localizacoesRaw || localizacoesRaw.length === 0) return [];
 
-      // 3) Filtro robusto: em_servico=true OU (recente E turno aberto)
-      const localizacoes = localizacoesRaw.filter(l =>
+      const localizacoesAtivas = (localizacoesRaw || []).filter(l =>
         l.em_servico || idsComTurnoAberto.has(l.vistoriador_id)
       );
+      const localizacaoPorProfissional = new Map(localizacoesAtivas.map(l => [l.vistoriador_id, l]));
 
-      if (localizacoes.length === 0) return [];
+      const tecnicosDisponiveis = profiles
+        .map(profile => {
+          const rolePermanente = principalRole(rolesByUserId[profile.user_id] || new Set<string>());
+          const roleOperacional = roleOperacionalPorProf.get(profile.id) || rolePermanente;
+          const loc = localizacaoPorProfissional.get(profile.id);
+          const appAtivo = Boolean(loc);
+          const ehBase = roleOperacional === 'vistoriador_base';
+          const ehRota = roleOperacional === 'instalador_vistoriador';
 
-      const ids = localizacoes.map(l => l.vistoriador_id);
+          if (!ehBase && !(ehRota && appAtivo)) return null;
 
-      const { data: profiles, error: profErr } = await supabase
-        .from('profiles')
-        .select('id, nome, avatar_url, telefone')
-        .in('id', ids);
+          return {
+            profile,
+            loc,
+            rolePermanente,
+            roleOperacional,
+            appAtivo,
+            disponibilidadeTipo: ehBase ? 'base' : 'rota_online',
+          };
+        })
+        .filter(Boolean) as Array<{
+          profile: typeof profiles[number];
+          loc: typeof localizacoesRaw[number] | undefined;
+          rolePermanente: string;
+          roleOperacional: string;
+          appAtivo: boolean;
+          disponibilidadeTipo: 'rota_online' | 'base';
+        }>;
 
-      if (profErr) throw profErr;
+      if (!tecnicosDisponiveis.length) return [];
+
+      const idsDisponiveis = tecnicosDisponiveis.map(t => t.profile.id);
 
       const hoje = new Date().toISOString().split('T')[0];
       const { data: servicosAtribuidos } = await supabase
         .from('servicos')
         .select('id, tipo, data_agendada, bairro, cidade, uf, profissional_id, status')
-        .in('profissional_id', ids)
+        .in('profissional_id', idsDisponiveis)
         .gte('data_agendada', hoje)
         .in('status', ['agendada', 'em_andamento', 'em_rota']);
 
       // Reverse geocode sequencialmente (1/s Nominatim policy)
       const bairroMap: Record<string, string | null> = {};
-      for (const loc of localizacoes) {
+      for (const loc of localizacoesAtivas) {
         if (loc.latitude && loc.longitude) {
           bairroMap[loc.vistoriador_id] = await reverseGeocodeBairro(loc.latitude, loc.longitude);
-          if (localizacoes.indexOf(loc) < localizacoes.length - 1) {
+          if (localizacoesAtivas.indexOf(loc) < localizacoesAtivas.length - 1) {
             await sleep(1100);
           }
         }
       }
 
-      return (profiles || []).map(p => {
-        const loc = localizacoes.find(l => l.vistoriador_id === p.id);
+      return tecnicosDisponiveis.map(({ profile: p, loc, rolePermanente, roleOperacional, appAtivo, disponibilidadeTipo }) => {
         const tarefas = (servicosAtribuidos || [])
           .filter(s => s.profissional_id === p.id)
           .map(s => ({
@@ -183,12 +266,25 @@ export function useVistoriadoresAtivos() {
           }));
         return {
           ...p,
-          latitude: loc?.latitude,
-          longitude: loc?.longitude,
-          ultimaAtualizacao: loc?.updated_at,
+          role_permanente: rolePermanente,
+          role_operacional: roleOperacional,
+          perfilAtualLabel: roleOperacional === 'vistoriador_base' ? 'Base' : 'Rota',
+          fonteDisponibilidade: roleOperacional === 'vistoriador_base'
+            ? (appAtivo ? 'Na base • App ativo' : 'Na base')
+            : 'Online',
+          disponibilidadeTipo,
+          appAtivo,
+          latitude: loc?.latitude ?? null,
+          longitude: loc?.longitude ?? null,
+          ultimaAtualizacao: loc?.updated_at ?? null,
           bairroAtual: bairroMap[p.id] || null,
           tarefas,
         };
+      }).sort((a, b) => {
+        if (a.disponibilidadeTipo !== b.disponibilidadeTipo) {
+          return a.disponibilidadeTipo === 'rota_online' ? -1 : 1;
+        }
+        return (a.nome || '').localeCompare(b.nome || '', 'pt-BR');
       });
     },
     refetchInterval: 30000,
