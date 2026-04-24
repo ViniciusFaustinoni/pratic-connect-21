@@ -265,9 +265,9 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="border-t px-6 py-4">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button onClick={handleSave} disabled={saving || loadingVinculos}>
             {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Salvar hierarquia
           </Button>
