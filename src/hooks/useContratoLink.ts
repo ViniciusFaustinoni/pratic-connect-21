@@ -781,7 +781,7 @@ export function useAgendarInstalacaoContrato() {
       if (error) throw error;
       
       // Registrar no histórico
-      const periodoLabel = periodoCanonico === 'manha' ? 'Manhã' : periodoCanonico === 'tarde' ? 'Tarde' : 'Noite';
+      const periodoLabel = periodoCanonico === 'manha' ? 'Manhã' : 'Tarde';
       await supabase.from('contratos_historico').insert({
         contrato_id: contratoId,
         evento: 'instalacao_agendada',
