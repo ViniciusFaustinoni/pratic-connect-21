@@ -16,6 +16,7 @@ import { useInadimplenciaPrazos, useCarenciaDiasPadrao, useCarenciaVidrosDias } 
 import { useAssociadoActions } from '@/hooks/useAssociados';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import type { TablesUpdate } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
 import type { SituacaoAssociado } from '@/hooks/useAssociadoSituacao';
 
@@ -111,7 +112,7 @@ export function ReativacaoWizard({
         const fimVidros = new Date();
         fimVidros.setDate(fimVidros.getDate() + carenciaVidDias);
 
-        const contratoUpdate: Record<string, any> = {
+        const contratoUpdate: TablesUpdate<'contratos'> = {
           tipo_entrada: 'reativacao',
           data_carencia_inicio: hoje,
           data_carencia_fim: fimGeral.toISOString().split('T')[0],

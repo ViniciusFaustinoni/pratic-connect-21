@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { TablesUpdate } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -125,7 +126,7 @@ export function AtualizarStatusOSModal({
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData.user?.id;
 
-      const updateData: Record<string, unknown> = {
+      const updateData: TablesUpdate<'ordens_servico'> = {
         status: novoStatus,
         updated_at: new Date().toISOString(),
       };

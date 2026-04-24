@@ -25,6 +25,7 @@ import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { TablesInsert } from '@/integrations/supabase/types';
 import { useNavigate } from 'react-router-dom';
 
 interface FilaItem {
@@ -125,13 +126,15 @@ export function ModoTrabalhoModal({ open, onClose, fila, currentIndex, onNext, o
       const user = await supabase.auth.getUser();
       
       // Registrar o contato
-      await supabase.from('cobranca_contatos').insert({
+      const contato: TablesInsert<'cobranca_contatos'> = {
         associado_id: item.associado_id,
         tipo: 'ligacao',
         resultado: resultado,
         observacao: observacao,
-        realizado_por: user.data.user?.id
-      });
+        atendente_id: user.data.user?.id ?? null
+      };
+
+      await supabase.from('cobranca_contatos').insert(contato);
 
       // Atualizar status da fila
       await supabase.from('cobranca_fila').update({
