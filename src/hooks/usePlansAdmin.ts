@@ -32,6 +32,7 @@ export interface PlanInput {
   footer_note?: string | null;
   display_order?: number;
   is_active?: boolean;
+  codigo_sga_plano?: string | null;
   benefits?: PlanBenefitInput[];
   coberturas?: { cobertura_id: string }[];
   categorias_veiculo?: string | null;
@@ -68,6 +69,7 @@ export function useCreatePlan() {
         ativo: planData.is_active ?? true,
         valor_adesao: 0,
         categoria: categorias_veiculo || null,
+        codigo_sga_plano: planData.codigo_sga_plano ?? null,
       };
 
       // Create plan
@@ -164,6 +166,7 @@ export function useUpdatePlan() {
         ordem: planData.display_order || 0,
         ativo: planData.is_active ?? true,
         categoria: categorias_veiculo || null,
+        codigo_sga_plano: planData.codigo_sga_plano ?? null,
       };
 
       // Update plan
@@ -647,6 +650,11 @@ export interface BenefitInput {
   category?: string | null;
   display_order?: number;
   is_active?: boolean;
+  codigo_sga?: string | null;
+  carencia_ativa?: boolean;
+  carencia_dias?: number | null;
+  carencia_tipo?: string | null;
+  carencia_multiplicador?: number | null;
 }
 
 export type BenefitCreateInput = BenefitInput & { slug: string };
@@ -782,6 +790,7 @@ export function useDeleteMainCoverage() {
 export interface CoberturaInput {
   nome: string;
   codigo?: string;
+  codigo_sga?: string | null;
   descricao?: string | null;
   tipo?: string | null;
   icon?: string | null;
@@ -815,6 +824,7 @@ export function useCreateCobertura() {
           subtitle: input.subtitle ?? null,
           display_order: input.display_order ?? 0,
           ativo: input.ativo ?? true,
+          codigo_sga: input.codigo_sga ?? null,
         })
         .select()
         .single();
