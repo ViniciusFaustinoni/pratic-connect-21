@@ -151,6 +151,7 @@ const IntegracaoWhatsApp = lazy(() => import("./pages/configuracoes/IntegracaoWh
 const IntegracaoApiKeys = lazy(() => import("./pages/configuracoes/IntegracaoApiKeys"));
 const IntegracaoFontesLeads = lazy(() => import("./pages/configuracoes/IntegracaoFontesLeads"));
 const IntegracaoSGAHinova = lazy(() => import("./pages/configuracoes/IntegracaoSGAHinova"));
+const IntegracaoHinovaMapeamentos = lazy(() => import("./pages/configuracoes/IntegracaoHinovaMapeamentos"));
 const Sistema = lazy(() => import("./pages/configuracoes/Sistema"));
 const Logs = lazy(() => import("./pages/configuracoes/Logs"));
 const GradesComissao = lazy(() => import("./pages/configuracoes/GradesComissao"));
