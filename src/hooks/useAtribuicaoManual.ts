@@ -26,14 +26,18 @@ export function useServicosParaAtribuir() {
     queryFn: async () => {
       const hoje = new Date().toISOString().split('T')[0];
 
-      // Fetch regular services
+      // Fetch regular services — apenas serviços cujo contrato foi APROVADO pelo Cadastro.
+      // Defesa em profundidade: o trigger de criação já bloqueia, mas filtramos
+      // aqui também para que regressões silenciosas no banco não exponham itens
+      // não aprovados na fila de atribuição.
       const { data: servicos, error } = await supabase
         .from('servicos')
         .select(`
           id, tipo, data_agendada, hora_agendada, periodo, bairro, cidade, uf, logradouro, numero,
-          permite_encaixe, status,
+          permite_encaixe, status, contrato_id,
           associado:associados!servicos_associado_id_fkey(id, nome, telefone, whatsapp),
-          veiculo:veiculos!servicos_veiculo_id_fkey(placa, marca, modelo)
+          veiculo:veiculos!servicos_veiculo_id_fkey(placa, marca, modelo),
+          contrato:contratos!servicos_contrato_id_fkey(aprovado_em)
         `)
         .is('profissional_id', null)
         .in('status', ['pendente', 'agendada'])
@@ -42,6 +46,14 @@ export function useServicosParaAtribuir() {
         .order('hora_agendada', { ascending: true });
 
       if (error) throw error;
+
+      // Filtra serviços sem contrato aprovado (defesa em profundidade contra
+      // regressões no trigger). Serviços sem contrato vinculado são tolerados
+      // (ex.: vistorias avulsas criadas manualmente).
+      const servicosFiltrados = (servicos || []).filter((s: any) => {
+        if (!s.contrato_id) return true;
+        return !!s.contrato?.aprovado_em;
+      });
 
       // Fetch base inspections without technician assigned
       const { data: baseItems, error: baseError } = await supabase
@@ -75,7 +87,7 @@ export function useServicosParaAtribuir() {
       }));
 
       // Merge and sort by date
-      const merged = [...(servicos || []), ...baseNormalized].sort((a, b) => {
+      const merged = [...servicosFiltrados, ...baseNormalized].sort((a, b) => {
         const dateCompare = (a.data_agendada || '').localeCompare(b.data_agendada || '');
         if (dateCompare !== 0) return dateCompare;
         return (a.hora_agendada || '').localeCompare(b.hora_agendada || '');
