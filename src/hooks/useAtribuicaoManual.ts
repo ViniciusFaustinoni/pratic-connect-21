@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { formatLocalizacaoComZona, getZonaAtendimento } from '@/lib/localizacao-zonas';
 
 const PRODUCTION_BASE_URL = 'https://app.praticcar.org';
 
@@ -29,7 +30,7 @@ export function useServicosParaAtribuir() {
       const { data: servicos, error } = await supabase
         .from('servicos')
         .select(`
-          id, tipo, data_agendada, hora_agendada, periodo, bairro, cidade, logradouro, numero,
+          id, tipo, data_agendada, hora_agendada, periodo, bairro, cidade, uf, logradouro, numero,
           permite_encaixe, status,
           associado:associados!servicos_associado_id_fkey(id, nome, telefone, whatsapp),
           veiculo:veiculos!servicos_veiculo_id_fkey(placa, marca, modelo)
@@ -63,6 +64,7 @@ export function useServicosParaAtribuir() {
         periodo: null,
         bairro: null,
         cidade: null,
+        uf: null,
         logradouro: null,
         numero: null,
         permite_encaixe: false,
@@ -79,7 +81,11 @@ export function useServicosParaAtribuir() {
         return (a.hora_agendada || '').localeCompare(b.hora_agendada || '');
       });
 
-      return merged;
+      return merged.map(s => ({
+        ...s,
+        zona: getZonaAtendimento(s.bairro, s.cidade, (s as any).uf),
+        localizacaoFormatada: formatLocalizacaoComZona(s.bairro, s.cidade, (s as any).uf),
+      }));
     },
     refetchInterval: 30000,
     refetchIntervalInBackground: false,
@@ -150,7 +156,7 @@ export function useVistoriadoresAtivos() {
       const hoje = new Date().toISOString().split('T')[0];
       const { data: servicosAtribuidos } = await supabase
         .from('servicos')
-        .select('id, tipo, data_agendada, bairro, cidade, profissional_id, status')
+        .select('id, tipo, data_agendada, bairro, cidade, uf, profissional_id, status')
         .in('profissional_id', ids)
         .gte('data_agendada', hoje)
         .in('status', ['agendada', 'em_andamento', 'em_rota']);
@@ -168,7 +174,13 @@ export function useVistoriadoresAtivos() {
 
       return (profiles || []).map(p => {
         const loc = localizacoes.find(l => l.vistoriador_id === p.id);
-        const tarefas = (servicosAtribuidos || []).filter(s => s.profissional_id === p.id);
+        const tarefas = (servicosAtribuidos || [])
+          .filter(s => s.profissional_id === p.id)
+          .map(s => ({
+            ...s,
+            zona: getZonaAtendimento(s.bairro, s.cidade, (s as any).uf),
+            localizacaoFormatada: formatLocalizacaoComZona(s.bairro, s.cidade, (s as any).uf),
+          }));
         return {
           ...p,
           latitude: loc?.latitude,
