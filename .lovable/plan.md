@@ -1,107 +1,80 @@
 
-# Plano — Campos manuais de Código Hinova (somente obrigatórios no envio ao SGA)
+## Problema identificado
 
-## 1) O que o SGA exige obrigatoriamente em cada chamada
+A integração de busca de boletos (`POST /listar/boleto-associado-veiculo`) **já existe** (`supabase/functions/_shared/hinova-client.ts` → `listarBoletosVeiculo`), mas está **violando regras obrigatórias da API documentada**, o que causa erros silenciosos / 406:
 
-A integração faz duas chamadas para gravar uma adesão (`sga-hinova-sync`):
+| Item | Doc Hinova | Implementação atual | Status |
+|---|---|---|---|
+| Janela máxima | **90 dias** | 5 anos (default) e 5 meses (sync) | ❌ Erro |
+| `data_inicial` / `data_final` | obrigatório, dd/mm/aaaa | ok | ✅ |
+| `link_boleto` | opcional, retorna URL | nunca enviado | ⚠️ Faltando |
+| Identificador (`codigo_associado` ou `placa` ou `cpf` ou `codigo_veiculo`) | basta um par | enviamos os 2 códigos | ✅ |
+| Janela do filtro | usar par vencimento OR pagamento OR emissão | só `data_inicial`/`data_final` (genérico) | ⚠️ Frágil |
 
-**`POST /associado/cadastrar`** — campos com código Hinova:
-- `codigo_conta` (qual conta da regional)
-- `codigo_voluntario` (vendedor responsável)
-- `codigo_regional` (quando a conta tem mais de uma regional)
-- `codigo_cooperativa` (quando a conta tem mais de uma)
+Resultado: como o sistema dispara janelas de 150 dias / 1825 dias, a Hinova devolve 406 ou ignora o filtro, e os boletos chegam parciais ou vazios — o que explica o backfill ter "muitos vazios" mesmo com `codigo_hinova` correto.
 
-**`POST /veiculo/cadastrar`** — campos com código Hinova:
-- `codigo_associado` (vem do passo anterior — automático)
-- `codigo_plano` (plano contratado)
-- `codigo_cor` (cor do veículo)
-- `codigo_combustivel` (combustível)
-- `codigo_tipo_veiculo` (carro / moto / caminhão / etc.)
-- `codigo_voluntario` (vendedor)
-- `codigo_situacao` (pendente/ativo)
-- `produtos_vinculados[].codigo_produto` (cada cobertura e benefício do plano)
+## Plano (3 partes)
 
-Tudo o mais (RG, profissão, "como conheceu", forma de pagamento, etc.) é opcional na API e hoje resolvido por defaults globais — fora do escopo deste plano.
+### 1. Corrigir o cliente Hinova (`supabase/functions/_shared/hinova-client.ts`)
 
----
+- Em `listarBoletosVeiculo`, **trocar a janela única de 5 anos por janelas iterativas de 90 dias** cobrindo até N anos para trás (default 3 anos = ~12 chamadas) e concatenando resultados, deduplicados por `nosso_numero`.
+- Aceitar `linkBoleto?: boolean` (default `true`) e enviar `link_boleto: true` no body — assim já gravamos `boleto_url` direto da Hinova.
+- Aceitar `codigoSituacaoBoleto?: number` opcional para filtros pontuais (ex.: somente abertos = `1`).
+- Usar **`data_vencimento_inicial` / `data_vencimento_final`** (par mais semântico para "boletos do veículo no período") em vez do par genérico `data_inicial`/`data_final`, mantendo compatibilidade enviando ambos.
+- Limitar tamanho do payload em logs (continuar com `bodySample`).
 
-## 2) Inventário — onde já existe campo manual de código Hinova
+### 2. Criar nova edge function `sga-testar-boletos-veiculo`
 
-| Entidade do nosso sistema | Onde se cadastra | Campo manual hoje? |
-|---|---|---|
-| Conta / Regional / Cooperativa / Voluntário padrão / Situações | Configurações → Integrações → Hinova | ✅ existe (sheet de configuração) |
-| Plano de proteção | Cadastro de Planos (`PlanFormModal`) → `codigo_sga_plano` | ✅ existe |
-| Cobertura | `CoberturaUnificadaFormModal` → `codigo_sga` | ✅ existe |
-| Benefício | `BeneficioFormModal` → `codigo_sga` | ✅ existe |
-| Vendedor / Consultor | Consultores → Editar (`ConsultorEditSheet`) → `codigo_sga_voluntario` | ✅ existe |
-| **Cor de veículo** | Tabela global `hinova_mapeamentos` (tipo `cor`) | ⚠️ só via tela de mapeamentos — ok |
-| **Combustível** | `hinova_mapeamentos` (tipo `combustivel`) | ⚠️ só via mapeamentos — ok |
-| **Tipo de veículo (carro/moto/...)** | `hinova_mapeamentos` (tipo `tipo_veiculo`) | ⚠️ só via mapeamentos — ok |
-| **Tipo de foto/documento** | `hinova_mapeamentos` (tipo `tipo_foto`) | ⚠️ só via mapeamentos — ok |
+Função simples, **somente leitura, sem efeitos colaterais no banco** (não grava em `cobrancas`, não cria job), para validação isolada com 1 veículo:
 
-**Conclusão dos gaps:** já há campo manual em todas as entidades obrigatórias. O único ponto fraco é que **Cor, Combustível e Tipo de Veículo** ficam num lugar separado (Configurações → Mapeamentos Hinova), longe de quem cadastra o veículo. Quando falta um valor (ex.: cor "Grafite" não mapeada), o sync quebra com mensagem técnica.
+- **Input:** `{ veiculo_id?: string, placa?: string, codigo_veiculo?: number, dias?: number }` (default 90 dias).
+- **Fluxo:**
+  1. Carrega o veículo + associado (resolve `codigo_hinova` em ambos).
+  2. Autentica na Hinova.
+  3. Se faltar `codigo_veiculo`, reconcilia por placa; se faltar `codigo_associado`, reconcilia por CPF.
+  4. Chama `listarBoletosVeiculo` com janela de exatamente `dias` (≤90) e `link_boleto: true`.
+  5. **Retorna o JSON cru da Hinova + um resumo normalizado** (status mapeado, valores parseados) — sem persistir.
+- **Saída:** `{ success, codigo_associado, codigo_veiculo, janela: { inicio, fim }, request_payload, raw_response, boletos_normalizados, hinova_http_status }`.
+- Loga em `sga_sync_logs` com `action: 'teste_listar_boletos'` para auditoria.
 
----
+### 3. UI de teste em `Configurações > Integrações > Hinova`
 
-## 3) O que será implementado
+Adicionar um card "Teste de Boletos por Veículo" em `src/pages/configuracoes/IntegracaoHinovaMapeamentos.tsx` (ou na página principal de Integrações Hinova — confirmar o melhor local após abrir a tela):
 
-### 3.1. Tela de Mapeamentos Hinova — UX guiada (Configurações → Integrações → Mapeamentos)
+- Campo de busca por **placa** (autocomplete em `veiculos` com `codigo_hinova` not null).
+- Seletor de janela: 30 / 60 / 90 dias.
+- Botão **"Testar busca"** → chama `sga-testar-boletos-veiculo`.
+- Exibe lado a lado:
+  - **Request enviado** (codigo_associado, codigo_veiculo, datas, link_boleto).
+  - **Resposta crua da Hinova** (JSON colapsável).
+  - **Tabela normalizada**: nosso_numero, vencimento, valor, status, link.
+- Mostra erros transitórios com `reason` (`janela_horaria`, `auth`, etc.) e botão "Repetir".
 
-A tela `IntegracaoHinovaMapeamentos.tsx` já existe, mas é genérica. Vamos:
+### 4. Após validar com 1 veículo, ajustar o sync de produção
 
-- **Pré-popular as opções** lendo os valores reais que aparecem no sistema:
-  - **Cores**: distinct de `veiculos.cor` que ainda não têm mapeamento.
-  - **Combustíveis**: distinct de `veiculos.combustivel`.
-  - **Tipos de veículo**: as categorias do catálogo de planos (`carro`, `moto`, `caminhao`, etc.).
-- Mostrar, em cima de cada aba, um **alerta amarelo** listando os valores **sem código Hinova cadastrado** (ex.: "3 cores sem mapeamento: Grafite, Vinho, Champagne") com botão "Adicionar agora".
-- Para cada linha existente, manter edição inline do `codigo_hinova`.
+- `supabase/functions/sga-sync-financeiro-veiculo/index.ts`: substituir `janela5Meses()` por chamada à nova versão de `listarBoletosVeiculo` que já itera internamente em janelas de 90 dias (não precisa mais montar janela manualmente). Manter cobertura de ~3 anos para histórico inicial.
+- Idempotência por `nosso_numero` já existe (upsert), então re-rodar é seguro.
 
-### 3.2. Validação prévia ao envio (pre-check antes do `cadastrar`)
+## Arquivos afetados
 
-Antes de chamar `sga-hinova-sync`, rodar um pre-check no front (já existe `useChecklistSGA.ts` — estender) que valida e mostra mensagens humanas:
+- `supabase/functions/_shared/hinova-client.ts` — janela 90d iterativa + `link_boleto` + filtro vencimento.
+- `supabase/functions/sga-testar-boletos-veiculo/index.ts` — **novo** (read-only, sem grava nada).
+- `supabase/functions/sga-sync-financeiro-veiculo/index.ts` — usa nova assinatura.
+- `src/pages/configuracoes/IntegracaoHinovaMapeamentos.tsx` (ou página equivalente) — card de teste.
 
-| Falta | Mensagem | Onde resolver |
-|---|---|---|
-| Vendedor sem `codigo_sga_voluntario` | "Vendedor X não tem Código Hinova" | Botão → abre `ConsultorEditSheet` |
-| Plano sem `codigo_sga_plano` | "Plano Y não tem Código Hinova" | Botão → abre `PlanFormModal` |
-| Cobertura/benefício do plano sem `codigo_sga` | "Cobertura Z do plano Y sem código" | Botão → abre form do item |
-| Cor/combustível/tipo do veículo sem mapeamento | "Cor 'Grafite' não tem código Hinova mapeado" | Botão → abre Mapeamentos com a aba correta + valor pré-preenchido |
-| Configuração global incompleta (`codigo_conta`, `codigo_regional`, `codigo_cooperativa`) | "Integração Hinova sem código de conta" | Botão → abre `ConfigurarIntegracaoSheet` |
+## Detalhes técnicos
 
-O pre-check bloqueia o botão "Enviar ao SGA" e mostra os itens em uma lista clicável — **nenhuma adesão chega ao Hinova com payload incompleto**.
+- **Por que 90 dias é hard-cap:** documentação literal — *"O limite do intervalo de tempo é de, no máximo, 90 dias"*. A Hinova retorna 406 com payloads maiores; tem sido a causa de chamadas que devolvem 0 boletos para veículos que claramente têm cobranças.
+- **Iteração:** loop `for` de hoje → N anos atrás, em passos de 90 dias, com `await` sequencial (não paralelo) para não estourar rate limit. Cada iteração soma ao set por `nosso_numero` (chave única já existente em `cobrancas`).
+- **Sem novas tabelas/migrations.** O endpoint de teste apenas lê e loga em `sga_sync_logs` (já existe).
+- **Sem novos secrets.** Reusa credenciais Hinova já configuradas via `getHinovaCreds`.
+- **CORS padrão** + handler OPTIONS na nova função.
 
-### 3.3. Fallback explícito de `codigo_voluntario`
+## Critério de sucesso
 
-Hoje a edge function já tem o fallback "voluntário do vendedor → voluntário padrão da integração". Vamos apenas tornar isso visível na UI:
+Você acessa o card de teste, escolhe uma placa qualquer (com `codigo_hinova` preenchido), clica em "Testar busca 90 dias" e a tela mostra:
+1. Request enviado (com `data_vencimento_inicial`/`data_vencimento_final` válidos e `link_boleto: true`).
+2. Resposta crua da Hinova (JSON inteiro).
+3. Tabela com pelo menos 1 boleto recente, contendo `nosso_numero`, `linha_digitavel`, `valor_boleto`, `data_vencimento`, `situacao_boleto` e `link_boleto`.
 
-- Na linha do vendedor sem código próprio, badge **"Usará código padrão (X)"** em vez de bloquear.
-- Se o padrão também estiver vazio, aí sim bloquear.
-
----
-
-## 4) Arquivos afetados
-
-- `src/pages/configuracoes/IntegracaoHinovaMapeamentos.tsx` — pré-popular opções, alerta de pendências, deep-link por aba.
-- `src/hooks/useChecklistSGA.ts` — estender com checagens de cor/combustível/tipo do veículo + cooperativa/regional.
-- `src/components/cadastro/VeiculoFinanceiroSGA.tsx` (e/ou `BotaoAtivarSGA`) — exibir o checklist humano antes de habilitar o envio.
-- (sem mudanças no edge function — payload já está correto.)
-
----
-
-## 5) Fora do escopo (campos opcionais)
-
-Os campos abaixo **não** ganharão UI de "código Hinova manual" por entidade, porque a API SGA aceita defaults globais já configuráveis em Configurações → Integrações:
-- `codigo_profissao` (default global)
-- `codigo_como_conheceu` (default global)
-- `codigo_tipo_cobranca_recorrente` (default global)
-- `codigo_situacao` (default `pendente`/`ativo` já configurado)
-- Campos opcionais de RG, naturalidade, estado civil, etc.
-
----
-
-## 6) Resultado esperado
-
-- Nenhuma adesão será enviada ao SGA com mapeamento faltante.
-- Quando falta um código, o usuário vê **exatamente** o que falta e tem botão para resolver na própria tela.
-- Cor/combustível/tipo de veículo passam a ter inventário visível (não mais "descobre quando quebra").
-- Vendedores sem código herdam do padrão da integração e isso fica explícito.
+Após esse OK manual, libero o ajuste para o sync em massa.
