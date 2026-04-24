@@ -150,7 +150,7 @@ export function useRealocarInstalacao() {
       const { data: serv, error: fetchErr } = await supabase
         .from('servicos')
         .select(`
-          id, status, associado_id,
+          id, status, associado_id, instalacao_origem_id,
           associados:associados!servicos_associado_id_fkey(nome, telefone),
           veiculos:veiculos!servicos_veiculo_id_fkey(placa, marca, modelo, ano_modelo)
         `)
@@ -158,6 +158,21 @@ export function useRealocarInstalacao() {
         .eq('tipo', 'instalacao' as any)
         .single();
       if (fetchErr) throw fetchErr;
+
+      // Resolver o ID real em `instalacoes` (FK de agendamentos_base aponta para instalacoes.id)
+      let instalacaoIdReal: string | null = (serv as any).instalacao_origem_id ?? null;
+      if (!instalacaoIdReal) {
+        // Fallback: tentar localizar instalação vinculada a este serviço
+        const { data: instFallback } = await (supabase as any)
+          .from('instalacoes')
+          .select('id')
+          .eq('servico_id', params.instalacaoId)
+          .maybeSingle();
+        instalacaoIdReal = instFallback?.id ?? null;
+      }
+      if (!instalacaoIdReal) {
+        throw new Error('Este serviço não possui instalação vinculada — não é possível realocá-lo para uma base.');
+      }
 
       const veiculo = (serv as any).veiculos;
       const veiculoDescricao = veiculo
@@ -173,14 +188,14 @@ export function useRealocarInstalacao() {
           updated_at: new Date().toISOString(),
           observacoes: 'Realocada para nova base',
         })
-        .eq('instalacao_id', params.instalacaoId)
+        .eq('instalacao_id', instalacaoIdReal)
         .in('status', ['agendado', 'pendente', 'confirmado']);
 
       // 1) Insert agendamentos_base com horario = canônico do período
       const { error: agErr } = await (supabase as any)
         .from('agendamentos_base')
         .insert({
-          instalacao_id: params.instalacaoId,
+          instalacao_id: instalacaoIdReal,
           oficina_id: params.oficinaId,
           data_agendada: params.dataAgendada,
           horario: periodoToTime(params.periodo),
