@@ -132,8 +132,7 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
       const h = item.hierarquia;
       return item.usuario.id !== userId && (
         h?.supervisor_id === userId ||
-        h?.gerente_id === userId ||
-        h?.agencia_id === userId
+        h?.gerente_id === userId
       );
     });
 
@@ -141,7 +140,6 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
     const relacoes: string[] = [];
     if (linha.hierarquia?.gerente_id === superiorId) relacoes.push('Gerente');
     if (linha.hierarquia?.supervisor_id === superiorId) relacoes.push('Supervisor');
-    if (linha.hierarquia?.agencia_id === superiorId) relacoes.push('Agência');
     return relacoes.join(' / ') || 'Vínculo';
   };
 
