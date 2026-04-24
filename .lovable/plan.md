@@ -1,78 +1,107 @@
-## Objetivo
+## Contexto: o que o SGA Hinova exige (fonte: `https://api.hinova.com.br/api/sga/v2/doc/`)
 
-Remover "Noite" como opção selecionável de período em todo o sistema. O usuário só poderá criar/editar registros com **manhã** ou **tarde**. Registros legados continuam exibindo "Noite" via `formatPeriodoLabel` para não quebrar histórico.
+Toda nova adesão dispara dois POSTs na ordem:
 
----
+**1) `/associado/cadastrar`** — campos obrigatórios e códigos exigidos:
+- `codigo_conta` (Number) — obrigatório quando há mais de uma conta na regional
+- `codigo_regional` (opcional)
+- `codigo_cooperativa` (opcional)
+- `codigo_voluntario` (opcional, mas é assim que a Hinova vincula a venda ao consultor — sem ele a comissão fica órfã)
+- `codigo_profissao` (opcional)
+- `codigo_como_conheceu` (opcional)
+- `codigo_tipo_cobranca_recorrente` (opcional)
+- `beneficios[].codigo_beneficio` (opcional, vincula benefícios direto no associado)
 
-## Comportamento esperado após o ajuste
-
-- **Formulários (Instalação, Vistoria, Reagendamento, Edição)**: dropdown só lista Manhã e Tarde. Tentar enviar `noite` falha na validação Zod.
-- **Calendários e filtros de monitoramento**: deixam de exibir a coluna/aba/checkbox Noite. Registros legados que tenham `periodo='noite'` ou horário ≥18h continuam visíveis, agrupados em **Tarde** (fallback).
-- **Cards e listas**: ícone 🌙/Moon e label "Noite" só aparecem se o registro vier do banco com valor legado — UI nova nunca produz isso.
-- **Saudação "Boa noite"** no Dashboard e telas de instalador/cadastro permanece (não tem relação com período de agendamento).
-- **Banco de dados**: nenhuma alteração de schema ou enum. Dados existentes ficam preservados.
-
----
-
-## Arquivos a alterar
-
-### 1. Tipos canônicos (definição de fonte de verdade)
-- **`src/types/monitoramento.ts`** (L18, L33): tipo `PeriodoInstalacao` passa a `'manha' | 'tarde'`; remover `noite` do label map.
-- **`src/types/database.ts`** (L178, L693, L749): mesmo ajuste em `PeriodoInstalacao` e nas duas constantes de label.
-- **`src/lib/periodo-utils.ts`**:
-  - `PERIODO_INICIO`, `PERIODO_LABEL`, `PERIODO_FAIXA`, `PeriodoCanonico`, `normalizePeriodo`, `periodoToTime`: tipos passam a `'manha' | 'tarde'` e removem chave `noite`.
-  - `periodoFromHora`: horários ≥18h passam a retornar `'tarde'` (não mais `'noite'`).
-  - `formatPeriodoLabel`: **mantém** suporte a `noite`/HH:MM≥18 retornando "Noite" — necessário para legacy.
-- **`src/hooks/useServicos.ts`** (L35, L259): `PeriodoServico` passa a `'manha' | 'tarde'`; remover label `noite`.
-
-### 2. Formulários (validação)
-- **`src/components/instalacoes/InstalacaoFormDialog.tsx`** (L52): `z.enum(['manha', 'tarde'])`. Remover `<SelectItem value="noite">` se presente.
-- **`src/pages/monitoramento/InstalacaoDetalhe.tsx`** (L729): remover `<SelectItem value="noite">Noite (18h-21h)</SelectItem>` do dropdown de edição.
-
-### 3. Calendário e filtros de monitoramento
-- **`src/pages/monitoramento/CalendarioInstalacoes.tsx`** (L146-L420): remover bucket `noite` do agrupamento. No loop de classificação (L157), tratar registros legados com `periodo='noite'` como `tarde` (fallback de visualização). Remover a coluna/render `🌙 Noite`.
-- **`src/components/monitoramento/CalendarioDiaModal.tsx`** (L385-L396): remover `noite: []` do agrupamento e do meta-objeto de labels. Legados caem em `tarde`.
-- **`src/components/monitoramento/InstalacaoFilters.tsx`** (L77): remover `{ value: 'noite', label: 'Noite (18h-22h)' }` da lista de opções.
-
-### 4. Cards de listas (somente legado)
-Os arquivos abaixo mantêm a entrada `noite` apenas como dicionário de tradução para não quebrar render de registros antigos. Decisão: **manter** as entradas de label/ícone mas **não** as expor em formulários. Nenhuma mudança necessária:
-- `src/components/instalador/InstalacaoCard.tsx`
-- `src/components/rotas/InstalacaoMiniCard.tsx`
-- `src/components/rotas/VistoriaMiniCard.tsx`
-- `src/components/vistoriador/EncaixeCard.tsx`
-- `src/pages/Dashboard.tsx` (L567)
-
-### 5. Geração de link/contrato (entrada externa)
-- **`src/hooks/useContratoLink.ts`** (L750-L785): a função normaliza o período recebido do payload. Passa a converter `noite` → `tarde` (ao invés de manter `noite`), garantindo que novos contratos nunca sejam gerados com período `noite`.
-- **`src/hooks/useAlterarEnderecoTipo.ts`** (L100-L106): mesma normalização — `noite` recebido vira `tarde`.
-
-### 6. Cron de reagendamento (não alterar)
-- **`supabase/functions/cron-reagendamento-automatico/index.ts`** (L289): `cutoffPeriodo.noite = '21:15'` permanece. Garante que registros legados ainda sejam processados corretamente pelo cron até serem encerrados naturalmente.
-
-### 7. Não tocar
-- `src/pages/Dashboard.tsx` L164, `src/pages/instalador/InstaladorHome.tsx` L111, `src/components/cadastro/DashboardCadastro.tsx` L82: string "Boa noite" é saudação por hora do dia, sem relação com período.
-- `src/pages/app/AppConfiguracoes.tsx` L490 (`noturno`): preferência de notificação, não é período de agendamento.
-- `src/integrations/supabase/types.ts`: gerado automaticamente, não editar manualmente.
+**2) `/veiculo/cadastrar`** — campos obrigatórios e códigos exigidos:
+- `codigo_associado` (retorno do POST anterior — automático)
+- `codigo_conta`, `codigo_voluntario`, `codigo_cooperativa`
+- `codigo_cor`, `codigo_combustivel`, `codigo_tipo_veiculo` (de-para via `hinova_mapeamentos` — ✅ já populado)
+- `codigo_plano` (Hinova) — define produto comercializado
+- `produtos_vinculados[{codigo_produto, valor}]` — coberturas + benefícios do plano expandidos como produtos
+- `codigo_situacao` (pendente/ativo — opcional, vem das credenciais)
 
 ---
 
-## Riscos e mitigações
+## Onde precisa haver código manual no nosso sistema
 
-| Risco | Mitigação |
-|-------|-----------|
-| Registros legados com `periodo='noite'` sumiriam do calendário | `CalendarioInstalacoes` e `CalendarioDiaModal` aplicam fallback visual: legados aparecem na coluna **Tarde**. |
-| `formatPeriodoLabel` ainda devolve "Noite" para legados, gerando UI inconsistente em listas | Aceito como trade-off — a alternativa seria reescrever `noite`→`tarde` em massa no banco, o que apaga a verdade histórica. |
-| Cron processa cutoff `21:15` para legados | Mantido; sem impacto em novos registros (que nunca terão `noite`). |
-| Edge functions / payloads externos enviarem `noite` | Os hooks `useContratoLink` e `useAlterarEnderecoTipo` passam a normalizar para `tarde` antes de gravar. |
+| Entidade | Campo no banco | UI hoje | Bloqueia sync? | Pendentes |
+|---|---|---|---|---|
+| **Plano** | `planos.codigo_sga_plano` | ✅ `PlanFormModal` | **SIM** | 287/287 vazios |
+| **Vendedor / Agência / Supervisor / Gerente** | `profiles.codigo_sga_voluntario` | ✅ `ConsultorEditSheet` | **SIM** | 9 ativos sem código |
+| **Cobertura** | `coberturas.codigo_sga` | ✅ `CoberturaUnificadaFormModal` | Não (omite a cobertura no payload) | 2.865/2.865 vazios |
+| **Benefício** | `benefits.codigo_sga` | ✅ `BeneficioFormModal` | Não (omite o benefício no payload) | 1.770/1.770 vazios |
+| **Cor / Combustível / Tipo de veículo / Tipo de foto** | `hinova_mapeamentos` | ❌ sem tela admin | Não (vai `null`) | ✅ todos populados via seed |
+| **Conta bancária / Regional / Cooperativa / Situação Pendente / Situação Ativo** | `integracoes_credenciais` (JSON) | ⚠️ parcial — só `codigo_conta` e `codigo_voluntario` | **SIM se houver mais de uma conta** | a definir |
+| **Forma de pagamento (`codigo_tipo_cobranca_recorrente`)** | nenhum | ❌ inexistente | Não (Hinova usa default) | n/d |
+| **Como conheceu (`codigo_como_conheceu`)** | nenhum | ❌ inexistente | Não | n/d |
+| **Profissão (`codigo_profissao`)** | nenhum | ❌ inexistente | Não | n/d |
 
 ---
 
-## Validação pós-implementação
+## Plano de implementação (4 frentes, ordem por impacto)
 
-1. Abrir `InstalacaoFormDialog` e confirmar que o select só mostra Manhã e Tarde.
-2. Editar uma instalação em `/monitoramento/instalacao/:id` e confirmar a remoção da opção Noite.
-3. Abrir `/monitoramento/calendario` e confirmar que só existem 2 colunas por dia (Manhã/Tarde).
-4. Verificar via console que registros antigos com `periodo='noite'` aparecem na coluna Tarde do calendário.
-5. Confirmar que o caso da MARLI SILVA (KWX4D43) continua visível (cai em Tarde) ou pode ser reagendado normalmente para Manhã/Tarde.
+### Frente 1 — Completar formulário de credenciais Hinova (rápido, alto impacto)
+Arquivo: `src/components/integracoes/ConfigurarIntegracaoSheet.tsx`
 
-Pronto para aprovação.
+Adicionar ao array `camposPorIntegracao.hinova`:
+- `codigo_regional` (text, opcional)
+- `codigo_cooperativa` (text, opcional)
+- `codigo_situacao_pendente` (text, opcional, default 1)
+- `codigo_situacao_ativo` (text, opcional, default 2)
+- Manter `codigo_conta` (✅ já existe)
+- **Remover** `codigo_voluntario` daqui — voluntário é por vendedor, não global. Se quiser manter como **fallback** quando vendedor não tem código, renomear o label para "Código Voluntário Padrão (fallback)".
+
+A edge `sga-hinova-sync` já lê esses campos do `credenciais_integracao` (linhas 333–341), então só faltava expor na UI.
+
+### Frente 2 — Tela admin para mapeamentos de domínio (médio)
+Nova rota: `/configuracoes/integracoes/hinova/mapeamentos`
+
+CRUD da tabela `hinova_mapeamentos` (tipo, codigo_local, codigo_hinova, ativo) com:
+- Filtro por `tipo` (combustivel, cor, tipo_veiculo, tipo_foto)
+- Edição inline
+- Botão "Adicionar mapeamento"
+
+Já populado por seed mas hoje não há onde editar — se a Hinova mudar um código, exige migração SQL manual.
+
+### Frente 3 — Forma de pagamento, profissão e "como conheceu" (médio, opcional Hinova)
+Como esses três são opcionais no payload e a Hinova usa defaults, propor:
+
+3.1 **Configuração global** em `Configurações > Integrações > Hinova > Defaults`:
+- `codigo_tipo_cobranca_recorrente_padrao` (Number) — usado em todo associado novo
+- `codigo_como_conheceu_padrao` (Number)
+- `codigo_profissao_padrao` (Number)
+
+3.2 Edge passa a injetar esses defaults no payload de `/associado/cadastrar` quando definidos.
+
+(Não precisa de tela de profissão/cidade/parentesco completa — a Hinova só precisa do código numérico que ela mantém do lado dela; a equipe Pratic configura uma vez por conta.)
+
+### Frente 4 — Validação preventiva no fluxo de venda (alto impacto)
+Antes de permitir confirmar venda, bloquear com mensagem clara quando:
+1. **Plano** sem `codigo_sga_plano` → "Plano X ainda não está mapeado no SGA. Avise a coordenação."
+2. **Vendedor** sem `codigo_sga_voluntario` → bloqueia ao selecionar consultor.
+3. **Credenciais Hinova** sem `codigo_conta` (quando >1 conta) → mostra alerta no painel admin.
+
+Componentes alvo:
+- `src/hooks/usePlansAdmin.ts` — exibir badge "Sem código SGA" ao lado de cada plano.
+- `src/pages/vendas/Consultores.tsx` — destacar consultores ativos sem código.
+- Já existe `useChecklistSGA` e `useVendedoresSemCodigoSga` — expandir para incluir planos.
+
+---
+
+## Backfill em massa (apoio operacional, fora de código)
+
+Para os **287 planos** + **2.865 coberturas** + **1.770 benefícios** sem código, criar:
+- Tela de import via CSV em `Configurações > Planos > Importar Códigos SGA` aceitando colunas `nome,codigo_sga`, com matching por nome.
+- Botão "Aplicar mesmo código a todas as variantes da linha" (ex.: Select SP, Select RJ etc. compartilham `codigo_sga_plano` quando representam o mesmo produto Hinova).
+
+---
+
+## Resumo do que entra em código
+
+1. Adicionar 4 campos ao `ConfigurarIntegracaoSheet.tsx` (Frente 1).
+2. Criar página/rota admin de `hinova_mapeamentos` (Frente 2).
+3. Adicionar 3 campos default + uso na edge `sga-hinova-sync` (Frente 3).
+4. Adicionar guards visuais nos formulários de plano/consultor + alerta global de credenciais (Frente 4).
+5. (Opcional) Criar tela de import CSV para backfill (Frente 5).
+
+Aprovação para executar todas as 4 frentes? Ou prefere começar só pela Frente 1 + Frente 4 (correção mínima para destravar vendas com vendedor correto) e deixar 2/3/5 para depois?
