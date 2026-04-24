@@ -20,10 +20,22 @@ import {
   Clock,
   TrendingUp,
   MessageCircle,
+  Repeat2,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,6 +53,9 @@ interface EquipeCardProps {
   onDesativar: (prof: ProfissionalEquipe) => void;
   onRelatorio: (prof: ProfissionalEquipe) => void;
   onVerServicos?: (prof: ProfissionalEquipe) => void;
+  onAlternarPerfil?: (prof: ProfissionalEquipe) => void;
+  canAlternarPerfil?: boolean;
+  alternandoPerfil?: boolean;
 }
 
 const STATUS_CONFIG: Record<StatusProfissional, { label: string; className: string }> = {
@@ -106,7 +121,13 @@ const STATUS_OPERACIONAL_CONFIG: Record<StatusOperacional, {
   },
 };
 
-export function EquipeCard({ profissional, onEditar, onDesativar, onRelatorio, onVerServicos }: EquipeCardProps) {
+const PERFIL_LABELS: Record<string, string> = {
+  instalador_vistoriador: 'Instalador/Vistoriador',
+  vistoriador_base: 'Vistoriador Base',
+  analista_monitoramento: 'Analista Monitoramento',
+};
+
+export function EquipeCard({ profissional, onEditar, onDesativar, onRelatorio, onVerServicos, onAlternarPerfil, canAlternarPerfil = false, alternandoPerfil = false }: EquipeCardProps) {
   const getInitials = (nome: string) =>
     nome
       .split(' ')
@@ -126,6 +147,10 @@ export function EquipeCard({ profissional, onEditar, onDesativar, onRelatorio, o
 
   const statusOp = STATUS_OPERACIONAL_CONFIG[profissional.status_operacional];
   const statusProf = STATUS_CONFIG[profissional.status];
+  const perfilAtualLabel = PERFIL_LABELS[profissional.role_operacional] || profissional.role_operacional;
+  const proximoPerfil = profissional.role_operacional === 'vistoriador_base' ? 'instalador_vistoriador' : 'vistoriador_base';
+  const proximoPerfilLabel = PERFIL_LABELS[proximoPerfil];
+  const podeAlternarEstePerfil = canAlternarPerfil && ['instalador_vistoriador', 'vistoriador_base'].includes(profissional.role_permanente);
 
   const handleCardClick = () => {
     onVerServicos?.(profissional);
@@ -177,6 +202,14 @@ export function EquipeCard({ profissional, onEditar, onDesativar, onRelatorio, o
                 <span className="hidden sm:inline">{statusOp.label}</span>
                 <span className="sm:hidden">{statusOp.shortLabel}</span>
               </Badge>
+              <Badge variant="secondary" className="text-[10px] sm:text-xs px-1.5 py-0">
+                {perfilAtualLabel}
+              </Badge>
+              {profissional.em_cobertura && (
+                <Badge variant="outline" className="text-[10px] sm:text-xs px-1.5 py-0 bg-amber-500/10 text-amber-500 border-amber-500/25">
+                  {profissional.tipo_cobertura === 'base' ? 'Em cobertura de Base' : 'Em cobertura de Rota'}
+                </Badge>
+              )}
             </div>
           </div>
 
@@ -312,15 +345,47 @@ export function EquipeCard({ profissional, onEditar, onDesativar, onRelatorio, o
               }
             </span>
           </div>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="h-7 text-xs gap-1 text-primary hover:text-primary"
-            onClick={(e) => { e.stopPropagation(); onRelatorio(profissional); }}
-          >
-            <BarChart className="h-3 w-3" />
-            Relatório
-          </Button>
+          <div className="flex items-center gap-1.5">
+            {podeAlternarEstePerfil && onAlternarPerfil && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1"
+                    disabled={alternandoPerfil}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Repeat2 className="h-3 w-3" />
+                    Alternar
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Confirmar alternância?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Mover {profissional.nome} de {perfilAtualLabel} para {proximoPerfilLabel}? A alteração vale até reversão manual e não redistribui serviços já atribuídos.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => onAlternarPerfil(profissional)}>
+                      Confirmar
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-7 text-xs gap-1 text-primary hover:text-primary"
+              onClick={(e) => { e.stopPropagation(); onRelatorio(profissional); }}
+            >
+              <BarChart className="h-3 w-3" />
+              Relatório
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>
