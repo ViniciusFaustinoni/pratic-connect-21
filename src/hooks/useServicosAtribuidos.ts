@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format, subDays, startOfDay } from 'date-fns';
+import { formatLocalizacaoComZona, getZonaAtendimento } from '@/lib/localizacao-zonas';
 
 export type PeriodoFiltro = 'hoje' | '7dias' | '30dias' | 'todos';
 export type StatusFiltroServico =
@@ -21,6 +22,9 @@ export interface ServicoAtribuido {
   status: string;
   bairro: string | null;
   cidade: string | null;
+  uf: string | null;
+  zona: string | null;
+  localizacao_formatada: string;
   profissional_id: string | null;
   profissional_nome: string;
   associado_id: string | null;
@@ -89,7 +93,7 @@ export function useServicosAtribuidos(opts: UseServicosAtribuidosOpts) {
       // 3. Buscar serviços
       let query = supabase
         .from('servicos')
-        .select('id, data_agendada, hora_agendada, periodo, tipo, status, bairro, cidade, profissional_id, associado_id, veiculo_id')
+        .select('id, data_agendada, hora_agendada, periodo, tipo, status, bairro, cidade, uf, profissional_id, associado_id, veiculo_id')
         .in('profissional_id', profissionaisIds)
         .in('status', STATUS_VALIDOS as any)
         .order('data_agendada', { ascending: false })
@@ -153,6 +157,9 @@ export function useServicosAtribuidos(opts: UseServicosAtribuidosOpts) {
         status: s.status,
         bairro: s.bairro,
         cidade: s.cidade,
+        uf: s.uf,
+        zona: getZonaAtendimento(s.bairro, s.cidade, s.uf),
+        localizacao_formatada: formatLocalizacaoComZona(s.bairro, s.cidade, s.uf),
         profissional_id: s.profissional_id,
         profissional_nome: (s.profissional_id && profMap[s.profissional_id]) || '—',
         associado_id: s.associado_id,
@@ -167,7 +174,10 @@ export function useServicosAtribuidos(opts: UseServicosAtribuidosOpts) {
       return lista.filter(s =>
         (s.associado_nome || '').toLowerCase().includes(q) ||
         (s.veiculo_placa || '').toLowerCase().includes(q) ||
-        (s.profissional_nome || '').toLowerCase().includes(q)
+        (s.profissional_nome || '').toLowerCase().includes(q) ||
+        (s.bairro || '').toLowerCase().includes(q) ||
+        (s.cidade || '').toLowerCase().includes(q) ||
+        (s.zona || '').toLowerCase().includes(q)
       );
     },
     staleTime: 30 * 1000,
