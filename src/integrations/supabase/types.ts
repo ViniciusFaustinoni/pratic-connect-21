@@ -27446,6 +27446,119 @@ export type Database = {
         }
         Relationships: []
       }
+      tecnico_perfil_operacional: {
+        Row: {
+          ativo: boolean
+          criado_em: string
+          criado_por: string
+          encerrado_em: string | null
+          encerrado_por: string | null
+          id: string
+          observacoes: string | null
+          profissional_id: string
+          role_operacional: Database["public"]["Enums"]["app_role"]
+          role_permanente: Database["public"]["Enums"]["app_role"]
+        }
+        Insert: {
+          ativo?: boolean
+          criado_em?: string
+          criado_por: string
+          encerrado_em?: string | null
+          encerrado_por?: string | null
+          id?: string
+          observacoes?: string | null
+          profissional_id: string
+          role_operacional: Database["public"]["Enums"]["app_role"]
+          role_permanente: Database["public"]["Enums"]["app_role"]
+        }
+        Update: {
+          ativo?: boolean
+          criado_em?: string
+          criado_por?: string
+          encerrado_em?: string | null
+          encerrado_por?: string | null
+          id?: string
+          observacoes?: string | null
+          profissional_id?: string
+          role_operacional?: Database["public"]["Enums"]["app_role"]
+          role_permanente?: Database["public"]["Enums"]["app_role"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tecnico_perfil_operacional_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tecnico_perfil_operacional_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "tecnico_perfil_operacional_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
+      tecnico_perfil_operacional_historico: {
+        Row: {
+          acao: string
+          alterado_por: string
+          criado_em: string
+          id: string
+          profissional_id: string
+          role_anterior: Database["public"]["Enums"]["app_role"]
+          role_novo: Database["public"]["Enums"]["app_role"]
+        }
+        Insert: {
+          acao: string
+          alterado_por: string
+          criado_em?: string
+          id?: string
+          profissional_id: string
+          role_anterior: Database["public"]["Enums"]["app_role"]
+          role_novo: Database["public"]["Enums"]["app_role"]
+        }
+        Update: {
+          acao?: string
+          alterado_por?: string
+          criado_em?: string
+          id?: string
+          profissional_id?: string
+          role_anterior?: Database["public"]["Enums"]["app_role"]
+          role_novo?: Database["public"]["Enums"]["app_role"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tecnico_perfil_operacional_historico_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tecnico_perfil_operacional_historico_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "tecnico_perfil_operacional_historico_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
       template_versions: {
         Row: {
           canvas_data: Json | null
@@ -30793,6 +30906,16 @@ export type Database = {
         }
         Returns: string
       }
+      alternar_perfil_operacional_tecnico: {
+        Args: { _profissional_id: string }
+        Returns: {
+          acao: string
+          em_cobertura: boolean
+          profissional_id: string
+          role_operacional: Database["public"]["Enums"]["app_role"]
+          role_permanente: Database["public"]["Enums"]["app_role"]
+        }[]
+      }
       am_i_associado: { Args: never; Returns: boolean }
       am_i_funcionario: { Args: never; Returns: boolean }
       am_i_gerencia: { Args: never; Returns: boolean }
@@ -30896,6 +31019,10 @@ export type Database = {
       can_manage_juridico: { Args: { _user_id: string }; Returns: boolean }
       can_manage_marketing: { Args: { _user_id: string }; Returns: boolean }
       can_manage_permissions: { Args: { _user_id: string }; Returns: boolean }
+      can_manage_tecnico_perfil_operacional: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
       can_manage_users: { Args: { _user_id: string }; Returns: boolean }
       confirmar_encaixe_urgente: {
         Args: { p_encaixe_id: string; p_profissional_id: string }
@@ -31134,6 +31261,10 @@ export type Database = {
       }
       get_profile_id_for_auth: { Args: { auth_uid: string }; Returns: string }
       get_proximo_vendedor_distribuicao: { Args: never; Returns: string }
+      get_role_operacional_tecnico: {
+        Args: { _profissional_id: string }
+        Returns: Database["public"]["Enums"]["app_role"]
+      }
       get_ultimas_posicoes: {
         Args: never
         Returns: {
