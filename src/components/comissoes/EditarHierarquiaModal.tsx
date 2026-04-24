@@ -70,14 +70,12 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
 
   const [supervisorId, setSupervisorId] = useState<string>('none');
   const [gerenteId, setGerenteId] = useState<string>('none');
-  const [agenciaId, setAgenciaId] = useState<string>('none');
   const [observacoes, setObservacoes] = useState<string>('');
 
   useEffect(() => {
     if (!open || !linha) return;
     setSupervisorId(linha.hierarquia?.supervisor_id || 'none');
     setGerenteId(linha.hierarquia?.gerente_id || 'none');
-    setAgenciaId(linha.hierarquia?.agencia_id || 'none');
     setObservacoes(linha.hierarquia?.observacoes || '');
   }, [open, linha]);
 
