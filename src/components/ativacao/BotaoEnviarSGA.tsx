@@ -116,7 +116,7 @@ export function BotaoEnviarSGA({
     setIsLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('sga-hinova-sync', {
-        body: { veiculo_id: veiculoId, associado_id: associadoId, status_sga_destino: 'ativo' },
+        body: { veiculo_id: veiculoId, associado_id: associadoId, status_sga_destino: 'pendente' },
       });
 
       if (error) {
@@ -143,7 +143,7 @@ export function BotaoEnviarSGA({
         throw new Error(data?.error || 'Falha na sincronização com o SGA');
       }
 
-      toast.success('Enviado para o SGA com sucesso!', {
+      toast.success('Enviado para o SGA como pendente!', {
         description: `Código Hinova: ${data.codigo_veiculo_hinova || 'N/A'}`,
       });
 
@@ -161,8 +161,8 @@ export function BotaoEnviarSGA({
   };
 
   const buttonLabel = isRouboFurto 
-    ? (isError ? 'Reenviar para SGA (Roubo/Furto)' : 'Enviar para SGA (Roubo/Furto)')
-    : (isError ? 'Reenviar para SGA' : 'Enviar para SGA');
+    ? (isError ? 'Reenviar pendente SGA (Roubo/Furto)' : 'Enviar pendente SGA (Roubo/Furto)')
+    : (isError ? 'Reenviar pendente SGA' : 'Enviar pendente SGA');
 
   return (
     <AlertDialog>
