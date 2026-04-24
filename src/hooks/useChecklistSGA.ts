@@ -58,8 +58,30 @@ export function useChecklistSGA(veiculoId: string, associadoId: string): Checkli
       // Verificar mapeamentos
       const coresDisponiveis = mapeamentos.filter(m => m.tipo === 'cor').map(m => m.codigo_local.toLowerCase());
       const combustiveisDisponiveis = mapeamentos.filter(m => m.tipo === 'combustivel').map(m => m.codigo_local.toLowerCase());
+      const tiposVeiculoDisponiveis = mapeamentos.filter(m => m.tipo === 'tipo_veiculo').map(m => m.codigo_local.toLowerCase());
 
-      const itens: ChecklistSGAItem[] = [];
+      // Resolver plano + coberturas/benefícios sem código_sga
+      let planoNome: string | null = null;
+      let planoCodigoSga: string | null = null;
+      let coberturasSemCodigo: string[] = [];
+      let beneficiosSemCodigo: string[] = [];
+      if (contrato?.plano_id) {
+        const [planoRes, coberturasRes, beneficiosRes] = await Promise.all([
+          supabase.from('planos').select('nome, codigo_sga_plano').eq('id', contrato.plano_id).maybeSingle(),
+          supabase.from('planos_coberturas').select('coberturas!inner(nome, codigo_sga)').eq('plano_id', contrato.plano_id),
+          supabase.from('planos_beneficios').select('benefits!inner(name, codigo_sga)').eq('plano_id', contrato.plano_id),
+        ]);
+        planoNome = (planoRes.data as any)?.nome ?? null;
+        planoCodigoSga = (planoRes.data as any)?.codigo_sga_plano ?? null;
+        coberturasSemCodigo = ((coberturasRes.data || []) as any[])
+          .filter(r => !r.coberturas?.codigo_sga)
+          .map(r => r.coberturas?.nome)
+          .filter(Boolean);
+        beneficiosSemCodigo = ((beneficiosRes.data || []) as any[])
+          .filter(r => !r.benefits?.codigo_sga)
+          .map(r => r.benefits?.name)
+          .filter(Boolean);
+      }
 
       // === ASSOCIADO ===
       const addAssociado = (campo: string, label: string, valor: unknown, critico = false, detalhe?: string) => {
