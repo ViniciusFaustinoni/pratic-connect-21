@@ -43,6 +43,7 @@ export interface ContaCorrenteComissaoItem {
   plano_id: string | null;
   plano_nome: string | null;
   plano_linha: string | null;
+  instalacao_resumo: string | null;
   saldo_apos: number;
 }
 
@@ -167,6 +168,32 @@ export function useContaCorrenteComissoes() {
       const { data, error } = await builder;
       if (error) throw error;
 
+      const contratoIds = Array.from(new Set((data || []).map((row: any) => row.contrato_id).filter(Boolean)));
+      const instalacoesPorContrato = new Map<string, string>();
+
+      if (contratoIds.length > 0) {
+        const [{ data: servicos }, { data: instalacoes }] = await Promise.all([
+          (supabase as any)
+            .from('servicos')
+            .select('contrato_id, numero, status, concluida_em, created_at')
+            .in('contrato_id', contratoIds)
+            .eq('tipo', 'instalacao')
+            .order('created_at', { ascending: false }),
+          (supabase as any)
+            .from('instalacoes')
+            .select('contrato_id, numero, status, concluida_em, created_at')
+            .in('contrato_id', contratoIds)
+            .order('created_at', { ascending: false }),
+        ]);
+
+        [...(servicos || []), ...(instalacoes || [])].forEach((instalacao: any) => {
+          if (!instalacao.contrato_id || instalacoesPorContrato.has(instalacao.contrato_id)) return;
+          const numero = instalacao.numero ? `#${instalacao.numero}` : 'Instalação';
+          const status = instalacao.status ? String(instalacao.status).replace(/_/g, ' ') : 'sem status';
+          instalacoesPorContrato.set(instalacao.contrato_id, `${numero} • ${status}`);
+        });
+      }
+
       const search = filters.search.trim().toLowerCase();
       let saldo = 0;
       const mapped: ContaCorrenteComissaoItem[] = (data || []).map((row: any) => {
@@ -199,11 +226,12 @@ export function useContaCorrenteComissoes() {
           plano_id: row.plano_id,
           plano_nome: row.plano?.nome || null,
           plano_linha: row.plano?.linha || null,
+          instalacao_resumo: row.contrato_id ? instalacoesPorContrato.get(row.contrato_id) || null : null,
           saldo_apos: saldo,
         };
       }).filter((item) => {
         if (!search) return true;
-        return [item.vendedor_nome, item.vendedor_email, item.associado_nome, item.contrato_numero, item.plano_nome, item.plano_linha, item.role_destinatario, item.nivel_nome]
+        return [item.vendedor_nome, item.vendedor_email, item.associado_nome, item.contrato_numero, item.plano_nome, item.plano_linha, item.instalacao_resumo, item.role_destinatario, item.nivel_nome]
           .some((value) => String(value || '').toLowerCase().includes(search));
       });
 
