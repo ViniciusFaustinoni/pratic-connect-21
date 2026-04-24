@@ -33,6 +33,7 @@ import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
 import { VincularLeadModal } from '@/components/cotacoes/VincularLeadModal';
 import { gerarPdfCotacao, gerarPdfCotacaoComparativa, type PlanoParaPdf, type CotacaoComparativaParaPdf } from '@/lib/gerarPdfCotacao';
 import { CotacoesTable, type CotacoesTablePermissions } from '@/components/cotacoes/CotacoesTable';
+import { CotacoesMobileList } from '@/components/cotacoes/CotacoesMobileList';
 import { CotacaoDetalhesModal } from '@/components/cotacoes/CotacaoDetalhesModal';
 import { ConfirmacaoExclusaoCotacaoDialog } from '@/components/cotacoes/ConfirmacaoExclusaoCotacaoDialog';
 import { DuplicarCotacaoDialog, type DuplicarCotacaoConfirmPayload } from '@/components/cotacoes/DuplicarCotacaoDialog';
@@ -967,21 +968,39 @@ export default function Cotacoes() {
               </Button>
             </div>
           )}
-          <CotacoesTable 
-            cotacoes={cotacoesEmAndamento}
-            onRowClick={handleRowClick}
-            onCopiarWhatsApp={copiarParaWhatsApp}
-            onPdf={handleBaixarPdf}
-            onDuplicar={handleDuplicar}
-            onContinuar={handleContinuarCotacao}
-            onExcluir={handleExcluir}
-            copiandoWhatsAppId={copiandoWhatsApp}
-            getPermissions={getPermissions}
-            selectable={true}
-            selectedIds={selectedIds}
-            onToggleSelect={toggleSelect}
-            onToggleAll={toggleSelectAll}
-          />
+          <div className="hidden md:block">
+            <CotacoesTable 
+              cotacoes={cotacoesEmAndamento}
+              onRowClick={handleRowClick}
+              onCopiarWhatsApp={copiarParaWhatsApp}
+              onPdf={handleBaixarPdf}
+              onDuplicar={handleDuplicar}
+              onContinuar={handleContinuarCotacao}
+              onExcluir={handleExcluir}
+              copiandoWhatsAppId={copiandoWhatsApp}
+              getPermissions={getPermissions}
+              selectable={true}
+              selectedIds={selectedIds}
+              onToggleSelect={toggleSelect}
+              onToggleAll={toggleSelectAll}
+            />
+          </div>
+          <div className="md:hidden">
+            <CotacoesMobileList
+              cotacoes={cotacoesEmAndamento}
+              onRowClick={handleRowClick}
+              onCopiarWhatsApp={copiarParaWhatsApp}
+              onPdf={handleBaixarPdf}
+              onDuplicar={handleDuplicar}
+              onContinuar={handleContinuarCotacao}
+              onExcluir={handleExcluir}
+              copiandoWhatsAppId={copiandoWhatsApp}
+              getPermissions={getPermissions}
+              selectable={true}
+              selectedIds={selectedIds}
+              onToggleSelect={toggleSelect}
+            />
+          </div>
         </TabsContent>
 
         {/* Tab Finalizadas */}
