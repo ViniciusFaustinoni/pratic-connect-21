@@ -155,21 +155,12 @@ async function processar(supabase: any, body: ReqBody): Promise<Response> {
     );
   }
 
-  // 2) Auth Hinova (compartilhada)
-  const creds = await getHinovaCreds(supabase);
-  if (!creds) {
-    return new Response(
-      JSON.stringify({ ok: false, error: 'Credenciais Hinova não configuradas' }),
-      { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    );
-  }
-
+  // 2) Auth Hinova (cache global de sessão)
   let session: any;
   try {
-    session = await autenticarHinova(creds);
+    session = await getHinovaSession(supabase);
   } catch (e: any) {
     if (e instanceof HinovaTransientError) {
-      // Auth falhou (provavelmente janela horária) → reagenda TODOS os jobs deste batch
       const proximo = calcularProximoRetry(e.reason).toISOString();
       const ids = jobs.map((j: any) => j.id);
       await supabase
@@ -181,7 +172,11 @@ async function processar(supabase: any, body: ReqBody): Promise<Response> {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
-    throw e;
+    // Erro não-transiente (ex.: credenciais não configuradas)
+    return new Response(
+      JSON.stringify({ ok: false, error: String(e?.message || e) }),
+      { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
   }
 
   // 3) Processa job a job
