@@ -2,6 +2,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import type { ComissaoDashboardItem } from '@/hooks/useComissoesDashboard';
 
 interface Props {
@@ -17,6 +19,15 @@ const formatMoney = (value: number | null | undefined) =>
 const initials = (name: string) =>
   name.split(' ').slice(0, 2).map(part => part[0]).join('').toUpperCase();
 
+const formatDate = (value: string | null) => value ? format(new Date(value), 'dd/MM/yyyy', { locale: ptBR }) : '—';
+
+const formatTipo = (item: ComissaoDashboardItem) => {
+  if ((item.tipo_comissao || '').toLowerCase().includes('vitalicia') || (item.parcela_numero || 0) > 12) return 'Vitalícia';
+  if ((item.tipo_calculo || '').toLowerCase() === 'valor_fixo' || (item.tipo_comissao || '').toLowerCase() === 'valor_fixo') return 'Valor fixo';
+  if ((item.tipo_calculo || '').toLowerCase() === 'percentual' || Number(item.percentual_aplicado || 0) > 0) return 'Percentual';
+  return item.tipo_comissao || 'Comum';
+};
+
 export function ComissoesDetalhesModal({ open, onOpenChange, title, items }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -29,7 +40,9 @@ export function ComissoesDetalhesModal({ open, onOpenChange, title, items }: Pro
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Data</TableHead>
                 <TableHead>Usuário</TableHead>
+                <TableHead>Tipo</TableHead>
                 <TableHead>Nível</TableHead>
                 <TableHead>Parcela</TableHead>
                 <TableHead>Status</TableHead>
@@ -41,13 +54,14 @@ export function ComissoesDetalhesModal({ open, onOpenChange, title, items }: Pro
             <TableBody>
               {items.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
                     Nenhuma comissão encontrada.
                   </TableCell>
                 </TableRow>
               ) : (
                 items.map((item) => (
                   <TableRow key={item.id}>
+                    <TableCell>{formatDate(item.created_at)}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Avatar className="h-8 w-8">
@@ -60,6 +74,7 @@ export function ComissoesDetalhesModal({ open, onOpenChange, title, items }: Pro
                         </div>
                       </div>
                     </TableCell>
+                    <TableCell>{formatTipo(item)}</TableCell>
                     <TableCell>{item.nivel_nome || '—'}</TableCell>
                     <TableCell>{item.parcela_numero ? `${item.parcela_numero}ª` : '—'}</TableCell>
                     <TableCell><Badge variant="outline">{item.status}</Badge></TableCell>
