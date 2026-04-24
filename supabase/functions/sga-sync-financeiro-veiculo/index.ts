@@ -17,7 +17,7 @@ import {
   HinovaTransientError,
   HinovaNotFoundError,
   calcularProximoRetry,
-  invalidateHinovaSession,
+  type HinovaSession,
 } from '../_shared/hinova-client.ts';
 
 const corsHeaders = {
@@ -92,6 +92,32 @@ async function buscarAssociadoPorCpf(session: any, cpf: string | null | undefine
   }
 }
 
+/**
+ * Executa `op(session)` e, em caso de HinovaTransientError reason='auth',
+ * reautentica fresco UMA vez (sem cache) e retenta. Cobre o cenário em que
+ * outra instância paralela do backfill invalidou nosso tokenUsuario logo
+ * após nosso login. `setSession` permite ao caller atualizar a session em
+ * uso para as próximas chamadas dentro do mesmo job.
+ */
+async function withReauthRetry<T>(
+  supabase: any,
+  session: HinovaSession,
+  op: (s: HinovaSession) => Promise<T>,
+  setSession: (s: HinovaSession) => void,
+): Promise<T> {
+  try {
+    return await op(session);
+  } catch (e: any) {
+    if (e instanceof HinovaTransientError && e.reason === 'auth') {
+      console.warn('[SGA Sync Veículo] 401 inline — reautenticando fresh e retentando');
+      const fresh = await getHinovaSession(supabase, { noCache: true });
+      setSession(fresh);
+      return await op(fresh);
+    }
+    throw e;
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -141,7 +167,9 @@ serve(async (req) => {
     const authStart = Date.now();
     let session;
     try {
-      session = await getHinovaSession(supabase);
+      // noCache: true → autenticação fresca por job. Hinova é stateful;
+      // cache global causa 401 cruzados quando outra instância autentica em paralelo.
+      session = await getHinovaSession(supabase, { noCache: true });
       if (!session) throw new Error('Falha ao obter sessão Hinova');
 
       await supabase.from('sga_sync_logs').insert({
@@ -153,10 +181,6 @@ serve(async (req) => {
       });
     } catch (authErr: any) {
       const msg = String(authErr?.message || authErr);
-      // Se foi 401 do cache, invalida e propaga (próximo job revalida)
-      if (authErr instanceof HinovaTransientError && authErr.reason === 'auth') {
-        invalidateHinovaSession();
-      }
       await supabase.from('sga_sync_logs').insert({
         veiculo_id: veiculoId,
         associado_id: associado.id,
@@ -173,7 +197,7 @@ serve(async (req) => {
 
     if (veiculo.placa) {
       try {
-        const { found, debug } = await buscarVeiculoPorPlaca(session, veiculo.placa);
+        const { found, debug } = await withReauthRetry(supabase, session!, (s) => buscarVeiculoPorPlaca(s, veiculo.placa!), (s) => { session = s; });
         const codigoVeiculoEncontrado = Number(found?.codigo_veiculo) || null;
         const codigoAssociadoEncontrado = extractCodigoAssociado(found);
 
@@ -222,7 +246,7 @@ serve(async (req) => {
     // Se já temos codigoAssociado, só fazemos a chamada se a primeira tentativa de boletos falhar (ver abaixo).
     if (!codigoAssociado && associado.cpf) {
       try {
-        const associadoPorCpf = await buscarAssociadoPorCpf(session, associado.cpf);
+        const associadoPorCpf = await withReauthRetry(supabase, session!, (s) => buscarAssociadoPorCpf(s, associado.cpf), (s) => { session = s; });
         const codigoAssociadoPorCpf = extractCodigoAssociado(associadoPorCpf);
 
         await supabase.from('sga_sync_logs').insert({
@@ -256,7 +280,7 @@ serve(async (req) => {
 
     let situacao: string | null = null;
     try {
-      situacao = await buscarSituacaoFinanceiraVeiculo(session, codigoVeiculo);
+      situacao = await withReauthRetry(supabase, session!, (s) => buscarSituacaoFinanceiraVeiculo(s, codigoVeiculo!), (s) => { session = s; });
     } catch (e) {
       if (e instanceof HinovaTransientError) throw e;
       // Erro não-transitório de situação não bloqueia listagem de boletos
@@ -267,7 +291,7 @@ serve(async (req) => {
     const opcoesBoletos = { anosTras: 3, diasJanela: 90, linkBoleto: true } as const;
     let boletos: any[] = [];
     try {
-      boletos = await listarBoletosVeiculo(session, codigoAssociado, codigoVeiculo, opcoesBoletos);
+      boletos = await withReauthRetry(supabase, session!, (s) => listarBoletosVeiculo(s, codigoAssociado!, codigoVeiculo!, opcoesBoletos), (s) => { session = s; });
     } catch (e) {
       if (e instanceof HinovaTransientError) throw e;
       throw e;
@@ -276,7 +300,7 @@ serve(async (req) => {
     // Fallback CPF SEMPRE quando vazio — tenta reconciliar pelo CPF mesmo se já tínhamos codigoAssociado
     if ((!boletos || boletos.length === 0) && associado.cpf) {
       try {
-        const associadoPorCpf = await buscarAssociadoPorCpf(session, associado.cpf);
+        const associadoPorCpf = await withReauthRetry(supabase, session!, (s) => buscarAssociadoPorCpf(s, associado.cpf), (s) => { session = s; });
         const codigoAssociadoPorCpf = extractCodigoAssociado(associadoPorCpf);
 
         if (codigoAssociadoPorCpf && codigoAssociadoPorCpf !== codigoAssociado) {
@@ -289,7 +313,7 @@ serve(async (req) => {
           });
           codigoAssociado = codigoAssociadoPorCpf;
           await supabase.from('associados').update({ codigo_hinova: codigoAssociadoPorCpf }).eq('id', associado.id);
-          boletos = await listarBoletosVeiculo(session, codigoAssociadoPorCpf, codigoVeiculo, opcoesBoletos);
+          boletos = await withReauthRetry(supabase, session!, (s) => listarBoletosVeiculo(s, codigoAssociadoPorCpf, codigoVeiculo!, opcoesBoletos), (s) => { session = s; });
         }
       } catch (e) {
         if (e instanceof HinovaTransientError) throw e;
@@ -308,8 +332,6 @@ serve(async (req) => {
     let importados = 0;
     let totalAberto = 0;
     let totalVencido = 0;
-    let upsertFalhas = 0;
-    let ultimoErroUpsert: string | null = null;
     const hoje = new Date().toISOString().slice(0, 10);
 
     for (const b of boletos) {
@@ -382,8 +404,6 @@ serve(async (req) => {
 
       if (upErr) {
         console.error('[SGA Sync Veículo] upsert falhou', nosso, upErr.message);
-        upsertFalhas++;
-        ultimoErroUpsert = upErr.message;
         continue;
       }
       importados++;
@@ -408,41 +428,14 @@ serve(async (req) => {
       .eq('id', veiculo.id);
 
     if (jobId) {
-      // Determina status final com base no resultado real do upsert,
-      // não apenas na resposta da Hinova.
-      let statusFinal: string;
-      let erroFinal: string | null = null;
-      const proximoRetry = upsertFalhas > 0
-        ? new Date(Date.now() + 60_000).toISOString()
-        : null;
-
-      if (upsertFalhas > 0 && importados === 0) {
-        statusFinal = 'pendente_retry';
-        erroFinal = `Falha ao gravar ${upsertFalhas} boleto(s) em cobrancas: ${ultimoErroUpsert}`;
-      } else if (upsertFalhas > 0) {
-        statusFinal = 'pendente_retry';
-        erroFinal = `Importados ${importados}, mas ${upsertFalhas} falha(s) de upsert: ${ultimoErroUpsert}`;
-      } else if (importados > 0) {
-        statusFinal = 'concluido';
-      } else if (boletos.length === 0) {
-        statusFinal = 'sem_historico_hinova';
-        erroFinal = 'Nenhum boleto retornado pela Hinova para o vínculo atual de associado/veículo';
-      } else {
-        // boletos retornados mas todos sem nosso_numero válido
-        statusFinal = 'sem_historico_hinova';
-        erroFinal = `Hinova retornou ${boletos.length} boleto(s) mas nenhum com nosso_numero válido`;
-      }
-
       await supabase
         .from('sga_sync_financeiro_jobs')
         .update({
-          status: statusFinal,
-          concluido_em: statusFinal === 'concluido' || statusFinal === 'sem_historico_hinova'
-            ? new Date().toISOString()
-            : null,
+          status: boletos.length > 0 ? 'concluido' : 'sem_historico_hinova',
+          concluido_em: new Date().toISOString(),
           boletos_importados: importados,
-          proximo_retry_em: proximoRetry,
-          ultimo_erro: erroFinal,
+          proximo_retry_em: null,
+          ultimo_erro: boletos.length > 0 ? null : 'Nenhum boleto retornado pela Hinova para o vínculo atual de associado/veículo',
         })
         .eq('id', jobId);
     }

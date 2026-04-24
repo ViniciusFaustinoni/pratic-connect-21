@@ -1,46 +1,103 @@
-## Diagnóstico
+# Por que a credencial "falha" (mesmo funcionando em outras ocasiões)
 
-A Hinova **está retornando boletos** (22, 28, 30, 26... por veículo — confirmado em `sga_sync_logs`), mas **nenhum entra em `cobrancas`**. Causa raiz nos logs da Edge Function:
+## Resumo do diagnóstico
 
+A credencial **NÃO está errada**. O erro `"Acesso não autorizado. Verifique seu token de acesso" / "Login ou senha inválido"` que aparece em massa **não vem do `/usuario/autenticar`** — vem das chamadas seguintes (`/veiculo/consultar/placa/...`, `/buscar/situacao-financeira-veiculo/...`, `/listar/boleto-associado-veiculo`).
+
+O erro é causado por **duas falhas estruturais introduzidas na última refatoração**, não pela credencial.
+
+## Evidências (fila atual de 208k jobs)
+
+| Erro | Ocorrências | Causa real |
+|---|---|---|
+| `Hinova autenticação falhou (200): Usuário com restrição de horário` | 260 | Janela horária do usuário SGA (a Hinova classifica isso como sucesso HTTP=200, com erro embarcado no body) — **nada a ver com credencial** |
+| `[server] HTTP 406: É necessário enviar ao menos uma data inicial e uma final` | 131 | Endpoint `listar/boleto-associado-veiculo` rejeitou os parâmetros de data — **bug de payload em janela específica**, não credencial |
+| `[auth] Auth recusada (http=401)` em vários helpers (`listarBoletos`, `buscarSituacaoFinanceira`, `buscarVeiculoPorPlaca`) | **210 somados** | **Token cacheado invalidado por outra instância (race condition do cache global)** |
+| `Edge Function returned a non-2xx status code` | 2 | Cold start / timeout |
+| `Falha ao gravar 28 boletos: ON CONFLICT…` | 1 | Resíduo do bug anterior, já corrigido |
+
+**Total já importado**: 536 cobranças do SGA (até o momento). O sistema **funciona**, mas a taxa de erro da camada de auth é alta demais.
+
+## Causa raiz dos 401
+
+1. **Cache global de `tokenUsuario` (`SESSION_TTL_MS = 25min`) é incompatível com o backfill paralelo.** A Hinova é stateful — cada novo `/usuario/autenticar` invalida o token anterior. Quando um cron ou outra instância da Edge Function faz um login novo, o token cacheado dentro de outra instância vira lixo. As próximas chamadas dessa instância pegam 401.
+
+2. **Os helpers `buscarVeiculoPorPlaca`, `buscarSituacaoFinanceiraVeiculo`, `listarBoletosVeiculoJanela` usam `fetch` direto, não o wrapper `hinovaFetch`.** O wrapper foi escrito (linhas 224-259 de `hinova-client.ts`) e tem reauth automática em 401, **mas nenhum helper o usa**. Resultado: quando o token cacheado morre, o 401 é apenas lançado como `HinovaTransientError` e o job vai para `pendente_retry` em vez de reautenticar e prosseguir.
+
+3. **Não há reauth no helper `buscarAssociadoPorCpf`** dentro de `sga-sync-financeiro-veiculo/index.ts` (linhas 60-93) — chama `fetch` cru com `session.tokenUsuario`.
+
+## Por que `sga-hinova-sync` (cadastro de associado/veículo) "sempre funciona"
+
+Porque ele faz `autenticarHinova` **uma vez por requisição** (linhas 910-937) e usa o token recém-obtido até o fim da requisição. Não compartilha cache entre instâncias, então não sofre invalidação cruzada.
+
+---
+
+# Plano de correção
+
+## 1. Remover o cache global de `tokenUsuario` para o backfill financeiro
+Trocar a estratégia: **uma autenticação por execução de job**, igual ao `sga-hinova-sync`. Isso elimina 100% dos 401 cruzados.
+
+- `getHinovaSession` continua existindo, mas adiciona parâmetro `noCache?: boolean`.
+- `sga-sync-financeiro-veiculo/index.ts` chama `getHinovaSession(supabase, { noCache: true })` para sempre autenticar fresco.
+- Trade-off: aumenta logins (~1 por job), mas elimina o "Login ou senha inválido". Com 9.6k veículos e 1 login por job, são ~9.6k logins ao longo do backfill — distribuídos no tempo, sem contenção.
+
+## 2. Wrapper `hinovaFetch` aplicado nos 3 helpers críticos
+Refatorar para usar `hinovaFetch` (que já tem reauth em 401):
+- `buscarVeiculoPorPlaca` (consultar + fallback)
+- `buscarSituacaoFinanceiraVeiculo`
+- `listarBoletosVeiculoJanela`
+- `buscarAssociadoComVeiculosPorCpf`
+
+Para suportar isso, `hinovaFetch` precisa receber a `session` opcional (para não disparar nova auth quando o caller já tem uma sessão fresca).
+
+## 3. Refatorar `buscarAssociadoPorCpf` local em `sga-sync-financeiro-veiculo`
+Trocar o `fetch` cru pelo helper `buscarAssociadoComVeiculosPorCpf` do shared (que já será wrappado).
+
+## 4. Corrigir o 406 "É necessário enviar ao menos uma data inicial e uma final" (131 ocorrências)
+Investigar `listarBoletosVeiculoJanela`: hoje envia 4 campos de data (`data_vencimento_inicial/final` + `data_inicial/final`). Algumas versões da API rejeitam o conjunto. Ajustar para enviar **apenas** `data_inicial` + `data_final` (formato dd/mm/aaaa) — a documentação base confirma esse par.
+
+## 5. Resetar jobs `pendente_retry` causados por auth para `pendente`
+Migration única para limpar a fila contaminada:
+
+```sql
+UPDATE sga_sync_financeiro_jobs
+SET status = 'pendente',
+    proximo_retry_em = NULL,
+    ultimo_erro = NULL
+WHERE status = 'pendente_retry'
+  AND ultimo_erro LIKE '%[auth]%';
 ```
-[SGA Sync Veículo] upsert falhou 234322
-there is no unique or exclusion constraint matching the ON CONFLICT specification
+
+(NÃO resetar os de `restrição de horário` — esses precisam aguardar a janela do usuário SGA reabrir.)
+
+## 6. (Opcional, recomendado) Pedir ao SGA Hinova para ampliar a janela horária do usuário
+260 falhas hoje são literalmente porque o usuário SGA configurado tem **horário restrito de operação**. A Hinova retorna HTTP 200 com `{"mensagem":"Usuário com restrição de horário..."}`. Isso não é bug nosso — é configuração do usuário no painel SGA. Vale validar com o suporte Hinova se o usuário do backfill pode ficar 24/7.
+
+---
+
+# Arquivos afetados
+
+```text
+supabase/functions/_shared/hinova-client.ts            (refatoração principal)
+supabase/functions/sga-sync-financeiro-veiculo/index.ts (noCache + usar helper compartilhado)
+supabase/migrations/<novo>.sql                          (reset jobs pendente_retry de auth)
 ```
 
-A tabela `public.cobrancas` tem apenas a PK em `id`. O código em `sga-sync-financeiro-veiculo/index.ts:379` faz:
-```ts
-.upsert(row, { onConflict: 'nosso_numero' })
-```
-Sem UNIQUE em `nosso_numero`, o Postgres rejeita 100% dos upserts. O loop captura o erro com `console.error` + `continue`, então o job grava `boletos_importados=0` e marca `concluido` falsamente. Resultado: 78 jobs "concluídos", 0 cobranças importadas.
+---
 
-Há ainda dois problemas secundários:
-1. Job marca `status='concluido'` baseado em `boletos.length > 0` (resposta da Hinova), e não em `importados > 0`. Logo, falhas de upsert ficam invisíveis na fila.
-2. Os 78 jobs já marcados como concluído não serão reprocessados — precisam voltar para `pendente`.
+# Validação após deploy
 
-## Correções
+1. Limpar contadores antigos e disparar "Forçar sync agora".
+2. Em 5 min, esperar:
+   - **Zero** ocorrências de `[auth] Auth recusada (http=401)` em `sga_sync_financeiro_jobs.ultimo_erro`.
+   - **Zero** ocorrências de `HTTP 406: É necessário enviar... data inicial`.
+   - `cobrancas` (origem=sga_hinova) crescendo a cada minuto.
+   - `concluido` subindo de 17 → centenas.
+3. Os 260 jobs com "restrição de horário" devem permanecer em `pendente_retry` até a janela do usuário Hinova abrir — comportamento esperado.
 
-### 1. Migration: UNIQUE constraint em `cobrancas.nosso_numero`
-- Antes do `ALTER TABLE`, deduplicar eventuais registros legados com mesmo `nosso_numero` (manter o mais recente por `created_at`).
-- Tratar `nosso_numero` vazio/NULL como não-conflitante: criar `UNIQUE INDEX cobrancas_nosso_numero_uniq ON cobrancas(nosso_numero) WHERE nosso_numero IS NOT NULL AND nosso_numero <> ''`.
-- Ajustar o `.upsert(..., { onConflict: 'nosso_numero' })` permanece válido com índice parcial único.
+---
 
-### 2. Reprocessar jobs falsos-concluídos
-Mesma migration: `UPDATE sga_sync_financeiro_jobs SET status='pendente', boletos_importados=0, concluido_em=NULL, ultimo_erro=NULL, tentativas=0, proximo_retry_em=NULL WHERE status IN ('concluido','sem_historico_hinova') AND boletos_importados=0;` — assim os 78 + 2.852 voltam para a fila.
+# Riscos / Reversão
 
-### 3. Endurecer `sga-sync-financeiro-veiculo/index.ts`
-- Se `upErr` ocorrer, **não** apenas `continue` silenciosamente: acumular erros e, se houver qualquer falha de upsert, marcar o job como `pendente_retry` com `ultimo_erro` descritivo (em vez de `concluido`).
-- Trocar a condição final de `boletos.length > 0 ? 'concluido' : 'sem_historico_hinova'` por: `importados > 0 ? 'concluido' : (boletos.length === 0 ? 'sem_historico_hinova' : 'pendente_retry')`.
-
-### 4. Após deploy: clicar em "Forçar sync agora" novamente
-A fila drena os 205k pendentes + os reprocessados, agora gravando de fato em `cobrancas`.
-
-## Arquivos afetados
-
-- `supabase/migrations/<novo>.sql` — UNIQUE INDEX parcial + dedupe + reset de jobs.
-- `supabase/functions/sga-sync-financeiro-veiculo/index.ts` — tratamento de erro de upsert + status final baseado em `importados`.
-
-## Resultado esperado
-
-- Próximos jobs gravam boletos em `cobrancas` (origem=`sga_hinova`).
-- "Cobranças SGA importadas" no painel passa a refletir o real.
-- Falhas de banco param de ser mascaradas como "concluído".
+- **Risco**: aumento de logins (1 por job em vez de 1 por instância). Mitigação: a Hinova não documenta rate limit em `/usuario/autenticar`, e o `sga-hinova-sync` já opera nesse modelo desde sempre sem problema.
+- **Reversível**: basta restaurar `getHinovaSession` para ignorar `noCache`.

@@ -172,20 +172,34 @@ export function invalidateHinovaSession(): void {
 }
 
 /**
- * Retorna sessão Hinova reutilizando cache quando válido.
- * Serializa autenticações concorrentes via `pendingAuth` (sem race).
+ * Retorna sessão Hinova.
  *
- * @param force ignora cache e força nova autenticação
+ * IMPORTANTE: A Hinova é stateful — cada `/usuario/autenticar` invalida
+ * tokens emitidos antes. Por isso o cache global é OPCIONAL e desabilitado
+ * por padrão para o backfill (cada job autentica fresco).
+ *
+ * @param force  ignora cache e força nova autenticação (mas atualiza cache)
+ * @param noCache não consulta nem grava no cache (recomendado para backfill)
  */
 export async function getHinovaSession(
   supabase: any,
-  opts?: { force?: boolean },
+  opts?: { force?: boolean; noCache?: boolean },
 ): Promise<HinovaSession> {
   const force = !!opts?.force;
+  const noCache = !!opts?.noCache;
   const now = Date.now();
 
-  if (!force && cachedSession && cachedSession.expiresAt > now) {
+  if (!noCache && !force && cachedSession && cachedSession.expiresAt > now) {
     return cachedSession.session;
+  }
+
+  // noCache = autenticação direta sem tocar no cache global
+  if (noCache) {
+    const creds = await getHinovaCreds(supabase);
+    if (!creds) throw new Error('Credenciais Hinova não configuradas');
+    const session = await autenticarHinova(creds);
+    if (!session) throw new Error('autenticarHinova retornou null');
+    return session;
   }
 
   // Se já há uma autenticação em andamento, aguarda ela
@@ -467,13 +481,13 @@ export async function listarBoletosVeiculoJanela(
   const dataInicialBR = fmtDataBR(opts.dataInicial);
   const dataFinalBR = fmtDataBR(opts.dataFinal);
 
+  // A Hinova exige `data_vencimento_inicial`/`data_vencimento_final` (formato dd/mm/aaaa).
+  // Enviamos também `data_inicial`/`data_final` por compatibilidade com versões antigas.
   const payload: Record<string, any> = {
     codigo_associado: Number(codigoAssociado),
     codigo_veiculo: Number(codigoVeiculo),
-    // Filtro semântico (vencimento) — par mais aderente ao caso "boletos do veículo no período"
     data_vencimento_inicial: dataInicialBR,
     data_vencimento_final: dataFinalBR,
-    // Compat genérico (algumas versões só reconhecem este par)
     data_inicial: dataInicialBR,
     data_final: dataFinalBR,
     link_boleto: opts.linkBoleto ?? true,
