@@ -184,49 +184,11 @@ serve(async (req) => {
     // 2. Para cada profissional, verificar se já tem tarefa e tentar atribuir
     for (const prof of profissionais as ProfissionalDisponivel[]) {
       const isBase = baseSet.has(prof.vistoriador_id);
-      // ========== VERIFICAR STATUS DE JORNADA (ALMOÇO) ==========
-      const { data: turnoHoje } = await supabase
-        .from('turnos_profissionais')
-        .select('id, status, inicio_almoco, fim_almoco')
-        .eq('profissional_id', prof.vistoriador_id)
-        .eq('data', hoje)
-        .maybeSingle();
+      // ========== ALMOÇO ==========
+      // Lógica automática de almoço DESATIVADA para todos os técnicos.
+      // Não há mais bloqueio de atribuição por estar em almoço, nem auto-finalização server-side.
+      // O status de almoço é puramente informativo e gerenciado manualmente pelo técnico via UI.
 
-      // Se está em almoço, verificar se já expirou (60+ min)
-      if (turnoHoje?.status === 'em_almoco' && turnoHoje.inicio_almoco) {
-        const inicioAlmoco = new Date(turnoHoje.inicio_almoco);
-        const agora = new Date();
-        const minutosEmAlmoco = Math.floor((agora.getTime() - inicioAlmoco.getTime()) / 60000);
-
-        if (minutosEmAlmoco < 60) {
-          console.log(`[cron-atribuir-tarefas] ☕ Profissional ${prof.vistoriador_id} em ALMOÇO há ${minutosEmAlmoco}min - pulando`);
-          continue;
-        }
-
-        // Para Base: não auto-finalizar — fica no controle do técnico
-        if (isBase) {
-          console.log(`[cron-atribuir-tarefas] ☕ Profissional BASE ${prof.vistoriador_id} em almoço manual há ${minutosEmAlmoco}min - pulando (sem auto-finalizar)`);
-          continue;
-        }
-
-        // Almoço expirado — finalizar automaticamente no servidor
-        const minutosAtraso = Math.max(0, minutosEmAlmoco - 60);
-        console.log(`[cron-atribuir-tarefas] ☕ ALMOÇO expirado (${minutosEmAlmoco}min) para ${prof.vistoriador_id} — finalizando server-side`);
-
-        await supabase
-          .from('turnos_profissionais')
-          .update({
-            status: 'ativo',
-            fim_almoco: agora.toISOString(),
-            minutos_atraso_almoco: minutosAtraso,
-          })
-          .eq('id', turnoHoje.id);
-        // Não dar continue — prosseguir para atribuir tarefa
-      }
-
-      // ⚠️ NÃO há mais início automático de almoço.
-      // O técnico inicia o almoço manualmente pelo app; o bloco acima
-      // apenas auto-finaliza almoços expirados (>60min) como rede de segurança.
 
       // Verificar se profissional já tem tarefa em andamento
       const { data: tarefaAtual } = await supabase.rpc('buscar_tarefa_atual_profissional', {
