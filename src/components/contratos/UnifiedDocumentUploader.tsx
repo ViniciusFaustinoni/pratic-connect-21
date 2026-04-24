@@ -19,6 +19,7 @@ import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
+import type { TablesUpdate } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
 import { syncCnhDataToAssociado } from '@/utils/syncCnhData';
 import { compararPlacasComDetalhe, isPlacaPlaceholder } from '@/lib/placa-utils';
@@ -379,12 +380,12 @@ export const UnifiedDocumentUploader = forwardRef<
         
         // NOVO: Se for CRLV e temos veiculoId, atualizar renavam/chassi automaticamente
         if (ocrResult.tipo_detectado === 'crlv' && veiculoId) {
-          const updateData: Record<string, string> = {};
+          const updateData: TablesUpdate<'veiculos'> = {};
           
           // Mapear campos do OCR para o veículo
           if (dadosLimpos.renavam) updateData.renavam = dadosLimpos.renavam;
           if (dadosLimpos.chassi) updateData.chassi = dadosLimpos.chassi;
-          if (dadosLimpos.blindado === 'true') (updateData as any).blindado = true;
+          if (dadosLimpos.blindado === 'true') updateData.blindado = true;
           
           if (Object.keys(updateData).length > 0) {
             console.log('[OCR] Atualizando veículo com dados do CRLV:', updateData);

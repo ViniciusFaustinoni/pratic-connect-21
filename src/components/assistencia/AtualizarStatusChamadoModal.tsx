@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { TablesUpdate } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -69,7 +70,7 @@ export function AtualizarStatusChamadoModal({ open, onClose, chamado, veiculoId 
       const user = await supabase.auth.getUser();
 
       // 1. Preparar dados de atualização
-      const updateData: Record<string, any> = {
+      const updateData: TablesUpdate<'chamados_assistencia'> = {
         status: novoStatus as any,
         updated_at: new Date().toISOString(),
       };
