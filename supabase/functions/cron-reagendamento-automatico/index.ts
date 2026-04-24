@@ -133,14 +133,14 @@ Deno.serve(async (req) => {
                 break;
               } else if (cand.distancia <= 0.5) {
                 // Ocupado mas muito perto — enfileirar com prioridade alta
-                await supabase.from("fila_servicos").insert({
+                await supabase.from("fila_servicos").upsert({
                   servico_id: orfao.id,
                   profissional_id: cand.vistoriador_id,
                   distancia_km: cand.distancia,
                   prioridade: 1,
                   status: "aguardando",
                   motivo: "redistribuicao_imprevisto",
-                }).onConflict("servico_id,profissional_id").ignore();
+                }, { onConflict: "servico_id,profissional_id", ignoreDuplicates: true });
 
                 console.log(`[cron-reagendamento] 📋 Enfileirado ${orfao.id} para ${cand.vistoriador_id} com prioridade alta (${cand.distancia.toFixed(2)}km)`);
                 redistribuido = true;
