@@ -16,6 +16,7 @@ import { Upload, CheckCircle2, AlertTriangle, Loader2, ShieldAlert, Clock, XCirc
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface BotaoEnviarSGAProps {
   contratoId: string;
@@ -42,6 +43,7 @@ export function BotaoEnviarSGA({
 }: BotaoEnviarSGAProps) {
   const [isLoading, setIsLoading] = useState(false);
   const queryClient = useQueryClient();
+  const { profile } = useAuth();
 
   // Buscar status na fila de reenvio
   const { data: queueItem } = useQuery({
@@ -116,7 +118,15 @@ export function BotaoEnviarSGA({
     setIsLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('sga-hinova-sync', {
-        body: { veiculo_id: veiculoId, associado_id: associadoId, status_sga_destino: 'pendente' },
+        body: {
+          veiculo_id: veiculoId,
+          associado_id: associadoId,
+          status_sga_destino: 'pendente',
+          usuario_id: profile?.id || null,
+          usuario_nome: profile?.nome || null,
+          etapa_origem: 'ativacao-manual',
+          motivo_decisao: 'Envio manual pela tela de ativações; veículo deve entrar no SGA como pendente.',
+        },
       });
 
       if (error) {
