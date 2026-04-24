@@ -28,6 +28,7 @@ import {
   ExternalLink,
   ClipboardCheck,
   Copy,
+  FileText,
 } from 'lucide-react';
 import {
   useProposta,
