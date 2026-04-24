@@ -40,7 +40,7 @@ type EtapaVenda =
   | 'veiculo_recusado'
   | 'cancelado';
 
-const statusConfig: Record<StatusCotacaoExtended, { 
+export const statusConfig: Record<StatusCotacaoExtended, { 
   label: string; 
   color: string;
   bgColor: string;
@@ -91,7 +91,7 @@ const statusConfig: Record<StatusCotacaoExtended, {
   },
 };
 
-const etapaVendaConfig: Record<EtapaVenda, { label: string; color: string; bgColor: string }> = {
+export const etapaVendaConfig: Record<EtapaVenda, { label: string; color: string; bgColor: string }> = {
   cotacao_realizada: {
     label: 'Cotação Realizada',
     color: 'text-slate-600 dark:text-slate-400',
