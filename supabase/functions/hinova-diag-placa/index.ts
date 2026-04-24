@@ -19,9 +19,7 @@ serve(async (req) => {
   const cpfs: string[] = body.cpfs ?? [];
 
   try {
-    const creds = await getHinovaCreds(supabase);
-    if (!creds) throw new Error('sem creds');
-    const session = await autenticarHinova(creds);
+    const session = await getHinovaSession(supabase);
     if (!session) throw new Error('sem session');
 
     const headers = {
