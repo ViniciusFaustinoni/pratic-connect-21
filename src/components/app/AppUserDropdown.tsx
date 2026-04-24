@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, FileCheck, AlertTriangle, Settings, LogOut, Download } from 'lucide-react';
+import { User, FileCheck, AlertTriangle, Settings, LogOut, Download, Bug } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -13,11 +14,18 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { IOSInstallGuide } from '@/components/pwa/IOSInstallGuide';
+import { RelatarErroModal } from '@/components/suporte/RelatarErroModal';
+import { useMyPendingValidations } from '@/hooks/useErrorReports';
+import { TestarCorrecoesSheet } from '@/components/suporte/TestarCorrecoesSheet';
+import { Badge } from '@/components/ui/badge';
 
 export function AppUserDropdown() {
   const navigate = useNavigate();
   const { signOut, profile } = useAuth();
   const { canInstall, isIOS, promptInstall, showIOSInstructions, setShowIOSInstructions } = usePWAInstall();
+  const [relatarOpen, setRelatarOpen] = useState(false);
+  const [testarOpen, setTestarOpen] = useState(false);
+  const { data: pendingTests = 0 } = useMyPendingValidations();
 
   const handleInstall = async () => {
     if (isIOS) {
@@ -56,6 +64,17 @@ export function AppUserDropdown() {
           <User className="mr-2 h-4 w-4" />
           Meus Dados
         </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setRelatarOpen(true)}>
+          <Bug className="mr-2 h-4 w-4" />
+          Relatar Erro
+        </DropdownMenuItem>
+        {pendingTests > 0 && (
+          <DropdownMenuItem onClick={() => setTestarOpen(true)} className="text-warning focus:text-warning animate-pulse">
+            <Bug className="mr-2 h-4 w-4" />
+            Testar correções
+            <Badge variant="destructive" className="ml-auto h-5 min-w-5 px-1.5">{pendingTests}</Badge>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem onClick={() => navigate('/app/documentos')}>
           <FileCheck className="mr-2 h-4 w-4" />
           Documentos
