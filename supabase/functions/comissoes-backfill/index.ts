@@ -1,7 +1,7 @@
 // Edge function: comissoes-backfill
 // Reprocessa cobranças já pagas para gerar comissões via fn_gerar_comissoes_por_pagamento.
 // Apenas diretores podem executar.
-import { createClient } from "npm:@supabase/supabase-js@2.45.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
