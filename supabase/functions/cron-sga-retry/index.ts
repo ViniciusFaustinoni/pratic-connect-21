@@ -105,6 +105,22 @@ serve(async (req) => {
         .eq('id', item.id);
 
       try {
+        // Roteamento por etapa: atualização de placa pós-emplacamento
+        if (item.etapa_parou === 'atualizar_placa') {
+          const { data, error } = await supabase.functions.invoke('sga-atualizar-placa', {
+            body: { veiculo_id: item.veiculo_id },
+          });
+          if (error) throw new Error(error.message || 'Erro ao invocar sga-atualizar-placa');
+          if (data?.success) {
+            console.log(`[Cron SGA Retry] ✅ Placa atualizada no SGA: veiculo=${item.veiculo_id}`);
+            sucesso++;
+          } else {
+            console.log(`[Cron SGA Retry] ❌ Falha atualização placa: ${data?.error || 'desconhecido'}`);
+            falha++;
+          }
+          continue;
+        }
+
         const { data: veiculoRetry } = await supabase
           .from('veiculos')
           .select('cobertura_total')
