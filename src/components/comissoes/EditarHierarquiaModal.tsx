@@ -261,7 +261,7 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
                   Nenhum usuário disponível para formar vínculos.
                 </div>
               )}
-              <ChainNode label="Gerente" name={userName(usuariosMap, gerenteId === 'none' ? null : gerenteId)} icon={UserRound} loading={loadingVinculos} />
+              <ChainNode label={gerenteBloqueado ? 'Gerente (herdado do supervisor)' : 'Gerente'} name={userName(usuariosMap, gerenteEffectiveId)} icon={UserRound} loading={loadingVinculos} />
               <div className="flex justify-center text-muted-foreground"><ArrowDown className="h-4 w-4" /></div>
               <ChainNode label="Supervisor" name={userName(usuariosMap, supervisorId === 'none' ? null : supervisorId)} icon={Users2} loading={loadingVinculos} />
               <div className="flex justify-center text-muted-foreground"><ArrowDown className="h-4 w-4" /></div>
