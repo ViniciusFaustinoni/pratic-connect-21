@@ -42,9 +42,9 @@ serve(async (req) => {
         } else {
           erroMensagem = `API retornou status ${authResp.status}`;
         }
-      } catch (e) {
+      } catch (e: any) {
         tempoMs = Date.now() - start;
-        erroMensagem = `Erro de rede: ${e.message}`;
+        erroMensagem = `Erro de rede: ${e?.message || 'erro desconhecido'}`;
       }
     }
 
@@ -109,9 +109,9 @@ serve(async (req) => {
       veiculos_nao_sincronizados: naoSincronizados,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('[cron-sga-health-check] Error:', error);
-    return new Response(JSON.stringify({ success: false, error: error.message }), {
+    return new Response(JSON.stringify({ success: false, error: error?.message || 'Erro interno' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
