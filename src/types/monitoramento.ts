@@ -15,7 +15,7 @@ export {
 
 import type { StatusInstalacao } from './database';
 
-export type PeriodoInstalacao = 'manha' | 'tarde' | 'noite';
+export type PeriodoInstalacao = 'manha' | 'tarde';
 
 export type StatusRota = 'pendente' | 'em_andamento' | 'concluida' | 'cancelada';
 
@@ -30,7 +30,6 @@ export type PlataformaRastreador = 'rede_veiculos' | 'soft_truck' | 'nenhum';
 export const PERIODO_LABELS: Record<PeriodoInstalacao, string> = {
   manha: 'Manhã (08h-12h)',
   tarde: 'Tarde (13h-17h)',
-  noite: 'Noite (18h-21h)',
 };
 
 export const STATUS_ROTA_LABELS: Record<StatusRota, string> = {

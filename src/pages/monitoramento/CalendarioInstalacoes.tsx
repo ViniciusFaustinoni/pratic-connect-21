@@ -143,18 +143,20 @@ export default function CalendarioInstalacoesPage() {
 
   // Agrupar instalações por data E período
   const instalacoesPorData = useMemo(() => {
-    const map = new Map<string, { manha: typeof instalacoes; tarde: typeof instalacoes; noite: typeof instalacoes }>();
+    const map = new Map<string, { manha: typeof instalacoes; tarde: typeof instalacoes }>();
     
     instalacoes.forEach((inst) => {
       const dataStr = inst.data_agendada;
       if (!dataStr) return;
       
       if (!map.has(dataStr)) {
-        map.set(dataStr, { manha: [], tarde: [], noite: [] });
+        map.set(dataStr, { manha: [], tarde: [] });
       }
       
       const grupo = map.get(dataStr)!;
-      const periodo = (inst.periodo || 'manha') as 'manha' | 'tarde' | 'noite';
+      // Legacy: registros 'noite' caem em 'tarde'
+      const rawPeriodo = (inst.periodo || 'manha') as string;
+      const periodo: 'manha' | 'tarde' = rawPeriodo === 'manha' ? 'manha' : 'tarde';
       grupo[periodo].push(inst);
     });
     
@@ -279,8 +281,8 @@ export default function CalendarioInstalacoesPage() {
           <div className="grid grid-cols-7">
             {diasCalendario.map((dia, index) => {
               const dataStr = dia.data.toISOString().split('T')[0];
-              const instalacoesDia = instalacoesPorData.get(dataStr) || { manha: [], tarde: [], noite: [] };
-              const temInstalacoes = instalacoesDia.manha.length > 0 || instalacoesDia.tarde.length > 0 || instalacoesDia.noite.length > 0;
+              const instalacoesDia = instalacoesPorData.get(dataStr) || { manha: [], tarde: [] };
+              const temInstalacoes = instalacoesDia.manha.length > 0 || instalacoesDia.tarde.length > 0;
               
               const vistoriasDia = vistoriasPorData.get(dataStr) || { base: [], campo: [] };
               const temVistorias = vistoriasDia.base.length > 0 || vistoriasDia.campo.length > 0;
@@ -417,7 +419,6 @@ export default function CalendarioInstalacoesPage() {
                     <div className="mt-1 space-y-1.5">
                       {renderPeriodo(instalacoesDia.manha, 'Manhã', '☀️')}
                       {renderPeriodo(instalacoesDia.tarde, 'Tarde', '🌅')}
-                      {renderPeriodo(instalacoesDia.noite, 'Noite', '🌙')}
                       {renderVistoriasGrupo(vistoriasDia.base, 'Base', true)}
                       {renderVistoriasGrupo(vistoriasDia.campo, 'Campo', false)}
                     </div>

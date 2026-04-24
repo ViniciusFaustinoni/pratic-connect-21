@@ -175,7 +175,7 @@ export type TipoVistoria = 'saida' | 'sinistro';
 
 export type TipoSinistro = 'roubo' | 'furto' | 'colisao' | 'incendio' | 'alagamento' | 'outro';
 
-export type PeriodoInstalacao = 'manha' | 'tarde' | 'noite';
+export type PeriodoInstalacao = 'manha' | 'tarde';
 
 // Interfaces para as tabelas existentes
 export interface Profile {
@@ -690,7 +690,6 @@ export const STATUS_ROTA_LABELS: Record<StatusRota, string> = {
 export const PERIODO_LABELS = {
   manha: 'Manhã (08h - 12h)',
   tarde: 'Tarde (13h - 17h)',
-  noite: 'Noite (18h - 21h)',
 } as const;
 
 export const STATUS_VISTORIA_LABELS: Record<StatusVistoria, string> = {
@@ -746,7 +745,6 @@ export const TIPO_SINISTRO_LABELS: Record<TipoSinistro, string> = {
 export const PERIODO_INSTALACAO_LABELS: Record<PeriodoInstalacao, string> = {
   manha: 'Manhã',
   tarde: 'Tarde',
-  noite: 'Noite',
 };
 
 // Motivos de reprovação de documento

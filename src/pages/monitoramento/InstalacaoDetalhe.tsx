@@ -726,7 +726,6 @@ export default function InstalacaoDetalhePage() {
                   <SelectContent>
                     <SelectItem value="manha">Manhã (08h-12h)</SelectItem>
                     <SelectItem value="tarde">Tarde (13h-17h)</SelectItem>
-                    <SelectItem value="noite">Noite (18h-21h)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

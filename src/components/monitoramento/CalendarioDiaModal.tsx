@@ -380,11 +380,11 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
   }, [instalacoes, vistoriasCampo]);
 
 
-  // Group rota by period
+  // Group rota by period (legacy 'noite' cai em 'tarde')
   const rotaPorPeriodo = useMemo(() => {
-    const groups: Record<string, typeof rotaItems> = { manha: [], tarde: [], noite: [] };
+    const groups: Record<string, typeof rotaItems> = { manha: [], tarde: [] };
     rotaItems.forEach((item) => {
-      const p = item.periodo in groups ? item.periodo : 'manha';
+      const p = item.periodo === 'manha' ? 'manha' : 'tarde';
       groups[p].push(item);
     });
     return groups;
@@ -393,7 +393,6 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
   const periodoLabels: Record<string, { label: string; emoji: string }> = {
     manha: { label: 'Manhã', emoji: '☀️' },
     tarde: { label: 'Tarde', emoji: '🌅' },
-    noite: { label: 'Noite', emoji: '🌙' },
   };
 
   const isLoading = loadingInst || loadingVist || loadingBase;
