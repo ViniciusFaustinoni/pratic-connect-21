@@ -101,6 +101,9 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
       .join('')
       .toUpperCase();
 
+    const isVendedor = u.roles.some((r) => ['vendedor_clt', 'vendedor_externo', 'agencia'].includes(r));
+    const semSga = isVendedor && semCodigoSga?.ids.has(u.id);
+
     return (
       <div className="flex items-center gap-2">
         <Avatar className="h-8 w-8">
@@ -108,7 +111,21 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
           <AvatarFallback>{initials}</AvatarFallback>
         </Avatar>
         <div className="min-w-0">
-          <div className="font-medium truncate">{u.nome}</div>
+          <div className="font-medium truncate flex items-center gap-1.5">
+            <span className="truncate">{u.nome}</span>
+            {semSga && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" />
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    Vendedor sem <strong>Código SGA Voluntário</strong>. Sincronizações com o SGA serão bloqueadas.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
           <div className="text-xs text-muted-foreground truncate">{u.email}</div>
         </div>
       </div>
