@@ -413,6 +413,7 @@ const menuConfig: {
         { title: 'Atuarial', url: '/diretoria/indicadores', icon: TrendingUp },
         { title: 'Aprovações', url: '/diretoria/aprovacoes', icon: CheckCircle2 },
         { title: 'Blacklist', url: '/diretoria/blacklist', icon: Ban },
+        { title: 'Relatos de Erros', url: '/diretoria/relatos-erros', icon: Bug },
         { title: 'Configurações', url: '/diretoria/configuracoes', icon: Settings },
         { title: 'Perfis', url: '/diretoria/perfis', icon: Shield },
         { title: 'Logs', url: '/diretoria/logs', icon: FileText },
