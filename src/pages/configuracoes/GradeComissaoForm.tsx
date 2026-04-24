@@ -307,13 +307,16 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
     if (!nome.trim()) return 'Nome é obrigatório';
     if (selectedPlanIds.length === 0) return 'Selecione pelo menos um plano para a grade';
 
-    for (const planoId of selectedPlanIds) {
+    const regrasValidacao = getRegrasParaSalvar();
+    const planosParaValidar = configuracaoCompartilhada ? [planoConfiguracaoId] : selectedPlanIds;
+
+    for (const planoId of planosParaValidar) {
       const plano = planos.find(p => p.id === planoId);
-      const parcelas = regrasPorPlano[planoId] || [];
-      if (parcelas.length === 0) return `Configure pelo menos uma parcela para o plano ${plano?.nome || planoId}`;
+      const parcelas = regrasValidacao[planoId] || [];
+      if (parcelas.length === 0) return configuracaoCompartilhada ? 'Configure pelo menos uma parcela para os planos selecionados' : `Configure pelo menos uma parcela para o plano ${plano?.nome || planoId}`;
 
       for (const p of parcelas) {
-        const contexto = `${plano?.nome || 'Plano'} / ${p.label || 'Parcela'}`;
+        const contexto = `${configuracaoCompartilhada ? 'Configuração compartilhada' : plano?.nome || 'Plano'} / ${p.label || 'Parcela'}`;
         if (!p.label.trim()) return `${contexto}: informe o rótulo da parcela`;
         if (p.vitalicia) {
           if (!p.vitalicia_inicio_parcela || p.vitalicia_inicio_parcela < 1) return `${contexto}: defina a parcela inicial da regra vitalícia`;
@@ -333,7 +336,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
       }
 
       const nums = parcelas.filter(p => !p.vitalicia).map(p => p.numero_parcela);
-      if (nums.length !== new Set(nums).size) return `${plano?.nome || 'Plano'}: há parcelas com o mesmo número`;
+      if (nums.length !== new Set(nums).size) return `${configuracaoCompartilhada ? 'Configuração compartilhada' : plano?.nome || 'Plano'}: há parcelas com o mesmo número`;
     }
     return null;
   };
@@ -395,9 +398,10 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
         gradeId = data.id;
       }
 
+      const regrasParaSalvar = getRegrasParaSalvar();
       const parcelaIdByKey = new Map<string, string>();
       const parcelasInsert = selectedPlanIds.flatMap((planoId) =>
-        (regrasPorPlano[planoId] || []).map((p, i) => ({
+        (regrasParaSalvar[planoId] || []).map((p, i) => ({
           grade_id: gradeId!,
           numero_parcela: p.vitalicia ? null : p.numero_parcela,
           vitalicia: p.vitalicia,
@@ -421,7 +425,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
 
       const niveisInsert: any[] = [];
       selectedPlanIds.forEach((planoId) => {
-        (regrasPorPlano[planoId] || []).forEach((p, i) => {
+        (regrasParaSalvar[planoId] || []).forEach((p, i) => {
           const parcelaId = parcelaIdByKey.get(`${planoId}:${i}`);
           p.niveis.forEach((n, ni) => {
             niveisInsert.push({
@@ -446,7 +450,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
 
       const regrasInsert: any[] = [];
       selectedPlanIds.forEach(planoId => {
-        (regrasPorPlano[planoId] || []).forEach((p, i) => {
+        (regrasParaSalvar[planoId] || []).forEach((p, i) => {
           const parcelaId = parcelaIdByKey.get(`${planoId}:${i}`);
           p.niveis.forEach((n, ni) => {
             regrasInsert.push({
@@ -475,7 +479,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
         { id: gradeId, nome: nome.trim(), descricao: descricao.trim() || null, versao: novaVersao },
         planos,
         selectedPlanIds,
-        regrasPorPlano,
+        regrasParaSalvar,
       );
       await (supabase as any).from('grades_comissao_versoes').insert({
         grade_id: gradeId,
