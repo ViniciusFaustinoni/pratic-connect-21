@@ -197,7 +197,7 @@ serve(async (req) => {
 
     if (veiculo.placa) {
       try {
-        const { found, debug } = await buscarVeiculoPorPlaca(session, veiculo.placa);
+        const { found, debug } = await withReauthRetry(supabase, session!, (s) => buscarVeiculoPorPlaca(s, veiculo.placa!), (s) => { session = s; });
         const codigoVeiculoEncontrado = Number(found?.codigo_veiculo) || null;
         const codigoAssociadoEncontrado = extractCodigoAssociado(found);
 
@@ -246,7 +246,7 @@ serve(async (req) => {
     // Se já temos codigoAssociado, só fazemos a chamada se a primeira tentativa de boletos falhar (ver abaixo).
     if (!codigoAssociado && associado.cpf) {
       try {
-        const associadoPorCpf = await buscarAssociadoPorCpf(session, associado.cpf);
+        const associadoPorCpf = await withReauthRetry(supabase, session!, (s) => buscarAssociadoPorCpf(s, associado.cpf), (s) => { session = s; });
         const codigoAssociadoPorCpf = extractCodigoAssociado(associadoPorCpf);
 
         await supabase.from('sga_sync_logs').insert({
@@ -280,7 +280,7 @@ serve(async (req) => {
 
     let situacao: string | null = null;
     try {
-      situacao = await buscarSituacaoFinanceiraVeiculo(session, codigoVeiculo);
+      situacao = await withReauthRetry(supabase, session!, (s) => buscarSituacaoFinanceiraVeiculo(s, codigoVeiculo!), (s) => { session = s; });
     } catch (e) {
       if (e instanceof HinovaTransientError) throw e;
       // Erro não-transitório de situação não bloqueia listagem de boletos
@@ -291,7 +291,7 @@ serve(async (req) => {
     const opcoesBoletos = { anosTras: 3, diasJanela: 90, linkBoleto: true } as const;
     let boletos: any[] = [];
     try {
-      boletos = await listarBoletosVeiculo(session, codigoAssociado, codigoVeiculo, opcoesBoletos);
+      boletos = await withReauthRetry(supabase, session!, (s) => listarBoletosVeiculo(s, codigoAssociado!, codigoVeiculo!, opcoesBoletos), (s) => { session = s; });
     } catch (e) {
       if (e instanceof HinovaTransientError) throw e;
       throw e;
@@ -300,7 +300,7 @@ serve(async (req) => {
     // Fallback CPF SEMPRE quando vazio — tenta reconciliar pelo CPF mesmo se já tínhamos codigoAssociado
     if ((!boletos || boletos.length === 0) && associado.cpf) {
       try {
-        const associadoPorCpf = await buscarAssociadoPorCpf(session, associado.cpf);
+        const associadoPorCpf = await withReauthRetry(supabase, session!, (s) => buscarAssociadoPorCpf(s, associado.cpf), (s) => { session = s; });
         const codigoAssociadoPorCpf = extractCodigoAssociado(associadoPorCpf);
 
         if (codigoAssociadoPorCpf && codigoAssociadoPorCpf !== codigoAssociado) {
@@ -313,7 +313,7 @@ serve(async (req) => {
           });
           codigoAssociado = codigoAssociadoPorCpf;
           await supabase.from('associados').update({ codigo_hinova: codigoAssociadoPorCpf }).eq('id', associado.id);
-          boletos = await listarBoletosVeiculo(session, codigoAssociadoPorCpf, codigoVeiculo, opcoesBoletos);
+          boletos = await withReauthRetry(supabase, session!, (s) => listarBoletosVeiculo(s, codigoAssociadoPorCpf, codigoVeiculo!, opcoesBoletos), (s) => { session = s; });
         }
       } catch (e) {
         if (e instanceof HinovaTransientError) throw e;
