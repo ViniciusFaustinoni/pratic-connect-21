@@ -111,10 +111,11 @@ serve(async (req) => {
 
     const associadoId = contrato.associado_id;
 
-    // 2. Atualizar contrato para ativo (atomicamente)
+    // 2. Registrar aprovação cadastral no contrato sem ativar ainda.
+    // A ativação definitiva acontece somente após instalação + aprovação do Monitoramento.
     const { data: contratoAtualizado, error: contratoError } = await supabase
       .from('contratos')
-      .update({ status: 'ativo', data_ativacao: agora, aprovado_por, aprovado_em: agora })
+      .update({ aprovado_por, aprovado_em: agora })
       .eq('id', contrato_id)
       .eq('status', 'assinado')
       .select('id, status')
@@ -124,7 +125,7 @@ serve(async (req) => {
 
     if (!contratoAtualizado) {
       const { data: refetch } = await supabase.from('contratos').select('status').eq('id', contrato_id).single();
-      if (refetch?.status === 'ativo') {
+      if (refetch?.status === 'ativo' || refetch?.status === 'assinado') {
         return jsonResponse({ success: true, jaAprovado: true, mensagem: 'Este contrato já foi aprovado por outro usuário.', contratoId: contrato_id, associadoId });
       }
       throw new Error(`Não foi possível aprovar. Status atual: ${refetch?.status || 'desconhecido'}`);
@@ -139,14 +140,14 @@ serve(async (req) => {
       configRes,
       associadoUpdateRes,
     ] = await Promise.all([
-      supabase.from('instalacoes').select('id, status, rastreador_id')
+      supabase.from('instalacoes').select('id, status, rastreador_id, veiculo_id')
         .eq('contrato_id', contrato_id).eq('status', 'concluida').maybeSingle(),
       // Buscar TODOS os veículos do associado (para tratamento multi-veículo)
       supabase.from('veiculos').select('id, placa, marca, modelo, valor_fipe').eq('associado_id', associadoId),
       supabase.from('configuracoes').select('chave, valor')
         .in('chave', ['operacional_fipe_minimo_rastreador', 'operacional_fipe_minimo_rastreador_moto', 'marcas_exclusivas_moto']),
       supabase.from('associados').update({
-        status: 'ativo', data_adesao: agora.split('T')[0], aprovado_por, aprovado_em: agora,
+        status: 'aguardando_instalacao', data_adesao: agora.split('T')[0], aprovado_por, aprovado_em: agora,
       }).eq('id', associadoId).select('id, status').single(),
     ]);
 
@@ -368,6 +369,11 @@ serve(async (req) => {
       await Promise.all([
         supabase.from('contratos').update({ status: 'assinado', data_ativacao: null }).eq('id', contrato_id),
         supabase.from('associados').update({ status: 'aguardando_instalacao' }).eq('id', associadoId),
+      ]);
+    } else {
+      await Promise.all([
+        supabase.from('contratos').update({ status: 'ativo', data_ativacao: agora }).eq('id', contrato_id),
+        supabase.from('associados').update({ status: 'ativo', data_ativacao: agora }).eq('id', associadoId),
       ]);
     }
 

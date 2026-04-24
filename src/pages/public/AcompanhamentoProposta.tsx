@@ -276,6 +276,38 @@ function getStatusInfo(associado: AssociadoData) {
   const servico = associado.servicoInstalacao;
 
 
+  if (associado.status === 'recusado' && veiculo?.motivo_recusa_veiculo?.toLowerCase().includes('monitoramento')) {
+    return {
+      status: 'reprovado_monitoramento',
+      icon: XCircle,
+      color: 'destructive',
+      title: 'Instalação Reprovada pelo Monitoramento',
+      description: 'A validação final identificou uma pendência na instalação. Nossa equipe entrará em contato para orientar os próximos passos.',
+      showDetails: true,
+      showCriarConta: false,
+      showEmRota: false,
+      showEmAndamento: false,
+      showAtribuidaRota: false,
+      showRecusaOrientacoes: true,
+      motivoRecusa: veiculo.motivo_recusa_veiculo || '',
+    };
+  }
+
+  if (associado.status === 'recusado' || contrato?.status === 'cancelado') {
+    return {
+      status: 'reprovado_cadastro',
+      icon: XCircle,
+      color: 'destructive',
+      title: 'Cadastro Reprovado',
+      description: 'Sua proposta não foi aprovada na análise cadastral. Entre em contato para mais informações.',
+      showDetails: true,
+      showCriarConta: false,
+      showEmRota: false,
+      showEmAndamento: false,
+      showAtribuidaRota: false,
+    };
+  }
+
   // PRIORIDADE 1: Veículo recusado pelo instalador/vistoriador
   if (veiculo?.status === 'recusado') {
     return {
@@ -291,21 +323,6 @@ function getStatusInfo(associado: AssociadoData) {
       showAtribuidaRota: false,
       showRecusaOrientacoes: true,
       motivoRecusa: veiculo.motivo_recusa_veiculo || '',
-    };
-  }
-
-  // Verificar se foi reprovado/cancelado
-  if (contrato?.status === 'cancelado') {
-    return {
-      status: 'reprovado',
-      icon: XCircle,
-      color: 'destructive',
-      title: 'Proposta Recusada',
-      description: 'Sua proposta foi recusada. Entre em contato para mais informações.',
-      showDetails: false,
-      showCriarConta: false,
-      showEmRota: false,
-      showEmAndamento: false,
     };
   }
 
@@ -360,6 +377,23 @@ function getStatusInfo(associado: AssociadoData) {
       showEmAndamento: false,
       showAtribuidaRota: true,
       nomeVistoriador,
+    };
+  }
+
+  // Instalação concluída, aguardando validação final do Monitoramento
+  if (servico?.status === 'concluida' && !veiculo?.cobertura_total) {
+    return {
+      status: 'aguardando_monitoramento',
+      icon: ShieldCheck,
+      color: 'primary',
+      title: 'Instalação em Análise Final',
+      description: 'A instalação foi concluída. Nosso monitoramento está validando os dados para ativar sua Proteção 360º.',
+      showDetails: true,
+      showInstalacao: true,
+      showCriarConta: false,
+      showEmRota: false,
+      showEmAndamento: false,
+      showAtribuidaRota: false,
     };
   }
 
@@ -469,7 +503,9 @@ function getStatusInfo(associado: AssociadoData) {
       icon: Wrench,
       color: 'warning',
       title: 'Aguardando Instalação',
-      description: 'Sua proposta foi aprovada! Aguardando agendamento da instalação do rastreador.',
+      description: instalacao?.data_agendada
+        ? 'Seu cadastro foi aprovado. A instalação do rastreador será realizada conforme o agendamento.'
+        : 'Seu cadastro foi aprovado. Agora vamos liberar o serviço de instalação do rastreador.',
       showDetails: true,
       showInstalacao: true,
       showCriarConta: false,
@@ -691,6 +727,12 @@ export default function AcompanhamentoProposta() {
       badge: 'bg-success/20 text-success border-success/30',
     },
     primary: {
+      bg: 'bg-primary/10',
+      border: 'border-primary/30',
+      text: 'text-primary',
+      badge: 'bg-primary/20 text-primary border-primary/30',
+    },
+    info: {
       bg: 'bg-primary/10',
       border: 'border-primary/30',
       text: 'text-primary',

@@ -99,7 +99,7 @@ serve(async (req) => {
     // 2. Buscar contrato vinculado
     const { data: contrato, error: contratoError } = await supabase
       .from('contratos')
-      .select('id, associado_id, veiculo_id, adesao_paga')
+      .select('id, status, associado_id, veiculo_id, adesao_paga, aprovado_em')
       .eq('cotacao_id', cotacaoId)
       .single();
 
@@ -126,6 +126,11 @@ serve(async (req) => {
     if (skipPaymentCheck) {
       console.log('[CriarInstalacaoPosPagamento] skipPaymentCheck=true, pulando verificação de adesao_paga');
     }
+
+    // O pagamento/agendamento não libera instalação sozinho.
+    // A instalação só pode ser criada após aprovação explícita do Cadastro,
+    // mas os lançamentos financeiros abaixo continuam idempotentes.
+    const cadastroAprovado = !!contrato.aprovado_em;
 
     // 3.1 CORREÇÃO: Garantir que veiculo_id existe — fallback por placa OU por associado
     let veiculoIdFinal = contrato.veiculo_id;
@@ -320,8 +325,8 @@ serve(async (req) => {
       }
     }
 
-    // Se tem data, criar instalação normalmente
-    if (dataAgendada) {
+    // Se tem data e o Cadastro já aprovou, criar instalação normalmente
+    if (dataAgendada && cadastroAprovado) {
       // 5.1 VALIDAÇÃO CRÍTICA: Verificar coordenadas para atribuição automática
       if (!endereco.latitude || !endereco.longitude) {
         console.warn('[CriarInstalacaoPosPagamento] ⚠️ Coordenadas ausentes! Tentando geocodificar...');
@@ -448,6 +453,8 @@ serve(async (req) => {
         novaInstalacaoId = novaInstalacao.id;
         console.log('[CriarInstalacaoPosPagamento] Instalação criada com sucesso:', novaInstalacaoId);
       }
+    } else if (dataAgendada && !cadastroAprovado) {
+      console.log('[CriarInstalacaoPosPagamento] Agendamento encontrado, mas Cadastro ainda não aprovou — instalação não criada.');
     }
 
     // 6.1 GERAR LANÇAMENTOS FINANCEIROS (consultor + módulo Financeiro empresa)
