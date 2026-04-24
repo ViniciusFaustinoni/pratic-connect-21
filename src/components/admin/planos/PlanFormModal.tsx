@@ -47,6 +47,7 @@ interface PlanFormData {
   footer_note: string;
   display_order: string;
   is_active: boolean;
+  codigo_sga_plano: string;
 }
 
 const BADGE_COLORS = [
@@ -97,6 +98,7 @@ function createEmptyFormData(defaultProductLineId?: string): PlanFormData {
     footer_note: '',
     display_order: '0',
     is_active: true,
+    codigo_sga_plano: '',
   };
 }
 
@@ -112,6 +114,7 @@ function mapPlanToState(planData: any, defaultProductLineId?: string) {
       footer_note: planData?.footer_note || '',
       display_order: (planData?.ordem || 0).toString(),
       is_active: planData?.ativo ?? true,
+      codigo_sga_plano: planData?.codigo_sga_plano || '',
     } satisfies PlanFormData,
     coberturasCount: (planData?.planos_coberturas || []).length,
     benefitsCount: (planData?.planos_beneficios || []).length,
@@ -242,6 +245,7 @@ export function PlanFormModal({
       footer_note: formData.footer_note || null,
       display_order: parseInt(formData.display_order, 10) || 0,
       is_active: formData.is_active,
+      codigo_sga_plano: formData.codigo_sga_plano.trim() || null,
       // Don't pass benefits/coberturas — they're managed inline now
     };
 
