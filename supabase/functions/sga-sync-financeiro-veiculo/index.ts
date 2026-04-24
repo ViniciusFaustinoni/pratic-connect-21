@@ -92,6 +92,32 @@ async function buscarAssociadoPorCpf(session: any, cpf: string | null | undefine
   }
 }
 
+/**
+ * Executa `op(session)` e, em caso de HinovaTransientError reason='auth',
+ * reautentica fresco UMA vez (sem cache) e retenta. Cobre o cenário em que
+ * outra instância paralela do backfill invalidou nosso tokenUsuario logo
+ * após nosso login. `setSession` permite ao caller atualizar a session em
+ * uso para as próximas chamadas dentro do mesmo job.
+ */
+async function withReauthRetry<T>(
+  supabase: any,
+  session: HinovaSession,
+  op: (s: HinovaSession) => Promise<T>,
+  setSession: (s: HinovaSession) => void,
+): Promise<T> {
+  try {
+    return await op(session);
+  } catch (e: any) {
+    if (e instanceof HinovaTransientError && e.reason === 'auth') {
+      console.warn('[SGA Sync Veículo] 401 inline — reautenticando fresh e retentando');
+      const fresh = await getHinovaSession(supabase, { noCache: true });
+      setSession(fresh);
+      return await op(fresh);
+    }
+    throw e;
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
