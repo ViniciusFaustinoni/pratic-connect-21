@@ -65,6 +65,7 @@ interface DocumentosSolicitadosCardProps {
   documentosSolicitados: DocumentoSolicitadoEnviado[];
   documentosPendentes?: DocumentoSolicitadoPendente[];
   contratoId?: string;
+  contratoLinkToken?: string | null;
   associadoId?: string;
 }
 
@@ -72,12 +73,13 @@ export function DocumentosSolicitadosCard({
   documentosSolicitados,
   documentosPendentes = [],
   contratoId,
+  contratoLinkToken,
   associadoId,
 }: DocumentosSolicitadosCardProps) {
   const cancelarMutation = useCancelarDocumentosSolicitados();
   const temEnviados = documentosSolicitados && documentosSolicitados.length > 0;
   const temPendentes = documentosPendentes && documentosPendentes.length > 0;
-  const linkPublico = contratoId ? `https://app.praticcar.org/acompanhar/${contratoId}` : null;
+  const linkPublico = contratoLinkToken ? `https://app.praticcar.org/acompanhar/${contratoLinkToken}` : null;
 
   if (!temEnviados && !temPendentes) {
     return null;
