@@ -1,11 +1,12 @@
 import { Fragment, useState } from 'react';
-import { FileText, Download, ChevronDown, ChevronUp } from 'lucide-react';
+import { FileText, Download, ChevronDown, ChevronUp, GitBranch } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -38,6 +39,16 @@ const tabelaOptions = [
   'grades_comissao', 'grades_comissao_versoes', 'usuario_grade_comissao',
   'hierarquia_vendas', 'comissoes', 'comissoes_pagamentos', 'comissoes_pagamento_itens',
 ];
+
+const tabelaLabels: Record<string, string> = {
+  grades_comissao: 'Grades de comissão',
+  grades_comissao_versoes: 'Versões de grades',
+  usuario_grade_comissao: 'Atribuição de grade',
+  hierarquia_vendas: 'Hierarquia de vendas',
+  comissoes: 'Comissões',
+  comissoes_pagamentos: 'Pagamentos de comissões',
+  comissoes_pagamento_itens: 'Itens de pagamento',
+};
 
 const csvEscape = (value: unknown) => {
   const text = value === null || value === undefined ? '-' : typeof value === 'string' ? value : JSON.stringify(value);
