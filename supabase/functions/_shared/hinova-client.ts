@@ -709,3 +709,78 @@ export function calcularProximoRetry(reason: HinovaTransientError['reason']): Da
   // server / auth / network → 30 minutos
   return new Date(now.getTime() + 30 * 60 * 1000);
 }
+
+/**
+ * Executa `op(session)` reusando o cache de sessão. Em caso de
+ * `HinovaTransientError reason='auth'`, invalida o cache, força nova
+ * autenticação e tenta UMA vez mais. Outros erros propagam direto.
+ *
+ * Use isto como wrapper padrão em todas as chamadas a helpers
+ * (buscarVeiculoPorPlaca, listarBoletosVeiculo, etc).
+ */
+export async function withHinovaAuthRetry<T>(
+  supabase: any,
+  op: (s: HinovaSession) => Promise<T>,
+): Promise<T> {
+  let session = await getHinovaSession(supabase);
+  try {
+    return await op(session);
+  } catch (e: any) {
+    if (e instanceof HinovaTransientError && e.reason === 'auth') {
+      console.warn('[withHinovaAuthRetry] auth falhou — invalidando cache e tentando 1x mais');
+      invalidateHinovaSession();
+      session = await getHinovaSession(supabase, { force: true });
+      return await op(session);
+    }
+    throw e;
+  }
+}
+
+/**
+ * Verifica se o backfill financeiro está ativo (pausa crons concorrentes).
+ * Crons de SGA devem chamar isto e pular execução quando true.
+ */
+export async function isBackfillFinanceiroAtivo(supabase: any): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('sga_runtime_state')
+      .select('backfill_financeiro_ativo, backfill_expira_em')
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return false;
+    if (!data.backfill_financeiro_ativo) return false;
+    // TTL: se expirou, considera inativo (anti-deadlock)
+    if (data.backfill_expira_em && new Date(data.backfill_expira_em).getTime() < Date.now()) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Marca backfill como ativo por `ttlMinutes` (default 60min) */
+export async function marcarBackfillAtivo(supabase: any, ttlMinutes = 60): Promise<void> {
+  const now = new Date();
+  const expira = new Date(now.getTime() + ttlMinutes * 60 * 1000);
+  await supabase
+    .from('sga_runtime_state')
+    .update({
+      backfill_financeiro_ativo: true,
+      backfill_iniciado_em: now.toISOString(),
+      backfill_expira_em: expira.toISOString(),
+    })
+    .gte('id', '00000000-0000-0000-0000-000000000000'); // update-all (singleton)
+}
+
+/** Limpa flag de backfill ativo */
+export async function marcarBackfillInativo(supabase: any): Promise<void> {
+  await supabase
+    .from('sga_runtime_state')
+    .update({
+      backfill_financeiro_ativo: false,
+      backfill_expira_em: null,
+    })
+    .gte('id', '00000000-0000-0000-0000-000000000000');
+}
+
