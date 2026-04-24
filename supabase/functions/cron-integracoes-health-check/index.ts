@@ -36,8 +36,8 @@ async function testHinova(supabase: any) {
       };
     }
     return { conexao_ok: false, tempo_resposta_ms: ms, erro_mensagem: `API status ${resp.status}`, detalhes: {} };
-  } catch (e) {
-    return { conexao_ok: false, tempo_resposta_ms: Date.now() - start, erro_mensagem: `Rede: ${e.message}`, detalhes: {} };
+  } catch (e: any) {
+    return { conexao_ok: false, tempo_resposta_ms: Date.now() - start, erro_mensagem: `Rede: ${e?.message || 'erro desconhecido'}`, detalhes: {} };
   }
 }
 
@@ -82,8 +82,8 @@ async function testAutentique() {
     const ms = Date.now() - start;
     const ok = resp.ok;
     return { conexao_ok: ok, tempo_resposta_ms: ms, erro_mensagem: ok ? null : `Status ${resp.status}`, detalhes: {} };
-  } catch (e) {
-    return { conexao_ok: false, tempo_resposta_ms: Date.now() - start, erro_mensagem: `Rede: ${e.message}`, detalhes: {} };
+  } catch (e: any) {
+    return { conexao_ok: false, tempo_resposta_ms: Date.now() - start, erro_mensagem: `Rede: ${e?.message || 'erro desconhecido'}`, detalhes: {} };
   }
 }
 
@@ -95,8 +95,8 @@ async function testEmail() {
     const resp = await fetch('https://api.resend.com/domains', { headers: { 'Authorization': `Bearer ${key}` } });
     const ms = Date.now() - start;
     return { conexao_ok: resp.ok, tempo_resposta_ms: ms, erro_mensagem: resp.ok ? null : `Status ${resp.status}`, detalhes: {} };
-  } catch (e) {
-    return { conexao_ok: false, tempo_resposta_ms: Date.now() - start, erro_mensagem: `Rede: ${e.message}`, detalhes: {} };
+  } catch (e: any) {
+    return { conexao_ok: false, tempo_resposta_ms: Date.now() - start, erro_mensagem: `Rede: ${e?.message || 'erro desconhecido'}`, detalhes: {} };
   }
 }
 
