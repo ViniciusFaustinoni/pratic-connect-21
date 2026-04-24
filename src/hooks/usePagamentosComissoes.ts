@@ -78,7 +78,7 @@ export function usePagamentosComissoes() {
           vendedor:profiles!comissoes_vendedor_id_fkey(nome, full_name, email),
           grade:grades_comissao(nome),
           plano:planos(nome),
-          contrato:contratos(numero, vendedor:profiles(nome, full_name, email)),
+          contrato:contratos(numero, vendedor:profiles!contratos_vendedor_id_fkey(nome, full_name, email)),
           pagamento_itens:comissoes_pagamento_itens(pagamento_id, created_at, pagamento:comissoes_pagamentos(data_pagamento))
         `, { count: 'exact' })
         .gte('created_at', `${filters.dataInicio}T00:00:00`)
