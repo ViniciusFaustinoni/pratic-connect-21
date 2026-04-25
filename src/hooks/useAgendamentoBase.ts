@@ -189,11 +189,28 @@ export function useCriarAgendamentoBase() {
         : dados.horario === 'tarde' ? '13:00:00'
         : dados.horario;
 
+      // Vincular instalação correspondente à cotação (evita órfãos no mapa após
+      // aprovação da vistoria — ver mem://logic/operations/aprovacao-vistoria-encerra-servico).
+      let instalacaoIdVinculada: string | null = null;
+      try {
+        const { data: instalacaoExistente } = await publicSupabase
+          .from('instalacoes')
+          .select('id')
+          .eq('cotacao_id', dados.cotacaoId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        instalacaoIdVinculada = instalacaoExistente?.id ?? null;
+      } catch (e) {
+        console.warn('[useCriarAgendamentoBase] Falha ao buscar instalação vinculada (segue sem vínculo):', e);
+      }
+
       // Criar agendamento
       const { data: agendamento, error } = await publicSupabase
         .from('agendamentos_base')
         .insert({
           cotacao_id: dados.cotacaoId,
+          instalacao_id: instalacaoIdVinculada,
           data_agendada: dados.dataAgendada,
           horario: horarioParaInserir,
           cliente_nome: dados.clienteNome,
