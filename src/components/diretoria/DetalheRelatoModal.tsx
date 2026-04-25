@@ -24,6 +24,44 @@ export function DetalheRelatoModal({ report, onClose }: Props) {
   const { data: files = [] } = useErrorReportFiles(report?.id ?? null);
   const update = useUpdateErrorReportStatus();
   const [obs, setObs] = useState('');
+  const [preview, setPreview] = useState<{ url: string; nome: string; mime: string } | null>(null);
+
+  const copyImage = async (url: string, mime: string) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      // Tenta copiar como imagem nativa (PNG); caso falhe, copia a URL
+      if (navigator.clipboard && (window as any).ClipboardItem && mime.startsWith('image/')) {
+        try {
+          const item = new (window as any).ClipboardItem({ [blob.type]: blob });
+          await navigator.clipboard.write([item]);
+          toast.success('Imagem copiada para a área de transferência');
+          return;
+        } catch {
+          // fallback abaixo
+        }
+      }
+      await navigator.clipboard.writeText(url);
+      toast.success('Link da imagem copiado');
+    } catch (e) {
+      toast.error('Não foi possível copiar a imagem');
+    }
+  };
+
+  const downloadFile = async (url: string, nome: string) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = nome || 'arquivo';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch {
+      toast.error('Falha ao baixar');
+    }
+  };
 
   if (!report) return null;
   const sb = statusBadge[report.status];
