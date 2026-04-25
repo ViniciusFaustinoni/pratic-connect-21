@@ -241,11 +241,18 @@ export function SgaBackfillFinanceiroDialog() {
 
   const fetchStatus = async () => {
     try {
-      const { data, error } = await supabase.functions.invoke('sga-backfill-financeiro', {
-        body: { acao: 'status' },
-      });
-      if (error) throw error;
-      if (data?.success) setStatus(data as StatusResp);
+      const [statusResp, drenResp] = await Promise.all([
+        supabase.functions.invoke('sga-backfill-financeiro', { body: { acao: 'status' } }),
+        supabase.functions.invoke('sga-backfill-financeiro', { body: { acao: 'status_drenagem' } }),
+      ]);
+      if (!statusResp.error && statusResp.data?.success) setStatus(statusResp.data as StatusResp);
+      if (!drenResp.error && drenResp.data?.success) {
+        const d = drenResp.data as DrenagemStatus;
+        setDrenagem(d);
+        // Mantém histórico de até 6 amostras (~30s) p/ velocidade
+        drenagemHist.current.push({ t: Date.now(), processados: d.processados_total });
+        if (drenagemHist.current.length > 6) drenagemHist.current.shift();
+      }
     } catch (e: any) {
       console.error(e);
     }
