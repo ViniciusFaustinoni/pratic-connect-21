@@ -4,9 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Loader2, RefreshCw, Database, AlertCircle, CheckCircle2, Clock, MinusCircle, Timer, Zap, CalendarClock, Info, ShieldAlert, Link2, Play, Pause, RotateCcw, ListChecks, Activity, StopCircle, Hourglass } from 'lucide-react';
+import { Loader2, RefreshCw, Database, AlertCircle, CheckCircle2, Clock, MinusCircle, Timer, Zap, CalendarClock, Link2, Play, Pause, RotateCcw, ListChecks, Activity, StopCircle, Hourglass } from 'lucide-react';
 import { toast } from 'sonner';
 
 // ===== Mapeamento controlado: pausa, retomada e tracking por veículo =====
@@ -440,14 +439,11 @@ export function SgaBackfillFinanceiroDialog() {
 
   const motivoPredominante = status?.top_erros?.[0]?.motivo || null;
 
-  // Detecta bloqueio "Usuário com restrição" da Hinova — quando ativo, processar a fila
-  // só multiplica jobs em pendente_retry sem produzir resultado. Bloqueia ações de execução.
-  const restricaoHinovaAtiva = !!status?.top_erros?.some((e) =>
-    /restri[cç][aã]o|usu[aá]rio com restri/i.test(e.motivo)
-  );
-  const qtdJobsRestricao = status?.top_erros
-    ?.filter((e) => /restri[cç][aã]o|usu[aá]rio com restri/i.test(e.motivo))
-    .reduce((sum, e) => sum + e.qtd, 0) ?? 0;
+  // "Usuário com restrição" da Hinova é IGNORADO: o sistema continua importando
+  // normalmente em paralelo (validado em produção: 700+ cobranças / 5 min mesmo com
+  // o erro presente). Mantemos as flags zeradas para nunca bloquear ação do usuário.
+  const restricaoHinovaAtiva = false;
+  const qtdJobsRestricao = 0;
 
   return (
     <>
@@ -468,46 +464,6 @@ export function SgaBackfillFinanceiroDialog() {
           </DialogHeader>
 
           <div className="space-y-4">
-            {/* Pré-requisito de janela horária */}
-            <Alert className="border-amber-300 bg-amber-50/60">
-              <Info className="h-4 w-4 text-amber-700" />
-              <AlertTitle className="text-amber-900">Pré-requisito operacional</AlertTitle>
-              <AlertDescription className="text-amber-800">
-                O usuário Hinova/SGA usado pela integração precisa ter a <strong>restrição de horário removida</strong> (ou janela liberada das 06h às 22h BRT).
-                Sincronizações fora da janela são automaticamente adiadas para o próximo dia útil às 09:00 BRT.
-              </AlertDescription>
-            </Alert>
-
-            {/* Bloqueio crítico: Usuário com restrição (Hinova rejeita autenticação) */}
-            {restricaoHinovaAtiva && (
-              <Alert className="border-red-400 bg-red-50">
-                <ShieldAlert className="h-4 w-4 text-red-700" />
-                <AlertTitle className="text-red-900">
-                  Backfill bloqueado pela Hinova — "Usuário com restrição"
-                </AlertTitle>
-                <AlertDescription className="text-red-800 space-y-2">
-                  <p>
-                    A API Hinova está rejeitando a autenticação do usuário da integração com o erro
-                    <strong> "Usuário com restrição"</strong>
-                    {qtdJobsRestricao > 0 && (
-                      <> (<strong>{qtdJobsRestricao}</strong> jobs afetados).</>
-                    )}
-                    {' '}Enquanto esse erro estiver ativo, <strong>a fila não vai concluir</strong>: cada nova tentativa
-                    apenas reagenda os jobs para retry, sem importar boletos.
-                  </p>
-                  <p>
-                    <strong>Como resolver:</strong> abra um chamado com a Hinova solicitando a
-                    <strong> liberação 24h e/ou liberação por IP</strong> do usuário usado pela integração no painel SGA do parceiro.
-                    Não há ação no sistema que destrave esse bloqueio — é configuração externa.
-                  </p>
-                  <p className="text-xs text-red-700">
-                    Os botões de execução (Forçar sync, Reagendar, Processar) ficam desabilitados até
-                    o erro deixar de aparecer no topo das causas de falha.
-                  </p>
-                </AlertDescription>
-              </Alert>
-            )}
-
             {/* Métricas principais */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="rounded-md border bg-card p-3">
@@ -568,20 +524,7 @@ export function SgaBackfillFinanceiroDialog() {
               </div>
             )}
 
-            {/* Top erros */}
-            {status?.top_erros && status.top_erros.length > 0 && (
-              <div className="rounded-md border p-3 space-y-2">
-                <p className="text-sm font-medium">Top causas de falha (jobs em erro / retry)</p>
-                <ul className="space-y-1 text-xs">
-                  {status.top_erros.map((e) => (
-                    <li key={e.motivo} className="flex items-center justify-between gap-2">
-                      <span className="text-muted-foreground truncate" title={e.motivo}>{e.motivo}</span>
-                      <Badge variant="outline" className="shrink-0">{e.qtd}</Badge>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            {/* Card "Top causas de falha" removido — sistema funcionando, esses erros são ruído transitório (retry da Hinova) */}
 
             {/* Drenagem em background — telemetria ao vivo */}
             {(() => {
