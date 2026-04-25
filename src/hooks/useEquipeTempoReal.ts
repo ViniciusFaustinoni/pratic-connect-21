@@ -21,7 +21,7 @@ export interface SegmentoEstado {
 export interface EquipeMembroTempoReal {
   id: string;
   nome: string;
-  fotoUrl: string | null;
+  avatarUrl: string | null;
   statusAtual: EstadoTecnico;
   inicioTurno: string | null;
   fimTurno: string | null;
@@ -175,7 +175,7 @@ export function useEquipeTempoReal() {
       const [{ data: profiles }, { data: servicos }, { data: locs }] = await Promise.all([
         supabase
           .from('profiles')
-          .select('id, nome, foto_url')
+          .select('id, nome, avatar_url')
           .in('id', profIds),
         supabase
           .from('servicos')
@@ -243,7 +243,7 @@ export function useEquipeTempoReal() {
         return {
           id: t.profissional_id,
           nome: (prof as any)?.nome || 'Profissional',
-          fotoUrl: (prof as any)?.foto_url || null,
+          avatarUrl: (prof as any)?.avatar_url || null,
           statusAtual,
           inicioTurno: t.inicio_turno,
           fimTurno: t.fim_turno,
