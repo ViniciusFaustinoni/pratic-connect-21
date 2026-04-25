@@ -374,14 +374,25 @@ export default function CobrancasList() {
     return (pages?.pages || []).flatMap((p) => p.itens);
   }, [pages]);
 
-  // Filtro de busca client-side (apenas dentro das páginas já carregadas)
+  // Filtros client-side:
+  // 1) statusEfetivo (canônico) — necessário porque o filtro server-side traz status raw
+  //    amplos (ex.: PENDING entra na busca por 'vencido' e a reclassificação por
+  //    data_vencimento só acontece em toCanonical). Sem este filtro, pendentes a vencer
+  //    aparecem na aba "Vencidas" e vencidos aparecem na aba "Pendentes".
+  // 2) busca por nome/CPF.
   const cobrancasVisiveis = useMemo(() => {
-    if (!filters.busca) return cobrancasCarregadas;
-    const busca = filters.busca.toLowerCase();
-    return cobrancasCarregadas.filter(
-      (c) => c.associado?.nome?.toLowerCase().includes(busca) || c.associado?.cpf?.includes(busca),
-    );
-  }, [cobrancasCarregadas, filters.busca]);
+    let lista = cobrancasCarregadas;
+    if (statusEfetivo !== 'todos') {
+      lista = lista.filter((c) => c.status === statusEfetivo);
+    }
+    if (filters.busca) {
+      const busca = filters.busca.toLowerCase();
+      lista = lista.filter(
+        (c) => c.associado?.nome?.toLowerCase().includes(busca) || c.associado?.cpf?.includes(busca),
+      );
+    }
+    return lista;
+  }, [cobrancasCarregadas, filters.busca, statusEfetivo]);
 
   // Auto-fetch da próxima página quando o sentinela entra em viewport
   const sentinelaRef = useRef<HTMLDivElement | null>(null);
