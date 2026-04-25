@@ -24,7 +24,11 @@ const TIPO_BADGE_CLASSES: Record<string, string> = {
   'Outro': 'bg-gray-100 text-gray-700 border-gray-200',
 };
 
-export default function DashboardVendaExterna() {
+interface VendaExternaProps {
+  embedded?: boolean;
+}
+
+export default function VendaExterna({ embedded = false }: VendaExternaProps = {}) {
   const navigate = useNavigate();
   const { cards, isLoadingCards, vendedores, isLoadingVendedores, useParcelasPendentes, useParcelasAPagar, anteciparParcelas, registrarPagamentoLote } = useDashboardVendaExterna();
   
@@ -50,10 +54,14 @@ export default function DashboardVendaExterna() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Venda Externa</h1>
-          <p className="text-muted-foreground">Gestão de comissões de vendedores externos</p>
-        </div>
+        {embedded ? (
+          <div />
+        ) : (
+          <div>
+            <h1 className="text-2xl font-bold">Venda Externa</h1>
+            <p className="text-muted-foreground">Gestão de comissões de vendedores externos</p>
+          </div>
+        )}
         <Button variant="outline" onClick={() => setShowExportar(true)}>
           <FileDown className="h-4 w-4 mr-1" /> Exportar relatório
         </Button>
@@ -187,7 +195,7 @@ export default function DashboardVendaExterna() {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button size="sm" variant="ghost" onClick={() => navigate(`/financeiro/venda-externa/${v.vendedor_id}`)} title="Ver extrato">
+                      <Button size="sm" variant="ghost" onClick={() => navigate(`/comissoes/venda-externa/${v.vendedor_id}`)} title="Ver extrato">
                         <Eye className="h-4 w-4" />
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => setPagarVendedor(v)} title="Pagar" disabled={v.a_pagar_mes <= 0}>
