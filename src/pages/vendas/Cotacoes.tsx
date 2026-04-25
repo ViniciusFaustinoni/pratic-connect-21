@@ -44,6 +44,8 @@ import { cn } from '@/lib/utils';
 import { useCotacoesRealtime } from '@/hooks/useCotacoesRealtime';
 import { NovaEntradaDialog } from '@/components/vendas/OutrasEntradasMenu';
 import { useDebounce } from '@/hooks/useDebounce';
+import { RelatorioInteligenteCotacoesDialog } from '@/components/vendas/RelatorioInteligenteCotacoesDialog';
+import { Sparkles } from 'lucide-react';
 
 // Categorização dinâmica — fallback por termos quando benefits.category não está disponível
 const categorizarPorTermo = (cobLower: string): 'cobertura' | 'assistencia' | 'extra' => {
