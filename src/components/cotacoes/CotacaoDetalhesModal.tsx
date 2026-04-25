@@ -14,6 +14,7 @@ import type { CotacaoWithRelations } from '@/hooks/useCotacoes';
 import type { StatusCotacao } from '@/types/database';
 import { toast } from 'sonner';
 import { getEtapaVenda } from './CotacoesTable';
+import { VistoriaLinkBlock } from './VistoriaLinkBlock';
 
 type StatusCotacaoExtended = StatusCotacao | 'visualizada';
 
@@ -440,6 +441,12 @@ export function CotacaoDetalhesModal({
               </div>
             )}
             
+            {/* Vistoria — link público unificado */}
+            <div>
+              <h3 className="font-semibold mb-3">Vistoria</h3>
+              <VistoriaLinkBlock cotacaoId={cotacao.id} permitirGerar />
+            </div>
+
             {/* Timeline */}
             <div>
               <h3 className="font-semibold mb-3">Histórico</h3>
