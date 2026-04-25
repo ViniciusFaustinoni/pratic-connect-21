@@ -134,7 +134,7 @@ interface CobrancaUnificada {
   id: string;
   origem: 'asaas' | 'sga_hinova';
   associado_id: string | null;
-  associado: { id: string; nome: string; cpf: string; telefone?: string; whatsapp?: string } | null;
+  associado: { id: string; nome: string; cpf: string; telefone?: string; whatsapp?: string; email?: string } | null;
   tipo: string;
   status_raw: string;
   status: StatusCanonico;
@@ -145,6 +145,8 @@ interface CobrancaUnificada {
   boleto_url: string | null;
   pix_copia_cola: string | null;
   asaas_id: string | null;
+  linha_digitavel: string | null;
+  veiculo_id: string | null;
 }
 
 export default function CobrancasList() {
