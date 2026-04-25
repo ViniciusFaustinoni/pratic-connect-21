@@ -193,8 +193,8 @@ const ExtratoDetalhe = lazy(() => import("./pages/financeiro/ExtratoDetalhe"));
 const ContasBancarias = lazy(() => import("./pages/financeiro/ContasBancarias"));
 const ComissionamentoExternoConfig = lazy(() => import("./pages/financeiro/ComissionamentoExternoConfig"));
 const ContaCorrenteVendedor = lazy(() => import("./pages/financeiro/ContaCorrenteVendedor"));
-const GestaoContaVendedor = lazy(() => import("./pages/comissoes/GestaoContaVendedor"));
-const VendaExterna = lazy(() => import("./pages/comissoes/VendaExterna"));
+const GestaoContaVendedor = lazy(() => import("./pages/financeiro/GestaoContaVendedor"));
+const DashboardVendaExterna = lazy(() => import("./pages/financeiro/DashboardVendaExterna"));
 
 // Cobrança — apenas Régua continua roteada (dentro de /financeiro/cobrancas/regua via ReguaPage)
 const TrocaTitularidade = lazy(() => import("./pages/cobranca/TrocaTitularidade"));
@@ -390,11 +390,6 @@ const RedirectGradeComissao = () => {
   return <Navigate to={`/comissoes/grades/${id}`} replace />;
 };
 
-const RedirectVendaExternaDetalhe = () => {
-  const { vendedorId } = useParams();
-  return <Navigate to={`/comissoes/venda-externa/${vendedorId}`} replace />;
-};
-
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
@@ -566,9 +561,8 @@ const App = () => (
               <Route path="/financeiro/extratos/:id" element={<ExtratoDetalhe />} />
               <Route path="/financeiro/contas-bancarias" element={<ContasBancarias />} />
               <Route path="/financeiro/configuracoes/comissionamento-externo" element={<Navigate to="/comissoes" replace />} />
-              {/* Venda Externa migrada para /comissoes — redirects de compatibilidade */}
-              <Route path="/financeiro/venda-externa" element={<Navigate to="/comissoes?tab=venda-externa" replace />} />
-              <Route path="/financeiro/venda-externa/:vendedorId" element={<RedirectVendaExternaDetalhe />} />
+              <Route path="/financeiro/venda-externa" element={<DashboardVendaExterna />} />
+              <Route path="/financeiro/venda-externa/:vendedorId" element={<GestaoContaVendedor />} />
               <Route path="/perfil/conta-corrente" element={<ContaCorrenteVendedor />} />
 
               {/* Redirects de compatibilidade — rotas antigas removidas */}
@@ -587,7 +581,6 @@ const App = () => (
               <Route path="/comissoes/atribuicao" element={<ComissoesAtribuicao />} />
               <Route path="/comissoes/relatorio" element={<ComissoesRelatorio />} />
               <Route path="/comissoes/pagamentos" element={<ComissoesPagamentos />} />
-              <Route path="/comissoes/venda-externa/:vendedorId" element={<GestaoContaVendedor />} />
               <Route path="/comissoes/conta-corrente" element={<Navigate to="/comissoes" replace />} />
 
               {/* Redirects das rotas antigas /cobranca/* */}

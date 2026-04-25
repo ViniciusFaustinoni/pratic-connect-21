@@ -301,6 +301,7 @@ const menuConfig: {
         { title: 'Faturamento', url: '/financeiro/faturamento', icon: FileText },
         { title: 'Extrato', url: '/financeiro/extrato', icon: List },
         { title: 'Contas Bancárias', url: '/financeiro/contas-bancarias', icon: Building2 },
+        { title: 'Venda Externa', url: '/financeiro/venda-externa', icon: Users },
       ],
     },
     {
@@ -311,7 +312,6 @@ const menuConfig: {
       color: MENU_COLORS.financeiro,
       items: [
         { title: 'Dashboard', url: '/comissoes', icon: BarChart3 },
-        { title: 'Venda Externa', url: '/comissoes?tab=venda-externa', icon: Users },
         { title: 'Grades de Comissão', url: '/comissoes/grades', icon: Calculator, permission: 'isDiretor' },
         { title: 'Hierarquia de Comissões', url: '/comissoes/atribuicao', icon: Network, permission: 'isDiretor' },
         { title: 'Relatório', url: '/comissoes/relatorio', icon: FileText },

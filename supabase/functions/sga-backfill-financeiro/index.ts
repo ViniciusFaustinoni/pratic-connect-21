@@ -6,6 +6,7 @@
 // Body: { acao, batch_size?, delay_ms?, tipo? }
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { getHinovaSession, type HinovaSession } from '../_shared/hinova-client.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -284,7 +285,10 @@ serve(async (req) => {
     // -------- PROCESSAR --------
     const batchSize = Math.min(Math.max(parseInt(body.batch_size ?? '100'), 1), 200);
     const delayMs = Math.max(parseInt(body.delay_ms ?? '50'), 0);
-    const concurrency = Math.min(Math.max(parseInt(body.concurrency ?? '8'), 1), 15);
+    const concurrency = Math.min(Math.max(parseInt(body.concurrency ?? '12'), 1), 20);
+    // shareSession: autenticar 1× no início e propagar para os jobs (default true).
+    // Reduz drasticamente número de logins na Hinova (de 1 por job → 1 por batch).
+    const shareSession = body.share_session !== false;
 
     // Marca backfill ativo (TTL 30min) para pausar crons concorrentes
     const ttlExpira = new Date(Date.now() + 30 * 60 * 1000).toISOString();
@@ -344,11 +348,27 @@ serve(async (req) => {
       const isAuthOrHorarioError = (msg: string) =>
         /horari|janela_horaria|restri[çc][ãa]o|usu[áa]rio com restri|login ou senha inv[áa]lid|401|403|n[ãa]o autorizad/i.test(msg);
 
+      // Autentica UMA VEZ no início do batch e compartilha com todos os jobs.
+      // Se a sessão expirar/for invalidada no meio do batch, cada job tem seu próprio
+      // withReauthRetry que re-autentica isoladamente.
+      let sharedSession: HinovaSession | null = null;
+      if (shareSession) {
+        try {
+          sharedSession = await getHinovaSession(supabase, { noCache: true });
+          console.log('[SGA Backfill] sessão compartilhada autenticada para o batch', { jobs: jobs.length });
+        } catch (e: any) {
+          console.warn('[SGA Backfill] falha ao pré-autenticar sessão compartilhada — jobs autenticarão individualmente:', e?.message || e);
+          sharedSession = null;
+        }
+      }
+
       // Processa um único job (usado em paralelo)
       const processarJob = async (job: { id: string; veiculo_id: string }) => {
         try {
+          const payload: Record<string, any> = { veiculo_id: job.veiculo_id, job_id: job.id };
+          if (sharedSession) payload.hinova_session = sharedSession;
           const { data, error } = await supabase.functions.invoke('sga-sync-financeiro-veiculo', {
-            body: { veiculo_id: job.veiculo_id, job_id: job.id },
+            body: payload,
           });
           if (error) throw error;
           if (data?.success) return { kind: 'ok' as const };
@@ -374,9 +394,13 @@ serve(async (req) => {
 
       // Processa em chunks paralelos (concurrency por chunk)
       let processados = 0;
+      let ultimoHeartbeat = Date.now();
+      const HEARTBEAT_MIN_INTERVAL_MS = 4000;
+      let chunkIndex = 0;
       for (let i = 0; i < jobs.length; i += concurrency) {
         const chunk = jobs.slice(i, i + concurrency);
         const results = await Promise.allSettled(chunk.map(processarJob));
+        chunkIndex++;
 
         let chunkAuthFails = 0;
         let chunkNonAuthFails = 0;
@@ -404,17 +428,22 @@ serve(async (req) => {
           authFailStreak = 0;
         }
 
-        // Heartbeat ao final de cada chunk
-        await supabase
-          .from('sga_runtime_state')
-          .update({
-            backfill_ultimo_heartbeat: new Date().toISOString(),
-            backfill_processados_total: processados,
-            backfill_ok_total: ok,
-            backfill_fail_total: fail,
-            backfill_retry_total: retry,
-          })
-          .gte('id', '00000000-0000-0000-0000-000000000000');
+        // Heartbeat: a cada 3 chunks OU 4s OU no último chunk (o que vier antes)
+        const ehUltimoChunk = i + concurrency >= jobs.length;
+        const passouTempo = Date.now() - ultimoHeartbeat >= HEARTBEAT_MIN_INTERVAL_MS;
+        if (ehUltimoChunk || chunkIndex % 3 === 0 || passouTempo) {
+          await supabase
+            .from('sga_runtime_state')
+            .update({
+              backfill_ultimo_heartbeat: new Date().toISOString(),
+              backfill_processados_total: processados,
+              backfill_ok_total: ok,
+              backfill_fail_total: fail,
+              backfill_retry_total: retry,
+            })
+            .gte('id', '00000000-0000-0000-0000-000000000000');
+          ultimoHeartbeat = Date.now();
+        }
 
         // CIRCUIT BREAKER: 5 falhas auth/horário acumuladas → aborta o batch
         if (authFailStreak >= 5) {
@@ -433,7 +462,7 @@ serve(async (req) => {
         if (delayMs > 0 && i + concurrency < jobs.length) await sleep(delayMs);
       }
 
-      return json(200, { success: true, processados, ok, fail, retry, aborted, concurrency, motivo_abort: aborted ? 'janela_horaria_hinova_fechada' : null });
+      return json(200, { success: true, processados, ok, fail, retry, aborted, concurrency, share_session: !!sharedSession, motivo_abort: aborted ? 'janela_horaria_hinova_fechada' : null });
     } finally {
       // Renova TTL para o próximo batch (não desmarca — o TTL de 30min cuida disso se o cron parar)
       await supabase

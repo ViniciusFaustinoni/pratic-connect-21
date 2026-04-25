@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
   const acao = body.acao || 'executar_tudo';
   const maxSeg = Math.min(Math.max(body.max_segundos ?? 540, 30), 590);
   const batchRec = Math.min(Math.max(body.batch_reconciliacao ?? 80, 10), 200);
-  const batchFin = Math.min(Math.max(body.batch_financeiro ?? 50, 10), 100);
+  const batchFin = Math.min(Math.max(body.batch_financeiro ?? 80, 10), 200);
   const inicio = Date.now();
   const limite = inicio + maxSeg * 1000;
 
@@ -143,7 +143,9 @@ Deno.serve(async (req) => {
       const r = await invokeFn('sga-backfill-financeiro', {
         acao: 'processar',
         batch_size: batchFin,
-        delay_ms: 100,
+        delay_ms: 50,
+        concurrency: 12,
+        share_session: true,
       });
       totalFinRodadas++;
       if (!r.ok) {
