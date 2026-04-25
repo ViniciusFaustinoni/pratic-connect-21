@@ -97,17 +97,17 @@ export function DetalheRelatoModal({ report, onClose }: Props) {
                 <div className="grid grid-cols-3 gap-2 mt-1">
                   {files.map((f) => {
                     const isImg = f.mime_type?.startsWith('image/');
+                    const url = f.signedUrl ?? '';
                     return (
-                      <a
+                      <button
                         key={f.id}
-                        href={f.signedUrl ?? '#'}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="group block rounded border border-border overflow-hidden bg-muted aspect-square relative"
+                        type="button"
+                        onClick={() => url && setPreview({ url, nome: f.nome_original ?? 'arquivo', mime: f.mime_type ?? '' })}
+                        className="group block rounded border border-border overflow-hidden bg-muted aspect-square relative text-left"
                         title={f.nome_original ?? ''}
                       >
-                        {isImg && f.signedUrl ? (
-                          <img src={f.signedUrl} alt={f.nome_original ?? ''} className="w-full h-full object-cover" />
+                        {isImg && url ? (
+                          <img src={url} alt={f.nome_original ?? ''} className="w-full h-full object-cover" />
                         ) : (
                           <div className="flex flex-col items-center justify-center h-full p-2 text-center">
                             <FileText className="h-6 w-6 text-muted-foreground" />
@@ -117,7 +117,7 @@ export function DetalheRelatoModal({ report, onClose }: Props) {
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
                           <ExternalLink className="h-5 w-5 text-white" />
                         </div>
-                      </a>
+                      </button>
                     );
                   })}
                 </div>
