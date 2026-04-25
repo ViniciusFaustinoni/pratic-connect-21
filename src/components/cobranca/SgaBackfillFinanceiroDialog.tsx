@@ -928,7 +928,8 @@ export function SgaBackfillFinanceiroDialog() {
                 </li>
               </ol>
               <p className="pt-2 text-xs text-muted-foreground">
-                O cron diário roda às 09:00 BRT (12:00 UTC) — dentro da janela horária comercial. Ciclos extras a cada 2h até as 17h drenam a fila acumulada.
+                O cron diário roda às 09:00 BRT (12:00 UTC). Além disso, um cron de drenagem dispara a cada 5 minutos
+                dentro da janela horária liberada (06h–22h BRT) para drenar a fila continuamente em segundo plano.
               </p>
             </div>
           </div>
