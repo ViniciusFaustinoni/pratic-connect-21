@@ -580,6 +580,119 @@ export function SgaBackfillFinanceiroDialog() {
               </div>
             )}
 
+            {/* Drenagem em background — telemetria ao vivo */}
+            {(() => {
+              const drenAtivo = drenagem?.ativo && drenagem?.vivo;
+              const heartbeatSec = drenagem?.heartbeat_idade_ms != null
+                ? Math.round(drenagem.heartbeat_idade_ms / 1000)
+                : null;
+
+              // Velocidade jobs/min com base no histórico
+              const hist = drenagemHist.current;
+              let velocidadeJobsMin: number | null = null;
+              if (hist.length >= 2) {
+                const first = hist[0];
+                const last = hist[hist.length - 1];
+                const deltaJobs = last.processados - first.processados;
+                const deltaMin = (last.t - first.t) / 60000;
+                if (deltaMin > 0 && deltaJobs >= 0) {
+                  velocidadeJobsMin = Math.round(deltaJobs / deltaMin);
+                }
+              }
+              const pendentesAtuais = (status?.jobs.pendente ?? 0) + (status?.jobs.pendente_retry ?? 0);
+              const etaMin = velocidadeJobsMin && velocidadeJobsMin > 0
+                ? Math.round(pendentesAtuais / velocidadeJobsMin)
+                : null;
+              const formatEta = (m: number) => {
+                if (m < 60) return `~${m} min`;
+                const h = Math.floor(m / 60);
+                const r = m % 60;
+                return r > 0 ? `~${h}h ${r}min` : `~${h}h`;
+              };
+
+              return (
+                <div className={`rounded-md border p-3 space-y-3 ${drenAtivo ? 'border-emerald-400 bg-emerald-50/40' : 'bg-card'}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Activity className={`h-4 w-4 ${drenAtivo ? 'text-emerald-700 animate-pulse' : 'text-muted-foreground'}`} />
+                      <p className="text-sm font-medium">
+                        Drenagem em background
+                      </p>
+                      {drenAtivo ? (
+                        <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white">Em execução</Badge>
+                      ) : drenagem?.ativo && !drenagem?.vivo ? (
+                        <Badge variant="destructive">Sem heartbeat</Badge>
+                      ) : (
+                        <Badge variant="secondary">Parada</Badge>
+                      )}
+                      {drenagem?.cancelamento_solicitado && (
+                        <Badge variant="outline" className="border-amber-400 text-amber-700">Cancelamento solicitado</Badge>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                    <div className="rounded border bg-card p-2">
+                      <p className="text-muted-foreground">Processados (sessão)</p>
+                      <p className="text-base font-semibold">{drenagem?.processados_total ?? 0}</p>
+                    </div>
+                    <div className="rounded border bg-card p-2">
+                      <p className="text-muted-foreground">OK / Retry / Falhas</p>
+                      <p className="text-base font-semibold">
+                        <span className="text-emerald-700">{drenagem?.ok_total ?? 0}</span>
+                        {' / '}
+                        <span className="text-amber-700">{drenagem?.retry_total ?? 0}</span>
+                        {' / '}
+                        <span className="text-red-700">{drenagem?.fail_total ?? 0}</span>
+                      </p>
+                    </div>
+                    <div className="rounded border bg-card p-2">
+                      <p className="text-muted-foreground">Velocidade</p>
+                      <p className="text-base font-semibold">
+                        {velocidadeJobsMin != null ? `${velocidadeJobsMin} jobs/min` : '—'}
+                      </p>
+                    </div>
+                    <div className="rounded border bg-card p-2 flex flex-col">
+                      <p className="text-muted-foreground flex items-center gap-1">
+                        <Hourglass className="h-3 w-3" /> ETA fila
+                      </p>
+                      <p className="text-base font-semibold">
+                        {etaMin != null ? formatEta(etaMin) : '—'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>
+                      {drenagem?.iniciado_em
+                        ? <>Iniciada em {new Date(drenagem.iniciado_em).toLocaleString('pt-BR')} · Lote atual: <strong>{drenagem.lote_atual}</strong></>
+                        : 'Nenhuma execução recente'}
+                    </span>
+                    {heartbeatSec != null && (
+                      <span>
+                        Heartbeat: {heartbeatSec < 60 ? `há ${heartbeatSec}s` : `há ${Math.round(heartbeatSec / 60)}min`}
+                      </span>
+                    )}
+                  </div>
+
+                  {drenAtivo && (
+                    <div className="flex justify-end">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handlePararDrenagem}
+                        disabled={parandoDrenagem || drenagem?.cancelamento_solicitado}
+                        className="gap-1.5 text-red-700 border-red-300 hover:bg-red-50"
+                      >
+                        {parandoDrenagem ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <StopCircle className="h-3.5 w-3.5" />}
+                        Parar drenagem
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Ações de recuperação */}
             <div className="rounded-md border p-3 space-y-2">
               <p className="text-sm font-medium">Ações de recuperação</p>
@@ -599,14 +712,26 @@ export function SgaBackfillFinanceiroDialog() {
                   size="sm"
                   variant="default"
                   onClick={handleForcarSync}
-                  disabled={forcando || restricaoHinovaAtiva}
+                  disabled={forcando || restricaoHinovaAtiva || (drenagem?.ativo && drenagem?.vivo)}
                   className="gap-1.5"
-                  title={restricaoHinovaAtiva ? 'Bloqueado: usuário Hinova com restrição. Solicite liberação no painel SGA.' : undefined}
+                  title={
+                    restricaoHinovaAtiva
+                      ? 'Bloqueado: usuário Hinova com restrição. Solicite liberação no painel SGA.'
+                      : drenagem?.ativo && drenagem?.vivo
+                        ? 'Drenagem já em execução em background.'
+                        : undefined
+                  }
                 >
                   {forcando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
-                  Forçar sync agora (drenar fila)
+                  {drenagem?.ativo && drenagem?.vivo
+                    ? 'Drenagem em execução…'
+                    : 'Iniciar drenagem em background'}
                 </Button>
               </div>
+              <p className="text-xs text-muted-foreground">
+                A drenagem roda em segundo plano no servidor — você pode fechar este painel ou sair da página
+                que o processamento continua. Um cron de 5 em 5 minutos retoma automaticamente até a fila zerar.
+              </p>
               {restricaoHinovaAtiva && (
                 <p className="text-xs text-red-700">
                   ⛔ Ações desabilitadas enquanto a Hinova retornar "Usuário com restrição".
