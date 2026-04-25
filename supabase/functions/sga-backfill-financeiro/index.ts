@@ -311,27 +311,85 @@ serve(async (req) => {
       let ok = 0;
       let fail = 0;
       let retry = 0;
+      let authFailStreak = 0;
+      let aborted = false;
+      const proximaJanela = nextJanela().toISOString();
 
-      for (const job of jobs) {
+      // Detecta erro de janela horária / auth da Hinova (mesmo quando vem mascarado como "Login ou senha inválido")
+      const isAuthOrHorarioError = (msg: string) =>
+        /horari|janela_horaria|restri[çc][ãa]o|usu[áa]rio com restri|login ou senha inv[áa]lid|401|403|n[ãa]o autorizad/i.test(msg);
+
+      for (let i = 0; i < jobs.length; i++) {
+        const job = jobs[i];
         try {
           const { data, error } = await supabase.functions.invoke('sga-sync-financeiro-veiculo', {
             body: { veiculo_id: job.veiculo_id, job_id: job.id },
           });
           if (error) throw error;
-          if (data?.success) ok++;
-          else if (data?.retry) retry++;
-          else fail++;
+          if (data?.success) {
+            ok++;
+            authFailStreak = 0;
+          } else if (data?.retry) {
+            retry++;
+          } else {
+            fail++;
+            if (isAuthOrHorarioError(String(data?.error || ''))) authFailStreak++;
+            else authFailStreak = 0;
+          }
         } catch (e: any) {
           fail++;
-          await supabase
-            .from('sga_sync_financeiro_jobs')
-            .update({ status: 'erro', concluido_em: new Date().toISOString(), ultimo_erro: String(e?.message || e) })
-            .eq('id', job.id);
+          const msg = String(e?.message || e);
+          if (isAuthOrHorarioError(msg)) {
+            authFailStreak++;
+            // Reagenda o job para a próxima janela em vez de marcar como erro definitivo
+            await supabase
+              .from('sga_sync_financeiro_jobs')
+              .update({ status: 'pendente_retry', proximo_retry_em: proximaJanela, ultimo_erro: msg })
+              .eq('id', job.id);
+          } else {
+            authFailStreak = 0;
+            await supabase
+              .from('sga_sync_financeiro_jobs')
+              .update({ status: 'erro', concluido_em: new Date().toISOString(), ultimo_erro: msg })
+              .eq('id', job.id);
+          }
         }
+
+        // Heartbeat a cada 5 jobs para manter o "vivo" no status_drenagem
+        if (i % 5 === 0) {
+          await supabase
+            .from('sga_runtime_state')
+            .update({
+              backfill_ultimo_heartbeat: new Date().toISOString(),
+              backfill_processados_total: (i + 1),
+              backfill_ok_total: ok,
+              backfill_fail_total: fail,
+              backfill_retry_total: retry,
+            })
+            .gte('id', '00000000-0000-0000-0000-000000000000');
+        }
+
+        // CIRCUIT BREAKER: 5 falhas de auth/horário seguidas → aborta o batch
+        // (evita queimar CPU/memória em jobs que TODOS vão falhar pelo mesmo motivo,
+        //  prevenindo o RUNTIME_ERROR 503 por exceder limites do edge runtime)
+        if (authFailStreak >= 5) {
+          aborted = true;
+          // Reagenda o restante dos jobs para a próxima janela
+          const restantes = jobs.slice(i + 1).map(j => j.id);
+          if (restantes.length) {
+            await supabase
+              .from('sga_sync_financeiro_jobs')
+              .update({ status: 'pendente_retry', proximo_retry_em: proximaJanela, ultimo_erro: 'Circuit breaker: janela horária Hinova fechada' })
+              .in('id', restantes);
+          }
+          console.warn(`[SGA Backfill] Circuit breaker disparado após ${authFailStreak} falhas de auth — ${restantes.length} jobs reagendados para ${proximaJanela}`);
+          break;
+        }
+
         await sleep(delayMs);
       }
 
-      return json(200, { success: true, processados: jobs.length, ok, fail, retry });
+      return json(200, { success: true, processados: jobs.length, ok, fail, retry, aborted, motivo_abort: aborted ? 'janela_horaria_hinova_fechada' : null });
     } finally {
       // Renova TTL para o próximo batch (não desmarca — o TTL de 30min cuida disso se o cron parar)
       await supabase
