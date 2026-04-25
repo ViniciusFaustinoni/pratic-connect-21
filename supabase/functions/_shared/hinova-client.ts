@@ -621,7 +621,33 @@ export function parseDataHinova(d: string | null | undefined): string | null {
 export function toNumber(v: any): number {
   if (v === null || v === undefined) return 0;
   if (typeof v === 'number') return isFinite(v) ? v : 0;
-  const s = String(v).replace(/\./g, '').replace(',', '.').replace(/[^\d.\-]/g, '');
+  // Limpa caracteres não numéricos (mantém dígitos, ponto, vírgula e sinal)
+  let s = String(v).trim().replace(/[^\d.,\-]/g, '');
+  if (!s) return 0;
+
+  const hasComma = s.includes(',');
+  const hasDot = s.includes('.');
+
+  if (hasComma && hasDot) {
+    // Formato BR clássico: "1.234,56" — pontos são milhar, vírgula é decimal
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else if (hasComma) {
+    // Só vírgula: "561,40" → BR decimal
+    s = s.replace(',', '.');
+  } else if (hasDot) {
+    // Só ponto(s): pode ser decimal estilo Hinova ("561.40") ou milhar ("1.234")
+    const parts = s.split('.');
+    const last = parts[parts.length - 1];
+    if (parts.length === 2 && last.length <= 2) {
+      // Único ponto com 1-2 dígitos depois → decimal ("561.40", "12.5")
+      // mantém s como está
+    } else {
+      // Múltiplos pontos ou 3+ dígitos depois do ponto → milhar ("1.234", "1.234.567")
+      s = s.replace(/\./g, '');
+    }
+  }
+  // Sem ponto nem vírgula: parseFloat funciona direto
+
   const n = parseFloat(s);
   return isFinite(n) ? n : 0;
 }
