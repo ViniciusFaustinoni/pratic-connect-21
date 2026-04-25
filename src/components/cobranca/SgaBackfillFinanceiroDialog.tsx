@@ -549,7 +549,7 @@ export function SgaBackfillFinanceiroDialog() {
                 ? Math.round(drenagem.heartbeat_idade_ms / 1000)
                 : null;
 
-              // Velocidade jobs/min com base no histórico
+              // Velocidade jobs/min via histórico do polling (precisa modal aberto >5s)
               const hist = drenagemHist.current;
               let velocidadeJobsMin: number | null = null;
               if (hist.length >= 2) {
@@ -561,9 +561,17 @@ export function SgaBackfillFinanceiroDialog() {
                   velocidadeJobsMin = Math.round(deltaJobs / deltaMin);
                 }
               }
+              // Throughput REAL (cobranças/min últimos 5min) — fonte de verdade independente
+              // do polling. Usado para fallback de velocidade e como métrica primária do ETA.
+              const cobrancasPorMinReal = throughputReal
+                ? Math.round((throughputReal.ult5min / 5) * 10) / 10
+                : null;
+              const velocidadeEfetiva = velocidadeJobsMin && velocidadeJobsMin > 0
+                ? velocidadeJobsMin
+                : (cobrancasPorMinReal && cobrancasPorMinReal > 0 ? cobrancasPorMinReal : null);
               const pendentesAtuais = (status?.jobs.pendente ?? 0) + (status?.jobs.pendente_retry ?? 0);
-              const etaMin = velocidadeJobsMin && velocidadeJobsMin > 0
-                ? Math.round(pendentesAtuais / velocidadeJobsMin)
+              const etaMin = velocidadeEfetiva && velocidadeEfetiva > 0
+                ? Math.round(pendentesAtuais / velocidadeEfetiva)
                 : null;
               const formatEta = (m: number) => {
                 if (m < 60) return `~${m} min`;
