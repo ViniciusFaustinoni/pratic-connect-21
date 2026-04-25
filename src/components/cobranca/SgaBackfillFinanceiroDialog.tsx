@@ -74,6 +74,25 @@ export function SgaBackfillFinanceiroDialog() {
   const [preparandoBase, setPreparandoBase] = useState(false);
   const [prepProgress, setPrepProgress] = useState<{ lotes: number; mapeados: number; restantes: number } | null>(null);
 
+  // Telemetria da drenagem em background (lê sga_runtime_state)
+  interface DrenagemStatus {
+    ativo: boolean;
+    vivo: boolean;
+    cancelamento_solicitado: boolean;
+    iniciado_em: string | null;
+    ultimo_heartbeat: string | null;
+    heartbeat_idade_ms: number | null;
+    lote_atual: number;
+    processados_total: number;
+    ok_total: number;
+    fail_total: number;
+    retry_total: number;
+  }
+  const [drenagem, setDrenagem] = useState<DrenagemStatus | null>(null);
+  // Histórico curto p/ calcular velocidade (jobs/min)
+  const drenagemHist = useRef<Array<{ t: number; processados: number }>>([]);
+  const [parandoDrenagem, setParandoDrenagem] = useState(false);
+
   // ===== Mapeamento controlado (pausa/retomada) =====
   const [mapState, setMapState] = useState<RunState>('idle');
   const [progresso, setProgresso] = useState<MapearProgresso>(() => loadProgresso());
