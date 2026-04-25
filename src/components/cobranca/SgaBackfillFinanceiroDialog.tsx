@@ -66,6 +66,10 @@ interface StatusResp {
 export function SgaBackfillFinanceiroDialog() {
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<StatusResp | null>(null);
+  // Throughput REAL: cobranças importadas nos últimos 5min consultando direto `cobrancas`.
+  // Necessário porque `processados_total` da edge reseta a cada execução do cron e o histórico
+  // do polling do front só existe quando o modal está aberto.
+  const [throughputReal, setThroughputReal] = useState<{ ult5min: number; ult1h: number; ultima: string | null } | null>(null);
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
   const [reagendando, setReagendando] = useState(false);
