@@ -109,15 +109,20 @@ export default function ReguaCobranca() {
   const { data: regua, isLoading } = useQuery({
     queryKey: ['regua-cobranca'],
     queryFn: async () => {
+      // Busca a régua mais recente (ativa OU desativada) para permitir toggle
       const { data, error } = await supabase
         .from('reguas_cobranca')
         .select('*')
-        .eq('ativa', true)
+        .order('updated_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
       if (error) throw error;
       return data;
     }
   });
+
+  const reguaAtiva = regua?.ativa ?? false;
+  const [confirmDesativar, setConfirmDesativar] = useState(false);
 
   useEffect(() => {
     if (regua?.etapas) {
@@ -134,9 +139,9 @@ export default function ReguaCobranca() {
         .from('reguas_cobranca')
         .upsert({
           id,
-          nome: 'Régua Padrão',
+          nome: regua?.nome ?? 'Régua Padrão',
           etapas: JSON.parse(JSON.stringify(etapas)),
-          ativa: true,
+          ativa: regua?.ativa ?? true,
           updated_at: new Date().toISOString()
         } as never);
       if (error) throw error;
@@ -149,6 +154,56 @@ export default function ReguaCobranca() {
       toast.error('Erro ao salvar régua');
     }
   });
+
+  // Toggle global ativar/desativar régua
+  const toggleAtiva = useMutation({
+    mutationFn: async (novoEstado: boolean) => {
+      if (!regua?.id) {
+        // Não há régua persistida ainda — cria uma com o estado escolhido
+        const { error } = await supabase
+          .from('reguas_cobranca')
+          .insert({
+            id: crypto.randomUUID(),
+            nome: 'Régua Padrão',
+            etapas: JSON.parse(JSON.stringify(etapas)),
+            ativa: novoEstado,
+          } as never);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('reguas_cobranca')
+          .update({ ativa: novoEstado, updated_at: new Date().toISOString() } as never)
+          .eq('id', regua.id);
+        if (error) throw error;
+      }
+
+      // Auditoria
+      const { data: userData } = await supabase.auth.getUser();
+      await supabase.from('cobranca_eventos').insert({
+        associado_id: null,
+        tipo: 'regua_status',
+        subtipo: novoEstado ? 'ativada' : 'desativada',
+        descricao: `Régua de cobrança ${novoEstado ? 'ATIVADA' : 'DESATIVADA'}`,
+        dados: { acao: novoEstado ? 'ativada' : 'desativada', usuario_id: userData?.user?.id ?? null },
+        automatico: false,
+      } as never);
+    },
+    onSuccess: (_, novoEstado) => {
+      toast.success(novoEstado ? 'Régua ATIVADA — disparos liberados' : 'Régua DESATIVADA — nenhum disparo será feito');
+      queryClient.invalidateQueries({ queryKey: ['regua-cobranca'] });
+    },
+    onError: (err: any) => {
+      toast.error('Falha ao alterar status: ' + (err?.message || ''));
+    },
+  });
+
+  const handleToggleAtiva = (novoEstado: boolean) => {
+    if (!novoEstado) {
+      setConfirmDesativar(true);
+    } else {
+      toggleAtiva.mutate(true);
+    }
+  };
 
   // Estado da última execução manual
   const [ultimaExecucao, setUltimaExecucao] = useState<null | {
