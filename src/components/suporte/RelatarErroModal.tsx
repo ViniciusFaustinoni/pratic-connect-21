@@ -185,7 +185,7 @@ export function RelatarErroModal({ open, onOpenChange }: Props) {
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={submit} disabled={create.isPending || !hasImage}>
+          <Button onClick={submit} disabled={create.isPending || files.length === 0}>
             {create.isPending ? 'Enviando...' : 'Enviar'}
           </Button>
         </DialogFooter>
