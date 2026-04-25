@@ -76,11 +76,12 @@ Deno.serve(async (req) => {
   let benefits: any[] = [];
   from = 0;
   while (true) {
-    const { data } = await supabase
+    const { data, error: berr } = await supabase
       .from('benefits')
-      .select('id, name, slug, category, description, preco_sugerido, carencia_dias, carencia_ativa, codigo_sga, display_order, is_active, product_line_id')
+      .select('id, name, slug, category, description, preco_sugerido, carencia_dias, carencia_ativa, codigo_sga, display_order, is_active')
       .eq('is_active', true)
       .range(from, from + PAGE - 1);
+    if (berr) { console.error('benefits err', berr); break; }
     benefits = benefits.concat(data || []);
     if (!data || data.length < PAGE) break;
     from += PAGE;
