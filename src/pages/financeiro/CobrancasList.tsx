@@ -20,6 +20,7 @@ import { NovaCobrancaModal } from '@/components/financeiro/NovaCobrancaModal';
 import { RegistrarPagamentoModal } from '@/components/financeiro/RegistrarPagamentoModal';
 import { BatchActionsBar } from '@/components/financeiro/BatchActionsBar';
 import { SgaBackfillFinanceiroDialog } from '@/components/cobranca/SgaBackfillFinanceiroDialog';
+import { CobrancaDetalheModal } from '@/components/cobranca/CobrancaDetalheModal';
 import { usePermissions } from '@/hooks/usePermissions';
 
 type StatusCanonico = 'pendente' | 'pago' | 'vencido' | 'cancelado';
