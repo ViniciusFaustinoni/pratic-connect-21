@@ -78,7 +78,8 @@ export default function CobrancaDetalhe() {
   const { data: cobranca, isLoading, error } = useQuery({
     queryKey: ['cobranca', id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // 1) Tenta Asaas (asaas_cobrancas)
+      const { data: dataAsaas, error: errAsaas } = await supabase
         .from('asaas_cobrancas')
         .select(`
           *,
@@ -88,12 +89,53 @@ export default function CobrancaDetalhe() {
         `)
         .eq('id', id)
         .maybeSingle();
-      
-      if (error) throw error;
-      return data;
+
+      if (errAsaas) throw errAsaas;
+      if (dataAsaas) return { ...dataAsaas, _origem: 'asaas' as const };
+
+      // 2) Fallback: cobranças SGA Hinova (tabela `cobrancas`)
+      const { data: dataSga, error: errSga } = await supabase
+        .from('cobrancas')
+        .select(`
+          *,
+          associado:associados(*),
+          veiculo:veiculos(id, placa, marca, modelo)
+        `)
+        .eq('id', id)
+        .maybeSingle();
+
+      if (errSga) throw errSga;
+      if (!dataSga) return null;
+
+      // Mapeia status SGA -> formato Asaas (PENDING/RECEIVED/...) para reusar statusConfig
+      const statusMap: Record<string, string> = {
+        aguardando_pagamento: 'PENDING',
+        pendente: 'PENDING',
+        pago: 'RECEIVED',
+        vencido: 'OVERDUE',
+        cancelado: 'CANCELED',
+      };
+
+      // Normaliza para o shape que o restante do componente espera
+      return {
+        ...dataSga,
+        _origem: 'sga_hinova' as const,
+        status: statusMap[dataSga.status] || dataSga.status,
+        // Campos exclusivos do Asaas — vazios para SGA
+        asaas_id: null,
+        valor_liquido: dataSga.valor_pago ?? dataSga.valor,
+        pagamento_valor: dataSga.valor_pago,
+        competencia: dataSga.referencia_mes && dataSga.referencia_ano
+          ? `${String(dataSga.referencia_mes).padStart(2, '0')}/${dataSga.referencia_ano}`
+          : null,
+        referencia: dataSga.descricao || null,
+        criado_por_usuario: null,
+      } as any;
     },
     enabled: !!id,
   });
+
+  const isOrigemSga = cobranca?._origem === 'sga_hinova';
 
   const copiarParaClipboard = async (texto: string, descricao: string) => {
     try {
@@ -277,7 +319,9 @@ export default function CobrancaDetalhe() {
   const valorFinal = cobranca.valor_liquido || cobranca.valor || 0;
   const isPago = ['RECEIVED', 'CONFIRMED'].includes(cobranca.status);
   const isCancelado = cobranca.status === 'CANCELED';
-  const podeCancelar = !isPago && !isCancelado;
+  // SGA Hinova é histórico read-only — não permite cancelar/segunda via pelo nosso lado
+  const podeCancelar = !isPago && !isCancelado && !isOrigemSga;
+  const podeSegundaVia = !isPago && !isCancelado && !isOrigemSga && !cobranca.asaas_id?.startsWith('local_');
 
   return (
     <div className="space-y-6">
@@ -292,10 +336,15 @@ export default function CobrancaDetalhe() {
               Cobrança #{cobranca.id.slice(0, 8)}
             </h1>
             <p className="text-sm text-muted-foreground">
-              {cobranca.asaas_id && `ASAAS: ${cobranca.asaas_id}`}
+              {isOrigemSga
+                ? `SGA Hinova${cobranca.nosso_numero ? ` • Nosso Nº ${cobranca.nosso_numero}` : ''}`
+                : cobranca.asaas_id && `ASAAS: ${cobranca.asaas_id}`}
             </p>
           </div>
           <Badge className={status.class}>{status.label}</Badge>
+          {isOrigemSga && (
+            <Badge variant="secondary">SGA Hinova</Badge>
+          )}
         </div>
 
         <DropdownMenu>
@@ -326,7 +375,7 @@ export default function CobrancaDetalhe() {
                 Baixar PDF do Boleto
               </DropdownMenuItem>
             )}
-            {!isPago && !isCancelado && !cobranca.asaas_id?.startsWith('local_') && (
+            {podeSegundaVia && (
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem 
