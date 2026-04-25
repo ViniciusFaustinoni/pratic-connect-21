@@ -34,6 +34,7 @@ const AssociadoVistoria = lazy(() => import("./pages/public/AssociadoVistoria"))
 const LandingPlanos = lazy(() => import("./pages/public/LandingPlanos"));
 const PrestadorInstalacao = lazy(() => import("./pages/public/PrestadorInstalacao"));
 const VistoriaPrestador = lazy(() => import("./pages/public/VistoriaPrestador"));
+const VistoriaPublica = lazy(() => import("./pages/public/VistoriaPublica"));
 const CotacaoPublicaPage = lazy(() => import("./pages/public/CotacaoPublica"));
 const CotacaoPublicaCompleta = lazy(() => import("./pages/public/CotacaoPublicaCompleta"));
 const CotacaoContratacao = lazy(() => import("./pages/public/CotacaoContratacao"));
