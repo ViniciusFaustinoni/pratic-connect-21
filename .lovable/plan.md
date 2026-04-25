@@ -1,77 +1,73 @@
-## Objetivo
+## Contexto
 
-Tirar a página "Venda Externa" do módulo Financeiro e transformá-la em uma aba do Dashboard de Comissões.
+Após inspeção do código e do banco:
 
-## Mudanças
+- **287 planos ativos** em `public.planos`, **TODOS com `codigo_sga_plano = NULL`**.
+- A função `sga-hinova-sync` exige `codigo_sga_plano` preenchido — sem ele, nenhuma ativação real chega à Hinova com o plano correto (cai no default da conta).
+- Credenciais Hinova já configuradas em `integracoes_credenciais` (`configurado=true`).
+- A doc oficial (`https://api.hinova.com.br/api/sga/v2/doc/`) é uma SPA — `fetch_website` só capturou o início (Autenticação + Associado). Para descobrir o endpoint exato de **Plano** preciso fazer chamadas reais à API com o token, listando os caminhos plausíveis (`/listar/planos`, `/plano/listar`, `/listar/plano-protecao`, `/listar/tipo-plano`, etc.).
 
-### 1. Dashboard de Comissões vira `Tabs`
-`src/pages/comissoes/Dashboard.tsx` passa a renderizar um `<Tabs>` com duas abas:
+Esta investigação **exige executar chamadas autenticadas** (modo build), pois a doc não está disponível via HTTP estático.
 
-- **Visão Geral** — todo o conteúdo atual (filtros, KPIs, Top 5, modal de detalhes), sem alterações funcionais.
-- **Venda Externa** — renderiza `<DashboardVendaExterna />` como componente embutido.
+## Entregáveis
 
-A aba ativa é controlada por query string (`?tab=venda-externa`) para permitir deep-link a partir da sidebar.
+1. **Edge function `hinova-discover-planos`** (descartável) que:
+   - Autentica na Hinova.
+   - Tenta uma lista de endpoints candidatos GET (`/listar/plano/ativo`, `/plano/listar`, `/listar/tipo-plano/ativo`, `/listar/planos-protecao`, `/listar/servicos`, `/listar/tipo-servico/ativo`, etc.) e retorna o body cru de cada um.
+   - Identifica qual endpoint devolve a lista de planos com `codigo_plano` (ou similar), nome, valor.
 
-### 2. Mover o arquivo da página
-- `src/pages/financeiro/DashboardVendaExterna.tsx` → `src/pages/comissoes/VendaExterna.tsx`
-- `src/pages/financeiro/GestaoContaVendedor.tsx` → `src/pages/comissoes/GestaoContaVendedor.tsx`
+2. **Relatório comparativo** (Markdown salvo em `/mnt/documents/hinova-vs-local-planos.md`) contendo:
+   - **Lista completa de planos da Hinova** (código, nome, valor configurado lá, cobertura/categoria se disponível).
+   - **Lista completa dos 287 planos locais** (id, nome, linha, fipe_min/max, valor_adesão e — quando houver — valor mensal mínimo via `tabelas_preco_mensalidade`).
+   - **Tabela de match** por similaridade de nome (algoritmo de tokens normalizados) com 3 colunas: `Local → Hinova sugerido (score)`, `Match exato?`, `Diferença de valor`.
+   - **Resumo executivo**: quantos batem 100%, quantos parciais, quantos sem correspondência, divergências de valor.
 
-Ajustar o `navigate(...)` interno do dashboard de venda externa (linha 190): em vez de ir para `/financeiro/venda-externa/:vendedorId`, navegar para `/comissoes/venda-externa/:vendedorId`.
+3. **Análise estrutural** documentando se a estrutura Hinova é compatível:
+   - A Hinova trabalha com **um código numérico por "plano de proteção"** ligado à conta/regional. Nossos 287 planos são variações (ex.: linha + cobertura + região + deságio + uso). Provável conclusão: a Hinova tem **muito menos planos** que nós — vários dos nossos planos locais (ex.: "Select One Passeio 5%", "...- Lagos", "...- SP") devem mapear para o **mesmo** `codigo_plano` Hinova, com a diferença de valor sendo calculada via `valor_fixo`/`valor_adesao` no payload de cadastro do veículo.
 
-`ComissionamentoExternoConfig.tsx` permanece onde está (não foi pedido para mover) — já tem redirect via `<Navigate>` de `/financeiro/configuracoes/comissionamento-externo` para `/comissoes`.
+4. **Decisão sobre auto-preenchimento via API**:
+   - Se houver match >= 95% por token de nome + faixa FIPE compatível → marca como **auto-preenchível**.
+   - Se houver ambiguidade → marca como **revisão manual** e lista os 3 candidatos top.
+   - Gera um **migration SQL preview** (não executado) com `UPDATE planos SET codigo_sga_plano='X' WHERE id='...'` para os matches confiáveis, salvo em `/mnt/documents/hinova-codigos-suggested.sql`.
 
-### 3. Rotas (`src/App.tsx`)
-- Remover do bloco financeiro:
-  ```
-  <Route path="/financeiro/venda-externa" element={<DashboardVendaExterna />} />
-  <Route path="/financeiro/venda-externa/:vendedorId" element={<GestaoContaVendedor />} />
-  ```
-- Adicionar redirects para preservar links antigos:
-  ```
-  <Route path="/financeiro/venda-externa" element={<Navigate to="/comissoes?tab=venda-externa" replace />} />
-  <Route path="/financeiro/venda-externa/:vendedorId" element={<RedirectVendaExterna />} />
-  ```
-  (`RedirectVendaExterna` lê `useParams` e faz `<Navigate to={`/comissoes/venda-externa/${vendedorId}`} replace />`).
-- Adicionar dentro do bloco `/comissoes`:
-  ```
-  <Route path="/comissoes/venda-externa/:vendedorId" element={<GestaoContaVendedor />} />
-  ```
-  (a aba dentro do dashboard cobre `/comissoes?tab=venda-externa`; rota dedicada só para o detalhe por vendedor.)
-- Atualizar imports lazy dos dois componentes para o novo caminho.
+5. **UI opcional (somente se aprovado pelo usuário depois)**: tela em `/configuracoes/integracoes/hinova/planos` com tabela editável (Local | Hinova sugerido | Confirmar) e botão "Aplicar selecionados" que grava os códigos.
 
-### 4. Sidebar (`src/components/layout/AppSidebar.tsx`)
-- Remover linha 304 (`Venda Externa` do grupo Financeiro).
-- Adicionar dentro do grupo `comissoes` (após o Dashboard):
-  ```
-  { title: 'Venda Externa', url: '/comissoes?tab=venda-externa', icon: Users },
-  ```
+## Plano de execução (após aprovação)
 
-### 5. Breadcrumb (`src/components/layout/GlobalBreadcrumb.tsx`)
-- Remover entrada `/financeiro/venda-externa`.
-- Adicionar `/comissoes/venda-externa/:vendedorId` se necessário (a página filha continua tendo seu próprio header).
+```text
+Etapa 1 — Descoberta de endpoint
+  • Criar edge function hinova-discover-planos
+  • Autenticar e probar 8 endpoints candidatos
+  • Identificar o endpoint correto + formato de resposta
 
-### 6. Limpeza visual no componente embutido
-Quando `DashboardVendaExterna` rodar dentro da aba, o `<h1>Venda Externa</h1>` duplica o título do Dashboard de Comissões. Solução: aceitar uma prop opcional `embedded?: boolean` no componente; quando `true`, omite o header `h1+p` (mantém o botão "Exportar relatório" no canto direito da aba).
+Etapa 2 — Coleta
+  • Chamar o endpoint identificado
+  • Persistir snapshot em /mnt/documents/hinova-planos-raw.json
 
-## Arquivos afetados
+Etapa 3 — Comparação
+  • Script Python lê snapshot + SELECT de planos locais
+  • Calcula match por token Jaccard, faixa FIPE, palavras-chave
+    (lancamento|select_one, deságio %, aplicativo, lagos, sp, diesel)
+  • Gera tabela Markdown e SQL preview
 
-**Editados:**
-- `src/App.tsx` — rotas removidas/adicionadas + redirects
-- `src/components/layout/AppSidebar.tsx` — mover item entre grupos
-- `src/components/layout/GlobalBreadcrumb.tsx` — atualizar mapeamento
-- `src/pages/comissoes/Dashboard.tsx` — adicionar Tabs e integrar venda externa
+Etapa 4 — Apresentar resultado ao usuário
+  • Relatório em /mnt/documents/
+  • Decisão: aplicar SQL automático para matches >= 95% ou
+    abrir UI de revisão manual
+```
 
-**Movidos (renomeados):**
-- `src/pages/financeiro/DashboardVendaExterna.tsx` → `src/pages/comissoes/VendaExterna.tsx` (com prop `embedded`)
-- `src/pages/financeiro/GestaoContaVendedor.tsx` → `src/pages/comissoes/GestaoContaVendedor.tsx`
+## Detalhes técnicos
 
-Sem mudanças no banco, hooks (`useDashboardVendaExterna`) ou edge functions.
+- **Endpoint de auth confirmado**: `POST https://api.hinova.com.br/api/sga/v2/usuario/autenticar` com `{usuario, senha}` e header `Authorization: Bearer {token}`. Retorna `token_usuario` (não expira).
+- **Cache de sessão** já existe em `_shared/hinova-client.ts` (`getHinovaSession`) — reutilizar.
+- **Endpoints candidatos a testar** (baseados em padrões da doc):
+  `/listar/plano/ativo`, `/listar/plano-protecao/ativo`, `/listar/tipo-plano/ativo`, `/plano/listar/ativo`, `/listar/servico/ativo`, `/listar/tipo-servico/ativo`, `/listar/planos`, `/listar/produtos/ativo`.
+- **Campo destino**: `public.planos.codigo_sga_plano` (text). Validação atual em `sga-hinova-sync` linha 1514: `Number.parseInt(planoRow.codigo_sga_plano, 10)` — então deve ser numérico.
+- **Heurística de match de valor**: comparar `valor_fixo` Hinova com a faixa `tabelas_preco_mensalidade` do plano local na FIPE média; tolerância de R$ 5,00.
+- **Risco de janela horária**: a Hinova bloqueia por horário comercial em algumas contas — a função já trata `HinovaTransientError` com `reason='janela_horaria'`.
 
-## Validação
+## Não inclui
 
-Acessar como diretor:
-- `/financeiro` → item "Venda Externa" não aparece mais no menu Financeiro.
-- `/comissoes` → menu Comissões inclui "Venda Externa" abaixo do Dashboard.
-- Dashboard de Comissões mostra duas abas; clicar em "Venda Externa" carrega a tabela de vendedores.
-- `/financeiro/venda-externa` (link antigo) redireciona para `/comissoes?tab=venda-externa`.
-- "Ver extrato" de um vendedor abre `/comissoes/venda-externa/:id` corretamente.
+- Aplicar UPDATE em massa sem revisão (gerado como SQL preview, não executado).
+- Alterar a estrutura de `planos` ou `codigo_sga_plano`.
+- Mudar o fluxo de sync atual (`sga-hinova-sync`).
