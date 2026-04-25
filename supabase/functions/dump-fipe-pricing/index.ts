@@ -91,10 +91,11 @@ Deno.serve(async (req) => {
   let planBenefits: any[] = [];
   from = 0;
   while (true) {
-    const { data } = await supabase
+    const { data, error: pberr } = await supabase
       .from('plan_benefits')
-      .select('plan_id, benefit_id, is_included, custom_price, custom_carencia_dias')
+      .select('plan_id, benefit_id, custom_value, custom_text, is_highlighted')
       .range(from, from + PAGE - 1);
+    if (pberr) { console.error('plan_benefits err', pberr); break; }
     planBenefits = planBenefits.concat(data || []);
     if (!data || data.length < PAGE) break;
     from += PAGE;
