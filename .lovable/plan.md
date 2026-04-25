@@ -1,55 +1,66 @@
-## Problema identificado
+## Objetivo
 
-A planilha `catalogo_planos_pratic.xlsx` exportada anteriormente contém:
-- Aba **Coberturas por Plano**: 2.241 linhas, mas as colunas `Valor Limite`, `Franquia (%)`, `Franquia (R$)`, `Carência (dias)` e o **preço por cobertura** estão todas vazias.
-- Aba **Benefícios por Plano**: completamente vazia (apenas cabeçalhos).
+Criar um **segundo arquivo XLSX** dedicado a **preços**, vinculável ao `catalogo_planos_pratic_v3.xlsx` pela chave comum **ID Plano** (UUID já presente na aba "Planos" do v3).
 
-**Causa**: o script anterior leu apenas a tabela de override `planos_coberturas` (que tem todos os campos `NULL` neste sistema, exceto `obrigatoria` e `carencia_dias` parcial). Os valores reais ficam no catálogo (`coberturas` e `benefits`) e o join com benefícios não foi feito (ambas as tabelas-ponte `planos_beneficios`/`plan_benefits` estão vazias — os benefícios são vinculados apenas via catálogo clonado por linha).
+Arquivo: **`catalogo_planos_pratic_v3_precos.xlsx`** em `/mnt/documents/`.
 
-## Dados disponíveis no banco (verificado)
+## Estrutura proposta (6 abas focadas em preço)
 
-Tabela `coberturas` (clones por plano):
-- `valor_limite` → **0/2865 preenchidos** (não existe no banco — coluna ficará vazia mesmo assim, vamos manter mas marcar "—")
-- `franquia_valor` / `franquia_percentual` → **0/2865** (idem)
-- `carencia_dias` → **1907/2865** preenchidos ✅
-- `valor` (preço/mensalidade da cobertura) → **537/2865** preenchidos ✅
-- `percentual_cobertura` → disponível ✅
+### 1. Índice de Planos (chave de ligação)
+Coluna-âncora para PROCV/XLOOKUP no catálogo principal.
+- ID Plano · Linha · Plano · Código Plano · Nº Coberturas com preço · Nº Faixas FIPE · Mensalidade Mín (R$) · Mensalidade Máx (R$)
 
-Tabela `benefits` (catálogo de benefícios):
-- `preco_sugerido` → **1770/1770** ✅
-- `carencia_dias` → **962/1770** ✅
-- `description`, `category`, `display_order` ✅
+### 2. Preços de Coberturas (preço base)
+Apenas linhas com `valor` preenchido em `coberturas`.
+- ID Plano · Plano · ID Cobertura · Cobertura · Tipo · % Cobertura · **Preço Mensal Base (R$)** · Carência (dias) · Código SGA
 
-## Plano de ação
+### 3. Preços por Faixa FIPE (matriz completa — long format)
+A "fonte da verdade" do motor de cotação.
+- ID Plano · Plano · ID Cobertura · Cobertura · Faixa De (R$) · Faixa Até (R$) · **Valor Mensal (R$)**
+- ~75k linhas, com auto-filter para isolar plano/cobertura
 
-1. **Reescrever o script de exportação** para gerar `catalogo_planos_pratic_v2.xlsx` em `/mnt/documents/`, mantendo as abas existentes e melhorando duas:
+### 4. Mensalidade Total por Plano × Faixa FIPE
+Soma das contribuições de todas as coberturas do plano em cada faixa FIPE — é o que o associado paga.
+- ID Plano · Linha · Plano · Faixa De (R$) · Faixa Até (R$) · **Mensalidade Total (R$)** · Nº Coberturas somadas
 
-   **Aba "Coberturas por Plano"** — buscar direto da tabela `coberturas` (filtrando por linha/plano via slug do nome) com colunas:
-   - Linha, Plano, Cobertura, Código, Tipo
-   - **% Cobertura** (`percentual_cobertura`)
-   - **Valor Limite (R$)** (`valor_limite` — exibe "—" quando nulo)
-   - **Franquia (%)** / **Franquia (R$)** (idem)
-   - **Carência (dias)** (`carencia_dias`)
-   - **Preço Mensal (R$)** (`valor`) ← NOVO
-   - **Carência Ativa** (`carencia_ativa`)
-   - **Código SGA** (`codigo_sga`)
-   - Obrigatória
+### 5. Preços de Benefícios (catálogo)
+- ID Benefício · Categoria · Nome · **Preço Sugerido (R$)** · Carência (dias) · Carência Ativa · Slug
+- 1.770 linhas
 
-   **Aba "Benefícios por Plano"** — popular via catálogo `benefits` (já que a ponte está vazia, listar todos os benefícios ativos do catálogo agrupados por linha de produto, ou anexar como aba "Catálogo de Benefícios" geral):
-   - Nome, Slug, Categoria, Descrição
-   - **Preço Sugerido (R$)** (`preco_sugerido`)
-   - **Carência (dias)** + Carência Ativa
-   - Código SGA, Display Order, Ativo
+### 6. Resumo de Preços por Linha
+Visão executiva agregada.
+- Linha · Nº Planos · Nº Coberturas · Mensalidade Mín / Média / Máx (R$) · Faixa FIPE atendida (de–até)
 
-2. **Adicionar formatação**:
-   - Cabeçalhos em negrito + fundo cinza
-   - Valores monetários em formato `R$ #,##0.00;[Red]-R$ #,##0.00;"—"`
-   - Zoom 90%, freeze row 1, autofilter
+## Como conecta com o catálogo v3
 
-3. **QA**: abrir o xlsx gerado, validar 5 amostras de coberturas com `valor` preenchido e 5 benefícios com `preco_sugerido`.
+Ambas as planilhas compartilham **`ID Plano`** (UUID) como chave primária. Exemplos de fórmula que o usuário poderá usar no Excel:
 
-4. **Entregar** novo arquivo `catalogo_planos_pratic_v2.xlsx` via `<lov-artifact>`.
+```text
+=XLOOKUP([@ID Plano]; precos.Planos[ID Plano]; precos.Planos[Mensalidade Mín (R$)])
+```
 
-## Observação importante
+E **`ID Cobertura`** (UUID) como chave secundária para detalhar preços por cobertura.
 
-`valor_limite` e `franquia_valor`/`franquia_percentual` **não estão preenchidos em nenhum registro do banco** (0/2865). A coluna existirá na planilha mas mostrará "—". Se quiser que esses valores sejam preenchidos, será necessário um trabalho separado de cadastro/importação no catálogo de coberturas — me avise se for o caso.
+## Padrões de formatação (iguais ao v3)
+
+- Header escuro (#1F2937) + texto branco, congelar linha 1, auto-filter
+- Valores monetários: `R$ #,##0.00;[Red]-R$ #,##0.00;"—"`
+- IDs em fonte Consolas para facilitar copy/paste
+- Ordenação: Linha → Plano → Cobertura
+
+## Fontes de dados (já extraídas)
+
+Reutilizo o dump em `/tmp/fipe/dump.json` (5,2 MB) — não precisa nova chamada à edge function.
+- `coberturas.valor` → Preço Base (537/2865)
+- `entity_eligibility_rules` (rule_type=`fipe_range`) → Matriz FIPE (75.348 linhas)
+- `benefits.preco_sugerido` → Preços de benefícios (1.770/1.770, 100%)
+
+## QA antes de entregar
+
+- Validar 5 amostras: preço de cobertura no v3 == preço no novo arquivo
+- Validar soma da Aba 4 == soma manual de 1 plano × 1 faixa
+- Validar que todo `ID Plano` da Aba 1 também existe no v3
+
+## Entrega
+
+Arquivo final via `<lov-artifact>` + tabela-resumo de quantas linhas em cada aba.
