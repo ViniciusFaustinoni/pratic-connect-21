@@ -117,6 +117,7 @@ export default function Cotacoes() {
   // Modal de detalhes
   const [showDetalhesModal, setShowDetalhesModal] = useState(false);
   const [cotacaoSelecionada, setCotacaoSelecionada] = useState<CotacaoWithRelations | null>(null);
+  const [showRelatorioDialog, setShowRelatorioDialog] = useState(false);
 
   const permissions = usePermissions();
   const { profile, user } = useAuth();
