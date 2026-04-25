@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { useEquipeHoje } from '@/hooks/useDashboardCoordenador';
+import { useEquipeTempoReal } from '@/hooks/useEquipeTempoReal';
+import { TimelineTecnicoCard } from '@/components/equipe/TimelineTecnicoCard';
 import { useMovimentacoes } from '@/hooks/useMovimentacoes';
 import { 
   RotaFormDialog, 
@@ -46,7 +47,7 @@ export default function Rotas() {
   const { data: rotas, isLoading: loadingRotas } = useRotas(filters);
   const { data: instalacoesPendentes, isLoading: loadingPendentes } = useInstalacoesDisponiveis();
   const { data: filaServicos, isLoading: loadingFila } = useFilaServicos();
-  const { data: equipeHoje, isLoading: loadingEquipe } = useEquipeHoje();
+  const { data: equipeHoje, isLoading: loadingEquipe } = useEquipeTempoReal();
   const { data: movimentacoes, isLoading: loadingMovimentacoes } = useMovimentacoes();
 
   const handleOpenRota = (rotaId: string) => {
@@ -203,6 +204,10 @@ export default function Rotas() {
                 <Radio className="h-5 w-5 text-green-500" />
                 Equipe em Campo — Hoje
               </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Linha do tempo do turno de cada técnico, com tempos por estado:
+                em serviço, deslocamento, almoço, ocioso e inativo no horário comercial.
+              </p>
             </CardHeader>
             <CardContent>
               {loadingEquipe ? (
@@ -210,43 +215,16 @@ export default function Rotas() {
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               ) : equipeHoje?.length ? (
-                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   {equipeHoje.map((membro) => (
-                    <div key={membro.id} className="flex items-center justify-between rounded-lg border p-4">
-                      <div className="space-y-1">
-                        <p className="font-medium">{membro.nome}</p>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Badge
-                            variant={
-                              membro.status === 'em_rota' ? 'default' :
-                              membro.status === 'online' ? 'secondary' : 'outline'
-                            }
-                            className="text-xs"
-                          >
-                            {membro.status === 'em_rota' ? '🚗 Em rota' :
-                             membro.status === 'online' ? '🟢 Online' : '⚫ Offline'}
-                          </Badge>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {membro.tarefasConcluidas}/{membro.tarefasTotal} tarefas concluídas
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-2xl font-bold">
-                          {membro.tarefasTotal > 0 
-                            ? Math.round((membro.tarefasConcluidas / membro.tarefasTotal) * 100) 
-                            : 0}%
-                        </div>
-                        <p className="text-xs text-muted-foreground">progresso</p>
-                      </div>
-                    </div>
+                    <TimelineTecnicoCard key={membro.id} membro={membro} />
                   ))}
                 </div>
               ) : (
                 <div className="flex h-32 flex-col items-center justify-center text-center">
                   <Users className="h-8 w-8 text-muted-foreground/50" />
                   <p className="mt-2 text-muted-foreground">
-                    Nenhum profissional em campo hoje
+                    Nenhum profissional com turno aberto hoje
                   </p>
                 </div>
               )}
