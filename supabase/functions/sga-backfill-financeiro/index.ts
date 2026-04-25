@@ -472,7 +472,7 @@ serve(async (req) => {
         if (delayMs > 0 && i + concurrency < jobs.length) await sleep(delayMs);
       }
 
-      return json(200, { success: true, processados, ok, fail, retry, aborted, concurrency, share_session: !!sharedSession, motivo_abort: aborted ? 'janela_horaria_hinova_fechada' : null });
+      return json(200, { success: true, processados, ok, fail, retry, aborted, interrompido_por_tempo: interrompidoPorTempo, concurrency, share_session: !!sharedSession, motivo_abort: aborted ? 'janela_horaria_hinova_fechada' : null });
     } finally {
       // Renova TTL para o próximo batch (não desmarca — o TTL de 30min cuida disso se o cron parar)
       await supabase
