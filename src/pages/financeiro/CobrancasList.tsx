@@ -109,6 +109,7 @@ const mapStatusToAsaas = (status: string): string[] => {
 
 export default function CobrancasList() {
   const navigate = useNavigate();
+  const { isDiretor, isAdminMaster, isDesenvolvedor } = usePermissions();
   const queryClient = useQueryClient();
   
   const [filters, setFilters] = useState({
