@@ -740,6 +740,75 @@ export function EtapaDadosPessoaisDocumentos({
             </div>
           </div>
 
+          {/* Fallback manual — Veículo (oculto por padrão) */}
+          {temCrlv && (
+            <div className="px-3">
+              {!mostrarManualVeiculo ? (
+                <button
+                  type="button"
+                  onClick={() => setMostrarManualVeiculo(true)}
+                  className="text-xs text-muted-foreground hover:text-primary underline-offset-2 hover:underline inline-flex items-center gap-1"
+                >
+                  <Pencil className="h-3 w-3" />
+                  A IA não leu tudo? Preencher dados do veículo manualmente
+                </button>
+              ) : (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                      Preenchimento manual — Dados do veículo
+                    </p>
+                    <button type="button" onClick={() => setMostrarManualVeiculo(false)} className="text-xs text-muted-foreground hover:text-foreground">
+                      Recolher
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-xs">Placa</Label>
+                      <Input className="h-9 text-sm uppercase" maxLength={8} value={dadosExtraidos.veiculo_placa || ''} onChange={(e) => setCampoManual('veiculo_placa', e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7))} placeholder="ABC1D23" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Renavam</Label>
+                      <Input className="h-9 text-sm" value={dadosExtraidos.veiculo_renavam || ''} onChange={(e) => setCampoManual('veiculo_renavam', e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="11 dígitos" />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs">Chassi</Label>
+                      <Input className="h-9 text-sm uppercase font-mono" maxLength={17} value={dadosExtraidos.veiculo_chassi || ''} onChange={(e) => setCampoManual('veiculo_chassi', e.target.value.toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g, '').slice(0, 17))} placeholder="17 caracteres" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Cor</Label>
+                      <Input className="h-9 text-sm" value={dadosExtraidos.veiculo_cor || ''} onChange={(e) => setCampoManual('veiculo_cor', e.target.value)} placeholder="Branco, Prata..." />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Combustível</Label>
+                      <Select value={dadosExtraidos.veiculo_combustivel || ''} onValueChange={(v) => setCampoManual('veiculo_combustivel', v)}>
+                        <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                        <SelectContent>
+                          {COMBUSTIVEIS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs">Nº do motor</Label>
+                      <Input className="h-9 text-sm font-mono" value={dadosExtraidos.numero_motor || ''} onChange={(e) => setCampoManual('numero_motor', e.target.value.toUpperCase())} placeholder="Conforme CRLV" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Ano de fabricação</Label>
+                      <Input className="h-9 text-sm" type="number" min={1950} max={new Date().getFullYear() + 1} value={dadosExtraidos.veiculo_ano_fabricacao || ''} onChange={(e) => setCampoManual('veiculo_ano_fabricacao', e.target.value ? parseInt(e.target.value) : undefined)} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Ano do modelo</Label>
+                      <Input className="h-9 text-sm" type="number" min={1950} max={new Date().getFullYear() + 1} value={dadosExtraidos.veiculo_ano_modelo || ''} onChange={(e) => setCampoManual('veiculo_ano_modelo', e.target.value ? parseInt(e.target.value) : undefined)} />
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Use apenas se a leitura automática falhou. Confira chassi e placa com atenção.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Comprovante de Residência */}
           <div className={cn(
             'flex items-center gap-3 p-3 rounded-lg transition-colors',
