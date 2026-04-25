@@ -794,7 +794,7 @@ export default function CobrancasList() {
                           <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => navigate(`/financeiro/cobrancas/${cobranca.id}`)}>
+                          <DropdownMenuItem onClick={() => setDetalheId(cobranca.id)}>
                             <Eye className="mr-2 h-4 w-4" />Ver detalhes
                           </DropdownMenuItem>
                           {!['pago', 'cancelado'].includes(cobranca.status) && (
