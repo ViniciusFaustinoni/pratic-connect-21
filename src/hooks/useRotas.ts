@@ -220,13 +220,19 @@ export function useRotasMetricas() {
       // (serviço que ficou em_rota e nunca foi finalizado não conta).
       let emAndamento = 0;
       if (dentroComercial) {
+        // 1) status efetivo de execução
+        // 2) agendado para HOJE
+        // 3) marcador temporal (iniciada_em OU em_rota_em) caiu dentro do dia atual,
+        //    para descartar serviços com status pendurado de dias anteriores.
         const { count } = await supabase
           .from('servicos')
           .select('*', { count: 'exact', head: true })
           .in('status', ['em_rota', 'em_andamento'])
           .eq('data_agendada', hoje)
-          .or(`iniciada_em.gte.${inicioHojeUtc},em_rota_em.gte.${inicioHojeUtc}`)
-          .or(`iniciada_em.lte.${fimHojeUtcDate},em_rota_em.lte.${fimHojeUtcDate}`);
+          .or(
+            `and(iniciada_em.gte.${inicioHojeUtc},iniciada_em.lte.${fimHojeUtcDate}),` +
+            `and(em_rota_em.gte.${inicioHojeUtc},em_rota_em.lte.${fimHojeUtcDate})`
+          );
         emAndamento = count || 0;
       }
 
