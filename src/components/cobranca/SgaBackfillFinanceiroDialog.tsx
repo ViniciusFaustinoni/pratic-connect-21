@@ -249,9 +249,9 @@ export function SgaBackfillFinanceiroDialog() {
       if (!drenResp.error && drenResp.data?.success) {
         const d = drenResp.data as DrenagemStatus;
         setDrenagem(d);
-        // Mantém histórico de até 6 amostras (~30s) p/ velocidade
+        // Mantém histórico de até 36 amostras (~3min) p/ velocidade mais estável
         drenagemHist.current.push({ t: Date.now(), processados: d.processados_total });
-        if (drenagemHist.current.length > 6) drenagemHist.current.shift();
+        if (drenagemHist.current.length > 36) drenagemHist.current.shift();
       }
     } catch (e: any) {
       console.error(e);
