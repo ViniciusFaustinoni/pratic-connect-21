@@ -127,6 +127,40 @@ export function useGerarVistoriaLink() {
 }
 
 /**
+ * Marca a etapa como em andamento (chamada ao tocar no botão da home pública).
+ * Reflete o "em andamento" no monitoramento sem esperar a conclusão.
+ * Idempotente — chamadas repetidas não regridem status.
+ */
+export function useIniciarEtapaPublica() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: {
+      token: string;
+      etapa: 'fotos' | 'instalacao';
+      executorNome?: string | null;
+      executorTelefone?: string | null;
+      executorUserId?: string | null;
+    }) => {
+      const { data, error } = await publicSupabase.functions.invoke('iniciar-etapa-vistoria-publica', {
+        body: {
+          token: params.token,
+          etapa: params.etapa,
+          executor_nome: params.executorNome ?? null,
+          executor_telefone: params.executorTelefone ?? null,
+          executor_user_id: params.executorUserId ?? null,
+        },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Erro ao iniciar etapa');
+      return data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['vistoria-link-token', variables.token] });
+    },
+  });
+}
+
+/**
  * Conclui a etapa de Fotos & Vídeo (chamada do link público).
  */
 export function useConcluirEtapaFotosPublica() {
