@@ -1,7 +1,7 @@
 // Sincroniza o financeiro de UM veículo via API SGA Hinova.
 // - Reusável para on-demand (botão "Atualizar agora") e workers do backfill.
 // - Body: { veiculo_id: string, job_id?: string }
-// - Idempotente: upsert em cobrancas por nosso_numero.
+// - Idempotente: upsert em cobrancas por chave lógica (veiculo_id,data_vencimento,valor,tipo).
 // - Distingue erros transitórios (auth/janela/5xx) → status 'pendente_retry' com proximo_retry_em.
 // v3: janela de 5 meses passados em listarBoletosVeiculo (data_inicial/data_final obrigatórios pela Hinova).
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
@@ -421,20 +421,24 @@ serve(async (req) => {
       }
     }
 
-    // Upsert em UM ÚNICO round-trip (em vez de N round-trips). Em chunks de 500
-    // para nunca estourar limite de payload do PostgREST.
+    // Upsert idempotente por chave LÓGICA (veiculo_id, data_vencimento, valor, tipo).
+    // Hinova reemite nosso_numero ao quitar boletos, então usar nosso_numero como
+    // chave de conflito gerava duplicatas. O índice parcial cobrancas_sga_logica_uniq
+    // garante unicidade apenas para origem='sga_hinova'.
     if (rows.length > 0) {
       const CHUNK_UPSERT = 500;
       for (let i = 0; i < rows.length; i += CHUNK_UPSERT) {
         const slice = rows.slice(i, i + CHUNK_UPSERT);
         const { error: upErr } = await supabase
           .from('cobrancas')
-          .upsert(slice, { onConflict: 'nosso_numero' });
+          .upsert(slice, { onConflict: 'veiculo_id,data_vencimento,valor,tipo' });
         if (upErr) {
           console.error('[SGA Sync Veículo] upsert batch falhou', upErr.message);
           // Fallback: tenta linha a linha para não perder o lote inteiro
           for (const row of slice) {
-            const { error } = await supabase.from('cobrancas').upsert(row, { onConflict: 'nosso_numero' });
+            const { error } = await supabase
+              .from('cobrancas')
+              .upsert(row, { onConflict: 'veiculo_id,data_vencimento,valor,tipo' });
             if (!error) importados++;
           }
         } else {
