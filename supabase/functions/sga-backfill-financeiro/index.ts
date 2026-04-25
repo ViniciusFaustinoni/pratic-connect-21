@@ -204,17 +204,22 @@ serve(async (req) => {
 
     // -------- REAGENDAR ERROS TRANSITÓRIOS --------
     if (acao === 'reagendar_erros_horario') {
-      const proximo = nextJanela().toISOString();
-      // Padrões de erros transitórios que devem voltar para retry.
-      // OBS: usamos múltiplos UPDATEs porque o filtro .or() do PostgREST
-      // quebra com caracteres especiais (acentos, vírgulas dentro do padrão).
-      const padroes = [
+      const proximaJanela = nextJanela().toISOString();
+      const agora = new Date().toISOString();
+      // Padrões agrupados por quando devem ser re-tentados.
+      // OBS: usamos múltiplos UPDATEs porque .or() do PostgREST quebra
+      // com caracteres especiais (acentos, vírgulas dentro do padrão).
+      const padroesJanela = [
         '%horario%',
         '%horário%',
         '%janela_horaria%',
+        '%restri%',
         '%401%',
         '%403%',
-        '%restri%',
+        '%Login ou senha%',
+        '%login ou senha%',
+      ];
+      const padroesImediato = [
         '%5xx%',
         '%500%',
         '%502%',
@@ -230,20 +235,29 @@ serve(async (req) => {
         '%temporarily unavailable%',
       ];
       const idsReagendados = new Set<string>();
-      for (const padrao of padroes) {
-        const { data, error } = await supabase
-          .from('sga_sync_financeiro_jobs')
-          .update({ status: 'pendente_retry', proximo_retry_em: proximo })
-          .eq('status', 'erro')
-          .ilike('ultimo_erro', padrao)
-          .select('id');
-        if (error) {
-          console.error('[reagendar_erros_horario] padrão', padrao, error.message);
-          continue;
+      const aplicar = async (padroes: string[], proximo: string) => {
+        for (const padrao of padroes) {
+          const { data, error } = await supabase
+            .from('sga_sync_financeiro_jobs')
+            .update({ status: 'pendente_retry', proximo_retry_em: proximo })
+            .eq('status', 'erro')
+            .ilike('ultimo_erro', padrao)
+            .select('id');
+          if (error) {
+            console.error('[reagendar_erros_horario] padrão', padrao, error.message);
+            continue;
+          }
+          for (const r of data ?? []) idsReagendados.add(r.id);
         }
-        for (const r of data ?? []) idsReagendados.add(r.id);
-      }
-      return json(200, { success: true, reagendados: idsReagendados.size, proximo_retry_em: proximo });
+      };
+      await aplicar(padroesJanela, proximaJanela);
+      await aplicar(padroesImediato, agora);
+      return json(200, {
+        success: true,
+        reagendados: idsReagendados.size,
+        proximo_retry_em: proximaJanela,
+        retry_imediato_em: agora,
+      });
     }
 
     // -------- GUARDA GLOBAL: backfill_financeiro_ativo --------
