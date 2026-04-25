@@ -44,6 +44,8 @@ import { cn } from '@/lib/utils';
 import { useCotacoesRealtime } from '@/hooks/useCotacoesRealtime';
 import { NovaEntradaDialog } from '@/components/vendas/OutrasEntradasMenu';
 import { useDebounce } from '@/hooks/useDebounce';
+import { RelatorioInteligenteCotacoesDialog } from '@/components/vendas/RelatorioInteligenteCotacoesDialog';
+import { Sparkles } from 'lucide-react';
 
 // Categorização dinâmica — fallback por termos quando benefits.category não está disponível
 const categorizarPorTermo = (cobLower: string): 'cobertura' | 'assistencia' | 'extra' => {
@@ -115,6 +117,7 @@ export default function Cotacoes() {
   // Modal de detalhes
   const [showDetalhesModal, setShowDetalhesModal] = useState(false);
   const [cotacaoSelecionada, setCotacaoSelecionada] = useState<CotacaoWithRelations | null>(null);
+  const [showRelatorioDialog, setShowRelatorioDialog] = useState(false);
 
   const permissions = usePermissions();
   const { profile, user } = useAuth();
@@ -697,6 +700,16 @@ export default function Cotacoes() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {permissions.isDiretor && (
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => setShowRelatorioDialog(true)}
+            >
+              <Sparkles className="h-4 w-4" />
+              Relatório Inteligente
+            </Button>
+          )}
           <PermissionGate permission="cotacao.canCreate">
             <Button 
               className="gap-2 shadow-md hover:shadow-lg transition-all" 
@@ -710,6 +723,10 @@ export default function Cotacoes() {
             open={showNovaEntrada}
             onOpenChange={setShowNovaEntrada}
             onNovaCotacao={() => setShowCotacaoForm(true)}
+          />
+          <RelatorioInteligenteCotacoesDialog
+            open={showRelatorioDialog}
+            onOpenChange={setShowRelatorioDialog}
           />
         </div>
       </div>
