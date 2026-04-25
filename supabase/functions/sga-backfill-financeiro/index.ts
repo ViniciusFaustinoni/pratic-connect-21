@@ -281,8 +281,9 @@ serve(async (req) => {
     }
 
     // -------- PROCESSAR --------
-    const batchSize = Math.min(Math.max(parseInt(body.batch_size ?? '50'), 1), 100);
-    const delayMs = Math.max(parseInt(body.delay_ms ?? '150'), 50);
+    const batchSize = Math.min(Math.max(parseInt(body.batch_size ?? '100'), 1), 200);
+    const delayMs = Math.max(parseInt(body.delay_ms ?? '50'), 0);
+    const concurrency = Math.min(Math.max(parseInt(body.concurrency ?? '8'), 1), 15);
 
     // Marca backfill ativo (TTL 30min) para pausar crons concorrentes
     const ttlExpira = new Date(Date.now() + 30 * 60 * 1000).toISOString();
