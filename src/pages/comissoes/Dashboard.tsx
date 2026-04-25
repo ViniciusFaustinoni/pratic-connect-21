@@ -1,14 +1,18 @@
-import { useMemo, useState } from 'react';
-import { DollarSign, CheckCircle2, Clock, Infinity as InfinityIcon, Trophy } from 'lucide-react';
+import { lazy, Suspense, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { DollarSign, CheckCircle2, Clock, Infinity as InfinityIcon, Trophy, BarChart3, Users, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { KpiCard } from '@/components/comissoes/KpiCard';
 import { ComissoesDetalhesModal } from '@/components/comissoes/ComissoesDetalhesModal';
 import { useComissoesDashboard, type ComissaoDashboardItem } from '@/hooks/useComissoesDashboard';
 import { COMISSOES_STATUS_OPTIONS, COMISSOES_TIPO_LANCAMENTO_OPTIONS, isComissaoVitalicia } from '@/lib/comissoes-filtros';
 import type { DateRange } from 'react-day-picker';
+
+const VendaExterna = lazy(() => import('./VendaExterna'));
 
 const formatMoney = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
