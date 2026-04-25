@@ -459,6 +459,7 @@ const App = () => (
             
             {/* Public Vistoria Prestador */}
             <Route path="/vistoria-prestador/:token" element={<VistoriaPrestador />} />
+            <Route path="/vistoria/:token" element={<VistoriaPublica />} />
             
             {/* Public Portal Terceiro */}
             <Route path="/terceiro/:token" element={<PortalTerceiro />} />
