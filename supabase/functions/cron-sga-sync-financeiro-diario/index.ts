@@ -24,11 +24,12 @@ const corsHeaders = {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Caps defensivos por execução em background
-const MAX_CICLOS = 200;          // 200 × 50 = 10.000 jobs por execução
-const BATCH = 50;
-const DELAY_LOTE = 500;          // pausa entre lotes (sga-backfill-financeiro já tem delay interno)
+const MAX_CICLOS = 500;          // 500 × 20 = 10.000 jobs por execução
+const BATCH = 20;                // batch menor → invoke responde mais rápido (evita timeout interno)
+const DELAY_LOTE = 300;          // pausa entre lotes (sga-backfill-financeiro já tem delay interno)
 const MAX_WALL_CLOCK_MS = 50 * 60 * 1000; // 50 min — segurança vs runtime ~60 min
 const HEARTBEAT_TTL_MS = 2 * 60 * 1000;   // 2 min sem heartbeat → execução considerada morta
+const MAX_ERROS_CONSEC = 5;      // tolera erros transitórios antes de abortar
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };
 
