@@ -37,6 +37,46 @@ serve(async (req) => {
     const acao = body.acao || 'processar';
     const tipo = body.tipo || 'backfill_inicial';
 
+    // -------- STATUS DRENAGEM (telemetria do background) --------
+    if (acao === 'status_drenagem') {
+      const { data: state } = await supabase
+        .from('sga_runtime_state')
+        .select(
+          'backfill_financeiro_ativo, backfill_iniciado_em, backfill_ultimo_heartbeat, backfill_lote_atual, backfill_processados_total, backfill_ok_total, backfill_fail_total, backfill_retry_total, backfill_cancelar_solicitado'
+        )
+        .gte('id', '00000000-0000-0000-0000-000000000000')
+        .limit(1)
+        .maybeSingle();
+      const heartbeatTs = state?.backfill_ultimo_heartbeat
+        ? new Date(state.backfill_ultimo_heartbeat).getTime()
+        : 0;
+      const heartbeatIdadeMs = heartbeatTs ? Date.now() - heartbeatTs : null;
+      const vivo = state?.backfill_financeiro_ativo === true && heartbeatIdadeMs !== null && heartbeatIdadeMs < 2 * 60 * 1000;
+      return json(200, {
+        success: true,
+        ativo: !!state?.backfill_financeiro_ativo,
+        vivo,
+        cancelamento_solicitado: !!state?.backfill_cancelar_solicitado,
+        iniciado_em: state?.backfill_iniciado_em ?? null,
+        ultimo_heartbeat: state?.backfill_ultimo_heartbeat ?? null,
+        heartbeat_idade_ms: heartbeatIdadeMs,
+        lote_atual: state?.backfill_lote_atual ?? 0,
+        processados_total: state?.backfill_processados_total ?? 0,
+        ok_total: state?.backfill_ok_total ?? 0,
+        fail_total: state?.backfill_fail_total ?? 0,
+        retry_total: state?.backfill_retry_total ?? 0,
+      });
+    }
+
+    // -------- PARAR DRENAGEM (cancelamento gracioso) --------
+    if (acao === 'parar_drenagem') {
+      await supabase
+        .from('sga_runtime_state')
+        .update({ backfill_cancelar_solicitado: true })
+        .gte('id', '00000000-0000-0000-0000-000000000000');
+      return json(200, { success: true, cancelamento_solicitado: true });
+    }
+
     // -------- STATUS --------
     if (acao === 'status') {
       const counts: Record<string, number> = {};

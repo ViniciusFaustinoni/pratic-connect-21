@@ -24289,23 +24289,44 @@ export type Database = {
       }
       sga_runtime_state: {
         Row: {
+          backfill_cancelar_solicitado: boolean
           backfill_expira_em: string | null
+          backfill_fail_total: number
           backfill_financeiro_ativo: boolean
           backfill_iniciado_em: string | null
+          backfill_lote_atual: number
+          backfill_ok_total: number
+          backfill_processados_total: number
+          backfill_retry_total: number
+          backfill_ultimo_heartbeat: string | null
           id: string
           updated_at: string
         }
         Insert: {
+          backfill_cancelar_solicitado?: boolean
           backfill_expira_em?: string | null
+          backfill_fail_total?: number
           backfill_financeiro_ativo?: boolean
           backfill_iniciado_em?: string | null
+          backfill_lote_atual?: number
+          backfill_ok_total?: number
+          backfill_processados_total?: number
+          backfill_retry_total?: number
+          backfill_ultimo_heartbeat?: string | null
           id?: string
           updated_at?: string
         }
         Update: {
+          backfill_cancelar_solicitado?: boolean
           backfill_expira_em?: string | null
+          backfill_fail_total?: number
           backfill_financeiro_ativo?: boolean
           backfill_iniciado_em?: string | null
+          backfill_lote_atual?: number
+          backfill_ok_total?: number
+          backfill_processados_total?: number
+          backfill_retry_total?: number
+          backfill_ultimo_heartbeat?: string | null
           id?: string
           updated_at?: string
         }
