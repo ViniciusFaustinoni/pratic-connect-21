@@ -175,7 +175,7 @@ export default function VistoriaPublica() {
         )}
 
         {etapa === 'home' && (
-          <HomeEtapas link={link} onEtapa={setEtapa} />
+          <HomeEtapas link={link} token={token!} onEtapa={setEtapa} />
         )}
 
         {etapa === 'fotos' && instalacao && (
