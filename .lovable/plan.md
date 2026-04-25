@@ -13,117 +13,131 @@
 ## Falhas de lógica e riscos identificados
 
 ### 1) Link só nasce se já existir `instalacoes` (timing)
-- Hoje a aprovação documental dispara `gerar-link-vistoria-publica` com `cotacaoId`. Se a instalação ainda não foi criada (a maioria dos casos), a função retorna 400 silenciosamente e o link nunca é criado.
-- Resultado: o `VistoriaLinkBlock` aparece com botão "Gerar link" e só funciona depois que alguém criar a instalação manualmente, contradizendo o requisito ("após aprovar documentos, o link deve estar pronto").
+Aprovação documental dispara `gerar-link-vistoria-publica` com `cotacaoId`. Se a instalação ainda não foi criada, retorna 400 silenciosamente. `VistoriaLinkBlock` aparece com botão "Gerar link" e só funciona depois que alguém criar a instalação manualmente.
 
 ### 2) Duplicação de trabalho entre link público e app do técnico interno
-- `ExecutarVistoriaCompleta` ignora `vistoria_links`. Se as fotos já foram feitas pelo vendedor, o técnico vê tudo zerado e refaz — desperdício de tempo, fotos duplicadas em `vistoria_fotos` (upsert por `vistoria_id+tipo` sobrescreve as do vendedor).
-- O caminho legado (`useAprovarVeiculoVistoria`) marca `vistorias.status='aprovada'` direto, sem passar pelo `concluir-etapa-instalacao-publica` — `vistoria_links` fica eternamente "fotos_concluidas".
+`ExecutarVistoriaCompleta` ignora `vistoria_links`. Se as fotos já foram feitas pelo vendedor, técnico vê tudo zerado e refaz. `useAprovarVeiculoVistoria` marca `vistorias.status='aprovada'` direto sem passar pelo link — `vistoria_links` fica eternamente "fotos_concluidas".
 
 ### 3) Atribuição não sincroniza para o link
-- `AtribuirInstaladorDialog` atualiza só `instalacoes`. `vistoria_links.tecnico_atribuido_id` continua nulo, então mesmo que o técnico abrisse o link público, o nome dele não viria pré-preenchido nem travado.
+`AtribuirInstaladorDialog` só atualiza `instalacoes`. `vistoria_links.tecnico_atribuido_id` continua nulo, e o nome não vem pré-preenchido nem travado na etapa pública.
 
 ### 4) Identidade do executor das fotos não é validada
-- Qualquer pessoa com o token digita qualquer nome em `executor_nome`. Não há vínculo com `profiles`, vendedor ou associado. Auditoria fraca: não dá pra saber que foi o vendedor X quem subiu.
+Qualquer pessoa com o token digita qualquer nome. Sem vínculo com `profiles`/vendedor/associado. Auditoria fraca.
 
 ### 5) Conflito de status quando a etapa de fotos é refeita pelo técnico
-- Se técnico interno faz tudo via app (`ExecutarVistoriaCompleta`), o link continua "pendente". Se o coordenador olhar o `VistoriaLinkBlock` na cotação, vai parecer que ninguém fez nada — UI inconsistente com a realidade.
+Se técnico faz tudo via app legado, link continua "pendente". Coordenador olha `VistoriaLinkBlock` e parece que ninguém fez nada.
 
-### 6) RLS permissiva em `vistoria_links_authenticated_update` e `_insert`
-- `USING (true) WITH CHECK (true)` permite qualquer authenticated alterar/cancelar qualquer link. Risco de manipulação por usuários sem permissão (vendedor externo, agência, etc.).
+### 6) RLS permissiva em `vistoria_links`
+`USING (true) WITH CHECK (true)` permite qualquer authenticated alterar/cancelar qualquer link.
 
-### 7) Bucket de upload `vistoria-prestador-fotos` chamado com `publicSupabase` (anon)
-- Se o bucket não tiver policy permitindo INSERT anônimo, o upload falha silenciosamente. Precisa verificar/garantir policy específica para `vistoria-prestador-fotos` aceitar anon nas pastas `<token>/*`.
+### 7) Bucket `vistoria-prestador-fotos` chamado com `publicSupabase` (anon)
+Se o bucket não tiver policy permitindo INSERT anônimo nas pastas `<token>/*`, o upload falha silenciosamente.
 
 ### 8) Conclusão final não respeita "monitoramento aprova primeiro"
-- `aplicar-conclusao-vistoria` já marca `vistorias.status='aprovada'` automaticamente quando ambas etapas terminam. Isso pula a aprovação manual do monitoramento que o usuário pediu explicitamente ("Somente após as duas etapas... o associado é ativado aqui e no SGA"). A ativação de associado/SGA realmente não é feita aqui — mas marcar a vistoria como `aprovada` direto pode disparar outros gatilhos (laudo PDF, histórico, etc.) sem aval humano.
+`aplicar-conclusao-vistoria` marca `vistorias.status='aprovada'` automaticamente quando ambas etapas terminam. Pula a aprovação manual do monitoramento que o usuário pediu explicitamente.
 
 ### 9) Hodômetro/observações sobrescrevem dados do técnico
-- A etapa de fotos pública atualiza `vistorias.km_atual` e `observacoes`. Se o técnico preencher depois pelo app legado, sobrescreve novamente — ou vice-versa, dependendo da ordem.
+Etapa pública atualiza `vistorias.km_atual` e `observacoes` sem checar se já foram preenchidos.
 
 ### 10) Cancelamento/reagendamento de instalação não invalida o link
-- Se a instalação for cancelada/reagendada, o token continua válido e qualquer um com a URL pode subir fotos para uma vistoria zumbi.
+Token continua válido mesmo após cancelamento da instalação.
+
+### 11) Início de etapa pelo link NÃO espelha "em andamento" para o monitoramento  ⭐ NOVA
+Hoje, quando alguém (técnico, vendedor, associado) abre o link e clica em uma das etapas, **nada** muda em `instalacoes.status` nem em `vistorias.status`. O painel do monitoramento (`VistoriasInstalacoesMon`, mapa, dashboards) continua mostrando a tarefa como `agendada`, mesmo com o técnico já trabalhando. Só vai aparecer "em andamento" se o técnico tiver entrado pelo app interno (`ExecutarVistoriaCompleta` → `iniciarInstalacao` grava `status='em_andamento'` + `iniciada_em`).
 
 ---
 
 # Plano de adaptação
 
 ## A) Geração do link no momento certo
-
-1. **Criar a `instalacoes` automaticamente ao aprovar a documentação** (se ainda não existir) — em `PropostaAnalise.handleConfirmarAprovacao`, depois de `aprovarMutation`, chamar uma rotina que garanta a instalação base (status `pendente_agendamento`) antes de chamar `gerar-link-vistoria-publica`.
-2. Alternativamente: alterar `gerar-link-vistoria-publica` para criar a instalação esqueleto se não existir.
-3. Logar e exibir toast de erro real quando a geração falhar (em vez de silencioso).
+1. Em `PropostaAnalise.handleConfirmarAprovacao`, garantir `instalacoes` esqueleto (status `pendente_agendamento`) antes de chamar `gerar-link-vistoria-publica`. Alternativamente, a própria edge cria a instalação esqueleto se não existir.
+2. Toast de erro real quando a geração falhar (em vez de silencioso).
 
 ## B) Sincronizar atribuição de técnico → link
-
-1. No `useInstalacaoActions.atribuirInstalador`, depois de gravar `instalacoes.instalador_id`, fazer upsert em `vistoria_links.tecnico_atribuido_id`.
-2. Quando trocar o técnico (reatribuir), atualizar também o link.
-3. Quando o link já tem `tecnico_atribuido_id`, a UI pública pré-preenche e trava o campo "nome" da etapa de instalação (já implementado server-side em `concluir-etapa-instalacao-publica`).
+1. `useInstalacaoActions.atribuirInstalador` faz upsert em `vistoria_links.tecnico_atribuido_id` (ou `prestador_atribuido_id`) após gravar a instalação.
+2. Reatribuição substitui o valor.
 
 ## C) Unificar app do técnico com o link público
-
-Esta é a correção mais importante para evitar retrabalho. Duas opções:
-
-- **Opção 1 (recomendada):** `ExecutarVistoriaCompleta` passa a **ler `vistoria_links`** ao abrir. Se a etapa de fotos já estiver `concluida`, esconde os blocos de fotos/vídeo e mostra badge "Fotos enviadas por <fotos_executor_nome> em <data>". Técnico só executa a etapa de instalação (checklist + fotos do rastreador). Ao concluir, em vez de chamar diretamente `useAprovarVeiculoVistoria`, chama `concluir-etapa-instalacao-publica` (que dispara `aplicar-conclusao-vistoria` automaticamente). Se a etapa de fotos ainda não estiver concluída, ao terminar a vistoria completa o app chama `concluir-etapa-fotos-publica` + `concluir-etapa-instalacao-publica` em sequência.
-- **Opção 2 (mais simples):** manter `ExecutarVistoriaCompleta` como está, mas ao concluir, atualizar `vistoria_links` marcando ambas as etapas como `concluida` com `instalacao_executor_tipo='interno'`, para manter consistência de UI. Não evita retrabalho mas resolve o status.
-
-A Opção 1 é a que entrega o requisito original ("não trava o processo, qualquer um faz fotos, técnico faz só a instalação").
+- `ExecutarVistoriaCompleta` lê `vistoria_links`. Se etapa de fotos já estiver `concluida`, esconde blocos de fotos/vídeo e mostra badge "Fotos enviadas por <nome> em <data>". Técnico só faz a etapa de instalação.
+- Conclusão do técnico chama as edges públicas (`concluir-etapa-fotos-publica` e/ou `concluir-etapa-instalacao-publica`) em vez de `useAprovarVeiculoVistoria`. `aplicar-conclusao-vistoria` continua sendo o ponto único de finalização.
+- Vistorias antigas sem `vistoria_links` caem no comportamento legado (compat).
 
 ## D) Aprovação manual do monitoramento antes da conclusão final
-
-- Alterar `aplicar-conclusao-vistoria` para **não** marcar `vistorias.status='aprovada'` automaticamente. Em vez disso, marcar `vistorias.status='em_analise_monitoramento'` (ou flag equivalente) e deixar o monitoramento decidir aprovar/reprovar via tela existente (`VistoriasInstalacoesMon`).
-- A `instalacoes.status` permanece `concluida` (o técnico já terminou fisicamente), mas a aprovação que dispara SGA/ativação fica nas mãos do monitoramento — comportamento já existente, só precisa não ser pulado.
+- `aplicar-conclusao-vistoria` deixa de marcar `vistorias.status='aprovada'`. Marca `vistorias.status='aguardando_aprovacao_monitoramento'` (status já existente no fluxo). `instalacoes.status` vira `concluida` (técnico terminou fisicamente), mas SGA/ativação continua pendente até o monitoramento aprovar via tela existente.
 
 ## E) Identidade e auditoria do executor das fotos
-
-- No link público, quando o usuário abre a etapa de fotos, exigir um dos:
-  - Nome livre + telefone (mínimo) registrado em `vistoria_links.fotos_executor_nome` + nova coluna `fotos_executor_telefone`.
-  - OU, se o link foi aberto a partir de uma sessão autenticada (vendedor logado clicou em "Abrir link"), capturar o `auth.uid()` em nova coluna `fotos_executor_user_id`.
-- Registrar IP/user-agent em `vistoria_links` para auditoria mínima.
+- Etapa de fotos exige nome + telefone do executor. Salvar `fotos_executor_telefone`, `fotos_executor_user_id` (se logado), `fotos_executor_ip`, `fotos_executor_user_agent` em `vistoria_links`.
 
 ## F) Endurecer RLS de `vistoria_links`
-
-- Trocar `USING (true) WITH CHECK (true)` por policies que validem papel:
-  - INSERT/UPDATE só para `monitoramento`, `cadastro`, `diretor` e service role.
-  - SELECT público mantém-se (token é o segredo), mas **filtrado por `status != 'cancelado'`** para evitar acesso a links cancelados.
-- Garantir que o bucket `vistoria-prestador-fotos` tem policy permitindo `INSERT` anônimo apenas em pastas que casam com tokens existentes (regex `^[0-9a-f]{64}/`), ou usar uma edge function `upload-foto-vistoria-publica` que valida o token antes de assinar a URL.
+- INSERT/UPDATE só para `monitoramento`, `cadastro`, `diretor` e service role.
+- SELECT público mantém-se mas filtrado por `status != 'cancelado'`.
+- Bucket `vistoria-prestador-fotos`: policy permitindo INSERT anônimo apenas em `<token>/*` onde token existe e link não está cancelado, OU edge function `upload-foto-vistoria-publica` que valida o token.
 
 ## G) Consistência de dados duplicáveis
-
-- `concluir-etapa-fotos-publica` só sobrescreve `vistorias.km_atual/observacoes` se vierem **não-nulos** e o campo estiver vazio (proteção contra sobrescrever o que o técnico já preencheu). Mesma regra na ordem inversa em `ExecutarVistoriaCompleta`.
+- `concluir-etapa-fotos-publica` só sobrescreve `vistorias.km_atual/observacoes` se vierem não-nulos **e** o campo estiver vazio. Mesma regra na ordem inversa.
 
 ## H) Invalidar link quando a instalação muda de estado
-
-- Trigger `vistoria_links_invalidate_on_instalacao_change`: quando `instalacoes.status` virar `cancelada` ou a instalação for deletada/recriada, marcar `vistoria_links.status='cancelado'`. Quando criar nova instalação para a mesma cotação, gerar novo link.
+- Trigger `instalacoes_cancel_vistoria_link` AFTER UPDATE: se `status` virar `cancelada`, marca `vistoria_links.status='cancelado'`.
+- Nova instalação para a mesma cotação gera novo link.
 
 ## I) Ajustes de UX
+- `VistoriaLinkBlock` mostra timestamp e nome de quem fez cada etapa, botão "Reenviar link por WhatsApp".
+- Geração/regeneração restrita a cadastro/monitoramento/diretor.
+- Banner em `ExecutarVistoriaCompleta`: "Fotos já realizadas por <nome> — você só precisa concluir a instalação".
 
-- `VistoriaLinkBlock` mostrar timestamp e nome de quem fez cada etapa, com botão "Reenviar link por WhatsApp" (template novo).
-- Esconder botão "Gerar link" para quem não tem permissão (apenas cadastro/monitoramento/diretor).
-- Em `ExecutarVistoriaCompleta`, banner no topo: "Etapa de fotos já realizada por <nome> em <data> — você só precisa concluir a instalação do rastreador".
+## J) Espelhar "em andamento" para o monitoramento ao iniciar pelo link  ⭐ NOVA
+
+**Regra:** assim que **alguém** (qualquer executor) clica em "Realizar Fotos e Vídeo" ou "Realizar Instalação do Rastreador" no link público, o sistema marca a tarefa como em andamento para o monitoramento — sem esperar a conclusão.
+
+**Comportamento por etapa:**
+- Ao tocar **"Realizar Fotos e Vídeo"** pela primeira vez:
+  - `vistoria_links.fotos_etapa_status` → `em_andamento` (já existe na tabela)
+  - `vistoria_links.iniciada_em` ← `now()` (se nula)
+  - `vistorias.status` → `em_andamento`, `vistorias.iniciada_em` ← `now()` (se nula)
+  - `instalacoes.status` → `em_andamento`, `instalacoes.iniciada_em` ← `now()` (se nula)
+  - `servicos` (vinculado via `vistoria_origem_id`): status `em_andamento`, `iniciada_em` ← `now()`
+  - `agendamentos_base` vinculado: status `em_andamento` (se este status existir; senão deixar como está)
+- Ao tocar **"Realizar Instalação do Rastreador"** pela primeira vez (e a etapa anterior ainda não estiver `em_andamento` nem `concluida`): mesma propagação.
+- Se já estiver em andamento por causa da outra etapa, apenas idempotente (não regride status nem mexe em `iniciada_em`).
+- Se a tarefa estiver `concluida`/`cancelada` no fluxo legado, **não** regredir — bloqueio defensivo.
+
+**Identidade de quem iniciou:**
+- Se o link tem `tecnico_atribuido_id` e a sessão pública tem o user logado batendo, marcar `vistorias.tecnico_id` (se nulo) e gravar `vistoria_links.iniciada_por_user_id` (nova coluna).
+- Se for execução pública por terceiro (vendedor/associado), gravar nome+telefone do início (mesmas colunas de auditoria do plano E), sem alterar `vistorias.tecnico_id`.
+
+**Implementação:**
+- Nova edge function `iniciar-etapa-vistoria-publica` (anon-callable), recebe `{ token, etapa: 'fotos'|'instalacao', executor_nome?, executor_telefone? }`. Faz toda a propagação acima em uma transação lógica (sequência de updates). Idempotente.
+- Front (`VistoriaPublica.tsx`): no `onClick` de cada botão da home, chamar a edge antes de navegar para a tela da etapa. Não bloquear navegação se a edge falhar (toast de aviso, mas deixa o executor continuar — a conclusão depois reconcilia).
+- Reaproveitar a já existente lógica de "em andamento" do mapa/painel: nenhum código de monitoramento muda, basta os campos `instalacoes.status` e `vistorias.status` virarem `em_andamento` que tudo aparece corretamente (mapa pinta pin azul, dashboards contam, ETA roda).
+
+**Reversão controlada (edge cases):**
+- Se a etapa for abandonada (executor fecha o navegador), o status fica `em_andamento` indefinidamente. Mitigação: job/cron já existente que detecta `em_andamento` há mais de N horas pode emitir alerta para o monitoramento (não criamos nada novo, só documentamos a expectativa).
+- Se o executor cancelar/fechar antes de subir nada, sem problema — a etapa segue `em_andamento` e só vira `concluida` quando ele finalizar de fato.
 
 ---
 
 # Detalhes técnicos
 
 **Banco**
-- Migração: adicionar colunas `fotos_executor_telefone text`, `fotos_executor_user_id uuid`, `fotos_executor_ip text`, `fotos_executor_user_agent text` em `vistoria_links`.
-- Migração: novas RLS policies em `vistoria_links` baseadas em `has_role(auth.uid(), 'monitoramento'|'cadastro'|'diretor')`.
-- Migração: trigger `instalacoes_cancel_vistoria_link` AFTER UPDATE para cancelar link quando instalação for cancelada.
-- Storage: revisar/criar policies em `vistoria-prestador-fotos` para INSERT anon limitado por token.
+- Migração: `vistoria_links` ganha `fotos_executor_telefone text`, `fotos_executor_user_id uuid`, `fotos_executor_ip text`, `fotos_executor_user_agent text`, `iniciada_por_user_id uuid`, `iniciada_por_nome text`.
+- Migração: novas RLS policies em `vistoria_links` baseadas em `has_role`.
+- Migração: trigger `instalacoes_cancel_vistoria_link` (cancela link quando instalação cancela).
+- Storage: revisar policies de `vistoria-prestador-fotos` para INSERT anon limitado por token válido.
 
 **Edge functions**
-- `gerar-link-vistoria-publica`: criar instalação esqueleto se não existir; retornar erro explícito (não silencioso) ao chamador.
-- `concluir-etapa-fotos-publica`: deixar `km_atual/observacoes` opcionais e não-sobrescritivos; aceitar `executor_telefone`, `executor_user_id`, capturar `req.headers` para IP/UA.
-- `aplicar-conclusao-vistoria`: trocar `vistorias.status='aprovada'` por `'em_analise_monitoramento'` (ou equivalente) e remover qualquer disparo que pressuponha aprovação humana.
-- Nova edge `sincronizar-tecnico-vistoria-link`: chamada por `useInstalacaoActions.atribuirInstalador`.
+- `gerar-link-vistoria-publica`: cria instalação esqueleto se faltar; retorna erro explícito.
+- `iniciar-etapa-vistoria-publica` (NOVA): propaga `em_andamento` para link/vistoria/instalação/serviço.
+- `concluir-etapa-fotos-publica`: deixa `km_atual/observacoes` opcionais e não-sobrescritivos; aceita auditoria do executor.
+- `concluir-etapa-instalacao-publica`: já trava nome quando há atribuição interna (mantido).
+- `aplicar-conclusao-vistoria`: troca `vistorias.status='aprovada'` por `'aguardando_aprovacao_monitoramento'`.
+- Nova `sincronizar-tecnico-vistoria-link` chamada em `atribuirInstalador`.
 
 **Frontend**
-- `useInstalacaoActions.atribuirInstalador`: após sucesso, invocar `sincronizar-tecnico-vistoria-link`.
-- `ExecutarVistoriaCompleta`: ler `vistoria_links` por `instalacao_id`; renderizar condicionalmente blocos de fotos vs. instalação; ao finalizar, chamar as edges públicas equivalentes em vez de `useAprovarVeiculoVistoria`.
-- `VistoriaPublica`: bloquear etapa de fotos se o link estiver `cancelado`, mostrar quem já realizou cada etapa.
-- `PropostaAnalise`: garantir instalação esqueleto antes de gerar o link, ou tratar erro real do `gerar-link-vistoria-publica`.
+- `useInstalacaoActions.atribuirInstalador`: chama `sincronizar-tecnico-vistoria-link` no sucesso.
+- `ExecutarVistoriaCompleta`: lê `vistoria_links`, renderiza condicionalmente, finaliza via edges públicas.
+- `VistoriaPublica`: dispara `iniciar-etapa-vistoria-publica` ao clicar em cada etapa; bloqueia se link cancelado.
+- `PropostaAnalise`: garante instalação esqueleto antes do link.
 
 **Compatibilidade**
-- Nenhuma quebra para vistorias antigas (sem `vistoria_links`): `ExecutarVistoriaCompleta` cai no comportamento legado quando o link não existir.
+- Vistorias sem `vistoria_links` mantêm comportamento legado.
 - Aprovação do monitoramento (`useAprovarMonitoramento`) continua sendo o único caminho que dispara SGA/ativação Hinova.
