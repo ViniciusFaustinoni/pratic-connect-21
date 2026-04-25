@@ -206,8 +206,31 @@ serve(async (req) => {
       return json(200, { success: true, reagendados: data?.length ?? 0, proximo_retry_em: proximo });
     }
 
+    // -------- GUARDA GLOBAL: backfill_financeiro_ativo --------
+    // Bloqueia ações que disparam workers se a flag de runtime estiver desativada.
+    // Isso impede que o cron `sga-sync-financeiro-drenagem-5min` reinicie a drenagem
+    // quando o usuário clicou em "Parar Drenagem".
+    if (acao === 'enfileirar' || acao === 'processar' || !acao) {
+      const { data: rt } = await supabase
+        .from('sga_runtime_state')
+        .select('backfill_financeiro_ativo, backfill_cancelar_solicitado')
+        .gte('id', '00000000-0000-0000-0000-000000000000')
+        .limit(1)
+        .maybeSingle();
+      if (rt && (rt.backfill_financeiro_ativo === false || rt.backfill_cancelar_solicitado === true)) {
+        return json(200, {
+          success: true,
+          skipped: true,
+          motivo: 'backfill_pausado',
+          ativo: !!rt.backfill_financeiro_ativo,
+          cancelamento_solicitado: !!rt.backfill_cancelar_solicitado,
+        });
+      }
+    }
+
     // -------- ENFILEIRAR --------
     if (acao === 'enfileirar') {
+
       // Apenas veículos da BASE ANTIGA (origem_cadastro='api_externa').
       // INCLUI veículos SEM codigo_hinova — a sync reconcilia via placa+CPF.
       const pageSize = 1000;
