@@ -595,6 +595,66 @@ export function EtapaDadosPessoaisDocumentos({
             </div>
           </div>
 
+          {/* Fallback manual — Dados Pessoais (oculto por padrão) */}
+          {temDocumentoPessoal && (
+            <div className="px-3">
+              {!mostrarManualPessoal ? (
+                <button
+                  type="button"
+                  onClick={() => setMostrarManualPessoal(true)}
+                  className="text-xs text-muted-foreground hover:text-primary underline-offset-2 hover:underline inline-flex items-center gap-1"
+                >
+                  <Pencil className="h-3 w-3" />
+                  A IA não leu tudo? Preencher dados pessoais manualmente
+                </button>
+              ) : (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                      Preenchimento manual — Dados pessoais
+                    </p>
+                    <button type="button" onClick={() => setMostrarManualPessoal(false)} className="text-xs text-muted-foreground hover:text-foreground">
+                      Recolher
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs">Nome completo</Label>
+                      <Input className="h-9 text-sm" value={dadosExtraidos.nome || ''} onChange={(e) => setCampoManual('nome', e.target.value)} placeholder="Nome conforme documento" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">RG</Label>
+                      <Input className="h-9 text-sm" value={dadosExtraidos.rg || ''} onChange={(e) => setCampoManual('rg', e.target.value)} placeholder="00.000.000-0" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Órgão emissor</Label>
+                      <Input className="h-9 text-sm" value={dadosExtraidos.rg_orgao || ''} onChange={(e) => setCampoManual('rg_orgao', e.target.value.toUpperCase())} placeholder="SSP/UF" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Data de nascimento</Label>
+                      <Input className="h-9 text-sm" type="date" value={dadosExtraidos.data_nascimento || ''} onChange={(e) => setCampoManual('data_nascimento', e.target.value)} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Nº de Registro CNH</Label>
+                      <Input className="h-9 text-sm" value={dadosExtraidos.cnh || ''} onChange={(e) => setCampoManual('cnh', e.target.value.replace(/\D/g, ''))} placeholder="11 dígitos" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Validade CNH</Label>
+                      <Input className="h-9 text-sm" type="date" value={dadosExtraidos.cnh_validade || ''} onChange={(e) => setCampoManual('cnh_validade', e.target.value)} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Categoria CNH</Label>
+                      <Input className="h-9 text-sm" value={dadosExtraidos.cnh_categoria || ''} onChange={(e) => setCampoManual('cnh_categoria', e.target.value.toUpperCase())} placeholder="A, B, AB..." />
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Use apenas se a leitura automática falhou. Confirme cada dado com seu documento original.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Correção de CPF inválido ou ilegível */}
           {(cpfExtraidoInvalido || cpfIlegivel) && (
             <div className="p-3 rounded-lg bg-destructive/5 border border-destructive/20 space-y-2">
