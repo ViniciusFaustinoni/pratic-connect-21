@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Save, Plus, Trash2, MessageSquare, Smartphone, Mail, Phone, Pause, AlertTriangle, XCircle, Info, GripVertical, Play, ExternalLink, Loader2 } from 'lucide-react';
+import { Save, Plus, Trash2, MessageSquare, Smartphone, Mail, Phone, Pause, AlertTriangle, XCircle, Info, GripVertical, Play, ExternalLink, Loader2, Power, PowerOff } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
