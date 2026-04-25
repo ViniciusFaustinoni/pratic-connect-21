@@ -282,8 +282,9 @@ serve(async (req) => {
     }
 
     // -------- PROCESSAR --------
-    const batchSize = Math.min(Math.max(parseInt(body.batch_size ?? '50'), 1), 100);
-    const delayMs = Math.max(parseInt(body.delay_ms ?? '150'), 50);
+    const batchSize = Math.min(Math.max(parseInt(body.batch_size ?? '100'), 1), 200);
+    const delayMs = Math.max(parseInt(body.delay_ms ?? '50'), 0);
+    const concurrency = Math.min(Math.max(parseInt(body.concurrency ?? '8'), 1), 15);
 
     // Marca backfill ativo (TTL 30min) para pausar crons concorrentes
     const ttlExpira = new Date(Date.now() + 30 * 60 * 1000).toISOString();
@@ -343,63 +344,82 @@ serve(async (req) => {
       const isAuthOrHorarioError = (msg: string) =>
         /horari|janela_horaria|restri[çc][ãa]o|usu[áa]rio com restri|login ou senha inv[áa]lid|401|403|n[ãa]o autorizad/i.test(msg);
 
-      for (let i = 0; i < jobs.length; i++) {
-        const job = jobs[i];
+      // Processa um único job (usado em paralelo)
+      const processarJob = async (job: { id: string; veiculo_id: string }) => {
         try {
           const { data, error } = await supabase.functions.invoke('sga-sync-financeiro-veiculo', {
             body: { veiculo_id: job.veiculo_id, job_id: job.id },
           });
           if (error) throw error;
-          if (data?.success) {
-            ok++;
-            authFailStreak = 0;
-          } else if (data?.retry) {
-            retry++;
-          } else {
-            fail++;
-            if (isAuthOrHorarioError(String(data?.error || ''))) authFailStreak++;
-            else authFailStreak = 0;
-          }
+          if (data?.success) return { kind: 'ok' as const };
+          if (data?.retry) return { kind: 'retry' as const };
+          return { kind: 'fail' as const, msg: String(data?.error || ''), authLike: isAuthOrHorarioError(String(data?.error || '')) };
         } catch (e: any) {
-          fail++;
           const msg = String(e?.message || e);
-          if (isAuthOrHorarioError(msg)) {
-            authFailStreak++;
-            // Reagenda o job para a próxima janela em vez de marcar como erro definitivo
+          const authLike = isAuthOrHorarioError(msg);
+          if (authLike) {
             await supabase
               .from('sga_sync_financeiro_jobs')
               .update({ status: 'pendente_retry', proximo_retry_em: proximaJanela, ultimo_erro: msg })
               .eq('id', job.id);
           } else {
-            authFailStreak = 0;
             await supabase
               .from('sga_sync_financeiro_jobs')
               .update({ status: 'erro', concluido_em: new Date().toISOString(), ultimo_erro: msg })
               .eq('id', job.id);
           }
+          return { kind: 'fail' as const, msg, authLike };
+        }
+      };
+
+      // Processa em chunks paralelos (concurrency por chunk)
+      let processados = 0;
+      for (let i = 0; i < jobs.length; i += concurrency) {
+        const chunk = jobs.slice(i, i + concurrency);
+        const results = await Promise.allSettled(chunk.map(processarJob));
+
+        let chunkAuthFails = 0;
+        let chunkNonAuthFails = 0;
+        for (const r of results) {
+          processados++;
+          if (r.status !== 'fulfilled') {
+            fail++;
+            chunkNonAuthFails++;
+            continue;
+          }
+          const v = r.value;
+          if (v.kind === 'ok') ok++;
+          else if (v.kind === 'retry') retry++;
+          else {
+            fail++;
+            if (v.authLike) chunkAuthFails++;
+            else chunkNonAuthFails++;
+          }
         }
 
-        // Heartbeat a cada 5 jobs para manter o "vivo" no status_drenagem
-        if (i % 5 === 0) {
-          await supabase
-            .from('sga_runtime_state')
-            .update({
-              backfill_ultimo_heartbeat: new Date().toISOString(),
-              backfill_processados_total: (i + 1),
-              backfill_ok_total: ok,
-              backfill_fail_total: fail,
-              backfill_retry_total: retry,
-            })
-            .gte('id', '00000000-0000-0000-0000-000000000000');
+        // Atualiza streak: se o chunk inteiro foi falha de auth, soma ao streak; senão zera
+        if (chunkAuthFails > 0 && chunkNonAuthFails === 0) {
+          authFailStreak += chunkAuthFails;
+        } else if (results.some(r => r.status === 'fulfilled' && r.value.kind === 'ok')) {
+          authFailStreak = 0;
         }
 
-        // CIRCUIT BREAKER: 5 falhas de auth/horário seguidas → aborta o batch
-        // (evita queimar CPU/memória em jobs que TODOS vão falhar pelo mesmo motivo,
-        //  prevenindo o RUNTIME_ERROR 503 por exceder limites do edge runtime)
+        // Heartbeat ao final de cada chunk
+        await supabase
+          .from('sga_runtime_state')
+          .update({
+            backfill_ultimo_heartbeat: new Date().toISOString(),
+            backfill_processados_total: processados,
+            backfill_ok_total: ok,
+            backfill_fail_total: fail,
+            backfill_retry_total: retry,
+          })
+          .gte('id', '00000000-0000-0000-0000-000000000000');
+
+        // CIRCUIT BREAKER: 5 falhas auth/horário acumuladas → aborta o batch
         if (authFailStreak >= 5) {
           aborted = true;
-          // Reagenda o restante dos jobs para a próxima janela
-          const restantes = jobs.slice(i + 1).map(j => j.id);
+          const restantes = jobs.slice(i + chunk.length).map(j => j.id);
           if (restantes.length) {
             await supabase
               .from('sga_sync_financeiro_jobs')
@@ -410,10 +430,10 @@ serve(async (req) => {
           break;
         }
 
-        await sleep(delayMs);
+        if (delayMs > 0 && i + concurrency < jobs.length) await sleep(delayMs);
       }
 
-      return json(200, { success: true, processados: jobs.length, ok, fail, retry, aborted, motivo_abort: aborted ? 'janela_horaria_hinova_fechada' : null });
+      return json(200, { success: true, processados, ok, fail, retry, aborted, concurrency, motivo_abort: aborted ? 'janela_horaria_hinova_fechada' : null });
     } finally {
       // Renova TTL para o próximo batch (não desmarca — o TTL de 30min cuida disso se o cron parar)
       await supabase

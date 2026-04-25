@@ -249,9 +249,9 @@ export function SgaBackfillFinanceiroDialog() {
       if (!drenResp.error && drenResp.data?.success) {
         const d = drenResp.data as DrenagemStatus;
         setDrenagem(d);
-        // Mantém histórico de até 6 amostras (~30s) p/ velocidade
+        // Mantém histórico de até 36 amostras (~3min) p/ velocidade mais estável
         drenagemHist.current.push({ t: Date.now(), processados: d.processados_total });
-        if (drenagemHist.current.length > 6) drenagemHist.current.shift();
+        if (drenagemHist.current.length > 36) drenagemHist.current.shift();
       }
     } catch (e: any) {
       console.error(e);
@@ -351,7 +351,7 @@ export function SgaBackfillFinanceiroDialog() {
       let totalRetry = 0;
       for (let i = 0; i < 10; i++) {
         const { data, error } = await supabase.functions.invoke('sga-backfill-financeiro', {
-          body: { acao: 'processar', batch_size: 50, delay_ms: 150 },
+          body: { acao: 'processar', batch_size: 100, delay_ms: 50, concurrency: 10 },
         });
         if (error) throw error;
         if (!data?.processados) break;
