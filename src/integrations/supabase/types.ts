@@ -28858,6 +28858,69 @@ export type Database = {
           },
         ]
       }
+      vistoria_links: {
+        Row: {
+          created_at: string
+          criado_por: string | null
+          fotos_concluida_em: string | null
+          fotos_etapa_status: string
+          fotos_executor_nome: string | null
+          id: string
+          iniciada_em: string | null
+          instalacao_concluida_em: string | null
+          instalacao_etapa_status: string
+          instalacao_executor_nome: string | null
+          instalacao_executor_tipo: string | null
+          instalacao_id: string
+          prestador_atribuido_id: string | null
+          status: string
+          tecnico_atribuido_id: string | null
+          token: string
+          updated_at: string
+          vistoria_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          criado_por?: string | null
+          fotos_concluida_em?: string | null
+          fotos_etapa_status?: string
+          fotos_executor_nome?: string | null
+          id?: string
+          iniciada_em?: string | null
+          instalacao_concluida_em?: string | null
+          instalacao_etapa_status?: string
+          instalacao_executor_nome?: string | null
+          instalacao_executor_tipo?: string | null
+          instalacao_id: string
+          prestador_atribuido_id?: string | null
+          status?: string
+          tecnico_atribuido_id?: string | null
+          token?: string
+          updated_at?: string
+          vistoria_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          criado_por?: string | null
+          fotos_concluida_em?: string | null
+          fotos_etapa_status?: string
+          fotos_executor_nome?: string | null
+          id?: string
+          iniciada_em?: string | null
+          instalacao_concluida_em?: string | null
+          instalacao_etapa_status?: string
+          instalacao_executor_nome?: string | null
+          instalacao_executor_tipo?: string | null
+          instalacao_id?: string
+          prestador_atribuido_id?: string | null
+          status?: string
+          tecnico_atribuido_id?: string | null
+          token?: string
+          updated_at?: string
+          vistoria_id?: string | null
+        }
+        Relationships: []
+      }
       vistoria_prestador_links: {
         Row: {
           aceito_em: string | null
