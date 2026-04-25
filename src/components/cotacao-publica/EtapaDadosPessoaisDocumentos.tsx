@@ -133,6 +133,22 @@ export function EtapaDadosPessoaisDocumentos({
   const [cepManual, setCepManual] = useState('');
   const [buscandoCep, setBuscandoCep] = useState(false);
 
+  // Fallback de preenchimento manual (oculto por padrão)
+  const [mostrarManualPessoal, setMostrarManualPessoal] = useState(false);
+  const [mostrarManualVeiculo, setMostrarManualVeiculo] = useState(false);
+  const [mostrarManualEndereco, setMostrarManualEndereco] = useState(false);
+  const [camposManuais, setCamposManuais] = useState<Set<string>>(new Set());
+
+  const setCampoManual = useCallback((campo: keyof DadosExtraidos, valor: any) => {
+    setDadosExtraidos(prev => ({ ...prev, [campo]: valor }));
+    setCamposManuais(prev => {
+      const next = new Set(prev);
+      if (valor === '' || valor == null) next.delete(campo as string);
+      else next.add(campo as string);
+      return next;
+    });
+  }, []);
+
   // Sincronizar email e telefone quando defaultValues mudar (dados carregados do banco)
   useEffect(() => {
     if (defaultValues?.email && !email) {
