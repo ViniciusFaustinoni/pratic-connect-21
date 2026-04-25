@@ -347,6 +347,8 @@ serve(async (req) => {
     let totalVencido = 0;
     const hoje = new Date().toISOString().slice(0, 10);
 
+    // Monta TODAS as linhas em memória primeiro
+    const rows: Record<string, any>[] = [];
     for (const b of boletos) {
       const nosso = String(b.nosso_numero ?? b.nossoNumero ?? '').trim();
       if (!nosso) continue;
@@ -378,7 +380,7 @@ serve(async (req) => {
         }
       }
 
-      const row = {
+      rows.push({
         associado_id: veiculo.associado_id!,
         veiculo_id: veiculo.id,
         tipo: 'mensalidade',
@@ -388,9 +390,6 @@ serve(async (req) => {
         referencia_ano: refAno,
         valor,
         valor_final: valorFinal,
-        // Hinova devolve `valor_pagamento` (string com vírgula) quando há desconto/abatimento.
-        // Sem desconto, o valor pago coincide com `valor_boleto` (= valorFinal). Mantemos a
-        // ordem de prioridade: primeiro campos explícitos da API, depois `valorFinal` como fallback.
         valor_pago: status === 'pago'
           ? toNumber(b.valor_pagamento ?? b.valor_pago_boleto ?? b.valor_recebido ?? b.valor_pago ?? valorFinal)
           : null,
@@ -412,22 +411,34 @@ serve(async (req) => {
         tipo_boleto_hinova: b.tipo_boleto || null,
         dados_brutos_sga: b,
         sincronizado_sga_em: new Date().toISOString(),
-      } as Record<string, any>;
-
-      const { error: upErr } = await supabase
-        .from('cobrancas')
-        .upsert(row, { onConflict: 'nosso_numero' });
-
-      if (upErr) {
-        console.error('[SGA Sync Veículo] upsert falhou', nosso, upErr.message);
-        continue;
-      }
-      importados++;
+      });
 
       if (status === 'aguardando_pagamento' || status === 'vencido') {
         totalAberto += valorFinal || valor;
         if (status === 'vencido' || (dataVencimento && dataVencimento < hoje)) {
           totalVencido += valorFinal || valor;
+        }
+      }
+    }
+
+    // Upsert em UM ÚNICO round-trip (em vez de N round-trips). Em chunks de 500
+    // para nunca estourar limite de payload do PostgREST.
+    if (rows.length > 0) {
+      const CHUNK_UPSERT = 500;
+      for (let i = 0; i < rows.length; i += CHUNK_UPSERT) {
+        const slice = rows.slice(i, i + CHUNK_UPSERT);
+        const { error: upErr } = await supabase
+          .from('cobrancas')
+          .upsert(slice, { onConflict: 'nosso_numero' });
+        if (upErr) {
+          console.error('[SGA Sync Veículo] upsert batch falhou', upErr.message);
+          // Fallback: tenta linha a linha para não perder o lote inteiro
+          for (const row of slice) {
+            const { error } = await supabase.from('cobrancas').upsert(row, { onConflict: 'nosso_numero' });
+            if (!error) importados++;
+          }
+        } else {
+          importados += slice.length;
         }
       }
     }
