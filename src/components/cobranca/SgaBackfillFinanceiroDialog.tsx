@@ -496,7 +496,14 @@ export function SgaBackfillFinanceiroDialog() {
               </div>
               <div className="rounded-md border bg-emerald-50 p-3">
                 <p className="text-xs text-emerald-800">Cobranças SGA importadas</p>
-                <p className="text-2xl font-bold text-emerald-700">{status?.cobrancas_sga ?? '—'}</p>
+                <p className="text-2xl font-bold text-emerald-700">
+                  {status?.cobrancas_sga != null ? status.cobrancas_sga.toLocaleString('pt-BR') : '—'}
+                </p>
+                {throughputReal && throughputReal.ult1h > 0 && (
+                  <p className="text-[10px] text-emerald-700/80 mt-0.5">
+                    +{throughputReal.ult1h.toLocaleString('pt-BR')} na última hora
+                  </p>
+                )}
               </div>
             </div>
 
