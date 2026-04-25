@@ -143,6 +143,69 @@ serve(async (req) => {
       console.error('[processar-vistoria] Erro ao encerrar tarefas vinculadas (não bloqueante):', encErr);
     }
 
+    // 3.2 Resolver instalacao_id pela cadeia: vistoria.instalacao_id → agendamentos_base.instalacao_id → instalacoes.cotacao_id
+    // e encerrar a instalação + serviço de instalação correspondentes (espelho do trigger trg_sync_servico_on_vistoria_decisao,
+    // mas executado aqui para retorno consistente ao frontend).
+    try {
+      const novoStatusInstalacao = decisao === 'reprovada' ? 'cancelada' : 'concluida';
+      const novoStatusServ = decisao === 'reprovada' ? 'cancelada' : 'concluida';
+      const agora2 = new Date().toISOString();
+
+      let instalacaoVinculadaId: string | null = (vistoria as any).instalacao_id ?? null;
+
+      if (!instalacaoVinculadaId) {
+        const { data: abLink } = await supabase
+          .from('agendamentos_base')
+          .select('instalacao_id')
+          .eq('vistoria_id', vistoria_id)
+          .not('instalacao_id', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        instalacaoVinculadaId = abLink?.instalacao_id ?? null;
+      }
+
+      if (!instalacaoVinculadaId && (vistoria as any).cotacao_id) {
+        const { data: instByCot } = await supabase
+          .from('instalacoes')
+          .select('id')
+          .eq('cotacao_id', (vistoria as any).cotacao_id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        instalacaoVinculadaId = instByCot?.id ?? null;
+      }
+
+      if (instalacaoVinculadaId) {
+        console.log(`[processar-vistoria] Instalação vinculada resolvida: ${instalacaoVinculadaId} — encerrando como ${novoStatusInstalacao}`);
+
+        const { error: instErr } = await supabase
+          .from('instalacoes')
+          .update({ status: novoStatusInstalacao, concluida_em: agora2, updated_at: agora2 })
+          .eq('id', instalacaoVinculadaId)
+          .not('status', 'in', '(concluida,cancelada)');
+        if (instErr) console.error('[processar-vistoria] Erro ao encerrar instalação:', instErr);
+
+        const { data: servInstFech, error: servInstErr } = await supabase
+          .from('servicos')
+          .update({ status: novoStatusServ, concluida_em: agora2, updated_at: agora2 })
+          .eq('instalacao_origem_id', instalacaoVinculadaId)
+          .in('status', ['agendada','em_rota','em_andamento','pendente','reagendada','em_analise'])
+          .select('id');
+        if (servInstErr) console.error('[processar-vistoria] Erro ao encerrar serviços de instalação:', servInstErr);
+        else console.log(`[processar-vistoria] ${servInstFech?.length ?? 0} serviço(s) de instalação encerrado(s)`);
+
+        // Backfill rastreabilidade
+        if (!(vistoria as any).instalacao_id) {
+          await supabase.from('vistorias').update({ instalacao_id: instalacaoVinculadaId }).eq('id', vistoria_id);
+        }
+      } else {
+        console.log('[processar-vistoria] Nenhuma instalação vinculada à vistoria — nada a encerrar nesse passo.');
+      }
+    } catch (instCascadeErr) {
+      console.error('[processar-vistoria] Erro ao encerrar instalação vinculada (não bloqueante):', instCascadeErr);
+    }
+
     let instalacao_id: string | null = null;
     let nova_vistoria_id: string | null = null;
 
