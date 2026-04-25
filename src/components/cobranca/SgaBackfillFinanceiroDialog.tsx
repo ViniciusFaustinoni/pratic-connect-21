@@ -603,11 +603,25 @@ export function SgaBackfillFinanceiroDialog() {
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                     <div className="rounded border bg-card p-2">
-                      <p className="text-muted-foreground">Processados (sessão)</p>
-                      <p className="text-base font-semibold">{drenagem?.processados_total ?? 0}</p>
+                      <p className="text-muted-foreground">Última hora</p>
+                      <p className="text-base font-semibold text-emerald-700">
+                        {throughputReal ? `+${throughputReal.ult1h.toLocaleString('pt-BR')}` : '—'}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        cobranças importadas
+                      </p>
                     </div>
                     <div className="rounded border bg-card p-2">
-                      <p className="text-muted-foreground">OK / Retry / Falhas</p>
+                      <p className="text-muted-foreground">Últimos 5min</p>
+                      <p className="text-base font-semibold">
+                        {throughputReal ? `+${throughputReal.ult5min.toLocaleString('pt-BR')}` : '—'}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {cobrancasPorMinReal != null ? `${cobrancasPorMinReal}/min` : '—'}
+                      </p>
+                    </div>
+                    <div className="rounded border bg-card p-2">
+                      <p className="text-muted-foreground">Sessão atual (lote)</p>
                       <p className="text-base font-semibold">
                         <span className="text-emerald-700">{drenagem?.ok_total ?? 0}</span>
                         {' / '}
@@ -615,12 +629,7 @@ export function SgaBackfillFinanceiroDialog() {
                         {' / '}
                         <span className="text-red-700">{drenagem?.fail_total ?? 0}</span>
                       </p>
-                    </div>
-                    <div className="rounded border bg-card p-2">
-                      <p className="text-muted-foreground">Velocidade</p>
-                      <p className="text-base font-semibold">
-                        {velocidadeJobsMin != null ? `${velocidadeJobsMin} jobs/min` : '—'}
-                      </p>
+                      <p className="text-[10px] text-muted-foreground">OK / Retry / Falha</p>
                     </div>
                     <div className="rounded border bg-card p-2 flex flex-col">
                       <p className="text-muted-foreground flex items-center gap-1">
@@ -628,6 +637,9 @@ export function SgaBackfillFinanceiroDialog() {
                       </p>
                       <p className="text-base font-semibold">
                         {etaMin != null ? formatEta(etaMin) : '—'}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {velocidadeEfetiva ? `~${velocidadeEfetiva}/min` : 'aguardando ritmo'}
                       </p>
                     </div>
                   </div>
