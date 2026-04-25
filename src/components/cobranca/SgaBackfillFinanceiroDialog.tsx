@@ -244,18 +244,30 @@ export function SgaBackfillFinanceiroDialog() {
 
   const fetchStatus = async () => {
     try {
-      const [statusResp, drenResp] = await Promise.all([
+      const cincoMinAtras = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const umaHoraAtras = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const [statusResp, drenResp, ult5Resp, ult1hResp, ultimaResp] = await Promise.all([
         supabase.functions.invoke('sga-backfill-financeiro', { body: { acao: 'status' } }),
         supabase.functions.invoke('sga-backfill-financeiro', { body: { acao: 'status_drenagem' } }),
+        supabase.from('cobrancas').select('id', { count: 'exact', head: true })
+          .eq('origem', 'sga_hinova').gte('created_at', cincoMinAtras),
+        supabase.from('cobrancas').select('id', { count: 'exact', head: true })
+          .eq('origem', 'sga_hinova').gte('created_at', umaHoraAtras),
+        supabase.from('cobrancas').select('created_at')
+          .eq('origem', 'sga_hinova').order('created_at', { ascending: false }).limit(1).maybeSingle(),
       ]);
       if (!statusResp.error && statusResp.data?.success) setStatus(statusResp.data as StatusResp);
       if (!drenResp.error && drenResp.data?.success) {
         const d = drenResp.data as DrenagemStatus;
         setDrenagem(d);
-        // Mantém histórico de até 36 amostras (~3min) p/ velocidade mais estável
         drenagemHist.current.push({ t: Date.now(), processados: d.processados_total });
         if (drenagemHist.current.length > 36) drenagemHist.current.shift();
       }
+      setThroughputReal({
+        ult5min: ult5Resp.count ?? 0,
+        ult1h: ult1hResp.count ?? 0,
+        ultima: (ultimaResp.data as any)?.created_at ?? null,
+      });
     } catch (e: any) {
       console.error(e);
     }
