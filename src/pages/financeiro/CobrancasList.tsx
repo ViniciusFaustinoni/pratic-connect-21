@@ -20,6 +20,7 @@ import { NovaCobrancaModal } from '@/components/financeiro/NovaCobrancaModal';
 import { RegistrarPagamentoModal } from '@/components/financeiro/RegistrarPagamentoModal';
 import { BatchActionsBar } from '@/components/financeiro/BatchActionsBar';
 import { SgaBackfillFinanceiroDialog } from '@/components/cobranca/SgaBackfillFinanceiroDialog';
+import { CobrancaDetalheModal } from '@/components/cobranca/CobrancaDetalheModal';
 import { usePermissions } from '@/hooks/usePermissions';
 
 type StatusCanonico = 'pendente' | 'pago' | 'vencido' | 'cancelado';
@@ -166,6 +167,7 @@ export default function CobrancasList() {
   const [cobrancaSelecionada, setCobrancaSelecionada] = useState<any>(null);
   const [enviandoLote, setEnviandoLote] = useState(false);
   const [enviandoPDF, setEnviandoPDF] = useState<string | null>(null);
+  const [detalheId, setDetalheId] = useState<string | null>(null);
 
   const dataInicio = useMemo(
     () => format(startOfMonth(new Date(filters.ano, filters.mes - 1, 1)), 'yyyy-MM-dd'),
@@ -792,7 +794,7 @@ export default function CobrancasList() {
                           <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => navigate(`/financeiro/cobrancas/${cobranca.id}`)}>
+                          <DropdownMenuItem onClick={() => setDetalheId(cobranca.id)}>
                             <Eye className="mr-2 h-4 w-4" />Ver detalhes
                           </DropdownMenuItem>
                           {!['pago', 'cancelado'].includes(cobranca.status) && (
@@ -867,6 +869,11 @@ export default function CobrancasList() {
         open={modalPagamento}
         onClose={() => { setModalPagamento(false); setCobrancaSelecionada(null); }}
         cobranca={cobrancaSelecionada}
+      />
+      <CobrancaDetalheModal
+        id={detalheId}
+        open={!!detalheId}
+        onOpenChange={(o) => !o && setDetalheId(null)}
       />
 
       <BatchActionsBar

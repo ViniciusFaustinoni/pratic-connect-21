@@ -68,8 +68,16 @@ const formatLinhaDigitavel = (linha: string | null | undefined) => {
   return clean.replace(/(.{5})/g, '$1 ').trim();
 };
 
-export default function CobrancaDetalhe() {
-  const { id } = useParams<{ id: string }>();
+interface CobrancaDetalheProps {
+  /** Quando informado (modo modal), tem prioridade sobre o :id da rota */
+  cobrancaId?: string;
+  /** Quando true, oculta o botão "Voltar" (uso em modal) */
+  embedded?: boolean;
+}
+
+export default function CobrancaDetalhe({ cobrancaId, embedded }: CobrancaDetalheProps = {}) {
+  const params = useParams<{ id: string }>();
+  const id = cobrancaId ?? params.id;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { cancelarCobranca, gerarSegundaVia } = useAsaas();
@@ -297,10 +305,12 @@ export default function CobrancaDetalhe() {
   if (error || !cobranca) {
     return (
       <div className="space-y-6">
-        <Button variant="ghost" onClick={() => navigate('/financeiro/cobrancas')}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Voltar
-        </Button>
+        {!embedded && (
+          <Button variant="ghost" onClick={() => navigate('/financeiro/cobrancas')}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Voltar
+          </Button>
+        )}
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Erro</AlertTitle>
@@ -328,9 +338,11 @@ export default function CobrancaDetalhe() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/financeiro/cobrancas')}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
+          {!embedded && (
+            <Button variant="ghost" size="icon" onClick={() => navigate('/financeiro/cobrancas')}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          )}
           <div>
             <h1 className="text-2xl font-bold">
               Cobrança #{cobranca.id.slice(0, 8)}
