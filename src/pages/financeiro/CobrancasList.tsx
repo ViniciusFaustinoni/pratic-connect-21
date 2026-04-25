@@ -134,7 +134,7 @@ interface CobrancaUnificada {
   id: string;
   origem: 'asaas' | 'sga_hinova';
   associado_id: string | null;
-  associado: { id: string; nome: string; cpf: string; telefone?: string; whatsapp?: string } | null;
+  associado: { id: string; nome: string; cpf: string; telefone?: string; whatsapp?: string; email?: string } | null;
   tipo: string;
   status_raw: string;
   status: StatusCanonico;
@@ -145,6 +145,8 @@ interface CobrancaUnificada {
   boleto_url: string | null;
   pix_copia_cola: string | null;
   asaas_id: string | null;
+  linha_digitavel: string | null;
+  veiculo_id: string | null;
 }
 
 export default function CobrancasList() {
@@ -283,8 +285,9 @@ export default function CobrancasList() {
             .from('asaas_cobrancas')
             .select(`
               id, asaas_id, tipo, status, valor, pagamento_valor, data_vencimento,
-              competencia, boleto_url, pix_copia_cola, associado_id,
-              associado:associados(id, nome, cpf, telefone, whatsapp)
+              competencia, boleto_url, pix_copia_cola, associado_id, veiculo_id,
+              linha_digitavel,
+              associado:associados(id, nome, cpf, telefone, whatsapp, email)
             `)
             .gte('data_vencimento', dataInicio)
             .lte('data_vencimento', dataFim)
@@ -312,6 +315,8 @@ export default function CobrancasList() {
             boleto_url: c.boleto_url,
             pix_copia_cola: c.pix_copia_cola,
             asaas_id: c.asaas_id,
+            linha_digitavel: c.linha_digitavel || null,
+            veiculo_id: c.veiculo_id || null,
           }));
         } else {
           let q = supabase
@@ -319,8 +324,8 @@ export default function CobrancasList() {
             .select(`
               id, tipo, status, valor, valor_pago, data_vencimento,
               referencia_mes, referencia_ano, boleto_url, pix_copia_cola,
-              associado_id, origem,
-              associado:associados(id, nome, cpf, telefone, whatsapp)
+              associado_id, origem, veiculo_id, linha_digitavel,
+              associado:associados(id, nome, cpf, telefone, whatsapp, email)
             `)
             .eq('origem', 'sga_hinova')
             .gte('data_vencimento', dataInicio)
@@ -351,6 +356,8 @@ export default function CobrancasList() {
             boleto_url: c.boleto_url,
             pix_copia_cola: c.pix_copia_cola,
             asaas_id: null,
+            linha_digitavel: c.linha_digitavel || null,
+            veiculo_id: c.veiculo_id || null,
           }));
         }
       });
@@ -481,40 +488,106 @@ export default function CobrancasList() {
     }
   };
 
-  const handleEnviarBoletosLote = async () => {
+  const formatBRLLote = (v: number) =>
+    'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const formatDataLote = (iso?: string | null) =>
+    iso ? format(parseISO(iso), 'dd/MM/yyyy', { locale: ptBR }) : '—';
+
+  // ============================================================
+  // ENVIO EM MASSA — WhatsApp template Meta `emissao_boleto_gerado_v2`
+  // (já APROVADO pela Meta, contém a linha digitável como variável {{6}})
+  // ============================================================
+  const handleEnviarWhatsAppLote = async () => {
     const selecionadas = cobrancasVisiveis.filter((c) => selectedIds.has(c.id));
-    const comBoleto = selecionadas.filter((c) => c.boleto_url && (c.associado?.whatsapp || c.associado?.telefone));
-    if (comBoleto.length === 0) { toast.error('Nenhuma cobrança com boleto e telefone disponíveis'); return; }
+    if (selecionadas.length === 0) return;
+
+    if (selecionadas.length > 100 && !confirm(
+      `Você está prestes a enviar ${selecionadas.length} mensagens via WhatsApp.\nDeseja continuar?`
+    )) return;
+
     setEnviandoLote(true);
-    let enviados = 0; let erros = 0;
-    for (const cobranca of comBoleto) {
+    const ids = selecionadas.map((c) => c.id);
+
+    // Buscar veículos para enriquecer dados (modelo/placa) sob demanda
+    const veiculoIds = Array.from(new Set(selecionadas.map((c) => c.veiculo_id).filter(Boolean) as string[]));
+    let veiculoMap = new Map<string, { modelo?: string; placa?: string }>();
+    if (veiculoIds.length > 0) {
+      const { data: vs } = await supabase
+        .from('veiculos')
+        .select('id, modelo, placa')
+        .in('id', veiculoIds);
+      veiculoMap = new Map((vs || []).map((v: any) => [v.id, { modelo: v.modelo, placa: v.placa }]));
+    }
+
+    let enviados = 0;
+    let semTelefone = 0;
+    let semLinhaDigitavel = 0;
+    let falhas = 0;
+    const errosDetalhe: string[] = [];
+
+    const toastId = toast.loading(`Enviando WhatsApp 0/${selecionadas.length}...`);
+
+    for (let i = 0; i < selecionadas.length; i++) {
+      const cobranca = selecionadas[i];
+      const telefone = cobranca.associado?.whatsapp || cobranca.associado?.telefone;
+      if (!telefone) { semTelefone++; continue; }
+      if (!cobranca.linha_digitavel) { semLinhaDigitavel++; continue; }
+
+      const veic = cobranca.veiculo_id ? veiculoMap.get(cobranca.veiculo_id) : null;
+      const params = [
+        cobranca.associado?.nome || 'Associado',
+        veic?.modelo || '—',
+        veic?.placa || '—',
+        formatDataLote(cobranca.data_vencimento),
+        formatBRLLote(cobranca.valor),
+        cobranca.linha_digitavel,
+      ];
+
       try {
-        const telefone = cobranca.associado!.whatsapp || cobranca.associado!.telefone!;
-        const valor = formatCurrency(cobranca.valor);
-        const vencimento = cobranca.data_vencimento
-          ? format(parseISO(cobranca.data_vencimento), 'dd/MM/yyyy', { locale: ptBR })
-          : '';
-        await supabase.functions.invoke('whatsapp-send-media', {
+        const resp = await supabase.functions.invoke('whatsapp-send-text', {
           body: {
             telefone: telefone.replace(/\D/g, ''),
-            media_url: cobranca.boleto_url,
-            media_type: 'document',
-            mimetype: 'application/pdf',
-            filename: `boleto_${cobranca.asaas_id || cobranca.id}.pdf`,
-            caption: `📄 Boleto PRATICCAR\n💰 Valor: ${valor}\n📅 Vencimento: ${vencimento}`,
-            referencia_tipo: 'cobranca',
-            referencia_id: cobranca.id,
+            mensagem: '',
+            template_name: 'emissao_boleto_gerado_v2',
+            template_params: params,
           },
         });
+        if (resp.error) throw new Error(resp.error.message || String(resp.error));
+        const data: any = resp.data || {};
+        if (data.success === false) throw new Error(data.error || 'Falha desconhecida');
         enviados++;
-        await new Promise((r) => setTimeout(r, 1000));
-      } catch { erros++; }
+      } catch (err: any) {
+        falhas++;
+        if (errosDetalhe.length < 5) {
+          errosDetalhe.push(`${cobranca.associado?.nome || cobranca.id}: ${err.message}`);
+        }
+      }
+
+      toast.loading(`Enviando WhatsApp ${i + 1}/${selecionadas.length}...`, { id: toastId });
+      await new Promise((r) => setTimeout(r, 800));
     }
+
     setEnviandoLote(false);
-    toast.success(`${enviados} boleto(s) enviado(s)${erros > 0 ? `, ${erros} erro(s)` : ''}`);
+    const resumoParts = [`${enviados} enviada(s)`];
+    if (semTelefone) resumoParts.push(`${semTelefone} sem telefone`);
+    if (semLinhaDigitavel) resumoParts.push(`${semLinhaDigitavel} sem linha digitável`);
+    if (falhas) resumoParts.push(`${falhas} falha(s)`);
+    const resumo = resumoParts.join(' • ');
+
+    if (falhas > 0 || semTelefone > 0 || semLinhaDigitavel > 0) {
+      toast.warning(`WhatsApp: ${resumo}`, {
+        id: toastId,
+        description: errosDetalhe.length > 0 ? errosDetalhe.join('\n') : undefined,
+        duration: 10000,
+      });
+    } else {
+      toast.success(`WhatsApp: ${resumo}`, { id: toastId });
+    }
+    void ids;
     clearSelection();
   };
 
+  // Ação individual no menu (continua usando wa.me direto)
   const handleEnviarWhatsApp = (cobranca: CobrancaUnificada) => {
     const telefone = cobranca.associado?.whatsapp || cobranca.associado?.telefone;
     if (!telefone) { toast.error('Associado sem telefone cadastrado'); return; }
@@ -527,16 +600,93 @@ export default function CobrancasList() {
     mensagem += `Segue sua cobrança:\n`;
     mensagem += `💰 Valor: ${valor}\n`;
     mensagem += `📅 Vencimento: ${vencimento}\n`;
+    if (cobranca.linha_digitavel) mensagem += `\n💳 Linha digitável:\n${cobranca.linha_digitavel}\n`;
     if (cobranca.boleto_url) mensagem += `\n📄 Boleto: ${cobranca.boleto_url}\n`;
     if (cobranca.pix_copia_cola) mensagem += `\n📱 PIX Copia e Cola:\n${cobranca.pix_copia_cola}\n`;
     window.open(`https://wa.me/55${telefoneFormatado}?text=${encodeURIComponent(mensagem)}`, '_blank');
   };
 
-  const handleEnviarWhatsAppLote = () => {
-    cobrancasVisiveis.filter((c) => selectedIds.has(c.id)).forEach(handleEnviarWhatsApp);
+  // ============================================================
+  // ENVIO EM MASSA — E-mail (template `boleto-vencendo` com linha digitável)
+  // ============================================================
+  const handleEnviarEmailLote = async () => {
+    const selecionadas = cobrancasVisiveis.filter((c) => selectedIds.has(c.id));
+    if (selecionadas.length === 0) return;
+
+    if (selecionadas.length > 100 && !confirm(
+      `Você está prestes a enviar ${selecionadas.length} e-mails.\nDeseja continuar?`
+    )) return;
+
+    setEnviandoLote(true);
+
+    let enviados = 0;
+    let semEmail = 0;
+    let semLinhaDigitavel = 0;
+    let falhas = 0;
+    const errosDetalhe: string[] = [];
+
+    const hoje = new Date();
+    const toastId = toast.loading(`Enviando e-mail 0/${selecionadas.length}...`);
+
+    for (let i = 0; i < selecionadas.length; i++) {
+      const cobranca = selecionadas[i];
+      const email = cobranca.associado?.email;
+      if (!email) { semEmail++; continue; }
+      if (!cobranca.linha_digitavel) { semLinhaDigitavel++; continue; }
+
+      const venc = cobranca.data_vencimento ? parseISO(cobranca.data_vencimento) : null;
+      const diasRestantes = venc
+        ? Math.round((venc.getTime() - hoje.getTime()) / 86400000)
+        : 0;
+
+      try {
+        const resp = await supabase.functions.invoke('send-email', {
+          body: {
+            template: 'boleto-vencendo',
+            to: email,
+            data: {
+              nome: cobranca.associado?.nome || 'Associado',
+              valor: formatBRLLote(cobranca.valor).replace('R$ ', ''),
+              vencimento: formatDataLote(cobranca.data_vencimento),
+              competencia: cobranca.competencia || '—',
+              boletoUrl: cobranca.boleto_url || '',
+              linhaDigitavel: cobranca.linha_digitavel,
+              diasRestantes: diasRestantes >= 0 ? diasRestantes : Math.abs(diasRestantes),
+              vencido: diasRestantes < 0,
+            },
+          },
+        });
+        if (resp.error) throw new Error(resp.error.message || String(resp.error));
+        enviados++;
+      } catch (err: any) {
+        falhas++;
+        if (errosDetalhe.length < 5) {
+          errosDetalhe.push(`${cobranca.associado?.nome || cobranca.id}: ${err.message}`);
+        }
+      }
+
+      toast.loading(`Enviando e-mail ${i + 1}/${selecionadas.length}...`, { id: toastId });
+      await new Promise((r) => setTimeout(r, 500));
+    }
+
+    setEnviandoLote(false);
+    const resumoParts = [`${enviados} enviado(s)`];
+    if (semEmail) resumoParts.push(`${semEmail} sem e-mail`);
+    if (semLinhaDigitavel) resumoParts.push(`${semLinhaDigitavel} sem linha digitável`);
+    if (falhas) resumoParts.push(`${falhas} falha(s)`);
+    const resumo = resumoParts.join(' • ');
+
+    if (falhas > 0 || semEmail > 0 || semLinhaDigitavel > 0) {
+      toast.warning(`E-mail: ${resumo}`, {
+        id: toastId,
+        description: errosDetalhe.length > 0 ? errosDetalhe.join('\n') : undefined,
+        duration: 10000,
+      });
+    } else {
+      toast.success(`E-mail: ${resumo}`, { id: toastId });
+    }
     clearSelection();
   };
-  const handleEnviarEmailLote = () => { toast.info(`Enviando e-mail para ${selectedIds.size} cobrança(s)...`); clearSelection(); };
   const handleReemitirLote = () => { toast.info(`Reemitindo ${selectedIds.size} cobrança(s)...`); clearSelection(); };
 
   const clearFilters = () => {
@@ -892,13 +1042,17 @@ export default function CobrancasList() {
         onClear={clearSelection}
         actions={[
           {
-            label: enviandoLote ? 'Enviando...' : 'Enviar Boletos PDF',
-            icon: enviandoLote ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />,
-            onClick: handleEnviarBoletosLote,
+            label: enviandoLote ? 'Enviando...' : 'WhatsApp',
+            icon: enviandoLote ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />,
+            onClick: handleEnviarWhatsAppLote,
             disabled: enviandoLote,
           },
-          { label: 'WhatsApp', icon: <MessageSquare className="h-4 w-4" />, onClick: handleEnviarWhatsAppLote },
-          { label: 'E-mail', icon: <Mail className="h-4 w-4" />, onClick: handleEnviarEmailLote },
+          {
+            label: enviandoLote ? 'Enviando...' : 'E-mail',
+            icon: enviandoLote ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />,
+            onClick: handleEnviarEmailLote,
+            disabled: enviandoLote,
+          },
           { label: 'Reemitir', icon: <RefreshCw className="h-4 w-4" />, onClick: handleReemitirLote },
         ]}
       />
