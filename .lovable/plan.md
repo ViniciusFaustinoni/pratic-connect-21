@@ -1,106 +1,90 @@
 
 ## Diagnóstico
 
-Os valores "Pendente" exibidos na lista (R$ 56.140, R$ 171.594, R$ 84.040 etc.) **não são reais**. Auditoria no banco:
+### 1) Cobranças adicionais com bug x100 (sim, há mais)
 
-- **19.083 cobranças** importadas do SGA Hinova têm `valor` exatamente **100x maior** que o valor real do boleto.
-- **6.543 cobranças** têm `valor_pago` também 100x maior.
-- Apenas **4 registros** estão corretos.
-- Soma atual no banco: **R$ 479.789.737** — soma real esperada: **~R$ 4,79 milhões**.
+Após a correção anterior, **933 novas cobranças** foram importadas pela Hinova com `valor` 100x maior, e **319 com `valor_pago` 100x maior**. Total atual: 20.590 boletos Hinova; 933 ainda corrompidos.
 
-Exemplo confirmado (ALDA DE FATIMA — boleto `nosso_numero 781775`):
-- `dados_brutos_sga.valor_boleto`: `"561.40"` (formato Hinova com ponto decimal)
-- `cobrancas.valor` gravado: `56140.00` ❌
-- Linha digitável confirma: `…14270000056140` → R$ 561,40
-- Soma dos produtos dos 2 veículos: 280,70 + 280,70 = R$ 561,40 ✅
+Timeline (UTC):
+| Janela | Total importadas | Corretas | Bug x100 |
+|---|---|---|---|
+| 10:19–10:51 | ~12.000 | todas | 0 |
+| 10:55–10:57 | 910 | 0 | **todas** |
+| 10:58 | 247 | 224 | 23 |
+| 10:59+ | ainda rodando | mistura | mistura |
 
-### Causa raiz
+### 2) "Parar Drenagem" não funcionou
 
-`supabase/functions/_shared/hinova-client.ts` linha 624 — função `toNumber`:
+- Existe um **cron `sga-sync-financeiro-drenagem-5min`** rodando a cada 5 minutos. Esse cron dispara `sga-backfill-financeiro` independentemente do botão "Parar Drenagem".
+- O botão grava `backfill_cancelar_solicitado = true` em `sga_runtime_state`, mas a checagem é apenas dentro do lote em execução; o cron seguinte simplesmente reinicia o backfill (`backfill_cancelar_solicitado` voltou a `false` no último run que iniciou às 10:59:28).
+- Por isso a drenagem "continuou" mesmo após você clicar em parar.
 
-```ts
-const s = String(v).replace(/\./g, '').replace(',', '.').replace(/[^\d.\-]/g, '');
-```
+### 3) Por que ainda houve cobranças x100 após o fix do parser?
 
-Essa regra assume formato BR (`"1.234,56"`), mas a Hinova retorna alguns campos no formato **decimal com ponto** (`"561.40"`). A primeira substituição apaga o ponto decimal e o número final fica multiplicado por 100.
+O parser em `_shared/hinova-client.ts` foi corrigido e a função `sga-testar-boletos-veiculo` já retorna valores certos (`559.40` etc.). Mas a Edge Function `sga-sync-financeiro-veiculo` que estava com **instâncias antigas em cache** continuou gravando errado.
 
-Campos afetados conhecidos:
-- `valor_boleto` (vem como `"561.40"`)
-- Eventualmente outros campos numéricos do payload Hinova que usem ponto como separador decimal.
+Já forcei o redeploy de:
+- `sga-sync-financeiro-veiculo`
+- `sga-backfill-financeiro`
+- `sga-backfill-massa-orquestrador`
+- `sga-testar-boletos-veiculo`
+- `cron-sga-sync-financeiro-diario`
 
-Não afeta `valor_pagamento` quando ele já vem em formato BR (`"0,00"`), por isso só ~6.5k pagamentos foram corrompidos (apenas os que vinham com ponto).
+A partir desse redeploy, as próximas execuções devem usar o parser correto. Mas precisamos parar a drenagem antes de ter certeza, e re-corrigir os 933 + 319 já gravados errados.
 
 ---
 
 ## Plano de correção
 
-### 1) Corrigir o parser `toNumber` em `_shared/hinova-client.ts`
+### Passo 1 — Parar a drenagem de verdade
 
-Substituir a lógica por uma que detecte automaticamente o separador decimal:
+Migration que:
+- Desativa o cron `sga-sync-financeiro-drenagem-5min` (`UPDATE cron.job SET active = false WHERE jobname = ...`).
+- Marca `backfill_cancelar_solicitado = true` e `backfill_financeiro_ativo = false` no `sga_runtime_state`.
+- Adiciona uma checagem em `sga-backfill-financeiro` para abortar imediatamente se `backfill_financeiro_ativo` estiver `false` (assim, se o cron for reativado, ele respeita o flag global).
 
-- Se o valor já é `number` → retorna direto.
-- Se a string contém vírgula → tratar como BR: remove pontos (milhar), troca vírgula por ponto.
-- Se a string contém apenas ponto(s):
-  - Se tiver **um único ponto** com 1–2 dígitos após → tratar como decimal (`"561.40"` = 561.40).
-  - Se tiver múltiplos pontos ou 3 dígitos após o ponto → tratar como milhar (`"1.234"` = 1234) — improvável vir da Hinova, mas mantém compat.
-- Sem ponto nem vírgula → `parseInt`.
+### Passo 2 — Re-corrigir as 933 + 319 cobranças que vieram com bug
 
-### 2) Migration de correção retroativa
-
-Criar migration que normaliza os 19.083 registros já importados:
+Mesma migration: roda os 3 UPDATEs já validados (mesmo critério da migração anterior — só corrige onde `dados_brutos_sga` confirma o bug):
 
 ```sql
--- Corrige valor (todos os 19.083 boletos Hinova)
 UPDATE public.cobrancas
-SET valor = ROUND(valor / 100.0, 2),
-    updated_at = now()
+SET valor = ROUND(valor / 100.0, 2), updated_at = now()
 WHERE descricao LIKE 'Boleto Hinova%'
   AND dados_brutos_sga ? 'valor_boleto'
-  AND ROUND(valor / 100.0, 2) = (dados_brutos_sga->>'valor_boleto')::numeric;
+  AND ROUND(valor / 100.0, 2) = (dados_brutos_sga->>'valor_boleto')::numeric
+  AND valor != (dados_brutos_sga->>'valor_boleto')::numeric;
 
--- Corrige valor_final quando bater com o mesmo padrão
-UPDATE public.cobrancas
-SET valor_final = ROUND(valor_final / 100.0, 2),
-    updated_at = now()
-WHERE descricao LIKE 'Boleto Hinova%'
-  AND valor_final IS NOT NULL
-  AND valor_final >= 1000  -- só os afetados
-  AND ROUND(valor_final / 100.0, 2) <= 10000; -- sanity
-
--- Corrige valor_pago apenas onde realmente está x100
-UPDATE public.cobrancas
-SET valor_pago = ROUND(valor_pago / 100.0, 2),
-    updated_at = now()
-WHERE descricao LIKE 'Boleto Hinova%'
-  AND valor_pago IS NOT NULL
-  AND dados_brutos_sga->>'valor_pagamento' IS NOT NULL
-  AND dados_brutos_sga->>'valor_pagamento' NOT IN ('0,00','0.00','0')
-  AND ROUND(valor_pago / 100.0, 2) =
-      REPLACE(REPLACE(dados_brutos_sga->>'valor_pagamento', '.', ''), ',', '.')::numeric;
+-- mesma lógica para valor_final e valor_pago
 ```
 
-A condição compara contra o `dados_brutos_sga` original — só corrige onde houver evidência clara do bug; registros já corretos ficam intactos.
+### Passo 3 — Validar com a Hinova ao vivo
 
-### 3) Validação pós-correção
+Chamar `sga-sync-financeiro-veiculo` manualmente para 1 veículo de teste (ALDA, KYY9873) e confirmar que a próxima gravação no banco fica com `valor = 561.40` (e não 56140).
 
-Reexecutar a auditoria SQL para confirmar:
-- Soma total Hinova cai de R$ 479,7M para ~R$ 4,79M.
-- Caso ALDA: `valor` = 561,40.
-- Caso JANAINA (8 veículos): valor proporcional aos produtos do JSON.
-- KPIs da tela `/financeiro/cobrancas` (Pago / Pendente / Vencido) refletem totais realistas.
+### Passo 4 — Reativar a drenagem (opcional, sob comando do usuário)
 
-### 4) Não é necessário re-importar
+Após confirmar que está tudo OK, reativar o cron com:
+```sql
+UPDATE cron.job SET active = true WHERE jobname = 'sga-sync-financeiro-drenagem-5min';
+UPDATE public.sga_runtime_state SET backfill_financeiro_ativo = true, backfill_cancelar_solicitado = false;
+```
 
-Como `dados_brutos_sga` foi preservado intacto no upsert, podemos derivar o valor correto sem nova chamada à Hinova.
+Esse passo NÃO será executado automaticamente — fica para você decidir após validar.
 
 ---
 
 ## Detalhes técnicos
 
 **Arquivos modificados:**
-- `supabase/functions/_shared/hinova-client.ts` — função `toNumber` (linhas ~621-627).
-- `supabase/migrations/<timestamp>_fix_cobrancas_hinova_valores_x100.sql` — nova migration com os 3 UPDATEs acima.
+- `supabase/migrations/<timestamp>_pause_drenagem_e_recorrigir_cobrancas.sql` — desativa cron, marca flag, re-corrige UPDATEs.
+- `supabase/functions/sga-backfill-financeiro/index.ts` — checagem extra logo no início: se `backfill_financeiro_ativo = false`, retorna sem processar (evita reincidência caso cron seja reativado por engano).
 
-**Sem mudanças na UI:** `CobrancasList.tsx` e `CobrancaDetalhe.tsx` continuam corretos — eles apenas exibem o que está no banco. Após a migration os valores aparecerão corrigidos automaticamente.
+**Sem mudança no parser:** o fix de `toNumber` já está no código e foi confirmado funcionando via teste real (`sga-testar-boletos-veiculo` retorna 559.40 ✅).
 
-**Re-importações futuras:** o `upsert` por `nosso_numero` na função `sga-sync-financeiro-veiculo` sobrescreverá `valor` na próxima sincronização, agora já com `toNumber` corrigido — mantém idempotência.
+**Sem mudança na UI:** o botão "Parar Drenagem" continua existindo; com o cron desativado ele se torna o único meio de retomar (precisa do `Iniciar` novo + reativar cron).
+
+**Resposta direta às suas perguntas:**
+1. **"Reprocessar foi feito?"** → Sim, a migration anterior corrigiu os 19.083 históricos. Mas como o sync continuou gravando errado entre 10:55–10:59, surgiram 933 novos casos que ainda precisam ser corrigidos.
+2. **"Há mais cobranças x100?"** → Sim, 933 (`valor`) + 319 (`valor_pago`).
+3. **"Drenagem continuou?"** → Sim, porque o cron `*/5 * * * *` ignora o botão de parar. Será efetivamente parado nesta migration.
