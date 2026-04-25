@@ -229,16 +229,25 @@ serve(async (req) => {
       );
     }
 
-    // Dispara em background
-    EdgeRuntime.waitUntil(executarDrenagemEmBackground(supabase, { enfileirar: !apenasProcessar }));
+    // Tenta background; se EdgeRuntime indisponível, executa síncrono (cron 5min cobre o resto)
+    const bgPromise = executarDrenagemEmBackground(supabase, { enfileirar: !apenasProcessar });
+    try {
+      // @ts-ignore
+      if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) {
+        // @ts-ignore
+        EdgeRuntime.waitUntil(bgPromise);
+        return new Response(
+          JSON.stringify({ success: true, started: true, mode: 'background', message: 'Drenagem iniciada em background.' }),
+          { status: 202, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    } catch (_) {}
 
+    // Fallback síncrono — aguarda o ciclo (com cap interno de wall-clock)
+    await bgPromise;
     return new Response(
-      JSON.stringify({
-        success: true,
-        started: true,
-        message: 'Drenagem iniciada em background. Acompanhe o progresso pelo painel.',
-      }),
-      { status: 202, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ success: true, started: true, mode: 'sync', message: 'Drenagem concluída no ciclo atual.' }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (err: any) {
     console.error('[Cron SGA Drenagem] erro:', err);
