@@ -1,65 +1,50 @@
-## Diagnóstico — INS-2026-00049 (Chevrolet Cruze KYB9G10, Leandro Reis)
+## Exportação inteligente de usuários
 
-Linha do tempo reconstruída a partir do banco:
+Adicionar um botão **"Exportar"** ao lado de **"Novo usuário"** na tela `/configuracoes/usuarios-acessos` que abre um diálogo onde o diretor escolhe **quais perfis** e **quais campos** exportar, gerando um arquivo CSV ou XLSX.
 
-```text
-24/04 22:31  → Contratação cria:
-                instalacoes 95ea4018  status=agendada  data=24/04 manhã  cotacao=a90a5276
-                servicos    303a6411  status=agendada  tipo=instalacao   instalacao_origem_id=95ea4018
+### Comportamento
 
-24/04 18:31  → Cliente agenda vistoria na BASE pelo fluxo público:
-                agendamentos_base fbf36ada  cotacao_id=a90a5276  instalacao_id=NULL  ←  ❌ gap
-                data=25/04 08:00
+1. Botão **Exportar** (ícone Download) abre um `Dialog`.
+2. Diálogo dividido em 3 seções:
+   - **Perfis a exportar** (multi-seleção, agrupados por área — Comercial, Operações, Administração etc., reaproveitando `useAppRoles().getRolesByArea()`). Inclui atalhos: "Selecionar todos", "Limpar", e checkboxes por área (ex.: marca todos os perfis Comerciais de uma vez — útil para "todos os consultores externos e internos").
+   - **Filtros adicionais**:
+     - Status: Ativos / Inativos / Todos (default Ativos)
+     - Tipo: Funcionário / Prestador / Agência / Todos
+   - **Campos a exportar** (checkboxes, todos marcados por padrão): Nome, Email, Telefone, CPF, Tipo, Perfis (lista), Código SGA voluntário, Status (ativo/inativo), Data de cadastro, Último acesso.
+3. Seleção de **formato**: CSV (UTF-8 com BOM, separador `;` para Excel BR) ou XLSX.
+4. Pré-visualização: mostra "X usuário(s) serão exportados" antes de confirmar (executa COUNT rápido reativo).
+5. Ao confirmar:
+   - Busca todos os usuários sem paginação (rompe o limite de 1000 usando `.range()` em chunks de 1000 e concatenando — implementação no hook).
+   - Resolve perfis (roles) por usuário em uma única consulta `user_roles.in(user_id, [...])`.
+   - Gera o arquivo no cliente e dispara download com nome `usuarios_<YYYY-MM-DD_HHmm>.<ext>`.
+6. Toast de sucesso com contagem ("142 usuários exportados").
 
-25/04 12:15  → Vistoriador (f6313b28) executa vistoria na base:
-                vistorias bcf9aa4c  protocolo=VIS-2026-00013  origem=agendamento_base
-                instalacao_id=NULL  ←  herda o gap
+### Inteligência da exportação
 
-25/04 12:34  → Vistoria aprovada. Trigger e processar-vistoria encerram:
-                ✅ vistorias.bcf9aa4c → aprovada
-                ✅ agendamentos_base.fbf36ada → realizado
-                ❌ instalacoes.95ea4018 → CONTINUA agendada
-                ❌ servicos.303a6411  → CONTINUA agendada (vistoria_origem_id era NULL)
-                
-                Resultado: aparece como "Não atribuído / Agendada" no mapa
-                e o técnico Wallace não viu a tarefa no app.
-```
+- **Agrupamento por área** torna trivial selecionar "todos os consultores" (marca a área Comercial inteira) ou "todos os supervisores" (1 clique no role).
+- **Multi-role**: usuários com mais de 1 role aparecem uma única vez; coluna "Perfis" lista todos separados por `;`.
+- **Filtragem combinada**: perfis selecionados ∩ tipo ∩ status. Se nenhum perfil for marcado, exporta todos os perfis (exceto associado).
+- **Exclusão de associados** mantida (regra atual da tela).
+- **Sanitização CSV**: prefixar células iniciadas com `=`, `+`, `-`, `@` com `'` para prevenir CSV injection.
 
-Causa raiz: `useAgendamentoBase.criar()` não busca a `instalacao_id` correspondente ao `cotacao_id` quando insere o `agendamentos_base`. Sem esse vínculo, todo o encerramento em cascata da vistoria fica órfão.
+### Arquivos
 
-## Correções
+**Novo:**
+- `src/components/configuracoes/ExportarUsuariosDialog.tsx` — diálogo + lógica de geração CSV/XLSX (usa `xlsx` lib se já instalada; senão CSV puro). Verifica primeiro se `xlsx` está em `package.json`; se não, oferece apenas CSV nesta versão.
+- `src/hooks/useUsuariosExport.ts` — função `fetchUsuariosForExport(filters)` que pagina em chunks de 1000 e junta com roles.
 
-### 1. Saneamento imediato deste caso (migration data-fix)
-- `instalacoes.95ea4018` → `status=concluida`, `concluida_em=2026-04-25 12:34:53`
-- `servicos.303a6411` → `status=concluida`, `concluida_em=2026-04-25 12:34:53`
-- `vistorias.bcf9aa4c` → setar `instalacao_id=95ea4018` (rastreabilidade)
-- `agendamentos_base.fbf36ada` → setar `instalacao_id=95ea4018` (rastreabilidade)
+**Editado:**
+- `src/pages/configuracoes/UsuariosAcessos.tsx` — adiciona botão "Exportar" no header e renderiza o diálogo.
 
-### 2. Saneamento defensivo de outros casos com mesmo padrão
-Single-shot SQL: para todo `agendamentos_base` com `cotacao_id NOT NULL` e `instalacao_id IS NULL`, popular `instalacao_id` a partir da `instalacoes` (mais recente) com mesmo `cotacao_id`. Em seguida, encerrar instalações/serviços órfãos cuja vistoria associada já foi `aprovada`/`reprovada`/`cancelada`.
+### Detalhes técnicos
 
-### 3. Fechar o gap na criação (frontend público)
-Em `src/hooks/useAgendamentoBase.ts` (mutation de criação): antes do `INSERT` em `agendamentos_base`, buscar `instalacoes.id` por `cotacao_id` e incluir no payload. Idempotente — se não existir instalação ainda, segue com `null`.
+- Reaproveita `useAppRoles` para listar/agrupar roles e respeita `app_roles_config` (fonte dinâmica de perfis).
+- Consulta direta a `profiles` + `user_roles` via cliente Supabase (RLS já protege — só diretor/admin acessa a tela conforme `mem://constraints/access/usuarios-acessos-sem-associados.md`).
+- Sem mudanças em banco, sem novas edge functions, sem novos secrets.
+- Progress UX: botão "Exportar" mostra spinner durante a geração; bloqueia fechamento do dialog enquanto roda.
 
-### 4. Fechar o gap na decisão da vistoria (defesa em profundidade)
-Em `supabase/functions/processar-vistoria/index.ts`, ao encerrar serviços/agendamentos da vistoria:
-- Resolver `instalacao_id` por três caminhos (em ordem): `vistoria.instalacao_id` → `agendamentos_base.instalacao_id` (via `vistoria_id`) → `instalacoes` mais recente com `cotacao_id = vistoria.cotacao_id`.
-- Se encontrado e a decisão for `aprovada`/`aprovada_com_ressalvas`: marcar `instalacoes.status=concluida` e `servicos.status=concluida` para o(s) serviço(s) com `instalacao_origem_id` igual e status ativo. Se `reprovada`/`cancelada`: marcar como `cancelada`.
-- Logs explícitos por etapa.
+### Fora de escopo
 
-### 5. Trigger de banco — espelho da regra (defesa final)
-Estender o trigger `trg_sync_servico_on_vistoria_decisao` para também encerrar `instalacoes` e `servicos` resolvidos pela cadeia acima. Garante consistência mesmo se a edge falhar ou se a vistoria for decidida por SQL manual.
-
-### 6. Verificação pós-deploy
-- Conferir no banco que `instalacoes.95ea4018` e `servicos.303a6411` ficaram `concluida`.
-- Listar quantos casos foram saneados pela migration de retroativos.
-- Confirmar via UI (`/monitoramento/vistorias-instalacoes-mon`) que a busca por `KYB9G10` não mostra mais tarefa "Agendada / Não atribuído" para esse veículo.
-
-## Arquivos afetados
-- `src/hooks/useAgendamentoBase.ts` (gap #3)
-- `supabase/functions/processar-vistoria/index.ts` (gap #4)
-- Nova migration de data-fix + retroativos (#1, #2)
-- Nova migration alterando o trigger (#5)
-
-## Memória
-Atualizar `mem://logic/operations/aprovacao-vistoria-encerra-servico.md` para incluir a regra: "ao decidir uma vistoria, também encerrar a `instalacoes` resolvida via vistoria → agendamento_base → cotação".
+- Exportação assíncrona via edge function (não necessária para o volume atual de usuários internos).
+- PDF (formato não pedido).
+- Importação reversa.
