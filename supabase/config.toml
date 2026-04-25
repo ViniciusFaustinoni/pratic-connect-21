@@ -192,5 +192,3 @@ verify_jwt = false
 
 [functions.enviar-termo-filiacao-whatsapp]
 verify_jwt = false
-[functions.dump-catalog]
-verify_jwt = false
