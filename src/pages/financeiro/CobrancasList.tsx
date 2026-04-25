@@ -479,7 +479,8 @@ export default function CobrancasList() {
             Gerencie todas as cobranças da associação
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {(isDiretor || isAdminMaster || isDesenvolvedor) && <SgaBackfillFinanceiroDialog />}
           <Button variant="outline" onClick={handleExportar}>
             <Download className="mr-2 h-4 w-4" />
             Exportar
