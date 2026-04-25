@@ -5,7 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { ErrorReport, useErrorReportFiles, useUpdateErrorReportStatus } from '@/hooks/useErrorReports';
-import { FileText, Image as ImageIcon, ExternalLink, Play, CheckCircle2 } from 'lucide-react';
+import { FileText, Image as ImageIcon, ExternalLink, Play, CheckCircle2, Copy, Download, X } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface Props {
   report: ErrorReport | null;
@@ -23,6 +24,44 @@ export function DetalheRelatoModal({ report, onClose }: Props) {
   const { data: files = [] } = useErrorReportFiles(report?.id ?? null);
   const update = useUpdateErrorReportStatus();
   const [obs, setObs] = useState('');
+  const [preview, setPreview] = useState<{ url: string; nome: string; mime: string } | null>(null);
+
+  const copyImage = async (url: string, mime: string) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      // Tenta copiar como imagem nativa (PNG); caso falhe, copia a URL
+      if (navigator.clipboard && (window as any).ClipboardItem && mime.startsWith('image/')) {
+        try {
+          const item = new (window as any).ClipboardItem({ [blob.type]: blob });
+          await navigator.clipboard.write([item]);
+          toast.success('Imagem copiada para a área de transferência');
+          return;
+        } catch {
+          // fallback abaixo
+        }
+      }
+      await navigator.clipboard.writeText(url);
+      toast.success('Link da imagem copiado');
+    } catch (e) {
+      toast.error('Não foi possível copiar a imagem');
+    }
+  };
+
+  const downloadFile = async (url: string, nome: string) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = nome || 'arquivo';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch {
+      toast.error('Falha ao baixar');
+    }
+  };
 
   if (!report) return null;
   const sb = statusBadge[report.status];
@@ -58,17 +97,17 @@ export function DetalheRelatoModal({ report, onClose }: Props) {
                 <div className="grid grid-cols-3 gap-2 mt-1">
                   {files.map((f) => {
                     const isImg = f.mime_type?.startsWith('image/');
+                    const url = f.signedUrl ?? '';
                     return (
-                      <a
+                      <button
                         key={f.id}
-                        href={f.signedUrl ?? '#'}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="group block rounded border border-border overflow-hidden bg-muted aspect-square relative"
+                        type="button"
+                        onClick={() => url && setPreview({ url, nome: f.nome_original ?? 'arquivo', mime: f.mime_type ?? '' })}
+                        className="group block rounded border border-border overflow-hidden bg-muted aspect-square relative text-left"
                         title={f.nome_original ?? ''}
                       >
-                        {isImg && f.signedUrl ? (
-                          <img src={f.signedUrl} alt={f.nome_original ?? ''} className="w-full h-full object-cover" />
+                        {isImg && url ? (
+                          <img src={url} alt={f.nome_original ?? ''} className="w-full h-full object-cover" />
                         ) : (
                           <div className="flex flex-col items-center justify-center h-full p-2 text-center">
                             <FileText className="h-6 w-6 text-muted-foreground" />
@@ -78,7 +117,7 @@ export function DetalheRelatoModal({ report, onClose }: Props) {
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
                           <ExternalLink className="h-5 w-5 text-white" />
                         </div>
-                      </a>
+                      </button>
                     );
                   })}
                 </div>
@@ -140,6 +179,47 @@ export function DetalheRelatoModal({ report, onClose }: Props) {
           )}
         </DialogFooter>
       </DialogContent>
+
+      {/* Preview ampliado de imagem/arquivo */}
+      <Dialog open={!!preview} onOpenChange={(v) => !v && setPreview(null)}>
+        <DialogContent className="max-w-5xl p-0 overflow-hidden bg-background">
+          <DialogHeader className="px-4 py-3 border-b border-border flex flex-row items-center justify-between space-y-0">
+            <DialogTitle className="text-sm font-medium truncate pr-4">
+              {preview?.nome}
+            </DialogTitle>
+            <div className="flex items-center gap-2">
+              {preview?.mime.startsWith('image/') && (
+                <Button size="sm" variant="outline" onClick={() => preview && copyImage(preview.url, preview.mime)}>
+                  <Copy className="h-4 w-4 mr-1" /> Copiar
+                </Button>
+              )}
+              <Button size="sm" variant="outline" onClick={() => preview && downloadFile(preview.url, preview.nome)}>
+                <Download className="h-4 w-4 mr-1" /> Baixar
+              </Button>
+              <Button size="sm" variant="outline" asChild>
+                <a href={preview?.url} target="_blank" rel="noreferrer">
+                  <ExternalLink className="h-4 w-4 mr-1" /> Abrir
+                </a>
+              </Button>
+            </div>
+          </DialogHeader>
+          <div className="bg-black/80 flex items-center justify-center max-h-[80vh] overflow-auto">
+            {preview?.mime.startsWith('image/') ? (
+              <img
+                src={preview.url}
+                alt={preview.nome}
+                className="max-w-full max-h-[80vh] object-contain select-text"
+              />
+            ) : preview?.mime === 'application/pdf' ? (
+              <iframe src={preview.url} title={preview.nome} className="w-full h-[80vh] bg-white" />
+            ) : (
+              <div className="p-10 text-muted-foreground text-sm">
+                Pré-visualização não disponível para este tipo de arquivo.
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
