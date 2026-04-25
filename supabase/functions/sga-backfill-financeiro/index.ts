@@ -80,14 +80,18 @@ serve(async (req) => {
 
     // -------- STATUS --------
     if (acao === 'status') {
+      const statuses = ['pendente', 'pendente_retry', 'executando', 'concluido', 'erro', 'sem_historico_hinova', 'cancelado'];
+      // Paraleliza counts para reduzir wall-time e evitar saturar o worker
+      const countResults = await Promise.all(
+        statuses.map(st =>
+          supabase
+            .from('sga_sync_financeiro_jobs')
+            .select('id', { count: 'exact', head: true })
+            .eq('status', st)
+        )
+      );
       const counts: Record<string, number> = {};
-      for (const st of ['pendente', 'pendente_retry', 'executando', 'concluido', 'erro', 'sem_historico_hinova', 'cancelado']) {
-        const { count } = await supabase
-          .from('sga_sync_financeiro_jobs')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', st);
-        counts[st] = count ?? 0;
-      }
+      statuses.forEach((st, i) => { counts[st] = countResults[i].count ?? 0; });
 
       // Top 5 erros agrupados
       const { data: erros } = await supabase
