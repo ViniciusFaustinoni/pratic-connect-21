@@ -79,7 +79,8 @@ const CRLV_FIELDS: OcrFieldDef[] = [
   { key: 'renavam', label: 'Renavam' },
   { key: 'marca', label: 'Marca' },
   { key: 'modelo', label: 'Modelo' },
-  { key: 'ano', label: 'Ano' },
+  { key: 'ano_fabricacao', label: 'Ano fab.' },
+  { key: 'ano_modelo', label: 'Ano mod.' },
   { key: 'cor', label: 'Cor' },
   { key: 'combustivel', label: 'Combustível' },
   { key: 'motor', label: 'Motor' },
@@ -95,8 +96,8 @@ const CRLV_FIELDS: OcrFieldDef[] = [
 ];
 
 const COMPROVANTE_RESIDENCIA_FIELDS: OcrFieldDef[] = [
-  { key: 'nome', label: 'Nome do titular' },
-  { key: 'cpf', label: 'CPF', mask: 'cpf' },
+  { key: 'nome_titular', label: 'Nome do titular' },
+  { key: 'cpf_titular', label: 'CPF', mask: 'cpf' },
   { key: 'cep', label: 'CEP', mask: 'cep' },
   { key: 'logradouro', label: 'Logradouro' },
   { key: 'numero', label: 'Número' },

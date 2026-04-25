@@ -355,8 +355,10 @@ numero_crv, codigo_seguranca_crv, numero_atpv
 
 ### Comprovante de Residência
 Aceitar: contas (água/luz/gás/telefone/internet), faturas/boletos, IPTU/IPVA, IRPF, extratos, contratos aluguel, escrituras, **declaração de residência (modelo livre)**.
-Campos: logradouro, numero, complemento, bairro, cidade, uf (2 letras), cep, nome_titular, tipo_comprovante ("conta_luz"|"conta_agua"|"conta_gas"|"conta_telefone"|"conta_internet"|"fatura_cartao"|"boleto_plano_saude"|"boleto_condominio"|"iptu"|"ipva"|"extrato_bancario"|"contrato_aluguel"|"declaracao_residencia"|"outro"), data_emissao
+Campos: logradouro, numero, complemento, bairro, cidade, uf (2 letras), cep, nome_titular, cpf_titular (XXX.XXX.XXX-XX, opcional — extrair sempre que visível em IPTU/fatura/declaração; null se não aparecer no documento), tipo_comprovante ("conta_luz"|"conta_agua"|"conta_gas"|"conta_telefone"|"conta_internet"|"fatura_cartao"|"boleto_plano_saude"|"boleto_condominio"|"iptu"|"ipva"|"extrato_bancario"|"contrato_aluguel"|"declaracao_residencia"|"outro"), data_emissao
 - Aceitar sem data de emissão. IPTU/IPVA do ano vigente/anterior válidos.
+- **BAIRRO obrigatório quando o documento o exibe.** Quando o bairro vier embutido no logradouro (ex.: "EST CAFUNDA - TAQUARA", "RUA X, JARDIM PAULISTA", "AV Y BL 1 — COPACABANA"), separe e preencha bairro com a parte após o hífen/vírgula/travessão; mantenha logradouro apenas com a via. Quando o documento (ex.: algumas contas de luz) realmente não imprime bairro, deixe bairro:null e sugira **revisar** (não reprovar por isso).
+- **CPF do titular**: extraia do bloco de identificação do contribuinte/cliente (comum em IPTU "CPF/CNPJ DO CONTRIBUINTE", em faturas de cartão, e em declarações de residência). Se não estiver visível, cpf_titular:null — não bloqueia aprovação.
 
 #### Declaração de Residência (modelo livre, escrito pelo próprio interessado ou por terceiro)
 - Detectar pelo título "DECLARAÇÃO DE RESIDÊNCIA" (ou variantes como "DECLARAÇÃO DE DOMICÍLIO", "DECLARAÇÃO DE COMPROVAÇÃO DE RESIDÊNCIA").
@@ -461,7 +463,7 @@ function tryRepairTruncatedJSON(raw: string): object | null {
         // veículo
         'placa', 'renavam', 'chassi', 'marca', 'modelo', 'cor', 'combustivel', 'motor', 'numero_motor', 'nome_proprietario',
         // comprovante de residência
-        'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'cep', 'nome_titular', 'tipo_comprovante', 'data_emissao',
+        'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'cep', 'nome_titular', 'cpf_titular', 'tipo_comprovante', 'data_emissao',
         // ATPV-e / NF veículo
         'nome_comprador', 'cpf_comprador', 'cpf_cnpj_comprador', 'valor_nota_fiscal',
       ];

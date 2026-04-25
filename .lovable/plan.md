@@ -1,70 +1,52 @@
-## Diagnóstico atual
+# Correção do OCR no envio público de documentos
 
-A régua de cobrança **já existe e está funcional**, alinhada aos dados do SGA:
+## Diagnóstico
 
-- ✅ **18 etapas configuradas** (D-6 lembrete até D+61 reativação) na tabela `reguas_cobranca`
-- ✅ **13 templates Meta WhatsApp APROVADOS** (`d_6_lembrete_desconto_v1`, `d0_boleto_vence_hoje_v1`, etc.) — não precisa criar nenhum
-- ✅ **Edge function `executar-regua-cobranca`** já busca cobranças de duas fontes (`asaas_cobrancas` + `cobrancas` com `origem='sga_hinova'`), agrupa por associado, calcula dias de atraso e dispara WhatsApp com a linha digitável correta
-- ✅ **Cron diário às 12h** já agendado (`executar-regua-cobranca-diario`)
-- ✅ **141.512 cobranças SGA importadas**, **2.868 em aberto**, **100% com linha digitável**
+O OCR (`document-ocr`) ESTÁ extraindo os dados corretamente, mas a **UI de edição usa nomes de chaves diferentes** dos que o OCR retorna. Resultado: os campos aparecem em branco mesmo quando o documento foi lido com sucesso (ex.: 80% e 68% de confiança nos prints).
 
-**O que falta** (foco desta entrega): controle global de Ativar/Desativar a régua sem precisar mexer em etapas individuais.
+### Campos quebrados identificados
 
----
+**CRLV — campo "Ano" vazio**
+- OCR retorna: `ano_fabricacao` e `ano_modelo` (dois inteiros separados)
+- UI espera: `ano` (uma string única)
+- Arquivo: `src/components/ocr/ocr-fields-schema.ts` linha 82
 
-## Mudanças propostas
+**Comprovante de Residência — "Nome do titular", "CPF" e "Bairro" vazios**
+- OCR retorna: `nome_titular` (e o "Bairro" é extraído como `bairro`, mas em comprovantes onde o bairro está embutido no logradouro, fica null)
+- UI espera: `nome` e `cpf`
+- O prompt do OCR para comprovante **nem pede CPF** (só nome_titular, endereço, tipo, data)
+- Arquivo: `src/components/ocr/ocr-fields-schema.ts` linhas 97-107
 
-### 1. Botão global "Ativar / Desativar régua"
-Topo da aba `Régua` (`src/pages/cobranca/ReguaCobranca.tsx`):
+## O que será feito
 
-- **Switch grande** com rótulo dinâmico ("Régua ATIVA" verde / "Régua DESATIVADA" cinza)
-- **Tooltip explicativo** quando desativada: "Nenhuma mensagem, ligação ou ação será disparada — incluindo execução manual e cron diário"
-- **Confirmação modal** ao desativar (impacto alto, evita clique acidental)
-- Persiste no campo `reguas_cobranca.ativa` (já existe no schema)
+### 1. Alinhar schema da UI às chaves reais do OCR
+Em `src/components/ocr/ocr-fields-schema.ts`:
+- **CRLV**: trocar `{ key: 'ano' }` por `{ key: 'ano_fabricacao', label: 'Ano fab.' }` + `{ key: 'ano_modelo', label: 'Ano mod.' }`.
+- **Comprovante de residência**: trocar `{ key: 'nome' }` por `{ key: 'nome_titular', label: 'Nome do titular' }`.
 
-### 2. Bloqueio absoluto na edge function
-`supabase/functions/executar-regua-cobranca/index.ts`:
+### 2. Adicionar extração de CPF no comprovante de residência
+Em `supabase/functions/document-ocr/index.ts` (seção "### Comprovante de Residência", ~linha 356):
+- Incluir `cpf_titular` (XXX.XXX.XXX-XX) na lista de campos quando visível no documento (comum em IPTU, faturas de cartão, declarações).
+- Manter como opcional (null se não estiver presente — não bloqueia aprovação).
+- Adicionar `cpf_titular` à lista `dadosFields` do fallback regex (linha 464).
+- Schema da UI passa a ler `cpf_titular` em vez de `cpf` para esse tipo.
 
-- Lógica atual já busca `.eq('ativa', true)` e retorna sem fazer nada se não achar régua
-- **Reforçar**: log explícito `"Régua DESATIVADA — execução abortada"` + retorno padronizado `{ ativa: false, message: 'Régua desativada — nenhuma ação executada' }`
-- Vale tanto para o cron diário quanto para o botão "Executar agora"
+### 3. Reforçar extração de bairro no prompt
+No mesmo prompt do comprovante:
+- Instrução explícita: "Quando o bairro vier embutido no logradouro (ex.: 'EST CAFUNDA - TAQUARA'), separe e preencha `bairro` com a parte após o hífen/vírgula."
+- Quando o documento (ex.: conta de luz) não imprime bairro, deixar null e sugerir REVISAR (não reprovar).
 
-### 3. Bloqueio no botão "Executar agora"
-- Se régua estiver desativada, botão fica `disabled` com tooltip "Ative a régua para executar"
-- Garantia dupla: front bloqueia + back valida
+### 4. Compatibilidade retroativa
+Documentos já processados continuam funcionando — só as chaves novas passam a ter rótulo correto. Edição manual já existente do usuário não é perdida (o merge em `UnifiedDocumentUploader` mantém o que foi editado).
 
-### 4. Indicador visual no header
-- Badge de status no topo da página `/financeiro/regua`
-- Quando desativada: banner amarelo "⚠️ Régua de cobrança DESATIVADA — nenhum disparo automático ocorrerá"
+## Arquivos alterados
 
-### 5. Auditoria
-- Toda mudança no toggle grava evento em `cobranca_eventos` com `tipo='regua_status'` e `dados.acao='ativada'|'desativada'` + `usuario_id` para rastreabilidade
+- `src/components/ocr/ocr-fields-schema.ts` — corrigir keys de CRLV e comprovante de residência
+- `supabase/functions/document-ocr/index.ts` — adicionar `cpf_titular` e regra de bairro embutido
+- Deploy da edge function `document-ocr`
 
----
+## Validação
 
-## Detalhes técnicos
-
-**Arquivos alterados:**
-- `src/pages/cobranca/ReguaCobranca.tsx` — toggle + confirmação + banner + bloqueio do botão
-- `supabase/functions/executar-regua-cobranca/index.ts` — log explícito + retorno padronizado quando desativada
-
-**Sem mudanças necessárias em:**
-- Schema (campo `ativa` já existe em `reguas_cobranca`)
-- Templates Meta (todos os 13 já APROVED)
-- Cron (já configurado)
-- Mapeamento de variáveis (`linha_digitavel` já busca de SGA primeiro)
-
-**Sem migrations** — apenas mutation no `ativa` via `supabase.from('reguas_cobranca').update({ ativa: false })`.
-
----
-
-## Validação pós-implementação
-
-1. Ativar régua → executar manual → ver eventos criados em `cobranca_eventos`
-2. Desativar régua → executar manual → confirmar retorno `{ ativa: false }` e zero eventos
-3. Aguardar próxima execução do cron → confirmar nos logs da edge function que aborta
-4. Reativar → próxima execução volta a disparar normalmente
-
-## Observação sobre os valores divergentes (faturas)
-
-Continua pendente o reenvio da planilha `INADIMPLENTES_ABRIL_DE_2026.xlsx` em CSV para investigar a divergência específica de valores. Esta entrega trata da **régua** (controle de envio); a investigação de **valores** continua aguardando o arquivo legível.
+Após o deploy, reenviar os mesmos documentos do print:
+- CRLV LTB4J74 → "Ano fab." e "Ano mod." preenchidos (2013/2014 ou similar)
+- Comprovante de residência → "Nome do titular", "CPF" (se visível) e "Bairro" preenchidos
