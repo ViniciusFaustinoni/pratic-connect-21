@@ -1,87 +1,62 @@
-## Diagnóstico
+## Relatórios inteligentes de Cotações + Status SGA
 
-**Cobranças (tabela `cobrancas`)** — sem duplicidade real:
-- 141.512 registros, todos com `nosso_numero` único
-- 217 "duplicatas" suspeitas inicialmente detectadas eram **falsos positivos**: associados com 2+ veículos no mesmo vencimento/valor (ex.: associado `035e201b…` com Gol e Prisma, ambos com mensalidade R$ 278,07 vencendo 20/08/2025)
-- Índice único parcial `cobrancas_sga_logica_uniq (veiculo_id, data_vencimento, valor, tipo)` está protegendo corretamente — zero violações
+Vou adicionar, na aba **Vendas → Cotações** (visível apenas para Diretor), um botão **"Relatório Inteligente"** que abre um modal com filtros avançados e gera um Excel multi-aba. Em paralelo, vou exibir o **status real do SGA/Hinova** nas cotações fechadas (que já viraram veículo).
 
-**Jobs (tabela `sga_sync_financeiro_jobs`)** — duplicidade real, **1.648 jobs excedentes** em 1.646 veículos:
-- 1.060 grupos com `concluido` + `erro` (mesmo veículo enfileirado 2× e processado 2×)
-- 573 grupos com múltiplos `concluido`
-- 10 grupos com múltiplos `erro`
-- 3 grupos incluindo `pendente_retry`
+---
 
-### Causa raiz
+### 1. Botão "Relatório Inteligente" (Diretor)
 
-O `sga-backfill-financeiro` (rota `enfileirar`) só considera bloqueado quando há job em `pendente | pendente_retry | executando`. Re-execuções do backfill criam novos jobs para veículos já processados (concluídos ou com erro).
+Aparece no header da página de Cotações, ao lado de "Nova Cotação", visível apenas para `isDiretor`.
 
-```ts
-// supabase/functions/sga-backfill-financeiro/index.ts:256
-.in('status', ['pendente', 'pendente_retry', 'executando']);  // ❌ ignora concluido/erro
-```
+Abre um diálogo com filtros:
 
-**Impacto**: nenhuma duplicidade de cobrança chegou no banco (o índice `cobrancas_sga_logica_uniq` blindou), mas a fila de jobs está poluída — o que distorce métricas (% de progresso, contagem de erros) e gera chamadas redundantes à Hinova.
+- **Período**: presets (Hoje, Ontem, Últimos 7/30/90 dias, Mês atual, Mês anterior, Ano atual) + intervalo customizado (data início / data fim)
+- **Estado / Cidade**: multi-select alimentado com os valores distintos de `cliente_uf` e `cliente_cidade` (com normalização básica de maiúsculas/acentos)
+- **Situação**: Em andamento, Finalizadas, Todas
+- **Status detalhado** (multi-select): Rascunho, Link Enviado, Escolhendo Plano, Enviando Docs, Assinando Contrato, Pagando Taxa, Agendando Vistoria, Em Análise, Fechado, Recusada/Cancelada
+- **Consultor / Vendedor**: multi-select
+- **Plano escolhido**: multi-select
+- **Status SGA** (apenas faz sentido em fechadas): Não enviado, Pendente, Sincronizando, Ativado no SGA, Erro
 
-## Plano de correção
+Preview no modal: contagem de cotações que serão exportadas + estimativa de tempo.
 
-### 1. Limpeza de dados (migração — `UPDATE`)
+### 2. Geração do Excel (multi-aba)
 
-Cancelar jobs duplicados mantendo apenas o "melhor" por (veículo, tipo):
-- Prioridade: `concluido` > `erro` > `pendente_retry` (na prática só sobram `concluido`/`erro`)
-- Se houver múltiplos no melhor status, manter o mais recente (`updated_at DESC`)
-- Marcar os demais como `cancelado` com `ultimo_erro = 'duplicata_dedupe_$timestamp'` para auditoria
-- Estimativa: ~1.648 jobs serão cancelados
+Botão "Gerar Excel" baixa um arquivo `cotacoes_relatorio_AAAA-MM-DD.xlsx` com 4 abas:
 
-### 2. Index único de proteção (migração — schema)
+- **Resumo**: total geral, totais por status, por UF, por consultor, taxa de conversão (Fechadas / Total), ticket médio (FIPE), filtros aplicados
+- **Cotações**: linha por cotação com nº, data criação, cliente, CPF/CNPJ, telefone, cidade/UF, veículo (marca/modelo/ano/placa), FIPE, plano escolhido, status atual, etapa do funil, consultor, data última atualização, link público, **status SGA** (quando aplicável)
+- **Por Status**: agregação status × quantidade × valor FIPE total
+- **Por Região**: agregação UF/cidade × quantidade × ticket médio × % de conversão
 
-Criar índice único parcial bloqueando jobs ativos duplicados:
-```sql
-CREATE UNIQUE INDEX sga_sync_financeiro_jobs_ativo_uniq
-  ON sga_sync_financeiro_jobs (veiculo_id, tipo)
-  WHERE status IN ('pendente','pendente_retry','executando');
-```
-Garante que nunca mais haverá 2 jobs ativos para o mesmo veículo, mesmo se o backfill rodar concorrentemente.
+Implementação: edge function `gerar-relatorio-cotacoes` recebe os filtros, faz a query com paginação, monta o XLSX com `xlsx`/`exceljs` e devolve como base64 (ou faz upload no Storage e retorna URL assinada).
 
-### 3. Backfill idempotente (`sga-backfill-financeiro/index.ts`)
+### 3. Status real de envio para o SGA
 
-Trocar a verificação de bloqueio para considerar **qualquer job não cancelado** dentro de uma janela (ex.: últimas 24h) — assim, re-executar o backfill no mesmo dia não recria jobs:
+Hoje a coluna "Consultor" é a última informação visual relevante. Vou:
 
-```ts
-.in('status', ['pendente','pendente_retry','executando','concluido','erro'])
-.gte('created_at', new Date(Date.now() - 24*60*60*1000).toISOString())
-```
+- Adicionar uma coluna **"SGA"** na listagem (apenas exibida para diretor/admin) com badge colorido:
+  - cinza "—" → cotação ainda não fechada
+  - amarelo "Pendente" → veículo criado, `status_sga = 'pendente'`
+  - azul "Sincronizando" → `status_sga = 'sincronizando'`
+  - verde "Ativado" → `sincronizado_hinova = true`
+  - vermelho "Erro" → `status_sga = 'erro_sincronizacao'` (com tooltip mostrando o motivo se disponível)
+- O hook `useCotacoes` passará a fazer um JOIN leve com `veiculos` (via `associado_id` da cotação fechada) para trazer `sincronizado_hinova`, `status_sga`, `sincronizado_hinova_em`.
+- Adicionar filtro "Status SGA" também no header da listagem (não só no relatório).
 
-Adicionar `onConflict` no insert para falhar silenciosamente em corrida:
-```ts
-.upsert(novos, { onConflict: 'veiculo_id,tipo', ignoreDuplicates: true })
-```
-(funciona em conjunto com o índice único parcial).
-
-### 4. Cron diário (`cron-sga-sync-financeiro-diario/index.ts`)
-
-Verificar se enfileira jobs e aplicar a mesma proteção (idempotência por janela + upsert). Já é o padrão — só validar.
-
-### 5. Validação pós-fix
-
-Rodar query de auditoria:
-```sql
-SELECT COUNT(*) FROM (
-  SELECT veiculo_id, tipo FROM sga_sync_financeiro_jobs
-  WHERE status NOT IN ('cancelado')
-  GROUP BY veiculo_id, tipo HAVING COUNT(*) > 1
-) t;  -- deve retornar 0
-```
+---
 
 ### Arquivos afetados
 
-| Arquivo | Mudança |
-|---|---|
-| Nova migração SQL (schema) | Cria índice único parcial |
-| Nova migração SQL (data via insert tool) | Cancela 1.648 duplicatas existentes |
-| `supabase/functions/sga-backfill-financeiro/index.ts` | Bloqueio idempotente + upsert |
-| `supabase/functions/cron-sga-sync-financeiro-diario/index.ts` | Validação/ajuste defensivo |
+- `src/pages/vendas/Cotacoes.tsx` — botão, coluna SGA, filtro SGA
+- `src/components/vendas/RelatorioInteligenteCotacoesDialog.tsx` (novo) — modal de filtros + preview
+- `src/hooks/useRelatorioCotacoes.ts` (novo) — chamada à edge function + download
+- `src/hooks/useCotacoes.ts` — incluir join com veiculos para status SGA
+- `supabase/functions/gerar-relatorio-cotacoes/index.ts` (novo) — gera o XLSX com filtros server-side
+- `supabase/config.toml` — registrar a nova edge function
 
-### Fora de escopo
+### Observações
 
-- Cobranças: nenhuma ação necessária (zero duplicatas reais)
-- Reprocessar cobranças importadas (já estão íntegras)
+- Cidade tem inconsistência de capitalização/acento ("RIO DE JANEIRO" vs "Rio de Janeiro"). Vou normalizar (UPPER + remoção de acentos) para o agrupamento, exibindo a versão capitalizada.
+- O relatório respeita as regras de RLS já existentes (a edge function usa o JWT do diretor).
+- O status SGA só aparece preenchido após a cotação virar associado/veículo (status `aceita`/`concluido`).
