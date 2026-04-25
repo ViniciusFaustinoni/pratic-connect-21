@@ -44,13 +44,15 @@ function detectarTipoVeiculoDaCotacao(cotacao: any): 'carro' | 'moto' {
 }
 
 // NOVO FLUXO: 1-Plano, 2-Docs, 3-Contrato (Autentique), 4-Vistoria, 5-Pagamento
-const STEPS: Step[] = [
+// Quando autovistoria: adiciona 6ª etapa "Instalação" (índice 5) para agendamento físico do rastreador
+const STEPS_BASE: Step[] = [
   { id: 'plano', label: 'Escolha do Plano', description: 'Selecione seu plano' },
   { id: 'documentos', label: 'Documentos', description: 'Envie seus dados' },
   { id: 'contrato', label: 'Contrato', description: 'Assine digitalmente' },
   { id: 'vistoria', label: 'Vistoria', description: 'Tire as fotos' },
   { id: 'pagamento', label: 'Pagamento', description: 'Ative sua cobertura' },
 ];
+const STEP_INSTALACAO: Step = { id: 'instalacao', label: 'Instalação', description: 'Agende o rastreador' };
 
 const pageVariants = {
   initial: { opacity: 0, y: 20 },
