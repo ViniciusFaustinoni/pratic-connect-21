@@ -249,11 +249,17 @@ serve(async (req) => {
         if (!vs?.length) break;
 
         const vIds = vs.map(v => v.id);
+        // Idempotência: bloqueia veículo se já tem job ativo OU se foi processado nas últimas 24h
+        // (concluído/erro recente). Isso evita re-enfileirar veículos já sincronizados quando
+        // o backfill é executado múltiplas vezes no mesmo dia.
+        const janelaIdempotencia = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
         const { data: jobsExistentes } = await supabase
           .from('sga_sync_financeiro_jobs')
-          .select('veiculo_id')
+          .select('veiculo_id, status, updated_at')
           .in('veiculo_id', vIds)
-          .in('status', ['pendente', 'pendente_retry', 'executando']);
+          .or(
+            `status.in.(pendente,pendente_retry,executando),and(status.in.(concluido,erro),updated_at.gte.${janelaIdempotencia})`
+          );
         const blocked = new Set((jobsExistentes ?? []).map(j => j.veiculo_id));
 
         const novos = vs
@@ -271,9 +277,21 @@ serve(async (req) => {
           }));
 
         if (novos.length) {
+          // Insert tolerante a corrida: se o índice único parcial sga_sync_financeiro_jobs_ativo_uniq
+          // detectar conflito (job ativo já existe), o erro 23505 é ignorado individualmente.
           const { error: insErr } = await supabase.from('sga_sync_financeiro_jobs').insert(novos);
-          if (insErr) console.error('[SGA Backfill] insert err', insErr.message);
-          else inseridos += novos.length;
+          if (insErr && insErr.code !== '23505') {
+            console.error('[SGA Backfill] insert err', insErr.message);
+          } else if (!insErr) {
+            inseridos += novos.length;
+          } else {
+            // Conflito de duplicata — fallback: insere 1 a 1 ignorando os duplicados
+            for (const novo of novos) {
+              const { error: e1 } = await supabase.from('sga_sync_financeiro_jobs').insert(novo);
+              if (!e1) inseridos += 1;
+              else if (e1.code !== '23505') console.error('[SGA Backfill] insert err item', e1.message);
+            }
+          }
         }
 
         if (vs.length < pageSize) break;
