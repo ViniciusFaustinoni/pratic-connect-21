@@ -870,6 +870,11 @@ export default function CobrancasList() {
         onClose={() => { setModalPagamento(false); setCobrancaSelecionada(null); }}
         cobranca={cobrancaSelecionada}
       />
+      <CobrancaDetalheModal
+        id={detalheId}
+        open={!!detalheId}
+        onOpenChange={(o) => !o && setDetalheId(null)}
+      />
 
       <BatchActionsBar
         selectedCount={selectedIds.size}
