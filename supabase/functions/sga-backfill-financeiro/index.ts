@@ -348,11 +348,27 @@ serve(async (req) => {
       const isAuthOrHorarioError = (msg: string) =>
         /horari|janela_horaria|restri[çc][ãa]o|usu[áa]rio com restri|login ou senha inv[áa]lid|401|403|n[ãa]o autorizad/i.test(msg);
 
+      // Autentica UMA VEZ no início do batch e compartilha com todos os jobs.
+      // Se a sessão expirar/for invalidada no meio do batch, cada job tem seu próprio
+      // withReauthRetry que re-autentica isoladamente.
+      let sharedSession: HinovaSession | null = null;
+      if (shareSession) {
+        try {
+          sharedSession = await getHinovaSession(supabase, { noCache: true });
+          console.log('[SGA Backfill] sessão compartilhada autenticada para o batch', { jobs: jobs.length });
+        } catch (e: any) {
+          console.warn('[SGA Backfill] falha ao pré-autenticar sessão compartilhada — jobs autenticarão individualmente:', e?.message || e);
+          sharedSession = null;
+        }
+      }
+
       // Processa um único job (usado em paralelo)
       const processarJob = async (job: { id: string; veiculo_id: string }) => {
         try {
+          const payload: Record<string, any> = { veiculo_id: job.veiculo_id, job_id: job.id };
+          if (sharedSession) payload.hinova_session = sharedSession;
           const { data, error } = await supabase.functions.invoke('sga-sync-financeiro-veiculo', {
-            body: { veiculo_id: job.veiculo_id, job_id: job.id },
+            body: payload,
           });
           if (error) throw error;
           if (data?.success) return { kind: 'ok' as const };
