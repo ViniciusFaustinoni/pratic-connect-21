@@ -71,7 +71,13 @@ export default function VistoriaPublica() {
     else setSearchParams({ etapa: e });
   };
 
-  const { data: link, isLoading, error } = useVistoriaLinkPorToken(token);
+  const { data: link, isLoading, error, refetch } = useVistoriaLinkPorToken(token);
+
+  // Ao voltar para a home, refazer fetch para refletir etapas concluídas
+  // (esconde automaticamente botões de etapas já finalizadas).
+  useEffect(() => {
+    if (etapa === 'home') refetch();
+  }, [etapa, refetch]);
 
   // Dados da instalação / veículo / associado
   const { data: instalacao } = useQuery({
