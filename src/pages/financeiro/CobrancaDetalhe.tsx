@@ -336,10 +336,15 @@ export default function CobrancaDetalhe() {
               Cobrança #{cobranca.id.slice(0, 8)}
             </h1>
             <p className="text-sm text-muted-foreground">
-              {cobranca.asaas_id && `ASAAS: ${cobranca.asaas_id}`}
+              {isOrigemSga
+                ? `SGA Hinova${cobranca.nosso_numero ? ` • Nosso Nº ${cobranca.nosso_numero}` : ''}`
+                : cobranca.asaas_id && `ASAAS: ${cobranca.asaas_id}`}
             </p>
           </div>
           <Badge className={status.class}>{status.label}</Badge>
+          {isOrigemSga && (
+            <Badge variant="secondary">SGA Hinova</Badge>
+          )}
         </div>
 
         <DropdownMenu>
