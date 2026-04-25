@@ -540,52 +540,66 @@ export async function listarBoletosVeiculo(
   s: HinovaSession,
   codigoAssociado: number | string,
   codigoVeiculo: number | string,
-  opts?: { anosTras?: number; diasJanela?: number; linkBoleto?: boolean },
+  opts?: { anosTras?: number; diasJanela?: number; linkBoleto?: boolean; paralelismoJanelas?: number },
 ): Promise<any[]> {
   const anosTras = Math.max(0.1, opts?.anosTras ?? 3);
   const diasJanela = Math.min(90, Math.max(7, opts?.diasJanela ?? 90));
   const linkBoleto = opts?.linkBoleto ?? true;
+  const paralelismo = Math.min(8, Math.max(1, opts?.paralelismoJanelas ?? 4));
 
   const hoje = new Date();
   const inicioGeral = new Date(hoje);
   inicioGeral.setDate(inicioGeral.getDate() - Math.floor(anosTras * 365));
 
-  const dedup = new Map<string, any>();
+  // Pré-calcula TODAS as janelas (sem await) para podermos paralelizar
+  const janelas: Array<{ ini: Date; fim: Date }> = [];
   let cursorFim = new Date(hoje);
-
-  let janelasComErro = 0;
-  let ultimoErro: any = null;
   while (cursorFim >= inicioGeral) {
     const cursorIni = new Date(cursorFim);
     cursorIni.setDate(cursorIni.getDate() - (diasJanela - 1));
     const ini = cursorIni < inicioGeral ? new Date(inicioGeral) : cursorIni;
-
-    try {
-      const { boletos } = await listarBoletosVeiculoJanela(s, codigoAssociado, codigoVeiculo, {
-        dataInicial: ini,
-        dataFinal: cursorFim,
-        linkBoleto,
-      });
-
-      for (const b of boletos) {
-        const key = String(b?.nosso_numero ?? b?.nossoNumero ?? '').trim();
-        if (key && !dedup.has(key)) dedup.set(key, b);
-      }
-    } catch (e: any) {
-      // Janela individual falhou — registra mas continua varrendo as outras
-      janelasComErro++;
-      ultimoErro = e;
-      // Se for erro de auth ou rate limit, propaga para o caller decidir (parar tudo)
-      if (e?.reason === 'auth' || e?.reason === 'rate_limit' || e?.reason === 'janela_horaria') {
-        throw e;
-      }
-    }
-
-    // próxima janela: vai 1 dia antes do início desta
+    janelas.push({ ini, fim: new Date(cursorFim) });
     const proxFim = new Date(ini);
     proxFim.setDate(proxFim.getDate() - 1);
     cursorFim = proxFim;
   }
+
+  const dedup = new Map<string, any>();
+  let janelasComErro = 0;
+  let ultimoErro: any = null;
+  let abortarPorTransitorio: any = null;
+
+  // Processa em chunks paralelos. Erros transitórios "duros" (auth/rate/janela)
+  // marcam abortarPorTransitorio e impedem novos chunks — preserva o contrato anterior.
+  for (let i = 0; i < janelas.length && !abortarPorTransitorio; i += paralelismo) {
+    const chunk = janelas.slice(i, i + paralelismo);
+    const results = await Promise.allSettled(
+      chunk.map((j) =>
+        listarBoletosVeiculoJanela(s, codigoAssociado, codigoVeiculo, {
+          dataInicial: j.ini,
+          dataFinal: j.fim,
+          linkBoleto,
+        })
+      )
+    );
+    for (const r of results) {
+      if (r.status === 'fulfilled') {
+        for (const b of r.value.boletos) {
+          const key = String(b?.nosso_numero ?? b?.nossoNumero ?? '').trim();
+          if (key && !dedup.has(key)) dedup.set(key, b);
+        }
+      } else {
+        janelasComErro++;
+        ultimoErro = r.reason;
+        const reason = (r.reason as any)?.reason;
+        if (reason === 'auth' || reason === 'rate_limit' || reason === 'janela_horaria') {
+          abortarPorTransitorio = r.reason;
+        }
+      }
+    }
+  }
+
+  if (abortarPorTransitorio) throw abortarPorTransitorio;
 
   // Se TODAS as janelas falharam e nada foi coletado, propaga o último erro
   if (janelasComErro > 0 && dedup.size === 0 && ultimoErro) {
