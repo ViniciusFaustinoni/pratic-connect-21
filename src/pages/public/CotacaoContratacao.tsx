@@ -44,13 +44,15 @@ function detectarTipoVeiculoDaCotacao(cotacao: any): 'carro' | 'moto' {
 }
 
 // NOVO FLUXO: 1-Plano, 2-Docs, 3-Contrato (Autentique), 4-Vistoria, 5-Pagamento
-const STEPS: Step[] = [
+// Quando autovistoria: adiciona 6ª etapa "Instalação" (índice 5) para agendamento físico do rastreador
+const STEPS_BASE: Step[] = [
   { id: 'plano', label: 'Escolha do Plano', description: 'Selecione seu plano' },
   { id: 'documentos', label: 'Documentos', description: 'Envie seus dados' },
   { id: 'contrato', label: 'Contrato', description: 'Assine digitalmente' },
   { id: 'vistoria', label: 'Vistoria', description: 'Tire as fotos' },
   { id: 'pagamento', label: 'Pagamento', description: 'Ative sua cobertura' },
 ];
+const STEP_INSTALACAO: Step = { id: 'instalacao', label: 'Instalação', description: 'Agende o rastreador' };
 
 const pageVariants = {
   initial: { opacity: 0, y: 20 },
@@ -122,6 +124,14 @@ export default function CotacaoContratacao() {
     return etapaBase;
   }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa]);
 
+  // STEPS dinâmico: adiciona "Instalação" como 6ª etapa apenas quando autovistoria
+  const STEPS = useMemo<Step[]>(() => {
+    if (cotacao?.tipo_vistoria === 'autovistoria') {
+      return [...STEPS_BASE, STEP_INSTALACAO];
+    }
+    return STEPS_BASE;
+  }, [cotacao?.tipo_vistoria]);
+
   // Função para verificar se uma etapa específica já foi concluída
   // Isso garante o modo somente leitura mesmo quando o cliente volta para etapas anteriores
   const isEtapaConcluida = useCallback((etapaIndex: number): boolean => {
@@ -146,10 +156,18 @@ export default function CotacaoContratacao() {
         return !!cotacao.tipo_vistoria || statusConcluidos.vistoria.includes(cotacao.status_contratacao);
       case 4: // Pagamento - concluído se status >= pagamento_ok
         return statusConcluidos.pagamento.includes(cotacao.status_contratacao);
+      case 5: // Instalação (apenas autovistoria) - concluída quando instalação agendada ou status final
+        if (cotacao.tipo_vistoria !== 'autovistoria') return false;
+        return (
+          !!cotacao.vistoria_completa_data_agendada ||
+          hasInstalacaoAgendada ||
+          agendamentoConcluido ||
+          cotacao.status_contratacao === 'ativo'
+        );
       default:
         return false;
     }
-  }, [cotacao?.status_contratacao, cotacao?.plano_escolhido_id, cotacao?.tipo_vistoria]);
+  }, [cotacao?.status_contratacao, cotacao?.plano_escolhido_id, cotacao?.tipo_vistoria, cotacao?.vistoria_completa_data_agendada, hasInstalacaoAgendada, agendamentoConcluido]);
 
   // NÃO redirecionar automaticamente — manter o associado na página da cotação
   // mesmo quando já está ativo, para que ele possa continuar o fluxo de contratação
