@@ -18,7 +18,7 @@ export interface UsuarioExportRow {
   bloqueado: boolean | null;
   codigo_sga_voluntario: string | null;
   created_at: string | null;
-  ultimo_acesso: string | null;
+  data_ultimo_acesso: string | null;
   roles: string[];
 }
 
@@ -48,7 +48,7 @@ export async function fetchUsuariosForExport(
   while (true) {
     let q = supabase
       .from('profiles')
-      .select('id, user_id, nome, email, telefone, cpf, tipo, ativo, bloqueado, codigo_sga_voluntario, created_at, ultimo_acesso')
+      .select('id, user_id, nome, email, telefone, cpf, tipo, ativo, bloqueado, codigo_sga_voluntario, created_at, data_ultimo_acesso')
       .neq('tipo', 'associado')
       .order('nome', { ascending: true })
       .range(from, from + CHUNK - 1);

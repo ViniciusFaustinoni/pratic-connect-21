@@ -82,10 +82,10 @@ const CAMPOS: CampoDef[] = [
     format: r => (r.created_at ? format(new Date(r.created_at), 'dd/MM/yyyy') : ''),
   },
   {
-    key: 'ultimo_acesso',
+    key: 'data_ultimo_acesso',
     label: 'Último acesso',
     default: false,
-    format: r => (r.ultimo_acesso ? format(new Date(r.ultimo_acesso), 'dd/MM/yyyy HH:mm') : ''),
+    format: r => (r.data_ultimo_acesso ? format(new Date(r.data_ultimo_acesso), 'dd/MM/yyyy HH:mm') : ''),
   },
 ];
 
