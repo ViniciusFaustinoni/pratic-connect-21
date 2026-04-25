@@ -41,6 +41,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAtivarRastreador } from '@/hooks/useAtivarRastreador';
 import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
+import { useGerarVistoriaLink } from '@/hooks/useVistoriaLinkPublica';
 import { SolicitarDocumentosDialog } from '@/components/cadastro/SolicitarDocumentosDialog';
 import { ReprovarPropostaDialog } from '@/components/cadastro/ReprovarPropostaDialog';
 import { VisualizadorDocumentoModal } from '@/components/cadastro/VisualizadorDocumentoModal';
@@ -192,6 +193,8 @@ export default function PropostaAnalise() {
     setShowConfirmAprovar(true);
   };
 
+  const gerarVistoriaLinkMut = useGerarVistoriaLink();
+
   const handleConfirmarAprovacao = async () => {
     if (!id) return;
     setShowConfirmAprovar(false);
@@ -202,9 +205,18 @@ export default function PropostaAnalise() {
         veiculoRenavam: veiculoRenavam || undefined,
         veiculoChassi: veiculoChassi || undefined,
       });
-      // Toast de sucesso já é disparado pelo hook useAprovarProposta com a
-      // mensagem correta vinda do backend (distingue assistência vs Proteção 360).
-      // Navegar para próxima ou voltar para lista
+
+      // Após aprovação documental, gerar (ou reutilizar) o link público de vistoria.
+      // Idempotente: se já existir, devolve o mesmo token. Não bloqueia o fluxo se falhar.
+      try {
+        const cotacaoId = (proposta as any)?.cotacao_id || (proposta as any)?.cotacao?.id;
+        if (cotacaoId) {
+          await gerarVistoriaLinkMut.mutateAsync({ cotacaoId });
+        }
+      } catch (linkErr) {
+        console.warn('[PropostaAnalise] Falha ao gerar link de vistoria (não bloqueante):', linkErr);
+      }
+
       if (nextProposta) {
         navigate(`/cadastro/propostas/${nextProposta.id}`);
       } else {
