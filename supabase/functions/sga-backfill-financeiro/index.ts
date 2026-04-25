@@ -285,7 +285,10 @@ serve(async (req) => {
     // -------- PROCESSAR --------
     const batchSize = Math.min(Math.max(parseInt(body.batch_size ?? '100'), 1), 200);
     const delayMs = Math.max(parseInt(body.delay_ms ?? '50'), 0);
-    const concurrency = Math.min(Math.max(parseInt(body.concurrency ?? '8'), 1), 15);
+    const concurrency = Math.min(Math.max(parseInt(body.concurrency ?? '12'), 1), 20);
+    // shareSession: autenticar 1× no início e propagar para os jobs (default true).
+    // Reduz drasticamente número de logins na Hinova (de 1 por job → 1 por batch).
+    const shareSession = body.share_session !== false;
 
     // Marca backfill ativo (TTL 30min) para pausar crons concorrentes
     const ttlExpira = new Date(Date.now() + 30 * 60 * 1000).toISOString();
