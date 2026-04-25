@@ -3,6 +3,9 @@ project_id = "iyxdgmukrrdkffraptsx"
 [functions.analise-consistencia-relatos]
 verify_jwt = false
 
+[functions.dump-fipe-pricing]
+verify_jwt = false
+
 [functions.whatsapp-meta-webhook]
 verify_jwt = false
 
