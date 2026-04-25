@@ -834,6 +834,96 @@ export function EtapaDadosPessoaisDocumentos({
             </div>
           </div>
 
+          {/* Fallback manual — Endereço (oculto por padrão) */}
+          {temComprovante && (
+            <div className="px-3">
+              {!mostrarManualEndereco ? (
+                <button
+                  type="button"
+                  onClick={() => setMostrarManualEndereco(true)}
+                  className="text-xs text-muted-foreground hover:text-primary underline-offset-2 hover:underline inline-flex items-center gap-1"
+                >
+                  <Pencil className="h-3 w-3" />
+                  A IA não leu tudo? Preencher endereço manualmente
+                </button>
+              ) : (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                      Preenchimento manual — Endereço
+                    </p>
+                    <button type="button" onClick={() => setMostrarManualEndereco(false)} className="text-xs text-muted-foreground hover:text-foreground">
+                      Recolher
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div>
+                      <Label className="text-xs">CEP</Label>
+                      <Input
+                        className="h-9 text-sm"
+                        value={dadosExtraidos.cep || ''}
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/\D/g, '').slice(0, 8);
+                          const masked = v.length > 5 ? `${v.slice(0, 5)}-${v.slice(5)}` : v;
+                          setCampoManual('cep', masked);
+                          if (v.length === 8) {
+                            fetch(`https://viacep.com.br/ws/${v}/json/`)
+                              .then(r => r.json())
+                              .then(d => {
+                                if (!d.erro) {
+                                  setDadosExtraidos(prev => ({
+                                    ...prev,
+                                    logradouro: prev.logradouro || d.logradouro || '',
+                                    bairro: prev.bairro || d.bairro || '',
+                                    cidade: prev.cidade || d.localidade || '',
+                                    uf: prev.uf || d.uf || '',
+                                  }));
+                                }
+                              }).catch(() => {});
+                          }
+                        }}
+                        placeholder="00000-000"
+                        maxLength={9}
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs">Logradouro</Label>
+                      <Input className="h-9 text-sm" value={dadosExtraidos.logradouro || ''} onChange={(e) => setCampoManual('logradouro', e.target.value)} placeholder="Rua, Avenida..." />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Número</Label>
+                      <Input className="h-9 text-sm" value={dadosExtraidos.numero || ''} onChange={(e) => setCampoManual('numero', e.target.value)} placeholder="123" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Complemento</Label>
+                      <Input className="h-9 text-sm" value={dadosExtraidos.complemento || ''} onChange={(e) => setCampoManual('complemento', e.target.value)} placeholder="Apto, bloco..." />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Bairro</Label>
+                      <Input className="h-9 text-sm" value={dadosExtraidos.bairro || ''} onChange={(e) => setCampoManual('bairro', e.target.value)} />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs">Cidade</Label>
+                      <Input className="h-9 text-sm" value={dadosExtraidos.cidade || ''} onChange={(e) => setCampoManual('cidade', e.target.value)} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">UF</Label>
+                      <Select value={dadosExtraidos.uf || ''} onValueChange={(v) => setCampoManual('uf', v)}>
+                        <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="UF" /></SelectTrigger>
+                        <SelectContent>
+                          {UFS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Use apenas se a leitura automática falhou. O CEP preenche os demais campos automaticamente.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Aviso: CRLV/NF/ATPV-e enviado mas faltam motor ou chassi */}
           {crlvIncompleto && (
             <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 space-y-2">
