@@ -1,6 +1,6 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Edit, Key, Loader2, MoreHorizontal, Plus, Search, Shield, Trash2, UserCheck, UserX, Users } from 'lucide-react';
+import { Download, Edit, Key, Loader2, MoreHorizontal, Plus, Search, Shield, Trash2, UserCheck, UserX, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -52,6 +52,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 const PerfisVisibilidade = lazy(() => import('@/pages/configuracoes/Perfis'));
+import { ExportarUsuariosDialog } from '@/components/configuracoes/ExportarUsuariosDialog';
 
 const PAGE_SIZE = 20;
 
@@ -90,6 +91,7 @@ export default function UsuariosAcessos() {
   const [passwordDialog, setPasswordDialog] = useState<ProfileWithRoles | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<ProfileWithRoles | null>(null);
   const [senha, setSenha] = useState('');
+  const [exportOpen, setExportOpen] = useState(false);
 
   const { roles, getRoleLabel, getRolesByArea, isLoading: loadingRoles } = useAppRoles();
   const roleOptions = roles.filter(role => role.role !== 'associado');
@@ -153,11 +155,19 @@ export default function UsuariosAcessos() {
             Crie usuários internos, altere tipos, atribua perfis e mantenha acessos operacionais.
           </p>
         </div>
-        <Button onClick={() => navigate('/configuracoes/usuarios/novo')} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Novo usuário
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setExportOpen(true)} className="gap-2">
+            <Download className="h-4 w-4" />
+            Exportar
+          </Button>
+          <Button onClick={() => navigate('/configuracoes/usuarios/novo')} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Novo usuário
+          </Button>
+        </div>
       </div>
+
+      <ExportarUsuariosDialog open={exportOpen} onOpenChange={setExportOpen} />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Metric title="Total" value={stats.total} icon={Users} />
