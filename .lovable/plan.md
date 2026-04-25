@@ -1,83 +1,87 @@
-## Problema confirmado em produção
+## Diagnóstico — por que está lento (~4,2 jobs/min)
 
-Acessando como diretor a tela `/diretoria/vistorias-instalacoes`:
+Cada job de veículo hoje executa **sequencialmente** dentro de si:
 
-1. **KPI "Em Andamento: 4"** está incorreto. O hook `useRotasMetricas` conta TODAS as rotas com `status='em_andamento'` no histórico inteiro, sem filtrar por `data_rota = hoje`. Verificado no banco: hoje não há turnos abertos nem serviços em execução.
-2. **KPI "Instaladores: 0"** está errado também. O hook lê o campo legado `rotas.instalador_id`, mas a relação atual é a tabela n:n `rota_instaladores`.
-3. **Card "Equipe em Campo — Hoje"** depende de rotas com instaladores; mostra "Nenhum profissional" mesmo quando há técnicos com turno aberto sem rota formal.
-4. **Não existe** nenhum indicador de tempo gasto por estado (ocioso, deslocamento, em serviço, almoço, inativo dentro do horário comercial).
+1. `getHinovaSession({ noCache: true })` → **1 login fresh** (~500–1500 ms na Hinova).
+2. `buscarVeiculoPorPlaca` → 1 chamada.
+3. `buscarAssociadoPorCpf` (quando faltam códigos) → 1 chamada.
+4. `buscarSituacaoFinanceiraVeiculo` → 1 chamada.
+5. `listarBoletosVeiculo` → **~12 chamadas sequenciais** (3 anos / 90 dias = 12 janelas).
+6. Possível fallback CPF → +1 login + +12 janelas.
+7. Upserts em `cobrancas` um a um (sem batch).
 
-## O que será feito
+Resultado: **15–25 chamadas HTTP serializadas por veículo**, cada job consumindo 8–15 s. Com `concurrency: 8` no batch (e `BATCH=20` na drenagem em background), o teto efetivo bate exatamente nos ~4 jobs/min observados.
 
-### 1. Corrigir os 4 KPIs do topo
-- `Rotas Hoje`: manter (já correto).
-- `Em Andamento`: passar a contar `servicos` com `status IN ('em_rota','em_andamento')` E `data_agendada = hoje` (reflete técnicos efetivamente trabalhando agora).
-- `Instaladores`: passar a contar profissionais distintos com `turnos_profissionais.data = hoje` E `inicio_turno IS NOT NULL` (fonte de verdade do "quem está de plantão hoje"), com fallback para `rota_instaladores` quando não há turno registrado.
-- `Concluídas Semana`: passar a contar `servicos` concluídos na semana (mais granular que rotas inteiras).
+Estado atual da fila: 5.371 pendentes + 3.283 pendente_retry + 1.096 erros = ~9.750 a drenar.
 
-### 2. Reescrever a aba "Tempo Real" — Equipe em Campo
+## Plano de otimização
 
-Trocar o card atual por um **painel de timeline diária por técnico** que mostra, para cada profissional com turno hoje:
+### 1. Reuso de sessão Hinova dentro do batch (maior ganho)
 
-- Nome, foto, badge de status atual (Em serviço / Em deslocamento / Almoço / Ocioso / Inativo / Offline).
-- Linha do tempo horizontal (08:00 → 18:00) com blocos coloridos para cada estado.
-- 5 contadores numéricos do dia em formato `Hh Mm`:
-  - **Em serviço** (executando uma OS)
-  - **Em deslocamento** (em rota até o cliente)
-  - **Almoço**
-  - **Ocioso** (turno aberto, sem serviço, sem almoço, GPS recente)
-  - **Inativo no horário comercial** (turno aberto, sem GPS há > 25min, dentro de 08–18h)
-- Última atualização de GPS + tarefas concluídas/total.
+Hoje cada job autentica do zero por causa do `noCache: true` (proteção contra invalidação cruzada). Vamos manter isolamento entre invocações, mas **compartilhar uma única sessão dentro de cada batch de `sga-backfill-financeiro`**:
 
-A reconstrução é feita a partir de fontes já existentes (sem nova tabela):
-```text
-fonte                            usado para
-──────────────────────────────── ────────────────────────────────
-turnos_profissionais             início/fim de turno e almoço
-servicos.em_rota_em              início de deslocamento
-servicos.iniciada_em             fim deslocamento / início serviço
-servicos.concluida_em            fim do serviço
-vistoriadores_localizacao        detecção de inatividade GPS
-```
+- Em `sga-backfill-financeiro` (acao=processar): autenticar **uma vez** no início e passar `session` para os jobs via novo parâmetro de `sga-sync-financeiro-veiculo` (`hinova_session?: { tokenUsuario, apiUrl }`).
+- Em `sga-sync-financeiro-veiculo`: se receber `hinova_session`, usar direto; só autenticar fresh em fallback (401 inline já tratado pelo `withReauthRetry`).
+- Economiza **1–2 logins por job** → ~30–50% de tempo a menos por veículo.
 
-Algoritmo (resumido):
-1. Para cada técnico com turno hoje, montar segmentos `[início, fim, tipo]` a partir de turno + almoço + serviços (ordenados por `em_rota_em` / `iniciada_em` / `concluida_em`).
-2. Preencher gaps dentro do turno como **ocioso**, exceto janelas onde o último `vistoriadores_localizacao.updated_at` ficou >25min sem update dentro do horário comercial — esses gaps viram **inativo**.
-3. Somar minutos por tipo. Renderizar barra horizontal proporcional.
+### 2. Paralelizar as 12 janelas de boletos
 
-### 3. Detalhes técnicos
+Em `_shared/hinova-client.ts → listarBoletosVeiculo`, hoje é loop sequencial. Trocar por `Promise.allSettled` em chunks de 4 janelas paralelas:
 
-**Hook novo:** `src/hooks/useEquipeTempoReal.ts`
-- Query única paralelizada (`Promise.all`) por: `turnos_profissionais` do dia, `servicos` do dia com timestamps, último `vistoriadores_localizacao` por técnico, `profiles` para nome/foto.
-- Retorna `EquipeMembroTempoReal[]` com `{ id, nome, fotoUrl, statusAtual, segmentos[], totais: {emServico, deslocamento, almoco, ocioso, inativo}, ultimoGpsEm, tarefas: {concluidas, total} }`.
-- `refetchInterval: 60s` + invalidação via realtime nos canais `servicos`, `turnos_profissionais`, `vistoriadores_localizacao`.
+- 12 janelas × 600 ms sequencial ≈ 7,2 s → 3 chunks × 600 ms paralelo ≈ 1,8 s.
+- Mantém deduplicação por `nosso_numero` e tratamento de erros transitórios (auth/rate_limit/janela_horaria continuam abortando tudo).
+- Adicionar opção `paralelismoJanelas: number` (default 4) para tunar.
 
-**Componentes novos:**
-- `src/components/equipe/TimelineTecnicoCard.tsx` — card com barra horizontal, badges e contadores.
-- `src/components/equipe/TimelineBar.tsx` — SVG com segmentos coloridos, tooltip por bloco (Recharts não é necessário, é só uma barra empilhada simples em divs).
+### 3. Elevar concorrência e batch da drenagem
 
-**Cores dos estados** (Tailwind tokens semânticos):
-- Em serviço: `bg-primary`
-- Deslocamento: `bg-blue-500`
-- Almoço: `bg-amber-500`
-- Ocioso: `bg-muted`
-- Inativo: `bg-destructive`
-- Fora do turno: `bg-transparent` com borda
+Em `cron-sga-sync-financeiro-drenagem-5min` e em `sga-backfill-massa-orquestrador`:
 
-**Arquivos a editar:**
-- `src/hooks/useRotas.ts` → corrigir `useRotasMetricas`.
-- `src/pages/monitoramento/Rotas.tsx` → trocar o card "Equipe em Campo — Hoje" pelo novo `TimelineTecnicoCard` em loop.
+- `BATCH`: 20 → **40** (limite da Hinova suporta com folga após dedup de auth).
+- `concurrency` enviado a `sga-backfill-financeiro`: 8 → **12**.
+- `delay_ms` entre chunks: 100 → **50** (com circuit breaker já existente para auth/rate, é seguro).
 
-**Arquivos a criar:**
-- `src/hooks/useEquipeTempoReal.ts`
-- `src/components/equipe/TimelineTecnicoCard.tsx`
-- `src/components/equipe/TimelineBar.tsx`
+### 4. Upsert em batch de cobrancas
 
-Sem migrations — todos os dados já existem nas tabelas atuais.
+Em `sga-sync-financeiro-veiculo`, trocar o loop `for (const b of boletos) { upsert(...) }` por **um único `upsert(rows, { onConflict: 'nosso_numero' })`** com todas as linhas do veículo. Para 12 boletos médios isso elimina 11 RTTs ao Postgres.
 
-### 4. Validação após a implementação
+### 5. Pular reconciliação quando códigos já existem (fast-path)
 
-Como diretor (`admin@teste.com`), abrir a tela e confirmar:
-- Os 4 KPIs do topo refletem dados reais consultados no banco.
-- O painel mostra cada técnico com turno hoje (ou "Nenhum profissional com turno aberto" se vazio).
-- Para cada técnico, soma dos blocos = duração entre `inicio_turno` e `now()` (ou `fim_turno`).
+Hoje `buscarVeiculoPorPlaca` é sempre chamado se há `placa`, mesmo quando `veiculo.codigo_hinova` e `associado.codigo_hinova` já estão preenchidos e válidos. Mudar para:
+
+- Se ambos códigos já existem → pular reconciliação por placa/CPF e ir direto para `listarBoletosVeiculo`.
+- Só cair no fallback de placa/CPF quando `boletos.length === 0` (já existe lógica parecida).
+- Veículos já reconciliados (a maioria após a primeira passada) economizam 1–2 chamadas Hinova.
+
+### 6. Heartbeat menos chatto (micro-otimização)
+
+Atualizar `sga_runtime_state` a cada chunk de concurrency soma latência. Mudar para a cada **3 chunks** ou a cada 5 s (o que vier antes), mantendo TTL de 2 min do cron.
+
+## Impacto esperado
+
+| Métrica | Antes | Depois (estimado) |
+|---|---|---|
+| HTTP/veículo | 15–25 | 4–8 |
+| Tempo/veículo | 8–15 s | 2–4 s |
+| Jobs/min | ~4,2 | **~25–40** |
+| ETA fila atual (~9,7k) | ~34h | **~6–8h** |
+
+## Arquivos a alterar
+
+- `supabase/functions/_shared/hinova-client.ts` → paralelizar `listarBoletosVeiculo` (chunks).
+- `supabase/functions/sga-sync-financeiro-veiculo/index.ts` → aceitar `hinova_session` no body, fast-path de reconciliação, upsert em batch.
+- `supabase/functions/sga-backfill-financeiro/index.ts` → autenticar 1× por batch e propagar `hinova_session`; aumentar caps default; concurrency 12.
+- `supabase/functions/cron-sga-sync-financeiro-diario/index.ts` (drenagem 5min) → BATCH=40, concurrency=12, heartbeat menos frequente.
+- `supabase/functions/sga-backfill-massa-orquestrador/index.ts` → ajustar defaults `batch_financeiro=80`.
+
+## Salvaguardas mantidas
+
+- Circuit breaker de 5 falhas auth consecutivas continua ativo.
+- `withReauthRetry` em 401 inline continua reautenticando uma vez.
+- Pause via `backfill_cancelar_solicitado` continua respeitada.
+- Idempotência por `nosso_numero` preservada (upsert em batch usa o mesmo conflito).
+- Janela horária da Hinova: jobs com `auth/horario` continuam virando `pendente_retry` para a próxima janela 09h BRT.
+
+## Não incluso (fora de escopo / requer ação manual)
+
+- Liberar mais permissões da API Hinova (já solicitado em conversa anterior).
+- Substituir `/listar/boleto-associado-veiculo` por endpoint de listagem em massa — Hinova não expõe oficialmente.
