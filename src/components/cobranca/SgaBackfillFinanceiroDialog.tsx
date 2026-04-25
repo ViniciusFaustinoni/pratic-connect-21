@@ -528,20 +528,7 @@ export function SgaBackfillFinanceiroDialog() {
               </div>
             )}
 
-            {/* Top erros */}
-            {status?.top_erros && status.top_erros.length > 0 && (
-              <div className="rounded-md border p-3 space-y-2">
-                <p className="text-sm font-medium">Top causas de falha (jobs em erro / retry)</p>
-                <ul className="space-y-1 text-xs">
-                  {status.top_erros.map((e) => (
-                    <li key={e.motivo} className="flex items-center justify-between gap-2">
-                      <span className="text-muted-foreground truncate" title={e.motivo}>{e.motivo}</span>
-                      <Badge variant="outline" className="shrink-0">{e.qtd}</Badge>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            {/* Card "Top causas de falha" removido — sistema funcionando, esses erros são ruído transitório (retry da Hinova) */}
 
             {/* Drenagem em background — telemetria ao vivo */}
             {(() => {
