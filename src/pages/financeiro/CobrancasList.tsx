@@ -1042,13 +1042,17 @@ export default function CobrancasList() {
         onClear={clearSelection}
         actions={[
           {
-            label: enviandoLote ? 'Enviando...' : 'Enviar Boletos PDF',
-            icon: enviandoLote ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />,
-            onClick: handleEnviarBoletosLote,
+            label: enviandoLote ? 'Enviando...' : 'WhatsApp',
+            icon: enviandoLote ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />,
+            onClick: handleEnviarWhatsAppLote,
             disabled: enviandoLote,
           },
-          { label: 'WhatsApp', icon: <MessageSquare className="h-4 w-4" />, onClick: handleEnviarWhatsAppLote },
-          { label: 'E-mail', icon: <Mail className="h-4 w-4" />, onClick: handleEnviarEmailLote },
+          {
+            label: enviandoLote ? 'Enviando...' : 'E-mail',
+            icon: enviandoLote ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />,
+            onClick: handleEnviarEmailLote,
+            disabled: enviandoLote,
+          },
           { label: 'Reemitir', icon: <RefreshCw className="h-4 w-4" />, onClick: handleReemitirLote },
         ]}
       />
