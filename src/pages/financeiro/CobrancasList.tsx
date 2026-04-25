@@ -285,8 +285,9 @@ export default function CobrancasList() {
             .from('asaas_cobrancas')
             .select(`
               id, asaas_id, tipo, status, valor, pagamento_valor, data_vencimento,
-              competencia, boleto_url, pix_copia_cola, associado_id,
-              associado:associados(id, nome, cpf, telefone, whatsapp)
+              competencia, boleto_url, pix_copia_cola, associado_id, veiculo_id,
+              linha_digitavel,
+              associado:associados(id, nome, cpf, telefone, whatsapp, email)
             `)
             .gte('data_vencimento', dataInicio)
             .lte('data_vencimento', dataFim)
@@ -314,6 +315,8 @@ export default function CobrancasList() {
             boleto_url: c.boleto_url,
             pix_copia_cola: c.pix_copia_cola,
             asaas_id: c.asaas_id,
+            linha_digitavel: c.linha_digitavel || null,
+            veiculo_id: c.veiculo_id || null,
           }));
         } else {
           let q = supabase
@@ -321,8 +324,8 @@ export default function CobrancasList() {
             .select(`
               id, tipo, status, valor, valor_pago, data_vencimento,
               referencia_mes, referencia_ano, boleto_url, pix_copia_cola,
-              associado_id, origem,
-              associado:associados(id, nome, cpf, telefone, whatsapp)
+              associado_id, origem, veiculo_id, linha_digitavel,
+              associado:associados(id, nome, cpf, telefone, whatsapp, email)
             `)
             .eq('origem', 'sga_hinova')
             .gte('data_vencimento', dataInicio)
@@ -353,6 +356,8 @@ export default function CobrancasList() {
             boleto_url: c.boleto_url,
             pix_copia_cola: c.pix_copia_cola,
             asaas_id: null,
+            linha_digitavel: c.linha_digitavel || null,
+            veiculo_id: c.veiculo_id || null,
           }));
         }
       });
