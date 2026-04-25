@@ -127,7 +127,7 @@ async function executarDrenagemEmBackground(
       let invokeError: any = null;
       try {
         const r = await supabase.functions.invoke('sga-backfill-financeiro', {
-          body: { acao: 'processar', batch_size: BATCH, delay_ms: 150 },
+          body: { acao: 'processar', batch_size: BATCH, delay_ms: 50, concurrency: 12, share_session: true },
         });
         data = r.data;
         invokeError = r.error;
