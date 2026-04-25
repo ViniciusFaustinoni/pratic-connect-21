@@ -512,31 +512,104 @@ export default function ReguaCobranca() {
 
   return (
     <div className="space-y-6">
+      {/* Modal de confirmação de desativação */}
+      <AlertDialog open={confirmDesativar} onOpenChange={setConfirmDesativar}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <PowerOff className="h-5 w-5 text-destructive" />
+              Desativar régua de cobrança?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Ao desativar, <strong>nenhuma mensagem, ligação ou ação automática</strong> será disparada — incluindo a execução manual e o cron diário.
+              <br /><br />
+              As cobranças continuam sendo geradas normalmente, mas o sistema não notificará nem cobrará automaticamente os associados inadimplentes até que a régua seja reativada.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => toggleAtiva.mutate(false)}
+            >
+              Sim, desativar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Régua de Relacionamento</h1>
-          <p className="text-muted-foreground">Configure o fluxo automatizado de relacionamento</p>
+        <div className="flex items-start gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">Régua de Relacionamento</h1>
+            <p className="text-muted-foreground">Configure o fluxo automatizado de relacionamento</p>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => executarAgora.mutate()}
-            disabled={executarAgora.isPending}
-          >
-            {executarAgora.isPending ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+        <div className="flex flex-wrap gap-2 items-center">
+          {/* Toggle global Ativar/Desativar */}
+          <div className={`flex items-center gap-3 rounded-lg border px-3 py-2 ${reguaAtiva ? 'border-green-300 bg-green-50 dark:bg-green-950/30 dark:border-green-800' : 'border-muted bg-muted/40'}`}>
+            {reguaAtiva ? (
+              <Power className="h-4 w-4 text-green-700 dark:text-green-400" />
             ) : (
-              <Play className="h-4 w-4 mr-2" />
+              <PowerOff className="h-4 w-4 text-muted-foreground" />
             )}
-            Executar Agora
-          </Button>
+            <div className="flex flex-col">
+              <span className={`text-xs font-semibold ${reguaAtiva ? 'text-green-800 dark:text-green-300' : 'text-muted-foreground'}`}>
+                Régua {reguaAtiva ? 'ATIVA' : 'DESATIVADA'}
+              </span>
+              <span className="text-[10px] text-muted-foreground leading-tight">
+                {reguaAtiva ? 'Disparos liberados' : 'Nenhum disparo será feito'}
+              </span>
+            </div>
+            <Switch
+              checked={reguaAtiva}
+              disabled={toggleAtiva.isPending || isLoading}
+              onCheckedChange={handleToggleAtiva}
+              aria-label="Ativar ou desativar régua"
+            />
+          </div>
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-block">
+                  <Button
+                    variant="outline"
+                    onClick={() => executarAgora.mutate()}
+                    disabled={executarAgora.isPending || !reguaAtiva}
+                  >
+                    {executarAgora.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Play className="h-4 w-4 mr-2" />
+                    )}
+                    Executar Agora
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              {!reguaAtiva && (
+                <TooltipContent>Ative a régua para executar</TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
+
           <Button onClick={() => salvarRegua.mutate()} disabled={salvarRegua.isPending}>
             <Save className="h-4 w-4 mr-2" />
             Salvar Configuração
           </Button>
         </div>
       </div>
+
+      {/* Banner: régua desativada */}
+      {!reguaAtiva && !isLoading && (
+        <Alert className="border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-800">
+          <PowerOff className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          <AlertDescription className="text-amber-900 dark:text-amber-200">
+            <strong>Régua de cobrança DESATIVADA</strong> — nenhum disparo automático (WhatsApp, SMS, e-mail, ligação, suspensão, negativação ou cancelamento) ocorrerá. Reative no botão acima para retomar o fluxo.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Alerta Explicativo */}
       <Alert>
