@@ -19,6 +19,8 @@ import { toast } from 'sonner';
 import { NovaCobrancaModal } from '@/components/financeiro/NovaCobrancaModal';
 import { RegistrarPagamentoModal } from '@/components/financeiro/RegistrarPagamentoModal';
 import { BatchActionsBar } from '@/components/financeiro/BatchActionsBar';
+import { SgaBackfillFinanceiroDialog } from '@/components/cobranca/SgaBackfillFinanceiroDialog';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   'PENDING': { label: 'Pendente', variant: 'secondary' },
