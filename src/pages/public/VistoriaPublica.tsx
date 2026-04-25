@@ -45,6 +45,7 @@ import {
   useVistoriaLinkPorToken,
   useConcluirEtapaFotosPublica,
   useConcluirEtapaInstalacaoPublica,
+  useIniciarEtapaPublica,
 } from '@/hooks/useVistoriaLinkPublica';
 
 // Itens do checklist da instalação (mesmos do fluxo legado)
