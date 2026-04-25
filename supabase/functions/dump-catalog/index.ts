@@ -41,16 +41,12 @@ Deno.serve(async (req) => {
     }
     data = all;
   } else if (table === "benefits") {
-    const { data: rows } = await supabase.from("benefits").select("name, slug, category, description, preco_sugerido, carencia_dias, carencia_ativa, codigo_sga, display_order, is_active").order("category").order("display_order").order("name");
-    data = rows || [];
-  } else if (table === "elegibilidade") {
     const all: any[] = [];
     let from = 0; const size = 1000;
     while (true) {
-      const { data: chunk } = await supabase
-        .from("entity_eligibility_rules")
-        .select("rule_type, mode, config, is_active, plano:planos!entity_eligibility_rules_entity_id_fkey(nome, product_line:product_lines(name, display_order))")
-        .eq("entity_type", "plan")
+      const { data: chunk } = await supabase.from("benefits")
+        .select("name, slug, category, description, preco_sugerido, carencia_dias, carencia_ativa, codigo_sga, display_order, is_active")
+        .order("category").order("display_order").order("name")
         .range(from, from + size - 1);
       if (!chunk || chunk.length === 0) break;
       all.push(...chunk);
@@ -58,6 +54,31 @@ Deno.serve(async (req) => {
       from += size;
     }
     data = all;
+  } else if (table === "elegibilidade") {
+    const all: any[] = [];
+    let from = 0; const size = 1000;
+    while (true) {
+      const { data: chunk, error } = await supabase
+        .from("entity_eligibility_rules")
+        .select("rule_type, mode, config, is_active, entity_id")
+        .eq("entity_type", "plan")
+        .range(from, from + size - 1);
+      if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "content-type": "application/json" } });
+      if (!chunk || chunk.length === 0) break;
+      all.push(...chunk);
+      if (chunk.length < size) break;
+      from += size;
+    }
+    // Join with planos
+    const planIds = [...new Set(all.map(r => r.entity_id))];
+    const planMap = new Map();
+    for (let i = 0; i < planIds.length; i += 200) {
+      const { data: pls } = await supabase.from("planos")
+        .select("id, nome, product_line:product_lines(name, display_order)")
+        .in("id", planIds.slice(i, i + 200));
+      pls?.forEach(p => planMap.set(p.id, p));
+    }
+    data = all.map(r => ({ ...r, plano: planMap.get(r.entity_id) }));
   }
 
   return new Response(JSON.stringify({ data }), {
