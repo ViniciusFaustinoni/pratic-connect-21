@@ -119,27 +119,31 @@ serve(async (req) => {
         .slice(0, 5)
         .map(([motivo, qtd]) => ({ motivo, qtd }));
 
-      // Apenas veículos da base antiga são elegíveis para sincronização financeira
-      const { count: elegiveisSemCodigo } = await supabase
-        .from('veiculos')
-        .select('id, associados:associados!inner(origem_cadastro)', { count: 'exact', head: true })
-        .is('codigo_hinova', null)
-        .eq('associados.origem_cadastro', 'api_externa');
-      const { count: elegiveisComCodigo } = await supabase
-        .from('veiculos')
-        .select('id, associados:associados!inner(origem_cadastro)', { count: 'exact', head: true })
-        .not('codigo_hinova', 'is', null)
-        .eq('associados.origem_cadastro', 'api_externa');
-      const { count: sistemaNovo } = await supabase
-        .from('veiculos')
-        .select('id, associados:associados!inner(origem_cadastro)', { count: 'exact', head: true })
-        .eq('associados.origem_cadastro', 'interno');
-
-      // Cobranças SGA importadas
-      const { count: cobrancasSga } = await supabase
-        .from('cobrancas')
-        .select('id', { count: 'exact', head: true })
-        .eq('origem', 'sga_hinova');
+      // Apenas veículos da base antiga são elegíveis (paralelizado)
+      const [vSemCod, vComCod, vNovo, cobSga] = await Promise.all([
+        supabase
+          .from('veiculos')
+          .select('id, associados:associados!inner(origem_cadastro)', { count: 'exact', head: true })
+          .is('codigo_hinova', null)
+          .eq('associados.origem_cadastro', 'api_externa'),
+        supabase
+          .from('veiculos')
+          .select('id, associados:associados!inner(origem_cadastro)', { count: 'exact', head: true })
+          .not('codigo_hinova', 'is', null)
+          .eq('associados.origem_cadastro', 'api_externa'),
+        supabase
+          .from('veiculos')
+          .select('id, associados:associados!inner(origem_cadastro)', { count: 'exact', head: true })
+          .eq('associados.origem_cadastro', 'interno'),
+        supabase
+          .from('cobrancas')
+          .select('id', { count: 'exact', head: true })
+          .eq('origem', 'sga_hinova'),
+      ]);
+      const elegiveisSemCodigo = vSemCod.count;
+      const elegiveisComCodigo = vComCod.count;
+      const sistemaNovo = vNovo.count;
+      const cobrancasSga = cobSga.count;
 
       return json(200, {
         success: true,
