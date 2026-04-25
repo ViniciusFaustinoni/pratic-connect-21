@@ -72,6 +72,35 @@ Deno.serve(async (req) => {
   }
   const ruleMap = new Map(rules.map((r) => [r.entity_id, r.rule_config]));
 
+  // 6. benefits (catálogo)
+  let benefits: any[] = [];
+  from = 0;
+  while (true) {
+    const { data, error: berr } = await supabase
+      .from('benefits')
+      .select('id, name, slug, category, description, preco_sugerido, carencia_dias, carencia_ativa, codigo_sga, display_order, is_active')
+      .eq('is_active', true)
+      .range(from, from + PAGE - 1);
+    if (berr) { console.error('benefits err', berr); break; }
+    benefits = benefits.concat(data || []);
+    if (!data || data.length < PAGE) break;
+    from += PAGE;
+  }
+
+  // 7. plan_benefits (vínculo plano-benefício)
+  let planBenefits: any[] = [];
+  from = 0;
+  while (true) {
+    const { data, error: pberr } = await supabase
+      .from('plan_benefits')
+      .select('plan_id, benefit_id, custom_value, custom_text, is_highlighted')
+      .range(from, from + PAGE - 1);
+    if (pberr) { console.error('plan_benefits err', pberr); break; }
+    planBenefits = planBenefits.concat(data || []);
+    if (!data || data.length < PAGE) break;
+    from += PAGE;
+  }
+
   return new Response(
     JSON.stringify({
       planos,
@@ -79,6 +108,8 @@ Deno.serve(async (req) => {
       planos_coberturas: pc,
       coberturas: cobs,
       fipe_rules: Array.from(ruleMap.entries()).map(([id, cfg]) => ({ entity_id: id, rule_config: cfg })),
+      benefits,
+      plan_benefits: planBenefits,
     }),
     { headers: { ...cors, 'Content-Type': 'application/json' } },
   );
