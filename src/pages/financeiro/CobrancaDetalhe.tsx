@@ -68,8 +68,16 @@ const formatLinhaDigitavel = (linha: string | null | undefined) => {
   return clean.replace(/(.{5})/g, '$1 ').trim();
 };
 
-export default function CobrancaDetalhe() {
-  const { id } = useParams<{ id: string }>();
+interface CobrancaDetalheProps {
+  /** Quando informado (modo modal), tem prioridade sobre o :id da rota */
+  cobrancaId?: string;
+  /** Quando true, oculta o botão "Voltar" (uso em modal) */
+  embedded?: boolean;
+}
+
+export default function CobrancaDetalhe({ cobrancaId, embedded }: CobrancaDetalheProps = {}) {
+  const params = useParams<{ id: string }>();
+  const id = cobrancaId ?? params.id;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { cancelarCobranca, gerarSegundaVia } = useAsaas();
