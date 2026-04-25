@@ -202,18 +202,62 @@ serve(async (req) => {
       return json(200, { success: true, cancelados, veiculos_internos: veiculosInternos.length });
     }
 
-    // -------- REAGENDAR ERROS DE JANELA HORÁRIA --------
+    // -------- REAGENDAR ERROS TRANSITÓRIOS --------
     if (acao === 'reagendar_erros_horario') {
-      const proximo = nextJanela().toISOString();
-      // Move erros conhecidamente transitórios → pendente_retry
-      const { data, error } = await supabase
-        .from('sga_sync_financeiro_jobs')
-        .update({ status: 'pendente_retry', proximo_retry_em: proximo })
-        .eq('status', 'erro')
-        .or('ultimo_erro.ilike.%horario%,ultimo_erro.ilike.%horário%,ultimo_erro.ilike.%janela_horaria%,ultimo_erro.ilike.%401%,ultimo_erro.ilike.%restri%')
-        .select('id');
-      if (error) throw error;
-      return json(200, { success: true, reagendados: data?.length ?? 0, proximo_retry_em: proximo });
+      const proximaJanela = nextJanela().toISOString();
+      const agora = new Date().toISOString();
+      // Padrões agrupados por quando devem ser re-tentados.
+      // OBS: usamos múltiplos UPDATEs porque .or() do PostgREST quebra
+      // com caracteres especiais (acentos, vírgulas dentro do padrão).
+      const padroesJanela = [
+        '%horario%',
+        '%horário%',
+        '%janela_horaria%',
+        '%restri%',
+        '%401%',
+        '%403%',
+        '%Login ou senha%',
+        '%login ou senha%',
+      ];
+      const padroesImediato = [
+        '%5xx%',
+        '%500%',
+        '%502%',
+        '%503%',
+        '%504%',
+        '%non-2xx%',
+        '%non%2xx%',
+        '%Failed to send%',
+        '%Failed to fetch%',
+        '%network%',
+        '%timeout%',
+        '%indispon%',
+        '%temporarily unavailable%',
+      ];
+      const idsReagendados = new Set<string>();
+      const aplicar = async (padroes: string[], proximo: string) => {
+        for (const padrao of padroes) {
+          const { data, error } = await supabase
+            .from('sga_sync_financeiro_jobs')
+            .update({ status: 'pendente_retry', proximo_retry_em: proximo })
+            .eq('status', 'erro')
+            .ilike('ultimo_erro', padrao)
+            .select('id');
+          if (error) {
+            console.error('[reagendar_erros_horario] padrão', padrao, error.message);
+            continue;
+          }
+          for (const r of data ?? []) idsReagendados.add(r.id);
+        }
+      };
+      await aplicar(padroesJanela, proximaJanela);
+      await aplicar(padroesImediato, agora);
+      return json(200, {
+        success: true,
+        reagendados: idsReagendados.size,
+        proximo_retry_em: proximaJanela,
+        retry_imediato_em: agora,
+      });
     }
 
     // -------- GUARDA GLOBAL: backfill_financeiro_ativo --------
