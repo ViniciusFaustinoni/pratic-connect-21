@@ -61,13 +61,28 @@ export function SgaBackfillFinanceiroDialog() {
   const drenagemHist = useRef<Array<{ t: number; processados: number }>>([]);
   const [parandoDrenagem, setParandoDrenagem] = useState(false);
 
+  // Helper: invoca edge function tolerando 503 transitório (worker pool saturado)
+  const invokeWithRetry = async (fn: string, body: any, retries = 2) => {
+    let lastErr: any = null;
+    for (let i = 0; i <= retries; i++) {
+      const resp = await supabase.functions.invoke(fn, { body });
+      const msg = String(resp.error?.message || '');
+      const is503 = /503|temporarily unavailable|EDGE_RUNTIME_ERROR/i.test(msg);
+      if (!resp.error || !is503) return resp;
+      lastErr = resp.error;
+      // backoff: 1s, 2s
+      await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+    }
+    return { data: null, error: lastErr } as any;
+  };
+
   const fetchStatus = async () => {
     try {
       const cincoMinAtras = new Date(Date.now() - 5 * 60 * 1000).toISOString();
       const umaHoraAtras = new Date(Date.now() - 60 * 60 * 1000).toISOString();
       const [statusResp, drenResp, ult5Resp, ult1hResp, ultimaResp] = await Promise.all([
-        supabase.functions.invoke('sga-backfill-financeiro', { body: { acao: 'status' } }),
-        supabase.functions.invoke('sga-backfill-financeiro', { body: { acao: 'status_drenagem' } }),
+        invokeWithRetry('sga-backfill-financeiro', { acao: 'status' }),
+        invokeWithRetry('sga-backfill-financeiro', { acao: 'status_drenagem' }),
         supabase.from('cobrancas').select('id', { count: 'exact', head: true })
           .eq('origem', 'sga_hinova').gte('created_at', cincoMinAtras),
         supabase.from('cobrancas').select('id', { count: 'exact', head: true })
@@ -95,7 +110,9 @@ export function SgaBackfillFinanceiroDialog() {
   useEffect(() => {
     if (!open) return;
     fetchStatus();
-    const id = setInterval(fetchStatus, 5000);
+    // Polling de 15s reduz pressão sobre o worker pool da edge function
+    // (antes 5s causava saturação concorrente com o cron de drenagem → 503)
+    const id = setInterval(fetchStatus, 15000);
     return () => clearInterval(id);
   }, [open]);
 
