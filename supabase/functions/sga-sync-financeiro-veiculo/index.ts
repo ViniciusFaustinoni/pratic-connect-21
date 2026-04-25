@@ -375,8 +375,11 @@ serve(async (req) => {
         referencia_ano: refAno,
         valor,
         valor_final: valorFinal,
+        // Hinova devolve `valor_pagamento` (string com vírgula) quando há desconto/abatimento.
+        // Sem desconto, o valor pago coincide com `valor_boleto` (= valorFinal). Mantemos a
+        // ordem de prioridade: primeiro campos explícitos da API, depois `valorFinal` como fallback.
         valor_pago: status === 'pago'
-          ? toNumber(b.valor_pago_boleto ?? b.valor_recebido ?? b.valor_pago ?? valorFinal)
+          ? toNumber(b.valor_pagamento ?? b.valor_pago_boleto ?? b.valor_recebido ?? b.valor_pago ?? valorFinal)
           : null,
         forma_pagamento: status === 'pago'
           ? (b.forma_pagamento_boleto ?? b.tipo_pagamento ?? b.forma_pagamento ?? null)
