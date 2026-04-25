@@ -338,9 +338,11 @@ export default function CobrancaDetalhe({ cobrancaId, embedded }: CobrancaDetalh
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/financeiro/cobrancas')}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
+          {!embedded && (
+            <Button variant="ghost" size="icon" onClick={() => navigate('/financeiro/cobrancas')}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          )}
           <div>
             <h1 className="text-2xl font-bold">
               Cobrança #{cobranca.id.slice(0, 8)}
