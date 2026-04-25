@@ -919,6 +919,28 @@ export function agruparFotosFiltradas(tipo: TipoVeiculo, incluirInstalacao: bool
   }));
 }
 
+/**
+ * Devolve APENAS as fotos da etapa de instalação do rastreador
+ * (categorias 'instalacao' e 'rastreador'). Usado pelo fluxo público
+ * de vistoria em duas etapas.
+ */
+export function getFotosApenasInstalacao(tipo: TipoVeiculo): VistoriaFotoConfig[] {
+  return getFotosByTipoVeiculo(tipo).filter(
+    f => f.categoria === 'instalacao' || f.categoria === 'rastreador',
+  );
+}
+
+export function agruparFotosApenasInstalacao(tipo: TipoVeiculo) {
+  const categorias = getCategoriasByTipoVeiculo(tipo).filter(
+    c => c.id === 'instalacao' || c.id === 'rastreador',
+  );
+  const fotos = getFotosApenasInstalacao(tipo);
+  return categorias.map(categoria => ({
+    ...categoria,
+    fotos: fotos.filter(foto => foto.categoria === categoria.id).sort((a, b) => a.ordem - b.ordem),
+  }));
+}
+
 // Constantes legadas para compatibilidade
 export const TOTAL_FOTOS_OBRIGATORIAS = FOTOS_VISTORIA_COMPLETA.filter(f => f.categoria !== 'instalacao').length;
 export const IDS_FOTOS_OBRIGATORIAS = FOTOS_VISTORIA_COMPLETA.filter(f => f.categoria !== 'instalacao').map(f => f.id);
