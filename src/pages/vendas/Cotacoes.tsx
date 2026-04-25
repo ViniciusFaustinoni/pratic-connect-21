@@ -700,6 +700,16 @@ export default function Cotacoes() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {permissions.isDiretor && (
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => setShowRelatorioDialog(true)}
+            >
+              <Sparkles className="h-4 w-4" />
+              Relatório Inteligente
+            </Button>
+          )}
           <PermissionGate permission="cotacao.canCreate">
             <Button 
               className="gap-2 shadow-md hover:shadow-lg transition-all" 
@@ -713,6 +723,10 @@ export default function Cotacoes() {
             open={showNovaEntrada}
             onOpenChange={setShowNovaEntrada}
             onNovaCotacao={() => setShowCotacaoForm(true)}
+          />
+          <RelatorioInteligenteCotacoesDialog
+            open={showRelatorioDialog}
+            onOpenChange={setShowRelatorioDialog}
           />
         </div>
       </div>
