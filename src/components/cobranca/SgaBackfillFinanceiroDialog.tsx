@@ -351,7 +351,7 @@ export function SgaBackfillFinanceiroDialog() {
       let totalRetry = 0;
       for (let i = 0; i < 10; i++) {
         const { data, error } = await supabase.functions.invoke('sga-backfill-financeiro', {
-          body: { acao: 'processar', batch_size: 50, delay_ms: 150 },
+          body: { acao: 'processar', batch_size: 100, delay_ms: 50, concurrency: 10 },
         });
         if (error) throw error;
         if (!data?.processados) break;
