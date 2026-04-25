@@ -4,9 +4,11 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Bug, Upload, X, Image as ImageIcon, FileText } from 'lucide-react';
+import { Bug, Upload, X, Image as ImageIcon, FileText, Lightbulb, AlertCircle } from 'lucide-react';
 import { useCreateErrorReport } from '@/hooks/useErrorReports';
 import { toast } from 'sonner';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 interface Props {
   open: boolean;
@@ -67,6 +69,41 @@ export function RelatarErroModal({ open, onOpenChange }: Props) {
           <DialogDescription>
             Descreva o problema encontrado. Sua mensagem vai direto para a equipe responsável.
           </DialogDescription>
+
+          <Accordion type="single" collapsible className="mt-4 border rounded-lg bg-muted/30">
+            <AccordionItem value="boas-praticas" className="border-0">
+              <AccordionTrigger className="px-4 py-3 hover:no-underline text-sm font-medium">
+                <span className="flex items-center gap-2">
+                  <Lightbulb className="h-4 w-4 text-amber-500" />
+                  Boas práticas para relatar erros
+                </span>
+              </AccordionTrigger>
+              <AccordionContent className="px-4 pb-4">
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li className="flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                    <span><strong>Um erro = um relato.</strong> Se encontrou 3 problemas diferentes, abra 3 relatos separados.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                    <span><strong>Print sempre da tela inteira,</strong> mostrando a mensagem de erro e o que estava aberto.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                    <span><strong>Não escreva só "não está funcionando"</strong> — sem contexto, ninguém consegue ajudar.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                    <span><strong>Inclua dados de exemplo</strong> quando possível: número da cotação, CPF do associado, placa do veículo.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                    <span><strong>Erros urgentes</strong> (sistema fora do ar, pagamento travando): além do relato, avise no canal direto da equipe.</span>
+                  </li>
+                </ul>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         </DialogHeader>
 
         <div className="space-y-4">
