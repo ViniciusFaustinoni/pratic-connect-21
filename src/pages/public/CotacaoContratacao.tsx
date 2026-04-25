@@ -124,6 +124,14 @@ export default function CotacaoContratacao() {
     return etapaBase;
   }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa]);
 
+  // STEPS dinâmico: adiciona "Instalação" como 6ª etapa apenas quando autovistoria
+  const STEPS = useMemo<Step[]>(() => {
+    if (cotacao?.tipo_vistoria === 'autovistoria') {
+      return [...STEPS_BASE, STEP_INSTALACAO];
+    }
+    return STEPS_BASE;
+  }, [cotacao?.tipo_vistoria]);
+
   // Função para verificar se uma etapa específica já foi concluída
   // Isso garante o modo somente leitura mesmo quando o cliente volta para etapas anteriores
   const isEtapaConcluida = useCallback((etapaIndex: number): boolean => {
