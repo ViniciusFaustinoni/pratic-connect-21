@@ -396,8 +396,18 @@ serve(async (req) => {
       let processados = 0;
       let ultimoHeartbeat = Date.now();
       const HEARTBEAT_MIN_INTERVAL_MS = 4000;
+      // Cap de wall-clock: o edge runtime aborta invocações > ~150s (worker timeout).
+      // Saímos graciosamente em 120s para o cron pegar a próxima leva sem 503.
+      const inicioBatch = Date.now();
+      const WALL_CLOCK_LIMIT_MS = 120_000;
       let chunkIndex = 0;
+      let interrompidoPorTempo = false;
       for (let i = 0; i < jobs.length; i += concurrency) {
+        if (Date.now() - inicioBatch > WALL_CLOCK_LIMIT_MS) {
+          interrompidoPorTempo = true;
+          console.warn('[SGA Backfill] interrompendo batch por wall-clock — restantes voltam à fila como pendente');
+          break;
+        }
         const chunk = jobs.slice(i, i + concurrency);
         const results = await Promise.allSettled(chunk.map(processarJob));
         chunkIndex++;
