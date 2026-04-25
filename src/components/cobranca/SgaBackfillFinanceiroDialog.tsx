@@ -429,11 +429,14 @@ export function SgaBackfillFinanceiroDialog() {
   const semHistorico = status?.jobs.sem_historico_hinova ?? 0;
   const cancelados = status?.jobs.cancelado ?? 0;
   const pendenteRetry = status?.jobs.pendente_retry ?? 0;
-  const totalJobs = status
-    ? status.jobs.pendente + pendenteRetry + status.jobs.executando + status.jobs.concluido + status.jobs.erro + semHistorico + cancelados
+  // IMPORTANTE: jobs `cancelado` NÃO entram no progresso — são lixo de dedupe anterior
+  // que distorce o percentual (inflava para 95% mesmo com poucos concluídos reais).
+  const ativosTotal = status
+    ? status.jobs.pendente + pendenteRetry + status.jobs.executando + status.jobs.concluido + status.jobs.erro + semHistorico
     : 0;
-  const finalizados = status ? status.jobs.concluido + semHistorico + cancelados : 0;
-  const concluidoPct = totalJobs > 0 ? Math.round((finalizados / totalJobs) * 100) : 0;
+  const totalJobs = ativosTotal + cancelados; // exibido em "todos os jobs"
+  const finalizados = status ? status.jobs.concluido + semHistorico + status.jobs.erro : 0;
+  const concluidoPct = ativosTotal > 0 ? Math.round((finalizados / ativosTotal) * 100) : 0;
 
   const motivoPredominante = status?.top_erros?.[0]?.motivo || null;
 
