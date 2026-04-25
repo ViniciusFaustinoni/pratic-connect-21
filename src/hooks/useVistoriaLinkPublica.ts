@@ -88,6 +88,8 @@ export function useVistoriaLinkPorToken(token: string | undefined | null) {
       if (error) throw error;
       return (data as any) || null;
     },
+    refetchInterval: 20_000,
+    refetchOnWindowFocus: true,
   });
 }
 
