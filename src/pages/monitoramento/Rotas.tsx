@@ -110,7 +110,11 @@ export default function Rotas() {
             ) : (
               <>
                 <div className="text-2xl font-bold">{metricas?.emAndamento || 0}</div>
-                <p className="text-xs text-muted-foreground">Instaladores em campo</p>
+                <p className="text-xs text-muted-foreground">
+                  {metricas?.dentroHorarioComercial
+                    ? 'Instaladores em campo agora'
+                    : 'Fora do horário comercial'}
+                </p>
               </>
             )}
           </CardContent>
@@ -127,7 +131,11 @@ export default function Rotas() {
             ) : (
               <>
                 <div className="text-2xl font-bold">{metricas?.instaladoresAtivos || 0}</div>
-                <p className="text-xs text-muted-foreground">Ativos hoje</p>
+                <p className="text-xs text-muted-foreground">
+                  {metricas?.dentroHorarioComercial
+                    ? 'Com turno aberto agora'
+                    : 'Fora do horário comercial'}
+                </p>
               </>
             )}
           </CardContent>
