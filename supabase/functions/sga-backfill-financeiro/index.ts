@@ -394,9 +394,13 @@ serve(async (req) => {
 
       // Processa em chunks paralelos (concurrency por chunk)
       let processados = 0;
+      let ultimoHeartbeat = Date.now();
+      const HEARTBEAT_MIN_INTERVAL_MS = 4000;
+      let chunkIndex = 0;
       for (let i = 0; i < jobs.length; i += concurrency) {
         const chunk = jobs.slice(i, i + concurrency);
         const results = await Promise.allSettled(chunk.map(processarJob));
+        chunkIndex++;
 
         let chunkAuthFails = 0;
         let chunkNonAuthFails = 0;
@@ -424,17 +428,22 @@ serve(async (req) => {
           authFailStreak = 0;
         }
 
-        // Heartbeat ao final de cada chunk
-        await supabase
-          .from('sga_runtime_state')
-          .update({
-            backfill_ultimo_heartbeat: new Date().toISOString(),
-            backfill_processados_total: processados,
-            backfill_ok_total: ok,
-            backfill_fail_total: fail,
-            backfill_retry_total: retry,
-          })
-          .gte('id', '00000000-0000-0000-0000-000000000000');
+        // Heartbeat: a cada 3 chunks OU 4s OU no último chunk (o que vier antes)
+        const ehUltimoChunk = i + concurrency >= jobs.length;
+        const passouTempo = Date.now() - ultimoHeartbeat >= HEARTBEAT_MIN_INTERVAL_MS;
+        if (ehUltimoChunk || chunkIndex % 3 === 0 || passouTempo) {
+          await supabase
+            .from('sga_runtime_state')
+            .update({
+              backfill_ultimo_heartbeat: new Date().toISOString(),
+              backfill_processados_total: processados,
+              backfill_ok_total: ok,
+              backfill_fail_total: fail,
+              backfill_retry_total: retry,
+            })
+            .gte('id', '00000000-0000-0000-0000-000000000000');
+          ultimoHeartbeat = Date.now();
+        }
 
         // CIRCUIT BREAKER: 5 falhas auth/horário acumuladas → aborta o batch
         if (authFailStreak >= 5) {
@@ -453,7 +462,7 @@ serve(async (req) => {
         if (delayMs > 0 && i + concurrency < jobs.length) await sleep(delayMs);
       }
 
-      return json(200, { success: true, processados, ok, fail, retry, aborted, concurrency, motivo_abort: aborted ? 'janela_horaria_hinova_fechada' : null });
+      return json(200, { success: true, processados, ok, fail, retry, aborted, concurrency, share_session: !!sharedSession, motivo_abort: aborted ? 'janela_horaria_hinova_fechada' : null });
     } finally {
       // Renova TTL para o próximo batch (não desmarca — o TTL de 30min cuida disso se o cron parar)
       await supabase
