@@ -319,7 +319,9 @@ export default function CobrancaDetalhe() {
   const valorFinal = cobranca.valor_liquido || cobranca.valor || 0;
   const isPago = ['RECEIVED', 'CONFIRMED'].includes(cobranca.status);
   const isCancelado = cobranca.status === 'CANCELED';
-  const podeCancelar = !isPago && !isCancelado;
+  // SGA Hinova é histórico read-only — não permite cancelar/segunda via pelo nosso lado
+  const podeCancelar = !isPago && !isCancelado && !isOrigemSga;
+  const podeSegundaVia = !isPago && !isCancelado && !isOrigemSga && !cobranca.asaas_id?.startsWith('local_');
 
   return (
     <div className="space-y-6">
