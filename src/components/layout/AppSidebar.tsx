@@ -296,7 +296,6 @@ const menuConfig: {
       items: [
         { title: 'Dashboard', url: '/financeiro', icon: BarChart3 },
         { title: 'Cobranças (Faturas)', url: '/financeiro/cobrancas', icon: Receipt },
-        { title: 'Régua', url: '/financeiro/cobrancas/regua', icon: List },
         { title: 'Chat Cobrança', url: '/cobranca/chat', icon: MessageCircle },
         { title: 'Contas a Pagar', url: '/financeiro/contas-pagar', icon: CreditCard },
         { title: 'Faturamento', url: '/financeiro/faturamento', icon: FileText },
