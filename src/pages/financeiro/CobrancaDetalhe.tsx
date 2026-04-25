@@ -375,7 +375,7 @@ export default function CobrancaDetalhe() {
                 Baixar PDF do Boleto
               </DropdownMenuItem>
             )}
-            {!isPago && !isCancelado && !cobranca.asaas_id?.startsWith('local_') && (
+            {podeSegundaVia && (
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem 
