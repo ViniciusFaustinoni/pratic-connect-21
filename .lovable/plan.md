@@ -1,59 +1,52 @@
-# Acelerar drenagem do financeiro Hinova
+# Abrir detalhes da cobrança em modal
 
-## Diagnóstico do gargalo atual
+## Mudança
 
-A drenagem está lenta porque cada veículo é processado **sequencialmente, um por um**, dentro de cada batch:
-
-- **Loop sequencial**: o orquestrador `sga-backfill-financeiro` faz `for (job of jobs) { await invoke(...) ; await sleep(150ms) }` → cada veículo espera o anterior terminar
-- **Tempo típico por veículo**: ~1,5–3s (chamada à API Hinova) + 150ms de delay = ~2s
-- **Throughput real**: ~30 veículos/min por execução de batch
-- **Cron de 5 em 5 min** com batches de 50 → no melhor caso ~600/h, mas na prática a UI mostra **0 jobs/min** porque o loop fica preso esperando respostas
-- **Métrica "Velocidade 0 jobs/min"** confirma: a janela de medição (60s) raramente captura conclusões
-
-## O que muda
-
-### 1. Paralelismo dentro do batch (impacto principal)
-
-No `sga-backfill-financeiro/index.ts`, substituir o loop `for` sequencial por processamento em **chunks paralelos** com `Promise.allSettled`:
-
-- Aceitar novo parâmetro `concurrency` (default `8`, máx `15`)
-- Dividir os 50 jobs em chunks de 8 e disparar `invoke()` em paralelo dentro de cada chunk
-- Manter o circuit breaker (5 falhas auth seguidas → aborta) verificando o resultado agregado de cada chunk
-- Reduzir `delayMs` default de 150ms → 50ms (entre chunks, não entre jobs)
-- Aumentar `batchSize` máximo de 100 → **200**
-
-**Ganho estimado**: ~6–8x mais rápido → ~200–250 veículos/min por execução
-
-### 2. Cron mais agressivo
-
-Trocar o schedule do cron `sga-sync-financeiro-drenagem-5min` de `*/5` (a cada 5 min) para `*/2` (a cada 2 min) durante o horário de operação. Isso garante que, se um batch terminar antes do tempo, o próximo já dispare.
-
-### 3. Frontend — usar valores agressivos por default
-
-No `SgaBackfillFinanceiroDialog.tsx`, atualizar as chamadas de "Iniciar drenagem" e "Forçar processamento" para enviar:
-```
-{ acao: 'processar', batch_size: 100, delay_ms: 50, concurrency: 10 }
-```
-
-### 4. KPI "Velocidade" — janela maior para capturar progresso real
-
-A janela atual de 60s (5 amostras de 12s) zera quando não há atualização entre dois polls. Aumentar a janela para **3 minutos** (15 amostras) e calcular a taxa instantânea com base em qualquer delta > 0, não apenas no último intervalo.
-
-## Riscos e mitigações
-
-- **Hinova pode aplicar rate limit**: começamos com `concurrency=8` (conservador). Se aparecer pico de erros 429/restrição, o circuit breaker já existente reagenda para a próxima janela.
-- **Edge function timeout**: Supabase edge functions têm limite de ~150s. Com batch=100 e concurrency=10, cada batch leva ~20-30s — bem dentro do limite.
-- **Custo de invocações concorrentes**: cada `supabase.functions.invoke` para `sga-sync-financeiro-veiculo` é uma execução separada. Com concorrência 10 e cron a cada 2 min, ainda fica longe dos limites do plano.
+Hoje, clicar em "Ver detalhes" no menu da lista de cobranças navega para a rota `/financeiro/cobrancas/:id` (página inteira). Vamos transformar isso em um modal sobre a lista, mantendo a rota como fallback (links externos / refresh continuam funcionando).
 
 ## Arquivos alterados
 
-- `supabase/functions/sga-backfill-financeiro/index.ts` — paralelismo via chunks + `Promise.allSettled`, novos defaults
-- `src/components/cobranca/SgaBackfillFinanceiroDialog.tsx` — passa `concurrency`, `batch_size` 100, `delay_ms` 50; janela de KPI de 60s → 180s
-- Migration SQL — atualiza schedule do cron `sga-sync-financeiro-drenagem-5min` para `*/2 9-23,0-1 * * *`
+### 1. `src/pages/financeiro/CobrancaDetalhe.tsx` — refatoração mínima
 
-## Validação após deploy
+Aceitar `id` via prop opcional (além do `:id` da rota) e flag `embedded` para ocultar o botão "Voltar":
 
-1. Iniciar drenagem pelo modal
-2. Confirmar via `sga_runtime_state.backfill_processados_total` que o número sobe rapidamente (esperado: +100/min)
-3. Confirmar KPI "Velocidade" no modal mostra valor > 0
-4. Verificar `sga_sync_financeiro_jobs` (status='erro') não dispara — se disparar e for 429/restrição, reduzir `concurrency` para 5
+```tsx
+interface CobrancaDetalheProps {
+  cobrancaId?: string;   // prioridade sobre params
+  embedded?: boolean;    // oculta "Voltar" no modo modal
+}
+
+export default function CobrancaDetalhe({ cobrancaId, embedded }: Props = {}) {
+  const params = useParams<{ id: string }>();
+  const id = cobrancaId ?? params.id;
+  // ...resto idêntico
+}
+```
+
+E envolver os 2 botões "Voltar" existentes em `{!embedded && ...}`.
+
+### 2. `src/components/cobranca/CobrancaDetalheModal.tsx` — novo wrapper
+
+Componente leve (~25 linhas) que abre um Dialog grande (`max-w-5xl`, `max-h-[90vh] overflow-y-auto`) e renderiza `<CobrancaDetalhe cobrancaId={id} embedded />` quando `open=true`.
+
+### 3. `src/pages/financeiro/CobrancasList.tsx` — trocar navegação por abertura de modal
+
+- Adicionar estado: `const [detalheId, setDetalheId] = useState<string | null>(null)`
+- Trocar `onClick={() => navigate(`/financeiro/cobrancas/${cobranca.id}`)}` por `onClick={() => setDetalheId(cobranca.id)}`
+- Renderizar `<CobrancaDetalheModal id={detalheId} open={!!detalheId} onOpenChange={o => !o && setDetalheId(null)} />` ao final do componente
+
+### 4. Rota `/financeiro/cobrancas/:id` — preservada
+
+Continua funcionando como página standalone (acesso por URL direta, compartilhamento de link, refresh). Sem mudança em `App.tsx`.
+
+## Comportamento esperado
+
+- Clique em "Ver detalhes" → modal abre por cima da lista, sem mudar a URL
+- Botões internos ("Cancelar", "Segunda Via", "Reenviar PDF", etc.) continuam funcionando idênticos dentro do modal
+- Fechar o modal (ESC, clique fora ou X) volta para a lista no mesmo scroll
+- Cache do React Query é compartilhado: dados aparecem instantaneamente se já vistos
+- URL `/financeiro/cobrancas/abc-123` direto no navegador continua exibindo a página inteira normalmente
+
+## Riscos
+
+Baixos. A lógica do componente não muda — só ganha 2 props opcionais com defaults seguros. Botão "Voltar" oculto no modo modal evita ação confusa (não há para onde voltar dentro de um Dialog).
