@@ -5,7 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { ErrorReport, useErrorReportFiles, useUpdateErrorReportStatus } from '@/hooks/useErrorReports';
-import { FileText, Image as ImageIcon, ExternalLink, Play, CheckCircle2 } from 'lucide-react';
+import { FileText, Image as ImageIcon, ExternalLink, Play, CheckCircle2, Copy, Download, X } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface Props {
   report: ErrorReport | null;
