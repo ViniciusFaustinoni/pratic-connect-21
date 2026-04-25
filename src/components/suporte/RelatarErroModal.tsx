@@ -131,13 +131,13 @@ export function RelatarErroModal({ open, onOpenChange }: Props) {
           </div>
 
           <div className="space-y-1.5">
-            <Label>Prints do erro <span className="text-destructive">*</span></Label>
+            <Label>Anexos do erro (prints ou PDF) <span className="text-destructive">*</span></Label>
             <label
               htmlFor="erro-files"
               className="flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border p-4 text-muted-foreground hover:border-primary hover:text-primary cursor-pointer transition-colors"
             >
               <Upload className="h-5 w-5" />
-              <span className="text-sm">Clique para anexar (até {MAX_FILES} arquivos, 10MB cada)</span>
+              <span className="text-sm">Clique para anexar imagens ou PDF (até {MAX_FILES} arquivos, 10MB cada)</span>
               <input
                 id="erro-files"
                 type="file"
@@ -147,9 +147,9 @@ export function RelatarErroModal({ open, onOpenChange }: Props) {
                 onChange={(e) => handleFiles(e.target.files)}
               />
             </label>
-            {!hasImage && (
+            {files.length === 0 && (
               <p className="text-xs text-muted-foreground">
-                É obrigatório anexar pelo menos 1 print (imagem) mostrando o erro.
+                Anexe pelo menos 1 arquivo — print da tela é o ideal, mas PDF também é aceito.
               </p>
             )}
 
