@@ -167,6 +167,7 @@ export default function CobrancasList() {
   const [cobrancaSelecionada, setCobrancaSelecionada] = useState<any>(null);
   const [enviandoLote, setEnviandoLote] = useState(false);
   const [enviandoPDF, setEnviandoPDF] = useState<string | null>(null);
+  const [detalheId, setDetalheId] = useState<string | null>(null);
 
   const dataInicio = useMemo(
     () => format(startOfMonth(new Date(filters.ano, filters.mes - 1, 1)), 'yyyy-MM-dd'),
