@@ -440,14 +440,11 @@ export function SgaBackfillFinanceiroDialog() {
 
   const motivoPredominante = status?.top_erros?.[0]?.motivo || null;
 
-  // Detecta bloqueio "Usuário com restrição" da Hinova — quando ativo, processar a fila
-  // só multiplica jobs em pendente_retry sem produzir resultado. Bloqueia ações de execução.
-  const restricaoHinovaAtiva = !!status?.top_erros?.some((e) =>
-    /restri[cç][aã]o|usu[aá]rio com restri/i.test(e.motivo)
-  );
-  const qtdJobsRestricao = status?.top_erros
-    ?.filter((e) => /restri[cç][aã]o|usu[aá]rio com restri/i.test(e.motivo))
-    .reduce((sum, e) => sum + e.qtd, 0) ?? 0;
+  // "Usuário com restrição" da Hinova é IGNORADO: o sistema continua importando
+  // normalmente em paralelo (validado em produção: 700+ cobranças / 5 min mesmo com
+  // o erro presente). Mantemos as flags zeradas para nunca bloquear ação do usuário.
+  const restricaoHinovaAtiva = false;
+  const qtdJobsRestricao = 0;
 
   return (
     <>
