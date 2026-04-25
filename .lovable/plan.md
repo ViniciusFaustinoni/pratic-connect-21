@@ -1,50 +1,87 @@
-## Exportação inteligente de usuários
+## Diagnóstico
 
-Adicionar um botão **"Exportar"** ao lado de **"Novo usuário"** na tela `/configuracoes/usuarios-acessos` que abre um diálogo onde o diretor escolhe **quais perfis** e **quais campos** exportar, gerando um arquivo CSV ou XLSX.
+**Cobranças (tabela `cobrancas`)** — sem duplicidade real:
+- 141.512 registros, todos com `nosso_numero` único
+- 217 "duplicatas" suspeitas inicialmente detectadas eram **falsos positivos**: associados com 2+ veículos no mesmo vencimento/valor (ex.: associado `035e201b…` com Gol e Prisma, ambos com mensalidade R$ 278,07 vencendo 20/08/2025)
+- Índice único parcial `cobrancas_sga_logica_uniq (veiculo_id, data_vencimento, valor, tipo)` está protegendo corretamente — zero violações
 
-### Comportamento
+**Jobs (tabela `sga_sync_financeiro_jobs`)** — duplicidade real, **1.648 jobs excedentes** em 1.646 veículos:
+- 1.060 grupos com `concluido` + `erro` (mesmo veículo enfileirado 2× e processado 2×)
+- 573 grupos com múltiplos `concluido`
+- 10 grupos com múltiplos `erro`
+- 3 grupos incluindo `pendente_retry`
 
-1. Botão **Exportar** (ícone Download) abre um `Dialog`.
-2. Diálogo dividido em 3 seções:
-   - **Perfis a exportar** (multi-seleção, agrupados por área — Comercial, Operações, Administração etc., reaproveitando `useAppRoles().getRolesByArea()`). Inclui atalhos: "Selecionar todos", "Limpar", e checkboxes por área (ex.: marca todos os perfis Comerciais de uma vez — útil para "todos os consultores externos e internos").
-   - **Filtros adicionais**:
-     - Status: Ativos / Inativos / Todos (default Ativos)
-     - Tipo: Funcionário / Prestador / Agência / Todos
-   - **Campos a exportar** (checkboxes, todos marcados por padrão): Nome, Email, Telefone, CPF, Tipo, Perfis (lista), Código SGA voluntário, Status (ativo/inativo), Data de cadastro, Último acesso.
-3. Seleção de **formato**: CSV (UTF-8 com BOM, separador `;` para Excel BR) ou XLSX.
-4. Pré-visualização: mostra "X usuário(s) serão exportados" antes de confirmar (executa COUNT rápido reativo).
-5. Ao confirmar:
-   - Busca todos os usuários sem paginação (rompe o limite de 1000 usando `.range()` em chunks de 1000 e concatenando — implementação no hook).
-   - Resolve perfis (roles) por usuário em uma única consulta `user_roles.in(user_id, [...])`.
-   - Gera o arquivo no cliente e dispara download com nome `usuarios_<YYYY-MM-DD_HHmm>.<ext>`.
-6. Toast de sucesso com contagem ("142 usuários exportados").
+### Causa raiz
 
-### Inteligência da exportação
+O `sga-backfill-financeiro` (rota `enfileirar`) só considera bloqueado quando há job em `pendente | pendente_retry | executando`. Re-execuções do backfill criam novos jobs para veículos já processados (concluídos ou com erro).
 
-- **Agrupamento por área** torna trivial selecionar "todos os consultores" (marca a área Comercial inteira) ou "todos os supervisores" (1 clique no role).
-- **Multi-role**: usuários com mais de 1 role aparecem uma única vez; coluna "Perfis" lista todos separados por `;`.
-- **Filtragem combinada**: perfis selecionados ∩ tipo ∩ status. Se nenhum perfil for marcado, exporta todos os perfis (exceto associado).
-- **Exclusão de associados** mantida (regra atual da tela).
-- **Sanitização CSV**: prefixar células iniciadas com `=`, `+`, `-`, `@` com `'` para prevenir CSV injection.
+```ts
+// supabase/functions/sga-backfill-financeiro/index.ts:256
+.in('status', ['pendente', 'pendente_retry', 'executando']);  // ❌ ignora concluido/erro
+```
 
-### Arquivos
+**Impacto**: nenhuma duplicidade de cobrança chegou no banco (o índice `cobrancas_sga_logica_uniq` blindou), mas a fila de jobs está poluída — o que distorce métricas (% de progresso, contagem de erros) e gera chamadas redundantes à Hinova.
 
-**Novo:**
-- `src/components/configuracoes/ExportarUsuariosDialog.tsx` — diálogo + lógica de geração CSV/XLSX (usa `xlsx` lib se já instalada; senão CSV puro). Verifica primeiro se `xlsx` está em `package.json`; se não, oferece apenas CSV nesta versão.
-- `src/hooks/useUsuariosExport.ts` — função `fetchUsuariosForExport(filters)` que pagina em chunks de 1000 e junta com roles.
+## Plano de correção
 
-**Editado:**
-- `src/pages/configuracoes/UsuariosAcessos.tsx` — adiciona botão "Exportar" no header e renderiza o diálogo.
+### 1. Limpeza de dados (migração — `UPDATE`)
 
-### Detalhes técnicos
+Cancelar jobs duplicados mantendo apenas o "melhor" por (veículo, tipo):
+- Prioridade: `concluido` > `erro` > `pendente_retry` (na prática só sobram `concluido`/`erro`)
+- Se houver múltiplos no melhor status, manter o mais recente (`updated_at DESC`)
+- Marcar os demais como `cancelado` com `ultimo_erro = 'duplicata_dedupe_$timestamp'` para auditoria
+- Estimativa: ~1.648 jobs serão cancelados
 
-- Reaproveita `useAppRoles` para listar/agrupar roles e respeita `app_roles_config` (fonte dinâmica de perfis).
-- Consulta direta a `profiles` + `user_roles` via cliente Supabase (RLS já protege — só diretor/admin acessa a tela conforme `mem://constraints/access/usuarios-acessos-sem-associados.md`).
-- Sem mudanças em banco, sem novas edge functions, sem novos secrets.
-- Progress UX: botão "Exportar" mostra spinner durante a geração; bloqueia fechamento do dialog enquanto roda.
+### 2. Index único de proteção (migração — schema)
+
+Criar índice único parcial bloqueando jobs ativos duplicados:
+```sql
+CREATE UNIQUE INDEX sga_sync_financeiro_jobs_ativo_uniq
+  ON sga_sync_financeiro_jobs (veiculo_id, tipo)
+  WHERE status IN ('pendente','pendente_retry','executando');
+```
+Garante que nunca mais haverá 2 jobs ativos para o mesmo veículo, mesmo se o backfill rodar concorrentemente.
+
+### 3. Backfill idempotente (`sga-backfill-financeiro/index.ts`)
+
+Trocar a verificação de bloqueio para considerar **qualquer job não cancelado** dentro de uma janela (ex.: últimas 24h) — assim, re-executar o backfill no mesmo dia não recria jobs:
+
+```ts
+.in('status', ['pendente','pendente_retry','executando','concluido','erro'])
+.gte('created_at', new Date(Date.now() - 24*60*60*1000).toISOString())
+```
+
+Adicionar `onConflict` no insert para falhar silenciosamente em corrida:
+```ts
+.upsert(novos, { onConflict: 'veiculo_id,tipo', ignoreDuplicates: true })
+```
+(funciona em conjunto com o índice único parcial).
+
+### 4. Cron diário (`cron-sga-sync-financeiro-diario/index.ts`)
+
+Verificar se enfileira jobs e aplicar a mesma proteção (idempotência por janela + upsert). Já é o padrão — só validar.
+
+### 5. Validação pós-fix
+
+Rodar query de auditoria:
+```sql
+SELECT COUNT(*) FROM (
+  SELECT veiculo_id, tipo FROM sga_sync_financeiro_jobs
+  WHERE status NOT IN ('cancelado')
+  GROUP BY veiculo_id, tipo HAVING COUNT(*) > 1
+) t;  -- deve retornar 0
+```
+
+### Arquivos afetados
+
+| Arquivo | Mudança |
+|---|---|
+| Nova migração SQL (schema) | Cria índice único parcial |
+| Nova migração SQL (data via insert tool) | Cancela 1.648 duplicatas existentes |
+| `supabase/functions/sga-backfill-financeiro/index.ts` | Bloqueio idempotente + upsert |
+| `supabase/functions/cron-sga-sync-financeiro-diario/index.ts` | Validação/ajuste defensivo |
 
 ### Fora de escopo
 
-- Exportação assíncrona via edge function (não necessária para o volume atual de usuários internos).
-- PDF (formato não pedido).
-- Importação reversa.
+- Cobranças: nenhuma ação necessária (zero duplicatas reais)
+- Reprocessar cobranças importadas (já estão íntegras)
