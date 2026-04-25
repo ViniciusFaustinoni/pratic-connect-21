@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
     while (true) {
       const { data: chunk, error } = await supabase
         .from("entity_eligibility_rules")
-        .select("rule_type, mode, config, is_active, entity_id")
+        .select('rule_type, "mode", config, is_active, entity_id')
         .eq("entity_type", "plan")
         .range(from, from + size - 1);
       if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "content-type": "application/json" } });
