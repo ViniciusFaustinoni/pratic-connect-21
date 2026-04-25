@@ -167,57 +167,108 @@ export function useRota(id: string | undefined) {
   });
 }
 
+// Janela de horário comercial (BRT) — usada pelos KPIs em tempo real
+const HORARIO_COMERCIAL = { inicio: 8, fim: 18 } as const;
+
+/**
+ * Retorna o "agora" em America/Sao_Paulo como objeto utilitário.
+ * Usado para decidir hoje (BRT) e se estamos dentro do horário comercial,
+ * mesmo quando o servidor/usuário estiver em outro fuso.
+ */
+function nowBrt() {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  });
+  const parts = Object.fromEntries(fmt.formatToParts(new Date()).map(p => [p.type, p.value]));
+  const date = `${parts.year}-${parts.month}-${parts.day}`; // YYYY-MM-DD
+  const hora = Number(parts.hour);
+  const minuto = Number(parts.minute);
+  // 0 = domingo … 6 = sábado
+  const weekday = new Date(`${date}T12:00:00-03:00`).getUTCDay();
+  const dentroComercial =
+    weekday >= 1 && weekday <= 6 && // seg-sáb
+    hora >= HORARIO_COMERCIAL.inicio && hora < HORARIO_COMERCIAL.fim;
+  return { date, hora, minuto, weekday, dentroComercial };
+}
+
 // Métricas para dashboard
 export function useRotasMetricas() {
   return useQuery({
     queryKey: ['rotas-metricas'],
     queryFn: async () => {
-      const hoje = format(new Date(), 'yyyy-MM-dd');
+      const { date: hoje, dentroComercial } = nowBrt();
       const inicioSemana = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
       const fimSemana = format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
-      // Rotas hoje
+      // Janela de "hoje" em UTC para queries com timestamp
+      // (00:00 BRT = 03:00 UTC; 23:59:59 BRT = 02:59:59 UTC do dia seguinte)
+      const inicioHojeUtc = `${hoje}T03:00:00.000Z`;
+      const fimHojeUtc = `${hoje}T02:59:59.999Z`;
+      const fimHojeUtcDate = new Date(new Date(fimHojeUtc).getTime() + 24 * 60 * 60 * 1000).toISOString();
+
+      // Rotas hoje (programação do dia — não depende de horário comercial)
       const { count: rotasHoje } = await supabase
         .from('rotas')
         .select('*', { count: 'exact', head: true })
         .eq('data_rota', hoje);
 
-      // Em Andamento: serviços efetivamente em execução HOJE (em rota ou em andamento)
-      const { count: emAndamento } = await supabase
-        .from('servicos')
-        .select('*', { count: 'exact', head: true })
-        .eq('data_agendada', hoje)
-        .in('status', ['em_rota', 'em_andamento']);
-
-      // Instaladores ativos: profissionais com turno aberto hoje (fonte de verdade)
-      const { data: turnosHoje } = await supabase
-        .from('turnos_profissionais')
-        .select('profissional_id')
-        .eq('data', hoje)
-        .not('inicio_turno', 'is', null);
-
-      let instaladoresAtivos = new Set((turnosHoje || []).map((t: any) => t.profissional_id)).size;
-
-      // Fallback: se não houver turnos registrados, usar rota_instaladores + rotas.instalador_id
-      if (instaladoresAtivos === 0) {
-        const [{ data: ri }, { data: legacy }] = await Promise.all([
-          supabase
-            .from('rota_instaladores')
-            .select('instalador_id, rotas!inner(data_rota)')
-            .eq('rotas.data_rota', hoje),
-          supabase
-            .from('rotas')
-            .select('instalador_id')
-            .eq('data_rota', hoje)
-            .not('instalador_id', 'is', null),
-        ]);
-        const ids = new Set<string>();
-        (ri || []).forEach((r: any) => r.instalador_id && ids.add(r.instalador_id));
-        (legacy || []).forEach((r: any) => r.instalador_id && ids.add(r.instalador_id));
-        instaladoresAtivos = ids.size;
+      // Em Andamento: efetivamente em execução AGORA, dentro do horário comercial.
+      // Usa iniciada_em / em_rota_em para evitar status "pendurado" de dias anteriores
+      // (serviço que ficou em_rota e nunca foi finalizado não conta).
+      let emAndamento = 0;
+      if (dentroComercial) {
+        const { count } = await supabase
+          .from('servicos')
+          .select('*', { count: 'exact', head: true })
+          .in('status', ['em_rota', 'em_andamento'])
+          .eq('data_agendada', hoje)
+          .or(`iniciada_em.gte.${inicioHojeUtc},em_rota_em.gte.${inicioHojeUtc}`)
+          .or(`iniciada_em.lte.${fimHojeUtcDate},em_rota_em.lte.${fimHojeUtcDate}`);
+        emAndamento = count || 0;
       }
 
-      // Concluídas na semana: serviços concluídos (mais granular que rotas)
+      // Instaladores ativos: profissionais com turno aberto hoje (fonte de verdade).
+      // Fora do horário comercial, mostra 0 (operação encerrada).
+      let instaladoresAtivos = 0;
+      if (dentroComercial) {
+        const { data: turnosHoje } = await supabase
+          .from('turnos_profissionais')
+          .select('profissional_id, fim_turno')
+          .eq('data', hoje)
+          .not('inicio_turno', 'is', null);
+
+        // Considera apenas turnos AINDA ABERTOS (sem fim_turno)
+        instaladoresAtivos = new Set(
+          (turnosHoje || [])
+            .filter((t: any) => !t.fim_turno)
+            .map((t: any) => t.profissional_id)
+        ).size;
+
+        // Fallback: nenhum turno registrado → usar rota_instaladores + rotas.instalador_id
+        if (instaladoresAtivos === 0) {
+          const [{ data: ri }, { data: legacy }] = await Promise.all([
+            supabase
+              .from('rota_instaladores')
+              .select('instalador_id, rotas!inner(data_rota)')
+              .eq('rotas.data_rota', hoje),
+            supabase
+              .from('rotas')
+              .select('instalador_id')
+              .eq('data_rota', hoje)
+              .not('instalador_id', 'is', null),
+          ]);
+          const ids = new Set<string>();
+          (ri || []).forEach((r: any) => r.instalador_id && ids.add(r.instalador_id));
+          (legacy || []).forEach((r: any) => r.instalador_id && ids.add(r.instalador_id));
+          instaladoresAtivos = ids.size;
+        }
+      }
+
+      // Concluídas na semana: serviços concluídos (sem restrição de horário,
+      // pois é métrica acumulada de produtividade).
       const { count: concluidasSemana } = await supabase
         .from('servicos')
         .select('*', { count: 'exact', head: true })
@@ -227,9 +278,10 @@ export function useRotasMetricas() {
 
       return {
         rotasHoje: rotasHoje || 0,
-        emAndamento: emAndamento || 0,
+        emAndamento,
         instaladoresAtivos,
         concluidasSemana: concluidasSemana || 0,
+        dentroHorarioComercial: dentroComercial,
       };
     },
     refetchInterval: 60_000,
