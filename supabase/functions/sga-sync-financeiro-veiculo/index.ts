@@ -143,6 +143,11 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     veiculoId = body.veiculo_id;
     jobId = body.job_id;
+    // Sessão Hinova pré-autenticada (caller compartilha 1 login entre vários jobs do batch).
+    // Quando ausente, autenticamos fresh por job (comportamento legado).
+    const sessionEntrada: HinovaSession | null = body.hinova_session && body.hinova_session.tokenUsuario && body.hinova_session.apiUrl
+      ? (body.hinova_session as HinovaSession)
+      : null;
 
     if (!veiculoId) return json(400, { success: false, error: 'veiculo_id obrigatório' });
 
@@ -164,38 +169,46 @@ serve(async (req) => {
     const associado: any = Array.isArray((veiculo as any).associados) ? (veiculo as any).associados[0] : (veiculo as any).associados;
     if (!associado?.id) throw new Error('Associado não encontrado para o veículo');
 
-    const authStart = Date.now();
-    let session;
-    try {
-      // noCache: true → autenticação fresca por job. Hinova é stateful;
-      // cache global causa 401 cruzados quando outra instância autentica em paralelo.
-      session = await getHinovaSession(supabase, { noCache: true });
-      if (!session) throw new Error('Falha ao obter sessão Hinova');
+    let session: HinovaSession;
+    if (sessionEntrada) {
+      session = sessionEntrada;
+    } else {
+      const authStart = Date.now();
+      try {
+        // noCache: true → autenticação fresca por job (legado, mantém isolamento).
+        session = await getHinovaSession(supabase, { noCache: true });
+        if (!session) throw new Error('Falha ao obter sessão Hinova');
 
-      await supabase.from('sga_sync_logs').insert({
-        veiculo_id: veiculoId,
-        associado_id: associado.id,
-        action: 'autenticar',
-        status: 'success',
-        duracao_ms: Date.now() - authStart,
-      });
-    } catch (authErr: any) {
-      const msg = String(authErr?.message || authErr);
-      await supabase.from('sga_sync_logs').insert({
-        veiculo_id: veiculoId,
-        associado_id: associado.id,
-        action: 'autenticar',
-        status: 'error',
-        error_message: msg,
-        duracao_ms: Date.now() - authStart,
-      });
-      throw authErr;
+        await supabase.from('sga_sync_logs').insert({
+          veiculo_id: veiculoId,
+          associado_id: associado.id,
+          action: 'autenticar',
+          status: 'success',
+          duracao_ms: Date.now() - authStart,
+        });
+      } catch (authErr: any) {
+        const msg = String(authErr?.message || authErr);
+        await supabase.from('sga_sync_logs').insert({
+          veiculo_id: veiculoId,
+          associado_id: associado.id,
+          action: 'autenticar',
+          status: 'error',
+          error_message: msg,
+          duracao_ms: Date.now() - authStart,
+        });
+        throw authErr;
+      }
     }
 
     let codigoVeiculo = Number(veiculo.codigo_hinova) || null;
     let codigoAssociado = Number(associado.codigo_hinova) || null;
 
-    if (veiculo.placa) {
+    // FAST-PATH: se já temos ambos os códigos reconciliados, pulamos a chamada de buscarVeiculoPorPlaca
+    // (economiza 1 RTT à Hinova). O fallback CPF abaixo (quando boletos vêm vazios) cobre casos de
+    // códigos desatualizados.
+    const temCodigosReconciliados = !!(codigoVeiculo && codigoAssociado);
+
+    if (!temCodigosReconciliados && veiculo.placa) {
       try {
         const { found, debug } = await withReauthRetry(supabase, session!, (s) => buscarVeiculoPorPlaca(s, veiculo.placa!), (s) => { session = s; });
         const codigoVeiculoEncontrado = Number(found?.codigo_veiculo) || null;
