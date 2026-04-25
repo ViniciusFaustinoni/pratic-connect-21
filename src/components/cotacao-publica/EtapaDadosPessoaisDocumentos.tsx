@@ -19,7 +19,9 @@ import {
   Car,
   AlertTriangle,
   RefreshCw,
-  Search
+  Search,
+  Pencil,
+  ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { DadosPessoaisForm } from './FormularioDadosPessoais';
@@ -28,6 +30,10 @@ import {
   type DocumentoUnificado,
   type UnifiedDocumentUploaderHandle,
 } from '@/components/contratos/UnifiedDocumentUploader';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
+const COMBUSTIVEIS = ['Gasolina','Etanol','Flex','Diesel','GNV','Híbrido','Elétrico'];
 
 interface DadosExtraidos {
   // Dados pessoais (de CNH/RG)
@@ -126,6 +132,22 @@ export function EtapaDadosPessoaisDocumentos({
   const [reprocessandoComprovante, setReprocessandoComprovante] = useState(false);
   const [cepManual, setCepManual] = useState('');
   const [buscandoCep, setBuscandoCep] = useState(false);
+
+  // Fallback de preenchimento manual (oculto por padrão)
+  const [mostrarManualPessoal, setMostrarManualPessoal] = useState(false);
+  const [mostrarManualVeiculo, setMostrarManualVeiculo] = useState(false);
+  const [mostrarManualEndereco, setMostrarManualEndereco] = useState(false);
+  const [camposManuais, setCamposManuais] = useState<Set<string>>(new Set());
+
+  const setCampoManual = useCallback((campo: keyof DadosExtraidos, valor: any) => {
+    setDadosExtraidos(prev => ({ ...prev, [campo]: valor }));
+    setCamposManuais(prev => {
+      const next = new Set(prev);
+      if (valor === '' || valor == null) next.delete(campo as string);
+      else next.add(campo as string);
+      return next;
+    });
+  }, []);
 
   // Sincronizar email e telefone quando defaultValues mudar (dados carregados do banco)
   useEffect(() => {
@@ -573,6 +595,66 @@ export function EtapaDadosPessoaisDocumentos({
             </div>
           </div>
 
+          {/* Fallback manual — Dados Pessoais (oculto por padrão) */}
+          {temDocumentoPessoal && (
+            <div className="px-3">
+              {!mostrarManualPessoal ? (
+                <button
+                  type="button"
+                  onClick={() => setMostrarManualPessoal(true)}
+                  className="text-xs text-muted-foreground hover:text-primary underline-offset-2 hover:underline inline-flex items-center gap-1"
+                >
+                  <Pencil className="h-3 w-3" />
+                  A IA não leu tudo? Preencher dados pessoais manualmente
+                </button>
+              ) : (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                      Preenchimento manual — Dados pessoais
+                    </p>
+                    <button type="button" onClick={() => setMostrarManualPessoal(false)} className="text-xs text-muted-foreground hover:text-foreground">
+                      Recolher
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs">Nome completo</Label>
+                      <Input className="h-9 text-sm" value={dadosExtraidos.nome || ''} onChange={(e) => setCampoManual('nome', e.target.value)} placeholder="Nome conforme documento" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">RG</Label>
+                      <Input className="h-9 text-sm" value={dadosExtraidos.rg || ''} onChange={(e) => setCampoManual('rg', e.target.value)} placeholder="00.000.000-0" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Órgão emissor</Label>
+                      <Input className="h-9 text-sm" value={dadosExtraidos.rg_orgao || ''} onChange={(e) => setCampoManual('rg_orgao', e.target.value.toUpperCase())} placeholder="SSP/UF" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Data de nascimento</Label>
+                      <Input className="h-9 text-sm" type="date" value={dadosExtraidos.data_nascimento || ''} onChange={(e) => setCampoManual('data_nascimento', e.target.value)} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Nº de Registro CNH</Label>
+                      <Input className="h-9 text-sm" value={dadosExtraidos.cnh || ''} onChange={(e) => setCampoManual('cnh', e.target.value.replace(/\D/g, ''))} placeholder="11 dígitos" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Validade CNH</Label>
+                      <Input className="h-9 text-sm" type="date" value={dadosExtraidos.cnh_validade || ''} onChange={(e) => setCampoManual('cnh_validade', e.target.value)} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Categoria CNH</Label>
+                      <Input className="h-9 text-sm" value={dadosExtraidos.cnh_categoria || ''} onChange={(e) => setCampoManual('cnh_categoria', e.target.value.toUpperCase())} placeholder="A, B, AB..." />
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Use apenas se a leitura automática falhou. Confirme cada dado com seu documento original.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Correção de CPF inválido ou ilegível */}
           {(cpfExtraidoInvalido || cpfIlegivel) && (
             <div className="p-3 rounded-lg bg-destructive/5 border border-destructive/20 space-y-2">
@@ -658,6 +740,75 @@ export function EtapaDadosPessoaisDocumentos({
             </div>
           </div>
 
+          {/* Fallback manual — Veículo (oculto por padrão) */}
+          {temCrlv && (
+            <div className="px-3">
+              {!mostrarManualVeiculo ? (
+                <button
+                  type="button"
+                  onClick={() => setMostrarManualVeiculo(true)}
+                  className="text-xs text-muted-foreground hover:text-primary underline-offset-2 hover:underline inline-flex items-center gap-1"
+                >
+                  <Pencil className="h-3 w-3" />
+                  A IA não leu tudo? Preencher dados do veículo manualmente
+                </button>
+              ) : (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                      Preenchimento manual — Dados do veículo
+                    </p>
+                    <button type="button" onClick={() => setMostrarManualVeiculo(false)} className="text-xs text-muted-foreground hover:text-foreground">
+                      Recolher
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-xs">Placa</Label>
+                      <Input className="h-9 text-sm uppercase" maxLength={8} value={dadosExtraidos.veiculo_placa || ''} onChange={(e) => setCampoManual('veiculo_placa', e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7))} placeholder="ABC1D23" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Renavam</Label>
+                      <Input className="h-9 text-sm" value={dadosExtraidos.veiculo_renavam || ''} onChange={(e) => setCampoManual('veiculo_renavam', e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="11 dígitos" />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs">Chassi</Label>
+                      <Input className="h-9 text-sm uppercase font-mono" maxLength={17} value={dadosExtraidos.veiculo_chassi || ''} onChange={(e) => setCampoManual('veiculo_chassi', e.target.value.toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g, '').slice(0, 17))} placeholder="17 caracteres" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Cor</Label>
+                      <Input className="h-9 text-sm" value={dadosExtraidos.veiculo_cor || ''} onChange={(e) => setCampoManual('veiculo_cor', e.target.value)} placeholder="Branco, Prata..." />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Combustível</Label>
+                      <Select value={dadosExtraidos.veiculo_combustivel || ''} onValueChange={(v) => setCampoManual('veiculo_combustivel', v)}>
+                        <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                        <SelectContent>
+                          {COMBUSTIVEIS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs">Nº do motor</Label>
+                      <Input className="h-9 text-sm font-mono" value={dadosExtraidos.numero_motor || ''} onChange={(e) => setCampoManual('numero_motor', e.target.value.toUpperCase())} placeholder="Conforme CRLV" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Ano de fabricação</Label>
+                      <Input className="h-9 text-sm" type="number" min={1950} max={new Date().getFullYear() + 1} value={dadosExtraidos.veiculo_ano_fabricacao || ''} onChange={(e) => setCampoManual('veiculo_ano_fabricacao', e.target.value ? parseInt(e.target.value) : undefined)} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Ano do modelo</Label>
+                      <Input className="h-9 text-sm" type="number" min={1950} max={new Date().getFullYear() + 1} value={dadosExtraidos.veiculo_ano_modelo || ''} onChange={(e) => setCampoManual('veiculo_ano_modelo', e.target.value ? parseInt(e.target.value) : undefined)} />
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Use apenas se a leitura automática falhou. Confira chassi e placa com atenção.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Comprovante de Residência */}
           <div className={cn(
             'flex items-center gap-3 p-3 rounded-lg transition-colors',
@@ -682,6 +833,96 @@ export function EtapaDadosPessoaisDocumentos({
               )}
             </div>
           </div>
+
+          {/* Fallback manual — Endereço (oculto por padrão) */}
+          {temComprovante && (
+            <div className="px-3">
+              {!mostrarManualEndereco ? (
+                <button
+                  type="button"
+                  onClick={() => setMostrarManualEndereco(true)}
+                  className="text-xs text-muted-foreground hover:text-primary underline-offset-2 hover:underline inline-flex items-center gap-1"
+                >
+                  <Pencil className="h-3 w-3" />
+                  A IA não leu tudo? Preencher endereço manualmente
+                </button>
+              ) : (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                      Preenchimento manual — Endereço
+                    </p>
+                    <button type="button" onClick={() => setMostrarManualEndereco(false)} className="text-xs text-muted-foreground hover:text-foreground">
+                      Recolher
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div>
+                      <Label className="text-xs">CEP</Label>
+                      <Input
+                        className="h-9 text-sm"
+                        value={dadosExtraidos.cep || ''}
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/\D/g, '').slice(0, 8);
+                          const masked = v.length > 5 ? `${v.slice(0, 5)}-${v.slice(5)}` : v;
+                          setCampoManual('cep', masked);
+                          if (v.length === 8) {
+                            fetch(`https://viacep.com.br/ws/${v}/json/`)
+                              .then(r => r.json())
+                              .then(d => {
+                                if (!d.erro) {
+                                  setDadosExtraidos(prev => ({
+                                    ...prev,
+                                    logradouro: prev.logradouro || d.logradouro || '',
+                                    bairro: prev.bairro || d.bairro || '',
+                                    cidade: prev.cidade || d.localidade || '',
+                                    uf: prev.uf || d.uf || '',
+                                  }));
+                                }
+                              }).catch(() => {});
+                          }
+                        }}
+                        placeholder="00000-000"
+                        maxLength={9}
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs">Logradouro</Label>
+                      <Input className="h-9 text-sm" value={dadosExtraidos.logradouro || ''} onChange={(e) => setCampoManual('logradouro', e.target.value)} placeholder="Rua, Avenida..." />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Número</Label>
+                      <Input className="h-9 text-sm" value={dadosExtraidos.numero || ''} onChange={(e) => setCampoManual('numero', e.target.value)} placeholder="123" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Complemento</Label>
+                      <Input className="h-9 text-sm" value={dadosExtraidos.complemento || ''} onChange={(e) => setCampoManual('complemento', e.target.value)} placeholder="Apto, bloco..." />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Bairro</Label>
+                      <Input className="h-9 text-sm" value={dadosExtraidos.bairro || ''} onChange={(e) => setCampoManual('bairro', e.target.value)} />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs">Cidade</Label>
+                      <Input className="h-9 text-sm" value={dadosExtraidos.cidade || ''} onChange={(e) => setCampoManual('cidade', e.target.value)} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">UF</Label>
+                      <Select value={dadosExtraidos.uf || ''} onValueChange={(v) => setCampoManual('uf', v)}>
+                        <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="UF" /></SelectTrigger>
+                        <SelectContent>
+                          {UFS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Use apenas se a leitura automática falhou. O CEP preenche os demais campos automaticamente.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Aviso: CRLV/NF/ATPV-e enviado mas faltam motor ou chassi */}
           {crlvIncompleto && (
