@@ -533,7 +533,22 @@ export function SgaBackfillFinanceiroDialog() {
                   <Badge variant="secondary" className="gap-1 bg-green-50 text-green-700"><CheckCircle2 className="h-3 w-3" /> Concluídos: {status.jobs.concluido}</Badge>
                   <Badge variant="secondary" className="gap-1"><MinusCircle className="h-3 w-3" /> Sem histórico: {semHistorico}</Badge>
                   {cancelados > 0 && (
-                    <Badge variant="secondary" className="gap-1"><MinusCircle className="h-3 w-3" /> Cancelados: {cancelados}</Badge>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge variant="outline" className="gap-1 text-muted-foreground cursor-help">
+                            <MinusCircle className="h-3 w-3" /> Não-elegíveis: {cancelados.toLocaleString('pt-BR')}
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="max-w-[300px] text-xs">
+                            Jobs cancelados pertencem a veículos da base nova (origem 'interno') ou a duplicatas
+                            removidas em rodadas anteriores de deduplicação. <strong>Não contam como erro</strong> e
+                            são excluídos do progresso e dos cálculos de ETA.
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   )}
                   <Badge variant="secondary" className="gap-1 bg-red-50 text-red-700"><AlertCircle className="h-3 w-3" /> Erros: {status.jobs.erro}</Badge>
                 </div>
