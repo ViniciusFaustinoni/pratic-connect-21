@@ -305,10 +305,12 @@ export default function CobrancaDetalhe({ cobrancaId, embedded }: CobrancaDetalh
   if (error || !cobranca) {
     return (
       <div className="space-y-6">
-        <Button variant="ghost" onClick={() => navigate('/financeiro/cobrancas')}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Voltar
-        </Button>
+        {!embedded && (
+          <Button variant="ghost" onClick={() => navigate('/financeiro/cobrancas')}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Voltar
+          </Button>
+        )}
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Erro</AlertTitle>
