@@ -182,28 +182,48 @@ export function useRotasMetricas() {
         .select('*', { count: 'exact', head: true })
         .eq('data_rota', hoje);
 
-      // Em andamento
+      // Em Andamento: serviços efetivamente em execução HOJE (em rota ou em andamento)
       const { count: emAndamento } = await supabase
-        .from('rotas')
+        .from('servicos')
         .select('*', { count: 'exact', head: true })
-        .eq('status', 'em_andamento');
+        .eq('data_agendada', hoje)
+        .in('status', ['em_rota', 'em_andamento']);
 
-      // Instaladores ativos (com rotas hoje)
-      const { data: instaladoresData } = await supabase
-        .from('rotas')
-        .select('instalador_id')
-        .eq('data_rota', hoje)
-        .not('instalador_id', 'is', null);
+      // Instaladores ativos: profissionais com turno aberto hoje (fonte de verdade)
+      const { data: turnosHoje } = await supabase
+        .from('turnos_profissionais')
+        .select('profissional_id')
+        .eq('data', hoje)
+        .not('inicio_turno', 'is', null);
 
-      const instaladoresAtivos = new Set(instaladoresData?.map(r => r.instalador_id)).size;
+      let instaladoresAtivos = new Set((turnosHoje || []).map((t: any) => t.profissional_id)).size;
 
-      // Concluídas na semana
+      // Fallback: se não houver turnos registrados, usar rota_instaladores + rotas.instalador_id
+      if (instaladoresAtivos === 0) {
+        const [{ data: ri }, { data: legacy }] = await Promise.all([
+          supabase
+            .from('rota_instaladores')
+            .select('instalador_id, rotas!inner(data_rota)')
+            .eq('rotas.data_rota', hoje),
+          supabase
+            .from('rotas')
+            .select('instalador_id')
+            .eq('data_rota', hoje)
+            .not('instalador_id', 'is', null),
+        ]);
+        const ids = new Set<string>();
+        (ri || []).forEach((r: any) => r.instalador_id && ids.add(r.instalador_id));
+        (legacy || []).forEach((r: any) => r.instalador_id && ids.add(r.instalador_id));
+        instaladoresAtivos = ids.size;
+      }
+
+      // Concluídas na semana: serviços concluídos (mais granular que rotas)
       const { count: concluidasSemana } = await supabase
-        .from('rotas')
+        .from('servicos')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'concluida')
-        .gte('data_rota', inicioSemana)
-        .lte('data_rota', fimSemana);
+        .gte('concluida_em', `${inicioSemana}T00:00:00`)
+        .lte('concluida_em', `${fimSemana}T23:59:59`);
 
       return {
         rotasHoje: rotasHoje || 0,
@@ -212,6 +232,8 @@ export function useRotasMetricas() {
         concluidasSemana: concluidasSemana || 0,
       };
     },
+    refetchInterval: 60_000,
+    staleTime: 30_000,
   });
 }
 
