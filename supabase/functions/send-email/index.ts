@@ -212,8 +212,17 @@ const TEMPLATES: Record<string, {
     `
   },
   'boleto-vencendo': {
-    subject: 'Lembrete: Sua cobrança vence em breve - PRATIC',
-    html: (data) => `
+    subject: (data) => (data.vencido ? 'Boleto vencido - PRATIC' : 'Lembrete: Sua cobrança vence em breve - PRATIC'),
+    html: (data) => {
+      const vencido = !!data.vencido;
+      const linhaDigitavel = String(data.linhaDigitavel || '').trim();
+      const titulo = vencido
+        ? `🚨 Boleto vencido há ${data.diasRestantes} dia(s)`
+        : `⏰ Lembrete: vence em ${data.diasRestantes} dia(s)`;
+      const introducao = vencido
+        ? `Identificamos que sua cobrança está vencida. Para evitar suspensão da proteção, regularize o pagamento o quanto antes.`
+        : `Sua cobrança vence em <strong>${data.diasRestantes} dia(s)</strong>. Não deixe sua proteção expirar!`;
+      return `
       <!DOCTYPE html>
       <html>
       <head>
@@ -223,30 +232,44 @@ const TEMPLATES: Record<string, {
       <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f4f5;">
         <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
           <div style="background-color: #ffffff; border-radius: 8px; padding: 40px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-            <h1 style="color: #f59e0b; font-size: 24px; margin: 0 0 24px 0;">⏰ Lembrete de Vencimento</h1>
+            <h1 style="color: ${vencido ? '#dc2626' : '#f59e0b'}; font-size: 24px; margin: 0 0 24px 0;">${titulo}</h1>
             <p style="color: #52525b; font-size: 16px; line-height: 1.6; margin: 0 0 24px 0;">
-              Sua cobrança vence em <strong>${data.diasRestantes} dias</strong>. Não deixe sua proteção expirar!
+              ${introducao}
             </p>
-            <div style="background-color: #fffbeb; border-radius: 8px; padding: 20px; margin-bottom: 24px; border: 1px solid #fde68a;">
+            <div style="background-color: ${vencido ? '#fef2f2' : '#fffbeb'}; border-radius: 8px; padding: 20px; margin-bottom: 24px; border: 1px solid ${vencido ? '#fecaca' : '#fde68a'};">
               <p style="color: #52525b; font-size: 14px; margin: 0 0 8px 0;">Competência</p>
               <p style="color: #18181b; font-size: 18px; font-weight: 600; margin: 0 0 16px 0;">${data.competencia}</p>
               <p style="color: #52525b; font-size: 14px; margin: 0 0 8px 0;">Valor</p>
               <p style="color: #18181b; font-size: 24px; font-weight: 700; margin: 0 0 16px 0;">R$ ${data.valor}</p>
               <p style="color: #52525b; font-size: 14px; margin: 0 0 8px 0;">Vencimento</p>
-              <p style="color: #f59e0b; font-size: 18px; font-weight: 600; margin: 0;">${data.vencimento}</p>
+              <p style="color: ${vencido ? '#dc2626' : '#f59e0b'}; font-size: 18px; font-weight: 600; margin: 0;">${data.vencimento}</p>
             </div>
+            ${linhaDigitavel ? `
+            <div style="background-color: #f4f4f5; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
+              <p style="color: #52525b; font-size: 14px; margin: 0 0 8px 0;">💳 Linha digitável (copie e cole no app do banco)</p>
+              <p style="color: #18181b; font-family: 'Courier New', Consolas, monospace; font-size: 14px; font-weight: 600; word-break: break-all; background-color: #ffffff; padding: 12px; border-radius: 6px; border: 1px dashed #d4d4d8; margin: 0; user-select: all;">
+                ${linhaDigitavel}
+              </p>
+            </div>
+            ` : ''}
+            ${data.boletoUrl ? `
             <a href="${data.boletoUrl}" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: 500;">
-              Pagar Agora
+              Visualizar Boleto
             </a>
+            ` : ''}
             <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 32px 0;">
             <p style="color: #a1a1aa; font-size: 14px; margin: 0;">
               PRATIC Proteção Veicular
+            </p>
+            <p style="color: #a1a1aa; font-size: 12px; margin: 8px 0 0 0;">
+              Mensagem automática. Caso já tenha efetuado o pagamento, por favor desconsidere.
             </p>
           </div>
         </div>
       </body>
       </html>
-    `
+    `;
+    }
   },
   'recuperacao-senha': {
     subject: 'Recuperação de Senha - PRATIC',
