@@ -24,11 +24,12 @@ const corsHeaders = {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Caps defensivos por execução em background
-const MAX_CICLOS = 200;          // 200 × 50 = 10.000 jobs por execução
-const BATCH = 50;
-const DELAY_LOTE = 500;          // pausa entre lotes (sga-backfill-financeiro já tem delay interno)
+const MAX_CICLOS = 500;          // 500 × 20 = 10.000 jobs por execução
+const BATCH = 20;                // batch menor → invoke responde mais rápido (evita timeout interno)
+const DELAY_LOTE = 300;          // pausa entre lotes (sga-backfill-financeiro já tem delay interno)
 const MAX_WALL_CLOCK_MS = 50 * 60 * 1000; // 50 min — segurança vs runtime ~60 min
 const HEARTBEAT_TTL_MS = 2 * 60 * 1000;   // 2 min sem heartbeat → execução considerada morta
+const MAX_ERROS_CONSEC = 5;      // tolera erros transitórios antes de abortar
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };
 
@@ -89,6 +90,7 @@ async function executarDrenagemEmBackground(
       }
     }
 
+    let errosConsec = 0;
     for (let i = 0; i < MAX_CICLOS; i++) {
       // Cap por wall-clock
       if (Date.now() - inicio > MAX_WALL_CLOCK_MS) {
@@ -108,18 +110,53 @@ async function executarDrenagemEmBackground(
         break;
       }
 
-      const r = await supabase.functions.invoke('sga-backfill-financeiro', {
-        body: { acao: 'processar', batch_size: BATCH, delay_ms: 150 },
-      });
-      const data: any = r.data;
-      if (!data?.processados) {
-        console.log('[Cron SGA Drenagem] fila vazia, encerrando');
+      // Pré-checagem: existe algum job pendente/retry vencido?
+      const nowIsoCheck = new Date().toISOString();
+      const { count: pendCount } = await supabase
+        .from('sga_sync_financeiro_jobs')
+        .select('id', { count: 'exact', head: true })
+        .in('status', ['pendente', 'pendente_retry'])
+        .in('tipo', ['backfill_inicial', 'resync'])
+        .or(`status.eq.pendente,proximo_retry_em.lte.${nowIsoCheck}`);
+      if ((pendCount ?? 0) === 0) {
+        console.log('[Cron SGA Drenagem] fila realmente vazia (count=0), encerrando');
+        break;
+      }
+
+      let data: any = null;
+      let invokeError: any = null;
+      try {
+        const r = await supabase.functions.invoke('sga-backfill-financeiro', {
+          body: { acao: 'processar', batch_size: BATCH, delay_ms: 150 },
+        });
+        data = r.data;
+        invokeError = r.error;
+      } catch (e) {
+        invokeError = e;
+      }
+
+      if (invokeError) {
+        errosConsec++;
+        console.warn(`[Cron SGA Drenagem] invoke erro (${errosConsec}/${MAX_ERROS_CONSEC}):`, invokeError);
+        if (errosConsec >= MAX_ERROS_CONSEC) {
+          console.error('[Cron SGA Drenagem] erros consecutivos demais, abortando');
+          break;
+        }
+        await sleep(2000);
+        continue;
+      }
+      errosConsec = 0;
+
+      const processados = data?.processados ?? 0;
+      if (processados === 0) {
+        // fila estava vazia neste momento — sai do loop, próximo cron retoma
+        console.log('[Cron SGA Drenagem] processados=0 (sem jobs vencidos no momento), encerrando');
         break;
       }
       totalOk += data.ok ?? 0;
       totalFail += data.fail ?? 0;
       totalRetry += data.retry ?? 0;
-      totalProcessados += data.processados;
+      totalProcessados += processados;
       lotes++;
 
       // Heartbeat + contadores acumulados
@@ -192,16 +229,25 @@ serve(async (req) => {
       );
     }
 
-    // Dispara em background
-    EdgeRuntime.waitUntil(executarDrenagemEmBackground(supabase, { enfileirar: !apenasProcessar }));
+    // Tenta background; se EdgeRuntime indisponível, executa síncrono (cron 5min cobre o resto)
+    const bgPromise = executarDrenagemEmBackground(supabase, { enfileirar: !apenasProcessar });
+    try {
+      // @ts-ignore
+      if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) {
+        // @ts-ignore
+        EdgeRuntime.waitUntil(bgPromise);
+        return new Response(
+          JSON.stringify({ success: true, started: true, mode: 'background', message: 'Drenagem iniciada em background.' }),
+          { status: 202, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    } catch (_) {}
 
+    // Fallback síncrono — aguarda o ciclo (com cap interno de wall-clock)
+    await bgPromise;
     return new Response(
-      JSON.stringify({
-        success: true,
-        started: true,
-        message: 'Drenagem iniciada em background. Acompanhe o progresso pelo painel.',
-      }),
-      { status: 202, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ success: true, started: true, mode: 'sync', message: 'Drenagem concluída no ciclo atual.' }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (err: any) {
     console.error('[Cron SGA Drenagem] erro:', err);
