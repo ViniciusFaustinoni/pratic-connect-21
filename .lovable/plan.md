@@ -1,66 +1,70 @@
-## Objetivo
+## Diagnóstico atual
 
-Criar um **segundo arquivo XLSX** dedicado a **preços**, vinculável ao `catalogo_planos_pratic_v3.xlsx` pela chave comum **ID Plano** (UUID já presente na aba "Planos" do v3).
+A régua de cobrança **já existe e está funcional**, alinhada aos dados do SGA:
 
-Arquivo: **`catalogo_planos_pratic_v3_precos.xlsx`** em `/mnt/documents/`.
+- ✅ **18 etapas configuradas** (D-6 lembrete até D+61 reativação) na tabela `reguas_cobranca`
+- ✅ **13 templates Meta WhatsApp APROVADOS** (`d_6_lembrete_desconto_v1`, `d0_boleto_vence_hoje_v1`, etc.) — não precisa criar nenhum
+- ✅ **Edge function `executar-regua-cobranca`** já busca cobranças de duas fontes (`asaas_cobrancas` + `cobrancas` com `origem='sga_hinova'`), agrupa por associado, calcula dias de atraso e dispara WhatsApp com a linha digitável correta
+- ✅ **Cron diário às 12h** já agendado (`executar-regua-cobranca-diario`)
+- ✅ **141.512 cobranças SGA importadas**, **2.868 em aberto**, **100% com linha digitável**
 
-## Estrutura proposta (6 abas focadas em preço)
+**O que falta** (foco desta entrega): controle global de Ativar/Desativar a régua sem precisar mexer em etapas individuais.
 
-### 1. Índice de Planos (chave de ligação)
-Coluna-âncora para PROCV/XLOOKUP no catálogo principal.
-- ID Plano · Linha · Plano · Código Plano · Nº Coberturas com preço · Nº Faixas FIPE · Mensalidade Mín (R$) · Mensalidade Máx (R$)
+---
 
-### 2. Preços de Coberturas (preço base)
-Apenas linhas com `valor` preenchido em `coberturas`.
-- ID Plano · Plano · ID Cobertura · Cobertura · Tipo · % Cobertura · **Preço Mensal Base (R$)** · Carência (dias) · Código SGA
+## Mudanças propostas
 
-### 3. Preços por Faixa FIPE (matriz completa — long format)
-A "fonte da verdade" do motor de cotação.
-- ID Plano · Plano · ID Cobertura · Cobertura · Faixa De (R$) · Faixa Até (R$) · **Valor Mensal (R$)**
-- ~75k linhas, com auto-filter para isolar plano/cobertura
+### 1. Botão global "Ativar / Desativar régua"
+Topo da aba `Régua` (`src/pages/cobranca/ReguaCobranca.tsx`):
 
-### 4. Mensalidade Total por Plano × Faixa FIPE
-Soma das contribuições de todas as coberturas do plano em cada faixa FIPE — é o que o associado paga.
-- ID Plano · Linha · Plano · Faixa De (R$) · Faixa Até (R$) · **Mensalidade Total (R$)** · Nº Coberturas somadas
+- **Switch grande** com rótulo dinâmico ("Régua ATIVA" verde / "Régua DESATIVADA" cinza)
+- **Tooltip explicativo** quando desativada: "Nenhuma mensagem, ligação ou ação será disparada — incluindo execução manual e cron diário"
+- **Confirmação modal** ao desativar (impacto alto, evita clique acidental)
+- Persiste no campo `reguas_cobranca.ativa` (já existe no schema)
 
-### 5. Preços de Benefícios (catálogo)
-- ID Benefício · Categoria · Nome · **Preço Sugerido (R$)** · Carência (dias) · Carência Ativa · Slug
-- 1.770 linhas
+### 2. Bloqueio absoluto na edge function
+`supabase/functions/executar-regua-cobranca/index.ts`:
 
-### 6. Resumo de Preços por Linha
-Visão executiva agregada.
-- Linha · Nº Planos · Nº Coberturas · Mensalidade Mín / Média / Máx (R$) · Faixa FIPE atendida (de–até)
+- Lógica atual já busca `.eq('ativa', true)` e retorna sem fazer nada se não achar régua
+- **Reforçar**: log explícito `"Régua DESATIVADA — execução abortada"` + retorno padronizado `{ ativa: false, message: 'Régua desativada — nenhuma ação executada' }`
+- Vale tanto para o cron diário quanto para o botão "Executar agora"
 
-## Como conecta com o catálogo v3
+### 3. Bloqueio no botão "Executar agora"
+- Se régua estiver desativada, botão fica `disabled` com tooltip "Ative a régua para executar"
+- Garantia dupla: front bloqueia + back valida
 
-Ambas as planilhas compartilham **`ID Plano`** (UUID) como chave primária. Exemplos de fórmula que o usuário poderá usar no Excel:
+### 4. Indicador visual no header
+- Badge de status no topo da página `/financeiro/regua`
+- Quando desativada: banner amarelo "⚠️ Régua de cobrança DESATIVADA — nenhum disparo automático ocorrerá"
 
-```text
-=XLOOKUP([@ID Plano]; precos.Planos[ID Plano]; precos.Planos[Mensalidade Mín (R$)])
-```
+### 5. Auditoria
+- Toda mudança no toggle grava evento em `cobranca_eventos` com `tipo='regua_status'` e `dados.acao='ativada'|'desativada'` + `usuario_id` para rastreabilidade
 
-E **`ID Cobertura`** (UUID) como chave secundária para detalhar preços por cobertura.
+---
 
-## Padrões de formatação (iguais ao v3)
+## Detalhes técnicos
 
-- Header escuro (#1F2937) + texto branco, congelar linha 1, auto-filter
-- Valores monetários: `R$ #,##0.00;[Red]-R$ #,##0.00;"—"`
-- IDs em fonte Consolas para facilitar copy/paste
-- Ordenação: Linha → Plano → Cobertura
+**Arquivos alterados:**
+- `src/pages/cobranca/ReguaCobranca.tsx` — toggle + confirmação + banner + bloqueio do botão
+- `supabase/functions/executar-regua-cobranca/index.ts` — log explícito + retorno padronizado quando desativada
 
-## Fontes de dados (já extraídas)
+**Sem mudanças necessárias em:**
+- Schema (campo `ativa` já existe em `reguas_cobranca`)
+- Templates Meta (todos os 13 já APROVED)
+- Cron (já configurado)
+- Mapeamento de variáveis (`linha_digitavel` já busca de SGA primeiro)
 
-Reutilizo o dump em `/tmp/fipe/dump.json` (5,2 MB) — não precisa nova chamada à edge function.
-- `coberturas.valor` → Preço Base (537/2865)
-- `entity_eligibility_rules` (rule_type=`fipe_range`) → Matriz FIPE (75.348 linhas)
-- `benefits.preco_sugerido` → Preços de benefícios (1.770/1.770, 100%)
+**Sem migrations** — apenas mutation no `ativa` via `supabase.from('reguas_cobranca').update({ ativa: false })`.
 
-## QA antes de entregar
+---
 
-- Validar 5 amostras: preço de cobertura no v3 == preço no novo arquivo
-- Validar soma da Aba 4 == soma manual de 1 plano × 1 faixa
-- Validar que todo `ID Plano` da Aba 1 também existe no v3
+## Validação pós-implementação
 
-## Entrega
+1. Ativar régua → executar manual → ver eventos criados em `cobranca_eventos`
+2. Desativar régua → executar manual → confirmar retorno `{ ativa: false }` e zero eventos
+3. Aguardar próxima execução do cron → confirmar nos logs da edge function que aborta
+4. Reativar → próxima execução volta a disparar normalmente
 
-Arquivo final via `<lov-artifact>` + tabela-resumo de quantas linhas em cada aba.
+## Observação sobre os valores divergentes (faturas)
+
+Continua pendente o reenvio da planilha `INADIMPLENTES_ABRIL_DE_2026.xlsx` em CSV para investigar a divergência específica de valores. Esta entrega trata da **régua** (controle de envio); a investigação de **valores** continua aguardando o arquivo legível.

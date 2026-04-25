@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Save, Plus, Trash2, MessageSquare, Smartphone, Mail, Phone, Pause, AlertTriangle, XCircle, Info, GripVertical, Play, ExternalLink, Loader2 } from 'lucide-react';
+import { Save, Plus, Trash2, MessageSquare, Smartphone, Mail, Phone, Pause, AlertTriangle, XCircle, Info, GripVertical, Play, ExternalLink, Loader2, Power, PowerOff } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -108,15 +109,20 @@ export default function ReguaCobranca() {
   const { data: regua, isLoading } = useQuery({
     queryKey: ['regua-cobranca'],
     queryFn: async () => {
+      // Busca a régua mais recente (ativa OU desativada) para permitir toggle
       const { data, error } = await supabase
         .from('reguas_cobranca')
         .select('*')
-        .eq('ativa', true)
+        .order('updated_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
       if (error) throw error;
       return data;
     }
   });
+
+  const reguaAtiva = regua?.ativa ?? false;
+  const [confirmDesativar, setConfirmDesativar] = useState(false);
 
   useEffect(() => {
     if (regua?.etapas) {
@@ -133,9 +139,9 @@ export default function ReguaCobranca() {
         .from('reguas_cobranca')
         .upsert({
           id,
-          nome: 'Régua Padrão',
+          nome: regua?.nome ?? 'Régua Padrão',
           etapas: JSON.parse(JSON.stringify(etapas)),
-          ativa: true,
+          ativa: regua?.ativa ?? true,
           updated_at: new Date().toISOString()
         } as never);
       if (error) throw error;
@@ -148,6 +154,56 @@ export default function ReguaCobranca() {
       toast.error('Erro ao salvar régua');
     }
   });
+
+  // Toggle global ativar/desativar régua
+  const toggleAtiva = useMutation({
+    mutationFn: async (novoEstado: boolean) => {
+      if (!regua?.id) {
+        // Não há régua persistida ainda — cria uma com o estado escolhido
+        const { error } = await supabase
+          .from('reguas_cobranca')
+          .insert({
+            id: crypto.randomUUID(),
+            nome: 'Régua Padrão',
+            etapas: JSON.parse(JSON.stringify(etapas)),
+            ativa: novoEstado,
+          } as never);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('reguas_cobranca')
+          .update({ ativa: novoEstado, updated_at: new Date().toISOString() } as never)
+          .eq('id', regua.id);
+        if (error) throw error;
+      }
+
+      // Auditoria
+      const { data: userData } = await supabase.auth.getUser();
+      await supabase.from('cobranca_eventos').insert({
+        associado_id: null,
+        tipo: 'regua_status',
+        subtipo: novoEstado ? 'ativada' : 'desativada',
+        descricao: `Régua de cobrança ${novoEstado ? 'ATIVADA' : 'DESATIVADA'}`,
+        dados: { acao: novoEstado ? 'ativada' : 'desativada', usuario_id: userData?.user?.id ?? null },
+        automatico: false,
+      } as never);
+    },
+    onSuccess: (_, novoEstado) => {
+      toast.success(novoEstado ? 'Régua ATIVADA — disparos liberados' : 'Régua DESATIVADA — nenhum disparo será feito');
+      queryClient.invalidateQueries({ queryKey: ['regua-cobranca'] });
+    },
+    onError: (err: any) => {
+      toast.error('Falha ao alterar status: ' + (err?.message || ''));
+    },
+  });
+
+  const handleToggleAtiva = (novoEstado: boolean) => {
+    if (!novoEstado) {
+      setConfirmDesativar(true);
+    } else {
+      toggleAtiva.mutate(true);
+    }
+  };
 
   // Estado da última execução manual
   const [ultimaExecucao, setUltimaExecucao] = useState<null | {
@@ -456,31 +512,104 @@ export default function ReguaCobranca() {
 
   return (
     <div className="space-y-6">
+      {/* Modal de confirmação de desativação */}
+      <AlertDialog open={confirmDesativar} onOpenChange={setConfirmDesativar}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <PowerOff className="h-5 w-5 text-destructive" />
+              Desativar régua de cobrança?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Ao desativar, <strong>nenhuma mensagem, ligação ou ação automática</strong> será disparada — incluindo a execução manual e o cron diário.
+              <br /><br />
+              As cobranças continuam sendo geradas normalmente, mas o sistema não notificará nem cobrará automaticamente os associados inadimplentes até que a régua seja reativada.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => toggleAtiva.mutate(false)}
+            >
+              Sim, desativar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Régua de Relacionamento</h1>
-          <p className="text-muted-foreground">Configure o fluxo automatizado de relacionamento</p>
+        <div className="flex items-start gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">Régua de Relacionamento</h1>
+            <p className="text-muted-foreground">Configure o fluxo automatizado de relacionamento</p>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => executarAgora.mutate()}
-            disabled={executarAgora.isPending}
-          >
-            {executarAgora.isPending ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+        <div className="flex flex-wrap gap-2 items-center">
+          {/* Toggle global Ativar/Desativar */}
+          <div className={`flex items-center gap-3 rounded-lg border px-3 py-2 ${reguaAtiva ? 'border-green-300 bg-green-50 dark:bg-green-950/30 dark:border-green-800' : 'border-muted bg-muted/40'}`}>
+            {reguaAtiva ? (
+              <Power className="h-4 w-4 text-green-700 dark:text-green-400" />
             ) : (
-              <Play className="h-4 w-4 mr-2" />
+              <PowerOff className="h-4 w-4 text-muted-foreground" />
             )}
-            Executar Agora
-          </Button>
+            <div className="flex flex-col">
+              <span className={`text-xs font-semibold ${reguaAtiva ? 'text-green-800 dark:text-green-300' : 'text-muted-foreground'}`}>
+                Régua {reguaAtiva ? 'ATIVA' : 'DESATIVADA'}
+              </span>
+              <span className="text-[10px] text-muted-foreground leading-tight">
+                {reguaAtiva ? 'Disparos liberados' : 'Nenhum disparo será feito'}
+              </span>
+            </div>
+            <Switch
+              checked={reguaAtiva}
+              disabled={toggleAtiva.isPending || isLoading}
+              onCheckedChange={handleToggleAtiva}
+              aria-label="Ativar ou desativar régua"
+            />
+          </div>
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-block">
+                  <Button
+                    variant="outline"
+                    onClick={() => executarAgora.mutate()}
+                    disabled={executarAgora.isPending || !reguaAtiva}
+                  >
+                    {executarAgora.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Play className="h-4 w-4 mr-2" />
+                    )}
+                    Executar Agora
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              {!reguaAtiva && (
+                <TooltipContent>Ative a régua para executar</TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
+
           <Button onClick={() => salvarRegua.mutate()} disabled={salvarRegua.isPending}>
             <Save className="h-4 w-4 mr-2" />
             Salvar Configuração
           </Button>
         </div>
       </div>
+
+      {/* Banner: régua desativada */}
+      {!reguaAtiva && !isLoading && (
+        <Alert className="border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-800">
+          <PowerOff className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          <AlertDescription className="text-amber-900 dark:text-amber-200">
+            <strong>Régua de cobrança DESATIVADA</strong> — nenhum disparo automático (WhatsApp, SMS, e-mail, ligação, suspensão, negativação ou cancelamento) ocorrerá. Reative no botão acima para retomar o fluxo.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Alerta Explicativo */}
       <Alert>
