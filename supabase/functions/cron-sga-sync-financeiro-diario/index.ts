@@ -90,6 +90,7 @@ async function executarDrenagemEmBackground(
       }
     }
 
+    let errosConsec = 0;
     for (let i = 0; i < MAX_CICLOS; i++) {
       // Cap por wall-clock
       if (Date.now() - inicio > MAX_WALL_CLOCK_MS) {
@@ -109,18 +110,53 @@ async function executarDrenagemEmBackground(
         break;
       }
 
-      const r = await supabase.functions.invoke('sga-backfill-financeiro', {
-        body: { acao: 'processar', batch_size: BATCH, delay_ms: 150 },
-      });
-      const data: any = r.data;
-      if (!data?.processados) {
-        console.log('[Cron SGA Drenagem] fila vazia, encerrando');
+      // Pré-checagem: existe algum job pendente/retry vencido?
+      const nowIsoCheck = new Date().toISOString();
+      const { count: pendCount } = await supabase
+        .from('sga_sync_financeiro_jobs')
+        .select('id', { count: 'exact', head: true })
+        .in('status', ['pendente', 'pendente_retry'])
+        .in('tipo', ['backfill_inicial', 'resync'])
+        .or(`status.eq.pendente,proximo_retry_em.lte.${nowIsoCheck}`);
+      if ((pendCount ?? 0) === 0) {
+        console.log('[Cron SGA Drenagem] fila realmente vazia (count=0), encerrando');
+        break;
+      }
+
+      let data: any = null;
+      let invokeError: any = null;
+      try {
+        const r = await supabase.functions.invoke('sga-backfill-financeiro', {
+          body: { acao: 'processar', batch_size: BATCH, delay_ms: 150 },
+        });
+        data = r.data;
+        invokeError = r.error;
+      } catch (e) {
+        invokeError = e;
+      }
+
+      if (invokeError) {
+        errosConsec++;
+        console.warn(`[Cron SGA Drenagem] invoke erro (${errosConsec}/${MAX_ERROS_CONSEC}):`, invokeError);
+        if (errosConsec >= MAX_ERROS_CONSEC) {
+          console.error('[Cron SGA Drenagem] erros consecutivos demais, abortando');
+          break;
+        }
+        await sleep(2000);
+        continue;
+      }
+      errosConsec = 0;
+
+      const processados = data?.processados ?? 0;
+      if (processados === 0) {
+        // fila estava vazia neste momento — sai do loop, próximo cron retoma
+        console.log('[Cron SGA Drenagem] processados=0 (sem jobs vencidos no momento), encerrando');
         break;
       }
       totalOk += data.ok ?? 0;
       totalFail += data.fail ?? 0;
       totalRetry += data.retry ?? 0;
-      totalProcessados += data.processados;
+      totalProcessados += processados;
       lotes++;
 
       // Heartbeat + contadores acumulados
