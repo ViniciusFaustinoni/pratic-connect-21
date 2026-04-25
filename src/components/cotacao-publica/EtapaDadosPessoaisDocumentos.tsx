@@ -19,7 +19,9 @@ import {
   Car,
   AlertTriangle,
   RefreshCw,
-  Search
+  Search,
+  Pencil,
+  ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { DadosPessoaisForm } from './FormularioDadosPessoais';
@@ -28,6 +30,10 @@ import {
   type DocumentoUnificado,
   type UnifiedDocumentUploaderHandle,
 } from '@/components/contratos/UnifiedDocumentUploader';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
+const COMBUSTIVEIS = ['Gasolina','Etanol','Flex','Diesel','GNV','Híbrido','Elétrico'];
 
 interface DadosExtraidos {
   // Dados pessoais (de CNH/RG)
