@@ -13,7 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
-import { format, isToday, parseISO } from 'date-fns';
+import { format, isToday, parseISO, endOfMonth, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { NovaCobrancaModal } from '@/components/financeiro/NovaCobrancaModal';
@@ -22,16 +22,14 @@ import { BatchActionsBar } from '@/components/financeiro/BatchActionsBar';
 import { SgaBackfillFinanceiroDialog } from '@/components/cobranca/SgaBackfillFinanceiroDialog';
 import { usePermissions } from '@/hooks/usePermissions';
 
-const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
-  'PENDING': { label: 'Pendente', variant: 'secondary' },
-  'RECEIVED': { label: 'Pago', variant: 'default' },
-  'CONFIRMED': { label: 'Confirmado', variant: 'default' },
-  'OVERDUE': { label: 'Vencido', variant: 'destructive' },
-  'CANCELED': { label: 'Cancelado', variant: 'outline' },
-  'pendente': { label: 'Pendente', variant: 'secondary' },
-  'pago': { label: 'Pago', variant: 'default' },
-  'vencido': { label: 'Vencido', variant: 'destructive' },
-  'cancelado': { label: 'Cancelado', variant: 'outline' },
+// Status canônicos exibidos na UI: pendente | pago | vencido | cancelado
+type StatusCanonico = 'pendente' | 'pago' | 'vencido' | 'cancelado';
+
+const statusConfig: Record<StatusCanonico, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
+  pendente: { label: 'Pendente', variant: 'secondary' },
+  pago: { label: 'Pago', variant: 'default' },
+  vencido: { label: 'Vencido', variant: 'destructive' },
+  cancelado: { label: 'Cancelado', variant: 'outline' },
 };
 
 const tipoConfig: Record<string, { label: string }> = {
@@ -63,6 +61,12 @@ const tipoOptions = [
   { value: 'avulso', label: 'Avulso' },
 ];
 
+const origemOptions = [
+  { value: 'todas', label: 'Todas as origens' },
+  { value: 'asaas', label: 'Asaas' },
+  { value: 'sga_hinova', label: 'SGA Hinova' },
+];
+
 const meses = [
   { value: '1', label: 'Janeiro' },
   { value: '2', label: 'Fevereiro' },
@@ -80,11 +84,10 @@ const meses = [
 
 const getAnos = () => {
   const anoAtual = new Date().getFullYear();
-  return [
-    { value: String(anoAtual), label: String(anoAtual) },
-    { value: String(anoAtual - 1), label: String(anoAtual - 1) },
-    { value: String(anoAtual - 2), label: String(anoAtual - 2) },
-  ];
+  return Array.from({ length: 5 }, (_, i) => ({
+    value: String(anoAtual - i),
+    label: String(anoAtual - i),
+  }));
 };
 
 const formatCurrency = (value: number) =>
@@ -97,24 +100,65 @@ const formatCpfParcial = (cpf: string) => {
   return `${clean.slice(0, 3)}.***.**${clean.slice(8, 9)}-${clean.slice(9)}`;
 };
 
-const mapStatusToAsaas = (status: string): string[] => {
-  const map: Record<string, string[]> = {
-    'pendente': ['PENDING', 'pendente'],
-    'pago': ['RECEIVED', 'CONFIRMED', 'pago'],
-    'vencido': ['OVERDUE', 'vencido'],
-    'cancelado': ['CANCELED', 'cancelado'],
-  };
-  return map[status] || [status];
+// Mapeia o status bruto (qualquer fonte) -> status canônico
+// Para "aguardando_pagamento" (Hinova) e "PENDING" (Asaas), checa a data de vencimento.
+const toCanonical = (rawStatus: string, dataVencimento?: string | null): StatusCanonico => {
+  const s = (rawStatus || '').toLowerCase();
+
+  // Pago
+  if (['received', 'confirmed', 'pago'].includes(s)) return 'pago';
+
+  // Cancelado
+  if (['canceled', 'cancelled', 'cancelado'].includes(s)) return 'cancelado';
+
+  // Vencido (status explícito)
+  if (['overdue', 'vencido'].includes(s)) return 'vencido';
+
+  // Pendente / aguardando_pagamento -> verifica vencimento
+  if (['pending', 'pendente', 'aguardando_pagamento', 'aguardando'].includes(s)) {
+    if (dataVencimento) {
+      try {
+        const venc = parseISO(dataVencimento);
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+        if (venc < hoje) return 'vencido';
+      } catch {
+        // ignora parse error
+      }
+    }
+    return 'pendente';
+  }
+
+  // Fallback: pendente
+  return 'pendente';
 };
+
+interface CobrancaUnificada {
+  id: string;
+  origem: 'asaas' | 'sga_hinova';
+  associado_id: string | null;
+  associado: { id: string; nome: string; cpf: string; telefone?: string; whatsapp?: string } | null;
+  tipo: string;
+  status_raw: string;
+  status: StatusCanonico;
+  valor: number;
+  valor_pago: number;
+  data_vencimento: string | null;
+  competencia: string | null;
+  boleto_url: string | null;
+  pix_copia_cola: string | null;
+  asaas_id: string | null;
+}
 
 export default function CobrancasList() {
   const navigate = useNavigate();
   const { isDiretor, isAdminMaster, isDesenvolvedor } = usePermissions();
   const queryClient = useQueryClient();
-  
+
   const [filters, setFilters] = useState({
     status: 'todos',
     tipo: 'todos',
+    origem: 'todas' as 'todas' | 'asaas' | 'sga_hinova',
     mes: new Date().getMonth() + 1,
     ano: new Date().getFullYear(),
     busca: '',
@@ -123,15 +167,184 @@ export default function CobrancasList() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 25;
 
-  // Estado para seleção em lote
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
-  // Estados dos modais
   const [modalNovaCobranca, setModalNovaCobranca] = useState(false);
   const [modalPagamento, setModalPagamento] = useState(false);
   const [cobrancaSelecionada, setCobrancaSelecionada] = useState<any>(null);
+  const [enviandoLote, setEnviandoLote] = useState(false);
+  const [enviandoPDF, setEnviandoPDF] = useState<string | null>(null);
 
-  // Funções de seleção em lote
+  // Janela de datas (vencimento) — usada para AMBAS as fontes
+  const dataInicio = useMemo(() => {
+    const d = startOfMonth(new Date(filters.ano, filters.mes - 1, 1));
+    return format(d, 'yyyy-MM-dd');
+  }, [filters.mes, filters.ano]);
+
+  const dataFim = useMemo(() => {
+    const d = endOfMonth(new Date(filters.ano, filters.mes - 1, 1));
+    return format(d, 'yyyy-MM-dd');
+  }, [filters.mes, filters.ano]);
+
+  // ============ QUERY UNIFICADA: Asaas + SGA ============
+  const { data: cobrancas, isLoading } = useQuery<CobrancaUnificada[]>({
+    queryKey: ['cobrancas-lista-unificada', filters.mes, filters.ano, filters.origem, filters.tipo],
+    queryFn: async () => {
+      const promises: Promise<CobrancaUnificada[]>[] = [];
+
+      // Asaas
+      if (filters.origem === 'todas' || filters.origem === 'asaas') {
+        const promiseAsaas = (async () => {
+          let q = supabase
+            .from('asaas_cobrancas')
+            .select(`
+              id, asaas_id, tipo, status, valor, pagamento_valor, data_vencimento,
+              competencia, boleto_url, pix_copia_cola, associado_id,
+              associado:associados(id, nome, cpf, telefone, whatsapp)
+            `)
+            .gte('data_vencimento', dataInicio)
+            .lte('data_vencimento', dataFim)
+            .order('data_vencimento', { ascending: false });
+
+          if (filters.tipo !== 'todos') {
+            q = q.ilike('tipo', `%${filters.tipo}%`);
+          }
+          const { data, error } = await q.limit(1000);
+          if (error) throw error;
+          return (data || []).map((c: any): CobrancaUnificada => ({
+            id: c.id,
+            origem: 'asaas',
+            associado_id: c.associado_id,
+            associado: c.associado,
+            tipo: c.tipo,
+            status_raw: c.status,
+            status: toCanonical(c.status, c.data_vencimento),
+            valor: Number(c.valor) || 0,
+            valor_pago: Number(c.pagamento_valor) || 0,
+            data_vencimento: c.data_vencimento,
+            competencia: c.competencia,
+            boleto_url: c.boleto_url,
+            pix_copia_cola: c.pix_copia_cola,
+            asaas_id: c.asaas_id,
+          }));
+        })();
+        promises.push(promiseAsaas);
+      }
+
+      // SGA Hinova (tabela `cobrancas` com origem = 'sga_hinova')
+      if (filters.origem === 'todas' || filters.origem === 'sga_hinova') {
+        const promiseSga = (async () => {
+          let q = supabase
+            .from('cobrancas')
+            .select(`
+              id, tipo, status, valor, valor_pago, data_vencimento,
+              referencia_mes, referencia_ano, boleto_url, pix_copia_cola,
+              associado_id, origem,
+              associado:associados(id, nome, cpf, telefone, whatsapp)
+            `)
+            .eq('origem', 'sga_hinova')
+            .gte('data_vencimento', dataInicio)
+            .lte('data_vencimento', dataFim)
+            .order('data_vencimento', { ascending: false });
+
+          if (filters.tipo !== 'todos') {
+            q = q.ilike('tipo', `%${filters.tipo}%`);
+          }
+          const { data, error } = await q.limit(1000);
+          if (error) throw error;
+          return (data || []).map((c: any): CobrancaUnificada => ({
+            id: c.id,
+            origem: 'sga_hinova',
+            associado_id: c.associado_id,
+            associado: c.associado,
+            tipo: c.tipo,
+            status_raw: c.status,
+            status: toCanonical(c.status, c.data_vencimento),
+            valor: Number(c.valor) || 0,
+            valor_pago: Number(c.valor_pago) || 0,
+            data_vencimento: c.data_vencimento,
+            competencia: c.referencia_mes && c.referencia_ano
+              ? `${String(c.referencia_mes).padStart(2, '0')}/${c.referencia_ano}`
+              : null,
+            boleto_url: c.boleto_url,
+            pix_copia_cola: c.pix_copia_cola,
+            asaas_id: null,
+          }));
+        })();
+        promises.push(promiseSga);
+      }
+
+      const resultados = await Promise.all(promises);
+      return resultados.flat().sort((a, b) => {
+        const da = a.data_vencimento || '';
+        const db = b.data_vencimento || '';
+        return db.localeCompare(da);
+      });
+    },
+  });
+
+  // ============ KPIs (somam ambas as fontes via cobrancas já carregadas) ============
+  const kpis = useMemo(() => {
+    if (!cobrancas) return { total: 0, qtdPagas: 0, valorPagas: 0, qtdPendentes: 0, valorPendentes: 0, qtdVencidas: 0, valorVencidas: 0 };
+
+    const pagas = cobrancas.filter(c => c.status === 'pago');
+    const pendentes = cobrancas.filter(c => c.status === 'pendente');
+    const vencidas = cobrancas.filter(c => c.status === 'vencido');
+
+    return {
+      total: cobrancas.length,
+      qtdPagas: pagas.length,
+      valorPagas: pagas.reduce((acc, c) => acc + (c.valor_pago || c.valor), 0),
+      qtdPendentes: pendentes.length,
+      valorPendentes: pendentes.reduce((acc, c) => acc + c.valor, 0),
+      qtdVencidas: vencidas.length,
+      valorVencidas: vencidas.reduce((acc, c) => acc + c.valor, 0),
+    };
+  }, [cobrancas]);
+
+  // ============ Filtragem (busca + status + tab) — client-side ============
+  const filteredCobrancas = useMemo(() => {
+    if (!cobrancas) return [];
+    let result = cobrancas;
+
+    if (filters.status !== 'todos') {
+      result = result.filter(c => c.status === filters.status);
+    }
+
+    if (filters.busca) {
+      const busca = filters.busca.toLowerCase();
+      result = result.filter(c =>
+        c.associado?.nome?.toLowerCase().includes(busca) ||
+        c.associado?.cpf?.includes(busca)
+      );
+    }
+
+    if (activeTab !== 'todas') {
+      result = result.filter(c => c.status === activeTab);
+    }
+
+    return result;
+  }, [cobrancas, filters.busca, filters.status, activeTab]);
+
+  // Paginação
+  const totalPages = Math.ceil(filteredCobrancas.length / itemsPerPage);
+  const paginatedCobrancas = filteredCobrancas.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  // Contadores das tabs
+  const tabCounts = useMemo(() => {
+    if (!cobrancas) return { todas: 0, pendente: 0, pago: 0, vencido: 0, cancelado: 0 };
+    return {
+      todas: cobrancas.length,
+      pendente: cobrancas.filter(c => c.status === 'pendente').length,
+      pago: cobrancas.filter(c => c.status === 'pago').length,
+      vencido: cobrancas.filter(c => c.status === 'vencido').length,
+      cancelado: cobrancas.filter(c => c.status === 'cancelado').length,
+    };
+  }, [cobrancas]);
+
+  // Seleção em lote
   const handleSelectAll = () => {
     if (selectedIds.size === paginatedCobrancas.length) {
       setSelectedIds(new Set());
@@ -142,36 +355,41 @@ export default function CobrancasList() {
 
   const handleSelectItem = (id: string) => {
     const newSelected = new Set(selectedIds);
-    if (newSelected.has(id)) {
-      newSelected.delete(id);
-    } else {
-      newSelected.add(id);
-    }
+    if (newSelected.has(id)) newSelected.delete(id); else newSelected.add(id);
     setSelectedIds(newSelected);
   };
 
   const clearSelection = () => setSelectedIds(new Set());
 
-  // Estado para envio em lote
-  const [enviandoLote, setEnviandoLote] = useState(false);
-  const [enviandoPDF, setEnviandoPDF] = useState<string | null>(null);
+  // Mutation: cancelar cobrança (apenas Asaas — SGA é read-only no nosso lado)
+  const cancelarCobranca = useMutation({
+    mutationFn: async (asaasId: string) => {
+      const { data, error } = await supabase.functions.invoke('asaas-cobrancas', {
+        body: { action: 'cancelar', asaas_id: asaasId },
+      });
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error || 'Erro ao cancelar');
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Cobrança cancelada com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['cobrancas-lista-unificada'] });
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao cancelar: ${error.message}`);
+    },
+  });
 
-  // Enviar boleto PDF via Evolution API
-  const handleEnviarBoletoPDF = async (cobranca: any) => {
+  // ============ Envios WhatsApp ============
+  const handleEnviarBoletoPDF = async (cobranca: CobrancaUnificada) => {
     const telefone = cobranca.associado?.whatsapp || cobranca.associado?.telefone;
-    if (!telefone) {
-      toast.error('Associado sem telefone cadastrado');
-      return;
-    }
-    if (!cobranca.boleto_url) {
-      toast.error('Boleto não disponível para envio');
-      return;
-    }
+    if (!telefone) { toast.error('Associado sem telefone cadastrado'); return; }
+    if (!cobranca.boleto_url) { toast.error('Boleto não disponível para envio'); return; }
 
     setEnviandoPDF(cobranca.id);
     try {
-      const valor = formatCurrency(Number(cobranca.valor));
-      const vencimento = cobranca.data_vencimento 
+      const valor = formatCurrency(cobranca.valor);
+      const vencimento = cobranca.data_vencimento
         ? format(parseISO(cobranca.data_vencimento), 'dd/MM/yyyy', { locale: ptBR })
         : '';
 
@@ -187,39 +405,29 @@ export default function CobrancasList() {
           referencia_id: cobranca.id,
         },
       });
-
       if (error) throw error;
       toast.success('Boleto PDF enviado por WhatsApp!');
     } catch (err: any) {
-      console.error('Erro ao enviar boleto PDF:', err);
       toast.error(`Erro ao enviar: ${err.message}`);
     } finally {
       setEnviandoPDF(null);
     }
   };
 
-  // Ações em lote - Enviar boletos PDF via Evolution API
   const handleEnviarBoletosLote = async () => {
     const selecionadas = paginatedCobrancas.filter(c => selectedIds.has(c.id));
     const comBoleto = selecionadas.filter(c => c.boleto_url && (c.associado?.whatsapp || c.associado?.telefone));
-    
-    if (comBoleto.length === 0) {
-      toast.error('Nenhuma cobrança com boleto e telefone disponíveis');
-      return;
-    }
+    if (comBoleto.length === 0) { toast.error('Nenhuma cobrança com boleto e telefone disponíveis'); return; }
 
     setEnviandoLote(true);
-    let enviados = 0;
-    let erros = 0;
-
+    let enviados = 0; let erros = 0;
     for (const cobranca of comBoleto) {
       try {
-        const telefone = cobranca.associado?.whatsapp || cobranca.associado?.telefone;
-        const valor = formatCurrency(Number(cobranca.valor));
-        const vencimento = cobranca.data_vencimento 
+        const telefone = cobranca.associado!.whatsapp || cobranca.associado!.telefone!;
+        const valor = formatCurrency(cobranca.valor);
+        const vencimento = cobranca.data_vencimento
           ? format(parseISO(cobranca.data_vencimento), 'dd/MM/yyyy', { locale: ptBR })
           : '';
-
         await supabase.functions.invoke('whatsapp-send-media', {
           body: {
             telefone: telefone.replace(/\D/g, ''),
@@ -232,169 +440,55 @@ export default function CobrancasList() {
             referencia_id: cobranca.id,
           },
         });
-
         enviados++;
-        // Delay entre envios para evitar bloqueio (1 segundo)
         await new Promise(r => setTimeout(r, 1000));
-      } catch {
-        erros++;
-      }
+      } catch { erros++; }
     }
-
     setEnviandoLote(false);
     toast.success(`${enviados} boleto(s) enviado(s)${erros > 0 ? `, ${erros} erro(s)` : ''}`);
     clearSelection();
   };
 
+  const handleEnviarWhatsApp = (cobranca: CobrancaUnificada) => {
+    const telefone = cobranca.associado?.whatsapp || cobranca.associado?.telefone;
+    if (!telefone) { toast.error('Associado sem telefone cadastrado'); return; }
+
+    const telefoneFormatado = telefone.replace(/\D/g, '');
+    const valor = formatCurrency(cobranca.valor);
+    const vencimento = cobranca.data_vencimento
+      ? format(parseISO(cobranca.data_vencimento), 'dd/MM/yyyy', { locale: ptBR })
+      : '';
+
+    let mensagem = `Olá ${cobranca.associado?.nome || ''}! 👋\n\n`;
+    mensagem += `Segue sua cobrança:\n`;
+    mensagem += `💰 Valor: ${valor}\n`;
+    mensagem += `📅 Vencimento: ${vencimento}\n`;
+    if (cobranca.boleto_url) mensagem += `\n📄 Boleto: ${cobranca.boleto_url}\n`;
+    if (cobranca.pix_copia_cola) mensagem += `\n📱 PIX Copia e Cola:\n${cobranca.pix_copia_cola}\n`;
+
+    window.open(`https://wa.me/55${telefoneFormatado}?text=${encodeURIComponent(mensagem)}`, '_blank');
+  };
+
   const handleEnviarWhatsAppLote = () => {
-    const selecionadas = paginatedCobrancas.filter(c => selectedIds.has(c.id));
-    selecionadas.forEach(cobranca => {
-      handleEnviarWhatsApp(cobranca);
-    });
+    paginatedCobrancas.filter(c => selectedIds.has(c.id)).forEach(handleEnviarWhatsApp);
     clearSelection();
   };
 
   const handleEnviarEmailLote = () => {
     toast.info(`Enviando e-mail para ${selectedIds.size} cobrança(s)...`);
-    // TODO: Implementar lógica de envio de email
     clearSelection();
   };
 
   const handleReemitirLote = () => {
     toast.info(`Reemitindo ${selectedIds.size} cobrança(s)...`);
-    // TODO: Implementar lógica de reemissão
     clearSelection();
   };
-
-  // Mutation para cancelar cobrança
-  const cancelarCobranca = useMutation({
-    mutationFn: async (asaasId: string) => {
-      const { data, error } = await supabase.functions.invoke('asaas-cobrancas', {
-        body: { action: 'cancelar', asaas_id: asaasId },
-      });
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error || 'Erro ao cancelar');
-      return data;
-    },
-    onSuccess: () => {
-      toast.success('Cobrança cancelada com sucesso!');
-      queryClient.invalidateQueries({ queryKey: ['cobrancas-lista'] });
-      queryClient.invalidateQueries({ queryKey: ['cobrancas-kpis'] });
-    },
-    onError: (error: Error) => {
-      toast.error(`Erro ao cancelar: ${error.message}`);
-    },
-  });
-
-  // Query principal de cobranças
-  const { data: cobrancas, isLoading } = useQuery({
-    queryKey: ['cobrancas-lista', filters],
-    queryFn: async () => {
-      const competencia = `${String(filters.mes).padStart(2, '0')}/${filters.ano}`;
-      
-      let query = supabase
-        .from('asaas_cobrancas')
-        .select(`
-          *,
-          associado:associados(id, nome, cpf, telefone, whatsapp)
-        `)
-        .order('data_vencimento', { ascending: false });
-
-      // Filtro de status
-      if (filters.status !== 'todos') {
-        const statusList = mapStatusToAsaas(filters.status);
-        query = query.in('status', statusList);
-      }
-
-      // Filtro de tipo
-      if (filters.tipo !== 'todos') {
-        query = query.ilike('tipo', `%${filters.tipo}%`);
-      }
-
-      // Filtro de competência
-      query = query.eq('competencia', competencia);
-
-      const { data, error } = await query.limit(500);
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  // Query para KPIs
-  const { data: kpis } = useQuery({
-    queryKey: ['cobrancas-kpis', filters.mes, filters.ano],
-    queryFn: async () => {
-      const competencia = `${String(filters.mes).padStart(2, '0')}/${filters.ano}`;
-
-      const { data } = await supabase
-        .from('asaas_cobrancas')
-        .select('valor, pagamento_valor, status')
-        .eq('competencia', competencia);
-
-      const total = data?.length || 0;
-      const pagas = data?.filter(c => ['RECEIVED', 'CONFIRMED', 'pago'].includes(c.status)) || [];
-      const pendentes = data?.filter(c => ['PENDING', 'pendente'].includes(c.status)) || [];
-      const vencidas = data?.filter(c => ['OVERDUE', 'vencido'].includes(c.status)) || [];
-
-      return {
-        total,
-        qtdPagas: pagas.length,
-        valorPagas: pagas.reduce((acc, c) => acc + Number(c.pagamento_valor || c.valor || 0), 0),
-        qtdPendentes: pendentes.length,
-        valorPendentes: pendentes.reduce((acc, c) => acc + Number(c.valor || 0), 0),
-        qtdVencidas: vencidas.length,
-        valorVencidas: vencidas.reduce((acc, c) => acc + Number(c.valor || 0), 0),
-      };
-    },
-  });
-
-  // Filtragem por busca e tab (client-side)
-  const filteredCobrancas = useMemo(() => {
-    if (!cobrancas) return [];
-    
-    let result = cobrancas;
-
-    // Filtro por busca
-    if (filters.busca) {
-      const busca = filters.busca.toLowerCase();
-      result = result.filter(c => 
-        c.associado?.nome?.toLowerCase().includes(busca) ||
-        c.associado?.cpf?.includes(busca)
-      );
-    }
-
-    // Filtro por tab
-    if (activeTab !== 'todas') {
-      const statusList = mapStatusToAsaas(activeTab);
-      result = result.filter(c => statusList.includes(c.status));
-    }
-
-    return result;
-  }, [cobrancas, filters.busca, activeTab]);
-
-  // Paginação
-  const totalPages = Math.ceil(filteredCobrancas.length / itemsPerPage);
-  const paginatedCobrancas = filteredCobrancas.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
-
-  // Contadores para tabs
-  const tabCounts = useMemo(() => {
-    if (!cobrancas) return { todas: 0, pendente: 0, pago: 0, vencido: 0, cancelado: 0 };
-    return {
-      todas: cobrancas.length,
-      pendente: cobrancas.filter(c => ['PENDING', 'pendente'].includes(c.status)).length,
-      pago: cobrancas.filter(c => ['RECEIVED', 'CONFIRMED', 'pago'].includes(c.status)).length,
-      vencido: cobrancas.filter(c => ['OVERDUE', 'vencido'].includes(c.status)).length,
-      cancelado: cobrancas.filter(c => ['CANCELED', 'cancelado'].includes(c.status)).length,
-    };
-  }, [cobrancas]);
 
   const clearFilters = () => {
     setFilters({
       status: 'todos',
       tipo: 'todos',
+      origem: 'todas',
       mes: new Date().getMonth() + 1,
       ano: new Date().getFullYear(),
       busca: '',
@@ -403,62 +497,23 @@ export default function CobrancasList() {
     setCurrentPage(1);
   };
 
-  const isVencendoHoje = (dataVencimento: string) => {
+  const isVencendoHoje = (dataVencimento?: string | null) => {
     if (!dataVencimento) return false;
-    return isToday(parseISO(dataVencimento));
+    try { return isToday(parseISO(dataVencimento)); } catch { return false; }
   };
 
-  const isVencido = (status: string) => {
-    return ['OVERDUE', 'vencido'].includes(status);
-  };
-
-  const getRowClass = (cobranca: any) => {
-    if (isVencido(cobranca.status)) return 'bg-destructive/5';
+  const getRowClass = (cobranca: CobrancaUnificada) => {
+    if (cobranca.status === 'vencido') return 'bg-destructive/5';
     if (isVencendoHoje(cobranca.data_vencimento)) return 'bg-yellow-50 dark:bg-yellow-900/10';
     return '';
   };
 
-  const handleEnviarWhatsApp = (cobranca: any) => {
-    const telefone = cobranca.associado?.whatsapp || cobranca.associado?.telefone;
-    if (!telefone) {
-      toast.error('Associado sem telefone cadastrado');
-      return;
-    }
-    
-    const telefoneFormatado = telefone.replace(/\D/g, '');
-    const valor = formatCurrency(Number(cobranca.valor));
-    const vencimento = cobranca.data_vencimento 
-      ? format(parseISO(cobranca.data_vencimento), 'dd/MM/yyyy', { locale: ptBR })
-      : '';
-    
-    let mensagem = `Olá ${cobranca.associado?.nome || ''}! 👋\n\n`;
-    mensagem += `Segue sua cobrança:\n`;
-    mensagem += `💰 Valor: ${valor}\n`;
-    mensagem += `📅 Vencimento: ${vencimento}\n`;
-    
-    if (cobranca.boleto_url) {
-      mensagem += `\n📄 Boleto: ${cobranca.boleto_url}\n`;
-    }
-    
-    if (cobranca.pix_copia_cola) {
-      mensagem += `\n📱 PIX Copia e Cola:\n${cobranca.pix_copia_cola}\n`;
-    }
-    
-    const url = `https://wa.me/55${telefoneFormatado}?text=${encodeURIComponent(mensagem)}`;
-    window.open(url, '_blank');
-  };
-
   const handleExportar = () => {
-    if (!filteredCobrancas.length) {
-      toast.error('Nenhuma cobrança para exportar');
-      return;
-    }
-
-    const headers = 'Nome,CPF,Tipo,Valor,Vencimento,Status\n';
-    const rows = filteredCobrancas.map(c => 
-      `"${c.associado?.nome || ''}","${c.associado?.cpf || ''}","${c.tipo}","${c.valor}","${c.data_vencimento}","${c.status}"`
+    if (!filteredCobrancas.length) { toast.error('Nenhuma cobrança para exportar'); return; }
+    const headers = 'Origem,Nome,CPF,Tipo,Valor,Vencimento,Status\n';
+    const rows = filteredCobrancas.map(c =>
+      `"${c.origem}","${c.associado?.nome || ''}","${c.associado?.cpf || ''}","${c.tipo}","${c.valor}","${c.data_vencimento || ''}","${c.status}"`
     ).join('\n');
-    
     const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -471,23 +526,18 @@ export default function CobrancasList() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Cobranças</h1>
-          <p className="text-muted-foreground">
-            Gerencie todas as cobranças da associação
-          </p>
+          <p className="text-muted-foreground">Gerencie cobranças do Asaas e do histórico SGA Hinova</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {(isDiretor || isAdminMaster || isDesenvolvedor) && <SgaBackfillFinanceiroDialog />}
           <Button variant="outline" onClick={handleExportar}>
-            <Download className="mr-2 h-4 w-4" />
-            Exportar
+            <Download className="mr-2 h-4 w-4" />Exportar
           </Button>
           <Button onClick={() => setModalNovaCobranca(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Nova Cobrança
+            <Plus className="mr-2 h-4 w-4" />Nova Cobrança
           </Button>
         </div>
       </div>
@@ -497,41 +547,29 @@ export default function CobrancasList() {
         <Card>
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground">Total</p>
-            <p className="text-2xl font-bold">{kpis?.total || 0}</p>
+            <p className="text-2xl font-bold">{kpis.total}</p>
             <p className="text-xs text-muted-foreground">cobranças</p>
           </CardContent>
         </Card>
         <Card className="border-green-200 dark:border-green-800">
           <CardContent className="p-4">
             <p className="text-sm text-green-600 dark:text-green-400">Pagas</p>
-            <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-              {kpis?.qtdPagas || 0}
-            </p>
-            <p className="text-xs text-green-600/80 dark:text-green-400/80">
-              {formatCurrency(kpis?.valorPagas || 0)}
-            </p>
+            <p className="text-2xl font-bold text-green-600 dark:text-green-400">{kpis.qtdPagas}</p>
+            <p className="text-xs text-green-600/80 dark:text-green-400/80">{formatCurrency(kpis.valorPagas)}</p>
           </CardContent>
         </Card>
         <Card className="border-yellow-200 dark:border-yellow-800">
           <CardContent className="p-4">
             <p className="text-sm text-yellow-600 dark:text-yellow-400">Pendentes</p>
-            <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-              {kpis?.qtdPendentes || 0}
-            </p>
-            <p className="text-xs text-yellow-600/80 dark:text-yellow-400/80">
-              {formatCurrency(kpis?.valorPendentes || 0)}
-            </p>
+            <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{kpis.qtdPendentes}</p>
+            <p className="text-xs text-yellow-600/80 dark:text-yellow-400/80">{formatCurrency(kpis.valorPendentes)}</p>
           </CardContent>
         </Card>
         <Card className="border-red-200 dark:border-red-800">
           <CardContent className="p-4">
             <p className="text-sm text-destructive">Vencidas</p>
-            <p className="text-2xl font-bold text-destructive">
-              {kpis?.qtdVencidas || 0}
-            </p>
-            <p className="text-xs text-destructive/80">
-              {formatCurrency(kpis?.valorVencidas || 0)}
-            </p>
+            <p className="text-2xl font-bold text-destructive">{kpis.qtdVencidas}</p>
+            <p className="text-xs text-destructive/80">{formatCurrency(kpis.valorVencidas)}</p>
           </CardContent>
         </Card>
       </div>
@@ -551,67 +589,43 @@ export default function CobrancasList() {
                 />
               </div>
             </div>
-            <Select
-              value={filters.status}
-              onValueChange={(value) => setFilters(prev => ({ ...prev, status: value }))}
-            >
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
+            <Select value={filters.origem} onValueChange={(value: any) => setFilters(prev => ({ ...prev, origem: value }))}>
+              <SelectTrigger className="w-[160px]"><SelectValue placeholder="Origem" /></SelectTrigger>
               <SelectContent>
-                {statusOptions.map(opt => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                ))}
+                {origemOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Select
-              value={filters.tipo}
-              onValueChange={(value) => setFilters(prev => ({ ...prev, tipo: value }))}
-            >
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Tipo" />
-              </SelectTrigger>
+            <Select value={filters.status} onValueChange={(value) => setFilters(prev => ({ ...prev, status: value }))}>
+              <SelectTrigger className="w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
-                {tipoOptions.map(opt => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                ))}
+                {statusOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Select
-              value={String(filters.mes)}
-              onValueChange={(value) => setFilters(prev => ({ ...prev, mes: Number(value) }))}
-            >
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Mês" />
-              </SelectTrigger>
+            <Select value={filters.tipo} onValueChange={(value) => setFilters(prev => ({ ...prev, tipo: value }))}>
+              <SelectTrigger className="w-[160px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
               <SelectContent>
-                {meses.map(m => (
-                  <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                ))}
+                {tipoOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Select
-              value={String(filters.ano)}
-              onValueChange={(value) => setFilters(prev => ({ ...prev, ano: Number(value) }))}
-            >
-              <SelectTrigger className="w-[100px]">
-                <SelectValue placeholder="Ano" />
-              </SelectTrigger>
+            <Select value={String(filters.mes)} onValueChange={(value) => setFilters(prev => ({ ...prev, mes: Number(value) }))}>
+              <SelectTrigger className="w-[140px]"><SelectValue placeholder="Mês" /></SelectTrigger>
               <SelectContent>
-                {getAnos().map(a => (
-                  <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>
-                ))}
+                {meses.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={String(filters.ano)} onValueChange={(value) => setFilters(prev => ({ ...prev, ano: Number(value) }))}>
+              <SelectTrigger className="w-[100px]"><SelectValue placeholder="Ano" /></SelectTrigger>
+              <SelectContent>
+                {getAnos().map(a => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}
               </SelectContent>
             </Select>
             <Button variant="ghost" size="sm" onClick={clearFilters}>
-              <X className="mr-1 h-4 w-4" />
-              Limpar
+              <X className="mr-1 h-4 w-4" />Limpar
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Tabs de Status */}
       <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setCurrentPage(1); }}>
         <TabsList>
           <TabsTrigger value="todas">Todas ({tabCounts.todas})</TabsTrigger>
@@ -622,7 +636,6 @@ export default function CobrancasList() {
         </TabsList>
       </Tabs>
 
-      {/* Tabela */}
       <Card>
         <CardContent className="p-0">
           <Table>
@@ -635,6 +648,7 @@ export default function CobrancasList() {
                   />
                 </TableHead>
                 <TableHead>Associado</TableHead>
+                <TableHead>Origem</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Referência</TableHead>
                 <TableHead className="text-right">Valor</TableHead>
@@ -649,6 +663,7 @@ export default function CobrancasList() {
                   <TableRow key={i}>
                     <TableCell><Skeleton className="h-4 w-4" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-20" /></TableCell>
@@ -659,13 +674,13 @@ export default function CobrancasList() {
                 ))
               ) : paginatedCobrancas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                     Nenhuma cobrança encontrada
                   </TableCell>
                 </TableRow>
               ) : (
                 paginatedCobrancas.map((cobranca) => (
-                  <TableRow key={cobranca.id} className={getRowClass(cobranca)}>
+                  <TableRow key={`${cobranca.origem}-${cobranca.id}`} className={getRowClass(cobranca)}>
                     <TableCell>
                       <Checkbox
                         checked={selectedIds.has(cobranca.id)}
@@ -681,6 +696,11 @@ export default function CobrancasList() {
                       </div>
                     </TableCell>
                     <TableCell>
+                      <Badge variant={cobranca.origem === 'asaas' ? 'default' : 'secondary'}>
+                        {cobranca.origem === 'asaas' ? 'Asaas' : 'SGA'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
                       <Badge variant="outline">
                         {tipoConfig[cobranca.tipo]?.label || cobranca.tipo}
                       </Badge>
@@ -689,7 +709,7 @@ export default function CobrancasList() {
                       {cobranca.competencia || '-'}
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      {formatCurrency(Number(cobranca.valor) || 0)}
+                      {formatCurrency(cobranca.valor)}
                     </TableCell>
                     <TableCell>
                       {cobranca.data_vencimento
@@ -697,8 +717,8 @@ export default function CobrancasList() {
                         : '-'}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={statusConfig[cobranca.status]?.variant || 'outline'}>
-                        {statusConfig[cobranca.status]?.label || cobranca.status}
+                      <Badge variant={statusConfig[cobranca.status].variant}>
+                        {statusConfig[cobranca.status].label}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -710,24 +730,21 @@ export default function CobrancasList() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => navigate(`/financeiro/cobrancas/${cobranca.id}`)}>
-                            <Eye className="mr-2 h-4 w-4" />
-                            Ver detalhes
+                            <Eye className="mr-2 h-4 w-4" />Ver detalhes
                           </DropdownMenuItem>
-                          {!['RECEIVED', 'CONFIRMED', 'pago', 'CANCELED', 'cancelado'].includes(cobranca.status) && (
+                          {!['pago', 'cancelado'].includes(cobranca.status) && (
                             <>
                               <DropdownMenuItem onClick={() => {
                                 setCobrancaSelecionada(cobranca);
                                 setModalPagamento(true);
                               }}>
-                                <DollarSign className="mr-2 h-4 w-4" />
-                                Registrar Pagamento
+                                <DollarSign className="mr-2 h-4 w-4" />Registrar Pagamento
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handleEnviarWhatsApp(cobranca)}>
-                                <MessageSquare className="mr-2 h-4 w-4" />
-                                WhatsApp (link)
+                                <MessageSquare className="mr-2 h-4 w-4" />WhatsApp (link)
                               </DropdownMenuItem>
                               {cobranca.boleto_url && (
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => handleEnviarBoletoPDF(cobranca)}
                                   disabled={enviandoPDF === cobranca.id}
                                 >
@@ -739,18 +756,21 @@ export default function CobrancasList() {
                                   Enviar Boleto PDF
                                 </DropdownMenuItem>
                               )}
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem 
-                                className="text-destructive"
-                                onClick={() => {
-                                  if (confirm('Tem certeza que deseja cancelar esta cobrança?')) {
-                                    cancelarCobranca.mutate(cobranca.asaas_id);
-                                  }
-                                }}
-                              >
-                                <X className="mr-2 h-4 w-4" />
-                                Cancelar
-                              </DropdownMenuItem>
+                              {cobranca.origem === 'asaas' && cobranca.asaas_id && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-destructive"
+                                    onClick={() => {
+                                      if (confirm('Tem certeza que deseja cancelar esta cobrança?')) {
+                                        cancelarCobranca.mutate(cobranca.asaas_id!);
+                                      }
+                                    }}
+                                  >
+                                    <X className="mr-2 h-4 w-4" />Cancelar
+                                  </DropdownMenuItem>
+                                </>
+                              )}
                             </>
                           )}
                         </DropdownMenuContent>
@@ -764,7 +784,6 @@ export default function CobrancasList() {
         </CardContent>
       </Card>
 
-      {/* Paginação */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
@@ -773,12 +792,7 @@ export default function CobrancasList() {
             {filteredCobrancas.length} cobranças
           </p>
           <div className="flex gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-            >
+            <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1}>
               Anterior
             </Button>
             {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
@@ -794,33 +808,20 @@ export default function CobrancasList() {
                 </Button>
               );
             })}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              disabled={currentPage === totalPages}
-            >
+            <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages}>
               Próximo
             </Button>
           </div>
         </div>
       )}
 
-      {/* Modais */}
-      <NovaCobrancaModal 
-        open={modalNovaCobranca} 
-        onClose={() => setModalNovaCobranca(false)} 
-      />
-      <RegistrarPagamentoModal 
-        open={modalPagamento} 
-        onClose={() => {
-          setModalPagamento(false);
-          setCobrancaSelecionada(null);
-        }}
+      <NovaCobrancaModal open={modalNovaCobranca} onClose={() => setModalNovaCobranca(false)} />
+      <RegistrarPagamentoModal
+        open={modalPagamento}
+        onClose={() => { setModalPagamento(false); setCobrancaSelecionada(null); }}
         cobranca={cobrancaSelecionada}
       />
 
-      {/* Barra de Ações em Lote */}
       <BatchActionsBar
         selectedCount={selectedIds.size}
         onClear={clearSelection}
@@ -831,21 +832,9 @@ export default function CobrancasList() {
             onClick: handleEnviarBoletosLote,
             disabled: enviandoLote,
           },
-          {
-            label: 'WhatsApp',
-            icon: <MessageSquare className="h-4 w-4" />,
-            onClick: handleEnviarWhatsAppLote,
-          },
-          {
-            label: 'E-mail',
-            icon: <Mail className="h-4 w-4" />,
-            onClick: handleEnviarEmailLote,
-          },
-          {
-            label: 'Reemitir',
-            icon: <RefreshCw className="h-4 w-4" />,
-            onClick: handleReemitirLote,
-          },
+          { label: 'WhatsApp', icon: <MessageSquare className="h-4 w-4" />, onClick: handleEnviarWhatsAppLote },
+          { label: 'E-mail', icon: <Mail className="h-4 w-4" />, onClick: handleEnviarEmailLote },
+          { label: 'Reemitir', icon: <RefreshCw className="h-4 w-4" />, onClick: handleReemitirLote },
         ]}
       />
     </div>
