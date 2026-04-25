@@ -1,7 +1,7 @@
 // Sincroniza o financeiro de UM veículo via API SGA Hinova.
 // - Reusável para on-demand (botão "Atualizar agora") e workers do backfill.
 // - Body: { veiculo_id: string, job_id?: string }
-// - Idempotente: upsert em cobrancas por nosso_numero.
+// - Idempotente: upsert em cobrancas por chave lógica (veiculo_id,data_vencimento,valor,tipo).
 // - Distingue erros transitórios (auth/janela/5xx) → status 'pendente_retry' com proximo_retry_em.
 // v3: janela de 5 meses passados em listarBoletosVeiculo (data_inicial/data_final obrigatórios pela Hinova).
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
