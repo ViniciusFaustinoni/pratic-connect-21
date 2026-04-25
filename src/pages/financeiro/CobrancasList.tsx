@@ -19,6 +19,8 @@ import { toast } from 'sonner';
 import { NovaCobrancaModal } from '@/components/financeiro/NovaCobrancaModal';
 import { RegistrarPagamentoModal } from '@/components/financeiro/RegistrarPagamentoModal';
 import { BatchActionsBar } from '@/components/financeiro/BatchActionsBar';
+import { SgaBackfillFinanceiroDialog } from '@/components/cobranca/SgaBackfillFinanceiroDialog';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   'PENDING': { label: 'Pendente', variant: 'secondary' },
@@ -107,6 +109,7 @@ const mapStatusToAsaas = (status: string): string[] => {
 
 export default function CobrancasList() {
   const navigate = useNavigate();
+  const { isDiretor, isAdminMaster, isDesenvolvedor } = usePermissions();
   const queryClient = useQueryClient();
   
   const [filters, setFilters] = useState({
@@ -476,7 +479,8 @@ export default function CobrancasList() {
             Gerencie todas as cobranças da associação
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {(isDiretor || isAdminMaster || isDesenvolvedor) && <SgaBackfillFinanceiroDialog />}
           <Button variant="outline" onClick={handleExportar}>
             <Download className="mr-2 h-4 w-4" />
             Exportar
