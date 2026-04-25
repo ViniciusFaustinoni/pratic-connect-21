@@ -28865,8 +28865,11 @@ export type Database = {
           fotos_concluida_em: string | null
           fotos_etapa_status: string
           fotos_executor_nome: string | null
+          fotos_executor_telefone: string | null
           id: string
           iniciada_em: string | null
+          iniciada_por_nome: string | null
+          iniciada_por_user_id: string | null
           instalacao_concluida_em: string | null
           instalacao_etapa_status: string
           instalacao_executor_nome: string | null
@@ -28885,8 +28888,11 @@ export type Database = {
           fotos_concluida_em?: string | null
           fotos_etapa_status?: string
           fotos_executor_nome?: string | null
+          fotos_executor_telefone?: string | null
           id?: string
           iniciada_em?: string | null
+          iniciada_por_nome?: string | null
+          iniciada_por_user_id?: string | null
           instalacao_concluida_em?: string | null
           instalacao_etapa_status?: string
           instalacao_executor_nome?: string | null
@@ -28905,8 +28911,11 @@ export type Database = {
           fotos_concluida_em?: string | null
           fotos_etapa_status?: string
           fotos_executor_nome?: string | null
+          fotos_executor_telefone?: string | null
           id?: string
           iniciada_em?: string | null
+          iniciada_por_nome?: string | null
+          iniciada_por_user_id?: string | null
           instalacao_concluida_em?: string | null
           instalacao_etapa_status?: string
           instalacao_executor_nome?: string | null

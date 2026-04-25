@@ -45,6 +45,7 @@ import {
   useVistoriaLinkPorToken,
   useConcluirEtapaFotosPublica,
   useConcluirEtapaInstalacaoPublica,
+  useIniciarEtapaPublica,
 } from '@/hooks/useVistoriaLinkPublica';
 
 // Itens do checklist da instalação (mesmos do fluxo legado)
@@ -175,7 +176,7 @@ export default function VistoriaPublica() {
         )}
 
         {etapa === 'home' && (
-          <HomeEtapas link={link} onEtapa={setEtapa} />
+          <HomeEtapas link={link} token={token!} onEtapa={setEtapa} />
         )}
 
         {etapa === 'fotos' && instalacao && (
@@ -258,16 +259,37 @@ function DadosVistoria({ veiculo, associado, instalacao, rastreador }: any) {
   );
 }
 
-function HomeEtapas({ link, onEtapa }: { link: any; onEtapa: (e: Etapa) => void }) {
+function HomeEtapas({
+  link,
+  token,
+  onEtapa,
+}: {
+  link: any;
+  token: string;
+  onEtapa: (e: Etapa) => void;
+}) {
   const fotosFeitas = link.fotos_etapa_status === 'concluida';
   const instFeita = link.instalacao_etapa_status === 'concluida';
+
+  const iniciarMut = useIniciarEtapaPublica();
+
+  const handleEtapa = async (e: Etapa, etapaApi: 'fotos' | 'instalacao') => {
+    // Dispara o "em andamento" no backend (não bloqueia navegação se falhar)
+    try {
+      await iniciarMut.mutateAsync({ token, etapa: etapaApi });
+    } catch (err) {
+      console.warn('[VistoriaPublica] iniciar etapa falhou (não bloqueante):', err);
+    }
+    onEtapa(e);
+  };
 
   return (
     <div className="space-y-3">
       {!fotosFeitas && (
         <button
-          onClick={() => onEtapa('fotos')}
-          className="w-full text-left rounded-xl border-2 border-primary/30 bg-primary/5 hover:bg-primary/10 transition-all p-5 flex items-center gap-4"
+          onClick={() => handleEtapa('fotos', 'fotos')}
+          disabled={iniciarMut.isPending}
+          className="w-full text-left rounded-xl border-2 border-primary/30 bg-primary/5 hover:bg-primary/10 transition-all p-5 flex items-center gap-4 disabled:opacity-60"
         >
           <div className="w-14 h-14 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
             <Camera className="h-7 w-7" />
@@ -283,8 +305,9 @@ function HomeEtapas({ link, onEtapa }: { link: any; onEtapa: (e: Etapa) => void 
 
       {!instFeita && (
         <button
-          onClick={() => onEtapa('instalacao')}
-          className="w-full text-left rounded-xl border-2 border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 transition-all p-5 flex items-center gap-4"
+          onClick={() => handleEtapa('instalacao', 'instalacao')}
+          disabled={iniciarMut.isPending}
+          className="w-full text-left rounded-xl border-2 border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 transition-all p-5 flex items-center gap-4 disabled:opacity-60"
         >
           <div className="w-14 h-14 rounded-full bg-blue-600 text-white flex items-center justify-center">
             <Cpu className="h-7 w-7" />
