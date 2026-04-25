@@ -100,7 +100,8 @@ serve(async (req) => {
         const raw = String(e.ultimo_erro || '').slice(0, 80);
         // normaliza por categoria
         let key = raw;
-        if (/janela_horaria|horari/i.test(raw)) key = 'Janela horária restrita (Hinova)';
+        if (/usu[aá]rio com restri|usu\\u00e1rio com restri/i.test(raw)) key = 'Usuário com restrição (Hinova - liberar 24h/IP)';
+        else if (/janela_horaria|horari/i.test(raw)) key = 'Janela horária restrita (Hinova)';
         else if (/auth|401|403/i.test(raw)) key = 'Autenticação recusada (401/403)';
         else if (/rate|429/i.test(raw)) key = 'Rate limit (429)';
         else if (/server|5\d\d/i.test(raw)) key = 'Servidor Hinova indisponível (5xx)';
