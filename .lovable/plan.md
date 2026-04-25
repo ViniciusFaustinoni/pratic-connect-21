@@ -1,54 +1,55 @@
-## Diagnóstico do estado atual
+## Problema identificado
 
-| Item | Status hoje |
-|---|---|
-| Botão **"Enviar Boletos"** (PDF em massa) | Envia PDF via `whatsapp-send-media` — **deve ser removido** |
-| Botão **"WhatsApp"** em massa | Abre `wa.me` no navegador para cada cobrança (uma aba por contato). Não usa template Meta, não envia código de barras de fato. **Inviável** para 333 cobranças |
-| Botão **"E-mail"** em massa | Apenas exibe `toast.info(...)` — **não envia nada** |
-| Template Meta `d1_a_d4_boleto_vencido_v1` (vencido) | Aprovado, mas **não tem variável de código de barras** (só `{{1}} = nome`) |
-| Template Meta `emissao_boleto_gerado_v2` | Aprovado, com **6 variáveis incluindo a linha digitável** ({{6}}) |
-| Templates de e-mail (`boleto-vencendo`, `boleto-gerado`) | Existem, mas **não enviam código de barras** — só link |
-| Coluna `cobrancas.linha_digitavel` | 100% das 141.512 linhas SGA preenchidas ✅ |
+A planilha `catalogo_planos_pratic.xlsx` exportada anteriormente contém:
+- Aba **Coberturas por Plano**: 2.241 linhas, mas as colunas `Valor Limite`, `Franquia (%)`, `Franquia (R$)`, `Carência (dias)` e o **preço por cobertura** estão todas vazias.
+- Aba **Benefícios por Plano**: completamente vazia (apenas cabeçalhos).
 
-## O que será feito
+**Causa**: o script anterior leu apenas a tabela de override `planos_coberturas` (que tem todos os campos `NULL` neste sistema, exceto `obrigatoria` e `carencia_dias` parcial). Os valores reais ficam no catálogo (`coberturas` e `benefits`) e o join com benefícios não foi feito (ambas as tabelas-ponte `planos_beneficios`/`plan_benefits` estão vazias — os benefícios são vinculados apenas via catálogo clonado por linha).
 
-### 1. WhatsApp em massa (botão "WhatsApp" da barra azul)
+## Dados disponíveis no banco (verificado)
 
-Substituir o `wa.me` por envio real via API Meta usando template aprovado, com a linha digitável como variável. Como o template de "vencido" hoje aprovado (`d1_a_d4_boleto_vencido_v1`) não tem slot de código de barras, vamos:
+Tabela `coberturas` (clones por plano):
+- `valor_limite` → **0/2865 preenchidos** (não existe no banco — coluna ficará vazia mesmo assim, vamos manter mas marcar "—")
+- `franquia_valor` / `franquia_percentual` → **0/2865** (idem)
+- `carencia_dias` → **1907/2865** preenchidos ✅
+- `valor` (preço/mensalidade da cobertura) → **537/2865** preenchidos ✅
+- `percentual_cobertura` → disponível ✅
 
-- Reusar `emissao_boleto_gerado_v2` (já aprovado, contém os 6 campos: nome, modelo, placa, vencimento, valor, **linha digitável**) — mesmo padrão usado pela régua automatizada.
-- Criar um hook `handleEnviarWhatsAppLote` que:
-  - Itera as cobranças selecionadas
-  - Carrega `associado.nome`, `veiculo.modelo`, `veiculo.placa`, `valor`, `data_vencimento`, `linha_digitavel`
-  - Chama `whatsapp-send-text` com `template_name: 'emissao_boleto_gerado_v2'` + `template_params`
-  - Aguarda 800ms entre envios (mesma cadência da régua) para evitar rate-limit
-  - Mostra progresso ("Enviando 12/333…") e resumo final (enviados / sem telefone / sem linha digitável / falhas)
-  - Em cobranças sem `linha_digitavel`, marca como ignorada e reporta no resumo
+Tabela `benefits` (catálogo de benefícios):
+- `preco_sugerido` → **1770/1770** ✅
+- `carencia_dias` → **962/1770** ✅
+- `description`, `category`, `display_order` ✅
 
-### 2. E-mail em massa (botão "E-mail" da barra azul)
+## Plano de ação
 
-- Atualizar template `boleto-vencendo` em `supabase/functions/send-email/index.ts` para incluir bloco com **linha digitável copiável** (fonte monospace, destaque visual) + link do boleto.
-- Implementar `handleEnviarEmailLote` real:
-  - Filtra selecionadas com `associado.email` válido
-  - Para cada uma, chama `send-email` com `template: 'boleto-vencendo'` e `data: { nome, valor, vencimento, competencia, boletoUrl, linhaDigitavel, diasRestantes/atraso }`
-  - 500ms entre envios; progresso e resumo final igual ao WhatsApp
+1. **Reescrever o script de exportação** para gerar `catalogo_planos_pratic_v2.xlsx` em `/mnt/documents/`, mantendo as abas existentes e melhorando duas:
 
-### 3. Remoção do "Enviar Boletos PDF"
+   **Aba "Coberturas por Plano"** — buscar direto da tabela `coberturas` (filtrando por linha/plano via slug do nome) com colunas:
+   - Linha, Plano, Cobertura, Código, Tipo
+   - **% Cobertura** (`percentual_cobertura`)
+   - **Valor Limite (R$)** (`valor_limite` — exibe "—" quando nulo)
+   - **Franquia (%)** / **Franquia (R$)** (idem)
+   - **Carência (dias)** (`carencia_dias`)
+   - **Preço Mensal (R$)** (`valor`) ← NOVO
+   - **Carência Ativa** (`carencia_ativa`)
+   - **Código SGA** (`codigo_sga`)
+   - Obrigatória
 
-- Remover o botão **"Enviar Boletos"** da `BatchActionsBar` em `CobrancasList.tsx`.
-- Remover `handleEnviarBoletosLote` e o estado `enviandoLote` associado.
-- Manter `handleEnviarBoletoPDF` individual no menu de cada linha (caso use), apenas se você quiser — confirme se também devo removê-lo da ação por linha.
+   **Aba "Benefícios por Plano"** — popular via catálogo `benefits` (já que a ponte está vazia, listar todos os benefícios ativos do catálogo agrupados por linha de produto, ou anexar como aba "Catálogo de Benefícios" geral):
+   - Nome, Slug, Categoria, Descrição
+   - **Preço Sugerido (R$)** (`preco_sugerido`)
+   - **Carência (dias)** + Carência Ativa
+   - Código SGA, Display Order, Ativo
 
-### 4. Garantias técnicas
+2. **Adicionar formatação**:
+   - Cabeçalhos em negrito + fundo cinza
+   - Valores monetários em formato `R$ #,##0.00;[Red]-R$ #,##0.00;"—"`
+   - Zoom 90%, freeze row 1, autofilter
 
-- Idempotência: usa o log natural de `whatsapp_logs` / `email_send_log` (cobranças sem `linha_digitavel` nunca disparam, evitando envio incompleto).
-- Toast com botão "Ver detalhes" listando até 5 falhas com motivo.
-- Limite de segurança: confirma com modal antes de disparar > 100 envios.
+3. **QA**: abrir o xlsx gerado, validar 5 amostras de coberturas com `valor` preenchido e 5 benefícios com `preco_sugerido`.
 
-## Arquivos afetados
+4. **Entregar** novo arquivo `catalogo_planos_pratic_v2.xlsx` via `<lov-artifact>`.
 
-- `src/pages/financeiro/CobrancasList.tsx` — novos handlers, remoção do botão PDF
-- `src/components/financeiro/BatchActionsBar.tsx` — remover `Enviar Boletos` do helper `getCobrancasBatchActions`
-- `supabase/functions/send-email/index.ts` — atualizar template `boleto-vencendo` adicionando linha digitável
+## Observação importante
 
-Nenhuma migração de banco é necessária. Nenhum template Meta novo é necessário (o `emissao_boleto_gerado_v2` já está APROVADO e cobre o caso).
+`valor_limite` e `franquia_valor`/`franquia_percentual` **não estão preenchidos em nenhum registro do banco** (0/2865). A coluna existirá na planilha mas mostrará "—". Se quiser que esses valores sejam preenchidos, será necessário um trabalho separado de cadastro/importação no catálogo de coberturas — me avise se for o caso.
