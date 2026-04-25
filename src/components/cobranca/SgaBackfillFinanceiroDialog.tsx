@@ -388,17 +388,41 @@ export function SgaBackfillFinanceiroDialog() {
   const handleForcarSync = async () => {
     setForcando(true);
     try {
-      // Pega top 100 jobs pendentes (mais antigos primeiro) e força processamento via cron
+      // Dispara drenagem em BACKGROUND (resposta 202 Accepted imediata).
+      // O loop continua processando mesmo se o usuário fechar o diálogo/sair da página.
       const { data, error } = await supabase.functions.invoke('cron-sga-sync-financeiro-diario', {
         body: { apenas_processar: true },
       });
       if (error) throw error;
-      toast.success(`Sync forçado: ${data?.ok || 0} OK, ${data?.retry || 0} adiados, ${data?.fail || 0} falhas`);
-      fetchStatus();
+      if (data?.started === false && data?.reason === 'already_running') {
+        toast.info('Drenagem já em execução em background. Acompanhe o progresso aqui.');
+      } else {
+        toast.success('Drenagem iniciada em background. A fila será drenada continuamente até esgotar.');
+      }
+      // Pequeno delay e recarrega status
+      setTimeout(fetchStatus, 1500);
     } catch (e: any) {
-      toast.error(e?.message || 'Erro ao forçar sync');
+      toast.error(e?.message || 'Erro ao iniciar drenagem');
     } finally {
       setForcando(false);
+    }
+  };
+
+  const handlePararDrenagem = async () => {
+    setParandoDrenagem(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sga-backfill-financeiro', {
+        body: { acao: 'parar_drenagem' },
+      });
+      if (error) throw error;
+      if (data?.success) {
+        toast.success('Cancelamento solicitado — o background vai parar após o lote atual.');
+        setTimeout(fetchStatus, 1500);
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao parar drenagem');
+    } finally {
+      setParandoDrenagem(false);
     }
   };
 
