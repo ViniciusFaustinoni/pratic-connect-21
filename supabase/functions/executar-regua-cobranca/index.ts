@@ -157,14 +157,29 @@ Deno.serve(async (req) => {
       throw errRegua
     }
 
-    const etapasRaw = (regua?.etapas as Etapa[] | null) || []
+    if (!regua) {
+      console.log('⛔ Régua DESATIVADA — execução abortada (nenhuma régua com ativa=true)')
+      return new Response(JSON.stringify({
+        ativa: false,
+        message: 'Régua desativada — nenhuma ação executada',
+        processados: 0,
+        eventos_criados: 0,
+        whatsapp_enviados: 0,
+        whatsapp_falhas: 0,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    const etapasRaw = (regua.etapas as Etapa[] | null) || []
     const etapasAtivas = etapasRaw.filter((e) => e.ativa !== false)
 
-    if (!regua || etapasAtivas.length === 0) {
-      console.log('Nenhuma régua ativa encontrada ou sem etapas')
-      return new Response(JSON.stringify({ message: 'Nenhuma régua ativa', processados: 0, eventos_criados: 0 }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
+    if (etapasAtivas.length === 0) {
+      console.log('Régua ativa, mas sem etapas habilitadas')
+      return new Response(JSON.stringify({
+        ativa: true,
+        message: 'Régua ativa, porém sem etapas habilitadas',
+        processados: 0,
+        eventos_criados: 0,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
     const etapas = [...etapasAtivas].sort((a, b) => a.dias - b.dias)
