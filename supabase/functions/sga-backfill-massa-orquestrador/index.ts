@@ -143,7 +143,9 @@ Deno.serve(async (req) => {
       const r = await invokeFn('sga-backfill-financeiro', {
         acao: 'processar',
         batch_size: batchFin,
-        delay_ms: 100,
+        delay_ms: 50,
+        concurrency: 12,
+        share_session: true,
       });
       totalFinRodadas++;
       if (!r.ok) {
