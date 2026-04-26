@@ -56,7 +56,7 @@ export default function PlanosSGA() {
     if (!busca) return items;
     return items.filter((p) =>
       matchTexto(
-        `${p.codigo_produto ?? ''} ${p.descricao ?? ''} ${p.descricao_tipo_veiculo ?? ''}`,
+        `${p.codigo_produto ?? ''} ${p.decricao_produto ?? ''} ${p.descricao_produto_boleto ?? ''} ${p.classificacao_produto ?? ''} ${p.descricao_tipo_veiculo ?? ''}`,
         busca,
       ),
     );
@@ -233,14 +233,14 @@ function ProdutosTable({ loading, items, onShowDetalhe, cached, total }: TablePr
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-24">Código</TableHead>
+              <TableHead className="w-20">Código</TableHead>
               <TableHead>Descrição</TableHead>
+              <TableHead>Classificação</TableHead>
               <TableHead>Tipo veículo</TableHead>
-              <TableHead>Base</TableHead>
+              <TableHead className="text-right">Valor</TableHead>
               <TableHead>Formato</TableHead>
-              <TableHead>Situação</TableHead>
-              <TableHead>Regional</TableHead>
-              <TableHead className="w-24"></TableHead>
+              <TableHead>Padrão</TableHead>
+              <TableHead className="w-20"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -252,21 +252,25 @@ function ProdutosTable({ loading, items, onShowDetalhe, cached, total }: TablePr
               </TableRow>
             )}
             {items.map((p, idx) => {
-              const vigente = String(p.vigente ?? '').toUpperCase() === 'S';
+              const padrao = String(p.padrao ?? '').toUpperCase() === 'S';
+              const descricao = p.descricao_produto_boleto || p.decricao_produto || p.descricao || '—';
+              const valor = typeof p.valor === 'number' ? p.valor : Number(p.valor_produto ?? 0);
               return (
                 <TableRow key={`${p.codigo_produto ?? idx}`}>
                   <TableCell className="font-mono text-xs">{String(p.codigo_produto ?? '—')}</TableCell>
-                  <TableCell className="font-medium">{p.descricao ?? '—'}</TableCell>
+                  <TableCell className="font-medium">{descricao}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {p.classificacao_produto ?? '—'}
+                  </TableCell>
                   <TableCell>{p.descricao_tipo_veiculo ?? '—'}</TableCell>
-                  <TableCell>{p.base_cobranca ?? '—'}</TableCell>
+                  <TableCell className="text-right font-mono text-xs">
+                    {valor > 0
+                      ? valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                      : '—'}
+                  </TableCell>
                   <TableCell>{p.formato_cobranca ?? '—'}</TableCell>
                   <TableCell>
-                    <Badge variant={vigente ? 'default' : 'secondary'}>
-                      {vigente ? 'Vigente' : 'Inativo'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {p.regionais?.map((r) => r.nome_regional).filter(Boolean).join(', ') || '—'}
+                    {padrao ? <Badge>Padrão</Badge> : <Badge variant="secondary">Adicional</Badge>}
                   </TableCell>
                   <TableCell>
                     <Button size="sm" variant="ghost" onClick={() => onShowDetalhe(p)}>
