@@ -10,15 +10,14 @@ const corsHeaders = {
     'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
-const ROLES_PERMITIDAS = new Set([
+const ROLES_PERMITIDAS = [
   'diretor',
-  'gerente',
-  'monitoramento',
+  'analista_monitoramento',
   'coordenador_monitoramento',
   'analista_cadastro',
-  'analista',
-  'supervisor_operacional',
-])
+  'gerente_comercial',
+  'supervisor_vendas',
+]
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -50,14 +49,16 @@ Deno.serve(async (req) => {
     }
     const userId = userRes.user.id
 
-    // Validar perfil
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('id, role, tipo')
-      .eq('id', userId)
-      .maybeSingle()
+    // Validar perfil via user_roles
+    const { data: roles } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId)
 
-    if (!profile || !ROLES_PERMITIDAS.has(String(profile.role || ''))) {
+    const userRoles = (roles || []).map((r: any) => String(r.role))
+    const podeAprovar = userRoles.some((r) => ROLES_PERMITIDAS.includes(r))
+
+    if (!podeAprovar) {
       return new Response(JSON.stringify({ success: false, error: 'Sem permissão para aprovar fotos' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

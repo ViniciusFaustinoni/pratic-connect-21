@@ -13,12 +13,10 @@ const corsHeaders = {
     'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
-const ROLES_TECNICAS = new Set([
-  'tecnico',
-  'instalador',
-  'tecnico_externo',
-  'prestador',
-])
+const ROLES_TECNICAS = [
+  'instalador_vistoriador',
+  'vistoriador_base',
+]
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -51,7 +49,7 @@ Deno.serve(async (req) => {
 
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, nome, role, tipo')
+      .select('id, nome')
       .eq('id', userId)
       .maybeSingle()
 
@@ -62,7 +60,15 @@ Deno.serve(async (req) => {
       })
     }
 
-    if (!ROLES_TECNICAS.has(String(profile.role || ''))) {
+    const { data: roles } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId)
+
+    const userRoles = (roles || []).map((r: any) => String(r.role))
+    const ehTecnico = userRoles.some((r) => ROLES_TECNICAS.includes(r))
+
+    if (!ehTecnico) {
       return new Response(
         JSON.stringify({
           success: false,

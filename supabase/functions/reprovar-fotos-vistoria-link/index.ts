@@ -9,15 +9,14 @@ const corsHeaders = {
     'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
-const ROLES_PERMITIDAS = new Set([
+const ROLES_PERMITIDAS = [
   'diretor',
-  'gerente',
-  'monitoramento',
+  'analista_monitoramento',
   'coordenador_monitoramento',
   'analista_cadastro',
-  'analista',
-  'supervisor_operacional',
-])
+  'gerente_comercial',
+  'supervisor_vendas',
+]
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -48,13 +47,15 @@ Deno.serve(async (req) => {
     }
     const userId = userRes.user.id
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('id, role')
-      .eq('id', userId)
-      .maybeSingle()
+    const { data: roles } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId)
 
-    if (!profile || !ROLES_PERMITIDAS.has(String(profile.role || ''))) {
+    const userRoles = (roles || []).map((r: any) => String(r.role))
+    const podeReprovar = userRoles.some((r) => ROLES_PERMITIDAS.includes(r))
+
+    if (!podeReprovar) {
       return new Response(JSON.stringify({ success: false, error: 'Sem permissão para reprovar fotos' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
