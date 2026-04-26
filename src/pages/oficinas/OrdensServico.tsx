@@ -84,7 +84,7 @@ export default function OrdensServico() {
             <Card
               key={os.id}
               className="cursor-pointer transition-shadow hover:shadow-md"
-              onClick={() => navigate(`/oficinas/ordens/${os.id}`)}
+              onClick={() => setOsSelecionadaId(os.id)}
             >
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">
@@ -123,6 +123,11 @@ export default function OrdensServico() {
       )}
 
       <OSFormDialog open={formOpen} onOpenChange={setFormOpen} />
+      <OrdemServicoDetalheModal
+        osId={osSelecionadaId}
+        open={!!osSelecionadaId}
+        onOpenChange={(open) => { if (!open) setOsSelecionadaId(null); }}
+      />
     </div>
   );
 }
