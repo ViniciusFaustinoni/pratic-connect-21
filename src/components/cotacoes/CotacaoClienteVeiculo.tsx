@@ -13,7 +13,7 @@ import {
   AlertCircle,
   MessageSquare,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { useLeadModals } from '@/contexts/LeadModalsContext';
 
 interface CotacaoClienteVeiculoProps {
   cotacao: {
