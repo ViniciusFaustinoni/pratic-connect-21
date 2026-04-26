@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useLeadModals } from '@/contexts/LeadModalsContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -50,6 +51,7 @@ import { useAuth } from '@/contexts/AuthContext';
 export default function VendedorHistorico() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { openLeadDetail } = useLeadModals();
   const [search, setSearch] = useState('');
   const [etapaFilter, setEtapaFilter] = useState('todos');
   const [activeTab, setActiveTab] = useState('leads');
