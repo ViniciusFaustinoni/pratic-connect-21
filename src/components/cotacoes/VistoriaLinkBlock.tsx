@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ExternalLink, Copy, Loader2, Camera, Cpu, CheckCircle, Link2 } from 'lucide-react';
+import { ExternalLink, Copy, Loader2, Camera, Cpu, CheckCircle, Link2, ShieldCheck, Clock, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -67,7 +67,24 @@ export function VistoriaLinkBlock({ cotacaoId, instalacaoId, permitirGerar = tru
 
   const url = buildVistoriaLinkUrl(link.token);
   const fotosOk = link.fotos_etapa_status === 'concluida';
+  const fotosAprovadas = !!link.fotos_aprovadas_em;
+  const fotosReprovadas = !!link.fotos_reprovadas_em && !fotosAprovadas;
+  const aguardandoAprovacao = fotosOk && !fotosAprovadas && !fotosReprovadas;
   const instOk = link.instalacao_etapa_status === 'concluida';
+
+  // Status visual da etapa de aprovação do monitoramento
+  let aprovStatus: 'pendente' | 'aguardando' | 'aprovada' | 'reprovada' = 'pendente';
+  let aprovLabel = 'Aguarda fotos';
+  if (fotosAprovadas) {
+    aprovStatus = 'aprovada';
+    aprovLabel = 'Aprovada';
+  } else if (fotosReprovadas) {
+    aprovStatus = 'reprovada';
+    aprovLabel = 'Reprovada';
+  } else if (aguardandoAprovacao) {
+    aprovStatus = 'aguardando';
+    aprovLabel = 'Aguardando';
+  }
 
   return (
     <div className="rounded-lg border border-border bg-card p-3 space-y-3">
@@ -81,26 +98,66 @@ export function VistoriaLinkBlock({ cotacaoId, instalacaoId, permitirGerar = tru
         </Badge>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 text-xs">
+      <div className="grid grid-cols-3 gap-2 text-xs">
+        {/* 1. Fotos */}
         <div className={`rounded border p-2 flex items-center gap-2 ${fotosOk ? 'border-success/40 bg-success/5' : 'border-border'}`}>
-          {fotosOk ? <CheckCircle className="h-4 w-4 text-success" /> : <Camera className="h-4 w-4 text-muted-foreground" />}
-          <div className="flex flex-col">
-            <span className="font-medium">Fotos & Vídeo</span>
-            <span className="text-muted-foreground">
+          {fotosOk ? <CheckCircle className="h-4 w-4 text-success flex-shrink-0" /> : <Camera className="h-4 w-4 text-muted-foreground flex-shrink-0" />}
+          <div className="flex flex-col min-w-0">
+            <span className="font-medium">Fotos</span>
+            <span className="text-muted-foreground truncate">
               {fotosOk ? link.fotos_executor_nome || 'Concluída' : 'Pendente'}
             </span>
           </div>
         </div>
+
+        {/* 2. Aprovação do monitoramento */}
+        <div
+          className={`rounded border p-2 flex items-center gap-2 ${
+            aprovStatus === 'aprovada'
+              ? 'border-success/40 bg-success/5'
+              : aprovStatus === 'reprovada'
+              ? 'border-destructive/40 bg-destructive/5'
+              : aprovStatus === 'aguardando'
+              ? 'border-amber-500/40 bg-amber-500/5'
+              : 'border-border'
+          }`}
+        >
+          {aprovStatus === 'aprovada' && <ShieldCheck className="h-4 w-4 text-success flex-shrink-0" />}
+          {aprovStatus === 'reprovada' && <AlertTriangle className="h-4 w-4 text-destructive flex-shrink-0" />}
+          {aprovStatus === 'aguardando' && <Clock className="h-4 w-4 text-amber-600 flex-shrink-0" />}
+          {aprovStatus === 'pendente' && <ShieldCheck className="h-4 w-4 text-muted-foreground flex-shrink-0" />}
+          <div className="flex flex-col min-w-0">
+            <span className="font-medium">Monitoramento</span>
+            <span className="text-muted-foreground truncate">{aprovLabel}</span>
+          </div>
+        </div>
+
+        {/* 3. Instalação */}
         <div className={`rounded border p-2 flex items-center gap-2 ${instOk ? 'border-success/40 bg-success/5' : 'border-border'}`}>
-          {instOk ? <CheckCircle className="h-4 w-4 text-success" /> : <Cpu className="h-4 w-4 text-muted-foreground" />}
-          <div className="flex flex-col">
+          {instOk ? <CheckCircle className="h-4 w-4 text-success flex-shrink-0" /> : <Cpu className="h-4 w-4 text-muted-foreground flex-shrink-0" />}
+          <div className="flex flex-col min-w-0">
             <span className="font-medium">Instalação</span>
-            <span className="text-muted-foreground">
-              {instOk ? link.instalacao_executor_nome || 'Concluída' : 'Pendente'}
+            <span className="text-muted-foreground truncate">
+              {instOk
+                ? link.instalacao_executor_nome || 'Concluída'
+                : fotosAprovadas
+                ? 'Liberada'
+                : 'Bloqueada'}
             </span>
           </div>
         </div>
       </div>
+
+      {/* Aviso de reprovação com motivo */}
+      {fotosReprovadas && link.fotos_reprovacao_motivo && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs flex items-start gap-2">
+          <AlertTriangle className="h-3.5 w-3.5 text-destructive mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="font-semibold text-destructive">Fotos reprovadas pelo monitoramento</p>
+            <p className="text-muted-foreground mt-0.5">{link.fotos_reprovacao_motivo}</p>
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center gap-2">
         <Button size="sm" variant="outline" className="flex-1" onClick={() => window.open(url, '_blank')}>
