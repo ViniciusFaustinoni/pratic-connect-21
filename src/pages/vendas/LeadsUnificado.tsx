@@ -11,7 +11,7 @@ import { LeadsTable } from '@/components/leads/LeadsTable';
 import { LeadsKanbanNew } from '@/components/leads/LeadsKanbanNew';
 import { LeadsFiltersPanel } from '@/components/leads/LeadsFiltersPanel';
 import { LeadFormDialog } from '@/components/leads/LeadFormDialog';
-import { LeadDetailDrawer } from '@/components/leads/LeadDetailDrawer';
+import { useLeadModals } from '@/contexts/LeadModalsContext';
 import { LeadLossDialog } from '@/components/leads/LeadLossDialog';
 import { LeadSignatureListener } from '@/components/leads/LeadSignatureToast';
 import { Switch } from '@/components/ui/switch';
