@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useLeadModals } from '@/contexts/LeadModalsContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Loader2, Calendar, X, ChevronLeft, ChevronRight, CheckCircle, Phone, Car } from 'lucide-react';
 import { format } from 'date-fns';
@@ -31,7 +32,7 @@ import { LeadFormDialog } from '@/components/leads/LeadFormDialog';
 import { LeadLossDialog } from '@/components/leads/LeadLossDialog';
 import { LeadKanbanCard } from '@/components/leads/LeadKanbanCard';
 import { LeadMetricsCards } from '@/components/leads/LeadMetricsCards';
-import { LeadDetailDrawer } from '@/components/leads/LeadDetailDrawer';
+// LeadDetailDrawer removido — substituído pelo LeadDetailModal global
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
