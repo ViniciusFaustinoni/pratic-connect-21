@@ -1,59 +1,60 @@
-## Planilha: Planos × Coberturas × Benefícios × Códigos Hinova
+# Sidebar mobile do diretor mostrar todos os caminhos (igual ao desktop)
 
-Vou gerar um arquivo `.xlsx` em `/mnt/documents/` com **2 abas**, usando os dados atuais do banco.
+## Causa raiz
 
-### Dados disponíveis no banco
-- **287 planos** ativos e visíveis (`planos`)
-- **2.865 coberturas** (`coberturas` — campo `codigo_sga` para Hinova, campo `valor` fixo)
-- **1.770 benefícios** (`benefits` — campo `codigo_sga`, campo `preco_sugerido`)
-- **2.241 vínculos** plano↔cobertura (`planos_coberturas`)
-- **1.330 vínculos** plano↔benefício (`planos_beneficios`)
-- **2.759 regras de faixa FIPE** em `entity_eligibility_rules` (rule_type='fipe_range') — quando uma cobertura tem essa regra, o valor varia por faixa de FIPE em vez de ser fixo
-- Código Hinova do plano: `planos.codigo_sga_plano`
+No mobile (largura <768px), o shadcn `Sidebar` abre dentro de um `Sheet` (drawer lateral), mas o estado `state` do `useSidebar()` permanece `"collapsed"` enquanto o usuário não expandiu manualmente no desktop. O `AppSidebar.tsx` (linha 553-554) decide o que renderizar com:
 
----
+```ts
+const { state, setOpenMobile, isMobile } = useSidebar();
+const collapsed = state === 'collapsed';
+```
 
-### Aba 1 — "Mapa Hinova" (matriz de códigos)
+Como `collapsed` está `true`, ele entra no ramo do **modo colapsado** (linha 724) — que renderiza só ícones com popover lateral. Esse layout funciona no desktop, mas dentro do drawer mobile fica:
 
-Uma linha por plano. Colunas:
+- Sem labels textuais dos itens.
+- Popovers laterais (`side="right"`) que abrem para fora do drawer ou ficam atrás dele.
+- Sem os super-grupos expansíveis com todos os módulos do diretor (Vendas, Operações, Financeiro, Diretoria, etc.).
 
-| A | B | C | D | E... |
-|---|---|---|---|---|
-| Plano (nome) | Coberturas (lista) | Benefícios (lista) | Código Hinova Plano | Código Hinova Cobertura 1, 2, 3... |
+Resultado: o diretor no celular vê uma versão amputada do menu — só os "main items" e ícones soltos, sem acesso aos sub-itens dos módulos.
 
-- **Coluna B**: nomes das coberturas do plano, separados por `;`
-- **Coluna C**: nomes dos benefícios do plano, separados por `;`
-- **Coluna D**: `planos.codigo_sga_plano` (vazio quando não configurado)
-- **Colunas E em diante**: uma coluna por cobertura do plano, no formato `Nome da Cobertura → código_sga` (ou em branco quando o código não estiver cadastrado). Como o número de coberturas varia por plano, a largura da matriz será o máximo encontrado (ex.: até ~12 coberturas por plano).
+## Correção
 
-### Aba 2 — "Estrutura e Valores"
+Forçar o **modo expandido** sempre que o sidebar estiver sendo renderizado dentro do drawer mobile, independente do `state` do desktop.
 
-Uma linha por **item** (cobertura ou benefício) de cada plano, mais o valor do plano:
+### Mudança 1 — `src/components/layout/AppSidebar.tsx` (linha 554)
 
-| Plano | Valor do Plano | Tipo | Item | Valor do Item |
-|---|---|---|---|---|
-| Select Bronze | R$ 87,50 a R$ 245,30 | Cobertura | Roubo e Furto | R$ 2,50 a R$ 45,00 (varia FIPE) |
-| Select Bronze | R$ 87,50 a R$ 245,30 | Cobertura | Colisão | R$ 30,00 (fixo) |
-| Select Bronze | R$ 87,50 a R$ 245,30 | Benefício | Carro Reserva 7 dias | R$ 12,00 (fixo) |
-| ... | ... | ... | ... | ... |
+Trocar:
+```ts
+const collapsed = state === 'collapsed';
+```
+por:
+```ts
+const collapsed = state === 'collapsed' && !isMobile;
+```
 
-Lógica de valor:
-- **Item com valor fixo**: pega `coberturas.valor` ou `benefits.preco_sugerido`
-- **Item com regra `fipe_range`** (entity_eligibility_rules): formata como `R$ MIN a R$ MAX (varia por FIPE)` usando o menor e maior `valor` das faixas
-- **Valor do Plano** (coluna B, repetida por linha do mesmo plano): soma de todos os itens
-  - Se nenhum item varia por FIPE → valor fixo único
-  - Se algum item varia → faixa `R$ MIN a R$ MAX` (somando mínimos vs. somando máximos das faixas)
+Com isso, em mobile o componente entra direto no ramo **MODO EXPANDIDO** (linha 903) que já contém:
+- Main items com label.
+- Super-grupos colapsáveis (Vendas, Operações, Financeiro, Diretoria, RH, Marketing, Configurações…).
+- Sub-grupos com todos os itens textuais e badges.
+- Itens de configuração no rodapé.
 
-### Critérios e exclusões
-- Apenas planos `ativo=true` e `visivel_gestao=true`
-- Apenas coberturas/benefícios efetivamente vinculados ao plano
-- Sem coluna de slug, sem IDs UUID, sem categoria, sem demais metadados — apenas o que foi pedido
-- Códigos Hinova ausentes ficam como célula vazia (não como "null" ou "—")
+### Mudança 2 — Garantir scroll/altura do drawer
 
-### Detalhe técnico
-- Script Python com `openpyxl`, executado via `code--exec`
-- Consultas SQL para puxar planos + joins de coberturas/benefícios + regras `fipe_range` em uma única passagem
-- Formatação: cabeçalhos em negrito, congelar primeira linha, larguras automáticas
-- Saída: `/mnt/documents/planos_hinova.xlsx` entregue via `<presentation-artifact>`
+O `SheetContent` mobile do shadcn tem altura total, mas o `SidebarContent` precisa ser scrollável quando a lista é longa (caso do diretor, com dezenas de itens). Verificar se já há `scrollbar-thin` e `overflow-y-auto` (já está em `SidebarContent` via shadcn). Se necessário, adicionar `h-full` no wrapper para o scroll funcionar dentro do `Sheet`.
 
-Posso prosseguir?
+### Mudança 3 — Footer/perfil no mobile
+
+O `SidebarFooter` (links de Perfil/Configurações no rodapé, linhas ~1100-1145) já é renderizado nos dois modos. Garantir que continua aparecendo no drawer mobile (não precisa mudança — o footer está fora do `if collapsed`).
+
+## O que NÃO muda
+
+- Desktop continua exatamente igual: collapsed/expandido controlado pelo `SidebarTrigger` no `AppHeader`.
+- Permissões e visibilidade de módulos (`visibleGroups`, `superGroups`, `useModuleVisibility`) continuam idênticas — diretor vê tudo.
+- Roles de mobile dedicados (Regulador, Instalador, App Associado) não são tocados — eles têm seus próprios layouts.
+- Não mexe em `AppMobileMenu` (esse é do app do associado, não do painel interno).
+
+## Resultado esperado
+
+No celular, ao tocar no botão de menu (hamburger no `AppHeader`), o diretor vê o **mesmo conjunto completo de super-grupos, grupos e itens** que vê no desktop expandido — com labels, badges, sub-itens e tudo navegável dentro do drawer.
+
+Edição mínima (1 linha de código) com efeito direto no problema relatado.
