@@ -67,7 +67,7 @@ import { LeadKanbanCard } from '@/components/leads/LeadKanbanCard';
 import { KanbanBoard } from '@/components/leads/KanbanBoard';
 import { LeadLossDialog } from '@/components/leads/LeadLossDialog';
 import { LeadMetricsBar } from '@/components/leads/LeadMetricsBar';
-import { LeadDetailDrawer } from '@/components/leads/LeadDetailDrawer';
+// LeadDetailDrawer removido — substituído pelo LeadDetailModal global (montado em LeadModalsHost).
 import { MoverEtapaModal } from '@/components/vendas/MoverEtapaModal';
 import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
 import { toast } from 'sonner';
@@ -115,7 +115,7 @@ export default function Leads() {
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [lossDialogLead, setLossDialogLead] = useState<Lead | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [drawerLeadId, setDrawerLeadId] = useState<string | null>(null);
+  // Detail modal agora é global via LeadModalsContext (openLeadDetail)
   const [moverLeadModal, setMoverLeadModal] = useState<{
     open: boolean;
     lead: Lead | null;
@@ -527,7 +527,7 @@ export default function Leads() {
                               className="text-primary hover:underline font-medium text-left"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setDrawerLeadId(lead.id);
+                                openLeadDetail(lead.id);
                               }}
                             >
                               {lead.nome}
@@ -736,7 +736,7 @@ export default function Leads() {
           handleDragStart={handleDragStart}
           handleDragEnd={handleDragEnd}
           activeLead={activeLead}
-          setDrawerLeadId={setDrawerLeadId}
+          setDrawerLeadId={openLeadDetail}
           showVendedor={isSupervisor || isGerencia}
         />
       )}
@@ -924,12 +924,7 @@ export default function Leads() {
         leadId={selectedLeadId}
       />
 
-      {/* Lead Detail Drawer */}
-      <LeadDetailDrawer
-        leadId={drawerLeadId}
-        open={!!drawerLeadId}
-        onClose={() => setDrawerLeadId(null)}
-      />
+      {/* Detail modal agora é global (LeadModalsHost) */}
     </div>
   );
 }
