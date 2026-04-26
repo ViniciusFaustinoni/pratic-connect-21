@@ -24,7 +24,6 @@ interface VeiculoOpcao {
   id: string;            // UUID local (necessário para o backend)
   descricao: string;
   placa: string;
-  fonte: 'sga' | 'local';
 }
 
 export function TrocaTitularidadeDialog({
@@ -85,7 +84,6 @@ export function TrocaTitularidadeDialog({
       return {
         id: local.id,
         placa: v.placa,
-        fonte: 'sga' as const,
         descricao: `${v.marca || local.marca || ''} ${v.modelo || local.modelo || ''} ${v.ano || local.ano_modelo || ''} - ${v.placa}`.trim(),
       };
     })
