@@ -957,6 +957,12 @@ export default function ReguladorOficina() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <OrdemServicoDetalheModal
+        osId={osDetalheId}
+        open={!!osDetalheId}
+        onOpenChange={(open) => { if (!open) setOsDetalheId(null); }}
+      />
     </div>
   );
 }
