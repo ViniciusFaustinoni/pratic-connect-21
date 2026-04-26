@@ -15,6 +15,18 @@ const ROLES_VENDAS = [
   'gerente_comercial',
 ];
 
+/**
+ * Roles que ORIGINAM vendas e portanto recebem grade própria.
+ * Supervisor e gerente NÃO entram aqui — eles comissionam pela grade
+ * do vendedor que originou a venda (ver fn_gerar_comissoes_por_pagamento).
+ */
+const ROLES_ORIGEM_VENDA = ['vendedor_clt', 'vendedor_externo', 'agencia'];
+
+export function podeReceberGrade(roles: string[] | undefined | null): boolean {
+  if (!roles || roles.length === 0) return false;
+  return roles.some((r) => ROLES_ORIGEM_VENDA.includes(r));
+}
+
 export function useUsuariosVendas() {
   return useQuery({
     queryKey: ['atribuicao-comissoes', 'usuarios-vendas'],

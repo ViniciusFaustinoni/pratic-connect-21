@@ -1,78 +1,49 @@
-# Tela "Planos SGA (Hinova)" — visualização somente leitura
+## Contexto e regra confirmada
 
-Criar uma área nova no sistema, separada dos planos locais, que **lista exatamente o que existe hoje no SGA** (planos/produtos + benefícios), com seus respectivos códigos. Nada é gravado, nada é sincronizado — é uma janela de leitura para a base da Hinova.
+- O motor `fn_gerar_comissoes_por_pagamento` já usa **uma única grade** — a do **vendedor** que originou a venda — e distribui as fatias para supervisor/gerente/agência via cadeia hierárquica. A grade pessoal de supervisores/gerentes nunca é consultada.
+- Hoje a UI ainda permite escolher uma grade para qualquer usuário das 5 roles de vendas, o que é confuso e cria registros sem efeito.
+- Verifiquei no banco: **0 atribuições ativas** existem hoje para supervisor/gerente — ou seja, não há limpeza de dados a fazer, só travar a entrada.
 
-## O que o usuário verá
+Quem pode ter grade própria: `vendedor_clt`, `vendedor_externo`, `agencia`. Quem **não pode**: `supervisor_vendas`, `gerente_comercial`.
 
-Nova rota: **`/configuracoes/integracoes/planos-sga`** (ou no menu "Integrações")
+Caso o usuário acumule papéis (ex.: vendedor_clt + supervisor_vendas), a grade continua permitida — porque ele ainda origina vendas como vendedor. O bloqueio só vale quando o usuário é **exclusivamente** supervisor e/ou gerente.
 
-Duas abas:
+## Mudanças
 
-1. **Produtos / Planos SGA** — tabela com:
-   - Código do produto
-   - Descrição
-   - Tipo de veículo (carro, moto, etc.)
-   - Base de cobrança (FIPE / valor fixo)
-   - Formato (% ou R$)
-   - Situação (ativo/inativo)
-   - Regional vinculada
-   - Botão "Ver detalhes" → abre dialog com o JSON completo retornado pela Hinova
+### 1. Banco — guard rail definitivo
 
-2. **Benefícios SGA** — tabela com:
-   - Código do benefício
-   - Descrição
-   - Situação (ativo/inativo/todos — filtro no topo)
-   - Categoria/tipo (se vier no payload)
+Migration adicionando uma trigger `BEFORE INSERT/UPDATE` em `usuario_grade_comissao` que rejeita atribuição quando o `user_id` (profile.id) tem apenas roles em (`supervisor_vendas`, `gerente_comercial`) e nenhuma role de origem de venda. Mensagem: "Supervisores/Gerentes não recebem grade própria — comissionam pela grade do vendedor que originou a venda."
 
-Botão **"Atualizar da Hinova"** no topo: refaz a chamada e recarrega a tabela.
+Sem CHECK constraint (regra depende de outra tabela). Encerrar quaisquer atribuições ativas residuais para essas roles, por segurança (`UPDATE ... SET data_fim = now()`).
 
-Campo de busca por código ou nome em cada aba.
+### 2. Hook `useAtribuicaoComissoes.ts`
 
-Aviso visual no topo: *"Esta tela é somente leitura. Reflete o cadastro atual no SGA. A criação de planos no SGA continua sendo feita pelo painel da Hinova."*
-
-## Como funciona por trás
-
-Reaproveita a infra já existente:
-
-```text
-Frontend (nova página)
-   │
-   ▼
-Edge Function nova: sga-listar-catalogo
-   │
-   ├─ getHinovaSession()  ← já existe em _shared/hinova-client.ts
-   │
-   ├─ GET /listar/produto/
-   └─ GET /listar/beneficio-por-situacao/{situacao}
-   │
-   ▼
-Retorna JSON cru ao frontend (com cache curto de 5 min em memória da function)
+Expor um helper `podeReceberGrade(roles)` derivado de:
 ```
+podeReceberGrade = roles.some(r => r in ['vendedor_clt','vendedor_externo','agencia'])
+```
+e usar em todos os pontos abaixo.
 
-Sem banco. Sem migration. Sem mexer em `planos`, `benefits`, `coberturas` nem nos códigos SGA já mapeados.
+### 3. Tela `AtribuicaoGrades.tsx`
 
-## Arquivos a criar
+- Coluna **Grade Atual**: para usuários sem permissão, exibir badge cinza “Não aplicável (recebe pela grade do vendedor)” em vez de “Sem grade”.
+- Não contar esses usuários no alerta `totalSemGrade`.
+- Manter botão de editar (eles ainda configuram hierarquia/observações), mas o modal vai esconder o campo de grade.
 
-**Backend (1 edge function nova):**
-- `supabase/functions/sga-listar-catalogo/index.ts`
-  - Aceita `?tipo=produtos` ou `?tipo=beneficios&situacao=ativo|inativo|todos`
-  - Usa `getHinovaSession` para auth
-  - Retorna a resposta da Hinova como veio (sem transformar)
-  - Cache em memória de 5 minutos por chave para não martelar a API
+### 4. Modal `AtribuirGradeModal.tsx` e `EditarHierarquiaModal.tsx`
 
-**Frontend (3 arquivos novos):**
-- `src/pages/configuracoes/PlanosSGA.tsx` — página com tabs e tabelas
-- `src/hooks/useSGACatalogo.ts` — 2 hooks (`useSGAProdutos`, `useSGABeneficios`) usando React Query
-- Entrada no menu de Configurações → Integrações apontando para a nova rota
+- Quando `!podeReceberGrade(linha.usuario.roles)`: ocultar todo o bloco “Grade aplicada”, mostrar um aviso curto explicando que supervisor/gerente comissiona pela grade do vendedor que originou a venda, e permitir apenas configurar hierarquia/observações.
+- Quando `podeReceberGrade`: comportamento atual.
+- No `handleSave`, só chamar `atribuirGrade.mutateAsync` se o usuário pode receber grade.
 
-## O que NÃO faz parte deste plano
+### 5. Detalhes técnicos adicionais
 
-- Não cria planos novos no SGA (a API não permite — só GET)
-- Não altera planos locais
-- Não preenche `codigo_sga` automaticamente em coberturas/benefícios locais
-- Não muda o fluxo de cadastro de associado
-- Não toca em nenhuma migration de banco
+- Não mexer em `fn_atribuir_grade_usuario` — a trigger no INSERT já barra qualquer chamada indevida (UI, RPC ou SQL direto).
+- Tipos: nenhuma mudança em `AtribuicaoLinha` necessária; a flag é derivada de `usuario.roles`.
+- Sem migração de dados destrutiva — apenas encerramento (data_fim) das atribuições ativas residuais (se aparecer alguma entre agora e o deploy).
 
-## Fluxo de aprovação
+## Resultado esperado
 
-Implemento exatamente isso. Se depois você quiser uma segunda fase (ex: ao lado de cada plano local, sugerir o produto SGA equivalente para preencher o `codigo_sga` num clique), a gente conversa em outro plano.
+- Diretor abre `/configuracoes/atribuicao-comissoes`: supervisores/gerentes aparecem com a tag “Não aplicável” em Grade, sem alarme de pendência.
+- Ao editar um supervisor/gerente, o seletor de grade simplesmente não aparece — só hierarquia.
+- Qualquer tentativa programática de gravar grade para essas roles é rejeitada pelo banco com mensagem clara.

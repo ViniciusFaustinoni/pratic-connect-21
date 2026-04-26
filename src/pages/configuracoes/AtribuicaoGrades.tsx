@@ -27,7 +27,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Eye, Network, Pencil, Search, Users2, AlertCircle, AlertTriangle } from 'lucide-react';
-import { useAtribuicoesComissao } from '@/hooks/useAtribuicaoComissoes';
+import { useAtribuicoesComissao, podeReceberGrade } from '@/hooks/useAtribuicaoComissoes';
 import { useVendedoresSemCodigoSga } from '@/hooks/useVendedoresSemCodigoSga';
 import { EditarHierarquiaModal } from '@/components/comissoes/EditarHierarquiaModal';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -85,7 +85,7 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
     });
   }, [atribuicoes, search, roleFilter, statusFilter]);
 
-  const totalSemGrade = atribuicoes.filter((a) => !a.gradeAtual).length;
+  const totalSemGrade = atribuicoes.filter((a) => podeReceberGrade(a.usuario.roles) && !a.gradeAtual).length;
 
   const handleEdit = (linha: AtribuicaoLinha) => {
     setEditing(linha);
@@ -378,12 +378,18 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filtered.map((linha) => (
+                  filtered.map((linha) => {
+                    const elegivelGrade = podeReceberGrade(linha.usuario.roles);
+                    return (
                       <TableRow key={linha.usuario.id}>
                         <TableCell>{renderUserCell(linha)}</TableCell>
                         <TableCell>{renderRoles(linha)}</TableCell>
                         <TableCell>
-                          {linha.gradeAtual?.grade ? (
+                          {!elegivelGrade ? (
+                            <span className="text-xs text-muted-foreground italic">
+                              Recebe pela grade do vendedor
+                            </span>
+                          ) : linha.gradeAtual?.grade ? (
                             <Badge variant="outline" className="font-normal">
                               {linha.gradeAtual.grade.nome}
                             </Badge>
@@ -392,13 +398,22 @@ export default function AtribuicaoGrades({ gradesPath = '/configuracoes/grades-c
                           )}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {linha.gradeAtual?.data_inicio ? new Date(linha.gradeAtual.data_inicio).toLocaleDateString('pt-BR') : '—'}
+                          {elegivelGrade && linha.gradeAtual?.data_inicio
+                            ? new Date(linha.gradeAtual.data_inicio).toLocaleDateString('pt-BR')
+                            : '—'}
                         </TableCell>
                         <TableCell>
-                          {linha.gradeAtual ? <Badge variant="secondary">Com grade</Badge> : <Badge variant="destructive">Sem grade</Badge>}
+                          {!elegivelGrade ? (
+                            <Badge variant="secondary" className="font-normal">Não aplicável</Badge>
+                          ) : linha.gradeAtual ? (
+                            <Badge variant="secondary">Com grade</Badge>
+                          ) : (
+                            <Badge variant="destructive">Sem grade</Badge>
+                          )}
                         </TableCell>
                       </TableRow>
-                    ))
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
