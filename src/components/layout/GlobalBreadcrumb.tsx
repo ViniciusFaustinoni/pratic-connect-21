@@ -168,13 +168,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
 // Rotas com IDs dinâmicos
 const DYNAMIC_ROUTES: Record<string, RouteConfig> = {
   // Vendas
-  '/vendas/leads/:id': {
-    label: 'Lead',
-    resolver: async (id: string) => {
-      const { data } = await supabase.from('leads').select('nome').eq('id', id).single();
-      return data?.nome || 'Lead';
-    },
-  },
+  // /vendas/leads/:id removido — agora abre como modal global
   '/vendas/vendedores/:id': {
     label: 'Vendedor',
     resolver: async (id: string) => {
