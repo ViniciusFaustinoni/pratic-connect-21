@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Plus, Search, ClipboardList, Calendar, Building2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -10,13 +9,14 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useOrdensServico } from '@/hooks/useOrdensServico';
 import { OSFormDialog } from '@/components/oficinas/OSFormDialog';
+import { OrdemServicoDetalheModal } from '@/components/oficinas/OrdemServicoDetalheModal';
 import { STATUS_ORDEM_SERVICO_LABELS, STATUS_ORDEM_SERVICO_COLORS, type StatusOrdemServico } from '@/types/database';
 
 export default function OrdensServico() {
-  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusOrdemServico | 'todos'>('todos');
   const [formOpen, setFormOpen] = useState(false);
+  const [osSelecionadaId, setOsSelecionadaId] = useState<string | null>(null);
 
   const { data: ordensServico, isLoading } = useOrdensServico({
     search: search || undefined,
@@ -84,7 +84,7 @@ export default function OrdensServico() {
             <Card
               key={os.id}
               className="cursor-pointer transition-shadow hover:shadow-md"
-              onClick={() => navigate(`/oficinas/ordens/${os.id}`)}
+              onClick={() => setOsSelecionadaId(os.id)}
             >
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">
@@ -123,6 +123,11 @@ export default function OrdensServico() {
       )}
 
       <OSFormDialog open={formOpen} onOpenChange={setFormOpen} />
+      <OrdemServicoDetalheModal
+        osId={osSelecionadaId}
+        open={!!osSelecionadaId}
+        onOpenChange={(open) => { if (!open) setOsSelecionadaId(null); }}
+      />
     </div>
   );
 }

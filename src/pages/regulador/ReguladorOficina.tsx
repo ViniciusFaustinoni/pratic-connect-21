@@ -17,8 +17,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { OrdemServicoDetalheModal } from '@/components/oficinas/OrdemServicoDetalheModal';
 import {
   Car, Search, Clock, AlertTriangle, AlertCircle, Phone,
   CheckCircle2, CircleDot, Circle, Wrench, Building2, Store,
@@ -120,8 +120,8 @@ export default function ReguladorOficina() {
   const [pdfEtapasReparo, setPdfEtapasReparo] = useState<string[]>([]);
   const [pdfItensExtraidos, setPdfItensExtraidos] = useState<any[]>([]);
   const [pdfSalvando, setPdfSalvando] = useState(false);
+  const [osDetalheId, setOsDetalheId] = useState<string | null>(null);
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
 
   const filters = useMemo(() => ({
     search: search || undefined,
@@ -654,7 +654,7 @@ export default function ReguladorOficina() {
                     <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => { setAlterarOficinaOS(v); setNovaOficinaId(v.oficina?.id || ''); }}>
                       <RefreshCw className="h-3 w-3 mr-1" /> Oficina
                     </Button>
-                    <Button size="sm" variant="outline" className="flex-1 h-8 text-xs" onClick={() => navigate(`/oficinas/ordens/${v.id}`)}>
+                    <Button size="sm" variant="outline" className="flex-1 h-8 text-xs" onClick={() => setOsDetalheId(v.id)}>
                       Ver Detalhes
                     </Button>
                   </div>
@@ -957,6 +957,12 @@ export default function ReguladorOficina() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <OrdemServicoDetalheModal
+        osId={osDetalheId}
+        open={!!osDetalheId}
+        onOpenChange={(open) => { if (!open) setOsDetalheId(null); }}
+      />
     </div>
   );
 }

@@ -316,15 +316,6 @@ const DYNAMIC_ROUTES: Record<string, RouteConfig> = {
       return data?.nome || 'Usuário';
     },
   },
-  
-  // Oficinas
-  '/oficinas/ordens/:id': {
-    label: 'OS',
-    resolver: async (id: string) => {
-      const { data } = await supabase.from('ordens_servico').select('numero').eq('id', id).single();
-      return data?.numero ? `OS #${data.numero}` : 'Ordem de Serviço';
-    },
-  },
 };
 
 // Verifica se uma string é um UUID válido

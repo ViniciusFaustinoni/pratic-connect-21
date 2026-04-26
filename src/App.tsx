@@ -137,7 +137,6 @@ const Oficinas = lazy(() => import("./pages/oficinas/Oficinas"));
 const AutoCenters = lazy(() => import("./pages/oficinas/AutoCenters"));
 const OficinasRelatorios = lazy(() => import("./pages/oficinas/OficinasRelatorios"));
 const OrdensServico = lazy(() => import("./pages/oficinas/OrdensServico"));
-const OrdemServicoDetalhe = lazy(() => import("./pages/oficinas/OrdemServicoDetalhe"));
 
 // Configurações
 const MeuPerfil = lazy(() => import("./pages/configuracoes/MeuPerfil"));
@@ -720,7 +719,7 @@ const App = () => (
               <Route path="/oficinas/auto-centers" element={<AutoCenters />} />
               <Route path="/oficinas/relatorios" element={<OficinasRelatorios />} />
               <Route path="/ordens-servico" element={<OrdensServico />} />
-              <Route path="/oficinas/ordens/:id" element={<OrdemServicoDetalhe />} />
+              <Route path="/oficinas/ordens/:id" element={<Navigate to="/ordens-servico" replace />} />
               
               {/* Configurações */}
               <Route path="/configuracoes" element={<LazyConfiguracoesLayout />}>
