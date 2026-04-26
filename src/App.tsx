@@ -404,6 +404,8 @@ const App = () => (
             <Sonner />
             <AppErrorBoundary>
               <BrowserRouter>
+                <LeadModalsProvider>
+                  <LeadModalsHost />
                 <Suspense fallback={<PageLoader />}>
                 <Routes>
             {/* Auth */}
