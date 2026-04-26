@@ -1,45 +1,78 @@
-# Preencher código Hinova (codigo_sga_voluntario) dos usuários
+# Tela "Planos SGA (Hinova)" — visualização somente leitura
 
-## Contexto
+Criar uma área nova no sistema, separada dos planos locais, que **lista exatamente o que existe hoje no SGA** (planos/produtos + benefícios), com seus respectivos códigos. Nada é gravado, nada é sincronizado — é uma janela de leitura para a base da Hinova.
 
-A coluna que armazena o "código Hinova" no banco se chama `codigo_sga_voluntario` na tabela `profiles` (não existe `codigo_hinova`). Hoje só 4 perfis têm valor preenchido. Você enviou 225 linhas (usuário + email + código) para popular o restante.
+## O que o usuário verá
 
-## Estratégia de matching
+Nova rota: **`/configuracoes/integracoes/planos-sga`** (ou no menu "Integrações")
 
-- Match por **email case-insensitive** (`lower(p.email) = lower(novos.email)`).
-- Não vou tentar fazer match por nome — tem caracteres acentuados, abreviações e nomes idênticos entre pessoas diferentes (ex: "EDUARDO SANTOS" pode existir mais de uma vez).
-- Emails que não baterem em nenhum profile não atualizam nada (UPDATE silencioso). Após rodar, vou listar os emails sem match para você revisar manualmente.
+Duas abas:
 
-## Migration
+1. **Produtos / Planos SGA** — tabela com:
+   - Código do produto
+   - Descrição
+   - Tipo de veículo (carro, moto, etc.)
+   - Base de cobrança (FIPE / valor fixo)
+   - Formato (% ou R$)
+   - Situação (ativo/inativo)
+   - Regional vinculada
+   - Botão "Ver detalhes" → abre dialog com o JSON completo retornado pela Hinova
 
-Um único `UPDATE` com `WITH ... VALUES` carregando os 225 pares (código, email):
+2. **Benefícios SGA** — tabela com:
+   - Código do benefício
+   - Descrição
+   - Situação (ativo/inativo/todos — filtro no topo)
+   - Categoria/tipo (se vier no payload)
 
-```sql
-WITH novos(codigo, email) AS (
-  VALUES
-    (125, 'vendedorctl@teste.com'),
-    (39, 'adrianaleandropraticcar@gmail.com'),
-    -- ... 223 linhas ...
-    (40, 'eduardonegreirospraticcar@gmail.com')
-)
-UPDATE public.profiles p
-SET codigo_sga_voluntario = novos.codigo::varchar,
-    updated_at = now()
-FROM novos
-WHERE lower(p.email) = lower(novos.email);
+Botão **"Atualizar da Hinova"** no topo: refaz a chamada e recarrega a tabela.
+
+Campo de busca por código ou nome em cada aba.
+
+Aviso visual no topo: *"Esta tela é somente leitura. Reflete o cadastro atual no SGA. A criação de planos no SGA continua sendo feita pelo painel da Hinova."*
+
+## Como funciona por trás
+
+Reaproveita a infra já existente:
+
+```text
+Frontend (nova página)
+   │
+   ▼
+Edge Function nova: sga-listar-catalogo
+   │
+   ├─ getHinovaSession()  ← já existe em _shared/hinova-client.ts
+   │
+   ├─ GET /listar/produto/
+   └─ GET /listar/beneficio-por-situacao/{situacao}
+   │
+   ▼
+Retorna JSON cru ao frontend (com cache curto de 5 min em memória da function)
 ```
 
-A lista completa dos 225 pares já foi gerada em `/tmp/migration.sql` (9277 caracteres). Vai entrar inteira na migration final.
+Sem banco. Sem migration. Sem mexer em `planos`, `benefits`, `coberturas` nem nos códigos SGA já mapeados.
 
-## Após aplicar
+## Arquivos a criar
 
-Vou rodar 2 queries de verificação:
+**Backend (1 edge function nova):**
+- `supabase/functions/sga-listar-catalogo/index.ts`
+  - Aceita `?tipo=produtos` ou `?tipo=beneficios&situacao=ativo|inativo|todos`
+  - Usa `getHinovaSession` para auth
+  - Retorna a resposta da Hinova como veio (sem transformar)
+  - Cache em memória de 5 minutos por chave para não martelar a API
 
-1. `SELECT COUNT(*) FROM profiles WHERE codigo_sga_voluntario IS NOT NULL` — número total de perfis preenchidos (esperado: ~225 + 4 que já tinham).
-2. Listagem dos emails da sua planilha que **não** bateram com nenhum profile — para você decidir se precisam ser criados ou se há divergência de email.
+**Frontend (3 arquivos novos):**
+- `src/pages/configuracoes/PlanosSGA.tsx` — página com tabs e tabelas
+- `src/hooks/useSGACatalogo.ts` — 2 hooks (`useSGAProdutos`, `useSGABeneficios`) usando React Query
+- Entrada no menu de Configurações → Integrações apontando para a nova rota
 
-## O que não muda
+## O que NÃO faz parte deste plano
 
-- Schema da tabela continua igual (sem nova coluna, sem nova constraint).
-- Os 4 códigos já preenchidos (5, 6, 10, 125) coincidem com a sua lista, então serão sobrescritos com o mesmo valor.
-- Nada de UI ou edge function muda.
+- Não cria planos novos no SGA (a API não permite — só GET)
+- Não altera planos locais
+- Não preenche `codigo_sga` automaticamente em coberturas/benefícios locais
+- Não muda o fluxo de cadastro de associado
+- Não toca em nenhuma migration de banco
+
+## Fluxo de aprovação
+
+Implemento exatamente isso. Se depois você quiser uma segunda fase (ex: ao lado de cada plano local, sugerir o produto SGA equivalente para preencher o `codigo_sga` num clique), a gente conversa em outro plano.
