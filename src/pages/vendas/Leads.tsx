@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useLeadModals } from '@/contexts/LeadModalsContext';
 import { Plus, MoreHorizontal, Loader2, ChevronLeft, ChevronRight, Edit, ArrowRight, ArrowRightLeft, XCircle, MessageCircle, Eye, Search, Filter, Trash2, X, CalendarClock, AlertTriangle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -67,7 +66,7 @@ import { LeadKanbanCard } from '@/components/leads/LeadKanbanCard';
 import { KanbanBoard } from '@/components/leads/KanbanBoard';
 import { LeadLossDialog } from '@/components/leads/LeadLossDialog';
 import { LeadMetricsBar } from '@/components/leads/LeadMetricsBar';
-// LeadDetailDrawer removido — substituído pelo LeadDetailModal global (montado em LeadModalsHost).
+import { LeadDetailDrawer } from '@/components/leads/LeadDetailDrawer';
 import { MoverEtapaModal } from '@/components/vendas/MoverEtapaModal';
 import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
 import { toast } from 'sonner';
@@ -100,7 +99,6 @@ const ORIGENS_TODAS: OrigemLead[] = [
 
 export default function Leads() {
   const navigate = useNavigate();
-  const { openLeadDetail, openLeadEdit } = useLeadModals();
   const [searchParams, setSearchParams] = useSearchParams();
   const { hasPermission, isSupervisor, isGerencia } = usePermissions();
   const [filters, setFilters] = useState<LeadFiltersType>({});
@@ -115,7 +113,7 @@ export default function Leads() {
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [lossDialogLead, setLossDialogLead] = useState<Lead | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
-  // Detail modal agora é global via LeadModalsContext (openLeadDetail)
+  const [drawerLeadId, setDrawerLeadId] = useState<string | null>(null);
   const [moverLeadModal, setMoverLeadModal] = useState<{
     open: boolean;
     lead: Lead | null;
@@ -159,7 +157,7 @@ export default function Leads() {
       searchParams.delete('novo');
       setSearchParams(searchParams, { replace: true });
     }
-
+    
     // Filtro por etapa via URL (vindo do funil de cotação)
     const etapaParam = searchParams.get('etapa');
     if (etapaParam && ETAPAS_TODAS.includes(etapaParam as EtapaLead)) {
@@ -167,17 +165,7 @@ export default function Leads() {
       searchParams.delete('etapa');
       setSearchParams(searchParams, { replace: true });
     }
-
-    // Deep-link compat: ?lead=<id> (e ?edit=1) abre os modais globais
-    const leadParam = searchParams.get('lead');
-    if (leadParam) {
-      openLeadDetail(leadParam);
-      if (searchParams.get('edit') === '1') openLeadEdit(leadParam);
-      searchParams.delete('lead');
-      searchParams.delete('edit');
-      setSearchParams(searchParams, { replace: true });
-    }
-  }, [searchParams, setSearchParams, openLeadDetail, openLeadEdit]);
+  }, [searchParams, setSearchParams]);
 
   // Para tabela com paginação
   const { data: leadsData, isLoading } = useLeads({ filters, page, perPage: 20 });
@@ -529,7 +517,7 @@ export default function Leads() {
                         <TableRow 
                           key={lead.id} 
                           className="cursor-pointer hover:bg-muted/50"
-                          onClick={() => openLeadDetail(lead.id)}
+                          onClick={() => navigate(`/vendas/leads/${lead.id}`)}
                         >
                           {/* Nome - link clicável para drawer */}
                           <TableCell>
@@ -537,7 +525,7 @@ export default function Leads() {
                               className="text-primary hover:underline font-medium text-left"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                openLeadDetail(lead.id);
+                                setDrawerLeadId(lead.id);
                               }}
                             >
                               {lead.nome}
@@ -613,14 +601,14 @@ export default function Leads() {
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={(e) => {
                                   e.stopPropagation();
-                                  openLeadDetail(lead.id);
+                                  navigate(`/vendas/leads/${lead.id}`);
                                 }}>
                                   <Eye className="mr-2 h-4 w-4" />
                                   Ver
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={(e) => {
                                   e.stopPropagation();
-                                  openLeadEdit(lead.id);
+                                  setEditingLead(lead);
                                 }}>
                                   <Edit className="mr-2 h-4 w-4" />
                                   Editar
@@ -746,7 +734,7 @@ export default function Leads() {
           handleDragStart={handleDragStart}
           handleDragEnd={handleDragEnd}
           activeLead={activeLead}
-          setDrawerLeadId={openLeadDetail}
+          setDrawerLeadId={setDrawerLeadId}
           showVendedor={isSupervisor || isGerencia}
         />
       )}
@@ -934,7 +922,12 @@ export default function Leads() {
         leadId={selectedLeadId}
       />
 
-      {/* Detail modal agora é global (LeadModalsHost) */}
+      {/* Lead Detail Drawer */}
+      <LeadDetailDrawer
+        leadId={drawerLeadId}
+        open={!!drawerLeadId}
+        onClose={() => setDrawerLeadId(null)}
+      />
     </div>
   );
 }

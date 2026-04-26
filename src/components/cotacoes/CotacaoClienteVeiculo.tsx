@@ -13,7 +13,7 @@ import {
   AlertCircle,
   MessageSquare,
 } from 'lucide-react';
-import { useLeadModals } from '@/contexts/LeadModalsContext';
+import { Link } from 'react-router-dom';
 
 interface CotacaoClienteVeiculoProps {
   cotacao: {
@@ -57,7 +57,6 @@ export function CotacaoClienteVeiculo({
   onVincularLead,
   onTrocarLead,
 }: CotacaoClienteVeiculoProps) {
-  const { openLeadDetail } = useLeadModals();
   const temLead = !!cotacao.lead_id;
   const telefoneDigits = cotacao.leads?.telefone?.replace(/\D/g, '') || '';
 
@@ -131,14 +130,11 @@ export function CotacaoClienteVeiculo({
                 </div>
 
                 {cotacao.leads?.id && (
-                  <Button
-                    variant="link"
-                    size="sm"
-                    className="p-0"
-                    onClick={() => openLeadDetail(cotacao.leads!.id!)}
-                  >
-                    Ver Lead
-                    <ExternalLink className="ml-1 h-3 w-3" />
+                  <Button variant="link" size="sm" className="p-0" asChild>
+                    <Link to={`/vendas/leads/${cotacao.leads.id}`}>
+                      Ver Lead
+                      <ExternalLink className="ml-1 h-3 w-3" />
+                    </Link>
                   </Button>
                 )}
               </div>

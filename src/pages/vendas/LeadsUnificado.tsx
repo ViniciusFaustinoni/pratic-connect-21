@@ -11,7 +11,7 @@ import { LeadsTable } from '@/components/leads/LeadsTable';
 import { LeadsKanbanNew } from '@/components/leads/LeadsKanbanNew';
 import { LeadsFiltersPanel } from '@/components/leads/LeadsFiltersPanel';
 import { LeadFormDialog } from '@/components/leads/LeadFormDialog';
-import { useLeadModals } from '@/contexts/LeadModalsContext';
+import { LeadDetailDrawer } from '@/components/leads/LeadDetailDrawer';
 import { LeadLossDialog } from '@/components/leads/LeadLossDialog';
 import { LeadSignatureListener } from '@/components/leads/LeadSignatureToast';
 import { Switch } from '@/components/ui/switch';
@@ -62,8 +62,8 @@ export default function LeadsUnificado() {
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [showNewLeadDialog, setShowNewLeadDialog] = useState(false);
-  // Detail modal agora é global (LeadModalsContext)
-  const { openLeadDetail } = useLeadModals();
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [showLeadDrawer, setShowLeadDrawer] = useState(false);
   const [showLossDialog, setShowLossDialog] = useState(false);
   const [leadToDelete, setLeadToDelete] = useState<string | null>(null);
   const [lossDialogData, setLossDialogData] = useState<{
@@ -115,8 +115,9 @@ export default function LeadsUnificado() {
 
   // Handle view lead details from signature toast
   const handleViewLeadDetails = useCallback((leadId: string) => {
-    openLeadDetail(leadId);
-  }, [openLeadDetail]);
+    setSelectedLeadId(leadId);
+    setShowLeadDrawer(true);
+  }, []);
 
   // Filter leads based on quick filter and advanced filters
   const filteredLeads = useMemo(() => {
@@ -172,7 +173,8 @@ export default function LeadsUnificado() {
 
   // Handlers
   const handleSelectLead = (lead: Lead) => {
-    openLeadDetail(lead.id);
+    setSelectedLeadId(lead.id);
+    setShowLeadDrawer(true);
   };
 
   const handleDeleteLead = (id: string) => {
@@ -302,7 +304,15 @@ export default function LeadsUnificado() {
         onOpenChange={setShowNewLeadDialog}
       />
 
-      {/* Detail modal agora é global (LeadModalsHost) */}
+      {/* Lead Detail Drawer */}
+      <LeadDetailDrawer
+        leadId={selectedLeadId}
+        open={showLeadDrawer}
+        onClose={() => {
+          setShowLeadDrawer(false);
+          setSelectedLeadId(null);
+        }}
+      />
 
       {/* Loss Dialog */}
       {lossDialogData && (

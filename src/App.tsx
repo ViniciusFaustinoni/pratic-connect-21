@@ -16,9 +16,6 @@ import { AnalistaEventosLayout } from "@/components/analista-eventos/AnalistaEve
 import { AgenciaLayout } from "@/components/layout/AgenciaLayout";
 import { AppErrorBoundary } from "@/components/app/AppErrorBoundary";
 import { VendasNotificationListener } from "./components/notifications/VendasNotificationListener";
-import { LeadModalsProvider } from "@/contexts/LeadModalsContext";
-import { LeadModalsHost } from "@/components/leads/LeadModalsHost";
-import { LegacyLeadRouteRedirect } from "@/components/leads/LegacyLeadRouteRedirect";
 import { Loader2 } from "lucide-react";
 
 // Global loading fallback
@@ -72,8 +69,8 @@ const DespachoReboquistaPublico = lazy(() => import("./pages/assistencia/Despach
 
 // Vendas
 const LeadsUnificado = lazy(() => import("./pages/vendas/LeadsUnificado"));
-// LeadDetalhe e LeadEditar foram convertidos em modais (LeadDetailModal / LeadEditarModal).
-// Rotas antigas redirecionam via LegacyLeadRouteRedirect.
+const LeadDetalhe = lazy(() => import("./pages/vendas/LeadDetalhe"));
+const LeadEditar = lazy(() => import("./pages/vendas/LeadEditar"));
 const AtivacoesList = lazy(() => import("./pages/vendas/AtivacoesList"));
 const Cotacoes = lazy(() => import("./pages/vendas/Cotacoes"));
 const CotacaoDetalhe = lazy(() => import("./pages/vendas/CotacaoDetalhe"));
@@ -134,7 +131,6 @@ const AprovacaoAssociadosMonitoramento = lazy(() => import("./pages/monitorament
 const AprovacaoInstalacaoDetalhe = lazy(() => import("./pages/monitoramento/AprovacaoInstalacaoDetalhe"));
 const ImprevistosPainel = lazy(() => import("./pages/monitoramento/ImprevistosPainel"));
 const PrestadoresParceiros = lazy(() => import("./pages/monitoramento/PrestadoresParceiros"));
-const MapaAtendimentoPage = lazy(() => import("./pages/monitoramento/MapaAtendimentoPage"));
 
 // Oficinas
 const Oficinas = lazy(() => import("./pages/oficinas/Oficinas"));
@@ -404,8 +400,6 @@ const App = () => (
             <Sonner />
             <AppErrorBoundary>
               <BrowserRouter>
-                <LeadModalsProvider>
-                  <LeadModalsHost />
                 <Suspense fallback={<PageLoader />}>
                 <Routes>
             {/* Auth */}
@@ -487,9 +481,8 @@ const App = () => (
               {/* Vendas — VendasNotificationListener montado por rota (Fase 5) */}
               <Route path="/vendas" element={<Navigate to="/vendas/leads" replace />} />
               <Route path="/vendas/leads" element={<><VendasNotificationListener /><LeadsUnificado /></>} />
-              {/* Rotas legadas: redirecionam para /vendas/leads e abrem modal correspondente */}
-              <Route path="/vendas/leads/:id" element={<LegacyLeadRouteRedirect />} />
-              <Route path="/vendas/leads/:id/editar" element={<LegacyLeadRouteRedirect edit />} />
+              <Route path="/vendas/leads/:id" element={<><VendasNotificationListener /><LeadDetalhe /></>} />
+              <Route path="/vendas/leads/:id/editar" element={<LeadEditar />} />
               <Route path="/vendas/ativacoes" element={<><VendasNotificationListener /><AtivacoesList /></>} />
               <Route path="/vendas/cotacoes" element={<><VendasNotificationListener /><Cotacoes /></>} />
               <Route path="/vendas/cotacoes/:id" element={<CotacaoDetalhe />} />
@@ -666,7 +659,6 @@ const App = () => (
               <Route path="/monitoramento/aprovacao-associados/:id" element={<AprovacaoInstalacaoDetalhe />} />
               <Route path="/monitoramento/imprevistos" element={<ImprevistosPainel />} />
               <Route path="/monitoramento/prestadores-parceiros" element={<PrestadoresParceiros />} />
-              <Route path="/monitoramento/mapa-atendimento" element={<MapaAtendimentoPage />} />
               <Route path="/monitoramento/aprovacoes" element={<AprovacoesTroca />} />
               
               {/* Marketing */}
@@ -846,7 +838,6 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
                 </Routes>
                 </Suspense>
-                </LeadModalsProvider>
               </BrowserRouter>
             </AppErrorBoundary>
           </TooltipProvider>

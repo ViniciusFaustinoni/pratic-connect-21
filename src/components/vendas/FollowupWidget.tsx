@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom';
-import { useLeadModals } from '@/contexts/LeadModalsContext';
 import { CalendarClock, AlertTriangle, Phone, ChevronRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,7 +14,6 @@ interface FollowupWidgetProps {
 }
 
 export function FollowupWidget({ vendedorId, maxItems = 5 }: FollowupWidgetProps) {
-  const { openLeadDetail } = useLeadModals();
   const { data: stats, isLoading: isLoadingStats } = useFollowupStats(vendedorId);
   const { data: followupsHoje, isLoading: isLoadingHoje } = useFollowupsHoje(vendedorId);
   const { data: followupsAtrasados } = useFollowupsAtrasados(vendedorId);
@@ -55,11 +53,10 @@ export function FollowupWidget({ vendedorId, maxItems = 5 }: FollowupWidgetProps
         ) : todosFollowups.length > 0 ? (
           <div className="space-y-2">
             {todosFollowups.map((lead) => (
-              <button
+              <Link
                 key={lead.id}
-                type="button"
-                onClick={() => openLeadDetail(lead.id)}
-                className="w-full text-left flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors group"
+                to={`/vendas/leads/${lead.id}`}
+                className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors group"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   {lead.isAtrasado ? (
@@ -76,7 +73,7 @@ export function FollowupWidget({ vendedorId, maxItems = 5 }: FollowupWidgetProps
                       {lead.nome}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {lead.veiculo_marca && lead.veiculo_modelo
+                      {lead.veiculo_marca && lead.veiculo_modelo 
                         ? `${lead.veiculo_marca} ${lead.veiculo_modelo}`
                         : lead.telefone
                       }
@@ -89,7 +86,7 @@ export function FollowupWidget({ vendedorId, maxItems = 5 }: FollowupWidgetProps
                   </span>
                   <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
-              </button>
+              </Link>
             ))}
 
             {totalPendentes > maxItems && (

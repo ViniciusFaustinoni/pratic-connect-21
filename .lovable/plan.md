@@ -1,117 +1,45 @@
+# Remover página Mapa de Atendimento
 
-## Objetivo
+## Escopo
 
-Eliminar as rotas dedicadas `/vendas/leads/:id` e `/vendas/leads/:id/editar` e converter ambas em **modais** abertos a partir das listagens (Kanban, tabela de Leads, Dashboard, Marketing, Followup, etc.), preservando 100% das funcionalidades atuais.
+Remover a página `/monitoramento/mapa-atendimento` (Regiões de Atuação) e os componentes que existem apenas para alimentá-la.
 
----
+## Atenção — decisão importante antes de prosseguir
 
-## Escopo do que será removido
+A tabela `municipios_atendimento` que essa página gerencia é consumida em fluxos críticos do sistema:
 
-**Páginas a deletar:**
-- `src/pages/vendas/LeadDetalhe.tsx` (688 linhas) — detalhe completo do lead com abas
-- `src/pages/vendas/LeadEditar.tsx` (655 linhas) — formulário de edição
+- `src/pages/vendas/Cotador.tsx` — bloqueia cotação para municípios "Fora de Cobertura"
+- `src/pages/cadastro/AssociadoDetalhe.tsx` — exibe classificação do município do associado
+- `supabase/functions/autentique-create/index.ts` — usa na geração de contrato
+- `supabase/functions/criar-instalacao-pos-pagamento/index.ts` — usa na criação automática da instalação pós-pagamento
 
-**Rotas a remover de `src/App.tsx`:**
-- `/vendas/leads/:id`
-- `/vendas/leads/:id/editar`
+Também há uma memória do projeto (`features/operations/geographic-intelligence-service-map-v2`) que define essa classificação como regra de negócio ativa.
 
-**Breadcrumb a limpar em `src/components/layout/GlobalBreadcrumb.tsx`:**
-- Entrada `/vendas/leads/:id`
+**O plano abaixo remove APENAS a tela de gestão (UI editável), preservando a tabela e o consumo nas demais áreas.** Se a intenção for remover também o bloqueio de cotação por município, o uso em contratos e a criação automática de instalação, isso é um trabalho bem maior e precisa ser confirmado explicitamente — me avise.
 
----
+## Mudanças
 
-## O que será criado
+### Arquivos a deletar
 
-### 1. `LeadDetailModal` (substitui LeadDetalhe.tsx)
+- `src/pages/monitoramento/MapaAtendimentoPage.tsx`
+- `src/components/gestao-comercial/MapaAtendimento.tsx` (componente legado, sem imports ativos)
 
-Dialog full-screen em mobile / `max-w-5xl` em desktop, com **todo o conteúdo atual** da página de detalhe:
+### Arquivos a editar
 
-- **Cabeçalho**: avatar, nome, telefone, e-mail, badges de etapa/origem, tempo no funil
-- **Cards superiores**: `LeadQuickStats`, `LeadFunnelProgress`, `VeiculoPerfilAlert`
-- **Abas (Tabs)**:
-  - **Linha do tempo** (`LeadTimeline` + `HistoricoConversaWhatsApp`)
-  - **Cotações** vinculadas (lista com `STATUS_COTACAO_LABELS/COLORS`)
-  - **Documentos**
-  - **Anotações**
-- **Ações no header do modal** (DropdownMenu + botões diretos):
-  - "Mover etapa" → abre `MoverEtapaModal` empilhado
-  - "Gerar cotação" → abre `CotacaoFormDialog` empilhado
-  - "Enviar WhatsApp" → ação direta
-  - "Gerar proposta" → `BotaoGerarProposta`
-  - "Agendar follow-up" → `AgendarFollowupDialog`
-  - "Editar" → abre `LeadEditarModal` empilhado (substitui `navigate(.../editar)`)
-  - "Excluir" → `AlertDialog` de confirmação
+- `src/App.tsx`
+  - Remover o `lazy(() => import("./pages/monitoramento/MapaAtendimentoPage"))`
+  - Remover a `<Route path="/monitoramento/mapa-atendimento" ... />`
+- `src/pages/monitoramento/DashboardCoordenador.tsx`
+  - Remover o item "Regiões de Atuação" do array `acoesRapidas`
 
-> O `LeadDetailDrawer.tsx` existente (377 linhas, versão resumida em Sheet) será **descontinuado e excluído** — o novo modal cobre tudo o que ele fazia e mais.
+### Não mexer
 
-### 2. `LeadEditarModal` (substitui LeadEditar.tsx)
+- Tabela `municipios_atendimento` (preservada)
+- `src/pages/vendas/Cotador.tsx`, `src/pages/cadastro/AssociadoDetalhe.tsx` e as duas Edge Functions — continuam consultando a tabela normalmente
+- Memória `geographic-intelligence-service-map-v2` permanece válida; apenas a edição via UI sai do ar
 
-Dialog `max-w-3xl` com o formulário completo atual:
+## Resultado esperado
 
-- Dados cadastrais (nome, telefone, email, CPF, etc.)
-- Dados do veículo
-- Atribuição de vendedor
-- Etapa, origem, observações
-- Botões Salvar / Cancelar
-- Ao salvar: invalida queries e fecha o modal (sem navegação)
-
-### 3. Hook/Context global de modal de Lead
-
-Criar `useLeadModals()` (Zustand ou Context simples) com API:
-
-```ts
-openLeadDetail(leadId: string)
-openLeadEdit(leadId: string)
-closeLeadModals()
-```
-
-Montar `<LeadModalsProvider>` no `App.tsx` envolvendo as rotas autenticadas, para que qualquer página possa abrir o modal sem prop drilling.
-
----
-
-## Arquivos a atualizar (substituir `navigate(...)` por `openLeadDetail/openLeadEdit`)
-
-| Arquivo | Mudança |
-|---|---|
-| `src/pages/vendas/Leads.tsx` (linhas 520, 604, 611-615) | Tabela: clique na linha e ações "Ver"/"Editar" abrem modal |
-| `src/pages/vendas/LeadKanban.tsx` (linha 237) | Card: clique abre detalhe; "Editar" abre edição |
-| `src/pages/vendas/LeadsUnificado.tsx` | Idem |
-| `src/pages/vendas/VendedorHistorico.tsx` (linha 292) | Linha de histórico abre detalhe |
-| `src/pages/vendas/VendasDashboard.tsx` (linha 570) | Mantém link para listagem (não é detalhe individual) |
-| `src/components/vendas/FollowupWidget.tsx` (linhas 58, 93) | Link individual → abre modal; link de listagem mantém |
-| `src/components/cotacoes/CotacaoClienteVeiculo.tsx` (linha 134) | Link → botão que abre modal |
-| `src/components/leads/LeadDetailDrawer.tsx` | **Excluir** (substituído pelo novo modal) |
-| `src/pages/marketing/CanalDetalhe.tsx` (linha 191) | Linha da tabela abre modal |
-| `src/pages/marketing/CampanhaDetalhe.tsx` (linha 626) | Idem |
-| `src/pages/Dashboard.tsx` (linha 485) | Idem |
-| `src/components/layout/GlobalBreadcrumb.tsx` (linha 171) | Remover entrada |
-
----
-
-## Comportamento e UX
-
-- **Deep-link preservado**: ao acessar uma URL antiga `/vendas/leads/:id` (ex: link compartilhado ou de e-mail), redirecionar para `/vendas/leads?lead=<id>` e o `Leads.tsx` detecta o query param e abre o modal automaticamente. Mesmo para `/vendas/leads/:id/editar` → `?lead=<id>&edit=1`.
-- **Modais empilhados**: o detalhe abre cotação, mover etapa, follow-up, editar e confirmação de exclusão sem fechar o modal-pai.
-- **Mobile**: o `Dialog` ocupa quase a tela inteira (`h-[95vh] max-w-full`), abas viram scroll vertical.
-- **Fechar**: ESC, clique fora ou botão X. Após salvar edição, o modal de edição fecha mas o de detalhe permanece (com dados atualizados via invalidate).
-
----
-
-## Detalhes técnicos
-
-- Reaproveitar **todo o JSX** atual de `LeadDetalhe.tsx` e `LeadEditar.tsx` movendo-o para os novos componentes; remover apenas `useParams`/`useNavigate` e a moldura de página (breadcrumb interno, botão "Voltar").
-- Substituir `useParams<{id}>()` por uma prop `leadId: string`.
-- Substituir `navigate(...)` interno por handlers do contexto (`openLeadEdit`, `closeLeadModals`).
-- O state `editingLead` já existente em `Leads.tsx` (linha 611) será migrado para o contexto global, eliminando duplicação.
-- `MoverEtapaModal`, `CotacaoFormDialog`, `AgendarFollowupDialog`, `AlertDialog` de exclusão continuam como já estão (são dialogs filhos).
-- Manter os hooks `useLead`, `useCotacoesByLead`, `useChangeLeadEtapa`, `useLeadActions`, `useCriarCotacaoPublica` exatamente como estão.
-
----
-
-## Critérios de aceite
-
-1. As rotas `/vendas/leads/:id` e `/vendas/leads/:id/editar` retornam 404 (ou redirecionam para listagem com modal aberto).
-2. Em desktop e mobile, todas as origens listadas acima abrem os modais corretamente.
-3. Nenhuma funcionalidade descrita (abas, botões, ações, edição) é perdida.
-4. Sidebar do diretor (corrigida na iteração anterior) continua funcionando.
-5. Build passa sem warnings de import quebrado.
+- A rota `/monitoramento/mapa-atendimento` deixa de existir (404 se acessada diretamente)
+- O atalho "Regiões de Atuação" some do dashboard do coordenador
+- Cotações continuam sendo bloqueadas para municípios marcados como "Fora de Cobertura" (alteração de classificação só será possível via SQL/migration daqui pra frente)
