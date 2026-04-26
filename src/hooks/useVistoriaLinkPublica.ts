@@ -28,6 +28,11 @@ export interface VistoriaLink {
   tecnico_atribuido_id: string | null;
   prestador_atribuido_id: string | null;
   iniciada_em: string | null;
+  fotos_aprovadas_em: string | null;
+  fotos_aprovadas_por: string | null;
+  fotos_reprovadas_em: string | null;
+  fotos_reprovadas_por: string | null;
+  fotos_reprovacao_motivo: string | null;
   created_at: string;
   updated_at: string;
 }
