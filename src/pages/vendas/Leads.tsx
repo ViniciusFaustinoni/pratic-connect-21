@@ -100,6 +100,7 @@ const ORIGENS_TODAS: OrigemLead[] = [
 
 export default function Leads() {
   const navigate = useNavigate();
+  const { openLeadDetail, openLeadEdit } = useLeadModals();
   const [searchParams, setSearchParams] = useSearchParams();
   const { hasPermission, isSupervisor, isGerencia } = usePermissions();
   const [filters, setFilters] = useState<LeadFiltersType>({});
