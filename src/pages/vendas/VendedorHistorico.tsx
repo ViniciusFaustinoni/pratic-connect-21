@@ -289,7 +289,7 @@ export default function VendedorHistorico() {
                 <Card 
                   key={lead.id} 
                   className="border-border/50 hover:border-primary/50 transition-colors cursor-pointer group"
-                  onClick={() => navigate(`/vendas/leads/${lead.id}`)}
+                  onClick={() => openLeadDetail(lead.id)}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
