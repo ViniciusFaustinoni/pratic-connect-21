@@ -131,7 +131,6 @@ const AprovacaoAssociadosMonitoramento = lazy(() => import("./pages/monitorament
 const AprovacaoInstalacaoDetalhe = lazy(() => import("./pages/monitoramento/AprovacaoInstalacaoDetalhe"));
 const ImprevistosPainel = lazy(() => import("./pages/monitoramento/ImprevistosPainel"));
 const PrestadoresParceiros = lazy(() => import("./pages/monitoramento/PrestadoresParceiros"));
-const MapaAtendimentoPage = lazy(() => import("./pages/monitoramento/MapaAtendimentoPage"));
 
 // Oficinas
 const Oficinas = lazy(() => import("./pages/oficinas/Oficinas"));
@@ -660,7 +659,6 @@ const App = () => (
               <Route path="/monitoramento/aprovacao-associados/:id" element={<AprovacaoInstalacaoDetalhe />} />
               <Route path="/monitoramento/imprevistos" element={<ImprevistosPainel />} />
               <Route path="/monitoramento/prestadores-parceiros" element={<PrestadoresParceiros />} />
-              <Route path="/monitoramento/mapa-atendimento" element={<MapaAtendimentoPage />} />
               <Route path="/monitoramento/aprovacoes" element={<AprovacoesTroca />} />
               
               {/* Marketing */}
