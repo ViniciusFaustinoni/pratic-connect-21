@@ -519,7 +519,7 @@ export default function Leads() {
                         <TableRow 
                           key={lead.id} 
                           className="cursor-pointer hover:bg-muted/50"
-                          onClick={() => navigate(`/vendas/leads/${lead.id}`)}
+                          onClick={() => openLeadDetail(lead.id)}
                         >
                           {/* Nome - link clicável para drawer */}
                           <TableCell>
@@ -603,14 +603,14 @@ export default function Leads() {
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={(e) => {
                                   e.stopPropagation();
-                                  navigate(`/vendas/leads/${lead.id}`);
+                                  openLeadDetail(lead.id);
                                 }}>
                                   <Eye className="mr-2 h-4 w-4" />
                                   Ver
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={(e) => {
                                   e.stopPropagation();
-                                  setEditingLead(lead);
+                                  openLeadEdit(lead.id);
                                 }}>
                                   <Edit className="mr-2 h-4 w-4" />
                                   Editar
