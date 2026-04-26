@@ -1,6 +1,23 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, Building2, Info, Loader2, RefreshCw, Search } from 'lucide-react';
+import {
+  AlertCircle,
+  Building2,
+  Car,
+  CheckCircle2,
+  CircleDollarSign,
+  Hash,
+  Info,
+  Layers,
+  Loader2,
+  MapPin,
+  Package,
+  RefreshCw,
+  Search,
+  Tag,
+  Users,
+  XCircle,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -46,7 +63,7 @@ export default function PlanosSGA() {
   const [tab, setTab] = useState<'produtos' | 'beneficios'>('produtos');
   const [busca, setBusca] = useState('');
   const [situacao, setSituacao] = useState<SGASituacao>('ativo');
-  const [detalhe, setDetalhe] = useState<unknown>(null);
+  const [detalhe, setDetalhe] = useState<{ tipo: 'produto' | 'beneficio'; data: SGAProduto | SGABeneficio } | null>(null);
 
   const produtosQ = useSGAProdutos();
   const beneficiosQ = useSGABeneficios(situacao);
@@ -164,7 +181,7 @@ export default function PlanosSGA() {
               <ProdutosTable
                 loading={produtosQ.isLoading}
                 items={produtosFiltrados}
-                onShowDetalhe={setDetalhe}
+                onShowDetalhe={(p) => setDetalhe({ tipo: 'produto', data: p })}
                 cached={produtosQ.data?.meta.cached}
                 total={produtosQ.data?.items.length ?? 0}
               />
@@ -174,7 +191,7 @@ export default function PlanosSGA() {
               <BeneficiosTable
                 loading={beneficiosQ.isLoading}
                 items={beneficiosFiltrados}
-                onShowDetalhe={setDetalhe}
+                onShowDetalhe={(b) => setDetalhe({ tipo: 'beneficio', data: b })}
                 cached={beneficiosQ.data?.meta.cached}
                 total={beneficiosQ.data?.items.length ?? 0}
               />
@@ -184,14 +201,11 @@ export default function PlanosSGA() {
       </Card>
 
       <Dialog open={!!detalhe} onOpenChange={(o) => !o && setDetalhe(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Detalhes do registro SGA</DialogTitle>
-            <DialogDescription>JSON completo retornado pela API da Hinova.</DialogDescription>
-          </DialogHeader>
-          <pre className="max-h-[60vh] overflow-auto rounded-md bg-muted p-3 text-xs">
-            {JSON.stringify(detalhe, null, 2)}
-          </pre>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          {detalhe?.tipo === 'produto' && <ProdutoDetalheView produto={detalhe.data as SGAProduto} />}
+          {detalhe?.tipo === 'beneficio' && (
+            <BeneficioDetalheView beneficio={detalhe.data as SGABeneficio} />
+          )}
         </DialogContent>
       </Dialog>
     </div>
@@ -201,7 +215,7 @@ export default function PlanosSGA() {
 interface TableProps<T> {
   loading: boolean;
   items: T[];
-  onShowDetalhe: (item: unknown) => void;
+  onShowDetalhe: (item: T) => void;
   cached?: boolean;
   total: number;
 }
@@ -336,6 +350,231 @@ function BeneficiosTable({ loading, items, onShowDetalhe, cached, total }: Table
             })}
           </TableBody>
         </Table>
+      </div>
+    </>
+  );
+}
+
+// ===================================================================
+// Visualizações detalhadas (cards/listas amigáveis em vez de JSON cru)
+// ===================================================================
+
+function InfoRow({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof Hash;
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-3 rounded-md border border-border/50 bg-muted/30 p-3">
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 flex-1">
+        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {label}
+        </div>
+        <div className="mt-0.5 break-words text-sm font-medium text-foreground">{value}</div>
+      </div>
+    </div>
+  );
+}
+
+function BoolBadge({ value }: { value: string | undefined | null }) {
+  const yes = String(value ?? '').toUpperCase() === 'S';
+  return (
+    <Badge variant={yes ? 'default' : 'secondary'} className="gap-1">
+      {yes ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+      {yes ? 'Sim' : 'Não'}
+    </Badge>
+  );
+}
+
+function ProdutoDetalheView({ produto }: { produto: SGAProduto }) {
+  const descricao =
+    produto.descricao_produto_boleto || produto.decricao_produto || produto.descricao || '—';
+  const valor =
+    typeof produto.valor === 'number' ? produto.valor : Number(produto.valor_produto ?? 0);
+  const fipeIni = Number((produto as Record<string, unknown>).valor_fipe_inicial ?? 0);
+  const fipeFim = Number((produto as Record<string, unknown>).valor_fipe_final ?? 0);
+  const regionais = produto.regionais ?? [];
+  const cooperativas = produto.cooperativas ?? [];
+
+  return (
+    <>
+      <DialogHeader className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <Package className="h-5 w-5 text-primary" />
+              {descricao}
+            </DialogTitle>
+            <DialogDescription className="mt-1">
+              Detalhes do produto SGA · código <span className="font-mono">{String(produto.codigo_produto ?? '—')}</span>
+            </DialogDescription>
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            {String(produto.padrao ?? '').toUpperCase() === 'S' ? (
+              <Badge>Padrão</Badge>
+            ) : (
+              <Badge variant="secondary">Adicional</Badge>
+            )}
+            {String(produto.compulsorio ?? '').toUpperCase() === 'S' && (
+              <Badge variant="outline">Compulsório</Badge>
+            )}
+          </div>
+        </div>
+      </DialogHeader>
+
+      {/* Identificação */}
+      <div className="space-y-3">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Identificação
+        </h3>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <InfoRow icon={Hash} label="Código do produto" value={String(produto.codigo_produto ?? '—')} />
+          <InfoRow
+            icon={Tag}
+            label="Classificação"
+            value={produto.classificacao_produto ?? '—'}
+          />
+          <InfoRow
+            icon={Car}
+            label="Tipo de veículo"
+            value={produto.descricao_tipo_veiculo ?? '—'}
+          />
+          <InfoRow
+            icon={Layers}
+            label="Descrição (boleto)"
+            value={produto.descricao_produto_boleto ?? '—'}
+          />
+        </div>
+      </div>
+
+      {/* Cobrança */}
+      <div className="mt-5 space-y-3">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Cobrança
+        </h3>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <InfoRow
+            icon={CircleDollarSign}
+            label="Valor"
+            value={
+              valor > 0
+                ? `${produto.formato_cobranca ?? 'R$'} ${valor.toLocaleString('pt-BR', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}`
+                : '—'
+            }
+          />
+          <InfoRow
+            icon={Tag}
+            label="Formato"
+            value={produto.formato_cobranca === '%' ? 'Percentual sobre FIPE' : 'Valor fixo (R$)'}
+          />
+          {(fipeIni > 0 || fipeFim > 0) && (
+            <InfoRow
+              icon={CircleDollarSign}
+              label="Faixa FIPE"
+              value={`R$ ${fipeIni.toLocaleString('pt-BR')} → R$ ${fipeFim.toLocaleString('pt-BR')}`}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Configurações */}
+      <div className="mt-5 space-y-3">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Configurações
+        </h3>
+        <div className="flex flex-wrap gap-2">
+          <div className="flex items-center gap-2 rounded-md border border-border/50 bg-muted/30 px-3 py-2">
+            <span className="text-xs text-muted-foreground">Padrão:</span>
+            <BoolBadge value={produto.padrao} />
+          </div>
+          <div className="flex items-center gap-2 rounded-md border border-border/50 bg-muted/30 px-3 py-2">
+            <span className="text-xs text-muted-foreground">Compulsório:</span>
+            <BoolBadge value={produto.compulsorio} />
+          </div>
+          <div className="flex items-center gap-2 rounded-md border border-border/50 bg-muted/30 px-3 py-2">
+            <span className="text-xs text-muted-foreground">Vincular após limite:</span>
+            <BoolBadge value={(produto as Record<string, unknown>).vincular_produto_apos_limite as string} />
+          </div>
+        </div>
+      </div>
+
+      {/* Regionais */}
+      {regionais.length > 0 && (
+        <div className="mt-5 space-y-3">
+          <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <MapPin className="h-3.5 w-3.5" />
+            Regionais vinculadas ({regionais.length})
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {regionais.map((r, i) => (
+              <Badge key={i} variant="outline" className="gap-1">
+                <span className="font-mono text-[10px] text-muted-foreground">
+                  {String(r.codigo_regional ?? '?')}
+                </span>
+                <span>{r.nome_regional ?? '—'}</span>
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Cooperativas */}
+      {cooperativas.length > 0 && (
+        <div className="mt-5 space-y-3">
+          <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <Users className="h-3.5 w-3.5" />
+            Cooperativas / Equipes ({cooperativas.length})
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {cooperativas.map((c, i) => (
+              <Badge key={i} variant="outline" className="gap-1">
+                <span className="font-mono text-[10px] text-muted-foreground">
+                  {String(c.codigo_cooperativa ?? '?')}
+                </span>
+                <span>{c.nome_cooperativa ?? '—'}</span>
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function BeneficioDetalheView({ beneficio }: { beneficio: SGABeneficio }) {
+  const ativa = String(beneficio.situacao ?? '').toLowerCase().includes('ativ');
+  return (
+    <>
+      <DialogHeader className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <Tag className="h-5 w-5 text-primary" />
+              {beneficio.descricao ?? '—'}
+            </DialogTitle>
+            <DialogDescription className="mt-1">
+              Detalhes do benefício SGA · código{' '}
+              <span className="font-mono">{String(beneficio.codigo_beneficio ?? '—')}</span>
+            </DialogDescription>
+          </div>
+          <Badge variant={ativa ? 'default' : 'secondary'}>{beneficio.situacao ?? '—'}</Badge>
+        </div>
+      </DialogHeader>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <InfoRow icon={Hash} label="Código" value={String(beneficio.codigo_beneficio ?? '—')} />
+        <InfoRow icon={Tag} label="Situação" value={beneficio.situacao ?? '—'} />
+        <div className="sm:col-span-2">
+          <InfoRow icon={Layers} label="Descrição" value={beneficio.descricao ?? '—'} />
+        </div>
       </div>
     </>
   );
