@@ -120,8 +120,8 @@ export default function ReguladorOficina() {
   const [pdfEtapasReparo, setPdfEtapasReparo] = useState<string[]>([]);
   const [pdfItensExtraidos, setPdfItensExtraidos] = useState<any[]>([]);
   const [pdfSalvando, setPdfSalvando] = useState(false);
+  const [osDetalheId, setOsDetalheId] = useState<string | null>(null);
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
 
   const filters = useMemo(() => ({
     search: search || undefined,
