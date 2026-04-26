@@ -181,7 +181,7 @@ export default function PlanosSGA() {
               <ProdutosTable
                 loading={produtosQ.isLoading}
                 items={produtosFiltrados}
-                onShowDetalhe={setDetalhe}
+                onShowDetalhe={(p) => setDetalhe({ tipo: 'produto', data: p })}
                 cached={produtosQ.data?.meta.cached}
                 total={produtosQ.data?.items.length ?? 0}
               />
@@ -191,7 +191,7 @@ export default function PlanosSGA() {
               <BeneficiosTable
                 loading={beneficiosQ.isLoading}
                 items={beneficiosFiltrados}
-                onShowDetalhe={setDetalhe}
+                onShowDetalhe={(b) => setDetalhe({ tipo: 'beneficio', data: b })}
                 cached={beneficiosQ.data?.meta.cached}
                 total={beneficiosQ.data?.items.length ?? 0}
               />
@@ -201,14 +201,11 @@ export default function PlanosSGA() {
       </Card>
 
       <Dialog open={!!detalhe} onOpenChange={(o) => !o && setDetalhe(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Detalhes do registro SGA</DialogTitle>
-            <DialogDescription>JSON completo retornado pela API da Hinova.</DialogDescription>
-          </DialogHeader>
-          <pre className="max-h-[60vh] overflow-auto rounded-md bg-muted p-3 text-xs">
-            {JSON.stringify(detalhe, null, 2)}
-          </pre>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          {detalhe?.tipo === 'produto' && <ProdutoDetalheView produto={detalhe.data as SGAProduto} />}
+          {detalhe?.tipo === 'beneficio' && (
+            <BeneficioDetalheView beneficio={detalhe.data as SGABeneficio} />
+          )}
         </DialogContent>
       </Dialog>
     </div>
