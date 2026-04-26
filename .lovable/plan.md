@@ -1,90 +1,45 @@
-# Remover fluxo legado de Substituição de Veículo
+# Preencher código Hinova (codigo_sga_voluntario) dos usuários
 
-## Por quê
+## Contexto
 
-Hoje convivem dois fluxos paralelos para substituir veículo de associado:
+A coluna que armazena o "código Hinova" no banco se chama `codigo_sga_voluntario` na tabela `profiles` (não existe `codigo_hinova`). Hoje só 4 perfis têm valor preenchido. Você enviou 225 linhas (usuário + email + código) para popular o restante.
 
-1. **Fluxo via cotação (oficial)** — Cotador padrão com `tipo_entrada='substituicao'`, acionado pelo `OutrasEntradasMenu` e validado pela memória `features/sales/vehicle-substitution-flow`.
-2. **Fluxo legado (stepper de 8 passos)** — `/cadastro/associados/:id/substituicao`, `/vendas/substituicao/:id`, `/cadastro/substituicoes`, `/cadastro/substituicoes/:id` e `/substituicao/:token`, gravando em `substituicoes_veiculo`.
+## Estratégia de matching
 
-Manter os dois cria divergência de regras (carência, agendamento dois locais, dupla aprovação). A decisão é manter apenas o fluxo via cotação.
+- Match por **email case-insensitive** (`lower(p.email) = lower(novos.email)`).
+- Não vou tentar fazer match por nome — tem caracteres acentuados, abreviações e nomes idênticos entre pessoas diferentes (ex: "EDUARDO SANTOS" pode existir mais de uma vez).
+- Emails que não baterem em nenhum profile não atualizam nada (UPDATE silencioso). Após rodar, vou listar os emails sem match para você revisar manualmente.
 
-## Dados existentes
+## Migration
 
-Consultei a tabela `substituicoes_veiculo`: **0 registros**. Não há nada para migrar — o passo de "migrar para cotacoes antes de apagar" se torna trivial (nenhum INSERT necessário). Vou apenas dropar a tabela e suas dependências.
-
-## Arquivos / rotas a remover
-
-### Páginas
-- `src/pages/cadastro/SubstituicaoVeiculoPage.tsx` (stepper completo)
-- `src/pages/cadastro/SubstituicoesPendentesPage.tsx` (lista pendentes)
-- `src/pages/cadastro/SubstituicaoDetalhePage.tsx` (detalhe)
-- `src/pages/public/SubstituicaoPublica.tsx` (jornada pública por token)
-
-### Componentes do stepper (`src/components/substituicao/`)
-- `SubstituicaoStepper.tsx`
-- `StepElegibilidade.tsx`
-- `StepEventoAtivo.tsx`
-- `StepRastreador.tsx`
-- `StepNovoVeiculo.tsx`
-- `StepVistoria.tsx`
-- `StepBeneficios.tsx`
-- `StepFinanceiro.tsx`
-- `StepConclusao.tsx`
-- `SubstituicaoStatusCard.tsx` (usado em `AssociadoDetalhe`)
-- Demais arquivos da pasta que só sirvam ao stepper (vou auditar diretório inteiro)
-
-### Hooks / tipos / módulos
-- `src/hooks/useSubstituicaoVeiculo.ts` (todos os hooks: `useSubstituicoes`, `useSubstituicao`, `useIniciarSubstituicao`, `useAprovarSubstituicao`, `useRejeitarSubstituicao` etc.)
-- `src/types/substituicao.ts`
-- Edge Functions / utilitários que existam apenas para `substituicoes_veiculo` (auditar `supabase/functions/`)
-
-### Rotas (`src/App.tsx`)
-- Remover `/substituicao/:token`, `/vendas/substituicao/:associadoId`, `/cadastro/associados/:associadoId/substituicao`, `/cadastro/substituicoes`, `/cadastro/substituicoes/:id`
-- Adicionar redirects de compatibilidade que mandam para o cotador com `tipo_entrada=substituicao`:
-  - `/vendas/substituicao/:associadoId` → `/vendas/cotacoes?associado_id=:id&tipo_entrada=substituicao`
-  - `/cadastro/associados/:associadoId/substituicao` → idem
-  - `/cadastro/substituicoes` e `/cadastro/substituicoes/:id` → `/cadastro/processos-operacionais` (aba relevante)
-  - `/substituicao/:token` → página simples explicando que o link expirou
-
-### Pontos de chamada a ajustar
-- `src/components/associados/detalhe/AssociadoHeroHeader.tsx` (linha 217): trocar o `navigate(\`/cadastro/associados/${id}/substituicao\`)` por abertura do mesmo `OutrasEntradasMenu` (ou navigate direto para `/vendas/cotacoes?associado_id=${id}&tipo_entrada=substituicao`).
-- `src/pages/vendas/Cotacao.tsx` (linha 393, callback `onSubstituicao`): remover o navigate para `/vendas/substituicao/:id`. O fluxo de substituição já é tratado pelo próprio Cotador via `tipo_entrada`, então a etapa que oferece "transformar em substituição" deve simplesmente seguir o fluxo unificado (vou confirmar o uso da função antes de remover).
-- `src/pages/cadastro/AssociadoDetalhe.tsx` (linha 404): remover o `<SubstituicaoStatusCard />` (componente será deletado).
-- `src/pages/cadastro/ProcessosOperacionais.tsx`: remover a aba "Substituições" inteira (`useSubstituicoes`, `STATUS_SUBSTITUICAO_LABELS`, contadores, conteúdo da TabsContent), reorganizando as TabsList restantes.
-- `src/components/layout/GlobalBreadcrumb.tsx`: remover `'/cadastro/substituicoes'`.
-- `src/hooks/useModuleItemVisibility.ts`: remover `'/cadastro/substituicoes': 'substituicoes'`.
-- `src/hooks/useModuleVisibility.ts`: remover `'/vendas/substituicao'` da lista do módulo `vendas`.
-
-### Banco de dados (migration)
+Um único `UPDATE` com `WITH ... VALUES` carregando os 225 pares (código, email):
 
 ```sql
--- Drop FKs/constraints e a tabela; está vazia (0 registros).
-DROP TABLE IF EXISTS public.substituicoes_veiculo CASCADE;
-
--- Caso existam tipos/enums dedicados (status_substituicao etc.), DROP TYPE IF EXISTS ... CASCADE.
--- Vou auditar antes da migration final.
+WITH novos(codigo, email) AS (
+  VALUES
+    (125, 'vendedorctl@teste.com'),
+    (39, 'adrianaleandropraticcar@gmail.com'),
+    -- ... 223 linhas ...
+    (40, 'eduardonegreirospraticcar@gmail.com')
+)
+UPDATE public.profiles p
+SET codigo_sga_voluntario = novos.codigo::varchar,
+    updated_at = now()
+FROM novos
+WHERE lower(p.email) = lower(novos.email);
 ```
 
-CASCADE garante que policies, triggers, índices e referências caiam junto. Antes de rodar vou listar dependências para o usuário aprovar.
+A lista completa dos 225 pares já foi gerada em `/tmp/migration.sql` (9277 caracteres). Vai entrar inteira na migration final.
 
-## O que NÃO muda
+## Após aplicar
 
-- Cotador continua aceitando `tipo_entrada=substituicao` (feature `vehicle-substitution-flow` permanece válida).
-- `OutrasEntradasMenu` permanece como porta de entrada.
-- A memória `features/sales/vehicle-substitution-flow` permanece atual.
+Vou rodar 2 queries de verificação:
 
-## Resultado
+1. `SELECT COUNT(*) FROM profiles WHERE codigo_sga_voluntario IS NOT NULL` — número total de perfis preenchidos (esperado: ~225 + 4 que já tinham).
+2. Listagem dos emails da sua planilha que **não** bateram com nenhum profile — para você decidir se precisam ser criados ou se há divergência de email.
 
-- Um único fluxo de substituição: Cotador.
-- Aproximadamente 15+ arquivos deletados, 5 rotas removidas, 1 tabela dropada.
-- Links antigos redirecionam para o novo fluxo (sem quebrar bookmarks).
+## O que não muda
 
-## Etapas técnicas
-
-1. Auditoria final do diretório `src/components/substituicao/` e `supabase/functions/` para listar tudo que será removido.
-2. Rodar migration de DROP (com aprovação do usuário).
-3. Apagar arquivos órfãos.
-4. Atualizar consumidores (App.tsx, AssociadoHeroHeader, AssociadoDetalhe, ProcessosOperacionais, Cotacao.tsx, breadcrumbs, módulos).
-5. Adicionar redirects.
-6. Verificar build (`tsc`).
+- Schema da tabela continua igual (sem nova coluna, sem nova constraint).
+- Os 4 códigos já preenchidos (5, 6, 10, 125) coincidem com a sua lista, então serão sobrescritos com o mesmo valor.
+- Nada de UI ou edge function muda.
