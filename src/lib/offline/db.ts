@@ -11,10 +11,12 @@ export type SyncStatus = 'pendente' | 'enviando' | 'enviada' | 'erro';
 export interface MidiaPendente {
   /** UUID gerado no cliente — também usado como idempotency key no servidor */
   id: string;
-  /** ID da vistoria a que pertence */
+  /** ID da vistoria a que pertence (para origem 'publico', usar o token do link) */
   vistoria_id: string;
-  /** Origem da vistoria — define qual edge function vai recebê-la */
-  origem: 'regulador' | 'instalador';
+  /** Origem da vistoria — define qual fluxo de upload usar */
+  origem: 'regulador' | 'instalador' | 'publico';
+  /** Token público do link de vistoria (apenas quando origem === 'publico') */
+  token?: string;
   tipo: MidiaTipo;
   /** Slot/índice da foto (1-10) ou identificador (ex.: 'frente', 'video_360') */
   slot: string | number;
@@ -31,7 +33,7 @@ export interface MidiaPendente {
 
 export interface VistoriaPendente {
   id: string; // mesmo ID da vistoria no servidor
-  origem: 'regulador' | 'instalador';
+  origem: 'regulador' | 'instalador' | 'publico';
   /** Snapshot dos dados (não-mídia) salvos offline para envio na finalização */
   payload: Record<string, unknown>;
   status: SyncStatus | 'rascunho';
@@ -74,7 +76,8 @@ export function gerarClientId(): string {
  */
 export async function enfileirarMidia(params: {
   vistoria_id: string;
-  origem: 'regulador' | 'instalador';
+  origem: 'regulador' | 'instalador' | 'publico';
+  token?: string;
   tipo: MidiaTipo;
   slot: string | number;
   blob: Blob;
@@ -102,6 +105,7 @@ export async function enfileirarMidia(params: {
     id: gerarClientId(),
     vistoria_id: params.vistoria_id,
     origem: params.origem,
+    token: params.token,
     tipo: params.tipo,
     slot: params.slot,
     blob: blobFinal,
