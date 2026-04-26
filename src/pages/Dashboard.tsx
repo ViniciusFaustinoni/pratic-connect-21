@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useLeadModals } from '@/contexts/LeadModalsContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -290,6 +291,7 @@ function QuickActions() {
 export default function Dashboard() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { openLeadDetail } = useLeadModals();
   const queryClient = useQueryClient();
   const { profile } = useAuth();
   const { isAnalistaCadastroOnly, isAnalistaEventosOnly, isCoordenadorMonitoramentoOnly, isAnalistaMonitoramentoOnly, isCoordenadorMonitoramento, isAnalistaMonitoramento, isInstaladorVistoriador, isInstaladorVistoriadorOnly, isVistoriadorBase, isGerencia, isDiretor, isDesenvolvedor, isAdminMaster, isVendedorOnly, userId } = usePermissions();
@@ -482,7 +484,7 @@ export default function Dashboard() {
                     <div
                       key={lead.id}
                       className="flex items-center justify-between rounded-lg border border-border p-3 hover:bg-card-hover hover:border-border-hover transition-all duration-200 cursor-pointer"
-                      onClick={() => navigate(`/vendas/leads/${lead.id}`)}
+                      onClick={() => openLeadDetail(lead.id)}
                     >
                       <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/20 text-sm font-medium text-primary">
