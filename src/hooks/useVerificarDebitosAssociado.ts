@@ -1,3 +1,5 @@
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { useBuscaSGA, type BoletoAbertoSGA } from './useBuscaSGA';
 
 export interface DebitoVeiculo {
@@ -20,19 +22,39 @@ export interface DebitosResult {
 /**
  * Verifica débitos em aberto consultando direto a API do SGA (Hinova).
  *
- * IMPORTANTE: O parâmetro mudou — agora aceita CPF (string de 11 dígitos)
- * em vez do `associado_id` local, porque a fonte de verdade não é mais
- * a tabela `cobrancas` do nosso banco.
+ * Aceita tanto CPF (string de 11 dígitos) quanto UUID local de associado:
+ *  - CPF → consulta direta no SGA;
+ *  - UUID → resolve o CPF na tabela `associados` e em seguida consulta o SGA.
  *
- * Para retrocompatibilidade, se receber um UUID (associado_id local),
- * o hook simplesmente não faz a busca e retorna sem débito — esses
- * call sites devem migrar para passar o CPF.
+ * Não usa mais a tabela local `cobrancas` como fonte de verdade.
  */
 export function useVerificarDebitosAssociado(cpfOrId: string | undefined) {
-  const limpo = (cpfOrId || '').replace(/\D/g, '');
-  const ehCpf = limpo.length === 11;
+  const limpoDigitos = (cpfOrId || '').replace(/\D/g, '');
+  const ehCpf = limpoDigitos.length === 11;
+  const ehUuid =
+    !!cpfOrId &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cpfOrId);
 
-  const sga = useBuscaSGA({ cpf: ehCpf ? limpo : undefined, enabled: ehCpf });
+  // Se veio UUID, resolvemos o CPF do associado local primeiro
+  const { data: cpfFromUuid } = useQuery({
+    queryKey: ['associado-cpf-from-uuid', cpfOrId],
+    queryFn: async () => {
+      if (!ehUuid) return null;
+      const { data } = await supabase
+        .from('associados')
+        .select('cpf')
+        .eq('id', cpfOrId!)
+        .maybeSingle();
+      return (data?.cpf || '').replace(/\D/g, '');
+    },
+    enabled: ehUuid,
+    staleTime: 60_000,
+  });
+
+  const cpfFinal = ehCpf ? limpoDigitos : (cpfFromUuid || '');
+  const cpfValido = cpfFinal.length === 11;
+
+  const sga = useBuscaSGA({ cpf: cpfFinal, enabled: cpfValido });
 
   const data: DebitosResult = (() => {
     if (!sga.data || !sga.data.encontrado) {
