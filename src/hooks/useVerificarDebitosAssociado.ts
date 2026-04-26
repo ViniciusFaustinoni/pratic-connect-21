@@ -1,72 +1,64 @@
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { useBuscaSGA, type BoletoAbertoSGA } from './useBuscaSGA';
 
-interface DebitoVeiculo {
+export interface DebitoVeiculo {
   placa: string;
   modelo: string;
   marca: string;
   total: number;
   quantidade: number;
+  boletos: BoletoAbertoSGA[];
 }
 
-interface DebitosResult {
+export interface DebitosResult {
   temDebito: boolean;
   debitosPorVeiculo: DebitoVeiculo[];
+  saldoTotal: number;
+  /** True quando o SGA está temporariamente indisponível */
+  erroTransitorio?: boolean;
 }
 
 /**
- * Verifica se um associado possui débitos em aberto (vencido ou aguardando_pagamento)
- * em qualquer veículo vinculado ao seu cadastro.
+ * Verifica débitos em aberto consultando direto a API do SGA (Hinova).
+ *
+ * IMPORTANTE: O parâmetro mudou — agora aceita CPF (string de 11 dígitos)
+ * em vez do `associado_id` local, porque a fonte de verdade não é mais
+ * a tabela `cobrancas` do nosso banco.
+ *
+ * Para retrocompatibilidade, se receber um UUID (associado_id local),
+ * o hook simplesmente não faz a busca e retorna sem débito — esses
+ * call sites devem migrar para passar o CPF.
  */
-export function useVerificarDebitosAssociado(associadoId: string | undefined) {
-  return useQuery<DebitosResult>({
-    queryKey: ['verificar-debitos-associado', associadoId],
-    queryFn: async () => {
-      if (!associadoId) return { temDebito: false, debitosPorVeiculo: [] };
+export function useVerificarDebitosAssociado(cpfOrId: string | undefined) {
+  const limpo = (cpfOrId || '').replace(/\D/g, '');
+  const ehCpf = limpo.length === 11;
 
-      const { data, error } = await supabase
-        .from('cobrancas')
-        .select('valor_final, veiculo_id')
-        .eq('associado_id', associadoId)
-        .in('status', ['vencido', 'aguardando_pagamento']);
+  const sga = useBuscaSGA({ cpf: ehCpf ? limpo : undefined, enabled: ehCpf });
 
-      if (error) throw error;
-      if (!data || data.length === 0) return { temDebito: false, debitosPorVeiculo: [] };
+  const data: DebitosResult = (() => {
+    if (!sga.data || !sga.data.encontrado) {
+      return {
+        temDebito: false,
+        debitosPorVeiculo: [],
+        saldoTotal: 0,
+        erroTransitorio: !!sga.data?.erro_transitorio,
+      };
+    }
+    const debitosPorVeiculo: DebitoVeiculo[] = sga.data.veiculos
+      .filter((v) => v.boletos_abertos.length > 0)
+      .map((v) => ({
+        placa: v.placa || 'N/A',
+        modelo: v.modelo || 'Não identificado',
+        marca: v.marca || '',
+        total: v.saldo_devedor,
+        quantidade: v.boletos_abertos.length,
+        boletos: v.boletos_abertos,
+      }));
+    return {
+      temDebito: debitosPorVeiculo.length > 0,
+      debitosPorVeiculo,
+      saldoTotal: sga.data.saldo_devedor_total,
+    };
+  })();
 
-      // Agrupar por veiculo_id
-      const veiculoIds = [...new Set(data.filter(d => d.veiculo_id).map(d => d.veiculo_id!))];
-
-      // Buscar dados dos veículos
-      let veiculosMap: Record<string, { placa: string; modelo: string; marca: string }> = {};
-      if (veiculoIds.length > 0) {
-        const { data: veiculos } = await supabase
-          .from('veiculos')
-          .select('id, placa, modelo, marca')
-          .in('id', veiculoIds);
-
-        if (veiculos) {
-          veiculosMap = Object.fromEntries(
-            veiculos.map(v => [v.id, { placa: v.placa || '', modelo: v.modelo || '', marca: v.marca || '' }])
-          );
-        }
-      }
-
-      // Agrupar débitos por veículo
-      const agrupado: Record<string, DebitoVeiculo> = {};
-      for (const item of data) {
-        const vid = item.veiculo_id || 'sem_veiculo';
-        if (!agrupado[vid]) {
-          const info = veiculosMap[vid] || { placa: 'N/A', modelo: 'Não identificado', marca: '' };
-          agrupado[vid] = { ...info, total: 0, quantidade: 0 };
-        }
-        agrupado[vid].total += Number(item.valor_final) || 0;
-        agrupado[vid].quantidade += 1;
-      }
-
-      const debitosPorVeiculo = Object.values(agrupado);
-      return { temDebito: debitosPorVeiculo.length > 0, debitosPorVeiculo };
-    },
-    enabled: !!associadoId,
-    staleTime: 15_000,
-  });
+  return { ...sga, data };
 }

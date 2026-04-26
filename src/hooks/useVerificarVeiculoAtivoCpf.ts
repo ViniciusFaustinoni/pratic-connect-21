@@ -1,58 +1,44 @@
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { useBuscaSGA } from './useBuscaSGA';
 
 export interface VeiculoAtivoCpfResult {
+  /** codigo_associado SGA (numérico). Mantido como string para compat. */
   associado_id: string;
   associado_nome: string;
+  /** codigo_veiculo SGA (numérico). Mantido como string para compat. */
   veiculo_id: string;
   veiculo_placa: string;
   veiculo_modelo: string;
   veiculo_marca: string;
+  /** Indica que a origem é o SGA (Hinova) e não a base local */
+  origem_sga: true;
 }
 
 /**
- * Verifica se um CPF já possui veículo ativo na Praticcar.
- * Retorna dados do associado + veículo ativo, ou null.
+ * Verifica via API SGA (Hinova) se um CPF já possui veículo na base.
+ * Usado pela etapa de cotação para detectar inclusão/substituição/troca.
  */
 export function useVerificarVeiculoAtivoCpf(cpf: string | undefined) {
-  const cpfLimpo = cpf?.replace(/\D/g, '') || '';
+  const cpfLimpo = (cpf || '').replace(/\D/g, '');
+  const sga = useBuscaSGA({ cpf: cpfLimpo, enabled: cpfLimpo.length === 11 });
 
-  return useQuery<VeiculoAtivoCpfResult | null>({
-    queryKey: ['verificar-veiculo-ativo-cpf', cpfLimpo],
-    queryFn: async () => {
-      if (cpfLimpo.length !== 11) return null;
+  let result: VeiculoAtivoCpfResult | null = null;
+  if (sga.data?.encontrado && sga.data.veiculos.length > 0) {
+    const v = sga.data.veiculos[0];
+    result = {
+      associado_id: String(sga.data.codigo_associado),
+      associado_nome: sga.data.associado?.nome || '',
+      veiculo_id: String(v.codigo_veiculo),
+      veiculo_placa: v.placa || '',
+      veiculo_modelo: v.modelo || '',
+      veiculo_marca: v.marca || '',
+      origem_sga: true,
+    };
+  }
 
-      // Buscar associado pelo CPF
-      const { data: associado } = await supabase
-        .from('associados')
-        .select('id, nome, cpf')
-        .eq('cpf', cpfLimpo)
-        .eq('status', 'ativo')
-        .maybeSingle();
-
-      if (!associado) return null;
-
-      // Buscar veículo ativo desse associado
-      const { data: veiculo } = await supabase
-        .from('veiculos')
-        .select('id, placa, modelo, marca')
-        .eq('associado_id', associado.id)
-        .eq('ativo', true)
-        .limit(1)
-        .maybeSingle();
-
-      if (!veiculo) return null;
-
-      return {
-        associado_id: associado.id,
-        associado_nome: associado.nome,
-        veiculo_id: veiculo.id,
-        veiculo_placa: veiculo.placa || '',
-        veiculo_modelo: veiculo.modelo || '',
-        veiculo_marca: veiculo.marca || '',
-      };
-    },
-    enabled: cpfLimpo.length === 11,
-    staleTime: 30_000,
-  });
+  return {
+    ...sga,
+    data: result,
+    /** Acesso ao payload completo (boletos, saldo) */
+    sga: sga.data,
+  };
 }
