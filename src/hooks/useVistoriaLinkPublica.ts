@@ -33,6 +33,12 @@ export interface VistoriaLink {
   fotos_reprovadas_em: string | null;
   fotos_reprovadas_por: string | null;
   fotos_reprovacao_motivo: string | null;
+  // Rascunho da etapa pública de fotos
+  fotos_rascunho_executor_nome: string | null;
+  fotos_rascunho_conferencia: { placa?: boolean; chassi?: boolean; modelo?: boolean; cor?: boolean } | null;
+  fotos_rascunho_hodometro: string | null;
+  fotos_rascunho_observacoes: string | null;
+  fotos_rascunho_atualizado_em: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -237,6 +243,38 @@ export function useConcluirEtapaInstalacaoPublica() {
     },
     onError: (err: any) => {
       toast.error(err?.message || 'Erro ao concluir etapa de instalação');
+    },
+  });
+}
+
+/**
+ * Salva (silenciosamente) o rascunho da etapa pública de fotos.
+ * Sem toasts — usado em auto-save com debounce.
+ */
+export function useSalvarRascunhoVistoriaPublica() {
+  return useMutation({
+    mutationFn: async (params: {
+      token: string;
+      executorNome?: string | null;
+      conferencia?: { placa?: boolean; chassi?: boolean; modelo?: boolean; cor?: boolean } | null;
+      hodometro?: string | null;
+      observacoes?: string | null;
+    }) => {
+      const { data, error } = await publicSupabase.functions.invoke('salvar-rascunho-vistoria-publica', {
+        body: {
+          token: params.token,
+          executor_nome: params.executorNome ?? null,
+          conferencia: params.conferencia ?? null,
+          hodometro: params.hodometro ?? null,
+          observacoes: params.observacoes ?? null,
+        },
+      });
+      if (error) throw error;
+      return data;
+    },
+    // Silencioso por design: falhas no auto-save não devem incomodar a pessoa.
+    onError: (err: any) => {
+      console.warn('[salvar-rascunho-vistoria-publica] falhou:', err?.message);
     },
   });
 }

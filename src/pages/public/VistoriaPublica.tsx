@@ -34,6 +34,8 @@ import {
   detectarTipoVeiculo,
   agruparFotosFiltradas,
   agruparFotosApenasInstalacao,
+  getTotalFotosObrigatorias,
+  getFotosFiltradas,
   type TipoVeiculo,
   type VistoriaFotoConfig,
 } from '@/data/vistoriaConfigCompleta';
@@ -41,12 +43,17 @@ import { compressImage } from '@/lib/imageCompressor';
 import { VistoriaFotoSequencial } from '@/components/vistorias/VistoriaFotoSequencial';
 import { VideoCapture } from '@/components/instalador/VideoCapture';
 import { ChecklistItem, type ChecklistStatus } from '@/components/instalador/ChecklistItem';
+import { Checkbox } from '@/components/ui/checkbox';
+import { CloudUpload, Gauge } from 'lucide-react';
 import {
   useVistoriaLinkPorToken,
   useConcluirEtapaFotosPublica,
   useConcluirEtapaInstalacaoPublica,
   useIniciarEtapaPublica,
+  useSalvarRascunhoVistoriaPublica,
 } from '@/hooks/useVistoriaLinkPublica';
+import { useUploadVistoriaPublicaOffline } from '@/hooks/useUploadVistoriaPublicaOffline';
+import { useSyncQueuePublica } from '@/hooks/useSyncQueuePublica';
 
 // Itens do checklist da instalação (mesmos do fluxo legado)
 const CHECKLIST_INSTALACAO = [
@@ -189,6 +196,8 @@ export default function VistoriaPublica() {
           <EtapaFotos
             token={token!}
             tipoVeiculo={tipoVeiculo}
+            link={link}
+            veiculo={veiculo}
             onConcluida={() => setEtapa('home')}
           />
         )}
@@ -431,86 +440,137 @@ function HomeEtapas({
 function EtapaFotos({
   token,
   tipoVeiculo,
+  link,
+  veiculo,
   onConcluida,
 }: {
   token: string;
   tipoVeiculo: TipoVeiculo;
+  link: any;
+  veiculo: any;
   onConcluida: () => void;
 }) {
-  const [fotosMap, setFotosMap] = useState<Record<string, string>>({});
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [uploadingFoto, setUploadingFoto] = useState<string | null>(null);
-  const [uploadingVideo, setUploadingVideo] = useState(false);
-  const [executorNome, setExecutorNome] = useState('');
-  const [observacoes, setObservacoes] = useState('');
+  // Restaurar rascunho ao montar
+  const rascunhoConf = (link?.fotos_rascunho_conferencia ?? null) as
+    | { placa?: boolean; chassi?: boolean; modelo?: boolean; cor?: boolean }
+    | null;
+
+  const [executorNome, setExecutorNome] = useState<string>(link?.fotos_rascunho_executor_nome || '');
+  const [conferencia, setConferencia] = useState({
+    placa: !!rascunhoConf?.placa,
+    chassi: !!rascunhoConf?.chassi,
+    modelo: !!rascunhoConf?.modelo,
+    cor: !!rascunhoConf?.cor,
+  });
+  const [hodometro, setHodometro] = useState<string>(link?.fotos_rascunho_hodometro || '');
+  const [observacoes, setObservacoes] = useState<string>(link?.fotos_rascunho_observacoes || '');
+
+  const [salvandoRascunho, setSalvandoRascunho] = useState(false);
   const [salvando, setSalvando] = useState(false);
 
+  // Fila offline + sync queue
+  const offlineQueue = useUploadVistoriaPublicaOffline(token);
+  const sync = useSyncQueuePublica(token);
+
+  // Mapa consolidado de fotos enviadas (uploads concluídos via sync queue)
+  const [fotosMap, setFotosMap] = useState<Record<string, string>>({});
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+
+  // Quando o sync queue conclui um upload, propaga para o estado
+  useEffect(() => {
+    if (Object.keys(sync.uploadsConcluidos).length === 0) return;
+    setFotosMap((prev) => {
+      const next = { ...prev };
+      for (const [slot, url] of Object.entries(sync.uploadsConcluidos)) {
+        if (slot === 'video_360') continue;
+        next[slot] = url;
+      }
+      return next;
+    });
+    if (sync.uploadsConcluidos['video_360']) {
+      setVideoUrl(sync.uploadsConcluidos['video_360']);
+    }
+  }, [sync.uploadsConcluidos]);
+
   const concluirMut = useConcluirEtapaFotosPublica();
+  const rascunhoMut = useSalvarRascunhoVistoriaPublica();
 
   const categorias = useMemo(() => agruparFotosFiltradas(tipoVeiculo, false), [tipoVeiculo]);
-  const todasFotos = useMemo(() => categorias.flatMap(c => c.fotos), [categorias]);
+  const todasFotos = useMemo(() => categorias.flatMap((c) => c.fotos), [categorias]);
+  const totalFotosObrigatorias = useMemo(() => getTotalFotosObrigatorias(tipoVeiculo), [tipoVeiculo]);
+  const fotosObrigatoriasDoTipo = useMemo(() => getFotosFiltradas(tipoVeiculo, false), [tipoVeiculo]);
+
+  // Fotos visíveis na UI = uploads concluídos + previews da fila offline
+  const fotosVisiveis = useMemo(() => {
+    const map: Record<string, string> = { ...fotosMap, ...offlineQueue.previewsFotos };
+    return map;
+  }, [fotosMap, offlineQueue.previewsFotos]);
 
   const fotosEnviadasArray = useMemo(
-    () => Object.entries(fotosMap).map(([tipo, arquivo_url]) => ({ tipo, arquivo_url })),
-    [fotosMap],
+    () => Object.entries(fotosVisiveis).map(([tipo, arquivo_url]) => ({ tipo, arquivo_url })),
+    [fotosVisiveis],
   );
-  const fotosOk = todasFotos.filter(f => !!fotosMap[f.id]).length;
-  const minimo = Math.min(10, todasFotos.length);
-  const podeFinalizar = fotosOk >= minimo && !!videoUrl && executorNome.trim().length >= 2;
 
+  const totalFotosEnviadas = useMemo(
+    () => fotosObrigatoriasDoTipo.filter((f) => fotosVisiveis[f.id]).length,
+    [fotosObrigatoriasDoTipo, fotosVisiveis],
+  );
+
+  const videoEnviadoPreview = videoUrl || offlineQueue.previewVideo;
+
+  const conferenciaCompleta = Object.values(conferencia).every(Boolean) && hodometro.trim().length > 0;
+  const todasFotosEnviadas = totalFotosEnviadas >= totalFotosObrigatorias;
+  const podeFinalizar =
+    conferenciaCompleta &&
+    todasFotosEnviadas &&
+    !!videoEnviadoPreview &&
+    executorNome.trim().length >= 2 &&
+    offlineQueue.totalPendentes === 0; // só finaliza após upload de tudo
+
+  // ── AUTO-SAVE DE RASCUNHO (debounce 2s) ─────────────────────────
+  useEffect(() => {
+    if (link?.fotos_etapa_status === 'concluida') return;
+    setSalvandoRascunho(true);
+    const t = setTimeout(() => {
+      rascunhoMut.mutate(
+        {
+          token,
+          executorNome,
+          conferencia,
+          hodometro,
+          observacoes,
+        },
+        { onSettled: () => setSalvandoRascunho(false) },
+      );
+    }, 2000);
+    return () => {
+      clearTimeout(t);
+      setSalvandoRascunho(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [executorNome, conferencia, hodometro, observacoes]);
+
+  // ── HANDLERS ────────────────────────────────────────────────────
   const handleUploadFoto = useCallback(
     async (foto: VistoriaFotoConfig, file: File) => {
-      setUploadingFoto(foto.id);
-      try {
-        let toUpload = file;
-        if (file.size > 500 * 1024) {
-          try {
-            toUpload = await compressImage(file, { maxWidth: 1920, maxHeight: 1920, quality: 0.75 });
-          } catch {
-            /* original */
-          }
+      let toUpload: File | Blob = file;
+      if (file.size > 250 * 1024) {
+        try {
+          toUpload = await compressImage(file, { maxWidth: 1920, maxHeight: 1920, quality: 0.75 });
+        } catch {
+          /* original */
         }
-        const ext = toUpload.name.split('.').pop() || 'jpg';
-        const path = `${token}/fotos/${foto.id}_${Date.now()}.${ext}`;
-        const { error } = await publicSupabase.storage
-          .from('vistoria-prestador-fotos')
-          .upload(path, toUpload, { upsert: true });
-        if (error) throw error;
-        const { data: urlData } = publicSupabase.storage
-          .from('vistoria-prestador-fotos')
-          .getPublicUrl(path);
-        setFotosMap(prev => ({ ...prev, [foto.id]: urlData.publicUrl }));
-      } catch (err: any) {
-        console.error('[EtapaFotos] erro upload', err);
-        toast.error('Erro ao enviar foto. Tente novamente.');
-      } finally {
-        setUploadingFoto(null);
       }
+      await offlineQueue.enfileirarFoto(foto.id, toUpload);
     },
-    [token],
+    [offlineQueue],
   );
 
   const handleUploadVideo = useCallback(
     async (file: File) => {
-      setUploadingVideo(true);
-      try {
-        const ext = file.name.split('.').pop() || 'mp4';
-        const path = `${token}/video/video_360_${Date.now()}.${ext}`;
-        const { error } = await publicSupabase.storage
-          .from('vistoria-prestador-fotos')
-          .upload(path, file, { upsert: true, contentType: file.type });
-        if (error) throw error;
-        const { data: urlData } = publicSupabase.storage
-          .from('vistoria-prestador-fotos')
-          .getPublicUrl(path);
-        setVideoUrl(urlData.publicUrl);
-      } catch (err: any) {
-        toast.error('Erro ao enviar vídeo');
-      } finally {
-        setUploadingVideo(false);
-      }
+      await offlineQueue.enfileirarVideo(file);
     },
-    [token],
+    [offlineQueue],
   );
 
   const handleFinalizar = async () => {
@@ -530,8 +590,37 @@ function EtapaFotos({
     }
   };
 
+  const dadosVeic = {
+    placa: veiculo?.placa || '—',
+    chassi: veiculo?.chassi || '—',
+    modelo: [veiculo?.marca, veiculo?.modelo].filter(Boolean).join(' ') || '—',
+    cor: veiculo?.cor || 'Não informada',
+  };
+
   return (
     <div className="space-y-4">
+      {/* Barra de progresso fixa */}
+      <div className="rounded-lg border border-border bg-card p-3 sticky top-[60px] z-30">
+        <div className="flex items-center justify-between text-xs mb-1">
+          <span className="text-muted-foreground">Progresso</span>
+          <span className="font-medium">
+            {totalFotosEnviadas}/{totalFotosObrigatorias} fotos
+          </span>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full bg-primary transition-all"
+            style={{ width: `${Math.min(100, (totalFotosEnviadas / Math.max(1, totalFotosObrigatorias)) * 100)}%` }}
+          />
+        </div>
+        {salvandoRascunho && (
+          <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
+            <CloudUpload className="h-3 w-3 animate-pulse" /> Salvando rascunho...
+          </p>
+        )}
+      </div>
+
+      {/* Quem está realizando */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
@@ -544,22 +633,72 @@ function EtapaFotos({
           <Input
             id="exec-fotos"
             value={executorNome}
-            onChange={e => setExecutorNome(e.target.value)}
+            onChange={(e) => setExecutorNome(e.target.value)}
             placeholder="Ex.: João Silva"
             className="mt-1"
+            maxLength={120}
           />
         </CardContent>
       </Card>
 
+      {/* Conferência de Dados */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Car className="h-4 w-4 text-primary" />
+            Conferência de Dados
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {[
+            { key: 'placa', label: 'Placa', value: dadosVeic.placa },
+            { key: 'chassi', label: 'Chassi', value: dadosVeic.chassi },
+            { key: 'modelo', label: 'Modelo', value: dadosVeic.modelo },
+            { key: 'cor', label: 'Cor', value: dadosVeic.cor },
+          ].map((item) => (
+            <label
+              key={item.key}
+              className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-2 cursor-pointer"
+            >
+              <Checkbox
+                checked={conferencia[item.key as keyof typeof conferencia]}
+                onCheckedChange={(c) =>
+                  setConferencia((prev) => ({ ...prev, [item.key]: !!c }))
+                }
+              />
+              <span className="flex-1 text-sm">
+                <span className="text-muted-foreground">{item.label}: </span>
+                <span className="font-medium">{item.value}</span>
+              </span>
+            </label>
+          ))}
+          <div className="pt-2">
+            <Label htmlFor="hodometro" className="flex items-center gap-2">
+              <Gauge className="h-4 w-4 text-muted-foreground" /> Hodômetro (km)
+            </Label>
+            <Input
+              id="hodometro"
+              type="number"
+              inputMode="numeric"
+              value={hodometro}
+              onChange={(e) => setHodometro(e.target.value.slice(0, 12))}
+              placeholder="Ex: 45000"
+              className="mt-1"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Fotos */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center justify-between">
             <span className="flex items-center gap-2">
               <Camera className="h-4 w-4 text-primary" />
-              Fotos do veículo
+              Fotos da Vistoria
             </span>
             <Badge variant="outline">
-              {fotosOk}/{todasFotos.length}
+              {totalFotosEnviadas}/{totalFotosObrigatorias}
             </Badge>
           </CardTitle>
         </CardHeader>
@@ -567,32 +706,34 @@ function EtapaFotos({
           <VistoriaFotoSequencial
             fotos={todasFotos}
             fotosEnviadas={fotosEnviadasArray}
-            uploadingFoto={uploadingFoto}
+            uploadingFoto={null}
             onUpload={(fotoId, file) => {
-              const foto = todasFotos.find(f => f.id === fotoId);
+              const foto = todasFotos.find((f) => f.id === fotoId);
               if (foto) handleUploadFoto(foto, file);
             }}
           />
         </CardContent>
       </Card>
 
+      {/* Vídeo 360° */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Video className="h-4 w-4 text-primary" />
-            Vídeo 360° {videoUrl && <CheckCircle className="h-4 w-4 text-success" />}
+            Vídeo 360° {videoEnviadoPreview && <CheckCircle className="h-4 w-4 text-success" />}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <VideoCapture
             onCapture={handleUploadVideo}
-            videoUrl={videoUrl ?? undefined}
-            uploading={uploadingVideo}
+            videoUrl={videoEnviadoPreview ?? undefined}
+            uploading={false}
             maxDuration={120}
           />
         </CardContent>
       </Card>
 
+      {/* Observações */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Observações (opcional)</CardTitle>
@@ -600,10 +741,13 @@ function EtapaFotos({
         <CardContent>
           <Textarea
             value={observacoes}
-            onChange={e => setObservacoes(e.target.value)}
+            onChange={(e) => setObservacoes(e.target.value.slice(0, 2000))}
             placeholder="Algo relevante sobre o veículo?"
             rows={3}
           />
+          <p className="text-xs text-muted-foreground mt-2">
+            Essas observações ficarão visíveis para o monitoramento.
+          </p>
         </CardContent>
       </Card>
 
@@ -613,19 +757,34 @@ function EtapaFotos({
         disabled={!podeFinalizar || salvando}
         onClick={handleFinalizar}
       >
-        {salvando ? <Loader2 className="h-5 w-5 mr-2 animate-spin" /> : <CheckCircle className="h-5 w-5 mr-2" />}
-        Finalizar etapa de fotos
+        {salvando ? (
+          <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+        ) : (
+          <CheckCircle className="h-5 w-5 mr-2" />
+        )}
+        Finalizar envio para aprovação
       </Button>
+
       {!podeFinalizar && (
         <p className="text-xs text-muted-foreground text-center">
           {executorNome.trim().length < 2 && 'Informe seu nome • '}
-          {fotosOk < minimo && `Envie ao menos ${minimo} fotos • `}
-          {!videoUrl && 'Envie o vídeo 360°'}
+          {!conferenciaCompleta && 'Confirme os dados e hodômetro • '}
+          {!todasFotosEnviadas && `Envie todas as ${totalFotosObrigatorias} fotos • `}
+          {!videoEnviadoPreview && 'Envie o vídeo 360° • '}
+          {offlineQueue.totalPendentes > 0 && `Aguarde envio (${offlineQueue.totalPendentes} pendente(s))`}
+        </p>
+      )}
+
+      {offlineQueue.totalPendentes > 0 && (
+        <p className="text-xs text-blue-600 text-center flex items-center justify-center gap-1">
+          <CloudUpload className="h-3 w-3" />
+          {offlineQueue.totalPendentes} mídia(s) sendo enviadas em segundo plano…
         </p>
       )}
     </div>
   );
 }
+
 
 // ──────────────────────────────────────────────────────────────────
 // ETAPA: INSTALAÇÃO DO RASTREADOR

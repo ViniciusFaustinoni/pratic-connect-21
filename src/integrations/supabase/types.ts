@@ -28868,6 +28868,11 @@ export type Database = {
           fotos_etapa_status: string
           fotos_executor_nome: string | null
           fotos_executor_telefone: string | null
+          fotos_rascunho_atualizado_em: string | null
+          fotos_rascunho_conferencia: Json | null
+          fotos_rascunho_executor_nome: string | null
+          fotos_rascunho_hodometro: string | null
+          fotos_rascunho_observacoes: string | null
           fotos_reprovacao_motivo: string | null
           fotos_reprovadas_em: string | null
           fotos_reprovadas_por: string | null
@@ -28896,6 +28901,11 @@ export type Database = {
           fotos_etapa_status?: string
           fotos_executor_nome?: string | null
           fotos_executor_telefone?: string | null
+          fotos_rascunho_atualizado_em?: string | null
+          fotos_rascunho_conferencia?: Json | null
+          fotos_rascunho_executor_nome?: string | null
+          fotos_rascunho_hodometro?: string | null
+          fotos_rascunho_observacoes?: string | null
           fotos_reprovacao_motivo?: string | null
           fotos_reprovadas_em?: string | null
           fotos_reprovadas_por?: string | null
@@ -28924,6 +28934,11 @@ export type Database = {
           fotos_etapa_status?: string
           fotos_executor_nome?: string | null
           fotos_executor_telefone?: string | null
+          fotos_rascunho_atualizado_em?: string | null
+          fotos_rascunho_conferencia?: Json | null
+          fotos_rascunho_executor_nome?: string | null
+          fotos_rascunho_hodometro?: string | null
+          fotos_rascunho_observacoes?: string | null
           fotos_reprovacao_motivo?: string | null
           fotos_reprovadas_em?: string | null
           fotos_reprovadas_por?: string | null
