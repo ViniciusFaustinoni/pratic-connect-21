@@ -69,8 +69,8 @@ const DespachoReboquistaPublico = lazy(() => import("./pages/assistencia/Despach
 
 // Vendas
 const LeadsUnificado = lazy(() => import("./pages/vendas/LeadsUnificado"));
-const LeadDetalhe = lazy(() => import("./pages/vendas/LeadDetalhe"));
-const LeadEditar = lazy(() => import("./pages/vendas/LeadEditar"));
+// LeadDetalhe e LeadEditar foram convertidos em modais (LeadDetailModal / LeadEditarModal).
+// Rotas antigas redirecionam via LegacyLeadRouteRedirect.
 const AtivacoesList = lazy(() => import("./pages/vendas/AtivacoesList"));
 const Cotacoes = lazy(() => import("./pages/vendas/Cotacoes"));
 const CotacaoDetalhe = lazy(() => import("./pages/vendas/CotacaoDetalhe"));
