@@ -248,8 +248,36 @@ export function useConcluirEtapaInstalacaoPublica() {
 }
 
 /**
- * Aprovação das fotos pelo monitoramento — libera a etapa de instalação no link público.
+ * Salva (silenciosamente) o rascunho da etapa pública de fotos.
+ * Sem toasts — usado em auto-save com debounce.
  */
+export function useSalvarRascunhoVistoriaPublica() {
+  return useMutation({
+    mutationFn: async (params: {
+      token: string;
+      executorNome?: string | null;
+      conferencia?: { placa?: boolean; chassi?: boolean; modelo?: boolean; cor?: boolean } | null;
+      hodometro?: string | null;
+      observacoes?: string | null;
+    }) => {
+      const { data, error } = await publicSupabase.functions.invoke('salvar-rascunho-vistoria-publica', {
+        body: {
+          token: params.token,
+          executor_nome: params.executorNome ?? null,
+          conferencia: params.conferencia ?? null,
+          hodometro: params.hodometro ?? null,
+          observacoes: params.observacoes ?? null,
+        },
+      });
+      if (error) throw error;
+      return data;
+    },
+    // Silencioso por design: falhas no auto-save não devem incomodar a pessoa.
+    onError: (err: any) => {
+      console.warn('[salvar-rascunho-vistoria-publica] falhou:', err?.message);
+    },
+  });
+}
 export function useAprovarFotosVistoria() {
   const queryClient = useQueryClient();
   return useMutation({
