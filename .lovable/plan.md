@@ -1,45 +1,58 @@
-# Remover página Mapa de Atendimento
+# Detalhe da OS como Modal
 
-## Escopo
+## Objetivo
 
-Remover a página `/monitoramento/mapa-atendimento` (Regiões de Atuação) e os componentes que existem apenas para alimentá-la.
+Eliminar a rota `/oficinas/ordens/:id` e exibir o detalhe da Ordem de Serviço dentro de um modal full-screen, mantendo todas as funcionalidades atuais.
 
-## Atenção — decisão importante antes de prosseguir
+## Funcionalidades preservadas
 
-A tabela `municipios_atendimento` que essa página gerencia é consumida em fluxos críticos do sistema:
+Tudo que existe hoje na página continua funcionando dentro do modal:
 
-- `src/pages/vendas/Cotador.tsx` — bloqueia cotação para municípios "Fora de Cobertura"
-- `src/pages/cadastro/AssociadoDetalhe.tsx` — exibe classificação do município do associado
-- `supabase/functions/autentique-create/index.ts` — usa na geração de contrato
-- `supabase/functions/criar-instalacao-pos-pagamento/index.ts` — usa na criação automática da instalação pós-pagamento
+- Cabeçalho com número da OS, status colorido e data de criação
+- Botões "Concluir OS / Gerenciar Conclusão" e "Atualizar Status"
+- Cards informativos (Oficina, Associado, Veículo)
+- Tabela de itens do orçamento com "Adicionar Item" e exclusão por linha
+- Total do orçamento
+- Card de Observações (quando houver)
+- Histórico/Timeline lateral (`OSTimeline`)
+- Submodais aninhados: `OSStatusDialog`, `OSItemFormDialog`, `OSConclusaoModal`
 
-Também há uma memória do projeto (`features/operations/geographic-intelligence-service-map-v2`) que define essa classificação como regra de negócio ativa.
+Observação: a descrição original menciona `HistoricoAlteracoes`, `AdicionarItemOSModal` e `SinistroCombobox`. Na implementação real esses elementos correspondem a `OSTimeline`, `OSItemFormDialog` e a vinculação a sinistro não existe nessa tela hoje — nada será inventado.
 
-**O plano abaixo remove APENAS a tela de gestão (UI editável), preservando a tabela e o consumo nas demais áreas.** Se a intenção for remover também o bloqueio de cotação por município, o uso em contratos e a criação automática de instalação, isso é um trabalho bem maior e precisa ser confirmado explicitamente — me avise.
+## Mudanças técnicas
 
-## Mudanças
+### Novo componente
 
-### Arquivos a deletar
+- `src/components/oficinas/OrdemServicoDetalheModal.tsx`
+  - `Dialog` grande (`max-w-6xl`, altura controlada com scroll interno)
+  - Recebe `osId` via prop e usa os mesmos hooks (`useOrdemServico`, `useOSItens`, `useOSHistorico`, `useDeleteOSItem`)
+  - Conteúdo idêntico ao da página atual, sem o botão "Voltar" (substituído pelo X do dialog)
 
-- `src/pages/monitoramento/MapaAtendimentoPage.tsx`
-- `src/components/gestao-comercial/MapaAtendimento.tsx` (componente legado, sem imports ativos)
+### Integração na lista
 
-### Arquivos a editar
+- `src/pages/oficinas/OrdensServico.tsx`
+  - Estado local `osSelecionadaId: string | null`
+  - Card da OS abre o modal em vez de `navigate(...)`
+  - Renderiza `<OrdemServicoDetalheModal osId={osSelecionadaId} open={!!osSelecionadaId} onOpenChange={...} />`
+
+### Outros consumidores
+
+- `src/pages/regulador/ReguladorOficina.tsx` (linha 657): o botão que hoje navega para `/oficinas/ordens/:id` passa a abrir o mesmo modal localmente (estado próprio na página + `OrdemServicoDetalheModal`).
+
+### Deep-link / compatibilidade
 
 - `src/App.tsx`
-  - Remover o `lazy(() => import("./pages/monitoramento/MapaAtendimentoPage"))`
-  - Remover a `<Route path="/monitoramento/mapa-atendimento" ... />`
-- `src/pages/monitoramento/DashboardCoordenador.tsx`
-  - Remover o item "Regiões de Atuação" do array `acoesRapidas`
+  - Remover `lazy(() => import("./pages/oficinas/OrdemServicoDetalhe"))` e a `<Route path="/oficinas/ordens/:id" ... />`
+  - Adicionar redirecionamento da rota antiga: `<Route path="/oficinas/ordens/:id" element={<Navigate to="/ordens-servico" replace />} />` (preserva links antigos)
 
-### Não mexer
+### Limpeza
 
-- Tabela `municipios_atendimento` (preservada)
-- `src/pages/vendas/Cotador.tsx`, `src/pages/cadastro/AssociadoDetalhe.tsx` e as duas Edge Functions — continuam consultando a tabela normalmente
-- Memória `geographic-intelligence-service-map-v2` permanece válida; apenas a edição via UI sai do ar
+- Deletar `src/pages/oficinas/OrdemServicoDetalhe.tsx`
+- `src/components/layout/GlobalBreadcrumb.tsx`: remover a entrada `'/oficinas/ordens/:id'` (não há mais rota com esse padrão)
 
-## Resultado esperado
+## Resultado
 
-- A rota `/monitoramento/mapa-atendimento` deixa de existir (404 se acessada diretamente)
-- O atalho "Regiões de Atuação" some do dashboard do coordenador
-- Cotações continuam sendo bloqueadas para municípios marcados como "Fora de Cobertura" (alteração de classificação só será possível via SQL/migration daqui pra frente)
+- Clicar numa OS na lista abre o modal sobreposto, sem trocar de rota
+- O regulador também vê o detalhe via modal
+- Todos os submodais (status, item, conclusão) continuam empilhando normalmente
+- Links antigos `/oficinas/ordens/:id` redirecionam para a lista (`/ordens-servico`)
