@@ -625,7 +625,7 @@ export default function CampanhaDetalhe() {
                       <TableRow 
                         key={lead.id} 
                         className="cursor-pointer hover:bg-muted/50"
-                        onClick={() => navigate(`/vendas/leads/${lead.id}`)}
+                        onClick={() => openLeadDetail(lead.id)}
                       >
                         <TableCell className="font-medium">{lead.nome}</TableCell>
                         <TableCell>{lead.telefone}</TableCell>
