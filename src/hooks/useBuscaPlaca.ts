@@ -1,48 +1,47 @@
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { useBuscaSGA } from './useBuscaSGA';
 
 export interface PlacaSearchResult {
-  veiculoId: string;
+  veiculoId: string; // codigo_veiculo SGA
   placa: string;
   modelo: string;
   marca: string;
-  associadoId: string;
+  associadoId: string; // codigo_associado SGA
   associadoNome: string;
   associadoCpf: string;
   associadoStatus: string;
+  origem_sga: true;
 }
 
+/**
+ * Busca veículos pela placa via API SGA (não mais base local).
+ * Retorna no máximo um veículo (a placa é única no SGA), mas mantém
+ * a interface de array para compat com consumidores.
+ */
 export function useBuscaPlaca(termo: string) {
-  return useQuery({
-    queryKey: ['busca-placa', termo],
-    queryFn: async (): Promise<PlacaSearchResult[]> => {
-      if (!termo || termo.length < 3) return [];
+  const placaLimpa = (termo || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  const enabled = placaLimpa.length >= 7;
 
-      const cleaned = termo.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  const sga = useBuscaSGA({ placa: placaLimpa, enabled });
 
-      const { data, error } = await supabase
-        .from('veiculos')
-        .select('id, placa, modelo, marca, associado_id, associados(id, nome, cpf, status)')
-        .ilike('placa', `%${cleaned}%`)
-        .eq('status', 'ativo')
-        .limit(5);
+  let results: PlacaSearchResult[] = [];
+  if (sga.data?.encontrado) {
+    const veiculo = sga.data.veiculos.find((v) => v.placa === placaLimpa) || sga.data.veiculos[0];
+    if (veiculo) {
+      results = [
+        {
+          veiculoId: String(veiculo.codigo_veiculo),
+          placa: veiculo.placa || '',
+          modelo: veiculo.modelo || '',
+          marca: veiculo.marca || '',
+          associadoId: String(sga.data.codigo_associado),
+          associadoNome: sga.data.associado?.nome || '',
+          associadoCpf: sga.data.associado?.cpf || '',
+          associadoStatus: 'ativo',
+          origem_sga: true,
+        },
+      ];
+    }
+  }
 
-      if (error) throw error;
-      if (!data) return [];
-
-      return data
-        .filter((v: any) => v.associados)
-        .map((v: any) => ({
-          veiculoId: v.id,
-          placa: v.placa || '',
-          modelo: v.modelo || '',
-          marca: v.marca || '',
-          associadoId: v.associados.id,
-          associadoNome: v.associados.nome || '',
-          associadoCpf: v.associados.cpf || '',
-          associadoStatus: v.associados.status || '',
-        }));
-    },
-    enabled: termo.length >= 3,
-  });
+  return { ...sga, data: results, sga: sga.data };
 }

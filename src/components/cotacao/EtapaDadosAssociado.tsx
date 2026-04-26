@@ -12,7 +12,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAssociadoSearch, type AssociadoSearchResult } from '@/hooks/useAssociadoSearch';
 import { useVerificarVeiculoAtivoCpf } from '@/hooks/useVerificarVeiculoAtivoCpf';
+import { useVerificarDebitosAssociado } from '@/hooks/useVerificarDebitosAssociado';
 import { DialogTipoOperacao } from '@/components/cotacao/DialogTipoOperacao';
+import { DebitosCard } from '@/components/cotacao/DebitosCard';
 
 interface EtapaDadosAssociadoProps {
   // Dados do associado/solicitante
@@ -84,9 +86,11 @@ export function EtapaDadosAssociado({
   const [buscaIndicador, setBuscaIndicador] = useState('');
   const { data: resultadosBusca = [], isLoading: isSearching } = useAssociadoSearch(buscaIndicador);
 
-  // CPF para verificação de veículo ativo
+  // CPF para verificação de veículo ativo + débitos no SGA
   const [cpfBusca, setCpfBusca] = useState('');
+  const cpfDigits = cpfBusca.replace(/\D/g, '');
   const { data: veiculoAtivoCpf, isLoading: verificandoCpf } = useVerificarVeiculoAtivoCpf(cpfBusca);
+  const { data: debitosSGA } = useVerificarDebitosAssociado(cpfDigits.length === 11 ? cpfDigits : undefined);
   const [showDialogTipo, setShowDialogTipo] = useState(false);
 
   // Auto-atribui o vendedor logado se ele não for liderança (ou pré-seleciona p/ liderança)
@@ -96,9 +100,16 @@ export function EtapaDadosAssociado({
     }
   }, [user?.id, consultorId, setConsultorId]);
 
-  // Pode avançar se Nome, Telefone e Consultor estão preenchidos
+  // Pode avançar se Nome, Telefone e Consultor estão preenchidos.
+  // Bloqueia se houver débito SGA — ex-cliente precisa quitar antes.
   const telefoneValido = telefone1.replace(/\D/g, '').length >= 10;
-  const canProceed = nome.trim() !== '' && telefoneValido && consultorId !== '' && (!isIndicacao || indicadorId !== '');
+  const temDebitoSGA = debitosSGA?.temDebito === true;
+  const canProceed =
+    nome.trim() !== '' &&
+    telefoneValido &&
+    consultorId !== '' &&
+    (!isIndicacao || indicadorId !== '') &&
+    !temDebitoSGA;
 
   const handleSelectIndicador = (associado: AssociadoSearchResult) => {
     setIndicadorId(associado.id);
@@ -201,6 +212,19 @@ export function EtapaDadosAssociado({
               </div>
             )}
           </div>
+
+          {/* Aviso de débito SGA — ex-cliente com saldo devedor */}
+          {temDebitoSGA && debitosSGA && (
+            <div className="md:col-span-2">
+              <DebitosCard
+                debitos={debitosSGA.debitosPorVeiculo}
+                saldoTotal={debitosSGA.saldoTotal}
+                bloqueante
+                titulo="Este CPF já foi cliente Pratic e está com saldo devedor"
+                descricao="É necessário quitar os boletos abaixo no SGA antes de iniciar uma nova cotação."
+              />
+            </div>
+          )}
 
           {/* E-mail */}
           <div className="space-y-2 md:col-span-2">
