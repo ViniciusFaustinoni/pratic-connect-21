@@ -34,6 +34,8 @@ import {
   detectarTipoVeiculo,
   agruparFotosFiltradas,
   agruparFotosApenasInstalacao,
+  getTotalFotosObrigatorias,
+  getFotosFiltradas,
   type TipoVeiculo,
   type VistoriaFotoConfig,
 } from '@/data/vistoriaConfigCompleta';
@@ -41,12 +43,17 @@ import { compressImage } from '@/lib/imageCompressor';
 import { VistoriaFotoSequencial } from '@/components/vistorias/VistoriaFotoSequencial';
 import { VideoCapture } from '@/components/instalador/VideoCapture';
 import { ChecklistItem, type ChecklistStatus } from '@/components/instalador/ChecklistItem';
+import { Checkbox } from '@/components/ui/checkbox';
+import { CloudUpload, Gauge } from 'lucide-react';
 import {
   useVistoriaLinkPorToken,
   useConcluirEtapaFotosPublica,
   useConcluirEtapaInstalacaoPublica,
   useIniciarEtapaPublica,
+  useSalvarRascunhoVistoriaPublica,
 } from '@/hooks/useVistoriaLinkPublica';
+import { useUploadVistoriaPublicaOffline } from '@/hooks/useUploadVistoriaPublicaOffline';
+import { useSyncQueuePublica } from '@/hooks/useSyncQueuePublica';
 
 // Itens do checklist da instalação (mesmos do fluxo legado)
 const CHECKLIST_INSTALACAO = [
@@ -189,6 +196,8 @@ export default function VistoriaPublica() {
           <EtapaFotos
             token={token!}
             tipoVeiculo={tipoVeiculo}
+            link={link}
+            veiculo={veiculo}
             onConcluida={() => setEtapa('home')}
           />
         )}
