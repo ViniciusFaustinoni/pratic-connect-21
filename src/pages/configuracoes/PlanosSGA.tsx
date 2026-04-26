@@ -1,6 +1,23 @@
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, Building2, Info, Loader2, RefreshCw, Search } from 'lucide-react';
+import {
+  AlertCircle,
+  Building2,
+  Car,
+  CheckCircle2,
+  CircleDollarSign,
+  Hash,
+  Info,
+  Layers,
+  Loader2,
+  MapPin,
+  Package,
+  RefreshCw,
+  Search,
+  Tag,
+  Users,
+  XCircle,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -46,7 +63,7 @@ export default function PlanosSGA() {
   const [tab, setTab] = useState<'produtos' | 'beneficios'>('produtos');
   const [busca, setBusca] = useState('');
   const [situacao, setSituacao] = useState<SGASituacao>('ativo');
-  const [detalhe, setDetalhe] = useState<unknown>(null);
+  const [detalhe, setDetalhe] = useState<{ tipo: 'produto' | 'beneficio'; data: SGAProduto | SGABeneficio } | null>(null);
 
   const produtosQ = useSGAProdutos();
   const beneficiosQ = useSGABeneficios(situacao);
