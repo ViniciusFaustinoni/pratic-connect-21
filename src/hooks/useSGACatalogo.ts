@@ -5,13 +5,22 @@ export type SGASituacao = 'ativo' | 'inativo' | 'todos';
 
 export interface SGAProduto {
   codigo_produto?: string | number;
+  // A API da Hinova retorna `decricao_produto` (sic) e `descricao_produto_boleto`
+  decricao_produto?: string;
+  descricao_produto_boleto?: string;
   descricao?: string;
+  classificacao_produto?: string;
   vigente?: string;
   formato_cobranca?: string;
   base_cobranca?: string;
   codigo_tipo_veiculo?: string | number;
   descricao_tipo_veiculo?: string;
+  valor?: number;
+  valor_produto?: string;
+  compulsorio?: string;
+  padrao?: string;
   regionais?: Array<{ codigo_regional?: string | number; nome_regional?: string }>;
+  cooperativas?: Array<{ codigo_cooperativa?: string | number; nome_cooperativa?: string }>;
   [k: string]: unknown;
 }
 

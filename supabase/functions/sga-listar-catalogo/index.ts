@@ -86,6 +86,18 @@ serve(async (req) => {
     }
 
     if (!resp.ok) {
+      // 406 + "Não foram encontrados" → tratamos como lista vazia (não é erro real)
+      const bodyStr = JSON.stringify(parsed).toLowerCase();
+      const isEmpty =
+        resp.status === 406 &&
+        (bodyStr.includes('não foram encontrados') || bodyStr.includes('nao foram encontrados'));
+      if (isEmpty) {
+        cache.set(cacheKey, { at: Date.now(), data: [] });
+        return new Response(
+          JSON.stringify({ cached: false, tipo, situacao, endpoint, data: [], empty: true }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
       return new Response(
         JSON.stringify({
           error: `Hinova retornou HTTP ${resp.status}`,
