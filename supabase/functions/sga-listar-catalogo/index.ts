@@ -2,7 +2,7 @@
 // Reaproveita getHinovaSession para autenticação.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getHinovaSession } from '../_shared/hinova-client.ts';
+import { getHinovaSession, hinovaFetch, HinovaTransientError } from '../_shared/hinova-client.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -61,23 +61,33 @@ serve(async (req) => {
   }
 
   try {
-    const session = await getHinovaSession(supabase);
-    if (!session) throw new Error('Não foi possível autenticar no SGA Hinova');
-
-    const headers = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${session.tokenUsuario}`,
-    };
+    // Resolve apiUrl primeiro (sem depender de cache de sessão)
+    const baseSession = await getHinovaSession(supabase);
+    if (!baseSession) throw new Error('Não foi possível autenticar no SGA Hinova');
 
     let endpoint = '';
     if (tipo === 'produtos') {
-      endpoint = `${session.apiUrl}/listar/produto/`;
+      endpoint = `${baseSession.apiUrl}/listar/produto/`;
     } else {
-      endpoint = `${session.apiUrl}/listar/beneficio-por-situacao/${situacao}`;
+      endpoint = `${baseSession.apiUrl}/listar/beneficio-por-situacao/${situacao}`;
     }
 
-    const resp = await fetch(endpoint, { method: 'GET', headers });
-    const text = await resp.text();
+    // Usa hinovaFetch para reautenticar automaticamente em 401/403
+    const { response: resp, bodyText: text } = await hinovaFetch(
+      supabase,
+      (token) => ({
+        url: endpoint,
+        init: {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      }),
+      `sga-listar-catalogo/${tipo}`,
+    );
+
     let parsed: unknown;
     try {
       parsed = JSON.parse(text);
