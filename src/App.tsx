@@ -35,6 +35,7 @@ const LandingPlanos = lazy(() => import("./pages/public/LandingPlanos"));
 const PrestadorInstalacao = lazy(() => import("./pages/public/PrestadorInstalacao"));
 const VistoriaPrestador = lazy(() => import("./pages/public/VistoriaPrestador"));
 const VistoriaPublica = lazy(() => import("./pages/public/VistoriaPublica"));
+const AssumirInstalacaoVistoria = lazy(() => import("./pages/public/AssumirInstalacaoVistoria"));
 const CotacaoPublicaPage = lazy(() => import("./pages/public/CotacaoPublica"));
 const CotacaoPublicaCompleta = lazy(() => import("./pages/public/CotacaoPublicaCompleta"));
 const CotacaoContratacao = lazy(() => import("./pages/public/CotacaoContratacao"));
@@ -459,7 +460,7 @@ const App = () => (
             {/* Public Vistoria Prestador */}
             <Route path="/vistoria-prestador/:token" element={<VistoriaPrestador />} />
             <Route path="/vistoria/:token" element={<VistoriaPublica />} />
-            
+            <Route path="/vistoria/:token/assumir-instalacao" element={<AssumirInstalacaoVistoria />} />
             {/* Public Portal Terceiro */}
             <Route path="/terceiro/:token" element={<PortalTerceiro />} />
             

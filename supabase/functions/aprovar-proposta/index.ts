@@ -332,10 +332,11 @@ serve(async (req) => {
           .limit(1)
           .maybeSingle();
 
+        let instalacaoCriadaId: string | null = instJaExiste?.id ?? null;
         if (instJaExiste?.id) {
           console.log(`[aprovar-proposta] Instalação já existe (${instJaExiste.id}) — pulando criação para veículo ${veiculo.placa}`);
         } else {
-          await supabase.from('instalacoes').insert({
+          const { data: novaInst, error: insErr } = await supabase.from('instalacoes').insert({
             associado_id: associadoId,
             veiculo_id: veiculoId,
             contrato_id: contrato_id,
@@ -353,8 +354,33 @@ serve(async (req) => {
             endereco_longitude,
             local_vistoria: 'cliente',
             permite_encaixe: permiteEncaixe,
-          });
-          console.log(`[aprovar-proposta] Instalação criada para veículo ${veiculo.placa}`);
+          }).select('id').single();
+          if (insErr) {
+            console.error(`[aprovar-proposta] Erro ao criar instalação para ${veiculo.placa}:`, insErr);
+          } else {
+            instalacaoCriadaId = novaInst?.id ?? null;
+            console.log(`[aprovar-proposta] Instalação criada (${instalacaoCriadaId}) para veículo ${veiculo.placa}`);
+          }
+        }
+
+        // Gerar link público de vistoria automaticamente (idempotente)
+        if (instalacaoCriadaId) {
+          try {
+            const { error: linkErr } = await supabase.functions.invoke('gerar-link-vistoria-publica', {
+              body: {
+                instalacao_id: instalacaoCriadaId,
+                cotacao_id: contrato.cotacao_id || null,
+                criado_por: aprovado_por || null,
+              },
+            });
+            if (linkErr) {
+              console.warn('[aprovar-proposta] Falha não-bloqueante ao gerar link de vistoria:', linkErr);
+            } else {
+              console.log(`[aprovar-proposta] Link público de vistoria gerado para instalação ${instalacaoCriadaId}`);
+            }
+          } catch (e) {
+            console.warn('[aprovar-proposta] Exceção não-bloqueante ao gerar link de vistoria:', e);
+          }
         }
       } else if (!veiculoPrecisaRastreador) {
         supabase.functions.invoke('notificar-cliente', {

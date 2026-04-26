@@ -275,25 +275,68 @@ function HomeEtapas({
   onEtapa: (e: Etapa) => void;
 }) {
   const fotosFeitas = link.fotos_etapa_status === 'concluida';
+  const fotosAprovadas = !!link.fotos_aprovadas_em;
+  const fotosReprovadas = !!link.fotos_reprovadas_em && !fotosAprovadas;
   const instFeita = link.instalacao_etapa_status === 'concluida';
+  const aguardandoAprovacao = fotosFeitas && !fotosAprovadas && !fotosReprovadas;
+  const podeIniciarInstalacao = fotosAprovadas && !instFeita;
+
+  // Buscar nome do técnico já atribuído (Caso B)
+  const { data: tecnicoAtribuido } = useQuery({
+    queryKey: ['vistoria-publica-tecnico-atribuido', link.id, link.tecnico_atribuido_id],
+    enabled: !!link.tecnico_atribuido_id,
+    queryFn: async () => {
+      const { data } = await publicSupabase
+        .from('profiles' as any)
+        .select('nome')
+        .eq('id', link.tecnico_atribuido_id)
+        .maybeSingle();
+      return (data as any)?.nome || null;
+    },
+  });
 
   const iniciarMut = useIniciarEtapaPublica();
+  const [avisoAtribuido, setAvisoAtribuido] = useState(false);
 
-  const handleEtapa = async (e: Etapa, etapaApi: 'fotos' | 'instalacao') => {
-    // Dispara o "em andamento" no backend (não bloqueia navegação se falhar)
+  const handleEtapaFotos = async () => {
     try {
-      await iniciarMut.mutateAsync({ token, etapa: etapaApi });
+      await iniciarMut.mutateAsync({ token, etapa: 'fotos' });
     } catch (err) {
-      console.warn('[VistoriaPublica] iniciar etapa falhou (não bloqueante):', err);
+      console.warn('[VistoriaPublica] iniciar fotos falhou (não bloqueante):', err);
     }
-    onEtapa(e);
+    onEtapa('fotos');
+  };
+
+  const handleClickInstalacao = async () => {
+    // Caso B: já atribuído a alguém — não direciona ao login, exibe aviso
+    if (link.tecnico_atribuido_id) {
+      setAvisoAtribuido(true);
+      return;
+    }
+    // Caso A: redireciona para login com retorno para a rota de assumir
+    const callback = `/vistoria/${token}/assumir-instalacao`;
+    window.location.href = `/auth?redirect=${encodeURIComponent(callback)}`;
   };
 
   return (
     <div className="space-y-3">
+      {/* Aviso de reprovação das fotos */}
+      {fotosReprovadas && (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 flex items-start gap-2 text-sm">
+          <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="font-semibold text-destructive">Fotos reprovadas pelo monitoramento</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {link.fotos_reprovacao_motivo || 'Por favor, refaça o envio das fotos.'}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Botão Fotos — exibido enquanto não foi concluída/aprovada */}
       {!fotosFeitas && (
         <button
-          onClick={() => handleEtapa('fotos', 'fotos')}
+          onClick={handleEtapaFotos}
           disabled={iniciarMut.isPending}
           className="w-full text-left rounded-xl border-2 border-primary/30 bg-primary/5 hover:bg-primary/10 transition-all p-5 flex items-center gap-4 disabled:opacity-60"
         >
@@ -309,11 +352,34 @@ function HomeEtapas({
         </button>
       )}
 
-      {!instFeita && (
+      {/* Aguardando aprovação do monitoramento */}
+      {aguardandoAprovacao && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 flex items-start gap-2 text-sm">
+          <Loader2 className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0 animate-spin" />
+          <div>
+            <p className="font-semibold text-amber-700 dark:text-amber-400">
+              Fotos enviadas — aguardando aprovação
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              O monitoramento está revisando o material. Assim que aprovado, o botão de instalação será liberado.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Fotos aprovadas — mostra confirmação */}
+      {fotosAprovadas && (
+        <div className="rounded-lg border border-success/30 bg-success/5 p-3 flex items-center gap-2 text-sm">
+          <CheckCircle className="h-4 w-4 text-success" />
+          Fotos aprovadas pelo monitoramento.
+        </div>
+      )}
+
+      {/* Botão Instalação — só aparece após aprovação */}
+      {podeIniciarInstalacao && (
         <button
-          onClick={() => handleEtapa('instalacao', 'instalacao')}
-          disabled={iniciarMut.isPending}
-          className="w-full text-left rounded-xl border-2 border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 transition-all p-5 flex items-center gap-4 disabled:opacity-60"
+          onClick={handleClickInstalacao}
+          className="w-full text-left rounded-xl border-2 border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 transition-all p-5 flex items-center gap-4"
         >
           <div className="w-14 h-14 rounded-full bg-blue-600 text-white flex items-center justify-center">
             <Cpu className="h-7 w-7" />
@@ -321,24 +387,39 @@ function HomeEtapas({
           <div className="flex-1">
             <p className="font-bold text-base">Realizar Instalação do Rastreador</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Checklist de instalação e fotos do equipamento instalado.
+              Requer login de técnico. Se ninguém estiver atribuído ainda, você assume automaticamente.
             </p>
           </div>
         </button>
       )}
 
-      {fotosFeitas && (
-        <div className="rounded-lg border border-success/30 bg-success/5 p-3 flex items-center gap-2 text-sm">
-          <CheckCircle className="h-4 w-4 text-success" />
-          Fotos e vídeo já enviados.
-        </div>
-      )}
       {instFeita && (
         <div className="rounded-lg border border-success/30 bg-success/5 p-3 flex items-center gap-2 text-sm">
           <CheckCircle className="h-4 w-4 text-success" />
           Instalação do rastreador já registrada.
         </div>
       )}
+
+      {/* Aviso quando já atribuído */}
+      <Dialog open={avisoAtribuido} onOpenChange={setAvisoAtribuido}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+              Instalação já atribuída
+            </DialogTitle>
+            <DialogDescription>
+              Esta instalação já foi atribuída a{' '}
+              <span className="font-semibold">{tecnicoAtribuido || 'outro técnico'}</span>.
+              <br />
+              Procure o monitoramento se for necessário trocar o responsável.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setAvisoAtribuido(false)}>Entendi</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

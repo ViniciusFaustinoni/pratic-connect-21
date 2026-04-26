@@ -28862,10 +28862,15 @@ export type Database = {
         Row: {
           created_at: string
           criado_por: string | null
+          fotos_aprovadas_em: string | null
+          fotos_aprovadas_por: string | null
           fotos_concluida_em: string | null
           fotos_etapa_status: string
           fotos_executor_nome: string | null
           fotos_executor_telefone: string | null
+          fotos_reprovacao_motivo: string | null
+          fotos_reprovadas_em: string | null
+          fotos_reprovadas_por: string | null
           id: string
           iniciada_em: string | null
           iniciada_por_nome: string | null
@@ -28885,10 +28890,15 @@ export type Database = {
         Insert: {
           created_at?: string
           criado_por?: string | null
+          fotos_aprovadas_em?: string | null
+          fotos_aprovadas_por?: string | null
           fotos_concluida_em?: string | null
           fotos_etapa_status?: string
           fotos_executor_nome?: string | null
           fotos_executor_telefone?: string | null
+          fotos_reprovacao_motivo?: string | null
+          fotos_reprovadas_em?: string | null
+          fotos_reprovadas_por?: string | null
           id?: string
           iniciada_em?: string | null
           iniciada_por_nome?: string | null
@@ -28908,10 +28918,15 @@ export type Database = {
         Update: {
           created_at?: string
           criado_por?: string | null
+          fotos_aprovadas_em?: string | null
+          fotos_aprovadas_por?: string | null
           fotos_concluida_em?: string | null
           fotos_etapa_status?: string
           fotos_executor_nome?: string | null
           fotos_executor_telefone?: string | null
+          fotos_reprovacao_motivo?: string | null
+          fotos_reprovadas_em?: string | null
+          fotos_reprovadas_por?: string | null
           id?: string
           iniciada_em?: string | null
           iniciada_por_nome?: string | null
@@ -28928,7 +28943,50 @@ export type Database = {
           updated_at?: string
           vistoria_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "vistoria_links_fotos_aprovadas_por_fkey"
+            columns: ["fotos_aprovadas_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vistoria_links_fotos_aprovadas_por_fkey"
+            columns: ["fotos_aprovadas_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "vistoria_links_fotos_aprovadas_por_fkey"
+            columns: ["fotos_aprovadas_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "vistoria_links_fotos_reprovadas_por_fkey"
+            columns: ["fotos_reprovadas_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vistoria_links_fotos_reprovadas_por_fkey"
+            columns: ["fotos_reprovadas_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "vistoria_links_fotos_reprovadas_por_fkey"
+            columns: ["fotos_reprovadas_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
       }
       vistoria_prestador_links: {
         Row: {

@@ -28,6 +28,11 @@ export interface VistoriaLink {
   tecnico_atribuido_id: string | null;
   prestador_atribuido_id: string | null;
   iniciada_em: string | null;
+  fotos_aprovadas_em: string | null;
+  fotos_aprovadas_por: string | null;
+  fotos_reprovadas_em: string | null;
+  fotos_reprovadas_por: string | null;
+  fotos_reprovacao_motivo: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -233,5 +238,125 @@ export function useConcluirEtapaInstalacaoPublica() {
     onError: (err: any) => {
       toast.error(err?.message || 'Erro ao concluir etapa de instalação');
     },
+  });
+}
+
+/**
+ * Aprovação das fotos pelo monitoramento — libera a etapa de instalação no link público.
+ */
+export function useAprovarFotosVistoria() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: { vistoriaLinkId: string }) => {
+      const { data, error } = await supabase.functions.invoke('aprovar-fotos-vistoria-link', {
+        body: { vistoria_link_id: params.vistoriaLinkId },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Erro ao aprovar fotos');
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vistoria-link'] });
+      queryClient.invalidateQueries({ queryKey: ['vistoria-links-aprovacao'] });
+      toast.success('Fotos aprovadas — etapa de instalação liberada.');
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || 'Erro ao aprovar fotos');
+    },
+  });
+}
+
+/**
+ * Reprovação das fotos pelo monitoramento — reabre a etapa de fotos com motivo.
+ */
+export function useReprovarFotosVistoria() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: { vistoriaLinkId: string; motivo: string }) => {
+      const { data, error } = await supabase.functions.invoke('reprovar-fotos-vistoria-link', {
+        body: { vistoria_link_id: params.vistoriaLinkId, motivo: params.motivo },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Erro ao reprovar fotos');
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vistoria-link'] });
+      queryClient.invalidateQueries({ queryKey: ['vistoria-links-aprovacao'] });
+      toast.success('Fotos reprovadas — link reaberto para novo envio.');
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || 'Erro ao reprovar fotos');
+    },
+  });
+}
+
+/**
+ * Técnico logado assume a instalação vinculada ao link público.
+ * Atribuição atômica + validação de fotos aprovadas.
+ */
+export function useAssumirInstalacaoVistoria() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: { token: string }) => {
+      const { data, error } = await supabase.functions.invoke('assumir-instalacao-vistoria-link', {
+        body: { token: params.token },
+      });
+      if (error) {
+        // Erro com payload (ex.: 409 alreadyAssigned) — repassar mensagem
+        const ctx = (error as any)?.context;
+        if (ctx?.body) {
+          try {
+            const parsed = typeof ctx.body === 'string' ? JSON.parse(ctx.body) : ctx.body;
+            const e: any = new Error(parsed?.error || 'Erro ao assumir instalação');
+            e.alreadyAssigned = !!parsed?.alreadyAssigned;
+            e.tecnico_nome = parsed?.tecnico_nome || null;
+            throw e;
+          } catch {
+            /* ignora parse */
+          }
+        }
+        throw error;
+      }
+      if (!data?.success) {
+        const e: any = new Error(data?.error || 'Erro ao assumir instalação');
+        e.alreadyAssigned = !!data?.alreadyAssigned;
+        e.tecnico_nome = data?.tecnico_nome || null;
+        throw e;
+      }
+      return data as { success: true; instalacao_id: string | null; redirect_to: string | null };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vistoria-link'] });
+      queryClient.invalidateQueries({ queryKey: ['vistoria-link-token'] });
+    },
+  });
+}
+
+/**
+ * Lista de links de vistoria com fotos aguardando aprovação no monitoramento.
+ */
+export function useVistoriaLinksAguardandoAprovacao() {
+  return useQuery({
+    queryKey: ['vistoria-links-aprovacao'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('vistoria_links' as any)
+        .select(`
+          id, token, instalacao_id, fotos_concluida_em, fotos_executor_nome,
+          instalacoes:instalacao_id(
+            id, data_agendada, periodo, cidade, uf,
+            associados:associado_id(nome, telefone),
+            veiculos:veiculo_id(marca, modelo, placa)
+          )
+        `)
+        .eq('fotos_etapa_status', 'concluida')
+        .is('fotos_aprovadas_em', null)
+        .is('fotos_reprovadas_em', null)
+        .order('fotos_concluida_em', { ascending: true });
+      if (error) throw error;
+      return (data as any[]) || [];
+    },
+    refetchInterval: 30_000,
   });
 }
