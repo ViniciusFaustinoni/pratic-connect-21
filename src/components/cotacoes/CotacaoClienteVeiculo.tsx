@@ -57,6 +57,7 @@ export function CotacaoClienteVeiculo({
   onVincularLead,
   onTrocarLead,
 }: CotacaoClienteVeiculoProps) {
+  const { openLeadDetail } = useLeadModals();
   const temLead = !!cotacao.lead_id;
   const telefoneDigits = cotacao.leads?.telefone?.replace(/\D/g, '') || '';
 
