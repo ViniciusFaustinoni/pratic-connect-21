@@ -141,6 +141,14 @@ const categorias: Categoria[] = [
         href: '/configuracoes/integracoes/hinova-mapeamentos',
         sempreAtivo: true,
       },
+      {
+        id: 'planos-sga',
+        nome: 'Planos SGA (Hinova)',
+        descricao: 'Visualização somente leitura dos planos e benefícios cadastrados no SGA',
+        icon: Building2,
+        href: '/configuracoes/integracoes/planos-sga',
+        sempreAtivo: true,
+      },
     ],
   },
   {

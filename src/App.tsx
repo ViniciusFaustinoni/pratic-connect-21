@@ -151,6 +151,7 @@ const IntegracaoApiKeys = lazy(() => import("./pages/configuracoes/IntegracaoApi
 const IntegracaoFontesLeads = lazy(() => import("./pages/configuracoes/IntegracaoFontesLeads"));
 const IntegracaoSGAHinova = lazy(() => import("./pages/configuracoes/IntegracaoSGAHinova"));
 const IntegracaoHinovaMapeamentos = lazy(() => import("./pages/configuracoes/IntegracaoHinovaMapeamentos"));
+const PlanosSGA = lazy(() => import("./pages/configuracoes/PlanosSGA"));
 const Sistema = lazy(() => import("./pages/configuracoes/Sistema"));
 const Logs = lazy(() => import("./pages/configuracoes/Logs"));
 const GradesComissao = lazy(() => import("./pages/configuracoes/GradesComissao"));
@@ -736,6 +737,7 @@ const App = () => (
                 <Route path="integracoes/fontes-leads" element={<IntegracaoFontesLeads />} />
                 <Route path="integracoes/sga-hinova" element={<IntegracaoSGAHinova />} />
                 <Route path="integracoes/hinova-mapeamentos" element={<IntegracaoHinovaMapeamentos />} />
+                <Route path="integracoes/planos-sga" element={<PlanosSGA />} />
                 <Route path="grades-comissao" element={<Navigate to="/comissoes/grades" replace />} />
                 <Route path="grades-comissao/nova" element={<Navigate to="/comissoes/grades/nova" replace />} />
                 <Route path="grades-comissao/:id" element={<RedirectGradeComissao />} />
