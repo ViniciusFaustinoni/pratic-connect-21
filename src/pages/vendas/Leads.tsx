@@ -159,7 +159,7 @@ export default function Leads() {
       searchParams.delete('novo');
       setSearchParams(searchParams, { replace: true });
     }
-    
+
     // Filtro por etapa via URL (vindo do funil de cotação)
     const etapaParam = searchParams.get('etapa');
     if (etapaParam && ETAPAS_TODAS.includes(etapaParam as EtapaLead)) {
@@ -167,7 +167,17 @@ export default function Leads() {
       searchParams.delete('etapa');
       setSearchParams(searchParams, { replace: true });
     }
-  }, [searchParams, setSearchParams]);
+
+    // Deep-link compat: ?lead=<id> (e ?edit=1) abre os modais globais
+    const leadParam = searchParams.get('lead');
+    if (leadParam) {
+      openLeadDetail(leadParam);
+      if (searchParams.get('edit') === '1') openLeadEdit(leadParam);
+      searchParams.delete('lead');
+      searchParams.delete('edit');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams, openLeadDetail, openLeadEdit]);
 
   // Para tabela com paginação
   const { data: leadsData, isLoading } = useLeads({ filters, page, perPage: 20 });
