@@ -1,4 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
+import { useLeadModals } from '@/contexts/LeadModalsContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +22,7 @@ const tipoLabels: Record<string, string> = {
 export default function CanalDetalhe() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { openLeadDetail } = useLeadModals();
   
   const { data: canais, isLoading } = useCanais();
   const { data: performance } = usePerformanceCanais();
@@ -188,7 +190,7 @@ export default function CanalDetalhe() {
                 </TableHeader>
                 <TableBody>
                   {leadsRecentes?.length ? leadsRecentes.map((lead: any) => (
-                    <TableRow key={lead.id} className="cursor-pointer" onClick={() => navigate(`/vendas/leads/${lead.id}`)}>
+                    <TableRow key={lead.id} className="cursor-pointer" onClick={() => openLeadDetail(lead.id)}>
                       <TableCell className="font-medium">{lead.nome}</TableCell>
                       <TableCell>{lead.telefone}</TableCell>
                       <TableCell><Badge variant="outline">{lead.etapa}</Badge></TableCell>

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useLeadModals } from '@/contexts/LeadModalsContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Loader2, Calendar, X, ChevronLeft, ChevronRight, CheckCircle, Phone, Car } from 'lucide-react';
 import { format } from 'date-fns';
@@ -31,7 +32,7 @@ import { LeadFormDialog } from '@/components/leads/LeadFormDialog';
 import { LeadLossDialog } from '@/components/leads/LeadLossDialog';
 import { LeadKanbanCard } from '@/components/leads/LeadKanbanCard';
 import { LeadMetricsCards } from '@/components/leads/LeadMetricsCards';
-import { LeadDetailDrawer } from '@/components/leads/LeadDetailDrawer';
+// LeadDetailDrawer removido — substituído pelo LeadDetailModal global
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -106,10 +107,11 @@ export default function LeadKanban() {
   const [showLeadForm, setShowLeadForm] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [lossDialogLead, setLossDialogLead] = useState<Lead | null>(null);
-  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  // detail/edit modals agora via LeadModalsContext (openLeadDetail/openLeadEdit)
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
   const boardRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const { openLeadDetail, openLeadEdit } = useLeadModals();
   const queryClient = useQueryClient();
 
   const { data: leads, isLoading } = useAllLeads(filters);
@@ -231,10 +233,10 @@ export default function LeadKanban() {
   const handleCardAction = (action: string, lead: Lead) => {
     switch (action) {
       case 'ver':
-        setSelectedLeadId(lead.id);
+        openLeadDetail(lead.id);
         break;
       case 'editar':
-        navigate(`/vendas/leads/${lead.id}/editar`);
+        openLeadEdit(lead.id);
         break;
       case 'contato':
         handleWhatsAppClick(lead.id, lead.etapa);
@@ -443,7 +445,7 @@ export default function LeadKanban() {
                         <LeadKanbanCard
                           key={lead.id}
                           lead={lead}
-                          onClick={() => setSelectedLeadId(lead.id)}
+                          onClick={() => openLeadDetail(lead.id)}
                           onQuote={handleQuote}
                           onWhatsAppClick={handleWhatsAppClick}
                           onAction={handleCardAction}
@@ -510,11 +512,7 @@ export default function LeadKanban() {
         />
       )}
 
-      <LeadDetailDrawer
-        leadId={selectedLeadId}
-        open={!!selectedLeadId}
-        onClose={() => setSelectedLeadId(null)}
-      />
+      {/* Detail modal agora é global (LeadModalsHost) */}
     </div>
   );
 }

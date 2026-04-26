@@ -1,4 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
+import { useLeadModals } from '@/contexts/LeadModalsContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -62,6 +63,7 @@ const etapaLabels: Record<string, string> = {
 export default function CampanhaDetalhe() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { openLeadDetail } = useLeadModals();
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   
   const { data: campanha, isLoading } = useCampanha(id!);
@@ -623,7 +625,7 @@ export default function CampanhaDetalhe() {
                       <TableRow 
                         key={lead.id} 
                         className="cursor-pointer hover:bg-muted/50"
-                        onClick={() => navigate(`/vendas/leads/${lead.id}`)}
+                        onClick={() => openLeadDetail(lead.id)}
                       >
                         <TableCell className="font-medium">{lead.nome}</TableCell>
                         <TableCell>{lead.telefone}</TableCell>

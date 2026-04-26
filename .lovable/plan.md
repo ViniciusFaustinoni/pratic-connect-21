@@ -1,60 +1,117 @@
-# Sidebar mobile do diretor mostrar todos os caminhos (igual ao desktop)
 
-## Causa raiz
+## Objetivo
 
-No mobile (largura <768px), o shadcn `Sidebar` abre dentro de um `Sheet` (drawer lateral), mas o estado `state` do `useSidebar()` permanece `"collapsed"` enquanto o usuário não expandiu manualmente no desktop. O `AppSidebar.tsx` (linha 553-554) decide o que renderizar com:
+Eliminar as rotas dedicadas `/vendas/leads/:id` e `/vendas/leads/:id/editar` e converter ambas em **modais** abertos a partir das listagens (Kanban, tabela de Leads, Dashboard, Marketing, Followup, etc.), preservando 100% das funcionalidades atuais.
+
+---
+
+## Escopo do que será removido
+
+**Páginas a deletar:**
+- `src/pages/vendas/LeadDetalhe.tsx` (688 linhas) — detalhe completo do lead com abas
+- `src/pages/vendas/LeadEditar.tsx` (655 linhas) — formulário de edição
+
+**Rotas a remover de `src/App.tsx`:**
+- `/vendas/leads/:id`
+- `/vendas/leads/:id/editar`
+
+**Breadcrumb a limpar em `src/components/layout/GlobalBreadcrumb.tsx`:**
+- Entrada `/vendas/leads/:id`
+
+---
+
+## O que será criado
+
+### 1. `LeadDetailModal` (substitui LeadDetalhe.tsx)
+
+Dialog full-screen em mobile / `max-w-5xl` em desktop, com **todo o conteúdo atual** da página de detalhe:
+
+- **Cabeçalho**: avatar, nome, telefone, e-mail, badges de etapa/origem, tempo no funil
+- **Cards superiores**: `LeadQuickStats`, `LeadFunnelProgress`, `VeiculoPerfilAlert`
+- **Abas (Tabs)**:
+  - **Linha do tempo** (`LeadTimeline` + `HistoricoConversaWhatsApp`)
+  - **Cotações** vinculadas (lista com `STATUS_COTACAO_LABELS/COLORS`)
+  - **Documentos**
+  - **Anotações**
+- **Ações no header do modal** (DropdownMenu + botões diretos):
+  - "Mover etapa" → abre `MoverEtapaModal` empilhado
+  - "Gerar cotação" → abre `CotacaoFormDialog` empilhado
+  - "Enviar WhatsApp" → ação direta
+  - "Gerar proposta" → `BotaoGerarProposta`
+  - "Agendar follow-up" → `AgendarFollowupDialog`
+  - "Editar" → abre `LeadEditarModal` empilhado (substitui `navigate(.../editar)`)
+  - "Excluir" → `AlertDialog` de confirmação
+
+> O `LeadDetailDrawer.tsx` existente (377 linhas, versão resumida em Sheet) será **descontinuado e excluído** — o novo modal cobre tudo o que ele fazia e mais.
+
+### 2. `LeadEditarModal` (substitui LeadEditar.tsx)
+
+Dialog `max-w-3xl` com o formulário completo atual:
+
+- Dados cadastrais (nome, telefone, email, CPF, etc.)
+- Dados do veículo
+- Atribuição de vendedor
+- Etapa, origem, observações
+- Botões Salvar / Cancelar
+- Ao salvar: invalida queries e fecha o modal (sem navegação)
+
+### 3. Hook/Context global de modal de Lead
+
+Criar `useLeadModals()` (Zustand ou Context simples) com API:
 
 ```ts
-const { state, setOpenMobile, isMobile } = useSidebar();
-const collapsed = state === 'collapsed';
+openLeadDetail(leadId: string)
+openLeadEdit(leadId: string)
+closeLeadModals()
 ```
 
-Como `collapsed` está `true`, ele entra no ramo do **modo colapsado** (linha 724) — que renderiza só ícones com popover lateral. Esse layout funciona no desktop, mas dentro do drawer mobile fica:
+Montar `<LeadModalsProvider>` no `App.tsx` envolvendo as rotas autenticadas, para que qualquer página possa abrir o modal sem prop drilling.
 
-- Sem labels textuais dos itens.
-- Popovers laterais (`side="right"`) que abrem para fora do drawer ou ficam atrás dele.
-- Sem os super-grupos expansíveis com todos os módulos do diretor (Vendas, Operações, Financeiro, Diretoria, etc.).
+---
 
-Resultado: o diretor no celular vê uma versão amputada do menu — só os "main items" e ícones soltos, sem acesso aos sub-itens dos módulos.
+## Arquivos a atualizar (substituir `navigate(...)` por `openLeadDetail/openLeadEdit`)
 
-## Correção
+| Arquivo | Mudança |
+|---|---|
+| `src/pages/vendas/Leads.tsx` (linhas 520, 604, 611-615) | Tabela: clique na linha e ações "Ver"/"Editar" abrem modal |
+| `src/pages/vendas/LeadKanban.tsx` (linha 237) | Card: clique abre detalhe; "Editar" abre edição |
+| `src/pages/vendas/LeadsUnificado.tsx` | Idem |
+| `src/pages/vendas/VendedorHistorico.tsx` (linha 292) | Linha de histórico abre detalhe |
+| `src/pages/vendas/VendasDashboard.tsx` (linha 570) | Mantém link para listagem (não é detalhe individual) |
+| `src/components/vendas/FollowupWidget.tsx` (linhas 58, 93) | Link individual → abre modal; link de listagem mantém |
+| `src/components/cotacoes/CotacaoClienteVeiculo.tsx` (linha 134) | Link → botão que abre modal |
+| `src/components/leads/LeadDetailDrawer.tsx` | **Excluir** (substituído pelo novo modal) |
+| `src/pages/marketing/CanalDetalhe.tsx` (linha 191) | Linha da tabela abre modal |
+| `src/pages/marketing/CampanhaDetalhe.tsx` (linha 626) | Idem |
+| `src/pages/Dashboard.tsx` (linha 485) | Idem |
+| `src/components/layout/GlobalBreadcrumb.tsx` (linha 171) | Remover entrada |
 
-Forçar o **modo expandido** sempre que o sidebar estiver sendo renderizado dentro do drawer mobile, independente do `state` do desktop.
+---
 
-### Mudança 1 — `src/components/layout/AppSidebar.tsx` (linha 554)
+## Comportamento e UX
 
-Trocar:
-```ts
-const collapsed = state === 'collapsed';
-```
-por:
-```ts
-const collapsed = state === 'collapsed' && !isMobile;
-```
+- **Deep-link preservado**: ao acessar uma URL antiga `/vendas/leads/:id` (ex: link compartilhado ou de e-mail), redirecionar para `/vendas/leads?lead=<id>` e o `Leads.tsx` detecta o query param e abre o modal automaticamente. Mesmo para `/vendas/leads/:id/editar` → `?lead=<id>&edit=1`.
+- **Modais empilhados**: o detalhe abre cotação, mover etapa, follow-up, editar e confirmação de exclusão sem fechar o modal-pai.
+- **Mobile**: o `Dialog` ocupa quase a tela inteira (`h-[95vh] max-w-full`), abas viram scroll vertical.
+- **Fechar**: ESC, clique fora ou botão X. Após salvar edição, o modal de edição fecha mas o de detalhe permanece (com dados atualizados via invalidate).
 
-Com isso, em mobile o componente entra direto no ramo **MODO EXPANDIDO** (linha 903) que já contém:
-- Main items com label.
-- Super-grupos colapsáveis (Vendas, Operações, Financeiro, Diretoria, RH, Marketing, Configurações…).
-- Sub-grupos com todos os itens textuais e badges.
-- Itens de configuração no rodapé.
+---
 
-### Mudança 2 — Garantir scroll/altura do drawer
+## Detalhes técnicos
 
-O `SheetContent` mobile do shadcn tem altura total, mas o `SidebarContent` precisa ser scrollável quando a lista é longa (caso do diretor, com dezenas de itens). Verificar se já há `scrollbar-thin` e `overflow-y-auto` (já está em `SidebarContent` via shadcn). Se necessário, adicionar `h-full` no wrapper para o scroll funcionar dentro do `Sheet`.
+- Reaproveitar **todo o JSX** atual de `LeadDetalhe.tsx` e `LeadEditar.tsx` movendo-o para os novos componentes; remover apenas `useParams`/`useNavigate` e a moldura de página (breadcrumb interno, botão "Voltar").
+- Substituir `useParams<{id}>()` por uma prop `leadId: string`.
+- Substituir `navigate(...)` interno por handlers do contexto (`openLeadEdit`, `closeLeadModals`).
+- O state `editingLead` já existente em `Leads.tsx` (linha 611) será migrado para o contexto global, eliminando duplicação.
+- `MoverEtapaModal`, `CotacaoFormDialog`, `AgendarFollowupDialog`, `AlertDialog` de exclusão continuam como já estão (são dialogs filhos).
+- Manter os hooks `useLead`, `useCotacoesByLead`, `useChangeLeadEtapa`, `useLeadActions`, `useCriarCotacaoPublica` exatamente como estão.
 
-### Mudança 3 — Footer/perfil no mobile
+---
 
-O `SidebarFooter` (links de Perfil/Configurações no rodapé, linhas ~1100-1145) já é renderizado nos dois modos. Garantir que continua aparecendo no drawer mobile (não precisa mudança — o footer está fora do `if collapsed`).
+## Critérios de aceite
 
-## O que NÃO muda
-
-- Desktop continua exatamente igual: collapsed/expandido controlado pelo `SidebarTrigger` no `AppHeader`.
-- Permissões e visibilidade de módulos (`visibleGroups`, `superGroups`, `useModuleVisibility`) continuam idênticas — diretor vê tudo.
-- Roles de mobile dedicados (Regulador, Instalador, App Associado) não são tocados — eles têm seus próprios layouts.
-- Não mexe em `AppMobileMenu` (esse é do app do associado, não do painel interno).
-
-## Resultado esperado
-
-No celular, ao tocar no botão de menu (hamburger no `AppHeader`), o diretor vê o **mesmo conjunto completo de super-grupos, grupos e itens** que vê no desktop expandido — com labels, badges, sub-itens e tudo navegável dentro do drawer.
-
-Edição mínima (1 linha de código) com efeito direto no problema relatado.
+1. As rotas `/vendas/leads/:id` e `/vendas/leads/:id/editar` retornam 404 (ou redirecionam para listagem com modal aberto).
+2. Em desktop e mobile, todas as origens listadas acima abrem os modais corretamente.
+3. Nenhuma funcionalidade descrita (abas, botões, ações, edição) é perdida.
+4. Sidebar do diretor (corrigida na iteração anterior) continua funcionando.
+5. Build passa sem warnings de import quebrado.
