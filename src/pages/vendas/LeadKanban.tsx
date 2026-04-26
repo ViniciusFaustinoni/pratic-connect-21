@@ -107,10 +107,11 @@ export default function LeadKanban() {
   const [showLeadForm, setShowLeadForm] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [lossDialogLead, setLossDialogLead] = useState<Lead | null>(null);
-  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  // detail/edit modals agora via LeadModalsContext (openLeadDetail/openLeadEdit)
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
   const boardRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const { openLeadDetail, openLeadEdit } = useLeadModals();
   const queryClient = useQueryClient();
 
   const { data: leads, isLoading } = useAllLeads(filters);
@@ -232,10 +233,10 @@ export default function LeadKanban() {
   const handleCardAction = (action: string, lead: Lead) => {
     switch (action) {
       case 'ver':
-        setSelectedLeadId(lead.id);
+        openLeadDetail(lead.id);
         break;
       case 'editar':
-        navigate(`/vendas/leads/${lead.id}/editar`);
+        openLeadEdit(lead.id);
         break;
       case 'contato':
         handleWhatsAppClick(lead.id, lead.etapa);
@@ -444,7 +445,7 @@ export default function LeadKanban() {
                         <LeadKanbanCard
                           key={lead.id}
                           lead={lead}
-                          onClick={() => setSelectedLeadId(lead.id)}
+                          onClick={() => openLeadDetail(lead.id)}
                           onQuote={handleQuote}
                           onWhatsAppClick={handleWhatsAppClick}
                           onAction={handleCardAction}
@@ -511,11 +512,7 @@ export default function LeadKanban() {
         />
       )}
 
-      <LeadDetailDrawer
-        leadId={selectedLeadId}
-        open={!!selectedLeadId}
-        onClose={() => setSelectedLeadId(null)}
-      />
+      {/* Detail modal agora é global (LeadModalsHost) */}
     </div>
   );
 }
