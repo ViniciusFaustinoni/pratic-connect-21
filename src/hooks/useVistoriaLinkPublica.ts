@@ -33,6 +33,12 @@ export interface VistoriaLink {
   fotos_reprovadas_em: string | null;
   fotos_reprovadas_por: string | null;
   fotos_reprovacao_motivo: string | null;
+  // Rascunho da etapa pública de fotos
+  fotos_rascunho_executor_nome: string | null;
+  fotos_rascunho_conferencia: { placa?: boolean; chassi?: boolean; modelo?: boolean; cor?: boolean } | null;
+  fotos_rascunho_hodometro: string | null;
+  fotos_rascunho_observacoes: string | null;
+  fotos_rascunho_atualizado_em: string | null;
   created_at: string;
   updated_at: string;
 }
