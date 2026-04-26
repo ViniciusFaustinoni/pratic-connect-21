@@ -215,7 +215,7 @@ export default function PlanosSGA() {
 interface TableProps<T> {
   loading: boolean;
   items: T[];
-  onShowDetalhe: (item: unknown) => void;
+  onShowDetalhe: (item: T) => void;
   cached?: boolean;
   total: number;
 }
