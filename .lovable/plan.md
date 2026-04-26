@@ -1,58 +1,90 @@
-# Detalhe da OS como Modal
+# Remover fluxo legado de Substituição de Veículo
 
-## Objetivo
+## Por quê
 
-Eliminar a rota `/oficinas/ordens/:id` e exibir o detalhe da Ordem de Serviço dentro de um modal full-screen, mantendo todas as funcionalidades atuais.
+Hoje convivem dois fluxos paralelos para substituir veículo de associado:
 
-## Funcionalidades preservadas
+1. **Fluxo via cotação (oficial)** — Cotador padrão com `tipo_entrada='substituicao'`, acionado pelo `OutrasEntradasMenu` e validado pela memória `features/sales/vehicle-substitution-flow`.
+2. **Fluxo legado (stepper de 8 passos)** — `/cadastro/associados/:id/substituicao`, `/vendas/substituicao/:id`, `/cadastro/substituicoes`, `/cadastro/substituicoes/:id` e `/substituicao/:token`, gravando em `substituicoes_veiculo`.
 
-Tudo que existe hoje na página continua funcionando dentro do modal:
+Manter os dois cria divergência de regras (carência, agendamento dois locais, dupla aprovação). A decisão é manter apenas o fluxo via cotação.
 
-- Cabeçalho com número da OS, status colorido e data de criação
-- Botões "Concluir OS / Gerenciar Conclusão" e "Atualizar Status"
-- Cards informativos (Oficina, Associado, Veículo)
-- Tabela de itens do orçamento com "Adicionar Item" e exclusão por linha
-- Total do orçamento
-- Card de Observações (quando houver)
-- Histórico/Timeline lateral (`OSTimeline`)
-- Submodais aninhados: `OSStatusDialog`, `OSItemFormDialog`, `OSConclusaoModal`
+## Dados existentes
 
-Observação: a descrição original menciona `HistoricoAlteracoes`, `AdicionarItemOSModal` e `SinistroCombobox`. Na implementação real esses elementos correspondem a `OSTimeline`, `OSItemFormDialog` e a vinculação a sinistro não existe nessa tela hoje — nada será inventado.
+Consultei a tabela `substituicoes_veiculo`: **0 registros**. Não há nada para migrar — o passo de "migrar para cotacoes antes de apagar" se torna trivial (nenhum INSERT necessário). Vou apenas dropar a tabela e suas dependências.
 
-## Mudanças técnicas
+## Arquivos / rotas a remover
 
-### Novo componente
+### Páginas
+- `src/pages/cadastro/SubstituicaoVeiculoPage.tsx` (stepper completo)
+- `src/pages/cadastro/SubstituicoesPendentesPage.tsx` (lista pendentes)
+- `src/pages/cadastro/SubstituicaoDetalhePage.tsx` (detalhe)
+- `src/pages/public/SubstituicaoPublica.tsx` (jornada pública por token)
 
-- `src/components/oficinas/OrdemServicoDetalheModal.tsx`
-  - `Dialog` grande (`max-w-6xl`, altura controlada com scroll interno)
-  - Recebe `osId` via prop e usa os mesmos hooks (`useOrdemServico`, `useOSItens`, `useOSHistorico`, `useDeleteOSItem`)
-  - Conteúdo idêntico ao da página atual, sem o botão "Voltar" (substituído pelo X do dialog)
+### Componentes do stepper (`src/components/substituicao/`)
+- `SubstituicaoStepper.tsx`
+- `StepElegibilidade.tsx`
+- `StepEventoAtivo.tsx`
+- `StepRastreador.tsx`
+- `StepNovoVeiculo.tsx`
+- `StepVistoria.tsx`
+- `StepBeneficios.tsx`
+- `StepFinanceiro.tsx`
+- `StepConclusao.tsx`
+- `SubstituicaoStatusCard.tsx` (usado em `AssociadoDetalhe`)
+- Demais arquivos da pasta que só sirvam ao stepper (vou auditar diretório inteiro)
 
-### Integração na lista
+### Hooks / tipos / módulos
+- `src/hooks/useSubstituicaoVeiculo.ts` (todos os hooks: `useSubstituicoes`, `useSubstituicao`, `useIniciarSubstituicao`, `useAprovarSubstituicao`, `useRejeitarSubstituicao` etc.)
+- `src/types/substituicao.ts`
+- Edge Functions / utilitários que existam apenas para `substituicoes_veiculo` (auditar `supabase/functions/`)
 
-- `src/pages/oficinas/OrdensServico.tsx`
-  - Estado local `osSelecionadaId: string | null`
-  - Card da OS abre o modal em vez de `navigate(...)`
-  - Renderiza `<OrdemServicoDetalheModal osId={osSelecionadaId} open={!!osSelecionadaId} onOpenChange={...} />`
+### Rotas (`src/App.tsx`)
+- Remover `/substituicao/:token`, `/vendas/substituicao/:associadoId`, `/cadastro/associados/:associadoId/substituicao`, `/cadastro/substituicoes`, `/cadastro/substituicoes/:id`
+- Adicionar redirects de compatibilidade que mandam para o cotador com `tipo_entrada=substituicao`:
+  - `/vendas/substituicao/:associadoId` → `/vendas/cotacoes?associado_id=:id&tipo_entrada=substituicao`
+  - `/cadastro/associados/:associadoId/substituicao` → idem
+  - `/cadastro/substituicoes` e `/cadastro/substituicoes/:id` → `/cadastro/processos-operacionais` (aba relevante)
+  - `/substituicao/:token` → página simples explicando que o link expirou
 
-### Outros consumidores
+### Pontos de chamada a ajustar
+- `src/components/associados/detalhe/AssociadoHeroHeader.tsx` (linha 217): trocar o `navigate(\`/cadastro/associados/${id}/substituicao\`)` por abertura do mesmo `OutrasEntradasMenu` (ou navigate direto para `/vendas/cotacoes?associado_id=${id}&tipo_entrada=substituicao`).
+- `src/pages/vendas/Cotacao.tsx` (linha 393, callback `onSubstituicao`): remover o navigate para `/vendas/substituicao/:id`. O fluxo de substituição já é tratado pelo próprio Cotador via `tipo_entrada`, então a etapa que oferece "transformar em substituição" deve simplesmente seguir o fluxo unificado (vou confirmar o uso da função antes de remover).
+- `src/pages/cadastro/AssociadoDetalhe.tsx` (linha 404): remover o `<SubstituicaoStatusCard />` (componente será deletado).
+- `src/pages/cadastro/ProcessosOperacionais.tsx`: remover a aba "Substituições" inteira (`useSubstituicoes`, `STATUS_SUBSTITUICAO_LABELS`, contadores, conteúdo da TabsContent), reorganizando as TabsList restantes.
+- `src/components/layout/GlobalBreadcrumb.tsx`: remover `'/cadastro/substituicoes'`.
+- `src/hooks/useModuleItemVisibility.ts`: remover `'/cadastro/substituicoes': 'substituicoes'`.
+- `src/hooks/useModuleVisibility.ts`: remover `'/vendas/substituicao'` da lista do módulo `vendas`.
 
-- `src/pages/regulador/ReguladorOficina.tsx` (linha 657): o botão que hoje navega para `/oficinas/ordens/:id` passa a abrir o mesmo modal localmente (estado próprio na página + `OrdemServicoDetalheModal`).
+### Banco de dados (migration)
 
-### Deep-link / compatibilidade
+```sql
+-- Drop FKs/constraints e a tabela; está vazia (0 registros).
+DROP TABLE IF EXISTS public.substituicoes_veiculo CASCADE;
 
-- `src/App.tsx`
-  - Remover `lazy(() => import("./pages/oficinas/OrdemServicoDetalhe"))` e a `<Route path="/oficinas/ordens/:id" ... />`
-  - Adicionar redirecionamento da rota antiga: `<Route path="/oficinas/ordens/:id" element={<Navigate to="/ordens-servico" replace />} />` (preserva links antigos)
+-- Caso existam tipos/enums dedicados (status_substituicao etc.), DROP TYPE IF EXISTS ... CASCADE.
+-- Vou auditar antes da migration final.
+```
 
-### Limpeza
+CASCADE garante que policies, triggers, índices e referências caiam junto. Antes de rodar vou listar dependências para o usuário aprovar.
 
-- Deletar `src/pages/oficinas/OrdemServicoDetalhe.tsx`
-- `src/components/layout/GlobalBreadcrumb.tsx`: remover a entrada `'/oficinas/ordens/:id'` (não há mais rota com esse padrão)
+## O que NÃO muda
+
+- Cotador continua aceitando `tipo_entrada=substituicao` (feature `vehicle-substitution-flow` permanece válida).
+- `OutrasEntradasMenu` permanece como porta de entrada.
+- A memória `features/sales/vehicle-substitution-flow` permanece atual.
 
 ## Resultado
 
-- Clicar numa OS na lista abre o modal sobreposto, sem trocar de rota
-- O regulador também vê o detalhe via modal
-- Todos os submodais (status, item, conclusão) continuam empilhando normalmente
-- Links antigos `/oficinas/ordens/:id` redirecionam para a lista (`/ordens-servico`)
+- Um único fluxo de substituição: Cotador.
+- Aproximadamente 15+ arquivos deletados, 5 rotas removidas, 1 tabela dropada.
+- Links antigos redirecionam para o novo fluxo (sem quebrar bookmarks).
+
+## Etapas técnicas
+
+1. Auditoria final do diretório `src/components/substituicao/` e `supabase/functions/` para listar tudo que será removido.
+2. Rodar migration de DROP (com aprovação do usuário).
+3. Apagar arquivos órfãos.
+4. Atualizar consumidores (App.tsx, AssociadoHeroHeader, AssociadoDetalhe, ProcessosOperacionais, Cotacao.tsx, breadcrumbs, módulos).
+5. Adicionar redirects.
+6. Verificar build (`tsc`).
