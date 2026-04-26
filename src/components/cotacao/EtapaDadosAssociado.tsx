@@ -100,9 +100,16 @@ export function EtapaDadosAssociado({
     }
   }, [user?.id, consultorId, setConsultorId]);
 
-  // Pode avançar se Nome, Telefone e Consultor estão preenchidos
+  // Pode avançar se Nome, Telefone e Consultor estão preenchidos.
+  // Bloqueia se houver débito SGA — ex-cliente precisa quitar antes.
   const telefoneValido = telefone1.replace(/\D/g, '').length >= 10;
-  const canProceed = nome.trim() !== '' && telefoneValido && consultorId !== '' && (!isIndicacao || indicadorId !== '');
+  const temDebitoSGA = debitosSGA?.temDebito === true;
+  const canProceed =
+    nome.trim() !== '' &&
+    telefoneValido &&
+    consultorId !== '' &&
+    (!isIndicacao || indicadorId !== '') &&
+    !temDebitoSGA;
 
   const handleSelectIndicador = (associado: AssociadoSearchResult) => {
     setIndicadorId(associado.id);
@@ -205,6 +212,19 @@ export function EtapaDadosAssociado({
               </div>
             )}
           </div>
+
+          {/* Aviso de débito SGA — ex-cliente com saldo devedor */}
+          {temDebitoSGA && debitosSGA && (
+            <div className="md:col-span-2">
+              <DebitosCard
+                debitos={debitosSGA.debitosPorVeiculo}
+                saldoTotal={debitosSGA.saldoTotal}
+                bloqueante
+                titulo="Este CPF já foi cliente Pratic e está com saldo devedor"
+                descricao="É necessário quitar os boletos abaixo no SGA antes de iniciar uma nova cotação."
+              />
+            </div>
+          )}
 
           {/* E-mail */}
           <div className="space-y-2 md:col-span-2">
