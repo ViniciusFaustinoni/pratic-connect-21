@@ -551,7 +551,9 @@ function UserCard() {
 
 export function AppSidebar() {
   const { state, setOpenMobile, isMobile } = useSidebar();
-  const collapsed = state === 'collapsed';
+  // Em mobile o sidebar abre dentro de um Sheet (drawer); sempre renderizar em modo expandido
+  // para o diretor (e demais perfis) verem todos os super-grupos, grupos e itens — igual ao desktop expandido.
+  const collapsed = state === 'collapsed' && !isMobile;
   
   const handleNavigation = () => {
     if (isMobile) {
