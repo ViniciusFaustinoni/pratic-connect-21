@@ -1,60 +1,45 @@
-# Sidebar mobile do diretor mostrar todos os caminhos (igual ao desktop)
+# Remover página Mapa de Atendimento
 
-## Causa raiz
+## Escopo
 
-No mobile (largura <768px), o shadcn `Sidebar` abre dentro de um `Sheet` (drawer lateral), mas o estado `state` do `useSidebar()` permanece `"collapsed"` enquanto o usuário não expandiu manualmente no desktop. O `AppSidebar.tsx` (linha 553-554) decide o que renderizar com:
+Remover a página `/monitoramento/mapa-atendimento` (Regiões de Atuação) e os componentes que existem apenas para alimentá-la.
 
-```ts
-const { state, setOpenMobile, isMobile } = useSidebar();
-const collapsed = state === 'collapsed';
-```
+## Atenção — decisão importante antes de prosseguir
 
-Como `collapsed` está `true`, ele entra no ramo do **modo colapsado** (linha 724) — que renderiza só ícones com popover lateral. Esse layout funciona no desktop, mas dentro do drawer mobile fica:
+A tabela `municipios_atendimento` que essa página gerencia é consumida em fluxos críticos do sistema:
 
-- Sem labels textuais dos itens.
-- Popovers laterais (`side="right"`) que abrem para fora do drawer ou ficam atrás dele.
-- Sem os super-grupos expansíveis com todos os módulos do diretor (Vendas, Operações, Financeiro, Diretoria, etc.).
+- `src/pages/vendas/Cotador.tsx` — bloqueia cotação para municípios "Fora de Cobertura"
+- `src/pages/cadastro/AssociadoDetalhe.tsx` — exibe classificação do município do associado
+- `supabase/functions/autentique-create/index.ts` — usa na geração de contrato
+- `supabase/functions/criar-instalacao-pos-pagamento/index.ts` — usa na criação automática da instalação pós-pagamento
 
-Resultado: o diretor no celular vê uma versão amputada do menu — só os "main items" e ícones soltos, sem acesso aos sub-itens dos módulos.
+Também há uma memória do projeto (`features/operations/geographic-intelligence-service-map-v2`) que define essa classificação como regra de negócio ativa.
 
-## Correção
+**O plano abaixo remove APENAS a tela de gestão (UI editável), preservando a tabela e o consumo nas demais áreas.** Se a intenção for remover também o bloqueio de cotação por município, o uso em contratos e a criação automática de instalação, isso é um trabalho bem maior e precisa ser confirmado explicitamente — me avise.
 
-Forçar o **modo expandido** sempre que o sidebar estiver sendo renderizado dentro do drawer mobile, independente do `state` do desktop.
+## Mudanças
 
-### Mudança 1 — `src/components/layout/AppSidebar.tsx` (linha 554)
+### Arquivos a deletar
 
-Trocar:
-```ts
-const collapsed = state === 'collapsed';
-```
-por:
-```ts
-const collapsed = state === 'collapsed' && !isMobile;
-```
+- `src/pages/monitoramento/MapaAtendimentoPage.tsx`
+- `src/components/gestao-comercial/MapaAtendimento.tsx` (componente legado, sem imports ativos)
 
-Com isso, em mobile o componente entra direto no ramo **MODO EXPANDIDO** (linha 903) que já contém:
-- Main items com label.
-- Super-grupos colapsáveis (Vendas, Operações, Financeiro, Diretoria, RH, Marketing, Configurações…).
-- Sub-grupos com todos os itens textuais e badges.
-- Itens de configuração no rodapé.
+### Arquivos a editar
 
-### Mudança 2 — Garantir scroll/altura do drawer
+- `src/App.tsx`
+  - Remover o `lazy(() => import("./pages/monitoramento/MapaAtendimentoPage"))`
+  - Remover a `<Route path="/monitoramento/mapa-atendimento" ... />`
+- `src/pages/monitoramento/DashboardCoordenador.tsx`
+  - Remover o item "Regiões de Atuação" do array `acoesRapidas`
 
-O `SheetContent` mobile do shadcn tem altura total, mas o `SidebarContent` precisa ser scrollável quando a lista é longa (caso do diretor, com dezenas de itens). Verificar se já há `scrollbar-thin` e `overflow-y-auto` (já está em `SidebarContent` via shadcn). Se necessário, adicionar `h-full` no wrapper para o scroll funcionar dentro do `Sheet`.
+### Não mexer
 
-### Mudança 3 — Footer/perfil no mobile
-
-O `SidebarFooter` (links de Perfil/Configurações no rodapé, linhas ~1100-1145) já é renderizado nos dois modos. Garantir que continua aparecendo no drawer mobile (não precisa mudança — o footer está fora do `if collapsed`).
-
-## O que NÃO muda
-
-- Desktop continua exatamente igual: collapsed/expandido controlado pelo `SidebarTrigger` no `AppHeader`.
-- Permissões e visibilidade de módulos (`visibleGroups`, `superGroups`, `useModuleVisibility`) continuam idênticas — diretor vê tudo.
-- Roles de mobile dedicados (Regulador, Instalador, App Associado) não são tocados — eles têm seus próprios layouts.
-- Não mexe em `AppMobileMenu` (esse é do app do associado, não do painel interno).
+- Tabela `municipios_atendimento` (preservada)
+- `src/pages/vendas/Cotador.tsx`, `src/pages/cadastro/AssociadoDetalhe.tsx` e as duas Edge Functions — continuam consultando a tabela normalmente
+- Memória `geographic-intelligence-service-map-v2` permanece válida; apenas a edição via UI sai do ar
 
 ## Resultado esperado
 
-No celular, ao tocar no botão de menu (hamburger no `AppHeader`), o diretor vê o **mesmo conjunto completo de super-grupos, grupos e itens** que vê no desktop expandido — com labels, badges, sub-itens e tudo navegável dentro do drawer.
-
-Edição mínima (1 linha de código) com efeito direto no problema relatado.
+- A rota `/monitoramento/mapa-atendimento` deixa de existir (404 se acessada diretamente)
+- O atalho "Regiões de Atuação" some do dashboard do coordenador
+- Cotações continuam sendo bloqueadas para municípios marcados como "Fora de Cobertura" (alteração de classificação só será possível via SQL/migration daqui pra frente)
