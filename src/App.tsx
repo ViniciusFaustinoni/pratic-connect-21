@@ -16,6 +16,9 @@ import { AnalistaEventosLayout } from "@/components/analista-eventos/AnalistaEve
 import { AgenciaLayout } from "@/components/layout/AgenciaLayout";
 import { AppErrorBoundary } from "@/components/app/AppErrorBoundary";
 import { VendasNotificationListener } from "./components/notifications/VendasNotificationListener";
+import { LeadModalsProvider } from "@/contexts/LeadModalsContext";
+import { LeadModalsHost } from "@/components/leads/LeadModalsHost";
+import { LegacyLeadRouteRedirect } from "@/components/leads/LegacyLeadRouteRedirect";
 import { Loader2 } from "lucide-react";
 
 // Global loading fallback
@@ -482,8 +485,9 @@ const App = () => (
               {/* Vendas — VendasNotificationListener montado por rota (Fase 5) */}
               <Route path="/vendas" element={<Navigate to="/vendas/leads" replace />} />
               <Route path="/vendas/leads" element={<><VendasNotificationListener /><LeadsUnificado /></>} />
-              <Route path="/vendas/leads/:id" element={<><VendasNotificationListener /><LeadDetalhe /></>} />
-              <Route path="/vendas/leads/:id/editar" element={<LeadEditar />} />
+              {/* Rotas legadas: redirecionam para /vendas/leads e abrem modal correspondente */}
+              <Route path="/vendas/leads/:id" element={<LegacyLeadRouteRedirect />} />
+              <Route path="/vendas/leads/:id/editar" element={<LegacyLeadRouteRedirect edit />} />
               <Route path="/vendas/ativacoes" element={<><VendasNotificationListener /><AtivacoesList /></>} />
               <Route path="/vendas/cotacoes" element={<><VendasNotificationListener /><Cotacoes /></>} />
               <Route path="/vendas/cotacoes/:id" element={<CotacaoDetalhe />} />
