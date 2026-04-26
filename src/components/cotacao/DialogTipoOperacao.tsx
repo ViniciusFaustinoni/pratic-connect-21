@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useVerificarDebitosAssociado } from '@/hooks/useVerificarDebitosAssociado';
 import { useInclusaoBloqueioDebito } from '@/hooks/useInclusaoBloqueioDebito';
-import { formatarMoeda } from '@/utils/format';
+import { DebitosCard } from '@/components/cotacao/DebitosCard';
 
 interface VeiculoAtivoInfo {
   associado_id: string;
@@ -110,38 +110,17 @@ export function DialogTipoOperacao({
                 </Alert>
               )}
 
-              {debitosCarregados && temDebito && bloqueioAtivo && (
-                <Alert variant="destructive" className="border-destructive/50 bg-destructive/10">
-                  <Ban className="h-4 w-4" />
-                  <AlertDescription className="text-sm space-y-2">
-                    <p className="font-medium">Inclusão bloqueada — débitos pendentes</p>
-                    <p>É necessário quitar todos os débitos antes de incluir um novo veículo:</p>
-                    <ul className="list-disc pl-4 space-y-1">
-                      {debitos.debitosPorVeiculo.map((d, i) => (
-                        <li key={i}>
-                          <strong>{d.marca} {d.modelo}</strong> (Placa: {d.placa}) — {d.quantidade} cobrança(s) em aberto, total: <strong>{formatarMoeda(d.total)}</strong>
-                        </li>
-                      ))}
-                    </ul>
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              {debitosCarregados && temDebito && !bloqueioAtivo && (
-                <Alert className="border-yellow-300 bg-yellow-50 dark:bg-yellow-950/30 dark:border-yellow-700">
-                  <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                  <AlertDescription className="text-sm text-yellow-800 dark:text-yellow-300 space-y-2">
-                    <p className="font-medium">Atenção — débitos pendentes encontrados</p>
-                    <ul className="list-disc pl-4 space-y-1">
-                      {debitos.debitosPorVeiculo.map((d, i) => (
-                        <li key={i}>
-                          <strong>{d.marca} {d.modelo}</strong> (Placa: {d.placa}) — {formatarMoeda(d.total)}
-                        </li>
-                      ))}
-                    </ul>
-                    <p>Você pode prosseguir, mas recomenda-se a quitação antes da inclusão.</p>
-                  </AlertDescription>
-                </Alert>
+              {debitosCarregados && temDebito && (
+                <DebitosCard
+                  debitos={debitos.debitosPorVeiculo}
+                  saldoTotal={debitos.saldoTotal}
+                  bloqueante={bloqueioAtivo}
+                  descricao={
+                    bloqueioAtivo
+                      ? 'É necessário quitar todos os débitos antes de incluir um novo veículo.'
+                      : 'Você pode prosseguir, mas recomenda-se a quitação antes da inclusão.'
+                  }
+                />
               )}
 
               {!mostrarVerificacao && (
