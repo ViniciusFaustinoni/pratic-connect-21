@@ -12,7 +12,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAssociadoSearch, type AssociadoSearchResult } from '@/hooks/useAssociadoSearch';
 import { useVerificarVeiculoAtivoCpf } from '@/hooks/useVerificarVeiculoAtivoCpf';
+import { useVerificarDebitosAssociado } from '@/hooks/useVerificarDebitosAssociado';
 import { DialogTipoOperacao } from '@/components/cotacao/DialogTipoOperacao';
+import { DebitosCard } from '@/components/cotacao/DebitosCard';
 
 interface EtapaDadosAssociadoProps {
   // Dados do associado/solicitante
@@ -84,9 +86,11 @@ export function EtapaDadosAssociado({
   const [buscaIndicador, setBuscaIndicador] = useState('');
   const { data: resultadosBusca = [], isLoading: isSearching } = useAssociadoSearch(buscaIndicador);
 
-  // CPF para verificação de veículo ativo
+  // CPF para verificação de veículo ativo + débitos no SGA
   const [cpfBusca, setCpfBusca] = useState('');
+  const cpfDigits = cpfBusca.replace(/\D/g, '');
   const { data: veiculoAtivoCpf, isLoading: verificandoCpf } = useVerificarVeiculoAtivoCpf(cpfBusca);
+  const { data: debitosSGA } = useVerificarDebitosAssociado(cpfDigits.length === 11 ? cpfDigits : undefined);
   const [showDialogTipo, setShowDialogTipo] = useState(false);
 
   // Auto-atribui o vendedor logado se ele não for liderança (ou pré-seleciona p/ liderança)
