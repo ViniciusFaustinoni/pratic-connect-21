@@ -278,6 +278,10 @@ export function useSalvarRascunhoVistoriaPublica() {
     },
   });
 }
+
+/**
+ * Aprovação das fotos pelo monitoramento — libera a etapa de instalação no link público.
+ */
 export function useAprovarFotosVistoria() {
   const queryClient = useQueryClient();
   return useMutation({
