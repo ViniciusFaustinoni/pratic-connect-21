@@ -252,7 +252,7 @@ export function useVistoriadoresAtivos() {
       const hoje = new Date().toISOString().split('T')[0];
       const { data: servicosAtribuidos } = await supabase
         .from('servicos')
-        .select('id, tipo, data_agendada, bairro, cidade, uf, profissional_id, status')
+        .select('id, tipo, data_agendada, bairro, cidade, uf, profissional_id, status, veiculo:veiculos!servicos_veiculo_id_fkey(placa, marca, modelo)')
         .in('profissional_id', idsDisponiveis)
         .gte('data_agendada', hoje)
         .in('status', ['agendada', 'em_andamento', 'em_rota']);
