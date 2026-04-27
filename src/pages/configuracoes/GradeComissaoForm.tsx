@@ -46,6 +46,7 @@ const defaultParcela = (ordem: number, numero: number): ParcelaForm => ({
   label: numero === 1 ? 'Taxa de Adesão' : `${numero}ª Parcela`,
   ordem,
   niveis: [],
+  supervisor_split_mode: 'igual',
 });
 
 const buildGradeSnapshot = (
