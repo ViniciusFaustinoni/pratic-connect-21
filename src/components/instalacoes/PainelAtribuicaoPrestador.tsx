@@ -153,7 +153,8 @@ function EstadoSelecao({
   }, [selectedId]);
 
   const handleConfirmar = async () => {
-    if (!selectedPrestador || valor <= 0) return;
+    if (!selectedPrestador) return;
+    // Valor é opcional — quando vazio, envia 0 (definido depois pela operação)
     setSalvando(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -271,17 +272,17 @@ function EstadoSelecao({
                 {isSelected && (
                   <div className="mt-2 ml-2 p-3 border rounded-lg bg-muted/30 space-y-2">
                     <Label htmlFor="valor-prestador" className="text-sm font-medium">
-                      Valor desta tarefa (R$)
+                      Valor desta tarefa (R$) <span className="text-muted-foreground font-normal">(opcional)</span>
                     </Label>
                     <Input
                       id="valor-prestador"
                       ref={valorRef}
                       value={displayValor}
                       onChange={handleValorChange}
-                      placeholder="R$ 0,00"
+                      placeholder="R$ 0,00 (opcional)"
                     />
                     <p className="text-xs text-muted-foreground">
-                      Este valor será lançado nos gastos do financeiro
+                      Se informado, será lançado nos gastos do financeiro. Pode ser definido depois pela operação.
                     </p>
                   </div>
                 )}
@@ -295,7 +296,6 @@ function EstadoSelecao({
       {selectedId && (
         <Button
           className="w-full"
-          disabled={valor <= 0}
           onClick={() => setConfirmarOpen(true)}
         >
           <MessageSquare className="mr-2 h-4 w-4" /> Atribuir e Notificar via WhatsApp

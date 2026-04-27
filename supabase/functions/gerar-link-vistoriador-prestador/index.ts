@@ -20,7 +20,13 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    const { instalacao_id, vistoriador_prestador_id, valor, atribuido_por, reenviar, skip_whatsapp } = await req.json()
+    const { instalacao_id, vistoriador_prestador_id, valor: valorRaw, atribuido_por, reenviar, skip_whatsapp } = await req.json()
+
+    // Valor é OPCIONAL: vazio/0/null gera o link normalmente; pode ser ajustado depois pela operação.
+    const valorNum = (valorRaw === null || valorRaw === undefined || valorRaw === '' || isNaN(Number(valorRaw)))
+      ? 0
+      : Number(valorRaw)
+    const valor = valorNum > 0 ? valorNum : null
 
     if (!instalacao_id || !vistoriador_prestador_id) {
       return new Response(
@@ -75,14 +81,14 @@ Deno.serve(async (req) => {
       linkToken = existingLink.token
       linkId = existingLink.id
     } else {
-      if (!valor || valor <= 0) {
-        return new Response(
-          JSON.stringify({ success: false, error: 'Valor é obrigatório para nova atribuição' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-
       const { data: newLink, error: linkErr } = await supabase
+        .from('vistoria_prestador_links')
+        .insert({
+          instalacao_id,
+          vistoriador_prestador_id,
+          valor, // pode ser null — será definido pela operação posteriormente
+          atribuido_por,
+        })
         .from('vistoria_prestador_links')
         .insert({
           instalacao_id,
@@ -249,7 +255,7 @@ _Dúvidas? Entre em contato com o coordenador._`
       .eq('id', linkId)
 
     // ── AÇÃO 3: Lançamento financeiro (apenas se nova atribuição) ──
-    if (!reenviar && valor > 0) {
+    if (!reenviar && (valor ?? 0) > 0) {
       try {
         const historico = `Vistoria Prestador — ${prestador.nome} — ${instalacao.cidade || 'Cidade'} — ${dataAgendada}`
         
@@ -304,7 +310,7 @@ _Dúvidas? Entre em contato com o coordenador._`
           usuario_nome: nomeAtribuidor,
           acao: 'atribuir',
           modulo: 'instalacoes',
-          descricao: `Atribuição de vistoriador prestador: ${prestador.nome} — Valor: R$ ${valor?.toFixed(2)} — WhatsApp: ${whatsappEnviado ? 'enviado' : 'falha'}`,
+          descricao: `Atribuição de vistoriador prestador: ${prestador.nome} — Valor: ${valor != null ? `R$ ${valor.toFixed(2)}` : 'a definir'} — WhatsApp: ${whatsappEnviado ? 'enviado' : 'falha'}`,
           registro_id: instalacao_id,
           dados_novos: {
             prestador_id: vistoriador_prestador_id,
