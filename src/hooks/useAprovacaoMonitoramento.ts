@@ -326,6 +326,8 @@ export function useReprovarInstalacaoMonitoramento() {
       queryClient.invalidateQueries({ queryKey: ['aprovacao-monitoramento-stats'] });
       queryClient.invalidateQueries({ queryKey: ['veiculos'] });
       queryClient.invalidateQueries({ queryKey: ['associados'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos-campo'] });
       toast.success('Instalação reprovada. Coordenador será notificado.');
     },
     onError: (error) => {
