@@ -22,6 +22,8 @@ import {
   Wand2,
   Trash2,
   Loader2,
+  AlertTriangle,
+  Undo2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -32,6 +34,7 @@ interface Props {
 
 const statusBadge: Record<ErrorReportStatus, { label: string; cls: string }> = {
   aberto: { label: 'Aberto', cls: 'bg-destructive/15 text-destructive border-destructive/30' },
+  critico: { label: 'Crítico', cls: 'bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/40' },
   em_tratamento: { label: 'Em tratamento', cls: 'bg-warning/15 text-warning border-warning/30' },
   concluido: { label: 'Concluído', cls: 'bg-primary/15 text-primary border-primary/30' },
   validado: { label: 'Validado', cls: 'bg-success/15 text-success border-success/30' },
