@@ -29058,6 +29058,7 @@ export type Database = {
         Row: {
           created_at: string
           criado_por: string | null
+          exige_etapa_instalacao: boolean
           fotos_aprovadas_em: string | null
           fotos_aprovadas_por: string | null
           fotos_concluida_em: string | null
@@ -29091,6 +29092,7 @@ export type Database = {
         Insert: {
           created_at?: string
           criado_por?: string | null
+          exige_etapa_instalacao?: boolean
           fotos_aprovadas_em?: string | null
           fotos_aprovadas_por?: string | null
           fotos_concluida_em?: string | null
@@ -29124,6 +29126,7 @@ export type Database = {
         Update: {
           created_at?: string
           criado_por?: string | null
+          exige_etapa_instalacao?: boolean
           fotos_aprovadas_em?: string | null
           fotos_aprovadas_por?: string | null
           fotos_concluida_em?: string | null
