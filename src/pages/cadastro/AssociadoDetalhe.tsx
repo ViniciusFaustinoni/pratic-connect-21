@@ -1216,6 +1216,18 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
           associadoNome={associado.nome}
         />
       )}
+
+      {/* Alterar forma de pagamento */}
+      {alterarFormaState && (
+        <AlterarFormaPagamentoDialog
+          open={alterarFormaState.open}
+          onOpenChange={(o) => setAlterarFormaState((s) => (s ? { ...s, open: o } : s))}
+          cobrancaId={alterarFormaState.cobrancaId}
+          formaAtual={alterarFormaState.formaAtual}
+          associadoId={id}
+          descricao={alterarFormaState.descricao}
+        />
+      )}
     </div>
   );
 }
