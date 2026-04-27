@@ -143,7 +143,7 @@ export function TestarCorrecoesSheet({ open, onOpenChange }: Props) {
                     size="sm"
                     variant="outline"
                     className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    onClick={() => { setRecusaReportId(r.id); setMotivo(''); }}
+                    onClick={() => abrirRecusa(r.id)}
                     disabled={reabrir.isPending}
                   >
                     <XCircle className="h-4 w-4 mr-1" />
