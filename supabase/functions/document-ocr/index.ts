@@ -298,7 +298,13 @@ Sempre preencha tanto "motor" quanto "numero_motor" com o MESMO valor (alias obr
   • **Placa ANTIGA** (LLLNNNN, ex: ABC1234, LQV3623): as **4 últimas posições são SEMPRE dígitos (0-9)**. Se a 5ª posição parecer uma letra (G/I/O/S/B/Z), é OCR errado — leia como dígito (G→6, I→1, O→0, S→5, B→8, Z→2).
   • **Placa MERCOSUL** (LLLNLNN, ex: RKR3I57, BRA2E19): a **5ª posição é SEMPRE uma LETRA (A-Z)**. Se parecer dígito (1/0/5/8/2/6), leia como letra.
   • COMO DECIDIR O FORMATO: o CRLV brasileiro emitido a partir de set/2018 usa Mercosul; veículos anteriores podem manter a placa antiga. Use o **campo "PLACA ANTERIOR/UF"** e o ano de fabricação como pista. Se "PLACA ANTERIOR" estiver no formato antigo e for igual à placa atual, então a placa atual também é antiga.
-  • **EM CASO DE DÚVIDA, releia a posição duvidosa caractere por caractere** comparando com letras/números vizinhos do mesmo documento (ex: outras ocorrências de "6" no Renavam ou no chassi).
+  • ⚠️ **DESAMBIGUAÇÃO DE DÍGITOS NUMÉRICOS** (4ª, 6ª e 7ª posições da Mercosul; 4ª–7ª da antiga): em CRLVs físicos esmaecidos os pares mais confundidos são **6↔8**, **0↔8**, **5↔6**, **1↔7**, **0↔9**, **3↔8**, **2↔7**. ANTES de devolver um dígito numérico, **compare visualmente o glifo** com outras ocorrências do MESMO dígito em campos de alta confiança do MESMO documento:
+      - **Chassi** (17 caracteres alfanuméricos) — costuma estar mais nítido
+      - **Renavam** (11 dígitos)
+      - **Nº do CRLV** (no topo, 11 dígitos)
+    Heurísticas de glifo: o "6" tem topo ABERTO/curvo e UMA barriga fechada; o "8" tem DUAS barrigas fechadas. O "0" não tem barriga superior; o "8" tem. O "1" não tem traço diagonal; o "7" tem.
+  • **NUNCA copie dígitos da "PLACA ANTERIOR" para a "PLACA" atual.** São campos distintos. A placa atual é a que aparece no campo "PLACA" em destaque, normalmente próxima ao CPF/CNPJ do proprietário.
+  • **EM CASO DE DÚVIDA REAL não resolvida**, escreva a placa com o caractere de menor risco e marque o campo `placa_confianca` (se existir no schema) como "baixa". Nunca chute "8" sem evidência — o default seguro é "6" quando o glifo tem topo aberto.
 
 ### Nota Fiscal de Veículo (DANFE / NF-e com dados veiculares)
 
