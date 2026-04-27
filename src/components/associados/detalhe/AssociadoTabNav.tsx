@@ -27,7 +27,7 @@ export function AssociadoTabNav({
     { value: 'resumo', label: 'Resumo', icon: TrendingUp },
     { value: 'dados', label: 'Dados Pessoais', icon: User },
     { value: 'veiculos', label: `Veículos${veiculosCount ? ` (${veiculosCount})` : ''}`, icon: Car },
-    { value: 'documentos', label: 'Documentos', icon: FileCheck, badge: docsPendentes, hidden: isAnalistaCadastroOnly },
+    { value: 'documentos', label: 'Documentos', icon: FileCheck, badge: docsPendentes },
     { value: 'financeiro', label: 'Financeiro', icon: CreditCard },
     { value: 'historico', label: 'Histórico', icon: History },
     { value: 'whatsapp', label: 'WhatsApp', icon: MessagesSquare },
