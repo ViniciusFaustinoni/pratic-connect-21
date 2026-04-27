@@ -1,85 +1,81 @@
-# Correção: Vendedores enxergando dados de toda a empresa
+## Visão geral
 
-## Diagnóstico (causa raiz)
+Há 6 relatos de erro na fila. Vou corrigir os 3 reais (P0/P1) e descartar os 3 que são testes/já validados. Após cada correção real, mudo o status do relato para `testar` para você validar.
 
-Vendedores (`vendedor_clt`, `vendedor_externo`, `agencia`) são cadastrados em `profiles` com `tipo = 'funcionario'`. Várias políticas RLS usam `is_funcionario(auth.uid())` como porta de acesso, e essa função **só checa `profiles.tipo = 'funcionario'`** — ignorando o `role` real. Resultado: vendedores recebem acesso de "staff completo" em:
+## Mapa dos relatos
 
-| Tabela | Política aberta hoje | Efeito para vendedor |
-|---|---|---|
-| `associados` | `Staff can view all associates` / `Staff can manage associates` (`is_funcionario`) | Vê e edita TODOS os associados |
-| `veiculos` | `Staff can manage vehicles` / `View vehicles` (`is_funcionario`) | Vê e edita TODOS os veículos |
-| `contratos` | `Staff can view contracts` (`is_funcionario`) | Vê TODOS os contratos |
-| `servicos` | `Funcionarios podem gerenciar/ver servicos` (`am_i_funcionario`) | Vê e edita TODOS os serviços |
+| # | Área | Status atual | Ação |
+|---|---|---|---|
+| 1 | "Consultor estar tendo acesso nosso banco de dados" — Dashboard mostra base ativa e funil completo para vendedor | aberto | **Corrigir** + status → testar |
+| 2 | "VERIFICAR SUB" — substituição entrou como nova venda | aberto | **Corrigir** + status → testar |
+| 3 | "MONITORAMENTO" — técnico finalizou vistoria sem informar IMEI; status ficou `agendada` | em_tratamento | **Corrigir** + status → testar |
+| 4 | "Teste" — `Testestesshshshsjjsnsnananana` | validado | Descartar (lixo) |
+| 5 | "Comercial" — não consegue criar cotação | validado | Descartar (já validado) |
+| 6 | "estesteste" — `testestestererssrsdsd` | validado | Descartar (lixo) |
 
-A tabela `cotacoes` já está correta (usa `vendedor_id = auth.uid()` + `can_view_all_cotacoes` que exclui vendedores), e `instalacoes` também (usa `has_role` específico).
+## Correção 1 — Dashboard do vendedor não pode ver dados da empresa inteira
 
-Confirmado em produção: 154 vendedores CLT + 36 externos + 36 agências, todos com `profiles.tipo='funcionario'`.
+**Problema técnico**: `src/pages/Dashboard.tsx` consome `useContratos()` e `useLeadsFunnel()` sem filtrar por vendedor. As RLS recém-aplicadas já restringem `contratos`, mas `leads` e o KPI de "Associados Ativos" continuam globais para gestores e o vendedor segue vendo o `FunilCotacaoChart` agregado quando montado fora do escopo.
 
-## Estratégia
+**Mudanças**:
+- No `Dashboard.tsx`, quando o usuário for vendedor não-gestor (`isVendedorOnly`):
+  - Filtrar `useContratos` por `vendedor_id = profile.id` (adicionar parâmetro de filtro no hook ou aplicar `.filter` client-side já que RLS limita).
+  - Filtrar `useLeads`/`useLeadsFunnel` por `vendedor_id`.
+  - Ocultar o KPI "Associados Ativos" global e substituir por "Meus Associados Ativos" (já filtrado).
+  - Garantir que o `FunilCotacaoChart` recebe filtro por vendedor (já é automático no `useFunilCotacao`, validar prop).
+- Adicionar `vendedor_id` opcional em `useLeadsFunnel` e `useContratos` (default `null`).
+- Em `useDocumentosContagem` e `usePendingDocumentos`: também escopar por vendedor (documentos cujo associado pertence ao vendedor).
 
-Criar um conceito explícito de **"funcionário interno NÃO-vendedor"** em SQL e trocar todas as policies abertas por escopo correto. Vendedores passam a enxergar apenas linhas vinculadas a algum vendedor_id deles (direta ou indiretamente via associado/contrato).
+**Resultado**: vendedor vê apenas KPIs, leads, contratos, funil e documentos da própria carteira.
 
-### 1) Novas funções SECURITY DEFINER
+## Correção 2 — Substituição de veículo entrando como Nova Venda
 
-- `is_funcionario_interno(_user_id uuid)` → true apenas se `profiles.tipo='funcionario'` E o usuário **não tem** nenhum dos roles `vendedor_clt`, `vendedor_externo`, `agencia` (e está ativo). Esta substitui `is_funcionario` em policies de "staff geral".
-- `is_vendedor_nao_gestor(_user_id uuid)` → true se for `vendedor_clt`/`vendedor_externo`/`agencia` e NÃO tiver `gerente_comercial`/`supervisor_vendas`/`diretor`/`admin_master`.
-- `get_vendedor_associado_ids(_user_id uuid)` → SETOF uuid: retorna IDs de associados visíveis ao vendedor a partir de:
-  - `cotacoes.vendedor_id = profile_id` → associado_id
-  - `contratos.vendedor_id = profile_id` ou `contratos.created_by = profile_id` → associado_id
-  - `associados.vendedor_original_id = profile_id`
+**Problema técnico**: O `useCotacao` grava `tipo_entrada` em `cotacoes.dados_extras` (jsonb), mas `supabase/functions/contrato-gerar/index.ts` lê `cotacao.tipo_entrada` (coluna inexistente) → sempre cai em `'adesao'` → contrato vira nova venda, com carência cheia, sem isenção e sem vínculo com o veículo antigo.
 
-Manteremos `is_funcionario` (algumas policies legítimas dependem dela para incluir associados acessando próprios dados), mas trocamos as policies sensíveis para `is_funcionario_interno`.
+**Mudanças**:
+- Migração SQL: adicionar coluna `cotacoes.tipo_entrada text` (nullable) + backfill a partir de `dados_extras->>'tipo_entrada'` para registros existentes.
+- Atualizar `useCotacao.ts` para gravar `tipo_entrada` na coluna direta (mantendo `dados_extras` como fallback de compatibilidade).
+- `contrato-gerar/index.ts` passa a ler a coluna direta; se nula, faz fallback para `dados_extras->>'tipo_entrada'`.
+- Confirmar que, quando `tipo_entrada = 'substituicao'`, o contrato não duplica o veículo antigo e referencia a substituição correta (já existe lógica para `substituicao_placa` em `autentique-create`).
 
-### 2) Substituição de RLS
+**Resultado**: cotações marcadas como substituição geram contratos com `tipo_entrada` correto, sem virar nova venda.
 
-**`associados`**
-- Substituir `Staff can view all associates` → permitir se `is_funcionario_interno(auth.uid())` OU `user_id = auth.uid()` OU `id IN get_vendedor_associado_ids(auth.uid())`.
-- Substituir `Staff can manage associates` (ALL) → restringir a `is_funcionario_interno` (vendedor não pode dar UPDATE/DELETE em qualquer associado).
-- Adicionar policy UPDATE: `Vendedor pode atualizar seus associados` com `id IN get_vendedor_associado_ids(...)`.
+## Correção 3 — Técnico finaliza vistoria sem informar IMEI; status fica "agendada"
 
-**`veiculos`**
-- `View vehicles` → `is_funcionario_interno(auth.uid()) OR associado_id IN get_vendedor_associado_ids(auth.uid()) OR associado_id = get_my_associado_id(auth.uid())`.
-- `Staff can manage vehicles` (ALL) → restringir a `is_funcionario_interno`.
-- Nova policy INSERT/UPDATE para vendedores limitada aos seus associados.
+**Problema técnico**: `ExecutarVistoriaCompleta.tsx` calcula `veiculoPrecisaRastreador` (FIPE ≥ R$ 30k para carro / R$ 9k para moto) e exibe a categoria de fotos do rastreador, mas **nunca solicita o IMEI**. O `useAprovarVeiculoVistoria` marca a `instalacao` como `concluida` sem setar `rastreador_id`. Em alguns fluxos a instalação fica como `agendada` porque a `vistoria` está vinculada por `servico_id`/`agendamento_base_id` em vez de `instalacao_id`, então o passo 4 do hook (`if (data.instalacaoId)`) não executa.
 
-**`contratos`**
-- `Staff can view contracts` → `is_funcionario_interno(auth.uid()) OR vendedor_id = get_current_profile_id() OR created_by = get_current_profile_id()`.
-- Mantém policies existentes "Sales can update own contracts" e "Staff with sales role can insert contracts".
+**Mudanças**:
+- Adicionar **Step de vínculo de rastreador** no `ExecutarVistoriaCompleta.tsx` quando `veiculoPrecisaRastreador === true`:
+  - Campo IMEI (com leitura de QR/barcode opcional reutilizando o `BarcodeScanner` já existente).
+  - Busca em `rastreadores` pelo IMEI; valida se está disponível (sem `veiculo_id` vinculado e status compatível).
+  - Bloqueia botão "Aprovar" enquanto IMEI não estiver vinculado (somente quando obrigatório).
+- Atualizar `useAprovarVeiculoVistoria` para aceitar `rastreadorId?: string`:
+  - Setar `instalacoes.rastreador_id` e `veiculos.rastreador_id`.
+  - Atualizar `rastreadores` setando `veiculo_id`, `instalado_em = now()` e status para `instalado`.
+- Garantir resolução robusta da `instalacao_id`: se `data.instalacaoId` vier nulo, tentar localizar a instalação pelo `servico_id` ou pela `vistoria.instalacao_id` antes de pular o passo 4.
+- Trigger SQL leve: ao concluir uma `instalacao` com `rastreador_id` preenchido e `vistoria` aprovada, garantir transição automática para `concluida` (defesa em profundidade).
 
-**`servicos`**
-- `Funcionarios podem ver servicos` → `is_funcionario_interno(auth.uid()) OR associado_id IN get_vendedor_associado_ids(auth.uid())`.
-- `Funcionarios podem gerenciar servicos` (ALL) → restringir a `is_funcionario_interno`.
+**Resultado**: técnico não consegue finalizar a vistoria sem informar o IMEI quando o veículo exige rastreador; instalação avança corretamente para `concluida` com vínculo de rastreador registrado.
 
-### 3) Ajustes correlatos
+## Atualização de status dos relatos
 
-Auditar e corrigir, com o mesmo padrão `is_funcionario_interno`, qualquer outra tabela cujo SELECT use `is_funcionario` e contenha dados sensíveis cross-vendedor:
-- `documentos_associado`, `assinaturas`, `pagamentos`, `mensalidades`, `comissoes` (se houver), `historico_*`, `leads`, `propostas`, `rastreadores`, `instalacoes_links_publicos` etc.
+Após aplicar cada correção, atualizo o relato correspondente:
 
-Migração varre `pg_policies` listando todas que usam `is_funcionario(auth.uid())` em SELECT/UPDATE/DELETE para revisão; apenas as tabelas sensíveis ao escopo do vendedor terão policies reescritas. Tabelas puramente operacionais internas (configs, catálogos, parâmetros) permanecem com `is_funcionario` se for desejável que vendedor leia (ex.: catálogo de planos).
+- Relato 1, 2, 3 → `status = 'em_tratamento'` enquanto trabalho, depois `'testar'` com `observacao_diretor` descrevendo o que foi corrigido.
+- Relato 4, 5, 6 → `status = 'descartado'` com `motivo_descarte` apropriado ("conteúdo de teste" / "já validado em produção").
 
-### 4) Verificação no frontend
+## Detalhes técnicos resumidos
 
-A maioria das telas (Cotações, Funil) já filtra por `vendedor_id` no hook quando o usuário é vendedor não-gestor (ver `useFunilCotacao.ts`). Garantir que também as telas de **Associados**, **Veículos**, **Contratos** e **Serviços** apliquem o mesmo escopo no `select` (defesa em profundidade, embora a RLS já bloqueie). Ajustar:
-- `useAssociados`/`useAssociadosList` → quando `isVendedorNaoGestor`, filtrar por associados vinculados.
-- `useContratos` → idem.
-- `useVeiculos` (se houver listagem global) → idem.
+**Arquivos a alterar**:
+- `src/pages/Dashboard.tsx`
+- `src/hooks/useContratos.ts`, `src/hooks/useLeads.ts`, `src/hooks/useDocumentos.ts` (aceitar filtro `vendedor_id`)
+- `src/hooks/useCotacao.ts`
+- `src/pages/instalador/ExecutarVistoriaCompleta.tsx`
+- `src/hooks/useVistoriaCompleta.ts`
+- `supabase/functions/contrato-gerar/index.ts`
 
-### 5) QA pós-deploy
+**Migrações SQL**:
+1. `alter table cotacoes add column tipo_entrada text` + backfill.
+2. Trigger opcional para conclusão de instalação com rastreador.
 
-1. Login como vendedor de teste (criar um se necessário).
-2. Conferir que listas de Associados, Veículos, Contratos, Serviços só mostram registros vinculados.
-3. Conferir que admin/diretor continua vendo tudo.
-4. Conferir que o associado público continua vendo só os próprios dados.
-5. Rodar `supabase--linter` para confirmar que não introduzimos warnings novos.
-
-## Arquivos / artefatos
-
-- **Migração SQL nova** (criar funções + recriar policies das 4 tabelas principais + qualquer correlata identificada na varredura).
-- **Hooks frontend** ajustados para filtragem explícita por vendedor onde aplicável.
-- Sem mudanças em rotas/UI.
-
-## Riscos / mitigação
-
-- Risco de quebrar fluxos públicos (token de contrato, link de vistoria): policies públicas existentes (`token_publico`, `link_token`) são mantidas intactas.
-- Risco de bloquear funcionários internos legítimos: `is_funcionario_interno` exclui apenas vendedores; analistas, coordenadores etc. continuam com acesso total.
-- Risco de quebrar vendedor-gestor (supervisor/gerente): mantemos as policies `can_view_all_cotacoes`/`is_gerencia` e estendemos a lógica de `is_vendedor_nao_gestor` para que gestores enxerguem amplo.
+**Validação**: após deploy, peço para você logar como vendedor de teste e validar dashboard escopado; criar uma cotação de substituição e verificar que o contrato gerado tem `tipo_entrada='substituicao'`; abrir uma vistoria com FIPE ≥ R$ 30k e confirmar que o passo de IMEI aparece e bloqueia a finalização.

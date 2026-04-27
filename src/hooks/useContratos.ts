@@ -21,11 +21,11 @@ export interface ContratoWithRelations extends Contrato {
   } | null;
 }
 
-export function useContratos() {
+export function useContratos(vendedorId?: string | null) {
   return useQuery({
-    queryKey: ['contratos'],
+    queryKey: ['contratos', vendedorId || 'all'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('contratos')
         .select(`
           *,
@@ -36,6 +36,10 @@ export function useContratos() {
         `)
         .order('created_at', { ascending: false })
         .limit(200);
+
+      if (vendedorId) query = query.eq('vendedor_id', vendedorId);
+
+      const { data, error } = await query;
       
       if (error) throw error;
       return (data || []) as ContratoWithRelations[];

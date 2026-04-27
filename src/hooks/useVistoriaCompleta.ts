@@ -21,6 +21,7 @@ interface AprovarVeiculoData {
   associadoId: string;
   hodometro: number;
   observacoes?: string;
+  rastreadorId?: string;
 }
 
 // Hook para aprovar veículo na vistoria completa
@@ -32,13 +33,29 @@ export function useAprovarVeiculoVistoria() {
     mutationFn: async (data: AprovarVeiculoData) => {
       const agora = new Date().toISOString();
 
-      // 1. Atualizar veículo como ativo (SEM cobertura_total — aguarda aprovação do monitoramento)
+      // 0. Vincular rastreador (se informado) ANTES de atualizar veículo/instalação
+      if (data.rastreadorId) {
+        const { error: rastError } = await supabase
+          .from('rastreadores')
+          .update({
+            veiculo_id: data.veiculoId,
+            associado_id: data.associadoId,
+            status: 'instalado',
+            updated_at: agora,
+          })
+          .eq('id', data.rastreadorId);
+        if (rastError) throw rastError;
+      }
+
+      // 1. Atualizar veículo como ativo (com rastreador, se houver)
+      const veiculoUpdate: Record<string, any> = {
+        status: 'ativo',
+        updated_at: agora,
+      };
+      if (data.rastreadorId) veiculoUpdate.rastreador_id = data.rastreadorId;
       const { error: veiculoError } = await supabase
         .from('veiculos')
-        .update({ 
-          status: 'ativo',
-          updated_at: agora,
-        })
+        .update(veiculoUpdate)
         .eq('id', data.veiculoId);
 
       if (veiculoError) throw veiculoError;
@@ -67,15 +84,28 @@ export function useAprovarVeiculoVistoria() {
 
       if (vistoriaError) throw vistoriaError;
 
-      // 4. Concluir instalação se existir
-      if (data.instalacaoId) {
+      // 4. Resolver instalacaoId — se não veio na chamada, tentar localizar pela vistoria
+      let instalacaoIdEfetivo = data.instalacaoId;
+      if (!instalacaoIdEfetivo) {
+        const { data: vistoriaInst } = await supabase
+          .from('vistorias')
+          .select('instalacao_id')
+          .eq('id', data.vistoriaId)
+          .maybeSingle();
+        instalacaoIdEfetivo = vistoriaInst?.instalacao_id || undefined;
+      }
+
+      // 4a. Concluir instalação se existir
+      if (instalacaoIdEfetivo) {
+        const instUpdate: Record<string, any> = {
+          status: 'concluida',
+          concluida_em: agora,
+        };
+        if (data.rastreadorId) instUpdate.rastreador_id = data.rastreadorId;
         const { error: instalacaoError } = await supabase
           .from('instalacoes')
-          .update({ 
-            status: 'concluida',
-            concluida_em: agora,
-          })
-          .eq('id', data.instalacaoId);
+          .update(instUpdate)
+          .eq('id', instalacaoIdEfetivo);
 
         if (instalacaoError) throw instalacaoError;
       }

@@ -4,8 +4,9 @@ import {
   ArrowLeft, Camera, Check, AlertTriangle, 
   Gauge, CheckCircle2, Loader2, Car, Video,
   ChevronDown, ChevronUp, XCircle, MapPin, Lock, ShieldCheck, ShieldX, MessageSquare,
-  MessageCircle, Phone, CloudUpload
+  MessageCircle, Phone, CloudUpload, Radio, Search
 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -126,6 +127,13 @@ export default function ExecutarVistoriaCompleta() {
   });
   const [hodometro, setHodometro] = useState('');
   const [observacoes, setObservacoes] = useState('');
+  // Vínculo de rastreador (IMEI) — usado apenas quando o veículo exige rastreador
+  const [imeiInput, setImeiInput] = useState('');
+  const [rastreadorEncontrado, setRastreadorEncontrado] = useState<{
+    id: string; imei: string; codigo?: string | null; numero_serie?: string | null; status?: string | null; veiculo_id?: string | null;
+  } | null>(null);
+  const [buscandoRastreador, setBuscandoRastreador] = useState(false);
+  const [erroRastreador, setErroRastreador] = useState<string | null>(null);
 
   // Dados
   const vistoriaId = vistoria?.id;
@@ -321,7 +329,48 @@ export default function ExecutarVistoriaCompleta() {
   const conferenciaCompleta = modoApenasInstalacao || (Object.values(conferencia).every(Boolean) && hodometro.length > 0);
   const todasFotosEnviadas = totalFotosObrigatorias === 0 ? true : totalFotosEnviadas >= totalFotosObrigatorias;
   const videoEnviado = modoApenasInstalacao || !!video360Url;
-  const podeAprovar = conferenciaCompleta && todasFotosEnviadas && videoEnviado;
+  // Rastreador é obrigatório quando o veículo precisa de rastreador.
+  // Se o veículo já vier com rastreador vinculado (campo `rastreador_id` no veículo
+  // ou na instalação), consideramos satisfeito.
+  const veiculoJaTemRastreador = !!(veiculo as any)?.rastreador_id || !!(vistoria as any)?.instalacao?.rastreador_id;
+  const rastreadorVinculado = !veiculoPrecisaRastreador || veiculoJaTemRastreador || !!rastreadorEncontrado;
+  const podeAprovar = conferenciaCompleta && todasFotosEnviadas && videoEnviado && rastreadorVinculado;
+
+  // Buscar rastreador por IMEI
+  const handleBuscarRastreador = async () => {
+    const imei = imeiInput.trim();
+    if (!imei) {
+      setErroRastreador('Informe o IMEI do rastreador.');
+      return;
+    }
+    setBuscandoRastreador(true);
+    setErroRastreador(null);
+    try {
+      const { data, error } = await supabase
+        .from('rastreadores')
+        .select('id, imei, status, veiculo_id, codigo, numero_serie')
+        .eq('imei', imei)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) {
+        setRastreadorEncontrado(null);
+        setErroRastreador('Rastreador não encontrado no estoque. Verifique o IMEI.');
+        return;
+      }
+      if (data.veiculo_id && data.veiculo_id !== veiculo?.id) {
+        setRastreadorEncontrado(null);
+        setErroRastreador('Este rastreador já está vinculado a outro veículo.');
+        return;
+      }
+      setRastreadorEncontrado(data as any);
+      toast.success('Rastreador localizado!');
+    } catch (e: any) {
+      console.error('[Vistoria] Erro buscando rastreador:', e);
+      setErroRastreador(e?.message || 'Falha ao buscar rastreador.');
+    } finally {
+      setBuscandoRastreador(false);
+    }
+  };
 
   // Handlers
   const handleUploadFoto = async (tipo: string, file: File, visivelCliente: boolean = true) => {
@@ -397,6 +446,7 @@ export default function ExecutarVistoriaCompleta() {
         associadoId: associado.id,
         hodometro: parseInt(hodometro),
         observacoes: observacoes.trim() || undefined,
+        rastreadorId: rastreadorEncontrado?.id,
       });
       setShowConfirmacao(true);
     } catch (e) {
@@ -685,6 +735,90 @@ export default function ExecutarVistoriaCompleta() {
           </Card>
         )}
 
+        {/* Vínculo do Rastreador (IMEI) — obrigatório quando o veículo exige rastreador */}
+        {veiculoPrecisaRastreador && (
+          <Card className={cn(
+            "border-2",
+            rastreadorVinculado ? "border-green-600 bg-slate-800" : "border-amber-500 bg-slate-800"
+          )}>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-base text-white">
+                <Radio className="h-5 w-5 text-blue-400" />
+                Vincular Rastreador (IMEI)
+                {rastreadorVinculado && <CheckCircle2 className="h-4 w-4 text-green-400" />}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {veiculoJaTemRastreador ? (
+                <div className="flex items-center gap-2 rounded-md bg-green-950/40 p-3 text-sm text-green-300">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Veículo já possui rastreador vinculado.
+                </div>
+              ) : rastreadorEncontrado ? (
+                <div className="space-y-2">
+                  <div className="rounded-md bg-green-950/40 p-3 text-sm text-green-300">
+                    <div className="font-semibold">Rastreador localizado</div>
+                    <div className="text-xs mt-1">IMEI: {rastreadorEncontrado.imei}</div>
+                    {rastreadorEncontrado.codigo && (
+                      <div className="text-xs">Código: {rastreadorEncontrado.codigo}</div>
+                    )}
+                    {rastreadorEncontrado.numero_serie && (
+                      <div className="text-xs">Série: {rastreadorEncontrado.numero_serie}</div>
+                    )}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { setRastreadorEncontrado(null); setImeiInput(''); }}
+                    className="text-slate-300 hover:text-white"
+                  >
+                    Alterar IMEI
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <Label htmlFor="imei-input" className="text-slate-300">IMEI do rastreador instalado</Label>
+                    <p className="text-xs text-slate-400 mb-2">
+                      Digite o IMEI do equipamento que você acabou de instalar no veículo.
+                    </p>
+                    <div className="flex gap-2">
+                      <Input
+                        id="imei-input"
+                        value={imeiInput}
+                        onChange={(e) => setImeiInput(e.target.value.replace(/\s/g, ''))}
+                        placeholder="Ex: 860000000000000"
+                        className="border-slate-600 bg-slate-900 text-white"
+                        inputMode="numeric"
+                      />
+                      <Button
+                        type="button"
+                        onClick={handleBuscarRastreador}
+                        disabled={buscandoRastreador || !imeiInput.trim()}
+                        className="bg-blue-600 hover:bg-blue-700"
+                      >
+                        {buscandoRastreador ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Search className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                  {erroRastreador && (
+                    <div className="rounded-md bg-red-950/40 p-3 text-sm text-red-300">
+                      {erroRastreador}
+                    </div>
+                  )}
+                  <p className="text-xs text-amber-400">
+                    Este veículo exige rastreador. Você precisa vincular o IMEI antes de finalizar a vistoria.
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Observações do Vistoriador — escondidas no modo apenas instalação */}
         {!modoApenasInstalacao && (
           <Card className="border-slate-700 bg-slate-800">
@@ -757,7 +891,8 @@ export default function ExecutarVistoriaCompleta() {
           <p className="mt-2 text-center text-xs text-amber-400">
             {!conferenciaCompleta && 'Confirme os dados e hodômetro. '}
             {!todasFotosEnviadas && `📸 Tire todas as fotos obrigatórias (faltam ${totalFotosObrigatorias - totalFotosEnviadas}). `}
-            {!videoEnviado && 'Envie o vídeo 360°.'}
+            {!videoEnviado && 'Envie o vídeo 360°. '}
+            {!rastreadorVinculado && '📡 Vincule o IMEI do rastreador.'}
           </p>
         )}
         {offlineQueue.totalPendentes > 0 && (
