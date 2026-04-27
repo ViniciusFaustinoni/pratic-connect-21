@@ -165,6 +165,9 @@ function DroppableVistoriador({ vistoriador }: { vistoriador: any }) {
         <CardContent className="pt-0 space-y-1.5">
           {vistoriador.tarefas.map((t: any) => {
             const placa = t.veiculo?.placa as string | undefined;
+            const chassi = t.veiculo?.chassi as string | undefined;
+            const isZeroKm = isPlacaPlaceholder(placa);
+            const identificador = formatPlacaOuChassi(placa, chassi, { fallback: '' });
             const emAndamento = t.status === 'em_andamento';
             const emRota = t.status === 'em_rota';
             return (
@@ -180,17 +183,17 @@ function DroppableVistoriador({ vistoriador }: { vistoriador: any }) {
                 )}
               >
                 {getTipoIcon(t.tipo)}
-                {placa ? (
+                {identificador ? (
                   <span
                     className={cn(
-                      'inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-mono font-semibold tracking-wider text-[10px]',
+                      'inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-mono font-semibold tracking-wider text-[10px] max-w-[180px] truncate',
                       emAndamento
                         ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
                         : 'bg-background/60 text-foreground border border-border'
                     )}
-                    title={`Placa: ${placa}`}
+                    title={isZeroKm && chassi ? `Veículo 0KM · Chassi: ${chassi}` : `Placa: ${placa}`}
                   >
-                    <Car className="h-3 w-3" /> {placa}
+                    <Car className="h-3 w-3 shrink-0" /> <span className="truncate">{identificador}</span>
                   </span>
                 ) : (
                   <span className="text-[10px] text-muted-foreground italic">sem placa</span>
