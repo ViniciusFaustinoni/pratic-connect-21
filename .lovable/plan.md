@@ -1,42 +1,59 @@
 ## Diagnóstico
 
-O serviço **NÃO está pendente no banco**. Foi cancelado às **12:23 (hora local) de hoje (27/04)** pelo próprio admin, com observação:
+Quando o **Coordenador de Monitoramento** clica em "Aprovar" na tela de Aprovação de Associado, o hook `useAprovarInstalacaoMonitoramento` (em `src/hooks/useAprovacaoMonitoramento.ts`) executa:
 
-> *"LIBERADO PELO ADMIN: FEITO NA LOTUS DIA 23/04/2026 — FOTOS FEITAS NO VISTO"*
+1. Ativa o veículo (`status='ativo'`, coberturas)
+2. Ativa o associado (`status='ativo'`, `data_ativacao`)
+3. Atualiza cotação (`status_contratacao='ativo'`)
+4. Atualiza contrato (`status='ativo'`, `data_ativacao`)
+5. Sincroniza SGA Hinova
+6. Insere histórico
+7. Notifica cliente
 
-Os 3 serviços de instalação da placa **KPD8B52** (Hillary dos Prazeres) estão com status:
+**Mas NUNCA atualiza o próprio registro de `servicos`** — `status` continua `em_analise`, `analisado_em`/`analisado_por` continuam `NULL`.
 
-| ID | Data | Status | Atualizado |
-|---|---|---|---|
-| e463ecbd… | 27/04 | `cancelada` | 27/04 15:23 |
-| 973f9542… | 25/04 | `cancelada` | 27/04 13:38 |
-| 707399fd… | 25/04 | `nao_compareceu` | 25/04 15:15 |
+Resultado: na aba **Serviços de Campo**, o badge ciano "Em Análise" persiste para sempre, mesmo após a aprovação no monitoramento.
 
-Como o hook `useServicosParaAtribuir` só lista `status IN ('pendente','agendada')` com `data_agendada >= hoje`, esse serviço **não deveria aparecer**.
+## Correção
 
-## Causa raiz
+### 1. Atualizar o serviço ao aprovar (causa raiz)
+Em `src/hooks/useAprovacaoMonitoramento.ts → useAprovarInstalacaoMonitoramento`, adicionar como primeira operação:
+```ts
+await supabase
+  .from('servicos')
+  .update({
+    status: 'aprovada',
+    analisado_em: agora,
+    analisado_por: profile?.id,
+    observacoes_analise: data.observacoes ?? null,
+    updated_at: agora,
+  })
+  .eq('id', data.servicoId);
+```
+Isso faz o serviço migrar imediatamente da fase **Aguardando Análise** → **Concluídas** em Serviços de Campo (já mapeado em `FASE_TO_STATUS.concluida = ['concluida', 'aprovada', 'aprovada_ressalvas']`).
 
-O hook `useServicosParaAtribuir` está configurado com:
-- `refetchInterval: 30000` (30s)
-- `refetchIntervalInBackground: false` ← **não atualiza quando a aba está em segundo plano**
-- Sem `refetchOnWindowFocus`
+### 2. Mesma lógica no fluxo "Aprovar com ressalvas"
+Verificar e aplicar análogo em `useAprovarComRessalvasMonitoramento` (se existir): `status='aprovada_ressalvas'`.
 
-Quando o usuário abre a aba (ou ela ficou em background), os dados ficam **defasados** até o próximo refetch — mostrando o serviço como pendente mesmo após o cancelamento.
+### 3. Mesma lógica no "Reprovar"
+Em `useReprovarInstalacaoMonitoramento`: setar `status='reprovada'` + `analisado_em`/`analisado_por`/`motivo_reprovacao`.
 
-## Correção proposta
+### 4. Refresh agressivo na lista (sintoma)
+Em `src/hooks/useServicos.ts` (linhas 439-441), aplicar o mesmo padrão da correção anterior:
+- `refetchInterval: 15000`
+- `refetchIntervalInBackground: true`
+- `refetchOnWindowFocus: true`
+- `staleTime: 0`
 
-Em `src/hooks/useAtribuicaoManual.ts`, no hook `useServicosParaAtribuir`:
-- Reduzir `refetchInterval` de **30s → 15s**
-- Habilitar `refetchIntervalInBackground: true` (mapa de monitoramento é tela operacional crítica)
-- Adicionar `refetchOnWindowFocus: true` para recarregar imediatamente ao voltar para a aba
-- Adicionar `staleTime: 0` para garantir leitura sempre fresca
-
-Mesma correção aplicada também em `useTecnicosAtivosParaAtribuir` (linha ~280) para manter consistência das tarefas atribuídas a cada técnico.
-
-## Resultado esperado
-
-Assim que o serviço for cancelado/finalizado, a coluna "Serviços Pendentes" remove o card em ≤ 15s (ou imediatamente ao focar a aba), sem precisar recarregar a página manualmente.
+Garante que a lista de Serviços de Campo se atualize sozinha quando voltar à aba.
 
 ## Arquivos afetados
 
-- `src/hooks/useAtribuicaoManual.ts` (2 hooks: `useServicosParaAtribuir` e `useTecnicosAtivosParaAtribuir`)
+- `src/hooks/useAprovacaoMonitoramento.ts` (3 mutations: aprovar, aprovar com ressalvas, reprovar)
+- `src/hooks/useServicos.ts` (config de refetch)
+
+## Resultado esperado
+
+- Após o coordenador aprovar (ou aprovar com ressalvas / reprovar), o card de Serviços de Campo migra imediatamente para a fase correta.
+- O campo "Em Análise" deixa de aparecer assim que houver decisão.
+- A lista atualiza em até 15s ou imediatamente ao focar a aba.
