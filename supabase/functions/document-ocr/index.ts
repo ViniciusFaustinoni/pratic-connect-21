@@ -1,9 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-// pdfjs-dist para descompressão real (FlateDecode) e extração nativa de texto
-// Build legacy é compatível com Deno/edge runtime sem worker
-// unpkg serve pdf.min.mjs sem deps de canvas (Node), funciona no Deno edge runtime
-import * as pdfjsLib from "https://esm.sh/pdfjs-dist@4.0.379/legacy/build/pdf.min.mjs?bundle&no-check";
+// unpdf: extração de texto nativo de PDF para runtimes serverless (Deno/edge),
+// sem worker e sem dependência de canvas. Substitui pdfjs-dist que falhava com
+// "Setting up fake worker failed" no edge runtime do Supabase.
+import { extractText, getDocumentProxy } from "https://esm.sh/unpdf@0.12.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -528,6 +528,52 @@ function extractCPFFromRaw(raw: string): string | null {
 const OCR_MODEL = 'google/gemini-2.5-flash';
 const OCR_RETRY_MODEL = 'google/gemini-2.5-pro';
 
+/**
+ * Chama o Lovable AI Gateway com retry exponencial em falhas transitórias.
+ * - Retenta em erros de rede e respostas 500/502/503/504.
+ * - NÃO retenta em 401/402/429 (erros legítimos que devem chegar ao usuário).
+ * - Backoff: 500ms, 1500ms, 3500ms (3 tentativas no total).
+ */
+async function callAIGatewayWithRetry(
+  body: Record<string, unknown>,
+  apiKey: string,
+  label: string,
+): Promise<Response> {
+  const delays = [500, 1500, 3500];
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < delays.length; attempt++) {
+    try {
+      const resp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+      if (resp.ok || ![500, 502, 503, 504].includes(resp.status)) {
+        if (attempt > 0) {
+          console.log(`[OCR][${label}] sucesso após ${attempt + 1} tentativa(s) (status ${resp.status})`);
+        }
+        return resp;
+      }
+      const errBody = await resp.text().catch(() => '');
+      console.warn(`[OCR][${label}] tentativa ${attempt + 1}/${delays.length} falhou: HTTP ${resp.status} ${errBody.slice(0, 200)}`);
+      lastErr = new Error(`HTTP ${resp.status}`);
+      if (attempt < delays.length - 1) {
+        await new Promise((r) => setTimeout(r, delays[attempt + 1]));
+      }
+    } catch (err) {
+      lastErr = err;
+      console.warn(`[OCR][${label}] tentativa ${attempt + 1}/${delays.length} erro de rede:`, err instanceof Error ? err.message : err);
+      if (attempt < delays.length - 1) {
+        await new Promise((r) => setTimeout(r, delays[attempt + 1]));
+      }
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error('AI Gateway indisponível após retries');
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -715,25 +761,25 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
       }
     }
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+    const ocrStartedAt = Date.now();
+    let response: Response;
+    try {
+      response = await callAIGatewayWithRetry({
         model: OCR_MODEL,
         messages: [
           { role: 'system', content: systemPrompt },
-          {
-            role: 'user',
-            content: contentParts,
-          },
+          { role: 'user', content: contentParts },
         ],
         max_tokens: 2000,
         temperature: 0,
-      }),
-    });
+      }, LOVABLE_API_KEY, 'main');
+    } catch (gwErr) {
+      console.error('[OCR] Gateway indisponível após retries:', gwErr);
+      return new Response(
+        JSON.stringify({ error: 'Serviço de OCR temporariamente indisponível. Tente novamente em instantes.' }),
+        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -814,6 +860,17 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
       }
     }
 
+    const ocrDurationMs = Date.now() - ocrStartedAt;
+    console.log('[OCR][summary]', JSON.stringify({
+      tipo_esperado: tipoEsperado || 'auto',
+      tipo_detectado: result?.tipo_detectado,
+      sucesso: result?.sucesso,
+      sugestao: result?.sugestao,
+      confianca: result?.confianca,
+      hasNativeText: !!extractedPdfText,
+      nativeTextLen: extractedPdfText?.length || 0,
+      durationMs: ocrDurationMs,
+    }));
     console.log('OCR result:', result);
 
     // Se temos texto nativo do PDF e o CPF extraído está em conflito, tentar pegar do texto
@@ -889,41 +946,34 @@ Use a função para retornar o CPF encontrado ou "ilegivel" se não conseguir le
         }
 
         try {
-          const retryResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: OCR_RETRY_MODEL,
-              messages: [
-                { role: 'system', content: retrySystemPrompt },
-                { role: 'user', content: retryUserContent },
-              ],
-              max_tokens: 200,
-              temperature: 0,
-              tools: [{
-                type: 'function',
-                function: {
-                  name: 'report_cpf',
-                  description: 'Reportar o CPF extraído da CNH',
-                  parameters: {
-                    type: 'object',
-                    properties: {
-                      cpf: { 
-                        type: 'string', 
-                        description: 'CPF no formato XXX.XXX.XXX-XX ou "ilegivel" se não conseguir ler' 
-                      }
-                    },
-                    required: ['cpf'],
-                    additionalProperties: false,
-                  }
+          const retryResponse = await callAIGatewayWithRetry({
+            model: OCR_RETRY_MODEL,
+            messages: [
+              { role: 'system', content: retrySystemPrompt },
+              { role: 'user', content: retryUserContent },
+            ],
+            max_tokens: 200,
+            temperature: 0,
+            tools: [{
+              type: 'function',
+              function: {
+                name: 'report_cpf',
+                description: 'Reportar o CPF extraído da CNH',
+                parameters: {
+                  type: 'object',
+                  properties: {
+                    cpf: {
+                      type: 'string',
+                      description: 'CPF no formato XXX.XXX.XXX-XX ou "ilegivel" se não conseguir ler'
+                    }
+                  },
+                  required: ['cpf'],
+                  additionalProperties: false,
                 }
-              }],
-              tool_choice: { type: 'function', function: { name: 'report_cpf' } },
-            }),
-          });
+              }
+            }],
+            tool_choice: { type: 'function', function: { name: 'report_cpf' } },
+          }, LOVABLE_API_KEY, 'cpf-retry');
 
           if (retryResponse.ok) {
             const retryData = await retryResponse.json();
@@ -1079,41 +1129,34 @@ Use a função para retornar o número do motor encontrado, ou "ilegivel" se ide
               };
             }
 
-            const motorRetryResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                model: OCR_RETRY_MODEL,
-                messages: [
-                  { role: 'system', content: motorRetryPrompt },
-                  { role: 'user', content: motorRetryUserContent },
-                ],
-                max_tokens: 200,
-                temperature: 0,
-                tools: [{
-                  type: 'function',
-                  function: {
-                    name: 'report_numero_motor',
-                    description: 'Reportar o número do motor extraído do documento',
-                    parameters: {
-                      type: 'object',
-                      properties: {
-                        numero_motor: {
-                          type: 'string',
-                          description: 'Número do motor (alfanumérico, com hífen opcional) ou "ilegivel" se não conseguir ler',
-                        },
+            const motorRetryResp = await callAIGatewayWithRetry({
+              model: OCR_RETRY_MODEL,
+              messages: [
+                { role: 'system', content: motorRetryPrompt },
+                { role: 'user', content: motorRetryUserContent },
+              ],
+              max_tokens: 200,
+              temperature: 0,
+              tools: [{
+                type: 'function',
+                function: {
+                  name: 'report_numero_motor',
+                  description: 'Reportar o número do motor extraído do documento',
+                  parameters: {
+                    type: 'object',
+                    properties: {
+                      numero_motor: {
+                        type: 'string',
+                        description: 'Número do motor (alfanumérico, com hífen opcional) ou "ilegivel" se não conseguir ler',
                       },
-                      required: ['numero_motor'],
-                      additionalProperties: false,
                     },
+                    required: ['numero_motor'],
+                    additionalProperties: false,
                   },
-                }],
-                tool_choice: { type: 'function', function: { name: 'report_numero_motor' } },
-              }),
-            });
+                },
+              }],
+              tool_choice: { type: 'function', function: { name: 'report_numero_motor' } },
+            }, LOVABLE_API_KEY, 'motor-retry');
 
             if (motorRetryResp.ok) {
               const motorRetryData = await motorRetryResp.json();
@@ -1281,41 +1324,34 @@ Use a função para retornar o chassi encontrado, ou "ilegivel" se identificar o
                 };
               }
 
-              const chassiRetryResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  model: OCR_RETRY_MODEL,
-                  messages: [
-                    { role: 'system', content: chassiRetryPrompt },
-                    { role: 'user', content: chassiRetryUserContent },
-                  ],
-                  max_tokens: 200,
-                  temperature: 0,
-                  tools: [{
-                    type: 'function',
-                    function: {
-                      name: 'report_chassi',
-                      description: 'Reportar o chassi (VIN) extraído do documento',
-                      parameters: {
-                        type: 'object',
-                        properties: {
-                          chassi: {
-                            type: 'string',
-                            description: 'Chassi de 17 caracteres (sem I, O, Q) ou "ilegivel" se não conseguir ler',
-                          },
+              const chassiRetryResp = await callAIGatewayWithRetry({
+                model: OCR_RETRY_MODEL,
+                messages: [
+                  { role: 'system', content: chassiRetryPrompt },
+                  { role: 'user', content: chassiRetryUserContent },
+                ],
+                max_tokens: 200,
+                temperature: 0,
+                tools: [{
+                  type: 'function',
+                  function: {
+                    name: 'report_chassi',
+                    description: 'Reportar o chassi (VIN) extraído do documento',
+                    parameters: {
+                      type: 'object',
+                      properties: {
+                        chassi: {
+                          type: 'string',
+                          description: 'Chassi de 17 caracteres (sem I, O, Q) ou "ilegivel" se não conseguir ler',
                         },
-                        required: ['chassi'],
-                        additionalProperties: false,
                       },
+                      required: ['chassi'],
+                      additionalProperties: false,
                     },
-                  }],
-                  tool_choice: { type: 'function', function: { name: 'report_chassi' } },
-                }),
-              });
+                  },
+                }],
+                tool_choice: { type: 'function', function: { name: 'report_chassi' } },
+              }, LOVABLE_API_KEY, 'chassi-retry');
 
               if (chassiRetryResp.ok) {
                 const chassiRetryData = await chassiRetryResp.json();
@@ -1396,37 +1432,21 @@ Use a função para retornar o chassi encontrado, ou "ilegivel" se identificar o
 });
 
 /**
- * Extrai texto nativo de um PDF usando pdfjs-dist (descomprime FlateDecode etc).
- * Retorna string vazia se for PDF escaneado puro (apenas imagens).
+ * Extrai texto nativo de um PDF usando unpdf (sem worker, ideal para edge runtime).
+ * Retorna string vazia se for PDF escaneado puro (apenas imagens) ou se falhar.
  */
 async function extractTextFromPDFBuffer(buffer: Uint8Array): Promise<string> {
   try {
-    // pdfjs-dist precisa de um Uint8Array novo (não compartilhado)
+    // unpdf precisa de Uint8Array novo (não compartilhado com fetch buffer)
     const data = new Uint8Array(buffer);
-    const loadingTask = (pdfjsLib as any).getDocument({
-      data,
-      disableFontFace: true,
-      useSystemFonts: false,
-      isEvalSupported: false,
-      // Sem worker no edge runtime
-      verbosity: 0,
-    });
-    const pdf = await loadingTask.promise;
-    const parts: string[] = [];
-    const maxPages = Math.min(pdf.numPages, 10);
-    for (let p = 1; p <= maxPages; p++) {
-      const page = await pdf.getPage(p);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items
-        .map((it: any) => (typeof it.str === 'string' ? it.str : ''))
-        .filter(Boolean)
-        .join(' ');
-      if (pageText.trim()) parts.push(pageText);
-    }
-    const result = parts.join('\n').replace(/[ \t]+/g, ' ').trim();
-    return result;
+    const pdf = await getDocumentProxy(data);
+    const { text } = await extractText(pdf, { mergePages: true });
+    if (!text) return '';
+    // text pode vir como string ou string[] dependendo da versão
+    const merged = Array.isArray(text) ? text.join('\n') : text;
+    return merged.replace(/[ \t]+/g, ' ').trim();
   } catch (err) {
-    console.warn('[OCR] pdfjs falhou ao extrair texto:', err instanceof Error ? err.message : err);
+    console.warn('[OCR] unpdf falhou ao extrair texto:', err instanceof Error ? err.message : err);
     return '';
   }
 }
