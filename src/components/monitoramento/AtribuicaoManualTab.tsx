@@ -162,13 +162,49 @@ function DroppableVistoriador({ vistoriador }: { vistoriador: any }) {
       </CardHeader>
       {vistoriador.tarefas.length > 0 && (
         <CardContent className="pt-0 space-y-1.5">
-          {vistoriador.tarefas.map((t: any) => (
-            <div key={t.id} className="flex items-center gap-2 text-xs p-2 rounded bg-muted/50">
-              {getTipoIcon(t.tipo)}
-              <span className="truncate">{t.localizacaoFormatada || t.bairro || t.cidade || 'Sem local'}</span>
-              <Badge variant="outline" className="ml-auto text-[9px]">{t.status}</Badge>
-            </div>
-          ))}
+          {vistoriador.tarefas.map((t: any) => {
+            const placa = t.veiculo?.placa as string | undefined;
+            const emAndamento = t.status === 'em_andamento';
+            const emRota = t.status === 'em_rota';
+            return (
+              <div
+                key={t.id}
+                className={cn(
+                  'flex items-center gap-2 text-xs p-2 rounded',
+                  emAndamento
+                    ? 'bg-blue-500/10 border border-blue-500/40 ring-1 ring-blue-500/30'
+                    : emRota
+                      ? 'bg-purple-500/10 border border-purple-500/30'
+                      : 'bg-muted/50'
+                )}
+              >
+                {getTipoIcon(t.tipo)}
+                {placa ? (
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-mono font-semibold tracking-wider text-[10px]',
+                      emAndamento
+                        ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+                        : 'bg-background/60 text-foreground border border-border'
+                    )}
+                    title={`Placa: ${placa}`}
+                  >
+                    <Car className="h-3 w-3" /> {placa}
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-muted-foreground italic">sem placa</span>
+                )}
+                <span className="truncate flex-1">{t.localizacaoFormatada || t.bairro || t.cidade || 'Sem local'}</span>
+                {emAndamento ? (
+                  <Badge variant="outline" className="ml-auto text-[9px] bg-blue-500/15 text-blue-300 border-blue-500/40">
+                    atendendo agora
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="ml-auto text-[9px]">{t.status}</Badge>
+                )}
+              </div>
+            );
+          })}
         </CardContent>
       )}
       {isOver && (
