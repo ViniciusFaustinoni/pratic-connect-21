@@ -10,8 +10,6 @@ import {
   useErrorReportHistory,
   useUpdateErrorReportStatus,
   useMelhorarTextoRelato,
-  useGerarPromptCorrecao,
-  PromptCorrecaoResultado,
   ErrorReportStatus,
 } from '@/hooks/useErrorReports';
 import {
@@ -21,14 +19,11 @@ import {
   CheckCircle2,
   Copy,
   Download,
-  Sparkles,
   Wand2,
   Trash2,
   Loader2,
-  RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface Props {
   report: ErrorReport | null;
