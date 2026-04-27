@@ -394,13 +394,13 @@ export default function Dashboard() {
       {/* KPIs - Grid de 4 */}
       <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
         <KPICard
-          titulo="Associados Ativos"
+          titulo={isVendedorOnly ? "Meus Associados Ativos" : "Associados Ativos"}
           valor={contratos?.filter(c => c.status === 'ativo').length || 0}
           emoji="👥"
           loading={contratosLoading}
         />
         <KPICard
-          titulo="Leads do Mês"
+          titulo={isVendedorOnly ? "Meus Leads do Mês" : "Leads do Mês"}
           valor={totalLeads}
           emoji="📊"
           variacao={12}
@@ -418,7 +418,7 @@ export default function Dashboard() {
           titulo={isVendedorOnly ? "Minhas Adesões" : "Receita Mensal"}
           valor={`R$ ${(
             isVendedorOnly
-              ? contratos?.filter(c => c.status === 'ativo' && c.vendedor_id === userId)
+              ? contratos?.filter(c => c.status === 'ativo')
                   .reduce((acc, c) => acc + (c.cotacoes?.valor_adesao || 0), 0) || 0
               : contratos?.filter(c => c.status === 'ativo')
                   .reduce((acc, c) => acc + (c.valor_mensal || 0), 0) || 0
