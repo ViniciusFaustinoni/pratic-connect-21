@@ -18,8 +18,82 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   Bot, Settings, MessageSquare, Globe, Save, Eye, ExternalLink, Copy,
-  Users, Phone, Clock, Send, UserCheck, Loader2, Image as ImageIcon, RefreshCw, Sparkles
+  Users, Phone, Clock, Send, UserCheck, Loader2, Image as ImageIcon, RefreshCw, Sparkles, Power, AlertTriangle
 } from 'lucide-react';
+
+// ─── Kill Switch Global do Agente ─────────────────────────────────────────
+function KillSwitchAgente() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  const { data: ativo, isLoading } = useQuery({
+    queryKey: ['agente-ia-ativo'],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from('agente_ia_config')
+        .select('valor')
+        .eq('chave', 'agente_ativo')
+        .maybeSingle();
+      return data?.valor !== 'false'; // default: ativo
+    },
+  });
+
+  const toggle = useMutation({
+    mutationFn: async (novoValor: boolean) => {
+      const { error } = await (supabase as any)
+        .from('agente_ia_config')
+        .upsert({ chave: 'agente_ativo', valor: novoValor ? 'true' : 'false', updated_by: user?.id }, { onConflict: 'chave' });
+      if (error) throw error;
+    },
+    onSuccess: (_, novoValor) => {
+      queryClient.invalidateQueries({ queryKey: ['agente-ia-ativo'] });
+      if (novoValor) {
+        toast.success('Agente Vinicius ATIVADO — voltará a responder mensagens');
+      } else {
+        toast.success('Agente Vinicius DESATIVADO — não responderá nenhuma mensagem');
+      }
+    },
+    onError: () => toast.error('Erro ao alterar status do agente'),
+  });
+
+  const isAtivo = !!ativo;
+
+  return (
+    <Card className={isAtivo ? 'border-green-500/40' : 'border-destructive/60 bg-destructive/5'}>
+      <CardContent className="pt-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3 flex-1">
+            <div className={`mt-0.5 rounded-full p-2 ${isAtivo ? 'bg-green-500/15 text-green-600 dark:text-green-400' : 'bg-destructive/15 text-destructive'}`}>
+              {isAtivo ? <Power className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm font-semibold">Status do Agente</h3>
+                {isLoading ? (
+                  <Badge variant="outline">Carregando…</Badge>
+                ) : isAtivo ? (
+                  <Badge className="bg-green-500/15 text-green-700 dark:text-green-400 hover:bg-green-500/20 border-green-500/30">Ativo</Badge>
+                ) : (
+                  <Badge variant="destructive">Desativado</Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {isAtivo
+                  ? 'O Vinicius está respondendo mensagens automaticamente no WhatsApp.'
+                  : 'O Vinicius NÃO está respondendo nenhuma mensagem. As mensagens recebidas continuam registradas para atendimento humano.'}
+              </p>
+            </div>
+          </div>
+          <Switch
+            checked={isAtivo}
+            disabled={isLoading || toggle.isPending}
+            onCheckedChange={(v) => toggle.mutate(v)}
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 // ─── Tab 1: Linhas de Produto do Agente ───────────────────────────────────
 function AbaLinhas() {
@@ -587,6 +661,8 @@ export default function AgenteConsultorIA() {
           Configure o agente de vendas automatizado que opera no WhatsApp.
         </p>
       </div>
+
+      <KillSwitchAgente />
 
       <Tabs defaultValue="linhas" className="w-full">
         <TabsList className="w-full justify-start">
