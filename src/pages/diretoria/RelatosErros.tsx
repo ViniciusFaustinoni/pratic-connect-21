@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Bug, Search, Eye, X, History as HistoryIcon, ListChecks, LayoutList } from 'lucide-react';
+import { Bug, Search, Eye, X, History as HistoryIcon, ListChecks, LayoutList, AlertTriangle } from 'lucide-react';
 import {
   useErrorReportsList,
   useReportersList,
