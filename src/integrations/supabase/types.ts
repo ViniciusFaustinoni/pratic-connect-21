@@ -11749,14 +11749,62 @@ export type Database = {
           },
         ]
       }
+      error_report_history: {
+        Row: {
+          changed_by: string | null
+          changed_by_nome: string | null
+          created_at: string
+          from_status: Database["public"]["Enums"]["error_report_status"] | null
+          id: string
+          observacao: string | null
+          report_id: string
+          to_status: Database["public"]["Enums"]["error_report_status"]
+        }
+        Insert: {
+          changed_by?: string | null
+          changed_by_nome?: string | null
+          created_at?: string
+          from_status?:
+            | Database["public"]["Enums"]["error_report_status"]
+            | null
+          id?: string
+          observacao?: string | null
+          report_id: string
+          to_status: Database["public"]["Enums"]["error_report_status"]
+        }
+        Update: {
+          changed_by?: string | null
+          changed_by_nome?: string | null
+          created_at?: string
+          from_status?:
+            | Database["public"]["Enums"]["error_report_status"]
+            | null
+          id?: string
+          observacao?: string | null
+          report_id?: string
+          to_status?: Database["public"]["Enums"]["error_report_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "error_report_history_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "error_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       error_reports: {
         Row: {
           area: string
           concluido_em: string | null
           concluido_por: string | null
           created_at: string
+          descartado_em: string | null
+          descartado_por: string | null
           descricao: string
           id: string
+          motivo_descarte: string | null
           observacao_diretor: string | null
           reporter_email: string | null
           reporter_id: string
@@ -11772,8 +11820,11 @@ export type Database = {
           concluido_em?: string | null
           concluido_por?: string | null
           created_at?: string
+          descartado_em?: string | null
+          descartado_por?: string | null
           descricao: string
           id?: string
+          motivo_descarte?: string | null
           observacao_diretor?: string | null
           reporter_email?: string | null
           reporter_id: string
@@ -11789,8 +11840,11 @@ export type Database = {
           concluido_em?: string | null
           concluido_por?: string | null
           created_at?: string
+          descartado_em?: string | null
+          descartado_por?: string | null
           descricao?: string
           id?: string
+          motivo_descarte?: string | null
           observacao_diretor?: string | null
           reporter_email?: string | null
           reporter_id?: string
@@ -31719,7 +31773,12 @@ export type Database = {
         | "em_abatimento"
       cc_tipo_lancamento: "credito" | "debito"
       cobranca_origem: "sistema" | "sga_hinova"
-      error_report_status: "aberto" | "em_tratamento" | "concluido" | "validado"
+      error_report_status:
+        | "aberto"
+        | "em_tratamento"
+        | "concluido"
+        | "validado"
+        | "descartado"
       etapa_lead:
         | "novo"
         | "contato_inicial"
@@ -32150,7 +32209,13 @@ export const Constants = {
       ],
       cc_tipo_lancamento: ["credito", "debito"],
       cobranca_origem: ["sistema", "sga_hinova"],
-      error_report_status: ["aberto", "em_tratamento", "concluido", "validado"],
+      error_report_status: [
+        "aberto",
+        "em_tratamento",
+        "concluido",
+        "validado",
+        "descartado",
+      ],
       etapa_lead: [
         "novo",
         "contato_inicial",
