@@ -78,9 +78,9 @@ function DraggableServico({ servico }: { servico: any }) {
           </div>
           <p className="text-sm font-medium truncate">{assoc?.nome || 'Sem nome'}</p>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            {veic?.placa && (
-              <span className="flex items-center gap-1">
-                <Car className="h-3 w-3" /> {veic.placa}
+            {(veic?.placa || veic?.chassi) && (
+              <span className="flex items-center gap-1" title={isPlacaPlaceholder(veic?.placa) && veic?.chassi ? `Veículo 0KM · Chassi: ${veic.chassi}` : undefined}>
+                <Car className="h-3 w-3" /> {formatPlacaOuChassi(veic?.placa, veic?.chassi)}
               </span>
             )}
             {servico.localizacaoFormatada && (
