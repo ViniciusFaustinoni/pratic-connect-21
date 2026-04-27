@@ -143,8 +143,82 @@ export function useServicosCampoUnificado(filters: ServicosCampoFilters = {}) {
 
   const servicos = query.data || [];
 
+  /**
+   * Deduplica serviços por (associado_id + veiculo_id + tipo), mantendo apenas
+   * o card "mais relevante" (vivo > terminal recente) e expondo as tentativas
+   * anteriores em `tentativas_anteriores` (usado pelo badge "Nx reagendado").
+   *
+   * Veículos diferentes do mesmo associado continuam gerando cards separados.
+   */
+  const servicosDeduplicados = useMemo(() => {
+    // Prioridade do status (menor = mais "vivo")
+    const STATUS_PRIORITY: Record<string, number> = {
+      em_andamento: 1,
+      em_rota: 2,
+      em_analise: 3,
+      agendada: 4,
+      pendente: 5,
+      atribuida: 6,
+      no_local: 7,
+      aguardando_prestador: 8,
+      reagendada: 20,
+      nao_compareceu: 21,
+      reprovada: 22,
+      aprovada_ressalvas: 30,
+      aprovada: 31,
+      concluida: 32,
+      cancelada: 50,
+    };
+    const priorityOf = (s: Servico) => STATUS_PRIORITY[s.status] ?? 99;
+
+    // Agrupa
+    const grupos = new Map<string, Servico[]>();
+    for (const s of servicos) {
+      // Sem associado_id ou veiculo_id, não há como deduplicar com segurança
+      if (!s.associado_id || !s.veiculo_id || !s.tipo) {
+        const k = `__loose_${s.id}`;
+        grupos.set(k, [s]);
+        continue;
+      }
+      const k = `${s.associado_id}|${s.veiculo_id}|${s.tipo}`;
+      const arr = grupos.get(k);
+      if (arr) arr.push(s);
+      else grupos.set(k, [s]);
+    }
+
+    const out: Servico[] = [];
+    for (const grupo of grupos.values()) {
+      if (grupo.length === 1) {
+        out.push(grupo[0]);
+        continue;
+      }
+      // Ordena: 1) prioridade do status, 2) created_at desc
+      const sorted = [...grupo].sort((a, b) => {
+        const pa = priorityOf(a);
+        const pb = priorityOf(b);
+        if (pa !== pb) return pa - pb;
+        const ca = (a as any).created_at ? new Date((a as any).created_at).getTime() : 0;
+        const cb = (b as any).created_at ? new Date((b as any).created_at).getTime() : 0;
+        return cb - ca;
+      });
+      const keeper = sorted[0];
+      const tentativas = sorted.slice(1).map((s) => ({
+        servico_id: s.id,
+        data_anterior: s.data_agendada,
+        periodo_anterior: s.periodo,
+        status_anterior: s.status,
+        created_at: (s as any).created_at,
+      }));
+      out.push({
+        ...keeper,
+        tentativas_anteriores: tentativas,
+      } as Servico & { tentativas_anteriores: typeof tentativas });
+    }
+    return out;
+  }, [servicos]);
+
   const servicosFiltrados = useMemo(() => {
-    let result = servicos;
+    let result = servicosDeduplicados;
 
     if (filters.search?.trim()) {
       const s = filters.search.toLowerCase().trim();
@@ -188,7 +262,7 @@ export function useServicosCampoUnificado(filters: ServicosCampoFilters = {}) {
     }
 
     return result;
-  }, [servicos, filters]);
+  }, [servicosDeduplicados, filters]);
 
   const metricas = useMemo(() => {
     const todayCount = (s: Servico) =>

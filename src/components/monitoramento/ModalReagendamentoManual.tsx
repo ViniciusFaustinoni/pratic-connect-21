@@ -54,33 +54,60 @@ export default function ModalReagendamentoManual({
 
     setSaving(true);
     try {
-      // Get original service data
+      // Buscar serviço original (incluindo origem instalação/vistoria e dados atuais)
       const { data: original, error: fetchErr } = await supabase
         .from('servicos')
-        .select('tipo, associado_id, veiculo_id, observacoes')
+        .select('tipo, associado_id, veiculo_id, observacoes, data_agendada, periodo, hora_agendada, status, instalacao_origem_id, vistoria_origem_id, historico_datas')
         .eq('id', servico.id)
         .single();
 
       if (fetchErr || !original) throw fetchErr || new Error('Serviço não encontrado');
 
-      // Create new service
-      const { error: insertErr } = await supabase.from('servicos').insert([{
-        tipo: original.tipo as any,
-        associado_id: original.associado_id,
-        veiculo_id: original.veiculo_id,
-        data_agendada: format(date, 'yyyy-MM-dd'),
-        periodo: periodo as any,
-        status: 'pendente' as any,
-        observacoes: `Reagendamento manual do serviço anterior. ${original.observacoes || ''}`.trim(),
-      }]);
+      const novaData = format(date, 'yyyy-MM-dd');
+      const novoPeriodo = periodo;
 
-      if (insertErr) throw insertErr;
+      // Anexa ao histórico do PRÓPRIO serviço (data anterior vira histórico)
+      const novoHistorico = [
+        ...((original.historico_datas as any[]) || []),
+        {
+          data_anterior: original.data_agendada,
+          periodo_anterior: original.periodo,
+          hora_anterior: original.hora_agendada,
+          status_anterior: original.status,
+          motivo: 'Reagendamento manual',
+          alterado_em: new Date().toISOString(),
+        },
+      ];
 
-      // Update old service status
-      await supabase
+      // 1) Se houver instalação de origem: atualiza ela (triggers propagam para serviços)
+      if (original.instalacao_origem_id) {
+        const { error: instErr } = await supabase
+          .from('instalacoes')
+          .update({
+            data_agendada: novaData,
+            periodo: novoPeriodo as any,
+            status: 'agendada' as any,
+            observacoes: `Reagendamento manual em ${new Date().toLocaleString('pt-BR')}.`,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', original.instalacao_origem_id);
+        if (instErr) throw instErr;
+      }
+
+      // 2) Atualiza o próprio serviço in-place (sem criar duplicata)
+      const { error: updErr } = await supabase
         .from('servicos')
-        .update({ status: 'reagendada' as any })
+        .update({
+          data_agendada: novaData,
+          periodo: novoPeriodo as any,
+          status: 'agendada' as any,
+          historico_datas: novoHistorico as any,
+          observacoes: `${original.observacoes || ''}\n[Reagendado manualmente em ${new Date().toLocaleString('pt-BR')}]`.trim(),
+          updated_at: new Date().toISOString(),
+        } as any)
         .eq('id', servico.id);
+
+      if (updErr) throw updErr;
 
       toast.success('Serviço reagendado com sucesso');
       onOpenChange(false);
