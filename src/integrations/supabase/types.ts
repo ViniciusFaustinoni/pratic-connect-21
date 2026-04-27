@@ -14667,6 +14667,7 @@ export type Database = {
       }
       instalacoes: {
         Row: {
+          agendamento_anterior_id: string | null
           assinatura_cliente_url: string | null
           associado_id: string
           bairro: string | null
@@ -14684,6 +14685,7 @@ export type Database = {
           encaixe_executado: boolean | null
           endereco_latitude: number | null
           endereco_longitude: number | null
+          historico_datas: Json
           hora_agendada: string | null
           id: string
           imei_rastreador: string | null
@@ -14710,6 +14712,7 @@ export type Database = {
           vistoriador_prestador_id: string | null
         }
         Insert: {
+          agendamento_anterior_id?: string | null
           assinatura_cliente_url?: string | null
           associado_id: string
           bairro?: string | null
@@ -14727,6 +14730,7 @@ export type Database = {
           encaixe_executado?: boolean | null
           endereco_latitude?: number | null
           endereco_longitude?: number | null
+          historico_datas?: Json
           hora_agendada?: string | null
           id?: string
           imei_rastreador?: string | null
@@ -14753,6 +14757,7 @@ export type Database = {
           vistoriador_prestador_id?: string | null
         }
         Update: {
+          agendamento_anterior_id?: string | null
           assinatura_cliente_url?: string | null
           associado_id?: string
           bairro?: string | null
@@ -14770,6 +14775,7 @@ export type Database = {
           encaixe_executado?: boolean | null
           endereco_latitude?: number | null
           endereco_longitude?: number | null
+          historico_datas?: Json
           hora_agendada?: string | null
           id?: string
           imei_rastreador?: string | null
@@ -14796,6 +14802,20 @@ export type Database = {
           vistoriador_prestador_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "instalacoes_agendamento_anterior_id_fkey"
+            columns: ["agendamento_anterior_id"]
+            isOneToOne: false
+            referencedRelation: "instalacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instalacoes_agendamento_anterior_id_fkey"
+            columns: ["agendamento_anterior_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["instalacao_id"]
+          },
           {
             foreignKeyName: "instalacoes_associado_id_fkey"
             columns: ["associado_id"]
@@ -23598,6 +23618,7 @@ export type Database = {
       servicos: {
         Row: {
           acabamento_recolocado: boolean | null
+          agendamento_anterior_id: string | null
           analisado_em: string | null
           analisado_por: string | null
           assinatura_autentique_id: string | null
@@ -23641,6 +23662,7 @@ export type Database = {
           fotos_manutencao: Json | null
           fotos_recusa: string[] | null
           fotos_ressalva: string[] | null
+          historico_datas: Json
           hora_agendada: string | null
           id: string
           imei_rastreador: string | null
@@ -23718,6 +23740,7 @@ export type Database = {
         }
         Insert: {
           acabamento_recolocado?: boolean | null
+          agendamento_anterior_id?: string | null
           analisado_em?: string | null
           analisado_por?: string | null
           assinatura_autentique_id?: string | null
@@ -23761,6 +23784,7 @@ export type Database = {
           fotos_manutencao?: Json | null
           fotos_recusa?: string[] | null
           fotos_ressalva?: string[] | null
+          historico_datas?: Json
           hora_agendada?: string | null
           id?: string
           imei_rastreador?: string | null
@@ -23838,6 +23862,7 @@ export type Database = {
         }
         Update: {
           acabamento_recolocado?: boolean | null
+          agendamento_anterior_id?: string | null
           analisado_em?: string | null
           analisado_por?: string | null
           assinatura_autentique_id?: string | null
@@ -23881,6 +23906,7 @@ export type Database = {
           fotos_manutencao?: Json | null
           fotos_recusa?: string[] | null
           fotos_ressalva?: string[] | null
+          historico_datas?: Json
           hora_agendada?: string | null
           id?: string
           imei_rastreador?: string | null
@@ -23957,6 +23983,27 @@ export type Database = {
           whatsapp_notificado_em?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "servicos_agendamento_anterior_id_fkey"
+            columns: ["agendamento_anterior_id"]
+            isOneToOne: false
+            referencedRelation: "servicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "servicos_agendamento_anterior_id_fkey"
+            columns: ["agendamento_anterior_id"]
+            isOneToOne: false
+            referencedRelation: "v_tarefas_orfas"
+            referencedColumns: ["servico_instalacao_relacionado"]
+          },
+          {
+            foreignKeyName: "servicos_agendamento_anterior_id_fkey"
+            columns: ["agendamento_anterior_id"]
+            isOneToOne: false
+            referencedRelation: "v_tarefas_orfas"
+            referencedColumns: ["servico_vistoria_id"]
+          },
           {
             foreignKeyName: "servicos_analisado_por_fkey"
             columns: ["analisado_por"]
