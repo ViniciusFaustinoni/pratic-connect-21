@@ -135,6 +135,8 @@ export default function ExecutarVistoriaCompleta() {
   } | null>(null);
   const [buscandoRastreador, setBuscandoRastreador] = useState(false);
   const [erroRastreador, setErroRastreador] = useState<string | null>(null);
+  // Confirmação visual de que o rastreador está enviando posição (mapa)
+  const [posicaoConfirmada, setPosicaoConfirmada] = useState(false);
 
   // Dados
   const vistoriaId = vistoria?.id;
