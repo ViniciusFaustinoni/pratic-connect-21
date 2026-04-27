@@ -251,26 +251,33 @@ export function useIniciarTarefa() {
 
   return useMutation({
     mutationFn: async ({ tarefaId }: { tarefaId: string; tipo?: string }) => {
-      // Agora só precisa atualizar uma tabela: servicos
-      const { error } = await supabase
-        .from('servicos')
-        .update({ 
-          status: 'em_andamento',
-          iniciada_em: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', tarefaId);
+      const { data, error } = await supabase.rpc('iniciar_tarefa_servico', {
+        p_servico_id: tarefaId,
+      });
 
-      if (error) throw error;
+      if (error) {
+        console.error('[useIniciarTarefa] RPC error:', error);
+        throw new Error(error.message || 'Não foi possível iniciar a tarefa.');
+      }
+
+      const result = (data ?? {}) as { ok?: boolean; codigo?: string; mensagem?: string };
+      if (!result.ok) {
+        const err: any = new Error(result.mensagem || 'Não foi possível iniciar a tarefa.');
+        err.codigo = result.codigo;
+        throw err;
+      }
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
       queryClient.invalidateQueries({ queryKey: ['servicos'] });
-      toast.success('Tarefa iniciada!');
+      toast.success(result?.mensagem || 'Tarefa iniciada!');
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error('Erro ao iniciar tarefa:', error);
-      toast.error('Erro ao iniciar tarefa');
+      queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      toast.error(error?.message || 'Erro ao iniciar tarefa');
     }
   });
 }
