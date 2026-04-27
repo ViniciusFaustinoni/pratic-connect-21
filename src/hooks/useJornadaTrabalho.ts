@@ -232,6 +232,10 @@ export function useJornadaTrabalho() {
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [turno?.status, calcularTempoReal, refetchTurno]);
 
+  // Checar se há tarefa em execução (em_rota / em_andamento) — usado para
+  // bloquear início de almoço enquanto há serviço em curso.
+  const temTarefaEmExecucao = useTemTarefaEmExecucao();
+
   // Mutation para criar/iniciar turno (protege contra sobrescrita de inicio_turno)
   const iniciarTurnoMutation = useMutation({
     mutationFn: async () => {
@@ -291,6 +295,9 @@ export function useJornadaTrabalho() {
   const iniciarAlmocoMutation = useMutation({
     mutationFn: async () => {
       if (!turno?.id) throw new Error('Turno não encontrado');
+      if (temTarefaEmExecucao) {
+        throw new Error('Finalize ou pause o serviço atual antes de iniciar o almoço.');
+      }
 
       const { data, error } = await supabase
         .from('turnos_profissionais')
@@ -309,9 +316,9 @@ export function useJornadaTrabalho() {
       refetchTurno();
       toast.info('Horário de almoço iniciado');
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error('[useJornadaTrabalho] Erro ao iniciar almoço:', error);
-      toast.error('Erro ao registrar almoço');
+      toast.error(error?.message || 'Erro ao registrar almoço');
     }
   });
 
@@ -392,9 +399,6 @@ export function useJornadaTrabalho() {
     }
   });
 
-  // Checar se há tarefa em execução (em_rota / em_andamento)
-  const temTarefaEmExecucao = useTemTarefaEmExecucao();
-
   // Tipo de alocação do dia (rota vs base). Mantido apenas para metadata/UI.
   const { isBase } = useAlocacaoDiaria();
 
@@ -425,8 +429,12 @@ export function useJornadaTrabalho() {
   const minutosRestantes = Math.max(0, jornadaAjustada - tempoReal.minutosTrabalhados);
   const percentualJornada = jornadaAjustada > 0 ? Math.min(100, (tempoReal.minutosTrabalhados / jornadaAjustada) * 100) : 0;
   const minutosAlmocoRestantes = Math.max(0, DURACAO_ALMOCO_MINUTOS - tempoReal.minutosAlmoco);
-  // Botão "Iniciar almoço" disponível para qualquer técnico em turno ativo sem almoço.
-  const podeIniciarAlmoco = turno?.status === 'ativo' && !turno?.inicio_almoco;
+  // Botão "Iniciar almoço" disponível para qualquer técnico em turno ativo sem almoço,
+  // DESDE QUE não haja serviço em execução. Bloqueio adicional para evitar
+  // registro de almoço durante atendimento.
+  const turnoAtivoSemAlmoco = turno?.status === 'ativo' && !turno?.inicio_almoco;
+  const bloqueadoPorTarefa = !!turnoAtivoSemAlmoco && temTarefaEmExecucao;
+  const podeIniciarAlmoco = !!turnoAtivoSemAlmoco && !temTarefaEmExecucao;
   const deveIniciarAlmoco = podeIniciarAlmoco && tempoReal.minutosTrabalhados >= TEMPO_ATE_ALMOCO_MINUTOS;
 
   // Verificar se deve encerrar turno automaticamente quando jornada está completa
@@ -515,6 +523,7 @@ export function useJornadaTrabalho() {
     temTarefaEmExecucao,
     isBase,
     podeIniciarAlmoco,
+    bloqueadoPorTarefa,
 
     // Helpers
     formatarMinutos,

@@ -27,6 +27,7 @@ export function JornadaStatusBar({ className }: JornadaStatusBarProps) {
     turno,
     isLoading,
     podeIniciarAlmoco,
+    bloqueadoPorTarefa,
     iniciarAlmoco,
     finalizarAlmoco,
     isIniciandoAlmoco,
@@ -152,6 +153,25 @@ export function JornadaStatusBar({ className }: JornadaStatusBarProps) {
           <Play className="h-4 w-4 mr-2" />
           {isIniciandoAlmoco ? 'Iniciando...' : 'Iniciar almoço'}
         </Button>
+      )}
+
+      {/* Bloqueio: técnico tem serviço em execução — mostrar botão desabilitado com motivo */}
+      {bloqueadoPorTarefa && (
+        <div className="space-y-1">
+          <Button
+            disabled
+            size="sm"
+            className="w-full bg-amber-600/40 text-white cursor-not-allowed"
+            title="Conclua o serviço atual antes de iniciar o almoço"
+          >
+            <Play className="h-4 w-4 mr-2" />
+            Iniciar almoço
+          </Button>
+          <p className="text-[11px] text-amber-300/80 text-center flex items-center justify-center gap-1">
+            <AlertTriangle className="h-3 w-3" />
+            Conclua o serviço atual antes de iniciar o almoço
+          </p>
+        </div>
       )}
 
       {/* Acréscimo por atraso de almoço */}
