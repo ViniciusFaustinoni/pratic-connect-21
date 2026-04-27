@@ -671,7 +671,10 @@ serve(async (req) => {
     // 8. Calcular carência dinamicamente — baseada no catálogo de coberturas do plano
     const carenciaDiasPadrao = await getConfiguracaoNumero(supabase, 'carencia_dias_padrao', 120);
     const carenciaVidrosDias = await getConfiguracaoNumero(supabase, 'carencia_beneficio_vidros_dias', 120);
-    const tipoEntrada = cotacao.tipo_entrada || 'adesao';
+    // tipo_entrada: prioriza coluna direta; faz fallback para dados_extras (registros legados)
+    const tipoEntrada = (cotacao as any).tipo_entrada
+      || ((cotacao as any).dados_extras?.tipo_entrada)
+      || 'adesao';
     const hoje = new Date().toISOString().split('T')[0];
     let dataCarenciaInicio: string | null = null;
     let dataCarenciaFim: string | null = null;
