@@ -158,8 +158,6 @@ function normalizePlacaMercosul(raw: string): string {
   return out.join('');
 }
 
-const PLACA_MERCOSUL_RE = /^[A-Z]{3}[0-9][A-Z][0-9]{2}$/;
-const PLACA_ANTIGA_RE = /^[A-Z]{3}[0-9]{4}$/;
 
 /**
  * Resolve a placa preferindo o formato Mercosul quando há ambiguidade
