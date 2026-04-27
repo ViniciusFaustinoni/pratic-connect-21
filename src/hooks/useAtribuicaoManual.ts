@@ -36,7 +36,7 @@ export function useServicosParaAtribuir() {
           id, tipo, data_agendada, hora_agendada, periodo, bairro, cidade, uf, logradouro, numero,
           permite_encaixe, status, contrato_id,
           associado:associados!servicos_associado_id_fkey(id, nome, telefone, whatsapp),
-          veiculo:veiculos!servicos_veiculo_id_fkey(placa, marca, modelo),
+          veiculo:veiculos!servicos_veiculo_id_fkey(placa, chassi, marca, modelo),
           contrato:contratos!servicos_contrato_id_fkey(aprovado_em)
         `)
         .is('profissional_id', null)
