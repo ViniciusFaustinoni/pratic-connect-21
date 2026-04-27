@@ -18,6 +18,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { VistoriaFotoSequencial } from '@/components/vistorias/VistoriaFotoSequencial';
 import { VideoCapture } from '@/components/instalador/VideoCapture';
 import { ModalRecusaVeiculoComFotos } from '@/components/instalador/ModalRecusaVeiculoComFotos';
+import { VerificarSinalRastreador } from '@/components/instalador/VerificarSinalRastreador';
 import { TemporizadorExecucao } from '@/components/vistoriador/TemporizadorExecucao';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
