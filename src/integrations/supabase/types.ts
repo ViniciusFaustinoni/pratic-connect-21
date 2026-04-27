@@ -31704,6 +31704,10 @@ export type Database = {
       is_supervisor_of: { Args: { _vendedor_id: string }; Returns: boolean }
       is_vendedor: { Args: { _user_id: string }; Returns: boolean }
       is_vendedor_nao_gestor: { Args: { _user_id: string }; Returns: boolean }
+      liberar_servico_admin: {
+        Args: { _motivo: string; _servico_id: string }
+        Returns: Json
+      }
       log_auth_event: {
         Args: {
           p_acao: string
