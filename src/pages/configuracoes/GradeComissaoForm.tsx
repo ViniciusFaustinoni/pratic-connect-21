@@ -422,6 +422,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
           vitalicia_inicio_parcela: p.vitalicia ? p.vitalicia_inicio_parcela : null,
           label: p.label.trim(),
           ordem: selectedPlanIds.indexOf(planoId) * 1000 + i,
+          supervisor_split_mode: p.supervisor_split_mode || 'igual',
           __key: `${planoId}:${i}`,
         }))
       );
