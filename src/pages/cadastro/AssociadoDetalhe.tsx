@@ -65,6 +65,7 @@ import { AdicionarRessalva } from '@/components/cadastro/AdicionarRessalva';
 import { useAssociadoSituacao } from '@/hooks/useAssociadoSituacao';
 import { BlocoDepreciacaoVeiculo } from '@/components/associados/detalhe/BlocoDepreciacaoVeiculo';
 import { formatPlacaExibicao } from '@/lib/placa-utils';
+import { ConcluirInstalacaoPrestadorButton } from '@/components/cadastro/ConcluirInstalacaoPrestadorButton';
 
 // ============================================
 // UTILITÁRIOS
@@ -237,6 +238,22 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
   const fotosInstaladorAgrupadas = vistoriaUnificada?.fotosInstalador?.length ? agruparFotosPorCategoria(vistoriaUnificada.fotosInstalador) : null;
   const fotosAutovistoriaAgrupadas = vistoriaUnificada?.fotosAutovistoria?.length ? agruparFotosPorCategoria(vistoriaUnificada.fotosAutovistoria) : null;
   const { data: veiculosComRastreador } = useVeiculosComRastreador(id);
+
+  // Instalações abertas por veículo (para liberar conclusão manual via prestador externo)
+  const { data: instalacoesAbertas } = useQuery({
+    queryKey: ['instalacoes-abertas-associado', id],
+    queryFn: async () => {
+      if (!id) return [] as Array<{ id: string; veiculo_id: string; status: string }>;
+      const { data, error } = await supabase
+        .from('instalacoes')
+        .select('id, veiculo_id, status')
+        .eq('associado_id', id)
+        .not('status', 'in', '(concluida,cancelada)');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!id,
+  });
 
   const { suspenderAssociado, reativarAssociado, isSuspendendo, isReativando } = useAssociadoActions();
   const ativarRastreadorMutation = useAtivarRastreadorPlataforma();
@@ -705,6 +722,12 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                               Ativar
                             </Button>
                           )}
+                          {(() => {
+                            const inst = instalacoesAbertas?.find((i) => i.veiculo_id === v.id);
+                            return inst ? (
+                              <ConcluirInstalacaoPrestadorButton instalacaoId={inst.id} />
+                            ) : null;
+                          })()}
                         </div>
                       </div>
                     </CardContent>

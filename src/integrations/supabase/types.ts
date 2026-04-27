@@ -31401,6 +31401,10 @@ export type Database = {
       }
       can_manage_users: { Args: { _user_id: string }; Returns: boolean }
       can_view_all_cotacoes: { Args: { _user_id: string }; Returns: boolean }
+      concluir_instalacao_prestador: {
+        Args: { p_instalacao_id: string; p_observacao: string }
+        Returns: Json
+      }
       confirmar_encaixe_urgente: {
         Args: { p_encaixe_id: string; p_profissional_id: string }
         Returns: boolean
