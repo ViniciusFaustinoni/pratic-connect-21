@@ -22,6 +22,10 @@ export interface ErrorReport {
   descartado_por: string | null;
   descartado_em: string | null;
   motivo_descarte: string | null;
+  eh_retratamento: boolean;
+  vezes_retratado: number;
+  ultimo_motivo_retratamento: string | null;
+  ultimo_retratamento_em: string | null;
   created_at: string;
   updated_at: string;
 }
