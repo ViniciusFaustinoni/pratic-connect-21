@@ -1,41 +1,42 @@
-## Objetivo
+## Diagnóstico
 
-Adicionar um botão "Ativar/Desativar Agente IA Vinicius" como **kill switch global**. Quando desativado, o agente para imediatamente de responder qualquer mensagem no WhatsApp, sem afetar o atendimento humano.
+O serviço **NÃO está pendente no banco**. Foi cancelado às **12:23 (hora local) de hoje (27/04)** pelo próprio admin, com observação:
 
-## Comportamento
+> *"LIBERADO PELO ADMIN: FEITO NA LOTUS DIA 23/04/2026 — FOTOS FEITAS NO VISTO"*
 
-- **Local do botão**: topo da tela `Configurações → Agente Consultor IA`, em destaque (ao lado do título "Agente Consultor IA"), com badge de status (Ativo / Desativado).
-- **Quando desativado**:
-  - O agente **não responde nenhuma mensagem** (nem leads novos, nem follow-ups, nem cotação).
-  - As mensagens recebidas continuam sendo registradas normalmente (histórico preservado).
-  - Conversas em andamento ficam paradas — humano pode assumir manualmente pela aba "Contatos".
-- **Quando reativado**: volta a responder normalmente nas próximas mensagens recebidas.
+Os 3 serviços de instalação da placa **KPD8B52** (Hillary dos Prazeres) estão com status:
 
-## Implementação técnica
+| ID | Data | Status | Atualizado |
+|---|---|---|---|
+| e463ecbd… | 27/04 | `cancelada` | 27/04 15:23 |
+| 973f9542… | 25/04 | `cancelada` | 27/04 13:38 |
+| 707399fd… | 25/04 | `nao_compareceu` | 25/04 15:15 |
 
-### 1. Configuração (DB)
-- Inserir nova chave em `agente_ia_config`:
-  - `chave = 'agente_ativo'`, `valor = 'true'` (default ligado).
-- Migration idempotente com `ON CONFLICT DO NOTHING`.
+Como o hook `useServicosParaAtribuir` só lista `status IN ('pendente','agendada')` com `data_agendada >= hoje`, esse serviço **não deveria aparecer**.
 
-### 2. Backend — kill switch
-- `supabase/functions/agente-consultor-ia/index.ts`: logo após carregar `config` (linhas ~73-87), checar `config.agente_ativo`. Se for `'false'`, retornar `{ success: true, ignored: 'agente_desativado' }` sem chamar IA nem enviar mensagem.
-- Garantir que `agente_ativo` seja lido **antes** de qualquer fluxo (lead novo, retomada, diretor — exceto comandos de diretor, que continuam funcionando para permitir reativar via WhatsApp se quisermos no futuro; nesta entrega: desativado bloqueia tudo, inclusive diretor).
+## Causa raiz
 
-### 3. Frontend — UI do toggle
-- `src/pages/configuracoes/AgenteConsultorIA.tsx`: adicionar bloco no topo do componente principal (acima das `Tabs`):
-  - Card com ícone `Power`, título "Status do Agente", `Switch` grande, badge "Ativo" (verde) / "Desativado" (vermelho).
-  - Texto explicativo: *"Quando desativado, o Vinicius não responde nenhuma mensagem no WhatsApp. Use para pausar o agente em casos críticos."*
-  - Confirmação via `toast` ao alternar.
-- Reutilizar a mesma query/mutation já existente (`agente-ia-config` + `saveConfig`).
+O hook `useServicosParaAtribuir` está configurado com:
+- `refetchInterval: 30000` (30s)
+- `refetchIntervalInBackground: false` ← **não atualiza quando a aba está em segundo plano**
+- Sem `refetchOnWindowFocus`
+
+Quando o usuário abre a aba (ou ela ficou em background), os dados ficam **defasados** até o próximo refetch — mostrando o serviço como pendente mesmo após o cancelamento.
+
+## Correção proposta
+
+Em `src/hooks/useAtribuicaoManual.ts`, no hook `useServicosParaAtribuir`:
+- Reduzir `refetchInterval` de **30s → 15s**
+- Habilitar `refetchIntervalInBackground: true` (mapa de monitoramento é tela operacional crítica)
+- Adicionar `refetchOnWindowFocus: true` para recarregar imediatamente ao voltar para a aba
+- Adicionar `staleTime: 0` para garantir leitura sempre fresca
+
+Mesma correção aplicada também em `useTecnicosAtivosParaAtribuir` (linha ~280) para manter consistência das tarefas atribuídas a cada técnico.
+
+## Resultado esperado
+
+Assim que o serviço for cancelado/finalizado, a coluna "Serviços Pendentes" remove o card em ≤ 15s (ou imediatamente ao focar a aba), sem precisar recarregar a página manualmente.
 
 ## Arquivos afetados
 
-- `supabase/migrations/<novo>.sql` (nova chave `agente_ativo`)
-- `supabase/functions/agente-consultor-ia/index.ts` (guard logo após carregar config)
-- `src/pages/configuracoes/AgenteConsultorIA.tsx` (UI do toggle no topo)
-
-## Fora do escopo
-
-- Não altera os webhooks (`whatsapp-meta-webhook`, `whatsapp-webhook`) — o bloqueio é centralizado no `agente-consultor-ia` para garantir um único ponto de verdade.
-- Não desliga follow-ups já agendados em filas externas (se houver) — apenas o handler do agente para de responder.
+- `src/hooks/useAtribuicaoManual.ts` (2 hooks: `useServicosParaAtribuir` e `useTecnicosAtivosParaAtribuir`)
