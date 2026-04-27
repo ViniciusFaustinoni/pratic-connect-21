@@ -238,7 +238,7 @@ export default function RelatosErros() {
           {!isLoading && reports.length === 0 && (
             <Card className="p-8 text-center text-muted-foreground">Nenhum relato com os filtros atuais.</Card>
           )}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             {ORDEM_FILA.map((s) => (
               <div key={s} className="space-y-2">
                 <div className="flex items-center gap-2 sticky top-0 bg-background py-1 z-10">
