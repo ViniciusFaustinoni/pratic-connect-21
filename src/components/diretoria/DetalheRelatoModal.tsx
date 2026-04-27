@@ -10,8 +10,6 @@ import {
   useErrorReportHistory,
   useUpdateErrorReportStatus,
   useMelhorarTextoRelato,
-  useGerarPromptCorrecao,
-  PromptCorrecaoResultado,
   ErrorReportStatus,
 } from '@/hooks/useErrorReports';
 import {
@@ -21,14 +19,11 @@ import {
   CheckCircle2,
   Copy,
   Download,
-  Sparkles,
   Wand2,
   Trash2,
   Loader2,
-  RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface Props {
   report: ErrorReport | null;
@@ -48,11 +43,9 @@ export function DetalheRelatoModal({ report, onClose }: Props) {
   const { data: history = [] } = useErrorReportHistory(report?.id ?? null);
   const update = useUpdateErrorReportStatus();
   const melhorarTexto = useMelhorarTextoRelato();
-  const gerarPrompt = useGerarPromptCorrecao();
   const [obs, setObs] = useState('');
   const [obsPrev, setObsPrev] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ url: string; nome: string; mime: string } | null>(null);
-  const [promptResult, setPromptResult] = useState<PromptCorrecaoResultado | null>(null);
 
   const copyImage = async (url: string, mime: string) => {
     try {
@@ -99,18 +92,6 @@ export function DetalheRelatoModal({ report, onClose }: Props) {
         action: { label: 'Desfazer', onClick: () => setObs(obsPrev ?? '') },
       });
     }
-  };
-
-  const onGerarPrompt = async () => {
-    if (!report) return;
-    const r = await gerarPrompt.mutateAsync({ reportId: report.id });
-    setPromptResult(r);
-  };
-
-  const onCopiarPrompt = async () => {
-    if (!promptResult?.prompt_para_lovable) return;
-    await navigator.clipboard.writeText(promptResult.prompt_para_lovable);
-    toast.success('Prompt copiado — cole no chat do Lovable');
   };
 
   const onDescartar = () => {
@@ -212,53 +193,6 @@ export function DetalheRelatoModal({ report, onClose }: Props) {
               )}
             </div>
 
-            {/* Gerar prompt */}
-            <div className="border border-border rounded-lg p-3 bg-muted/20 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-medium">Prompt de correção (Lovable)</span>
-                </div>
-                <div className="flex gap-1">
-                  {promptResult && (
-                    <Button size="sm" variant="ghost" onClick={onGerarPrompt} disabled={gerarPrompt.isPending}>
-                      <RotateCcw className="h-3 w-3 mr-1" /> Regerar
-                    </Button>
-                  )}
-                  <Button size="sm" onClick={onGerarPrompt} disabled={gerarPrompt.isPending}>
-                    {gerarPrompt.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Sparkles className="h-3 w-3 mr-1" />}
-                    {promptResult ? 'Gerar novamente' : 'Gerar prompt'}
-                  </Button>
-                </div>
-              </div>
-              {promptResult && (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium">{promptResult.titulo}</p>
-                  {promptResult.contexto_resumido && (
-                    <p className="text-xs text-muted-foreground">{promptResult.contexto_resumido}</p>
-                  )}
-                  {promptResult.arquivos_provaveis && promptResult.arquivos_provaveis.length > 0 && (
-                    <div className="text-xs">
-                      <span className="text-muted-foreground">Arquivos prováveis: </span>
-                      <span className="font-mono">{promptResult.arquivos_provaveis.join(', ')}</span>
-                    </div>
-                  )}
-                  <ScrollArea className="max-h-64 rounded border border-border bg-background">
-                    <pre className="text-xs whitespace-pre-wrap p-3 font-mono">
-                      {promptResult.prompt_para_lovable}
-                    </pre>
-                  </ScrollArea>
-                  <Button size="sm" variant="outline" onClick={onCopiarPrompt}>
-                    <Copy className="h-3 w-3 mr-1" /> Copiar prompt
-                  </Button>
-                </div>
-              )}
-              {!promptResult && !gerarPrompt.isPending && (
-                <p className="text-xs text-muted-foreground">
-                  Gera um prompt pronto para colar no chat do Lovable, analisando texto + imagens anexadas.
-                </p>
-              )}
-            </div>
           </div>
 
           {/* Timeline / aside */}
