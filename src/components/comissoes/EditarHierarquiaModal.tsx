@@ -117,7 +117,7 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
 
   const selectedUserId = linha.usuario.id;
   const superiores = usuarios.filter((u) => u.id !== selectedUserId);
-  const supervisores = superiores.filter((u) => u.roles.includes('supervisor_vendas'));
+  const supervisoresUsuarios = superiores.filter((u) => u.roles.includes('supervisor_vendas'));
   const gerentes = superiores.filter((u) => u.roles.includes('gerente_comercial'));
 
   const subordinados = (atribuicoes || []).filter((item) => {
@@ -128,10 +128,10 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
   const subordinadosDiretos = subordinados.filter((item) => item.hierarquia?.supervisor_id === selectedUserId);
   const subordinadosGerenciais = subordinados.filter((item) => item.hierarquia?.gerente_id === selectedUserId);
   const atribuicaoPorUsuario = new Map(atribuicoes.map((item) => [item.usuario.id, item]));
-  const supervisorSelecionado = supervisorId === 'none' ? null : supervisorId;
-  // Gerente herdado do supervisor (quando o supervisor já tem gerente atribuído na hierarquia dele)
-  const gerenteHerdadoDoSupervisor = supervisorSelecionado
-    ? atribuicaoPorUsuario.get(supervisorSelecionado)?.hierarquia?.gerente_id ?? null
+  const primeiroSupervisorId = supervisores[0]?.supervisor_id || null;
+  // Gerente herdado do primeiro supervisor (quando ele já tem gerente atribuído)
+  const gerenteHerdadoDoSupervisor = primeiroSupervisorId
+    ? atribuicaoPorUsuario.get(primeiroSupervisorId)?.hierarquia?.gerente_id ?? null
     : null;
   const gerenteEffectiveId = gerenteHerdadoDoSupervisor ?? (gerenteId === 'none' ? null : gerenteId);
   const gerenteSelecionado = gerenteEffectiveId;
@@ -141,22 +141,35 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
     return !supervisorHierarquiaAtual?.gerente_id || supervisorHierarquiaAtual.gerente_id === gerenteUserId;
   };
   const supervisoresCompativeis = gerenteSelecionado && !gerenteBloqueado
-    ? supervisores.filter((u) => supervisorPertenceAoGerente(u.id, gerenteSelecionado))
-    : supervisores;
+    ? supervisoresUsuarios.filter((u) => supervisorPertenceAoGerente(u.id, gerenteSelecionado))
+    : supervisoresUsuarios;
   const gerenteOptions = [
     { value: 'none', label: 'Nenhum gerente' },
     ...gerentes.map((u) => ({ value: u.id, label: `${u.nome} · ${u.email}` })),
   ];
-  const supervisorOptions = [
-    { value: 'none', label: 'Nenhum supervisor' },
-    ...supervisoresCompativeis.map((u) => ({ value: u.id, label: `${u.nome} · ${u.email}` })),
-  ];
+  const supervisorOptionsBase = supervisoresCompativeis.map((u) => ({ value: u.id, label: `${u.nome} · ${u.email}` }));
 
   const validationErrors: string[] = [];
-  const supervisorHierarquia = supervisorSelecionado ? atribuicaoPorUsuario.get(supervisorSelecionado)?.hierarquia : null;
 
-  if (gerenteSelecionado && supervisorSelecionado && supervisorHierarquia?.gerente_id && supervisorHierarquia.gerente_id !== gerenteSelecionado) {
-    validationErrors.push('O supervisor selecionado já pertence a outro gerente. Escolha um supervisor vinculado ao gerente informado.');
+  // Soma dos percentuais personalizados (quando algum estiver preenchido) deve totalizar 100
+  const percentuaisPreenchidos = supervisores.filter((s) => s.percentual_personalizado != null && !Number.isNaN(s.percentual_personalizado));
+  const usandoPersonalizado = percentuaisPreenchidos.length > 0;
+  const somaPercentuais = supervisores.reduce((sum, s) => sum + (Number(s.percentual_personalizado) || 0), 0);
+  if (usandoPersonalizado && Math.round(somaPercentuais * 100) !== 10000) {
+    validationErrors.push(`A soma dos percentuais dos supervisores deve totalizar 100% (atual: ${somaPercentuais.toFixed(2)}%).`);
+  }
+
+  // Conflito de gerente (apenas para o primeiro supervisor que define a herança)
+  const supervisorHierarquia = primeiroSupervisorId ? atribuicaoPorUsuario.get(primeiroSupervisorId)?.hierarquia : null;
+  if (gerenteSelecionado && primeiroSupervisorId && supervisorHierarquia?.gerente_id && supervisorHierarquia.gerente_id !== gerenteSelecionado) {
+    validationErrors.push('O primeiro supervisor já pertence a outro gerente. Escolha um supervisor vinculado ao gerente informado.');
+  }
+
+  const supervisoresDuplicados = supervisores
+    .map((s) => s.supervisor_id)
+    .filter((id, idx, arr) => id && arr.indexOf(id) !== idx);
+  if (supervisoresDuplicados.length > 0) {
+    validationErrors.push('Há supervisores duplicados na lista.');
   }
 
   const hasValidationErrors = validationErrors.length > 0;
@@ -169,27 +182,43 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
 
   const handleGerenteChange = (nextGerenteId: string) => {
     setGerenteId(nextGerenteId);
-
-    if (nextGerenteId !== 'none' && supervisorId !== 'none' && !supervisorPertenceAoGerente(supervisorId, nextGerenteId)) {
-      setSupervisorId('none');
-      toast.info('Supervisor removido para manter a cadeia Gerente → Supervisor → Usuário.');
+    if (nextGerenteId !== 'none') {
+      const incompatives = supervisores.filter((s) => !supervisorPertenceAoGerente(s.supervisor_id, nextGerenteId));
+      if (incompatives.length > 0) {
+        setSupervisores((prev) => prev.filter((s) => supervisorPertenceAoGerente(s.supervisor_id, nextGerenteId)));
+        toast.info('Supervisores incompatíveis foram removidos para manter a cadeia Gerente → Supervisor → Usuário.');
+      }
     }
   };
 
-  const handleSupervisorChange = (nextSupervisorId: string) => {
-    if (nextSupervisorId === 'none') {
-      setSupervisorId('none');
+  const addSupervisorRow = () => {
+    setSupervisores((prev) => [...prev, { supervisor_id: '', percentual_personalizado: null }]);
+  };
+
+  const removeSupervisorRow = (idx: number) => {
+    setSupervisores((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const updateSupervisorRow = (idx: number, patch: Partial<{ supervisor_id: string; percentual_personalizado: number | null }>) => {
+    setSupervisores((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
+  };
+
+  const handleSupervisorSelect = (idx: number, nextSupervisorId: string) => {
+    if (!nextSupervisorId) {
+      updateSupervisorRow(idx, { supervisor_id: '' });
       return;
     }
-
+    if (supervisores.some((s, i) => i !== idx && s.supervisor_id === nextSupervisorId)) {
+      toast.error('Este supervisor já está na lista.');
+      return;
+    }
     const supervisorHierarquiaAtual = atribuicaoPorUsuario.get(nextSupervisorId)?.hierarquia;
     if (gerenteId !== 'none' && supervisorHierarquiaAtual?.gerente_id && supervisorHierarquiaAtual.gerente_id !== gerenteId) {
       toast.error('Este supervisor pertence a outro gerente. Escolha um supervisor compatível.');
       return;
     }
-
-    setSupervisorId(nextSupervisorId);
-    if (gerenteId === 'none' && supervisorHierarquiaAtual?.gerente_id) {
+    updateSupervisorRow(idx, { supervisor_id: nextSupervisorId });
+    if (idx === 0 && gerenteId === 'none' && supervisorHierarquiaAtual?.gerente_id) {
       setGerenteId(supervisorHierarquiaAtual.gerente_id);
     }
   };
@@ -200,10 +229,18 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
       return;
     }
 
+    const supervisoresPayload = supervisores
+      .filter((s) => !!s.supervisor_id)
+      .map((s) => ({
+        supervisor_id: s.supervisor_id,
+        percentual_personalizado: usandoPersonalizado ? Number(s.percentual_personalizado) : null,
+      }));
+
     try {
       await upsertHierarquia.mutateAsync({
         vendedor_id: selectedUserId,
-        supervisor_id: supervisorId === 'none' ? null : supervisorId,
+        supervisor_id: supervisoresPayload[0]?.supervisor_id ?? null,
+        supervisores: supervisoresPayload.length > 0 ? supervisoresPayload : null,
         gerente_id: gerenteEffectiveId,
         agencia_id: null,
         observacoes: observacoes.trim() || null,
