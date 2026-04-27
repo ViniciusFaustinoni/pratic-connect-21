@@ -1091,7 +1091,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
               <div key={v.rastreador_id} className="p-3 border rounded-lg cursor-pointer hover:bg-muted transition-colors"
                 onClick={() => { setVeiculoSelecionadoId(v.rastreador_id); setSelecionarVeiculoOpen(false); setMapaModalOpen(true); }}>
                 <div className="flex items-center justify-between">
-                  <div><span className="font-semibold">{v.placa}</span><p className="text-sm text-muted-foreground">{v.marca} {v.modelo}</p></div>
+                  <div><span className="font-semibold">{formatPlacaExibicao(v.placa)}</span><p className="text-sm text-muted-foreground">{v.marca} {v.modelo}</p></div>
                   <Badge className={getStatusComunicacaoBadgeClass(v.status_comunicacao)}>
                     {getStatusComunicacaoLabel(v.status_comunicacao)}
                   </Badge>
