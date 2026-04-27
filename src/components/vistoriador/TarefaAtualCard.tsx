@@ -485,7 +485,6 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
             {isAgendada ? (
               // Tarefa atribuída - contato obrigatório antes de iniciar percurso (apenas para serviços externos)
               (() => {
-                const isNaBase = tarefa.local_vistoria === 'base';
                 return (
               <div className="space-y-2">
                 {/* Mensagem de orientação quando contato não foi feito (somente serviços externos) */}
