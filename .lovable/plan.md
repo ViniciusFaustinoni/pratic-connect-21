@@ -1,127 +1,68 @@
-# Correção: liberação manual de modelo não aplica no plano Advanced
+# Filtro de pesquisa por IMEI — Rastreadores
 
-## Auditoria de impacto (executada agora)
+## Diagnóstico
 
-A auditoria do banco confirmou que o bug de truncamento já contaminou massivamente as regras existentes. Top entradas suspeitas (modelo curto sem espaço que engloba múltiplas variantes):
+Investiguei o código do filtro (`src/hooks/useRastreadores.ts` linhas 129-178 + `src/lib/buscaUtils.ts`) e validei contra o banco. O filtro **funciona corretamente**: faz `ILIKE %termo%` em `codigo`, `numero_serie` e `imei`.
 
-| Linha | Marca | Modelo gravado | Variantes FIPE englobadas hoje |
-|---|---|---|---|
-| ESPECIAL / SELECT (todas regiões) | VOLKSWAGEN | GOL | **107** |
-| SELECT / ESPECIAL (todas regiões) | FIAT | PALIO | 100 |
-| ESPECIAL (todas regiões) | FORD | RANGER | 100 |
-| SELECT / ESPECIAL (todas regiões) | CHEVROLET | S10 | 93 |
-| SELECT (todas regiões) | TOYOTA | HILUX | 77 |
-| FIAT | UNO | 72 | |
-| FIAT | STRADA | 64 | |
-| MITSUBISHI | PAJERO | 62 | |
-| CHEVROLET | CORSA | 60 | |
-| FORD | FIESTA | 59 | |
-| HYUNDAI | HB20 | 58 | |
-| AUDI | A4 | 57 | |
-| ... | ... | ... | ... |
+O IMEI do seu teste — `357789644835164` — **não existe** na tabela `rastreadores` da Praticcar. Confirmei via SQL:
 
-São ~150 entradas distintas afetadas em todas as linhas (ADVANCED, SELECT, ESPECIAL, LANÇAMENTO) e todas as regiões (Nacional, SP, Lagos).
-
-**Conclusão da auditoria**: muitas dessas entradas representam efetivamente a intenção original (ex.: "GOL" cobrindo todas as variantes de Gol provavelmente é o desejado pelo Diretor). Por isso, **não é seguro reescrever automaticamente** — o que vou fazer é apenas o que foi aprovado: deduplicar exatas e deixar as decisões de granularidade para o operador via UI.
-
-A query SQL de auditoria fica embutida no comentário da migration para o Diretor poder reexecutar a qualquer momento.
-
-## Implementação
-
-### 1. `src/components/admin/planos/VeiculosAceitosEditor.tsx`
-
-- Substituir linha 93 — preservar nome completo:
-  ```ts
-  const modeloBase = isWildcard ? '' : modeloSelecionado.trim().toUpperCase();
-  ```
-- Adicionar validações em `handleAdd` antes do salvamento:
-  - **Duplicata exata** (mesma marca + modelo + ano_min + ano_max): bloqueia com `toast.error("Esta combinação já está cadastrada.")` e aborta.
-  - **Englobada por existente** (já existe entrada cujo modelo é prefixo do novo, mesma marca, anos compatíveis): mostra `AlertDialog` "Esta entrada já é coberta pela regra '{X}' existente. Deseja adicionar mesmo assim?".
-  - **Engloba existentes** (a nova entrada é prefixo de uma ou mais existentes, mesma marca): mostra `AlertDialog` listando as específicas e pergunta "Deseja substituir as entradas mais específicas pela nova entrada genérica?". Se confirmar, faz a remoção das englobadas + adição da nova em uma única chamada `updateRule`.
-
-### 2. `src/hooks/usePlanosCotacao.ts`
-
-Refatoração das linhas 285-328. Justificativa do `checkAllRules` legado existente: ele cobre regras genéricas (ano_range, regiao, etc.) — **deve continuar rodando**, apenas precisamos garantir que `marca_modelo` seja tirada da lista `linhaRules` ANTES de passar pelo `checkAllRules`, e tratar `marca_modelo` separadamente para ambos os modos (`include` e `exclude`).
-
-Comportamento final:
-
-```ts
-// Sempre remover marca_modelo de linhaRules antes do checkAllRules genérico
-let linhaRules = allEligibilityRules.filter(
-  r => r.entity_type === 'linha' && r.entity_id === productLineId && r.is_active
-);
-const linhaMarcaModeloRule = linhaRules.find(r => r.rule_type === 'marca_modelo');
-linhaRules = linhaRules.filter(r => r.rule_type !== 'marca_modelo');
-if (planoHasAnoRangeRules) {
-  linhaRules = linhaRules.filter(r => r.rule_type !== 'ano_range');
-}
-if (linhaRules.length > 0 && !checkAllRules(linhaRules, vehicleCtx)) {
-  negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '',
-    motivo: 'Bloqueado por regra da linha' });
-  continue;
-}
-
-// marca_modelo da linha: tratamento único e dedicado
-if (linhaMarcaModeloRule && !planoHasMarcaModeloRules) {
-  const isInclude = linhaMarcaModeloRule.rule_mode === 'include';
-  const match = findModelEligibility(linhaMarcaModeloRule, vehicleCtx);
-  const veicLabel = `${vehicleCtx.marca || ''} ${vehicleCtx.modelo || ''}`.trim();
-  if (isInclude) {
-    if (!match) {
-      negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '',
-        motivo: `Modelo ${veicLabel} não está liberado na linha ${plProductLine?.name || linha}` });
-      continue;
-    }
-    if (match.status === 'negado') {
-      negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '',
-        motivo: `Modelo ${veicLabel} negado na linha ${plProductLine?.name || linha}` });
-      continue;
-    }
-    linhaElegibilidadeStatus = match.status === 'aceito' ? 'aprovado' : match.status;
-    coberturaFipeOverride = match.coberturaFipe;
-  } else { // exclude / blacklist
-    if (match) {
-      negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '',
-        motivo: `Modelo ${veicLabel} bloqueado na linha ${plProductLine?.name || linha}` });
-      continue;
-    }
-  }
-}
+```
+SELECT * FROM rastreadores
+WHERE imei ILIKE '%357789644835164%' OR codigo ILIKE '%357789644835164%';
+→ 0 registros
 ```
 
-### 3. `supabase/migrations/<ts>_dedupe_marca_modelo_rules.sql`
+Esse IMEI aparece no **Pratic Master** (X3-Tech NT20, chip Vivo 55 31 97249-9969) mas nunca foi cadastrado/importado para o estoque do Praticcar. Por isso a tela mostra "Nenhum rastreador" + o banner azul "Não encontramos … Quer verificar na Softruck por IMEI?" — comportamento desenhado.
 
-Função plpgsql `dedupe_marca_modelo_rules()` que:
+Testei com um IMEI que **existe** localmente (`357789644846385`, status `instalado`, plataforma Softruck) e a query retorna 1 resultado normalmente.
 
-1. Cria tabela de log `entity_eligibility_rules_dedupe_log` (rule_id, original_config jsonb, new_config jsonb, removed_count int, conflicts jsonb, executed_at).
-2. Para cada regra ativa `marca_modelo`:
-   - `SELECT … FOR UPDATE` na linha.
-   - Itera `rule_config->'modelos'`, agrupa por `(marca, modelo, ano_min, ano_max)`.
-   - Critério de desempate: se houver status diferentes no mesmo grupo, mantém o mais restritivo na ordem `negado > limitado > aceito`. Se igual, mantém a primeira aparição (estável).
-   - Registra conflitos no campo `conflicts` do log.
-   - Atualiza `rule_config` com a lista deduplicada.
-3. A migration registra a função e a executa uma vez via `SELECT dedupe_marca_modelo_rules();`.
-4. Comentário no topo da migration com a query SQL de auditoria de truncamentos prováveis (a mesma usada agora) para o Diretor reexecutar quando quiser.
+**Conclusão técnica: não há bug no filtro.**
 
-## Comunicação operacional (passa a constar no plan.md)
+## O que vou fazer
 
-Após o deploy, comunicar à equipe:
-- Liberações de modelos a partir de agora respeitam o nome completo (`SHI 175` libera apenas SHI 175, não outras variantes).
-- Entradas legadas curtas (ex.: `GOL`, `S10`) **continuam funcionando como antes** (englobam todas as variantes que começam com esse prefixo) — não foram alteradas. Para tornar uma delas mais restritiva, o operador precisa removê-la e re-cadastrar a variante específica.
-- Se um associado relatar "moto/carro sumiu da cotação", verificar se o modelo está cadastrado com o nome certo na linha correspondente; agora o sistema mostra motivo claro em "Planos negados".
+Como o relato indica que você esperava encontrar o rastreador, há um gap de UX: o banner atual só oferece "Buscar na Softruck", mas o IMEI em questão está no **Pratic Master**, que é uma plataforma diferente. Vou tornar o fallback mais útil e o feedback mais claro.
+
+### 1. Melhorar o banner de "não encontrado"
+
+Em `src/components/rastreadores/BuscarNaSoftruckBanner.tsx` (e onde for renderizado em `Rastreadores.tsx`):
+
+- Quando o termo for um IMEI plausível (15 dígitos numéricos), oferecer botões para todas as plataformas integradas configuradas em `plataformas_rastreio` (hoje: Softruck, Rede Veículos; futuramente Pratic Master se for adicionado), não apenas Softruck.
+- Mostrar de forma explícita: "IMEI {X} não está no estoque do Praticcar. Buscar em: [Softruck] [Rede Veículos] …"
+- Cada botão chama a edge function correspondente e, se encontrar, oferece importar para o estoque local (`status='estoque'`).
+
+### 2. Acrescentar diagnóstico no console quando o filtro retornar 0
+
+Em `useRastreadores.ts`, quando `count === 0` E o `search` parece um IMEI (15 dígitos), logar de forma estruturada:
+
+```ts
+console.info('[Rastreadores] IMEI não encontrado no estoque local', { imei: filters.search });
+```
+
+Isso ajuda no suporte a confirmar rapidamente que o IMEI não está no banco (em vez de suspeitar do filtro).
+
+### 3. Não tocar na lógica de matching
+
+A query SQL atual está correta. **Não vou alterar**:
+- `escapeOrValue` / `normalizarBusca` — corretos para 15 dígitos.
+- O `.or()` com `codigo,numero_serie,imei` — cobre todos os campos relevantes.
 
 ## Arquivos
 
-- `src/components/admin/planos/VeiculosAceitosEditor.tsx` — fix do truncamento + UX duplicatas/englobamento.
-- `src/hooks/usePlanosCotacao.ts` — refactor do matching marca_modelo + motivos claros em "negados".
-- `supabase/migrations/<ts>_dedupe_marca_modelo_rules.sql` — função+log+execução.
+- `src/components/rastreadores/BuscarNaSoftruckBanner.tsx` — generalizar para várias plataformas.
+- `src/pages/monitoramento/Rastreadores.tsx` — passar lista de plataformas ativas para o banner.
+- `src/hooks/useRastreadores.ts` — log informativo quando 0 resultados em busca por IMEI puro.
 
-## Validação manual após o deploy
+## Validação após implementação
 
-1. Linha ADVANCED → aba Veículos aceitos → remover entradas duplicadas SHINERAY/SHI → adicionar `SHI 175` → confirmar no banco que `modelo === "SHI 175"`.
-2. Cotação Rápida: SHINERAY SHI 175 / 2025 / Gasolina + FIPE → planos ADVANCED aparecem.
-3. Modelo não liberado (ex.: SHI 100) → aparece em "Planos negados" com motivo `"Modelo SHINERAY SHI 100 não está liberado na linha ADVANCED"`.
-4. Tentar cadastrar duplicata exata → bloqueado com toast.
-5. Tentar cadastrar entrada englobada por existente → AlertDialog de aviso.
-6. Tentar cadastrar entrada que engloba outras → AlertDialog de substituição.
-7. Migration: verificar `entity_eligibility_rules_dedupe_log` para conferir o que foi consolidado.
+Vou logar como diretor (`admin@teste.com`) e:
+1. Pesquisar `357789644835164` — confirmar que aparece "Nenhum rastreador" + banner com opções de várias plataformas.
+2. Pesquisar `357789644846385` (existe localmente) — confirmar que retorna 1 rastreador corretamente.
+3. Pesquisar uma placa parcial — confirmar que continua funcionando.
+4. Pesquisar parte de nome de associado — confirmar que continua funcionando.
+
+## O que NÃO vou fazer
+
+- Não vou criar manualmente o rastreador `357789644835164` no estoque — isso é decisão operacional da equipe de monitoramento (entrada de estoque).
+- Não vou integrar com o Pratic Master (não é uma das plataformas atualmente integradas no sistema; exigiria credenciais e endpoint próprios).
+
+Se você quer que eu **importe esse IMEI específico** para o estoque local agora, ou que eu **adicione integração com Pratic Master**, me avise — são tarefas separadas.
