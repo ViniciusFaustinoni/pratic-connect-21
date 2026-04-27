@@ -64,6 +64,7 @@ function mapSgaCharge(cobranca: any): UnifiedCharge {
     referencia: buildSgaReference(cobranca),
     tipo: cobranca.tipo || 'mensalidade',
     fonte: 'sga',
+    forma_pagamento: cobranca.forma_pagamento || null,
   };
 }
 
