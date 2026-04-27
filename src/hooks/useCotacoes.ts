@@ -435,7 +435,18 @@ export function useDuplicarCotacao() {
     mutationFn: async (params: string | DuplicarCotacaoParams) => {
       const cotacaoId = typeof params === 'string' ? params : params.cotacaoId;
       const motivo = typeof params === 'string' ? undefined : params.motivo;
-      const acaoOriginal = typeof params === 'string' ? 'none' : (params.acaoOriginal ?? 'none');
+      // CORREÇÃO RAIZ (sumiço de cotações na tela do consultor):
+      // O fluxo comercial NUNCA deve excluir fisicamente a cotação original.
+      // Antes, "duplicar -> excluir" removia o registro do banco, o número
+      // sumia da listagem do consultor e da auditoria. Agora forçamos sempre
+      // o comportamento "manter como substituída" — a original permanece no
+      // banco com substituida_por_cotacao_id apontando para a nova.
+      const acaoOriginal: 'manter' | 'none' =
+        typeof params === 'string'
+          ? 'none'
+          : params.acaoOriginal === 'manter' || params.acaoOriginal === 'excluir'
+            ? 'manter'
+            : (params.acaoOriginal ?? 'none');
 
       // Buscar cotação original
       const { data: original, error: fetchError } = await supabase
@@ -446,20 +457,6 @@ export function useDuplicarCotacao() {
 
       if (fetchError) throw fetchError;
       if (!original) throw new Error('Cotação não encontrada');
-
-      // Se for excluir, validar que não há contrato/agendamento (race-safety)
-      if (acaoOriginal === 'excluir') {
-        const [contratoRes, agendRes] = await Promise.all([
-          supabase.from('contratos').select('id').eq('cotacao_id', cotacaoId).limit(1),
-          supabase.from('agendamentos_base').select('id').eq('cotacao_id', cotacaoId).limit(1),
-        ]);
-        if ((contratoRes.data?.length ?? 0) > 0 || (agendRes.data?.length ?? 0) > 0) {
-          throw new Error('Esta cotação já possui contrato ou agendamento. Recarregue a página e duplique novamente usando "Manter como substituída".');
-        }
-        if (!['rascunho', 'enviada'].includes(original.status as string)) {
-          throw new Error('Cotações neste status não podem ser excluídas — use "Manter como substituída".');
-        }
-      }
 
       // Remover campos que serão gerados novamente
       const {
