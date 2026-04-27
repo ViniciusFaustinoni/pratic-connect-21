@@ -31664,6 +31664,10 @@ export type Database = {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["tipo_usuario"]
       }
+      get_vendedor_associado_ids: {
+        Args: { _user_id: string }
+        Returns: string[]
+      }
       get_visible_modules: { Args: { _user_id: string }; Returns: string[] }
       has_permission: {
         Args: { _permission: string; _user_id: string }
@@ -31687,6 +31691,7 @@ export type Database = {
       is_diretor_or_admin: { Args: { _user_id: string }; Returns: boolean }
       is_error_reports_admin: { Args: { _user_id: string }; Returns: boolean }
       is_funcionario: { Args: { _user_id: string }; Returns: boolean }
+      is_funcionario_interno: { Args: { _user_id: string }; Returns: boolean }
       is_gerencia: { Args: { _user_id: string }; Returns: boolean }
       is_prestador: { Args: { _user_id: string }; Returns: boolean }
       is_sindicante_of_sinistro: {
@@ -31695,6 +31700,7 @@ export type Database = {
       }
       is_supervisor_of: { Args: { _vendedor_id: string }; Returns: boolean }
       is_vendedor: { Args: { _user_id: string }; Returns: boolean }
+      is_vendedor_nao_gestor: { Args: { _user_id: string }; Returns: boolean }
       log_auth_event: {
         Args: {
           p_acao: string
