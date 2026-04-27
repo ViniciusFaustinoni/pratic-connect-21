@@ -239,6 +239,22 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
   const fotosAutovistoriaAgrupadas = vistoriaUnificada?.fotosAutovistoria?.length ? agruparFotosPorCategoria(vistoriaUnificada.fotosAutovistoria) : null;
   const { data: veiculosComRastreador } = useVeiculosComRastreador(id);
 
+  // Instalações abertas por veículo (para liberar conclusão manual via prestador externo)
+  const { data: instalacoesAbertas } = useQuery({
+    queryKey: ['instalacoes-abertas-associado', id],
+    queryFn: async () => {
+      if (!id) return [] as Array<{ id: string; veiculo_id: string; status: string }>;
+      const { data, error } = await supabase
+        .from('instalacoes')
+        .select('id, veiculo_id, status')
+        .eq('associado_id', id)
+        .not('status', 'in', '(concluida,cancelada)');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!id,
+  });
+
   const { suspenderAssociado, reativarAssociado, isSuspendendo, isReativando } = useAssociadoActions();
   const ativarRastreadorMutation = useAtivarRastreadorPlataforma();
   const { data: statusPlataforma } = useStatusClienteRedeVeiculos(id);
