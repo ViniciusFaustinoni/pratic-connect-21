@@ -357,6 +357,7 @@ serve(async (req) => {
             endereco_longitude,
             local_vistoria: 'cliente',
             permite_encaixe: permiteEncaixe,
+            dispensa_rastreador: !veiculoPrecisaRastreador,
           }).select('id').single();
           if (insErr) {
             console.error(`[aprovar-proposta] Erro ao criar instalação para ${veiculo.placa}:`, insErr);
