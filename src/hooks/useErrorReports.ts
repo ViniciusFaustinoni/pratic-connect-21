@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
-export type ErrorReportStatus = 'aberto' | 'em_tratamento' | 'concluido' | 'validado';
+export type ErrorReportStatus = 'aberto' | 'em_tratamento' | 'concluido' | 'validado' | 'descartado';
 
 export interface ErrorReport {
   id: string;
@@ -19,6 +19,9 @@ export interface ErrorReport {
   concluido_por: string | null;
   concluido_em: string | null;
   validado_em: string | null;
+  descartado_por: string | null;
+  descartado_em: string | null;
+  motivo_descarte: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -30,6 +33,17 @@ export interface ErrorReportFile {
   nome_original: string | null;
   mime_type: string | null;
   tamanho_bytes: number | null;
+  created_at: string;
+}
+
+export interface ErrorReportHistoryEntry {
+  id: string;
+  report_id: string;
+  from_status: ErrorReportStatus | null;
+  to_status: ErrorReportStatus;
+  changed_by: string | null;
+  changed_by_nome: string | null;
+  observacao: string | null;
   created_at: string;
 }
 
@@ -71,15 +85,23 @@ export function useMyConcluidosReports() {
   });
 }
 
-export function useErrorReportsList(filters?: {
+export interface ErrorReportsFilters {
   status?: ErrorReportStatus | 'todos';
   search?: string;
-}) {
+  reporterId?: string | null;
+  dateFrom?: string | null; // ISO
+  dateTo?: string | null;   // ISO
+}
+
+export function useErrorReportsList(filters?: ErrorReportsFilters) {
   return useQuery({
     queryKey: ['error-reports', 'list', filters],
     queryFn: async () => {
       let q = supabase.from('error_reports').select('*').order('created_at', { ascending: false });
       if (filters?.status && filters.status !== 'todos') q = q.eq('status', filters.status);
+      if (filters?.reporterId) q = q.eq('reporter_id', filters.reporterId);
+      if (filters?.dateFrom) q = q.gte('created_at', filters.dateFrom);
+      if (filters?.dateTo) q = q.lte('created_at', filters.dateTo);
       if (filters?.search) {
         const s = `%${filters.search}%`;
         q = q.or(`area.ilike.${s},descricao.ilike.${s},reporter_nome.ilike.${s},reporter_email.ilike.${s}`);
@@ -87,6 +109,29 @@ export function useErrorReportsList(filters?: {
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as ErrorReport[];
+    },
+  });
+}
+
+/** Lista de reporters distintos para combobox de filtro do diretor */
+export function useReportersList() {
+  return useQuery({
+    queryKey: ['error-reports', 'reporters'],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('error_reports')
+        .select('reporter_id, reporter_nome, reporter_email')
+        .order('reporter_nome', { ascending: true });
+      if (error) throw error;
+      const seen = new Set<string>();
+      const unique: { reporter_id: string; reporter_nome: string | null; reporter_email: string | null }[] = [];
+      for (const r of data ?? []) {
+        if (seen.has(r.reporter_id)) continue;
+        seen.add(r.reporter_id);
+        unique.push(r);
+      }
+      return unique;
     },
   });
 }
@@ -103,7 +148,6 @@ export function useErrorReportFiles(reportId: string | null) {
         .order('created_at', { ascending: true });
       if (error) throw error;
       const files = (data ?? []) as ErrorReportFile[];
-      // Gerar signed URLs
       const withUrls = await Promise.all(
         files.map(async (f) => {
           const { data: signed } = await supabase.storage
@@ -113,6 +157,66 @@ export function useErrorReportFiles(reportId: string | null) {
         })
       );
       return withUrls;
+    },
+  });
+}
+
+/** Histórico (transições de status) de UM relato. */
+export function useErrorReportHistory(reportId: string | null) {
+  return useQuery({
+    queryKey: ['error-reports', 'history', reportId],
+    enabled: !!reportId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('error_report_history')
+        .select('*')
+        .eq('report_id', reportId!)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as ErrorReportHistoryEntry[];
+    },
+  });
+}
+
+/** Histórico GLOBAL com filtros — usado na aba Histórico do diretor. */
+export function useErrorReportHistoryGlobal(filters?: {
+  reporterId?: string | null;
+  changedBy?: string | null;
+  dateFrom?: string | null;
+  dateTo?: string | null;
+  search?: string;
+}) {
+  return useQuery({
+    queryKey: ['error-reports', 'history-global', filters],
+    queryFn: async () => {
+      let q = supabase
+        .from('error_report_history')
+        .select('*, error_reports!inner(id, area, descricao, reporter_id, reporter_nome)')
+        .order('created_at', { ascending: false })
+        .limit(500);
+      if (filters?.changedBy) q = q.eq('changed_by', filters.changedBy);
+      if (filters?.dateFrom) q = q.gte('created_at', filters.dateFrom);
+      if (filters?.dateTo) q = q.lte('created_at', filters.dateTo);
+      if (filters?.reporterId) {
+        q = q.eq('error_reports.reporter_id', filters.reporterId);
+      }
+      if (filters?.search) {
+        const s = `%${filters.search}%`;
+        q = q.or(`observacao.ilike.${s},changed_by_nome.ilike.${s}`);
+      }
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as Array<
+        ErrorReportHistoryEntry & {
+          error_reports: {
+            id: string;
+            area: string;
+            descricao: string;
+            reporter_id: string;
+            reporter_nome: string | null;
+          };
+        }
+      >;
     },
   });
 }
@@ -188,10 +292,12 @@ export function useUpdateErrorReportStatus() {
       id,
       status,
       observacao,
+      motivo_descarte,
     }: {
       id: string;
       status: ErrorReportStatus;
       observacao?: string;
+      motivo_descarte?: string;
     }) => {
       const patch: any = { status };
       if (observacao !== undefined) patch.observacao_diretor = observacao;
@@ -206,6 +312,11 @@ export function useUpdateErrorReportStatus() {
       if (status === 'validado') {
         patch.validado_em = new Date().toISOString();
       }
+      if (status === 'descartado') {
+        patch.descartado_por = user?.id;
+        patch.descartado_em = new Date().toISOString();
+        if (motivo_descarte !== undefined) patch.motivo_descarte = motivo_descarte;
+      }
       const { error } = await supabase.from('error_reports').update(patch).eq('id', id);
       if (error) throw error;
     },
@@ -214,11 +325,50 @@ export function useUpdateErrorReportStatus() {
       const labels: Record<ErrorReportStatus, string> = {
         aberto: 'Reaberto',
         em_tratamento: 'Em tratamento',
-        concluido: 'Marcado como concluído',
+        concluido: 'Concluído — enviado para teste do usuário',
         validado: 'Validado!',
+        descartado: 'Relato descartado',
       };
       toast.success(labels[vars.status]);
     },
     onError: (e: any) => toast.error('Falha ao atualizar status', { description: e.message }),
+  });
+}
+
+/** Chama edge function que reescreve a descrição com IA. */
+export function useMelhorarTextoRelato() {
+  return useMutation({
+    mutationFn: async ({ reportId, texto }: { reportId: string; texto?: string }) => {
+      const { data, error } = await supabase.functions.invoke('melhorar-texto-relato-erro', {
+        body: { report_id: reportId, texto },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return (data as { texto_melhorado: string }).texto_melhorado;
+    },
+    onError: (e: any) => toast.error('Falha ao melhorar texto', { description: e.message }),
+  });
+}
+
+export interface PromptCorrecaoResultado {
+  titulo: string;
+  contexto_resumido: string;
+  arquivos_provaveis?: string[];
+  passos_diagnostico?: string[];
+  prompt_para_lovable: string;
+}
+
+/** Chama edge function que gera prompt pronto para o chat do Lovable. */
+export function useGerarPromptCorrecao() {
+  return useMutation({
+    mutationFn: async ({ reportId }: { reportId: string }) => {
+      const { data, error } = await supabase.functions.invoke('gerar-prompt-correcao-erro', {
+        body: { report_id: reportId },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return data as PromptCorrecaoResultado;
+    },
+    onError: (e: any) => toast.error('Falha ao gerar prompt', { description: e.message }),
   });
 }
