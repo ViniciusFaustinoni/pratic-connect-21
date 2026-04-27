@@ -512,16 +512,8 @@ export function useDuplicarCotacao() {
       queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
       toast.success('Cotação duplicada com sucesso!');
 
-      const acao = data._acaoOriginal as 'excluir' | 'manter' | 'none';
-      if (acao === 'excluir') {
-        registrarLog({
-          acao: 'excluir',
-          modulo: 'cotacoes',
-          descricao: `Cotação original excluída em duplicação. Nova: ${data.numero}. Motivo: ${data._motivo ?? '—'}`,
-          entidade_id: data._originalId,
-          dados_novos: { nova_cotacao_id: data.id, motivo: data._motivo },
-        });
-      } else if (acao === 'manter') {
+      const acao = data._acaoOriginal as 'manter' | 'none';
+      if (acao === 'manter') {
         registrarLog({
           acao: 'duplicar',
           modulo: 'cotacoes',
