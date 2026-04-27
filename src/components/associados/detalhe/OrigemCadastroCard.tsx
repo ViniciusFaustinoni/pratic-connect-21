@@ -427,6 +427,7 @@ export const TIPO_ENTRADA_SHORT_LABELS: Record<string, string> = {
   inclusao: 'Inclusão',
   migracao: 'Migração',
   substituicao_placa: 'Substituição',
+  substituicao: 'Substituição',
   troca_titularidade: 'Troca Titular',
   reativacao: 'Reativação',
   indicacao: 'Indicação',
