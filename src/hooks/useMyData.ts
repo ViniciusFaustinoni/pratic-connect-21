@@ -729,6 +729,7 @@ function mapBoletoFromApi(b: any): Boleto {
     linhaDigitavel: b.linhaDigitavel || undefined,
     codigoBarras: b.codigoBarras || undefined,
     urlBoleto: b.linkBoleto || b.invoiceUrl || undefined,
+    fonte: 'asaas',
   };
 }
 
