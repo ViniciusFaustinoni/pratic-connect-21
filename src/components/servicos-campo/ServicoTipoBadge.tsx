@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { parseDataLocal } from '@/lib/date-utils';
 import { cn } from '@/lib/utils';
 import { TIPO_SERVICO_LABELS, type Servico, type TipoServico } from '@/hooks/useServicos';
 import { MOTIVO_RETIRADA_LABELS, type MotivoRetirada } from '@/types/retirada';
@@ -101,7 +102,10 @@ export function ServicoTipoBadge({ servico, className }: ServicoTipoBadgeProps) 
                 <Calendar className="h-3 w-3" /> Data:
               </span>
               <span>
-                {format(new Date(servico.data_agendada), "dd/MM/yyyy", { locale: ptBR })}
+                {(() => {
+                  const d = parseDataLocal(servico.data_agendada);
+                  return d ? format(d, 'dd/MM/yyyy', { locale: ptBR }) : '—';
+                })()}
               </span>
             </div>
           )}

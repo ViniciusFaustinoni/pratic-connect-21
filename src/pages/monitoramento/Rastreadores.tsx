@@ -51,6 +51,7 @@ import {
   RastreadorBatchActions,
   type ViewMode,
 } from '@/components/rastreadores';
+import { BuscarNaSoftruckBanner } from '@/components/rastreadores/BuscarNaSoftruckBanner';
 import { PlataformasConfigPanel } from '@/components/rastreadores/PlataformasConfigPanel';
 import { EntradaEstoqueDialog } from '@/components/monitoramento/estoque/EntradaEstoqueDialog';
 import { ImportarRastreadoresDialog } from '@/components/monitoramento/estoque/ImportarRastreadoresDialog';
@@ -420,6 +421,9 @@ function RastreadoresContent({
     <>
       <RastreadorMetrics metricas={metricas} isLoading={isLoadingMetricas} onFilterClick={onMetricFilterClick} activeFilter={activeMetricFilter} />
       <RastreadorFiltersV2 filters={filters} onFiltersChange={onFiltersChange} />
+      {!isLoading && (rastreadores?.length ?? 0) === 0 && filters.search && (
+        <BuscarNaSoftruckBanner termo={filters.search} />
+      )}
       <RastreadorListHeader
         viewMode={viewMode}
         onViewModeChange={onViewModeChange}

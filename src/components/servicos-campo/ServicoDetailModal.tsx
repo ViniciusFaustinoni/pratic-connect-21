@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { parseDataLocal } from '@/lib/date-utils';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -164,7 +165,7 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
               {/* RESUMO */}
               <TabsContent value="resumo" className="p-6 space-y-4">
                 <Section title="Agendamento" icon={Calendar}>
-                  <Field label="Data" value={servico.data_agendada ? format(new Date(servico.data_agendada), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : '—'} />
+                  <Field label="Data" value={(() => { const d = parseDataLocal(servico.data_agendada); return d ? format(d, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : '—'; })()} />
                   <Field label="Período" value={servico.periodo ? PERIODO_LABELS[servico.periodo] : '—'} />
                   <Field label="Hora" value={servico.hora_agendada?.slice(0, 5) || '—'} />
                   <Field label="Permite encaixe" value={servico.permite_encaixe ? 'Sim' : 'Não'} />
