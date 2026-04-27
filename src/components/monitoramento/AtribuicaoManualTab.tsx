@@ -295,6 +295,7 @@ export default function AtribuicaoManualTab() {
       if (
         !(assoc?.nome || '').toLowerCase().includes(term) &&
         !(veic?.placa || '').toLowerCase().includes(term) &&
+        !(veic?.chassi || '').toLowerCase().includes(term) &&
         !(s.bairro || '').toLowerCase().includes(term) &&
         !(s.cidade || '').toLowerCase().includes(term) &&
         !(s.zona || '').toLowerCase().includes(term)
