@@ -287,8 +287,10 @@ function HomeEtapas({
   const fotosAprovadas = !!link.fotos_aprovadas_em;
   const fotosReprovadas = !!link.fotos_reprovadas_em && !fotosAprovadas;
   const instFeita = link.instalacao_etapa_status === 'concluida';
-  const aguardandoAprovacao = fotosFeitas && !fotosAprovadas && !fotosReprovadas;
-  const podeIniciarInstalacao = fotosAprovadas && !instFeita;
+  // Veículos abaixo do limite FIPE (sem rastreador) dispensam a etapa de instalação.
+  const dispensaInstalacao = link.exige_etapa_instalacao === false;
+  const aguardandoAprovacao = !dispensaInstalacao && fotosFeitas && !fotosAprovadas && !fotosReprovadas;
+  const podeIniciarInstalacao = !dispensaInstalacao && fotosAprovadas && !instFeita;
 
   // Buscar nome do técnico já atribuído (Caso B)
   const { data: tecnicoAtribuido } = useQuery({
@@ -405,7 +407,9 @@ function HomeEtapas({
       {instFeita && (
         <div className="rounded-lg border border-success/30 bg-success/5 p-3 flex items-center gap-2 text-sm">
           <CheckCircle className="h-4 w-4 text-success" />
-          Instalação do rastreador já registrada.
+          {dispensaInstalacao
+            ? 'Vistoria concluída. Seu veículo já está protegido.'
+            : 'Instalação do rastreador já registrada.'}
         </div>
       )}
 
