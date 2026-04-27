@@ -31497,6 +31497,16 @@ export type Database = {
         Args: { p_instalacao_id: string; p_observacao: string }
         Returns: Json
       }
+      concluir_servico_prestador_externo: {
+        Args: {
+          _data_execucao: string
+          _executado_por: string
+          _local: string
+          _observacoes?: string
+          _servico_id: string
+        }
+        Returns: Json
+      }
       confirmar_encaixe_urgente: {
         Args: { p_encaixe_id: string; p_profissional_id: string }
         Returns: boolean
