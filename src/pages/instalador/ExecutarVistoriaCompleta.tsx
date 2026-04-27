@@ -329,7 +329,48 @@ export default function ExecutarVistoriaCompleta() {
   const conferenciaCompleta = modoApenasInstalacao || (Object.values(conferencia).every(Boolean) && hodometro.length > 0);
   const todasFotosEnviadas = totalFotosObrigatorias === 0 ? true : totalFotosEnviadas >= totalFotosObrigatorias;
   const videoEnviado = modoApenasInstalacao || !!video360Url;
-  const podeAprovar = conferenciaCompleta && todasFotosEnviadas && videoEnviado;
+  // Rastreador é obrigatório quando o veículo precisa de rastreador.
+  // Se o veículo já vier com rastreador vinculado (campo `rastreador_id` no veículo
+  // ou na instalação), consideramos satisfeito.
+  const veiculoJaTemRastreador = !!(veiculo as any)?.rastreador_id || !!(vistoria as any)?.instalacao?.rastreador_id;
+  const rastreadorVinculado = !veiculoPrecisaRastreador || veiculoJaTemRastreador || !!rastreadorEncontrado;
+  const podeAprovar = conferenciaCompleta && todasFotosEnviadas && videoEnviado && rastreadorVinculado;
+
+  // Buscar rastreador por IMEI
+  const handleBuscarRastreador = async () => {
+    const imei = imeiInput.trim();
+    if (!imei) {
+      setErroRastreador('Informe o IMEI do rastreador.');
+      return;
+    }
+    setBuscandoRastreador(true);
+    setErroRastreador(null);
+    try {
+      const { data, error } = await supabase
+        .from('rastreadores')
+        .select('id, imei, modelo, status, veiculo_id')
+        .eq('imei', imei)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) {
+        setRastreadorEncontrado(null);
+        setErroRastreador('Rastreador não encontrado no estoque. Verifique o IMEI.');
+        return;
+      }
+      if (data.veiculo_id && data.veiculo_id !== veiculo?.id) {
+        setRastreadorEncontrado(null);
+        setErroRastreador('Este rastreador já está vinculado a outro veículo.');
+        return;
+      }
+      setRastreadorEncontrado(data as any);
+      toast.success('Rastreador localizado!');
+    } catch (e: any) {
+      console.error('[Vistoria] Erro buscando rastreador:', e);
+      setErroRastreador(e?.message || 'Falha ao buscar rastreador.');
+    } finally {
+      setBuscandoRastreador(false);
+    }
+  };
 
   // Handlers
   const handleUploadFoto = async (tipo: string, file: File, visivelCliente: boolean = true) => {
