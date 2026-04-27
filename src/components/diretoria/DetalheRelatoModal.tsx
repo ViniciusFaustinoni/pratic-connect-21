@@ -114,8 +114,30 @@ export function DetalheRelatoModal({ report, onClose }: Props) {
           <DialogTitle className="flex items-center gap-2 flex-wrap">
             Relato — {report.area}
             <Badge variant="outline" className={sb.cls}>{sb.label}</Badge>
+            {report.eh_retratamento && report.vezes_retratado > 0 && (
+              <Badge
+                variant="outline"
+                className="border-orange-500/40 text-orange-600 dark:text-orange-400 bg-orange-500/10"
+              >
+                ↻ Retratamento {report.vezes_retratado}ª vez
+              </Badge>
+            )}
           </DialogTitle>
         </DialogHeader>
+
+        {report.eh_retratamento && report.vezes_retratado > 0 && report.ultimo_motivo_retratamento && (
+          <div className="rounded-lg border-l-4 border-orange-500 bg-orange-500/10 p-3 space-y-1">
+            <p className="text-xs font-semibold text-orange-700 dark:text-orange-300 uppercase">
+              ⚠ Retratamento — o usuário recusou a correção anterior
+            </p>
+            <p className="text-sm text-foreground/90 whitespace-pre-wrap">{report.ultimo_motivo_retratamento}</p>
+            {report.ultimo_retratamento_em && (
+              <p className="text-xs text-muted-foreground">
+                Devolvido em {new Date(report.ultimo_retratamento_em).toLocaleString('pt-BR')}
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="grid md:grid-cols-3 gap-4">
           <div className="md:col-span-2 space-y-4">
