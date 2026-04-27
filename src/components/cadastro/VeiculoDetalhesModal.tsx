@@ -131,7 +131,7 @@ export function VeiculoDetalhesModal({ open, onClose, veiculoId }: VeiculoDetalh
                 <Car className="h-5 w-5 text-primary" />
                 <span>Detalhes do Veículo</span>
                 {veiculo && (
-                  <Badge variant="outline" className="font-mono text-base">{veiculo.placa}</Badge>
+                  <Badge variant="outline" className="font-mono text-base">{formatPlacaExibicao(veiculo.placa)}</Badge>
                 )}
               </DialogTitle>
               {associado && (
