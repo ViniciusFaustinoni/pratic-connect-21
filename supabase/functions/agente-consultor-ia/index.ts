@@ -80,6 +80,17 @@ Deno.serve(async (req) => {
       config[row.chave] = row.valor;
     }
 
+    // ---- KILL SWITCH GLOBAL ----
+    // Se o agente estiver desativado via Configurações > Agente Consultor IA,
+    // não responde nada (mensagem fica registrada, humano pode assumir manualmente).
+    if (config.agente_ativo === "false") {
+      console.log(`[agente-consultor-ia] Agente DESATIVADO globalmente. Ignorando mensagem de ${telLimpo}`);
+      return new Response(
+        JSON.stringify({ success: true, ignored: "agente_desativado" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const nomeAgente = config.nome_agente || "Vinicius";
     const apresentacao = config.apresentacao_inicial || "";
     const instrucoes = config.instrucoes_comportamento || "";
