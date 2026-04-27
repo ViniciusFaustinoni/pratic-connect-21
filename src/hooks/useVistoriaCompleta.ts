@@ -21,6 +21,7 @@ interface AprovarVeiculoData {
   associadoId: string;
   hodometro: number;
   observacoes?: string;
+  rastreadorId?: string;
 }
 
 // Hook para aprovar veículo na vistoria completa
