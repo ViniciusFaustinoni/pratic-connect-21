@@ -453,11 +453,12 @@ export default function Perfis() {
           <h1 className="text-2xl font-semibold text-foreground">Perfis e Permissões</h1>
           <p className="text-sm text-muted-foreground">Gerencie perfis de acesso e visibilidade de módulos por usuário</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Badge variant="secondary" className="gap-1.5 py-1.5">
             <Users className="w-3.5 h-3.5" />
             {perfis.length} perfis
           </Badge>
+          {isDiretor && <DeslogarTodosButton />}
         </div>
       </div>
 
