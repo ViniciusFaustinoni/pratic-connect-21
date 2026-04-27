@@ -1040,7 +1040,7 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
                         <SelectItem value="inclusao">Inclusão</SelectItem>
                         <SelectItem value="troca_titularidade">Troca de Titularidade</SelectItem>
                         <SelectItem value="reativacao">Reativação</SelectItem>
-                        <SelectItem value="substituicao_placa">Substituição de Placa</SelectItem>
+                        <SelectItem value="substituicao_placa">Substituição de Veículo/Placa</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
