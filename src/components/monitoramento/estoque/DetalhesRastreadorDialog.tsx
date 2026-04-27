@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { parseDataLocal } from '@/lib/date-utils';
 import {
   Dialog,
   DialogContent,
@@ -394,7 +395,7 @@ export function DetalhesRastreadorDialog({ open, onOpenChange, rastreadorId }: D
                       {servicoManutencao.data_agendada && (
                         <p className="flex items-center gap-2">
                           <Clock className="h-3.5 w-3.5" />
-                          Agendado: {format(new Date(servicoManutencao.data_agendada), 'dd/MM/yyyy', { locale: ptBR })} - {servicoManutencao.periodo || 'A definir'}
+                          Agendado: {(() => { const d = parseDataLocal(servicoManutencao.data_agendada); return d ? format(d, 'dd/MM/yyyy', { locale: ptBR }) : '—'; })()} - {servicoManutencao.periodo || 'A definir'}
                         </p>
                       )}
                       {servicoManutencao.profissional?.nome && (

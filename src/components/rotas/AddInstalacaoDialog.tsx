@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { parseDataLocal } from '@/lib/date-utils';
 import { Loader2, Plus, CalendarIcon, Wrench, ClipboardCheck } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -163,7 +164,7 @@ export function AddInstalacaoDialog({
                           </Badge>
                           {servico.data_agendada && (
                             <span className="text-xs text-muted-foreground">
-                              {format(parseISO(servico.data_agendada), 'dd/MM')}
+                              {(() => { const d = parseDataLocal(servico.data_agendada); return d ? format(d, 'dd/MM') : '—'; })()}
                             </span>
                           )}
                         </div>

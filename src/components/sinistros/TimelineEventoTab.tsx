@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format, differenceInHours, differenceInMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { parseDataLocal } from '@/lib/date-utils';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -205,7 +206,7 @@ export function TimelineEventoTab({ sinistroId }: { sinistroId: string }) {
           timeline.push({
             id: `vistoria-ag-${v.id}`, date: v.created_at!,
             title: 'Vistoria agendada',
-            description: `Para: ${format(new Date(v.data_agendada), 'dd/MM/yyyy', { locale: ptBR })}`,
+            description: `Para: ${(() => { const d = parseDataLocal(v.data_agendada); return d ? format(d, 'dd/MM/yyyy', { locale: ptBR }) : '—'; })()}`,
             icon: Calendar, color: 'text-orange-500',
           });
         }

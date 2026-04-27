@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { parseDataLocal } from '@/lib/date-utils';
 import { MapPin, Navigation, Clock, Car, User, Wrench, ClipboardCheck, Loader2, FastForward } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -86,7 +87,7 @@ export function EncaixeCard({ encaixe }: EncaixeCardProps) {
             <div>
               <p className="font-medium text-sm">{getTipoLabel()}</p>
               <p className="text-xs text-muted-foreground">
-                {format(new Date(encaixe.data_agendada), "dd/MM", { locale: ptBR })}
+                {(() => { const d = parseDataLocal(encaixe.data_agendada); return d ? format(d, "dd/MM", { locale: ptBR }) : '—'; })()}
                 {encaixe.periodo && ` • ${PERIODO_LABELS[encaixe.periodo] || encaixe.periodo}`}
               </p>
             </div>
