@@ -195,3 +195,9 @@ verify_jwt = false
 
 [functions.enviar-termo-filiacao-whatsapp]
 verify_jwt = false
+
+[functions.melhorar-texto-relato-erro]
+verify_jwt = true
+
+[functions.gerar-prompt-correcao-erro]
+verify_jwt = true
