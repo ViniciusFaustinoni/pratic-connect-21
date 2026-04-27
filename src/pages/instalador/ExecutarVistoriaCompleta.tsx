@@ -348,7 +348,7 @@ export default function ExecutarVistoriaCompleta() {
     try {
       const { data, error } = await supabase
         .from('rastreadores')
-        .select('id, imei, modelo, status, veiculo_id')
+        .select('id, imei, status, veiculo_id, codigo, numero_serie')
         .eq('imei', imei)
         .maybeSingle();
       if (error) throw error;
