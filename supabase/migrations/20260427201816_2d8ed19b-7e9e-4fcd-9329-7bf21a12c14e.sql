@@ -1,0 +1,1 @@
+UPDATE error_reports SET status='concluido', concluido_em=now() WHERE id IN ('2ee8334f-fcd5-4415-870e-659ff7cbbea5','bdf46732-717d-4e9f-8d6c-b0068fc27901','f4d2b5ba-3a2a-4f6c-ae0d-680f99511e05');
