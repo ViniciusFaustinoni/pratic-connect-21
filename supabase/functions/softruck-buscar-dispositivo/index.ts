@@ -182,6 +182,25 @@ Deno.serve(async (req) => {
       if (deviceId && existing.plataforma_device_id !== deviceId) patch.plataforma_device_id = deviceId;
       if (vehicleId && existing.plataforma_veiculo_id !== vehicleId) patch.plataforma_veiculo_id = vehicleId;
       if (imei && existing.imei !== imei) patch.imei = imei;
+
+      // Reconciliar veiculo_id local pela placa Softruck quando o rastreador
+      // ainda não tem vínculo local (caso típico: KAIKE — placa vinculada na
+      // Softruck mas rastreador local sem veiculo_id, então a busca por placa
+      // na aba Rastreadores não retornava nada).
+      if (!existing.veiculo_id && placaSoftruck) {
+        const placaNorm = placaSoftruck.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+        const { data: vLocal } = await supabase
+          .from('veiculos')
+          .select('id')
+          .ilike('placa', placaNorm)
+          .limit(1)
+          .maybeSingle();
+        if (vLocal?.id) {
+          patch.veiculo_id = vLocal.id;
+          if (existing.status === 'estoque') patch.status = 'instalado';
+        }
+      }
+
       if (Object.keys(patch).length > 0) {
         await supabase.from('rastreadores').update(patch).eq('id', existing.id);
         acao = 'atualizado';

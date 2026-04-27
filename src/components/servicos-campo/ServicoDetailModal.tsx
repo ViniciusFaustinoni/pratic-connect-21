@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { RealocarInstalacaoDialog } from '@/components/instalacoes/RealocarInstalacaoDialog';
 import { LiberarServicoButton } from './LiberarServicoButton';
+import { ConcluirPrestadorExternoButton } from './ConcluirPrestadorExternoButton';
 import { cn } from '@/lib/utils';
 import {
   TIPO_SERVICO_LABELS, STATUS_SERVICO_LABELS, STATUS_SERVICO_COLORS,
@@ -137,6 +138,12 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
                   <MapPinned className="h-3.5 w-3.5" /> Realocar
                 </Button>
               )}
+              <ConcluirPrestadorExternoButton
+                servicoId={servico.id}
+                servicoStatus={servico.status}
+                veiculoId={(servico as any).veiculo_id}
+                associadoId={(servico as any).associado_id}
+              />
               <LiberarServicoButton servicoId={servico.id} servicoStatus={servico.status} />
             </div>
           </DialogHeader>
