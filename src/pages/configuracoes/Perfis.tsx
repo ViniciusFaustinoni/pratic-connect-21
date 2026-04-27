@@ -154,6 +154,8 @@ export default function Perfis() {
   const { canManagePermissions, canApprovePermissionChanges } = usePermissions();
   const { contagemPorPerfil, useUsuariosPorPerfil } = usePerfilUsuarios();
   const { roles: appRoles, getAreas, getAreaStyles, isLoading: isLoadingRoles } = useAppRoles();
+  const { perfis: perfisUsuario } = useAuth();
+  const isDiretor = perfisUsuario.includes('diretor');
   const queryClient = useQueryClient();
   
   const [activeTab, setActiveTab] = useState('perfis');
