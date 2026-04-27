@@ -523,6 +523,7 @@ export function useJornadaTrabalho() {
     temTarefaEmExecucao,
     isBase,
     podeIniciarAlmoco,
+    bloqueadoPorTarefa,
 
     // Helpers
     formatarMinutos,
