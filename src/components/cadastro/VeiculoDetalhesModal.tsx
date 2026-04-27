@@ -40,6 +40,7 @@ import { HistoricoVinculoSection } from '@/components/rastreadores/HistoricoVinc
 import { VincularRastreadorForm } from '@/components/cadastro/VincularRastreadorForm';
 import { VeiculoFinanceiroSGA } from '@/components/cadastro/VeiculoFinanceiroSGA';
 import { cn } from '@/lib/utils';
+import { formatPlacaExibicao } from '@/lib/placa-utils';
 
 // ============================================
 // TYPES
