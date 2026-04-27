@@ -64,6 +64,7 @@ import { AssociadoTabNav } from '@/components/associados/detalhe/AssociadoTabNav
 import { AdicionarRessalva } from '@/components/cadastro/AdicionarRessalva';
 import { useAssociadoSituacao } from '@/hooks/useAssociadoSituacao';
 import { BlocoDepreciacaoVeiculo } from '@/components/associados/detalhe/BlocoDepreciacaoVeiculo';
+import { formatPlacaExibicao } from '@/lib/placa-utils';
 
 // ============================================
 // UTILITÁRIOS
@@ -662,7 +663,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                             })()}
                           </div>
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                            <DataField label="Placa" value={v.placa} mono />
+                            <DataField label="Placa" value={formatPlacaExibicao(v.placa)} mono />
                             <DataField label="Chassi" value={v.chassi || '—'} mono small />
                             <DataField label="Renavam" value={v.renavam || '—'} />
                             <DataField label="Cor" value={v.cor || '—'} />
@@ -1090,7 +1091,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
               <div key={v.rastreador_id} className="p-3 border rounded-lg cursor-pointer hover:bg-muted transition-colors"
                 onClick={() => { setVeiculoSelecionadoId(v.rastreador_id); setSelecionarVeiculoOpen(false); setMapaModalOpen(true); }}>
                 <div className="flex items-center justify-between">
-                  <div><span className="font-semibold">{v.placa}</span><p className="text-sm text-muted-foreground">{v.marca} {v.modelo}</p></div>
+                  <div><span className="font-semibold">{formatPlacaExibicao(v.placa)}</span><p className="text-sm text-muted-foreground">{v.marca} {v.modelo}</p></div>
                   <Badge className={getStatusComunicacaoBadgeClass(v.status_comunicacao)}>
                     {getStatusComunicacaoLabel(v.status_comunicacao)}
                   </Badge>

@@ -40,6 +40,7 @@ import { HistoricoVinculoSection } from '@/components/rastreadores/HistoricoVinc
 import { VincularRastreadorForm } from '@/components/cadastro/VincularRastreadorForm';
 import { VeiculoFinanceiroSGA } from '@/components/cadastro/VeiculoFinanceiroSGA';
 import { cn } from '@/lib/utils';
+import { formatPlacaExibicao } from '@/lib/placa-utils';
 
 // ============================================
 // TYPES
@@ -130,7 +131,7 @@ export function VeiculoDetalhesModal({ open, onClose, veiculoId }: VeiculoDetalh
                 <Car className="h-5 w-5 text-primary" />
                 <span>Detalhes do Veículo</span>
                 {veiculo && (
-                  <Badge variant="outline" className="font-mono text-base">{veiculo.placa}</Badge>
+                  <Badge variant="outline" className="font-mono text-base">{formatPlacaExibicao(veiculo.placa)}</Badge>
                 )}
               </DialogTitle>
               {associado && (
@@ -187,7 +188,7 @@ export function VeiculoDetalhesModal({ open, onClose, veiculoId }: VeiculoDetalh
                       <InfoItem label="Modelo" value={veiculo.modelo} />
                       <InfoItem label="Ano" value={`${veiculo.ano_fabricacao || '?'}/${veiculo.ano_modelo || '?'}`} />
                       <InfoItem label="Cor" value={veiculo.cor} />
-                      <InfoItem label="Placa" value={veiculo.placa} mono />
+                      <InfoItem label="Placa" value={formatPlacaExibicao(veiculo.placa)} mono />
                       <InfoItem label="Chassi" value={veiculo.chassi} mono />
                       <InfoItem label="Renavam" value={veiculo.renavam} />
                       <InfoItem label="Combustível" value={veiculo.combustivel} />
