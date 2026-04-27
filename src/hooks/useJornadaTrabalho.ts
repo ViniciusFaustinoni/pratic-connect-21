@@ -232,6 +232,10 @@ export function useJornadaTrabalho() {
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [turno?.status, calcularTempoReal, refetchTurno]);
 
+  // Checar se há tarefa em execução (em_rota / em_andamento) — usado para
+  // bloquear início de almoço enquanto há serviço em curso.
+  const temTarefaEmExecucao = useTemTarefaEmExecucao();
+
   // Mutation para criar/iniciar turno (protege contra sobrescrita de inicio_turno)
   const iniciarTurnoMutation = useMutation({
     mutationFn: async () => {
