@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Home, ClipboardList, User, LogOut, Wrench } from 'lucide-react';
+import { Home, ClipboardList, User, LogOut, Wrench, Bug } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,8 @@ import {
 import { ReguladorGuard } from './ReguladorGuard';
 import { SyncStatusBanner } from '@/components/profissional/SyncStatusBanner';
 import logoFullDark from '@/assets/logos/logo-full-dark.png';
+import { RelatarErroModal } from '@/components/suporte/RelatarErroModal';
+import { TestarCorrecoesButton } from '@/components/suporte/TestarCorrecoesButton';
 
 const NAV_ITEMS = [
   { icon: Home, label: 'Início', path: '/regulador' },
@@ -26,6 +29,7 @@ export function ReguladorLayout() {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [relatarOpen, setRelatarOpen] = useState(false);
 
   const handleSignOut = async () => {
     await signOut();
@@ -65,6 +69,8 @@ export function ReguladorLayout() {
                 </div>
               </div>
 
+              <div className="flex items-center gap-2">
+              <TestarCorrecoesButton />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="rounded-full">
@@ -81,12 +87,17 @@ export function ReguladorLayout() {
                     <p className="text-xs text-muted-foreground">{profile?.email}</p>
                   </div>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setRelatarOpen(true)}>
+                    <Bug className="mr-2 h-4 w-4" />
+                    Relatar Erro
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleSignOut}>
                     <LogOut className="mr-2 h-4 w-4" />
                     Sair
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              </div>
             </div>
           </header>
 
@@ -121,6 +132,7 @@ export function ReguladorLayout() {
           </nav>
         </div>
       </div>
+      <RelatarErroModal open={relatarOpen} onOpenChange={setRelatarOpen} />
     </ReguladorGuard>
   );
 }

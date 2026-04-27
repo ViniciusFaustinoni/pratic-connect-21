@@ -1,16 +1,20 @@
+import { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { LogOut, Building2, CreditCard, LayoutDashboard } from 'lucide-react';
+import { LogOut, Building2, CreditCard, LayoutDashboard, Bug } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
+import { RelatarErroModal } from '@/components/suporte/RelatarErroModal';
+import { TestarCorrecoesButton } from '@/components/suporte/TestarCorrecoesButton';
 
 export function AgenciaLayout() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [relatarOpen, setRelatarOpen] = useState(false);
 
   const navItems = [
     { path: '/agencia', label: 'Painel', icon: LayoutDashboard },
@@ -53,6 +57,11 @@ export function AgenciaLayout() {
                     <span className="hidden sm:inline">{item.label}</span>
                   </Button>
                 ))}
+                <TestarCorrecoesButton />
+                <Button variant="ghost" size="sm" onClick={() => setRelatarOpen(true)} className="gap-2">
+                  <Bug className="h-4 w-4" />
+                  <span className="hidden sm:inline">Relatar Erro</span>
+                </Button>
                 <Button variant="ghost" size="sm" onClick={handleLogout} className="gap-2">
                   <LogOut className="h-4 w-4" />
                   <span className="hidden sm:inline">Sair</span>
@@ -67,6 +76,7 @@ export function AgenciaLayout() {
               <Outlet />
             </div>
           </main>
+          <RelatarErroModal open={relatarOpen} onOpenChange={setRelatarOpen} />
         </div>
     </ProtectedRoute>
   );
