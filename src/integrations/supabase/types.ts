@@ -31638,28 +31638,17 @@ export type Database = {
         Returns: string
       }
       fn_tipo_consultor: { Args: { p_vendedor_id: string }; Returns: string }
-      fn_upsert_hierarquia_vendedor:
-        | {
-            Args: {
-              p_agencia_id?: string
-              p_gerente_id?: string
-              p_observacoes?: string
-              p_supervisor_id?: string
-              p_vendedor_id: string
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              p_agencia_id?: string
-              p_gerente_id?: string
-              p_observacoes?: string
-              p_supervisor_id?: string
-              p_supervisores?: Json
-              p_vendedor_id: string
-            }
-            Returns: string
-          }
+      fn_upsert_hierarquia_vendedor: {
+        Args: {
+          p_agencia_id?: string
+          p_gerente_id?: string
+          p_observacoes?: string
+          p_supervisor_id?: string
+          p_supervisores?: Json
+          p_vendedor_id: string
+        }
+        Returns: string
+      }
       fn_verificar_almoco_profissional: {
         Args: { p_profissional_id: string }
         Returns: boolean
