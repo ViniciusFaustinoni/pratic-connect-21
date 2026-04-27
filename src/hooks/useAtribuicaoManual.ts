@@ -269,13 +269,16 @@ export function useVistoriadoresAtivos() {
       }
 
       return tecnicosDisponiveis.map(({ profile: p, loc, rolePermanente, roleOperacional, appAtivo, disponibilidadeTipo }) => {
+        const prioridadeStatus = (s: string) =>
+          s === 'em_andamento' ? 0 : s === 'em_rota' ? 1 : 2;
         const tarefas = (servicosAtribuidos || [])
           .filter(s => s.profissional_id === p.id)
           .map(s => ({
             ...s,
             zona: getZonaAtendimento(s.bairro, s.cidade, (s as any).uf),
             localizacaoFormatada: formatLocalizacaoComZona(s.bairro, s.cidade, (s as any).uf),
-          }));
+          }))
+          .sort((a, b) => prioridadeStatus(a.status) - prioridadeStatus(b.status));
         return {
           ...p,
           role_permanente: rolePermanente,
