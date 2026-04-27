@@ -446,6 +446,7 @@ export default function ExecutarVistoriaCompleta() {
         associadoId: associado.id,
         hodometro: parseInt(hodometro),
         observacoes: observacoes.trim() || undefined,
+        rastreadorId: rastreadorEncontrado?.id,
       });
       setShowConfirmacao(true);
     } catch (e) {
