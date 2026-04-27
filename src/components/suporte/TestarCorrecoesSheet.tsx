@@ -59,16 +59,29 @@ export function TestarCorrecoesSheet({ open, onOpenChange }: Props) {
   const [recusaReportId, setRecusaReportId] = useState<string | null>(null);
   const [motivo, setMotivo] = useState('');
 
+  // Fix tela preta: ao abrir o AlertDialog, fechamos o Sheet para evitar
+  // sobreposição de overlays do Radix (Sheet z-1100 + AlertDialog z-1200)
+  // que em alguns navegadores deixa o body com pointer-events: none travado.
+  const abrirRecusa = (reportId: string) => {
+    setMotivo('');
+    setRecusaReportId(reportId);
+    onOpenChange(false);
+  };
+
   const fecharRecusa = () => {
     setRecusaReportId(null);
     setMotivo('');
+    // Reabrir o Sheet para o usuário continuar avaliando outros relatos
+    onOpenChange(true);
   };
 
   const confirmarRecusa = async () => {
     if (!recusaReportId) return;
     try {
       await reabrir.mutateAsync({ id: recusaReportId, motivo });
-      fecharRecusa();
+      // Sucesso: limpar tudo e manter Sheet fechado (relato sumiu da lista)
+      setRecusaReportId(null);
+      setMotivo('');
     } catch {
       // toast já é exibido no hook
     }
