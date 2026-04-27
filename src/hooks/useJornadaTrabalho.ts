@@ -291,6 +291,9 @@ export function useJornadaTrabalho() {
   const iniciarAlmocoMutation = useMutation({
     mutationFn: async () => {
       if (!turno?.id) throw new Error('Turno não encontrado');
+      if (temTarefaEmExecucao) {
+        throw new Error('Finalize ou pause o serviço atual antes de iniciar o almoço.');
+      }
 
       const { data, error } = await supabase
         .from('turnos_profissionais')
