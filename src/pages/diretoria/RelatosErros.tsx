@@ -126,9 +126,14 @@ export default function RelatosErros() {
       descartado: [],
     };
     for (const r of reports) grupos[r.status].push(r);
-    // mais antigo primeiro = mais urgente
+    // mais antigo primeiro = mais urgente; retratamentos sobem ao topo de "em_tratamento"
     for (const k of Object.keys(grupos) as ErrorReportStatus[]) {
-      grupos[k].sort((a, b) => +new Date(a.created_at) - +new Date(b.created_at));
+      grupos[k].sort((a, b) => {
+        if (k === 'em_tratamento' && a.eh_retratamento !== b.eh_retratamento) {
+          return a.eh_retratamento ? -1 : 1;
+        }
+        return +new Date(a.created_at) - +new Date(b.created_at);
+      });
     }
     return grupos;
   }, [reports]);
