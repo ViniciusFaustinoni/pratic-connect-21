@@ -19,6 +19,7 @@ type UnifiedCharge = {
   referencia: string | null;
   tipo: string | null;
   fonte: 'asaas' | 'sga';
+  forma_pagamento: string | null;
 };
 
 const PAID_STATUSES = ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'];
@@ -49,6 +50,7 @@ function mapAsaasCharge(cobranca: any): UnifiedCharge {
     referencia: cobranca.referencia || cobranca.competencia || cobranca.tipo || 'Cobrança',
     tipo: cobranca.tipo || null,
     fonte: 'asaas',
+    forma_pagamento: cobranca.forma_pagamento || null,
   };
 }
 
