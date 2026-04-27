@@ -25,6 +25,7 @@ export interface ParcelaForm {
   label: string;
   ordem: number;
   niveis: NivelForm[];
+  supervisor_split_mode?: 'igual' | 'personalizado';
 }
 
 interface ParcelaEditorProps {
