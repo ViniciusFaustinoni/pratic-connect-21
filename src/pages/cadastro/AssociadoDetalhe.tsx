@@ -178,6 +178,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
   const [veiculoDetalhesId, setVeiculoDetalhesId] = useState<string | null>(null);
   const [veiculoEditar, setVeiculoEditar] = useState<any>(null);
   const [mapaModalOpen, setMapaModalOpen] = useState(false);
+  const [alterarFormaState, setAlterarFormaState] = useState<{ open: boolean; cobrancaId: string; formaAtual: string; descricao: string } | null>(null);
   const [veiculoSelecionadoId, setVeiculoSelecionadoId] = useState<string | null>(null);
   const [selecionarVeiculoOpen, setSelecionarVeiculoOpen] = useState(false);
   const [rastreadorModalOpen, setRastreadorModalOpen] = useState(false);
