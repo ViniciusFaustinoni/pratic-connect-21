@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { parseDataLocal } from '@/lib/date-utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -226,7 +227,7 @@ export default function ManutencaoRastreadoresTab() {
                   <TableCell>
                     <div className="flex flex-col">
                       <span className="text-sm">
-                        {format(new Date(vistoria.data_agendada), 'dd/MM/yyyy', { locale: ptBR })}
+                        {(() => { const d = parseDataLocal(vistoria.data_agendada); return d ? format(d, 'dd/MM/yyyy', { locale: ptBR }) : '—'; })()}
                       </span>
                       <span className="text-xs text-muted-foreground">
                         {PERIODO_LABELS[vistoria.periodo as keyof typeof PERIODO_LABELS] || vistoria.periodo}

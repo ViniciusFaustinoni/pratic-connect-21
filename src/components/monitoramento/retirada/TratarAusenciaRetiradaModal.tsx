@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { parseDataLocal } from '@/lib/date-utils';
 import {
   Dialog,
   DialogContent,
@@ -208,7 +209,7 @@ export function TratarAusenciaRetiradaModal({
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                   <span>
-                    {format(new Date(retirada.data_agendada), "dd/MM/yyyy", { locale: ptBR })}
+                    {(() => { const d = parseDataLocal(retirada.data_agendada); return d ? format(d, "dd/MM/yyyy", { locale: ptBR }) : '—'; })()}
                   </span>
                 </div>
               )}

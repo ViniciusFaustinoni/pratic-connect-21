@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useMemo } from 'react';
+import { parseDataLocal } from '@/lib/date-utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
@@ -1126,7 +1127,7 @@ export default function AcompanhamentoProposta() {
                     <div>
                       <p className="text-sm text-muted-foreground">Agendada para</p>
                       <p className="font-medium">
-                        {format(new Date(instalacao.data_agendada), "EEEE, dd 'de' MMMM", { locale: ptBR })}
+                        {(() => { const d = parseDataLocal(instalacao.data_agendada); return d ? format(d, "EEEE, dd 'de' MMMM", { locale: ptBR }) : '—'; })()}
                       </p>
                     </div>
                   </div>

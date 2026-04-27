@@ -9027,6 +9027,9 @@ export type Database = {
       cotacoes: {
         Row: {
           adicionais_selecionados: Json | null
+          avarias_observadas_cadastro: string | null
+          avarias_observadas_em: string | null
+          avarias_observadas_por: string | null
           campanha_desconto_id: string | null
           cancelada_em: string | null
           categoria: string | null
@@ -9154,6 +9157,9 @@ export type Database = {
         }
         Insert: {
           adicionais_selecionados?: Json | null
+          avarias_observadas_cadastro?: string | null
+          avarias_observadas_em?: string | null
+          avarias_observadas_por?: string | null
           campanha_desconto_id?: string | null
           cancelada_em?: string | null
           categoria?: string | null
@@ -9281,6 +9287,9 @@ export type Database = {
         }
         Update: {
           adicionais_selecionados?: Json | null
+          avarias_observadas_cadastro?: string | null
+          avarias_observadas_em?: string | null
+          avarias_observadas_por?: string | null
           campanha_desconto_id?: string | null
           cancelada_em?: string | null
           categoria?: string | null
