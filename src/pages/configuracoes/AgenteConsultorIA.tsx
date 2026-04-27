@@ -662,6 +662,8 @@ export default function AgenteConsultorIA() {
         </p>
       </div>
 
+      <KillSwitchAgente />
+
       <Tabs defaultValue="linhas" className="w-full">
         <TabsList className="w-full justify-start">
           <TabsTrigger value="linhas" className="gap-1.5">
