@@ -99,8 +99,10 @@ export function useServicosParaAtribuir() {
         localizacaoFormatada: formatLocalizacaoComZona(s.bairro, s.cidade, (s as any).uf),
       }));
     },
-    refetchInterval: 30000,
-    refetchIntervalInBackground: false,
+    refetchInterval: 15000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 }
 
@@ -302,9 +304,10 @@ export function useVistoriadoresAtivos() {
         return (a.nome || '').localeCompare(b.nome || '', 'pt-BR');
       });
     },
-    refetchInterval: 30000,
-    refetchIntervalInBackground: false,
-    staleTime: 25000,
+    refetchInterval: 15000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 }
 
