@@ -137,6 +137,7 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
                   <MapPinned className="h-3.5 w-3.5" /> Realocar
                 </Button>
               )}
+              <LiberarServicoButton servicoId={servico.id} servicoStatus={servico.status} />
             </div>
           </DialogHeader>
 
