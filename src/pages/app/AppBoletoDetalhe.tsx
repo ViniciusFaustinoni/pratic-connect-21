@@ -528,6 +528,16 @@ export default function AppBoletoDetalhe() {
               Compartilhar
             </Button>
           </div>
+          {boleto.fonte === 'asaas' && (boleto.status === 'pendente' || boleto.status === 'vencido') && (
+            <Button
+              variant="default"
+              className="w-full mt-3"
+              onClick={() => setAlterarFormaOpen(true)}
+            >
+              <CreditCard className="mr-2 h-4 w-4" />
+              Alterar forma de pagamento
+            </Button>
+          )}
         </CardContent>
       </Card>
 
