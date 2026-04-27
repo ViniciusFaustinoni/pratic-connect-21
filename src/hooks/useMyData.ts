@@ -705,6 +705,7 @@ async function buscarBoletosLocal(associadoId: string): Promise<Boleto[]> {
       formaPagamento: c.pagamento_forma || c.forma_pagamento || undefined,
       nossoNumero: c.boleto_nosso_numero || undefined,
       numeroDocumento: c.referencia || undefined,
+      fonte: 'asaas',
     };
   });
 }
