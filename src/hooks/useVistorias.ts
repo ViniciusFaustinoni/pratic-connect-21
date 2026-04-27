@@ -835,8 +835,14 @@ export function useExecutarVistoria() {
       queryClient.invalidateQueries({ queryKey: ['vistorias'] });
       queryClient.invalidateQueries({ queryKey: ['vistoria'] });
       queryClient.invalidateQueries({ queryKey: ['vistoria-completa'] });
+      queryClient.invalidateQueries({ queryKey: ['vistoria-completa-servico'] });
       queryClient.invalidateQueries({ queryKey: ['rastreadores'] });
       queryClient.invalidateQueries({ queryKey: ['rastreadores-metricas'] });
+      // Correção: garante que a tarefa atual do técnico suma imediatamente
+      // após a finalização (sem esperar o polling de 30s).
+      queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+      queryClient.invalidateQueries({ queryKey: ['minhas-tarefas'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
       toast.success('Vistoria finalizada com sucesso!');
     },
     onError: (error) => {
