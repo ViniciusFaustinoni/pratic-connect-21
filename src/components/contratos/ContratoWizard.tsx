@@ -1189,7 +1189,7 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
                        tipoOperacao === 'inclusao' ? 'Inclusão' :
                        tipoOperacao === 'troca_titularidade' ? 'Troca de Titularidade' :
                        tipoOperacao === 'reativacao' ? 'Reativação' :
-                       tipoOperacao === 'substituicao_placa' ? 'Substituição de Placa' : tipoOperacao}
+                       tipoOperacao === 'substituicao_placa' ? 'Substituição de Veículo/Placa' : tipoOperacao}
                     </Badge>
                   </div>
                 </div>
