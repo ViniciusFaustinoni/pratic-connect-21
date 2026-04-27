@@ -317,7 +317,18 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
               )}
               <ChainNode label={gerenteBloqueado ? 'Gerente (herdado do supervisor)' : 'Gerente'} name={userName(usuariosMap, gerenteEffectiveId)} icon={UserRound} loading={loadingVinculos} />
               <div className="flex justify-center text-muted-foreground"><ArrowDown className="h-4 w-4" /></div>
-              <ChainNode label="Supervisor" name={userName(usuariosMap, supervisorId === 'none' ? null : supervisorId)} icon={Users2} loading={loadingVinculos} />
+              <ChainNode
+                label={supervisores.length > 1 ? `Supervisores (${supervisores.length})` : 'Supervisor'}
+                name={
+                  supervisores.length === 0
+                    ? 'Não definido'
+                    : supervisores.length === 1
+                      ? userName(usuariosMap, supervisores[0].supervisor_id || null)
+                      : supervisores.map((s) => userName(usuariosMap, s.supervisor_id || null)).join(', ')
+                }
+                icon={Users2}
+                loading={loadingVinculos}
+              />
               <div className="flex justify-center text-muted-foreground"><ArrowDown className="h-4 w-4" /></div>
               <ChainNode label="Usuário selecionado" name={linha.usuario.nome} icon={Network} />
             </div>
