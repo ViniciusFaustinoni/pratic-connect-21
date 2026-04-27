@@ -1,36 +1,40 @@
-# Adicionar coluna "Crítico" em Relatos de Erros
+# Bloquear "Iniciar almoço" enquanto técnico tem serviço em andamento
 
-## Comportamento
+## Problema
 
-- Nada muda no fluxo de quem **cria** um relato — continua entrando como `Aberto`.
-- No card `Aberto`, ao abrir o modal de detalhes, surge um botão **"Crítico"**.
-- Clicar nele move o relato para o novo status `critico`, que aparece em uma **quarta coluna** na visão de Fila, ao lado de Aberto / Em tratamento / Concluído.
-- A coluna "Crítico" funciona como uma "geladeira" — ficam ali para resolver depois.
-- Do card `Crítico`, é possível **voltar para Aberto** (re-priorizar) ou **Iniciar tratamento** direto.
+O técnico Kleyton iniciou o almoço enquanto executava um atendimento. O hook `useTemTarefaEmExecucao` já existe e detecta corretamente serviços em `em_rota` ou `em_andamento`, mas o flag `podeIniciarAlmoco` em `useJornadaTrabalho.ts` **não consulta esse hook**:
 
-## Mudanças técnicas
+```ts
+// src/hooks/useJornadaTrabalho.ts:429
+const podeIniciarAlmoco = turno?.status === 'ativo' && !turno?.inicio_almoco;
+```
 
-### Banco
-- Adicionar valor `'critico'` ao enum `error_report_status` (migração).
+Resultado: o botão "Iniciar almoço" fica habilitado mesmo durante a execução de um serviço.
 
-### Backend / tipos
-- `src/hooks/useErrorReports.ts`: incluir `'critico'` no tipo `ErrorReportStatus` e tratar na função `useUpdateErrorReportStatus` (toast label).
+## Correção
 
-### UI — `src/pages/diretoria/RelatosErros.tsx`
-- `STATUS_LABELS`: adicionar `critico` com cor laranja (chamando atenção sem ser destrutiva).
-- `ORDEM_FILA`: passar para `['aberto', 'critico', 'em_tratamento', 'concluido']` (4 colunas).
-- Cards de contadores: incluir `critico` (vai para 6 cards no grid responsivo).
-- `reportsPorStatus`: incluir `critico` na inicialização.
-- Layout do grid de Fila: ajustar `lg:grid-cols-3` → `xl:grid-cols-4` para acomodar 4 colunas (mantendo responsivo).
+### `src/hooks/useJornadaTrabalho.ts`
+- Incluir `temTarefaEmExecucao` no cálculo:
+  ```ts
+  const podeIniciarAlmoco =
+    turno?.status === 'ativo' &&
+    !turno?.inicio_almoco &&
+    !temTarefaEmExecucao;
+  ```
+- Defesa em profundidade no `iniciarAlmocoMutation`: se `temTarefaEmExecucao` for `true` no momento do clique, abortar com `toast.error("Finalize ou pause o serviço atual antes de iniciar o almoço.")`.
 
-### UI — `src/components/diretoria/DetalheRelatoModal.tsx`
-- `statusBadge`: incluir `critico`.
-- Footer: quando `status === 'aberto'`, exibir botão extra **"Marcar como crítico"** (variant outline, ícone `AlertTriangle`, cor laranja) que dispara `update.mutate({ status: 'critico' })`.
-- Quando `status === 'critico'`: mostrar dois botões — **"Voltar para aberto"** e **"Iniciar tratamento"**.
+### `src/components/vistoriador/JornadaStatusBar.tsx`
+- Quando `podeIniciarAlmoco === false` apenas por causa de tarefa em execução, exibir o botão **desabilitado** com tooltip/legenda explicativa: *"Conclua o serviço atual antes de iniciar o almoço"*. Isso é mais didático do que sumir o botão silenciosamente.
+- Para isso, expor um novo flag `bloqueadoPorTarefa` do hook (`turno ativo + sem almoço iniciado + tem tarefa em execução`).
+
+## Compatibilidade com a regra existente
+
+A memória *technician-lunch-cycle-automation* diz que almoço é **100% manual** e que motores de atribuição **não consultam** o status `em_almoco`. Esta correção não viola nada:
+- Continua sendo manual (técnico clica para iniciar/finalizar).
+- Edge functions de atribuição permanecem inalteradas.
+- A regra adicionada é apenas uma trava de UI/cliente para evitar registro inconsistente quando há serviço em curso.
 
 ## Arquivos afetados
 
-- Migração: novo valor de enum
-- `src/hooks/useErrorReports.ts`
-- `src/pages/diretoria/RelatosErros.tsx`
-- `src/components/diretoria/DetalheRelatoModal.tsx`
+- `src/hooks/useJornadaTrabalho.ts`
+- `src/components/vistoriador/JornadaStatusBar.tsx`
