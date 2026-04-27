@@ -305,13 +305,13 @@ export interface LeadsFunnelData {
   [etapa: string]: number;
 }
 
-export function useLeadsFunnel() {
+export function useLeadsFunnel(vendedorId?: string | null) {
   return useQuery({
-    queryKey: ['leads-funnel'],
+    queryKey: ['leads-funnel', vendedorId || 'all'],
     queryFn: async (): Promise<LeadsFunnelData> => {
-      const { data, error } = await supabase
-        .from('leads')
-        .select('etapa');
+      let query = supabase.from('leads').select('etapa');
+      if (vendedorId) query = query.eq('vendedor_id', vendedorId);
+      const { data, error } = await query;
       
       if (error) throw error;
       
