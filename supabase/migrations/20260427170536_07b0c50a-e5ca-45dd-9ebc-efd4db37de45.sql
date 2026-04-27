@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.fn_upsert_hierarquia_vendedor(uuid, uuid, uuid, uuid, text);
