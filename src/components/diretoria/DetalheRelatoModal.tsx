@@ -265,12 +265,40 @@ export function DetalheRelatoModal({ report, onClose }: Props) {
           )}
 
           {report.status === 'aberto' && (
-            <Button
-              onClick={() => update.mutate({ id: report.id, status: 'em_tratamento', observacao: obs || undefined }, { onSuccess: onClose })}
-              disabled={update.isPending}
-            >
-              <Play className="h-4 w-4 mr-1" /> Iniciar tratamento
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                className="border-orange-500/40 text-orange-600 hover:text-orange-700 hover:bg-orange-500/10"
+                onClick={() => update.mutate({ id: report.id, status: 'critico', observacao: obs || undefined }, { onSuccess: onClose })}
+                disabled={update.isPending}
+              >
+                <AlertTriangle className="h-4 w-4 mr-1" /> Crítico
+              </Button>
+              <Button
+                onClick={() => update.mutate({ id: report.id, status: 'em_tratamento', observacao: obs || undefined }, { onSuccess: onClose })}
+                disabled={update.isPending}
+              >
+                <Play className="h-4 w-4 mr-1" /> Iniciar tratamento
+              </Button>
+            </>
+          )}
+
+          {report.status === 'critico' && (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => update.mutate({ id: report.id, status: 'aberto', observacao: obs || undefined })}
+                disabled={update.isPending}
+              >
+                <Undo2 className="h-4 w-4 mr-1" /> Voltar para aberto
+              </Button>
+              <Button
+                onClick={() => update.mutate({ id: report.id, status: 'em_tratamento', observacao: obs || undefined }, { onSuccess: onClose })}
+                disabled={update.isPending}
+              >
+                <Play className="h-4 w-4 mr-1" /> Iniciar tratamento
+              </Button>
+            </>
           )}
 
           {report.status === 'em_tratamento' && (
