@@ -673,6 +673,16 @@ export default function AppBoletoDetalhe() {
           </AlertDescription>
         </Alert>
       )}
+
+      {boleto.fonte === 'asaas' && (
+        <AlterarFormaPagamentoDialog
+          open={alterarFormaOpen}
+          onOpenChange={setAlterarFormaOpen}
+          cobrancaId={boleto.id}
+          formaAtual={boleto.formaPagamento || 'UNDEFINED'}
+          descricao={`${boleto.competencia || 'Cobrança'} • ${formatarValor(boleto.valorFinal)} • venc. ${boleto.dataVencimento}`}
+        />
+      )}
     </div>
   );
 }
