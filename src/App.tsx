@@ -200,6 +200,7 @@ const DashboardVendaExterna = lazy(() => import("./pages/financeiro/DashboardVen
 // Cobrança — apenas Régua continua roteada (dentro de /financeiro/cobrancas/regua via ReguaPage)
 const TrocaTitularidade = lazy(() => import("./pages/cobranca/TrocaTitularidade"));
 const AprovacoesTroca = lazy(() => import("./pages/monitoramento/AprovacoesTroca"));
+const LiberacoesAutoVistoria = lazy(() => import("./pages/monitoramento/LiberacoesAutoVistoria"));
 
 // Agência
 const AgenciaDashboard = lazy(() => import("./pages/agencia/AgenciaDashboard"));
@@ -661,6 +662,7 @@ const App = () => (
               <Route path="/monitoramento/imprevistos" element={<ImprevistosPainel />} />
               <Route path="/monitoramento/prestadores-parceiros" element={<PrestadoresParceiros />} />
               <Route path="/monitoramento/aprovacoes" element={<AprovacoesTroca />} />
+              <Route path="/monitoramento/liberacoes-autovistoria" element={<LiberacoesAutoVistoria />} />
               
               {/* Marketing */}
               <Route path="/marketing" element={<MarketingDashboard />} />
