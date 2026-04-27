@@ -1,56 +1,70 @@
-# Veículos 0KM: exibir chassi no lugar da placa
+# Veículos sem rastreador (FIPE < R$ 30k carro / R$ 9k moto, não-Diesel)
 
-## Problema
+## Regra
+- **Tarefa do técnico** não deve exigir etapa de instalação — só fotos e vídeo.
+- **Link público de vistoria** deve permitir concluir só com fotos, sem segunda etapa.
+- Ao concluir as fotos, **veículo é considerado pronto** (Proteção 360 ativa, sem agendar visita técnica).
 
-No card "Atribuição Manual" (e demais cards de serviços), veículos 0KM aparecem com a placa-placeholder técnica (ex: `0KM91CD6`) — que não é uma placa real. Usuário precisa ver o **chassi** nesses casos.
+## Estado atual (auditoria)
 
-Convenção já existente no projeto:
-- `src/lib/placa-utils.ts` → `isPlacaPlaceholder()` detecta `0KM + 5 chars`.
-- `formatPlacaExibicao()` já existe, mas hoje devolve só `"0KM (sem placa)"` para placeholders, sem usar chassi.
+| Camada | Já correto? | Precisa de ajuste? |
+|---|---|---|
+| `aprovar-proposta` — não cria instalação para veículo sem rastreador | ✅ | — |
+| `ExecutarVistoriaCompleta.tsx` (técnico) — filtra categorias `instalacao`/`rastreador` via `veiculoPrecisaRastreador` | ✅ | — |
+| `CotacaoPublicaCompleta.tsx` — lógica **invertida** ao escolher entre 18 fotos / 31 fotos | ❌ | Linhas 126-128 e 141-143 |
+| `VistoriaPublica.tsx` (link público pós-aprovação) — sempre mostra 2 etapas (Fotos + Instalação) | ❌ | Não considera a regra |
+| `concluir-etapa-fotos-publica` (edge) — sempre deixa o link aguardando etapa de instalação | ❌ | Não considera a regra |
+| Geração do link público — só dispara quando `veiculoPrecisaRastreador = true` | ❌ | Decidir se queremos link mesmo sem rastreador (ver decisão abaixo) |
 
-## Plano (3 etapas curtas)
+## Decisão de produto que precisa ser confirmada
 
-### 1. Novo helper em `src/lib/placa-utils.ts`
+Hoje, quando o veículo dispensa rastreador, **nenhum link público é criado** — `aprovar-proposta` ativa Proteção 360 direto, sem fotos. A regra do usuário ("se acessado pelo link público, e realizadas as imagens, prossegue sem instalação") sugere que mesmo nesses casos queremos que o cliente faça as fotos.
 
-Adicionar `formatPlacaOuChassi(placa, chassi, opts?)`:
-- Placa real → uppercase.
-- Placeholder 0KM com `chassi` → `"0KM · {CHASSI}"` (modo badge) ou `"Chassi {CHASSI}"` (modo full).
-- Placeholder sem chassi → fallback `"0KM (sem placa)"`.
+**Vou assumir o caminho A** (mais alinhado ao texto da regra): gerar o link público sempre, com etapa de instalação opcional. Se preferir o caminho B (manter ativação direta sem fotos), corrijo só os 3 pontos da UI/edge sem mexer em `aprovar-proposta`.
 
-### 2. Garantir `chassi` nas queries dos cards
+## Plano de implementação (caminho A)
 
-Hooks que alimentam os cards e ainda **não** trazem `chassi` (precisam incluir):
+### 1. Banco — campo de exigência por instalação
+- Adicionar `vistoria_links.exige_etapa_instalacao boolean default true`.
+- Backfill: marcar `false` para links cujo veículo dispensa rastreador (FIPE < limite + não-Diesel).
 
-- `src/hooks/useAtribuicaoManual.ts` — linhas 39, 257, 442 (`veiculo:veiculos!...(placa, marca, modelo)` → adicionar `chassi`).
-- `src/hooks/useServicos.ts` — linhas 277, 353, 688 (`select` do veículo precisa incluir `chassi`; nas linhas 777 e 799 já vem).
+### 2. `aprovar-proposta`
+- Sempre gerar link público de vistoria (mover a chamada `gerar-link-vistoria-publica` para fora do `if (veiculoPrecisaRastreador)`).
+- Passar `exige_etapa_instalacao = veiculoPrecisaRastreador` para o gerador.
+- Para veículos sem rastreador, ainda **não criar registro em `instalacoes`** (mantém comportamento atual de Proteção 360 imediata).
 
-### 3. Trocar a renderização em todos os pontos que mostram placa em card
+### 3. `gerar-link-vistoria-publica`
+- Aceitar e gravar a flag `exige_etapa_instalacao` no insert.
 
-Lista alvo (apenas os de **card de serviço/instalação/atribuição** — não tocar telas de cadastro/edição de veículo, onde a placa real importa):
+### 4. `VistoriaPublica.tsx`
+- Ler `link.exige_etapa_instalacao`. Quando `false`:
+  - `HomeEtapas`: ocultar o card "Instalação" e o aviso de login do técnico.
+  - Após concluir fotos, redirecionar para tela de "concluído" sem aguardar aprovação/instalação.
 
-- `src/components/monitoramento/AtribuicaoManualTab.tsx` — linhas 80–84 (card pendente) e 166/192 (chip de tarefa atribuída).
-- `src/components/servicos-campo/ServicosTable.tsx` — coluna Veículo.
-- `src/components/servicos-campo/ServicoDetailModal.tsx` — header.
-- `src/components/mapa/MapaVistoriasContent.tsx` — já mostra badge `0KM` (linhas 696, 967); ajustar para também exibir chassi ao lado.
-- `src/pages/monitoramento/Instalacoes.tsx` — linha ~240 (badge 0KM).
-- `src/components/instalador/*` (tarefa atual / próxima tarefa) — onde placa aparece no app do técnico.
+### 5. `concluir-etapa-fotos-publica` (edge)
+- Quando `link.exige_etapa_instalacao === false`:
+  - Setar `instalacao_etapa_status = 'concluida'` no mesmo update.
+  - Marcar `fotos_aprovadas_em = now()` (auto-aprovação — fotos vão direto para análise OCR/manual normal, mas não bloqueiam a finalização).
+  - Garantir `veiculos.cobertura_total = true` e `veiculos.status = 'ativo'` se ainda não estiverem.
+  - Aplicar regra de **dedupe** já existente (`mem://logic/operations/dedupe-agendamentos-rule`): fechar quaisquer `servicos`/`agendamentos_base` órfãos do par associado+veículo.
 
-Cada ponto passa a chamar `formatPlacaOuChassi(veiculo?.placa, veiculo?.chassi, { mode: 'badge' })`.
+### 6. `CotacaoPublicaCompleta.tsx` (correção do bug existente)
+- Linhas 126-128: inverter — usar `FOTOS_VISTORIA_COMPLETA_CLIENTE` (31 fotos) **quando** `veiculoPrecisaRastreador === false`. Hoje a condição está trocada.
+- Linha 141-143: inicializar `fotosVistoria` com `fotosVistoriaConfig` derivado do flag, não a constante padrão.
 
-## Comportamento final esperado
+### 7. Memória do projeto
+Adicionar `mem://logic/operations/vistoria-sem-rastreador-flow`:
+> Veículos abaixo de R$ 30k (carro) / R$ 9k (moto), não-Diesel: vistoria pública conclui só com fotos+vídeo; sem etapa de instalação; sem agendamento técnico. Backend marca `instalacao_etapa_status='concluida'` ao receber as fotos. Tarefa do técnico (`ExecutarVistoriaCompleta`) já filtra categorias `instalacao`/`rastreador` quando `veiculoPrecisaRastreador=false`.
 
-- Veículo com placa real `LUJ9I51` → exibe `LUJ9I51` (sem mudança).
-- Veículo 0KM `0KM91CD6` com chassi `9BWZZZ377VT004251` → exibe `0KM · 9BWZZZ377VT004251`.
-- Veículo 0KM sem chassi cadastrado → exibe `0KM (sem placa)` (fallback atual).
+## O que **NÃO** será alterado
 
-## Riscos
+- `ExecutarVistoriaCompleta.tsx` — já trata o caso corretamente.
+- Cálculo de `precisaRastreador()` em `useConfigRastreador.ts` — fonte única, não duplicar.
+- Tarefa do técnico para veículos com rastreador — fluxo atual permanece.
 
-- **Baixo.** Mudança é puramente de exibição. Nenhum filtro/busca por placa é alterado (busca continua aceitando o placeholder).
-- Garantir que toda query que renderiza placa em card também `select` o `chassi` (caso contrário, fallback genérico).
+## Confirmações que preciso
 
-## Fora de escopo
+1. **Caminho A (gerar link público sempre) ou B (manter ativação direta sem fotos para veículos < R$ 30k)?**
+2. Se A: as fotos do link público de veículo sem rastreador devem **passar pela aprovação manual do monitoramento** (igual veículos com rastreador) ou **auto-aprovar** ao concluir?
 
-- Tela de edição/cadastro de veículo: continua mostrando a placa-placeholder (é o valor real do banco).
-- Documentos / contratos / relatórios: já têm tratamento próprio via `Aditivos` "veiculo_0km".
-
-Aprova?
+Aprova o caminho A com auto-aprovação? Ou prefere outra combinação?
