@@ -126,7 +126,7 @@ function useOrigemCadastro(associadoId: string) {
       else if (tipoEntradaRaw === 'inclusao') tipoEntradaKey = 'inclusao';
       else if (tipoEntradaRaw === 'reativacao') tipoEntradaKey = 'reativacao';
       else if (tipoEntradaRaw === 'troca_titularidade') tipoEntradaKey = 'troca_titularidade';
-      else if (tipoEntradaRaw === 'substituicao_placa') tipoEntradaKey = 'substituicao_placa';
+      else if (tipoEntradaRaw === 'substituicao_placa' || tipoEntradaRaw === 'substituicao') tipoEntradaKey = 'substituicao_placa';
       else if (indicacao) tipoEntradaKey = 'indicacao';
 
       // Fallback: check for approved direct migration by CPF when type is still 'adesao'
@@ -427,6 +427,7 @@ export const TIPO_ENTRADA_SHORT_LABELS: Record<string, string> = {
   inclusao: 'Inclusão',
   migracao: 'Migração',
   substituicao_placa: 'Substituição',
+  substituicao: 'Substituição',
   troca_titularidade: 'Troca Titular',
   reativacao: 'Reativação',
   indicacao: 'Indicação',

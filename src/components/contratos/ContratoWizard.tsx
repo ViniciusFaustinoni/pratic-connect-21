@@ -151,7 +151,11 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
   useEffect(() => {
     if (cotacao) {
       // Auto-set tipoOperacao from cotação's tipo_entrada (inclusão context)
-      const cotacaoTipoEntrada = (cotacao as any).tipo_entrada;
+      // Normaliza 'substituicao' (alias) para 'substituicao_placa' (canônico)
+      const cotacaoTipoEntradaRaw = (cotacao as any).tipo_entrada;
+      const cotacaoTipoEntrada = cotacaoTipoEntradaRaw === 'substituicao'
+        ? 'substituicao_placa'
+        : cotacaoTipoEntradaRaw;
       if (cotacaoTipoEntrada && cotacaoTipoEntrada !== tipoOperacao) {
         setTipoOperacao(cotacaoTipoEntrada);
       }
@@ -1036,7 +1040,7 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
                         <SelectItem value="inclusao">Inclusão</SelectItem>
                         <SelectItem value="troca_titularidade">Troca de Titularidade</SelectItem>
                         <SelectItem value="reativacao">Reativação</SelectItem>
-                        <SelectItem value="substituicao_placa">Substituição de Placa</SelectItem>
+                        <SelectItem value="substituicao_placa">Substituição de Veículo/Placa</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1185,7 +1189,7 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
                        tipoOperacao === 'inclusao' ? 'Inclusão' :
                        tipoOperacao === 'troca_titularidade' ? 'Troca de Titularidade' :
                        tipoOperacao === 'reativacao' ? 'Reativação' :
-                       tipoOperacao === 'substituicao_placa' ? 'Substituição de Placa' : tipoOperacao}
+                       tipoOperacao === 'substituicao_placa' ? 'Substituição de Veículo/Placa' : tipoOperacao}
                     </Badge>
                   </div>
                 </div>

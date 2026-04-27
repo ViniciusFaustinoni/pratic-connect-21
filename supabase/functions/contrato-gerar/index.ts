@@ -672,9 +672,11 @@ serve(async (req) => {
     const carenciaDiasPadrao = await getConfiguracaoNumero(supabase, 'carencia_dias_padrao', 120);
     const carenciaVidrosDias = await getConfiguracaoNumero(supabase, 'carencia_beneficio_vidros_dias', 120);
     // tipo_entrada: prioriza coluna direta; faz fallback para dados_extras (registros legados)
-    const tipoEntrada = (cotacao as any).tipo_entrada
+    // Normalização: 'substituicao' (alias) -> 'substituicao_placa' (canônico do termo)
+    const tipoEntradaRaw = (cotacao as any).tipo_entrada
       || ((cotacao as any).dados_extras?.tipo_entrada)
       || 'adesao';
+    const tipoEntrada = tipoEntradaRaw === 'substituicao' ? 'substituicao_placa' : tipoEntradaRaw;
     const hoje = new Date().toISOString().split('T')[0];
     let dataCarenciaInicio: string | null = null;
     let dataCarenciaFim: string | null = null;

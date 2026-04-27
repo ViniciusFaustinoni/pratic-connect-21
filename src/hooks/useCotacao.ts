@@ -407,10 +407,16 @@ export function useCriarCotacao() {
         indicador_nome: payload.indicador_nome || null,
         // tipo_entrada gravado também na coluna direta para que o backend
         // (contrato-gerar, autentique-create) reconheça substituição/inclusão/migração.
-        tipo_entrada: payload.tipo_entrada || null,
+        // Normalização: 'substituicao' (alias usado em URLs/UI) é equivalente a 'substituicao_placa'
+        // (valor canônico aceito pelo termo de filiação e pelas edge functions).
+        tipo_entrada: payload.tipo_entrada === 'substituicao'
+          ? 'substituicao_placa'
+          : (payload.tipo_entrada || null),
         dados_extras: (payload.associado_id || payload.tipo_entrada) ? {
           associado_id: payload.associado_id || null,
-          tipo_entrada: payload.tipo_entrada || null,
+          tipo_entrada: payload.tipo_entrada === 'substituicao'
+            ? 'substituicao_placa'
+            : (payload.tipo_entrada || null),
           ...(payload.veiculo_antigo_id && {
             veiculo_antigo_id: payload.veiculo_antigo_id,
             veiculo_antigo_placa: payload.veiculo_antigo_placa || null,
