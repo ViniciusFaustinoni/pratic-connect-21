@@ -29,13 +29,14 @@ import { useErrorReportFiles } from '@/hooks/useErrorReports';
 
 const STATUS_LABELS: Record<ErrorReportStatus, { label: string; cls: string }> = {
   aberto: { label: 'Aberto', cls: 'bg-destructive/15 text-destructive border-destructive/30' },
+  critico: { label: 'Crítico', cls: 'bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/40' },
   em_tratamento: { label: 'Em tratamento', cls: 'bg-warning/15 text-warning border-warning/30' },
   concluido: { label: 'Concluído', cls: 'bg-primary/15 text-primary border-primary/30' },
   validado: { label: 'Validado', cls: 'bg-success/15 text-success border-success/30' },
   descartado: { label: 'Descartado', cls: 'bg-muted text-muted-foreground border-border' },
 };
 
-const ORDEM_FILA: ErrorReportStatus[] = ['aberto', 'em_tratamento', 'concluido'];
+const ORDEM_FILA: ErrorReportStatus[] = ['aberto', 'critico', 'em_tratamento', 'concluido'];
 
 function CardRelatoFila({ report, onOpen }: { report: ErrorReport; onOpen: (r: ErrorReport) => void }) {
   const { data: files = [] } = useErrorReportFiles(report.id);
