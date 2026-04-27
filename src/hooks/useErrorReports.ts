@@ -328,6 +328,7 @@ export function useUpdateErrorReportStatus() {
       qc.invalidateQueries({ queryKey: ['error-reports'] });
       const labels: Record<ErrorReportStatus, string> = {
         aberto: 'Reaberto',
+        critico: 'Marcado como crítico',
         em_tratamento: 'Em tratamento',
         concluido: 'Concluído — enviado para teste do usuário',
         validado: 'Validado!',
