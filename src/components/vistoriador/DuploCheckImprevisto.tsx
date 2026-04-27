@@ -105,6 +105,14 @@ export function DuploCheckImprevisto({
   const handleConfirmar = async () => {
     setConfirmando(true);
     try {
+      // 1) Buscar instalacao_origem_id do serviço para sincronizar a instalação
+      const { data: servico } = await supabase
+        .from('servicos')
+        .select('instalacao_origem_id')
+        .eq('id', tarefaId)
+        .single();
+
+      // 2) Marcar serviço como nao_compareceu
       const { error } = await supabase
         .from('servicos')
         .update({
@@ -117,6 +125,20 @@ export function DuploCheckImprevisto({
         .eq('id', tarefaId);
 
       if (error) throw error;
+
+      // 3) Sincroniza a instalação correspondente — evita que `enviar-link-reagendamento`
+      //    crie nova instalação em paralelo (que geraria card duplicado).
+      if (servico?.instalacao_origem_id) {
+        await supabase
+          .from('instalacoes')
+          .update({
+            status: 'nao_compareceu' as any,
+            instalador_id: null,
+            instalador_responsavel_id: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', servico.instalacao_origem_id);
+      }
 
       // PONTO B: Enviar link de reagendamento (idempotente - não reenvia se já foi)
       supabase.functions.invoke('enviar-link-reagendamento', {
