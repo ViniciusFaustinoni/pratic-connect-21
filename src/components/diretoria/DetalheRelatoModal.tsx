@@ -94,18 +94,6 @@ export function DetalheRelatoModal({ report, onClose }: Props) {
     }
   };
 
-  const onGerarPrompt = async () => {
-    if (!report) return;
-    const r = await gerarPrompt.mutateAsync({ reportId: report.id });
-    setPromptResult(r);
-  };
-
-  const onCopiarPrompt = async () => {
-    if (!promptResult?.prompt_para_lovable) return;
-    await navigator.clipboard.writeText(promptResult.prompt_para_lovable);
-    toast.success('Prompt copiado — cole no chat do Lovable');
-  };
-
   const onDescartar = () => {
     if (!report) return;
     const motivo = window.prompt('Motivo do descarte (opcional):') ?? '';
