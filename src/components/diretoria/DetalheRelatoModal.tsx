@@ -193,53 +193,6 @@ export function DetalheRelatoModal({ report, onClose }: Props) {
               )}
             </div>
 
-            {/* Gerar prompt */}
-            <div className="border border-border rounded-lg p-3 bg-muted/20 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-medium">Prompt de correção (Lovable)</span>
-                </div>
-                <div className="flex gap-1">
-                  {promptResult && (
-                    <Button size="sm" variant="ghost" onClick={onGerarPrompt} disabled={gerarPrompt.isPending}>
-                      <RotateCcw className="h-3 w-3 mr-1" /> Regerar
-                    </Button>
-                  )}
-                  <Button size="sm" onClick={onGerarPrompt} disabled={gerarPrompt.isPending}>
-                    {gerarPrompt.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Sparkles className="h-3 w-3 mr-1" />}
-                    {promptResult ? 'Gerar novamente' : 'Gerar prompt'}
-                  </Button>
-                </div>
-              </div>
-              {promptResult && (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium">{promptResult.titulo}</p>
-                  {promptResult.contexto_resumido && (
-                    <p className="text-xs text-muted-foreground">{promptResult.contexto_resumido}</p>
-                  )}
-                  {promptResult.arquivos_provaveis && promptResult.arquivos_provaveis.length > 0 && (
-                    <div className="text-xs">
-                      <span className="text-muted-foreground">Arquivos prováveis: </span>
-                      <span className="font-mono">{promptResult.arquivos_provaveis.join(', ')}</span>
-                    </div>
-                  )}
-                  <ScrollArea className="max-h-64 rounded border border-border bg-background">
-                    <pre className="text-xs whitespace-pre-wrap p-3 font-mono">
-                      {promptResult.prompt_para_lovable}
-                    </pre>
-                  </ScrollArea>
-                  <Button size="sm" variant="outline" onClick={onCopiarPrompt}>
-                    <Copy className="h-3 w-3 mr-1" /> Copiar prompt
-                  </Button>
-                </div>
-              )}
-              {!promptResult && !gerarPrompt.isPending && (
-                <p className="text-xs text-muted-foreground">
-                  Gera um prompt pronto para colar no chat do Lovable, analisando texto + imagens anexadas.
-                </p>
-              )}
-            </div>
           </div>
 
           {/* Timeline / aside */}
