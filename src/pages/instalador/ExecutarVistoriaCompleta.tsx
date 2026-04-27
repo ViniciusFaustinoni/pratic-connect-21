@@ -337,7 +337,16 @@ export default function ExecutarVistoriaCompleta() {
   // ou na instalação), consideramos satisfeito.
   const veiculoJaTemRastreador = !!(veiculo as any)?.rastreador_id || !!(vistoria as any)?.instalacao?.rastreador_id;
   const rastreadorVinculado = !veiculoPrecisaRastreador || veiculoJaTemRastreador || !!rastreadorEncontrado;
-  const podeAprovar = conferenciaCompleta && todasFotosEnviadas && videoEnviado && rastreadorVinculado;
+  // ID do rastreador ativo nesta vistoria (recém vinculado OU já existente no veículo/instalação)
+  const rastreadorIdAtivo: string | null =
+    rastreadorEncontrado?.id ||
+    (vistoria as any)?.instalacao?.rastreador_id ||
+    (veiculo as any)?.rastreador_id ||
+    null;
+  // Verificação visual da posição é obrigatória quando o veículo exige rastreador e há um ID ativo
+  const precisaConfirmarPosicao = veiculoPrecisaRastreador && !!rastreadorIdAtivo;
+  const posicaoOk = !precisaConfirmarPosicao || posicaoConfirmada;
+  const podeAprovar = conferenciaCompleta && todasFotosEnviadas && videoEnviado && rastreadorVinculado && posicaoOk;
 
   // Buscar rastreador por IMEI
   const handleBuscarRastreador = async () => {
