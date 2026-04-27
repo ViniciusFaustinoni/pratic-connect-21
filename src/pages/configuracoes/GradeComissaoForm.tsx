@@ -154,7 +154,13 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
         .order('ordem');
       if (rErr) throw rErr;
 
-      return { grade, gradePlanos: gps || [], regras: regras || [] };
+      const { data: parcelasMeta, error: pmErr } = await (supabase as any)
+        .from('grades_comissao_parcelas')
+        .select('id, numero_parcela, vitalicia, vitalicia_inicio_parcela, supervisor_split_mode')
+        .eq('grade_id', id!);
+      if (pmErr) throw pmErr;
+
+      return { grade, gradePlanos: gps || [], regras: regras || [], parcelasMeta: parcelasMeta || [] };
     },
   });
 
