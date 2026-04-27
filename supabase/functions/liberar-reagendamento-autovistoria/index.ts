@@ -54,11 +54,12 @@ Deno.serve(async (req) => {
 
     const { data: contratos, error: errC } = await supabase
       .from('contratos')
-      .select('id, veiculo_id, associado_id, token_publico')
+      .select('id, veiculo_id, associado_id, cotacao_id')
       .in('id', ids);
     if (errC) throw errC;
 
     const veiculoIds = (contratos ?? []).map(c => c.veiculo_id).filter(Boolean) as string[];
+    const cotacaoIds = (contratos ?? []).map(c => c.cotacao_id).filter(Boolean) as string[];
 
     // 1) reativar fluxo no contrato (limpar agenda anterior + marcar liberação)
     await supabase
@@ -68,8 +69,20 @@ Deno.serve(async (req) => {
         liberado_reagendamento_por: profile.id,
         liberado_reagendamento_motivo: motivo,
         vistoria_completa_data_agendada: null,
+        vistoria_completa_horario_agendado: null,
       })
       .in('id', ids);
+
+    // 1b) limpar agenda também na cotação (a tela pública lê de cotacoes)
+    if (cotacaoIds.length) {
+      await supabase
+        .from('cotacoes')
+        .update({
+          vistoria_completa_data_agendada: null,
+          vistoria_completa_horario_agendado: null,
+        })
+        .in('id', cotacaoIds);
+    }
 
     // 2) reativar cobertura do veículo (volta à condição de pré-instalação:
     //    cobertura roubo/furto liberada após autovistoria, total apenas após instalar)
@@ -84,6 +97,14 @@ Deno.serve(async (req) => {
           cobertura_total: false,
         })
         .in('id', veiculoIds);
+    }
+
+    // Buscar token público da cotação para link do WhatsApp
+    const tokenByCotacao = new Map<string, string>();
+    if (cotacaoIds.length) {
+      const { data: cots } = await supabase
+        .from('cotacoes').select('id, token_publico').in('id', cotacaoIds);
+      (cots ?? []).forEach(c => { if (c.token_publico) tokenByCotacao.set(c.id, c.token_publico); });
     }
 
     // 3) notificar associados via WhatsApp
