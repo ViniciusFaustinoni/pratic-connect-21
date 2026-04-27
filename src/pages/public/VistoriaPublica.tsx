@@ -287,8 +287,10 @@ function HomeEtapas({
   const fotosAprovadas = !!link.fotos_aprovadas_em;
   const fotosReprovadas = !!link.fotos_reprovadas_em && !fotosAprovadas;
   const instFeita = link.instalacao_etapa_status === 'concluida';
-  const aguardandoAprovacao = fotosFeitas && !fotosAprovadas && !fotosReprovadas;
-  const podeIniciarInstalacao = fotosAprovadas && !instFeita;
+  // Veículos abaixo do limite FIPE (sem rastreador) dispensam a etapa de instalação.
+  const dispensaInstalacao = link.exige_etapa_instalacao === false;
+  const aguardandoAprovacao = !dispensaInstalacao && fotosFeitas && !fotosAprovadas && !fotosReprovadas;
+  const podeIniciarInstalacao = !dispensaInstalacao && fotosAprovadas && !instFeita;
 
   // Buscar nome do técnico já atribuído (Caso B)
   const { data: tecnicoAtribuido } = useQuery({
