@@ -25,6 +25,7 @@ export interface ParcelaForm {
   label: string;
   ordem: number;
   niveis: NivelForm[];
+  supervisor_split_mode?: 'igual' | 'personalizado';
 }
 
 interface ParcelaEditorProps {
@@ -227,6 +228,38 @@ export function ParcelaEditor({
               <p className="text-xs text-destructive">A soma não pode ultrapassar 100%.</p>
             )}
           </div>
+
+          {parcela.niveis.some((n) => n.role === 'supervisor_vendas') && (
+            <div className="pt-2 border-t space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs">
+                  <div className="font-medium text-foreground">Divisão entre supervisores</div>
+                  <p className="text-muted-foreground">
+                    Define como o percentual da supervisão é repartido quando o vendedor tem mais de um supervisor vinculado.
+                  </p>
+                </div>
+                <Select
+                  value={parcela.supervisor_split_mode || 'igual'}
+                  onValueChange={(val: 'igual' | 'personalizado') =>
+                    onChange({ ...parcela, supervisor_split_mode: val })
+                  }
+                >
+                  <SelectTrigger className="h-8 w-44 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="igual">Igualmente</SelectItem>
+                    <SelectItem value="personalizado">Personalizado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {parcela.supervisor_split_mode === 'personalizado' && (
+                <p className="text-[11px] text-muted-foreground">
+                  Os percentuais individuais de cada supervisor são definidos no cadastro de hierarquia do vendedor e devem somar 100%.
+                </p>
+              )}
+            </div>
+          )}
         </CardContent>
       )}
     </Card>

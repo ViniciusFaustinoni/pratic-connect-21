@@ -20,9 +20,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { AlertCircle, ArrowDown, Loader2, Network, RefreshCw, UserRound, Users2 } from 'lucide-react';
+import { AlertCircle, ArrowDown, Loader2, Network, Plus, RefreshCw, Trash2, UserRound, Users2 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { useUpsertHierarquia, useUsuariosVendas } from '@/hooks/useAtribuicaoComissoes';
+import { useUpsertHierarquia, useUsuariosVendas, useSupervisoresVendedor } from '@/hooks/useAtribuicaoComissoes';
 import type { AtribuicaoLinha, UsuarioVendas } from '@/types/atribuicaoComissao';
 
 interface EditarHierarquiaModalProps {
@@ -67,28 +68,44 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
     refetch: refetchUsuarios,
   } = useUsuariosVendas();
   const upsertHierarquia = useUpsertHierarquia();
+  const { data: supervisoresExistentes = [] } = useSupervisoresVendedor(open ? linha?.usuario.id : null);
 
-  const [supervisorId, setSupervisorId] = useState<string>('none');
+  type SupervisorRow = { supervisor_id: string; percentual_personalizado: number | null };
+  const [supervisores, setSupervisores] = useState<SupervisorRow[]>([]);
   const [gerenteId, setGerenteId] = useState<string>('none');
   const [observacoes, setObservacoes] = useState<string>('');
 
   useEffect(() => {
     if (!open || !linha) return;
-    setSupervisorId(linha.hierarquia?.supervisor_id || 'none');
     setGerenteId(linha.hierarquia?.gerente_id || 'none');
     setObservacoes(linha.hierarquia?.observacoes || '');
   }, [open, linha]);
 
-  // Sincroniza gerente quando ele é herdado do supervisor selecionado
+  // Carrega múltiplos supervisores (se houver) ou cai para o supervisor singular legado
   useEffect(() => {
     if (!open || !linha) return;
-    const supId = supervisorId === 'none' ? null : supervisorId;
+    if (supervisoresExistentes.length > 0) {
+      setSupervisores(supervisoresExistentes.map((s) => ({
+        supervisor_id: s.supervisor_id,
+        percentual_personalizado: s.percentual_personalizado,
+      })));
+    } else if (linha.hierarquia?.supervisor_id) {
+      setSupervisores([{ supervisor_id: linha.hierarquia.supervisor_id, percentual_personalizado: null }]);
+    } else {
+      setSupervisores([]);
+    }
+  }, [open, linha, supervisoresExistentes]);
+
+  // Sincroniza gerente quando ele é herdado do PRIMEIRO supervisor selecionado
+  useEffect(() => {
+    if (!open || !linha) return;
+    const supId = supervisores[0]?.supervisor_id || null;
     if (!supId) return;
     const herdado = atribuicoes.find((a) => a.usuario.id === supId)?.hierarquia?.gerente_id ?? null;
     if (herdado && gerenteId !== herdado) {
       setGerenteId(herdado);
     }
-  }, [open, linha, supervisorId, atribuicoes, gerenteId]);
+  }, [open, linha, supervisores, atribuicoes, gerenteId]);
 
   const usuariosMap = useMemo(() => {
     const map = new Map<string, UsuarioVendas>();
@@ -100,7 +117,7 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
 
   const selectedUserId = linha.usuario.id;
   const superiores = usuarios.filter((u) => u.id !== selectedUserId);
-  const supervisores = superiores.filter((u) => u.roles.includes('supervisor_vendas'));
+  const supervisoresUsuarios = superiores.filter((u) => u.roles.includes('supervisor_vendas'));
   const gerentes = superiores.filter((u) => u.roles.includes('gerente_comercial'));
 
   const subordinados = (atribuicoes || []).filter((item) => {
@@ -111,10 +128,10 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
   const subordinadosDiretos = subordinados.filter((item) => item.hierarquia?.supervisor_id === selectedUserId);
   const subordinadosGerenciais = subordinados.filter((item) => item.hierarquia?.gerente_id === selectedUserId);
   const atribuicaoPorUsuario = new Map(atribuicoes.map((item) => [item.usuario.id, item]));
-  const supervisorSelecionado = supervisorId === 'none' ? null : supervisorId;
-  // Gerente herdado do supervisor (quando o supervisor já tem gerente atribuído na hierarquia dele)
-  const gerenteHerdadoDoSupervisor = supervisorSelecionado
-    ? atribuicaoPorUsuario.get(supervisorSelecionado)?.hierarquia?.gerente_id ?? null
+  const primeiroSupervisorId = supervisores[0]?.supervisor_id || null;
+  // Gerente herdado do primeiro supervisor (quando ele já tem gerente atribuído)
+  const gerenteHerdadoDoSupervisor = primeiroSupervisorId
+    ? atribuicaoPorUsuario.get(primeiroSupervisorId)?.hierarquia?.gerente_id ?? null
     : null;
   const gerenteEffectiveId = gerenteHerdadoDoSupervisor ?? (gerenteId === 'none' ? null : gerenteId);
   const gerenteSelecionado = gerenteEffectiveId;
@@ -124,22 +141,35 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
     return !supervisorHierarquiaAtual?.gerente_id || supervisorHierarquiaAtual.gerente_id === gerenteUserId;
   };
   const supervisoresCompativeis = gerenteSelecionado && !gerenteBloqueado
-    ? supervisores.filter((u) => supervisorPertenceAoGerente(u.id, gerenteSelecionado))
-    : supervisores;
+    ? supervisoresUsuarios.filter((u) => supervisorPertenceAoGerente(u.id, gerenteSelecionado))
+    : supervisoresUsuarios;
   const gerenteOptions = [
     { value: 'none', label: 'Nenhum gerente' },
     ...gerentes.map((u) => ({ value: u.id, label: `${u.nome} · ${u.email}` })),
   ];
-  const supervisorOptions = [
-    { value: 'none', label: 'Nenhum supervisor' },
-    ...supervisoresCompativeis.map((u) => ({ value: u.id, label: `${u.nome} · ${u.email}` })),
-  ];
+  const supervisorOptionsBase = supervisoresCompativeis.map((u) => ({ value: u.id, label: `${u.nome} · ${u.email}` }));
 
   const validationErrors: string[] = [];
-  const supervisorHierarquia = supervisorSelecionado ? atribuicaoPorUsuario.get(supervisorSelecionado)?.hierarquia : null;
 
-  if (gerenteSelecionado && supervisorSelecionado && supervisorHierarquia?.gerente_id && supervisorHierarquia.gerente_id !== gerenteSelecionado) {
-    validationErrors.push('O supervisor selecionado já pertence a outro gerente. Escolha um supervisor vinculado ao gerente informado.');
+  // Soma dos percentuais personalizados (quando algum estiver preenchido) deve totalizar 100
+  const percentuaisPreenchidos = supervisores.filter((s) => s.percentual_personalizado != null && !Number.isNaN(s.percentual_personalizado));
+  const usandoPersonalizado = percentuaisPreenchidos.length > 0;
+  const somaPercentuais = supervisores.reduce((sum, s) => sum + (Number(s.percentual_personalizado) || 0), 0);
+  if (usandoPersonalizado && Math.round(somaPercentuais * 100) !== 10000) {
+    validationErrors.push(`A soma dos percentuais dos supervisores deve totalizar 100% (atual: ${somaPercentuais.toFixed(2)}%).`);
+  }
+
+  // Conflito de gerente (apenas para o primeiro supervisor que define a herança)
+  const supervisorHierarquia = primeiroSupervisorId ? atribuicaoPorUsuario.get(primeiroSupervisorId)?.hierarquia : null;
+  if (gerenteSelecionado && primeiroSupervisorId && supervisorHierarquia?.gerente_id && supervisorHierarquia.gerente_id !== gerenteSelecionado) {
+    validationErrors.push('O primeiro supervisor já pertence a outro gerente. Escolha um supervisor vinculado ao gerente informado.');
+  }
+
+  const supervisoresDuplicados = supervisores
+    .map((s) => s.supervisor_id)
+    .filter((id, idx, arr) => id && arr.indexOf(id) !== idx);
+  if (supervisoresDuplicados.length > 0) {
+    validationErrors.push('Há supervisores duplicados na lista.');
   }
 
   const hasValidationErrors = validationErrors.length > 0;
@@ -152,27 +182,43 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
 
   const handleGerenteChange = (nextGerenteId: string) => {
     setGerenteId(nextGerenteId);
-
-    if (nextGerenteId !== 'none' && supervisorId !== 'none' && !supervisorPertenceAoGerente(supervisorId, nextGerenteId)) {
-      setSupervisorId('none');
-      toast.info('Supervisor removido para manter a cadeia Gerente → Supervisor → Usuário.');
+    if (nextGerenteId !== 'none') {
+      const incompatives = supervisores.filter((s) => !supervisorPertenceAoGerente(s.supervisor_id, nextGerenteId));
+      if (incompatives.length > 0) {
+        setSupervisores((prev) => prev.filter((s) => supervisorPertenceAoGerente(s.supervisor_id, nextGerenteId)));
+        toast.info('Supervisores incompatíveis foram removidos para manter a cadeia Gerente → Supervisor → Usuário.');
+      }
     }
   };
 
-  const handleSupervisorChange = (nextSupervisorId: string) => {
-    if (nextSupervisorId === 'none') {
-      setSupervisorId('none');
+  const addSupervisorRow = () => {
+    setSupervisores((prev) => [...prev, { supervisor_id: '', percentual_personalizado: null }]);
+  };
+
+  const removeSupervisorRow = (idx: number) => {
+    setSupervisores((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const updateSupervisorRow = (idx: number, patch: Partial<{ supervisor_id: string; percentual_personalizado: number | null }>) => {
+    setSupervisores((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
+  };
+
+  const handleSupervisorSelect = (idx: number, nextSupervisorId: string) => {
+    if (!nextSupervisorId) {
+      updateSupervisorRow(idx, { supervisor_id: '' });
       return;
     }
-
+    if (supervisores.some((s, i) => i !== idx && s.supervisor_id === nextSupervisorId)) {
+      toast.error('Este supervisor já está na lista.');
+      return;
+    }
     const supervisorHierarquiaAtual = atribuicaoPorUsuario.get(nextSupervisorId)?.hierarquia;
     if (gerenteId !== 'none' && supervisorHierarquiaAtual?.gerente_id && supervisorHierarquiaAtual.gerente_id !== gerenteId) {
       toast.error('Este supervisor pertence a outro gerente. Escolha um supervisor compatível.');
       return;
     }
-
-    setSupervisorId(nextSupervisorId);
-    if (gerenteId === 'none' && supervisorHierarquiaAtual?.gerente_id) {
+    updateSupervisorRow(idx, { supervisor_id: nextSupervisorId });
+    if (idx === 0 && gerenteId === 'none' && supervisorHierarquiaAtual?.gerente_id) {
       setGerenteId(supervisorHierarquiaAtual.gerente_id);
     }
   };
@@ -183,10 +229,18 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
       return;
     }
 
+    const supervisoresPayload = supervisores
+      .filter((s) => !!s.supervisor_id)
+      .map((s) => ({
+        supervisor_id: s.supervisor_id,
+        percentual_personalizado: usandoPersonalizado ? Number(s.percentual_personalizado) : null,
+      }));
+
     try {
       await upsertHierarquia.mutateAsync({
         vendedor_id: selectedUserId,
-        supervisor_id: supervisorId === 'none' ? null : supervisorId,
+        supervisor_id: supervisoresPayload[0]?.supervisor_id ?? null,
+        supervisores: supervisoresPayload.length > 0 ? supervisoresPayload : null,
         gerente_id: gerenteEffectiveId,
         agencia_id: null,
         observacoes: observacoes.trim() || null,
@@ -263,7 +317,18 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
               )}
               <ChainNode label={gerenteBloqueado ? 'Gerente (herdado do supervisor)' : 'Gerente'} name={userName(usuariosMap, gerenteEffectiveId)} icon={UserRound} loading={loadingVinculos} />
               <div className="flex justify-center text-muted-foreground"><ArrowDown className="h-4 w-4" /></div>
-              <ChainNode label="Supervisor" name={userName(usuariosMap, supervisorId === 'none' ? null : supervisorId)} icon={Users2} loading={loadingVinculos} />
+              <ChainNode
+                label={supervisores.length > 1 ? `Supervisores (${supervisores.length})` : 'Supervisor'}
+                name={
+                  supervisores.length === 0
+                    ? 'Não definido'
+                    : supervisores.length === 1
+                      ? userName(usuariosMap, supervisores[0].supervisor_id || null)
+                      : supervisores.map((s) => userName(usuariosMap, s.supervisor_id || null)).join(', ')
+                }
+                icon={Users2}
+                loading={loadingVinculos}
+              />
               <div className="flex justify-center text-muted-foreground"><ArrowDown className="h-4 w-4" /></div>
               <ChainNode label="Usuário selecionado" name={linha.usuario.nome} icon={Network} />
             </div>
@@ -330,20 +395,88 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
                 )}
               </div>
 
-              <div className="space-y-1.5">
-                <Label>Supervisor superior</Label>
-                <SearchableSelect
-                  value={supervisorId}
-                  onValueChange={handleSupervisorChange}
-                  options={supervisorOptions}
-                  placeholder="Buscar supervisor por nome ou e-mail"
-                  searchPlaceholder="Digite nome ou e-mail do supervisor..."
-                  disabled={saving || erroUsuarios || (!!gerenteSelecionado && supervisoresCompativeis.length === 0)}
-                  loading={loadingVinculos}
-                  className="h-11"
-                />
-                {!loadingVinculos && supervisores.length === 0 && <p className="text-xs text-muted-foreground">Nenhum supervisor disponível.</p>}
-                {!loadingVinculos && !!gerenteSelecionado && supervisores.length > 0 && supervisoresCompativeis.length === 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Supervisores superiores</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addSupervisorRow}
+                    disabled={saving || erroUsuarios || supervisoresCompativeis.length === 0}
+                  >
+                    <Plus className="mr-1 h-3.5 w-3.5" /> Adicionar supervisor
+                  </Button>
+                </div>
+                {supervisores.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Nenhum supervisor vinculado. Use "Adicionar supervisor" para incluir um ou mais.
+                  </p>
+                )}
+                {supervisores.map((row, idx) => {
+                  const opcoes = supervisorOptionsBase.filter(
+                    (o) => o.value === row.supervisor_id || !supervisores.some((s, i) => i !== idx && s.supervisor_id === o.value),
+                  );
+                  return (
+                    <div key={idx} className="flex flex-wrap items-end gap-2 rounded-md border bg-muted/30 p-2">
+                      <div className="min-w-[220px] flex-1 space-y-1">
+                        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Supervisor {idx + 1}</span>
+                        <SearchableSelect
+                          value={row.supervisor_id || ''}
+                          onValueChange={(v) => handleSupervisorSelect(idx, v)}
+                          options={opcoes}
+                          placeholder="Buscar supervisor por nome ou e-mail"
+                          searchPlaceholder="Digite nome ou e-mail..."
+                          disabled={saving || erroUsuarios}
+                          loading={loadingVinculos}
+                          className="h-10"
+                        />
+                      </div>
+                      <div className="w-32 space-y-1">
+                        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">% personalizado</span>
+                        <div className="flex items-center gap-1">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            step={0.01}
+                            placeholder="auto"
+                            value={row.percentual_personalizado ?? ''}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              updateSupervisorRow(idx, {
+                                percentual_personalizado: v === '' ? null : parseFloat(v),
+                              });
+                            }}
+                            disabled={saving}
+                            className="h-10"
+                          />
+                          <span className="text-xs text-muted-foreground">%</span>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeSupervisorRow(idx)}
+                        disabled={saving}
+                        title="Remover supervisor"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  );
+                })}
+                {supervisores.length > 1 && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Deixe os percentuais em branco para divisão igualitária. Para divisão personalizada, preencha todos
+                    e some 100% — a parcela da grade precisa estar marcada como "Personalizado".
+                  </p>
+                )}
+                {!loadingVinculos && supervisoresUsuarios.length === 0 && (
+                  <p className="text-xs text-muted-foreground">Nenhum supervisor disponível no sistema.</p>
+                )}
+                {!loadingVinculos && !!gerenteSelecionado && supervisoresUsuarios.length > 0 && supervisoresCompativeis.length === 0 && (
                   <p className="text-xs text-muted-foreground">Nenhum supervisor compatível com o gerente selecionado.</p>
                 )}
               </div>

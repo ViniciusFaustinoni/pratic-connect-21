@@ -151,12 +151,18 @@ export function useAtribuirGrade() {
   });
 }
 
+export interface SupervisorHierarquia {
+  supervisor_id: string;
+  percentual_personalizado?: number | null;
+}
+
 export function useUpsertHierarquia() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
       vendedor_id: string;
       supervisor_id?: string | null;
+      supervisores?: SupervisorHierarquia[] | null;
       gerente_id?: string | null;
       agencia_id?: string | null;
       observacoes?: string | null;
@@ -167,12 +173,38 @@ export function useUpsertHierarquia() {
         p_gerente_id: input.gerente_id ?? null,
         p_agencia_id: input.agencia_id ?? null,
         p_observacoes: input.observacoes ?? null,
+        p_supervisores: input.supervisores ?? null,
       });
       if (error) throw error;
       return data as string;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['atribuicao-comissoes'] });
+    },
+  });
+}
+
+export function useSupervisoresVendedor(vendedorId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['hierarquia-supervisores', vendedorId],
+    enabled: !!vendedorId,
+    queryFn: async () => {
+      const { data: hier, error: hErr } = await (supabase as any)
+        .from('hierarquia_vendas')
+        .select('id')
+        .eq('vendedor_id', vendedorId!)
+        .is('vigente_ate', null)
+        .maybeSingle();
+      if (hErr) throw hErr;
+      if (!hier) return [] as { supervisor_id: string; percentual_personalizado: number | null; ordem: number }[];
+
+      const { data, error } = await (supabase as any)
+        .from('hierarquia_vendas_supervisores')
+        .select('supervisor_id, percentual_personalizado, ordem')
+        .eq('hierarquia_id', hier.id)
+        .order('ordem');
+      if (error) throw error;
+      return data as { supervisor_id: string; percentual_personalizado: number | null; ordem: number }[];
     },
   });
 }

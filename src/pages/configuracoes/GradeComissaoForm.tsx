@@ -46,6 +46,7 @@ const defaultParcela = (ordem: number, numero: number): ParcelaForm => ({
   label: numero === 1 ? 'Taxa de Adesão' : `${numero}ª Parcela`,
   ordem,
   niveis: [],
+  supervisor_split_mode: 'igual',
 });
 
 const buildGradeSnapshot = (
@@ -153,7 +154,13 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
         .order('ordem');
       if (rErr) throw rErr;
 
-      return { grade, gradePlanos: gps || [], regras: regras || [] };
+      const { data: parcelasMeta, error: pmErr } = await (supabase as any)
+        .from('grades_comissao_parcelas')
+        .select('id, numero_parcela, vitalicia, vitalicia_inicio_parcela, supervisor_split_mode')
+        .eq('grade_id', id!);
+      if (pmErr) throw pmErr;
+
+      return { grade, gradePlanos: gps || [], regras: regras || [], parcelasMeta: parcelasMeta || [] };
     },
   });
 
@@ -167,6 +174,12 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
     setSelectedPlanIds(planIds);
 
     const regras = existing.regras || [];
+    const parcelasMeta = (existing as any).parcelasMeta || [];
+    const splitByParcelaId = new Map<string, 'igual' | 'personalizado'>();
+    parcelasMeta.forEach((pm: any) => {
+      splitByParcelaId.set(pm.id, (pm.supervisor_split_mode === 'personalizado' ? 'personalizado' : 'igual'));
+    });
+
     if (regras.length > 0) {
       const next: RegrasPorPlano = {};
       planIds.forEach((planoId: string) => {
@@ -187,6 +200,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
               vitalicia_inicio_parcela: base.vitalicia ? base.vitalicia_inicio_parcela : null,
               label: base.vitalicia ? 'Vitalícia' : base.parcela_numero === 1 ? 'Taxa de Adesão' : `${base.parcela_numero}ª Parcela`,
               ordem,
+              supervisor_split_mode: (base.parcela_id && splitByParcelaId.get(base.parcela_id)) || 'igual',
               niveis: grupo
                 .sort((a: any, b: any) => (a.ordem || 0) - (b.ordem || 0))
                 .map((r: any) => ({
@@ -408,6 +422,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
           vitalicia_inicio_parcela: p.vitalicia ? p.vitalicia_inicio_parcela : null,
           label: p.label.trim(),
           ordem: selectedPlanIds.indexOf(planoId) * 1000 + i,
+          supervisor_split_mode: p.supervisor_split_mode || 'igual',
           __key: `${planoId}:${i}`,
         }))
       );

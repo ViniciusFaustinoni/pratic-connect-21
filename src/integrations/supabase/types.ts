@@ -13991,6 +13991,7 @@ export type Database = {
           label: string
           numero_parcela: number | null
           ordem: number
+          supervisor_split_mode: string
           updated_at: string
           vitalicia: boolean
           vitalicia_inicio_parcela: number | null
@@ -14002,6 +14003,7 @@ export type Database = {
           label: string
           numero_parcela?: number | null
           ordem?: number
+          supervisor_split_mode?: string
           updated_at?: string
           vitalicia?: boolean
           vitalicia_inicio_parcela?: number | null
@@ -14013,6 +14015,7 @@ export type Database = {
           label?: string
           numero_parcela?: number | null
           ordem?: number
+          supervisor_split_mode?: string
           updated_at?: string
           vitalicia?: boolean
           vitalicia_inicio_parcela?: number | null
@@ -14106,6 +14109,44 @@ export type Database = {
           vigente_desde?: string
         }
         Relationships: []
+      }
+      hierarquia_vendas_supervisores: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          hierarquia_id: string
+          id: string
+          ordem: number
+          percentual_personalizado: number | null
+          supervisor_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          hierarquia_id: string
+          id?: string
+          ordem?: number
+          percentual_personalizado?: number | null
+          supervisor_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          hierarquia_id?: string
+          id?: string
+          ordem?: number
+          percentual_personalizado?: number | null
+          supervisor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hierarquia_vendas_supervisores_hierarquia_id_fkey"
+            columns: ["hierarquia_id"]
+            isOneToOne: false
+            referencedRelation: "hierarquia_vendas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       hinova_mapeamentos: {
         Row: {
@@ -31520,6 +31561,14 @@ export type Database = {
       fn_get_cotas_por_fipe: { Args: { p_valor_fipe: number }; Returns: number }
       fn_get_cotas_veiculo: { Args: { p_veiculo_id: string }; Returns: number }
       fn_limpar_tokens_expirados: { Args: never; Returns: undefined }
+      fn_listar_supervisores_vendedor: {
+        Args: { p_data_referencia?: string; p_vendedor_id: string }
+        Returns: {
+          ordem: number
+          percentual_personalizado: number
+          supervisor_id: string
+        }[]
+      }
       fn_marcar_comissao_paga: {
         Args: { p_comissao_id: string }
         Returns: {
@@ -31568,16 +31617,28 @@ export type Database = {
         Returns: string
       }
       fn_tipo_consultor: { Args: { p_vendedor_id: string }; Returns: string }
-      fn_upsert_hierarquia_vendedor: {
-        Args: {
-          p_agencia_id?: string
-          p_gerente_id?: string
-          p_observacoes?: string
-          p_supervisor_id?: string
-          p_vendedor_id: string
-        }
-        Returns: string
-      }
+      fn_upsert_hierarquia_vendedor:
+        | {
+            Args: {
+              p_agencia_id?: string
+              p_gerente_id?: string
+              p_observacoes?: string
+              p_supervisor_id?: string
+              p_vendedor_id: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_agencia_id?: string
+              p_gerente_id?: string
+              p_observacoes?: string
+              p_supervisor_id?: string
+              p_supervisores?: Json
+              p_vendedor_id: string
+            }
+            Returns: string
+          }
       fn_verificar_almoco_profissional: {
         Args: { p_profissional_id: string }
         Returns: boolean
