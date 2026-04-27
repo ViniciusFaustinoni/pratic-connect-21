@@ -126,6 +126,37 @@ Deno.serve(async (req) => {
       }
     }
 
+    // DEDUPE: fechar quaisquer outros serviços ativos da mesma cotação ANTES de criar o novo,
+    // evitando que o técnico veja itens fantasma com data antiga (relatos 2189c17b e ee37f6dc).
+    if (servico.cotacao_id) {
+      const { data: ativos } = await supabase
+        .from("servicos")
+        .select("id")
+        .eq("cotacao_id", servico.cotacao_id)
+        .neq("id", servico.id)
+        .not("status", "in", '("cancelada","reagendada","reprovada","concluida","aprovada","aprovada_ressalvas","nao_compareceu")');
+
+      if (ativos && ativos.length > 0) {
+        const ids = ativos.map((s) => s.id);
+        await supabase
+          .from("servicos")
+          .update({
+            status: "cancelada",
+            observacoes: `[AUTO 27/04/2026] Cancelado pelo fluxo de reagendamento — substituído por novo serviço.`,
+            updated_at: new Date().toISOString(),
+          })
+          .in("id", ids);
+        console.log(`[reagendar] Dedupe: ${ids.length} serviço(s) ativo(s) antigo(s) cancelado(s).`);
+
+        // Fechar agendamentos_base órfãos da mesma cotação
+        await supabase
+          .from("agendamentos_base")
+          .update({ status: "cancelado", updated_at: new Date().toISOString() })
+          .eq("cotacao_id", servico.cotacao_id)
+          .not("status", "in", '("cancelado","concluido","realizado")');
+      }
+    }
+
     // Validar vagas (skip for encaixe)
     if (!permite_encaixe) {
       const { data: servicosExistentes, error: vagasErr } = await supabase
