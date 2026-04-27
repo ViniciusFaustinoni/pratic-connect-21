@@ -340,7 +340,7 @@ Sempre preencha tanto "motor" quanto "numero_motor" com o MESMO valor (alias obr
       - **Nº do CRLV** (no topo, 11 dígitos)
     Heurísticas de glifo: o "6" tem topo ABERTO/curvo e UMA barriga fechada; o "8" tem DUAS barrigas fechadas. O "0" não tem barriga superior; o "8" tem. O "1" não tem traço diagonal; o "7" tem.
   • **NUNCA copie dígitos da "PLACA ANTERIOR" para a "PLACA" atual.** São campos distintos. A placa atual é a que aparece no campo "PLACA" em destaque, normalmente próxima ao CPF/CNPJ do proprietário.
-  • **EM CASO DE DÚVIDA REAL não resolvida**, escreva a placa com o caractere de menor risco e marque o campo `placa_confianca` (se existir no schema) como "baixa". Nunca chute "8" sem evidência — o default seguro é "6" quando o glifo tem topo aberto.
+  • **EM CASO DE DÚVIDA REAL não resolvida**, escreva a placa com o caractere de menor risco. Nunca chute "8" sem evidência — o default seguro é "6" quando o glifo tem topo aberto.
 
 ### Nota Fiscal de Veículo (DANFE / NF-e com dados veiculares)
 
