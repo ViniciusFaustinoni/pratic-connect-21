@@ -1,0 +1,1 @@
+ALTER TYPE public.error_report_status ADD VALUE IF NOT EXISTS 'critico';

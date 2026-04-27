@@ -22,6 +22,8 @@ import {
   Wand2,
   Trash2,
   Loader2,
+  AlertTriangle,
+  Undo2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -32,6 +34,7 @@ interface Props {
 
 const statusBadge: Record<ErrorReportStatus, { label: string; cls: string }> = {
   aberto: { label: 'Aberto', cls: 'bg-destructive/15 text-destructive border-destructive/30' },
+  critico: { label: 'Crítico', cls: 'bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/40' },
   em_tratamento: { label: 'Em tratamento', cls: 'bg-warning/15 text-warning border-warning/30' },
   concluido: { label: 'Concluído', cls: 'bg-primary/15 text-primary border-primary/30' },
   validado: { label: 'Validado', cls: 'bg-success/15 text-success border-success/30' },
@@ -262,12 +265,40 @@ export function DetalheRelatoModal({ report, onClose }: Props) {
           )}
 
           {report.status === 'aberto' && (
-            <Button
-              onClick={() => update.mutate({ id: report.id, status: 'em_tratamento', observacao: obs || undefined }, { onSuccess: onClose })}
-              disabled={update.isPending}
-            >
-              <Play className="h-4 w-4 mr-1" /> Iniciar tratamento
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                className="border-orange-500/40 text-orange-600 hover:text-orange-700 hover:bg-orange-500/10"
+                onClick={() => update.mutate({ id: report.id, status: 'critico', observacao: obs || undefined }, { onSuccess: onClose })}
+                disabled={update.isPending}
+              >
+                <AlertTriangle className="h-4 w-4 mr-1" /> Crítico
+              </Button>
+              <Button
+                onClick={() => update.mutate({ id: report.id, status: 'em_tratamento', observacao: obs || undefined }, { onSuccess: onClose })}
+                disabled={update.isPending}
+              >
+                <Play className="h-4 w-4 mr-1" /> Iniciar tratamento
+              </Button>
+            </>
+          )}
+
+          {report.status === 'critico' && (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => update.mutate({ id: report.id, status: 'aberto', observacao: obs || undefined })}
+                disabled={update.isPending}
+              >
+                <Undo2 className="h-4 w-4 mr-1" /> Voltar para aberto
+              </Button>
+              <Button
+                onClick={() => update.mutate({ id: report.id, status: 'em_tratamento', observacao: obs || undefined }, { onSuccess: onClose })}
+                disabled={update.isPending}
+              >
+                <Play className="h-4 w-4 mr-1" /> Iniciar tratamento
+              </Button>
+            </>
           )}
 
           {report.status === 'em_tratamento' && (

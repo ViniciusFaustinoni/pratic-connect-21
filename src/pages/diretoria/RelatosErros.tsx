@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Bug, Search, Eye, X, History as HistoryIcon, ListChecks, LayoutList } from 'lucide-react';
+import { Bug, Search, Eye, X, History as HistoryIcon, ListChecks, LayoutList, AlertTriangle } from 'lucide-react';
 import {
   useErrorReportsList,
   useReportersList,
@@ -29,13 +29,14 @@ import { useErrorReportFiles } from '@/hooks/useErrorReports';
 
 const STATUS_LABELS: Record<ErrorReportStatus, { label: string; cls: string }> = {
   aberto: { label: 'Aberto', cls: 'bg-destructive/15 text-destructive border-destructive/30' },
+  critico: { label: 'Crítico', cls: 'bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/40' },
   em_tratamento: { label: 'Em tratamento', cls: 'bg-warning/15 text-warning border-warning/30' },
   concluido: { label: 'Concluído', cls: 'bg-primary/15 text-primary border-primary/30' },
   validado: { label: 'Validado', cls: 'bg-success/15 text-success border-success/30' },
   descartado: { label: 'Descartado', cls: 'bg-muted text-muted-foreground border-border' },
 };
 
-const ORDEM_FILA: ErrorReportStatus[] = ['aberto', 'em_tratamento', 'concluido'];
+const ORDEM_FILA: ErrorReportStatus[] = ['aberto', 'critico', 'em_tratamento', 'concluido'];
 
 function CardRelatoFila({ report, onOpen }: { report: ErrorReport; onOpen: (r: ErrorReport) => void }) {
   const { data: files = [] } = useErrorReportFiles(report.id);
@@ -120,6 +121,7 @@ export default function RelatosErros() {
   const reportsPorStatus = useMemo(() => {
     const grupos: Record<ErrorReportStatus, ErrorReport[]> = {
       aberto: [],
+      critico: [],
       em_tratamento: [],
       concluido: [],
       validado: [],
@@ -155,8 +157,8 @@ export default function RelatosErros() {
         <h1 className="text-2xl font-bold">Relatos de Erros</h1>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        {(['aberto', 'em_tratamento', 'concluido', 'validado', 'descartado'] as ErrorReportStatus[]).map((s) => (
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        {(['aberto', 'critico', 'em_tratamento', 'concluido', 'validado', 'descartado'] as ErrorReportStatus[]).map((s) => (
           <Card
             key={s}
             className={`p-3 cursor-pointer hover:bg-muted/30 transition ${statusFilter === s ? 'ring-2 ring-primary' : ''}`}
@@ -236,7 +238,7 @@ export default function RelatosErros() {
           {!isLoading && reports.length === 0 && (
             <Card className="p-8 text-center text-muted-foreground">Nenhum relato com os filtros atuais.</Card>
           )}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             {ORDEM_FILA.map((s) => (
               <div key={s} className="space-y-2">
                 <div className="flex items-center gap-2 sticky top-0 bg-background py-1 z-10">

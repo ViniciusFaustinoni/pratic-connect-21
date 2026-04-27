@@ -1,65 +1,36 @@
-# Corrigir classificação de "Substituição" no contrato/termo de filiação
+# Adicionar coluna "Crítico" em Relatos de Erros
 
-## Diagnóstico técnico
+## Comportamento
 
-Existem dois fluxos distintos que envolvem substituição e o sistema usa **dois valores diferentes** para `tipo_entrada` na tabela `contratos`, causando inconsistência:
+- Nada muda no fluxo de quem **cria** um relato — continua entrando como `Aberto`.
+- No card `Aberto`, ao abrir o modal de detalhes, surge um botão **"Crítico"**.
+- Clicar nele move o relato para o novo status `critico`, que aparece em uma **quarta coluna** na visão de Fila, ao lado de Aberto / Em tratamento / Concluído.
+- A coluna "Crítico" funciona como uma "geladeira" — ficam ali para resolver depois.
+- Do card `Crítico`, é possível **voltar para Aberto** (re-priorizar) ou **Iniciar tratamento** direto.
 
-1. **Cotação/Cotador com `?tipo_entrada=substituicao`** (`OutrasEntradasMenu`, `Cotador.tsx`, `Cotacao.tsx`):
-   - Grava `cotacoes.tipo_entrada = 'substituicao'`.
-   - Quando o contrato é gerado por `contrato-gerar` (linhas 674–825), o valor `'substituicao'` é repassado **literal** para `contratos.tipo_entrada`.
+## Mudanças técnicas
 
-2. **Fluxo de substituição estruturado** (edge `efetivar-substituicao`):
-   - Cria contrato com `tipo_entrada = 'substituicao_placa'`.
+### Banco
+- Adicionar valor `'critico'` ao enum `error_report_status` (migração).
 
-O problema:
+### Backend / tipos
+- `src/hooks/useErrorReports.ts`: incluir `'critico'` no tipo `ErrorReportStatus` e tratar na função `useUpdateErrorReportStatus` (toast label).
 
-- O **template do termo** (`supabase/functions/_shared/template-utils.ts`) só reconhece `'substituicao_placa'`. Quando recebe `'substituicao'`, **nenhum checkbox de operação é marcado** e o helper `substituicao.tipo_operacao` cai em `'Nova Adesão'` (linha 268).
-- O **gerador do termo de afiliação** (`termo-afiliacao-utils.ts`, linha 470) faz `contrato.tipo_entrada === 'nova' ? 'adesao' : contrato.tipo_entrada || 'adesao'` — ou seja, qualquer valor desconhecido escapa, mas o tipo `TipoOperacao` (linha 96) **não inclui `'substituicao'`**, e os labels/checks downstream tratam só `substituicao_placa`.
-- A `ContratoWizard` (Select de operação, linhas 1025/1183–1188) **não tem opção "Substituição"**, só `substituicao_placa`.
-- A constante `TIPO_ENTRADA_SHORT_LABELS` em `OrigemCadastroCard.tsx` também só conhece `substituicao_placa`, então um contrato gravado como `'substituicao'` aparece como "Nova Adesão" no detalhe do veículo.
+### UI — `src/pages/diretoria/RelatosErros.tsx`
+- `STATUS_LABELS`: adicionar `critico` com cor laranja (chamando atenção sem ser destrutiva).
+- `ORDEM_FILA`: passar para `['aberto', 'critico', 'em_tratamento', 'concluido']` (4 colunas).
+- Cards de contadores: incluir `critico` (vai para 6 cards no grid responsivo).
+- `reportsPorStatus`: incluir `critico` na inicialização.
+- Layout do grid de Fila: ajustar `lg:grid-cols-3` → `xl:grid-cols-4` para acomodar 4 colunas (mantendo responsivo).
 
-Resumo: o cotador grava `'substituicao'`, mas todo o pipeline de termo/contrato espera `'substituicao_placa'`. O resultado é o reportado: substituições viram "Nova Adesão" no termo de filiação.
+### UI — `src/components/diretoria/DetalheRelatoModal.tsx`
+- `statusBadge`: incluir `critico`.
+- Footer: quando `status === 'aberto'`, exibir botão extra **"Marcar como crítico"** (variant outline, ícone `AlertTriangle`, cor laranja) que dispara `update.mutate({ status: 'critico' })`.
+- Quando `status === 'critico'`: mostrar dois botões — **"Voltar para aberto"** e **"Iniciar tratamento"**.
 
-Confirmação no banco: hoje todos os 80 contratos estão com `tipo_entrada='adesao'`, então a correção de código não exige migração de dados retroativos (apenas opcional).
+## Arquivos afetados
 
-## Decisão de padronização
-
-Adotar **`'substituicao_placa'` como valor canônico** em toda a aplicação (ele já é o usado pela edge `efetivar-substituicao`, pelo template e pelos labels). O valor `'substituicao'` vindo da URL/cotador será convertido para `'substituicao_placa'` no momento da gravação.
-
-## Mudanças
-
-### 1. Cotador / Cotação grava o valor canônico
-- `src/pages/vendas/Cotador.tsx` (linha 843) e `src/pages/vendas/Cotacao.tsx` (linha 307): trocar `'substituicao'` por `'substituicao_placa'` no payload `tipo_entrada` salvo em `cotacoes`.
-- `src/components/vendas/OutrasEntradasMenu.tsx` (linha 264): manter `'substituicao'` apenas se for usado em URL/navegação; quando persistir no DB, normalizar para `'substituicao_placa'`. (Na prática só precisa trocar onde grava em tabela.)
-- `src/pages/public/CotacaoContratacao.tsx` (linhas 102–103): aceitar ambos `'substituicao'` e `'substituicao_placa'` por compatibilidade temporária.
-
-### 2. Edge function `contrato-gerar` normaliza ao gravar
-- `supabase/functions/contrato-gerar/index.ts` (linhas 674–825): antes de inserir em `contratos.tipo_entrada`, mapear `'substituicao' → 'substituicao_placa'`. Garante que registros legados de `cotacoes` continuem corretos.
-
-### 3. Wizard de contrato exibe a opção corretamente
-- `src/components/contratos/ContratoWizard.tsx`:
-  - Linhas 1025+ (Select): adicionar item `'substituicao_placa'` rotulado como "Substituição de Veículo/Placa" e remover qualquer valor `'substituicao'` solto.
-  - Linhas 153–157: ao receber `cotacao.tipo_entrada === 'substituicao'`, setar `tipoOperacao = 'substituicao_placa'`.
-
-### 4. Tipo `TipoOperacao` permanece restrito ao canônico
-- `supabase/functions/_shared/termo-afiliacao-utils.ts` (linha 470): adicionar normalização `contrato.tipo_entrada === 'substituicao' ? 'substituicao_placa' : ...` para blindar contra dados antigos.
-
-### 5. (Opcional) Migração de dados existentes
-- Atualizar registros legados em `cotacoes` e `contratos` que tenham `tipo_entrada='substituicao'` para `'substituicao_placa'`. Hoje não há nenhum em `contratos`; pode existir em `cotacoes` antigas — vou checar e migrar se necessário via tool de insert/update.
-
-## Resultado esperado
-
-- Cadastros marcados como SUB no cotador serão persistidos como `tipo_entrada='substituicao_placa'`.
-- O **termo de filiação** marcará o checkbox correspondente a "Substituição de Placa" (template já tem suporte nativo) em vez de cair em "Nova Adesão".
-- O detalhe do associado e o `OrigemCadastroCard` exibirão o badge "Substituição" corretamente.
-- Os outros tipos (adesão, migração, inclusão, troca de titularidade, reativação) continuam funcionando inalterados.
-
-## Arquivos a editar
-
-- `src/pages/vendas/Cotador.tsx`
-- `src/pages/vendas/Cotacao.tsx`
-- `src/components/vendas/OutrasEntradasMenu.tsx` (apenas onde grava no DB)
-- `src/pages/public/CotacaoContratacao.tsx` (aceitar ambos)
-- `src/components/contratos/ContratoWizard.tsx`
-- `supabase/functions/contrato-gerar/index.ts`
-- `supabase/functions/_shared/termo-afiliacao-utils.ts`
+- Migração: novo valor de enum
+- `src/hooks/useErrorReports.ts`
+- `src/pages/diretoria/RelatosErros.tsx`
+- `src/components/diretoria/DetalheRelatoModal.tsx`

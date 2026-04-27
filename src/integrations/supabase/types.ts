@@ -31878,6 +31878,7 @@ export type Database = {
         | "concluido"
         | "validado"
         | "descartado"
+        | "critico"
       etapa_lead:
         | "novo"
         | "contato_inicial"
@@ -32314,6 +32315,7 @@ export const Constants = {
         "concluido",
         "validado",
         "descartado",
+        "critico",
       ],
       etapa_lead: [
         "novo",
