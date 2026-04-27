@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { ArrowLeftRight, Users, FileInput, PlusCircle, Search, Loader2, AlertTriangle, ArrowLeft, Car, CheckCircle2, XCircle, Plus } from 'lucide-react';
+import { ArrowLeftRight, Users, FileInput, PlusCircle, Search, Loader2, AlertTriangle, ArrowLeft, Car, CheckCircle2, XCircle, Plus, Info } from 'lucide-react';
 import { useAssociadoSearch, type AssociadoSearchResult } from '@/hooks/useAssociadoSearch';
 import { useBuscaPlaca } from '@/hooks/useBuscaPlaca';
 import { useVerificarDebitosAssociado } from '@/hooks/useVerificarDebitosAssociado';
@@ -639,21 +639,46 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
                       </div>
                     ) : (
                       <div className="p-1">
-                        {isSearching && searchTerm.length >= 2 && (
-                          <div className="flex items-center justify-center py-6">
-                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                          </div>
-                        )}
+                        {(() => {
+                          const cleaned = searchTerm.replace(/\D/g, '');
+                          const alnum = searchTerm.replace(/[^A-Za-z0-9]/g, '');
+                          const isCpfCompleto = cleaned.length === 11;
+                          const isPlacaCompleta = alnum.length >= 7 && /[A-Za-z]/.test(alnum);
+                          const consultandoSGA = isSearching && (isCpfCompleto || isPlacaCompleta);
+                          return (
+                            <>
+                              {isSearching && searchTerm.length >= 2 && (
+                                <div className="flex items-center justify-center gap-2 py-6">
+                                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                  {consultandoSGA && (
+                                    <span className="text-xs text-muted-foreground">Consultando SGA…</span>
+                                  )}
+                                </div>
+                              )}
 
-                        {!isSearching && searchTerm.length >= 2 && mergedAssociadoResults.length === 0 && (
-                          <p className="text-sm text-muted-foreground text-center py-6">Nenhum associado encontrado</p>
-                        )}
+                              {!isSearching && searchTerm.length >= 2 && mergedAssociadoResults.length === 0 && (
+                                <div className="px-3 py-5 space-y-3">
+                                  <p className="text-sm text-muted-foreground text-center">
+                                    Nenhum associado encontrado.
+                                  </p>
+                                  <Alert>
+                                    <Info className="h-4 w-4" />
+                                    <AlertTitle className="text-xs">Buscando alguém da Praticcar?</AlertTitle>
+                                    <AlertDescription className="text-xs leading-relaxed">
+                                      A busca por <strong>nome</strong> consulta apenas a base local. Para encontrar associados que já são clientes da Praticcar (mas ainda não estão na sua base local), digite o <strong>CPF completo</strong> (11 dígitos) ou a <strong>placa</strong> (7 caracteres) — assim consultamos o SGA em tempo real.
+                                    </AlertDescription>
+                                  </Alert>
+                                </div>
+                              )}
 
-                        {searchTerm.length < 2 && (
-                          <p className="text-xs text-muted-foreground text-center py-6">
-                            Digite pelo menos 2 caracteres para buscar
-                          </p>
-                        )}
+                              {searchTerm.length < 2 && (
+                                <p className="text-xs text-muted-foreground text-center py-6">
+                                  Digite pelo menos 2 caracteres (nome, CPF ou placa)
+                                </p>
+                              )}
+                            </>
+                          );
+                        })()}
 
                         {mergedAssociadoResults.map((a) => (
                           <button
