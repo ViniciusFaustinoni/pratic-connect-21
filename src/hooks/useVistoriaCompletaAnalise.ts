@@ -174,6 +174,21 @@ export function useAtivarRastreadorPlataforma() {
 
         if (error) throw error;
         if (!result.success) throw new Error(result.error || 'Erro ao ativar na Softruck');
+      } else if (rastreador.plataforma === 'rede_veiculos') {
+        // Vincular cliente+veículo+equipamento e ativar na Rede Veículos
+        // Isso cria o cliente na plataforma e dispara o envio de login/senha por e-mail
+        const { data: result, error } = await supabase.functions.invoke('rede-veiculos-vincular-cliente', {
+          body: {
+            imei,
+            veiculoId,
+            associadoId,
+          },
+        });
+
+        if (error) throw error;
+        if (!result?.success) throw new Error(result?.error || 'Erro ao vincular na Rede Veículos');
+      } else {
+        console.warn('[ativar-rastreador] Plataforma sem integração de ativação:', rastreador.plataforma);
       }
 
       const { error: veicError } = await supabase
