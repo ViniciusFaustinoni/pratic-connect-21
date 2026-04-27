@@ -27,6 +27,7 @@ export function JornadaStatusBar({ className }: JornadaStatusBarProps) {
     turno,
     isLoading,
     podeIniciarAlmoco,
+    bloqueadoPorTarefa,
     iniciarAlmoco,
     finalizarAlmoco,
     isIniciandoAlmoco,
