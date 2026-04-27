@@ -915,7 +915,8 @@ export default function ExecutarVistoriaCompleta() {
             {!conferenciaCompleta && 'Confirme os dados e hodômetro. '}
             {!todasFotosEnviadas && `📸 Tire todas as fotos obrigatórias (faltam ${totalFotosObrigatorias - totalFotosEnviadas}). `}
             {!videoEnviado && 'Envie o vídeo 360°. '}
-            {!rastreadorVinculado && '📡 Vincule o IMEI do rastreador.'}
+            {!rastreadorVinculado && '📡 Vincule o IMEI do rastreador. '}
+            {rastreadorVinculado && precisaConfirmarPosicao && !posicaoConfirmada && '📍 Confirme a posição do rastreador no mapa.'}
           </p>
         )}
         {offlineQueue.totalPendentes > 0 && (
