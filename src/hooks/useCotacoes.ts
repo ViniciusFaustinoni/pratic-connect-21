@@ -435,7 +435,18 @@ export function useDuplicarCotacao() {
     mutationFn: async (params: string | DuplicarCotacaoParams) => {
       const cotacaoId = typeof params === 'string' ? params : params.cotacaoId;
       const motivo = typeof params === 'string' ? undefined : params.motivo;
-      const acaoOriginal = typeof params === 'string' ? 'none' : (params.acaoOriginal ?? 'none');
+      // CORREÇÃO RAIZ (sumiço de cotações na tela do consultor):
+      // O fluxo comercial NUNCA deve excluir fisicamente a cotação original.
+      // Antes, "duplicar -> excluir" removia o registro do banco, o número
+      // sumia da listagem do consultor e da auditoria. Agora forçamos sempre
+      // o comportamento "manter como substituída" — a original permanece no
+      // banco com substituida_por_cotacao_id apontando para a nova.
+      const acaoOriginal: 'manter' | 'none' =
+        typeof params === 'string'
+          ? 'none'
+          : params.acaoOriginal === 'manter' || params.acaoOriginal === 'excluir'
+            ? 'manter'
+            : (params.acaoOriginal ?? 'none');
 
       // Buscar cotação original
       const { data: original, error: fetchError } = await supabase
@@ -446,20 +457,6 @@ export function useDuplicarCotacao() {
 
       if (fetchError) throw fetchError;
       if (!original) throw new Error('Cotação não encontrada');
-
-      // Se for excluir, validar que não há contrato/agendamento (race-safety)
-      if (acaoOriginal === 'excluir') {
-        const [contratoRes, agendRes] = await Promise.all([
-          supabase.from('contratos').select('id').eq('cotacao_id', cotacaoId).limit(1),
-          supabase.from('agendamentos_base').select('id').eq('cotacao_id', cotacaoId).limit(1),
-        ]);
-        if ((contratoRes.data?.length ?? 0) > 0 || (agendRes.data?.length ?? 0) > 0) {
-          throw new Error('Esta cotação já possui contrato ou agendamento. Recarregue a página e duplique novamente usando "Manter como substituída".');
-        }
-        if (!['rascunho', 'enviada'].includes(original.status as string)) {
-          throw new Error('Cotações neste status não podem ser excluídas — use "Manter como substituída".');
-        }
-      }
 
       // Remover campos que serão gerados novamente
       const {
@@ -495,7 +492,9 @@ export function useDuplicarCotacao() {
 
       if (error) throw error;
 
-      // Pós-processamento na original conforme acaoOriginal
+      // Pós-processamento na original — sempre "manter como substituída".
+      // Exclusão física via fluxo de duplicação foi removida (causa raiz do
+      // sumiço de cotações da tela do consultor).
       if (acaoOriginal === 'manter') {
         await supabase
           .from('cotacoes')
@@ -505,26 +504,6 @@ export function useDuplicarCotacao() {
             motivo_substituicao: motivo ?? null,
           })
           .eq('id', cotacaoId);
-      } else if (acaoOriginal === 'excluir') {
-        // Tenta exclusão via Edge Function (cascata segura). Fallback: DELETE direto.
-        try {
-          const { data: delData, error: delErr } = await supabase.functions.invoke('delete-cotacao', {
-            body: { cotacaoId, motivo: motivo ? `[Duplicação] ${motivo}` : '[Duplicação]' },
-          });
-          if (delErr || !delData?.success) {
-            throw new Error(delErr?.message || delData?.error || 'Falha ao excluir original');
-          }
-        } catch (e) {
-          console.warn('[useDuplicarCotacao] delete-cotacao falhou, tentando DELETE direto:', e);
-          const { error: directDelErr } = await supabase
-            .from('cotacoes')
-            .delete()
-            .eq('id', cotacaoId);
-          if (directDelErr) {
-            console.error('[useDuplicarCotacao] DELETE direto também falhou:', directDelErr);
-            toast.warning('Duplicata criada, mas não foi possível excluir a original. Você pode excluí-la manualmente.');
-          }
-        }
       }
 
       return { ...nova, _originalId: cotacaoId, _acaoOriginal: acaoOriginal, _motivo: motivo };
@@ -533,16 +512,8 @@ export function useDuplicarCotacao() {
       queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
       toast.success('Cotação duplicada com sucesso!');
 
-      const acao = data._acaoOriginal as 'excluir' | 'manter' | 'none';
-      if (acao === 'excluir') {
-        registrarLog({
-          acao: 'excluir',
-          modulo: 'cotacoes',
-          descricao: `Cotação original excluída em duplicação. Nova: ${data.numero}. Motivo: ${data._motivo ?? '—'}`,
-          entidade_id: data._originalId,
-          dados_novos: { nova_cotacao_id: data.id, motivo: data._motivo },
-        });
-      } else if (acao === 'manter') {
+      const acao = data._acaoOriginal as 'manter' | 'none';
+      if (acao === 'manter') {
         registrarLog({
           acao: 'duplicar',
           modulo: 'cotacoes',
