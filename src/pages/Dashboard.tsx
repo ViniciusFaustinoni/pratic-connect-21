@@ -330,14 +330,21 @@ export default function Dashboard() {
     );
   }
 
+  // Escopo do vendedor: vendedor não-gestor enxerga apenas a própria carteira
+  const vendedorScopeId = isVendedorOnly ? (profile?.id ?? userId ?? null) : null;
+
   // Queries otimizadas para dashboard - principais KPIs
-  const { data: leadsFunnel, isLoading: leadsLoading } = useLeadsFunnel();
-  const { data: contratos, isLoading: contratosLoading } = useContratos();
+  const { data: leadsFunnel, isLoading: leadsLoading } = useLeadsFunnel(vendedorScopeId);
+  const { data: contratos, isLoading: contratosLoading } = useContratos(vendedorScopeId);
   const { data: docsContagem } = useDocumentosContagem();
   const { data: instMetricas, isLoading: instalacoesLoading } = useInstalacoesMetricas();
   
   // Queries secundárias - carregam dados para widgets específicos
-  const { data: leadsData } = useLeads({ page: 1, perPage: 5 }); // Apenas 5 leads para preview
+  const { data: leadsData } = useLeads({
+    page: 1,
+    perPage: 5,
+    filters: vendedorScopeId ? { vendedor_id: vendedorScopeId } : undefined,
+  });
   const { data: pendingDocs, isLoading: docsLoading } = usePendingDocumentos();
   const { data: instalacoesDia } = useInstalacoesDoDia();
   
