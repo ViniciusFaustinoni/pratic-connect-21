@@ -781,7 +781,7 @@ export default function ExecutarVistoriaCompleta() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => { setRastreadorEncontrado(null); setImeiInput(''); }}
+                    onClick={() => { setRastreadorEncontrado(null); setImeiInput(''); setPosicaoConfirmada(false); }}
                     className="text-slate-300 hover:text-white"
                   >
                     Alterar IMEI
