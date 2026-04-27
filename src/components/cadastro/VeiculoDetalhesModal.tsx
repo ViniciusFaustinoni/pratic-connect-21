@@ -188,7 +188,7 @@ export function VeiculoDetalhesModal({ open, onClose, veiculoId }: VeiculoDetalh
                       <InfoItem label="Modelo" value={veiculo.modelo} />
                       <InfoItem label="Ano" value={`${veiculo.ano_fabricacao || '?'}/${veiculo.ano_modelo || '?'}`} />
                       <InfoItem label="Cor" value={veiculo.cor} />
-                      <InfoItem label="Placa" value={veiculo.placa} mono />
+                      <InfoItem label="Placa" value={formatPlacaExibicao(veiculo.placa)} mono />
                       <InfoItem label="Chassi" value={veiculo.chassi} mono />
                       <InfoItem label="Renavam" value={veiculo.renavam} />
                       <InfoItem label="Combustível" value={veiculo.combustivel} />
