@@ -348,8 +348,9 @@ export default function AtribuicaoManualTab() {
 
   const handleConfirmPrestador = async () => {
     if (!prestadorConfirmDialog) return;
-    const valor = parseFloat(valorPrestador);
-    if (isNaN(valor) || valor <= 0) return;
+    // Valor é opcional — quando vazio, envia 0 (definido depois pela operação)
+    const valor = valorPrestador.trim() === '' ? 0 : parseFloat(valorPrestador);
+    if (isNaN(valor) || valor < 0) return;
 
     try {
       const result = await atribuirPrestadorMutation.mutateAsync({
@@ -527,12 +528,12 @@ export default function AtribuicaoManualTab() {
             </Badge>
 
             <div>
-              <label className="text-sm font-medium mb-1 block">Valor (R$) *</label>
+              <label className="text-sm font-medium mb-1 block">Valor (R$) <span className="text-muted-foreground font-normal">(opcional)</span></label>
               <Input
                 type="number"
                 min="0"
                 step="0.01"
-                placeholder="Ex: 80.00"
+                placeholder="Ex: 80.00 (opcional)"
                 value={valorPrestador}
                 onChange={e => setValorPrestador(e.target.value)}
                 className="h-9"
@@ -544,7 +545,7 @@ export default function AtribuicaoManualTab() {
             <Button variant="outline" onClick={() => setPrestadorConfirmDialog(null)}>Cancelar</Button>
             <Button
               onClick={handleConfirmPrestador}
-              disabled={atribuirPrestadorMutation.isPending || !valorPrestador || parseFloat(valorPrestador) <= 0}
+              disabled={atribuirPrestadorMutation.isPending}
             >
               {atribuirPrestadorMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
               Gerar Link
