@@ -66,6 +66,7 @@ import { useAssociadoSituacao } from '@/hooks/useAssociadoSituacao';
 import { BlocoDepreciacaoVeiculo } from '@/components/associados/detalhe/BlocoDepreciacaoVeiculo';
 import { formatPlacaExibicao } from '@/lib/placa-utils';
 import { ConcluirInstalacaoPrestadorButton } from '@/components/cadastro/ConcluirInstalacaoPrestadorButton';
+import { AlterarFormaPagamentoDialog } from '@/components/cobrancas/AlterarFormaPagamentoDialog';
 
 // ============================================
 // UTILITÁRIOS
@@ -177,6 +178,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
   const [veiculoDetalhesId, setVeiculoDetalhesId] = useState<string | null>(null);
   const [veiculoEditar, setVeiculoEditar] = useState<any>(null);
   const [mapaModalOpen, setMapaModalOpen] = useState(false);
+  const [alterarFormaState, setAlterarFormaState] = useState<{ open: boolean; cobrancaId: string; formaAtual: string; descricao: string } | null>(null);
   const [veiculoSelecionadoId, setVeiculoSelecionadoId] = useState<string | null>(null);
   const [selecionarVeiculoOpen, setSelecionarVeiculoOpen] = useState(false);
   const [rastreadorModalOpen, setRastreadorModalOpen] = useState(false);
@@ -976,22 +978,51 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                         <TableHead className="text-xs">Referência</TableHead>
                         <TableHead className="text-xs">Vencimento</TableHead>
                         <TableHead className="text-xs">Valor</TableHead>
+                        <TableHead className="text-xs">Forma</TableHead>
                         <TableHead className="text-xs">Status</TableHead>
+                        <TableHead className="text-xs text-right">Ações</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {cobrancasData.faturas.slice(0, 10).map((f: any) => (
-                        <TableRow key={f.id}>
-                          <TableCell className="font-medium text-xs">{f.referencia || f.tipo}</TableCell>
-                          <TableCell className="text-xs">{formatDate(f.data_vencimento)}</TableCell>
-                          <TableCell className="text-xs">{formatCurrency(f.valor)}</TableCell>
-                          <TableCell>
-                            <Badge className={cn('text-[10px]', getStatusCobrancaClass(f.status))}>
-                              {getStatusCobrancaLabel(f.status)}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {cobrancasData.faturas.slice(0, 10).map((f: any) => {
+                        const statusOpen = ['PENDING', 'OVERDUE'].includes(String(f.status).toUpperCase());
+                        const podeAlterar = f.fonte === 'asaas' && statusOpen;
+                        const formaLabel =
+                          (f.forma_pagamento || '').toUpperCase() === 'PIX' ? 'PIX' :
+                          (f.forma_pagamento || '').toUpperCase() === 'BOLETO' ? 'Boleto' :
+                          (f.forma_pagamento || '').toUpperCase() === 'CREDIT_CARD' ? 'Cartão' :
+                          (f.forma_pagamento || '').toUpperCase() === 'UNDEFINED' ? 'PIX/Cartão' : '—';
+                        return (
+                          <TableRow key={f.id}>
+                            <TableCell className="font-medium text-xs">{f.referencia || f.tipo}</TableCell>
+                            <TableCell className="text-xs">{formatDate(f.data_vencimento)}</TableCell>
+                            <TableCell className="text-xs">{formatCurrency(f.valor)}</TableCell>
+                            <TableCell className="text-xs">{formaLabel}</TableCell>
+                            <TableCell>
+                              <Badge className={cn('text-[10px]', getStatusCobrancaClass(f.status))}>
+                                {getStatusCobrancaLabel(f.status)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {podeAlterar ? (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-[11px]"
+                                  onClick={() => setAlterarFormaState({
+                                    open: true,
+                                    cobrancaId: f.id,
+                                    formaAtual: f.forma_pagamento || 'UNDEFINED',
+                                    descricao: `${f.referencia || f.tipo} • ${formatCurrency(f.valor)} • venc. ${formatDate(f.data_vencimento)}`,
+                                  })}
+                                >
+                                  Alterar forma
+                                </Button>
+                              ) : null}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 ) : (
@@ -1183,6 +1214,18 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
           onOpenChange={setTrocaTitularidadeOpen}
           associadoId={id}
           associadoNome={associado.nome}
+        />
+      )}
+
+      {/* Alterar forma de pagamento */}
+      {alterarFormaState && (
+        <AlterarFormaPagamentoDialog
+          open={alterarFormaState.open}
+          onOpenChange={(o) => setAlterarFormaState((s) => (s ? { ...s, open: o } : s))}
+          cobrancaId={alterarFormaState.cobrancaId}
+          formaAtual={alterarFormaState.formaAtual}
+          associadoId={id}
+          descricao={alterarFormaState.descricao}
         />
       )}
     </div>

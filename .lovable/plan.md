@@ -1,56 +1,60 @@
-## Diagnóstico
+## Demanda do Relato
 
-Bug confirmado em `src/components/diretoria/DetalheRelatoModal.tsx`.
+A associada **MARIA JULIA FLORENCIO GOMES** relatou que, após a conclusão do cadastro, **não existe forma de alterar o método de pagamento da cobrança de adesão** (ex.: trocar PIX por Cartão de Crédito). Hoje, quando o associado ainda está fisicamente na sede e pede a troca, o atendente precisa fazer "manualmente" — não há ação no sistema.
 
-O modal de detalhe de relato é montado **uma única vez** na página `RelatosErros.tsx` (linha 333) — apenas a prop `report` muda quando o diretor clica em outro relato. Mas o estado interno `obs` (`useState('')`) **nunca é resetado** entre relatos.
+## Diagnóstico técnico
 
-Além disso, na função `onMelhorar`:
-```ts
-const base = obs.trim() || report.descricao;
-```
-Ela usa o conteúdo do textarea "Observação para o autor" como entrada da IA. Se esse textarea ainda contém o texto melhorado de um relato anterior (porque o estado não foi limpo), a IA recebe esse texto e devolve uma versão refinada dele — exatamente o sintoma descrito ("retorna um texto de outro relato").
+- A forma de pagamento (`forma_pagamento`) é gravada **por cobrança**, principalmente em `cobrancas` e `asaas_cobrancas`. Não existe campo "padrão" no associado/contrato.
+- A criação inicial é feita pela Edge Function `asaas-cobranca-adesao` com `billingType` (PIX | BOLETO | CREDIT_CARD | UNDEFINED).
+- A Edge Function `asaas-cobrancas` hoje suporta `POST` (criar), `GET` (consultar) e `DELETE` (cancelar) — **não suporta alterar `billingType`** de uma cobrança existente.
+- A API do Asaas permite atualizar uma cobrança **enquanto ela estiver `PENDING`** via `POST /v3/payments/{id}` com o novo `billingType`. Se já estiver `RECEIVED`/`CONFIRMED`, não é editável.
+- A tela do associado (gestão) tem aba **Financeiro → Últimas Faturas** (`AssociadoDetalhe.tsx`, linhas 936+), que lista as cobranças mas não tem ação por linha.
+- A tela do próprio associado (`AppBoletoDetalhe.tsx`) mostra o boleto/PIX, mas também não tem ação de troca.
 
-A edge function `melhorar-texto-relato-erro` está correta: busca o relato pelo `report_id` correto, mas **prioriza o `texto` enviado pelo cliente** (linha 56: `const textoBase = (textoOpcional ?? report.descricao ?? '').trim()`). Como o cliente sempre envia o `obs` contaminado, o texto correto do banco é ignorado.
+## Plano de implementação
 
-## Correção
+### 1) Edge Function: `asaas-cobranca-alterar-forma`
+Nova função (ou nova `action` em `asaas-cobrancas`) que:
+- Recebe `{ cobrancaId, novaForma: 'PIX' | 'BOLETO' | 'CREDIT_CARD' }`
+- Valida permissão do chamador (RLS via cliente autenticado + verificação de acesso ao associado).
+- Busca a cobrança em `cobrancas`/`asaas_cobrancas`, garante que está com status pendente (`PENDING` no Asaas, não pago localmente).
+- **Estratégia padrão**: tenta `POST /payments/{asaas_id}` enviando apenas `billingType` novo. Se o Asaas retornar erro de campo imutável (alguns campos como `billingType` exigem recriação dependendo do estado), faz **fallback**: cancela a cobrança atual via `DELETE` e cria nova via mesma rotina do `asaas-cobranca-adesao` (mesmo valor, vencimento, contrato, cliente).
+- Atualiza `cobrancas.forma_pagamento` e `asaas_cobrancas.forma_pagamento` no banco.
+- Registra entrada em `associados_historico` com `tipo='forma_pagamento_alterada'`, descrição "Forma de pagamento alterada de X para Y" e `usuario_id`.
+- Retorna os novos dados (linha de digitação do boleto, QR Code do PIX, ou link de checkout do cartão) para a UI exibir imediatamente.
 
-### 1. Resetar estado ao trocar de relato
-Em `DetalheRelatoModal.tsx`, adicionar `useEffect` que limpa `obs`, `obsPrev` e `preview` sempre que `report?.id` mudar:
-```tsx
-useEffect(() => {
-  setObs('');
-  setObsPrev(null);
-  setPreview(null);
-}, [report?.id]);
-```
+### 2) Hook React: `useAlterarFormaPagamento`
+Em `src/hooks/useCobrancas.ts` (ou novo arquivo). `useMutation` que invoca a edge function, invalida `['cobrancas-associado', id]`, `['resumo-financeiro', id]` e `['my-boletos']`, com toast de sucesso/erro.
 
-### 2. "Melhorar com IA" deve usar a descrição do relato como fonte de verdade
-Quando o diretor clica em "Melhorar com IA" sem ter digitado nada, a base deve ser **sempre** `report.descricao` (texto original do autor), não o textarea. O textarea é destino, não fonte.
+### 3) UI — Tela de gestão (sede)
+Em `src/pages/cadastro/AssociadoDetalhe.tsx`, na aba **Financeiro**:
+- Adicionar uma coluna "Ações" na tabela "Últimas Faturas" com um botão "Alterar forma" (visível apenas quando a fatura está pendente e ainda não vencida/paga).
+- Abrir um `Dialog` com um `RadioGroup` (PIX / BOLETO / CARTÃO) e botão "Confirmar alteração". Mostrar a forma atual destacada.
+- Após confirmar, mostrar o novo PIX/boleto inline (modal com QR Code copiável ou linha digitável) — útil para imprimir/enviar enquanto o associado ainda está na sede.
 
-Trocar `onMelhorar`:
-```ts
-const onMelhorar = async () => {
-  if (!report) return;
-  // Sempre melhora a DESCRIÇÃO do relato atual, não o que está no campo de observação
-  const novo = await melhorarTexto.mutateAsync({
-    reportId: report.id,
-    texto: report.descricao,
-  });
-  if (novo) {
-    setObsPrev(obs);
-    setObs(novo);
-    toast.success('Texto melhorado pela IA', {
-      action: { label: 'Desfazer', onClick: () => setObs(obsPrev ?? '') },
-    });
-  }
-};
-```
+### 4) UI — App do associado
+Em `src/pages/app/AppBoletoDetalhe.tsx`, adicionar botão **"Alterar forma de pagamento"** no card do boleto pendente, acionando o mesmo fluxo (mesmo `Dialog`/hook). O associado pode trocar sozinho dentro do app.
 
-Isso garante que a IA sempre opere sobre o texto correto do relato em foco, independente do que esteja (ou tenha ficado) no textarea.
+### 5) Restrições e validações
+- Só permite alterar quando a cobrança está **pendente** (`status` ∈ pendente/em_aberto/aguardando_pagamento) e **não vencida há mais de N dias** (configurável; default: permite até a data de vencimento).
+- Se a cobrança já tiver tentativa de cartão recusada, manter histórico mas permitir nova tentativa.
+- Cartão de crédito: redirecionar para o link de checkout do Asaas (`invoiceUrl`) — não capturar dados de cartão direto na UI.
+- Bloquear alteração para cobranças `RECEIVED`/`CONFIRMED`/`OVERDUE` há mais de 30 dias (já vão para protesto/cobrança).
+
+### 6) Permissões e auditoria
+- Permissão de "alterar forma de pagamento" liberada por padrão para: Diretor, Gerente Comercial, Atendente, Financeiro, e o **próprio associado** (autenticado no app).
+- Toda alteração registra em `associados_historico` com autor e timestamp.
 
 ## Arquivos afetados
-- `src/components/diretoria/DetalheRelatoModal.tsx`
+- `supabase/functions/asaas-cobrancas/index.ts` — adicionar `action: 'alterar-forma'` (ou criar `asaas-cobranca-alterar-forma/index.ts` separada).
+- `src/hooks/useCobrancas.ts` — novo hook `useAlterarFormaPagamento`.
+- `src/components/cobrancas/AlterarFormaPagamentoDialog.tsx` — novo componente reutilizável.
+- `src/pages/cadastro/AssociadoDetalhe.tsx` — coluna "Ações" + botão na tabela de faturas.
+- `src/pages/app/AppBoletoDetalhe.tsx` — botão "Alterar forma de pagamento".
+- Migração: nada novo (campos já existem); apenas garantir que `associados_historico` aceita o novo `tipo`.
 
 ## Resultado esperado
-- Ao abrir um novo relato, o campo "Observação para o autor" começa vazio.
-- "Melhorar com IA" sempre devolve uma versão refinada da descrição **do relato atualmente aberto**, nunca de outro.
+- Atendente consegue, em um clique, trocar a forma de pagamento da fatura de adesão (ou de qualquer mensalidade pendente) enquanto o associado ainda está na sede.
+- O próprio associado consegue trocar pelo app antes do vencimento.
+- Histórico completo de quem alterou e quando.
+- Cobrança original é atualizada (ou recriada com mesmo valor/vencimento) no Asaas, sem duplicar débitos.

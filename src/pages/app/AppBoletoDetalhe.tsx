@@ -38,6 +38,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useMyBoleto, BoletoHistorico } from '@/hooks/useMyData';
 import { formatarValor, statusConfig as boletoStatusConfig } from '@/components/app/CardBoleto';
+import { AlterarFormaPagamentoDialog } from '@/components/cobrancas/AlterarFormaPagamentoDialog';
 
 // ============================================
 // COMPONENTE DE CÓDIGO DE BARRAS VISUAL
@@ -98,6 +99,7 @@ export default function AppBoletoDetalhe() {
   
   const [copiando, setCopiando] = useState<'pix' | 'linha' | null>(null);
   const [baixando, setBaixando] = useState(false);
+  const [alterarFormaOpen, setAlterarFormaOpen] = useState(false);
   const [compartilhando, setCompartilhando] = useState(false);
 
   // ============================================
@@ -527,6 +529,16 @@ export default function AppBoletoDetalhe() {
               Compartilhar
             </Button>
           </div>
+          {boleto.fonte === 'asaas' && (boleto.status === 'pendente' || boleto.status === 'vencido') && (
+            <Button
+              variant="default"
+              className="w-full mt-3"
+              onClick={() => setAlterarFormaOpen(true)}
+            >
+              <CreditCard className="mr-2 h-4 w-4" />
+              Alterar forma de pagamento
+            </Button>
+          )}
         </CardContent>
       </Card>
 
@@ -660,6 +672,16 @@ export default function AppBoletoDetalhe() {
             Para boleto bancário, pode levar até 3 dias úteis.
           </AlertDescription>
         </Alert>
+      )}
+
+      {boleto.fonte === 'asaas' && (
+        <AlterarFormaPagamentoDialog
+          open={alterarFormaOpen}
+          onOpenChange={setAlterarFormaOpen}
+          cobrancaId={boleto.id}
+          formaAtual={boleto.formaPagamento || 'UNDEFINED'}
+          descricao={`${boleto.competencia || 'Cobrança'} • ${formatarValor(boleto.valorFinal)} • venc. ${boleto.dataVencimento}`}
+        />
       )}
     </div>
   );

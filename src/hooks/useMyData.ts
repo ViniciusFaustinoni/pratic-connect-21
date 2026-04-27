@@ -37,6 +37,7 @@ export interface Boleto {
   formaPagamento?: string;
   nossoNumero?: string;
   numeroDocumento?: string;
+  fonte?: 'asaas' | 'sga';
 }
 
 export interface BoletoHistorico {
@@ -663,6 +664,7 @@ async function buscarBoletosSGA(associadoId: string): Promise<Boleto[]> {
       urlBoleto: c.boleto_url || undefined,
       formaPagamento: c.forma_pagamento || undefined,
       nossoNumero: c.nosso_numero || undefined,
+      fonte: 'sga',
     };
   });
 }
@@ -703,6 +705,7 @@ async function buscarBoletosLocal(associadoId: string): Promise<Boleto[]> {
       formaPagamento: c.pagamento_forma || c.forma_pagamento || undefined,
       nossoNumero: c.boleto_nosso_numero || undefined,
       numeroDocumento: c.referencia || undefined,
+      fonte: 'asaas',
     };
   });
 }
@@ -726,6 +729,7 @@ function mapBoletoFromApi(b: any): Boleto {
     linhaDigitavel: b.linhaDigitavel || undefined,
     codigoBarras: b.codigoBarras || undefined,
     urlBoleto: b.linkBoleto || b.invoiceUrl || undefined,
+    fonte: 'asaas',
   };
 }
 
