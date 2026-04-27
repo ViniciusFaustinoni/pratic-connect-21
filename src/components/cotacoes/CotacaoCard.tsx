@@ -354,6 +354,11 @@ export function CotacaoCard({
               {status.label.toUpperCase()}
             </Badge>
           )}
+          {(cotacao as any).substituida_por_cotacao_id && (
+            <Badge variant="outline" className="font-medium border-amber-500/60 text-amber-700 dark:text-amber-300 text-[10px]">
+              SUBSTITUÍDA
+            </Badge>
+          )}
           {etapaInfo && (
             <Badge className={cn(etapaInfo.bgColor, etapaInfo.color, "font-medium border-0 text-[10px]")}>
               {etapaInfo.label.toUpperCase()}
