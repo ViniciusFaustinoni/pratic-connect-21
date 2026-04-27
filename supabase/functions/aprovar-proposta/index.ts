@@ -269,8 +269,8 @@ serve(async (req) => {
         }
       }
 
-      // Criar instalação se necessário
-      if (veiculoPrecisaRastreador && !instalacaoDesteVeiculo && !jaTemInstalacaoAtivaDesteVeic) {
+      // Criar instalação se necessário (sempre, para permitir geração do link público de vistoria)
+      if (!instalacaoDesteVeiculo && !jaTemInstalacaoAtivaDesteVeic) {
         const associadoData = contrato.associado as any;
         let dataAgendada = new Date().toISOString().split('T')[0];
         let periodoPreferido = 'manha';
