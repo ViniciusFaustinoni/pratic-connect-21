@@ -113,6 +113,20 @@ export function useAprovarInstalacaoMonitoramento() {
     mutationFn: async (data: AprovarData) => {
       const agora = new Date().toISOString();
 
+      // 0. Marcar o serviço como APROVADO (encerra fase "Em Análise" em Serviços de Campo)
+      const { error: servicoError } = await supabase
+        .from('servicos')
+        .update({
+          status: 'aprovada',
+          analisado_em: agora,
+          analisado_por: profile?.id ?? null,
+          observacoes_analise: data.observacoes ?? null,
+          updated_at: agora,
+        } as any)
+        .eq('id', data.servicoId);
+
+      if (servicoError) throw servicoError;
+
       // 1. Ativar cobertura total + roubo/furto (caso não tenha autovistoria) e status ativo
       const { error: veiculoError } = await supabase
         .from('veiculos')
