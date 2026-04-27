@@ -64,6 +64,7 @@ import { AssociadoTabNav } from '@/components/associados/detalhe/AssociadoTabNav
 import { AdicionarRessalva } from '@/components/cadastro/AdicionarRessalva';
 import { useAssociadoSituacao } from '@/hooks/useAssociadoSituacao';
 import { BlocoDepreciacaoVeiculo } from '@/components/associados/detalhe/BlocoDepreciacaoVeiculo';
+import { formatPlacaExibicao } from '@/lib/placa-utils';
 
 // ============================================
 // UTILITÁRIOS
