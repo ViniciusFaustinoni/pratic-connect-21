@@ -238,6 +238,8 @@ export function useAprovarInstalacaoMonitoramento() {
       queryClient.invalidateQueries({ queryKey: ['aprovacao-monitoramento-stats'] });
       queryClient.invalidateQueries({ queryKey: ['veiculos'] });
       queryClient.invalidateQueries({ queryKey: ['associados'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos-campo'] });
       toast.success('Proteção 360 ativada com sucesso! Associado notificado.');
     },
     onError: (error) => {
