@@ -96,7 +96,9 @@ Deno.serve(async (req) => {
     }
 
     // ── AÇÃO 1: Reusar link ativo ou criar novo ──
-    const colunaPrestador = usaVistoriadorPrestador ? 'vistoriador_prestador_id' : 'prestador_id'
+    // A tabela `instalacao_prestador_links` possui apenas a coluna `prestador_id`.
+    // Independentemente da origem (vistoriadores_prestadores ou prestadores_assistencia),
+    // o id é o mesmo e gravamos sempre em `prestador_id`.
     let linkToken: string
     let linkId: string
 
@@ -104,7 +106,7 @@ Deno.serve(async (req) => {
       .from('instalacao_prestador_links')
       .select('id, token')
       .eq('instalacao_id', instalacao_id)
-      .eq(colunaPrestador, prestadorIdFinal)
+      .eq('prestador_id', prestadorIdFinal)
       .in('status', ['aguardando', 'aceito', 'em_rota', 'em_execucao'])
       .order('created_at', { ascending: false })
       .limit(1)
@@ -114,23 +116,21 @@ Deno.serve(async (req) => {
       linkToken = existingLink.token
       linkId = existingLink.id
     } else {
-      const insertPayload: any = {
-        instalacao_id,
-        valor,
-        atribuido_por,
-      }
-      insertPayload[colunaPrestador] = prestadorIdFinal
-
       const { data: newLink, error: linkErr } = await supabase
         .from('instalacao_prestador_links')
-        .insert(insertPayload)
+        .insert({
+          instalacao_id,
+          prestador_id: prestadorIdFinal,
+          valor,
+          atribuido_por,
+        })
         .select('id, token')
         .single()
 
       if (linkErr) {
         console.error('Erro ao criar link:', linkErr)
         return new Response(
-          JSON.stringify({ success: false, error: 'Erro ao gerar link' }),
+          JSON.stringify({ success: false, error: `Erro ao gerar link: ${linkErr.message}` }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
