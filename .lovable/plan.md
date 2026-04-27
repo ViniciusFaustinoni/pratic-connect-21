@@ -1,59 +1,56 @@
 ## Diagnóstico
 
-Quando o **Coordenador de Monitoramento** clica em "Aprovar" na tela de Aprovação de Associado, o hook `useAprovarInstalacaoMonitoramento` (em `src/hooks/useAprovacaoMonitoramento.ts`) executa:
+Bug confirmado em `src/components/diretoria/DetalheRelatoModal.tsx`.
 
-1. Ativa o veículo (`status='ativo'`, coberturas)
-2. Ativa o associado (`status='ativo'`, `data_ativacao`)
-3. Atualiza cotação (`status_contratacao='ativo'`)
-4. Atualiza contrato (`status='ativo'`, `data_ativacao`)
-5. Sincroniza SGA Hinova
-6. Insere histórico
-7. Notifica cliente
+O modal de detalhe de relato é montado **uma única vez** na página `RelatosErros.tsx` (linha 333) — apenas a prop `report` muda quando o diretor clica em outro relato. Mas o estado interno `obs` (`useState('')`) **nunca é resetado** entre relatos.
 
-**Mas NUNCA atualiza o próprio registro de `servicos`** — `status` continua `em_analise`, `analisado_em`/`analisado_por` continuam `NULL`.
+Além disso, na função `onMelhorar`:
+```ts
+const base = obs.trim() || report.descricao;
+```
+Ela usa o conteúdo do textarea "Observação para o autor" como entrada da IA. Se esse textarea ainda contém o texto melhorado de um relato anterior (porque o estado não foi limpo), a IA recebe esse texto e devolve uma versão refinada dele — exatamente o sintoma descrito ("retorna um texto de outro relato").
 
-Resultado: na aba **Serviços de Campo**, o badge ciano "Em Análise" persiste para sempre, mesmo após a aprovação no monitoramento.
+A edge function `melhorar-texto-relato-erro` está correta: busca o relato pelo `report_id` correto, mas **prioriza o `texto` enviado pelo cliente** (linha 56: `const textoBase = (textoOpcional ?? report.descricao ?? '').trim()`). Como o cliente sempre envia o `obs` contaminado, o texto correto do banco é ignorado.
 
 ## Correção
 
-### 1. Atualizar o serviço ao aprovar (causa raiz)
-Em `src/hooks/useAprovacaoMonitoramento.ts → useAprovarInstalacaoMonitoramento`, adicionar como primeira operação:
-```ts
-await supabase
-  .from('servicos')
-  .update({
-    status: 'aprovada',
-    analisado_em: agora,
-    analisado_por: profile?.id,
-    observacoes_analise: data.observacoes ?? null,
-    updated_at: agora,
-  })
-  .eq('id', data.servicoId);
+### 1. Resetar estado ao trocar de relato
+Em `DetalheRelatoModal.tsx`, adicionar `useEffect` que limpa `obs`, `obsPrev` e `preview` sempre que `report?.id` mudar:
+```tsx
+useEffect(() => {
+  setObs('');
+  setObsPrev(null);
+  setPreview(null);
+}, [report?.id]);
 ```
-Isso faz o serviço migrar imediatamente da fase **Aguardando Análise** → **Concluídas** em Serviços de Campo (já mapeado em `FASE_TO_STATUS.concluida = ['concluida', 'aprovada', 'aprovada_ressalvas']`).
 
-### 2. Mesma lógica no fluxo "Aprovar com ressalvas"
-Verificar e aplicar análogo em `useAprovarComRessalvasMonitoramento` (se existir): `status='aprovada_ressalvas'`.
+### 2. "Melhorar com IA" deve usar a descrição do relato como fonte de verdade
+Quando o diretor clica em "Melhorar com IA" sem ter digitado nada, a base deve ser **sempre** `report.descricao` (texto original do autor), não o textarea. O textarea é destino, não fonte.
 
-### 3. Mesma lógica no "Reprovar"
-Em `useReprovarInstalacaoMonitoramento`: setar `status='reprovada'` + `analisado_em`/`analisado_por`/`motivo_reprovacao`.
+Trocar `onMelhorar`:
+```ts
+const onMelhorar = async () => {
+  if (!report) return;
+  // Sempre melhora a DESCRIÇÃO do relato atual, não o que está no campo de observação
+  const novo = await melhorarTexto.mutateAsync({
+    reportId: report.id,
+    texto: report.descricao,
+  });
+  if (novo) {
+    setObsPrev(obs);
+    setObs(novo);
+    toast.success('Texto melhorado pela IA', {
+      action: { label: 'Desfazer', onClick: () => setObs(obsPrev ?? '') },
+    });
+  }
+};
+```
 
-### 4. Refresh agressivo na lista (sintoma)
-Em `src/hooks/useServicos.ts` (linhas 439-441), aplicar o mesmo padrão da correção anterior:
-- `refetchInterval: 15000`
-- `refetchIntervalInBackground: true`
-- `refetchOnWindowFocus: true`
-- `staleTime: 0`
-
-Garante que a lista de Serviços de Campo se atualize sozinha quando voltar à aba.
+Isso garante que a IA sempre opere sobre o texto correto do relato em foco, independente do que esteja (ou tenha ficado) no textarea.
 
 ## Arquivos afetados
-
-- `src/hooks/useAprovacaoMonitoramento.ts` (3 mutations: aprovar, aprovar com ressalvas, reprovar)
-- `src/hooks/useServicos.ts` (config de refetch)
+- `src/components/diretoria/DetalheRelatoModal.tsx`
 
 ## Resultado esperado
-
-- Após o coordenador aprovar (ou aprovar com ressalvas / reprovar), o card de Serviços de Campo migra imediatamente para a fase correta.
-- O campo "Em Análise" deixa de aparecer assim que houver decisão.
-- A lista atualiza em até 15s ou imediatamente ao focar a aba.
+- Ao abrir um novo relato, o campo "Observação para o autor" começa vazio.
+- "Melhorar com IA" sempre devolve uma versão refinada da descrição **do relato atualmente aberto**, nunca de outro.

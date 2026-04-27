@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -50,6 +50,13 @@ export function DetalheRelatoModal({ report, onClose }: Props) {
   const [obsPrev, setObsPrev] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ url: string; nome: string; mime: string } | null>(null);
 
+  // Reset estado ao trocar de relato (modal é montado uma vez na página pai)
+  useEffect(() => {
+    setObs('');
+    setObsPrev(null);
+    setPreview(null);
+  }, [report?.id]);
+
   const copyImage = async (url: string, mime: string) => {
     try {
       const res = await fetch(url);
@@ -86,8 +93,11 @@ export function DetalheRelatoModal({ report, onClose }: Props) {
 
   const onMelhorar = async () => {
     if (!report) return;
-    const base = obs.trim() || report.descricao;
-    const novo = await melhorarTexto.mutateAsync({ reportId: report.id, texto: base });
+    // Sempre melhora a DESCRIÇÃO do relato atual, não o que está no campo de observação
+    const novo = await melhorarTexto.mutateAsync({
+      reportId: report.id,
+      texto: report.descricao,
+    });
     if (novo) {
       setObsPrev(obs);
       setObs(novo);
