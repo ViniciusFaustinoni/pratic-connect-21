@@ -536,7 +536,7 @@ serve(async (req) => {
     }
 
     // ============= BUSCAR DADOS DE SUBSTITUIÇÃO (quando aplicável) =============
-    if (contrato.tipo_entrada === 'substituicao_placa' && contrato.associado_id && contrato.veiculo_id) {
+    if ((contrato.tipo_entrada === 'substituicao_placa' || contrato.tipo_entrada === 'substituicao') && contrato.associado_id && contrato.veiculo_id) {
       const { data: subst } = await supabase
         .from('substituicoes_veiculo')
         .select('veiculo_antigo_placa, veiculo_antigo_modelo, veiculo_antigo_fipe')
