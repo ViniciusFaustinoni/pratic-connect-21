@@ -19,6 +19,7 @@ import {
   MapPinned,
 } from 'lucide-react';
 import { RealocarInstalacaoDialog } from '@/components/instalacoes/RealocarInstalacaoDialog';
+import { LiberarServicoButton } from './LiberarServicoButton';
 import { cn } from '@/lib/utils';
 import {
   TIPO_SERVICO_LABELS, STATUS_SERVICO_LABELS, STATUS_SERVICO_COLORS,
