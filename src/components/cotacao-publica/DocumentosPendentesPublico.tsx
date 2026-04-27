@@ -155,25 +155,45 @@ export function DocumentosPendentesPublico({
         .from('cotacoes-docs')
         .getPublicUrl(fileName);
 
-      // 2.1 Rodar OCR (não bloqueante para o usuário; aguardamos para já gravar resultado)
+      // 2.1 Rodar OCR com timeout (90s) e até 2 tentativas em falhas de rede.
+      // Não bloqueia o usuário: se OCR falhar de vez, documento é gravado sem dados.
       let ocrTipoDetectado: string | null = null;
       let ocrSugestao: string | null = null;
       let ocrConfianca: number | null = null;
       let ocrDados: Record<string, unknown> | null = null;
-      try {
-        const { data: ocrResult, error: ocrError } = await publicSupabase.functions.invoke('document-ocr', {
-          body: { url: publicUrl, tipoEsperado: doc.tipo_documento },
-        });
-        if (!ocrError && ocrResult) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const r = ocrResult as any;
-          ocrTipoDetectado = r.tipo_detectado ?? null;
-          ocrSugestao = r.sugestao ?? null;
-          ocrConfianca = typeof r.confianca === 'number' ? r.confianca : null;
-          ocrDados = r.dados ?? null;
+      const OCR_TIMEOUT_MS = 90_000;
+      const OCR_MAX_ATTEMPTS = 2;
+      for (let attempt = 1; attempt <= OCR_MAX_ATTEMPTS; attempt++) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), OCR_TIMEOUT_MS);
+        try {
+          const { data: ocrResult, error: ocrError } = await publicSupabase.functions.invoke('document-ocr', {
+            body: { url: publicUrl, tipoEsperado: doc.tipo_documento },
+            ...(({ signal: controller.signal } as unknown) as Record<string, unknown>),
+          });
+          clearTimeout(timeoutId);
+          if (!ocrError && ocrResult) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const r = ocrResult as any;
+            ocrTipoDetectado = r.tipo_detectado ?? null;
+            ocrSugestao = r.sugestao ?? null;
+            ocrConfianca = typeof r.confianca === 'number' ? r.confianca : null;
+            ocrDados = r.dados ?? null;
+          }
+          break; // sucesso (mesmo que vazio) — sai do loop
+        } catch (ocrErr: any) {
+          clearTimeout(timeoutId);
+          const isAbort = ocrErr?.name === 'AbortError' || controller.signal.aborted;
+          const isNetwork = ocrErr?.message?.toLowerCase?.().includes('failed to fetch') ||
+                            ocrErr?.message?.toLowerCase?.().includes('network');
+          if ((isAbort || isNetwork) && attempt < OCR_MAX_ATTEMPTS) {
+            console.warn(`[DocsPendentes] OCR tentativa ${attempt} falhou (${isAbort ? 'timeout' : 'rede'}), retry...`);
+            await new Promise((r) => setTimeout(r, 800));
+            continue;
+          }
+          console.warn('[DocsPendentes] OCR falhou (segue sem bloquear):', ocrErr);
+          break;
         }
-      } catch (ocrErr) {
-        console.warn('[DocsPendentes] OCR falhou (segue sem bloquear):', ocrErr);
       }
 
       // 3. Criar registro na tabela documentos (tipo já é validado pelo enum do banco)
