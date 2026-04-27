@@ -1,70 +1,74 @@
-# Veículos sem rastreador (FIPE < R$ 30k carro / R$ 9k moto, não-Diesel)
+# Veículos com FIPE < R$ 30k (carro) / R$ 9k (moto), não-Diesel — fluxo sem instalação
 
-## Regra
-- **Tarefa do técnico** não deve exigir etapa de instalação — só fotos e vídeo.
-- **Link público de vistoria** deve permitir concluir só com fotos, sem segunda etapa.
-- Ao concluir as fotos, **veículo é considerado pronto** (Proteção 360 ativa, sem agendar visita técnica).
+## Regra (sua especificação)
+1. **Link público de vistoria** continua sendo gerado, mas **apenas com a etapa de imagens**. A etapa de instalação não aparece.
+2. **Tarefa atribuída ao técnico** também dispensa a etapa de instalação — mostra somente fotos e vídeo.
+3. Quando o cliente concluir as imagens pelo link público, o veículo é considerado **pronto** (sem precisar visita técnica).
 
 ## Estado atual (auditoria)
 
-| Camada | Já correto? | Precisa de ajuste? |
-|---|---|---|
-| `aprovar-proposta` — não cria instalação para veículo sem rastreador | ✅ | — |
-| `ExecutarVistoriaCompleta.tsx` (técnico) — filtra categorias `instalacao`/`rastreador` via `veiculoPrecisaRastreador` | ✅ | — |
-| `CotacaoPublicaCompleta.tsx` — lógica **invertida** ao escolher entre 18 fotos / 31 fotos | ❌ | Linhas 126-128 e 141-143 |
-| `VistoriaPublica.tsx` (link público pós-aprovação) — sempre mostra 2 etapas (Fotos + Instalação) | ❌ | Não considera a regra |
-| `concluir-etapa-fotos-publica` (edge) — sempre deixa o link aguardando etapa de instalação | ❌ | Não considera a regra |
-| Geração do link público — só dispara quando `veiculoPrecisaRastreador = true` | ❌ | Decidir se queremos link mesmo sem rastreador (ver decisão abaixo) |
+| Camada | Hoje |
+|---|---|
+| `aprovar-proposta` | Cria registro em `instalacoes` **apenas** se `veiculoPrecisaRastreador=true`. Para FIPE baixo: ativa Proteção 360 direto, **sem link público**. |
+| `gerar-link-vistoria-publica` | Exige `instalacao_id` (NOT NULL na tabela `vistoria_links`). |
+| `VistoriaPublica.tsx` | Sempre exibe os dois cards: **Etapa Fotos** + **Etapa Instalação**. Não consulta a flag de exigência. |
+| `concluir-etapa-fotos-publica` | Marca só `fotos_etapa_status='concluida'`. Sempre deixa o link aguardando instalação. |
+| `ExecutarVistoriaCompleta.tsx` (técnico) | ✅ Já filtra categorias `instalacao`/`rastreador` quando `veiculoPrecisaRastreador=false`. |
+| BD: `vistoria_links.exige_etapa_instalacao` | ✅ Coluna criada na migração anterior, com backfill. |
 
-## Decisão de produto que precisa ser confirmada
+## Plano revisado
 
-Hoje, quando o veículo dispensa rastreador, **nenhum link público é criado** — `aprovar-proposta` ativa Proteção 360 direto, sem fotos. A regra do usuário ("se acessado pelo link público, e realizadas as imagens, prossegue sem instalação") sugere que mesmo nesses casos queremos que o cliente faça as fotos.
+### 1. `aprovar-proposta` — sempre criar instalação + link
+- Remover o `if (veiculoPrecisaRastreador)` que envolve a criação da `instalacao`.
+- **Sempre** criar registro em `instalacoes` (mesmo para FIPE baixo) — necessário porque `vistoria_links.instalacao_id` é NOT NULL e é referência para todo o pipeline público.
+- Para veículos sem rastreador, marcar a instalação com `local_vistoria='cliente'` e gravar marcador `dispensa_rastreador=true` (nova coluna em `instalacoes`).
+- A chamada para `gerar-link-vistoria-publica` passa a rodar para **todos** os veículos.
+- A ativação imediata de Proteção 360 para veículos sem rastreador **continua** acontecendo nesse passo (não esperar fotos).
 
-**Vou assumir o caminho A** (mais alinhado ao texto da regra): gerar o link público sempre, com etapa de instalação opcional. Se preferir o caminho B (manter ativação direta sem fotos), corrijo só os 3 pontos da UI/edge sem mexer em `aprovar-proposta`.
-
-## Plano de implementação (caminho A)
-
-### 1. Banco — campo de exigência por instalação
-- Adicionar `vistoria_links.exige_etapa_instalacao boolean default true`.
-- Backfill: marcar `false` para links cujo veículo dispensa rastreador (FIPE < limite + não-Diesel).
-
-### 2. `aprovar-proposta`
-- Sempre gerar link público de vistoria (mover a chamada `gerar-link-vistoria-publica` para fora do `if (veiculoPrecisaRastreador)`).
-- Passar `exige_etapa_instalacao = veiculoPrecisaRastreador` para o gerador.
-- Para veículos sem rastreador, ainda **não criar registro em `instalacoes`** (mantém comportamento atual de Proteção 360 imediata).
+### 2. `instalacoes` — novo marcador
+- Nova coluna `instalacoes.dispensa_rastreador boolean default false`.
+- Backfill: marcar `true` para instalações cujos veículos dispensam rastreador (mesma regra FIPE/Diesel já usada).
 
 ### 3. `gerar-link-vistoria-publica`
-- Aceitar e gravar a flag `exige_etapa_instalacao` no insert.
+- Após resolver `instalacao_id`, buscar `instalacoes.dispensa_rastreador`.
+- Gravar `vistoria_links.exige_etapa_instalacao = !dispensa_rastreador` no insert.
+- Atualizar a flag mesmo em links já existentes (caso a regra mude).
 
-### 4. `VistoriaPublica.tsx`
-- Ler `link.exige_etapa_instalacao`. Quando `false`:
-  - `HomeEtapas`: ocultar o card "Instalação" e o aviso de login do técnico.
-  - Após concluir fotos, redirecionar para tela de "concluído" sem aguardar aprovação/instalação.
+### 4. `VistoriaPublica.tsx` — UI condicional
+- Carregar `link.exige_etapa_instalacao`.
+- Quando `false`:
+  - **Esconder** o card "Instalação" e o aviso de login do técnico.
+  - Após concluir a etapa de fotos, mostrar tela de **conclusão final** (não "aguardando técnico").
+- Quando `true`: comportamento atual (2 etapas).
 
-### 5. `concluir-etapa-fotos-publica` (edge)
-- Quando `link.exige_etapa_instalacao === false`:
-  - Setar `instalacao_etapa_status = 'concluida'` no mesmo update.
-  - Marcar `fotos_aprovadas_em = now()` (auto-aprovação — fotos vão direto para análise OCR/manual normal, mas não bloqueiam a finalização).
-  - Garantir `veiculos.cobertura_total = true` e `veiculos.status = 'ativo'` se ainda não estiverem.
-  - Aplicar regra de **dedupe** já existente (`mem://logic/operations/dedupe-agendamentos-rule`): fechar quaisquer `servicos`/`agendamentos_base` órfãos do par associado+veículo.
+### 5. `concluir-etapa-fotos-publica` — autocompletar quando dispensa
+- Ler `link.exige_etapa_instalacao`.
+- Quando `false`, no mesmo update:
+  - `instalacao_etapa_status = 'concluida'`
+  - `instalacao_concluida_em = now()`
+  - `fotos_aprovadas_em = now()` (auto-aprovado, sem fila do monitoramento)
+- Atualizar `instalacoes.status = 'concluida'` para fechar o ciclo.
+- Aplicar dedupe (regra `mem://logic/operations/dedupe-agendamentos-rule`): fechar `servicos`/`agendamentos_base` órfãos do par associado+veículo.
 
-### 6. `CotacaoPublicaCompleta.tsx` (correção do bug existente)
-- Linhas 126-128: inverter — usar `FOTOS_VISTORIA_COMPLETA_CLIENTE` (31 fotos) **quando** `veiculoPrecisaRastreador === false`. Hoje a condição está trocada.
-- Linha 141-143: inicializar `fotosVistoria` com `fotosVistoriaConfig` derivado do flag, não a constante padrão.
+### 6. Tarefa do técnico — confirmação
+- `ExecutarVistoriaCompleta.tsx` já trata o caso (linha 290 — `agruparFotosFiltradas(tipo, veiculoPrecisaRastreador)`). **Nada a alterar.**
+- Confirmação adicional: na tela de criação manual de instalação (`InstalacaoFormDialog`), avisar visualmente quando o veículo dispensa rastreador para que o técnico saiba que sua tarefa terá só fotos.
 
-### 7. Memória do projeto
-Adicionar `mem://logic/operations/vistoria-sem-rastreador-flow`:
-> Veículos abaixo de R$ 30k (carro) / R$ 9k (moto), não-Diesel: vistoria pública conclui só com fotos+vídeo; sem etapa de instalação; sem agendamento técnico. Backend marca `instalacao_etapa_status='concluida'` ao receber as fotos. Tarefa do técnico (`ExecutarVistoriaCompleta`) já filtra categorias `instalacao`/`rastreador` quando `veiculoPrecisaRastreador=false`.
+### 7. Atribuição manual / fila
+- Cards na fila de atribuição (`AtribuicaoManualTab`) ganham um badge "Sem instalação" para veículos que dispensam rastreador, evitando confusão do operador ao atribuir.
+
+### 8. Memória
+- Salvar `mem://logic/operations/vistoria-sem-rastreador-flow`:
+> Veículos com FIPE < R$ 30k (carro) / R$ 9k (moto), não-Diesel: `aprovar-proposta` cria a instalação com `dispensa_rastreador=true` e gera link público; `vistoria_links.exige_etapa_instalacao=false`; `VistoriaPublica.tsx` mostra só etapa de fotos; `concluir-etapa-fotos-publica` marca instalação como concluída e auto-aprova; tarefa do técnico (`ExecutarVistoriaCompleta`) já filtra categorias `instalacao`/`rastreador` via `veiculoPrecisaRastreador`.
 
 ## O que **NÃO** será alterado
+- `precisaRastreador()` em `useConfigRastreador.ts` — fonte única.
+- Schema de `vistoria_links` (já tem `exige_etapa_instalacao` + backfill da migração anterior).
+- `ExecutarVistoriaCompleta.tsx` — já correto.
 
-- `ExecutarVistoriaCompleta.tsx` — já trata o caso corretamente.
-- Cálculo de `precisaRastreador()` em `useConfigRastreador.ts` — fonte única, não duplicar.
-- Tarefa do técnico para veículos com rastreador — fluxo atual permanece.
+## Confirmações antes de implementar
 
-## Confirmações que preciso
+1. **Auto-aprovação das fotos** quando dispensa rastreador (sem passar pela fila do monitoramento), correto? Ou prefere que vá para fila igual hoje?
+2. Posso prosseguir com a criação da `instalacao` mesmo para FIPE baixo (necessário pela FK)? A alternativa de tornar `instalacao_id` nullable mexe em vários edges.
 
-1. **Caminho A (gerar link público sempre) ou B (manter ativação direta sem fotos para veículos < R$ 30k)?**
-2. Se A: as fotos do link público de veículo sem rastreador devem **passar pela aprovação manual do monitoramento** (igual veículos com rastreador) ou **auto-aprovar** ao concluir?
-
-Aprova o caminho A com auto-aprovação? Ou prefere outra combinação?
+Aprova?

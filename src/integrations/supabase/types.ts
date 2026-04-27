@@ -14681,6 +14681,7 @@ export type Database = {
           created_at: string
           data_agendada: string
           data_agendada_original: string | null
+          dispensa_rastreador: boolean
           em_rota_em: string | null
           encaixe_executado: boolean | null
           endereco_latitude: number | null
@@ -14726,6 +14727,7 @@ export type Database = {
           created_at?: string
           data_agendada: string
           data_agendada_original?: string | null
+          dispensa_rastreador?: boolean
           em_rota_em?: string | null
           encaixe_executado?: boolean | null
           endereco_latitude?: number | null
@@ -14771,6 +14773,7 @@ export type Database = {
           created_at?: string
           data_agendada?: string
           data_agendada_original?: string | null
+          dispensa_rastreador?: boolean
           em_rota_em?: string | null
           encaixe_executado?: boolean | null
           endereco_latitude?: number | null
