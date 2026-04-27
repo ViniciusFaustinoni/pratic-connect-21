@@ -70,6 +70,9 @@ const DIGIT_SWAPS: Array<[string, string]> = [
   ['2', '7'], ['7', '2'],
 ];
 
+const PLACA_MERCOSUL_RE = /^[A-Z]{3}[0-9][A-Z][0-9]{2}$/;
+const PLACA_ANTIGA_RE = /^[A-Z]{3}[0-9]{4}$/;
+
 /**
  * Gera todas as variantes plausíveis da placa para cobrir confusões OCR
  * comuns entre Mercosul (LLL N L NN) e formato antigo (LLL NNNN).
