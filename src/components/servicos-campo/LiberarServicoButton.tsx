@@ -26,7 +26,7 @@ interface LiberarServicoButtonProps {
   onLiberado?: () => void;
 }
 
-const LIBERAVEL = ['agendada', 'em_rota', 'em_andamento', 'imprevisto_pendente'];
+const LIBERAVEL = ['agendada', 'em_rota', 'em_andamento', 'imprevisto_pendente', 'pendente', 'reagendada', 'nao_compareceu', 'em_analise'];
 
 export function LiberarServicoButton({
   servicoId,
@@ -63,17 +63,31 @@ export function LiberarServicoButton({
         _motivo: motivo.trim(),
       });
       if (error) throw error;
-      toast.success('Serviço liberado. Técnico desbloqueado para novas atribuições.');
+      const fechados = (data as any)?.agendamentos_fechados ?? 0;
+      toast.success(
+        fechados > 0
+          ? `Serviço liberado. Agendamento vinculado também foi fechado.`
+          : 'Serviço liberado. Técnico desbloqueado para novas atribuições.'
+      );
       setOpen(false);
       setMotivo('');
-      // Invalidar tudo que pode listar serviços/técnicos
-      await queryClient.invalidateQueries({ queryKey: ['servicos'] });
-      await queryClient.invalidateQueries({ queryKey: ['servicos-campo-unificado'] });
-      await queryClient.invalidateQueries({ queryKey: ['atribuicao-manual'] });
-      await queryClient.invalidateQueries({ queryKey: ['tecnicos-disponiveis'] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['servicos'] }),
+        queryClient.invalidateQueries({ queryKey: ['servicos-campo-unificado'] }),
+        queryClient.invalidateQueries({ queryKey: ['atribuicao-manual'] }),
+        queryClient.invalidateQueries({ queryKey: ['tecnicos-disponiveis'] }),
+        queryClient.invalidateQueries({ queryKey: ['agendamentos-base'] }),
+        queryClient.invalidateQueries({ queryKey: ['agendamentos_base'] }),
+        queryClient.invalidateQueries({ queryKey: ['monitoramento-mapa'] }),
+        queryClient.invalidateQueries({ queryKey: ['mapa-atribuicao'] }),
+      ]);
       onLiberado?.();
     } catch (err: any) {
-      toast.error(`Erro ao liberar serviço: ${err.message ?? err}`);
+      const msg = err?.message ?? String(err);
+      // Mensagens claras vindas do RPC
+      toast.error(msg.includes('status terminal') || msg.includes('não permite')
+        ? msg
+        : `Erro ao liberar serviço: ${msg}`);
     } finally {
       setLoading(false);
     }

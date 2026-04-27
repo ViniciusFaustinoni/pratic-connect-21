@@ -1,118 +1,93 @@
-# Plano para corrigir o sumiço recorrente de cotações na tela do consultor
+## Tratamento dos relatos de erro abertos
 
-## Diagnóstico confirmado
-A cotação informada (`COT-20260427-160753911-031`) não sumiu por filtro visual nem por RLS.
+Há **6 relatos com status `aberto`** na tela Diretoria → Relatos de Erros. Cada um terá: análise → mudança para `em_tratamento` → correção → mudança para `concluído` (com `observacao_diretor` explicando o que foi feito para o reporter testar).
 
-O banco mostra que ela foi:
-1. criada às 19:08,
-2. excluída às 19:12,
-3. recriada como uma nova cotação (`COT-20260427-161537806-513`) às 19:15,
-4. excluída novamente às 19:21.
+Ordem cronológica reversa (mais novos primeiro):
 
-Os logs de auditoria provam isso:
-- `Cotação COT-20260427-160753911-031 criada`
-- `Cotação COT-20260427-160753911-031 excluída com cascata`
-- `Cotação COT-20260427-161537806-513 criada`
-- `Cotação COT-20260427-161537806-513 excluída com cascata`
+---
 
-Ou seja: a causa raiz é fluxo de exclusão/substituição de cotação, não o filtro da listagem.
+### 1) Kleytonn — "Já aceitei dois ou mais e não está aparecendo no histórico" (MONITORAMENTO)
+**ID:** `b33d7038…`
 
-## Causa provável no código
-Hoje o sistema permite que a ação de duplicar/excluir remova a cotação original do banco via `delete-cotacao`.
-Isso ocorre em pontos como:
-- `src/hooks/useCotacoes.ts` (`useDuplicarCotacao`)
-- `supabase/functions/delete-cotacao/index.ts`
-- telas que disparam duplicação/substituição em `Cotacoes.tsx` e `CotacaoDetalhe.tsx`
+**Diagnóstico:** investigar a aba/tela de "histórico de aceites" do monitoramento. Provavelmente o filtro padrão é por data/usuário e omite registros do dia, ou a invalidação de cache (react-query) não dispara após a ação "Aceitar". Validar query keys e RLS.
 
-Esse desenho é frágil porque transforma “corrigir uma cotação” em “apagar a original”. Resultado:
-- a cotação some do consultor,
-- o número original deixa de existir,
-- o histórico fica quebrado para auditoria e suporte,
-- o problema parece aleatório para o time comercial.
+**Correção:** ajustar o hook que lista o histórico (filtro padrão = "hoje" sem timezone errado) e garantir `invalidateQueries` na mutation de aceitar.
 
-## Implementação proposta
-### 1. Parar de apagar cotações como caminho padrão de correção
-Alterar o fluxo de duplicação para que a original nunca seja removida em correções comuns.
+---
 
-Mudança:
-- substituir o comportamento `acaoOriginal = 'excluir'` por um fluxo de “substituída/corrigida”, mantendo a cotação original no banco.
-- a nova cotação continua sendo criada, mas a original fica marcada com rastreabilidade.
+### 2) Kleytonn — "Veículo só aparece nessa aba no Cadastro e não aparece para o monitoramento associar ao técnico" (MONITORAMENTO)
+**ID:** `2127cad7…`
 
-Resultado esperado:
-- a cotação antiga não desaparece mais,
-- o consultor e a diretoria conseguem auditar o encadeamento da correção,
-- suporte não perde o número que o consultor copiou/compartilhou.
+**Diagnóstico:** veículo aprovado pelo cadastro não cai na fila do monitoramento para atribuição. Padrão típico: trigger de criação de `agendamentos_base`/`servicos` não disparou, ou status do contrato não foi propagado, ou filtro do board do monitoramento exige campo (rastreador/endereço) ainda não preenchido.
 
-### 2. Introduzir status visual e regras claras para cotações substituídas
-Ajustar a listagem para tratar a cotação original como registro histórico, não como item ativo “apagado”.
+**Correção:** revisar pipeline de aprovação de cadastro → criação de serviço de instalação. Garantir que ao aprovar (com vistoria/contrato OK) o registro entre na lista de "aguardando atribuição" do monitoramento. Adicionar fallback: botão manual no detalhe do associado para "Enviar para monitoramento".
 
-Mudança:
-- exibir badge/estado de “Substituída” quando houver `substituida_por_cotacao_id`;
-- remover ações indevidas na original substituída;
-- manter a duplicata como a cotação operacional ativa.
+---
 
-Resultado esperado:
-- a tela deixa de parecer inconsistente,
-- o consultor entende por que aquela cotação antiga não deve mais ser usada,
-- o número antigo continua pesquisável.
+### 3) Teste — "Planilha com veículos com erro no SGA" (cadastro)
+**ID:** `43aaa131…`
 
-### 3. Bloquear exclusão destrutiva para cotações comerciais normais
-Restringir o uso de exclusão física para cenários realmente administrativos/excepcionais.
+**Diagnóstico:** complementar do relato #4. Não há planilha anexada na descrição; tratar em conjunto com #4 (mesma raiz).
 
-Mudança:
-- endurecer `useDuplicarCotacao` para nunca chamar `delete-cotacao` em duplicação comum;
-- opcionalmente manter exclusão física só em ação explícita de diretoria/admin fora do fluxo de correção comercial;
-- reforçar logs com motivo e vínculo entre original e duplicata.
+**Correção:** mesma do item #4. Marcar como concluído referenciando o tratamento do #4 e pedir reenvio da planilha caso queira reprocessamento individual.
 
-Resultado esperado:
-- elimina a recorrência do problema “sumiu da tela”;
-- reduz perdas acidentais de histórico;
-- mantém trilha de auditoria íntegra.
+---
 
-### 4. Corrigir a experiência da listagem do consultor
-Ajustar os componentes da lista para refletirem o novo modelo.
+### 4) Teste — "Erros na migração para o SGA: cor, combustível, voluntário, plano errados; documentos/proposta enviados manualmente; vistoria não foi pro SGA" (cadastro)
+**ID:** `0ab7e65c…`
 
-Mudança:
-- revisar `Cotacoes.tsx`, `CotacaoCard.tsx`, `CotacoesTable.tsx` e `CotacoesMobileList.tsx`;
-- garantir que registros substituídos possam ser encontrados por número/placa/nome;
-- decidir se ficam visíveis por padrão com badge ou em filtro específico, mas sem desaparecer do banco.
+**Diagnóstico:** edge function `sga-hinova-sync` já foi reforçada nesta sessão para incluir fotos. Os campos relatados (cor, combustível, voluntário/indicador, plano, documentos, proposta, vistoria) são mapeamentos no payload Hinova. Auditar mapeamento atual:
+- Cor → vem de `veiculos.cor` mas pode estar usando label vs. código Hinova.
+- Combustível → idem (Hinova tem código numérico).
+- Voluntário/indicador → campo `indicador_id` precisa virar código de voluntário Hinova.
+- Plano → usar `plano.codigo_hinova` (se existir) em vez do nome.
+- Documentos/proposta → upload para SGA via endpoint de anexos (hoje provavelmente só envia metadados).
+- Vistoria → criar registro de vistoria na Hinova após conclusão.
 
-Resultado esperado:
-- o consultor continua encontrando a cotação informada mesmo após uma correção;
-- a diretoria consegue conferir o histórico completo.
+**Correção:** atualizar `sga-hinova-sync` com o mapeamento correto + endpoint de upload de documentos/proposta/vistoria. Rodar reprocessamento dos cadastros marcados.
 
-### 5. Validar com consulta real e teste manual
-Depois da implementação:
-- criar/duplicar uma cotação de teste,
-- confirmar no banco que a original permaneceu,
-- entrar como diretor e validar a listagem,
-- pesquisar pelo número original e pelo novo,
-- confirmar que nenhuma das duas some por exclusão automática.
+---
 
-## Arquivos mais prováveis de ajuste
-- `src/hooks/useCotacoes.ts`
-- `src/pages/vendas/Cotacoes.tsx`
-- `src/pages/vendas/CotacaoDetalhe.tsx`
-- `src/components/cotacoes/DuplicarCotacaoDialog.tsx`
-- `src/components/cotacoes/CotacaoCard.tsx`
-- `src/components/cotacoes/CotacoesTable.tsx`
-- `src/components/cotacoes/CotacoesMobileList.tsx`
-- possivelmente `supabase/functions/delete-cotacao/index.ts` se for necessário restringir o uso do delete físico
+### 5) Kaike — "Erro ao usar a função de Liberar o Serviço do Técnico" (MONITORAMENTO)
+**ID:** `a4ea4264…`
+
+**Diagnóstico:** o botão `LiberarServicoButton` chama RPC `liberar_servico_admin`. O RPC valida motivo, papel e status. Possíveis causas do erro:
+- Status do serviço fora da lista (`agendada/em_rota/em_andamento/imprevisto_pendente`) — mensagem genérica para o usuário.
+- Faltando invalidar `agendamentos_base` (o card volta a aparecer travado).
+- Permissão: Kaike provavelmente é Coordenador de Monitoramento — já permitido, então não é isso.
+
+**Correção:** 
+- Melhorar tratamento de erro no botão (mensagem clara: "serviço já está concluído/cancelado").
+- Estender RPC para também fechar `agendamentos_base` vinculado (aplica regra de dedupe/sincronização já documentada na memória `dedupe-agendamentos-rule`).
+- Invalidar também `['agendamentos-base']` e `['monitoramento-mapa']` após sucesso.
+
+---
+
+### 6) Leonardo — "Não tá gerando contrato do cliente" (não gera contrato)
+**ID:** `7813b9df…`
+
+**Diagnóstico:** descrição vaga. Verificar logs do edge `generate-contract` / `gerar-proposta` para o usuário Leonardo nas últimas horas, identificar a cotação/associado. Causas comuns: créditos Autentique esgotados, template não vinculado ao plano, variável obrigatória faltando.
+
+**Correção:** identificar a cotação alvo via logs, corrigir o gatilho/variável faltante, e adicionar log mais explícito de erro no fluxo público para o consultor ver o motivo real.
+
+---
+
+## Fluxo padrão por item
+Para cada relato:
+1. `UPDATE error_reports SET status='em_tratamento', tratado_em=now(), tratado_por=<diretor>` antes de iniciar.
+2. Implementar a correção (código + migration se necessário).
+3. `UPDATE error_reports SET status='concluido', concluido_em=now(), observacao_diretor='<resumo do que foi feito + como testar>'`.
 
 ## Detalhes técnicos
-```text
-Hoje:
-Correção -> duplicar -> excluir original -> número some do banco
+- Atualizações de `error_reports` via tool de insert/update (não migration).
+- Correção #4 envolve edge function `sga-hinova-sync` — pode requerer secret de upload Hinova (verificar se já existe).
+- Correção #5 envolve nova migration alterando RPC `liberar_servico_admin`.
+- Correção #1, #2, #5: ajustes em hooks React e componentes do módulo monitoramento.
+- Correção #6 começa com investigação em logs (`supabase--edge_function_logs`) antes de codar.
 
-Depois:
-Correção -> duplicar -> original marcada como substituída -> número continua pesquisável
-```
+## Pergunta antes de executar
+Os relatos #3 (planilha sem anexo) e #6 (Leonardo, sem detalhes) são vagos. Posso:
+- (a) Marcar #3 como duplicata do #4 e tratá-los em conjunto;
+- (b) Para #6, investigar logs do Leonardo nas últimas 6h e tentar deduzir a causa.
 
-Regras da correção:
-- manter `cotacoes.vendedor_id` intacto na original;
-- preencher `substituida_por_cotacao_id` e `motivo_substituicao`;
-- impedir ações operacionais na cotação substituída;
-- preservar auditoria e rastreabilidade.
-
-## Observação importante
-Também encontrei inconsistências históricas entre `profile.id` e `auth.user.id` em partes do módulo comercial, mas esse caso específico não foi causado por isso. O caso do Moacir foi exclusão real no banco. Se quiser, depois desta correção eu posso abrir uma segunda frente para sanear definitivamente essas inconsistências de IDs no módulo comercial.
+Confirma seguir assim?
