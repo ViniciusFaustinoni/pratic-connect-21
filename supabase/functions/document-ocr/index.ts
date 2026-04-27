@@ -58,10 +58,27 @@ function validatePlaca(placa: string): boolean {
 const DIGIT_TO_LETTER: Record<string, string> = { '0': 'O', '1': 'I', '5': 'S', '8': 'B', '2': 'Z', '6': 'G' };
 const LETTER_TO_DIGIT: Record<string, string> = { 'O': '0', 'I': '1', 'S': '5', 'B': '8', 'Z': '2', 'G': '6', 'T': '7', 'L': '1', 'Q': '0' };
 
+// Pares de dígitos visualmente confundíveis em CRLVs físicos esmaecidos.
+// Ordem: o primeiro é o "default seguro" (mais comum em casos limítrofes).
+const DIGIT_SWAPS: Array<[string, string]> = [
+  ['6', '8'], ['8', '6'],
+  ['0', '8'], ['8', '0'],
+  ['5', '6'], ['6', '5'],
+  ['1', '7'], ['7', '1'],
+  ['0', '9'], ['9', '0'],
+  ['3', '8'], ['8', '3'],
+  ['2', '7'], ['7', '2'],
+];
+
 /**
  * Gera todas as variantes plausíveis da placa para cobrir confusões OCR
  * comuns entre Mercosul (LLL N L NN) e formato antigo (LLL NNNN).
- * Inclui a placa original, normalização Mercosul e normalização para antiga.
+ * Inclui:
+ *  - placa original
+ *  - normalização Mercosul / antiga (swaps letra↔dígito)
+ *  - variantes com 1 swap dígito↔dígito nas posições numéricas (6↔8, etc.)
+ *
+ * Limita a 1 swap por candidato para manter o conjunto pequeno (<30 itens).
  */
 function gerarCandidatosPlaca(raw: string): string[] {
   if (!raw) return [];
@@ -93,8 +110,26 @@ function gerarCandidatosPlaca(raw: string): string[] {
   }
   out.add(antiga.join(''));
 
+  // Variante 3: para CADA placa já no conjunto que seja válida, gera variantes
+  // com 1 swap dígito↔dígito nas posições numéricas (cobre 6↔8 e similares).
+  const baseValidas = Array.from(out).filter(p => validatePlaca(p));
+  for (const base of baseValidas) {
+    const isMercosul = PLACA_MERCOSUL_RE.test(base);
+    const digitPositions = isMercosul ? [3, 5, 6] : [3, 4, 5, 6];
+    for (const pos of digitPositions) {
+      const ch = base[pos];
+      if (!/[0-9]/.test(ch)) continue;
+      for (const [from, to] of DIGIT_SWAPS) {
+        if (ch !== from) continue;
+        const variant = base.substring(0, pos) + to + base.substring(pos + 1);
+        if (validatePlaca(variant)) out.add(variant);
+      }
+    }
+  }
+
   return Array.from(out);
 }
+
 
 /**
  * Normalização posicional Mercosul-aware (LLL N L NN).
