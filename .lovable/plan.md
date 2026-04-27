@@ -1,52 +1,30 @@
-# Correção: "ASSOCIADO NÃO ENCONTRADO" na Inclusão de Veículo
+# Liberar todas as abas do detalhe do associado para o perfil "Analista de Cadastro"
 
 ## Diagnóstico
 
-Relato de **Maria Júlia Florêncio Gomes** (`error_reports.7fa873f1...`):
+No detalhe do associado (`/cadastro/associados/:id`), a barra de abas é renderizada por `AssociadoTabNav.tsx`. Hoje, a aba **Documentos** tem a flag `hidden: isAnalistaCadastroOnly`, ou seja:
 
-> *"Ao clicar na aba de inclusão, não consegui encontrar o associado no sistema."*
+```tsx
+{ value: 'documentos', label: 'Documentos', icon: FileCheck, badge: docsPendentes, hidden: isAnalistaCadastroOnly }
+```
 
-O screenshot mostra a busca por **"VICTOR HUGO FERREIRA DOS SANTOS CARDOZO"** (texto livre) → "Nenhum associado encontrado". Confirmado: esse nome **não existe na tabela local `associados`**, mas o associado é cliente da Praticcar — vive apenas no **SGA (Hinova)**.
-
-### Causa-raiz técnica
-
-Em `src/components/vendas/OutrasEntradasMenu.tsx`, a Inclusão de Veículo usa dois hooks:
-
-1. `useAssociadoSearch(termo)` — só consulta SGA quando o termo é **CPF de 11 dígitos**. Para nome/telefone parcial, faz `SELECT` apenas na tabela local `associados`.
-2. `useBuscaPlaca(termo)` — consulta SGA, mas só com **placa de 7+ caracteres**.
-
-A API Hinova/SGA (`hinova-client.ts`) **não oferece endpoint de busca por nome** — só `associado/buscar/{cpf}/cpf` e `veiculo/buscar/{placa}/placa`. Portanto, buscar por nome textual nunca consegue alcançar associados que estão exclusivamente no SGA, e a vendedora vê apenas "Nenhum associado encontrado", sem entender por quê.
+Resultado: usuários que têm **apenas** o papel `analista_cadastro` (sem nenhum outro perfil privilegiado) não veem essa aba. Todas as outras abas pedidas (Resumo, Dados Pessoais, Veículos, Financeiro, Histórico, WhatsApp) já são visíveis para esse perfil.
 
 ## Correção
 
-Como a API SGA não suporta busca por nome, a solução é **orientar a vendedora a usar CPF ou placa** quando o associado não aparece pelo nome.
+Remover a restrição da aba Documentos em `src/components/associados/detalhe/AssociadoTabNav.tsx`:
 
-### 1) Empty-state contextual e acionável (`OutrasEntradasMenu.tsx`)
+- Linha 30 — tirar `hidden: isAnalistaCadastroOnly` do item `documentos`.
+- A prop `isAnalistaCadastroOnly` deixa de ser usada no componente; pode ser removida da interface e da chamada em `AssociadoDetalhe.tsx` (limpeza opcional, sem impacto funcional).
 
-Substituir a mensagem genérica `"Nenhum associado encontrado"` por um bloco que:
-- Detecta o tipo de termo digitado (texto vs. número parcial vs. CPF/placa incompletos);
-- Mostra **dica clara**: *"Não encontramos esse nome na nossa base. Se o cliente já é associado da Praticcar, busque pelo **CPF completo** (11 dígitos) ou pela **placa** (7 caracteres) — assim conseguimos consultar o SGA em tempo real."*
-- Mostra ícone informativo + atalho visual indicando que CPF/placa fazem busca SGA.
+Não há mudança em outros arquivos: o conteúdo da aba (`DocumentosTab`) já é renderizado normalmente quando `activeTab === 'documentos'` em `AssociadoDetalhe.tsx`, sem condicionais por perfil.
 
-### 2) Indicador "buscando no SGA"
+## Fora de escopo
 
-Quando o usuário digita CPF completo ou placa válida, mostrar um pequeno hint *"Consultando SGA…"* enquanto `loadingAssociados`/`loadingPlacas` está ativo, para deixar claro que o sistema vai além da base local.
-
-### 3) Aceitar busca por placa também na lista de associados
-
-Hoje `useBuscaPlaca` é mesclado com `useAssociadoSearch` em `mergedAssociadoResults` — verificar se está realmente sendo disparado para tipo `inclusao` (linhas 92-94: `selectedTipo !== 'migracao'` ✓, ok). Manter, e garantir que o placeholder do input já cite *"nome, CPF ou placa"* (já cita).
-
-### 4) Marcar relato como resolvido
-
-Atualizar `error_reports.7fa873f1...` para status `concluido` com observação descrevendo a correção (limitação SGA + UX nova).
-
-## Fora de escopo (intencional)
-
-- **Não vamos** abrir endpoint de busca por nome no SGA — Hinova não oferece.
-- **Não vamos** sincronizar toda a base SGA para a tabela local — escopo grande, fora do relato.
-- **Não vamos** tocar no relato de "forma de pagamento" (excluído pelo usuário em mensagens anteriores).
+- Restrições do `AssociadoHeroHeader` (botões de Troca de Titularidade etc.) permanecem como estão — o pedido foi sobre as **abas** do detalhe.
+- Permissões de escrita/edição dentro de cada aba não são alteradas.
 
 ## Arquivos afetados
 
-- `src/components/vendas/OutrasEntradasMenu.tsx` — empty-state inteligente + hint "consultando SGA"
-- update em `error_reports` (data, via insert tool)
+- `src/components/associados/detalhe/AssociadoTabNav.tsx`
+- (opcional) `src/pages/cadastro/AssociadoDetalhe.tsx` — remover passagem da prop não usada
