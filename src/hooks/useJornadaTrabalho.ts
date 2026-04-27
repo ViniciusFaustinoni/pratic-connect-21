@@ -312,9 +312,9 @@ export function useJornadaTrabalho() {
       refetchTurno();
       toast.info('Horário de almoço iniciado');
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error('[useJornadaTrabalho] Erro ao iniciar almoço:', error);
-      toast.error('Erro ao registrar almoço');
+      toast.error(error?.message || 'Erro ao registrar almoço');
     }
   });
 
