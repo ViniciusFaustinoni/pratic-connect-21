@@ -255,7 +255,7 @@ _Dúvidas? Entre em contato com o coordenador._`
       .eq('id', linkId)
 
     // ── AÇÃO 3: Lançamento financeiro (apenas se nova atribuição) ──
-    if (!reenviar && valor > 0) {
+    if (!reenviar && (valor ?? 0) > 0) {
       try {
         const historico = `Vistoria Prestador — ${prestador.nome} — ${instalacao.cidade || 'Cidade'} — ${dataAgendada}`
         
@@ -310,7 +310,7 @@ _Dúvidas? Entre em contato com o coordenador._`
           usuario_nome: nomeAtribuidor,
           acao: 'atribuir',
           modulo: 'instalacoes',
-          descricao: `Atribuição de vistoriador prestador: ${prestador.nome} — Valor: R$ ${valor?.toFixed(2)} — WhatsApp: ${whatsappEnviado ? 'enviado' : 'falha'}`,
+          descricao: `Atribuição de vistoriador prestador: ${prestador.nome} — Valor: ${valor != null ? `R$ ${valor.toFixed(2)}` : 'a definir'} — WhatsApp: ${whatsappEnviado ? 'enviado' : 'falha'}`,
           registro_id: instalacao_id,
           dados_novos: {
             prestador_id: vistoriador_prestador_id,
