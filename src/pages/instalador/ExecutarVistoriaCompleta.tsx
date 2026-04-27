@@ -255,8 +255,29 @@ export default function ExecutarVistoriaCompleta() {
     return precisaRastreador(valorFipeVeiculo, fipeMinRastreador, tipoVeiculoDetectado, fipeMinRastreadorMoto);
   }, [valorFipeVeiculo, fipeMinRastreador, tipoVeiculoDetectado, fipeMinRastreadorMoto]);
   
-  // Categorias filtradas baseado na necessidade de rastreador
-  const categorias = useMemo(() => agruparFotosFiltradas(tipoVeiculoDetectado, veiculoPrecisaRastreador), [tipoVeiculoDetectado, veiculoPrecisaRastreador]);
+  // ── Modo "apenas instalação" (origem: link público com fotos já aprovadas) ──
+  // Quando a etapa de fotos foi feita por outra pessoa via link público e já passou
+  // pela aprovação do monitoramento, o técnico não deve refazer as fotos visuais —
+  // só executa a instalação do rastreador. Detectamos via vistoria_links.
+  const { data: vistoriaLink } = useVistoriaLink({ instalacaoId });
+  const modoApenasInstalacao = useMemo(() => {
+    return (
+      !!vistoriaLink &&
+      vistoriaLink.fotos_etapa_status === 'concluida' &&
+      !!vistoriaLink.fotos_aprovadas_em
+    );
+  }, [vistoriaLink]);
+
+  // Categorias filtradas baseado na necessidade de rastreador.
+  // Em modoApenasInstalacao, só categorias 'instalacao' e 'rastreador' (esta última
+  // depende da regra normal de necessidade de rastreador).
+  const categorias = useMemo(() => {
+    if (modoApenasInstalacao) {
+      const todas = agruparFotosApenasInstalacao(tipoVeiculoDetectado);
+      return veiculoPrecisaRastreador ? todas : todas.filter(c => c.id !== 'rastreador');
+    }
+    return agruparFotosFiltradas(tipoVeiculoDetectado, veiculoPrecisaRastreador);
+  }, [tipoVeiculoDetectado, veiculoPrecisaRastreador, modoApenasInstalacao]);
 
   // Mapa de fotos
   const fotosMap = useMemo(() => {
@@ -276,16 +297,18 @@ export default function ExecutarVistoriaCompleta() {
     return counts;
   }, [categorias, fotosMap]);
 
-  // Total de fotos obrigatórias e enviadas — dinâmico por tipo de veículo
-  const totalFotosObrigatorias = useMemo(
-    () => getTotalFotosObrigatorias(tipoVeiculoDetectado),
-    [tipoVeiculoDetectado]
+  // Total de fotos obrigatórias e enviadas — restritas ao escopo atual (apenas
+  // instalação ou completo) para não exigir fotos visuais já aprovadas.
+  const fotosObrigatoriasDoTipo = useMemo(
+    () => modoApenasInstalacao
+      ? getFotosApenasInstalacao(tipoVeiculoDetectado).filter(
+          f => f.categoria !== 'rastreador' || veiculoPrecisaRastreador,
+        )
+      : getFotosFiltradas(tipoVeiculoDetectado, false),
+    [tipoVeiculoDetectado, modoApenasInstalacao, veiculoPrecisaRastreador]
   );
 
-  const fotosObrigatoriasDoTipo = useMemo(
-    () => getFotosFiltradas(tipoVeiculoDetectado, false),
-    [tipoVeiculoDetectado]
-  );
+  const totalFotosObrigatorias = fotosObrigatoriasDoTipo.length;
 
   const totalFotosEnviadas = useMemo(
     () => fotosObrigatoriasDoTipo.filter(f => fotosMap[f.id]).length,
@@ -293,9 +316,11 @@ export default function ExecutarVistoriaCompleta() {
   );
 
   // Validação
-  const conferenciaCompleta = Object.values(conferencia).every(Boolean) && hodometro.length > 0;
-  const todasFotosEnviadas = totalFotosEnviadas >= totalFotosObrigatorias;
-  const videoEnviado = !!video360Url;
+  // No modo apenas instalação, conferência e vídeo já foram feitos pelo público —
+  // não bloqueamos a aprovação por eles.
+  const conferenciaCompleta = modoApenasInstalacao || (Object.values(conferencia).every(Boolean) && hodometro.length > 0);
+  const todasFotosEnviadas = totalFotosObrigatorias === 0 ? true : totalFotosEnviadas >= totalFotosObrigatorias;
+  const videoEnviado = modoApenasInstalacao || !!video360Url;
   const podeAprovar = conferenciaCompleta && todasFotosEnviadas && videoEnviado;
 
   // Handlers
