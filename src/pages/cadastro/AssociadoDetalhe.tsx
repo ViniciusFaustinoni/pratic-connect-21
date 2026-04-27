@@ -722,6 +722,12 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                               Ativar
                             </Button>
                           )}
+                          {(() => {
+                            const inst = instalacoesAbertas?.find((i) => i.veiculo_id === v.id);
+                            return inst ? (
+                              <ConcluirInstalacaoPrestadorButton instalacaoId={inst.id} />
+                            ) : null;
+                          })()}
                         </div>
                       </div>
                     </CardContent>
