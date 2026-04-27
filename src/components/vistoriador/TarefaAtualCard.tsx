@@ -375,41 +375,50 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
             <div className="flex-1 min-w-0">
               <p className="font-medium text-foreground truncate">{tarefa.cliente.nome}</p>
               <div className="flex items-center gap-2">
-                <p className="text-sm text-muted-foreground">{tarefa.cliente.telefone}</p>
+                {!isNaBase && (
+                  <p className="text-sm text-muted-foreground">{tarefa.cliente.telefone}</p>
+                )}
+                {isNaBase && (
+                  <p className="text-xs text-muted-foreground italic">Atendimento na base — sem necessidade de contato prévio</p>
+                )}
                 <SlaIndicador criadoEm={tarefa.data_agendada} tipoServico={tarefa.tipo} />
               </div>
             </div>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={abrirWhatsApp}
-              disabled={!tarefa.cliente.whatsapp && !tarefa.cliente.telefone}
-              className={cn(
-                "text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950",
-                contatoRealizado && tarefa.contato_tipo === 'whatsapp' && "border-green-500 bg-green-50 dark:bg-green-950"
-              )}
-            >
-              {contatoRealizado && tarefa.contato_tipo === 'whatsapp' ? (
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
-              ) : (
-                <MessageCircle className="h-4 w-4" />
-              )}
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={ligarCliente}
-              disabled={!tarefa.cliente.telefone}
-              className={cn(
-                contatoRealizado && tarefa.contato_tipo === 'ligacao' && "border-green-500 bg-green-50 dark:bg-green-950"
-              )}
-            >
-              {contatoRealizado && tarefa.contato_tipo === 'ligacao' ? (
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
-              ) : (
-                <Phone className="h-4 w-4" />
-              )}
-            </Button>
+            {!isNaBase && (
+              <>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={abrirWhatsApp}
+                  disabled={!tarefa.cliente.whatsapp && !tarefa.cliente.telefone}
+                  className={cn(
+                    "text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950",
+                    contatoRealizado && tarefa.contato_tipo === 'whatsapp' && "border-green-500 bg-green-50 dark:bg-green-950"
+                  )}
+                >
+                  {contatoRealizado && tarefa.contato_tipo === 'whatsapp' ? (
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <MessageCircle className="h-4 w-4" />
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={ligarCliente}
+                  disabled={!tarefa.cliente.telefone}
+                  className={cn(
+                    contatoRealizado && tarefa.contato_tipo === 'ligacao' && "border-green-500 bg-green-50 dark:bg-green-950"
+                  )}
+                >
+                  {contatoRealizado && tarefa.contato_tipo === 'ligacao' ? (
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <Phone className="h-4 w-4" />
+                  )}
+                </Button>
+              </>
+            )}
           </div>
 
           {/* Veículo */}
