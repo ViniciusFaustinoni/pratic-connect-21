@@ -407,7 +407,9 @@ function HomeEtapas({
       {instFeita && (
         <div className="rounded-lg border border-success/30 bg-success/5 p-3 flex items-center gap-2 text-sm">
           <CheckCircle className="h-4 w-4 text-success" />
-          Instalação do rastreador já registrada.
+          {dispensaInstalacao
+            ? 'Vistoria concluída. Seu veículo já está protegido.'
+            : 'Instalação do rastreador já registrada.'}
         </div>
       )}
 
