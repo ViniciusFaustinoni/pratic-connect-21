@@ -65,6 +65,7 @@ import { AdicionarRessalva } from '@/components/cadastro/AdicionarRessalva';
 import { useAssociadoSituacao } from '@/hooks/useAssociadoSituacao';
 import { BlocoDepreciacaoVeiculo } from '@/components/associados/detalhe/BlocoDepreciacaoVeiculo';
 import { formatPlacaExibicao } from '@/lib/placa-utils';
+import { ConcluirInstalacaoPrestadorButton } from '@/components/cadastro/ConcluirInstalacaoPrestadorButton';
 
 // ============================================
 // UTILITÁRIOS
