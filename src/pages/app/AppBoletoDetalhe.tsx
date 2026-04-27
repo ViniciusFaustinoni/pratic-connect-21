@@ -98,6 +98,7 @@ export default function AppBoletoDetalhe() {
   
   const [copiando, setCopiando] = useState<'pix' | 'linha' | null>(null);
   const [baixando, setBaixando] = useState(false);
+  const [alterarFormaOpen, setAlterarFormaOpen] = useState(false);
   const [compartilhando, setCompartilhando] = useState(false);
 
   // ============================================
