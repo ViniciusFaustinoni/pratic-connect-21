@@ -1,93 +1,54 @@
-## Tratamento dos relatos de erro abertos
+## Correção: erro "CPF extraído do documento é inválido" mesmo após correção manual
 
-Há **6 relatos com status `aberto`** na tela Diretoria → Relatos de Erros. Cada um terá: análise → mudança para `em_tratamento` → correção → mudança para `concluído` (com `observacao_diretor` explicando o que foi feito para o reporter testar).
+### Diagnóstico (cotação COT-20260427-162612349-929 — MOACIR JACINTO FERREIRA)
 
-Ordem cronológica reversa (mais novos primeiro):
+Análise da CNH nos logs OCR:
+- **19:48** — OCR rodou com sucesso, retornou `cpf: "685.186.507-63"` (CPF matematicamente válido — passa no dígito verificador). Log: `[OCR] CPF extraído validado com sucesso: 685.186.507-63`.
+- **19:26** — Primeira tentativa de envio (já fora do retention dos logs), provavelmente o OCR retornou um CPF com dígito inválido OU `"ilegivel"`.
 
----
+A função `document-ocr` está funcionando corretamente — inclusive com retry, permutação de dígitos confundíveis e validação por checksum.
 
-### 1) Kleytonn — "Já aceitei dois ou mais e não está aparecendo no histórico" (MONITORAMENTO)
-**ID:** `b33d7038…`
+### Bug real
 
-**Diagnóstico:** investigar a aba/tela de "histórico de aceites" do monitoramento. Provavelmente o filtro padrão é por data/usuário e omite registros do dia, ou a invalidação de cache (react-query) não dispara após a ação "Aceitar". Validar query keys e RLS.
+Em `src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx`, o componente já tem toda a lógica de **CPF manual** preparada:
 
-**Correção:** ajustar o hook que lista o histórico (filtro padrão = "hoje" sem timezone errado) e garantir `invalidateQueries` na mutation de aceitar.
+- Linha 173: `cpfEfetivo = cpfManual || (cpfIlegivel ? '' : dadosExtraidos.cpf)` — combina manual com OCR.
+- Linha 175: `cpfValido = validateCPF(cpfLimpoEfetivo)` — valida o efetivo.
+- Linha 191: `podeAvancar` usa `cpfValido` corretamente.
+- Linhas 659+: campo de input "CPF (corrigir manualmente)" que aparece quando OCR é ilegível/inválido.
 
----
+**Mas no `handleSubmit` (linhas 408–414) a validação ignora o CPF manual** e olha apenas `dadosExtraidos.cpf` (o que veio do OCR):
 
-### 2) Kleytonn — "Veículo só aparece nessa aba no Cadastro e não aparece para o monitoramento associar ao técnico" (MONITORAMENTO)
-**ID:** `2127cad7…`
+```ts
+const cpfExtraido = dadosExtraidos.cpf || '';   // ❌ só OCR
+const cpfLimpo = cpfExtraido.replace(/\D/g, '');
+if (!cpfLimpo || !validateCPF(cpfLimpo)) {
+  toast.error('O CPF extraído do documento é inválido...');
+  return;
+}
+```
 
-**Diagnóstico:** veículo aprovado pelo cadastro não cai na fila do monitoramento para atribuição. Padrão típico: trigger de criação de `agendamentos_base`/`servicos` não disparou, ou status do contrato não foi propagado, ou filtro do board do monitoramento exige campo (rastreador/endereço) ainda não preenchido.
+Resultado: usuário corrige o CPF no campo manual, o badge fica verde ("CPF válido"), botão "Continuar" habilita, mas ao clicar **o toast vermelho aparece** (visto no print) porque a validação do submit ainda compara o CPF original do OCR.
 
-**Correção:** revisar pipeline de aprovação de cadastro → criação de serviço de instalação. Garantir que ao aprovar (com vistoria/contrato OK) o registro entre na lista de "aguardando atribuição" do monitoramento. Adicionar fallback: botão manual no detalhe do associado para "Enviar para monitoramento".
+### Correção
 
----
+Trocar a validação do `handleSubmit` para usar `cpfLimpoEfetivo`/`cpfValido` (que já consideram o CPF manual), com mensagem de erro mais clara distinguindo entre "OCR inválido" e "manual inválido".
 
-### 3) Teste — "Planilha com veículos com erro no SGA" (cadastro)
-**ID:** `43aaa131…`
+```ts
+if (!cpfLimpoEfetivo || !validateCPF(cpfLimpoEfetivo)) {
+  toast.error(
+    cpfManual
+      ? 'O CPF digitado é inválido. Verifique os dígitos antes de continuar.'
+      : 'O CPF extraído do documento é inválido. Corrija manualmente no campo "CPF" antes de continuar.'
+  );
+  return;
+}
+```
 
-**Diagnóstico:** complementar do relato #4. Não há planilha anexada na descrição; tratar em conjunto com #4 (mesma raiz).
+### Detalhes técnicos
+- 1 arquivo alterado: `src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx` (linhas 408–414).
+- Nenhuma mudança no banco, edge function ou hook.
+- Sem regressão: a lógica de habilitar/desabilitar o botão Continuar (`podeAvancar`) já usava o CPF efetivo — só o gate final do submit estava errado.
 
-**Correção:** mesma do item #4. Marcar como concluído referenciando o tratamento do #4 e pedir reenvio da planilha caso queira reprocessamento individual.
-
----
-
-### 4) Teste — "Erros na migração para o SGA: cor, combustível, voluntário, plano errados; documentos/proposta enviados manualmente; vistoria não foi pro SGA" (cadastro)
-**ID:** `0ab7e65c…`
-
-**Diagnóstico:** edge function `sga-hinova-sync` já foi reforçada nesta sessão para incluir fotos. Os campos relatados (cor, combustível, voluntário/indicador, plano, documentos, proposta, vistoria) são mapeamentos no payload Hinova. Auditar mapeamento atual:
-- Cor → vem de `veiculos.cor` mas pode estar usando label vs. código Hinova.
-- Combustível → idem (Hinova tem código numérico).
-- Voluntário/indicador → campo `indicador_id` precisa virar código de voluntário Hinova.
-- Plano → usar `plano.codigo_hinova` (se existir) em vez do nome.
-- Documentos/proposta → upload para SGA via endpoint de anexos (hoje provavelmente só envia metadados).
-- Vistoria → criar registro de vistoria na Hinova após conclusão.
-
-**Correção:** atualizar `sga-hinova-sync` com o mapeamento correto + endpoint de upload de documentos/proposta/vistoria. Rodar reprocessamento dos cadastros marcados.
-
----
-
-### 5) Kaike — "Erro ao usar a função de Liberar o Serviço do Técnico" (MONITORAMENTO)
-**ID:** `a4ea4264…`
-
-**Diagnóstico:** o botão `LiberarServicoButton` chama RPC `liberar_servico_admin`. O RPC valida motivo, papel e status. Possíveis causas do erro:
-- Status do serviço fora da lista (`agendada/em_rota/em_andamento/imprevisto_pendente`) — mensagem genérica para o usuário.
-- Faltando invalidar `agendamentos_base` (o card volta a aparecer travado).
-- Permissão: Kaike provavelmente é Coordenador de Monitoramento — já permitido, então não é isso.
-
-**Correção:** 
-- Melhorar tratamento de erro no botão (mensagem clara: "serviço já está concluído/cancelado").
-- Estender RPC para também fechar `agendamentos_base` vinculado (aplica regra de dedupe/sincronização já documentada na memória `dedupe-agendamentos-rule`).
-- Invalidar também `['agendamentos-base']` e `['monitoramento-mapa']` após sucesso.
-
----
-
-### 6) Leonardo — "Não tá gerando contrato do cliente" (não gera contrato)
-**ID:** `7813b9df…`
-
-**Diagnóstico:** descrição vaga. Verificar logs do edge `generate-contract` / `gerar-proposta` para o usuário Leonardo nas últimas horas, identificar a cotação/associado. Causas comuns: créditos Autentique esgotados, template não vinculado ao plano, variável obrigatória faltando.
-
-**Correção:** identificar a cotação alvo via logs, corrigir o gatilho/variável faltante, e adicionar log mais explícito de erro no fluxo público para o consultor ver o motivo real.
-
----
-
-## Fluxo padrão por item
-Para cada relato:
-1. `UPDATE error_reports SET status='em_tratamento', tratado_em=now(), tratado_por=<diretor>` antes de iniciar.
-2. Implementar a correção (código + migration se necessário).
-3. `UPDATE error_reports SET status='concluido', concluido_em=now(), observacao_diretor='<resumo do que foi feito + como testar>'`.
-
-## Detalhes técnicos
-- Atualizações de `error_reports` via tool de insert/update (não migration).
-- Correção #4 envolve edge function `sga-hinova-sync` — pode requerer secret de upload Hinova (verificar se já existe).
-- Correção #5 envolve nova migration alterando RPC `liberar_servico_admin`.
-- Correção #1, #2, #5: ajustes em hooks React e componentes do módulo monitoramento.
-- Correção #6 começa com investigação em logs (`supabase--edge_function_logs`) antes de codar.
-
-## Pergunta antes de executar
-Os relatos #3 (planilha sem anexo) e #6 (Leonardo, sem detalhes) são vagos. Posso:
-- (a) Marcar #3 como duplicata do #4 e tratá-los em conjunto;
-- (b) Para #6, investigar logs do Leonardo nas últimas 6h e tentar deduzir a causa.
-
-Confirma seguir assim?
+### Bonus opcional (sugiro NÃO fazer agora, pergunta antes)
+Posso também adicionar logs no `handleSubmit` quando o CPF for diferente do OCR (audit trail), mas isso é melhoria futura — não impede a correção.
