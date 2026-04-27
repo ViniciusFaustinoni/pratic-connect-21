@@ -1,3 +1,4 @@
+import { parseDataLocal } from '@/lib/date-utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -93,7 +94,10 @@ export function ServicosTable({ servicos, isLoading, onRowClick }: ServicosTable
                       <div>
                         <div className="flex items-center gap-1 text-sm">
                           <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                          {format(new Date(s.data_agendada), 'dd/MM/yyyy', { locale: ptBR })}
+                          {(() => {
+                            const d = parseDataLocal(s.data_agendada);
+                            return d ? format(d, 'dd/MM/yyyy', { locale: ptBR }) : '—';
+                          })()}
                         </div>
                         {s.periodo && (
                           <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
