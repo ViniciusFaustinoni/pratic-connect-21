@@ -1285,6 +1285,73 @@ Use a função para retornar o número do motor encontrado, ou "ilegivel" se ide
             }
           }
 
+          // 2.5) CROSS-CHECK COM BANCO: para fotos sem texto nativo (JPG/PNG)
+          // ou quando o cross-check com PDF não resolveu, tentar achar uma placa
+          // entre os candidatos expandidos (incluindo swaps 6↔8, etc.) que já
+          // exista em `veiculos`/`cotacoes` do CPF informado. Match único trava.
+          try {
+            const placaAtual = String(d.placa).replace(/[^A-Z0-9]/gi, '').toUpperCase();
+            const todosCandidatos = gerarCandidatosPlaca(placaAtual)
+              .filter(p => validatePlaca(p) && p !== placaAtual);
+
+            if (todosCandidatos.length > 0 && cpfEsperado) {
+              const cpfDigits = String(cpfEsperado).replace(/\D/g, '');
+              if (cpfDigits.length === 11) {
+                const sb = createClient(
+                  Deno.env.get('SUPABASE_URL')!,
+                  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY')!
+                );
+
+                const placasParaTestar = [placaAtual, ...todosCandidatos];
+
+                // Veículos do associado (via profiles.cpf → veiculos.user_id)
+                const { data: profileRows } = await sb
+                  .from('profiles')
+                  .select('user_id')
+                  .eq('cpf', cpfDigits)
+                  .limit(5);
+
+                const userIds = (profileRows || []).map((r: any) => r.user_id).filter(Boolean);
+
+                let placaConfirmada: string | null = null;
+
+                if (userIds.length > 0) {
+                  const { data: vRows } = await sb
+                    .from('veiculos')
+                    .select('placa')
+                    .in('user_id', userIds)
+                    .in('placa', placasParaTestar)
+                    .limit(2);
+
+                  if (vRows && vRows.length === 1) {
+                    placaConfirmada = String(vRows[0].placa).toUpperCase();
+                  }
+                }
+
+                // Fallback: cotações por CPF
+                if (!placaConfirmada) {
+                  const { data: cRows } = await sb
+                    .from('cotacoes')
+                    .select('placa')
+                    .eq('cpf', cpfDigits)
+                    .in('placa', placasParaTestar)
+                    .limit(2);
+
+                  if (cRows && cRows.length === 1) {
+                    placaConfirmada = String(cRows[0].placa).toUpperCase();
+                  }
+                }
+
+                if (placaConfirmada && placaConfirmada !== placaAtual) {
+                  console.log(`[OCR] Placa confirmada via banco (CPF ${cpfDigits}): "${placaAtual}" → "${placaConfirmada}"`);
+                  d.placa = placaConfirmada;
+                }
+              }
+            }
+          } catch (xErr) {
+            console.warn('[OCR] Cross-check de placa com banco falhou (mantendo leitura):', xErr);
+          }
+
           // 3) Fallback legado: prefere Mercosul se ainda não foi resolvido.
           const atual = String(d.placa);
           if (!validatePlaca(atual)) {
@@ -1295,6 +1362,7 @@ Use a função para retornar o número do motor encontrado, ou "ilegivel" se ide
             }
           }
         }
+
 
         // ==== SANEAMENTO CHASSI: tentar corrigir confusões O↔0, I↔1, Q↔0, S↔5 ====
         if (v.field === 'chassi') {
