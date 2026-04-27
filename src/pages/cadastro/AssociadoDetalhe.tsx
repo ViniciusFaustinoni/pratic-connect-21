@@ -978,22 +978,51 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                         <TableHead className="text-xs">Referência</TableHead>
                         <TableHead className="text-xs">Vencimento</TableHead>
                         <TableHead className="text-xs">Valor</TableHead>
+                        <TableHead className="text-xs">Forma</TableHead>
                         <TableHead className="text-xs">Status</TableHead>
+                        <TableHead className="text-xs text-right">Ações</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {cobrancasData.faturas.slice(0, 10).map((f: any) => (
-                        <TableRow key={f.id}>
-                          <TableCell className="font-medium text-xs">{f.referencia || f.tipo}</TableCell>
-                          <TableCell className="text-xs">{formatDate(f.data_vencimento)}</TableCell>
-                          <TableCell className="text-xs">{formatCurrency(f.valor)}</TableCell>
-                          <TableCell>
-                            <Badge className={cn('text-[10px]', getStatusCobrancaClass(f.status))}>
-                              {getStatusCobrancaLabel(f.status)}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {cobrancasData.faturas.slice(0, 10).map((f: any) => {
+                        const statusOpen = ['PENDING', 'OVERDUE'].includes(String(f.status).toUpperCase());
+                        const podeAlterar = f.fonte === 'asaas' && statusOpen;
+                        const formaLabel =
+                          (f.forma_pagamento || '').toUpperCase() === 'PIX' ? 'PIX' :
+                          (f.forma_pagamento || '').toUpperCase() === 'BOLETO' ? 'Boleto' :
+                          (f.forma_pagamento || '').toUpperCase() === 'CREDIT_CARD' ? 'Cartão' :
+                          (f.forma_pagamento || '').toUpperCase() === 'UNDEFINED' ? 'PIX/Cartão' : '—';
+                        return (
+                          <TableRow key={f.id}>
+                            <TableCell className="font-medium text-xs">{f.referencia || f.tipo}</TableCell>
+                            <TableCell className="text-xs">{formatDate(f.data_vencimento)}</TableCell>
+                            <TableCell className="text-xs">{formatCurrency(f.valor)}</TableCell>
+                            <TableCell className="text-xs">{formaLabel}</TableCell>
+                            <TableCell>
+                              <Badge className={cn('text-[10px]', getStatusCobrancaClass(f.status))}>
+                                {getStatusCobrancaLabel(f.status)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {podeAlterar ? (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-[11px]"
+                                  onClick={() => setAlterarFormaState({
+                                    open: true,
+                                    cobrancaId: f.id,
+                                    formaAtual: f.forma_pagamento || 'UNDEFINED',
+                                    descricao: `${f.referencia || f.tipo} • ${formatCurrency(f.valor)} • venc. ${formatDate(f.data_vencimento)}`,
+                                  })}
+                                >
+                                  Alterar forma
+                                </Button>
+                              ) : null}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 ) : (
