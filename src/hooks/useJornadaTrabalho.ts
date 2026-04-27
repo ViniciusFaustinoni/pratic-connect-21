@@ -399,9 +399,6 @@ export function useJornadaTrabalho() {
     }
   });
 
-  // Checar se há tarefa em execução (em_rota / em_andamento)
-  const temTarefaEmExecucao = useTemTarefaEmExecucao();
-
   // Tipo de alocação do dia (rota vs base). Mantido apenas para metadata/UI.
   const { isBase } = useAlocacaoDiaria();
 
