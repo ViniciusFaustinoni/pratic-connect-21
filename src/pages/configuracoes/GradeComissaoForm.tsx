@@ -174,6 +174,12 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
     setSelectedPlanIds(planIds);
 
     const regras = existing.regras || [];
+    const parcelasMeta = (existing as any).parcelasMeta || [];
+    const splitByParcelaId = new Map<string, 'igual' | 'personalizado'>();
+    parcelasMeta.forEach((pm: any) => {
+      splitByParcelaId.set(pm.id, (pm.supervisor_split_mode === 'personalizado' ? 'personalizado' : 'igual'));
+    });
+
     if (regras.length > 0) {
       const next: RegrasPorPlano = {};
       planIds.forEach((planoId: string) => {
@@ -194,6 +200,7 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
               vitalicia_inicio_parcela: base.vitalicia ? base.vitalicia_inicio_parcela : null,
               label: base.vitalicia ? 'Vitalícia' : base.parcela_numero === 1 ? 'Taxa de Adesão' : `${base.parcela_numero}ª Parcela`,
               ordem,
+              supervisor_split_mode: (base.parcela_id && splitByParcelaId.get(base.parcela_id)) || 'igual',
               niveis: grupo
                 .sort((a: any, b: any) => (a.ordem || 0) - (b.ordem || 0))
                 .map((r: any) => ({
