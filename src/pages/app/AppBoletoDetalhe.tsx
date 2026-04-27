@@ -38,6 +38,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useMyBoleto, BoletoHistorico } from '@/hooks/useMyData';
 import { formatarValor, statusConfig as boletoStatusConfig } from '@/components/app/CardBoleto';
+import { AlterarFormaPagamentoDialog } from '@/components/cobrancas/AlterarFormaPagamentoDialog';
 
 // ============================================
 // COMPONENTE DE CÓDIGO DE BARRAS VISUAL
