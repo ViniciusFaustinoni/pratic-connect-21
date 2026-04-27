@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { 
   Check, X, Info, Search, ChevronDown, ChevronUp, Grid3X3, Settings2,
   Crown, Briefcase, FileText, Radio, Megaphone, Scale, Smartphone,
-  Shield, Users, Clock, Eye, Pencil, Save, ChevronRight
+  Shield, Users, Clock, Eye, Pencil, Save, ChevronRight, LogOut, Loader2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -13,9 +13,21 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { usePermissions } from '@/hooks/usePermissions';
 import { usePerfilUsuarios } from '@/hooks/usePerfilUsuarios';
 import { useAppRoles } from '@/hooks/useAppRoles';
+import { useAuth } from '@/contexts/AuthContext';
 import { MODULES, MODULE_ITEMS } from '@/config/modules';
 import { GerenciarRolesTab } from '@/components/configuracoes/GerenciarRolesTab';
 import { SolicitacoesTab } from '@/components/configuracoes/SolicitacoesTab';
@@ -25,6 +37,59 @@ import { Perfil } from '@/components/configuracoes/PerfilCard';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+
+function DeslogarTodosButton() {
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  const handleConfirm = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('deslogar-todos-usuarios');
+      if (error) throw error;
+      const total = (data as { total_deslogados?: number } | null)?.total_deslogados ?? 0;
+      toast.success(`${total} ${total === 1 ? 'usuário desconectado' : 'usuários desconectados'}`);
+      setOpen(false);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Erro ao deslogar usuários';
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger asChild>
+        <Button variant="destructive" size="sm" className="gap-2">
+          <LogOut className="w-4 h-4" />
+          <span className="hidden sm:inline">Deslogar todos os usuários</span>
+          <span className="sm:hidden">Deslogar todos</span>
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Todos os usuários conectados serão desconectados imediatamente e precisarão refazer o login no próximo acesso.
+            Sua sessão de Diretor permanecerá ativa. Esta ação será registrada em log de auditoria.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={loading}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={loading}
+            onClick={(e) => { e.preventDefault(); handleConfirm(); }}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Sim, deslogar todos'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 
 // Mapa de ícones Lucide por nome (para áreas — derivados do banco)
 const ICON_REGISTRY: Record<string, typeof Crown> = {
