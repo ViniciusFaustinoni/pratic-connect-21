@@ -117,8 +117,9 @@ Deno.serve(async (req) => {
           .maybeSingle();
         if (!assoc?.telefone) continue;
 
-        const link = c.token_publico
-          ? `https://app.praticcar.org/cotacao/${c.token_publico}`
+        const token = c.cotacao_id ? tokenByCotacao.get(c.cotacao_id) : null;
+        const link = token
+          ? `https://app.praticcar.org/cotacao/${token}`
           : 'https://app.praticcar.org';
 
         const msg =
