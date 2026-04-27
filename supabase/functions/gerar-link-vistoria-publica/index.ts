@@ -84,6 +84,19 @@ Deno.serve(async (req) => {
       if (vist) vistoriaId = vist.id
     }
 
+    // ── 1.5) Resolver flag de exigência da etapa de instalação a partir da instalação âncora
+    let exigeEtapaInstalacao = true;
+    {
+      const { data: instInfo } = await supabase
+        .from('instalacoes')
+        .select('dispensa_rastreador')
+        .eq('id', instalacaoId)
+        .maybeSingle();
+      if (instInfo && (instInfo as any).dispensa_rastreador === true) {
+        exigeEtapaInstalacao = false;
+      }
+    }
+
     // ── 2) Já existe link? (idempotente)
     const { data: existing } = await supabase
       .from('vistoria_links')
@@ -92,20 +105,19 @@ Deno.serve(async (req) => {
       .maybeSingle()
 
     if (existing && existing.status !== 'cancelado') {
-      // Atualiza atribuições se vieram novas
-      const patch: Record<string, any> = {}
+      // Atualiza atribuições e flag de exigência se vieram novas
+      const patch: Record<string, any> = { exige_etapa_instalacao: exigeEtapaInstalacao }
       if (tecnico_atribuido_id) patch.tecnico_atribuido_id = tecnico_atribuido_id
       if (prestador_atribuido_id) patch.prestador_atribuido_id = prestador_atribuido_id
       if (vistoriaId) patch.vistoria_id = vistoriaId
-      if (Object.keys(patch).length > 0) {
-        await supabase.from('vistoria_links').update(patch).eq('id', existing.id)
-      }
+      await supabase.from('vistoria_links').update(patch).eq('id', existing.id)
       return new Response(
         JSON.stringify({
           success: true,
           token: existing.token,
           url: `${BASE_URL}/vistoria/${existing.token}`,
           reused: true,
+          exige_etapa_instalacao: exigeEtapaInstalacao,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       )
@@ -120,6 +132,7 @@ Deno.serve(async (req) => {
         tecnico_atribuido_id,
         prestador_atribuido_id,
         criado_por,
+        exige_etapa_instalacao: exigeEtapaInstalacao,
       })
       .select('id, token')
       .single()
