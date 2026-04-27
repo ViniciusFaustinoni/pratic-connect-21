@@ -157,8 +157,8 @@ export default function RelatosErros() {
         <h1 className="text-2xl font-bold">Relatos de Erros</h1>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        {(['aberto', 'em_tratamento', 'concluido', 'validado', 'descartado'] as ErrorReportStatus[]).map((s) => (
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        {(['aberto', 'critico', 'em_tratamento', 'concluido', 'validado', 'descartado'] as ErrorReportStatus[]).map((s) => (
           <Card
             key={s}
             className={`p-3 cursor-pointer hover:bg-muted/30 transition ${statusFilter === s ? 'ring-2 ring-primary' : ''}`}
