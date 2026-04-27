@@ -196,62 +196,48 @@ export function useTarefaAtual() {
  * Usado quando o profissional aceita uma tarefa atribuída manualmente
  */
 export function useIniciarRota() {
-  const { profile } = useAuth();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({ tarefaId }: { tarefaId: string }) => {
-      // Verificar se o serviço está atribuído a este profissional
-      const { data: servico, error: fetchError } = await supabase
-        .from('servicos')
-        .select('profissional_id')
-        .eq('id', tarefaId)
-        .single();
-      
-      if (fetchError) throw fetchError;
-      
-      if (!servico?.profissional_id) {
-        throw new Error('Serviço não atribuído a nenhum profissional');
-      }
-      
-      if (servico.profissional_id !== profile?.id) {
-        throw new Error('Este serviço não está atribuído a você');
+      // RPC transacional: valida atribuição + status + atualiza em uma única ida
+      const { data, error } = await supabase.rpc('iniciar_rota_servico', {
+        p_servico_id: tarefaId,
+      });
+
+      if (error) {
+        console.error('[useIniciarRota] RPC error:', error);
+        throw new Error(error.message || 'Não foi possível iniciar a rota.');
       }
 
-      // Só então atualizar status
-      const { error } = await supabase
-        .from('servicos')
-        .update({ 
-          status: 'em_rota',
-          em_rota_em: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', tarefaId)
-        .eq('profissional_id', profile.id); // Garantia adicional
-
-      if (error) throw error;
+      const result = (data ?? {}) as { ok?: boolean; codigo?: string; mensagem?: string };
+      if (!result.ok) {
+        const err: any = new Error(result.mensagem || 'Não foi possível iniciar a rota.');
+        err.codigo = result.codigo;
+        throw err;
+      }
 
       // Disparar notificações em background (não bloqueia o fluxo)
       supabase.functions.invoke('notificar-inicio-rota', {
         body: { servico_id: tarefaId }
-      }).then(result => {
-        if (result.error) {
-          console.warn('[useIniciarRota] Erro ao disparar notificações:', result.error);
-        } else {
-          console.log('[useIniciarRota] Notificações disparadas:', result.data);
-        }
-      }).catch(err => {
-        console.warn('[useIniciarRota] Exceção ao disparar notificações:', err);
-      });
+      }).then(r => {
+        if (r.error) console.warn('[useIniciarRota] Erro ao disparar notificações:', r.error);
+        else console.log('[useIniciarRota] Notificações disparadas:', r.data);
+      }).catch(e => console.warn('[useIniciarRota] Exceção ao disparar notificações:', e));
+
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
       queryClient.invalidateQueries({ queryKey: ['servicos'] });
-      toast.success('Rota iniciada! Siga para o local.');
+      toast.success(result?.mensagem || 'Rota iniciada! Siga para o local.');
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error('Erro ao iniciar rota:', error);
-      toast.error('Erro ao iniciar rota');
+      // Auto-recuperação: invalidar para o card refletir o estado real do servidor
+      queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      toast.error(error?.message || 'Erro ao iniciar rota');
     }
   });
 }
