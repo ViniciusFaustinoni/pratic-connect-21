@@ -1829,18 +1829,39 @@ serve(async (req) => {
     let fotosEnviadas = 0;
     const fotosComErro: string[] = [];
 
+    // Normaliza tipos curtos usados em `documentos` para as chaves de hinova_mapeamentos
+    // (Bug 2: 'chassi','motor','frente'... não casavam com 'foto_chassi','foto_motor','foto_frontal_veiculo'...)
+    const normalizarTipoFoto = (tipo: string | null | undefined): string | null => {
+      if (!tipo) return null;
+      const t = String(tipo).toLowerCase().trim();
+      const aliases: Record<string, string> = {
+        chassi: 'foto_chassi',
+        motor: 'foto_motor',
+        frente: 'foto_frontal_veiculo',
+        frontal: 'foto_frontal_veiculo',
+        traseira: 'foto_traseira_veiculo',
+        lateral_esquerda: 'foto_lateral_esquerda',
+        lateral_direita: 'foto_lateral_direita',
+        odometro: 'foto_hodometro',
+        hodometro: 'foto_hodometro',
+        painel: 'foto_painel',
+        km: 'foto_km',
+      };
+      return aliases[t] || t;
+    };
+
     const { data: documentos } = await supabase
       .from('documentos')
-      .select('*')
+      .select('id, tipo, nome_arquivo, arquivo_url, status')
       .or(`associado_id.eq.${_aid},veiculo_id.eq.${_vid}`)
-      .eq('status', 'aprovado');
+      .in('status', ['aprovado', 'em_analise']);
 
     const { data: documentosContrato } = contrato?.cotacao_id
       ? await supabase
           .from('contratos_documentos')
           .select('id, tipo, arquivo_nome, arquivo_url, status')
           .eq('cotacao_id', contrato.cotacao_id)
-          .eq('status', 'aprovado')
+          .in('status', ['aprovado', 'em_analise'])
       : { data: [] };
 
     const documentosParaEnvio = [
@@ -1859,15 +1880,43 @@ serve(async (req) => {
       const batchSize = 50;
       for (let i = 0; i < documentosParaEnvio.length; i += batchSize) {
         const batch = documentosParaEnvio.slice(i, i + batchSize);
-        
-        const fotos = batch.map(doc => {
-          const tipoFoto = getMapeamento('tipo_foto', doc.tipo) || 1;
-          return {
-            nome_arquivo: doc.nome_arquivo || `documento_${doc.id}.jpg`,
-            codigo_tipo: tipoFoto,
-            link: doc.url_arquivo || doc.arquivo_url
-          };
-        }).filter(f => f.link);
+        const descartadosPorLink: string[] = [];
+        const descartadosPorTipo: Array<{ id: string; tipo: string }> = [];
+
+        const fotos = batch
+          .map((doc: any) => {
+            const link = doc.arquivo_url; // Bug 1: era `doc.url_arquivo || doc.arquivo_url` (campo inexistente)
+            if (!link) {
+              descartadosPorLink.push(doc.id);
+              return null;
+            }
+            const tipoNormalizado = normalizarTipoFoto(doc.tipo);
+            const tipoFoto = getMapeamento('tipo_foto', tipoNormalizado);
+            if (!tipoFoto) {
+              // Bug 2: antes caía em `|| 1` e enviava tudo como CNH no SGA
+              console.warn('[SGA Sync] tipo_foto sem mapeamento, descartando', { id: doc.id, tipo: doc.tipo });
+              descartadosPorTipo.push({ id: doc.id, tipo: String(doc.tipo) });
+              return null;
+            }
+            return {
+              nome_arquivo: doc.nome_arquivo || `documento_${doc.id}.jpg`,
+              codigo_tipo: tipoFoto,
+              link,
+            };
+          })
+          .filter((f: any): f is { nome_arquivo: string; codigo_tipo: number; link: string } => f !== null);
+
+        if (descartadosPorLink.length > 0 || descartadosPorTipo.length > 0) {
+          await logSync(_vid, _aid, 'enviar_fotos_descarte', 'info',
+            {
+              codigo_veiculo: codigoVeiculoHinova,
+              qtd_batch: batch.length,
+              qtd_validas: fotos.length,
+              descartados_sem_link: descartadosPorLink,
+              descartados_sem_mapeamento: descartadosPorTipo,
+            },
+            null, null);
+        }
 
         if (fotos.length === 0) continue;
 
@@ -1885,19 +1934,25 @@ serve(async (req) => {
           );
 
           const fotosData = await safeJsonParse<any>(fotosResponse, 'enviar_fotos');
-          
+
           await logSync(_vid, _aid, 'enviar_fotos', fotosResponse.ok ? 'success' : 'error',
-            { codigo_veiculo: codigoVeiculoHinova, qtd_fotos: fotos.length }, fotosData, 
-            fotosResponse.ok ? null : fotosData.mensagem);
+            {
+              codigo_veiculo: codigoVeiculoHinova,
+              qtd_fotos_enviadas: fotos.length,
+              qtd_batch: batch.length,
+              qtd_descartadas: descartadosPorLink.length + descartadosPorTipo.length,
+            },
+            fotosData,
+            fotosResponse.ok ? null : fotosData?.mensagem);
 
           if (fotosResponse.ok) {
             fotosEnviadas += fotos.length;
           } else {
-            fotosComErro.push(...fotos.map(f => f.nome_arquivo));
+            fotosComErro.push(...fotos.map((f: any) => f.nome_arquivo));
           }
         } catch (e) {
           console.error('[SGA Sync] Erro ao enviar lote de fotos:', e);
-          fotosComErro.push(...batch.map(d => d.nome_arquivo || d.id));
+          fotosComErro.push(...batch.map((d: any) => d.nome_arquivo || d.id));
         }
       }
     }
