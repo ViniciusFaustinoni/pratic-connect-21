@@ -52,24 +52,23 @@ Deno.serve(async (req) => {
     }
 
     if (!instalacaoId) {
-      // Sem instalação ainda: não é erro — o link será gerado quando a instalação existir.
-      // Mantém o fluxo de aprovação não-bloqueante.
-      if (cotacao_id) {
-        return new Response(
-          JSON.stringify({
-            success: true,
-            pending: true,
-            reused: false,
-            token: null,
-            url: null,
-            motivo: 'instalacao_ainda_nao_criada',
-          }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-        )
-      }
+      // Sem instalação ainda: NUNCA bloquear o fluxo de aprovação.
+      // O link será gerado quando a instalação for criada (idempotente).
+      // Retornamos 200 com pending=true mesmo sem cotacao_id, para que o overlay
+      // de runtime do front não trate como erro fatal.
+      const motivo = cotacao_id
+        ? 'instalacao_ainda_nao_criada'
+        : 'sem_instalacao_e_sem_cotacao'
       return new Response(
-        JSON.stringify({ success: false, error: 'instalacao_id (ou cotacao_id válido) é obrigatório' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        JSON.stringify({
+          success: true,
+          pending: true,
+          reused: false,
+          token: null,
+          url: null,
+          motivo,
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       )
     }
 
