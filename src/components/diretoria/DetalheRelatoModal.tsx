@@ -93,8 +93,11 @@ export function DetalheRelatoModal({ report, onClose }: Props) {
 
   const onMelhorar = async () => {
     if (!report) return;
-    const base = obs.trim() || report.descricao;
-    const novo = await melhorarTexto.mutateAsync({ reportId: report.id, texto: base });
+    // Sempre melhora a DESCRIÇÃO do relato atual, não o que está no campo de observação
+    const novo = await melhorarTexto.mutateAsync({
+      reportId: report.id,
+      texto: report.descricao,
+    });
     if (novo) {
       setObsPrev(obs);
       setObs(novo);
