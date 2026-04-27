@@ -664,6 +664,7 @@ async function buscarBoletosSGA(associadoId: string): Promise<Boleto[]> {
       urlBoleto: c.boleto_url || undefined,
       formaPagamento: c.forma_pagamento || undefined,
       nossoNumero: c.nosso_numero || undefined,
+      fonte: 'sga',
     };
   });
 }
