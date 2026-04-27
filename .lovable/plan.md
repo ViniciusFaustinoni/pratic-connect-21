@@ -1,65 +1,48 @@
-## Problema (root cause confirmado nos logs)
+# Correção raiz do OCR — confusão 6↔8 em placas
 
-Ao clicar em **"Gerar Link"** para atribuir o prestador *Kleytonn* a uma Instalação, a edge function `gerar-link-prestador` falha com:
+## Causa raiz (já investigada)
 
-```
-PGRST204 — Could not find the 'vistoriador_prestador_id' column
-of 'instalacao_prestador_links' in the schema cache
-```
+Em fotos de CRLV antigo (papel verde, esmaecido), o modelo confunde `6` com `8` na 4ª/6ª/7ª posição da placa. Hoje:
 
-A tabela `instalacao_prestador_links` só tem a coluna `prestador_id`. Mas a função, desde que foi adicionado suporte a `vistoriadores_prestadores`, escolhe dinamicamente o nome da coluna:
+1. O **prompt** só desambigua a 5ª posição (letra obrigatória do Mercosul). Os dígitos numéricos não têm regra explícita.
+2. `gerarCandidatosPlaca` só faz swaps **letra↔dígito** (Mercosul vs antiga), nunca **dígito↔dígito**.
+3. Cross-check com texto nativo do PDF só ajuda quando o documento é PDF — fotos JPG (caso reportado) não têm texto nativo.
+4. Não validamos contra **veículos/cotações já cadastrados** no banco, que poderiam ancorar a leitura.
 
-```ts
-const colunaPrestador = usaVistoriadorPrestador
-  ? 'vistoriador_prestador_id'   // ❌ não existe nesta tabela
-  : 'prestador_id'
-```
+## Correções (mínimas, cirúrgicas)
 
-Como o prestador *Kleytonn* está cadastrado em `vistoriadores_prestadores`, a função tenta inserir `vistoriador_prestador_id` → erro 500 → o front mostra "Edge Function returned a non-2xx status code".
+### 1. `supabase/functions/document-ocr/index.ts` — Prompt (linhas 296–301)
 
-A coluna `vistoriador_prestador_id` só existe em `vistoria_prestador_links` (fluxo de vistoria), não em `instalacao_prestador_links` (fluxo de instalação).
+Adicionar bloco específico para **dígitos numéricos** da placa, listando os pares confundíveis e instruindo o modelo a comparar visualmente o glifo com ocorrências do mesmo dígito no chassi/Renavam/Nº CRLV. Reforçar a proibição de copiar dígitos da "PLACA ANTERIOR" para a "PLACA" atual.
 
-## Correção (mínima e cirúrgica)
+### 2. `supabase/functions/document-ocr/index.ts` — `gerarCandidatosPlaca` (linhas 66–97)
 
-Em `supabase/functions/gerar-link-prestador/index.ts` (apenas o fluxo de **instalação**) sempre usar a coluna `prestador_id`, independentemente da tabela de origem do prestador. O `id` é o mesmo (o bloco já faz `upsert` espelhando em `vistoriadores_prestadores` quando vem de `prestadores_instalacao`), então gravar em `prestador_id` continua íntegro.
+Expandir para emitir também variantes com swap **dígito↔dígito** nas posições numéricas:
 
-Mudanças:
+- Mercosul: posições 3, 5, 6 — gerar variantes trocando 6↔8, 0↔8, 5↔6, 1↔7, 0↔9, 3↔8, 2↔7
+- Antiga: posições 3, 4, 5, 6 — mesmas trocas
 
-1. **SELECT do link existente** (linha ~107): trocar
-   ```ts
-   .eq(colunaPrestador, prestadorIdFinal)
-   ```
-   por
-   ```ts
-   .eq('prestador_id', prestadorIdFinal)
-   ```
+Limitar a no máximo **1 swap por candidato** para não explodir o conjunto (já cobre o caso comum). Resultado fica < 30 candidatos por placa.
 
-2. **INSERT do novo link** (linha ~117–122): substituir o uso dinâmico por:
-   ```ts
-   const insertPayload = {
-     instalacao_id,
-     prestador_id: prestadorIdFinal,
-     valor,
-     atribuido_por,
-   }
-   ```
+### 3. `supabase/functions/document-ocr/index.ts` — Cross-check com banco (linhas 1224–1255)
 
-3. **Mensagem de erro mais útil**: incluir `linkErr.message` no JSON de resposta para evitar futuros 500 silenciosos.
+Quando o OCR é foto (sem `extractedPdfText`) e há `cpfEsperado` no request, consultar `veiculos` e `cotacoes` cujo `associado/cliente` tenha aquele CPF e cuja placa esteja entre os candidatos expandidos. Se houver match único, usa essa placa.
 
-4. Marcar o relato de erro como **em_tratamento** ao iniciar e **concluido** ao terminar (conforme padrão pedido pela diretoria).
-
-## Arquivos afetados
-
-- `supabase/functions/gerar-link-prestador/index.ts` — ajustar coluna e mensagem de erro
-- migração SQL para mover relato(s) abertos sobre "atribuir prestador" para `em_tratamento` → `concluido`
+Se não houver `cpfEsperado` ou nenhum match, **não força** — apenas registra log e mantém a leitura original (preserva fluxo de novo cadastro).
 
 ## Não muda
 
-- Fluxo de vistoria (`gerar-link-vistoriador-prestador`) — esse já usa a tabela correta `vistoria_prestador_links` que de fato possui `vistoriador_prestador_id`.
-- Front-end (`AtribuirPrestadorPopover`, `useAtribuicaoManual`) — chamada continua igual.
+- Fluxo de detecção do tipo de documento
+- Demais campos (chassi, renavam, CPF, CNH) — já têm tratamento
+- Front-end (`useDocumentoOCR`) — interface continua igual
 
-## Teste após o deploy
+## Teste
 
-1. Abrir `/monitoramento/servicos-campo` → aba Atribuição.
-2. Clicar no botão laranja de prestador externo em uma instalação pendente.
-3. Selecionar *Kleytonn*, valor opcional, **Gerar Link** → deve abrir o `LinkPrestadorResultDialog` com a URL pública.
+1. Reenviar a foto do CRLV `LLL6C94` → deve retornar `LLL6C94` (não `LLL8C94`).
+2. Reenviar uma foto de CRLV de placa antiga conhecida → não deve haver regressão.
+3. CRLV de associado existente no banco → match por CPF deve travar a placa correta.
+
+## Arquivo afetado
+
+- `supabase/functions/document-ocr/index.ts` — 3 alterações localizadas
+- Marcar relato `error_reports` correlato ao OCR como `concluido` após deploy.

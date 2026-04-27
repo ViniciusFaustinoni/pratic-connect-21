@@ -58,10 +58,30 @@ function validatePlaca(placa: string): boolean {
 const DIGIT_TO_LETTER: Record<string, string> = { '0': 'O', '1': 'I', '5': 'S', '8': 'B', '2': 'Z', '6': 'G' };
 const LETTER_TO_DIGIT: Record<string, string> = { 'O': '0', 'I': '1', 'S': '5', 'B': '8', 'Z': '2', 'G': '6', 'T': '7', 'L': '1', 'Q': '0' };
 
+// Pares de dígitos visualmente confundíveis em CRLVs físicos esmaecidos.
+// Ordem: o primeiro é o "default seguro" (mais comum em casos limítrofes).
+const DIGIT_SWAPS: Array<[string, string]> = [
+  ['6', '8'], ['8', '6'],
+  ['0', '8'], ['8', '0'],
+  ['5', '6'], ['6', '5'],
+  ['1', '7'], ['7', '1'],
+  ['0', '9'], ['9', '0'],
+  ['3', '8'], ['8', '3'],
+  ['2', '7'], ['7', '2'],
+];
+
+const PLACA_MERCOSUL_RE = /^[A-Z]{3}[0-9][A-Z][0-9]{2}$/;
+const PLACA_ANTIGA_RE = /^[A-Z]{3}[0-9]{4}$/;
+
 /**
  * Gera todas as variantes plausíveis da placa para cobrir confusões OCR
  * comuns entre Mercosul (LLL N L NN) e formato antigo (LLL NNNN).
- * Inclui a placa original, normalização Mercosul e normalização para antiga.
+ * Inclui:
+ *  - placa original
+ *  - normalização Mercosul / antiga (swaps letra↔dígito)
+ *  - variantes com 1 swap dígito↔dígito nas posições numéricas (6↔8, etc.)
+ *
+ * Limita a 1 swap por candidato para manter o conjunto pequeno (<30 itens).
  */
 function gerarCandidatosPlaca(raw: string): string[] {
   if (!raw) return [];
@@ -93,8 +113,26 @@ function gerarCandidatosPlaca(raw: string): string[] {
   }
   out.add(antiga.join(''));
 
+  // Variante 3: para CADA placa já no conjunto que seja válida, gera variantes
+  // com 1 swap dígito↔dígito nas posições numéricas (cobre 6↔8 e similares).
+  const baseValidas = Array.from(out).filter(p => validatePlaca(p));
+  for (const base of baseValidas) {
+    const isMercosul = PLACA_MERCOSUL_RE.test(base);
+    const digitPositions = isMercosul ? [3, 5, 6] : [3, 4, 5, 6];
+    for (const pos of digitPositions) {
+      const ch = base[pos];
+      if (!/[0-9]/.test(ch)) continue;
+      for (const [from, to] of DIGIT_SWAPS) {
+        if (ch !== from) continue;
+        const variant = base.substring(0, pos) + to + base.substring(pos + 1);
+        if (validatePlaca(variant)) out.add(variant);
+      }
+    }
+  }
+
   return Array.from(out);
 }
+
 
 /**
  * Normalização posicional Mercosul-aware (LLL N L NN).
@@ -120,8 +158,6 @@ function normalizePlacaMercosul(raw: string): string {
   return out.join('');
 }
 
-const PLACA_MERCOSUL_RE = /^[A-Z]{3}[0-9][A-Z][0-9]{2}$/;
-const PLACA_ANTIGA_RE = /^[A-Z]{3}[0-9]{4}$/;
 
 /**
  * Resolve a placa preferindo o formato Mercosul quando há ambiguidade
@@ -298,7 +334,13 @@ Sempre preencha tanto "motor" quanto "numero_motor" com o MESMO valor (alias obr
   • **Placa ANTIGA** (LLLNNNN, ex: ABC1234, LQV3623): as **4 últimas posições são SEMPRE dígitos (0-9)**. Se a 5ª posição parecer uma letra (G/I/O/S/B/Z), é OCR errado — leia como dígito (G→6, I→1, O→0, S→5, B→8, Z→2).
   • **Placa MERCOSUL** (LLLNLNN, ex: RKR3I57, BRA2E19): a **5ª posição é SEMPRE uma LETRA (A-Z)**. Se parecer dígito (1/0/5/8/2/6), leia como letra.
   • COMO DECIDIR O FORMATO: o CRLV brasileiro emitido a partir de set/2018 usa Mercosul; veículos anteriores podem manter a placa antiga. Use o **campo "PLACA ANTERIOR/UF"** e o ano de fabricação como pista. Se "PLACA ANTERIOR" estiver no formato antigo e for igual à placa atual, então a placa atual também é antiga.
-  • **EM CASO DE DÚVIDA, releia a posição duvidosa caractere por caractere** comparando com letras/números vizinhos do mesmo documento (ex: outras ocorrências de "6" no Renavam ou no chassi).
+  • ⚠️ **DESAMBIGUAÇÃO DE DÍGITOS NUMÉRICOS** (4ª, 6ª e 7ª posições da Mercosul; 4ª–7ª da antiga): em CRLVs físicos esmaecidos os pares mais confundidos são **6↔8**, **0↔8**, **5↔6**, **1↔7**, **0↔9**, **3↔8**, **2↔7**. ANTES de devolver um dígito numérico, **compare visualmente o glifo** com outras ocorrências do MESMO dígito em campos de alta confiança do MESMO documento:
+      - **Chassi** (17 caracteres alfanuméricos) — costuma estar mais nítido
+      - **Renavam** (11 dígitos)
+      - **Nº do CRLV** (no topo, 11 dígitos)
+    Heurísticas de glifo: o "6" tem topo ABERTO/curvo e UMA barriga fechada; o "8" tem DUAS barrigas fechadas. O "0" não tem barriga superior; o "8" tem. O "1" não tem traço diagonal; o "7" tem.
+  • **NUNCA copie dígitos da "PLACA ANTERIOR" para a "PLACA" atual.** São campos distintos. A placa atual é a que aparece no campo "PLACA" em destaque, normalmente próxima ao CPF/CNPJ do proprietário.
+  • **EM CASO DE DÚVIDA REAL não resolvida**, escreva a placa com o caractere de menor risco. Nunca chute "8" sem evidência — o default seguro é "6" quando o glifo tem topo aberto.
 
 ### Nota Fiscal de Veículo (DANFE / NF-e com dados veiculares)
 
@@ -1243,6 +1285,73 @@ Use a função para retornar o número do motor encontrado, ou "ilegivel" se ide
             }
           }
 
+          // 2.5) CROSS-CHECK COM BANCO: para fotos sem texto nativo (JPG/PNG)
+          // ou quando o cross-check com PDF não resolveu, tentar achar uma placa
+          // entre os candidatos expandidos (incluindo swaps 6↔8, etc.) que já
+          // exista em `veiculos`/`cotacoes` do CPF informado. Match único trava.
+          try {
+            const placaAtual = String(d.placa).replace(/[^A-Z0-9]/gi, '').toUpperCase();
+            const todosCandidatos = gerarCandidatosPlaca(placaAtual)
+              .filter(p => validatePlaca(p) && p !== placaAtual);
+
+            if (todosCandidatos.length > 0 && cpfEsperado) {
+              const cpfDigits = String(cpfEsperado).replace(/\D/g, '');
+              if (cpfDigits.length === 11) {
+                const sb = createClient(
+                  Deno.env.get('SUPABASE_URL')!,
+                  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY')!
+                );
+
+                const placasParaTestar = [placaAtual, ...todosCandidatos];
+
+                // Veículos do associado (via profiles.cpf → veiculos.user_id)
+                const { data: profileRows } = await sb
+                  .from('profiles')
+                  .select('user_id')
+                  .eq('cpf', cpfDigits)
+                  .limit(5);
+
+                const userIds = (profileRows || []).map((r: any) => r.user_id).filter(Boolean);
+
+                let placaConfirmada: string | null = null;
+
+                if (userIds.length > 0) {
+                  const { data: vRows } = await sb
+                    .from('veiculos')
+                    .select('placa')
+                    .in('user_id', userIds)
+                    .in('placa', placasParaTestar)
+                    .limit(2);
+
+                  if (vRows && vRows.length === 1) {
+                    placaConfirmada = String(vRows[0].placa).toUpperCase();
+                  }
+                }
+
+                // Fallback: cotações por CPF
+                if (!placaConfirmada) {
+                  const { data: cRows } = await sb
+                    .from('cotacoes')
+                    .select('placa')
+                    .eq('cpf', cpfDigits)
+                    .in('placa', placasParaTestar)
+                    .limit(2);
+
+                  if (cRows && cRows.length === 1) {
+                    placaConfirmada = String(cRows[0].placa).toUpperCase();
+                  }
+                }
+
+                if (placaConfirmada && placaConfirmada !== placaAtual) {
+                  console.log(`[OCR] Placa confirmada via banco (CPF ${cpfDigits}): "${placaAtual}" → "${placaConfirmada}"`);
+                  d.placa = placaConfirmada;
+                }
+              }
+            }
+          } catch (xErr) {
+            console.warn('[OCR] Cross-check de placa com banco falhou (mantendo leitura):', xErr);
+          }
+
           // 3) Fallback legado: prefere Mercosul se ainda não foi resolvido.
           const atual = String(d.placa);
           if (!validatePlaca(atual)) {
@@ -1253,6 +1362,7 @@ Use a função para retornar o número do motor encontrado, ou "ilegivel" se ide
             }
           }
         }
+
 
         // ==== SANEAMENTO CHASSI: tentar corrigir confusões O↔0, I↔1, Q↔0, S↔5 ====
         if (v.field === 'chassi') {
