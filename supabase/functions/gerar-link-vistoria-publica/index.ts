@@ -150,6 +150,7 @@ Deno.serve(async (req) => {
         token: created.token,
         url: `${BASE_URL}/vistoria/${created.token}`,
         reused: false,
+        exige_etapa_instalacao: exigeEtapaInstalacao,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     )
