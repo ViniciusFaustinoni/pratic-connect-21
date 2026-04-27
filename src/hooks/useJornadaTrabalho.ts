@@ -429,8 +429,12 @@ export function useJornadaTrabalho() {
   const minutosRestantes = Math.max(0, jornadaAjustada - tempoReal.minutosTrabalhados);
   const percentualJornada = jornadaAjustada > 0 ? Math.min(100, (tempoReal.minutosTrabalhados / jornadaAjustada) * 100) : 0;
   const minutosAlmocoRestantes = Math.max(0, DURACAO_ALMOCO_MINUTOS - tempoReal.minutosAlmoco);
-  // Botão "Iniciar almoço" disponível para qualquer técnico em turno ativo sem almoço.
-  const podeIniciarAlmoco = turno?.status === 'ativo' && !turno?.inicio_almoco;
+  // Botão "Iniciar almoço" disponível para qualquer técnico em turno ativo sem almoço,
+  // DESDE QUE não haja serviço em execução. Bloqueio adicional para evitar
+  // registro de almoço durante atendimento.
+  const turnoAtivoSemAlmoco = turno?.status === 'ativo' && !turno?.inicio_almoco;
+  const bloqueadoPorTarefa = !!turnoAtivoSemAlmoco && temTarefaEmExecucao;
+  const podeIniciarAlmoco = !!turnoAtivoSemAlmoco && !temTarefaEmExecucao;
   const deveIniciarAlmoco = podeIniciarAlmoco && tempoReal.minutosTrabalhados >= TEMPO_ATE_ALMOCO_MINUTOS;
 
   // Verificar se deve encerrar turno automaticamente quando jornada está completa
