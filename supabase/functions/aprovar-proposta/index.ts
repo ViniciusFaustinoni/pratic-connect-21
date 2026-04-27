@@ -222,13 +222,16 @@ serve(async (req) => {
         cobertura_total: ativarProtecao360,
       }).eq('id', veiculoId);
 
-      // Verificar se já existe instalação ativa para este veículo
+      // Verificar se já existe instalação ativa para este veículo.
+      // IMPORTANTE: criamos instalação para TODOS os veículos (mesmo os que dispensam rastreador),
+      // porque o link público de vistoria depende de uma instalação como âncora.
+      // Veículos sem rastreador recebem dispensa_rastreador=true; o link público trata o resto.
       let jaTemInstalacaoAtivaDesteVeic = false;
-      if (veiculoPrecisaRastreador && !instalacaoDesteVeiculo) {
+      if (!instalacaoDesteVeiculo) {
         const { data: instalacaoAtiva } = await supabase.from('instalacoes')
           .select('id')
           .eq('veiculo_id', veiculoId)
-          .in('status', ['agendada', 'em_rota', 'em_andamento'])
+          .in('status', ['agendada', 'em_rota', 'em_andamento', 'em_analise', 'concluida'])
           .maybeSingle();
         jaTemInstalacaoAtivaDesteVeic = !!instalacaoAtiva;
       }
