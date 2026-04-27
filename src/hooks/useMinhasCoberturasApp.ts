@@ -9,6 +9,7 @@ export interface CoberturaVeiculo {
   modelo: string;
   marca: string;
   inadimplente: boolean;
+  suspensaAutoVistoria?: boolean;
   temCoberturaRouboFurto: boolean;
   temCoberturaTotal: boolean;
   podeAssistencia: boolean;
@@ -78,12 +79,16 @@ export function useMinhasCoberturas() {
   // Build per-vehicle coverage
   const coberturasPorVeiculo: CoberturaVeiculo[] = (veiculos || []).map(v => {
     const inadimplente = veiculosInadimplentes.includes(v.id);
-    const temCoberturaRouboFurto = !inadimplente && (v.cobertura_roubo_furto || false);
-    const temCoberturaTotal = !inadimplente && (v.cobertura_total || false);
+    // Cobertura suspensa por auto-vistoria (instalação não realizada no prazo)
+    const suspensaAutoVistoria = (v as any).cobertura_suspensa === true
+      && (v as any).cobertura_suspensa_motivo === 'Auto-vistoria sem instalação no prazo';
+    const bloqueado = inadimplente || suspensaAutoVistoria;
+    const temCoberturaRouboFurto = !bloqueado && (v.cobertura_roubo_furto || false);
+    const temCoberturaTotal = !bloqueado && (v.cobertura_total || false);
     const podeAssistencia = temCoberturaTotal;
     const podeRastreamento = temCoberturaTotal && (v.rastreador_ativo || false);
 
-    const tiposSinistroPermitidos: string[] = inadimplente
+    const tiposSinistroPermitidos: string[] = bloqueado
       ? []
       : ['colisao', 'roubo', 'furto', 'incendio', 'fenomeno_natural', 'vandalismo', 'outro'];
 
@@ -93,17 +98,19 @@ export function useMinhasCoberturas() {
       modelo: v.modelo || '',
       marca: v.marca || '',
       inadimplente,
+      suspensaAutoVistoria,
       temCoberturaRouboFurto,
       temCoberturaTotal,
       podeAssistencia,
       podeRastreamento,
       tiposSinistroPermitidos,
-    };
+    } as CoberturaVeiculo;
   });
 
   // Backward compat: principal vehicle (first)
   const principal = coberturasPorVeiculo[0];
   const inadimplente = principal?.inadimplente || false;
+  const suspensaAutoVistoria = principal?.suspensaAutoVistoria || false;
   const temCoberturaRouboFurto = principal?.temCoberturaRouboFurto || false;
   const temCoberturaTotal = principal?.temCoberturaTotal || false;
   const podeAssistencia = principal?.podeAssistencia || false;
@@ -113,6 +120,7 @@ export function useMinhasCoberturas() {
   return {
     isLoading,
     inadimplente,
+    suspensaAutoVistoria,
     carenciaIsenta,
     temCoberturaRouboFurto,
     temCoberturaTotal,
@@ -121,13 +129,15 @@ export function useMinhasCoberturas() {
     tiposSinistroPermitidos,
     beneficiosAdicionaisSuspensos,
     coberturasPorVeiculo,
-    mensagemCoberturaParcial: inadimplente
-      ? 'A cobertura principal deste veículo está suspensa por inadimplência. Regularize para reativá-la.'
-      : carenciaIsenta
-        ? 'Suas coberturas estão ativas sem período de carência — origem: migração aprovada.'
-        : temCoberturaRouboFurto && !temCoberturaTotal
-          ? 'Sua cobertura atual é apenas para roubo e furto. Após a instalação do rastreador, você terá Proteção 360º incluindo assistência 24h.'
-          : null,
+    mensagemCoberturaParcial: suspensaAutoVistoria
+      ? 'Sua cobertura está suspensa porque o rastreador não foi instalado dentro do prazo após a auto-vistoria. Aguarde a liberação do nosso time de monitoramento para reagendar a vistoria/instalação.'
+      : inadimplente
+        ? 'A cobertura principal deste veículo está suspensa por inadimplência. Regularize para reativá-la.'
+        : carenciaIsenta
+          ? 'Suas coberturas estão ativas sem período de carência — origem: migração aprovada.'
+          : temCoberturaRouboFurto && !temCoberturaTotal
+            ? 'Sua cobertura atual é apenas para roubo e furto. Após a instalação do rastreador, você terá Proteção 360º incluindo assistência 24h.'
+            : null,
   };
 }
 

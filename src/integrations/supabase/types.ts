@@ -8254,6 +8254,9 @@ export type Database = {
           documentos_completos: boolean | null
           id: string
           lead_id: string | null
+          liberado_reagendamento_em: string | null
+          liberado_reagendamento_motivo: string | null
+          liberado_reagendamento_por: string | null
           link_gerado_em: string | null
           link_token: string | null
           numero: string
@@ -8377,6 +8380,9 @@ export type Database = {
           documentos_completos?: boolean | null
           id?: string
           lead_id?: string | null
+          liberado_reagendamento_em?: string | null
+          liberado_reagendamento_motivo?: string | null
+          liberado_reagendamento_por?: string | null
           link_gerado_em?: string | null
           link_token?: string | null
           numero: string
@@ -8500,6 +8506,9 @@ export type Database = {
           documentos_completos?: boolean | null
           id?: string
           lead_id?: string | null
+          liberado_reagendamento_em?: string | null
+          liberado_reagendamento_motivo?: string | null
+          liberado_reagendamento_por?: string | null
           link_gerado_em?: string | null
           link_token?: string | null
           numero?: string
@@ -8661,6 +8670,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_acompanhamento"
             referencedColumns: ["lead_id"]
+          },
+          {
+            foreignKeyName: "contratos_liberado_reagendamento_por_fkey"
+            columns: ["liberado_reagendamento_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contratos_liberado_reagendamento_por_fkey"
+            columns: ["liberado_reagendamento_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "contratos_liberado_reagendamento_por_fkey"
+            columns: ["liberado_reagendamento_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
           },
           {
             foreignKeyName: "contratos_plano_id_fkey"
