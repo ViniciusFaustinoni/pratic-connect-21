@@ -579,19 +579,21 @@ export default function ExecutarVistoriaCompleta() {
         </div>
       </header>
 
-      {/* Progresso */}
-      <div className="flex-shrink-0 border-b border-slate-700 bg-slate-800 px-4 py-2">
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-slate-400">Progresso:</span>
-          <span className="font-medium text-white">{totalFotosEnviadas}/{totalFotosObrigatorias} fotos</span>
+      {/* Progresso — esconde se não há fotos obrigatórias (modo só-instalação sem rastreador) */}
+      {totalFotosObrigatorias > 0 && (
+        <div className="flex-shrink-0 border-b border-slate-700 bg-slate-800 px-4 py-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-400">Progresso:</span>
+            <span className="font-medium text-white">{totalFotosEnviadas}/{totalFotosObrigatorias} fotos</span>
+          </div>
+          <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-700">
+            <div 
+              className="h-full bg-blue-500 transition-all"
+              style={{ width: `${(totalFotosEnviadas / totalFotosObrigatorias) * 100}%` }}
+            />
+          </div>
         </div>
-        <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-700">
-          <div 
-            className="h-full bg-blue-500 transition-all"
-            style={{ width: `${(totalFotosEnviadas / totalFotosObrigatorias) * 100}%` }}
-          />
-        </div>
-      </div>
+      )}
 
       {/* Temporizador de Execução */}
       {(vistoria as any)?.iniciada_em && (
