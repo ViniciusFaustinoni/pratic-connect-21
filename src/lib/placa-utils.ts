@@ -30,6 +30,25 @@ export const formatPlacaExibicao = (
   return placa.trim().toUpperCase();
 };
 
+/**
+ * Para uso em cards/listas: exibe placa real quando existir; para 0KM,
+ * exibe o chassi (que é o identificador físico do veículo sem placa).
+ *  - Placa real → "ABC1D23"
+ *  - 0KM com chassi → "0KM · 9BWZZZ..." (mode 'badge') ou "Chassi 9BWZZZ..." (mode 'full')
+ *  - 0KM sem chassi → fallback ("0KM (sem placa)")
+ */
+export const formatPlacaOuChassi = (
+  placa?: string | null,
+  chassi?: string | null,
+  opts: { mode?: 'badge' | 'full'; fallback?: string } = {}
+): string => {
+  const { mode = 'badge', fallback = '0KM (sem placa)' } = opts;
+  if (placa && !isPlacaPlaceholder(placa)) return placa.trim().toUpperCase();
+  const c = chassi?.trim().toUpperCase();
+  if (c) return mode === 'badge' ? `0KM · ${c}` : `Chassi ${c}`;
+  return fallback;
+};
+
 // ============================================================================
 // Comparação resiliente de placa (tolera confusões comuns de OCR)
 // ============================================================================

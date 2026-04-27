@@ -274,7 +274,7 @@ export function useServicos(filters?: ServicoFilters) {
         .select(`
           *,
           associado:associados!servicos_associado_id_fkey(id, nome, telefone, whatsapp, cpf, email),
-          veiculo:veiculos!servicos_veiculo_id_fkey(id, placa, marca, modelo, cor, ano_fabricacao, ano_modelo),
+          veiculo:veiculos!servicos_veiculo_id_fkey(id, placa, chassi, marca, modelo, cor, ano_fabricacao, ano_modelo),
           profissional:profiles!servicos_profissional_id_fkey(id, nome, telefone),
           cotacao:cotacoes(id, numero),
           contrato:contratos(id, numero)
@@ -350,7 +350,7 @@ export function useServico(id: string | undefined) {
         .select(`
           *,
           associado:associados!servicos_associado_id_fkey(id, nome, telefone, whatsapp, cpf, email),
-          veiculo:veiculos!servicos_veiculo_id_fkey(id, placa, marca, modelo, cor, ano_fabricacao, ano_modelo),
+          veiculo:veiculos!servicos_veiculo_id_fkey(id, placa, chassi, marca, modelo, cor, ano_fabricacao, ano_modelo),
           profissional:profiles!servicos_profissional_id_fkey(id, nome, telefone),
           cotacao:cotacoes(id, numero),
           contrato:contratos(id, numero)
@@ -685,7 +685,7 @@ export function useServicosHistorico(dias: number = 7) {
         .select(`
           id, tipo, status, data_agendada, concluida_em,
           associado:associados(nome),
-          veiculo:veiculos(placa, marca, modelo),
+          veiculo:veiculos(placa, chassi, marca, modelo),
           bairro, cidade
         `)
         .eq('profissional_id', profissionalId)
