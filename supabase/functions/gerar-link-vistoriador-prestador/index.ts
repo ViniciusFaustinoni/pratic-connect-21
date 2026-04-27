@@ -20,7 +20,13 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    const { instalacao_id, vistoriador_prestador_id, valor, atribuido_por, reenviar, skip_whatsapp } = await req.json()
+    const { instalacao_id, vistoriador_prestador_id, valor: valorRaw, atribuido_por, reenviar, skip_whatsapp } = await req.json()
+
+    // Valor é OPCIONAL: vazio/0/null gera o link normalmente; pode ser ajustado depois pela operação.
+    const valorNum = (valorRaw === null || valorRaw === undefined || valorRaw === '' || isNaN(Number(valorRaw)))
+      ? 0
+      : Number(valorRaw)
+    const valor = valorNum > 0 ? valorNum : null
 
     if (!instalacao_id || !vistoriador_prestador_id) {
       return new Response(
