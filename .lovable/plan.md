@@ -1,89 +1,127 @@
+# Correção: liberação manual de modelo não aplica no plano Advanced
 
-# Suspensão por Auto-Vistoria Não Instalada
+## Auditoria de impacto (executada agora)
 
-## Diagnóstico do que já existe (e do que falha)
+A auditoria do banco confirmou que o bug de truncamento já contaminou massivamente as regras existentes. Top entradas suspeitas (modelo curto sem espaço que engloba múltiplas variantes):
 
-| Item | Status atual |
-|---|---|
-| Edge function `cron-suspender-cobertura-inativacao` que marca `veiculos.cobertura_suspensa=true` após 48h sem instalação | Existe, mas **prazo hardcoded em 48h**, **não filtra por `tipo_vistoria='autovistoria'`**, **não está agendada no `cron.job`** (nunca roda) e **não notifica o associado** |
-| Configuração diretoria do prazo | Existem `sla_horas_instalacao` e `operacional_prazo_instalacao` mas **não são usados pela função** |
-| Cobertura roubo/furto cair quando suspenso | `useMinhasCoberturasApp` só olha inadimplência — **ignora `cobertura_suspensa`** |
-| Tela do Coordenador para liberar | **Não existe** |
-| Tela pública voltar para etapa de agendamento após liberação | **Não existe** — fluxo público não conhece esse estado |
-| Veículos hoje nessa condição | 0 (cron nunca rodou) |
+| Linha | Marca | Modelo gravado | Variantes FIPE englobadas hoje |
+|---|---|---|---|
+| ESPECIAL / SELECT (todas regiões) | VOLKSWAGEN | GOL | **107** |
+| SELECT / ESPECIAL (todas regiões) | FIAT | PALIO | 100 |
+| ESPECIAL (todas regiões) | FORD | RANGER | 100 |
+| SELECT / ESPECIAL (todas regiões) | CHEVROLET | S10 | 93 |
+| SELECT (todas regiões) | TOYOTA | HILUX | 77 |
+| FIAT | UNO | 72 | |
+| FIAT | STRADA | 64 | |
+| MITSUBISHI | PAJERO | 62 | |
+| CHEVROLET | CORSA | 60 | |
+| FORD | FIESTA | 59 | |
+| HYUNDAI | HB20 | 58 | |
+| AUDI | A4 | 57 | |
+| ... | ... | ... | ... |
 
-Conclusão: a regra **não está funcional**. Vou implementar do zero usando a função existente como base.
+São ~150 entradas distintas afetadas em todas as linhas (ADVANCED, SELECT, ESPECIAL, LANÇAMENTO) e todas as regiões (Nacional, SP, Lagos).
 
-## O que será feito
+**Conclusão da auditoria**: muitas dessas entradas representam efetivamente a intenção original (ex.: "GOL" cobrindo todas as variantes de Gol provavelmente é o desejado pelo Diretor). Por isso, **não é seguro reescrever automaticamente** — o que vou fazer é apenas o que foi aprovado: deduplicar exatas e deixar as decisões de granularidade para o operador via UI.
 
-### 1. Configuração na Diretoria
-- Nova chave em `configuracoes`: `prazo_instalacao_autovistoria_horas` (default `72`).
-- Adicionar input no painel de configurações da Diretoria (seção "Operacional / Prazos") para o coordenador/diretoria editar.
+A query SQL de auditoria fica embutida no comentário da migration para o Diretor poder reexecutar a qualquer momento.
 
-### 2. Suspensão automática (corrigir e agendar)
-Reescrever `cron-suspender-cobertura-inativacao` para:
-- Ler o prazo da configuração `prazo_instalacao_autovistoria_horas`.
-- Filtrar **apenas** contratos `tipo_vistoria='autovistoria'`, `status='ativo'`, com `data_assinatura` ultrapassada.
-- Verificar instalação concluída em `servicos` (já existe).
-- Ao suspender:
-  - `veiculos.cobertura_suspensa=true`, `cobertura_suspensa_motivo='Auto-vistoria sem instalação no prazo'`, `cobertura_suspensa_em=now()`.
-  - Disparar WhatsApp + push + e-mail para o associado avisando que perdeu **roubo/furto** até instalar (mensagem clara + link).
-  - Registrar em `logs_auditoria`.
-- **Não reverter automaticamente** suspensões "auto_vistoria_prazo" — só o Coordenador libera (ver passo 4). Suspensões antigas (motivo "Rastreador não ativado em 48h") mantêm reversão automática.
-- Agendar via `pg_cron` para rodar de hora em hora.
+## Implementação
 
-### 3. Cobertura visível ao associado
-Atualizar `useMinhasCoberturasApp` para tratar `cobertura_suspensa=true` como **bloqueio de roubo/furto e total**, com mensagem específica:
-> "Sua cobertura está suspensa porque a instalação do rastreador não foi realizada no prazo da auto-vistoria. Aguarde liberação do nosso time de monitoramento."
+### 1. `src/components/admin/planos/VeiculosAceitosEditor.tsx`
 
-Banner persistente no `AppHome` enquanto suspenso por esse motivo.
+- Substituir linha 93 — preservar nome completo:
+  ```ts
+  const modeloBase = isWildcard ? '' : modeloSelecionado.trim().toUpperCase();
+  ```
+- Adicionar validações em `handleAdd` antes do salvamento:
+  - **Duplicata exata** (mesma marca + modelo + ano_min + ano_max): bloqueia com `toast.error("Esta combinação já está cadastrada.")` e aborta.
+  - **Englobada por existente** (já existe entrada cujo modelo é prefixo do novo, mesma marca, anos compatíveis): mostra `AlertDialog` "Esta entrada já é coberta pela regra '{X}' existente. Deseja adicionar mesmo assim?".
+  - **Engloba existentes** (a nova entrada é prefixo de uma ou mais existentes, mesma marca): mostra `AlertDialog` listando as específicas e pergunta "Deseja substituir as entradas mais específicas pela nova entrada genérica?". Se confirmar, faz a remoção das englobadas + adição da nova em uma única chamada `updateRule`.
 
-### 4. Tela de liberação (Monitoramento)
-Nova página `src/pages/monitoramento/LiberacoesAutoVistoria.tsx`, acessível só ao **Coordenador de Monitoramento** e Diretoria (já há `monitoring-coordinator-permissions`).
-- Lista veículos com `cobertura_suspensa=true` e motivo "Auto-vistoria sem instalação no prazo".
-- Mostra: associado, placa/modelo, data assinatura, dias suspenso, contato.
-- Ações: **Liberar para reagendar vistoria** (com campo motivo opcional).
-- Adicionar item no menu lateral de Monitoramento e como card/aba dentro de `VistoriasInstalacoesMon` (aba "Liberações").
+### 2. `src/hooks/usePlanosCotacao.ts`
 
-### 5. Efeito da liberação
-Ao clicar "Liberar":
-- Marca `veiculos.cobertura_suspensa=false`, limpa motivo/em.
-- Novos campos em `contratos`: `liberado_reagendamento_em timestamptz`, `liberado_reagendamento_por uuid`, `liberado_reagendamento_motivo text`.
-- Limpa `vistoria_completa_data_agendada` para reabrir agendamento.
-- Dispara WhatsApp ao associado com o link público (`/cotacao/:token` → continua para etapa de agendamento).
-- Log de auditoria.
+Refatoração das linhas 285-328. Justificativa do `checkAllRules` legado existente: ele cobre regras genéricas (ano_range, regiao, etc.) — **deve continuar rodando**, apenas precisamos garantir que `marca_modelo` seja tirada da lista `linhaRules` ANTES de passar pelo `checkAllRules`, e tratar `marca_modelo` separadamente para ambos os modos (`include` e `exclude`).
 
-### 6. Reabertura na tela pública
-No fluxo público de cotação/contratação, detectar `contrato.liberado_reagendamento_em IS NOT NULL` **e** `vistoria_completa_data_agendada IS NULL` → renderizar novamente a etapa "Agendar vistoria/instalação" (componente já existe), continuando o fluxo normal até a conclusão da instalação. Após nova instalação concluída, a flag de suspensão não retorna automaticamente.
+Comportamento final:
 
-### 7. Reativação automática pós-instalação
-Trigger ao concluir serviço de instalação (`servicos.status='concluida'`, `tipo='instalacao'`):
-- Garantir que `veiculo.cobertura_suspensa=false` e `cobertura_total=true` / `cobertura_roubo_furto=true` conforme plano.
-- Notificar associado: "Sua proteção completa está ativa".
+```ts
+// Sempre remover marca_modelo de linhaRules antes do checkAllRules genérico
+let linhaRules = allEligibilityRules.filter(
+  r => r.entity_type === 'linha' && r.entity_id === productLineId && r.is_active
+);
+const linhaMarcaModeloRule = linhaRules.find(r => r.rule_type === 'marca_modelo');
+linhaRules = linhaRules.filter(r => r.rule_type !== 'marca_modelo');
+if (planoHasAnoRangeRules) {
+  linhaRules = linhaRules.filter(r => r.rule_type !== 'ano_range');
+}
+if (linhaRules.length > 0 && !checkAllRules(linhaRules, vehicleCtx)) {
+  negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '',
+    motivo: 'Bloqueado por regra da linha' });
+  continue;
+}
 
-## Arquivos afetados (resumo)
+// marca_modelo da linha: tratamento único e dedicado
+if (linhaMarcaModeloRule && !planoHasMarcaModeloRules) {
+  const isInclude = linhaMarcaModeloRule.rule_mode === 'include';
+  const match = findModelEligibility(linhaMarcaModeloRule, vehicleCtx);
+  const veicLabel = `${vehicleCtx.marca || ''} ${vehicleCtx.modelo || ''}`.trim();
+  if (isInclude) {
+    if (!match) {
+      negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '',
+        motivo: `Modelo ${veicLabel} não está liberado na linha ${plProductLine?.name || linha}` });
+      continue;
+    }
+    if (match.status === 'negado') {
+      negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '',
+        motivo: `Modelo ${veicLabel} negado na linha ${plProductLine?.name || linha}` });
+      continue;
+    }
+    linhaElegibilidadeStatus = match.status === 'aceito' ? 'aprovado' : match.status;
+    coberturaFipeOverride = match.coberturaFipe;
+  } else { // exclude / blacklist
+    if (match) {
+      negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '',
+        motivo: `Modelo ${veicLabel} bloqueado na linha ${plProductLine?.name || linha}` });
+      continue;
+    }
+  }
+}
+```
 
-**Banco (migrations):**
-- Insert da chave `prazo_instalacao_autovistoria_horas` em `configuracoes`.
-- Colunas em `contratos`: `liberado_reagendamento_em`, `liberado_reagendamento_por`, `liberado_reagendamento_motivo`.
-- `pg_cron.schedule` para a edge function (hourly).
-- Trigger de reativação pós-instalação.
+### 3. `supabase/migrations/<ts>_dedupe_marca_modelo_rules.sql`
 
-**Edge functions:**
-- `supabase/functions/cron-suspender-cobertura-inativacao/index.ts` — reescrita.
-- `supabase/functions/liberar-reagendamento-autovistoria/index.ts` — nova (chamada pela UI do Coordenador).
+Função plpgsql `dedupe_marca_modelo_rules()` que:
 
-**Frontend:**
-- `src/pages/diretoria/...` (form de configurações) — adicionar campo do prazo.
-- `src/hooks/useMinhasCoberturasApp.ts` — considerar `cobertura_suspensa`.
-- `src/pages/monitoramento/LiberacoesAutoVistoria.tsx` — nova.
-- `src/pages/monitoramento/VistoriasInstalacoesMon.tsx` — nova aba "Liberações".
-- Menu lateral monitoramento — novo item.
-- Fluxo público de cotação — branch para reabrir etapa de agendamento.
-- Banner em `AppHome` quando suspenso por esse motivo.
+1. Cria tabela de log `entity_eligibility_rules_dedupe_log` (rule_id, original_config jsonb, new_config jsonb, removed_count int, conflicts jsonb, executed_at).
+2. Para cada regra ativa `marca_modelo`:
+   - `SELECT … FOR UPDATE` na linha.
+   - Itera `rule_config->'modelos'`, agrupa por `(marca, modelo, ano_min, ano_max)`.
+   - Critério de desempate: se houver status diferentes no mesmo grupo, mantém o mais restritivo na ordem `negado > limitado > aceito`. Se igual, mantém a primeira aparição (estável).
+   - Registra conflitos no campo `conflicts` do log.
+   - Atualiza `rule_config` com a lista deduplicada.
+3. A migration registra a função e a executa uma vez via `SELECT dedupe_marca_modelo_rules();`.
+4. Comentário no topo da migration com a query SQL de auditoria de truncamentos prováveis (a mesma usada agora) para o Diretor reexecutar quando quiser.
 
-## Pontos a confirmar antes de codar
+## Comunicação operacional (passa a constar no plan.md)
 
-1. **Default do prazo**: 72h (igual a `operacional_prazo_instalacao`) ou outro valor?
-2. **Notificação ao suspender**: WhatsApp + push + e-mail, ou só WhatsApp?
-3. **Liberação**: o Coordenador libera manualmente caso a caso (proposto), ou também queremos um botão de "liberar em massa"?
+Após o deploy, comunicar à equipe:
+- Liberações de modelos a partir de agora respeitam o nome completo (`SHI 175` libera apenas SHI 175, não outras variantes).
+- Entradas legadas curtas (ex.: `GOL`, `S10`) **continuam funcionando como antes** (englobam todas as variantes que começam com esse prefixo) — não foram alteradas. Para tornar uma delas mais restritiva, o operador precisa removê-la e re-cadastrar a variante específica.
+- Se um associado relatar "moto/carro sumiu da cotação", verificar se o modelo está cadastrado com o nome certo na linha correspondente; agora o sistema mostra motivo claro em "Planos negados".
+
+## Arquivos
+
+- `src/components/admin/planos/VeiculosAceitosEditor.tsx` — fix do truncamento + UX duplicatas/englobamento.
+- `src/hooks/usePlanosCotacao.ts` — refactor do matching marca_modelo + motivos claros em "negados".
+- `supabase/migrations/<ts>_dedupe_marca_modelo_rules.sql` — função+log+execução.
+
+## Validação manual após o deploy
+
+1. Linha ADVANCED → aba Veículos aceitos → remover entradas duplicadas SHINERAY/SHI → adicionar `SHI 175` → confirmar no banco que `modelo === "SHI 175"`.
+2. Cotação Rápida: SHINERAY SHI 175 / 2025 / Gasolina + FIPE → planos ADVANCED aparecem.
+3. Modelo não liberado (ex.: SHI 100) → aparece em "Planos negados" com motivo `"Modelo SHINERAY SHI 100 não está liberado na linha ADVANCED"`.
+4. Tentar cadastrar duplicata exata → bloqueado com toast.
+5. Tentar cadastrar entrada englobada por existente → AlertDialog de aviso.
+6. Tentar cadastrar entrada que engloba outras → AlertDialog de substituição.
+7. Migration: verificar `entity_eligibility_rules_dedupe_log` para conferir o que foi consolidado.
