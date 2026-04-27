@@ -219,12 +219,13 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
     'sistema.data_extenso': formatDateExtended(dataAtual),
 
     // Tipo de Operação (checkboxes condicionais)
+    // Aceita 'substituicao' como alias de 'substituicao_placa' (defesa contra registros legados)
     'operacao.adesao': (dados.contrato.tipo_entrada === 'adesao' || dados.contrato.tipo_entrada === 'nova') ? '(X)' : '( )',
     'operacao.migracao': dados.contrato.tipo_entrada === 'migracao' ? '(X)' : '( )',
     'operacao.inclusao': dados.contrato.tipo_entrada === 'inclusao' ? '(X)' : '( )',
     'operacao.troca_titularidade': dados.contrato.tipo_entrada === 'troca_titularidade' ? '(X)' : '( )',
     'operacao.reativacao': dados.contrato.tipo_entrada === 'reativacao' ? '(X)' : '( )',
-    'operacao.substituicao_placa': dados.contrato.tipo_entrada === 'substituicao_placa' ? '(X)' : '( )',
+    'operacao.substituicao_placa': (dados.contrato.tipo_entrada === 'substituicao_placa' || dados.contrato.tipo_entrada === 'substituicao') ? '(X)' : '( )',
 
     // Regras de Venda (dinâmicas da Diretoria)
     ...(dados.regrasVenda ? {
