@@ -68,28 +68,44 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
     refetch: refetchUsuarios,
   } = useUsuariosVendas();
   const upsertHierarquia = useUpsertHierarquia();
+  const { data: supervisoresExistentes = [] } = useSupervisoresVendedor(open ? linha?.usuario.id : null);
 
-  const [supervisorId, setSupervisorId] = useState<string>('none');
+  type SupervisorRow = { supervisor_id: string; percentual_personalizado: number | null };
+  const [supervisores, setSupervisores] = useState<SupervisorRow[]>([]);
   const [gerenteId, setGerenteId] = useState<string>('none');
   const [observacoes, setObservacoes] = useState<string>('');
 
   useEffect(() => {
     if (!open || !linha) return;
-    setSupervisorId(linha.hierarquia?.supervisor_id || 'none');
     setGerenteId(linha.hierarquia?.gerente_id || 'none');
     setObservacoes(linha.hierarquia?.observacoes || '');
   }, [open, linha]);
 
-  // Sincroniza gerente quando ele é herdado do supervisor selecionado
+  // Carrega múltiplos supervisores (se houver) ou cai para o supervisor singular legado
   useEffect(() => {
     if (!open || !linha) return;
-    const supId = supervisorId === 'none' ? null : supervisorId;
+    if (supervisoresExistentes.length > 0) {
+      setSupervisores(supervisoresExistentes.map((s) => ({
+        supervisor_id: s.supervisor_id,
+        percentual_personalizado: s.percentual_personalizado,
+      })));
+    } else if (linha.hierarquia?.supervisor_id) {
+      setSupervisores([{ supervisor_id: linha.hierarquia.supervisor_id, percentual_personalizado: null }]);
+    } else {
+      setSupervisores([]);
+    }
+  }, [open, linha, supervisoresExistentes]);
+
+  // Sincroniza gerente quando ele é herdado do PRIMEIRO supervisor selecionado
+  useEffect(() => {
+    if (!open || !linha) return;
+    const supId = supervisores[0]?.supervisor_id || null;
     if (!supId) return;
     const herdado = atribuicoes.find((a) => a.usuario.id === supId)?.hierarquia?.gerente_id ?? null;
     if (herdado && gerenteId !== herdado) {
       setGerenteId(herdado);
     }
-  }, [open, linha, supervisorId, atribuicoes, gerenteId]);
+  }, [open, linha, supervisores, atribuicoes, gerenteId]);
 
   const usuariosMap = useMemo(() => {
     const map = new Map<string, UsuarioVendas>();
