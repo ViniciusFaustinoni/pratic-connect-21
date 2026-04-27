@@ -395,20 +395,88 @@ export function EditarHierarquiaModal({ open, onOpenChange, linha, atribuicoes }
                 )}
               </div>
 
-              <div className="space-y-1.5">
-                <Label>Supervisor superior</Label>
-                <SearchableSelect
-                  value={supervisorId}
-                  onValueChange={handleSupervisorChange}
-                  options={supervisorOptions}
-                  placeholder="Buscar supervisor por nome ou e-mail"
-                  searchPlaceholder="Digite nome ou e-mail do supervisor..."
-                  disabled={saving || erroUsuarios || (!!gerenteSelecionado && supervisoresCompativeis.length === 0)}
-                  loading={loadingVinculos}
-                  className="h-11"
-                />
-                {!loadingVinculos && supervisores.length === 0 && <p className="text-xs text-muted-foreground">Nenhum supervisor disponível.</p>}
-                {!loadingVinculos && !!gerenteSelecionado && supervisores.length > 0 && supervisoresCompativeis.length === 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Supervisores superiores</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addSupervisorRow}
+                    disabled={saving || erroUsuarios || supervisoresCompativeis.length === 0}
+                  >
+                    <Plus className="mr-1 h-3.5 w-3.5" /> Adicionar supervisor
+                  </Button>
+                </div>
+                {supervisores.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Nenhum supervisor vinculado. Use "Adicionar supervisor" para incluir um ou mais.
+                  </p>
+                )}
+                {supervisores.map((row, idx) => {
+                  const opcoes = supervisorOptionsBase.filter(
+                    (o) => o.value === row.supervisor_id || !supervisores.some((s, i) => i !== idx && s.supervisor_id === o.value),
+                  );
+                  return (
+                    <div key={idx} className="flex flex-wrap items-end gap-2 rounded-md border bg-muted/30 p-2">
+                      <div className="min-w-[220px] flex-1 space-y-1">
+                        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Supervisor {idx + 1}</span>
+                        <SearchableSelect
+                          value={row.supervisor_id || ''}
+                          onValueChange={(v) => handleSupervisorSelect(idx, v)}
+                          options={opcoes}
+                          placeholder="Buscar supervisor por nome ou e-mail"
+                          searchPlaceholder="Digite nome ou e-mail..."
+                          disabled={saving || erroUsuarios}
+                          loading={loadingVinculos}
+                          className="h-10"
+                        />
+                      </div>
+                      <div className="w-32 space-y-1">
+                        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">% personalizado</span>
+                        <div className="flex items-center gap-1">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            step={0.01}
+                            placeholder="auto"
+                            value={row.percentual_personalizado ?? ''}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              updateSupervisorRow(idx, {
+                                percentual_personalizado: v === '' ? null : parseFloat(v),
+                              });
+                            }}
+                            disabled={saving}
+                            className="h-10"
+                          />
+                          <span className="text-xs text-muted-foreground">%</span>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeSupervisorRow(idx)}
+                        disabled={saving}
+                        title="Remover supervisor"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  );
+                })}
+                {supervisores.length > 1 && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Deixe os percentuais em branco para divisão igualitária. Para divisão personalizada, preencha todos
+                    e some 100% — a parcela da grade precisa estar marcada como "Personalizado".
+                  </p>
+                )}
+                {!loadingVinculos && supervisoresUsuarios.length === 0 && (
+                  <p className="text-xs text-muted-foreground">Nenhum supervisor disponível no sistema.</p>
+                )}
+                {!loadingVinculos && !!gerenteSelecionado && supervisoresUsuarios.length > 0 && supervisoresCompativeis.length === 0 && (
                   <p className="text-xs text-muted-foreground">Nenhum supervisor compatível com o gerente selecionado.</p>
                 )}
               </div>
