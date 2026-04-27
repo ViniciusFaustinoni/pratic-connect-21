@@ -266,7 +266,7 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
       'substituicao.fipe_anterior': formatCurrency(dados.substituicao.fipe_anterior),
       'substituicao.tipo_operacao': 'Substituição de Placa',
     } : {
-      'substituicao.tipo_operacao': dados.contrato.tipo_entrada === 'substituicao_placa' ? 'Substituição de Placa' : 'Nova Adesão',
+      'substituicao.tipo_operacao': (dados.contrato.tipo_entrada === 'substituicao_placa' || dados.contrato.tipo_entrada === 'substituicao') ? 'Substituição de Placa' : 'Nova Adesão',
     }),
 
     // Troca de Titularidade (quando aplicável)
