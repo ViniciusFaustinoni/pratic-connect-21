@@ -133,6 +133,7 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
   };
 
   const contatoRealizado = !!tarefa.contato_realizado_em;
+  const isNaBase = tarefa.local_vistoria === 'base';
 
   const handleIniciarRota = () => {
     iniciarRota({ tarefaId: tarefa.id });
