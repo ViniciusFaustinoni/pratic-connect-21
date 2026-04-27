@@ -11806,6 +11806,7 @@ export type Database = {
           descartado_em: string | null
           descartado_por: string | null
           descricao: string
+          eh_retratamento: boolean
           id: string
           motivo_descarte: string | null
           observacao_diretor: string | null
@@ -11815,8 +11816,11 @@ export type Database = {
           status: Database["public"]["Enums"]["error_report_status"]
           tratado_em: string | null
           tratado_por: string | null
+          ultimo_motivo_retratamento: string | null
+          ultimo_retratamento_em: string | null
           updated_at: string
           validado_em: string | null
+          vezes_retratado: number
         }
         Insert: {
           area: string
@@ -11826,6 +11830,7 @@ export type Database = {
           descartado_em?: string | null
           descartado_por?: string | null
           descricao: string
+          eh_retratamento?: boolean
           id?: string
           motivo_descarte?: string | null
           observacao_diretor?: string | null
@@ -11835,8 +11840,11 @@ export type Database = {
           status?: Database["public"]["Enums"]["error_report_status"]
           tratado_em?: string | null
           tratado_por?: string | null
+          ultimo_motivo_retratamento?: string | null
+          ultimo_retratamento_em?: string | null
           updated_at?: string
           validado_em?: string | null
+          vezes_retratado?: number
         }
         Update: {
           area?: string
@@ -11846,6 +11854,7 @@ export type Database = {
           descartado_em?: string | null
           descartado_por?: string | null
           descricao?: string
+          eh_retratamento?: boolean
           id?: string
           motivo_descarte?: string | null
           observacao_diretor?: string | null
@@ -11855,8 +11864,11 @@ export type Database = {
           status?: Database["public"]["Enums"]["error_report_status"]
           tratado_em?: string | null
           tratado_por?: string | null
+          ultimo_motivo_retratamento?: string | null
+          ultimo_retratamento_em?: string | null
           updated_at?: string
           validado_em?: string | null
+          vezes_retratado?: number
         }
         Relationships: []
       }

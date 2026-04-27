@@ -22,6 +22,10 @@ export interface ErrorReport {
   descartado_por: string | null;
   descartado_em: string | null;
   motivo_descarte: string | null;
+  eh_retratamento: boolean;
+  vezes_retratado: number;
+  ultimo_motivo_retratamento: string | null;
+  ultimo_retratamento_em: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -372,3 +376,51 @@ export function useGerarPromptCorrecao() {
     onError: (e: any) => toast.error('Falha ao gerar prompt', { description: e.message }),
   });
 }
+
+/**
+ * Usuário (reporter) recusa a correção de um relato concluído:
+ * volta para `em_tratamento` com flag de retratamento e contador incrementado.
+ */
+export function useReabrirRelatoComoRetratamento() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, motivo }: { id: string; motivo: string }) => {
+      if (!user) throw new Error('Não autenticado');
+      const motivoTrim = motivo.trim();
+      if (motivoTrim.length < 10) throw new Error('Informe um motivo com pelo menos 10 caracteres');
+
+      // Buscar contador atual
+      const { data: current, error: getErr } = await supabase
+        .from('error_reports')
+        .select('vezes_retratado, status, reporter_id')
+        .eq('id', id)
+        .single();
+      if (getErr) throw getErr;
+      if (current.reporter_id !== user.id) throw new Error('Apenas o autor do relato pode reabrir');
+      if (current.status !== 'concluido') throw new Error('Apenas relatos concluídos podem ser reabertos');
+
+      const { error: updErr } = await supabase
+        .from('error_reports')
+        .update({
+          status: 'em_tratamento',
+          eh_retratamento: true,
+          vezes_retratado: (current.vezes_retratado ?? 0) + 1,
+          ultimo_motivo_retratamento: motivoTrim,
+          ultimo_retratamento_em: new Date().toISOString(),
+          concluido_em: null,
+          concluido_por: null,
+          observacao_diretor: null,
+        })
+        .eq('id', id);
+      if (updErr) throw updErr;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['error-reports'] });
+      toast.success('Relato devolvido para tratamento como retratamento');
+    },
+    onError: (e: any) => toast.error('Falha ao reabrir relato', { description: e.message }),
+  });
+}
+

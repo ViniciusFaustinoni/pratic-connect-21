@@ -63,6 +63,15 @@ function CardRelatoFila({ report, onOpen }: { report: ErrorReport; onOpen: (r: E
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex items-center gap-2 flex-wrap">
           <Badge variant="outline" className={sb.cls}>{sb.label}</Badge>
+          {report.eh_retratamento && report.vezes_retratado > 0 && (
+            <Badge
+              variant="outline"
+              className="border-orange-500/40 text-orange-600 dark:text-orange-400 bg-orange-500/10"
+              title={report.ultimo_motivo_retratamento ?? undefined}
+            >
+              ↻ Retratamento {report.vezes_retratado}ª vez
+            </Badge>
+          )}
           <span className="text-xs text-muted-foreground">{idade}</span>
         </div>
         <p className="font-medium text-sm truncate">{report.area}</p>
@@ -117,9 +126,14 @@ export default function RelatosErros() {
       descartado: [],
     };
     for (const r of reports) grupos[r.status].push(r);
-    // mais antigo primeiro = mais urgente
+    // mais antigo primeiro = mais urgente; retratamentos sobem ao topo de "em_tratamento"
     for (const k of Object.keys(grupos) as ErrorReportStatus[]) {
-      grupos[k].sort((a, b) => +new Date(a.created_at) - +new Date(b.created_at));
+      grupos[k].sort((a, b) => {
+        if (k === 'em_tratamento' && a.eh_retratamento !== b.eh_retratamento) {
+          return a.eh_retratamento ? -1 : 1;
+        }
+        return +new Date(a.created_at) - +new Date(b.created_at);
+      });
     }
     return grupos;
   }, [reports]);
