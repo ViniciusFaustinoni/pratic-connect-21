@@ -663,7 +663,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                             })()}
                           </div>
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                            <DataField label="Placa" value={v.placa} mono />
+                            <DataField label="Placa" value={formatPlacaExibicao(v.placa)} mono />
                             <DataField label="Chassi" value={v.chassi || '—'} mono small />
                             <DataField label="Renavam" value={v.renavam || '—'} />
                             <DataField label="Cor" value={v.cor || '—'} />
