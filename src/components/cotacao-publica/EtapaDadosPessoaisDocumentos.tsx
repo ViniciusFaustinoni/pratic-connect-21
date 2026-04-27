@@ -405,11 +405,13 @@ export function EtapaDadosPessoaisDocumentos({
       return;
     }
 
-    // Validar CPF extraído pelo OCR antes de persistir
-    const cpfExtraido = dadosExtraidos.cpf || '';
-    const cpfLimpo = cpfExtraido.replace(/\D/g, '');
-    if (!cpfLimpo || !validateCPF(cpfLimpo)) {
-      toast.error('O CPF extraído do documento é inválido. Corrija manualmente antes de continuar.');
+    // Validar CPF efetivo (CPF manual tem prioridade sobre o do OCR)
+    if (!cpfLimpoEfetivo || !validateCPF(cpfLimpoEfetivo)) {
+      toast.error(
+        cpfManual
+          ? 'O CPF digitado é inválido. Verifique os dígitos antes de continuar.'
+          : 'O CPF extraído do documento é inválido. Corrija manualmente no campo "CPF" antes de continuar.'
+      );
       return;
     }
     
