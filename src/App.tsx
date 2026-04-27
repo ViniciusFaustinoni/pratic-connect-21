@@ -730,6 +730,7 @@ const App = () => (
                 <Route path="seguranca" element={<Seguranca />} />
                 <Route path="notificacoes" element={<NotificacoesConfig />} />
                 <Route path="usuarios-acessos" element={<UsuariosAcessos />} />
+                <Route path="usuarios" element={<Navigate to="/configuracoes/usuarios-acessos" replace />} />
                 <Route path="usuarios/novo" element={<UsuarioForm />} />
                 <Route path="usuarios/:id" element={<UsuarioForm />} />
                 <Route path="integracoes" element={<Integracoes />} />
