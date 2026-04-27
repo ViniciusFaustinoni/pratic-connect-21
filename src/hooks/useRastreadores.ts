@@ -183,6 +183,17 @@ export function useRastreadores(filters?: RastreadorFilters) {
 
       if (error) throw error;
 
+      // Diagnóstico: busca por IMEI (14-16 dígitos puros) sem resultado
+      if (filters?.search && (count ?? 0) === 0) {
+        const termo = filters.search.trim();
+        if (/^\d{14,16}$/.test(termo)) {
+          console.info(
+            '[useRastreadores] IMEI não encontrado no estoque local',
+            { imei: termo, hint: 'Pode estar em plataforma externa não importada (ex.: Pratic Master)' }
+          );
+        }
+      }
+
       // Filter by communication status if needed (client-side refinement)
       let result = data as RastreadorWithRelations[];
       
