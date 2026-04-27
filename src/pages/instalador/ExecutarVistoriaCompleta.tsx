@@ -130,7 +130,7 @@ export default function ExecutarVistoriaCompleta() {
   // Vínculo de rastreador (IMEI) — usado apenas quando o veículo exige rastreador
   const [imeiInput, setImeiInput] = useState('');
   const [rastreadorEncontrado, setRastreadorEncontrado] = useState<{
-    id: string; imei: string; modelo?: string | null; status?: string | null; veiculo_id?: string | null;
+    id: string; imei: string; codigo?: string | null; numero_serie?: string | null; status?: string | null; veiculo_id?: string | null;
   } | null>(null);
   const [buscandoRastreador, setBuscandoRastreador] = useState(false);
   const [erroRastreador, setErroRastreador] = useState<string | null>(null);
