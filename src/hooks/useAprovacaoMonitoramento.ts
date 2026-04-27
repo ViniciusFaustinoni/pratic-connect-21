@@ -113,6 +113,20 @@ export function useAprovarInstalacaoMonitoramento() {
     mutationFn: async (data: AprovarData) => {
       const agora = new Date().toISOString();
 
+      // 0. Marcar o serviço como APROVADO (encerra fase "Em Análise" em Serviços de Campo)
+      const { error: servicoError } = await supabase
+        .from('servicos')
+        .update({
+          status: 'aprovada',
+          analisado_em: agora,
+          analisado_por: profile?.id ?? null,
+          observacoes_analise: data.observacoes ?? null,
+          updated_at: agora,
+        } as any)
+        .eq('id', data.servicoId);
+
+      if (servicoError) throw servicoError;
+
       // 1. Ativar cobertura total + roubo/furto (caso não tenha autovistoria) e status ativo
       const { error: veiculoError } = await supabase
         .from('veiculos')
@@ -224,6 +238,8 @@ export function useAprovarInstalacaoMonitoramento() {
       queryClient.invalidateQueries({ queryKey: ['aprovacao-monitoramento-stats'] });
       queryClient.invalidateQueries({ queryKey: ['veiculos'] });
       queryClient.invalidateQueries({ queryKey: ['associados'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos-campo'] });
       toast.success('Proteção 360 ativada com sucesso! Associado notificado.');
     },
     onError: (error) => {
@@ -255,7 +271,10 @@ export function useReprovarInstalacaoMonitoramento() {
       const { error: servicoError } = await supabase
         .from('servicos')
         .update({
-          status: 'reprovada_monitoramento',
+          status: 'reprovada',
+          analisado_em: agora,
+          analisado_por: profile?.id ?? null,
+          motivo_reprovacao: data.motivo,
           observacoes: `Reprovado pelo monitoramento: ${data.motivo}`,
           updated_at: agora,
         } as any)
@@ -307,6 +326,8 @@ export function useReprovarInstalacaoMonitoramento() {
       queryClient.invalidateQueries({ queryKey: ['aprovacao-monitoramento-stats'] });
       queryClient.invalidateQueries({ queryKey: ['veiculos'] });
       queryClient.invalidateQueries({ queryKey: ['associados'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos-campo'] });
       toast.success('Instalação reprovada. Coordenador será notificado.');
     },
     onError: (error) => {

@@ -329,6 +329,10 @@ export function useServicos(filters?: ServicoFilters) {
       if (error) throw error;
       return (data || []) as Servico[];
     },
+    refetchInterval: 15000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 }
 
