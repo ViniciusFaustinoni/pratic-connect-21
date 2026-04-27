@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Home, ClipboardList, Map, User, LogOut, LayoutDashboard } from 'lucide-react';
+import { Home, ClipboardList, Map, User, LogOut, LayoutDashboard, Bug } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -24,6 +24,8 @@ import { PushNotificationBanner } from './PushNotificationBanner';
 import { SyncStatusBanner } from '@/components/profissional/SyncStatusBanner';
 import { useAppResume } from '@/hooks/useAppResume';
 import logoFullDark from '@/assets/logos/logo-full-dark.png';
+import { RelatarErroModal } from '@/components/suporte/RelatarErroModal';
+import { TestarCorrecoesButton } from '@/components/suporte/TestarCorrecoesButton';
 
 const NAV_ITEMS = [
   { icon: Home, label: 'Início', path: '/instalador' },
@@ -39,6 +41,7 @@ export function InstaladorLayout() {
   const location = useLocation();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [relatarOpen, setRelatarOpen] = useState(false);
 
   useAppResume();
   const { isBase: isVistoriadorBase } = useAlocacaoDiaria();
@@ -156,6 +159,7 @@ export function InstaladorLayout() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <TestarCorrecoesButton />
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="rounded-full">
@@ -178,6 +182,10 @@ export function InstaladorLayout() {
                           Ir para Gestão
                         </DropdownMenuItem>
                       )}
+                      <DropdownMenuItem onClick={() => setRelatarOpen(true)}>
+                        <Bug className="mr-2 h-4 w-4" />
+                        Relatar Erro
+                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={handleSignOut}>
                         <LogOut className="mr-2 h-4 w-4" />
                         Sair
@@ -243,6 +251,7 @@ export function InstaladorLayout() {
           <PWAInstallPromptProfissional />
         </div>
       </div>
+      <RelatarErroModal open={relatarOpen} onOpenChange={setRelatarOpen} />
     </InstaladorGuard>
   );
 }
