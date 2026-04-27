@@ -50,6 +50,13 @@ export function DetalheRelatoModal({ report, onClose }: Props) {
   const [obsPrev, setObsPrev] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ url: string; nome: string; mime: string } | null>(null);
 
+  // Reset estado ao trocar de relato (modal é montado uma vez na página pai)
+  useEffect(() => {
+    setObs('');
+    setObsPrev(null);
+    setPreview(null);
+  }, [report?.id]);
+
   const copyImage = async (url: string, mime: string) => {
     try {
       const res = await fetch(url);
