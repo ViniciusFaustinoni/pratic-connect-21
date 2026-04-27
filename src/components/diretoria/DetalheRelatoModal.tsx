@@ -121,6 +121,7 @@ export function DetalheRelatoModal({ report, onClose }: Props) {
   const fmt = (d: string | null) => (d ? new Date(d).toLocaleString('pt-BR') : '-');
 
   return (
+    <>
     <Dialog open={!!report} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
