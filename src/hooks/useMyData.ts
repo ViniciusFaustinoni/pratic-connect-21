@@ -37,6 +37,7 @@ export interface Boleto {
   formaPagamento?: string;
   nossoNumero?: string;
   numeroDocumento?: string;
+  fonte?: 'asaas' | 'sga';
 }
 
 export interface BoletoHistorico {
