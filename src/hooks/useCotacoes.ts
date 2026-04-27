@@ -492,7 +492,9 @@ export function useDuplicarCotacao() {
 
       if (error) throw error;
 
-      // Pós-processamento na original conforme acaoOriginal
+      // Pós-processamento na original — sempre "manter como substituída".
+      // Exclusão física via fluxo de duplicação foi removida (causa raiz do
+      // sumiço de cotações da tela do consultor).
       if (acaoOriginal === 'manter') {
         await supabase
           .from('cotacoes')
@@ -502,26 +504,6 @@ export function useDuplicarCotacao() {
             motivo_substituicao: motivo ?? null,
           })
           .eq('id', cotacaoId);
-      } else if (acaoOriginal === 'excluir') {
-        // Tenta exclusão via Edge Function (cascata segura). Fallback: DELETE direto.
-        try {
-          const { data: delData, error: delErr } = await supabase.functions.invoke('delete-cotacao', {
-            body: { cotacaoId, motivo: motivo ? `[Duplicação] ${motivo}` : '[Duplicação]' },
-          });
-          if (delErr || !delData?.success) {
-            throw new Error(delErr?.message || delData?.error || 'Falha ao excluir original');
-          }
-        } catch (e) {
-          console.warn('[useDuplicarCotacao] delete-cotacao falhou, tentando DELETE direto:', e);
-          const { error: directDelErr } = await supabase
-            .from('cotacoes')
-            .delete()
-            .eq('id', cotacaoId);
-          if (directDelErr) {
-            console.error('[useDuplicarCotacao] DELETE direto também falhou:', directDelErr);
-            toast.warning('Duplicata criada, mas não foi possível excluir a original. Você pode excluí-la manualmente.');
-          }
-        }
       }
 
       return { ...nova, _originalId: cotacaoId, _acaoOriginal: acaoOriginal, _motivo: motivo };
