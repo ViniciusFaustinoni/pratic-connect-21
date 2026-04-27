@@ -831,7 +831,18 @@ export default function ExecutarVistoriaCompleta() {
           </Card>
         )}
 
+        {/* Verificação visual do sinal do rastreador (mapa) */}
+        {precisaConfirmarPosicao && rastreadorIdAtivo && (
+          <VerificarSinalRastreador
+            rastreadorId={rastreadorIdAtivo}
+            imei={rastreadorEncontrado?.imei}
+            confirmado={posicaoConfirmada}
+            onConfirmar={setPosicaoConfirmada}
+          />
+        )}
+
         {/* Observações do Vistoriador — escondidas no modo apenas instalação */}
+
         {!modoApenasInstalacao && (
           <Card className="border-slate-700 bg-slate-800">
             <CardHeader className="pb-2">
