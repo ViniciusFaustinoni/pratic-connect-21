@@ -32,10 +32,13 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { 
   agruparFotosPorCategoriaCompleta, 
   agruparFotosFiltradas,
+  agruparFotosApenasInstalacao,
   detectarTipoVeiculo,
   getTotalFotosObrigatorias,
-  getFotosFiltradas
+  getFotosFiltradas,
+  getFotosApenasInstalacao,
 } from '@/data/vistoriaConfigCompleta';
+import { useVistoriaLink } from '@/hooks/useVistoriaLinkPublica';
 import { useConfigFipeRastreador, useConfigFipeRastreadorMoto, precisaRastreador } from '@/hooks/useConfigRastreador';
 import { compressImage } from '@/lib/imageCompressor';
 import { useDeviceCapability } from '@/hooks/useDeviceCapability';
@@ -252,8 +255,29 @@ export default function ExecutarVistoriaCompleta() {
     return precisaRastreador(valorFipeVeiculo, fipeMinRastreador, tipoVeiculoDetectado, fipeMinRastreadorMoto);
   }, [valorFipeVeiculo, fipeMinRastreador, tipoVeiculoDetectado, fipeMinRastreadorMoto]);
   
-  // Categorias filtradas baseado na necessidade de rastreador
-  const categorias = useMemo(() => agruparFotosFiltradas(tipoVeiculoDetectado, veiculoPrecisaRastreador), [tipoVeiculoDetectado, veiculoPrecisaRastreador]);
+  // ── Modo "apenas instalação" (origem: link público com fotos já aprovadas) ──
+  // Quando a etapa de fotos foi feita por outra pessoa via link público e já passou
+  // pela aprovação do monitoramento, o técnico não deve refazer as fotos visuais —
+  // só executa a instalação do rastreador. Detectamos via vistoria_links.
+  const { data: vistoriaLink } = useVistoriaLink({ instalacaoId });
+  const modoApenasInstalacao = useMemo(() => {
+    return (
+      !!vistoriaLink &&
+      vistoriaLink.fotos_etapa_status === 'concluida' &&
+      !!vistoriaLink.fotos_aprovadas_em
+    );
+  }, [vistoriaLink]);
+
+  // Categorias filtradas baseado na necessidade de rastreador.
+  // Em modoApenasInstalacao, só categorias 'instalacao' e 'rastreador' (esta última
+  // depende da regra normal de necessidade de rastreador).
+  const categorias = useMemo(() => {
+    if (modoApenasInstalacao) {
+      const todas = agruparFotosApenasInstalacao(tipoVeiculoDetectado);
+      return veiculoPrecisaRastreador ? todas : todas.filter(c => c.id !== 'rastreador');
+    }
+    return agruparFotosFiltradas(tipoVeiculoDetectado, veiculoPrecisaRastreador);
+  }, [tipoVeiculoDetectado, veiculoPrecisaRastreador, modoApenasInstalacao]);
 
   // Mapa de fotos
   const fotosMap = useMemo(() => {
@@ -273,16 +297,18 @@ export default function ExecutarVistoriaCompleta() {
     return counts;
   }, [categorias, fotosMap]);
 
-  // Total de fotos obrigatórias e enviadas — dinâmico por tipo de veículo
-  const totalFotosObrigatorias = useMemo(
-    () => getTotalFotosObrigatorias(tipoVeiculoDetectado),
-    [tipoVeiculoDetectado]
+  // Total de fotos obrigatórias e enviadas — restritas ao escopo atual (apenas
+  // instalação ou completo) para não exigir fotos visuais já aprovadas.
+  const fotosObrigatoriasDoTipo = useMemo(
+    () => modoApenasInstalacao
+      ? getFotosApenasInstalacao(tipoVeiculoDetectado).filter(
+          f => f.categoria !== 'rastreador' || veiculoPrecisaRastreador,
+        )
+      : getFotosFiltradas(tipoVeiculoDetectado, false),
+    [tipoVeiculoDetectado, modoApenasInstalacao, veiculoPrecisaRastreador]
   );
 
-  const fotosObrigatoriasDoTipo = useMemo(
-    () => getFotosFiltradas(tipoVeiculoDetectado, false),
-    [tipoVeiculoDetectado]
-  );
+  const totalFotosObrigatorias = fotosObrigatoriasDoTipo.length;
 
   const totalFotosEnviadas = useMemo(
     () => fotosObrigatoriasDoTipo.filter(f => fotosMap[f.id]).length,
@@ -290,9 +316,11 @@ export default function ExecutarVistoriaCompleta() {
   );
 
   // Validação
-  const conferenciaCompleta = Object.values(conferencia).every(Boolean) && hodometro.length > 0;
-  const todasFotosEnviadas = totalFotosEnviadas >= totalFotosObrigatorias;
-  const videoEnviado = !!video360Url;
+  // No modo apenas instalação, conferência e vídeo já foram feitos pelo público —
+  // não bloqueamos a aprovação por eles.
+  const conferenciaCompleta = modoApenasInstalacao || (Object.values(conferencia).every(Boolean) && hodometro.length > 0);
+  const todasFotosEnviadas = totalFotosObrigatorias === 0 ? true : totalFotosEnviadas >= totalFotosObrigatorias;
+  const videoEnviado = modoApenasInstalacao || !!video360Url;
   const podeAprovar = conferenciaCompleta && todasFotosEnviadas && videoEnviado;
 
   // Handlers
@@ -551,19 +579,21 @@ export default function ExecutarVistoriaCompleta() {
         </div>
       </header>
 
-      {/* Progresso */}
-      <div className="flex-shrink-0 border-b border-slate-700 bg-slate-800 px-4 py-2">
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-slate-400">Progresso:</span>
-          <span className="font-medium text-white">{totalFotosEnviadas}/{totalFotosObrigatorias} fotos</span>
+      {/* Progresso — esconde se não há fotos obrigatórias (modo só-instalação sem rastreador) */}
+      {totalFotosObrigatorias > 0 && (
+        <div className="flex-shrink-0 border-b border-slate-700 bg-slate-800 px-4 py-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-400">Progresso:</span>
+            <span className="font-medium text-white">{totalFotosEnviadas}/{totalFotosObrigatorias} fotos</span>
+          </div>
+          <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-700">
+            <div 
+              className="h-full bg-blue-500 transition-all"
+              style={{ width: `${(totalFotosEnviadas / totalFotosObrigatorias) * 100}%` }}
+            />
+          </div>
         </div>
-        <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-700">
-          <div 
-            className="h-full bg-blue-500 transition-all"
-            style={{ width: `${(totalFotosEnviadas / totalFotosObrigatorias) * 100}%` }}
-          />
-        </div>
-      </div>
+      )}
 
       {/* Temporizador de Execução */}
       {(vistoria as any)?.iniciada_em && (
@@ -574,104 +604,132 @@ export default function ExecutarVistoriaCompleta() {
       )}
 
       <main className="flex-1 overflow-y-auto overscroll-contain space-y-4 p-4" style={{ WebkitOverflowScrolling: 'touch' as any }}>
-        {/* Conferência de Dados */}
-        <Card className="border-slate-700 bg-slate-800">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-base text-white">
-              <Car className="h-5 w-5 text-blue-400" />
-              Conferência de Dados
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {[
-              { key: 'placa', label: 'Placa', value: veiculo?.placa },
-              { key: 'chassi', label: 'Chassi', value: veiculo?.chassi },
-              { key: 'modelo', label: 'Modelo', value: `${veiculo?.marca} ${veiculo?.modelo}` },
-              { key: 'cor', label: 'Cor', value: veiculo?.cor || 'Não informada' },
-            ].map(item => (
-              <div key={item.key} className="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-900 p-2">
-                <Checkbox
-                  checked={conferencia[item.key as keyof typeof conferencia]}
-                  onCheckedChange={(c) => setConferencia(prev => ({ ...prev, [item.key]: !!c }))}
-                />
-                <span className="flex-1 text-sm text-slate-300">{item.label}: <span className="font-medium text-white">{item.value}</span></span>
+        {/* Banner: vistoria veio de link público com fotos já aprovadas */}
+        {modoApenasInstalacao && (
+          <Card className="border-green-600/40 bg-green-950/40">
+            <CardContent className="flex items-start gap-3 p-4">
+              <ShieldCheck className="h-6 w-6 text-green-400 flex-shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-semibold text-green-200">
+                  Etapa de fotos já aprovada pelo monitoramento
+                </p>
+                <p className="text-green-300/80 mt-1">
+                  {vistoriaLink?.fotos_executor_nome
+                    ? `Fotos enviadas por ${vistoriaLink.fotos_executor_nome}. `
+                    : ''}
+                  Você precisa realizar apenas a instalação do rastreador.
+                </p>
               </div>
-            ))}
-            <div>
-              <Label className="text-slate-300">Hodômetro (km)</Label>
-              <Input
-                type="number"
-                placeholder="Ex: 45000"
-                value={hodometro}
-                onChange={(e) => setHodometro(e.target.value)}
-                className="mt-1 border-slate-600 bg-slate-900 text-white"
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Conferência de Dados — escondida no modo apenas instalação (já feita pelo público) */}
+        {!modoApenasInstalacao && (
+          <Card className="border-slate-700 bg-slate-800">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-base text-white">
+                <Car className="h-5 w-5 text-blue-400" />
+                Conferência de Dados
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {[
+                { key: 'placa', label: 'Placa', value: veiculo?.placa },
+                { key: 'chassi', label: 'Chassi', value: veiculo?.chassi },
+                { key: 'modelo', label: 'Modelo', value: `${veiculo?.marca} ${veiculo?.modelo}` },
+                { key: 'cor', label: 'Cor', value: veiculo?.cor || 'Não informada' },
+              ].map(item => (
+                <div key={item.key} className="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-900 p-2">
+                  <Checkbox
+                    checked={conferencia[item.key as keyof typeof conferencia]}
+                    onCheckedChange={(c) => setConferencia(prev => ({ ...prev, [item.key]: !!c }))}
+                  />
+                  <span className="flex-1 text-sm text-slate-300">{item.label}: <span className="font-medium text-white">{item.value}</span></span>
+                </div>
+              ))}
+              <div>
+                <Label className="text-slate-300">Hodômetro (km)</Label>
+                <Input
+                  type="number"
+                  placeholder="Ex: 45000"
+                  value={hodometro}
+                  onChange={(e) => setHodometro(e.target.value)}
+                  className="mt-1 border-slate-600 bg-slate-900 text-white"
+                />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Fotos sequenciais — só renderiza se houver categorias para fotografar */}
+        {categorias.length > 0 && categorias.some(c => c.fotos.length > 0) && (
+          <Card className="border-slate-700 bg-slate-800">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-base text-white">
+                <Camera className="h-5 w-5 text-blue-400" />
+                {modoApenasInstalacao ? 'Fotos da Instalação' : 'Fotos da Vistoria'}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <VistoriaFotoSequencial
+                fotos={categorias.flatMap(c => c.fotos)}
+                fotosEnviadas={fotosEnviadas}
+                uploadingFoto={uploadingFoto}
+                onUpload={(fotoId, file) => {
+                  const foto = categorias.flatMap(c => c.fotos).find(f => f.id === fotoId);
+                  handleUploadFoto(fotoId, file, foto?.visivelCliente !== false);
+                }}
               />
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
-        {/* Fotos sequenciais */}
-        <Card className="border-slate-700 bg-slate-800">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-base text-white">
-              <Camera className="h-5 w-5 text-blue-400" />
-              Fotos da Vistoria
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <VistoriaFotoSequencial
-              fotos={categorias.flatMap(c => c.fotos)}
-              fotosEnviadas={fotosEnviadas}
-              uploadingFoto={uploadingFoto}
-              onUpload={(fotoId, file) => {
-                const foto = categorias.flatMap(c => c.fotos).find(f => f.id === fotoId);
-                handleUploadFoto(fotoId, file, foto?.visivelCliente !== false);
-              }}
-            />
-          </CardContent>
-        </Card>
+        {/* Observações do Vistoriador — escondidas no modo apenas instalação */}
+        {!modoApenasInstalacao && (
+          <Card className="border-slate-700 bg-slate-800">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-base text-white">
+                <MessageSquare className="h-5 w-5 text-amber-400" />
+                Observações (opcional)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Textarea
+                placeholder="Registre qualquer observação relevante sobre o veículo ou a vistoria..."
+                value={observacoes}
+                onChange={(e) => setObservacoes(e.target.value)}
+                className="resize-none border-slate-600 bg-slate-900 text-white min-h-[100px]"
+                rows={4}
+              />
+              <p className="text-xs text-slate-400 mt-2">
+                Essas observações serão visíveis para o analista de cadastro.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
-        {/* Observações do Vistoriador (opcional) */}
-        <Card className="border-slate-700 bg-slate-800">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-base text-white">
-              <MessageSquare className="h-5 w-5 text-amber-400" />
-              Observações (opcional)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              placeholder="Registre qualquer observação relevante sobre o veículo ou a vistoria..."
-              value={observacoes}
-              onChange={(e) => setObservacoes(e.target.value)}
-              className="resize-none border-slate-600 bg-slate-900 text-white min-h-[100px]"
-              rows={4}
-            />
-            <p className="text-xs text-slate-400 mt-2">
-              Essas observações serão visíveis para o analista de cadastro.
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Vídeo 360 */}
-        <Card className="border-slate-700 bg-slate-800">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-base text-white">
-              <Video className="h-5 w-5 text-purple-400" />
-              Vídeo 360° Obrigatório
-              {videoEnviado && <CheckCircle2 className="h-4 w-4 text-green-400" />}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <VideoCapture
-              onCapture={handleUploadVideo}
-              videoUrl={video360Url}
-              uploading={uploadingVideo}
-              uploadProgress={uploadingVideo ? videoUploadProgress : undefined}
-              maxDuration={120}
-            />
-          </CardContent>
-        </Card>
+        {/* Vídeo 360 — escondido no modo apenas instalação (já gravado pelo público) */}
+        {!modoApenasInstalacao && (
+          <Card className="border-slate-700 bg-slate-800">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-base text-white">
+                <Video className="h-5 w-5 text-purple-400" />
+                Vídeo 360° Obrigatório
+                {videoEnviado && <CheckCircle2 className="h-4 w-4 text-green-400" />}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <VideoCapture
+                onCapture={handleUploadVideo}
+                videoUrl={video360Url}
+                uploading={uploadingVideo}
+                uploadProgress={uploadingVideo ? videoUploadProgress : undefined}
+                maxDuration={120}
+              />
+            </CardContent>
+          </Card>
+        )}
       </main>
 
       {/* Footer */}

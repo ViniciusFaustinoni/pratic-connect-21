@@ -1,111 +1,53 @@
-## Objetivo
-Reescrever a etapa de fotos do link público de vistoria (`VistoriaPublica.tsx → EtapaFotos`) para ter **a mesma estrutura** do app do instalador (`ExecutarVistoriaCompleta.tsx`), mantendo:
-- Tema **claro** (não dark como no app)
-- **Sem botões de Aprovar/Reprovar** (apenas envio → "aguardando aprovação")
-- Mesmas validações e recursos avançados
+# Plano — Técnico vê só a etapa de instalação ao vir do link público
 
-## Estrutura final da tela pública
+## Contexto
 
-Igual ao app do instalador, na seguinte ordem:
+**Pergunta 2 (já implementado):** Técnicos só conseguem assumir uma instalação via link público depois que as fotos forem aprovadas pelo monitoramento. Isso é garantido em duas camadas:
+- **UI** (`HomeEtapas` em `VistoriaPublica.tsx`): o botão "Realizar Instalação do Rastreador" só aparece quando `fotos_aprovadas_em` está preenchido.
+- **Servidor** (edge function `assumir-instalacao-vistoria-link`): retorna 400 com "Fotos ainda não foram aprovadas pelo monitoramento" se tentarem assumir antes da aprovação.
 
-```text
-┌─────────────────────────────────────────────┐
-│ Header: Voltar  +  Nome cliente | Placa     │
-│         (sem botões WhatsApp/Telefone)      │
-├─────────────────────────────────────────────┤
-│ Barra de progresso fixa: X/Y fotos          │
-├─────────────────────────────────────────────┤
-│ ▸ Card "Quem está realizando?"              │
-│   - Nome do executor (input livre)          │
-│                                             │
-│ ▸ Card "Conferência de Dados"               │
-│   - Checkbox: Placa, Chassi, Modelo, Cor    │
-│   - Input: Hodômetro (km) — obrigatório     │
-│                                             │
-│ ▸ Card "Fotos da Vistoria"                  │
-│   - VistoriaFotoSequencial (mesmo do app)   │
-│                                             │
-│ ▸ Card "Vídeo 360°"                         │
-│   - VideoCapture                            │
-│                                             │
-│ ▸ Card "Observações (opcional)"             │
-│   - Textarea                                │
-├─────────────────────────────────────────────┤
-│ Footer fixo:                                │
-│ [ Finalizar envio para aprovação ]          │
-│ Indicador: rascunho salvo / fila offline    │
-└─────────────────────────────────────────────┘
-```
+Não há nada a mudar nesse ponto.
 
-## Recursos a implementar
+**Pergunta 1 (falta implementar):** Quando o técnico assume a instalação via link público, ele é redirecionado para `/instalador/vistoria/:id` (`ExecutarVistoriaCompleta.tsx`). Hoje essa tela renderiza **todas** as categorias (geral, motor, interior, instalação, rastreador) como se as fotos não tivessem sido feitas — duplicando o trabalho que o "qualquer um" já fez via link público.
 
-### 1. Conferência de dados + hodômetro
-- Card com 4 checkboxes (placa, chassi, modelo, cor) buscando dados do veículo já carregado.
-- Input numérico de hodômetro (obrigatório para finalizar).
-- Adicionar à validação `podeFinalizar`.
+Precisamos: quando a vistoria foi originada de um link público com fotos já aprovadas, ocultar as categorias visuais e mostrar **apenas** "instalação" e "rastreador" + checklist + finalização.
 
-### 2. Barra de progresso de fotos
-- Componente fixo no topo (logo abaixo do header) mostrando `totalFotosEnviadas / totalFotosObrigatorias`.
-- Usa `getTotalFotosObrigatorias(tipoVeiculo)` igual ao app — número dinâmico por tipo de veículo, em vez do mínimo fixo de 10 atual.
+## Como detectar o modo
 
-### 3. Auto-save de rascunho
+A função `agruparFotosApenasInstalacao(tipo)` já existe em `src/data/vistoriaConfigCompleta.ts` e retorna só as categorias `instalacao` e `rastreador`.
 
-Adicionar a `vistoria_links` colunas para guardar o rascunho do executor público:
-- `fotos_rascunho_executor_nome` (text)
-- `fotos_rascunho_conferencia` (jsonb) — checkboxes
-- `fotos_rascunho_hodometro` (text)
-- `fotos_rascunho_observacoes` (text)
-- `fotos_rascunho_atualizado_em` (timestamptz)
+Detecção do modo dentro de `ExecutarVistoriaCompleta.tsx`:
+1. Buscar em `vistoria_links` o registro com `instalacao_id = vistoria.instalacao_id`.
+2. Se existir e `fotos_etapa_status === 'concluida'` e `fotos_aprovadas_em != null` → `modoApenasInstalacao = true`.
 
-Edge function nova: `salvar-rascunho-vistoria-publica` (recebe `token` + dados, atualiza colunas). RLS continua negando acesso direto à tabela — só via edge function.
+## Mudanças
 
-Hook React com debounce de 2s (mesmo padrão do app).
+### 1) Hook `useVistoriaLinkPorInstalacao`
+Novo hook em `src/hooks/useVistoriaLinkPublica.ts` (ou arquivo próprio para área autenticada): consulta `vistoria_links` por `instalacao_id` retornando `fotos_aprovadas_em`, `fotos_etapa_status`, `fotos_executor_nome`, `fotos_rascunho_hodometro`, `fotos_rascunho_conferencia`. Usa o cliente autenticado normal (técnico está logado).
 
-### 4. Fila offline para uploads (origem=`publico`)
-O `useSyncQueue` atual só funciona para usuários logados. Para a rota pública:
-- Estender `MidiaPendente.origem` para aceitar `'publico'`.
-- Adicionar campo opcional `token` (do link) em `MidiaPendente`.
-- No `useSyncQueue`, novo branch `origem === 'publico'` que:
-  - Não usa `supabase.auth.getSession()`.
-  - Faz upload via `publicSupabase` para o bucket `vistoria-prestador-fotos` (já usado).
-  - Usa o `token` para reconstruir o path `${token}/fotos/${slot}.jpg`.
-- Novo hook `useUploadVistoriaPublicaOffline(token)` análogo ao `useUploadVistoriaOffline`, com `enfileirarFoto` / `enfileirarVideo` específicos.
-- Componente reutilizável `OfflineQueueIndicator` (ou inline, igual ao existente) mostrando "X mídia(s) pendentes".
+### 2) `ExecutarVistoriaCompleta.tsx`
+- Chamar `useVistoriaLinkPorInstalacao(instalacaoId)`.
+- Derivar `modoApenasInstalacao`.
+- Substituir `agruparFotosFiltradas(...)` por `agruparFotosApenasInstalacao(tipo)` quando `modoApenasInstalacao` for true (mantém a lógica `veiculoPrecisaRastreador` para decidir se a categoria `rastreador` entra).
+- Recalcular `totalFotosObrigatorias` e `totalFotosEnviadas` filtrando para essas categorias (usar `getFotosApenasInstalacao` para a lista base).
+- **Pré-preencher** os campos já preenchidos pelo público (somente leitura/visualização):
+  - Conferência (placa/chassi/modelo/cor) e hodômetro vindos do `vistoria_links` (rascunho ou registros oficiais).
+  - Mostrar nome de quem fez as fotos (`fotos_executor_nome`) num badge informativo no topo: "Fotos enviadas por X — aprovadas pelo monitoramento".
+- Validações de "podeAprovar" devem considerar apenas as fotos de instalação + rastreador (não exigir fotos visuais que já foram aprovadas).
 
-### 5. Status "aguardando aprovação"
-Ao finalizar, o backend já marca `fotos_etapa_status='concluida'` e o gating do monitoramento já existe (essa parte não muda). Apenas confirmar que o estado visual reflete claramente "Enviado — aguardando aprovação do monitoramento" depois de finalizar.
+### 3) Banner contextual no topo
+Quando `modoApenasInstalacao === true`, exibir card informativo:
+> "Etapa de fotos já aprovada pelo monitoramento. Você precisa realizar apenas a instalação do rastreador."
 
-## O que NÃO entra (decisões já confirmadas)
+## Detalhes técnicos
 
-- ❌ Tema dark (mantém claro).
-- ❌ Botões "Aprovar" / "Reprovar" (a aprovação fica com o monitoramento).
-- ❌ Botões WhatsApp/Telefone do associado no header (essa tela é pública, não para o técnico).
-- ❌ Temporizador de execução (descartado).
+- Reutilizar `agruparFotosApenasInstalacao` e `getFotosApenasInstalacao` (já existem).
+- Não tocar em RLS — técnico autenticado já tem leitura de `vistoria_links` via policies existentes (verificar; se não, adicionar policy `SELECT` para roles `instalador_vistoriador`/`vistoriador_base` quando `tecnico_atribuido_id = auth.uid()`).
+- Sem mudanças em edge functions.
+- Sem migração de banco (colunas `fotos_aprovadas_em`, `fotos_executor_nome`, `fotos_rascunho_*` já existem).
 
-## Arquivos a tocar
+## Não-objetivos
 
-**Backend (migration + edge function nova):**
-- Migration: adicionar colunas de rascunho em `vistoria_links`.
-- `supabase/functions/salvar-rascunho-vistoria-publica/index.ts` — nova.
-
-**Frontend:**
-- `src/lib/offline/db.ts` — adicionar `'publico'` em `origem` e campo `token`.
-- `src/hooks/useSyncQueue.ts` — novo branch para origem pública.
-- `src/hooks/useUploadVistoriaPublicaOffline.ts` — novo.
-- `src/hooks/useVistoriaLinkPublica.ts` — adicionar `useSalvarRascunhoVistoriaPublica` (mutation com debounce).
-- `src/pages/public/VistoriaPublica.tsx` — refatorar `EtapaFotos`:
-  - Adicionar conferência + hodômetro
-  - Adicionar barra de progresso fixa
-  - Trocar uploads diretos pela fila offline
-  - Adicionar auto-save de rascunho
-  - Restaurar rascunho ao abrir
-  - Usar `getTotalFotosObrigatorias` em vez de mínimo fixo
-
-## Ordem de execução
-1. Migration das colunas de rascunho.
-2. Edge function `salvar-rascunho-vistoria-publica`.
-3. Estender `db.ts` e `useSyncQueue.ts` para origem pública.
-4. Hooks de offline + rascunho público.
-5. Refatorar `EtapaFotos`.
-6. QA: gerar link, abrir em janela anônima (sem login), enviar fotos com auto-save, validar que aparecem em "aguardando aprovação" no monitoramento.
-
+- Não mexer no fluxo padrão (sem link público) — continua mostrando tudo.
+- Não mexer no gate de aprovação (já funciona conforme pedido).
+- Não permitir que o técnico edite/refaça as fotos visuais já aprovadas (somente leitura).
