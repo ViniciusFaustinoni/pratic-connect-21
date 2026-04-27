@@ -1,81 +1,85 @@
-# Plano — Fila de Relatos de Erros do Diretor (filtros, IA e gerar prompt)
+# Correção: Vendedores enxergando dados de toda a empresa
 
-## Estado atual (já implementado)
+## Diagnóstico (causa raiz)
 
-- Tabela `error_reports` com enum `aberto | em_tratamento | concluido | validado`, RLS ok.
-- Página `/diretoria/relatos-erros` com cards de contagem, abas por status, busca textual, tabela com autor/email, modal de detalhe com anexos e botões "Iniciar tratamento" / "Marcar como concluído".
-- Fluxo do autor: sheet "Testar correções" lista concluídos e permite marcar `validado`.
-- O autor (nome + email) **já é exibido** na lista e no modal — então este pedido já está atendido. Vou apenas reforçar a coluna no header.
+Vendedores (`vendedor_clt`, `vendedor_externo`, `agencia`) são cadastrados em `profiles` com `tipo = 'funcionario'`. Várias políticas RLS usam `is_funcionario(auth.uid())` como porta de acesso, e essa função **só checa `profiles.tipo = 'funcionario'`** — ignorando o `role` real. Resultado: vendedores recebem acesso de "staff completo" em:
 
-## Gaps a resolver
+| Tabela | Política aberta hoje | Efeito para vendedor |
+|---|---|---|
+| `associados` | `Staff can view all associates` / `Staff can manage associates` (`is_funcionario`) | Vê e edita TODOS os associados |
+| `veiculos` | `Staff can manage vehicles` / `View vehicles` (`is_funcionario`) | Vê e edita TODOS os veículos |
+| `contratos` | `Staff can view contracts` (`is_funcionario`) | Vê TODOS os contratos |
+| `servicos` | `Funcionarios podem gerenciar/ver servicos` (`am_i_funcionario`) | Vê e edita TODOS os serviços |
 
-1. Falta status **`descartado`** (com data e responsável).
-2. Filtros: somente busca textual + abas. Falta **filtro por usuário** (combobox) e **filtro por intervalo de datas**.
-3. Falta visão de **fila** (cards priorizados por idade, separando "novos" de "em tratamento") em vez/além da tabela.
-4. Falta aba de **histórico completo** (todas as transições de status com quem/quando — log de auditoria), separada da fila operacional.
-5. No modal de detalhes do diretor:
-   - Falta **botão "Melhorar texto com IA"** sobre a descrição (reescreve mantendo significado, mais técnico, com contexto do sistema).
-   - Falta **botão "Gerar prompt"** que analisa a descrição + imagens anexadas + contexto do sistema (área, rota, módulos relacionados) e produz um prompt pronto para colar no chat do Lovable, com botão de copiar.
-6. Botão "Descartar" + "Voltar para usuário testar" (já existe via "concluído", manter texto explícito).
+A tabela `cotacoes` já está correta (usa `vendedor_id = auth.uid()` + `can_view_all_cotacoes` que exclui vendedores), e `instalacoes` também (usa `has_role` específico).
 
-## Mudanças
+Confirmado em produção: 154 vendedores CLT + 36 externos + 36 agências, todos com `profiles.tipo='funcionario'`.
 
-### 1. Banco
+## Estratégia
 
-- **Migration**: adicionar `descartado` ao enum `error_report_status`; adicionar colunas `descartado_em timestamptz`, `descartado_por uuid`, `motivo_descarte text` em `error_reports`.
-- **Tabela nova `error_report_history`** (auditoria de transições):
-  - `id`, `report_id` (FK), `from_status`, `to_status`, `changed_by` (uuid), `changed_by_nome` (snapshot), `observacao` (texto opcional), `created_at`.
-  - RLS: SELECT para autor do report **ou** admin; INSERT só via trigger.
-- **Trigger** `AFTER UPDATE OF status` em `error_reports` que insere uma linha em `error_report_history` com snapshot do nome via `profiles`.
-- **Trigger** `AFTER INSERT` em `error_reports` que registra a transição inicial `null → aberto`.
+Criar um conceito explícito de **"funcionário interno NÃO-vendedor"** em SQL e trocar todas as policies abertas por escopo correto. Vendedores passam a enxergar apenas linhas vinculadas a algum vendedor_id deles (direta ou indiretamente via associado/contrato).
 
-### 2. Edge Functions (2 novas)
+### 1) Novas funções SECURITY DEFINER
 
-Ambas usam Lovable AI Gateway com `google/gemini-3-flash-preview` por padrão (LOVABLE_API_KEY já está no projeto).
+- `is_funcionario_interno(_user_id uuid)` → true apenas se `profiles.tipo='funcionario'` E o usuário **não tem** nenhum dos roles `vendedor_clt`, `vendedor_externo`, `agencia` (e está ativo). Esta substitui `is_funcionario` em policies de "staff geral".
+- `is_vendedor_nao_gestor(_user_id uuid)` → true se for `vendedor_clt`/`vendedor_externo`/`agencia` e NÃO tiver `gerente_comercial`/`supervisor_vendas`/`diretor`/`admin_master`.
+- `get_vendedor_associado_ids(_user_id uuid)` → SETOF uuid: retorna IDs de associados visíveis ao vendedor a partir de:
+  - `cotacoes.vendedor_id = profile_id` → associado_id
+  - `contratos.vendedor_id = profile_id` ou `contratos.created_by = profile_id` → associado_id
+  - `associados.vendedor_original_id = profile_id`
 
-- **`melhorar-texto-relato-erro`**
-  - Input: `{ report_id }`. Lê `descricao`, `area` e info do reporter.
-  - Saída: `{ texto_melhorado }`. Mantém o conteúdo original, só estrutura/clareza/termos técnicos. Não altera fatos.
-  - Verifica permissão (chamador precisa ser admin de error_reports).
+Manteremos `is_funcionario` (algumas policies legítimas dependem dela para incluir associados acessando próprios dados), mas trocamos as policies sensíveis para `is_funcionario_interno`.
 
-- **`gerar-prompt-correcao-erro`**
-  - Input: `{ report_id }`. Lê descrição + área + lista de arquivos. Para imagens, gera signed URLs (1h) e envia ao modelo como conteúdo multimodal (`image_url`). Modelo padrão: `google/gemini-2.5-pro` (multimodal forte).
-  - System prompt embute o **contexto do sistema** (stack: React 18 + Vite + Tailwind + Supabase; rota da área relatada; arquivos do projeto que tipicamente correspondem àquela área; convenções de RLS, uso do gateway, secrets, design tokens semânticos).
-  - Output via tool calling estruturado: `{ titulo, contexto_resumido, passos_diagnostico[], arquivos_provaveis[], prompt_para_lovable }`. O `prompt_para_lovable` é o texto final pronto para colar.
-  - Verifica permissão admin.
+### 2) Substituição de RLS
 
-### 3. Frontend
+**`associados`**
+- Substituir `Staff can view all associates` → permitir se `is_funcionario_interno(auth.uid())` OU `user_id = auth.uid()` OU `id IN get_vendedor_associado_ids(auth.uid())`.
+- Substituir `Staff can manage associates` (ALL) → restringir a `is_funcionario_interno` (vendedor não pode dar UPDATE/DELETE em qualquer associado).
+- Adicionar policy UPDATE: `Vendedor pode atualizar seus associados` com `id IN get_vendedor_associado_ids(...)`.
 
-- **`useErrorReports.ts`**: adicionar `descartado` ao tipo `ErrorReportStatus`; estender filtros (`reporterId?: string | null`, `dateFrom?: string`, `dateTo?: string`); novo hook `useDescartarErrorReport()`; novo hook `useErrorReportHistory(reportId)`; novo hook `useReportersList()` (distintos `reporter_id, reporter_nome` para o combobox).
+**`veiculos`**
+- `View vehicles` → `is_funcionario_interno(auth.uid()) OR associado_id IN get_vendedor_associado_ids(auth.uid()) OR associado_id = get_my_associado_id(auth.uid())`.
+- `Staff can manage vehicles` (ALL) → restringir a `is_funcionario_interno`.
+- Nova policy INSERT/UPDATE para vendedores limitada aos seus associados.
 
-- **`/diretoria/relatos-erros` (`RelatosErros.tsx`)** — refatorar com 3 abas no topo:
-  1. **Fila** (default): cards agrupados por status (Aberto, Em tratamento, Concluído aguardando teste), ordenados por `created_at` asc (mais antigo primeiro = mais urgente). Cada card mostra: autor, área, idade ("há 2h"), preview de descrição, miniatura do 1º anexo se imagem.
-  2. **Tabela** (a atual, mantida para listagem ampla com colunas).
-  3. **Histórico**: tabela cronológica vinda de `error_report_history` (data, report (link), autor do relato, ator, transição `de → para`, observação). Filtrável por usuário e data.
-  - Filtros globais (acima das abas): `Combobox de usuário`, `Date range picker`, busca livre, status (mantido como dropdown extra).
+**`contratos`**
+- `Staff can view contracts` → `is_funcionario_interno(auth.uid()) OR vendedor_id = get_current_profile_id() OR created_by = get_current_profile_id()`.
+- Mantém policies existentes "Sales can update own contracts" e "Staff with sales role can insert contracts".
 
-- **`DetalheRelatoModal.tsx`**:
-  - Acima do textarea "Observação para o autor": botão **"Melhorar com IA"** (chama `melhorar-texto-relato-erro` com a descrição atual; substitui o conteúdo do textarea por sugestão; com toast de undo).
-  - Nova seção **"Prompt de correção"**: botão **"Gerar prompt"** (chama `gerar-prompt-correcao-erro`); ao retornar exibe um bloco com o prompt em `<pre>`, botão "Copiar" e botões "Regerar" / "Editar manualmente".
-  - Adicionar botão **"Descartar"** (vermelho outline) no footer com motivo opcional via prompt → chama `useDescartarErrorReport`.
-  - Renomear "Marcar como concluído" → "Concluir e enviar para teste do usuário" para deixar explícito que volta ao autor.
-  - Renderizar a timeline `error_report_history` no aside direito (substitui as 4 linhas estáticas atuais).
+**`servicos`**
+- `Funcionarios podem ver servicos` → `is_funcionario_interno(auth.uid()) OR associado_id IN get_vendedor_associado_ids(auth.uid())`.
+- `Funcionarios podem gerenciar servicos` (ALL) → restringir a `is_funcionario_interno`.
 
-### 4. Permissões/Segurança
+### 3) Ajustes correlatos
 
-- Ambas edge functions: `verify_jwt = true` (Authorization Bearer do usuário) → validar via `is_error_reports_admin(auth.uid())` server-side antes de chamar IA. Retorna 403 se não for.
-- Não armazenar prompts gerados na DB (são derivados; sob demanda).
+Auditar e corrigir, com o mesmo padrão `is_funcionario_interno`, qualquer outra tabela cujo SELECT use `is_funcionario` e contenha dados sensíveis cross-vendedor:
+- `documentos_associado`, `assinaturas`, `pagamentos`, `mensalidades`, `comissoes` (se houver), `historico_*`, `leads`, `propostas`, `rastreadores`, `instalacoes_links_publicos` etc.
 
-## Fora do escopo
+Migração varre `pg_policies` listando todas que usam `is_funcionario(auth.uid())` em SELECT/UPDATE/DELETE para revisão; apenas as tabelas sensíveis ao escopo do vendedor terão policies reescritas. Tabelas puramente operacionais internas (configs, catálogos, parâmetros) permanecem com `is_funcionario` se for desejável que vendedor leia (ex.: catálogo de planos).
 
-- Notificação por email/WhatsApp ao autor quando concluído (mantém o badge "Testar correções" que já existe).
-- Categorização automática por área via IA.
+### 4) Verificação no frontend
 
-## Validação esperada
+A maioria das telas (Cotações, Funil) já filtra por `vendedor_id` no hook quando o usuário é vendedor não-gestor (ver `useFunilCotacao.ts`). Garantir que também as telas de **Associados**, **Veículos**, **Contratos** e **Serviços** apliquem o mesmo escopo no `select` (defesa em profundidade, embora a RLS já bloqueie). Ajustar:
+- `useAssociados`/`useAssociadosList` → quando `isVendedorNaoGestor`, filtrar por associados vinculados.
+- `useContratos` → idem.
+- `useVeiculos` (se houver listagem global) → idem.
 
-- Diretor entra em /diretoria/relatos-erros → vê aba **Fila** por padrão com cards priorizados.
-- Pode filtrar por usuário "Fulano" + período "última semana" e os 3 abas refletem.
-- Abre modal → clica "Melhorar com IA" → texto da observação recebe versão polida.
-- Clica "Gerar prompt" → recebe prompt pronto; copia e cola no Lovable.
-- Pode "Iniciar tratamento", "Concluir e enviar para teste do usuário", "Descartar".
-- Aba **Histórico** mostra todas as transições com data/ator/observação.
+### 5) QA pós-deploy
+
+1. Login como vendedor de teste (criar um se necessário).
+2. Conferir que listas de Associados, Veículos, Contratos, Serviços só mostram registros vinculados.
+3. Conferir que admin/diretor continua vendo tudo.
+4. Conferir que o associado público continua vendo só os próprios dados.
+5. Rodar `supabase--linter` para confirmar que não introduzimos warnings novos.
+
+## Arquivos / artefatos
+
+- **Migração SQL nova** (criar funções + recriar policies das 4 tabelas principais + qualquer correlata identificada na varredura).
+- **Hooks frontend** ajustados para filtragem explícita por vendedor onde aplicável.
+- Sem mudanças em rotas/UI.
+
+## Riscos / mitigação
+
+- Risco de quebrar fluxos públicos (token de contrato, link de vistoria): policies públicas existentes (`token_publico`, `link_token`) são mantidas intactas.
+- Risco de bloquear funcionários internos legítimos: `is_funcionario_interno` exclui apenas vendedores; analistas, coordenadores etc. continuam com acesso total.
+- Risco de quebrar vendedor-gestor (supervisor/gerente): mantemos as policies `can_view_all_cotacoes`/`is_gerencia` e estendemos a lógica de `is_vendedor_nao_gestor` para que gestores enxerguem amplo.
