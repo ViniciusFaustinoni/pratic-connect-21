@@ -81,14 +81,14 @@ Deno.serve(async (req) => {
       linkToken = existingLink.token
       linkId = existingLink.id
     } else {
-      if (!valor || valor <= 0) {
-        return new Response(
-          JSON.stringify({ success: false, error: 'Valor é obrigatório para nova atribuição' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-
       const { data: newLink, error: linkErr } = await supabase
+        .from('vistoria_prestador_links')
+        .insert({
+          instalacao_id,
+          vistoriador_prestador_id,
+          valor, // pode ser null — será definido pela operação posteriormente
+          atribuido_por,
+        })
         .from('vistoria_prestador_links')
         .insert({
           instalacao_id,
