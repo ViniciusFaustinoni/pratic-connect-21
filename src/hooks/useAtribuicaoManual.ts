@@ -254,7 +254,7 @@ export function useVistoriadoresAtivos() {
       const hoje = new Date().toISOString().split('T')[0];
       const { data: servicosAtribuidos } = await supabase
         .from('servicos')
-        .select('id, tipo, data_agendada, bairro, cidade, uf, profissional_id, status, veiculo:veiculos!servicos_veiculo_id_fkey(placa, marca, modelo)')
+        .select('id, tipo, data_agendada, bairro, cidade, uf, profissional_id, status, veiculo:veiculos!servicos_veiculo_id_fkey(placa, chassi, marca, modelo)')
         .in('profissional_id', idsDisponiveis)
         .gte('data_agendada', hoje)
         .in('status', ['agendada', 'em_andamento', 'em_rota']);
@@ -439,7 +439,7 @@ export function useAtribuirServicoManual() {
         .select(`
           id, tipo, data_agendada, hora_agendada, bairro, cidade, logradouro, numero,
           associado:associados!servicos_associado_id_fkey(nome, telefone),
-          veiculo:veiculos!servicos_veiculo_id_fkey(placa)
+          veiculo:veiculos!servicos_veiculo_id_fkey(placa, chassi)
         `)
         .eq('id', servicoId)
         .maybeSingle();
