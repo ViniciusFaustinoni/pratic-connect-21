@@ -19,13 +19,14 @@ export function useVagasPeriodo(data: string | null) {
         return { manha: LIMITE_VAGAS_POR_PERIODO, tarde: LIMITE_VAGAS_POR_PERIODO };
       }
 
-      // Buscar serviços agendados para a data (excluindo cancelados/recusados)
+      // Buscar serviços agendados para a data (excluindo cancelados/reprovados)
+      // Obs: 'recusada' NÃO existe no enum status_servico — usar 'reprovada'.
       const { data: servicos, error } = await publicSupabase
         .from('servicos')
         .select('periodo')
         .eq('data_agendada', data)
         .eq('local_vistoria', 'cliente')
-        .not('status', 'in', '("cancelada","recusada")');
+        .not('status', 'in', '("cancelada","reprovada")');
       
       if (error) {
         console.error('[useVagasPeriodo] Erro ao buscar serviços:', error);

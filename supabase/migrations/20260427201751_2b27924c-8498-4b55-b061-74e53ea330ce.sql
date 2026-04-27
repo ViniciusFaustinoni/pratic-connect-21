@@ -1,0 +1,7 @@
+UPDATE error_reports SET status='em_tratamento', tratado_em=now(), observacao_diretor='Causa raiz: hook useVagasPeriodo filtrava por status "recusada" (valor inexistente no enum status_servico), gerando erro de cast no Postgres que bloqueava listagens compartilhadas e impedia iniciar rota. Corrigido para usar "reprovada". Pode testar.' WHERE id='2ee8334f-fcd5-4415-870e-659ff7cbbea5';
+
+UPDATE error_reports SET status='em_tratamento', tratado_em=now(), observacao_diretor='Mesma causa raiz do erro "iniciar rota": filtro com status "recusada" no hook useVagasPeriodo provocava erro de enum no banco e bloqueava atribuições. Corrigido. Pode testar atribuir novamente.' WHERE id='bdf46732-717d-4e9f-8d6c-b0068fc27901';
+
+UPDATE error_reports SET status='em_tratamento', tratado_em=now(), observacao_diretor='Campo Valor tornou-se opcional no popover/dialog de Atribuir a Prestador (Mapa e Aba Atribuição Manual). Quando vazio, o link é gerado com valor 0 e pode ser ajustado depois. Pode testar.' WHERE id='f4d2b5ba-3a2a-4f6c-ae0d-680f99511e05';
+
+UPDATE error_reports SET status='em_tratamento', tratado_em=now(), observacao_diretor='Em análise. Para localizar o card bloqueado e identificar a regra que impede a exclusão, por favor informe no relato: (1) PLACA do veículo, (2) Nome/CPF do associado e, se possível, (3) ID do card/instalação. O alerta "placa em atendimento" geralmente vem de instalação/serviço ainda ativo — precisamos do dado para liberar com segurança.' WHERE id='5d9f403f-e859-4ae1-94c8-f1ac2ff4741c';

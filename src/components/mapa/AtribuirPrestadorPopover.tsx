@@ -31,9 +31,10 @@ export function AtribuirPrestadorPopover({ servicoId }: AtribuirPrestadorPopover
 
   const handleConfirm = async () => {
     if (!selectedPrestador) return;
-    const valorNum = parseFloat(valor);
-    if (isNaN(valorNum) || valorNum <= 0) {
-      toast.error('Informe um valor válido');
+    // Valor é opcional — quando vazio, envia 0 (será definido depois pela operação)
+    const valorNum = valor.trim() === '' ? 0 : parseFloat(valor);
+    if (isNaN(valorNum) || valorNum < 0) {
+      toast.error('Valor inválido');
       return;
     }
 
@@ -128,12 +129,12 @@ export function AtribuirPrestadorPopover({ servicoId }: AtribuirPrestadorPopover
                 <Button variant="ghost" size="sm" onClick={handleBack} className="text-xs h-7">Voltar</Button>
               </div>
               <div>
-                <label className="text-xs font-medium mb-1 block">Valor (R$) *</label>
+                <label className="text-xs font-medium mb-1 block">Valor (R$) <span className="text-muted-foreground font-normal">(opcional)</span></label>
                 <Input
                   type="number"
                   min="0"
                   step="0.01"
-                  placeholder="Ex: 80.00"
+                  placeholder="Ex: 80.00 (opcional)"
                   value={valor}
                   onChange={e => setValor(e.target.value)}
                   className="h-8 text-sm"
@@ -141,7 +142,7 @@ export function AtribuirPrestadorPopover({ servicoId }: AtribuirPrestadorPopover
               </div>
               <Button
                 onClick={handleConfirm}
-                disabled={mutation.isPending || !valor || parseFloat(valor) <= 0}
+                disabled={mutation.isPending}
                 className="w-full h-8 text-sm"
                 size="sm"
               >
