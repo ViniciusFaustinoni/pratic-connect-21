@@ -229,7 +229,7 @@ export function AssociadoHeroHeader({
                     <DropdownMenuSeparator />
                   </>
                 )}
-                {(status === 'suspenso' || coberturasSuspensas) && (
+                {(['suspenso', 'inadimplente', 'bloqueado', 'cancelado'].includes(status) || coberturasSuspensas) && (
                   <>
                     <DropdownMenuItem onClick={onReativar} disabled={isReativando} className="text-emerald-600 focus:text-emerald-600">
                       {isReativando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
