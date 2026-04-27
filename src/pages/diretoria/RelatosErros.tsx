@@ -121,6 +121,7 @@ export default function RelatosErros() {
   const reportsPorStatus = useMemo(() => {
     const grupos: Record<ErrorReportStatus, ErrorReport[]> = {
       aberto: [],
+      critico: [],
       em_tratamento: [],
       concluido: [],
       validado: [],
