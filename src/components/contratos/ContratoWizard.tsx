@@ -151,7 +151,11 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
   useEffect(() => {
     if (cotacao) {
       // Auto-set tipoOperacao from cotação's tipo_entrada (inclusão context)
-      const cotacaoTipoEntrada = (cotacao as any).tipo_entrada;
+      // Normaliza 'substituicao' (alias) para 'substituicao_placa' (canônico)
+      const cotacaoTipoEntradaRaw = (cotacao as any).tipo_entrada;
+      const cotacaoTipoEntrada = cotacaoTipoEntradaRaw === 'substituicao'
+        ? 'substituicao_placa'
+        : cotacaoTipoEntradaRaw;
       if (cotacaoTipoEntrada && cotacaoTipoEntrada !== tipoOperacao) {
         setTipoOperacao(cotacaoTipoEntrada);
       }
