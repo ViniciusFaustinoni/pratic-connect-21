@@ -4,8 +4,9 @@ import {
   ArrowLeft, Camera, Check, AlertTriangle, 
   Gauge, CheckCircle2, Loader2, Car, Video,
   ChevronDown, ChevronUp, XCircle, MapPin, Lock, ShieldCheck, ShieldX, MessageSquare,
-  MessageCircle, Phone, CloudUpload
+  MessageCircle, Phone, CloudUpload, Radio, Search
 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
