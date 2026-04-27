@@ -332,39 +332,40 @@ export function DetalheRelatoModal({ report, onClose }: Props) {
           )}
         </DialogFooter>
       </DialogContent>
-
-      {/* Preview ampliado */}
-      <Dialog open={!!preview} onOpenChange={(v) => !v && setPreview(null)}>
-        <DialogContent className="max-w-5xl p-0 overflow-hidden bg-background">
-          <DialogHeader className="px-4 py-3 border-b border-border flex flex-row items-center justify-between space-y-0">
-            <DialogTitle className="text-sm font-medium truncate pr-4">{preview?.nome}</DialogTitle>
-            <div className="flex items-center gap-2">
-              {preview?.mime.startsWith('image/') && (
-                <Button size="sm" variant="outline" onClick={() => preview && copyImage(preview.url, preview.mime)}>
-                  <Copy className="h-4 w-4 mr-1" /> Copiar
-                </Button>
-              )}
-              <Button size="sm" variant="outline" onClick={() => preview && downloadFile(preview.url, preview.nome)}>
-                <Download className="h-4 w-4 mr-1" /> Baixar
-              </Button>
-              <Button size="sm" variant="outline" asChild>
-                <a href={preview?.url} target="_blank" rel="noreferrer">
-                  <ExternalLink className="h-4 w-4 mr-1" /> Abrir
-                </a>
-              </Button>
-            </div>
-          </DialogHeader>
-          <div className="bg-black/80 flex items-center justify-center max-h-[80vh] overflow-auto">
-            {preview?.mime.startsWith('image/') ? (
-              <img src={preview.url} alt={preview.nome} className="max-w-full max-h-[80vh] object-contain" />
-            ) : preview?.mime === 'application/pdf' ? (
-              <iframe src={preview.url} title={preview.nome} className="w-full h-[80vh] bg-white" />
-            ) : (
-              <div className="p-10 text-muted-foreground text-sm">Pré-visualização não disponível.</div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
     </Dialog>
+
+    {/* Preview ampliado — fora do Dialog pai para evitar overlay órfão (tela preta) */}
+    <Dialog open={!!preview} onOpenChange={(v) => !v && setPreview(null)}>
+      <DialogContent className="max-w-5xl p-0 overflow-hidden bg-background">
+        <DialogHeader className="px-4 py-3 border-b border-border flex flex-row items-center justify-between space-y-0">
+          <DialogTitle className="text-sm font-medium truncate pr-4">{preview?.nome}</DialogTitle>
+          <div className="flex items-center gap-2">
+            {preview?.mime.startsWith('image/') && (
+              <Button size="sm" variant="outline" onClick={() => preview && copyImage(preview.url, preview.mime)}>
+                <Copy className="h-4 w-4 mr-1" /> Copiar
+              </Button>
+            )}
+            <Button size="sm" variant="outline" onClick={() => preview && downloadFile(preview.url, preview.nome)}>
+              <Download className="h-4 w-4 mr-1" /> Baixar
+            </Button>
+            <Button size="sm" variant="outline" asChild>
+              <a href={preview?.url} target="_blank" rel="noreferrer">
+                <ExternalLink className="h-4 w-4 mr-1" /> Abrir
+              </a>
+            </Button>
+          </div>
+        </DialogHeader>
+        <div className="bg-black/80 flex items-center justify-center max-h-[80vh] overflow-auto">
+          {preview?.mime.startsWith('image/') ? (
+            <img src={preview.url} alt={preview.nome} className="max-w-full max-h-[80vh] object-contain" />
+          ) : preview?.mime === 'application/pdf' ? (
+            <iframe src={preview.url} title={preview.nome} className="w-full h-[80vh] bg-white" />
+          ) : (
+            <div className="p-10 text-muted-foreground text-sm">Pré-visualização não disponível.</div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
