@@ -709,7 +709,10 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                           <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setVeiculoEditar(v)}>
                             <Edit className="h-3 w-3 mr-1" /> Editar
                           </Button>
-                          {v.rastreador && v.rastreador.plataforma === 'softruck' && !v.rastreador.plataforma_device_id && (
+                          {v.rastreador && (
+                            (v.rastreador.plataforma === 'softruck' && !v.rastreador.plataforma_device_id) ||
+                            (v.rastreador.plataforma === 'rede_veiculos' && !v.rede_veiculos_cliente_id)
+                          ) && (
                             <Button size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
                               onClick={() => ativarRastreadorMutation.mutateAsync({
                                 instalacaoId: '', veiculoId: v.id, associadoId: id!,
