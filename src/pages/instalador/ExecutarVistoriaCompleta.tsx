@@ -18,6 +18,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { VistoriaFotoSequencial } from '@/components/vistorias/VistoriaFotoSequencial';
 import { VideoCapture } from '@/components/instalador/VideoCapture';
 import { ModalRecusaVeiculoComFotos } from '@/components/instalador/ModalRecusaVeiculoComFotos';
+import { VerificarSinalRastreador } from '@/components/instalador/VerificarSinalRastreador';
 import { TemporizadorExecucao } from '@/components/vistoriador/TemporizadorExecucao';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -134,6 +135,8 @@ export default function ExecutarVistoriaCompleta() {
   } | null>(null);
   const [buscandoRastreador, setBuscandoRastreador] = useState(false);
   const [erroRastreador, setErroRastreador] = useState<string | null>(null);
+  // Confirmação visual de que o rastreador está enviando posição (mapa)
+  const [posicaoConfirmada, setPosicaoConfirmada] = useState(false);
 
   // Dados
   const vistoriaId = vistoria?.id;
@@ -334,7 +337,16 @@ export default function ExecutarVistoriaCompleta() {
   // ou na instalação), consideramos satisfeito.
   const veiculoJaTemRastreador = !!(veiculo as any)?.rastreador_id || !!(vistoria as any)?.instalacao?.rastreador_id;
   const rastreadorVinculado = !veiculoPrecisaRastreador || veiculoJaTemRastreador || !!rastreadorEncontrado;
-  const podeAprovar = conferenciaCompleta && todasFotosEnviadas && videoEnviado && rastreadorVinculado;
+  // ID do rastreador ativo nesta vistoria (recém vinculado OU já existente no veículo/instalação)
+  const rastreadorIdAtivo: string | null =
+    rastreadorEncontrado?.id ||
+    (vistoria as any)?.instalacao?.rastreador_id ||
+    (veiculo as any)?.rastreador_id ||
+    null;
+  // Verificação visual da posição é obrigatória quando o veículo exige rastreador e há um ID ativo
+  const precisaConfirmarPosicao = veiculoPrecisaRastreador && !!rastreadorIdAtivo;
+  const posicaoOk = !precisaConfirmarPosicao || posicaoConfirmada;
+  const podeAprovar = conferenciaCompleta && todasFotosEnviadas && videoEnviado && rastreadorVinculado && posicaoOk;
 
   // Buscar rastreador por IMEI
   const handleBuscarRastreador = async () => {
@@ -769,7 +781,7 @@ export default function ExecutarVistoriaCompleta() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => { setRastreadorEncontrado(null); setImeiInput(''); }}
+                    onClick={() => { setRastreadorEncontrado(null); setImeiInput(''); setPosicaoConfirmada(false); }}
                     className="text-slate-300 hover:text-white"
                   >
                     Alterar IMEI
@@ -819,7 +831,18 @@ export default function ExecutarVistoriaCompleta() {
           </Card>
         )}
 
+        {/* Verificação visual do sinal do rastreador (mapa) */}
+        {precisaConfirmarPosicao && rastreadorIdAtivo && (
+          <VerificarSinalRastreador
+            rastreadorId={rastreadorIdAtivo}
+            imei={rastreadorEncontrado?.imei}
+            confirmado={posicaoConfirmada}
+            onConfirmar={setPosicaoConfirmada}
+          />
+        )}
+
         {/* Observações do Vistoriador — escondidas no modo apenas instalação */}
+
         {!modoApenasInstalacao && (
           <Card className="border-slate-700 bg-slate-800">
             <CardHeader className="pb-2">
@@ -892,7 +915,8 @@ export default function ExecutarVistoriaCompleta() {
             {!conferenciaCompleta && 'Confirme os dados e hodômetro. '}
             {!todasFotosEnviadas && `📸 Tire todas as fotos obrigatórias (faltam ${totalFotosObrigatorias - totalFotosEnviadas}). `}
             {!videoEnviado && 'Envie o vídeo 360°. '}
-            {!rastreadorVinculado && '📡 Vincule o IMEI do rastreador.'}
+            {!rastreadorVinculado && '📡 Vincule o IMEI do rastreador. '}
+            {rastreadorVinculado && precisaConfirmarPosicao && !posicaoConfirmada && '📍 Confirme a posição do rastreador no mapa.'}
           </p>
         )}
         {offlineQueue.totalPendentes > 0 && (
