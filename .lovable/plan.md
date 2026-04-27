@@ -1,56 +1,62 @@
-## Objetivo
-Corrigir definitivamente o erro de geração de link para prestador quando o valor do serviço é deixado em branco, mantendo o comportamento já esperado pelo usuário: valor opcional.
+# Plano: corrigir definitivamente o "Erro ao iniciar rota"
 
-## Diagnóstico confirmado
-A regra já foi flexibilizada no frontend de atribuição manual/mapa e no fluxo `gerar-link-prestador` (instalação externa).
+## 1. Diagnóstico (causa raiz)
 
-O erro persiste no fluxo de vistoria por prestador porque a edge function `gerar-link-vistoriador-prestador` ainda bloqueia nova atribuição com a validação:
-- `if (!valor || valor <= 0) -> "Valor é obrigatório para nova atribuição"`
+Acessei o banco como diretor e investiguei o serviço da tela (Andresa, Rua Caminho dos Astros, Rafael Peixoto):
 
-Ou seja: a interface já aceita valor vazio, mas essa branch específica do backend ainda rejeita `0`/vazio.
+- O serviço exibido pelo app do técnico (`12bbff07-…`, associado 7622ee03-…, bairro "PQ CENTENARIO") **foi cancelado** às 23:08:02 — junto com várias outras instalações em massa (mesmo timestamp em ~10 registros). Outro serviço relacionado (`a4ff906f-…`) virou `nao_compareceu` às 23:10 **e perdeu o `profissional_id`**.
+- Quando o técnico toca "Iniciar Percurso/Tarefa", o hook `useIniciarRota` (`src/hooks/useTarefaAtual.ts`) executa:
+  1. `SELECT profissional_id FROM servicos WHERE id=...`
+  2. Se `profissional_id` é NULL → lança `"Serviço não atribuído a nenhum profissional"`.
+  3. Se diferente do `profile.id` → lança `"Este serviço não está atribuído a você"`.
+  4. Mesmo se passar, o trigger `validar_status_servico` no banco bloqueia qualquer transição para `em_rota`/`em_andamento` quando `profissional_id IS NULL`, com `RAISE EXCEPTION`.
+- O `onError` do hook **descarta a mensagem real** e mostra o toast genérico `"Erro ao iniciar rota"`.
+- A tela do app continua mostrando a tarefa antiga porque `useTarefaAtual` faz polling a cada 30s (com `staleTime` 15s) e o cancelamento ocorreu por trigger no banco — sem realtime forçando invalidação no aparelho do técnico até o próximo refetch.
 
-## Plano
-1. Ajustar a edge function `gerar-link-vistoriador-prestador`
-- Remover a obrigatoriedade de valor para nova atribuição.
-- Normalizar valor vazio para `0` (ou `null`, conforme padrão já usado no insert) sem quebrar reenvio de link.
-- Manter lançamento financeiro apenas quando `valor > 0`.
-- Manter auditoria, WhatsApp e criação/reuso do token intactos.
+**Resumo da causa raiz:** o serviço foi cancelado/desatribuído por outro fluxo (cancelamento de instalação/cotação/no-show ou reatribuição) **enquanto o card já estava renderizado no aparelho do técnico**. Ao clicar, o app tenta atualizar um registro que não pertence mais a ele e mostra um toast genérico, sem atualizar a tela nem explicar o motivo.
 
-2. Unificar o comportamento em todos os pontos de entrada
-- Revisar e alinhar os chamadores de vistoria por prestador para o mesmo contrato funcional:
-  - `src/hooks/useAtribuicaoManual.ts`
-  - `src/components/monitoramento/AtribuicaoManualTab.tsx`
-  - `src/components/mapa/AtribuirPrestadorPopover.tsx`
-  - `src/components/instalacoes/PainelAtribuicaoPrestador.tsx`
-- Garantir que todos tratem valor como opcional, sem uma tela exigir valor enquanto outra dispensa.
+Isso vai continuar acontecendo sempre que: (a) coordenação cancelar/reatribuir uma tarefa, (b) cron de "não compareceu" rodar, (c) trigger em cascata de cancelamento de cotação/instalação/vistoria disparar, (d) o técnico estiver com a tela aberta sem refetch recente.
 
-3. Corrigir a inconsistência restante no painel de atribuição de prestador
-- Hoje `PainelAtribuicaoPrestador.tsx` ainda exige `valor > 0` para habilitar confirmação.
-- Vou alinhar essa tela ao mesmo comportamento já adotado no mapa e na aba de atribuição manual:
-  - campo continua disponível
-  - preenchimento continua opcional
-  - link pode ser gerado mesmo com valor vazio
-  - financeiro só recebe lançamento se houver valor positivo
+## 2. Correção pontual (resolver o erro visível agora)
 
-4. Validar o fluxo completo e evitar regressão
-- Validar estes cenários após a correção:
-  - gerar link de vistoria por prestador sem valor
-  - gerar link com valor informado
-  - reenviar link existente
-  - gerar link de instalação externa sem valor
-- Confirmar que o link abre normalmente e que não há novo bloqueio por backend.
+1. **Mensagens de erro úteis** em `useIniciarRota` (e `useIniciarTarefa`):
+   - Usar `error.message` no toast (em vez de string fixa).
+   - Detectar os 3 cenários e mostrar mensagens específicas em PT-BR:
+     - "Esta tarefa foi cancelada e não está mais disponível."
+     - "Esta tarefa foi reatribuída a outro técnico."
+     - "Esta tarefa precisa estar com status 'agendada' para iniciar."
+2. **Auto-recuperação da tela**: em qualquer erro do `useIniciarRota`/`useIniciarTarefa`, invalidar `['tarefa-atual']` e `['servicos']` para o card sumir/atualizar imediatamente.
+3. **Pré-checagem antes do clique**: ampliar o `select` inicial para trazer `status, profissional_id` e validar:
+   - status ∈ ('agendada','em_rota') → caso contrário, abortar com mensagem clara.
 
-5. Fechar o relato com a causa correta
-- Após validar, atualizar a tratativa do relato para refletir a causa raiz real:
-  - o frontend estava correto
-  - a regressão estava na edge function `gerar-link-vistoriador-prestador`
-- Só então marcar como concluído para novo teste do usuário.
+## 3. Correção estrutural (evita classe inteira de bugs)
 
-## Detalhes técnicos
-- Arquivo crítico: `supabase/functions/gerar-link-vistoriador-prestador/index.ts`
-- Ponto exato da regressão: validação de criação de novo link ainda exige `valor > 0`
-- Fluxo já correto para referência: `supabase/functions/gerar-link-prestador/index.ts`
-- Inconsistência visual remanescente: `src/components/instalacoes/PainelAtribuicaoPrestador.tsx` ainda desabilita a confirmação quando `valor <= 0`
+4. **RPC transacional `iniciar_rota_servico(p_servico_id)`** (SECURITY DEFINER):
+   - Faz `SELECT … FOR UPDATE`, valida `profissional_id = auth.uid()`-mapeado-para-profile, valida status, atualiza para `em_rota` + `em_rota_em` em **uma única ida**.
+   - Retorna JSON `{ ok, codigo_erro, mensagem }` para o cliente exibir mensagem precisa.
+   - Mesma estratégia para `iniciar_tarefa_servico`.
+   - Elimina race condition entre o `SELECT` e o `UPDATE` no cliente.
+5. **Realtime no card do técnico**: assinar mudanças em `servicos` filtradas por `profissional_id=eq.<id>` no `useTarefaAtual` para refletir cancelamentos/reatribuições em segundos, em vez de aguardar o polling de 30s.
+6. **Padronizar erros do banco com SQLSTATE**:
+   - Atualizar `validar_status_servico` para usar `ERRCODE` próprios (ex.: `'P0001'` com prefixos `SERVICO_SEM_PROFISSIONAL`, `SERVICO_NAO_ATRIBUIDO`, `SERVICO_STATUS_INVALIDO`) e mensagens em PT-BR.
+   - Cliente passa a mapear esses códigos para toasts amigáveis.
+7. **Audit trail mínimo**: registrar em `error_reports` (ou tabela equivalente já existente) toda falha de transição de status com `servico_id`, `user_id`, `motivo`, para o coordenador ver no painel.
 
-## Resultado esperado
-Depois dessa correção, qualquer fluxo de atribuição para prestador deve permitir gerar o link sem informar valor, e o valor poderá continuar sendo definido depois pela operação, sem erro e sem retrabalho do usuário.
+## 4. Arquivos / objetos a alterar
+
+- `src/hooks/useTarefaAtual.ts` — `useIniciarRota`, `useIniciarTarefa`: chamar nova RPC, mensagens úteis, invalidação no `onError`, assinatura realtime.
+- Nova migração SQL:
+  - `iniciar_rota_servico(uuid)` e `iniciar_tarefa_servico(uuid)` (SECURITY DEFINER, retorno JSON).
+  - Atualizar `validar_status_servico` com SQLSTATEs e mensagens claras.
+- Opcional: incluir badge "Tarefa indisponível — atualizando…" no `TarefaAtualCard` quando o serviço sumir entre clique e refetch.
+
+## 5. Validação após implantação
+
+- Cancelar uma tarefa atribuída pelo painel do coordenador enquanto o técnico está com o app aberto → o card deve sumir em <5s e qualquer clique tardio mostra "Esta tarefa foi cancelada".
+- Reatribuir tarefa do técnico A para o B → técnico A vê o card desaparecer; clique tardio diz "Esta tarefa foi reatribuída".
+- Tentar iniciar rota com sucesso → status muda para `em_rota` e edge `notificar-inicio-rota` continua sendo chamada.
+- Logs de `error_reports` registram todas as falhas com `codigo_erro` para análise.
+
+## 6. Nota sobre o cenário observado
+
+A onda de cancelamentos às 23:08:02 atingiu várias instalações simultaneamente — provavelmente um cancelamento em cascata via `cancelar_servicos_ao_cancelar_instalacao/_cotacao` ou `cron-no-show`. A correção acima trata o sintoma para o técnico, mas vale revisar separadamente **por que tantas instalações foram canceladas de uma vez** (fora do escopo deste plano, abrir tarefa específica se desejar).

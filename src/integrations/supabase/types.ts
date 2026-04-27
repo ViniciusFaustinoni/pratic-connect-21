@@ -31853,6 +31853,8 @@ export type Database = {
             Returns: boolean
           }
         | { Args: { _role: string; _user_id: string }; Returns: boolean }
+      iniciar_rota_servico: { Args: { p_servico_id: string }; Returns: Json }
+      iniciar_tarefa_servico: { Args: { p_servico_id: string }; Returns: Json }
       is_admin_master: { Args: { _user_id: string }; Returns: boolean }
       is_associado: { Args: { _user_id: string }; Returns: boolean }
       is_comissao_manager: { Args: never; Returns: boolean }
