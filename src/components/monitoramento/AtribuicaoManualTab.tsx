@@ -15,6 +15,7 @@ import { format, parseISO, isToday, isTomorrow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { TIPO_SERVICO_LABELS } from '@/hooks/useServicos';
 import { LinkPrestadorResultDialog } from './LinkPrestadorResultDialog';
+import { formatPlacaOuChassi, isPlacaPlaceholder } from '@/lib/placa-utils';
 
 function getTipoLabel(tipo: string) {
   if (tipo === 'vistoria_base') return 'Vistoria Base';
