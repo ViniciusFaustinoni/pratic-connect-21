@@ -271,7 +271,10 @@ export function useReprovarInstalacaoMonitoramento() {
       const { error: servicoError } = await supabase
         .from('servicos')
         .update({
-          status: 'reprovada_monitoramento',
+          status: 'reprovada',
+          analisado_em: agora,
+          analisado_por: profile?.id ?? null,
+          motivo_reprovacao: data.motivo,
           observacoes: `Reprovado pelo monitoramento: ${data.motivo}`,
           updated_at: agora,
         } as any)
