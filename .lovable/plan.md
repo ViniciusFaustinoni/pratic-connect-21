@@ -1,53 +1,51 @@
-# Plano — Técnico vê só a etapa de instalação ao vir do link público
+# Plano — Mapa de monitoramento refletir atribuição via link público
 
-## Contexto
+## Diagnóstico
 
-**Pergunta 2 (já implementado):** Técnicos só conseguem assumir uma instalação via link público depois que as fotos forem aprovadas pelo monitoramento. Isso é garantido em duas camadas:
-- **UI** (`HomeEtapas` em `VistoriaPublica.tsx`): o botão "Realizar Instalação do Rastreador" só aparece quando `fotos_aprovadas_em` está preenchido.
-- **Servidor** (edge function `assumir-instalacao-vistoria-link`): retorna 400 com "Fotos ainda não foram aprovadas pelo monitoramento" se tentarem assumir antes da aprovação.
+Quando o técnico assume a instalação via link público (`/vistoria/:token` → "Realizar Instalação" → login → `assumir-instalacao-vistoria-link`), a edge function tenta atualizar `instalacoes.tecnico_id`. **Esse campo não existe.** As colunas reais são `instalador_id` e `instalador_responsavel_id`.
 
-Não há nada a mudar nesse ponto.
+Resultado: a atualização vira um no-op (PostgREST silenciosamente descarta), a `view_vistorias_mapa` não recebe a atribuição e o pin não aparece como "atribuído" no Mapa > Atribuições.
 
-**Pergunta 1 (falta implementar):** Quando o técnico assume a instalação via link público, ele é redirecionado para `/instalador/vistoria/:id` (`ExecutarVistoriaCompleta.tsx`). Hoje essa tela renderiza **todas** as categorias (geral, motor, interior, instalação, rastreador) como se as fotos não tivessem sido feitas — duplicando o trabalho que o "qualquer um" já fez via link público.
+A `view_vistorias_mapa` define `vistoriador_id` para instalações como:
+```
+COALESCE(servicos.profissional_id, instalacoes.instalador_responsavel_id, rota_instaladores.instalador_id)
+```
 
-Precisamos: quando a vistoria foi originada de um link público com fotos já aprovadas, ocultar as categorias visuais e mostrar **apenas** "instalação" e "rastreador" + checklist + finalização.
+Ou seja, para o mapa refletir a atribuição manual, precisamos atualizar **dois** lugares: a instalação e o serviço materializado.
 
-## Como detectar o modo
+## Mudança
 
-A função `agruparFotosApenasInstalacao(tipo)` já existe em `src/data/vistoriaConfigCompleta.ts` e retorna só as categorias `instalacao` e `rastreador`.
+Reescrever o trecho final de `supabase/functions/assumir-instalacao-vistoria-link/index.ts` (depois da validação atômica de `tecnico_atribuido_id`) para:
 
-Detecção do modo dentro de `ExecutarVistoriaCompleta.tsx`:
-1. Buscar em `vistoria_links` o registro com `instalacao_id = vistoria.instalacao_id`.
-2. Se existir e `fotos_etapa_status === 'concluida'` e `fotos_aprovadas_em != null` → `modoApenasInstalacao = true`.
+1. **Atualizar `instalacoes`** com:
+   - `instalador_id = userId`
+   - `instalador_responsavel_id = userId` (campo lido pela view do mapa)
+   - `status = 'agendada'` (mesmo padrão do `AtribuirInstaladorDialog`)
 
-## Mudanças
+2. **Atualizar `servicos`** ativos derivados desta instalação:
+   - `WHERE instalacao_origem_id = link.instalacao_id AND status NOT IN ('concluida','cancelada','nao_compareceu','imprevisto_pendente')`
+   - `SET profissional_id = userId, status = 'agendada'`
 
-### 1) Hook `useVistoriaLinkPorInstalacao`
-Novo hook em `src/hooks/useVistoriaLinkPublica.ts` (ou arquivo próprio para área autenticada): consulta `vistoria_links` por `instalacao_id` retornando `fotos_aprovadas_em`, `fotos_etapa_status`, `fotos_executor_nome`, `fotos_rascunho_hodometro`, `fotos_rascunho_conferencia`. Usa o cliente autenticado normal (técnico está logado).
+3. **Registrar log** em `servicos_atribuicoes_log` (mesmo padrão do hook `useAtribuicaoManual`):
+   - `tipo_atribuicao = 'manual'`
+   - `observacoes = 'Auto-atribuição via link público de vistoria'`
+   - `atribuido_por = userId` (o próprio técnico que assumiu)
 
-### 2) `ExecutarVistoriaCompleta.tsx`
-- Chamar `useVistoriaLinkPorInstalacao(instalacaoId)`.
-- Derivar `modoApenasInstalacao`.
-- Substituir `agruparFotosFiltradas(...)` por `agruparFotosApenasInstalacao(tipo)` quando `modoApenasInstalacao` for true (mantém a lógica `veiculoPrecisaRastreador` para decidir se a categoria `rastreador` entra).
-- Recalcular `totalFotosObrigatorias` e `totalFotosEnviadas` filtrando para essas categorias (usar `getFotosApenasInstalacao` para a lista base).
-- **Pré-preencher** os campos já preenchidos pelo público (somente leitura/visualização):
-  - Conferência (placa/chassi/modelo/cor) e hodômetro vindos do `vistoria_links` (rascunho ou registros oficiais).
-  - Mostrar nome de quem fez as fotos (`fotos_executor_nome`) num badge informativo no topo: "Fotos enviadas por X — aprovadas pelo monitoramento".
-- Validações de "podeAprovar" devem considerar apenas as fotos de instalação + rastreador (não exigir fotos visuais que já foram aprovadas).
+Cada step trata erro com `console.error` sem abortar — a atribuição em `vistoria_links.tecnico_atribuido_id` (atômica, feita antes) permanece como garantia primária.
 
-### 3) Banner contextual no topo
-Quando `modoApenasInstalacao === true`, exibir card informativo:
-> "Etapa de fotos já aprovada pelo monitoramento. Você precisa realizar apenas a instalação do rastreador."
+## Arquivos afetados
 
-## Detalhes técnicos
-
-- Reutilizar `agruparFotosApenasInstalacao` e `getFotosApenasInstalacao` (já existem).
-- Não tocar em RLS — técnico autenticado já tem leitura de `vistoria_links` via policies existentes (verificar; se não, adicionar policy `SELECT` para roles `instalador_vistoriador`/`vistoriador_base` quando `tecnico_atribuido_id = auth.uid()`).
-- Sem mudanças em edge functions.
-- Sem migração de banco (colunas `fotos_aprovadas_em`, `fotos_executor_nome`, `fotos_rascunho_*` já existem).
+- `supabase/functions/assumir-instalacao-vistoria-link/index.ts` — substituir as linhas 186-192 pelo novo bloco descrito acima.
 
 ## Não-objetivos
 
-- Não mexer no fluxo padrão (sem link público) — continua mostrando tudo.
-- Não mexer no gate de aprovação (já funciona conforme pedido).
-- Não permitir que o técnico edite/refaça as fotos visuais já aprovadas (somente leitura).
+- Sem mudanças de schema (todas as colunas já existem).
+- Sem mudanças de RLS (a edge function usa `SUPABASE_SERVICE_ROLE_KEY`).
+- Sem mudanças no frontend — o mapa já consulta `view_vistorias_mapa` corretamente, basta a view receber dados certos.
+
+## Validação esperada
+
+Depois do deploy, ao assumir uma instalação via link público:
+- Pin da instalação no Mapa > Atribuições passa a aparecer com a cor do status `agendada` (não mais "sem atribuição").
+- Popup do pin mostra o nome do técnico que assumiu.
+- A entrada também aparece no painel de "Equipe" do técnico (já que `servicos.profissional_id` agora bate com seu profile).

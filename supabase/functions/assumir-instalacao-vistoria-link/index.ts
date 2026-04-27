@@ -183,12 +183,61 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Vincular a instalação ao técnico (mesmo efeito do AtribuirInstaladorDialog)
+    // Vincular a instalação ao técnico — atualiza AMBAS as colunas que o restante
+    // do sistema (mapa de monitoramento, atribuição manual, kanban) consulta:
+    //   - instalador_id            → usado por filtros de listagem do app do técnico
+    //   - instalador_responsavel_id → usado pela view view_vistorias_mapa para popular
+    //                                 o vistoriador_id (e refletir no Mapa > Atribuições)
+    //   - status='agendada'         → consistente com AtribuirInstaladorDialog
     if (link.instalacao_id) {
-      await supabase
+      const { error: updInstErr } = await supabase
         .from('instalacoes')
-        .update({ tecnico_id: userId })
+        .update({
+          instalador_id: userId,
+          instalador_responsavel_id: userId,
+          status: 'agendada',
+        })
         .eq('id', link.instalacao_id)
+      if (updInstErr) {
+        console.error('[assumir-instalacao-vistoria-link] erro atualizando instalacoes:', updInstErr)
+      }
+
+      // Materializa a atribuição no(s) serviço(s) ativos derivados desta instalação.
+      // A view do mapa prioriza COALESCE(servicos.profissional_id, ...), então sem
+      // este update o pin não muda de "sem atribuição" no monitoramento.
+      const { data: servicosAtivos, error: servSelErr } = await supabase
+        .from('servicos')
+        .select('id')
+        .eq('instalacao_origem_id', link.instalacao_id)
+        .not('status', 'in', '(concluida,cancelada,nao_compareceu,imprevisto_pendente)')
+
+      if (servSelErr) {
+        console.error('[assumir-instalacao-vistoria-link] erro lendo servicos:', servSelErr)
+      } else if (servicosAtivos && servicosAtivos.length > 0) {
+        const ids = servicosAtivos.map((s: any) => s.id)
+        const { error: updServErr } = await supabase
+          .from('servicos')
+          .update({ profissional_id: userId, status: 'agendada' })
+          .in('id', ids)
+        if (updServErr) {
+          console.error('[assumir-instalacao-vistoria-link] erro atualizando servicos:', updServErr)
+        }
+
+        // Log de atribuição (mesmo padrão do useAtribuicaoManual.ts)
+        const logRows = ids.map((sid: string) => ({
+          servico_id: sid,
+          profissional_id: userId,
+          tipo_atribuicao: 'manual',
+          atribuido_por: userId,
+          observacoes: 'Auto-atribuição via link público de vistoria',
+        }))
+        const { error: logErr } = await supabase
+          .from('servicos_atribuicoes_log')
+          .insert(logRows as any)
+        if (logErr) {
+          console.error('[assumir-instalacao-vistoria-link] erro log atribuicao:', logErr)
+        }
+      }
     }
 
     return new Response(
