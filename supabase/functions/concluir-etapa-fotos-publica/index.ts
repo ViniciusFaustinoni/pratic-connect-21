@@ -101,15 +101,28 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── 4) Marcar etapa concluída no link
+    // ── 4) Marcar etapa concluída no link.
+    // Quando o veículo dispensa rastreador (exige_etapa_instalacao=false), também
+    // fechamos a etapa de instalação automaticamente e auto-aprovamos as fotos.
+    const dispensaInstalacao = link.exige_etapa_instalacao === false
+    const linkPatch: Record<string, any> = {
+      fotos_etapa_status: 'concluida',
+      fotos_concluida_em: agora,
+      fotos_executor_nome: executor_nome,
+      vistoria_id: vistoriaId,
+    }
+    if (dispensaInstalacao) {
+      linkPatch.instalacao_etapa_status = 'concluida'
+      linkPatch.instalacao_concluida_em = agora
+      linkPatch.instalacao_executor_nome = executor_nome
+      linkPatch.instalacao_executor_tipo = 'cliente'
+      linkPatch.fotos_aprovadas_em = agora
+      linkPatch.status = 'concluida'
+    }
+
     const { error: linkUpd } = await supabase
       .from('vistoria_links')
-      .update({
-        fotos_etapa_status: 'concluida',
-        fotos_concluida_em: agora,
-        fotos_executor_nome: executor_nome,
-        vistoria_id: vistoriaId,
-      })
+      .update(linkPatch)
       .eq('id', link.id)
 
     if (linkUpd) {
@@ -119,8 +132,19 @@ Deno.serve(async (req) => {
       )
     }
 
-    // ── 5) Se a outra etapa já foi concluída, aplicar conclusão final
-    if (link.instalacao_etapa_status === 'concluida') {
+    // ── 4.5) Se dispensou instalação, marcar a instalação como concluída
+    // (fecha o ciclo no módulo de instalações; trigger de cascata cuida de
+    // serviços/agendamentos órfãos pelo padrão de dedupe do projeto).
+    if (dispensaInstalacao && link.instalacao_id) {
+      await supabase
+        .from('instalacoes')
+        .update({ status: 'concluida', data_conclusao: agora })
+        .eq('id', link.instalacao_id)
+        .neq('status', 'concluida')
+    }
+
+    // ── 5) Se a outra etapa já foi concluída (ou foi auto-concluída acima), aplicar conclusão final
+    if (dispensaInstalacao || link.instalacao_etapa_status === 'concluida') {
       try {
         await supabase.functions.invoke('aplicar-conclusao-vistoria', {
           body: { vistoria_link_id: link.id },
