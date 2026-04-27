@@ -414,43 +414,53 @@ export default function GradeComissaoForm({ basePath = '/configuracoes/grades-co
 
       const regrasParaSalvar = getRegrasParaSalvar();
       const parcelaIdByKey = new Map<string, string>();
-      const parcelasInsert = selectedPlanIds.flatMap((planoId) =>
-        (regrasParaSalvar[planoId] || []).map((p, i) => ({
-          grade_id: gradeId!,
-          numero_parcela: p.vitalicia ? null : p.numero_parcela,
-          vitalicia: p.vitalicia,
-          vitalicia_inicio_parcela: p.vitalicia ? p.vitalicia_inicio_parcela : null,
-          label: p.label.trim(),
-          ordem: selectedPlanIds.indexOf(planoId) * 1000 + i,
-          supervisor_split_mode: p.supervisor_split_mode || 'igual',
-          __key: `${planoId}:${i}`,
-        }))
-      );
+
+      // Parcelas e níveis são por GRADE (não por plano). Em config compartilhada
+      // todas as entradas dos planos selecionados apontam para os mesmos IDs.
+      // Usamos o primeiro plano selecionado como modelo canônico.
+      const planoModeloId = selectedPlanIds[0];
+      const parcelasModelo = regrasParaSalvar[planoModeloId] || [];
+
+      const parcelasInsertCanon = parcelasModelo.map((p, i) => ({
+        grade_id: gradeId!,
+        numero_parcela: p.vitalicia ? null : p.numero_parcela,
+        vitalicia: p.vitalicia,
+        vitalicia_inicio_parcela: p.vitalicia ? p.vitalicia_inicio_parcela : null,
+        label: p.label.trim(),
+        ordem: i,
+        supervisor_split_mode: p.supervisor_split_mode || 'igual',
+        __idx: i,
+      }));
 
       const { data: pcsCriadas, error: pErr } = await (supabase as any)
         .from('grades_comissao_parcelas')
-        .insert(parcelasInsert.map(({ __key, ...row }) => row))
+        .insert(parcelasInsertCanon.map(({ __idx, ...row }) => row))
         .select('id, ordem');
       if (pErr) throw pErr;
 
-      (pcsCriadas || []).forEach((p: any) => {
-        const original = parcelasInsert.find((row) => row.ordem === p.ordem);
-        if (original) parcelaIdByKey.set(original.__key, p.id);
+      const idByOrdem = new Map<number, string>();
+      (pcsCriadas || []).forEach((p: any) => idByOrdem.set(p.ordem, p.id));
+
+      // Mapeia (planoId:i) -> mesmo parcela_id canônico (por índice da parcela no modelo)
+      selectedPlanIds.forEach((planoId) => {
+        parcelasModelo.forEach((_, i) => {
+          const pid = idByOrdem.get(i);
+          if (pid) parcelaIdByKey.set(`${planoId}:${i}`, pid);
+        });
       });
 
+      // Níveis: também canônicos por grade (uma única vez, baseados no modelo)
       const niveisInsert: any[] = [];
-      selectedPlanIds.forEach((planoId) => {
-        (regrasParaSalvar[planoId] || []).forEach((p, i) => {
-          const parcelaId = parcelaIdByKey.get(`${planoId}:${i}`);
-          p.niveis.forEach((n, ni) => {
-            niveisInsert.push({
-              grade_id: gradeId!,
-              parcela_id: parcelaId,
-              nome: n.nome.trim(),
-              percentual: n.tipo_comissao === 'valor_fixo' ? 0 : Number(n.valor ?? n.percentual) || 0,
-              ordem: ni,
-              role: n.role,
-            });
+      parcelasModelo.forEach((p, i) => {
+        const parcelaId = idByOrdem.get(i);
+        p.niveis.forEach((n, ni) => {
+          niveisInsert.push({
+            grade_id: gradeId!,
+            parcela_id: parcelaId,
+            nome: n.nome.trim(),
+            percentual: n.tipo_comissao === 'valor_fixo' ? 0 : Number(n.valor ?? n.percentual) || 0,
+            ordem: ni,
+            role: n.role,
           });
         });
       });
