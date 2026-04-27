@@ -43,11 +43,9 @@ export function DetalheRelatoModal({ report, onClose }: Props) {
   const { data: history = [] } = useErrorReportHistory(report?.id ?? null);
   const update = useUpdateErrorReportStatus();
   const melhorarTexto = useMelhorarTextoRelato();
-  const gerarPrompt = useGerarPromptCorrecao();
   const [obs, setObs] = useState('');
   const [obsPrev, setObsPrev] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ url: string; nome: string; mime: string } | null>(null);
-  const [promptResult, setPromptResult] = useState<PromptCorrecaoResultado | null>(null);
 
   const copyImage = async (url: string, mime: string) => {
     try {
