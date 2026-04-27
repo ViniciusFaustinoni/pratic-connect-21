@@ -242,6 +242,11 @@ const menuConfig: {
           url: '/monitoramento/aprovacoes',
           icon: ShieldAlert,
         },
+        {
+          title: 'Liberações Auto-Vistoria',
+          url: '/monitoramento/liberacoes-autovistoria',
+          icon: ShieldAlert,
+        },
         { title: 'Prestadores Parceiros', url: '/monitoramento/prestadores-parceiros', icon: Truck },
       ],
     },
