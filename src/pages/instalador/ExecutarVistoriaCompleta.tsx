@@ -39,7 +39,6 @@ import {
   getFotosApenasInstalacao,
 } from '@/data/vistoriaConfigCompleta';
 import { useVistoriaLink } from '@/hooks/useVistoriaLinkPublica';
-import { ShieldCheck as ShieldCheckIcon } from 'lucide-react';
 import { useConfigFipeRastreador, useConfigFipeRastreadorMoto, precisaRastreador } from '@/hooks/useConfigRastreador';
 import { compressImage } from '@/lib/imageCompressor';
 import { useDeviceCapability } from '@/hooks/useDeviceCapability';
