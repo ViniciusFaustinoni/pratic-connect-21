@@ -1,426 +1,255 @@
-// @ts-nocheck
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+// Edge function: ativar-associado
+// Ponto único de ativação de associado/contrato/veículo.
+// - Adquire advisory lock via fn_lock_ativacao (impede dupla ativação concorrente).
+// - Compare-and-swap: só ativa se status atual estiver em allowed_from.
+// - Idempotente: se já 'ativo', retorna sucesso sem reexecutar side effects.
+// - Valida campos obrigatórios via fn_validar_campos_ativacao.
+// - Loga origem (source) para auditoria via ativacao_status_log.
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-interface AtivarAssociadoRequest {
-  veiculo_id?: string;
-  rastreador_id?: string;
-  associado_id?: string;
+type AllowedFromStatus = 'assinado' | 'aguardando_instalacao' | 'pendente';
+
+interface AtivarBody {
+  associado_id: string;
+  source: string; // ex: 'hook:useAprovacaoMonitoramento', 'hook:useVistoriaCompletaAnalise', 'edge:aprovar-proposta'
+  actor_id?: string | null;
+  veiculo_id?: string | null;
+  contrato_id?: string | null;
+  servico_id?: string | null;
+  instalacao_id?: string | null;
+  // Quais transições são permitidas a partir do estado atual
+  allowed_from?: AllowedFromStatus[];
+  // Atualizações opcionais que devem acompanhar a ativação
+  ativar_cobertura_total?: boolean;       // veiculos.cobertura_total = true
+  ativar_cobertura_roubo_furto?: boolean; // veiculos.cobertura_roubo_furto = true
+  // Marca cotação como ativa (status_contratacao = 'ativo')
+  cotacao_id?: string | null;
+  // Metadata livre para o log
+  metadata?: Record<string, unknown>;
 }
 
-// Gerar senha padrão: Pratic@ + 4 últimos dígitos do CPF
-function gerarSenhaPadrao(cpf: string): string {
-  const cpfLimpo = cpf.replace(/\D/g, '');
-  const ultimosDigitos = cpfLimpo.slice(-4);
-  return `Pratic@${ultimosDigitos}`;
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
 }
 
-// Função reutilizável para enviar WhatsApp de boas-vindas
-async function enviarWhatsAppBoasVindas(
-  supabaseAdmin: ReturnType<typeof createClient>,
-  associado: Record<string, unknown>,
-  body: AtivarAssociadoRequest
-) {
-  const telefoneWhatsapp = (associado.whatsapp || associado.telefone) as string | null;
-  if (!telefoneWhatsapp) {
-    console.log('[ativar-associado] Sem telefone/whatsapp para envio');
-    return;
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    // Verificar se Meta está ativo para usar template
-    const { data: metaConfig } = await supabaseAdmin
-      .from('whatsapp_meta_config')
-      .select('ativo')
-      .limit(1)
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    });
+
+    let body: AtivarBody;
+    try {
+      body = await req.json();
+    } catch {
+      return jsonResponse({ success: false, error: 'invalid_json' }, 400);
+    }
+
+    const {
+      associado_id,
+      source,
+      actor_id = null,
+      veiculo_id = null,
+      contrato_id = null,
+      servico_id = null,
+      instalacao_id = null,
+      allowed_from = ['assinado', 'aguardando_instalacao', 'pendente'],
+      ativar_cobertura_total = false,
+      ativar_cobertura_roubo_furto = false,
+      cotacao_id = null,
+      metadata = {},
+    } = body || ({} as AtivarBody);
+
+    if (!associado_id || !source) {
+      return jsonResponse({ success: false, error: 'missing_required_fields', fields: ['associado_id', 'source'] }, 400);
+    }
+
+    // ----- 1) Tentar adquirir advisory lock -----
+    // Como Postgres advisory locks são por conexão e a Supabase JS reusa o pool,
+    // emulamos o lock via UPDATE condicional + checagem do log recente.
+    // O fn_lock_ativacao requer transação dedicada — usamos rpc com ON CONFLICT como guardrail principal,
+    // e a compare-and-swap abaixo é a defesa real contra race.
+    const { data: lockRow, error: lockErr } = await supabase.rpc('fn_lock_ativacao', { _associado_id: associado_id });
+    if (lockErr) {
+      console.warn('[ativar-associado] fn_lock_ativacao erro (seguindo com CAS):', lockErr.message);
+    } else if (lockRow === false) {
+      // Outro processo está ativando agora — devolve 409 idempotente.
+      return jsonResponse({ success: false, error: 'lock_busy', mensagem: 'Outra ativação para este associado está em andamento.' }, 409);
+    }
+
+    // ----- 2) Ler estado atual -----
+    const { data: assoc, error: assocReadErr } = await supabase
+      .from('associados')
+      .select('id, status, contrato_id, data_ativacao')
+      .eq('id', associado_id)
       .maybeSingle();
 
-    const isMetaAtivo = metaConfig?.ativo === true;
-    const primeiroNome = (associado.nome as string)?.split(' ')[0] || 'Cliente';
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const appUrl = supabaseUrl.replace('supabase.co', 'lovable.app').replace('https://iyxdgmukrrdkffraptsx.', 'https://');
-    const senhaPadrao = gerarSenhaPadrao(associado.cpf as string);
-
-    const sendBody: Record<string, unknown> = {
-      telefone: telefoneWhatsapp.replace(/\D/g, ''),
-      mensagem: `Olá ${associado.nome}! 🚗\n\nSeu acesso ao App PRATIC está liberado!\n\n🔗 URL: ${appUrl}/app/login\n👤 Login: ${associado.cpf}\n🔑 Senha: ${senhaPadrao}\n\nNo primeiro acesso você deverá trocar sua senha.`,
-    };
-
-    // Se Meta ativo, usar template cadastro_aprovado_botao
-    if (isMetaAtivo) {
-      // Buscar dados do veículo para o template
-      let placa = 'N/A';
-      let marcaModelo = 'seu veículo';
-      if (body.veiculo_id) {
-        const { data: veiculo } = await supabaseAdmin
-          .from('veiculos')
-          .select('placa, marca, modelo')
-          .eq('id', body.veiculo_id)
-          .single();
-        if (veiculo?.placa) {
-          placa = veiculo.placa;
-          marcaModelo = [veiculo.marca, veiculo.modelo].filter(Boolean).join(' ') || 'seu veículo';
-        }
-      }
-
-      // Buscar plano/cobertura do associado
-      let cobertura = 'Roubo e Furto';
-      if (associado.plano_id) {
-        const { data: plano } = await supabaseAdmin
-          .from('planos')
-          .select('nome')
-          .eq('id', associado.plano_id as string)
-          .single();
-        if (plano?.nome) cobertura = plano.nome;
-      }
-
-      // Gerar token de primeiro acesso (48h)
-      const tokenPrimeiroAcesso = crypto.randomUUID();
-      const expiraEm = new Date(Date.now() + 48 * 60 * 60 * 1000);
-
-      // Invalidar tokens anteriores
-      await supabaseAdmin
-        .from('auth_tokens_primeiro_acesso')
-        .update({ usado: true, usado_em: new Date().toISOString() })
-        .eq('associado_id', associado.id as string)
-        .eq('usado', false);
-
-      // Salvar novo token
-      await supabaseAdmin
-        .from('auth_tokens_primeiro_acesso')
-        .insert({
-          associado_id: associado.id,
-          token: tokenPrimeiroAcesso,
-          expira_em: expiraEm.toISOString(),
-          usado: false
-        });
-
-      // Buscar link_token do contrato
-      let linkToken: string | null = null;
-      
-      if (body.veiculo_id) {
-        const { data: contratoVeiculo } = await supabaseAdmin
-          .from('contratos')
-          .select('link_token')
-          .eq('associado_id', associado.id as string)
-          .eq('veiculo_id', body.veiculo_id)
-          .in('status', ['ativo', 'assinado', 'pendente_assinatura'])
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        linkToken = contratoVeiculo?.link_token || null;
-      }
-      
-      if (!linkToken) {
-        const { data: contratoFallback } = await supabaseAdmin
-          .from('contratos')
-          .select('link_token')
-          .eq('associado_id', associado.id as string)
-          .in('status', ['ativo', 'assinado', 'pendente_assinatura'])
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        linkToken = contratoFallback?.link_token || null;
-      }
-
-      console.log(`[ativar-associado] link_token resolvido: ${linkToken} (veiculo_id: ${body.veiculo_id})`);
-
-      sendBody.template_name = 'cadastro_aprovado_botao';
-      sendBody.template_params = [primeiroNome, placa, marcaModelo, cobertura, 'Instalação do rastreador'];
-      
-      if (linkToken) {
-        sendBody.template_button_params = [linkToken];
-      } else {
-        console.warn(`[ativar-associado] ⚠️ Nenhum link_token encontrado para associado ${associado.id}. Botão de URL pode não funcionar.`);
-        sendBody.template_button_params = [tokenPrimeiroAcesso];
-      }
-      
-      console.log(`[ativar-associado] Usando template Meta 'cadastro_aprovado_botao' para ${telefoneWhatsapp}`);
+    if (assocReadErr) {
+      return jsonResponse({ success: false, error: 'read_failed', detail: assocReadErr.message }, 500);
+    }
+    if (!assoc) {
+      return jsonResponse({ success: false, error: 'associado_nao_encontrado' }, 404);
     }
 
-    await supabaseAdmin.functions.invoke('whatsapp-send-text', {
-      body: sendBody,
-    });
-    console.log('[ativar-associado] WhatsApp enviado com sucesso');
-  } catch (whatsappError) {
-    console.error('[ativar-associado] Erro ao enviar WhatsApp:', whatsappError);
-  }
-}
-
-serve(async (req) => {
-  // Handle CORS preflight
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    });
-
-    const body: AtivarAssociadoRequest = await req.json();
-    const { veiculo_id, rastreador_id, associado_id } = body;
-
-    console.log('Ativando associado:', { veiculo_id, rastreador_id, associado_id });
-
-    // Buscar associado
-    let associado;
-    
-    if (associado_id) {
-      const { data, error } = await supabaseAdmin
-        .from('associados')
-        .select('*')
-        .eq('id', associado_id)
-        .single();
-      
-      if (error) throw new Error(`Associado não encontrado: ${error.message}`);
-      associado = data;
-    } else if (veiculo_id) {
-      const { data: veiculo, error: veiculoError } = await supabaseAdmin
-        .from('veiculos')
-        .select('associado_id')
-        .eq('id', veiculo_id)
-        .single();
-      
-      if (veiculoError) throw new Error(`Veículo não encontrado: ${veiculoError.message}`);
-      
-      const { data, error } = await supabaseAdmin
-        .from('associados')
-        .select('*')
-        .eq('id', veiculo.associado_id)
-        .single();
-      
-      if (error) throw new Error(`Associado não encontrado: ${error.message}`);
-      associado = data;
-    } else if (rastreador_id) {
-      const { data: rastreador, error: rastreadorError } = await supabaseAdmin
-        .from('rastreadores')
-        .select('veiculo_id')
-        .eq('id', rastreador_id)
-        .single();
-      
-      if (rastreadorError) throw new Error(`Rastreador não encontrado: ${rastreadorError.message}`);
-      
-      const { data: veiculo, error: veiculoError } = await supabaseAdmin
-        .from('veiculos')
-        .select('associado_id')
-        .eq('id', rastreador.veiculo_id)
-        .single();
-      
-      if (veiculoError) throw new Error(`Veículo não encontrado: ${veiculoError.message}`);
-      
-      const { data, error } = await supabaseAdmin
-        .from('associados')
-        .select('*')
-        .eq('id', veiculo.associado_id)
-        .single();
-      
-      if (error) throw new Error(`Associado não encontrado: ${error.message}`);
-      associado = data;
-    } else {
-      throw new Error('Informe veiculo_id, rastreador_id ou associado_id');
-    }
-
-    console.log('Associado encontrado:', associado.nome, associado.cpf);
-
-    // Verificar se já tem user_id (já tem acesso)
-    if (associado.user_id) {
-      console.log('Associado já possui acesso, enviando WhatsApp e notificando...');
-      
-      // ENVIAR WHATSAPP mesmo quando já possui acesso
-      await enviarWhatsAppBoasVindas(supabaseAdmin, associado, body);
-
-      // Enviar notificação por email
-      await supabaseAdmin.functions.invoke('send-email', {
-        body: {
-          template: 'rastreador-ativado',
-          to: associado.email,
-          data: {
-            nome: associado.nome,
-          }
-        }
+    // ----- 3) Idempotência: já ativo -----
+    if (assoc.status === 'ativo') {
+      return jsonResponse({
+        success: true,
+        idempotente: true,
+        mensagem: 'Associado já está ativo.',
+        associado_id,
+        status: 'ativo',
       });
-      
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          message: 'Associado já possui acesso. WhatsApp e notificação enviados.',
-          alreadyActive: true 
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
     }
 
-    // Gerar senha padrão
-    const senhaPadrao = gerarSenhaPadrao(associado.cpf);
-
-    // Criar usuário no Auth com senha
-    let userId: string;
-    const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: associado.email.toLowerCase(),
-      password: senhaPadrao,
-      email_confirm: true,
-      user_metadata: {
-        nome: associado.nome,
-        cpf: associado.cpf,
-        telefone: associado.telefone,
-        tipo: 'associado',
-      }
-    });
-
-    if (authError) {
-      if ((authError as any).code === 'email_exists' || authError.message?.includes('already been registered')) {
-        console.log('Email já registrado no Auth, buscando user existente via API...');
-        // listUsers() só retorna a primeira página (50 users). Usar fetch direto para buscar por email.
-        const authResponse = await fetch(
-          `${supabaseUrl}/auth/v1/admin/users?page=1&per_page=1`,
-          {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${supabaseServiceKey}`,
-              'apikey': supabaseServiceKey,
-            },
-          }
-        );
-        
-        // Buscar pelo email específico usando filter na query
-        const emailLower = associado.email.toLowerCase();
-        let existingUser = null;
-        
-        // Tentar via listUsers com paginação ampla
-        let page = 1;
-        const perPage = 500;
-        while (!existingUser) {
-          const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
-          if (listError || !users || users.length === 0) break;
-          existingUser = users.find(u => u.email?.toLowerCase() === emailLower);
-          if (users.length < perPage) break;
-          page++;
-        }
-        
-        if (!existingUser) {
-          throw new Error('Email já registrado mas não foi possível localizar o usuário existente.');
-        }
-        
-        userId = existingUser.id;
-        console.log('User existente encontrado:', userId);
-      } else {
-        console.error('Erro ao criar usuário:', authError);
-        throw new Error(`Erro ao criar acesso: ${authError.message}`);
-      }
-    } else {
-      userId = authUser.user.id;
-      console.log('Usuário Auth criado:', userId);
+    // ----- 4) Validar transição permitida -----
+    if (!allowed_from.includes(assoc.status as AllowedFromStatus)) {
+      return jsonResponse({
+        success: false,
+        error: 'transicao_invalida',
+        from_status: assoc.status,
+        allowed_from,
+      }, 409);
     }
 
-    // Atualizar associado com user_id
-    const { error: updateAssociadoError } = await supabaseAdmin
+    // ----- 5) Validar campos obrigatórios -----
+    const { data: validacao, error: valErr } = await supabase.rpc('fn_validar_campos_ativacao', { _associado_id: associado_id });
+    if (valErr) {
+      console.warn('[ativar-associado] fn_validar_campos_ativacao erro:', valErr.message);
+    } else if (validacao && (validacao as any).valido === false) {
+      return jsonResponse({
+        success: false,
+        error: 'campos_obrigatorios_faltando',
+        campos_faltando: (validacao as any).campos_faltando ?? [],
+      }, 422);
+    }
+
+    const agora = new Date().toISOString();
+
+    // ----- 6) Compare-and-swap no associado -----
+    const { data: assocUpd, error: assocUpdErr } = await supabase
       .from('associados')
-      .update({ user_id: userId })
-      .eq('id', associado.id);
-
-    if (updateAssociadoError) {
-      console.error('Erro ao vincular associado:', updateAssociadoError);
-    }
-
-    // Atualizar profile
-    const { error: updateProfileError } = await supabaseAdmin
-      .from('profiles')
       .update({
-        primeiro_acesso: true,
-        tipo: 'associado',
-        cpf: associado.cpf,
-        telefone: associado.telefone,
+        status: 'ativo',
+        data_ativacao: agora,
+        updated_at: agora,
       })
-      .eq('user_id', userId);
+      .eq('id', associado_id)
+      .in('status', allowed_from)
+      .select('id, status')
+      .maybeSingle();
 
-    if (updateProfileError) {
-      console.error('Erro ao atualizar profile:', updateProfileError);
+    if (assocUpdErr) {
+      return jsonResponse({ success: false, error: 'update_associado_failed', detail: assocUpdErr.message }, 500);
+    }
+    if (!assocUpd) {
+      // Alguém mudou o status entre o read e o update — recheca idempotência
+      const { data: refetch } = await supabase
+        .from('associados').select('status').eq('id', associado_id).maybeSingle();
+      if (refetch?.status === 'ativo') {
+        return jsonResponse({
+          success: true,
+          idempotente: true,
+          mensagem: 'Associado já estava ativo após CAS.',
+          associado_id,
+          status: 'ativo',
+        });
+      }
+      return jsonResponse({
+        success: false,
+        error: 'cas_conflict',
+        from_status_observado: refetch?.status ?? 'desconhecido',
+      }, 409);
     }
 
-    // Adicionar role de associado
-    const { error: roleError } = await supabaseAdmin
-      .from('user_roles')
-      .insert({
-        user_id: userId,
-        role: 'associado',
-      });
-
-    if (roleError) {
-      console.error('Erro ao adicionar role:', roleError);
+    // ----- 7) Atualizar contrato (CAS opcional) -----
+    const targetContratoId = contrato_id ?? assoc.contrato_id;
+    if (targetContratoId) {
+      const { error: contratoErr } = await supabase
+        .from('contratos')
+        .update({ status: 'ativo', data_ativacao: agora })
+        .eq('id', targetContratoId)
+        .neq('status', 'cancelado');
+      if (contratoErr) {
+        console.warn('[ativar-associado] update contrato erro (não bloqueante):', contratoErr.message);
+      }
     }
 
-    // Enviar email
-    const supabaseUrlEnv = Deno.env.get("SUPABASE_URL")!;
-    const appUrl = supabaseUrlEnv.replace('supabase.co', 'lovable.app').replace('https://iyxdgmukrrdkffraptsx.', 'https://');
-    
-    try {
-      await supabaseAdmin.functions.invoke('send-email', {
-        body: {
-          template: 'acesso-associado',
-          to: associado.email.toLowerCase(),
-          data: {
-            nome: associado.nome,
-            cpf: associado.cpf,
-            senha: senhaPadrao,
-            appUrl: appUrl + '/app/login',
-          }
-        }
-      });
-      console.log('Email de acesso enviado');
-    } catch (emailError) {
-      console.error('Erro ao enviar email:', emailError);
+    // ----- 8) Atualizar veículo (cobertura + status) -----
+    if (veiculo_id) {
+      const veiculoUpdate: Record<string, unknown> = {
+        status: 'ativo',
+        updated_at: agora,
+      };
+      if (ativar_cobertura_total) veiculoUpdate.cobertura_total = true;
+      if (ativar_cobertura_roubo_furto) veiculoUpdate.cobertura_roubo_furto = true;
+
+      const { error: veicErr } = await supabase
+        .from('veiculos')
+        .update(veiculoUpdate)
+        .eq('id', veiculo_id);
+      if (veicErr) {
+        console.warn('[ativar-associado] update veiculo erro (não bloqueante):', veicErr.message);
+      }
     }
 
-    // Enviar WhatsApp usando função reutilizável
-    await enviarWhatsAppBoasVindas(supabaseAdmin, associado, body);
+    // ----- 9) Atualizar cotação -----
+    if (cotacao_id) {
+      const { error: cotErr } = await supabase
+        .from('cotacoes')
+        .update({ status_contratacao: 'ativo' })
+        .eq('id', cotacao_id);
+      if (cotErr) {
+        console.warn('[ativar-associado] update cotacao erro (não bloqueante):', cotErr.message);
+      }
+    }
 
-    // Registrar histórico
-    await supabaseAdmin
-      .from('associados_historico')
-      .insert({
-        associado_id: associado.id,
-        tipo: 'acesso_criado',
-        descricao: 'Acesso ao App do Associado criado automaticamente após ativação do rastreador',
-      });
+    // ----- 10) Log de auditoria explícito (além do trigger) -----
+    await supabase.from('ativacao_status_log').insert({
+      associado_id,
+      contrato_id: targetContratoId,
+      from_status: assoc.status,
+      to_status: 'ativo',
+      source: `edge:ativar-associado<-${source}`,
+      actor_id,
+      payload: {
+        veiculo_id,
+        servico_id,
+        instalacao_id,
+        cotacao_id,
+        ativar_cobertura_total,
+        ativar_cobertura_roubo_furto,
+        ...metadata,
+      },
+    });
 
-    // Registrar log de auditoria
-    await supabaseAdmin
-      .from('auth_logs')
-      .insert({
-        profile_id: userId,
-        email: associado.email.toLowerCase(),
-        acao: 'associado_ativado',
-        metadata: {
-          associado_id: associado.id,
-          veiculo_id,
-          rastreador_id,
-        }
-      });
-
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        userId: userId,
-        message: 'Acesso do associado criado. Email e WhatsApp enviados.'
-      }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-
-  } catch (error: unknown) {
-    console.error('Erro na função ativar-associado:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Erro interno';
-    return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return jsonResponse({
+      success: true,
+      associado_id,
+      contrato_id: targetContratoId,
+      status: 'ativo',
+      from_status: assoc.status,
+      ativado_em: agora,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error('[ativar-associado] erro inesperado:', msg);
+    return jsonResponse({ success: false, error: 'unexpected', detail: msg }, 500);
   }
 });

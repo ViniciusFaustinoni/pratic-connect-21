@@ -191,27 +191,26 @@ export function useAtivarRastreadorPlataforma() {
         console.warn('[ativar-rastreador] Plataforma sem integração de ativação:', rastreador.plataforma);
       }
 
-      const { error: veicError } = await supabase
-        .from('veiculos')
-        .update({
-          cobertura_total: true,
-          status: 'ativo',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', veiculoId);
+      // Ativação atômica via edge function única (lock + CAS + log + auditoria)
+      const { data: ativacao, error: ativacaoError } = await supabase.functions.invoke('ativar-associado', {
+        body: {
+          associado_id: associadoId,
+          veiculo_id: veiculoId,
+          instalacao_id: instalacaoId,
+          source: 'hook:useVistoriaCompletaAnalise',
+          actor_id: profile?.id ?? null,
+          ativar_cobertura_total: true,
+          allowed_from: ['assinado', 'aguardando_instalacao', 'pendente'],
+          metadata: { rastreador_id: rastreadorId, imei, plataforma: rastreador.plataforma },
+        },
+      });
 
-      if (veicError) throw veicError;
-
-      const { error: assocError } = await supabase
-        .from('associados')
-        .update({
-          status: 'ativo',
-          data_ativacao: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', associadoId);
-
-      if (assocError) throw assocError;
+      if (ativacaoError) throw ativacaoError;
+      if (ativacao && ativacao.success === false && !ativacao.idempotente) {
+        throw new Error(ativacao.error === 'campos_obrigatorios_faltando'
+          ? `Campos obrigatórios faltando: ${(ativacao.campos_faltando || []).join(', ')}`
+          : ativacao.mensagem || ativacao.error || 'Falha na ativação');
+      }
 
       try {
         const { data: veiculoInfo } = await supabase

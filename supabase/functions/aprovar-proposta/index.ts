@@ -409,10 +409,28 @@ serve(async (req) => {
         supabase.from('associados').update({ status: 'aguardando_instalacao' }).eq('id', associadoId),
       ]);
     } else {
-      await Promise.all([
-        supabase.from('contratos').update({ status: 'ativo', data_ativacao: agora }).eq('id', contrato_id),
-        supabase.from('associados').update({ status: 'ativo', data_ativacao: agora }).eq('id', associadoId),
-      ]);
+      // Ativação atômica via edge function única (lock + CAS + log)
+      const ativarUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/ativar-associado`;
+      const ativarResp = await fetch(ativarUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        },
+        body: JSON.stringify({
+          associado_id: associadoId,
+          contrato_id: contrato_id,
+          source: 'edge:aprovar-proposta',
+          actor_id: aprovado_por,
+          allowed_from: ['assinado', 'aguardando_instalacao', 'pendente'],
+          metadata: { motivoDecisaoSga, jaTemInstalacaoConcluida, planoTemRouboFurto },
+        }),
+      });
+      const ativarJson: any = await ativarResp.json().catch(() => ({}));
+      if (!ativarResp.ok && !ativarJson?.idempotente) {
+        console.error('[aprovar-proposta] Falha em ativar-associado:', ativarJson);
+        throw new Error(`Falha na ativação atômica: ${ativarJson?.error || ativarResp.status}`);
+      }
     }
 
     // 5. Histórico + documentos + SGA
