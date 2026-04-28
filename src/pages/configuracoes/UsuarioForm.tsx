@@ -596,6 +596,23 @@ export default function UsuarioForm() {
                   </div>
                 </div>
 
+                {formData.perfis.some(p => ['vendedor_clt', 'vendedor_externo', 'agencia', 'supervisor', 'gerente'].includes(p)) && (
+                  <div className="space-y-2">
+                    <Label htmlFor="codigo_sga_voluntario">Código SGA Voluntário</Label>
+                    <Input
+                      id="codigo_sga_voluntario"
+                      value={formData.codigo_sga_voluntario}
+                      onChange={(e) => setFormData({ ...formData, codigo_sga_voluntario: e.target.value })}
+                      placeholder="Ex: 12345"
+                      maxLength={20}
+                      className="bg-background"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Usado na sincronização Hinova/SGA dos veículos vendidos por este usuário. Se vazio, usa o código global.
+                    </p>
+                  </div>
+                )}
+
                 {!isEditing && (
                   <div className="space-y-2">
                     <Label htmlFor="senha">Senha de acesso *</Label>
