@@ -127,59 +127,47 @@ export function useAprovarInstalacaoMonitoramento() {
 
       if (servicoError) throw servicoError;
 
-      // 1. Ativar cobertura total + roubo/furto (caso não tenha autovistoria) e status ativo
-      const { error: veiculoError } = await supabase
-        .from('veiculos')
-        .update({
-          cobertura_roubo_furto: true,
-          cobertura_total: true,
-          status: 'ativo',
-          updated_at: agora,
-        })
-        .eq('id', data.veiculoId);
-
-      if (veiculoError) throw veiculoError;
-
-      // 2. Ativar associado
-      const { error: associadoError } = await supabase
-        .from('associados')
-        .update({
-          status: 'ativo',
-          data_ativacao: agora,
-          updated_at: agora,
-        })
-        .eq('id', data.associadoId);
-
-      if (associadoError) throw associadoError;
-
-      // 3. Buscar cotação e contrato para atualizar
+      // 1. Buscar cotação/contrato vinculados à instalação (para passar ao orquestrador)
       const { data: servicoData } = await supabase
         .from('servicos')
         .select('instalacao_origem_id')
         .eq('id', data.servicoId)
         .single();
 
-      // Tentar atualizar cotação via instalação
+      let cotacaoId: string | null = null;
+      let contratoId: string | null = null;
       if (servicoData?.instalacao_origem_id) {
         const { data: instalacao } = await supabase
           .from('instalacoes')
           .select('cotacao_id, contrato_id')
           .eq('id', servicoData.instalacao_origem_id)
           .single();
+        cotacaoId = instalacao?.cotacao_id ?? null;
+        contratoId = instalacao?.contrato_id ?? null;
+      }
 
-        if (instalacao?.cotacao_id) {
-          await supabase
-            .from('cotacoes')
-            .update({ status_contratacao: 'ativo' })
-            .eq('id', instalacao.cotacao_id);
-        }
+      // 2. Ativação atômica via edge function única (lock + CAS + log)
+      const { data: ativacao, error: ativacaoError } = await supabase.functions.invoke('ativar-associado', {
+        body: {
+          associado_id: data.associadoId,
+          veiculo_id: data.veiculoId,
+          contrato_id: contratoId,
+          cotacao_id: cotacaoId,
+          servico_id: data.servicoId,
+          source: 'hook:useAprovacaoMonitoramento',
+          actor_id: profile?.id ?? null,
+          ativar_cobertura_total: true,
+          ativar_cobertura_roubo_furto: true,
+          allowed_from: ['assinado', 'aguardando_instalacao', 'pendente'],
+          metadata: { observacoes: data.observacoes ?? null },
+        },
+      });
 
-        if (instalacao?.contrato_id) {
-          await supabase
-            .from('contratos')
-            .update({ status: 'ativo', data_ativacao: agora })
-            .eq('id', instalacao.contrato_id);
-        }
+      if (ativacaoError) throw ativacaoError;
+      if (ativacao && ativacao.success === false && !ativacao.idempotente) {
+        throw new Error(ativacao.error === 'campos_obrigatorios_faltando'
+          ? `Campos obrigatórios faltando: ${(ativacao.campos_faltando || []).join(', ')}`
+          : ativacao.mensagem || ativacao.error || 'Falha na ativação');
       }
 
       // 4. Garantir ativação no SGA somente no fechamento do Monitoramento
