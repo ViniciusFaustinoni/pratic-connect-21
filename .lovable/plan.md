@@ -1,184 +1,51 @@
-# Revisão completa do endpoint de cadastro no SGA (Hinova)
+
+# Validação E2E — sga-hinova-sync
 
 ## Objetivo
+Confirmar, com dados reais, que o fluxo refatorado executa na ordem canônica do Hinova:
+1. Buscar associado por CPF → reusa ou cadastra
+2. Buscar veículo por placa/chassi → reusa, falha se de outro associado, ou cadastra
+3. Upload de fotos em lotes de 50
 
-Reescrever `supabase/functions/sga-hinova-sync/index.ts` (2009 linhas, com lógica acumulada de patches) em uma orquestração linear, previsível e fiel à documentação oficial Hinova:
+## Etapas
 
-1. **Autenticar** → token de usuário
-2. **Buscar associado por CPF** (`GET /associado/buscar/{cpf}/cpf`)
-   - Se existir → reusa `codigo_associado` e a lista de `veiculos` retornada
-   - Se não existir → **Cadastrar associado** (`POST /associado/cadastrar`) e captura `codigo_associado`
-3. **Buscar veículo por placa/chassi** (`GET /veiculo/buscar/:placaOuChassi/:buscar_por`)
-   - Se existir e pertencer ao associado → reusa `codigo_veiculo`
-   - Se não existir → **Cadastrar veículo** vinculado ao `codigo_associado` (`POST /veiculo/cadastrar`) e captura `codigo_veiculo`
-4. **Cadastrar fotos** vinculadas ao `codigo_veiculo` (`POST /veiculo/foto/cadastrar`), em lotes de até 50
-5. Persistir `codigo_hinova` em `associados` e `veiculos`, marcar fila como concluída
+### 1. Selecionar candidato de teste
+Rodar SELECT em `associados` + `contratos` + `veiculos` filtrando:
+- `status = 'ativo'`
+- `codigo_associado_hinova IS NULL` (nunca sincronizado) **ou** um associado já sincronizado para validar o caminho "reuso"
+- veículo com `placa`, `chassi`, `codigo_fipe`, `ano_fabricacao` preenchidos
+- documentos/fotos disponíveis em `documentos_associado` ou bucket equivalente
 
-Todo o resto (loops de recovery por logs, 3 estratégias paralelas de busca, fallbacks por endpoints inexistentes, etc.) é removido — a busca oficial é a regra única.
+Apresentar 1–2 candidatos e pedir confirmação antes de disparar.
 
-## Arquitetura
+### 2. Disparar sync
+`supabase--curl_edge_functions` POST `/sga-hinova-sync` com `{ associado_id, contrato_id, veiculo_id }` (payload exato a confirmar lendo o handler).
 
-```text
-┌─────────────────────────────────────────────────────────┐
-│ sga-hinova-sync/index.ts (orquestrador, ~250 linhas)    │
-│   - valida entrada, carrega credenciais                 │
-│   - guard idempotência + lock                           │
-│   - chama steps em ordem, propaga códigos               │
-└─────────────────────────────────────────────────────────┘
-        │ usa
-        ▼
-┌─────────────────────────────────────────────────────────┐
-│ _shared/hinova-client.ts (já existe — expandir)         │
-│   - autenticar()                                        │
-│   - buscarAssociadoPorCpf(cpf)                          │
-│   - cadastrarAssociado(payload)                         │
-│   - buscarVeiculoPorPlaca(placa)  [já existe]           │
-│   - buscarVeiculoPorChassi(chassi)                      │
-│   - cadastrarVeiculo(payload)                           │
-│   - cadastrarFotosVeiculo(codigoVeiculo, fotos[])       │
-└─────────────────────────────────────────────────────────┘
-        │
-        ▼
-┌─────────────────────────────────────────────────────────┐
-│ _shared/hinova-payloads.ts (NOVO)                       │
-│   - buildAssociadoPayload(associado, ctx)               │
-│   - buildVeiculoPayload(veiculo, codAssoc, plano, ctx)  │
-│   - buildFotosPayload(documentos[], mapeamentos)        │
-└─────────────────────────────────────────────────────────┘
-```
+### 3. Coletar evidências
+- `supabase--edge_function_logs sga-hinova-sync` — extrair as 3 fases (associado, veículo, fotos) e os `codigo_*` retornados pelo Hinova
+- SELECT pós-sync em `associados.codigo_associado_hinova`, `veiculos.codigo_veiculo_hinova`, `sga_sync_log` (ou tabela equivalente) para confirmar persistência
+- Conferir contagem de fotos enviadas vs documentos elegíveis
 
-Cada função do client retorna um objeto tipado `{ ok, codigo?, raw, status }` — sem lançar exceções "transparentes". O orquestrador decide o que fazer com cada resultado.
+### 4. Cenários a cobrir (idealmente 3 execuções)
+- **A — Cadastro novo**: associado sem `codigo_associado_hinova`. Deve passar pelas 3 fases criando tudo.
+- **B — Reuso de associado**: re-disparar no mesmo registro. Deve achar por CPF, achar veículo por placa, **não** recriar nada, e (idempotência) não reenviar fotos duplicadas.
+- **C — Veículo de outro dono** (se houver caso real): confirmar que falha permanente é registrada sem corromper estado.
 
-## Fluxo do orquestrador (pseudocódigo)
-
-```text
-1. validateInput(veiculo_id, associado_id, status_sga_destino)
-2. loadCredenciais()  // env > banco > falha
-3. idempotencyGuard(veiculo)  // já sincronizado? sair com sucesso
-4. acquireLock(veiculo)  // status_sga = 'sincronizando'
-
-5. associado = db.getAssociado(associado_id)
-   guardBaseAntiga(associado)  // mantém regra atual
-   veiculo   = db.getVeiculo(veiculo_id)
-   contrato  = db.getContrato(veiculo_id || associado_id)
-   resolveVendedor(contrato)  // codigo_sga_voluntario obrigatório
-
-6. token = hinova.autenticar()
-
-7. // PASSO ASSOCIADO — busca antes de cadastrar
-   busca = hinova.buscarAssociadoPorCpf(cpf)
-   if busca.encontrado:
-       codigoAssociado = busca.codigo_associado
-       // tentar reaproveitar veículo da lista retornada
-       vExistente = busca.veiculos.find(v => normalizePlaca(v.placa) === placa)
-       if vExistente: codigoVeiculo = vExistente.codigo_veiculo
-   else:
-       payload = buildAssociadoPayload(associado, contexto)
-       res = hinova.cadastrarAssociado(payload)
-       if !res.ok: failQueue('associado', res.erro); return
-       codigoAssociado = res.codigo_associado
-
-   db.update(associados, { codigo_hinova: codigoAssociado, sincronizado: true })
-
-8. // PASSO VEÍCULO — busca antes de cadastrar
-   if !codigoVeiculo:
-       busca = hinova.buscarVeiculoPorPlaca(placa) || hinova.buscarVeiculoPorChassi(chassi)
-       if busca.encontrado && busca.codigo_associado == codigoAssociado:
-           codigoVeiculo = busca.codigo_veiculo
-       else if busca.encontrado:
-           failQueue('veiculo', 'placa pertence a outro associado no Hinova'); return
-       else:
-           payload = buildVeiculoPayload(veiculo, codigoAssociado, plano, contexto)
-           res = hinova.cadastrarVeiculo(payload)
-           if !res.ok: failQueue('veiculo', res.erro); return
-           codigoVeiculo = res.codigo_veiculo
-
-   db.update(veiculos, { codigo_hinova: codigoVeiculo, status_sga: destino })
-
-9. // PASSO FOTOS
-   docs = db.getDocumentos(associado_id, veiculo_id)
-   fotos = buildFotosPayload(docs, mapeamentos)  // descarta sem URL ou sem mapeamento
-   for batch of chunks(fotos, 50):
-       hinova.cadastrarFotosVeiculo(codigoVeiculo, batch)
-
-10. markQueueCompleted(); logSync('sync_completo', success)
-```
-
-## Mudanças no payload (alinhar 100% com docs)
-
-### Associado (`POST /associado/cadastrar`)
-Campos enviados (todos validados antes):
-`nome, cpf (numérico), rg, data_nascimento (dd/mm/yyyy), sexo (M|F), logradouro, numero, complemento, bairro, cidade, estado (sigla), cep (numérico), codigo_conta, dia_vencimento, telefone, celular, email, codigo_regional, codigo_cooperativa, codigo_voluntario (do vendedor), codigo_tipo_cobranca_recorrente, codigo_como_conheceu, codigo_profissao, data_contrato`
-
-Removidos: payloads inflados que a Hinova ignora ou rejeita.
-
-### Veículo (`POST /veiculo/cadastrar`)
-`codigo_associado, ano_fabricacao, ano_modelo, codigo_tipo_veiculo, kilometragem, chassi, numero_motor, codigo_fipe, codigo_voluntario, dia_vencimento, renavam, placa (vazio se 0KM), codigo_combustivel, codigo_cor, codigo_cota, codigo_conta, valor_fipe, valor_adesao, data_contrato, codigo_situacao, codigo_cooperativa, produtos[]`
-
-`produtos[]` segue o formato oficial `[{ codigo_produto: N }, ...]` (não `produtos_vinculados` com `valor` — ajustar conforme docs).
-
-### Fotos (`POST /veiculo/foto/cadastrar`)
-Por lote de ≤50, formato exato:
-```json
-{ "codigo_veiculo": N, "foto": [{ "nome_arquivo", "codigo_tipo", "link" }] }
-```
-
-## Remoções (limpeza)
-
-- 3 estratégias concorrentes de busca por CPF (`/associado/buscar/cpf`, `/associado/consultar`, `/associado/buscar` POST) → manter **só** `GET /associado/buscar/{cpf}/cpf` (é o documentado).
-- Loop de "recovery por logs/identidade" em 4 estratégias → desnecessário, pois a busca oficial sempre roda primeiro.
-- Detector de "loop infinito CPF duplicado" → não acontece mais (busca substitui a tentativa cega).
-- Fallback `formatCPF` em URL → spec diz "999.999.999-99 ou somente números"; padronizar em **somente números**.
-- Inferência de `codigo_conta` por histórico de logs → manter só ENV/banco; falhar com mensagem clara se ausente.
-
-## Mantido (regras de negócio existentes)
-
-- Guard de idempotência (`sincronizado_hinova && codigo_hinova`)
-- Lock por `status_sga='sincronizando'` com stale-lock recovery (5min)
-- Guard `origem_cadastro='api_externa'` (base antiga não reenvia)
-- Resolução obrigatória de `codigo_sga_voluntario` do vendedor real do contrato
-- Resolução de `codigo_sga_plano` numérico estrito
-- Downgrade de `ativo`→`pendente` quando veículo tem Roubo/Furto sem aprovação técnica
-- Auditoria em `logs_auditoria` da decisão SGA
-- `sga_sync_queue` para reenvio com backoff e `falha_permanente` após 10 tentativas
-- Mapeamentos via tabela `hinova_mapeamentos` (cor, combustível, tipo_veiculo, tipo_foto)
-- Trigger DB que mantém `veiculos.associado_id == contratos.associado_id`
-
-## Tratamento de erros (uniforme)
-
-Tabela de decisão por erro do Hinova:
-
-| Cenário | Ação |
-|---|---|
-| 401/token expirado | reautenticar 1x; se persistir → fila com `etapa='auth'` |
-| Associado: CPF duplicado | (não deve mais ocorrer — busca antes) → fallback: re-buscar; se nada → `falha_permanente` |
-| Associado: 4xx validação | `falha_permanente` com mensagem completa (campos inválidos) |
-| Veículo: placa/chassi duplicado em outro associado | `falha_permanente` "veículo pertence a outro CPF no Hinova" |
-| Veículo: associado não cadastrado | invalidar `codigo_hinova` local, requeue etapa `associado` |
-| Fotos: erro parcial | reenfileirar etapa `fotos` com `codigo_associado_hinova` e `codigo_veiculo_hinova` já gravados |
-| Rede/timeout | retry exponencial (3x), depois fila |
+### 5. Critérios de aceite
+- Fase 1 retorna `codigo_associado` e grava em `associados`
+- Fase 2 retorna `codigo_veiculo` e grava em `veiculos`
+- Fase 3 envia fotos em lotes ≤ 50, com `codigo_tipo` correto por documento
+- Reexecução é idempotente (sem duplicatas no Hinova)
+- Logs sem stack trace de erro nas 3 fases
 
 ## Detalhes técnicos
+- Ler `supabase/functions/sga-hinova-sync/index.ts` para confirmar nome dos parâmetros de entrada
+- Ler `_shared/hinova-payloads.ts` para mapear `codigo_tipo` de fotos vs `documentos.tipo`
+- Se faltar algum mapeamento de tipo de foto (CRLV, CNH, chassi, frente, lateral, traseira, motor), reportar antes de disparar — não inventar valores
 
-- **Arquivo principal**: `supabase/functions/sga-hinova-sync/index.ts` reescrito (~300 linhas, era 2009).
-- **Novos helpers**: `supabase/functions/_shared/hinova-payloads.ts` e expansão de `_shared/hinova-client.ts` com `autenticar`, `buscarAssociadoPorCpf`, `cadastrarAssociado`, `buscarVeiculoPorChassi`, `cadastrarVeiculo`, `cadastrarFotosVeiculo`.
-- **Compatibilidade**: contrato de entrada idêntico (`{veiculo_id, associado_id, status_sga_destino?, ...}`) e mesma resposta `202 {success, status:'processing'}`. Nenhum chamador front/edge precisa mudar.
-- **Logs**: mesmo schema de `sga_sync_logs` (action/status/payload), mas com `action` enxutos: `autenticar | buscar_associado | cadastrar_associado | buscar_veiculo | cadastrar_veiculo | enviar_fotos | sync_completo`. Diagnósticos `busca_cpf_diagnostico`/`recovery_*` saem.
-- **Idempotência reforçada**: o passo "buscar antes de cadastrar" elimina a maior parte dos casos de duplicidade que motivaram os patches anteriores (ex.: KOS1G37, deadlock de CPF).
-- **Reaproveitamento da lista de veículos do associado**: quando o `GET /associado/buscar/{cpf}/cpf` retorna `veiculos[]`, varremos por placa para reusar `codigo_veiculo` sem cadastrar de novo (corrige caso "associado existe, veículo dele já existe").
+## Riscos
+- O teste **cria registros reais no Hinova**. Vou pedir confirmação explícita do CPF/placa antes de disparar a fase de cadastro.
+- Se o candidato não tiver `codigo_fipe` ou `chassi` válido, o cadastro do veículo falha — nesse caso reporto e peço outro candidato.
 
-## Validação após deploy
-
-1. Reprocessar a fila de `sga_sync_queue` com status `pendente`/`falha_permanente` para casos similares ao KOS1G37.
-2. Rodar uma cotação de teste end-to-end (associado novo + associado existente + veículo novo + veículo existente).
-3. Conferir em `sga_sync_logs` que cada veículo gera no máximo: `autenticar → buscar_associado → (cadastrar_associado?) → buscar_veiculo → (cadastrar_veiculo?) → enviar_fotos → sync_completo`.
-
-## Memória
-
-Atualizar `mem://architecture/activation/single-source-activation` (já existe) e criar `mem://integrations/sga/cadastro-fluxo-canonico` documentando: "buscar antes de cadastrar é regra única; nenhuma estratégia paralela de recovery; payloads conforme docs Hinova v2".
-
-## Fora do escopo
-
-- Não alteramos `sga-buscar-associado-completo` (consulta usada na cotação).
-- Não alteramos cron de retry (`cron-sga-retry`) — continua chamando este endpoint.
-- Não alteramos schema do banco (apenas reuso das colunas existentes).
+## O que muda no código
+Nada por padrão. Só edito se o teste expor bug real — nesse caso, paro e reporto antes de mexer.
