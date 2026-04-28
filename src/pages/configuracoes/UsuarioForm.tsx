@@ -290,6 +290,7 @@ export default function UsuarioForm() {
     capacidade_diaria: 10,
     grade_comissao_id: '' as string,
     agencia_forma_recebimento: 'comissao' as 'comissao' | 'em_maos',
+    codigo_sga_voluntario: '',
   });
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
