@@ -5,7 +5,7 @@ import {
   UserPlus, RefreshCw, Edit, Upload, CheckCircle, XCircle,
   Car, Calendar, CheckSquare, SquareX, Receipt, DollarSign,
   PhoneCall, PhoneOff, AlertTriangle, FileText, FileCheck,
-  MessageSquare, ChevronDown, Filter, Loader2, History, X, Wrench
+  MessageSquare, ChevronDown, Filter, Loader2, History, X, Wrench, ShieldCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
