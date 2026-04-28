@@ -435,7 +435,8 @@ serve(async (req) => {
           contrato_id: contrato_id,
           source: 'edge:aprovar-proposta',
           actor_id: aprovado_por,
-          allowed_from: ['assinado', 'aguardando_instalacao', 'pendente'],
+          // status_associado válidos (enum não inclui 'assinado'/'pendente' — esses são de contratos)
+          allowed_from: ['aguardando_instalacao', 'em_analise', 'documentacao_pendente', 'aprovado'],
           metadata: { motivoDecisaoSga, jaTemInstalacaoConcluida, planoTemRouboFurto },
         }),
       });
