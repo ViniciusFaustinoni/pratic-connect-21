@@ -66,8 +66,8 @@ export function LiberarServicoButton({
       const fechados = (data as any)?.agendamentos_fechados ?? 0;
       toast.success(
         fechados > 0
-          ? `Serviço liberado. Agendamento vinculado também foi fechado.`
-          : 'Serviço liberado. Técnico desbloqueado para novas atribuições.'
+          ? 'Serviço cancelado. Agendamento vinculado também foi fechado.'
+          : 'Serviço cancelado. Técnico desbloqueado para novas atribuições.'
       );
       setOpen(false);
       setMotivo('');
