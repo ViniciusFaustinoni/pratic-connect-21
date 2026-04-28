@@ -113,7 +113,28 @@ export function useAprovarInstalacaoMonitoramento() {
     mutationFn: async (data: AprovarData) => {
       const agora = new Date().toISOString();
 
-      // 0. Marcar o serviço como APROVADO (encerra fase "Em Análise" em Serviços de Campo)
+      // 0a. Pré-validar campos obrigatórios ANTES de tocar em qualquer status
+      const { data: validacao, error: valErr } = await supabase.rpc(
+        'fn_validar_campos_ativacao',
+        { _associado_id: data.associadoId } as any,
+      );
+      if (valErr) throw valErr;
+      const faltando = (validacao as any)?.faltando ?? (validacao as any)?.campos_faltando ?? [];
+      if (Array.isArray(faltando) && faltando.length > 0) {
+        throw new Error(`Não é possível aprovar: campos obrigatórios faltando — ${faltando.join(', ')}`);
+      }
+
+      // 0b. Bloquear se associado já está em estado terminal
+      const { data: assocAtual } = await supabase
+        .from('associados')
+        .select('status')
+        .eq('id', data.associadoId)
+        .maybeSingle();
+      if (assocAtual && ['cancelado','cancelamento_solicitado','recusado','inadimplente_terminal'].includes(String(assocAtual.status))) {
+        throw new Error(`Associado está em "${assocAtual.status}" — não pode ser aprovado.`);
+      }
+
+      // 0c. Marcar o serviço como APROVADO (encerra fase "Em Análise" em Serviços de Campo)
       const { error: servicoError } = await supabase
         .from('servicos')
         .update({
@@ -170,18 +191,20 @@ export function useAprovarInstalacaoMonitoramento() {
           : ativacao.mensagem || ativacao.error || 'Falha na ativação');
       }
 
-      // 4. Garantir ativação no SGA somente no fechamento do Monitoramento
-      try {
-        await supabase.functions.invoke('sga-hinova-sync', {
-          body: {
-            veiculo_id: data.veiculoId,
-            associado_id: data.associadoId,
-            status_sga_destino: 'ativo',
-          },
-        });
-      } catch (err) {
-        console.warn('[aprovar-monitoramento] Erro ao sincronizar SGA como ativo:', err);
-      }
+      // 4. Garantir ativação no SGA via fila com retry (idempotente)
+      await supabase.rpc('enqueue_integration', {
+        _integration: 'sga',
+        _operation: 'hinova_sync',
+        _payload: {
+          veiculo_id: data.veiculoId,
+          associado_id: data.associadoId,
+          status_sga_destino: 'ativo',
+        },
+        _correlation_id: `sga:hinova:${data.veiculoId}:ativo`,
+        _max_attempts: 5,
+        _delay_seconds: 0,
+        _created_by: profile?.id ?? null,
+      });
 
       // 5. Registrar histórico
       await supabase.from('associados_historico').insert({
