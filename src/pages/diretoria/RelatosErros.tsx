@@ -36,7 +36,7 @@ const STATUS_LABELS: Record<ErrorReportStatus, { label: string; cls: string }> =
   descartado: { label: 'Descartado', cls: 'bg-muted text-muted-foreground border-border' },
 };
 
-const ORDEM_FILA: ErrorReportStatus[] = ['aberto', 'critico', 'em_tratamento', 'concluido'];
+const ORDEM_FILA: ErrorReportStatus[] = ['aberto', 'em_tratamento', 'concluido', 'critico'];
 
 function CardRelatoFila({ report, onOpen }: { report: ErrorReport; onOpen: (r: ErrorReport) => void }) {
   const { data: files = [] } = useErrorReportFiles(report.id);
