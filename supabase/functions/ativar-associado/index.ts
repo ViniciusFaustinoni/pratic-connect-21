@@ -7,6 +7,7 @@
 // - Loga origem (source) para auditoria via ativacao_status_log.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+import { translateDbError } from '../_shared/db-error-translator.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -248,8 +249,11 @@ Deno.serve(async (req) => {
       ativado_em: agora,
     });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error('[ativar-associado] erro inesperado:', msg);
-    return jsonResponse({ success: false, error: 'unexpected', detail: msg }, 500);
+    const t = translateDbError(e);
+    console.error('[ativar-associado] erro:', { code: t.code, msg: t.message, raw: t.raw });
+    return jsonResponse(
+      { success: false, error: t.message, code: t.code, detail: t.raw },
+      t.status,
+    );
   }
 });

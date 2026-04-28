@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { translateDbError } from "../_shared/db-error-translator.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -519,9 +520,15 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('[aprovar-proposta] Erro:', error);
+    const t = translateDbError(error);
     return new Response(
-      JSON.stringify({ success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      JSON.stringify({
+        success: false,
+        error: t.message,
+        code: t.code,
+        raw: t.raw,
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: t.status === 500 ? 400 : t.status }
     );
   }
 });
