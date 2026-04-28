@@ -414,67 +414,7 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
             </div>
           )}
 
-          {/* Resultado da Validação do Chassi */}
-          {chassiResultado && chassiResultado.validacao && (
-            <div className={`p-4 rounded-lg flex items-center gap-3 border ${
-              chassiResultado.validacao === 'confere'
-                ? 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900'
-                : chassiResultado.validacao === 'diverge'
-                ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900'
-                : 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900'
-            }`}>
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                chassiResultado.validacao === 'confere'
-                  ? 'bg-green-500'
-                  : chassiResultado.validacao === 'diverge'
-                  ? 'bg-red-500'
-                  : 'bg-amber-500'
-              }`}>
-                {chassiResultado.validacao === 'confere' ? (
-                  <CheckCircle className="h-5 w-5 text-white" />
-                ) : chassiResultado.validacao === 'diverge' ? (
-                  <XCircle className="h-5 w-5 text-white" />
-                ) : (
-                  <AlertTriangle className="h-5 w-5 text-white" />
-                )}
-              </div>
-              <div className="flex-1">
-                {chassiResultado.validacao === 'confere' ? (
-                  <>
-                    <p className="font-semibold text-green-700 dark:text-green-400">
-                      Chassi Validado
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      O número do chassi confere com o cadastro.
-                    </p>
-                  </>
-                ) : chassiResultado.validacao === 'diverge' ? (
-                  <>
-                    <p className="font-semibold text-red-700 dark:text-red-400">
-                      Chassi Divergente
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      O número da foto não confere com o cadastro.
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="font-semibold text-amber-700 dark:text-amber-400">
-                      Chassi Ilegível
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Não foi possível ler o chassi na foto.
-                    </p>
-                  </>
-                )}
-                {chassiResultado.confianca > 0 && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Confiança: {Math.round(chassiResultado.confianca * 100)}%
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
+          {/* Validação automática de chassi removida — chassi é sempre preenchido manualmente. */}
 
           <Button onClick={handleContinuar} className="w-full" size="lg">
             Continuar para Pagamento
