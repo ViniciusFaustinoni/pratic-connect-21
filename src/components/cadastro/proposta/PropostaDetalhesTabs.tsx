@@ -28,6 +28,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { PropostaPendente } from '@/hooks/usePropostasPendentes';
 import { formatPeriodoLabel } from '@/lib/periodo-utils';
+import { normalizeChassi, chassiHelperText, isValidChassi } from '@/lib/chassi';
 
 interface PropostaDetalhesTabsProps {
   proposta: PropostaPendente;
