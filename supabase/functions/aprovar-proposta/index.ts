@@ -247,12 +247,24 @@ serve(async (req) => {
               .select('email').eq('id', associadoId).single();
 
             if (rastreadorData.plataforma === 'softruck') {
-              await supabase.functions.invoke('softruck-ativar-dispositivo', {
-                body: { imei: rastreadorData.imei, veiculoId, associadoId, associadoEmail: associadoEmail?.email },
+              await supabase.rpc('enqueue_integration', {
+                _integration: 'softruck',
+                _operation: 'ativar_dispositivo',
+                _payload: { imei: rastreadorData.imei, veiculoId, associadoId, associadoEmail: associadoEmail?.email },
+                _correlation_id: `softruck:ativar:${veiculoId}`,
+                _max_attempts: 5,
+                _delay_seconds: 0,
+                _created_by: aprovado_por ?? null,
               });
             } else if (rastreadorData.plataforma === 'rede_veiculos') {
-              await supabase.functions.invoke('rede-veiculos-vincular-cliente', {
-                body: { imei: rastreadorData.imei, veiculoId, associadoId },
+              await supabase.rpc('enqueue_integration', {
+                _integration: 'rede',
+                _operation: 'vincular_cliente',
+                _payload: { imei: rastreadorData.imei, veiculoId, associadoId },
+                _correlation_id: `rede:vincular:${veiculoId}`,
+                _max_attempts: 5,
+                _delay_seconds: 0,
+                _created_by: aprovado_por ?? null,
               });
             }
 
@@ -471,19 +483,23 @@ serve(async (req) => {
         .select('id').eq('associado_id', associadoId).eq('sincronizado_hinova', false).limit(1).maybeSingle();
 
       if (veiculoParaSGA?.id) {
-        console.log('[aprovar-proposta] Enviando para SGA...');
-        fetch(`${supabaseUrl}/functions/v1/sga-hinova-sync`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
-          body: JSON.stringify({
+        console.log('[aprovar-proposta] Enfileirando SGA...');
+        await supabase.rpc('enqueue_integration', {
+          _integration: 'sga',
+          _operation: 'hinova_sync',
+          _payload: {
             veiculo_id: veiculoParaSGA.id,
             associado_id: associadoId,
             status_sga_destino: statusSgaDestino,
             usuario_id: aprovado_por,
             etapa_origem: 'aprovar-proposta',
             motivo_decisao: motivoDecisaoSga,
-          }),
-        }).catch(e => console.warn('[aprovar-proposta] SGA falhou:', e));
+          },
+          _correlation_id: `sga:hinova:${veiculoParaSGA.id}:${statusSgaDestino}`,
+          _max_attempts: 5,
+          _delay_seconds: 0,
+          _created_by: aprovado_por ?? null,
+        });
       }
     } catch (e) {
       console.warn('[aprovar-proposta] Erro SGA:', e);

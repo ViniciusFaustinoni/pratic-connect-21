@@ -307,6 +307,70 @@ export function useReprovarInstalacaoMonitoramento() {
         usuario_id: profile?.id,
       });
 
+      // 4. Cancelar contrato vinculado para impedir cobrança recorrente
+      const { data: contratoVinculado } = await supabase
+        .from('contratos')
+        .select('id')
+        .eq('veiculo_id', data.veiculoId)
+        .in('status', ['assinado', 'ativo'])
+        .maybeSingle();
+      if (contratoVinculado?.id) {
+        await supabase
+          .from('contratos')
+          .update({ status: 'cancelado', updated_at: agora })
+          .eq('id', contratoVinculado.id);
+      }
+
+      // 5. Enfileirar desativação nas integrações (com retry automático)
+      const { data: instalacaoConcluida } = await supabase
+        .from('instalacoes')
+        .select('rastreador_id')
+        .eq('veiculo_id', data.veiculoId)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (instalacaoConcluida?.rastreador_id) {
+        const { data: rastr } = await supabase
+          .from('rastreadores')
+          .select('imei, plataforma')
+          .eq('id', instalacaoConcluida.rastreador_id)
+          .maybeSingle();
+
+        if (rastr?.imei) {
+          if (rastr.plataforma === 'rede_veiculos') {
+            await supabase.rpc('enqueue_integration', {
+              _integration: 'rede',
+              _operation: 'desvincular_cliente',
+              _payload: { imei: rastr.imei, veiculoId: data.veiculoId, associadoId: data.associadoId, motivo: 'reprovacao_monitoramento' },
+              _correlation_id: `rede:desvincular:${data.veiculoId}`,
+              _max_attempts: 5,
+              _delay_seconds: 0,
+              _created_by: profile?.id ?? null,
+            });
+          }
+          // Softruck: não há função de desativar mapeada — registrar para revisão
+        }
+      }
+
+      // SGA: cancelar associado se já estava sincronizado
+      const { data: veicSga } = await supabase
+        .from('veiculos')
+        .select('sincronizado_hinova')
+        .eq('id', data.veiculoId)
+        .maybeSingle();
+      if (veicSga?.sincronizado_hinova) {
+        await supabase.rpc('enqueue_integration', {
+          _integration: 'sga',
+          _operation: 'hinova_sync',
+          _payload: { veiculo_id: data.veiculoId, associado_id: data.associadoId, status_sga_destino: 'cancelado', motivo_decisao: `Reprovação monitoramento: ${data.motivo}` },
+          _correlation_id: `sga:hinova:${data.veiculoId}:cancelado`,
+          _max_attempts: 5,
+          _delay_seconds: 0,
+          _created_by: profile?.id ?? null,
+        });
+      }
+
       return { sucesso: true };
     },
     onSuccess: () => {

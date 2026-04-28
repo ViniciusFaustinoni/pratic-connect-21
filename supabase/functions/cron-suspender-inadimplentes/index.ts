@@ -197,25 +197,27 @@ serve(async (req) => {
           }
         }
 
-        // Notificar Rede Veículos se habilitado
+        // Notificar Rede Veículos se habilitado (enfileira com retry)
         let notificadoRedeVeiculos = false;
         if (notificarRedeVeiculos) {
-          try {
-            const redeResponse = await supabase.functions.invoke('rede-veiculos-informar-inadimplente', {
-              body: {
-                associadoId,
-                motivo: 'suspensao_automatica',
-                diasAtraso: dados.diasMaiorAtraso,
-                valorPendente: dados.valorTotalPendente,
-              },
-            });
-
-            if (redeResponse.data?.success) {
-              notificadoRedeVeiculos = true;
-              console.log(`[Cron] Rede Veículos notificada para ${dados.nome}`);
-            }
-          } catch (redeErr) {
-            console.warn(`[Cron] Erro ao notificar Rede Veículos:`, redeErr);
+          const { error: enqErr } = await supabase.rpc('enqueue_integration', {
+            _integration: 'rede',
+            _operation: 'informar_inadimplente',
+            _payload: {
+              associadoId,
+              motivo: 'suspensao_automatica',
+              diasAtraso: dados.diasMaiorAtraso,
+              valorPendente: dados.valorTotalPendente,
+            },
+            _correlation_id: `rede:inadimplente:${associadoId}:${new Date().toISOString().slice(0,10)}`,
+            _max_attempts: 5,
+            _delay_seconds: 0,
+          });
+          if (!enqErr) {
+            notificadoRedeVeiculos = true;
+            console.log(`[Cron] Rede Veículos enfileirada para ${dados.nome}`);
+          } else {
+            console.warn(`[Cron] Erro ao enfileirar Rede Veículos:`, enqErr);
           }
         }
 

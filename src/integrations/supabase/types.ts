@@ -31807,6 +31807,18 @@ export type Database = {
         Returns: boolean
       }
       data_esta_bloqueada: { Args: { _data: string }; Returns: boolean }
+      enqueue_integration: {
+        Args: {
+          _correlation_id?: string
+          _created_by?: string
+          _delay_seconds?: number
+          _integration: Database["public"]["Enums"]["integration_provider"]
+          _max_attempts?: number
+          _operation: string
+          _payload: Json
+        }
+        Returns: string
+      }
       expirar_encaixes_urgentes: { Args: never; Returns: number }
       fn_atribuir_grade_usuario: {
         Args: {

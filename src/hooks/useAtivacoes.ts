@@ -303,10 +303,9 @@ export function useAtivarContrato() {
           console.error('Erro ao ativar associado:', associadoError);
         }
 
-        // 4. Enviar automaticamente ao SGA (fire-and-forget)
-        // Priorizar veiculo_id do contrato (determinístico)
+        // 4. Enviar automaticamente ao SGA via fila com retry
         let veiculo: { id: string; sincronizado_hinova: boolean | null; status_sga: string | null } | null = null;
-        
+
         if (contrato.veiculo_id) {
           const { data } = await supabase
             .from('veiculos')
@@ -325,37 +324,24 @@ export function useAtivarContrato() {
         }
 
         if (veiculo && veiculo.status_sga !== 'ativado_sga') {
-          supabase.functions.invoke('sga-hinova-sync', {
-            body: {
+          const { error: enqErr } = await supabase.rpc('enqueue_integration', {
+            _integration: 'sga',
+            _operation: 'hinova_sync',
+            _payload: {
               veiculo_id: veiculo.id,
               associado_id: contrato.associado_id,
               status_sga_destino: 'pendente',
             },
-          }).then(({ data, error }) => {
-            if (error || !data?.success) {
-              console.warn('[Ativacao] Falha ao enviar ao SGA:', error || data?.error);
-              // A própria função sga-hinova-sync já grava na fila de reenvio
-              toast.warning('Contrato ativado, mas envio ao SGA falhou. O sistema tentará reenviar automaticamente.');
-            } else {
-              toast.success('Enviado ao SGA automaticamente como pendente!');
-            }
-          }).catch(async (err) => {
-            console.warn('[Ativacao] Erro ao enviar ao SGA:', err);
-            // Fallback: inserir diretamente na fila se a função nem executou
-            try {
-              await supabase.from('sga_sync_queue').upsert({
-                veiculo_id: veiculo.id,
-                associado_id: contrato.associado_id,
-                status: 'pendente',
-                tentativas: 0,
-                erro_ultimo: err instanceof Error ? err.message : 'Erro de conexão',
-                etapa_parou: 'associado',
-                origem: 'automatico',
-                proximo_reenvio_em: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-              }, { onConflict: 'veiculo_id,associado_id' });
-            } catch (_) {}
-            toast.warning('Contrato ativado. Envio ao SGA será tentado automaticamente em 10 minutos.');
+            _correlation_id: `sga:hinova:${veiculo.id}:pendente`,
+            _max_attempts: 5,
+            _delay_seconds: 0,
           });
+          if (enqErr) {
+            console.warn('[Ativacao] Falha ao enfileirar SGA:', enqErr);
+            toast.warning('Contrato ativado, mas envio ao SGA não pôde ser enfileirado.');
+          } else {
+            toast.success('Envio ao SGA enfileirado com retry automático.');
+          }
         }
       }
     },
