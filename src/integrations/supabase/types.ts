@@ -31820,6 +31820,10 @@ export type Database = {
         Returns: string
       }
       expirar_encaixes_urgentes: { Args: never; Returns: number }
+      fn_associado_em_estado_terminal: {
+        Args: { _associado_id: string }
+        Returns: string
+      }
       fn_atribuir_grade_usuario: {
         Args: {
           p_grade_id: string
