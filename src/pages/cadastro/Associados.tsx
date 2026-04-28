@@ -128,6 +128,8 @@ export default function Associados() {
     cidade?: string;
     data_adesao_inicio?: string;
     data_adesao_fim?: string;
+    vendedor_id?: string;
+    tipos_entrada?: string[];
   }>({});
 
   // Construir filtros server-side
