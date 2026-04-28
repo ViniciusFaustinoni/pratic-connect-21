@@ -657,9 +657,6 @@ export interface DevolverFilaParams {
 }
 
 export function useDevolverServicoParaFila() {
-  // Lazy import para evitar ciclo (useRealocarInstalacao não depende deste arquivo)
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { useRealocarInstalacao } = require('./useRealocarInstalacao') as typeof import('./useRealocarInstalacao');
   const { realocarParaFila } = useRealocarInstalacao();
   return useMutation({
     mutationFn: async (params: DevolverFilaParams) => {
@@ -680,8 +677,6 @@ export interface ReatribuirServicoParams extends DevolverFilaParams {
 }
 
 export function useReatribuirServico() {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { useRealocarInstalacao } = require('./useRealocarInstalacao') as typeof import('./useRealocarInstalacao');
   const { reatribuirProfissional } = useRealocarInstalacao();
   return useMutation({
     mutationFn: async (params: ReatribuirServicoParams) => {
