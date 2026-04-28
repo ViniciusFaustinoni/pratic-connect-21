@@ -827,6 +827,10 @@ serve(async (req) => {
       return 1;
     };
 
+    // Declaração antecipada — usada nos `upsertSyncQueue` desde o PASSO 3.5.
+    // (Antes ficava no PASSO 4.5 e causava TDZ: "Cannot access 'codigoAssociadoHinova' before initialization")
+    let codigoAssociadoHinova: number | null = (associado as any)?.codigo_hinova ?? null;
+
     // ========================================
     // PASSO 3.5: Buscar código voluntário do vendedor
     // ========================================
@@ -946,7 +950,7 @@ serve(async (req) => {
     // PASSO 4.5: Consulta backup por CPF (antes de cadastrar)
     // Verifica se o associado já existe no Hinova
     // ========================================
-    let codigoAssociadoHinova = associado.codigo_hinova;
+    codigoAssociadoHinova = associado.codigo_hinova ?? codigoAssociadoHinova;
 
     // Validar se o codigo_hinova existente é compatível com o codigo_conta atual
     if (codigoAssociadoHinova && codigoContaValido) {
