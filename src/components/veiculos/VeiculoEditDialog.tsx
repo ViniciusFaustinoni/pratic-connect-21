@@ -370,8 +370,12 @@ export function VeiculoEditDialog({ open, onClose, veiculo }: VeiculoEditDialogP
                         <Input
                           {...field}
                           disabled={!permitirEdicaoChassi}
-                          className="uppercase"
+                          className="uppercase font-mono"
                           placeholder="9BWZZZ377VT004251"
+                          maxLength={17}
+                          onChange={(e) => field.onChange(
+                            e.target.value.toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g, '').slice(0, 17),
+                          )}
                         />
                       </FormControl>
                       <FormDescription>
