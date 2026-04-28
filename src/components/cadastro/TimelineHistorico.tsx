@@ -263,7 +263,7 @@ const filterCategories: Record<string, TipoEvento[]> = {
   todos: [],
   status: ['status_alterado', 'associado_criado', 'dados_atualizados'],
   documentos: ['documento_enviado', 'documento_aprovado', 'documento_reprovado'],
-  instalacoes: ['instalacao_agendada', 'instalacao_concluida', 'instalacao_cancelada', 'veiculo_adicionado', 'veiculo_removido'],
+  instalacoes: ['instalacao_agendada', 'instalacao_concluida', 'instalacao_cancelada', 'veiculo_adicionado', 'veiculo_removido', 'protecao_360_aprovada_monitoramento', 'protecao_360_reprovada_monitoramento'],
   financeiro: ['boleto_gerado', 'boleto_pago', 'boleto_cancelado', 'contrato_assinado'],
   sinistros: ['sinistro_aberto', 'sinistro_atualizado', 'sinistro_encerrado'],
   chamados: ['chamado_aberto', 'chamado_concluido'],
