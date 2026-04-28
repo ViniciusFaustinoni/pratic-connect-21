@@ -26,12 +26,6 @@ interface AutovistoriaProps {
   onVoltar: () => void;
 }
 
-// Interface para resultado da validação do chassi
-interface ChassiResultado {
-  chassi: string | null;
-  validacao: 'confere' | 'diverge' | 'ilegivel' | null;
-  confianca: number;
-}
 
 export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, readOnly, onComplete, onVoltar }: AutovistoriaProps) {
   const fotos = getFotosAutovistoria(tipoVeiculo);
