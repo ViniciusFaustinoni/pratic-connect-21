@@ -1,6 +1,48 @@
+// deno-lint-ignore-file no-explicit-any
+/**
+ * sga-hinova-sync — Orquestrador de cadastro Associado + Veículo + Fotos no SGA Hinova.
+ *
+ * REGRA ÚNICA E GERAL DE ENVIO PARA O SGA:
+ *   1. Autenticar (token de usuário)
+ *   2. Buscar associado por CPF (GET /associado/buscar/{cpf}/cpf)
+ *      → existe? reusa codigo_associado e a lista veiculos[] retornada
+ *      → não? POST /associado/cadastrar e captura codigo_associado
+ *   3. Buscar veículo por placa (GET /veiculo/consultar/placa/{placa}) e/ou chassi
+ *      → existe e é do mesmo associado? reusa codigo_veiculo
+ *      → existe mas é de OUTRO associado? falha permanente (conflito)
+ *      → não existe? POST /veiculo/cadastrar vinculado ao codigo_associado
+ *   4. Cadastrar fotos (POST /veiculo/foto/cadastrar) em lotes de até 50
+ *   5. Persistir codigo_hinova local e marcar fila como concluída
+ *
+ * Compat: contrato de entrada/saída idêntico à versão anterior — chamadores não mudam.
+ */
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { buscarVeiculoPorPlaca } from '../_shared/hinova-client.ts';
+import {
+  getHinovaCreds,
+  autenticarHinova,
+  buscarAssociadoComVeiculosPorCpf,
+  buscarVeiculoPorPlaca,
+  buscarVeiculoPorChassi,
+  cadastrarAssociadoHinova,
+  cadastrarVeiculoHinova,
+  cadastrarFotosVeiculoHinova,
+  HinovaTransientError,
+  HinovaNotFoundError,
+  type HinovaSession,
+} from '../_shared/hinova-client.ts';
+import {
+  buildAssociadoPayload,
+  buildVeiculoPayload,
+  buildFotosPayload,
+  chunk,
+  cleanAlphaNum,
+  cleanDigits,
+  isPlacaPlaceholder,
+  type AssociadoCtx,
+  type VeiculoCtx,
+  type DocumentoEntrada,
+} from '../_shared/hinova-payloads.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,1995 +57,733 @@ interface SyncRequest {
   usuario_nome?: string | null;
   etapa_origem?: string | null;
   motivo_decisao?: string | null;
+  bypass_guard_base_antiga?: boolean;
+  force_resync_media?: boolean;
+  action?: 'test_connection';
 }
 
-interface HinovaAuthResponse {
-  mensagem: string;
-  token_usuario?: string;
-}
-
-interface HinovaAssociadoResponse {
-  mensagem: string;
-  codigo_associado?: number;
-}
-
-interface HinovaVeiculoResponse {
-  mensagem: string;
-  codigo_veiculo?: number;
-}
-
-// Helper para formatar data para dd/mm/yyyy
-function formatDateBR(dateStr: string | null): string {
-  if (!dateStr) return '';
-  const date = new Date(dateStr);
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const year = date.getFullYear();
-  return `${day}/${month}/${year}`;
-}
-
-// Helper para limpar CPF (apenas números)
-function cleanCPF(cpf: string | null): string {
-  if (!cpf) return '';
-  return cpf.replace(/\D/g, '');
-}
-
-// Helper para limpar telefone (apenas números)
-function cleanPhoneDigits(phone: string | null): string {
-  if (!phone) return '';
-  return phone.replace(/\D/g, '');
-}
-
-// Helper para formatar CPF com pontuação
-function formatCPF(cpf: string | null): string {
-  if (!cpf) return '';
-  const clean = cpf.replace(/\D/g, '');
-  if (clean.length !== 11) return clean;
-  return `${clean.slice(0,3)}.${clean.slice(3,6)}.${clean.slice(6,9)}-${clean.slice(9)}`;
-}
-
-// Helper para extrair código de associado de múltiplos formatos de payload
-function extractCodigoAssociado(payload: any): number | null {
-  if (!payload) return null;
-
-  const candidates = [
-    payload?.codigo_associado,
-    payload?.codigo,
-    payload?.data?.codigo_associado,
-    payload?.data?.codigo,
-    payload?.associado?.codigo_associado,
-    payload?.associado?.codigo,
-    payload?.resultado?.codigo_associado,
-    payload?.resultado?.codigo,
-    Array.isArray(payload) ? payload[0]?.codigo_associado : null,
-    Array.isArray(payload) ? payload[0]?.codigo : null,
-  ];
-
-  for (const candidate of candidates) {
-    const parsed = Number(candidate);
-    if (Number.isFinite(parsed) && parsed > 0) {
-      return parsed;
-    }
-  }
-
-  return null;
-}
-
-// Helper para formatar telefone
-function formatPhone(phone: string | null): string {
-  if (!phone) return '';
-  const clean = phone.replace(/\D/g, '');
-  if (clean.length === 11) {
-    return `(${clean.slice(0, 2)}) ${clean.slice(2, 7)}-${clean.slice(7)}`;
-  }
-  if (clean.length === 10) {
-    return `(${clean.slice(0, 2)}) ${clean.slice(2, 6)}-${clean.slice(6)}`;
-  }
-  return phone;
-}
-
-function normalizeText(text: string | null | undefined): string {
-  return (text || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]/g, '');
-}
-
-function parseValorFipe(valor: string | null | undefined): number | null {
-  if (!valor) return null;
-  const parsed = Number(valor.replace('R$', '').replace(/\./g, '').replace(',', '.').trim());
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function normalizeErrorMessages(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map((v) => String(v));
-  if (typeof value === 'string') return [value];
-  if (value && typeof value === 'object') return [JSON.stringify(value)];
-  return [];
-}
-
-async function resolverFipePorNome(tipo: string, marca: string | null, modelo: string | null, ano: number | null): Promise<{ codigoFipe: string; valorFipe: number | null } | null> {
-  if (!marca || !modelo) return null;
-  const base = `https://parallelum.com.br/fipe/api/v1/${tipo}`;
-  const marcas = await (await fetch(`${base}/marcas`)).json();
-  const marcaEncontrada = marcas.find((m: any) => normalizeText(marca).includes(normalizeText(m.nome)) || normalizeText(m.nome).includes(normalizeText(marca)));
-  if (!marcaEncontrada) return null;
-  const modelosData = await (await fetch(`${base}/marcas/${marcaEncontrada.codigo}/modelos`)).json();
-  const alvoTokens = normalizeText(modelo).match(/[a-z0-9]+/g) || [];
-  const modelos = modelosData?.modelos || [];
-  const modeloEncontrado = modelos
-    .map((m: any) => ({ item: m, score: alvoTokens.filter(t => normalizeText(m.nome).includes(t)).length }))
-    .sort((a: any, b: any) => b.score - a.score)[0]?.item;
-  if (!modeloEncontrado) return null;
-  const anos = await (await fetch(`${base}/marcas/${marcaEncontrada.codigo}/modelos/${modeloEncontrado.codigo}/anos`)).json();
-  const anoEncontrado = (anos || []).find((a: any) => String(a.nome).includes(String(ano))) || anos?.[0];
-  if (!anoEncontrado) return null;
-  const preco = await (await fetch(`${base}/marcas/${marcaEncontrada.codigo}/modelos/${modeloEncontrado.codigo}/anos/${anoEncontrado.codigo}`)).json();
-  return preco?.CodigoFipe ? { codigoFipe: preco.CodigoFipe, valorFipe: parseValorFipe(preco.Valor) } : null;
-}
-
-// Retry com backoff exponencial
-async function fetchWithRetry(
-  url: string, 
-  options: RequestInit, 
-  maxRetries = 3
-): Promise<Response> {
-  let lastError: Error | null = null;
-  
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      const response = await fetch(url, options);
-      return response;
-    } catch (error) {
-      lastError = error as Error;
-      const delay = Math.pow(2, i) * 1000;
-      console.log(`[Retry ${i + 1}/${maxRetries}] Aguardando ${delay}ms...`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
-  
-  throw lastError;
-}
-
-// Helper para parse seguro de JSON
-async function safeJsonParse<T>(response: Response, context: string): Promise<T> {
-  const contentType = response.headers.get('content-type') || '';
-  const textResponse = await response.text();
-  
-  console.log(`[SGA Sync] ${context} - Status: ${response.status}, Content-Type: ${contentType}`);
-  
-  if (!contentType.includes('application/json')) {
-    console.error(`[SGA Sync] ${context} - Resposta não-JSON recebida:`, textResponse.substring(0, 300));
-    
-    if (textResponse.trim().startsWith('<!') || textResponse.includes('<html')) {
-      throw new Error(`API Hinova retornou HTML ao invés de JSON. Isso geralmente indica: erro de servidor, redirecionamento de autenticação ou rate limiting. Status: ${response.status}`);
-    }
-    
-    if (textResponse.toLowerCase().includes('erro') || textResponse.toLowerCase().includes('error')) {
-      throw new Error(`Erro da API Hinova: ${textResponse.substring(0, 200)}`);
-    }
-    
-    throw new Error(`Resposta inesperada da API Hinova (${contentType}): ${textResponse.substring(0, 200)}`);
-  }
-  
-  try {
-    return JSON.parse(textResponse) as T;
-  } catch (parseError) {
-    console.error(`[SGA Sync] ${context} - Erro ao parsear JSON:`, textResponse.substring(0, 300));
-    throw new Error(`Resposta inválida da API Hinova - não é JSON válido: ${textResponse.substring(0, 100)}`);
-  }
-}
-
-// Helper para upsert na fila de reenvio
-async function upsertSyncQueue(
-  supabase: any,
-  veiculoId: string,
-  associadoId: string,
-  etapaParou: string,
-  erroMsg: string,
-  codigoAssociadoHinova: number | null = null,
-  codigoVeiculoHinova: number | null = null,
-  origem: string = 'automatico'
-) {
-  try {
-    // Check if exists
-    const { data: existing } = await supabase
-      .from('sga_sync_queue')
-      .select('id, tentativas')
-      .eq('veiculo_id', veiculoId)
-      .eq('associado_id', associadoId)
-      .maybeSingle();
-
-    const tentativas = (existing?.tentativas || 0) + 1;
-    const proximoReenvio = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-
-    if (existing) {
-      await supabase
-        .from('sga_sync_queue')
-        .update({
-          status: tentativas >= 10 ? 'falha_permanente' : 'pendente',
-          tentativas,
-          ultima_tentativa_em: new Date().toISOString(),
-          proximo_reenvio_em: proximoReenvio,
-          erro_ultimo: erroMsg,
-          etapa_parou: etapaParou,
-          ...(codigoAssociadoHinova && { codigo_associado_hinova: codigoAssociadoHinova }),
-          ...(codigoVeiculoHinova && { codigo_veiculo_hinova: codigoVeiculoHinova }),
-        })
-        .eq('id', existing.id);
-    } else {
-      await supabase
-        .from('sga_sync_queue')
-        .insert({
-          veiculo_id: veiculoId,
-          associado_id: associadoId,
-          status: 'pendente',
-          tentativas: 1,
-          ultima_tentativa_em: new Date().toISOString(),
-          proximo_reenvio_em: proximoReenvio,
-          erro_ultimo: erroMsg,
-          etapa_parou: etapaParou,
-          codigo_associado_hinova: codigoAssociadoHinova,
-          codigo_veiculo_hinova: codigoVeiculoHinova,
-          origem,
-        });
-    }
-    console.log(`[SGA Sync] Fila de reenvio atualizada: etapa=${etapaParou}, tentativas=${tentativas}`);
-  } catch (e) {
-    console.error('[SGA Sync] Erro ao gravar na fila de reenvio:', e);
-  }
-}
-
-// Helper para marcar fila como concluída
-async function markQueueCompleted(supabase: any, veiculoId: string, associadoId: string) {
-  try {
-    await supabase
-      .from('sga_sync_queue')
-      .update({ status: 'concluido', ultima_tentativa_em: new Date().toISOString() })
-      .eq('veiculo_id', veiculoId)
-      .eq('associado_id', associadoId);
-  } catch (e) {
-    console.error('[SGA Sync] Erro ao marcar fila como concluída:', e);
-  }
-}
+const STALE_LOCK_MS = 5 * 60 * 1000;
+const QUEUE_BACKOFF_MS = 10 * 60 * 1000;
+const MAX_TENTATIVAS = 10;
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   const startTime = Date.now();
-  
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  // Helper para descriptografar credenciais do banco
-  async function getCredenciaisBanco(integracao: string): Promise<Record<string, string> | null> {
-    try {
-      const { data, error } = await supabase
-        .from('integracoes_credenciais')
-        .select('credenciais_encrypted, iv, configurado')
-        .eq('integracao', integracao)
-        .single();
-
-      if (error || !data || !data.configurado) return null;
-
-      const encoder = new TextEncoder();
-      const keyMaterial = await crypto.subtle.importKey(
-        'raw', encoder.encode(supabaseServiceKey), { name: 'PBKDF2' }, false, ['deriveKey']
-      );
-      const key = await crypto.subtle.deriveKey(
-        { name: 'PBKDF2', salt: encoder.encode('integracoes_credenciais_salt'), iterations: 100000, hash: 'SHA-256' },
-        keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['decrypt']
-      );
-      
-      const encrypted = Uint8Array.from(atob(data.credenciais_encrypted), c => c.charCodeAt(0));
-      const iv = Uint8Array.from(atob(data.iv), c => c.charCodeAt(0));
-      const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, encrypted);
-      
-      return JSON.parse(new TextDecoder().decode(decrypted));
-    } catch (e) {
-      console.error('[getCredenciaisBanco] Erro:', e);
-      return null;
-    }
-  }
-
-  // Hinova credentials
-  let hinovaApiUrl = Deno.env.get('HINOVA_API_URL') || 'https://api.hinova.com.br/api/sga/v2';
-  let hinovaToken = Deno.env.get('HINOVA_TOKEN');
-  let hinovaUsuario = Deno.env.get('HINOVA_USUARIO');
-  let hinovaSenha = Deno.env.get('HINOVA_SENHA');
-  let hinovaCodigoConta = Deno.env.get('HINOVA_CODIGO_CONTA') || '';
-  let hinovaCodigoRegional = Deno.env.get('HINOVA_CODIGO_REGIONAL');
-  let hinovaCodigoCooperativa = Deno.env.get('HINOVA_CODIGO_COOPERATIVA');
-  let hinovaCodigoVoluntario = Deno.env.get('HINOVA_CODIGO_VOLUNTARIO');
-  let hinovaCodigoSituacaoPendente = Deno.env.get('HINOVA_CODIGO_SITUACAO_PENDENTE');
-  let hinovaCodigoSituacaoAtivo = Deno.env.get('HINOVA_CODIGO_SITUACAO_ATIVO');
-  let hinovaCodigoTipoCobrancaPadrao: string | undefined;
-  let hinovaCodigoComoConheceuPadrao: string | undefined;
-  let hinovaCodigoProfissaoPadrao: string | undefined;
-  let codigoContaOrigem: 'env' | 'database' | 'historico' | 'fallback' = hinovaCodigoConta ? 'env' : 'fallback';
-
-  if (!hinovaToken || !hinovaUsuario || !hinovaSenha || !hinovaCodigoConta) {
-    console.log('[SGA Sync] Credenciais incompletas em ENV, buscando do banco...');
-    const credBanco = await getCredenciaisBanco('hinova');
-    if (credBanco) {
-      hinovaToken = credBanco.token || hinovaToken;
-      hinovaUsuario = credBanco.usuario || hinovaUsuario;
-      hinovaSenha = credBanco.senha || hinovaSenha;
-      if (credBanco.codigo_conta) {
-        hinovaCodigoConta = String(credBanco.codigo_conta);
-        codigoContaOrigem = 'database';
-      }
-      hinovaCodigoRegional = credBanco.codigo_regional || hinovaCodigoRegional;
-      hinovaCodigoCooperativa = credBanco.codigo_cooperativa || hinovaCodigoCooperativa;
-      hinovaCodigoVoluntario = credBanco.codigo_voluntario || hinovaCodigoVoluntario;
-      hinovaCodigoSituacaoPendente = credBanco.codigo_situacao_pendente || hinovaCodigoSituacaoPendente;
-      hinovaCodigoSituacaoAtivo = credBanco.codigo_situacao_ativo || hinovaCodigoSituacaoAtivo;
-      hinovaCodigoTipoCobrancaPadrao = credBanco.codigo_tipo_cobranca_recorrente_padrao || hinovaCodigoTipoCobrancaPadrao;
-      hinovaCodigoComoConheceuPadrao = credBanco.codigo_como_conheceu_padrao || hinovaCodigoComoConheceuPadrao;
-      hinovaCodigoProfissaoPadrao = credBanco.codigo_profissao_padrao || hinovaCodigoProfissaoPadrao;
-      if (credBanco.api_url) hinovaApiUrl = credBanco.api_url;
-      console.log('[SGA Sync] Credenciais carregadas do banco');
-    }
-  }
-
-  if (!hinovaCodigoConta) {
-    try {
-      const { data: logsCodigoConta } = await supabase
-        .from('sga_sync_logs')
-        .select('request_payload, created_at')
-        .eq('action', 'cadastrar_associado')
-        .eq('status', 'success')
-        .not('request_payload', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(100);
-
-      if (logsCodigoConta) {
-        for (const log of logsCodigoConta) {
-          const payload = (log.request_payload || {}) as Record<string, unknown>;
-          const candidato = Number(payload?.codigo_conta);
-          if (Number.isFinite(candidato) && candidato > 0) {
-            hinovaCodigoConta = String(candidato);
-            codigoContaOrigem = 'historico';
-            console.log(`[SGA Sync] codigo_conta inferido do histórico: ${hinovaCodigoConta}`);
-            break;
-          }
-        }
-      }
-    } catch (e) {
-      console.log('[SGA Sync] Falha ao inferir codigo_conta por histórico:', e);
-    }
-  }
-
-  const codigoContaResolvido = Number.parseInt(hinovaCodigoConta || '', 10);
-  const codigoContaValido = Number.isFinite(codigoContaResolvido) && codigoContaResolvido > 0;
-
-  console.log(`[SGA Sync] codigo_conta origem=${codigoContaOrigem}, valor=${codigoContaValido ? codigoContaResolvido : 'inválido'}`);
-
-  console.log('[SGA Sync] Token Bearer carregado:', hinovaToken ? `${hinovaToken.slice(0, 10)}...` : 'VAZIO');
-
-  // Helper para registrar log
+  // ---- Helpers locais ----
   async function logSync(
-    veiculoId: string | null,
-    associadoId: string | null,
+    veiculo_id: string | null,
+    associado_id: string | null,
     action: string,
-    status: string,
-    requestPayload: any,
-    responsePayload: any,
-    errorMessage: string | null = null
+    status: 'success' | 'error' | 'info' | 'warning' | 'skipped',
+    request_payload: any,
+    response_payload: any,
+    error_message: string | null = null,
   ) {
     try {
-      const record = {
-        veiculo_id: veiculoId || null,
-        associado_id: associadoId || null,
-        action,
-        status,
-        request_payload: requestPayload,
-        response_payload: responsePayload,
-        error_message: errorMessage,
+      await supabase.from('sga_sync_logs').insert({
+        veiculo_id, associado_id, action, status,
+        request_payload, response_payload, error_message,
         duracao_ms: Date.now() - startTime,
-      };
-      console.log(`[Log] Gravando log: action=${action}, veiculo_id=${veiculoId}, associado_id=${associadoId}`);
-      const { error: insertError } = await supabase.from('sga_sync_logs').insert(record);
-      if (insertError) {
-        console.error('[Log] Erro no insert:', JSON.stringify(insertError));
-      }
+      });
     } catch (e) {
-      console.error('[Log] Erro ao registrar log:', e);
+      console.error('[logSync]', e);
     }
   }
 
-  const authHeaders = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${hinovaToken}`,
-  };
+  async function upsertQueue(
+    veiculo_id: string,
+    associado_id: string,
+    etapa: string,
+    erro: string,
+    codigo_associado_hinova: number | null = null,
+    codigo_veiculo_hinova: number | null = null,
+  ) {
+    try {
+      const { data: existing } = await supabase
+        .from('sga_sync_queue')
+        .select('id, tentativas')
+        .eq('veiculo_id', veiculo_id)
+        .eq('associado_id', associado_id)
+        .maybeSingle();
+      const tentativas = (existing?.tentativas || 0) + 1;
+      const proximo = new Date(Date.now() + QUEUE_BACKOFF_MS).toISOString();
+      const base = {
+        status: tentativas >= MAX_TENTATIVAS ? 'falha_permanente' : 'pendente',
+        tentativas,
+        ultima_tentativa_em: new Date().toISOString(),
+        proximo_reenvio_em: proximo,
+        erro_ultimo: erro,
+        etapa_parou: etapa,
+        ...(codigo_associado_hinova && { codigo_associado_hinova }),
+        ...(codigo_veiculo_hinova && { codigo_veiculo_hinova }),
+      };
+      if (existing) {
+        await supabase.from('sga_sync_queue').update(base).eq('id', existing.id);
+      } else {
+        await supabase.from('sga_sync_queue').insert({
+          veiculo_id, associado_id, origem: 'automatico',
+          ...base,
+        });
+      }
+    } catch (e) {
+      console.error('[upsertQueue]', e);
+    }
+  }
+
+  async function markQueueDone(veiculo_id: string, associado_id: string) {
+    try {
+      await supabase.from('sga_sync_queue')
+        .update({ status: 'concluido', ultima_tentativa_em: new Date().toISOString() })
+        .eq('veiculo_id', veiculo_id).eq('associado_id', associado_id);
+    } catch (e) {
+      console.error('[markQueueDone]', e);
+    }
+  }
+
+  async function markQueueFalhaPermanente(veiculo_id: string, associado_id: string, motivo: string) {
+    try {
+      await supabase.from('sga_sync_queue')
+        .update({ status: 'falha_permanente', erro_ultimo: motivo, ultima_tentativa_em: new Date().toISOString() })
+        .eq('veiculo_id', veiculo_id).eq('associado_id', associado_id);
+    } catch (e) {
+      console.error('[markQueueFalhaPermanente]', e);
+    }
+  }
+
+  async function setStatusSga(veiculo_id: string, status: string) {
+    try { await supabase.from('veiculos').update({ status_sga: status }).eq('id', veiculo_id); }
+    catch (e) { console.error('[setStatusSga]', e); }
+  }
+
+  // ---- Carregamento de credenciais e códigos da conta ----
+  let codigoConta = Number.parseInt(Deno.env.get('HINOVA_CODIGO_CONTA') || '', 10);
+  let codigoRegional = Number.parseInt(Deno.env.get('HINOVA_CODIGO_REGIONAL') || '', 10);
+  let codigoCooperativa = Number.parseInt(Deno.env.get('HINOVA_CODIGO_COOPERATIVA') || '', 10);
+  let codigoVoluntarioPadrao = Number.parseInt(Deno.env.get('HINOVA_CODIGO_VOLUNTARIO') || '', 10);
+  let codigoSituacaoPendente = Number.parseInt(Deno.env.get('HINOVA_CODIGO_SITUACAO_PENDENTE') || '', 10);
+  let codigoSituacaoAtivo = Number.parseInt(Deno.env.get('HINOVA_CODIGO_SITUACAO_ATIVO') || '', 10);
+  let codigoTipoCobrancaPadrao: number | undefined;
+  let codigoComoConheceuPadrao: number | undefined;
+  let codigoProfissaoPadrao: number | undefined;
 
   try {
-    if (!hinovaToken || !hinovaUsuario || !hinovaSenha) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'Credenciais do Hinova não configuradas. Configure em Configurações > Integrações ou via Supabase Secrets.',
-          step: 'config'
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    if (!codigoContaValido) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'codigo_conta do Hinova inválido ou ausente. Configure HINOVA_CODIGO_CONTA (ou integre em credenciais) e tente novamente.',
-          step: 'config'
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const requestBody = await req.json();
-    const { veiculo_id, associado_id, action, bypass_guard_base_antiga, usuario_id, usuario_nome, etapa_origem, motivo_decisao } = requestBody as SyncRequest & { action?: string; bypass_guard_base_antiga?: boolean; force_resync_media?: boolean };
-    const forceResyncMedia = requestBody.force_resync_media === true;
-    const statusSgaSolicitado = requestBody.status_sga_destino === 'ativo' ? 'ativo' : 'pendente';
-    let statusSgaDestino: 'pendente' | 'ativo' = requestBody.status_sga_destino === 'ativo' ? 'ativo' : 'pendente';
-
-    // ========================================
-    // MODO TESTE DE CONEXÃO
-    // ========================================
-    if (action === 'test_connection') {
-      console.log('[SGA Sync] Modo teste de conexão...');
-      
-      const authPayload = { usuario: hinovaUsuario, senha: hinovaSenha };
-      const authResponse = await fetchWithRetry(
-        `${hinovaApiUrl}/usuario/autenticar`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${hinovaToken}`
-          },
-          body: JSON.stringify(authPayload)
-        }
-      );
-
-      const authData: HinovaAuthResponse = await safeJsonParse<HinovaAuthResponse>(authResponse, 'test_connection');
-      
-      if (!authResponse.ok || !authData.token_usuario) {
-        return new Response(
-          JSON.stringify({
-            success: false,
-            error: `Falha na autenticação: ${authData.mensagem || 'Credenciais inválidas'}`,
-            step: 'test_connection'
-          }),
-          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          mensagem: 'Conexão estabelecida com sucesso!',
-          step: 'test_connection'
-        }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // ========================================
-    // MODO SINCRONIZAÇÃO COMPLETA
-    // ========================================
-    if (!veiculo_id || !associado_id) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'veiculo_id e associado_id são obrigatórios para sincronização',
-          step: 'validation'
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    let motivoDecisaoFinal = motivo_decisao || (statusSgaDestino === 'ativo' ? 'Regra solicitou envio ativo ao SGA.' : 'Regra solicitou envio pendente ao SGA.');
-
-    if (statusSgaDestino === 'ativo') {
-      const { data: regraVeiculo } = await supabase
-        .from('veiculos')
-        .select('cobertura_roubo_furto, cobertura_total, status')
-        .eq('id', veiculo_id)
-        .maybeSingle();
-
-      const podeAtivarDefinitivo = regraVeiculo?.cobertura_total === true || regraVeiculo?.cobertura_roubo_furto !== true;
-      if (!podeAtivarDefinitivo) {
-        console.warn(`[SGA Sync] Ativação definitiva bloqueada para veículo ${veiculo_id}. Enviando como pendente até aprovação técnica.`);
-        statusSgaDestino = 'pendente';
-        motivoDecisaoFinal = 'Ativação definitiva bloqueada: veículo com Roubo/Furto sem cobertura_total/aprovação técnica. Enviado como pendente.';
-      }
-    }
-
-    try {
-      let usuarioNomeAuditoria = usuario_nome || 'Sistema';
-      if (usuario_id && !usuario_nome) {
-        const { data: profileAuditoria } = await supabase
-          .from('profiles')
-          .select('nome, email')
-          .eq('id', usuario_id)
-          .maybeSingle();
-        usuarioNomeAuditoria = profileAuditoria?.nome || profileAuditoria?.email || 'Sistema';
-      }
-
-      await supabase.from('logs_auditoria').insert({
-        usuario_id: usuario_id || null,
-        usuario_nome: usuarioNomeAuditoria,
-        acao: 'decisao_sga',
-        modulo: 'diretoria',
-        tabela: 'sga_sync_logs',
-        registro_id: veiculo_id,
-        descricao: `Regra decidiu enviar para o SGA como ${statusSgaDestino}`,
-        dados_novos: {
-          etapa: etapa_origem || 'sga-hinova-sync',
-          motivo: motivoDecisaoFinal,
-          status_sga_solicitado: statusSgaSolicitado,
-          status_sga_destino: statusSgaDestino,
-          veiculo_id,
-          associado_id,
-        },
-      });
-    } catch (auditErr) {
-      console.error('[SGA Sync] Erro ao registrar auditoria da decisão SGA:', auditErr);
-    }
-
-    console.log(`[SGA Sync] Iniciando sincronização - Veículo: ${veiculo_id}, Associado: ${associado_id}, destino=${statusSgaDestino}`);
-
-    // ========================================
-    // GUARD DE IDEMPOTÊNCIA
-    // ========================================
-    const { data: veiculoCheck } = await supabase
-      .from('veiculos')
-      .select('sincronizado_hinova, codigo_hinova, status_sga')
-      .eq('id', veiculo_id)
+    const { data } = await supabase
+      .from('integracoes_credenciais')
+      .select('credenciais_encrypted, iv, configurado')
+      .eq('integracao', 'hinova')
       .single();
-
-    // Se já está sincronizado com sucesso, retornar sem chamar Hinova
-    if (!forceResyncMedia && veiculoCheck?.sincronizado_hinova && veiculoCheck?.codigo_hinova && (statusSgaDestino !== 'ativo' || veiculoCheck?.status_sga === 'ativado_sga')) {
-      console.log(`[SGA Sync] Veículo ${veiculo_id} já sincronizado (codigo_hinova=${veiculoCheck.codigo_hinova}). Retornando sucesso.`);
-      await logSync(veiculo_id, associado_id, 'idempotency_guard', 'skipped', { veiculo_id, associado_id, status_sga_destino: statusSgaDestino }, { codigo_hinova: veiculoCheck.codigo_hinova, status_sga: veiculoCheck.status_sga });
-      await markQueueCompleted(supabase, veiculo_id, associado_id);
-      return new Response(
-        JSON.stringify({
-          success: true,
-          data: { already_synced: true, codigo_veiculo_hinova: veiculoCheck.codigo_hinova },
-          step: 'idempotency_guard'
-        }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    if (data?.configurado) {
+      // Decrypt mínimo para extrair códigos auxiliares (se ENV não tiver)
+      const enc = new TextEncoder();
+      const km = await crypto.subtle.importKey('raw', enc.encode(supabaseServiceKey), { name: 'PBKDF2' }, false, ['deriveKey']);
+      const key = await crypto.subtle.deriveKey(
+        { name: 'PBKDF2', salt: enc.encode('integracoes_credenciais_salt'), iterations: 100000, hash: 'SHA-256' },
+        km, { name: 'AES-GCM', length: 256 }, false, ['decrypt'],
       );
+      const ct = Uint8Array.from(atob(data.credenciais_encrypted), c => c.charCodeAt(0));
+      const iv = Uint8Array.from(atob(data.iv), c => c.charCodeAt(0));
+      const dec = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+      const cred = JSON.parse(new TextDecoder().decode(dec));
+      if (!Number.isFinite(codigoConta)) codigoConta = Number.parseInt(cred.codigo_conta || '', 10);
+      if (!Number.isFinite(codigoRegional)) codigoRegional = Number.parseInt(cred.codigo_regional || '', 10);
+      if (!Number.isFinite(codigoCooperativa)) codigoCooperativa = Number.parseInt(cred.codigo_cooperativa || '', 10);
+      if (!Number.isFinite(codigoVoluntarioPadrao)) codigoVoluntarioPadrao = Number.parseInt(cred.codigo_voluntario || '', 10);
+      if (!Number.isFinite(codigoSituacaoPendente)) codigoSituacaoPendente = Number.parseInt(cred.codigo_situacao_pendente || '', 10);
+      if (!Number.isFinite(codigoSituacaoAtivo)) codigoSituacaoAtivo = Number.parseInt(cred.codigo_situacao_ativo || '', 10);
+      const tcr = Number.parseInt(cred.codigo_tipo_cobranca_recorrente_padrao || '', 10);
+      if (Number.isFinite(tcr)) codigoTipoCobrancaPadrao = tcr;
+      const cc = Number.parseInt(cred.codigo_como_conheceu_padrao || '', 10);
+      if (Number.isFinite(cc)) codigoComoConheceuPadrao = cc;
+      const cp = Number.parseInt(cred.codigo_profissao_padrao || '', 10);
+      if (Number.isFinite(cp)) codigoProfissaoPadrao = cp;
     }
-
-    // Se já existe processamento em andamento, verificar se é stale lock
-    if (veiculoCheck?.status_sga === 'sincronizando') {
-      const { data: lastLog } = await supabase
-        .from('sga_sync_logs')
-        .select('created_at')
-        .eq('veiculo_id', veiculo_id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      const lockAge = lastLog?.created_at
-        ? Date.now() - new Date(lastLog.created_at).getTime()
-        : Infinity;
-
-      const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutos
-
-      if (lockAge < STALE_THRESHOLD_MS) {
-        console.log(`[SGA Sync] Veículo ${veiculo_id} em sincronização há ${Math.round(lockAge / 1000)}s. Ignorando.`);
-        await logSync(veiculo_id, associado_id, 'idempotency_guard', 'skipped_in_progress', { veiculo_id, associado_id }, null);
-        return new Response(
-          JSON.stringify({ success: true, data: { already_in_progress: true }, step: 'idempotency_guard' }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      // Stale lock detectado — resetar e permitir nova tentativa
-      console.log(`[SGA Sync] Stale lock detectado para veículo ${veiculo_id} (${Math.round(lockAge / 1000)}s). Resetando status.`);
-      await supabase
-        .from('veiculos')
-        .update({ status_sga: 'erro_sincronizacao' })
-        .eq('id', veiculo_id);
-      await logSync(veiculo_id, associado_id, 'stale_lock_recovery', 'recovered', { veiculo_id, lock_age_ms: lockAge }, null);
-      // Continua execução normal
-    }
-
-    await supabase
-      .from('veiculos')
-      .update({ status_sga: 'sincronizando' })
-      .eq('id', veiculo_id);
-
-    // Heavy sync runs in background via EdgeRuntime.waitUntil
-    const doBackgroundSync = async () => {
-      // ⚡ Capture IDs explicitly to prevent stale closures in EdgeRuntime.waitUntil
-      const _vid = veiculo_id;
-      const _aid = associado_id;
-      const _statusDestino = statusSgaDestino;
-      try {
-
-    // ========================================
-    // GUARD: Detectar loops infinitos (CPF duplicado sem recovery)
-    // ========================================
-    try {
-      const { data: recentFailures } = await supabase
-        .from('sga_sync_logs')
-        .select('error_message, created_at')
-        .eq('veiculo_id', _vid)
-        .eq('associado_id', _aid)
-        .eq('action', 'cadastrar_associado')
-        .eq('status', 'error')
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      if (recentFailures && recentFailures.length >= 3) {
-        const cpfDuplicateErrors = recentFailures.filter(f => 
-          f.error_message?.toLowerCase().includes('cpf') ||
-          f.error_message?.toLowerCase().includes('não aceitável') ||
-          f.error_message?.toLowerCase().includes('not acceptable')
-        );
-        
-        if (cpfDuplicateErrors.length >= 3) {
-          console.log(`[SGA Sync] ⛔ Loop infinito detectado: ${cpfDuplicateErrors.length} falhas consecutivas de CPF duplicado para veiculo=${_vid}`);
-          await logSync(_vid, _aid, 'loop_detection', 'error', 
-            { consecutive_failures: cpfDuplicateErrors.length }, null, 
-            'Loop infinito detectado: CPF duplicado sem recovery possível. Marcado como falha permanente.');
-          
-          // Marcar como falha permanente na fila
-          await supabase
-            .from('sga_sync_queue')
-            .update({ 
-              status: 'falha_permanente', 
-              erro_ultimo: 'Loop infinito: CPF duplicado no Hinova sem possibilidade de recovery automático',
-              ultima_tentativa_em: new Date().toISOString()
-            })
-            .eq('veiculo_id', _vid)
-            .eq('associado_id', _aid);
-          
-          await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
-          return;
-        }
-      }
-    } catch (e) {
-      console.log('[SGA Sync] Erro no guard de loop:', e);
-    }
-
-    // ========================================
-    // PASSO 1: Buscar dados do associado
-    // ========================================
-    const { data: associado, error: associadoError } = await supabase
-      .from('associados')
-      .select('*')
-      .eq('id', _aid)
-      .single();
-
-    if (associadoError || !associado) {
-      await logSync(_vid, _aid, 'buscar_associado', 'error', null, null, 'Associado não encontrado');
-      await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
-      await upsertSyncQueue(supabase, _vid, _aid, 'associado', 'Associado não encontrado no banco');
-      return;
-    }
-
-    // ========================================
-    // GUARD DE DUPLICIDADE: associado da BASE ANTIGA não pode ser reenviado ao SGA.
-    // A base antiga (origem_cadastro='api_externa') já existe no Hinova com seu
-    // próprio codigo_hinova. Reenviar criaria duplicidade. Este endpoint é
-    // exclusivo do fluxo de envio de NOVOS associados (origem_cadastro='interno').
-    // ========================================
-    if (associado.origem_cadastro === 'api_externa') {
-      // Bypass permitido apenas se o associado JÁ tem codigo_hinova (reusa, não duplica).
-      // Usado para casos pontuais onde um veículo do associado da base antiga
-      // não foi cadastrado no SGA e precisa ser incluído manualmente.
-      if (bypass_guard_base_antiga && associado.codigo_hinova) {
-        console.warn(`[SGA Sync] ⚠️ Bypass guard_base_antiga ATIVO para veiculo=${_vid} (associado.codigo_hinova=${associado.codigo_hinova} será reutilizado)`);
-        await logSync(_vid, _aid, 'guard_base_antiga_bypass', 'info',
-          { codigo_hinova_reutilizado: associado.codigo_hinova }, null,
-          'Bypass autorizado: associado já tem codigo_hinova, será reusado para cadastrar veículo');
-      } else {
-        const msg = `Associado pertence à base antiga (origem_cadastro=api_externa, codigo_hinova=${associado.codigo_hinova ?? 'null'}). Não pode ser reenviado ao SGA — risco de duplicidade.`;
-        console.warn('[SGA Sync] Bloqueado:', msg);
-        await logSync(_vid, _aid, 'guard_base_antiga', 'error', null, null, msg);
-        await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
-        return;
-      }
-    }
-
-    // ========================================
-    // PASSO 2: Buscar dados do veículo
-    // ========================================
-    const { data: veiculo, error: veiculoError } = await supabase
-      .from('veiculos')
-      .select('*')
-      .eq('id', _vid)
-      .single();
-
-    if (veiculoError || !veiculo) {
-      await logSync(_vid, _aid, 'buscar_veiculo', 'error', null, null, 'Veículo não encontrado');
-      await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
-      await upsertSyncQueue(supabase, _vid, _aid, 'associado', 'Veículo não encontrado no banco');
-      return;
-    }
-
-    // ========================================
-    // PASSO 3: Buscar mapeamentos
-    // ========================================
-    const { data: mapeamentos } = await supabase
-      .from('hinova_mapeamentos')
-      .select('*')
-      .eq('ativo', true);
-
-    const getMapeamento = (tipo: string, codigoLocal: string | null): number | null => {
-      if (!codigoLocal) return null;
-      const map = mapeamentos?.find(
-        m => m.tipo === tipo && m.codigo_local.toLowerCase() === codigoLocal.toLowerCase()
-      );
-      return map?.codigo_hinova || null;
-    };
-
-    const normalizarCombustivel = (combustivel: string | null): string | null => {
-      if (!combustivel) return null;
-      const c = combustivel.toUpperCase().trim();
-      if (c.includes('/') && (c.includes('GASOLINA') || c.includes('ALCOOL') || c.includes('ÁLCOOL') || c.includes('ETANOL'))) {
-        if (c.includes('GAS NATURAL') || c.includes('GNV')) return 'gnv';
-        return 'flex';
-      }
-      if (c === 'FLEX' || c === 'BICOMBUSTÍVEL' || c === 'BICOMBUSTIVEL') return 'flex';
-      if (c === 'GASOLINA') return 'gasolina';
-      if (c === 'ETANOL' || c === 'ÁLCOOL' || c === 'ALCOOL') return 'etanol';
-      if (c === 'DIESEL') return 'diesel';
-      if (c === 'GNV' || c === 'GAS NATURAL' || c === 'GÁS NATURAL') return 'gnv';
-      if (c === 'ELÉTRICO' || c === 'ELETRICO') return 'eletrico';
-      if (c === 'HÍBRIDO' || c === 'HIBRIDO') return 'hibrido';
-      return combustivel.toLowerCase();
-    };
-
-    const inferirTipoVeiculo = async (categoria: string | null, marca?: string | null, modelo?: string | null): Promise<number> => {
-      if (categoria) {
-        const cat = categoria.toUpperCase().trim();
-        if (cat.includes('MOTO') || cat.includes('MOTOCICLETA')) return 2;
-        if (cat.includes('CAMINHÃO') || cat.includes('CAMINHAO') || cat.includes('TRUCK')) return 3;
-        if (cat.includes('VAN') || cat.includes('UTILITÁRIO') || cat.includes('UTILITARIO')) return 4;
-        if (cat.includes('ÔNIBUS') || cat.includes('ONIBUS')) return 5;
-        if (cat.includes('REBOQUE') || cat.includes('SEMI-REBOQUE')) return 6;
-      }
-      
-      const marcaNorm = (marca || '').trim().toUpperCase();
-      const modeloNorm = (modelo || '').trim().toUpperCase();
-
-      // Regra 1: Marcas exclusivas de moto (tabela configuracoes)
-      if (marcaNorm) {
-        const { data: configData } = await supabase
-          .from('configuracoes')
-          .select('valor')
-          .eq('chave', 'marcas_exclusivas_moto')
-          .maybeSingle();
-
-        if (configData?.valor) {
-          try {
-            const raw = configData.valor.trim();
-            const marcasList: string[] = raw.startsWith('[')
-              ? JSON.parse(raw).map((m: string) => m.toUpperCase().trim())
-              : raw.split(',').map((m: string) => m.toUpperCase().trim());
-            if (marcasList.some(m => marcaNorm.includes(m) || m.includes(marcaNorm))) {
-              return 2;
-            }
-          } catch { /* ignora parse error */ }
-        }
-      }
-
-      // Regra 2: Marca mista → consulta marcas_modelos (tabela unificada)
-      if (marcaNorm && modeloNorm) {
-        const firstToken = modeloNorm.split(' ')[0];
-        const { data } = await supabase
-          .from('marcas_modelos')
-          .select('modelo')
-          .ilike('marca', marcaNorm)
-          .ilike('modelo', `%${firstToken}%`)
-          .eq('ativo', true)
-          .limit(5);
-        // Se encontrou na marcas_modelos, é um veículo catalogado.
-        // A detecção de moto depende das marcas exclusivas (regra 1) e keywords (regra 3).
-      }
-
-      // Regra 3: Fallback — keywords de modelo apenas (sem marcas hardcoded)
-      const MOTO_MODEL_KEYWORDS = ['nxr', 'bros', 'cg ', 'cg-', 'cb ', 'cb-', 'cbr', 'pcx', 'biz', 'pop', 
-        'titan', 'fan', 'xre', 'lander', 'tenere', 'ténéré', 'crosser', 'fazer', 'ybr', 'neo',
-        'burgman', 'intruder', 'factor', 'scooter', 'lead', 'sahara', 'transalp', 'africa twin',
-        'xtz', 'xt ', 'xj6', 'mt-', 'mt ', 'nmax', 'fluo', 'next', 'crypton', 'yes',
-        'gsx', 'v-strom', 'vstrom', 'dl ', 'boulevard', 'hayabusa', 'ninja', 'versys', 'z900', 'z800', 'z750',
-        'duke', 'adventure', 'rc ', 'apache', 'speed', 'street', 'bonneville', 'tiger',
-        'sportster', 'iron', 'fat bob', 'softail', 'electra', 'road king',
-        'riva', 'kansas', 'mirage', 'horizon', 'jet', 'citicom', 'citycom',
-        'elite', 'adv', 'sh ', 'sh-', 'xadv', 'x-adv'];
-      if (modelo && MOTO_MODEL_KEYWORDS.some(kw => modelo.toLowerCase().includes(kw))) return 2;
-      
-      return 1;
-    };
-
-    // Declaração antecipada — usada nos `upsertSyncQueue` desde o PASSO 3.5.
-    // (Antes ficava no PASSO 4.5 e causava TDZ: "Cannot access 'codigoAssociadoHinova' before initialization")
-    let codigoAssociadoHinova: number | null = (associado as any)?.codigo_hinova ?? null;
-
-    // ========================================
-    // PASSO 3.5: Buscar código voluntário do vendedor
-    // ========================================
-    console.log('[SGA Sync] Buscando código voluntário do vendedor...');
-    
-    // Priorizar contrato pelo veiculo_id (determinístico), fallback por associado_id
-    let contrato: {
-      vendedor_id: string | null;
-      veiculo_categoria: string | null;
-      cotacao_id?: string | null;
-      plano_id: string | null;
-      valor_mensal: number | null;
-      valor_adesao: number | null;
-      valor_adicional: number | null;
-    } | null = null;
-
-    const contratoSelect = 'vendedor_id, veiculo_categoria, cotacao_id, plano_id, valor_mensal, valor_adesao, valor_adicional';
-
-    const { data: contratoByVeiculo } = await supabase
-      .from('contratos')
-      .select(contratoSelect)
-      .eq('veiculo_id', _vid)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (contratoByVeiculo) {
-      contrato = contratoByVeiculo as any;
-      console.log(`[SGA Sync] Contrato encontrado por veiculo_id: ${_vid}`);
-    } else {
-      const { data: contratoByAssociado } = await supabase
-        .from('contratos')
-        .select(contratoSelect)
-        .eq('associado_id', _aid)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      contrato = contratoByAssociado as any;
-      console.log(`[SGA Sync] Contrato fallback por associado_id: ${_aid}`);
-    }
-    
-    // CONSULTOR — usar SOMENTE o vendedor real do contrato.
-    // Sem fallback "qualquer vendedor" para evitar atribuir a venda
-    // ao consultor errado no SGA.
-    let vendedorNomeLog: string | null = null;
-    if (contrato?.vendedor_id) {
-      console.log(`[SGA Sync] Vendedor do contrato: ${contrato.vendedor_id}`);
-
-      const { data: vendedor } = await supabase
-        .from('profiles')
-        .select('codigo_sga_voluntario, nome')
-        .eq('id', contrato.vendedor_id)
-        .single();
-
-      vendedorNomeLog = vendedor?.nome || null;
-
-      if (vendedor?.codigo_sga_voluntario) {
-        hinovaCodigoVoluntario = vendedor.codigo_sga_voluntario;
-        console.log(`[SGA Sync] Usando código voluntário do vendedor ${vendedor.nome}: ${hinovaCodigoVoluntario}`);
-      } else {
-        const msg = `Vendedor ${vendedor?.nome || contrato.vendedor_id} não possui codigo_sga_voluntario configurado.`;
-        console.warn(`[SGA Sync] ${msg} — bloqueando sync para evitar atribuição incorreta.`);
-        await logSync(_vid, _aid, 'resolver_vendedor', 'error',
-          { vendedor_id: contrato.vendedor_id, nome: vendedor?.nome }, null, msg);
-        await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
-        await upsertSyncQueue(supabase, _vid, _aid, 'vendedor_sem_codigo_sga', msg, codigoAssociadoHinova);
-        return;
-      }
-    } else {
-      const msg = 'Contrato sem vendedor_id — não é possível identificar o consultor para o SGA.';
-      console.warn(`[SGA Sync] ${msg}`);
-      await logSync(_vid, _aid, 'resolver_vendedor', 'error', { veiculo_id: _vid, associado_id: _aid }, null, msg);
-      await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
-      await upsertSyncQueue(supabase, _vid, _aid, 'contrato_sem_vendedor', msg, codigoAssociadoHinova);
-      return;
-    }
-
-    // ========================================
-    // PASSO 4: Autenticar na API Hinova
-    // ========================================
-    console.log('[SGA Sync] Autenticando na API Hinova...');
-    
-    const authPayload = { usuario: hinovaUsuario, senha: hinovaSenha };
-
-    const authResponse = await fetchWithRetry(
-      `${hinovaApiUrl}/usuario/autenticar`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${hinovaToken}`
-        },
-        body: JSON.stringify(authPayload)
-      }
-    );
-
-    const authData: HinovaAuthResponse = await safeJsonParse<HinovaAuthResponse>(authResponse, 'autenticar');
-    
-    await logSync(_vid, _aid, 'autenticar', authResponse.ok ? 'success' : 'error', 
-      { usuario: hinovaUsuario }, authData, authResponse.ok ? null : authData.mensagem);
-
-    if (!authResponse.ok || !authData.token_usuario) {
-      await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
-      await upsertSyncQueue(supabase, _vid, _aid, 'associado', `Falha na autenticação: ${authData.mensagem}`);
-      return;
-    }
-
-    const tokenUsuario = authData.token_usuario;
-    console.log('[SGA Sync] Autenticação bem-sucedida');
-
-    const operationHeaders = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${tokenUsuario}`,
-    };
-
-    // ========================================
-    // PASSO 4.5: Consulta backup por CPF (antes de cadastrar)
-    // Verifica se o associado já existe no Hinova
-    // ========================================
-    codigoAssociadoHinova = associado.codigo_hinova ?? codigoAssociadoHinova;
-
-    // Validar se o codigo_hinova existente é compatível com o codigo_conta atual
-    if (codigoAssociadoHinova && codigoContaValido) {
-      try {
-        const { data: logOrigem } = await supabase
-          .from('sga_sync_logs')
-          .select('request_payload')
-          .eq('associado_id', _aid)
-          .in('action', ['cadastrar_associado', 'busca_backup_cpf'])
-          .eq('status', 'success')
-          .not('request_payload', 'is', null)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (logOrigem) {
-          const codigoContaOrigem = Number((logOrigem.request_payload as any)?.codigo_conta);
-          if (Number.isFinite(codigoContaOrigem) && codigoContaOrigem !== codigoContaResolvido) {
-            console.log(`[SGA Sync] codigo_hinova ${codigoAssociadoHinova} pertence ao codigo_conta ${codigoContaOrigem}, mas atual é ${codigoContaResolvido}. Descartando.`);
-            await logSync(_vid, _aid, 'invalidar_codigo_conta_incompativel', 'info',
-              { codigo_hinova: codigoAssociadoHinova, codigo_conta_origem: codigoContaOrigem, codigo_conta_atual: codigoContaResolvido },
-              null, 'codigo_conta incompatível');
-            codigoAssociadoHinova = null;
-            // Limpar no banco para não reutilizar
-            await supabase.from('associados').update({ codigo_hinova: null, sincronizado_hinova: false }).eq('id', _aid);
-          }
-        }
-      } catch (e) {
-        console.log('[SGA Sync] Erro ao validar codigo_conta do codigo_hinova existente:', e);
-      }
-    }
-
-    if (!codigoAssociadoHinova) {
-      console.log('[SGA Sync] Verificando se associado já existe no Hinova via busca por CPF...');
-      const cpfLimpo = cleanCPF(associado.cpf);
-      try {
-        // Tentar múltiplos formatos de busca por CPF
-        const cpfLimpo = cleanCPF(associado.cpf);
-        const cpfFormatado = formatCPF(associado.cpf);
-        
-        const tentativas = [
-          { label: 'GET buscar/cpf limpo', url: `${hinovaApiUrl}/associado/buscar/${cpfLimpo}/cpf`, method: 'GET' as const },
-          { label: 'POST consultar', url: `${hinovaApiUrl}/associado/consultar`, method: 'POST' as const, body: JSON.stringify({ cpf: cpfLimpo }) },
-          { label: 'POST buscar', url: `${hinovaApiUrl}/associado/buscar`, method: 'POST' as const, body: JSON.stringify({ cpf: cpfLimpo }) },
-        ];
-
-        for (const tentativa of tentativas) {
-          try {
-            console.log(`[SGA Sync] Busca backup: ${tentativa.label}...`);
-            const buscaResp = await fetchWithRetry(
-              tentativa.url,
-              { method: tentativa.method, headers: operationHeaders, ...(tentativa.body && { body: tentativa.body }) },
-              1 // single attempt for search endpoints
-            );
-            
-            // SEMPRE ler o body, independente do content-type
-            const contentType = buscaResp.headers.get('content-type') || '';
-            const buscaText = await buscaResp.text();
-            console.log(`[SGA Sync] ${tentativa.label} - Status: ${buscaResp.status}, CT: ${contentType}, Body: ${buscaText.substring(0, 500)}`);
-            
-            // Gravar diagnóstico em sga_sync_logs para cada tentativa
-            await logSync(_vid, _aid, 'busca_cpf_diagnostico', 
-              buscaResp.ok ? 'success' : 'info',
-              { metodo: tentativa.label, url: tentativa.url },
-              { status: buscaResp.status, content_type: contentType, body_preview: buscaText.substring(0, 500) },
-              buscaResp.ok ? null : `Status ${buscaResp.status}`
-            );
-
-            // Tentar parsear como JSON mesmo se content-type não indica
-            try {
-              const buscaData = JSON.parse(buscaText);
-              
-              // Extrair código de formatos possíveis
-              const codigo = extractCodigoAssociado(buscaData);
-              
-              if (codigo) {
-                codigoAssociadoHinova = parseInt(String(codigo));
-                console.log(`[SGA Sync] Associado já existe no Hinova! Código: ${codigoAssociadoHinova} (via ${tentativa.label})`);
-                
-                await supabase.from('associados').update({ 
-                  codigo_hinova: codigoAssociadoHinova,
-                  sincronizado_hinova: true,
-                  sincronizado_hinova_em: new Date().toISOString()
-                }).eq('id', _aid);
-
-                await logSync(_vid, _aid, 'busca_backup_cpf', 'success', 
-                  { cpf: '***', metodo: tentativa.label }, { codigo_associado: codigoAssociadoHinova }, null);
-
-                // Check if vehicle already linked
-                const veiculos = buscaData.veiculos || buscaData?.data?.veiculos || [];
-                if (Array.isArray(veiculos)) {
-                  const veiculoExistente = veiculos.find(
-                    (v: any) => v.placa === veiculo.placa
-                  );
-                  if (veiculoExistente?.codigo_veiculo) {
-                    console.log(`[SGA Sync] Veículo também já existe no Hinova! Código: ${veiculoExistente.codigo_veiculo}`);
-                    
-                    await supabase.from('veiculos').update({ 
-                      codigo_hinova: parseInt(veiculoExistente.codigo_veiculo),
-                      sincronizado_hinova: true,
-                      sincronizado_hinova_em: new Date().toISOString(),
-                      status_sga: _statusDestino === 'ativo' ? 'ativado_sga' : 'pendente_sga'
-                    }).eq('id', _vid);
-
-                    await markQueueCompleted(supabase, _vid, _aid);
-
-                    return;
-                  }
-                }
-                
-                break; // Found the code, exit tentativas loop
-              }
-            } catch (_parseErr) {
-              console.log(`[SGA Sync] ${tentativa.label}: body não é JSON válido`);
-            }
-          } catch (e) {
-            console.log(`[SGA Sync] ${tentativa.label} falhou:`, e);
-            await logSync(_vid, _aid, 'busca_cpf_diagnostico', 'error',
-              { metodo: tentativa.label }, null, e instanceof Error ? e.message : 'Erro de rede');
-          }
-        }
-        
-        if (!codigoAssociadoHinova) {
-          console.log('[SGA Sync] Nenhuma busca por CPF retornou código, prosseguindo com cadastro');
-        }
-      } catch (e) {
-        console.log('[SGA Sync] Busca backup por CPF falhou (não bloqueia):', e);
-      }
-    }
-
-    // ========================================
-    // PASSO 5: Cadastrar associado (se não encontrado via backup)
-    // ========================================
-    if (!codigoAssociadoHinova) {
-      console.log('[SGA Sync] Cadastrando associado no Hinova...');
-      
-      const associadoPayload = {
-        nome: associado.nome,
-        cpf: cleanCPF(associado.cpf),
-        rg: associado.rg || '',
-        data_nascimento: formatDateBR(associado.data_nascimento),
-        email: associado.email || '',
-        telefone: formatPhone(associado.telefone),
-        celular: formatPhone(associado.whatsapp || associado.telefone),
-        cep: associado.cep?.replace(/\D/g, '') || '',
-        logradouro: associado.logradouro || '',
-        numero: associado.numero || 'S/N',
-        complemento: associado.complemento || '',
-        bairro: associado.bairro || '',
-        cidade: associado.cidade || '',
-        estado: associado.uf || '',
-        sexo: associado.sexo?.toUpperCase() === 'FEMININO' ? 'F' : 'M',
-        dia_vencimento: associado.dia_vencimento || 10,
-        codigo_conta: codigoContaResolvido,
-        ...(hinovaCodigoRegional && { codigo_regional: parseInt(hinovaCodigoRegional) }),
-        ...(hinovaCodigoCooperativa && { codigo_cooperativa: parseInt(hinovaCodigoCooperativa) }),
-        ...(hinovaCodigoVoluntario && { codigo_voluntario: parseInt(hinovaCodigoVoluntario) }),
-        ...(hinovaCodigoTipoCobrancaPadrao && { codigo_tipo_cobranca_recorrente: parseInt(hinovaCodigoTipoCobrancaPadrao) }),
-        ...(hinovaCodigoComoConheceuPadrao && { codigo_como_conheceu: parseInt(hinovaCodigoComoConheceuPadrao) }),
-        ...(hinovaCodigoProfissaoPadrao && { codigo_profissao: parseInt(hinovaCodigoProfissaoPadrao) }),
-      };
-      console.log(`[SGA Sync] Payload associado: codigo_conta=${codigoContaResolvido}`);
-
-      const associadoResponse = await fetchWithRetry(
-        `${hinovaApiUrl}/associado/cadastrar`,
-        {
-          method: 'POST',
-          headers: operationHeaders,
-          body: JSON.stringify(associadoPayload)
-        }
-      );
-
-      const associadoData: HinovaAssociadoResponse = await safeJsonParse<HinovaAssociadoResponse>(associadoResponse, 'cadastrar_associado');
-      
-      await logSync(_vid, _aid, 'cadastrar_associado', associadoResponse.ok ? 'success' : 'error',
-        { ...associadoPayload, cpf: '***' }, associadoData, associadoResponse.ok ? null : associadoData.mensagem);
-
-      if (!associadoResponse.ok) {
-        console.log(`[SGA Sync] Resposta cadastrar_associado (${associadoResponse.status}):`, JSON.stringify(associadoData));
-        const errorMessages = (associadoData as any).error || [];
-        const isTokenBearerError = 
-          (associadoData.mensagem?.toLowerCase().includes('token de acesso') ||
-           associadoData.mensagem?.toLowerCase().includes('acesso não autorizado') ||
-           errorMessages.some((e: string) => 
-             e.toLowerCase().includes('login') || 
-             e.toLowerCase().includes('senha') ||
-             e.toLowerCase().includes('autorizado')
-           ));
-
-        if (isTokenBearerError && tokenUsuario) {
-          await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
-          await upsertSyncQueue(supabase, _vid, _aid, 'associado', 'Token Bearer expirado');
-          return;
-        }
-
-        // CPF duplicado
-        const isCpfDuplicado = 
-          (associadoData.mensagem?.toLowerCase().includes('cpf') && 
-           associadoData.mensagem?.toLowerCase().includes('exist')) ||
-          errorMessages.some((e: string) => 
-            e.toLowerCase().includes('cpf') && e.toLowerCase().includes('exist')
-          );
-        
-        if (isCpfDuplicado) {
-          console.log('[SGA Sync] CPF já existe no Hinova, buscando código...');
-
-          let codigoExistente: number | null = extractCodigoAssociado(associadoData);
-
-          if (codigoExistente) {
-            console.log(`[SGA Sync] Código retornado no próprio erro de cadastro: ${codigoExistente}`);
-          }
-
-          // Buscar códigos já invalidados para não reutilizá-los (previne loop infinito)
-          let codigosInvalidados = new Set<number>();
-          try {
-            const { data: logsInvalidados } = await supabase
-              .from('sga_sync_logs')
-              .select('request_payload')
-              .or(`associado_id.eq.${_aid},veiculo_id.eq.${_vid}`)
-              .eq('action', 'invalidar_codigo_associado')
-              .order('created_at', { ascending: false })
-              .limit(50);
-
-            if (logsInvalidados) {
-              for (const l of logsInvalidados) {
-                const cod = Number((l.request_payload as any)?.codigo_invalidado);
-                if (Number.isFinite(cod) && cod > 0) codigosInvalidados.add(cod);
-              }
-            }
-            if (codigosInvalidados.size > 0) {
-              console.log(`[SGA Sync] Códigos já invalidados (${codigosInvalidados.size}): ${[...codigosInvalidados].join(', ')}`);
-            }
-          } catch (e) {
-            console.log('[SGA Sync] Erro ao buscar códigos invalidados:', e);
-          }
-
-          // Estratégia 1: Logs anteriores do mesmo associado_id
-          if (!codigoExistente) {
-            try {
-              const { data: logAnterior } = await supabase
-                .from('sga_sync_logs')
-                .select('response_payload')
-                .eq('associado_id', _aid)
-                .eq('action', 'cadastrar_associado')
-                .eq('status', 'success')
-                .not('response_payload', 'is', null)
-                .order('created_at', { ascending: false })
-                .limit(10);
-
-              if (logAnterior) {
-                for (const log of logAnterior) {
-                  const codigo = extractCodigoAssociado(log.response_payload);
-                  if (codigo && !codigosInvalidados.has(codigo)) {
-                    codigoExistente = codigo;
-                    console.log(`[SGA Sync] Código recuperado via logs do próprio associado: ${codigoExistente}`);
-                    break;
-                  } else if (codigo && codigosInvalidados.has(codigo)) {
-                    console.log(`[SGA Sync] Código ${codigo} dos logs do associado IGNORADO (já invalidado)`);
-                  }
-                }
-              }
-            } catch (e) {
-              console.log('[SGA Sync] Erro logs anteriores:', e);
-            }
-          }
-
-          // Estratégia 2: Logs históricos por identidade (nome/email/telefone)
-          if (!codigoExistente) {
-            try {
-              const { data: logsIdentidade } = await supabase
-                .from('sga_sync_logs')
-                .select('request_payload, response_payload, created_at')
-                .eq('action', 'cadastrar_associado')
-                .eq('status', 'success')
-                .not('response_payload', 'is', null)
-                .order('created_at', { ascending: false })
-                .limit(20);
-
-              const nomeAtual = (associado.nome || '').trim().toLowerCase();
-              const emailAtual = (associado.email || '').trim().toLowerCase();
-              const cpfAtual = cleanCPF(associado.cpf);
-              const telefoneAtual = cleanPhoneDigits(associado.whatsapp || associado.telefone);
-
-              if (logsIdentidade) {
-                for (const log of logsIdentidade) {
-                  const reqPayload = (log.request_payload || {}) as Record<string, unknown>;
-                  const codigo = extractCodigoAssociado(log.response_payload);
-                  if (!codigo) continue;
-                  if (codigosInvalidados.has(codigo)) {
-                    console.log(`[SGA Sync] Código ${codigo} dos logs de identidade IGNORADO (já invalidado)`);
-                    continue;
-                  }
-
-                  const nomeLog = String(reqPayload?.nome || '').trim().toLowerCase();
-                  const emailLog = String(reqPayload?.email || '').trim().toLowerCase();
-                  const cpfLog = cleanCPF(reqPayload?.cpf ? String(reqPayload.cpf) : null);
-                  const telefoneLog = cleanPhoneDigits(
-                    reqPayload?.celular ? String(reqPayload.celular) : (reqPayload?.telefone ? String(reqPayload.telefone) : null)
-                  );
-                  const codigoContaLog = Number(reqPayload?.codigo_conta);
-                  // Validação OBRIGATÓRIA: rejeitar se codigo_conta é diferente
-                  const codigoContaCompativel =
-                    Number.isFinite(codigoContaLog) && codigoContaValido
-                      ? codigoContaLog === codigoContaResolvido
-                      : false; // Se não temos ambos os valores, rejeitar por segurança
-
-                  const cpfMatch = cpfLog.length === 11 && cpfAtual.length === 11 && cpfLog === cpfAtual;
-                  const nomeMatch = !!nomeAtual && !!nomeLog && nomeLog === nomeAtual;
-                  const emailMatch = !!emailAtual && !!emailLog && emailLog === emailAtual;
-                  const telefoneMatch = !!telefoneAtual && !!telefoneLog && telefoneLog === telefoneAtual;
-
-                  if (codigoContaCompativel && (cpfMatch || (nomeMatch && emailMatch) || (nomeMatch && telefoneMatch))) {
-                    codigoExistente = codigo;
-                    console.log(`[SGA Sync] Código recuperado via logs de identidade: ${codigoExistente}`);
-                    await logSync(
-                      _vid,
-                      _aid,
-                      'recovery_cpf_diagnostico',
-                      'success',
-                      { metodo: 'logs_identidade', created_at_origem: log.created_at },
-                      { codigo_associado: codigoExistente },
-                      null
-                    );
-                    break;
-                  }
-                }
-              }
-            } catch (e) {
-              console.log('[SGA Sync] Erro ao buscar código por logs de identidade:', e);
-            }
-          }
-
-          // Estratégia 3: Busca por CPF com logging completo (diagnóstico)
-          if (!codigoExistente) {
-            const cpfLimpoRecovery = cleanCPF(associado.cpf);
-            const cpfFormatadoRecovery = formatCPF(associado.cpf);
-
-            const recoveryTentativas = [
-              { label: 'Recovery GET buscar/cpf limpo', url: `${hinovaApiUrl}/associado/buscar/${cpfLimpoRecovery}/cpf`, method: 'GET' as const },
-              { label: 'Recovery POST consultar', url: `${hinovaApiUrl}/associado/consultar`, method: 'POST' as const, body: JSON.stringify({ cpf: cpfLimpoRecovery }) },
-              { label: 'Recovery POST buscar', url: `${hinovaApiUrl}/associado/buscar`, method: 'POST' as const, body: JSON.stringify({ cpf: cpfLimpoRecovery }) },
-            ];
-
-            for (const t of recoveryTentativas) {
-              if (codigoExistente) break;
-              try {
-                console.log(`[SGA Sync] ${t.label}...`);
-                const resp = await fetchWithRetry(
-                  t.url,
-                  { method: t.method, headers: operationHeaders, ...(t.body && { body: t.body }) },
-                  1
-                );
-                const ct = resp.headers.get('content-type') || '';
-                const text = await resp.text();
-                console.log(`[SGA Sync] ${t.label} - Status: ${resp.status}, CT: ${ct}, Body: ${text.substring(0, 500)}`);
-
-                await logSync(
-                  _vid,
-                  _aid,
-                  'recovery_cpf_diagnostico',
-                  resp.ok ? 'success' : 'info',
-                  { metodo: t.label, url: t.url },
-                  { status: resp.status, content_type: ct, body_preview: text.substring(0, 500) },
-                  resp.ok ? null : `Status ${resp.status}`
-                );
-
-                try {
-                  const parsed = JSON.parse(text);
-                  const codigo = extractCodigoAssociado(parsed);
-                  if (codigo) {
-                    codigoExistente = codigo;
-                    console.log(`[SGA Sync] Recovery encontrou código ${codigoExistente} via ${t.label}`);
-                  }
-                } catch (_) {
-                  // body não é JSON
-                }
-              } catch (e) {
-                console.log(`[SGA Sync] ${t.label} falhou:`, e);
-                await logSync(
-                  _vid,
-                  _aid,
-                  'recovery_cpf_diagnostico',
-                  'error',
-                  { metodo: t.label },
-                  null,
-                  e instanceof Error ? e.message : 'Erro de rede'
-                );
-              }
-            }
-          }
-
-          // Estratégia 4: Banco local
-          if (!codigoExistente) {
-            const { data: associadoLocal } = await supabase
-              .from('associados')
-              .select('codigo_hinova')
-              .eq('cpf', associado.cpf)
-              .not('codigo_hinova', 'is', null)
-              .limit(1)
-              .maybeSingle();
-
-            if (associadoLocal?.codigo_hinova && !codigosInvalidados.has(associadoLocal.codigo_hinova)) {
-              codigoExistente = associadoLocal.codigo_hinova;
-              console.log(`[SGA Sync] Código recuperado do banco local: ${codigoExistente}`);
-            } else if (associadoLocal?.codigo_hinova && codigosInvalidados.has(associadoLocal.codigo_hinova)) {
-              console.log(`[SGA Sync] Código ${associadoLocal.codigo_hinova} do banco local IGNORADO (já invalidado)`);
-            }
-          }
-
-          if (codigoExistente) {
-            await supabase.from('associados').update({
-              codigo_hinova: codigoExistente,
-              sincronizado_hinova: true,
-              sincronizado_hinova_em: new Date().toISOString()
-            }).eq('id', _aid);
-
-            codigoAssociadoHinova = codigoExistente;
-            console.log(`[SGA Sync] Código existente recuperado: ${codigoAssociadoHinova}`);
-          } else {
-            // ⛔ CPF duplicado mas NENHUMA estratégia encontrou código → falha permanente
-            // Detectar deadlock específico: CPF existe mas busca retorna 406 (indisponível/deletado no Hinova)
-            const isDeadlock = codigosInvalidados.size > 0;
-            const deadlockMsg = isDeadlock
-              ? `DEADLOCK HINOVA: CPF existe no Hinova mas está indisponível/deletado (código ${[...codigosInvalidados].join(',')} invalidado). Requer reativação manual no painel Hinova.`
-              : 'CPF duplicado no Hinova mas nenhuma estratégia de recovery encontrou código válido. Requer intervenção manual.';
-            console.log(`[SGA Sync] ⛔ ${deadlockMsg}`);
-            await supabase
-              .from('sga_sync_queue')
-              .update({ 
-                status: 'falha_permanente', 
-                erro_ultimo: deadlockMsg,
-                ultima_tentativa_em: new Date().toISOString()
-              })
-              .eq('veiculo_id', _vid)
-              .eq('associado_id', _aid);
-            await logSync(_vid, _aid, 'cpf_duplicado_sem_recovery', 'error', 
-              { codigos_invalidados: [...codigosInvalidados], is_deadlock: isDeadlock }, null, deadlockMsg);
-            await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
-            return;
-          }
-        } else {
-          // Erro genérico
-          await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
-          await upsertSyncQueue(supabase, _vid, _aid, 'associado', `Falha cadastro: ${associadoData.mensagem}`);
-          return;
-        }
-      } else {
-        codigoAssociadoHinova = associadoData.codigo_associado;
-        console.log(`[SGA Sync] Associado cadastrado - Código: ${codigoAssociadoHinova}`);
-
-        await supabase.from('associados').update({ 
-          codigo_hinova: codigoAssociadoHinova,
-          sincronizado_hinova: true,
-          sincronizado_hinova_em: new Date().toISOString()
-        }).eq('id', _aid);
-      }
-    } else {
-      console.log(`[SGA Sync] Associado já sincronizado - Código: ${codigoAssociadoHinova}`);
-    }
-
-    // ========================================
-    // PASSO 6: Validar e cadastrar veículo
-    // ========================================
-    console.log('[SGA Sync] Validando campos obrigatórios do veículo...');
-
-    const camposObrigatorios: { campo: string; valor: string | null | undefined; label: string }[] = [
-      { campo: 'placa', valor: veiculo.placa, label: 'PLACA' },
-      { campo: 'renavam', valor: veiculo.renavam, label: 'RENAVAM' },
-      { campo: 'chassi', valor: veiculo.chassi, label: 'CHASSI' },
-    ];
-
-    for (const { campo, valor, label } of camposObrigatorios) {
-      if (!valor || valor.trim() === '') {
-        const msg = `${label} é obrigatório para sincronização com SGA.`;
-        await logSync(_vid, _aid, 'validar_veiculo', 'error', null, null, `${label} não informado`);
-        await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
-        await upsertSyncQueue(supabase, _vid, _aid, 'veiculo', `${label} não informado`, codigoAssociadoHinova);
-        return;
-      }
-    }
-
-    if (!hinovaCodigoVoluntario) {
-      hinovaCodigoVoluntario = '1';
-      console.warn('[SGA Sync] Código voluntário não configurado, usando padrão (1).');
-    }
-
-    const combustivelNormalizado = normalizarCombustivel(veiculo.combustivel);
-    const tipoVeiculoInferido = await inferirTipoVeiculo(contrato?.veiculo_categoria || null, veiculo.marca, veiculo.modelo);
-    let codigoFipeResolvido = veiculo.codigo_fipe || '';
-    let valorFipeResolvido = veiculo.valor_fipe || 0;
-
-    if (!codigoFipeResolvido) {
-      try {
-        const tipoFipe = tipoVeiculoInferido === 2 ? 'motos' : tipoVeiculoInferido === 3 ? 'caminhoes' : 'carros';
-        const fipe = await resolverFipePorNome(tipoFipe, veiculo.marca, veiculo.modelo, veiculo.ano_modelo || veiculo.ano_fabricacao || null);
-        if (fipe?.codigoFipe) {
-          codigoFipeResolvido = fipe.codigoFipe;
-          valorFipeResolvido = fipe.valorFipe || valorFipeResolvido;
-          await logSync(_vid, _aid, 'resolver_fipe_veiculo', 'success',
-            { marca: veiculo.marca, modelo: veiculo.modelo, ano: veiculo.ano_modelo, tipo: tipoFipe },
-            { codigo_fipe: codigoFipeResolvido, valor_fipe: valorFipeResolvido });
-        }
-      } catch (e) {
-        await logSync(_vid, _aid, 'resolver_fipe_veiculo', 'error',
-          { marca: veiculo.marca, modelo: veiculo.modelo, ano: veiculo.ano_modelo }, null,
-          e instanceof Error ? e.message : 'Falha ao resolver FIPE');
-      }
-    }
-
-    const codigoSituacaoDestino = _statusDestino === 'ativo'
-      ? Number.parseInt(hinovaCodigoSituacaoAtivo || '', 10)
-      : Number.parseInt(hinovaCodigoSituacaoPendente || '', 10);
-
-    // ============================================================
-    // PLACA — não enviar placeholder técnico de 0KM ao SGA
-    // ============================================================
-    const PLACA_PLACEHOLDER_REGEX = /^0KM[A-Z0-9]{5}$/i;
-    const isPlacaPlaceholder = (p?: string | null) => !!p && PLACA_PLACEHOLDER_REGEX.test(p.trim());
-    const placaParaSga = isPlacaPlaceholder(veiculo.placa) ? '' : (veiculo.placa || '').trim();
-
-    if (isPlacaPlaceholder(veiculo.placa)) {
-      console.log('[SGA Sync] Veículo 0KM detectado (placa placeholder). Enviando sem placa para o SGA.');
-      try {
-        await supabase.from('veiculos')
-          .update({ aguardando_placa_definitiva: true })
-          .eq('id', _vid);
-      } catch (e) {
-        console.warn('[SGA Sync] Falha ao marcar aguardando_placa_definitiva:', e);
-      }
-    }
-
-    // ============================================================
-    // PLANO + VALORES + BENEFÍCIOS — necessário para o SGA gerar
-    // o cadastro com plano correto, valores corretos e produtos.
-    // ============================================================
-    let codigoPlanoSga: number | null = null;
-    let valorMensalidadePayload: number | null = null;
-    let valorAdesaoPayload: number | null = null;
-    const produtosVinculados: { codigo_produto: number; valor: number }[] = [];
-
-    // Resolução do plano é feita ESTRITAMENTE pelo codigo_sga_plano (numérico).
-    // Nunca por nome/sufixo/prefixo. Sem código válido → segue enviando apenas
-    // associado + veículo (Hinova usará o plano default da conta, ajuste manual no SGA).
-    if (contrato?.plano_id) {
-      const { data: planoRow } = await supabase
-        .from('planos')
-        .select('id, nome, codigo_sga_plano, valor_adesao')
-        .eq('id', contrato.plano_id)
-        .maybeSingle();
-
-      const parsedCodigoPlano = planoRow?.codigo_sga_plano
-        ? Number.parseInt(planoRow.codigo_sga_plano, 10)
-        : NaN;
-
-      if (Number.isFinite(parsedCodigoPlano) && parsedCodigoPlano > 0) {
-        codigoPlanoSga = parsedCodigoPlano;
-
-        valorMensalidadePayload = contrato.valor_mensal != null ? Number(contrato.valor_mensal) : null;
-        valorAdesaoPayload = contrato.valor_adesao != null
-          ? Number(contrato.valor_adesao)
-          : (planoRow?.valor_adesao != null ? Number(planoRow.valor_adesao) : null);
-
-        // Benefícios do plano
-        const { data: planoBeneficios } = await supabase
-          .from('planos_beneficios')
-          .select('benefit_id, custom_value, benefits!inner(codigo_sga, name, preco_sugerido)')
-          .eq('plano_id', contrato.plano_id);
-
-        for (const pb of (planoBeneficios || []) as any[]) {
-          const codigoSga = pb.benefits?.codigo_sga;
-          const valor = pb.custom_value != null ? Number(pb.custom_value) :
-                        (pb.benefits?.preco_sugerido != null ? Number(pb.benefits.preco_sugerido) : 0);
-          if (codigoSga) {
-            const c = Number.parseInt(codigoSga, 10);
-            if (Number.isFinite(c) && c > 0) {
-              produtosVinculados.push({ codigo_produto: c, valor });
-            }
-          } else {
-            console.warn(`[SGA Sync] Benefício "${pb.benefits?.name}" sem codigo_sga; será omitido do payload.`);
-          }
-        }
-
-        // Coberturas do plano
-        const { data: planoCoberturas } = await supabase
-          .from('planos_coberturas')
-          .select('cobertura_id, valor_limite, coberturas!inner(codigo_sga, nome, valor)')
-          .eq('plano_id', contrato.plano_id);
-
-        for (const pc of (planoCoberturas || []) as any[]) {
-          const codigoSga = pc.coberturas?.codigo_sga;
-          const valor = pc.valor_limite != null ? Number(pc.valor_limite) :
-                        (pc.coberturas?.valor != null ? Number(pc.coberturas.valor) : 0);
-          if (codigoSga) {
-            const c = Number.parseInt(codigoSga, 10);
-            if (Number.isFinite(c) && c > 0) {
-              produtosVinculados.push({ codigo_produto: c, valor });
-            }
-          } else {
-            console.warn(`[SGA Sync] Cobertura "${pc.coberturas?.nome}" sem codigo_sga; será omitida do payload.`);
-          }
-        }
-
-        console.log(`[SGA Sync] Plano resolvido: codigo_sga=${codigoPlanoSga}, mensalidade=${valorMensalidadePayload}, adesao=${valorAdesaoPayload}, produtos=${produtosVinculados.length}`);
-      } else {
-        const motivo = !planoRow
-          ? 'plano_nao_encontrado_no_banco'
-          : (!planoRow.codigo_sga_plano ? 'plano_sem_codigo_sga' : 'codigo_sga_invalido');
-        const msg = `Veículo será enviado sem codigo_plano (motivo=${motivo}, plano_id=${contrato.plano_id}). Hinova usará o plano default da conta — ajuste manual no SGA pode ser necessário.`;
-        console.warn(`[SGA Sync] ${msg}`);
-        await logSync(_vid, _aid, 'resolver_plano', 'warning',
-          { plano_id: contrato.plano_id, motivo, nome: planoRow?.nome ?? null, codigo_sga_plano: planoRow?.codigo_sga_plano ?? null },
-          null, msg);
-      }
-    } else {
-      console.warn('[SGA Sync] Contrato sem plano_id — cadastro será enviado sem codigo_plano (Hinova usará o default da conta).');
-    }
-
-    const veiculoPayload: Record<string, unknown> = {
-      codigo_associado: codigoAssociadoHinova,
-      placa: placaParaSga,
-      chassi: veiculo.chassi.trim(),
-      renavam: veiculo.renavam.trim(),
-      ano_fabricacao: veiculo.ano_fabricacao || veiculo.ano_modelo,
-      ano_modelo: veiculo.ano_modelo,
-      codigo_fipe: codigoFipeResolvido,
-      valor_fipe: valorFipeResolvido,
-      kilometragem: 0,
-      numero_motor: '',
-      dia_vencimento: associado.dia_vencimento || 10,
-      codigo_conta: codigoContaResolvido,
-      codigo_cor: getMapeamento('cor', veiculo.cor),
-      codigo_combustivel: getMapeamento('combustivel', combustivelNormalizado),
-      codigo_tipo_veiculo: getMapeamento('tipo_veiculo', contrato?.veiculo_categoria?.toLowerCase() || null) || tipoVeiculoInferido,
-      codigo_voluntario: parseInt(hinovaCodigoVoluntario),
-      ...(Number.isFinite(codigoSituacaoDestino) && codigoSituacaoDestino > 0 && { codigo_situacao: codigoSituacaoDestino }),
-      ...(hinovaCodigoCooperativa && { codigo_cooperativa: parseInt(hinovaCodigoCooperativa) }),
-      ...(codigoPlanoSga !== null && { codigo_plano: codigoPlanoSga }),
-      ...(valorMensalidadePayload !== null && { valor_mensalidade: valorMensalidadePayload }),
-      ...(valorAdesaoPayload !== null && { valor_adesao: valorAdesaoPayload }),
-      ...(produtosVinculados.length > 0 && { produtos_vinculados: produtosVinculados }),
-    };
-
-    const veiculoResponse = await fetchWithRetry(
-      `${hinovaApiUrl}/veiculo/cadastrar`,
-      { method: 'POST', headers: operationHeaders, body: JSON.stringify(veiculoPayload) }
-    );
-
-    const veiculoData: HinovaVeiculoResponse = await safeJsonParse<HinovaVeiculoResponse>(veiculoResponse, 'cadastrar_veiculo');
-    
-    await logSync(_vid, _aid, 'cadastrar_veiculo', veiculoResponse.ok ? 'success' : 'error',
-      veiculoPayload, veiculoData, veiculoResponse.ok ? null : veiculoData.mensagem);
-
-    let codigoVeiculoHinova = veiculoData.codigo_veiculo;
-
-    if (!veiculoResponse.ok) {
-      console.log(`[SGA Sync] Resposta cadastrar_veiculo (${veiculoResponse.status}):`, JSON.stringify(veiculoData));
-      const statusCode = veiculoResponse.status;
-      const mensagem = veiculoData.mensagem?.toLowerCase() || '';
-      const errorMessages: string[] = normalizeErrorMessages((veiculoData as any).error);
-      
-      // Check if this is a validation error (not a duplicate)
-      const isValidationError = errorMessages.some((e: string) => 
-        e.toLowerCase().includes('parâmetros inválidos') || 
-        e.toLowerCase().includes('parametros invalidos') ||
-        e.toLowerCase().includes('verifique o campo')
-      );
-
-      // Check if the error is about the associate code being invalid/not registered
-      const allErrorsJoined = [...errorMessages.map((e: string) => e.toLowerCase()), mensagem].join(' ');
-      const isAssociadoInvalidoError = allErrorsJoined.includes('associado') && (
-        allErrorsJoined.includes('não está cadastrado') ||
-        allErrorsJoined.includes('nao esta cadastrado') ||
-        allErrorsJoined.includes('não encontrado') ||
-        allErrorsJoined.includes('nao encontrado') ||
-        allErrorsJoined.includes('not found')
-      );
-      
-      const isDuplicate = !isValidationError && !isAssociadoInvalidoError && (
-        statusCode === 406 || mensagem.includes('já cadastrad') || mensagem.includes('duplicad') || mensagem.includes('existe')
-      );
-      
-      if (isDuplicate) {
-        console.log('[SGA Sync] Placa já cadastrada, tentando buscar código...');
-        
-        let codigoVeiculoExistente: number | null = null;
-
-        // Estratégia 0: helper compartilhado com endpoint primário + fallback legado
-        try {
-          const { found, debug } = await buscarVeiculoPorPlaca({
-            apiUrl: hinovaApiUrl,
-            token: hinovaToken || '',
-            usuario: hinovaUsuario || '',
-            senha: hinovaSenha || '',
-            tokenUsuario,
-          }, veiculo.placa);
-
-          await logSync(_vid, _aid, 'buscar_veiculo_placa_shared', found?.codigo_veiculo ? 'success' : 'empty',
-            { placa: veiculo.placa }, { debug, found }, null);
-
-          if (found?.codigo_veiculo) {
-            codigoVeiculoExistente = parseInt(String(found.codigo_veiculo));
-            const codAssocEncontrado = found.codigo_associado || found.codigo_associado_pf;
-            if (codAssocEncontrado) {
-              codigoAssociadoHinova = parseInt(String(codAssocEncontrado));
-              await supabase.from('associados').update({
-                codigo_hinova: codigoAssociadoHinova,
-                sincronizado_hinova: true,
-                sincronizado_hinova_em: new Date().toISOString()
-              }).eq('id', _aid);
-            }
-          }
-        } catch (e) { console.log('[SGA Sync] Busca placa shared falhou:', e); }
-
-        // Estratégia 1: GET /veiculo/consultar/placa/{placa}
-        if (!codigoVeiculoExistente) try {
-          const buscaResponse = await fetchWithRetry(
-            `${hinovaApiUrl}/veiculo/consultar/placa/${veiculo.placa}`,
-            { method: 'GET', headers: operationHeaders }
-          );
-          if (buscaResponse.ok) {
-            const buscaData = await safeJsonParse<any>(buscaResponse, 'buscar_veiculo_placa');
-            codigoVeiculoExistente = buscaData.codigo_veiculo || buscaData.codigo || 
-              (buscaData.data && (Array.isArray(buscaData.data) ? buscaData.data[0]?.codigo_veiculo : buscaData.data.codigo_veiculo));
-          }
-        } catch (e) { console.log('[SGA Sync] Busca placa falhou:', e); }
-
-        // Estratégia 2: Busca backup - veículos do associado
-        if (!codigoVeiculoExistente && codigoAssociadoHinova) {
-          try {
-            const cpfLimpoVeiculo = cleanCPF(associado.cpf);
-            let buscaResponse = await fetchWithRetry(
-              `${hinovaApiUrl}/associado/buscar/${cpfLimpoVeiculo}/cpf`,
-              { method: 'GET', headers: operationHeaders }
-            );
-            // Fallback: tentar com CPF formatado
-            if (!buscaResponse.ok) {
-              const cpfFormatadoVeiculo = formatCPF(associado.cpf);
-              buscaResponse = await fetchWithRetry(
-                `${hinovaApiUrl}/associado/buscar/${encodeURIComponent(cpfFormatadoVeiculo)}/cpf`,
-                { method: 'GET', headers: operationHeaders }
-              );
-            }
-            if (buscaResponse.ok) {
-              const buscaData = await safeJsonParse<any>(buscaResponse, 'buscar_veiculo_via_associado');
-              if (buscaData?.veiculos && Array.isArray(buscaData.veiculos)) {
-                const veiculoEncontrado = buscaData.veiculos.find((v: any) => v.placa === veiculo.placa);
-                if (veiculoEncontrado?.codigo_veiculo) {
-                  codigoVeiculoExistente = parseInt(veiculoEncontrado.codigo_veiculo);
-                }
-              }
-            }
-          } catch (e) { console.log('[SGA Sync] Busca veículo via associado falhou:', e); }
-        }
-
-        // Estratégia 3: Logs anteriores
-        if (!codigoVeiculoExistente) {
-          try {
-            const { data: logAnterior } = await supabase
-              .from('sga_sync_logs')
-              .select('response_payload')
-              .eq('veiculo_id', _vid)
-              .eq('action', 'cadastrar_veiculo')
-              .eq('status', 'success')
-              .not('response_payload', 'is', null)
-              .order('created_at', { ascending: false })
-              .limit(5);
-            
-            if (logAnterior) {
-              for (const log of logAnterior) {
-                const resp = log.response_payload as any;
-                if (resp?.codigo_veiculo) {
-                  codigoVeiculoExistente = resp.codigo_veiculo;
-                  break;
-                }
-              }
-            }
-          } catch (e) { console.log('[SGA Sync] Logs anteriores falhou:', e); }
-        }
-
-        // Estratégia 4: Banco local
-        if (!codigoVeiculoExistente) {
-          const { data: veiculoLocal } = await supabase
-            .from('veiculos')
-            .select('codigo_hinova')
-            .eq('placa', veiculo.placa)
-            .not('codigo_hinova', 'is', null)
-            .limit(1)
-            .maybeSingle();
-          
-          if (veiculoLocal?.codigo_hinova) {
-            codigoVeiculoExistente = veiculoLocal.codigo_hinova;
-          }
-        }
-
-        if (codigoVeiculoExistente) {
-          codigoVeiculoHinova = codigoVeiculoExistente;
-          console.log(`[SGA Sync] Código veículo recuperado: ${codigoVeiculoHinova}`);
-        } else {
-          // Preservar estado parcial
-          if (codigoAssociadoHinova) {
-            await supabase.from('associados').update({ 
-              codigo_hinova: codigoAssociadoHinova,
-              sincronizado_hinova: true,
-              sincronizado_hinova_em: new Date().toISOString()
-            }).eq('id', _aid);
-          }
-          
-          await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
-          await upsertSyncQueue(supabase, _vid, _aid, 'veiculo', 'Placa duplicada - código não recuperado', codigoAssociadoHinova);
-          return;
-        }
-      } else {
-        // Verificar se o erro indica que o codigo_associado é inválido no Hinova
-        const allErrors = [...errorMessages, mensagem].join(' ').toLowerCase();
-        const isAssociadoInvalido = allErrors.includes('associado') && (
-          allErrors.includes('não está cadastrado') ||
-          allErrors.includes('nao esta cadastrado') ||
-          allErrors.includes('não encontrado') ||
-          allErrors.includes('nao encontrado') ||
-          allErrors.includes('not found')
-        );
-
-        if (isAssociadoInvalido && codigoAssociadoHinova) {
-          console.log(`[SGA Sync] ⚠️ codigo_associado ${codigoAssociadoHinova} rejeitado pelo Hinova. Invalidando e resetando para etapa associado.`);
-          
-          // Limpar codigo_hinova inválido
-          await supabase.from('associados').update({ 
-            codigo_hinova: null,
-            sincronizado_hinova: false,
-            sincronizado_hinova_em: null
-          }).eq('id', _aid);
-
-          // Resetar fila para recomeçar do associado
-          await upsertSyncQueue(supabase, _vid, _aid, 'associado', 
-            `codigo_associado ${codigoAssociadoHinova} inválido no Hinova - resetando para recadastro`, null);
-
-          await logSync(_vid, _aid, 'invalidar_codigo_associado', 'info',
-            { codigo_invalidado: codigoAssociadoHinova, motivo: allErrors.substring(0, 300) },
-            veiculoData, 'Código associado inválido no Hinova');
-
-          await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
-          return;
-        }
-
-        // Erro genérico no veículo - preservar estado parcial do associado
-        if (codigoAssociadoHinova) {
-          await supabase.from('associados').update({ 
-            codigo_hinova: codigoAssociadoHinova,
-            sincronizado_hinova: true,
-            sincronizado_hinova_em: new Date().toISOString()
-          }).eq('id', _aid);
-        }
-        await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
-        await upsertSyncQueue(supabase, _vid, _aid, 'veiculo', `Falha cadastro veículo: ${veiculoData.mensagem}`, codigoAssociadoHinova);
-        return;
-      }
-    }
-
-    console.log(`[SGA Sync] Veículo processado - Código: ${codigoVeiculoHinova}`);
-
-    // Atualizar veículo no banco
-    await supabase.from('veiculos').update({ 
-      codigo_hinova: codigoVeiculoHinova,
-      sincronizado_hinova: true,
-      sincronizado_hinova_em: new Date().toISOString(),
-      status_sga: _statusDestino === 'ativo' ? 'ativado_sga' : 'pendente_sga'
-    }).eq('id', _vid);
-
-    // ========================================
-    // PASSO 7: Buscar e enviar fotos
-    // ========================================
-    let fotosEnviadas = 0;
-    const fotosComErro: string[] = [];
-
-    // Normaliza tipos curtos usados em `documentos` para as chaves de hinova_mapeamentos
-    // (Bug 2: 'chassi','motor','frente'... não casavam com 'foto_chassi','foto_motor','foto_frontal_veiculo'...)
-    const normalizarTipoFoto = (tipo: string | null | undefined): string | null => {
-      if (!tipo) return null;
-      const t = String(tipo).toLowerCase().trim();
-      const aliases: Record<string, string> = {
-        chassi: 'foto_chassi',
-        motor: 'foto_motor',
-        frente: 'foto_frontal_veiculo',
-        frontal: 'foto_frontal_veiculo',
-        traseira: 'foto_traseira_veiculo',
-        lateral_esquerda: 'foto_lateral_esquerda',
-        lateral_direita: 'foto_lateral_direita',
-        odometro: 'foto_hodometro',
-        hodometro: 'foto_hodometro',
-        painel: 'foto_painel',
-        km: 'foto_km',
-      };
-      return aliases[t] || t;
-    };
-
-    const { data: documentos } = await supabase
-      .from('documentos')
-      .select('id, tipo, nome_arquivo, arquivo_url, status')
-      .or(`associado_id.eq.${_aid},veiculo_id.eq.${_vid}`)
-      .in('status', ['aprovado', 'em_analise']);
-
-    const { data: documentosContrato } = contrato?.cotacao_id
-      ? await supabase
-          .from('contratos_documentos')
-          .select('id, tipo, arquivo_nome, arquivo_url, status')
-          .eq('cotacao_id', contrato.cotacao_id)
-          .in('status', ['aprovado', 'em_analise'])
-      : { data: [] };
-
-    const documentosParaEnvio = [
-      ...(documentos || []),
-      ...((documentosContrato || []).map((doc: any) => ({
-        id: doc.id,
-        tipo: doc.tipo,
-        nome_arquivo: doc.arquivo_nome,
-        arquivo_url: doc.arquivo_url,
-      }))),
-    ];
-
-    if (documentosParaEnvio.length > 0 && codigoVeiculoHinova) {
-      console.log(`[SGA Sync] Enviando ${documentosParaEnvio.length} documentos/fotos...`);
-
-      const batchSize = 50;
-      for (let i = 0; i < documentosParaEnvio.length; i += batchSize) {
-        const batch = documentosParaEnvio.slice(i, i + batchSize);
-        const descartadosPorLink: string[] = [];
-        const descartadosPorTipo: Array<{ id: string; tipo: string }> = [];
-
-        const fotos = batch
-          .map((doc: any) => {
-            const link = doc.arquivo_url; // Bug 1: era `doc.url_arquivo || doc.arquivo_url` (campo inexistente)
-            if (!link) {
-              descartadosPorLink.push(doc.id);
-              return null;
-            }
-            const tipoNormalizado = normalizarTipoFoto(doc.tipo);
-            const tipoFoto = getMapeamento('tipo_foto', tipoNormalizado);
-            if (!tipoFoto) {
-              // Bug 2: antes caía em `|| 1` e enviava tudo como CNH no SGA
-              console.warn('[SGA Sync] tipo_foto sem mapeamento, descartando', { id: doc.id, tipo: doc.tipo });
-              descartadosPorTipo.push({ id: doc.id, tipo: String(doc.tipo) });
-              return null;
-            }
-            return {
-              nome_arquivo: doc.nome_arquivo || `documento_${doc.id}.jpg`,
-              codigo_tipo: tipoFoto,
-              link,
-            };
-          })
-          .filter((f: any): f is { nome_arquivo: string; codigo_tipo: number; link: string } => f !== null);
-
-        if (descartadosPorLink.length > 0 || descartadosPorTipo.length > 0) {
-          await logSync(_vid, _aid, 'enviar_fotos_descarte', 'info',
-            {
-              codigo_veiculo: codigoVeiculoHinova,
-              qtd_batch: batch.length,
-              qtd_validas: fotos.length,
-              descartados_sem_link: descartadosPorLink,
-              descartados_sem_mapeamento: descartadosPorTipo,
-            },
-            null, null);
-        }
-
-        if (fotos.length === 0) continue;
-
-        try {
-          const fotosResponse = await fetchWithRetry(
-            `${hinovaApiUrl}/veiculo/foto/cadastrar`,
-            {
-              method: 'POST',
-              headers: operationHeaders,
-              body: JSON.stringify({
-                codigo_veiculo: codigoVeiculoHinova,
-                foto: fotos
-              })
-            }
-          );
-
-          const fotosData = await safeJsonParse<any>(fotosResponse, 'enviar_fotos');
-
-          await logSync(_vid, _aid, 'enviar_fotos', fotosResponse.ok ? 'success' : 'error',
-            {
-              codigo_veiculo: codigoVeiculoHinova,
-              qtd_fotos_enviadas: fotos.length,
-              qtd_batch: batch.length,
-              qtd_descartadas: descartadosPorLink.length + descartadosPorTipo.length,
-            },
-            fotosData,
-            fotosResponse.ok ? null : fotosData?.mensagem);
-
-          if (fotosResponse.ok) {
-            fotosEnviadas += fotos.length;
-          } else {
-            fotosComErro.push(...fotos.map((f: any) => f.nome_arquivo));
-          }
-        } catch (e) {
-          console.error('[SGA Sync] Erro ao enviar lote de fotos:', e);
-          fotosComErro.push(...batch.map((d: any) => d.nome_arquivo || d.id));
-        }
-      }
-    }
-
-    // Se houve erro nas fotos, gravar na fila para reenvio
-    if (fotosComErro.length > 0 && fotosEnviadas === 0) {
-      await upsertSyncQueue(supabase, _vid, _aid, 'fotos', 
-        `Erro ao enviar ${fotosComErro.length} fotos`, codigoAssociadoHinova, codigoVeiculoHinova);
-    } else {
-      // Tudo OK - marcar fila como concluída
-      await markQueueCompleted(supabase, _vid, _aid);
-    }
-
-    console.log(`[SGA Sync] Sincronização concluída! Fotos: ${fotosEnviadas}, Erros: ${fotosComErro.length}`);
-
-    await logSync(_vid, _aid, 'sync_completo', 'success', null, {
-      codigo_associado_hinova: codigoAssociadoHinova,
-      codigo_veiculo_hinova: codigoVeiculoHinova,
-      status_sga_destino: _statusDestino,
-      status_sga_local: _statusDestino === 'ativo' ? 'ativado_sga' : 'pendente_sga',
-      fotos_enviadas: fotosEnviadas,
-      fotos_com_erro: fotosComErro.length
-    }, null);
-
-    console.log('[SGA Sync] Background sync concluído com sucesso');
-
-      } catch (bgError) {
-        console.error('[SGA Sync] Erro no background sync:', bgError);
-        try {
-          await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
-          await upsertSyncQueue(supabase, _vid, _aid, 'associado',
-            bgError instanceof Error ? bgError.message : 'Erro inesperado no background');
-          await logSync(_vid, _aid, 'sync_background_error', 'error', null, null,
-            bgError instanceof Error ? bgError.message : 'Erro inesperado');
-        } catch (_) {}
-      }
-    };
-
-    // @ts-ignore: EdgeRuntime is available in Supabase Edge Functions
-    EdgeRuntime.waitUntil(doBackgroundSync());
-
+  } catch (e) {
+    console.warn('[sga-hinova-sync] erro ao ler integracoes_credenciais:', e);
+  }
+
+  if (!Number.isFinite(codigoConta) || codigoConta <= 0) {
     return new Response(
-      JSON.stringify({ success: true, status: 'processing', step: 'sync_started' }),
-      { status: 202, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-
-  } catch (error) {
-    console.error('[SGA Sync] Erro na preparação:', error);
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: error instanceof Error ? error.message : 'Erro interno',
-        step: 'setup'
-      }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ success: false, error: 'codigo_conta do Hinova não configurado.', step: 'config' }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   }
+
+  let req_body: SyncRequest;
+  try { req_body = await req.json(); }
+  catch {
+    return new Response(JSON.stringify({ success: false, error: 'JSON inválido' }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+
+  // ---- Modo teste de conexão ----
+  if (req_body.action === 'test_connection') {
+    try {
+      const creds = await getHinovaCreds(supabase);
+      if (!creds) throw new Error('Credenciais não configuradas');
+      const session = await autenticarHinova(creds);
+      if (!session) throw new Error('Falha na autenticação');
+      return new Response(JSON.stringify({ success: true, mensagem: 'Conexão OK' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    } catch (e: any) {
+      return new Response(JSON.stringify({ success: false, error: String(e?.message || e) }),
+        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+  }
+
+  const { veiculo_id, associado_id } = req_body;
+  if (!veiculo_id || !associado_id) {
+    return new Response(JSON.stringify({ success: false, error: 'veiculo_id e associado_id obrigatórios' }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+
+  let statusDestino: 'pendente' | 'ativo' = req_body.status_sga_destino === 'ativo' ? 'ativo' : 'pendente';
+
+  // Downgrade ativo → pendente se cobertura R/F sem cobertura_total
+  if (statusDestino === 'ativo') {
+    const { data: vRule } = await supabase.from('veiculos')
+      .select('cobertura_roubo_furto, cobertura_total').eq('id', veiculo_id).maybeSingle();
+    if (vRule && vRule.cobertura_roubo_furto === true && vRule.cobertura_total !== true) {
+      console.warn(`[sga] Downgrade ativo→pendente: veiculo ${veiculo_id} R/F sem cobertura_total.`);
+      statusDestino = 'pendente';
+    }
+  }
+
+  // ---- Auditoria da decisão ----
+  try {
+    let nomeAud = req_body.usuario_nome || 'Sistema';
+    if (req_body.usuario_id && !req_body.usuario_nome) {
+      const { data: p } = await supabase.from('profiles').select('nome, email').eq('id', req_body.usuario_id).maybeSingle();
+      nomeAud = p?.nome || p?.email || 'Sistema';
+    }
+    await supabase.from('logs_auditoria').insert({
+      usuario_id: req_body.usuario_id || null, usuario_nome: nomeAud,
+      acao: 'decisao_sga', modulo: 'diretoria', tabela: 'sga_sync_logs',
+      registro_id: veiculo_id,
+      descricao: `Regra decidiu enviar para o SGA como ${statusDestino}`,
+      dados_novos: {
+        etapa: req_body.etapa_origem || 'sga-hinova-sync',
+        motivo: req_body.motivo_decisao || `Envio ${statusDestino}`,
+        status_sga_destino: statusDestino, veiculo_id, associado_id,
+      },
+    });
+  } catch (e) { console.error('[auditoria]', e); }
+
+  // ---- Guard de idempotência + lock ----
+  const { data: vCheck } = await supabase.from('veiculos')
+    .select('sincronizado_hinova, codigo_hinova, status_sga')
+    .eq('id', veiculo_id).single();
+
+  if (!req_body.force_resync_media && vCheck?.sincronizado_hinova && vCheck?.codigo_hinova
+      && (statusDestino !== 'ativo' || vCheck?.status_sga === 'ativado_sga')) {
+    await logSync(veiculo_id, associado_id, 'idempotency_guard', 'skipped',
+      { status_sga_destino: statusDestino }, { codigo_hinova: vCheck.codigo_hinova });
+    await markQueueDone(veiculo_id, associado_id);
+    return new Response(JSON.stringify({ success: true, data: { already_synced: true, codigo_veiculo_hinova: vCheck.codigo_hinova } }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+
+  if (vCheck?.status_sga === 'sincronizando') {
+    const { data: lastLog } = await supabase.from('sga_sync_logs')
+      .select('created_at').eq('veiculo_id', veiculo_id)
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+    const lockAge = lastLog?.created_at ? Date.now() - new Date(lastLog.created_at).getTime() : Infinity;
+    if (lockAge < STALE_LOCK_MS) {
+      await logSync(veiculo_id, associado_id, 'idempotency_guard', 'skipped', { lockAge }, null);
+      return new Response(JSON.stringify({ success: true, data: { already_in_progress: true } }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    await logSync(veiculo_id, associado_id, 'stale_lock_recovery', 'info', { lockAge }, null);
+  }
+
+  await setStatusSga(veiculo_id, 'sincronizando');
+
+  // ============================================================
+  // BACKGROUND SYNC
+  // ============================================================
+  const doSync = async () => {
+    const _vid = veiculo_id;
+    const _aid = associado_id;
+    let codigoAssociadoHinova: number | null = null;
+    let codigoVeiculoHinova: number | null = null;
+
+    try {
+      // 1. Carregar associado, veículo, contrato
+      const { data: associado, error: errA } = await supabase
+        .from('associados').select('*').eq('id', _aid).single();
+      if (errA || !associado) {
+        await logSync(_vid, _aid, 'buscar_associado_local', 'error', null, null, 'Associado não encontrado no banco');
+        await setStatusSga(_vid, 'erro_sincronizacao');
+        await upsertQueue(_vid, _aid, 'associado', 'Associado não encontrado no banco');
+        return;
+      }
+      codigoAssociadoHinova = associado.codigo_hinova ?? null;
+
+      // Guard base antiga
+      if (associado.origem_cadastro === 'api_externa') {
+        if (req_body.bypass_guard_base_antiga && associado.codigo_hinova) {
+          await logSync(_vid, _aid, 'guard_base_antiga_bypass', 'info',
+            { codigo_hinova_reutilizado: associado.codigo_hinova }, null);
+        } else {
+          const msg = `Associado base antiga (codigo_hinova=${associado.codigo_hinova ?? 'null'}). Envio bloqueado para evitar duplicidade.`;
+          await logSync(_vid, _aid, 'guard_base_antiga', 'error', null, null, msg);
+          await setStatusSga(_vid, 'erro_sincronizacao');
+          return;
+        }
+      }
+
+      const { data: veiculo, error: errV } = await supabase
+        .from('veiculos').select('*').eq('id', _vid).single();
+      if (errV || !veiculo) {
+        await logSync(_vid, _aid, 'buscar_veiculo_local', 'error', null, null, 'Veículo não encontrado');
+        await setStatusSga(_vid, 'erro_sincronizacao');
+        await upsertQueue(_vid, _aid, 'veiculo', 'Veículo não encontrado no banco');
+        return;
+      }
+
+      // Validações mínimas — a Hinova exige
+      const obrigatorios = [
+        { k: 'placa', v: veiculo.placa, label: 'PLACA' },
+        { k: 'renavam', v: veiculo.renavam, label: 'RENAVAM' },
+        { k: 'chassi', v: veiculo.chassi, label: 'CHASSI' },
+      ];
+      for (const c of obrigatorios) {
+        if (!c.v || String(c.v).trim() === '') {
+          const msg = `${c.label} é obrigatório para sincronização com SGA.`;
+          await logSync(_vid, _aid, 'validar_veiculo', 'error', null, null, msg);
+          await setStatusSga(_vid, 'erro_sincronizacao');
+          await upsertQueue(_vid, _aid, 'veiculo', msg, codigoAssociadoHinova);
+          return;
+        }
+      }
+
+      // 2. Contrato (vendedor + plano + valores)
+      const contratoSel = 'vendedor_id, veiculo_categoria, cotacao_id, plano_id, valor_mensal, valor_adesao';
+      let contrato: any = null;
+      const { data: cByVeic } = await supabase.from('contratos').select(contratoSel)
+        .eq('veiculo_id', _vid).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      contrato = cByVeic;
+      if (!contrato) {
+        const { data: cByAssoc } = await supabase.from('contratos').select(contratoSel)
+          .eq('associado_id', _aid).order('created_at', { ascending: false }).limit(1).maybeSingle();
+        contrato = cByAssoc;
+      }
+
+      // Vendedor obrigatório
+      let codigoVoluntario = codigoVoluntarioPadrao;
+      if (contrato?.vendedor_id) {
+        const { data: vend } = await supabase.from('profiles')
+          .select('codigo_sga_voluntario, nome').eq('id', contrato.vendedor_id).single();
+        if (vend?.codigo_sga_voluntario) {
+          codigoVoluntario = Number.parseInt(vend.codigo_sga_voluntario, 10);
+        } else {
+          const msg = `Vendedor ${vend?.nome || contrato.vendedor_id} não possui codigo_sga_voluntario.`;
+          await logSync(_vid, _aid, 'resolver_vendedor', 'error',
+            { vendedor_id: contrato.vendedor_id }, null, msg);
+          await setStatusSga(_vid, 'erro_sincronizacao');
+          await upsertQueue(_vid, _aid, 'vendedor_sem_codigo_sga', msg, codigoAssociadoHinova);
+          return;
+        }
+      } else {
+        const msg = 'Contrato sem vendedor_id — não é possível identificar consultor SGA.';
+        await logSync(_vid, _aid, 'resolver_vendedor', 'error', { _vid, _aid }, null, msg);
+        await setStatusSga(_vid, 'erro_sincronizacao');
+        await upsertQueue(_vid, _aid, 'contrato_sem_vendedor', msg, codigoAssociadoHinova);
+        return;
+      }
+      if (!Number.isFinite(codigoVoluntario) || codigoVoluntario <= 0) {
+        const msg = 'codigo_voluntario do vendedor inválido.';
+        await logSync(_vid, _aid, 'resolver_vendedor', 'error', { vendedor_id: contrato.vendedor_id }, null, msg);
+        await setStatusSga(_vid, 'erro_sincronizacao');
+        await upsertQueue(_vid, _aid, 'vendedor_sem_codigo_sga', msg, codigoAssociadoHinova);
+        return;
+      }
+
+      // Plano + produtos
+      let codigoPlanoSga: number | undefined;
+      let valorMensalidade: number | undefined;
+      let valorAdesao: number | undefined;
+      const produtos: Array<{ codigo_produto: number }> = [];
+      if (contrato?.plano_id) {
+        const { data: planoRow } = await supabase.from('planos')
+          .select('id, nome, codigo_sga_plano, valor_adesao').eq('id', contrato.plano_id).maybeSingle();
+        const cp = planoRow?.codigo_sga_plano ? Number.parseInt(planoRow.codigo_sga_plano, 10) : NaN;
+        if (Number.isFinite(cp) && cp > 0) {
+          codigoPlanoSga = cp;
+          valorMensalidade = contrato.valor_mensal != null ? Number(contrato.valor_mensal) : undefined;
+          valorAdesao = contrato.valor_adesao != null ? Number(contrato.valor_adesao)
+            : (planoRow?.valor_adesao != null ? Number(planoRow.valor_adesao) : undefined);
+
+          const { data: pBen } = await supabase.from('planos_beneficios')
+            .select('benefits!inner(codigo_sga, name)').eq('plano_id', contrato.plano_id);
+          for (const pb of (pBen || []) as any[]) {
+            const c = pb.benefits?.codigo_sga ? Number.parseInt(pb.benefits.codigo_sga, 10) : NaN;
+            if (Number.isFinite(c) && c > 0) produtos.push({ codigo_produto: c });
+          }
+          const { data: pCob } = await supabase.from('planos_coberturas')
+            .select('coberturas!inner(codigo_sga, nome)').eq('plano_id', contrato.plano_id);
+          for (const pc of (pCob || []) as any[]) {
+            const c = pc.coberturas?.codigo_sga ? Number.parseInt(pc.coberturas.codigo_sga, 10) : NaN;
+            if (Number.isFinite(c) && c > 0) produtos.push({ codigo_produto: c });
+          }
+        } else {
+          await logSync(_vid, _aid, 'resolver_plano', 'warning',
+            { plano_id: contrato.plano_id, codigo_sga_plano: planoRow?.codigo_sga_plano ?? null },
+            null, 'Sem codigo_sga_plano — Hinova usará default da conta');
+        }
+      }
+
+      // 3. Mapeamentos (cor, combustível, tipo, foto)
+      const { data: mapeamentos } = await supabase.from('hinova_mapeamentos').select('*').eq('ativo', true);
+      const getMap = (tipo: string, codigoLocal: string | null | undefined): number | null => {
+        if (!codigoLocal) return null;
+        const m = mapeamentos?.find((x: any) =>
+          x.tipo === tipo && String(x.codigo_local).toLowerCase() === codigoLocal.toLowerCase());
+        return m?.codigo_hinova ? Number(m.codigo_hinova) : null;
+      };
+
+      const normalCombustivel = (() => {
+        const c = (veiculo.combustivel || '').toUpperCase().trim();
+        if (!c) return null;
+        if (c.includes('/') && (c.includes('GASOLINA') || c.includes('ALCOOL') || c.includes('ÁLCOOL') || c.includes('ETANOL'))) {
+          if (c.includes('GAS NATURAL') || c.includes('GNV')) return 'gnv';
+          return 'flex';
+        }
+        if (c === 'FLEX' || c.includes('BICOMB')) return 'flex';
+        if (c === 'GASOLINA') return 'gasolina';
+        if (c === 'ETANOL' || c === 'ÁLCOOL' || c === 'ALCOOL') return 'etanol';
+        if (c === 'DIESEL') return 'diesel';
+        if (c === 'GNV' || c.includes('GAS NATURAL') || c.includes('GÁS NATURAL')) return 'gnv';
+        if (c.includes('ELÉTRICO') || c.includes('ELETRICO')) return 'eletrico';
+        if (c.includes('HÍBRIDO') || c.includes('HIBRIDO')) return 'hibrido';
+        return c.toLowerCase();
+      })();
+
+      const inferTipoVeiculo = (cat: string | null): number => {
+        const c = (cat || '').toUpperCase().trim();
+        if (c.includes('MOTO')) return 2;
+        if (c.includes('CAMINH') || c.includes('TRUCK')) return 3;
+        if (c.includes('VAN') || c.includes('UTILIT')) return 4;
+        if (c.includes('ÔNIBUS') || c.includes('ONIBUS')) return 5;
+        if (c.includes('REBOQUE')) return 6;
+        return 1;
+      };
+      const tipoVeiculo = getMap('tipo_veiculo', contrato?.veiculo_categoria?.toLowerCase()) ?? inferTipoVeiculo(contrato?.veiculo_categoria);
+
+      // 4. Autenticar (sessão fresca para esta execução)
+      const creds = await getHinovaCreds(supabase);
+      if (!creds) {
+        await logSync(_vid, _aid, 'autenticar', 'error', null, null, 'Credenciais não configuradas');
+        await setStatusSga(_vid, 'erro_sincronizacao');
+        await upsertQueue(_vid, _aid, 'auth', 'Credenciais Hinova não configuradas');
+        return;
+      }
+      let session: HinovaSession;
+      try {
+        const s = await autenticarHinova(creds);
+        if (!s) throw new Error('autenticarHinova retornou null');
+        session = s;
+        await logSync(_vid, _aid, 'autenticar', 'success', { usuario: creds.usuario }, { ok: true });
+      } catch (e: any) {
+        await logSync(_vid, _aid, 'autenticar', 'error', null, null, String(e?.message || e));
+        await setStatusSga(_vid, 'erro_sincronizacao');
+        await upsertQueue(_vid, _aid, 'auth', String(e?.message || e), codigoAssociadoHinova);
+        return;
+      }
+
+      // ============================================================
+      // 5. ASSOCIADO — buscar antes de cadastrar
+      // ============================================================
+      const cpfDigitos = cleanDigits(associado.cpf);
+      const placaLimpa = cleanAlphaNum(veiculo.placa);
+      const chassiLimpo = cleanAlphaNum(veiculo.chassi);
+
+      let veiculosNoAssociado: Array<{ placa: string; codigo_veiculo: number }> = [];
+      try {
+        const r = await buscarAssociadoComVeiculosPorCpf(session, cpfDigitos);
+        if (r.codigo_associado) {
+          codigoAssociadoHinova = r.codigo_associado;
+          veiculosNoAssociado = r.veiculos || [];
+          await logSync(_vid, _aid, 'buscar_associado', 'success',
+            { cpf: '***' }, { codigo_associado: codigoAssociadoHinova, qtd_veiculos: veiculosNoAssociado.length });
+          await supabase.from('associados').update({
+            codigo_hinova: codigoAssociadoHinova,
+            sincronizado_hinova: true,
+            sincronizado_hinova_em: new Date().toISOString(),
+          }).eq('id', _aid);
+        }
+      } catch (e: any) {
+        if (e instanceof HinovaNotFoundError) {
+          await logSync(_vid, _aid, 'buscar_associado', 'info', { cpf: '***' }, null, 'Associado não existe no Hinova — será cadastrado');
+        } else {
+          // transitório — propagar para fila
+          await logSync(_vid, _aid, 'buscar_associado', 'error', { cpf: '***' }, null, String(e?.message || e));
+          await setStatusSga(_vid, 'erro_sincronizacao');
+          await upsertQueue(_vid, _aid, 'associado', `Erro busca associado: ${e?.message || e}`, codigoAssociadoHinova);
+          return;
+        }
+      }
+
+      // 5.b — cadastrar se não existe
+      if (!codigoAssociadoHinova) {
+        const ctxA: AssociadoCtx = {
+          codigo_conta: codigoConta,
+          codigo_regional: Number.isFinite(codigoRegional) ? codigoRegional : undefined,
+          codigo_cooperativa: Number.isFinite(codigoCooperativa) ? codigoCooperativa : undefined,
+          codigo_voluntario: codigoVoluntario,
+          codigo_tipo_cobranca_recorrente: codigoTipoCobrancaPadrao,
+          codigo_como_conheceu: codigoComoConheceuPadrao,
+          codigo_profissao: codigoProfissaoPadrao,
+          data_contrato_iso: associado.created_at,
+        };
+        const payloadA = buildAssociadoPayload(associado, ctxA);
+        try {
+          const res = await cadastrarAssociadoHinova(session, payloadA);
+          await logSync(_vid, _aid, 'cadastrar_associado', res.ok ? 'success' : 'error',
+            { ...payloadA, cpf: '***' }, res.raw,
+            res.ok ? null : (res.mensagem || res.errors.join('; ') || `HTTP ${res.status}`));
+          if (!res.ok || !res.codigo) {
+            const erroDetalhe = res.errors.length ? res.errors.join('; ') : (res.mensagem || `HTTP ${res.status}`);
+            await setStatusSga(_vid, 'erro_sincronizacao');
+            await upsertQueue(_vid, _aid, 'associado', `Falha cadastro associado: ${erroDetalhe}`, codigoAssociadoHinova);
+            return;
+          }
+          codigoAssociadoHinova = res.codigo;
+          await supabase.from('associados').update({
+            codigo_hinova: codigoAssociadoHinova,
+            sincronizado_hinova: true,
+            sincronizado_hinova_em: new Date().toISOString(),
+          }).eq('id', _aid);
+        } catch (e: any) {
+          await logSync(_vid, _aid, 'cadastrar_associado', 'error', { cpf: '***' }, null, String(e?.message || e));
+          await setStatusSga(_vid, 'erro_sincronizacao');
+          await upsertQueue(_vid, _aid, 'associado', `Erro rede/transitório: ${e?.message || e}`, codigoAssociadoHinova);
+          return;
+        }
+      }
+
+      // ============================================================
+      // 6. VEÍCULO — buscar antes de cadastrar
+      // ============================================================
+      // 6.a Reaproveitar lista do associado
+      if (placaLimpa) {
+        const v = veiculosNoAssociado.find(x => x.placa === placaLimpa);
+        if (v) {
+          codigoVeiculoHinova = v.codigo_veiculo;
+          await logSync(_vid, _aid, 'reusar_veiculo_do_associado', 'info',
+            { placa: placaLimpa }, { codigo_veiculo: codigoVeiculoHinova });
+        }
+      }
+
+      // 6.b Buscar por placa/chassi globalmente (detecta conflito com OUTRO associado)
+      if (!codigoVeiculoHinova && placaLimpa && !isPlacaPlaceholder(veiculo.placa)) {
+        try {
+          const r = await buscarVeiculoPorPlaca(session, placaLimpa);
+          if (r.found?.codigo_veiculo) {
+            const codAssocRem = Number(r.found.codigo_associado || r.found.codigo_associado_pf || 0);
+            if (codAssocRem && codAssocRem !== codigoAssociadoHinova) {
+              const msg = `Placa ${placaLimpa} já cadastrada no Hinova para outro associado (codigo_associado=${codAssocRem}).`;
+              await logSync(_vid, _aid, 'conflito_placa', 'error',
+                { placa: placaLimpa }, { codigo_associado_remoto: codAssocRem, codigo_veiculo: r.found.codigo_veiculo }, msg);
+              await setStatusSga(_vid, 'erro_sincronizacao');
+              await markQueueFalhaPermanente(_vid, _aid, msg);
+              return;
+            }
+            codigoVeiculoHinova = Number(r.found.codigo_veiculo);
+            await logSync(_vid, _aid, 'buscar_veiculo_placa', 'success',
+              { placa: placaLimpa }, { codigo_veiculo: codigoVeiculoHinova });
+          }
+        } catch (e: any) {
+          if (!(e instanceof HinovaNotFoundError)) {
+            await logSync(_vid, _aid, 'buscar_veiculo_placa', 'error', { placa: placaLimpa }, null, String(e?.message || e));
+            await setStatusSga(_vid, 'erro_sincronizacao');
+            await upsertQueue(_vid, _aid, 'veiculo', `Erro busca veículo placa: ${e?.message || e}`, codigoAssociadoHinova);
+            return;
+          }
+        }
+      }
+
+      // 6.c Buscar por chassi (placeholder 0KM ou placa não encontrada)
+      if (!codigoVeiculoHinova && chassiLimpo.length === 17) {
+        try {
+          const r = await buscarVeiculoPorChassi(session, chassiLimpo);
+          if (r.found?.codigo_veiculo) {
+            const codAssocRem = Number(r.found.codigo_associado || 0);
+            if (codAssocRem && codAssocRem !== codigoAssociadoHinova) {
+              const msg = `Chassi ${chassiLimpo} já cadastrado no Hinova para outro associado (codigo_associado=${codAssocRem}).`;
+              await logSync(_vid, _aid, 'conflito_chassi', 'error',
+                { chassi: chassiLimpo }, { codigo_associado_remoto: codAssocRem }, msg);
+              await setStatusSga(_vid, 'erro_sincronizacao');
+              await markQueueFalhaPermanente(_vid, _aid, msg);
+              return;
+            }
+            codigoVeiculoHinova = Number(r.found.codigo_veiculo);
+            await logSync(_vid, _aid, 'buscar_veiculo_chassi', 'success',
+              { chassi: chassiLimpo }, { codigo_veiculo: codigoVeiculoHinova });
+          }
+        } catch (e: any) {
+          if (!(e instanceof HinovaNotFoundError)) {
+            console.warn('[buscar_veiculo_chassi]', e);
+          }
+        }
+      }
+
+      // 6.d Cadastrar se não existe
+      if (!codigoVeiculoHinova) {
+        const codSituacao = statusDestino === 'ativo' ? codigoSituacaoAtivo : codigoSituacaoPendente;
+        const ctxV: VeiculoCtx = {
+          codigo_associado: codigoAssociadoHinova!,
+          codigo_conta: codigoConta,
+          codigo_voluntario: codigoVoluntario,
+          codigo_situacao: Number.isFinite(codSituacao) && codSituacao > 0 ? codSituacao : undefined,
+          codigo_cooperativa: Number.isFinite(codigoCooperativa) ? codigoCooperativa : undefined,
+          codigo_plano: codigoPlanoSga,
+          valor_mensalidade: valorMensalidade,
+          valor_adesao: valorAdesao,
+          produtos: produtos.length > 0 ? produtos : undefined,
+          tipo_veiculo: tipoVeiculo,
+          codigo_combustivel: getMap('combustivel', normalCombustivel),
+          codigo_cor: getMap('cor', veiculo.cor),
+          data_contrato_iso: associado.created_at,
+        };
+        const payloadV = buildVeiculoPayload(veiculo, veiculo.codigo_fipe || '', Number(veiculo.valor_fipe) || 0, ctxV);
+
+        try {
+          const res = await cadastrarVeiculoHinova(session, payloadV);
+          await logSync(_vid, _aid, 'cadastrar_veiculo', res.ok ? 'success' : 'error',
+            payloadV, res.raw, res.ok ? null : (res.mensagem || res.errors.join('; ') || `HTTP ${res.status}`));
+          if (!res.ok || !res.codigo) {
+            const allErr = [...res.errors, res.mensagem || ''].join(' ').toLowerCase();
+            // Se Hinova diz que o associado não está cadastrado → invalidar e requeue
+            const isAssocInvalido = allErr.includes('associado') &&
+              (allErr.includes('não está cadastrado') || allErr.includes('nao esta cadastrado')
+               || allErr.includes('não encontrado') || allErr.includes('nao encontrado') || allErr.includes('not found'));
+            if (isAssocInvalido && codigoAssociadoHinova) {
+              await supabase.from('associados').update({
+                codigo_hinova: null, sincronizado_hinova: false, sincronizado_hinova_em: null,
+              }).eq('id', _aid);
+              await logSync(_vid, _aid, 'invalidar_codigo_associado', 'info',
+                { codigo_invalidado: codigoAssociadoHinova }, res.raw, 'Associado inválido no Hinova — recadastrar');
+              await setStatusSga(_vid, 'erro_sincronizacao');
+              await upsertQueue(_vid, _aid, 'associado', 'codigo_associado inválido no Hinova — resetando');
+              return;
+            }
+            await setStatusSga(_vid, 'erro_sincronizacao');
+            await upsertQueue(_vid, _aid, 'veiculo',
+              `Falha cadastro veículo: ${res.mensagem || res.errors.join('; ') || `HTTP ${res.status}`}`,
+              codigoAssociadoHinova);
+            return;
+          }
+          codigoVeiculoHinova = res.codigo;
+        } catch (e: any) {
+          await logSync(_vid, _aid, 'cadastrar_veiculo', 'error', payloadV, null, String(e?.message || e));
+          await setStatusSga(_vid, 'erro_sincronizacao');
+          await upsertQueue(_vid, _aid, 'veiculo', `Erro rede/transitório: ${e?.message || e}`,
+            codigoAssociadoHinova);
+          return;
+        }
+      }
+
+      // Persistir veículo
+      await supabase.from('veiculos').update({
+        codigo_hinova: codigoVeiculoHinova,
+        sincronizado_hinova: true,
+        sincronizado_hinova_em: new Date().toISOString(),
+        status_sga: statusDestino === 'ativo' ? 'ativado_sga' : 'pendente_sga',
+      }).eq('id', _vid);
+
+      // ============================================================
+      // 7. FOTOS — em lotes de 50
+      // ============================================================
+      const { data: docs } = await supabase.from('documentos')
+        .select('id, tipo, nome_arquivo, arquivo_url, status')
+        .or(`associado_id.eq.${_aid},veiculo_id.eq.${_vid}`)
+        .in('status', ['aprovado', 'em_analise']);
+
+      const { data: docsContrato } = contrato?.cotacao_id
+        ? await supabase.from('contratos_documentos')
+            .select('id, tipo, arquivo_nome, arquivo_url, status')
+            .eq('cotacao_id', contrato.cotacao_id)
+            .in('status', ['aprovado', 'em_analise'])
+        : { data: [] as any[] };
+
+      const documentosEntrada: DocumentoEntrada[] = [
+        ...((docs || []) as any[]).map(d => ({
+          id: d.id, tipo: d.tipo, nome_arquivo: d.nome_arquivo, arquivo_url: d.arquivo_url,
+        })),
+        ...((docsContrato || []) as any[]).map(d => ({
+          id: d.id, tipo: d.tipo, nome_arquivo: d.arquivo_nome, arquivo_url: d.arquivo_url,
+        })),
+      ];
+
+      const { fotos, descartadasSemLink, descartadasSemTipo } = buildFotosPayload(
+        documentosEntrada,
+        (tipo) => getMap('tipo_foto', tipo),
+      );
+
+      if (descartadasSemLink.length || descartadasSemTipo.length) {
+        await logSync(_vid, _aid, 'enviar_fotos_descarte', 'info', {
+          qtd_total: documentosEntrada.length,
+          qtd_validas: fotos.length,
+          descartadas_sem_link: descartadasSemLink,
+          descartadas_sem_mapeamento: descartadasSemTipo,
+        }, null);
+      }
+
+      let fotosEnviadas = 0;
+      let fotosComErro = 0;
+      if (fotos.length > 0 && codigoVeiculoHinova) {
+        for (const lote of chunk(fotos, 50)) {
+          try {
+            const r = await cadastrarFotosVeiculoHinova(session, codigoVeiculoHinova, lote);
+            await logSync(_vid, _aid, 'enviar_fotos', r.ok ? 'success' : 'error',
+              { codigo_veiculo: codigoVeiculoHinova, qtd: lote.length }, r.raw,
+              r.ok ? null : (r.mensagem || r.errors.join('; ')));
+            if (r.ok) fotosEnviadas += lote.length;
+            else fotosComErro += lote.length;
+          } catch (e: any) {
+            await logSync(_vid, _aid, 'enviar_fotos', 'error',
+              { codigo_veiculo: codigoVeiculoHinova, qtd: lote.length }, null, String(e?.message || e));
+            fotosComErro += lote.length;
+          }
+        }
+      }
+
+      if (fotosComErro > 0 && fotosEnviadas === 0) {
+        await upsertQueue(_vid, _aid, 'fotos', `Erro ao enviar ${fotosComErro} fotos`,
+          codigoAssociadoHinova, codigoVeiculoHinova);
+      } else {
+        await markQueueDone(_vid, _aid);
+      }
+
+      await logSync(_vid, _aid, 'sync_completo', 'success', null, {
+        codigo_associado_hinova: codigoAssociadoHinova,
+        codigo_veiculo_hinova: codigoVeiculoHinova,
+        status_sga_destino: statusDestino,
+        fotos_enviadas: fotosEnviadas,
+        fotos_com_erro: fotosComErro,
+      });
+      console.log(`[sga-hinova-sync] OK veiculo=${_vid} cod_assoc=${codigoAssociadoHinova} cod_veic=${codigoVeiculoHinova}`);
+
+    } catch (bgErr: any) {
+      console.error('[sga-hinova-sync] background error:', bgErr);
+      try {
+        await setStatusSga(_vid, 'erro_sincronizacao');
+        await upsertQueue(_vid, _aid, 'background',
+          bgErr instanceof Error ? bgErr.message : String(bgErr), codigoAssociadoHinova, codigoVeiculoHinova);
+        await logSync(_vid, _aid, 'sync_background_error', 'error', null, null,
+          bgErr instanceof Error ? bgErr.message : String(bgErr));
+      } catch (_) { /* ignore */ }
+    }
+  };
+
+  // @ts-ignore: EdgeRuntime disponível em Supabase Edge Functions
+  EdgeRuntime.waitUntil(doSync());
+
+  return new Response(JSON.stringify({ success: true, status: 'processing', step: 'sync_started' }),
+    { status: 202, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 });
