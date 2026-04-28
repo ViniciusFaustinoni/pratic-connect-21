@@ -610,13 +610,19 @@ export default function UsuarioForm() {
                     <Input
                       id="codigo_sga_voluntario"
                       value={formData.codigo_sga_voluntario}
-                      onChange={(e) => setFormData({ ...formData, codigo_sga_voluntario: e.target.value })}
+                      onChange={(e) => {
+                        // Permitir apenas dígitos, máx. 20
+                        const onlyDigits = e.target.value.replace(/\D/g, '').slice(0, 20);
+                        setFormData({ ...formData, codigo_sga_voluntario: onlyDigits });
+                      }}
+                      inputMode="numeric"
+                      pattern="\d*"
                       placeholder="Ex: 12345"
                       maxLength={20}
                       className="bg-background"
                     />
                     <p className="text-xs text-muted-foreground">
-                      Usado na sincronização Hinova/SGA dos veículos vendidos por este usuário. Se vazio, usa o código global.
+                      Apenas números (até 20 dígitos). Usado na sincronização Hinova/SGA dos veículos vendidos por este usuário. Se vazio, usa o código global.
                     </p>
                   </div>
                 )}
