@@ -20,12 +20,13 @@ export function useLiberacoesAutoVistoria() {
   return useQuery<LiberacaoAutoVistoriaItem[]>({
     queryKey: ['liberacoes-autovistoria'],
     queryFn: async () => {
-      // Veículos suspensos pelo motivo específico
+      // Veículos suspensos por instalação fora do prazo
+      // (motivo legado "Auto-vistoria sem instalação no prazo" + motivo novo "Instalação não realizada no prazo de Xh...")
       const { data: veiculos, error } = await supabase
         .from('veiculos')
         .select('id, placa, modelo, marca, cobertura_suspensa_em, cobertura_suspensa_motivo')
         .eq('cobertura_suspensa', true)
-        .eq('cobertura_suspensa_motivo', 'Auto-vistoria sem instalação no prazo');
+        .or('cobertura_suspensa_motivo.eq.Auto-vistoria sem instalação no prazo,cobertura_suspensa_motivo.ilike.Instalação não realizada%');
       if (error) throw error;
       if (!veiculos?.length) return [];
 
@@ -35,7 +36,7 @@ export function useLiberacoesAutoVistoria() {
         .from('contratos')
         .select('id, veiculo_id, associado_id, data_assinatura, liberado_reagendamento_em')
         .in('veiculo_id', veiculoIds)
-        .eq('status', 'ativo')
+        .in('status', ['ativo', 'assinado'])
         .is('liberado_reagendamento_em', null);
 
       const associadoIds = [...new Set((contratos ?? []).map(c => c.associado_id).filter(Boolean))];

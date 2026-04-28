@@ -1,36 +1,44 @@
-## Diagnóstico — Causa Raiz
+## Diagnóstico
 
-O contrato do CASSIO (`3388240f-...`, placa **LMX5A90**) foi assinado em **22/04 22:35 UTC** (≈19:35 BR), há mais de **5 dias**, e deveria ter sido suspenso pelo cron `cron-suspender-cobertura-inativacao` (executa de hora em hora, prazo padrão 72h). Não foi suspenso por **3 filtros bloqueantes** na função:
+O wizard "Reativar Associado" assume **sempre** que a suspensão é por inadimplência:
+- `caminho` é decidido só por `dias` de atraso de pagamento (`useAssociadoSituacao.diasAtraso`).
+- Os 3 caminhos (Pagamento Simples / Pagamento + Revistoria / Nova Adesão) só falam de **boleto**, **revistoria** e **adesão**.
 
-| # | Filtro na query | Valor real do contrato | Resultado |
-|---|---|---|---|
-| 1 | `tipo_vistoria = 'autovistoria'` | `NULL` | ❌ Excluído |
-| 2 | `status = 'ativo'` | `'assinado'` | ❌ Excluído |
-| 3 | (verificação de instalação) busca em `servicos` por `tipo='instalacao'` | A instalação está na tabela `instalacoes` (registro `agendada` desde 24/04 para 27/04) | ❌ Nunca encontraria mesmo se passasse |
+No caso do CASSIO o veículo **não está inadimplente** — está com `cobertura_suspensa=true` por causa do cron que corrigimos antes (instalação não realizada no prazo). Como `diasAtraso=0`, o wizard cai no caminho 1 e mostra "Confirmar Pagamento" — completamente errado para esse cenário.
 
-Ou seja, a função só suspende um subconjunto muito específico (auto-vistoria + status ativo) e ignora o caminho normal de "vistoria com técnico" — que é o caso do CASSIO. Resultado: contratos como esse ficam invisíveis ao cron e nunca suspendem.
+Já existe a infraestrutura correta para esse fluxo: edge function `liberar-reagendamento-autovistoria` + página `/monitoramento/liberacoes-autovistoria` + hook `useLiberacoesAutoVistoria`. O wizard só precisa **detectar** o motivo da suspensão e oferecer o caminho certo.
 
-Adicionalmente, a verificação de "já instalado" consulta a tabela errada (`servicos` em vez de `instalacoes`), o que pode causar falsos negativos mesmo nos casos que entram.
+Bug adicional descoberto: o hook `useLiberacoesAutoVistoria` filtra pelo motivo legado `'Auto-vistoria sem instalação no prazo'`, mas o cron corrigido grava `'Instalação não realizada no prazo de Xh após assinatura'`. Resultado: novos casos (como o CASSIO) **não aparecem** na tela de liberações do monitoramento.
 
 ## O que será corrigido
 
-### 1. Edge function `cron-suspender-cobertura-inativacao`
-- **Remover** o filtro `tipo_vistoria = 'autovistoria'` — a regra dos 48h vale para todos os tipos de vistoria/instalação (memória `suspensao-cobertura-48h`).
-- **Ampliar** o filtro de status para incluir contratos `assinado` e `ativo` (ambos representam contratos válidos aguardando instalação).
-- **Trocar a fonte de verdade da instalação**: verificar tabela `instalacoes` (status `concluida` ou `concluida_em IS NOT NULL`) em vez de `servicos`. Manter `servicos` como fallback para retrocompatibilidade.
-- **Ignorar** instalações com `dispensa_rastreador = true` (não exigem rastreador, então não devem suspender).
-- Atualizar a mensagem de WhatsApp para ser genérica ("instalação não realizada no prazo") em vez de citar auto-vistoria.
+### 1. Adicionar caminho "Liberação de Reagendamento" no wizard
+Em `src/components/associados/reativacao/ReativacaoWizard.tsx`:
 
-### 2. Reprocessamento manual
-Após o deploy, invocar a função uma vez para processar o backlog acumulado (CASSIO e quaisquer outros contratos assinados há mais de 72h sem instalação concluída). Retornar a lista no resultado para auditoria.
+- Detectar suspensão por instalação lendo `veiculos.cobertura_suspensa_motivo` do(s) veículo(s) do associado (motivo começa com "Instalação não realizada" ou contém "auto-vistoria").
+- Quando esse motivo for detectado, ignorar a lógica de inadimplência e usar um **novo caminho 4** ("Liberar Reagendamento de Vistoria/Instalação"):
+  - Banner azul informativo: "Suspensão por instalação não realizada no prazo. Não há débito em aberto."
+  - 1 etapa única: **"Liberar para Reagendamento"** com campo opcional de motivo, que chama a edge function `liberar-reagendamento-autovistoria` (já existe) com o `contrato_id`.
+  - Após sucesso: cobertura volta, contrato fica `liberado_reagendamento_em=now()`, WhatsApp é disparado pro associado com o link público pra reagendar.
+- Se houver inadimplência **E** suspensão por instalação simultaneamente, mostrar os dois caminhos em sequência (primeiro liberar, depois confirmar pagamento) — caso raro, mas tratado.
 
-### 3. Atualizar memória
-Atualizar `mem://logic/operations/suspensao-cobertura-48h` para refletir que a regra cobre **todos** os contratos assinados (não só auto-vistoria) e que a fonte de verdade da instalação é a tabela `instalacoes`.
+### 2. Corrigir filtro do hook `useLiberacoesAutoVistoria`
+Em `src/hooks/useLiberacoesAutoVistoria.ts`:
+- Trocar `.eq('cobertura_suspensa_motivo', 'Auto-vistoria sem instalação no prazo')` por `.or('cobertura_suspensa_motivo.eq.Auto-vistoria sem instalação no prazo,cobertura_suspensa_motivo.ilike.Instalação não realizada%')` para cobrir o motivo novo + o legado.
+- Ampliar filtro de status do contrato de `eq('status','ativo')` para `in('status', ['ativo','assinado'])` (alinhado com o cron corrigido).
+
+### 3. Atualizar memória `suspensao-cobertura-48h`
+Adicionar nota: a reativação após suspensão por instalação se faz pela liberação de reagendamento (não por wizard de inadimplência).
 
 ## Fora do escopo
-- Não mexer no agendamento do cron (já roda de hora em hora — OK).
-- Não mexer no parâmetro `prazo_instalacao_autovistoria_horas` (continua configurável pela diretoria; default 72h).
-- Não criar novas tabelas nem migrations — só edge function + reprocessamento.
+- Não mexer no cron de suspensão (já corrigido).
+- Não mexer na lógica de inadimplência ou nos caminhos 1/2/3.
+- Não criar nova migration — só código frontend + ajuste de hook.
 
 ## Resultado esperado
-Após a correção, na próxima execução horária (ou no reprocessamento manual) o veículo **LMX5A90** terá `cobertura_suspensa = true`, badge "Suspensa" aparecerá no header, e o WhatsApp de aviso será enviado ao CASSIO. O mesmo passará a valer para qualquer contrato futuro assinado e não instalado dentro do prazo.
+Ao abrir "Reativar" para o CASSIO (ou qualquer associado suspenso por instalação fora do prazo, sem dívida), o wizard mostra:
+- Banner azul: "Suspenso por instalação não realizada no prazo (X dias)"
+- 1 botão único: **"Liberar Reagendamento"** (com motivo opcional)
+- Ao confirmar: cobertura reativada, contrato liberado, WhatsApp enviado com link público.
+
+A página `/monitoramento/liberacoes-autovistoria` também passa a listar os casos novos.
