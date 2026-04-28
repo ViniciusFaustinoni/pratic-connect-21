@@ -949,6 +949,7 @@ export default function Associados() {
           initialFilters={sheetFilters}
           planos={planos}
           cidades={cidades}
+          vendedores={vendedores?.map(v => ({ id: v.id, nome: v.nome }))}
         />
 
         {/* Export Dialog */}
