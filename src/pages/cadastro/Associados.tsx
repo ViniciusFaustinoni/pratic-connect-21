@@ -169,7 +169,7 @@ export default function Associados() {
   // Reset paginação ao alterar filtros server-side
   useEffect(() => {
     setPage(1);
-  }, [search, statusFilter, planoFilter, cidadeFilter, sheetFilters.status, sheetFilters.plano_id, sheetFilters.cidade, sheetFilters.data_adesao_inicio, sheetFilters.data_adesao_fim]);
+  }, [search, statusFilter, planoFilter, cidadeFilter, sheetFilters.status, sheetFilters.plano_id, sheetFilters.cidade, sheetFilters.data_adesao_inicio, sheetFilters.data_adesao_fim, sheetFilters.vendedor_id, sheetFilters.tipos_entrada]);
 
   // Check if any filter is active
   const hasFilters = search || statusFilter !== 'all' || planoFilter !== 'all' || cidadeFilter !== 'all' || Object.keys(sheetFilters).length > 0;
@@ -183,6 +183,8 @@ export default function Associados() {
     sheetFilters.plano_id ? true : false,
     sheetFilters.cidade ? true : false,
     sheetFilters.data_adesao_inicio || sheetFilters.data_adesao_fim ? true : false,
+    sheetFilters.vendedor_id ? true : false,
+    sheetFilters.tipos_entrada?.length ? true : false,
   ].filter(Boolean).length;
 
   // Filtro de data agora é server-side via hook; sem filtragem client-side adicional.
