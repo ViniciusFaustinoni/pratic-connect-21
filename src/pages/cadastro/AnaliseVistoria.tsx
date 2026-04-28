@@ -37,7 +37,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChassiOcrEditor } from '@/components/ocr/ChassiOcrEditor';
+
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
