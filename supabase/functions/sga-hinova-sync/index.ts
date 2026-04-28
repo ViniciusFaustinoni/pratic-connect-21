@@ -1491,6 +1491,9 @@ serve(async (req) => {
     let valorAdesaoPayload: number | null = null;
     const produtosVinculados: { codigo_produto: number; valor: number }[] = [];
 
+    // Resolução do plano é feita ESTRITAMENTE pelo codigo_sga_plano (numérico).
+    // Nunca por nome/sufixo/prefixo. Sem código válido → segue enviando apenas
+    // associado + veículo (Hinova usará o plano default da conta, ajuste manual no SGA).
     if (contrato?.plano_id) {
       const { data: planoRow } = await supabase
         .from('planos')
@@ -1498,80 +1501,69 @@ serve(async (req) => {
         .eq('id', contrato.plano_id)
         .maybeSingle();
 
-      if (!planoRow) {
-        const msg = `Plano ${contrato.plano_id} não encontrado.`;
-        await logSync(_vid, _aid, 'resolver_plano', 'error', { plano_id: contrato.plano_id }, null, msg);
-        await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
-        await upsertSyncQueue(supabase, _vid, _aid, 'plano_nao_encontrado', msg, codigoAssociadoHinova);
-        return;
-      }
+      const parsedCodigoPlano = planoRow?.codigo_sga_plano
+        ? Number.parseInt(planoRow.codigo_sga_plano, 10)
+        : NaN;
 
-      if (!planoRow.codigo_sga_plano) {
-        const msg = `Plano "${planoRow.nome}" sem codigo_sga_plano configurado. Cadastre o código SGA do plano em Configurações > Planos.`;
-        await logSync(_vid, _aid, 'resolver_plano', 'error',
-          { plano_id: contrato.plano_id, nome: planoRow.nome }, null, msg);
-        await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
-        await upsertSyncQueue(supabase, _vid, _aid, 'plano_sem_codigo_sga', msg, codigoAssociadoHinova);
-        return;
-      }
+      if (Number.isFinite(parsedCodigoPlano) && parsedCodigoPlano > 0) {
+        codigoPlanoSga = parsedCodigoPlano;
 
-      const parsedCodigoPlano = Number.parseInt(planoRow.codigo_sga_plano, 10);
-      if (!Number.isFinite(parsedCodigoPlano) || parsedCodigoPlano <= 0) {
-        const msg = `codigo_sga_plano inválido para o plano "${planoRow.nome}": ${planoRow.codigo_sga_plano}`;
-        await logSync(_vid, _aid, 'resolver_plano', 'error',
-          { plano_id: contrato.plano_id, codigo: planoRow.codigo_sga_plano }, null, msg);
-        await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
-        await upsertSyncQueue(supabase, _vid, _aid, 'plano_codigo_sga_invalido', msg, codigoAssociadoHinova);
-        return;
-      }
-      codigoPlanoSga = parsedCodigoPlano;
+        valorMensalidadePayload = contrato.valor_mensal != null ? Number(contrato.valor_mensal) : null;
+        valorAdesaoPayload = contrato.valor_adesao != null
+          ? Number(contrato.valor_adesao)
+          : (planoRow?.valor_adesao != null ? Number(planoRow.valor_adesao) : null);
 
-      valorMensalidadePayload = contrato.valor_mensal != null ? Number(contrato.valor_mensal) : null;
-      valorAdesaoPayload = contrato.valor_adesao != null
-        ? Number(contrato.valor_adesao)
-        : (planoRow.valor_adesao != null ? Number(planoRow.valor_adesao) : null);
+        // Benefícios do plano
+        const { data: planoBeneficios } = await supabase
+          .from('planos_beneficios')
+          .select('benefit_id, custom_value, benefits!inner(codigo_sga, name, preco_sugerido)')
+          .eq('plano_id', contrato.plano_id);
 
-      // Benefícios do plano
-      const { data: planoBeneficios } = await supabase
-        .from('planos_beneficios')
-        .select('benefit_id, custom_value, benefits!inner(codigo_sga, name, preco_sugerido)')
-        .eq('plano_id', contrato.plano_id);
-
-      for (const pb of (planoBeneficios || []) as any[]) {
-        const codigoSga = pb.benefits?.codigo_sga;
-        const valor = pb.custom_value != null ? Number(pb.custom_value) :
-                      (pb.benefits?.preco_sugerido != null ? Number(pb.benefits.preco_sugerido) : 0);
-        if (codigoSga) {
-          const c = Number.parseInt(codigoSga, 10);
-          if (Number.isFinite(c) && c > 0) {
-            produtosVinculados.push({ codigo_produto: c, valor });
+        for (const pb of (planoBeneficios || []) as any[]) {
+          const codigoSga = pb.benefits?.codigo_sga;
+          const valor = pb.custom_value != null ? Number(pb.custom_value) :
+                        (pb.benefits?.preco_sugerido != null ? Number(pb.benefits.preco_sugerido) : 0);
+          if (codigoSga) {
+            const c = Number.parseInt(codigoSga, 10);
+            if (Number.isFinite(c) && c > 0) {
+              produtosVinculados.push({ codigo_produto: c, valor });
+            }
+          } else {
+            console.warn(`[SGA Sync] Benefício "${pb.benefits?.name}" sem codigo_sga; será omitido do payload.`);
           }
-        } else {
-          console.warn(`[SGA Sync] Benefício "${pb.benefits?.name}" sem codigo_sga; será omitido do payload.`);
         }
-      }
 
-      // Coberturas do plano
-      const { data: planoCoberturas } = await supabase
-        .from('planos_coberturas')
-        .select('cobertura_id, valor_limite, coberturas!inner(codigo_sga, nome, valor)')
-        .eq('plano_id', contrato.plano_id);
+        // Coberturas do plano
+        const { data: planoCoberturas } = await supabase
+          .from('planos_coberturas')
+          .select('cobertura_id, valor_limite, coberturas!inner(codigo_sga, nome, valor)')
+          .eq('plano_id', contrato.plano_id);
 
-      for (const pc of (planoCoberturas || []) as any[]) {
-        const codigoSga = pc.coberturas?.codigo_sga;
-        const valor = pc.valor_limite != null ? Number(pc.valor_limite) :
-                      (pc.coberturas?.valor != null ? Number(pc.coberturas.valor) : 0);
-        if (codigoSga) {
-          const c = Number.parseInt(codigoSga, 10);
-          if (Number.isFinite(c) && c > 0) {
-            produtosVinculados.push({ codigo_produto: c, valor });
+        for (const pc of (planoCoberturas || []) as any[]) {
+          const codigoSga = pc.coberturas?.codigo_sga;
+          const valor = pc.valor_limite != null ? Number(pc.valor_limite) :
+                        (pc.coberturas?.valor != null ? Number(pc.coberturas.valor) : 0);
+          if (codigoSga) {
+            const c = Number.parseInt(codigoSga, 10);
+            if (Number.isFinite(c) && c > 0) {
+              produtosVinculados.push({ codigo_produto: c, valor });
+            }
+          } else {
+            console.warn(`[SGA Sync] Cobertura "${pc.coberturas?.nome}" sem codigo_sga; será omitida do payload.`);
           }
-        } else {
-          console.warn(`[SGA Sync] Cobertura "${pc.coberturas?.nome}" sem codigo_sga; será omitida do payload.`);
         }
-      }
 
-      console.log(`[SGA Sync] Plano resolvido: codigo_sga=${codigoPlanoSga}, mensalidade=${valorMensalidadePayload}, adesao=${valorAdesaoPayload}, produtos=${produtosVinculados.length}`);
+        console.log(`[SGA Sync] Plano resolvido: codigo_sga=${codigoPlanoSga}, mensalidade=${valorMensalidadePayload}, adesao=${valorAdesaoPayload}, produtos=${produtosVinculados.length}`);
+      } else {
+        const motivo = !planoRow
+          ? 'plano_nao_encontrado_no_banco'
+          : (!planoRow.codigo_sga_plano ? 'plano_sem_codigo_sga' : 'codigo_sga_invalido');
+        const msg = `Veículo será enviado sem codigo_plano (motivo=${motivo}, plano_id=${contrato.plano_id}). Hinova usará o plano default da conta — ajuste manual no SGA pode ser necessário.`;
+        console.warn(`[SGA Sync] ${msg}`);
+        await logSync(_vid, _aid, 'resolver_plano', 'warning',
+          { plano_id: contrato.plano_id, motivo, nome: planoRow?.nome ?? null, codigo_sga_plano: planoRow?.codigo_sga_plano ?? null },
+          null, msg);
+      }
     } else {
       console.warn('[SGA Sync] Contrato sem plano_id — cadastro será enviado sem codigo_plano (Hinova usará o default da conta).');
     }
