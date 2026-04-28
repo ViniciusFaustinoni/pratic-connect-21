@@ -80,41 +80,6 @@ const FOTO_LABELS: Record<string, string> = {
 };
 
 // Função para renderizar chassi com diferenças destacadas caractere por caractere
-function renderChassiComparado(chassiCadastro: string, chassiOCR: string): { elemento: JSX.Element; diferencas: { posicao: number; esperado: string; encontrado: string }[] } {
-  const cadastroNormalizado = chassiCadastro?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '';
-  const ocrNormalizado = chassiOCR?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '';
-  const maxLen = Math.max(cadastroNormalizado.length, ocrNormalizado.length);
-  const caracteres: JSX.Element[] = [];
-  const diferencas: { posicao: number; esperado: string; encontrado: string }[] = [];
-  
-  for (let i = 0; i < maxLen; i++) {
-    const charCadastro = cadastroNormalizado[i] || '';
-    const charOCR = ocrNormalizado[i] || '';
-    const diferente = charCadastro !== charOCR;
-    
-    if (diferente) {
-      diferencas.push({ posicao: i + 1, esperado: charCadastro || '—', encontrado: charOCR || '—' });
-    }
-    
-    caracteres.push(
-      <span 
-        key={i} 
-        className={diferente 
-          ? 'bg-destructive/20 text-destructive font-bold px-0.5 rounded border border-destructive/30' 
-          : ''
-        }
-        title={diferente ? `Posição ${i + 1}: esperado "${charCadastro}", encontrado "${charOCR}"` : undefined}
-      >
-        {charOCR || '?'}
-      </span>
-    );
-  }
-  
-  return {
-    elemento: <span className="font-mono text-sm tracking-wider">{caracteres}</span>,
-    diferencas
-  };
-}
 
 export default function AnaliseVistoria() {
   const { id } = useParams<{ id: string }>();
