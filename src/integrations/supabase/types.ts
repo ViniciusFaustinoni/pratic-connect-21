@@ -2686,6 +2686,42 @@ export type Database = {
           },
         ]
       }
+      ativacao_status_log: {
+        Row: {
+          actor_id: string | null
+          associado_id: string
+          contrato_id: string | null
+          created_at: string
+          from_status: string | null
+          id: string
+          payload: Json
+          source: string
+          to_status: string
+        }
+        Insert: {
+          actor_id?: string | null
+          associado_id: string
+          contrato_id?: string | null
+          created_at?: string
+          from_status?: string | null
+          id?: string
+          payload?: Json
+          source: string
+          to_status: string
+        }
+        Update: {
+          actor_id?: string | null
+          associado_id?: string
+          contrato_id?: string | null
+          created_at?: string
+          from_status?: string | null
+          id?: string
+          payload?: Json
+          source?: string
+          to_status?: string
+        }
+        Relationships: []
+      }
       auditoria_indicios_concorrencia: {
         Row: {
           analisado_em: string | null
@@ -15227,6 +15263,63 @@ export type Database = {
           id?: string
           integracao?: string
           tempo_resposta_ms?: number | null
+        }
+        Relationships: []
+      }
+      integration_retry_queue: {
+        Row: {
+          attempts: number
+          correlation_id: string | null
+          created_at: string
+          created_by: string | null
+          dead_letter_at: string | null
+          id: string
+          integration: Database["public"]["Enums"]["integration_provider"]
+          last_attempt_at: string | null
+          last_error: string | null
+          max_attempts: number
+          next_attempt_at: string
+          operation: string
+          payload: Json
+          status: Database["public"]["Enums"]["integration_queue_status"]
+          succeeded_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          correlation_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          dead_letter_at?: string | null
+          id?: string
+          integration: Database["public"]["Enums"]["integration_provider"]
+          last_attempt_at?: string | null
+          last_error?: string | null
+          max_attempts?: number
+          next_attempt_at?: string
+          operation: string
+          payload?: Json
+          status?: Database["public"]["Enums"]["integration_queue_status"]
+          succeeded_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          correlation_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          dead_letter_at?: string | null
+          id?: string
+          integration?: Database["public"]["Enums"]["integration_provider"]
+          last_attempt_at?: string | null
+          last_error?: string | null
+          max_attempts?: number
+          next_attempt_at?: string
+          operation?: string
+          payload?: Json
+          status?: Database["public"]["Enums"]["integration_queue_status"]
+          succeeded_at?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -31832,6 +31925,7 @@ export type Database = {
           supervisor_id: string
         }[]
       }
+      fn_lock_ativacao: { Args: { _associado_id: string }; Returns: boolean }
       fn_marcar_comissao_paga: {
         Args: { p_comissao_id: string }
         Returns: {
@@ -31890,6 +31984,10 @@ export type Database = {
           p_vendedor_id: string
         }
         Returns: string
+      }
+      fn_validar_campos_ativacao: {
+        Args: { _associado_id: string }
+        Returns: Json
       }
       fn_verificar_almoco_profissional: {
         Args: { p_profissional_id: string }
@@ -32162,6 +32260,13 @@ export type Database = {
         | "contato"
         | "qualificado"
       forma_pagamento_oficina: "pix" | "transferencia" | "boleto" | "cheque"
+      integration_provider: "sga" | "softruck" | "rede"
+      integration_queue_status:
+        | "pending"
+        | "processing"
+        | "success"
+        | "failed"
+        | "dead_letter"
       motivo_perda:
         | "preco"
         | "concorrencia"
@@ -32601,6 +32706,14 @@ export const Constants = {
         "qualificado",
       ],
       forma_pagamento_oficina: ["pix", "transferencia", "boleto", "cheque"],
+      integration_provider: ["sga", "softruck", "rede"],
+      integration_queue_status: [
+        "pending",
+        "processing",
+        "success",
+        "failed",
+        "dead_letter",
+      ],
       motivo_perda: [
         "preco",
         "concorrencia",
