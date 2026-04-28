@@ -177,6 +177,9 @@ export function buildVeiculoPayload(
     codigo_voluntario: ctx.codigo_voluntario,
   };
 
+  if (Number.isFinite(ctx.codigo_conta) && (ctx.codigo_conta as number) > 0) {
+    payload.codigo_conta = ctx.codigo_conta;
+  }
   if (ctx.codigo_combustivel) payload.codigo_combustivel = ctx.codigo_combustivel;
   if (ctx.codigo_cor) payload.codigo_cor = ctx.codigo_cor;
   if (ctx.codigo_situacao) payload.codigo_situacao = ctx.codigo_situacao;
