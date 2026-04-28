@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
@@ -8,12 +9,15 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import {
   CheckCircle, AlertTriangle, Info, Loader2, CreditCard,
-  Camera, Radio, FileCheck, ArrowRight, Shield,
+  Camera, Radio, FileCheck, ArrowRight, Shield, CalendarClock,
 } from 'lucide-react';
 import { useInadimplenciaPrazos, useCarenciaDiasPadrao, useCarenciaVidrosDias } from '@/hooks/useConteudosSistema';
 import { useAssociadoActions } from '@/hooks/useAssociados';
+import { useLiberarAutoVistoria } from '@/hooks/useLiberacoesAutoVistoria';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import type { TablesUpdate } from '@/integrations/supabase/types';
@@ -28,18 +32,20 @@ interface ReativacaoWizardProps {
   situacao: SituacaoAssociado;
 }
 
-type Caminho = 1 | 2 | 3;
+type Caminho = 1 | 2 | 3 | 4;
 
 const CAMINHO_LABELS: Record<Caminho, string> = {
   1: 'Pagamento Simples',
   2: 'Pagamento + Revistoria',
   3: 'Nova Adesão Completa',
+  4: 'Liberar Reagendamento de Instalação',
 };
 
 const CAMINHO_COLORS: Record<Caminho, string> = {
   1: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
   2: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
   3: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+  4: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
 };
 
 export function ReativacaoWizard({
@@ -49,19 +55,71 @@ export function ReativacaoWizard({
   const { data: carenciaDiasPadrao } = useCarenciaDiasPadrao();
   const { data: carenciaVidrosDias } = useCarenciaVidrosDias();
   const { reativarAssociado, isReativando } = useAssociadoActions();
+  const liberarAutoVistoria = useLiberarAutoVistoria();
   const { user } = useAuth();
 
   // Steps tracking
   const [currentStep, setCurrentStep] = useState(0);
   const [stepsCompleted, setStepsCompleted] = useState<Record<number, boolean>>({});
   const [isProcessing, setIsProcessing] = useState(false);
+  const [motivoLiberacao, setMotivoLiberacao] = useState('');
 
   const prazoSemRevistoria = prazos?.prazoSemRevistoria ?? 30;
   const prazoNovaAdesao = prazos?.prazoNovaAdesao ?? 180;
   const dias = situacao.diasAtraso;
 
-  // Determine path
-  const caminho: Caminho = dias <= prazoSemRevistoria ? 1 : dias <= prazoNovaAdesao ? 2 : 3;
+  // Detectar suspensão por instalação fora do prazo (lendo o motivo da cobertura suspensa do veículo do contrato)
+  const { data: suspensaoInstalacao } = useQuery({
+    queryKey: ['suspensao-instalacao-veiculo', contratoId],
+    queryFn: async () => {
+      if (!contratoId) return null;
+      const { data: contrato } = await supabase
+        .from('contratos')
+        .select('veiculo_id, liberado_reagendamento_em')
+        .eq('id', contratoId)
+        .maybeSingle();
+      if (!contrato?.veiculo_id) return null;
+      // Se já foi liberado, não está mais nesse caminho
+      if (contrato.liberado_reagendamento_em) return null;
+
+      const { data: v } = await supabase
+        .from('veiculos')
+        .select('cobertura_suspensa, cobertura_suspensa_motivo, cobertura_suspensa_em')
+        .eq('id', contrato.veiculo_id)
+        .maybeSingle();
+
+      if (!v?.cobertura_suspensa || !v.cobertura_suspensa_motivo) return null;
+
+      const motivo = v.cobertura_suspensa_motivo.toLowerCase();
+      const isInstalacao =
+        motivo.startsWith('instalação não realizada') ||
+        motivo.includes('auto-vistoria sem instalação') ||
+        motivo.includes('autovistoria sem instalação');
+
+      if (!isInstalacao) return null;
+
+      const susEm = v.cobertura_suspensa_em ? new Date(v.cobertura_suspensa_em) : new Date();
+      const diasSuspenso = Math.max(0, Math.floor((Date.now() - susEm.getTime()) / (1000 * 60 * 60 * 24)));
+
+      return {
+        motivo: v.cobertura_suspensa_motivo,
+        diasSuspenso,
+        suspensaEm: v.cobertura_suspensa_em,
+      };
+    },
+    enabled: !!contratoId && open,
+  });
+
+  // Determinar caminho:
+  // - Se há suspensão por instalação SEM dívida → caminho 4
+  // - Se há dívida → caminhos 1/2/3 conforme prazo
+  // - (Se houver os dois, dívida prevalece — caso raro; cobertura volta após pagamento normal)
+  const caminho: Caminho = (() => {
+    if (suspensaoInstalacao && dias === 0) return 4;
+    if (dias <= prazoSemRevistoria) return 1;
+    if (dias <= prazoNovaAdesao) return 2;
+    return 3;
+  })();
 
   const stepsForPath: Record<Caminho, { title: string; icon: typeof CreditCard }[]> = {
     1: [
@@ -77,11 +135,20 @@ export function ReativacaoWizard({
       { title: 'Nova Vistoria', icon: Camera },
       { title: 'Instalação Rastreador', icon: Radio },
     ],
+    4: [
+      { title: 'Liberar Reagendamento', icon: CalendarClock },
+    ],
   };
 
   const steps = stepsForPath[caminho];
   const totalSteps = steps.length;
   const allDone = Object.keys(stepsCompleted).length === totalSteps;
+
+  // Reset steps quando o caminho muda (ex.: query de suspensão chega depois)
+  useEffect(() => {
+    setCurrentStep(0);
+    setStepsCompleted({});
+  }, [caminho]);
 
   const markStepComplete = (step: number) => {
     setStepsCompleted(prev => ({ ...prev, [step]: true }));
@@ -90,9 +157,42 @@ export function ReativacaoWizard({
     }
   };
 
+  const handleLiberarReagendamento = async () => {
+    if (!contratoId) {
+      toast.error('Contrato não identificado.');
+      return;
+    }
+    try {
+      await liberarAutoVistoria.mutateAsync({
+        contrato_ids: [contratoId],
+        motivo: motivoLiberacao.trim() || undefined,
+      });
+      markStepComplete(0);
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao liberar reagendamento');
+    }
+  };
+
   const handleFinalizar = async () => {
     setIsProcessing(true);
     try {
+      // Caminho 4: a edge function já reativou cobertura, contrato e disparou WhatsApp.
+      // Aqui só registramos o histórico e fechamos. Não chamar reativarAssociado porque
+      // o associado pode continuar 'aguardando_instalacao' até concluir a nova instalação.
+      if (caminho === 4) {
+        await supabase.from('associados_historico').insert({
+          associado_id: associadoId,
+          tipo: 'status_alterado',
+          descricao: `Reagendamento liberado após suspensão por instalação fora do prazo${motivoLiberacao ? ` — ${motivoLiberacao}` : ''}`,
+          dados_anteriores: { caminho: 4, motivo_suspensao: suspensaoInstalacao?.motivo, dias_suspenso: suspensaoInstalacao?.diasSuspenso },
+          dados_novos: { liberado_reagendamento: true },
+        });
+        toast.success('Reagendamento liberado. Associado notificado por WhatsApp.');
+        onOpenChange(false);
+        resetState();
+        return;
+      }
+
       if (caminho === 3) {
         // Register as nova adesão + pontuação
         await supabase.from('associados_historico').insert({
@@ -196,6 +296,7 @@ export function ReativacaoWizard({
   const resetState = () => {
     setCurrentStep(0);
     setStepsCompleted({});
+    setMotivoLiberacao('');
   };
 
   const handleClose = (val: boolean) => {
@@ -205,6 +306,45 @@ export function ReativacaoWizard({
 
   const renderStepContent = (stepIndex: number) => {
     const done = stepsCompleted[stepIndex];
+
+    // Caminho 4 — Liberar Reagendamento
+    if (caminho === 4 && stepIndex === 0) {
+      return (
+        <div className="space-y-3">
+          <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30">
+            <Info className="h-4 w-4 text-blue-600" />
+            <AlertDescription className="text-sm text-blue-800 dark:text-blue-300">
+              A liberação reativa a cobertura do veículo (roubo/furto) e envia ao associado um link no WhatsApp para reagendar a vistoria/instalação. A cobertura total volta ao concluir a instalação.
+            </AlertDescription>
+          </Alert>
+          <div className="space-y-2">
+            <Label htmlFor="motivo-liberacao" className="text-sm">Motivo da liberação (opcional)</Label>
+            <Textarea
+              id="motivo-liberacao"
+              value={motivoLiberacao}
+              onChange={(e) => setMotivoLiberacao(e.target.value)}
+              placeholder="Ex.: cliente solicitou reagendamento por viagem, atraso justificado..."
+              rows={2}
+              disabled={done}
+            />
+          </div>
+          <Button
+            onClick={handleLiberarReagendamento}
+            disabled={done || liberarAutoVistoria.isPending}
+            className="w-full"
+            variant={done ? 'outline' : 'default'}
+          >
+            {done ? (
+              <><CheckCircle className="h-4 w-4 mr-2" /> Reagendamento Liberado</>
+            ) : liberarAutoVistoria.isPending ? (
+              <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Liberando...</>
+            ) : (
+              <><CalendarClock className="h-4 w-4 mr-2" /> Liberar Reagendamento</>
+            )}
+          </Button>
+        </div>
+      );
+    }
 
     // Caminho 1, step 0 / Caminho 2, step 0 / Caminho 3, step 0
     if (stepIndex === 0) {
@@ -321,6 +461,15 @@ export function ReativacaoWizard({
     return null;
   };
 
+  // Banner: caminho 4 tem texto próprio
+  const bannerClass = caminho === 4
+    ? 'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30'
+    : caminho === 1
+      ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30'
+      : caminho === 2
+        ? 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30'
+        : 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/30';
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-lg">
@@ -329,23 +478,31 @@ export function ReativacaoWizard({
             <Shield className="h-5 w-5" /> Reativar Associado
           </DialogTitle>
           <DialogDescription>
-            Wizard de reativação baseado nos prazos configurados.
+            {caminho === 4
+              ? 'Liberação de reagendamento para suspensão por instalação fora do prazo.'
+              : 'Wizard de reativação baseado nos prazos configurados.'}
           </DialogDescription>
         </DialogHeader>
 
         {/* Situation banner */}
-        <Alert className={caminho === 1
-          ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30'
-          : caminho === 2
-            ? 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30'
-            : 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/30'
-        }>
+        <Alert className={bannerClass}>
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription className="text-sm space-y-1">
-            <p><strong>Inadimplente há {dias} dias</strong></p>
-            <p className="text-xs text-muted-foreground">
-              Prazo sem revistoria: {prazoSemRevistoria} dias · Prazo nova adesão: {prazoNovaAdesao} dias
-            </p>
+            {caminho === 4 ? (
+              <>
+                <p><strong>Cobertura suspensa há {suspensaoInstalacao?.diasSuspenso ?? 0} dias</strong></p>
+                <p className="text-xs text-muted-foreground">
+                  Motivo: {suspensaoInstalacao?.motivo ?? 'instalação não realizada no prazo'}. Não há débito em aberto.
+                </p>
+              </>
+            ) : (
+              <>
+                <p><strong>Inadimplente há {dias} dias</strong></p>
+                <p className="text-xs text-muted-foreground">
+                  Prazo sem revistoria: {prazoSemRevistoria} dias · Prazo nova adesão: {prazoNovaAdesao} dias
+                </p>
+              </>
+            )}
             <Badge className={CAMINHO_COLORS[caminho]}>
               Caminho: {CAMINHO_LABELS[caminho]}
             </Badge>
@@ -415,7 +572,7 @@ export function ReativacaoWizard({
             ) : (
               <ArrowRight className="h-4 w-4 mr-2" />
             )}
-            Finalizar Reativação
+            {caminho === 4 ? 'Concluir' : 'Finalizar Reativação'}
           </Button>
         </DialogFooter>
       </DialogContent>
