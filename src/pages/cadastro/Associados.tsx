@@ -49,6 +49,7 @@ import {
 import { STATUS_ASSOCIADO_LABELS, type StatusAssociado } from '@/types/database';
 import { useAssociados, useAssociadosContagem, useAssociadosCidades, useUpdateAssociadoStatus, useDeleteAssociado } from '@/hooks/useAssociados';
 import { usePlanos } from '@/hooks/usePlanos';
+import { useVendedores } from '@/hooks/useVendedores';
 
 import { AssociadoFilters } from '@/components/cadastro/AssociadoFilters';
 import { ExportAssociadosDialog } from '@/components/cadastro/ExportAssociadosDialog';
@@ -127,6 +128,8 @@ export default function Associados() {
     cidade?: string;
     data_adesao_inicio?: string;
     data_adesao_fim?: string;
+    vendedor_id?: string;
+    tipos_entrada?: string[];
   }>({});
 
   // Construir filtros server-side
@@ -148,6 +151,8 @@ export default function Associados() {
       cidade: serverCidade,
       data_adesao_inicio: sheetFilters.data_adesao_inicio,
       data_adesao_fim: sheetFilters.data_adesao_fim,
+      vendedor_id: sheetFilters.vendedor_id,
+      tipos_entrada: sheetFilters.tipos_entrada,
     },
     pagination: { page, pageSize },
   });
@@ -157,13 +162,14 @@ export default function Associados() {
   const { data: contagem } = useAssociadosContagem();
   const { data: planos } = usePlanos();
   const { data: cidades } = useAssociadosCidades();
+  const { data: vendedores } = useVendedores();
   const updateStatus = useUpdateAssociadoStatus();
   const deleteAssociado = useDeleteAssociado();
 
   // Reset paginação ao alterar filtros server-side
   useEffect(() => {
     setPage(1);
-  }, [search, statusFilter, planoFilter, cidadeFilter, sheetFilters.status, sheetFilters.plano_id, sheetFilters.cidade, sheetFilters.data_adesao_inicio, sheetFilters.data_adesao_fim]);
+  }, [search, statusFilter, planoFilter, cidadeFilter, sheetFilters.status, sheetFilters.plano_id, sheetFilters.cidade, sheetFilters.data_adesao_inicio, sheetFilters.data_adesao_fim, sheetFilters.vendedor_id, sheetFilters.tipos_entrada]);
 
   // Check if any filter is active
   const hasFilters = search || statusFilter !== 'all' || planoFilter !== 'all' || cidadeFilter !== 'all' || Object.keys(sheetFilters).length > 0;
@@ -177,6 +183,8 @@ export default function Associados() {
     sheetFilters.plano_id ? true : false,
     sheetFilters.cidade ? true : false,
     sheetFilters.data_adesao_inicio || sheetFilters.data_adesao_fim ? true : false,
+    sheetFilters.vendedor_id ? true : false,
+    sheetFilters.tipos_entrada?.length ? true : false,
   ].filter(Boolean).length;
 
   // Filtro de data agora é server-side via hook; sem filtragem client-side adicional.
@@ -941,6 +949,7 @@ export default function Associados() {
           initialFilters={sheetFilters}
           planos={planos}
           cidades={cidades}
+          vendedores={vendedores?.map(v => ({ id: v.id, nome: v.nome }))}
         />
 
         {/* Export Dialog */}

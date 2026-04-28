@@ -14,11 +14,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
+import { Check, ChevronsUpDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { STATUS_ASSOCIADO_LABELS, type StatusAssociado } from '@/types/database';
 
 export interface SheetFiltersValue {
@@ -27,6 +42,8 @@ export interface SheetFiltersValue {
   cidade?: string;
   data_adesao_inicio?: string;
   data_adesao_fim?: string;
+  vendedor_id?: string;
+  tipos_entrada?: string[];
 }
 
 interface AssociadoFiltersProps {
@@ -39,10 +56,23 @@ interface AssociadoFiltersProps {
     cidade?: string;
     data_adesao_inicio?: string;
     data_adesao_fim?: string;
+    vendedor_id?: string;
+    tipos_entrada?: string[];
   };
   planos?: { id: string; nome: string }[];
   cidades?: string[];
+  vendedores?: { id: string; nome: string }[];
 }
+
+const TIPO_ENTRADA_OPTIONS: { value: string; label: string }[] = [
+  { value: 'adesao', label: 'Nova Adesão' },
+  { value: 'inclusao', label: 'Inclusão de Veículo' },
+  { value: 'substituicao_placa', label: 'Substituição de Placa' },
+  { value: 'troca_titularidade', label: 'Troca de Titularidade' },
+  { value: 'reativacao', label: 'Reativação' },
+  { value: 'migracao', label: 'Migração' },
+  { value: 'indicacao', label: 'Indicação' },
+];
 
 const STATUS_OPTIONS: { value: StatusAssociado; label: string }[] = [
   { value: 'ativo', label: 'Ativo' },
@@ -72,6 +102,7 @@ export function AssociadoFilters({
   initialFilters,
   planos,
   cidades,
+  vendedores,
 }: AssociadoFiltersProps) {
   const [statusSelecionados, setStatusSelecionados] = useState<StatusAssociado[]>(
     Array.isArray(initialFilters?.status)
@@ -84,12 +115,25 @@ export function AssociadoFilters({
   const [cidade, setCidade] = useState(initialFilters?.cidade || 'all');
   const [dataInicio, setDataInicio] = useState(initialFilters?.data_adesao_inicio || '');
   const [dataFim, setDataFim] = useState(initialFilters?.data_adesao_fim || '');
+  const [vendedorId, setVendedorId] = useState(initialFilters?.vendedor_id || '');
+  const [vendedorOpen, setVendedorOpen] = useState(false);
+  const [tiposEntrada, setTiposEntrada] = useState<string[]>(
+    initialFilters?.tipos_entrada || []
+  );
 
   const handleStatusChange = (status: StatusAssociado, checked: boolean) => {
     if (checked) {
       setStatusSelecionados([...statusSelecionados, status]);
     } else {
       setStatusSelecionados(statusSelecionados.filter(s => s !== status));
+    }
+  };
+
+  const handleTipoEntradaChange = (tipo: string, checked: boolean) => {
+    if (checked) {
+      setTiposEntrada([...tiposEntrada, tipo]);
+    } else {
+      setTiposEntrada(tiposEntrada.filter(t => t !== tipo));
     }
   };
 
@@ -111,6 +155,8 @@ export function AssociadoFilters({
     if (cidade && cidade !== 'all') filters.cidade = cidade;
     if (dataInicio) filters.data_adesao_inicio = dataInicio;
     if (dataFim) filters.data_adesao_fim = dataFim;
+    if (vendedorId) filters.vendedor_id = vendedorId;
+    if (tiposEntrada.length > 0) filters.tipos_entrada = tiposEntrada;
 
     onApply(filters);
     onClose();
@@ -122,13 +168,19 @@ export function AssociadoFilters({
     setCidade('all');
     setDataInicio('');
     setDataFim('');
+    setVendedorId('');
+    setTiposEntrada([]);
   };
 
   const activeCount =
     statusSelecionados.length +
     (plano && plano !== 'all' ? 1 : 0) +
     (cidade && cidade !== 'all' ? 1 : 0) +
-    (dataInicio || dataFim ? 1 : 0);
+    (dataInicio || dataFim ? 1 : 0) +
+    (vendedorId ? 1 : 0) +
+    tiposEntrada.length;
+
+  const vendedorSelecionado = vendedores?.find(v => v.id === vendedorId);
 
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -161,6 +213,97 @@ export function AssociadoFilters({
                 </div>
               ))}
             </div>
+          </div>
+
+          <Separator />
+
+          {/* TIPO DE ADESÃO */}
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Tipo de Adesão</Label>
+            <div className="space-y-2">
+              {TIPO_ENTRADA_OPTIONS.map((option) => (
+                <div key={option.value} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`tipo-${option.value}`}
+                    checked={tiposEntrada.includes(option.value)}
+                    onCheckedChange={(checked) =>
+                      handleTipoEntradaChange(option.value, checked as boolean)
+                    }
+                  />
+                  <Label
+                    htmlFor={`tipo-${option.value}`}
+                    className="text-sm font-normal cursor-pointer"
+                  >
+                    {option.label}
+                  </Label>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* CONSULTOR */}
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Consultor</Label>
+            <Popover open={vendedorOpen} onOpenChange={setVendedorOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={vendedorOpen}
+                  className="w-full justify-between font-normal"
+                >
+                  <span className="truncate">
+                    {vendedorSelecionado?.nome || 'Todos os consultores'}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Buscar consultor..." />
+                  <CommandList>
+                    <CommandEmpty>Nenhum consultor encontrado.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="__all__"
+                        onSelect={() => {
+                          setVendedorId('');
+                          setVendedorOpen(false);
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            'mr-2 h-4 w-4',
+                            !vendedorId ? 'opacity-100' : 'opacity-0'
+                          )}
+                        />
+                        Todos os consultores
+                      </CommandItem>
+                      {vendedores?.map((v) => (
+                        <CommandItem
+                          key={v.id}
+                          value={v.nome}
+                          onSelect={() => {
+                            setVendedorId(v.id);
+                            setVendedorOpen(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              'mr-2 h-4 w-4',
+                              vendedorId === v.id ? 'opacity-100' : 'opacity-0'
+                            )}
+                          />
+                          {v.nome}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           <Separator />

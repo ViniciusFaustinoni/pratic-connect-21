@@ -1,92 +1,100 @@
-## Investigação — Chassi divergente entre CRLV e Sistema
+# Filtros: Consultor e Tipo de Adesão na aba Associados
 
-### Caso real
-- **Veículo:** Fiat Palio Elx Flex 2008 — Placa `KNO3F78` (associada Maria Amelia Balbi de Castro)
-- **Chassi no CRLV (correto):** `9BD17104G85241143` — 17 caracteres
-- **Chassi no sistema:** `9BD17104G8524113` — **16 caracteres** (faltou o dígito `4` antes do `3` final)
+## Objetivo
+Adicionar dois novos filtros ao painel **Filtros Avançados** da página `/cadastro/associados`:
+1. **Consultor (vendedor)** — busca por nome, com select pesquisável.
+2. **Tipo de Adesão** — multi-select: Nova Adesão, Inclusão, Substituição, Troca de Titularidade, Reativação, Migração, Indicação.
 
-### Como o erro entrou no banco
-1. A cotação `1036666f-5de5-461d-a330-061b265d6040` foi criada **manualmente pelo vendedor**, sem lead, sem CRLV anexado (`doc_crlv = null`) e sem vistoria associada (`vistoria_id = null`).
-2. Na tela `Cadastro → Propostas Pendentes → Análise da Proposta` (`src/pages/cadastro/PropostaAnalise.tsx`), o analista digita/edita o chassi no campo de `PropostaDetalhesTabs.tsx` (linha 274):
-   ```tsx
-   <Input
-     value={veiculoChassi}
-     onChange={(e) => setVeiculoChassi(
-       e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '')
-     )}
-     maxLength={17}
-   />
-   ```
-3. **O input só limita o máximo (17), não exige o mínimo.** Qualquer string de 1–17 caracteres é aceita.
-4. `handleConfirmarAprovacao` chama `aprovarMutation` enviando `veiculoChassi` direto, sem qualquer validação.
-5. `useAprovarProposta` (`src/hooks/usePropostasPendentes.ts`) faz `update veiculos set chassi = params.veiculoChassi` — grava 16 caracteres no banco.
-6. O caractere omitido (`4`) está no meio de uma sequência repetitiva (`...241143` → digitado `...24113`), exatamente o tipo de erro que validação de comprimento pegaria imediatamente.
+Ambos serão combináveis com os filtros já existentes (status, plano, cidade, período).
 
-### Por que o caso anterior (KRX9802) "subiu" e este não
-Não há relação direta com o bug do FIPE×ano da investigação anterior. Aqui a falha é puramente **qualidade do dado de entrada**: chassi com 16 chars será reprovado em qualquer validação SGA/Hinova futura, em qualquer integração de rastreador, e cria divergência permanente com o CRLV oficial.
+## Modelo de dados (já existente)
+- `contratos.vendedor_id` → `profiles.id` (consultor responsável pela venda).
+- `contratos.tipo_entrada` (varchar): valores canônicos já usados na base — `adesao`, `inclusao`, `substituicao_placa`, `substituicao` (alias), `troca_titularidade`, `reativacao`, `migracao`, `indicacao`. Labels já existem em `TIPO_ENTRADA_SHORT_LABELS` (`OrigemCadastroCard.tsx`).
+- `associados.vendedor_original_id` existe mas é histórico — o vínculo "vivo" do consultor da contratação atual está em `contratos.vendedor_id`. Vamos filtrar por `contratos.vendedor_id` (último contrato vinculado), respeitando a memória `profile-id-as-canonical-commission-key`.
 
-### Raiz do problema
-- **Ausência de validação de comprimento mínimo (17) e charset do chassi** em **todos** os pontos onde o usuário interno digita chassi:
-  - `PropostaDetalhesTabs.tsx` (aprovação da proposta) — sem validação
-  - `VeiculoEditDialog.tsx` — `chassi: z.string().optional()` sem regex/length
-  - `ChassiOcrEditor.tsx` — só exige `>= 5` chars
-- **Ausência de cruzamento automático** entre o chassi digitado e o chassi extraído do OCR do CRLV quando o documento existe.
-- **Ausência de bloqueio de I, O, Q** (caracteres proibidos pela ISO 3779 / VIN), hoje só barrados parcialmente no fluxo público.
+## Mudanças
 
----
+### 1. `src/components/cadastro/AssociadoFilters.tsx`
+- Estender `SheetFiltersValue`:
+  ```ts
+  vendedor_id?: string;
+  tipos_entrada?: string[];
+  ```
+- Adicionar duas novas props: `vendedores?: { id: string; nome: string }[]` e usar `TIPO_ENTRADA_SHORT_LABELS` para as opções.
+- UI:
+  - Bloco **Consultor**: `Select` com busca (Combobox baseado em `Command`) listando vendedores ordenados por nome + opção "Todos os consultores".
+  - Bloco **Tipo de Adesão**: lista de checkboxes (mesmo padrão do bloco Status) com as 7 opções canônicas.
+- Atualizar `handleApply`, `handleLimpar` e `activeCount` para incluir os novos filtros.
 
-## Plano de correção
+### 2. `src/hooks/useAssociados.ts`
+- Estender `AssociadoFilters` com `vendedor_id?: string` e `tipos_entrada?: string[]`.
+- No `queryFn`, quando algum desses filtros vier preenchido, fazer pré-busca em `contratos`:
+  ```ts
+  let associadoIdsByContrato: string[] | null = null;
+  if (filters?.vendedor_id || filters?.tipos_entrada?.length) {
+    let q = supabase.from('contratos').select('associado_id').not('associado_id','is',null);
+    if (filters.vendedor_id) q = q.eq('vendedor_id', filters.vendedor_id);
+    if (filters.tipos_entrada?.length) {
+      // Normaliza alias 'substituicao' ↔ 'substituicao_placa'
+      const tipos = expandTipoEntradaAliases(filters.tipos_entrada);
+      q = q.in('tipo_entrada', tipos);
+    }
+    const { data } = await q.limit(50000);
+    associadoIdsByContrato = Array.from(new Set((data||[]).map(r=>r.associado_id).filter(Boolean)));
+    if (associadoIdsByContrato.length === 0) {
+      // sem matches → retorna vazio
+      return { associados: [], pagination: { page, pageSize, total: 0, totalPages: 0 } };
+    }
+    query = query.in('id', associadoIdsByContrato);
+  }
+  ```
+- Helper `expandTipoEntradaAliases` no próprio arquivo: se o array contém `substituicao_placa`, adiciona também `substituicao` (e vice-versa) para respeitar a memória `tipo-entrada-substituicao-canonical`.
 
-### 1. Utilitário central de validação de chassi
-Criar `src/lib/chassi.ts`:
-- `normalizeChassi(input)` — uppercase + remove tudo que não for `A-HJ-NPR-Z0-9` (bloqueia I/O/Q, padrão VIN).
-- `isValidChassi(input)` — deve ter exatamente 17 caracteres válidos.
-- `chassiHelperText(input)` — mensagem de erro padronizada para UI.
-
-### 2. Validação obrigatória nos formulários (camada de UI)
-Aplicar a todos os inputs de chassi internos:
-- `src/components/cadastro/proposta/PropostaDetalhesTabs.tsx` — bloquear envio se `!isValidChassi`, exibir contador `X/17` e mensagem de erro inline.
-- `src/components/veiculos/VeiculoEditDialog.tsx` — substituir `z.string().optional()` por schema Zod com regex `/^[A-HJ-NPR-Z0-9]{17}$/`.
-- `src/components/ocr/ChassiOcrEditor.tsx` — exigir 17 caracteres antes do `Save`.
-- Demais inputs de chassi do sistema (rastreadores, instalador checklist) — aplicar `normalizeChassi` + validação 17 chars.
-
-### 3. Bloqueio na aprovação da proposta
-Em `src/pages/cadastro/PropostaAnalise.tsx → handleConfirmarAprovacao`:
-- Antes de chamar `aprovarMutation`, validar:
-  - Se há `veiculoChassi` digitado: deve ter 17 chars válidos, senão `toast.error` e abortar.
-  - Se a proposta tem `doc_crlv` com OCR processado, comparar `chassi digitado` vs `chassi_ocr` e exigir confirmação explícita do analista quando divergem (modal "Os chassis não coincidem — confirmar mesmo assim?").
-
-### 4. Defesa em profundidade no banco (migration)
-Criar migration adicionando:
-```sql
-ALTER TABLE veiculos
-  ADD CONSTRAINT veiculos_chassi_format
-  CHECK (chassi IS NULL OR chassi ~ '^[A-HJ-NPR-Z0-9]{17}$');
-
-ALTER TABLE cotacoes
-  ADD CONSTRAINT cotacoes_chassi_format
-  CHECK (veiculo_chassi IS NULL OR veiculo_chassi ~ '^[A-HJ-NPR-Z0-9]{17}$');
+### 3. Novo hook `src/hooks/useVendedoresList.ts` (ou reuso)
+Verificar se já existe um hook que liste vendedores (`profiles` com role `vendedor` / `consultor` / `agencia`). Se existir, reutilizar; senão criar:
+```ts
+export function useVendedoresList() {
+  return useQuery({
+    queryKey: ['vendedores-list'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, nome')
+        .in('role', ['vendedor','supervisor','gerente','agencia','consultor_externo'])
+        .order('nome');
+      return data || [];
+    },
+    staleTime: 5*60*1000,
+  });
+}
 ```
-Antes de aplicar, rodar `SELECT id, placa, chassi FROM veiculos WHERE chassi IS NOT NULL AND chassi !~ '^[A-HJ-NPR-Z0-9]{17}$'` para listar os registros legados que precisam ser corrigidos manualmente (provavelmente uma dezena).
+(Vou conferir os roles reais no `app_roles_config` antes de fechar a lista; usa-se a mesma fonte que já alimenta outras telas de comissão.)
 
-### 5. Correção imediata do caso atual
-- `UPDATE veiculos SET chassi = '9BD17104G85241143' WHERE id = '6915f219-0d34-4169-89b1-758e982aa51e'` (via migration auditável).
-- `UPDATE cotacoes SET veiculo_chassi = '9BD17104G85241143' WHERE id = '1036666f-5de5-461d-a330-061b265d6040'`.
-- Reenfileirar sincronização SGA/Hinova do associado `38575c0f-...` para atualizar lá também.
+### 4. `src/pages/cadastro/Associados.tsx`
+- Adicionar `vendedor_id` e `tipos_entrada` ao state `sheetFilters`.
+- Passar `vendedor_id` e `tipos_entrada` para `useAssociados({ filters: ... })`.
+- Passar `vendedores={vendedores}` para `<AssociadoFilters>`.
+- Atualizar:
+  - `hasFilters`, contagem de filtros ativos, `useEffect` de reset de paginação.
+  - Chips de filtros ativos (se houver) para mostrar consultor + tipos selecionados.
 
-### 6. Auditoria retroativa
-- Listar todos os veículos com `LENGTH(chassi) <> 17` ou contendo `I/O/Q` e gerar relatório para a equipe de cadastro corrigir antes da migration de constraint entrar em produção.
+## Detalhes técnicos
 
----
+### Aliases de tipo_entrada
+A memória `tipo-entrada-substituicao-canonical` define `substituicao_placa` como canônico, com `substituicao` como alias gravado em alguns contratos antigos. O filtro deve sempre buscar ambos quando o usuário escolher "Substituição".
 
-## Arquivos que serão alterados
-- **novo:** `src/lib/chassi.ts`
-- **edit:** `src/components/cadastro/proposta/PropostaDetalhesTabs.tsx`
-- **edit:** `src/pages/cadastro/PropostaAnalise.tsx`
-- **edit:** `src/components/veiculos/VeiculoEditDialog.tsx`
-- **edit:** `src/components/ocr/ChassiOcrEditor.tsx`
-- **edit:** demais inputs de chassi (rastreadores/instalador) para reutilizar o util
-- **nova migration:** check constraints + correção dos dois registros do caso
+### Performance
+A pré-busca em `contratos` retorna apenas `associado_id` distinct. Em produção atual (~9.5k associados, ~quantidade similar de contratos), o limite de 50k cobre 100% dos casos. Se futuramente crescer, migra-se para uma RPC dedicada.
 
-## Resultado esperado
-Impossível salvar veículo/cotação/proposta com chassi diferente de 17 caracteres VIN-válidos. Quando houver CRLV com OCR, o sistema avisa proativamente sobre divergências antes de aprovar.
+### Escopo de visibilidade
+A query continua respeitando RLS de `associados` e `contratos`, então o filtro por consultor para um vendedor logado naturalmente só retornará seus próprios associados (já alinhado com `funil-cotacao-vendor-scoping`).
+
+## Arquivos afetados
+- `src/components/cadastro/AssociadoFilters.tsx` (UI + tipos)
+- `src/hooks/useAssociados.ts` (filtros server-side + alias)
+- `src/hooks/useVendedoresList.ts` (novo, se não houver equivalente)
+- `src/pages/cadastro/Associados.tsx` (state + props)
+
+## Fora de escopo
+- Não altera exportação inteligente (pode ser estendida em iteração separada para incluir colunas de consultor/tipo).
+- Não toca a barra de filtros rápidos no topo (apenas o sheet de Filtros Avançados, conforme pedido).

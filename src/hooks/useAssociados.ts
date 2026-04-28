@@ -66,6 +66,16 @@ export interface AssociadoFilters {
   estado?: string;
   data_adesao_inicio?: string;
   data_adesao_fim?: string;
+  vendedor_id?: string;
+  tipos_entrada?: string[];
+}
+
+// Aliases canônicos: 'substituicao_placa' é canônico, 'substituicao' é alias.
+function expandTipoEntradaAliases(tipos: string[]): string[] {
+  const set = new Set(tipos);
+  if (set.has('substituicao_placa')) set.add('substituicao');
+  if (set.has('substituicao')) set.add('substituicao_placa');
+  return Array.from(set);
 }
 
 export interface ContagemAssociados {
@@ -109,6 +119,38 @@ export function useAssociados({ filters, pagination, enabled = true }: UseAssoci
           contratos!fk_contratos_associado (*),
           veiculos (*)
         `, { count: 'exact' });
+
+      // Pré-busca em contratos quando filtra por consultor ou tipo de adesão
+      if (filters?.vendedor_id || (filters?.tipos_entrada && filters.tipos_entrada.length > 0)) {
+        let cq = supabase
+          .from('contratos')
+          .select('associado_id')
+          .not('associado_id', 'is', null);
+
+        if (filters.vendedor_id) {
+          cq = cq.eq('vendedor_id', filters.vendedor_id);
+        }
+        if (filters.tipos_entrada && filters.tipos_entrada.length > 0) {
+          const tipos = expandTipoEntradaAliases(filters.tipos_entrada);
+          cq = cq.in('tipo_entrada', tipos);
+        }
+
+        const { data: contratosData, error: cErr } = await cq.limit(50000);
+        if (cErr) throw cErr;
+
+        const associadoIds = Array.from(
+          new Set((contratosData || []).map((r: any) => r.associado_id).filter(Boolean))
+        );
+
+        if (associadoIds.length === 0) {
+          return {
+            associados: [] as AssociadoWithRelations[],
+            pagination: { page, pageSize, total: 0, totalPages: 0 },
+          };
+        }
+
+        query = query.in('id', associadoIds);
+      }
 
       // Filtro por status (pode ser array)
       if (filters?.status) {
