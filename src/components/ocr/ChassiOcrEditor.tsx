@@ -67,18 +67,21 @@ export function ChassiOcrEditor({ vistoriaId, chassiOcrAtual, chassiCadastro, on
       <div className="flex gap-2">
         <Input
           value={valor}
-          onChange={(e) => setValor(e.target.value.toUpperCase())}
+          onChange={(e) => setValor(normalizeChassi(e.target.value))}
           maxLength={17}
           placeholder="17 caracteres"
           className="font-mono uppercase"
         />
-        <Button size="sm" onClick={handleSave} disabled={salvando || valor.length < 5}>
+        <Button size="sm" onClick={handleSave} disabled={salvando || !isValidChassi(valor)}>
           <Save className="w-4 h-4" />
         </Button>
         <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setValor(chassiOcrAtual || ''); }}>
           <X className="w-4 h-4" />
         </Button>
       </div>
+      <p className={`text-[11px] ${valor && !isValidChassi(valor) ? 'text-destructive' : 'text-muted-foreground'}`}>
+        {chassiHelperText(valor) || `${valor.length}/17`}
+      </p>
     </div>
   );
 }
