@@ -269,9 +269,9 @@ serve(async (req) => {
               });
             }
 
-            await supabase.functions.invoke('ativar-associado', {
-              body: { veiculo_id: veiculoId, rastreador_id: instalacaoConcluida.rastreador_id, associado_id: associadoId },
-            });
+            // NOTE: ativação centralizada acontece mais abaixo (bloco "deveAguardarInstalacao = false"),
+            // chamando ativar-associado com source/allowed_from corretos. Aqui apenas garantimos
+            // a notificação ao cliente — não invocar ativar-associado novamente para evitar payload inválido.
 
             supabase.functions.invoke('notificar-cliente', {
               body: { tipo: 'cobertura_total_ativada', associado_id: associadoId, dados: { placa: veiculo.placa || '', marca: (veiculo as any).marca || '', modelo: veiculo.modelo || '' } },
