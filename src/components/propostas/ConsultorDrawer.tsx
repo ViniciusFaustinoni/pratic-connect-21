@@ -1,4 +1,4 @@
-import { Star, Award, AlertTriangle, User, Clock, Send, CheckCircle, Car, X } from 'lucide-react';
+import { Star, Award, AlertTriangle, User, Clock, Send, CheckCircle, Car, X, Save, KeyRound } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -11,10 +11,16 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { UserAvatar } from '@/components/UserAvatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { useConsultorPropostas, type ConsultorMetricas, type PeriodoFiltro } from '@/hooks/usePropostasMetricas';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 interface ConsultorDrawerProps {
   consultor: ConsultorMetricas | null;
@@ -61,12 +67,57 @@ function getStatusIcon(status: string) {
 
 export function ConsultorDrawer({ consultor, periodo, open, onClose }: ConsultorDrawerProps) {
   const { data, isLoading } = useConsultorPropostas(consultor?.id || null, periodo);
+  const queryClient = useQueryClient();
+  const [codigoSga, setCodigoSga] = useState('');
+
+  // Carrega profile (id + codigo_sga_voluntario) pelo user_id (consultor.id é user_id auth)
+  const { data: profile, isLoading: loadingProfile } = useQuery({
+    queryKey: ['consultor-profile-sga', consultor?.id],
+    queryFn: async () => {
+      if (!consultor?.id) return null;
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, codigo_sga_voluntario')
+        .eq('user_id', consultor.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!consultor?.id && open,
+  });
+
+  useEffect(() => {
+    setCodigoSga((profile as any)?.codigo_sga_voluntario || '');
+  }, [profile]);
+
+  const salvarSga = useMutation({
+    mutationFn: async () => {
+      if (!profile?.id) throw new Error('Profile não encontrado');
+      const valor = codigoSga.trim();
+      if (valor && !/^\d{1,20}$/.test(valor)) {
+        throw new Error('Código SGA deve conter apenas números (até 20 dígitos).');
+      }
+      const { error } = await supabase
+        .from('profiles')
+        .update({ codigo_sga_voluntario: valor || null })
+        .eq('id', profile.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Código SGA atualizado');
+      queryClient.invalidateQueries({ queryKey: ['consultor-profile-sga', consultor?.id] });
+      queryClient.invalidateQueries({ queryKey: ['consultores-sga'] });
+    },
+    onError: (e: any) => toast.error(e.message || 'Erro ao salvar Código SGA'),
+  });
 
   if (!consultor) return null;
 
   const rankingBadge = getRankingBadge(consultor.ranking);
   const performanceBadge = getPerformanceBadge(consultor.taxaConversao);
   const Icon = performanceBadge.icon;
+  const sgaAtual = (profile as any)?.codigo_sga_voluntario || '';
+  const sgaDirty = codigoSga.trim() !== (sgaAtual || '');
 
   // Combinar todas as propostas recentes (max 5)
   const recentItems = [
@@ -170,6 +221,47 @@ export function ConsultorDrawer({ consultor, periodo, open, onClose }: Consultor
                       {consultor.taxaConversao.toFixed(0)}%
                     </span>
                   </div>
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* Configurações - Código SGA */}
+            <div>
+              <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                <KeyRound className="h-4 w-4" /> CÓDIGO SGA VOLUNTÁRIO
+              </h3>
+              {loadingProfile ? (
+                <Skeleton className="h-10 w-full" />
+              ) : !profile ? (
+                <p className="text-xs text-muted-foreground">Perfil não encontrado para este consultor.</p>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="codigo_sga_drawer" className="sr-only">Código SGA</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="codigo_sga_drawer"
+                      value={codigoSga}
+                      onChange={(e) => setCodigoSga(e.target.value.replace(/\D/g, '').slice(0, 20))}
+                      inputMode="numeric"
+                      pattern="\d*"
+                      maxLength={20}
+                      placeholder="Ex: 12345"
+                      className="bg-background"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => salvarSga.mutate()}
+                      disabled={!sgaDirty || salvarSga.isPending}
+                    >
+                      <Save className="h-4 w-4 mr-1" />
+                      Salvar
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Apenas números (até 20 dígitos). Usado na sincronização Hinova/SGA.
+                  </p>
                 </div>
               )}
             </div>
