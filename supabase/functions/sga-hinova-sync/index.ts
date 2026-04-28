@@ -950,7 +950,7 @@ serve(async (req) => {
     // PASSO 4.5: Consulta backup por CPF (antes de cadastrar)
     // Verifica se o associado já existe no Hinova
     // ========================================
-    let codigoAssociadoHinova = associado.codigo_hinova;
+    codigoAssociadoHinova = associado.codigo_hinova ?? codigoAssociadoHinova;
 
     // Validar se o codigo_hinova existente é compatível com o codigo_conta atual
     if (codigoAssociadoHinova && codigoContaValido) {
