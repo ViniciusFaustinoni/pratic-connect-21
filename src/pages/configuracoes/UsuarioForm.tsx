@@ -362,6 +362,7 @@ export default function UsuarioForm() {
       capacidade_diaria: usuario.capacidade_diaria || 10,
       grade_comissao_id: '',
       agencia_forma_recebimento: ((usuario as any).agencia_forma_recebimento === 'em_maos' ? 'em_maos' : 'comissao') as 'comissao' | 'em_maos',
+      codigo_sga_voluntario: (usuario as any).codigo_sga_voluntario || '',
     };
     setFormData((prev) => {
       const same = prev.nome === next.nome && prev.email === next.email &&
@@ -373,7 +374,8 @@ export default function UsuarioForm() {
         prev.perfis.every((p, i) => p === next.perfis[i]) &&
         prev.regioes_atendimento.length === next.regioes_atendimento.length &&
         prev.capacidade_diaria === next.capacidade_diaria &&
-        prev.agencia_forma_recebimento === next.agencia_forma_recebimento;
+        prev.agencia_forma_recebimento === next.agencia_forma_recebimento &&
+        prev.codigo_sga_voluntario === next.codigo_sga_voluntario;
       return same ? prev : next;
     });
   }, [usuario]);
