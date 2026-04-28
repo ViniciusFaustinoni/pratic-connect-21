@@ -306,6 +306,7 @@ export default function AtribuicaoManualTab() {
   const { data: servicos, isLoading: loadingServicos } = useServicosParaAtribuir();
   const { data: vistoriadores, isLoading: loadingVist } = useVistoriadoresAtivos();
   const { data: prestadores, isLoading: loadingPrestadores } = useVistoriadoresPrestadores();
+  const { data: travados } = useServicosTravados();
   const atribuirMutation = useAtribuirServicoManual();
   const atribuirPrestadorMutation = useAtribuirServicoPrestador();
 
@@ -313,6 +314,12 @@ export default function AtribuicaoManualTab() {
   const [busca, setBusca] = useState('');
   const [dragging, setDragging] = useState<any>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ servico: any; vistoriadorId: string } | null>(null);
+
+  // Devolver / reatribuir state
+  const [acaoDialog, setAcaoDialog] = useState<{
+    servico: any;
+    modo: 'devolver' | 'reatribuir';
+  } | null>(null);
 
   // Prestador assignment states
   const [prestadorConfirmDialog, setPrestadorConfirmDialog] = useState<{ servico: any; prestadorId: string; prestadorNome: string; prestadorTelefone?: string | null } | null>(null);
@@ -322,6 +329,20 @@ export default function AtribuicaoManualTab() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   const prestadoresAtivos = (prestadores || []).filter((p: any) => p.ativo);
+
+  const handleAcaoTarefa = (tarefa: any, modo: 'devolver' | 'reatribuir') => {
+    setAcaoDialog({
+      servico: {
+        id: tarefa.id,
+        tipo: tarefa.tipo,
+        associadoNome: tarefa.associado?.nome,
+        veiculoPlaca: tarefa.veiculo?.placa,
+        profissionalNome: tarefa.profissionalNome,
+        profissionalIdAtual: tarefa.profissionalIdAtual,
+      },
+      modo,
+    });
+  };
 
   const servicosFiltrados = (servicos || []).filter(s => {
     if (filtroTipo !== 'todos' && s.tipo !== filtroTipo) return false;
