@@ -31878,6 +31878,16 @@ export type Database = {
         Args: { _motivo: string; _servico_id: string }
         Returns: Json
       }
+      liberar_servico_para_reatribuicao: {
+        Args: {
+          _categoria?: string
+          _motivo: string
+          _nova_data?: string
+          _novo_periodo?: string
+          _servico_id: string
+        }
+        Returns: Json
+      }
       log_auth_event: {
         Args: {
           p_acao: string
@@ -31899,6 +31909,17 @@ export type Database = {
       processar_template: {
         Args: { p_template_id: string; p_variaveis: Json }
         Returns: string
+      }
+      reatribuir_servico_admin: {
+        Args: {
+          _categoria?: string
+          _motivo: string
+          _nova_data?: string
+          _novo_periodo?: string
+          _novo_profissional_id: string
+          _servico_id: string
+        }
+        Returns: Json
       }
       reservar_encaixe_urgente: {
         Args: { p_encaixe_id: string; p_profissional_id: string }
