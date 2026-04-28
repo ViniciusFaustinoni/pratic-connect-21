@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { RealocarInstalacaoDialog } from '@/components/instalacoes/RealocarInstalacaoDialog';
 import { LiberarServicoButton } from './LiberarServicoButton';
+import { DevolverFilaButton } from './DevolverFilaButton';
 import { ConcluirPrestadorExternoButton } from './ConcluirPrestadorExternoButton';
 import { cn } from '@/lib/utils';
 import {
