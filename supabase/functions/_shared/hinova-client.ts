@@ -838,3 +838,199 @@ export async function marcarBackfillInativo(supabase: any): Promise<void> {
     .gte('id', '00000000-0000-0000-0000-000000000000');
 }
 
+
+// ===================================================================
+// CADASTRO (orquestração SGA)
+// Endpoints oficiais Hinova v2:
+//   POST /associado/cadastrar     → { mensagem, codigo_associado }
+//   POST /veiculo/cadastrar       → { mensagem, codigo_veiculo }
+//   POST /veiculo/foto/cadastrar  → { mensagem }
+//   GET  /veiculo/buscar/:chassi/chassi
+// ===================================================================
+
+export interface CadastroResultado {
+  ok: boolean;
+  codigo: number | null;
+  status: number;
+  raw: any;
+  mensagem: string | null;
+  errors: string[];
+}
+
+function parseJsonSafe(txt: string): any {
+  try { return JSON.parse(txt); } catch { return null; }
+}
+
+function extractCodigo(payload: any, key: 'codigo_associado' | 'codigo_veiculo'): number | null {
+  if (!payload) return null;
+  const candidates = [
+    payload[key],
+    payload?.data?.[key],
+    payload?.dados?.[key],
+    payload?.resultado?.[key],
+    payload?.codigo,
+    payload?.data?.codigo,
+    Array.isArray(payload) ? payload[0]?.[key] : null,
+    Array.isArray(payload) ? payload[0]?.codigo : null,
+  ];
+  for (const c of candidates) {
+    const n = Number(c);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
+
+function extractErrors(payload: any): string[] {
+  if (!payload) return [];
+  const e = payload.error ?? payload.errors ?? payload.erros;
+  if (Array.isArray(e)) return e.map((x: any) => String(x));
+  if (typeof e === 'string') return [e];
+  return [];
+}
+
+/** POST /associado/cadastrar */
+export async function cadastrarAssociadoHinova(
+  s: HinovaSession,
+  payload: Record<string, unknown>,
+): Promise<CadastroResultado> {
+  let r: Response;
+  try {
+    r = await fetch(`${s.apiUrl}/associado/cadastrar`, {
+      method: 'POST',
+      headers: authHeaders(s),
+      body: JSON.stringify(payload),
+    });
+  } catch (e: any) {
+    throw new HinovaTransientError(`[cadastrarAssociado] rede: ${String(e?.message || e)}`, {
+      httpStatus: 0, reason: 'network',
+    });
+  }
+  const txt = await r.text();
+  const data = parseJsonSafe(txt);
+  if ((r.status === 401 || r.status === 403) && !isJanelaHorariaError(txt)) {
+    throwHttpError(r.status, txt, 'cadastrarAssociado');
+  }
+  if (r.status >= 500 || isJanelaHorariaError(txt)) {
+    throwHttpError(r.status, txt, 'cadastrarAssociado');
+  }
+  return {
+    ok: r.ok,
+    codigo: extractCodigo(data, 'codigo_associado'),
+    status: r.status,
+    raw: data ?? txt.slice(0, 500),
+    mensagem: data?.mensagem ?? null,
+    errors: extractErrors(data),
+  };
+}
+
+/** POST /veiculo/cadastrar */
+export async function cadastrarVeiculoHinova(
+  s: HinovaSession,
+  payload: Record<string, unknown>,
+): Promise<CadastroResultado> {
+  let r: Response;
+  try {
+    r = await fetch(`${s.apiUrl}/veiculo/cadastrar`, {
+      method: 'POST',
+      headers: authHeaders(s),
+      body: JSON.stringify(payload),
+    });
+  } catch (e: any) {
+    throw new HinovaTransientError(`[cadastrarVeiculo] rede: ${String(e?.message || e)}`, {
+      httpStatus: 0, reason: 'network',
+    });
+  }
+  const txt = await r.text();
+  const data = parseJsonSafe(txt);
+  if ((r.status === 401 || r.status === 403) && !isJanelaHorariaError(txt)) {
+    throwHttpError(r.status, txt, 'cadastrarVeiculo');
+  }
+  if (r.status >= 500 || isJanelaHorariaError(txt)) {
+    throwHttpError(r.status, txt, 'cadastrarVeiculo');
+  }
+  return {
+    ok: r.ok,
+    codigo: extractCodigo(data, 'codigo_veiculo'),
+    status: r.status,
+    raw: data ?? txt.slice(0, 500),
+    mensagem: data?.mensagem ?? null,
+    errors: extractErrors(data),
+  };
+}
+
+/** POST /veiculo/foto/cadastrar — máx 50 fotos por chamada */
+export interface FotoHinovaPayload {
+  nome_arquivo: string;
+  codigo_tipo: number;
+  link?: string;
+  binario?: string;
+  observacao?: string;
+}
+
+export async function cadastrarFotosVeiculoHinova(
+  s: HinovaSession,
+  codigo_veiculo: number,
+  fotos: FotoHinovaPayload[],
+): Promise<CadastroResultado> {
+  if (fotos.length === 0) {
+    return { ok: true, codigo: null, status: 200, raw: { mensagem: 'sem fotos' }, mensagem: 'sem fotos', errors: [] };
+  }
+  if (fotos.length > 50) {
+    throw new Error('cadastrarFotosVeiculoHinova: máx. 50 fotos por chamada');
+  }
+  let r: Response;
+  try {
+    r = await fetch(`${s.apiUrl}/veiculo/foto/cadastrar`, {
+      method: 'POST',
+      headers: authHeaders(s),
+      body: JSON.stringify({ codigo_veiculo, foto: fotos }),
+    });
+  } catch (e: any) {
+    throw new HinovaTransientError(`[cadastrarFotosVeiculo] rede: ${String(e?.message || e)}`, {
+      httpStatus: 0, reason: 'network',
+    });
+  }
+  const txt = await r.text();
+  const data = parseJsonSafe(txt);
+  if ((r.status === 401 || r.status === 403) && !isJanelaHorariaError(txt)) {
+    throwHttpError(r.status, txt, 'cadastrarFotosVeiculo');
+  }
+  if (r.status >= 500 || isJanelaHorariaError(txt)) {
+    throwHttpError(r.status, txt, 'cadastrarFotosVeiculo');
+  }
+  return {
+    ok: r.ok,
+    codigo: null,
+    status: r.status,
+    raw: data ?? txt.slice(0, 500),
+    mensagem: data?.mensagem ?? null,
+    errors: extractErrors(data),
+  };
+}
+
+/** GET /veiculo/buscar/:chassi/chassi — retorna { codigo_veiculo, codigo_associado } ou null */
+export async function buscarVeiculoPorChassi(
+  s: HinovaSession,
+  chassi: string,
+): Promise<{ found: any | null; debug: { endpoint: string; status: number; bodySample: string } }> {
+  const c = (chassi || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (c.length !== 17) {
+    return { found: null, debug: { endpoint: 'buscar/chassi', status: 0, bodySample: 'chassi inválido' } };
+  }
+  let r: Response;
+  try {
+    r = await fetch(`${s.apiUrl}/veiculo/buscar/${c}/chassi`, { method: 'GET', headers: authHeaders(s) });
+  } catch (e: any) {
+    throw new HinovaTransientError(`[buscarVeiculoPorChassi] rede: ${String(e?.message || e)}`, {
+      httpStatus: 0, reason: 'network',
+    });
+  }
+  const txt = await r.text();
+  const debug = { endpoint: 'buscar/chassi', status: r.status, bodySample: txt.slice(0, 200) };
+  if (r.status === 404) return { found: null, debug };
+  if (!r.ok) throwHttpError(r.status, txt, 'buscarVeiculoPorChassi');
+  const j = parseJsonSafe(txt);
+  const root = Array.isArray(j) ? j[0] : (j?.data ?? j?.dados ?? j);
+  if (root?.codigo_veiculo) return { found: root, debug };
+  return { found: null, debug };
+}
