@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { formatLocalizacaoComZona, getZonaAtendimento } from '@/lib/localizacao-zonas';
+import { useRealocarInstalacao } from './useRealocarInstalacao';
 
 const PRODUCTION_BASE_URL = 'https://app.praticcar.org';
 
@@ -642,8 +643,10 @@ export function useAtribuirServicoPrestador() {
 }
 
 // ============================================================================
-// Devolver serviço já atribuído à fila de atribuição manual (não destrutivo).
-// Usa RPC `liberar_servico_para_reatribuicao`.
+// COMPATIBILIDADE — antigos hooks "Devolver à fila" / "Reatribuir".
+// Hoje delegam para o hook unificado `useRealocarInstalacao`, que chama a
+// RPC única `realocar_servico`. Mantemos a API para não quebrar call-sites.
+// Novos códigos devem usar `useRealocarInstalacao` diretamente.
 // ============================================================================
 export interface DevolverFilaParams {
   servicoId: string;
@@ -654,32 +657,17 @@ export interface DevolverFilaParams {
 }
 
 export function useDevolverServicoParaFila() {
-  const qc = useQueryClient();
+  const { realocarParaFila } = useRealocarInstalacao();
   return useMutation({
     mutationFn: async (params: DevolverFilaParams) => {
-      const { data, error } = await supabase.rpc('liberar_servico_para_reatribuicao' as any, {
-        _servico_id: params.servicoId,
-        _motivo: params.motivo,
-        _categoria: params.categoria,
-        _nova_data: params.novaData ?? null,
-        _novo_periodo: params.novoPeriodo ?? 'manha',
+      return realocarParaFila.mutateAsync({
+        instalacaoId: params.servicoId,
+        dataAgendada: params.novaData || new Date().toISOString().split('T')[0],
+        periodo: params.novoPeriodo || 'manha',
+        motivo: params.motivo,
+        categoria: params.categoria,
+        notificarWhatsApp: false,
       });
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      toast.success('Serviço devolvido à fila de atribuição');
-      qc.invalidateQueries({ queryKey: ['servicos-para-atribuir-manual'] });
-      qc.invalidateQueries({ queryKey: ['vistoriadores-ativos-manual'] });
-      qc.invalidateQueries({ queryKey: ['servicos-travados'] });
-      qc.invalidateQueries({ queryKey: ['servicos'] });
-      qc.invalidateQueries({ queryKey: ['instalacoes'] });
-      qc.invalidateQueries({ queryKey: ['servicos-campo-unificado'] });
-      qc.invalidateQueries({ queryKey: ['tarefa-atual'] });
-      qc.invalidateQueries({ queryKey: ['agendamentos-base'] });
-    },
-    onError: (err: any) => {
-      toast.error('Erro ao devolver à fila: ' + (err?.message || ''));
     },
   });
 }
@@ -689,33 +677,18 @@ export interface ReatribuirServicoParams extends DevolverFilaParams {
 }
 
 export function useReatribuirServico() {
-  const qc = useQueryClient();
+  const { reatribuirProfissional } = useRealocarInstalacao();
   return useMutation({
     mutationFn: async (params: ReatribuirServicoParams) => {
-      const { data, error } = await supabase.rpc('reatribuir_servico_admin' as any, {
-        _servico_id: params.servicoId,
-        _novo_profissional_id: params.novoProfissionalId,
-        _motivo: params.motivo,
-        _categoria: params.categoria,
-        _nova_data: params.novaData ?? null,
-        _novo_periodo: params.novoPeriodo ?? 'manha',
+      return reatribuirProfissional.mutateAsync({
+        instalacaoId: params.servicoId,
+        profissionalId: params.novoProfissionalId,
+        dataAgendada: params.novaData || new Date().toISOString().split('T')[0],
+        periodo: params.novoPeriodo || 'manha',
+        motivo: params.motivo,
+        categoria: params.categoria,
+        notificarWhatsApp: false,
       });
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      toast.success('Serviço reatribuído com sucesso');
-      qc.invalidateQueries({ queryKey: ['servicos-para-atribuir-manual'] });
-      qc.invalidateQueries({ queryKey: ['vistoriadores-ativos-manual'] });
-      qc.invalidateQueries({ queryKey: ['servicos-travados'] });
-      qc.invalidateQueries({ queryKey: ['servicos'] });
-      qc.invalidateQueries({ queryKey: ['instalacoes'] });
-      qc.invalidateQueries({ queryKey: ['servicos-campo-unificado'] });
-      qc.invalidateQueries({ queryKey: ['tarefa-atual'] });
-      qc.invalidateQueries({ queryKey: ['agendamentos-base'] });
-    },
-    onError: (err: any) => {
-      toast.error('Erro ao reatribuir: ' + (err?.message || ''));
     },
   });
 }
