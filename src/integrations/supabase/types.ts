@@ -9160,6 +9160,7 @@ export type Database = {
           veiculo_alienado: boolean | null
           veiculo_ano: number | null
           veiculo_ano_fabricacao: number | null
+          veiculo_ano_modelo: number | null
           veiculo_blindado: boolean | null
           veiculo_categoria: string | null
           veiculo_chassi: string | null
@@ -9173,6 +9174,7 @@ export type Database = {
           veiculo_procedencia: string | null
           veiculo_renavam: string | null
           veiculo_tipo_uso: string | null
+          veiculo_zero_km: boolean | null
           vendedor_id: string | null
           vistoria_completa_data_agendada: string | null
           vistoria_completa_endereco_bairro: string | null
@@ -9290,6 +9292,7 @@ export type Database = {
           veiculo_alienado?: boolean | null
           veiculo_ano?: number | null
           veiculo_ano_fabricacao?: number | null
+          veiculo_ano_modelo?: number | null
           veiculo_blindado?: boolean | null
           veiculo_categoria?: string | null
           veiculo_chassi?: string | null
@@ -9303,6 +9306,7 @@ export type Database = {
           veiculo_procedencia?: string | null
           veiculo_renavam?: string | null
           veiculo_tipo_uso?: string | null
+          veiculo_zero_km?: boolean | null
           vendedor_id?: string | null
           vistoria_completa_data_agendada?: string | null
           vistoria_completa_endereco_bairro?: string | null
@@ -9420,6 +9424,7 @@ export type Database = {
           veiculo_alienado?: boolean | null
           veiculo_ano?: number | null
           veiculo_ano_fabricacao?: number | null
+          veiculo_ano_modelo?: number | null
           veiculo_blindado?: boolean | null
           veiculo_categoria?: string | null
           veiculo_chassi?: string | null
@@ -9433,6 +9438,7 @@ export type Database = {
           veiculo_procedencia?: string | null
           veiculo_renavam?: string | null
           veiculo_tipo_uso?: string | null
+          veiculo_zero_km?: boolean | null
           vendedor_id?: string | null
           vistoria_completa_data_agendada?: string | null
           vistoria_completa_endereco_bairro?: string | null
