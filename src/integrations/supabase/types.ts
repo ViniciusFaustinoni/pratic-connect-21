@@ -31910,6 +31910,20 @@ export type Database = {
         Args: { p_template_id: string; p_variaveis: Json }
         Returns: string
       }
+      realocar_servico: {
+        Args: {
+          _categoria?: string
+          _destino: string
+          _motivo: string
+          _nova_data?: string
+          _novo_periodo?: string
+          _oficina_id?: string
+          _profissional_id?: string
+          _rota_id?: string
+          _servico_id: string
+        }
+        Returns: Json
+      }
       reatribuir_servico_admin: {
         Args: {
           _categoria?: string
