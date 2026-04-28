@@ -89,13 +89,6 @@ Deno.serve(async (req) => {
           valor, // pode ser null — será definido pela operação posteriormente
           atribuido_por,
         })
-        .from('vistoria_prestador_links')
-        .insert({
-          instalacao_id,
-          vistoriador_prestador_id,
-          valor,
-          atribuido_por,
-        })
         .select('id, token')
         .single()
 
