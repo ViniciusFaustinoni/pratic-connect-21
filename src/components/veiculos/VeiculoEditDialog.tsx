@@ -67,7 +67,13 @@ const TIPOS_VEICULO = [
 const veiculoEditSchema = z.object({
   cor: z.string().min(1, 'Cor é obrigatória'),
   placa: z.string().min(7, 'Placa inválida').max(8, 'Placa inválida'),
-  chassi: z.string().optional(),
+  chassi: z
+    .string()
+    .optional()
+    .refine(
+      (v) => !v || /^[A-HJ-NPR-Z0-9]{17}$/.test(v.toUpperCase()),
+      'Chassi deve ter 17 caracteres no padrão VIN (sem I, O ou Q).',
+    ),
   renavam: z.string().optional(),
   valor_fipe: z.number().min(0, 'Valor inválido').optional(),
   codigo_fipe: z.string().optional(),
