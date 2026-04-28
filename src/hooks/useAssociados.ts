@@ -66,6 +66,16 @@ export interface AssociadoFilters {
   estado?: string;
   data_adesao_inicio?: string;
   data_adesao_fim?: string;
+  vendedor_id?: string;
+  tipos_entrada?: string[];
+}
+
+// Aliases canônicos: 'substituicao_placa' é canônico, 'substituicao' é alias.
+function expandTipoEntradaAliases(tipos: string[]): string[] {
+  const set = new Set(tipos);
+  if (set.has('substituicao_placa')) set.add('substituicao');
+  if (set.has('substituicao')) set.add('substituicao_placa');
+  return Array.from(set);
 }
 
 export interface ContagemAssociados {
