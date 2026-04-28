@@ -85,7 +85,19 @@ function throwHttpError(httpStatus: number, body: string, ctx: string): never {
   if (httpStatus === 404) {
     throw new HinovaNotFoundError(`[${ctx}] Recurso não encontrado (http=404)`, sample);
   }
-  // Outros (400, 406, 422...) — tratamos como transitório por segurança (Hinova às vezes retorna 406 para auth)
+  // 406 com mensagem de "não encontrado / indisponível para consulta" → tratamos como NotFound
+  // (Hinova devolve 406 quando o veículo está cancelado / situação indisponível, mas o fluxo deve
+  // seguir para a próxima estratégia de busca em vez de abortar).
+  if (httpStatus === 406) {
+    const lower = sample.toLowerCase();
+    if (
+      lower.includes('não encontrad') || lower.includes('nao encontrad') ||
+      lower.includes('indispon') || lower.includes('não existe') || lower.includes('nao existe')
+    ) {
+      throw new HinovaNotFoundError(`[${ctx}] Recurso não encontrado/indisponível (http=406)`, sample);
+    }
+  }
+  // Outros (400, 406 sem padrão de not-found, 422...) — transitório por segurança
   throw new HinovaTransientError(`[${ctx}] HTTP ${httpStatus}: ${sample}`, {
     httpStatus,
     reason: 'server',

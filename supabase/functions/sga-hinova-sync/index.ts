@@ -206,11 +206,11 @@ serve(async (req) => {
     console.warn('[sga-hinova-sync] erro ao ler integracoes_credenciais:', e);
   }
 
+  // codigo_conta é OPCIONAL no Hinova: só é exigido quando a regional tem >1 conta bancária.
+  // Se vazio, omitimos do payload e o SGA usa a conta default.
   if (!Number.isFinite(codigoConta) || codigoConta <= 0) {
-    return new Response(
-      JSON.stringify({ success: false, error: 'codigo_conta do Hinova não configurado.', step: 'config' }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    );
+    codigoConta = NaN; // sinaliza "não enviar"
+    console.warn('[sga-hinova-sync] codigo_conta não configurado — usando conta default da regional.');
   }
 
   let req_body: SyncRequest;

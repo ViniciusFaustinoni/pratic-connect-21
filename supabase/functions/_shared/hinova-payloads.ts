@@ -8,7 +8,8 @@
 import type { FotoHinovaPayload } from './hinova-client.ts';
 
 export interface AssociadoCtx {
-  codigo_conta: number;
+  /** Código da conta bancária. Obrigatório APENAS quando a regional tem mais de uma conta. */
+  codigo_conta?: number;
   codigo_regional?: number;
   codigo_cooperativa?: number;
   codigo_voluntario?: number;
@@ -20,7 +21,8 @@ export interface AssociadoCtx {
 
 export interface VeiculoCtx {
   codigo_associado: number;
-  codigo_conta: number;
+  /** Código da conta bancária. Obrigatório APENAS quando a regional tem mais de uma conta. */
+  codigo_conta?: number;
   codigo_voluntario: number;
   codigo_situacao?: number;
   codigo_cooperativa?: number;
@@ -109,9 +111,11 @@ export function buildAssociadoPayload(
     cidade: associado.cidade || '',
     estado: normalizeUF(associado.uf || associado.estado),
     cep: cleanDigits(associado.cep),
-    codigo_conta: ctx.codigo_conta,
     dia_vencimento: associado.dia_vencimento || 10,
   };
+  if (Number.isFinite(ctx.codigo_conta) && (ctx.codigo_conta as number) > 0) {
+    payload.codigo_conta = ctx.codigo_conta;
+  }
 
   // Opcionais — só envia se tiver valor real
   if (associado.complemento) payload.complemento = associado.complemento;
@@ -169,11 +173,13 @@ export function buildVeiculoPayload(
     kilometragem: Number(veiculo.kilometragem) || 0,
     numero_motor: veiculo.numero_motor || '',
     dia_vencimento: veiculo.dia_vencimento || 10,
-    codigo_conta: ctx.codigo_conta,
     codigo_tipo_veiculo: ctx.tipo_veiculo,
     codigo_voluntario: ctx.codigo_voluntario,
   };
 
+  if (Number.isFinite(ctx.codigo_conta) && (ctx.codigo_conta as number) > 0) {
+    payload.codigo_conta = ctx.codigo_conta;
+  }
   if (ctx.codigo_combustivel) payload.codigo_combustivel = ctx.codigo_combustivel;
   if (ctx.codigo_cor) payload.codigo_cor = ctx.codigo_cor;
   if (ctx.codigo_situacao) payload.codigo_situacao = ctx.codigo_situacao;
