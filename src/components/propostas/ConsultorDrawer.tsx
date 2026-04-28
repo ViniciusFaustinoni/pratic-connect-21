@@ -1,4 +1,4 @@
-import { Star, Award, AlertTriangle, User, Clock, Send, CheckCircle, Car, X } from 'lucide-react';
+import { Star, Award, AlertTriangle, User, Clock, Send, CheckCircle, Car, X, Save, KeyRound } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -11,10 +11,16 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { UserAvatar } from '@/components/UserAvatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { useConsultorPropostas, type ConsultorMetricas, type PeriodoFiltro } from '@/hooks/usePropostasMetricas';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 interface ConsultorDrawerProps {
   consultor: ConsultorMetricas | null;
