@@ -1,126 +1,126 @@
-## Plano Faseado — Correção Definitiva dos 38 Erros do Fluxo de Ativação
+## Diagnóstico — raiz do erro
 
-Estruturado em **6 fases sequenciais**, começando pelos 5 riscos críticos. Cada fase é independente e deployável isoladamente, permitindo validação incremental sem travar o fluxo de produção.
+Investiguei o caso `KXD6881` / chassi `935SLYFYYFB520933` no banco. A foto é a seguinte:
 
----
+| Associado | CPF | Veículo (id) | Status veíc. | Status assoc. | Cotação | Contrato | Enviado SGA? |
+|---|---|---|---|---|---|---|---|
+| FABIO LENO DE SOUZA | 03236347708 | `cb7c49d9…` | `em_analise` | `pendente_vistoria` | **nenhuma** | nenhum | **NÃO** (sem fila, sem log) |
+| VITÓRIA ANTÔNIA … | 12213590702 | `2f162355…` | `ativo` | `ativo` | `7dc53937…` | `a3d70892…` | **SIM** (cód. associado Hinova `30000`, veículo falhando com "ano FIPE") |
 
-### FASE 0 — Infraestrutura de Segurança (pré-requisito, 1 dia)
+Ou seja, dentro do **nosso banco** existem dois veículos diferentes com a mesma placa+chassi+renavam, vinculados a **dois associados de CPFs distintos**. No **SGA** só foi efetivamente cadastrada a Vitória — mas o problema é estrutural: nada impede que amanhã o cadastro do Fabio também seja enviado e gere a mesma duplicidade lá fora.
 
-Antes de tocar em qualquer lógica de negócio, criar os mecanismos que as próximas fases vão consumir:
+A varredura geral confirma que o problema **não é isolado**: pelo menos outro caso existe — placa `TUF2F28` / chassi `9C2KF5210PR003478` em dois associados.
 
-1. **Advisory locks helper** — função SQL `pg_try_advisory_xact_lock(hashtext('ativacao:' || associado_id))` encapsulada em `public.fn_lock_ativacao(uuid)` retornando boolean.
-2. **Tabela de auditoria de transições** — `ativacao_status_log` (associado_id, contrato_id, from_status, to_status, source, actor_id, payload jsonb, created_at) — alimentada por trigger único em `associados`.
-3. **Helper de validação de campos obrigatórios** — função SQL `fn_validar_campos_ativacao(associado_id)` retornando jsonb com array de campos faltantes (cpf, chassi, renavam, placa, telefone).
-4. **Tabela de fila genérica de retry** — `integration_retry_queue` (id, integration ENUM[sga,softruck,rede], operation, payload, attempts, last_error, next_attempt_at, status) — para unificar com a `sga_sync_queue` existente em fase futura.
+### Causas-raiz (em ordem de gravidade)
 
-**Saída:** PR único, sem mudança de comportamento — apenas infraestrutura.
+1. **Não existe constraint UNIQUE em `veiculos.placa`, `veiculos.chassi` ou `veiculos.renavam`.**
+   A única coisa que existe é `idx_veiculos_placa` (não-único). Resultado: dois fluxos diferentes podem inserir o mesmo veículo sem qualquer guardrail no banco.
 
----
+2. **Cadastros "soltos" sem cotação.**
+   O Fabio foi criado como associado + veículo, mas **nunca teve cotação**. Algum fluxo (admin ou import) inseriu o veículo direto sem passar pela checagem de duplicidade da cotação. Por isso ele ficou "limbo" e não disparou nenhum bloqueio.
 
-### FASE 1 — Race Conditions e Duplicação de Ativação (CRÍTICO #1)
+3. **Sem normalização de chave.**
+   `placa`, `chassi`, `cpf` são gravados como o usuário digitou (com/sem hífen, com/sem máscara, espaços, maiúsculas/minúsculas). Mesmo se houvesse um UNIQUE, ele falharia em detectar `KXD-6881` vs `KXD6881`.
 
-**Erros cobertos:** 1, 2, 3 (duplicate entry points para `status='ativo'`).
+4. **`fn_validar_campos_ativacao` e `ativar-associado` validam só campos do próprio associado** — não checam se o veículo já existe vinculado a outra pessoa.
 
-1. Em `useAprovacaoMonitoramento.ts` e `useVistoriaCompletaAnalise.ts`, ambos chamam uma nova edge function única **`ativar-associado`** que:
-   - Adquire advisory lock via `fn_lock_ativacao`.
-   - Lê estado atual (`SELECT ... FOR UPDATE`).
-   - Valida pré-condições (contrato assinado, instalação aprovada, vistoria aprovada).
-   - Aplica transição idempotente (se já `ativo`, retorna sucesso sem reexecutar side effects).
-   - Loga em `ativacao_status_log`.
-2. Em `aprovar-proposta/index.ts`, substituir o bulk update por `UPDATE ... WHERE status = $expected_status` (compare-and-swap), retornando erro 409 se webhook concorrente já mudou o estado.
-3. Remover qualquer outro caminho que escreva `status='ativo'` direto na tabela — bloquear via trigger `BEFORE UPDATE` que rejeita transições não originadas pela edge function (checa `current_setting('app.ativacao_source', true)`).
+5. **SGA `cadastrar_veiculo` está reciclando erro genérico ("Não aceitável") sem reconhecer "já existe"** — então nem a integração consegue se defender.
 
 ---
 
-### FASE 2 — Sincronizações SGA/Softruck/Rede com Garantia de Entrega (CRÍTICOS #2, #4)
+## Plano de correção (em fases)
 
-**Erros cobertos:** sync fire-and-forget, vazamentos em reprovação, falhas silenciosas em webhooks de pagamento.
+### Fase A — Conter o sangramento (migration imediata)
 
-1. **Eliminar fire-and-forget**: substituir todas as chamadas `fetch().catch()` em `aprovar-proposta`, `useAtivacoes.ts`, `asaas-webhook` e `cron-suspender-inadimplentes` por enfileiramento síncrono em `integration_retry_queue` com status `pending`.
-2. **Worker único `process-integration-queue`** (cron a cada 1 min) que:
-   - Pega lote de até 50 itens `pending` ou `failed` com `next_attempt_at <= now()`.
-   - Executa com `AbortSignal.timeout(15000)`.
-   - Backoff exponencial (1min, 5min, 30min, 2h, 6h) até 5 tentativas; depois marca `dead_letter` e dispara alerta no `relatos_erros`.
-3. **Reprovação de instalação** (`useReprovarInstalacaoMonitoramento`): além de reverter status do associado, enfileirar:
-   - `softruck:desativar_dispositivo`
-   - `rede:desvincular_cliente`
-   - `sga:cancelar_associado` (se já sincronizado)
-   - Update em `contratos.status = 'cancelado_reprovacao'` para parar cobrança recorrente.
+Adicionar guards no banco que **impedem** novas duplicidades, mesmo se o app estiver com bug.
 
----
+1. Função `public.fn_normalizar_placa(text)` → `UPPER + remove [^A-Z0-9]`.
+   Função `public.fn_normalizar_chassi(text)` → `UPPER + remove [^A-Z0-9]`.
+   Função `public.fn_normalizar_doc(text)` → só dígitos.
 
-### FASE 3 — Validação de Pré-Requisitos e Bloqueio de Estados Inválidos (CRÍTICO #5)
+2. **Índices únicos parciais** em `veiculos`, ignorando registros já cancelados/recusados (para não quebrar histórico):
+   ```sql
+   CREATE UNIQUE INDEX uniq_veiculos_placa_ativa
+     ON veiculos (fn_normalizar_placa(placa))
+     WHERE placa IS NOT NULL AND status NOT IN ('cancelado','recusado');
 
-**Erros cobertos:** campos obrigatórios não validados, cancelamento durante execução em campo, instalação pós-cancelamento.
+   CREATE UNIQUE INDEX uniq_veiculos_chassi_ativa
+     ON veiculos (fn_normalizar_chassi(chassi))
+     WHERE chassi IS NOT NULL AND status NOT IN ('cancelado','recusado');
+   ```
+   Antes de criar, **resolver os 2 casos existentes** (passo C abaixo) — senão o `CREATE INDEX` falha.
 
-1. Edge function `ativar-associado` (Fase 1) chama `fn_validar_campos_ativacao` antes de prosseguir; se retornar campos faltantes, retorna 422 com lista — UI exibe modal bloqueante.
-2. Mesma validação aplicada na **aprovação do monitor** e na **finalização da instalação em campo** (não só no momento de virar `ativo`).
-3. **Trigger `trg_bloquear_instalacao_se_cancelado`** em `instalacoes` BEFORE UPDATE: rejeita `status='concluida'` se o associado estiver em `cancelado`, `cancelamento_solicitado` ou `inadimplente_terminal`.
-4. Trigger espelhado em `vistorias` e `servicos` para mesma proteção cruzada.
+3. Trigger `BEFORE INSERT/UPDATE` em `veiculos` que:
+   - normaliza `placa`/`chassi` no próprio registro;
+   - bloqueia (`RAISE EXCEPTION`) se já existe outro veículo ativo de **outro associado** com mesma placa **ou** mesmo chassi;
+   - mensagem clara: "Veículo placa X já está cadastrado para o associado Y (CPF Z)".
 
----
+4. Index único em `associados (fn_normalizar_doc(cpf))` (parcial, status não terminal). Já existe? Verificar; se não, adicionar.
 
-### FASE 4 — Estados Limbo e Cleanup Automático
+### Fase B — Pré-validação no fluxo de criação
 
-**Erros cobertos:** associados presos em `aguardando_instalacao`/`assinado`, `aprovado_em` órfão, transições falhadas sem retry.
+Mesmo com os guards do banco, queremos UX clara antes do erro 23505.
 
-1. **Cron `cron-detectar-limbo-ativacao`** (a cada 30 min):
-   - Identifica associados em `aguardando_instalacao` há > 72h sem agendamento ativo → cria tarefa em `relatos_erros` com severidade média.
-   - Identifica `assinado` com `aprovado_em` preenchido e contrato Autentique completo há > 1h → reenfileira `ativar-associado`.
-   - Identifica instalações `em_andamento` há > 24h → notifica coordenador de monitoramento.
-2. **Dashboard `/diretoria/saude-ativacao`** consumindo `ativacao_status_log` + `integration_retry_queue` mostrando: funil em tempo real, itens travados, taxa de sucesso por integração, dead letters.
+1. RPC `fn_checar_disponibilidade_veiculo(_placa, _chassi, _associado_id)` que retorna:
+   ```json
+   { "disponivel": false, "conflito": "placa", "associado_existente": "...", "status": "ativo" }
+   ```
+2. Chamar essa RPC em:
+   - `useCriarCotacao` / fluxo de cotação (já hoje deve checar — verificar);
+   - `useIncluirVeiculo` (inclusão em associado existente);
+   - **Fluxo admin de cadastro avulso** (o que criou o Fabio sem cotação);
+   - `aprovar-proposta` antes de aprovar (defesa em profundidade).
+3. Bloquear `ativar-associado` se a checagem detectar conflito ativo com outro associado.
 
----
+### Fase C — Saneamento dos casos existentes
 
-### FASE 5 — Triggers Silenciosos e Permissões RLS
+1. Caso `KXD6881` (Fabio × Vitória):
+   - Vitória está ativa, com instalação concluída e código Hinova `30000` → **mantém**.
+   - Fabio está só como `pendente_vistoria` sem cotação/contrato → **marcar veículo como `recusado`** com motivo "duplicidade detectada — placa pertence a outro associado ativo" e **associado como `recusado`** (ou mover para um status específico tipo `duplicado_bloqueado`). Registrar em `associados_historico`.
+2. Caso `TUF2F28` — mesmo tratamento: identificar qual é o "bom" (com contrato/instalação) e recusar o outro.
+3. Script SQL de auditoria salvo em `/mnt/documents/duplicidades_veiculos.csv` com a lista completa para o usuário conferir antes de aplicar.
 
-**Erros cobertos:** `RAISE NOTICE` mascarando erros financeiros, RLS faltante para `prestador`/`instalador`.
+### Fase D — Defesa na integração SGA
 
-1. Refatorar `fn_estorno_cancelamento` e `trigger_calcular_comissao`:
-   - Substituir `RAISE NOTICE` por `RAISE EXCEPTION` quando a falha for em dado financeiro (estorno, comissão).
-   - Manter `NOTICE` apenas para casos verdadeiramente opcionais, e nesses casos gravar em `relatos_erros` automaticamente.
-2. Adicionar políticas RLS para `prestador` e `instalador` em: `instalacoes`, `vistorias`, `servicos`, `agendamentos_base`, `associados` (somente registros vinculados ao próprio user_id).
-3. Edge function wrapper que, ao receber PostgrestError com código `42501` (insufficient_privilege), retorna mensagem amigável "Sem permissão para esta operação — contate o coordenador" em vez de erro genérico.
+1. Em `sga-sync` (ou função equivalente que faz `cadastrar_veiculo`): tratar resposta "Não aceitável" do Hinova reconhecendo o subcaso **"placa já cadastrada"** → marcar fila como `bloqueado_duplicidade` (status novo) em vez de continuar tentando 10x.
+2. Adicionar à `fn_detectar_limbo_ativacao` (Fase 4) um cenário `duplicidade_sga` que aparece no dashboard de Saúde da Ativação.
+3. Logar `bloqueado_duplicidade` em `ativacao_status_log` para visibilidade.
 
----
+### Fase E — Fechar a porta dos cadastros avulsos
 
-### Ordem de Deploy e Critério de Aceite
-
-```text
-Fase 0  → infra        → sem efeito visível
-Fase 1  → ativacao     → testar dupla aprovação simultânea (2 abas)
-Fase 2  → integrações  → testar reprovação + verificar Softruck/Rede desativados
-Fase 3  → validações   → tentar ativar com chassi vazio (deve bloquear)
-Fase 4  → limbo        → simular associado preso 72h
-Fase 5  → triggers/RLS → executar suite Deno tests
-```
-
-Cada fase entra atrás de feature flag (`ativacao_v2_*`) na tabela `feature_flags`, permitindo rollback instantâneo sem redeploy.
-
----
-
-### Detalhes Técnicos
-
-**Arquivos novos:**
-- `supabase/functions/ativar-associado/index.ts`
-- `supabase/functions/process-integration-queue/index.ts`
-- `supabase/functions/cron-detectar-limbo-ativacao/index.ts`
-- `src/pages/diretoria/SaudeAtivacao.tsx`
-- `src/hooks/useSaudeAtivacao.ts`
-
-**Arquivos modificados (principais):**
-- `src/hooks/useAprovacaoMonitoramento.ts`
-- `src/hooks/useVistoriaCompletaAnalise.ts`
-- `src/hooks/useReprovarInstalacaoMonitoramento.ts`
-- `src/hooks/useAtivacoes.ts`
-- `supabase/functions/aprovar-proposta/index.ts`
-- `supabase/functions/asaas-webhook/index.ts`
-- `supabase/functions/cron-suspender-inadimplentes/index.ts`
-
-**Migrations:** 6 (1 por fase, isoladas).
-
-**Tempo estimado:** 8–10 dias úteis (Fase 0–1 em paralelo possível; restante sequencial).
+1. Identificar o(s) ponto(s) onde se cria associado+veículo **sem cotação** (Fabio é a evidência).
+   Provavelmente: tela admin de "novo associado", import via API externa, ou edge function que duplica para o caminho de "cliente externo".
+2. Adicionar a mesma checagem da Fase B nesses pontos.
+3. Em sequência, criar uma **trigger ou check** que recuse veículos com `associado_id` cujo `cpf` já tenha outro veículo ativo com a mesma placa em outro associado (defesa final).
 
 ---
 
-**Aprovar para começar pela Fase 0 + Fase 1 (críticos #1, #2, #5)?** Posso entregar essas duas fases no primeiro deploy e seguir para Fase 2 após validação em homologação.
+## Detalhes técnicos
+
+### Arquivos / objetos esperados
+- Migration: `add_uniqueness_veiculos.sql` — funções de normalização + trigger + índices únicos parciais.
+- Migration: `fn_checar_disponibilidade_veiculo.sql`.
+- Hook novo: `src/hooks/useChecarDisponibilidadeVeiculo.ts`.
+- Edits: `aprovar-proposta/index.ts`, `ativar-associado/index.ts`, `sga-sync/index.ts` (nome real a confirmar olhando `supabase/functions`), e o(s) hook(s)/edge function(s) de criação de veículo avulso.
+- Saneamento: `data-fix-duplicidades-veiculos.sql` aplicado via insert tool após o usuário aprovar a lista.
+
+### Cenários cobertos pelos novos testes Deno
+- Tentar criar veículo com placa já existente em outro associado → 409 com mensagem clara.
+- Variações de máscara (`KXD-6881`, `kxd6881`, `KXD 6881`) caem no mesmo bloqueio.
+- Idempotência: re-inserção do mesmo veículo no mesmo associado **não** bloqueia.
+- `ativar-associado` falha com `duplicidade_veiculo` se houver outro ativo.
+
+### Memória a registrar (se aprovado)
+`mem://constraints/operations/veiculo-unico-por-associado-ativo` — "Placa e chassi normalizados são únicos entre associados não-terminais. Cadastros avulsos sem cotação devem passar por `fn_checar_disponibilidade_veiculo`."
+
+---
+
+## Ordem de execução recomendada
+
+1. **Apresentar a lista completa de duplicidades** (export CSV) — você decide qual lado de cada par fica.
+2. Sanear (Fase C).
+3. Aplicar guards no banco (Fase A).
+4. Pré-validação no app + edge functions (Fases B, D, E).
+5. Testes Deno de regressão.
+
+Posso começar pela Fase A + export do CSV de duplicidades para você revisar antes do saneamento?
