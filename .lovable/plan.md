@@ -1,129 +1,109 @@
-# Plano definitivo para corrigir a atribuição de serviços no monitoramento
+# Plano: Sync SGA tolerante à ausência de código de plano
 
-## Achados confirmados
-- A fila manual mostra apenas:
-  - `servicos` com `profissional_id is null` e `status in ('pendente','agendada')`
-  - `agendamentos_base` com `atendido_por is null` e `status in ('agendado','pendente')`
-- O autoassign (`atribuir-proxima-tarefa`) também só considera `servicos` sem profissional com `status in ('pendente','agendada')`.
-- Os casos citados estão fora desses filtros, por isso “sumiram” da fila:
-  - `LTG3H67` → serviço `20810068-7282-4291-a1d1-55bb9e4ca96f` e instalação `82b36ad6-92cb-4429-99db-b696dc6e0af8` em `em_analise`, sem profissional
-  - `LTS3A98` → serviço `5b0980bb-aa3b-4679-a8f5-0c8f5c86dc63` e instalação `3a3ce140-fd0b-4960-8bc4-7fbf3e3c8df4` em `em_analise`, sem profissional
-- Há pelo menos mais 1 caso idêntico já ativo (`0KM91CD6`), então o problema é sistêmico e não isolado.
-- O log funcional prova a regressão:
-  - `LTS3A98` foi atribuído manualmente e depois devolvido; após isso terminou em `em_analise`
-  - `LTG3H67` foi atribuído manualmente e depois também terminou em `em_analise`
-- Não encontrei evidência de erro recente no Edge Function de autoatribuição. O problema principal é de estado no banco/sincronização, não de runtime.
+## Problema confirmado
 
-## Causa raiz
-Há uma combinação perigosa de 3 fatores:
+Na `supabase/functions/sga-hinova-sync/index.ts`, linhas **1494–1526**, o bloco de resolução de plano **aborta a sync com `return`** em três casos:
 
-1. A RPC `realocar_servico` passou a gravar `instalacoes.status = 'em_analise'` quando o destino é fila/base sem profissional.
-2. A trigger `sync_instalacao_update_to_servicos()` propaga esse `em_analise` para `servicos.status`.
-3. A UI e o autoassign ignoram `em_analise` para fila de atribuição.
+1. `plano_id` não encontrado em `planos`
+2. `planoRow.codigo_sga_plano` ausente
+3. `codigo_sga_plano` inválido (não numérico)
 
-Resultado:
-```text
-Realocação/devolução -> instalação vai para em_analise
-                     -> trigger sincroniza serviço para em_analise
-                     -> serviço sai da fila manual e da autoatribuição
-                     -> limbo operacional
+Como esse bloco roda **depois** de `/associado/cadastrar` (linha 1118) e **antes** de `/veiculo/cadastrar` (linha 1605), o associado é criado no Hinova mas o veículo não — exatamente o cenário relatado (~60% das falhas: planos "5%" sem `codigo_sga_plano`).
+
+O payload do veículo (linhas 1579–1602) já é construído com **spread condicional**:
+```ts
+...(codigoPlanoSga !== null && { codigo_plano: codigoPlanoSga }),
+...(valorMensalidadePayload !== null && { valor_mensalidade: ... }),
+...(valorAdesaoPayload !== null && { valor_adesao: ... }),
+...(produtosVinculados.length > 0 && { produtos_vinculados: ... }),
+```
+Ou seja, **a infraestrutura para enviar veículo sem plano já existe** — só o `return` precoce está bloqueando.
+
+## Regra de negócio (conforme solicitado)
+
+- Resolução é feita **exclusivamente pelo `codigo_sga_plano`** (numérico). **Nunca** por nome/sufixo/prefixo.
+- **Com código válido** → envia associado + veículo + plano + benefícios + coberturas (comportamento atual).
+- **Sem código (ausente, vazio, inválido ou plano não encontrado)** → envia somente associado + veículo. Hinova usa o plano default da conta. Ajustes finos ficam para o operador no SGA.
+
+## Mudanças
+
+### Arquivo único: `supabase/functions/sga-hinova-sync/index.ts` (linhas 1489–1577)
+
+Substituir os três blocos `return` por **warnings + continue**, mantendo `codigoPlanoSga = null`:
+
+```ts
+let codigoPlanoSga: number | null = null;
+let valorMensalidadePayload: number | null = null;
+let valorAdesaoPayload: number | null = null;
+const produtosVinculados: { codigo_produto: number; valor: number }[] = [];
+
+if (contrato?.plano_id) {
+  const { data: planoRow } = await supabase
+    .from('planos')
+    .select('id, nome, codigo_sga_plano, valor_adesao')
+    .eq('id', contrato.plano_id)
+    .maybeSingle();
+
+  // Resolução estritamente pelo codigo_sga_plano. Sem código → segue sem plano.
+  const parsedCodigoPlano = planoRow?.codigo_sga_plano
+    ? Number.parseInt(planoRow.codigo_sga_plano, 10)
+    : NaN;
+
+  if (Number.isFinite(parsedCodigoPlano) && parsedCodigoPlano > 0) {
+    codigoPlanoSga = parsedCodigoPlano;
+
+    valorMensalidadePayload = contrato.valor_mensal != null ? Number(contrato.valor_mensal) : null;
+    valorAdesaoPayload = contrato.valor_adesao != null
+      ? Number(contrato.valor_adesao)
+      : (planoRow?.valor_adesao != null ? Number(planoRow.valor_adesao) : null);
+
+    // Benefícios e coberturas (mantém lógica atual, linhas 1535–1572)
+    // ...
+    console.log(`[SGA Sync] Plano resolvido: codigo_sga=${codigoPlanoSga}, ...`);
+  } else {
+    const motivo = !planoRow
+      ? 'plano_nao_encontrado_no_banco'
+      : (!planoRow.codigo_sga_plano ? 'plano_sem_codigo_sga' : 'codigo_sga_invalido');
+    console.warn(`[SGA Sync] ${motivo} (plano_id=${contrato.plano_id}). Enviando veículo sem codigo_plano — Hinova usará default da conta.`);
+    await logSync(_vid, _aid, 'resolver_plano', 'warning',
+      { plano_id: contrato.plano_id, motivo }, null,
+      'Veículo será enviado sem codigo_plano. Ajuste manual no SGA pode ser necessário.');
+  }
+} else {
+  console.warn('[SGA Sync] Contrato sem plano_id — cadastro será enviado sem codigo_plano.');
+}
 ```
 
-Além disso, existem triggers duplicadas e parcialmente sobrepostas em `servicos -> instalacoes`, o que aumenta o risco de regressão e estados ping-pong.
+**O que foi removido:**
+- `return` quando plano não existe
+- `return` quando `codigo_sga_plano` ausente
+- `return` quando `codigo_sga_plano` inválido
+- `update veiculos.status_sga = 'erro_sincronizacao'` nesses casos
+- `upsertSyncQueue` com motivos `plano_nao_encontrado` / `plano_sem_codigo_sga` / `plano_codigo_sga_invalido`
 
-## O que será implementado
+**O que foi mantido:**
+- Resolução estritamente pelo `codigo_sga_plano` (nunca por nome).
+- Envio de plano + valores + produtos_vinculados quando o código existe.
+- Spread condicional já existente nas linhas 1598–1601 — sem `codigo_plano`, Hinova usa default.
+- Log estruturado em `sga_sync_logs` com `status='warning'` para rastreabilidade dos veículos que entraram "incompletos".
 
-### 1) Corrigir a regra canônica de fila
-Padronizar que serviço “aguardando atribuição” nunca use `em_analise`.
+## Backfill
 
-Regra operacional:
-- Sem profissional e elegível para fila: `servicos.status = 'agendada'` ou `reagendada`
-- Base: manter `local_vistoria = 'base'` + `agendamentos_base` como fonte da fila de base
-- `em_analise` deixa de ser usado como estado de retorno para atribuição operacional
+Após o deploy, rodar reprocessamento dos 33 veículos identificados anteriormente que ficaram com `status_sga='erro_sincronizacao'` por causa de `plano_sem_codigo_sga` / `plano_nao_encontrado` / `plano_codigo_sga_invalido`. O reprocessamento usa o mesmo edge `sga-hinova-sync` — agora ele vai concluir o cadastro do veículo no Hinova mesmo sem código de plano.
 
-### 2) Corrigir a RPC `realocar_servico`
-Ajustar a RPC para que:
-- `destino='fila'` não grave mais `instalacoes.status = 'em_analise'`
-- `destino='base'` também não empurre o serviço para limbo
-- `servicos`, `instalacoes` e `agendamentos_base` terminem em estados compatíveis com os filtros reais da fila
-- toda realocação escreva log consistente
+Filtro do backfill (consulta em `sga_sync_queue`):
+```sql
+status_atual IN ('plano_sem_codigo_sga','plano_nao_encontrado','plano_codigo_sga_invalido')
+```
 
-### 3) Eliminar conflitos de sincronização
-Revisar e consolidar as triggers/funções de sincronização:
-- `sync_instalacao_update_to_servicos`
-- `sync_servico_to_instalacao`
-- `sync_servicos_to_instalacao`
+## Fora de escopo
 
-Objetivo:
-- remover sobreposição
-- impedir regressão de status por efeito colateral
-- definir um fluxo claro de sincronização para status operacionais
-
-Direção proposta:
-- `servicos` como fonte canônica da atribuição operacional
-- `instalacoes` sincroniza apenas os campos realmente necessários de execução
-- atualizações vindas de `instalacoes` não podem tirar um serviço elegível da fila sem regra explícita
-
-### 4) Blindar o mapeamento de status
-Ajustar `map_to_status_servico` e a lógica das triggers para que status internos de instalação não caiam em estados invisíveis para a fila por acidente.
-
-Também vou revisar os caminhos que atualizam instalação/serviço fora da RPC principal para garantir que nenhum deles volte a gravar `em_analise` como estado de fila.
-
-### 5) Reconciliar os dados já corrompidos
-Executar uma correção de dados para restaurar os serviços em limbo.
-
-Escopo mínimo já confirmado:
-- `LTG3H67`
-- `LTS3A98`
-- `0KM91CD6`
-
-Escopo completo:
-- localizar todos os `servicos.tipo='instalacao'` com:
-  - `profissional_id is null`
-  - `status = 'em_analise'`
-  - vínculo com instalação ativa
-- recolocar esses registros no estado correto de fila
-- reconstituir `agendamentos_base` quando aplicável
-
-### 6) Criar monitoramento preventivo
-Adicionar diagnóstico permanente para detectar automaticamente:
-- serviço sem profissional em status fora da fila
-- divergência `servicos.status` x `instalacoes.status`
-- serviço/base sem registro correspondente
-- itens que estavam atribuídos e ficaram sem técnico fora dos estados esperados
-
-Isso pode ser exposto como query de auditoria e/ou card interno no monitoramento.
-
-### 7) Validar fim a fim
-Após a correção, validar os fluxos críticos:
-- atribuir manualmente
-- devolver à fila
-- reatribuir
-- realocar para base
-- realocar para rota
-- técnico iniciar execução
-- item voltar a aparecer corretamente na aba de atribuição quando necessário
-
-Casos obrigatórios de validação:
-- `LTG3H67`
-- `LTS3A98`
-
-## Entregáveis
-- Correção definitiva da RPC de realocação
-- Consolidação/hardening das triggers de sincronização
-- Backfill dos serviços atualmente em limbo
-- Relatório final com os registros recuperados
-- Checklist de validação dos fluxos de atribuição
-- Mecanismo de detecção de novos limbos
-
-## Detalhes técnicos
-- Hoje o bug nasce porque o status `em_analise` é aceito no banco, mas não é aceito pela fila manual nem pela autoatribuição.
-- Há acoplamento bidirecional entre `servicos` e `instalacoes`; isso precisa ser reduzido para evitar sobrescritas involuntárias.
-- A correção não será só visual: inclui regra de negócio, sincronização e saneamento dos dados já afetados.
+- **Não** vou cadastrar `codigo_sga_plano` para os planos "5%" — isso é decisão do usuário/operação no SGA.
+- **Não** vou alterar a lógica de associado/cadastrar nem a resolução de FIPE/ano.
+- **Não** mexo em outras causas (token expirado, conflito de placa, FIPE incompatível) — são tickets separados já mapeados.
 
 ## Resultado esperado
-Ao final:
-- os serviços não voltarão a “sumir” da fila por troca indevida para `em_analise`
-- os itens em limbo voltarão a ser atribuíveis
-- a aba de serviços/monitoramento recuperará consistência entre fila, execução e histórico
-- novos casos passarão a ser detectados antes de impactar a operação
+
+- Causa #1 (~60% das falhas) eliminada: associado **e** veículo passam a ser sincronizados sempre que os dados básicos forem válidos.
+- Veículos sem `codigo_plano` chegam ao SGA prontos para ajuste manual de plano pelo operador.
+- Logs `warning` permitem auditoria de quais veículos precisam de revisão manual posterior.
