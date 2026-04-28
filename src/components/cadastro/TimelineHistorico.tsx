@@ -58,7 +58,9 @@ export type TipoEvento =
   | 'ressalva_registrada'
   | 'ressalva_aprovada_monitoramento'
   | 'ressalva_declinada_monitoramento'
-  | 'ressalva_instalacao';
+  | 'ressalva_instalacao'
+  | 'protecao_360_aprovada_monitoramento'
+  | 'protecao_360_reprovada_monitoramento';
 
 export interface EventoHistorico {
   id: string;
