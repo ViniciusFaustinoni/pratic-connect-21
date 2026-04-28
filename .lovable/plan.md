@@ -1,55 +1,129 @@
-# Sincronização SGA — diagnóstico das 33 placas + correção em 4 frentes
+# Plano definitivo para corrigir a atribuição de serviços no monitoramento
 
-## Estado atual (após últimas migrações)
+## Achados confirmados
+- A fila manual mostra apenas:
+  - `servicos` com `profissional_id is null` e `status in ('pendente','agendada')`
+  - `agendamentos_base` com `atendido_por is null` e `status in ('agendado','pendente')`
+- O autoassign (`atribuir-proxima-tarefa`) também só considera `servicos` sem profissional com `status in ('pendente','agendada')`.
+- Os casos citados estão fora desses filtros, por isso “sumiram” da fila:
+  - `LTG3H67` → serviço `20810068-7282-4291-a1d1-55bb9e4ca96f` e instalação `82b36ad6-92cb-4429-99db-b696dc6e0af8` em `em_analise`, sem profissional
+  - `LTS3A98` → serviço `5b0980bb-aa3b-4679-a8f5-0c8f5c86dc63` e instalação `3a3ce140-fd0b-4960-8bc4-7fbf3e3c8df4` em `em_analise`, sem profissional
+- Há pelo menos mais 1 caso idêntico já ativo (`0KM91CD6`), então o problema é sistêmico e não isolado.
+- O log funcional prova a regressão:
+  - `LTS3A98` foi atribuído manualmente e depois devolvido; após isso terminou em `em_analise`
+  - `LTG3H67` foi atribuído manualmente e depois também terminou em `em_analise`
+- Não encontrei evidência de erro recente no Edge Function de autoatribuição. O problema principal é de estado no banco/sincronização, não de runtime.
 
-| Bucket | Qtd | Placas |
-|---|---|---|
-| ✅ Já no SGA (sem ação) | 13 | PYN0C82, KOA4D63, LSQ6E05, KYS4C01, KWX3G43, PPC8C61, ZZZ3366, RFV2A76, LLR6D25, FOM7A27, KXV3F40, QXV0H02, QPC3C40 |
-| 🟡 Sincronizado parcial (`pendente_sga`) | 1 | RMF4F15 |
-| ⛔ Plano sem `codigo_sga_plano` | 6 | KPD8B52, KRH5G81, KYB9G10, LUJ9I51, PUS6J49, RVD2H32 |
-| 🐞 Bug TDZ no edge function | 3 | KQR2A87, SRL5G88, TUF2F28 (HUGO) |
-| 🔁 Pendente recuperável (>10 tent.) | 4 | HAT3D43, KXD6881 (VITÓRIA), LRA9681, KWX4D43 |
-| 🆕 Nunca enfileirado | 5 | KPJ4994, KPQ8J26, QUB1B14, TUB9C24, TUM3D59 |
-| 👯 Duplicidade de chassi | 2 | KXD6881 (FABIO LENO), TUF2F28 (MATHEUS) |
-| 👻 Não existe na base | 1 | RUP6G12 |
+## Causa raiz
+Há uma combinação perigosa de 3 fatores:
 
-## Causas-raiz confirmadas
+1. A RPC `realocar_servico` passou a gravar `instalacoes.status = 'em_analise'` quando o destino é fila/base sem profissional.
+2. A trigger `sync_instalacao_update_to_servicos()` propaga esse `em_analise` para `servicos.status`.
+3. A UI e o autoassign ignoram `em_analise` para fila de atribuição.
 
-1. **Bug TDZ** em `supabase/functions/sga-hinova-sync/index.ts`: as linhas 895 e 903 usam `codigoAssociadoHinova` antes da declaração na linha 949 → erro `Cannot access 'codigoAssociadoHinova' before initialization` para todo veículo cujo contrato cai nos caminhos "vendedor sem código SGA" / "contrato sem vendedor".
-2. **Planos "5%" sem `codigo_sga_plano`**: 17 planos têm `codigo_sga_plano = NULL`. A função aborta com `falha_permanente`/`plano_sem_codigo_sga`. Sem o código real do Hinova, **não é possível resolver via código** — depende da diretoria fornecer o mapeamento.
-3. **Veículos órfãos da fila**: criados antes da fila existir ou por aprovação que não emitiu o evento. Precisam de inserção manual em `sga_sync_queue`.
-4. **Duplicidade de chassi**: dois associados ativos com mesmo chassi. Operacional, não técnico.
+Resultado:
+```text
+Realocação/devolução -> instalação vai para em_analise
+                     -> trigger sincroniza serviço para em_analise
+                     -> serviço sai da fila manual e da autoatribuição
+                     -> limbo operacional
+```
 
-## Ações que serão executadas (após aprovação)
+Além disso, existem triggers duplicadas e parcialmente sobrepostas em `servicos -> instalacoes`, o que aumenta o risco de regressão e estados ping-pong.
 
-### Frente 1 — Fix do bug TDZ (raiz)
-Mover, em `sga-hinova-sync/index.ts`, a declaração `let codigoAssociadoHinova: number | null = (associado as any)?.codigo_hinova ?? null;` para o início do bloco (antes do PASSO 3.5, linha ~830) e remover a re-declaração com `let` na linha 949 (vira atribuição). Sem mudança de semântica.
+## O que será implementado
 
-### Frente 2 — Enfileirar os 5 órfãos
-Migração que faz `INSERT … ON CONFLICT DO UPDATE` em `sga_sync_queue` para os veículos:
-- KPJ4994 (cde763e9-eb0e-4c23-bbb2-8a38de21264b)
-- KPQ8J26 (04a5ca1f-c01f-4a95-9d58-a4c8bf713d96)
-- QUB1B14 (dc8c73bf-7bd9-45a8-9950-5453e23fe632)
-- TUB9C24 (3d78f886-77f4-4db8-927b-820d905b1f26)
-- TUM3D59 (55c2f9bc-9c16-4e63-a838-d2fbe143d5aa)
+### 1) Corrigir a regra canônica de fila
+Padronizar que serviço “aguardando atribuição” nunca use `em_analise`.
 
-Status `pendente`, `tentativas=0`, `proximo_reenvio_em=now()`.
+Regra operacional:
+- Sem profissional e elegível para fila: `servicos.status = 'agendada'` ou `reagendada`
+- Base: manter `local_vistoria = 'base'` + `agendamentos_base` como fonte da fila de base
+- `em_analise` deixa de ser usado como estado de retorno para atribuição operacional
 
-### Frente 3 — Resetar fila dos recuperáveis e disparar sync
-Para HAT3D43, KXD6881 (VITÓRIA), LRA9681, KWX4D43, KQR2A87, SRL5G88, TUF2F28 (HUGO), RMF4F15 e os 5 órfãos da Frente 2: zerar `tentativas` e `proximo_reenvio_em=now()`. Em seguida, invocar a edge function `sga-hinova-sync` para cada `veiculo_id` (script único disparando em série, com log do resultado).
+### 2) Corrigir a RPC `realocar_servico`
+Ajustar a RPC para que:
+- `destino='fila'` não grave mais `instalacoes.status = 'em_analise'`
+- `destino='base'` também não empurre o serviço para limbo
+- `servicos`, `instalacoes` e `agendamentos_base` terminem em estados compatíveis com os filtros reais da fila
+- toda realocação escreva log consistente
 
-### Frente 4 — Bloqueios não-técnicos (relatório, sem ação automática)
-- **6 placas com plano 5% sem código**: aguardando diretoria informar o `codigo_sga_plano` real de cada um dos 17 planos. Vou listar os planos no relatório final para vocês preencherem.
-- **2 duplicidades de chassi**: precisa decisão de operações sobre qual associado é válido.
-- **RUP6G12**: não existe na base — operações precisa investigar.
+### 3) Eliminar conflitos de sincronização
+Revisar e consolidar as triggers/funções de sincronização:
+- `sync_instalacao_update_to_servicos`
+- `sync_servico_to_instalacao`
+- `sync_servicos_to_instalacao`
 
-## Entregáveis após execução
+Objetivo:
+- remover sobreposição
+- impedir regressão de status por efeito colateral
+- definir um fluxo claro de sincronização para status operacionais
 
-1. Patch em `supabase/functions/sga-hinova-sync/index.ts` (movimento da `let`).
-2. Migração SQL com os `INSERT/UPDATE` em `sga_sync_queue` (Frente 2 + reset da Frente 3).
-3. Relatório final (no chat) mostrando, placa a placa, o resultado do disparo do `sga-hinova-sync`: quantas conseguiram subir, quantas voltaram com erro novo, e a lista dos bloqueios remanescentes para serem tratados manualmente no SGA pela operação.
+Direção proposta:
+- `servicos` como fonte canônica da atribuição operacional
+- `instalacoes` sincroniza apenas os campos realmente necessários de execução
+- atualizações vindas de `instalacoes` não podem tirar um serviço elegível da fila sem regra explícita
 
-## O que não será feito sem decisão da diretoria
-- **Não** vou inventar `codigo_sga_plano` para os 17 planos 5%.
-- **Não** vou cancelar/excluir as duplicidades de chassi.
-- **Não** vou criar registro de RUP6G12.
+### 4) Blindar o mapeamento de status
+Ajustar `map_to_status_servico` e a lógica das triggers para que status internos de instalação não caiam em estados invisíveis para a fila por acidente.
+
+Também vou revisar os caminhos que atualizam instalação/serviço fora da RPC principal para garantir que nenhum deles volte a gravar `em_analise` como estado de fila.
+
+### 5) Reconciliar os dados já corrompidos
+Executar uma correção de dados para restaurar os serviços em limbo.
+
+Escopo mínimo já confirmado:
+- `LTG3H67`
+- `LTS3A98`
+- `0KM91CD6`
+
+Escopo completo:
+- localizar todos os `servicos.tipo='instalacao'` com:
+  - `profissional_id is null`
+  - `status = 'em_analise'`
+  - vínculo com instalação ativa
+- recolocar esses registros no estado correto de fila
+- reconstituir `agendamentos_base` quando aplicável
+
+### 6) Criar monitoramento preventivo
+Adicionar diagnóstico permanente para detectar automaticamente:
+- serviço sem profissional em status fora da fila
+- divergência `servicos.status` x `instalacoes.status`
+- serviço/base sem registro correspondente
+- itens que estavam atribuídos e ficaram sem técnico fora dos estados esperados
+
+Isso pode ser exposto como query de auditoria e/ou card interno no monitoramento.
+
+### 7) Validar fim a fim
+Após a correção, validar os fluxos críticos:
+- atribuir manualmente
+- devolver à fila
+- reatribuir
+- realocar para base
+- realocar para rota
+- técnico iniciar execução
+- item voltar a aparecer corretamente na aba de atribuição quando necessário
+
+Casos obrigatórios de validação:
+- `LTG3H67`
+- `LTS3A98`
+
+## Entregáveis
+- Correção definitiva da RPC de realocação
+- Consolidação/hardening das triggers de sincronização
+- Backfill dos serviços atualmente em limbo
+- Relatório final com os registros recuperados
+- Checklist de validação dos fluxos de atribuição
+- Mecanismo de detecção de novos limbos
+
+## Detalhes técnicos
+- Hoje o bug nasce porque o status `em_analise` é aceito no banco, mas não é aceito pela fila manual nem pela autoatribuição.
+- Há acoplamento bidirecional entre `servicos` e `instalacoes`; isso precisa ser reduzido para evitar sobrescritas involuntárias.
+- A correção não será só visual: inclui regra de negócio, sincronização e saneamento dos dados já afetados.
+
+## Resultado esperado
+Ao final:
+- os serviços não voltarão a “sumir” da fila por troca indevida para `em_analise`
+- os itens em limbo voltarão a ser atribuíveis
+- a aba de serviços/monitoramento recuperará consistência entre fila, execução e histórico
+- novos casos passarão a ser detectados antes de impactar a operação
