@@ -139,6 +139,9 @@ export function EtapaDadosPessoaisDocumentos({
   const [mostrarManualEndereco, setMostrarManualEndereco] = useState(false);
   const [camposManuais, setCamposManuais] = useState<Set<string>>(new Set());
 
+  // Marcação 0KM do veículo (fallback quando OCR falha ou cliente declara veículo novo)
+  const [isZeroKm, setIsZeroKm] = useState(false);
+
   const setCampoManual = useCallback((campo: keyof DadosExtraidos, valor: any) => {
     setDadosExtraidos(prev => ({ ...prev, [campo]: valor }));
     setCamposManuais(prev => {
