@@ -120,6 +120,38 @@ export function useAssociados({ filters, pagination, enabled = true }: UseAssoci
           veiculos (*)
         `, { count: 'exact' });
 
+      // Pré-busca em contratos quando filtra por consultor ou tipo de adesão
+      if (filters?.vendedor_id || (filters?.tipos_entrada && filters.tipos_entrada.length > 0)) {
+        let cq = supabase
+          .from('contratos')
+          .select('associado_id')
+          .not('associado_id', 'is', null);
+
+        if (filters.vendedor_id) {
+          cq = cq.eq('vendedor_id', filters.vendedor_id);
+        }
+        if (filters.tipos_entrada && filters.tipos_entrada.length > 0) {
+          const tipos = expandTipoEntradaAliases(filters.tipos_entrada);
+          cq = cq.in('tipo_entrada', tipos);
+        }
+
+        const { data: contratosData, error: cErr } = await cq.limit(50000);
+        if (cErr) throw cErr;
+
+        const associadoIds = Array.from(
+          new Set((contratosData || []).map((r: any) => r.associado_id).filter(Boolean))
+        );
+
+        if (associadoIds.length === 0) {
+          return {
+            associados: [] as AssociadoWithRelations[],
+            pagination: { page, pageSize, total: 0, totalPages: 0 },
+          };
+        }
+
+        query = query.in('id', associadoIds);
+      }
+
       // Filtro por status (pode ser array)
       if (filters?.status) {
         if (Array.isArray(filters.status)) {
