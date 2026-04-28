@@ -151,6 +151,8 @@ export default function Associados() {
       cidade: serverCidade,
       data_adesao_inicio: sheetFilters.data_adesao_inicio,
       data_adesao_fim: sheetFilters.data_adesao_fim,
+      vendedor_id: sheetFilters.vendedor_id,
+      tipos_entrada: sheetFilters.tipos_entrada,
     },
     pagination: { page, pageSize },
   });
@@ -160,6 +162,7 @@ export default function Associados() {
   const { data: contagem } = useAssociadosContagem();
   const { data: planos } = usePlanos();
   const { data: cidades } = useAssociadosCidades();
+  const { data: vendedores } = useVendedores();
   const updateStatus = useUpdateAssociadoStatus();
   const deleteAssociado = useDeleteAssociado();
 
