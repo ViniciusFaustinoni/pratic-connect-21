@@ -272,7 +272,28 @@ export function PropostaDetalhesTabs({
                   {proposta.veiculo_chassi ? (
                     <p className="text-sm font-medium text-foreground h-9 flex items-center px-3 bg-muted/30 rounded-lg border border-border/50">{proposta.veiculo_chassi}</p>
                   ) : (
-                    <Input type="text" value={veiculoChassi} onChange={(e) => setVeiculoChassi(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} placeholder="Digite o CHASSI" maxLength={17} className="h-9 rounded-lg" />
+                    <>
+                      <Input
+                        type="text"
+                        value={veiculoChassi}
+                        onChange={(e) => setVeiculoChassi(normalizeChassi(e.target.value))}
+                        placeholder="Digite o CHASSI (17 caracteres)"
+                        maxLength={17}
+                        className={cn(
+                          "h-9 rounded-lg font-mono uppercase",
+                          veiculoChassi && !isValidChassi(veiculoChassi) && "border-destructive focus-visible:ring-destructive"
+                        )}
+                      />
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className={cn(
+                          "text-muted-foreground",
+                          veiculoChassi && !isValidChassi(veiculoChassi) && "text-destructive"
+                        )}>
+                          {chassiHelperText(veiculoChassi) || 'Padrão VIN: 17 caracteres, sem I, O ou Q.'}
+                        </span>
+                        <span className="text-muted-foreground tabular-nums">{veiculoChassi.length}/17</span>
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
