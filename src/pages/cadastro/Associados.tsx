@@ -49,6 +49,7 @@ import {
 import { STATUS_ASSOCIADO_LABELS, type StatusAssociado } from '@/types/database';
 import { useAssociados, useAssociadosContagem, useAssociadosCidades, useUpdateAssociadoStatus, useDeleteAssociado } from '@/hooks/useAssociados';
 import { usePlanos } from '@/hooks/usePlanos';
+import { useVendedores } from '@/hooks/useVendedores';
 
 import { AssociadoFilters } from '@/components/cadastro/AssociadoFilters';
 import { ExportAssociadosDialog } from '@/components/cadastro/ExportAssociadosDialog';
