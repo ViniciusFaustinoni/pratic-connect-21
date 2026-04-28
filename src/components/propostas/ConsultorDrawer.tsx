@@ -227,6 +227,47 @@ export function ConsultorDrawer({ consultor, periodo, open, onClose }: Consultor
 
             <Separator />
 
+            {/* Configurações - Código SGA */}
+            <div>
+              <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                <KeyRound className="h-4 w-4" /> CÓDIGO SGA VOLUNTÁRIO
+              </h3>
+              {loadingProfile ? (
+                <Skeleton className="h-10 w-full" />
+              ) : !profile ? (
+                <p className="text-xs text-muted-foreground">Perfil não encontrado para este consultor.</p>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="codigo_sga_drawer" className="sr-only">Código SGA</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="codigo_sga_drawer"
+                      value={codigoSga}
+                      onChange={(e) => setCodigoSga(e.target.value.replace(/\D/g, '').slice(0, 20))}
+                      inputMode="numeric"
+                      pattern="\d*"
+                      maxLength={20}
+                      placeholder="Ex: 12345"
+                      className="bg-background"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => salvarSga.mutate()}
+                      disabled={!sgaDirty || salvarSga.isPending}
+                    >
+                      <Save className="h-4 w-4 mr-1" />
+                      Salvar
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Apenas números (até 20 dígitos). Usado na sincronização Hinova/SGA.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
             {/* Propostas Recentes */}
             <div>
               <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
