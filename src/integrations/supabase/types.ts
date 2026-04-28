@@ -2686,6 +2686,118 @@ export type Database = {
           },
         ]
       }
+      ativacao_limbo_alertas: {
+        Row: {
+          associado_id: string | null
+          created_at: string
+          detalhes: Json
+          id: string
+          instalacao_id: string | null
+          primeira_deteccao_em: string
+          resolvido_em: string | null
+          resolvido_por: string | null
+          severidade: string
+          status: string
+          tipo: string
+          ultima_deteccao_em: string
+          updated_at: string
+        }
+        Insert: {
+          associado_id?: string | null
+          created_at?: string
+          detalhes?: Json
+          id?: string
+          instalacao_id?: string | null
+          primeira_deteccao_em?: string
+          resolvido_em?: string | null
+          resolvido_por?: string | null
+          severidade?: string
+          status?: string
+          tipo: string
+          ultima_deteccao_em?: string
+          updated_at?: string
+        }
+        Update: {
+          associado_id?: string | null
+          created_at?: string
+          detalhes?: Json
+          id?: string
+          instalacao_id?: string | null
+          primeira_deteccao_em?: string
+          resolvido_em?: string | null
+          resolvido_por?: string | null
+          severidade?: string
+          status?: string
+          tipo?: string
+          ultima_deteccao_em?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ativacao_limbo_alertas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ativacao_limbo_alertas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "ativacao_limbo_alertas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "ativacao_limbo_alertas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "ativacao_limbo_alertas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ativacao_limbo_alertas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "ativacao_limbo_alertas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "ativacao_limbo_alertas_instalacao_id_fkey"
+            columns: ["instalacao_id"]
+            isOneToOne: false
+            referencedRelation: "instalacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ativacao_limbo_alertas_instalacao_id_fkey"
+            columns: ["instalacao_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["instalacao_id"]
+          },
+        ]
+      }
       ativacao_status_log: {
         Row: {
           actor_id: string | null
@@ -31909,6 +32021,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      fn_detectar_limbo_ativacao: { Args: never; Returns: Json }
       fn_determinar_numero_parcela_cobranca: {
         Args: { p_cobranca_id: string }
         Returns: number
