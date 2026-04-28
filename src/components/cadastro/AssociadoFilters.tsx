@@ -14,11 +14,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
+import { Check, ChevronsUpDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { STATUS_ASSOCIADO_LABELS, type StatusAssociado } from '@/types/database';
 
 export interface SheetFiltersValue {
@@ -27,6 +42,8 @@ export interface SheetFiltersValue {
   cidade?: string;
   data_adesao_inicio?: string;
   data_adesao_fim?: string;
+  vendedor_id?: string;
+  tipos_entrada?: string[];
 }
 
 interface AssociadoFiltersProps {
@@ -39,10 +56,23 @@ interface AssociadoFiltersProps {
     cidade?: string;
     data_adesao_inicio?: string;
     data_adesao_fim?: string;
+    vendedor_id?: string;
+    tipos_entrada?: string[];
   };
   planos?: { id: string; nome: string }[];
   cidades?: string[];
+  vendedores?: { id: string; nome: string }[];
 }
+
+const TIPO_ENTRADA_OPTIONS: { value: string; label: string }[] = [
+  { value: 'adesao', label: 'Nova Adesão' },
+  { value: 'inclusao', label: 'Inclusão de Veículo' },
+  { value: 'substituicao_placa', label: 'Substituição de Placa' },
+  { value: 'troca_titularidade', label: 'Troca de Titularidade' },
+  { value: 'reativacao', label: 'Reativação' },
+  { value: 'migracao', label: 'Migração' },
+  { value: 'indicacao', label: 'Indicação' },
+];
 
 const STATUS_OPTIONS: { value: StatusAssociado; label: string }[] = [
   { value: 'ativo', label: 'Ativo' },
