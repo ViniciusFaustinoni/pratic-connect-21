@@ -451,13 +451,18 @@ export function EtapaDadosPessoaisDocumentos({
       cnh: dadosExtraidos.cnh || undefined,
       cnh_validade: dadosExtraidos.cnh_validade || undefined,
       cnh_categoria: dadosExtraidos.cnh_categoria || undefined,
-      // Dados do veículo extraídos do CRLV (expandido)
+      // Dados do veículo extraídos do CRLV ou preenchidos manualmente
+      veiculo_placa: dadosExtraidos.veiculo_placa || undefined,
       veiculo_chassi: dadosExtraidos.veiculo_chassi || undefined,
       veiculo_renavam: dadosExtraidos.veiculo_renavam || undefined,
       veiculo_cor: dadosExtraidos.veiculo_cor || undefined,
       veiculo_combustivel: dadosExtraidos.veiculo_combustivel || undefined,
       veiculo_ano_fabricacao: dadosExtraidos.veiculo_ano_fabricacao || undefined,
+      veiculo_ano_modelo: dadosExtraidos.veiculo_ano_modelo || undefined,
       veiculo_numero_motor: dadosExtraidos.numero_motor || dadosExtraidos.veiculo_motor || undefined,
+      // Fallback manual: 0KM e procedência
+      veiculo_zero_km: isZeroKm || undefined,
+      veiculo_procedencia: procedenciaVeiculo || (isZeroKm ? 'Novo (zero km)' : undefined),
     };
     onSubmit(dados);
   };
