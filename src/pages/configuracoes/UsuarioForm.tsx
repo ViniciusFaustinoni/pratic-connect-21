@@ -290,6 +290,7 @@ export default function UsuarioForm() {
     capacidade_diaria: 10,
     grade_comissao_id: '' as string,
     agencia_forma_recebimento: 'comissao' as 'comissao' | 'em_maos',
+    codigo_sga_voluntario: '',
   });
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -361,6 +362,7 @@ export default function UsuarioForm() {
       capacidade_diaria: usuario.capacidade_diaria || 10,
       grade_comissao_id: '',
       agencia_forma_recebimento: ((usuario as any).agencia_forma_recebimento === 'em_maos' ? 'em_maos' : 'comissao') as 'comissao' | 'em_maos',
+      codigo_sga_voluntario: (usuario as any).codigo_sga_voluntario || '',
     };
     setFormData((prev) => {
       const same = prev.nome === next.nome && prev.email === next.email &&
@@ -372,7 +374,8 @@ export default function UsuarioForm() {
         prev.perfis.every((p, i) => p === next.perfis[i]) &&
         prev.regioes_atendimento.length === next.regioes_atendimento.length &&
         prev.capacidade_diaria === next.capacidade_diaria &&
-        prev.agencia_forma_recebimento === next.agencia_forma_recebimento;
+        prev.agencia_forma_recebimento === next.agencia_forma_recebimento &&
+        prev.codigo_sga_voluntario === next.codigo_sga_voluntario;
       return same ? prev : next;
     });
   }, [usuario]);
@@ -390,6 +393,13 @@ export default function UsuarioForm() {
           tipo: formData.tipo as any, ativo: formData.ativo,
           updated_at: new Date().toISOString(),
         };
+        // Código SGA aplicável a perfis comerciais
+        const isVendasProfile = formData.perfis.some(p => ['vendedor_clt', 'vendedor_externo', 'agencia', 'supervisor', 'gerente'].includes(p));
+        if (isVendasProfile) {
+          profileUpdate.codigo_sga_voluntario = formData.codigo_sga_voluntario.trim() || null;
+        } else {
+          profileUpdate.codigo_sga_voluntario = null;
+        }
         if (isAgencia) {
           profileUpdate.cnpj = formData.cnpj;
           profileUpdate.razao_social = formData.razao_social;
@@ -585,6 +595,23 @@ export default function UsuarioForm() {
                     <Input id="telefone" value={formData.telefone} onChange={(e) => setFormData({ ...formData, telefone: e.target.value })} placeholder="(00) 00000-0000" className="bg-background" />
                   </div>
                 </div>
+
+                {formData.perfis.some(p => ['vendedor_clt', 'vendedor_externo', 'agencia', 'supervisor', 'gerente'].includes(p)) && (
+                  <div className="space-y-2">
+                    <Label htmlFor="codigo_sga_voluntario">Código SGA Voluntário</Label>
+                    <Input
+                      id="codigo_sga_voluntario"
+                      value={formData.codigo_sga_voluntario}
+                      onChange={(e) => setFormData({ ...formData, codigo_sga_voluntario: e.target.value })}
+                      placeholder="Ex: 12345"
+                      maxLength={20}
+                      className="bg-background"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Usado na sincronização Hinova/SGA dos veículos vendidos por este usuário. Se vazio, usa o código global.
+                    </p>
+                  </div>
+                )}
 
                 {!isEditing && (
                   <div className="space-y-2">
