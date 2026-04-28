@@ -217,6 +217,97 @@ export function AssociadoFilters({
 
           <Separator />
 
+          {/* TIPO DE ADESÃO */}
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Tipo de Adesão</Label>
+            <div className="space-y-2">
+              {TIPO_ENTRADA_OPTIONS.map((option) => (
+                <div key={option.value} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`tipo-${option.value}`}
+                    checked={tiposEntrada.includes(option.value)}
+                    onCheckedChange={(checked) =>
+                      handleTipoEntradaChange(option.value, checked as boolean)
+                    }
+                  />
+                  <Label
+                    htmlFor={`tipo-${option.value}`}
+                    className="text-sm font-normal cursor-pointer"
+                  >
+                    {option.label}
+                  </Label>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* CONSULTOR */}
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Consultor</Label>
+            <Popover open={vendedorOpen} onOpenChange={setVendedorOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={vendedorOpen}
+                  className="w-full justify-between font-normal"
+                >
+                  <span className="truncate">
+                    {vendedorSelecionado?.nome || 'Todos os consultores'}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Buscar consultor..." />
+                  <CommandList>
+                    <CommandEmpty>Nenhum consultor encontrado.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="__all__"
+                        onSelect={() => {
+                          setVendedorId('');
+                          setVendedorOpen(false);
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            'mr-2 h-4 w-4',
+                            !vendedorId ? 'opacity-100' : 'opacity-0'
+                          )}
+                        />
+                        Todos os consultores
+                      </CommandItem>
+                      {vendedores?.map((v) => (
+                        <CommandItem
+                          key={v.id}
+                          value={v.nome}
+                          onSelect={() => {
+                            setVendedorId(v.id);
+                            setVendedorOpen(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              'mr-2 h-4 w-4',
+                              vendedorId === v.id ? 'opacity-100' : 'opacity-0'
+                            )}
+                          />
+                          {v.nome}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          <Separator />
+
           {/* PLANO */}
           <div className="space-y-3">
             <Label className="text-sm font-medium">Plano</Label>
