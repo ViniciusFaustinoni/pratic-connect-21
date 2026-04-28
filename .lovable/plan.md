@@ -1,63 +1,36 @@
-## Objetivo
+## Diagnóstico — Causa Raiz
 
-No fluxo público de cotação (link enviado ao cliente), quando o cliente envia o documento do veículo (CRLV, NF ou ATPV-e) e a IA **não consegue extrair os dados**, oferecer um formulário manual para que ele preencha chassi, ano, placa, etc., incluindo a marcação **0KM Sim/Não**.
+O contrato do CASSIO (`3388240f-...`, placa **LMX5A90**) foi assinado em **22/04 22:35 UTC** (≈19:35 BR), há mais de **5 dias**, e deveria ter sido suspenso pelo cron `cron-suspender-cobertura-inativacao` (executa de hora em hora, prazo padrão 72h). Não foi suspenso por **3 filtros bloqueantes** na função:
 
-Hoje já existe um botão escondido ("A IA não leu tudo? Preencher manualmente") que só aparece **depois** do upload. Falham dois cenários:
-1. Quando a IA falha por completo (nada extraído) o cliente fica sem caminho óbvio.
-2. Não há campo de **0KM** nem o submit do formulário envia essa informação.
+| # | Filtro na query | Valor real do contrato | Resultado |
+|---|---|---|---|
+| 1 | `tipo_vistoria = 'autovistoria'` | `NULL` | ❌ Excluído |
+| 2 | `status = 'ativo'` | `'assinado'` | ❌ Excluído |
+| 3 | (verificação de instalação) busca em `servicos` por `tipo='instalacao'` | A instalação está na tabela `instalacoes` (registro `agendada` desde 24/04 para 27/04) | ❌ Nunca encontraria mesmo se passasse |
 
-## Onde alterar
+Ou seja, a função só suspende um subconjunto muito específico (auto-vistoria + status ativo) e ignora o caminho normal de "vistoria com técnico" — que é o caso do CASSIO. Resultado: contratos como esse ficam invisíveis ao cron e nunca suspendem.
 
-Arquivo único: `src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx`
+Adicionalmente, a verificação de "já instalado" consulta a tabela errada (`servicos` em vez de `instalacoes`), o que pode causar falsos negativos mesmo nos casos que entram.
 
-## Mudanças
+## O que será corrigido
 
-### 1. Detectar quando o OCR falhou no documento do veículo
-Criar um flag `crlvSemDados`:
-- `true` quando há documento do veículo enviado com sucesso (`temCrlv`) **mas** nenhum dado relevante foi extraído (`!temDadosVeiculo` — sem placa nem chassi).
-- Quando `crlvSemDados` for `true`, abrir o painel manual automaticamente (`setMostrarManualVeiculo(true)`) e mostrar um aviso amarelo: *"Não conseguimos ler o documento. Preencha os dados do veículo abaixo."*
+### 1. Edge function `cron-suspender-cobertura-inativacao`
+- **Remover** o filtro `tipo_vistoria = 'autovistoria'` — a regra dos 48h vale para todos os tipos de vistoria/instalação (memória `suspensao-cobertura-48h`).
+- **Ampliar** o filtro de status para incluir contratos `assinado` e `ativo` (ambos representam contratos válidos aguardando instalação).
+- **Trocar a fonte de verdade da instalação**: verificar tabela `instalacoes` (status `concluida` ou `concluida_em IS NOT NULL`) em vez de `servicos`. Manter `servicos` como fallback para retrocompatibilidade.
+- **Ignorar** instalações com `dispensa_rastreador = true` (não exigem rastreador, então não devem suspender).
+- Atualizar a mensagem de WhatsApp para ser genérica ("instalação não realizada no prazo") em vez de citar auto-vistoria.
 
-### 2. Adicionar campo "0KM" no painel manual
-Dentro do bloco manual de veículo (linhas 758–809), adicionar antes da grade de inputs:
-- Toggle **"Veículo 0KM?"** (Sim/Não), default `Não`.
-- Quando **Sim**: tornar a placa opcional (placa fica vazia / "0KM"), exigir apenas chassi + ano modelo. Define `procedenciaVeiculo = 'Novo (zero km)'`.
-- Quando **Não**: exigir placa + chassi.
+### 2. Reprocessamento manual
+Após o deploy, invocar a função uma vez para processar o backlog acumulado (CASSIO e quaisquer outros contratos assinados há mais de 72h sem instalação concluída). Retornar a lista no resultado para auditoria.
 
-### 3. Tornar o painel manual disponível mesmo SEM documento
-Hoje só aparece com `temCrlv === true`. Alterar a condição para também aparecer quando o cliente enviou um arquivo mas o OCR retornou vazio. Mantém o botão "Preencher manualmente" em qualquer cenário onde o usuário queira.
+### 3. Atualizar memória
+Atualizar `mem://logic/operations/suspensao-cobertura-48h` para refletir que a regra cobre **todos** os contratos assinados (não só auto-vistoria) e que a fonte de verdade da instalação é a tabela `instalacoes`.
 
-### 4. Ajustar `temDadosVeiculo` para considerar 0KM
-Alterar:
-```ts
-const temDadosVeiculo = !!(
-  dadosExtraidos.veiculo_placa ||
-  dadosExtraidos.veiculo_chassi ||
-  (isZeroKm && dadosExtraidos.veiculo_chassi)
-);
-```
-(Em 0KM, basta chassi + ano para liberar o "Continuar".)
+## Fora do escopo
+- Não mexer no agendamento do cron (já roda de hora em hora — OK).
+- Não mexer no parâmetro `prazo_instalacao_autovistoria_horas` (continua configurável pela diretoria; default 72h).
+- Não criar novas tabelas nem migrations — só edge function + reprocessamento.
 
-### 5. Submeter o flag 0KM e procedência
-No `handleSubmit` (linha 419), incluir no payload:
-- `veiculo_zero_km: isZeroKm`
-- `veiculo_procedencia: procedenciaVeiculo` (já existe state, mas nunca era enviado)
-
-### 6. Adicionar campos ao tipo `DadosPessoaisForm`
-Em `src/components/cotacao-publica/FormularioDadosPessoais.tsx`, estender o schema com `veiculo_zero_km?: boolean` e `veiculo_procedencia?: string` (ambos opcionais).
-
-### 7. Persistência no consumidor
-Em `src/pages/public/CotacaoContratacao.tsx` (consumidor da etapa), ao receber `onSubmit`, gravar os novos campos junto com o resto na cotação/associado conforme já é feito (sem nova migration — `cotacoes.veiculo_zero_km` ou flag equivalente já existe; se não existir, será adicionada).
-
-## Critérios de aceitação
-
-- Cliente envia foto do CRLV; IA não extrai nada → painel manual abre **sozinho** com aviso destacado.
-- Cliente marca 0KM = Sim → campo placa some/fica opcional; chassi e ano modelo permanecem obrigatórios; botão "Continuar" libera.
-- Cliente marca 0KM = Não → fluxo igual ao atual (placa + chassi obrigatórios).
-- Marca/modelo **não** aparecem no fallback (já vêm da seleção FIPE da etapa anterior — confirmado no código).
-- Nenhuma quebra no fluxo atual quando a IA extrai os dados normalmente (painel manual continua opcional/recolhido).
-
-## Fora de escopo
-
-- Mexer no OCR / `document-ocr` edge function.
-- Adicionar marca/modelo manuais (já vêm da etapa de seleção FIPE).
-- Mudanças no fluxo de Documentos Pendentes pós-cotação (`DocumentosPendentesPublico.tsx`) — o pedido foi específico ao link público de cotação.
+## Resultado esperado
+Após a correção, na próxima execução horária (ou no reprocessamento manual) o veículo **LMX5A90** terá `cobertura_suspensa = true`, badge "Suspensa" aparecerá no header, e o WhatsApp de aviso será enviado ao CASSIO. O mesmo passará a valer para qualquer contrato futuro assinado e não instalado dentro do prazo.
