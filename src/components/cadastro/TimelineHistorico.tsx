@@ -244,6 +244,18 @@ const eventoConfig: Record<TipoEvento, EventoConfig> = {
     bgCor: 'bg-amber-100',
     label: 'Ressalva de instalação',
   },
+  protecao_360_aprovada_monitoramento: {
+    icone: ShieldCheck,
+    cor: 'text-green-600',
+    bgCor: 'bg-green-100',
+    label: 'Proteção 360 ativada',
+  },
+  protecao_360_reprovada_monitoramento: {
+    icone: XCircle,
+    cor: 'text-red-600',
+    bgCor: 'bg-red-100',
+    label: 'Proteção 360 reprovada',
+  },
 };
 
 // Filter categories
