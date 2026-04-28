@@ -51,7 +51,7 @@ import {
   PropostaApprovalStepper,
 } from '@/components/cadastro/proposta';
 import type { DocumentoAnexadoCompleto } from '@/types/documentos';
-import { isValidChassi, normalizeChassi, chassisDivergem } from '@/lib/chassi';
+import { isValidChassi, normalizeChassi } from '@/lib/chassi';
 
 // ============================================
 // COMPONENTE PRINCIPAL
