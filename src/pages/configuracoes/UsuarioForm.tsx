@@ -393,10 +393,18 @@ export default function UsuarioForm() {
           tipo: formData.tipo as any, ativo: formData.ativo,
           updated_at: new Date().toISOString(),
         };
-        // Código SGA aplicável a perfis comerciais
+        // Código SGA aplicável a perfis comerciais (apenas dígitos, até 20 caracteres)
         const isVendasProfile = formData.perfis.some(p => ['vendedor_clt', 'vendedor_externo', 'agencia', 'supervisor', 'gerente'].includes(p));
         if (isVendasProfile) {
-          profileUpdate.codigo_sga_voluntario = formData.codigo_sga_voluntario.trim() || null;
+          const codigoSga = (formData.codigo_sga_voluntario || '').trim();
+          if (codigoSga) {
+            if (!/^\d{1,20}$/.test(codigoSga)) {
+              throw new Error('Código SGA Voluntário deve conter apenas números (até 20 dígitos).');
+            }
+            profileUpdate.codigo_sga_voluntario = codigoSga;
+          } else {
+            profileUpdate.codigo_sga_voluntario = null;
+          }
         } else {
           profileUpdate.codigo_sga_voluntario = null;
         }
