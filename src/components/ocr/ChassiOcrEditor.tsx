@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Pencil, Save, X } from 'lucide-react';
+import { normalizeChassi, isValidChassi, chassiHelperText } from '@/lib/chassi';
 
 interface ChassiOcrEditorProps {
   vistoriaId: string;
