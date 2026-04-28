@@ -689,6 +689,14 @@ export default function AtribuicaoManualTab() {
         prestadorNome={linkResult?.prestadorNome || ''}
         prestadorTelefone={linkResult?.prestadorTelefone}
       />
+
+      {/* ── Devolver à Fila / Reatribuir ── */}
+      <DevolverFilaDialog
+        open={!!acaoDialog}
+        onOpenChange={(o) => { if (!o) setAcaoDialog(null); }}
+        servico={acaoDialog?.servico ?? null}
+        modoReatribuir={acaoDialog?.modo === 'reatribuir'}
+      />
     </DndContext>
   );
 }
