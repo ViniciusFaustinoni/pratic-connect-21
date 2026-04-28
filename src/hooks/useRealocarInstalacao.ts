@@ -1,51 +1,100 @@
+// =============================================================================
+// useRealocarInstalacao — hook ÚNICO de realocação de serviços.
+//
+// Tudo passa pela RPC `realocar_servico` (server-side, atômica, com auditoria).
+// Suporta 4 destinos:
+//   - 'fila'         → devolver à fila de atribuição manual (sem profissional)
+//   - 'profissional' → reatribuir direto a outro técnico
+//   - 'rota'         → mover para uma rota existente (instalador opcional)
+//   - 'base'         → realocar para uma oficina/base (cria agendamentos_base)
+//
+// O WhatsApp ao associado é opcional e é disparado pelo client com os dados
+// retornados pela RPC.
+// =============================================================================
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { PERIODO_LABEL, periodoToTime } from '@/lib/periodo-utils';
+import { PERIODO_LABEL } from '@/lib/periodo-utils';
 
-interface RealocarParaRotaParams {
-  instalacaoId: string;
-  rotaId: string | null; // null = enviar para fila de atribuição manual
-  instaladorId?: string | null;
-  dataAgendada: string; // yyyy-MM-dd
+export type DestinoRealocacao = 'fila' | 'profissional' | 'rota' | 'base';
+export type CategoriaRealocacao =
+  | 'nao_compareceu'
+  | 'tecnico_indisponivel'
+  | 'reagendamento_operacional'
+  | 'outro';
+
+export interface RealocarParaFilaParams {
+  instalacaoId: string;       // = servico_id (mantém nome legado)
+  dataAgendada: string;       // yyyy-MM-dd
   periodo: 'manha' | 'tarde';
   motivo: string;
-  notificarWhatsApp: boolean;
+  categoria?: CategoriaRealocacao;
+  notificarWhatsApp?: boolean;
 }
 
-interface RealocarParaBaseParams {
+export interface RealocarParaProfissionalParams extends RealocarParaFilaParams {
+  profissionalId: string;
+}
+
+export interface RealocarParaRotaParams {
   instalacaoId: string;
-  oficinaId: string;
-  oficinaNome: string;
+  rotaId: string | null;       // null → cai em 'fila'
+  instaladorId?: string | null;
   dataAgendada: string;
   periodo: 'manha' | 'tarde';
   motivo: string;
-  notificarWhatsApp: boolean;
+  categoria?: CategoriaRealocacao;
+  notificarWhatsApp?: boolean;
 }
 
-async function registrarHistorico(opts: {
+export interface RealocarParaBaseParams {
   instalacaoId: string;
-  associadoId: string;
+  oficinaId: string;
+  oficinaNome?: string;        // só para mensagem WhatsApp; RPC busca pelo id
+  dataAgendada: string;
+  periodo: 'manha' | 'tarde';
   motivo: string;
-  destino: 'rota' | 'base';
-  dadosNovos: Record<string, unknown>;
-  statusAnterior?: string | null;
-}) {
-  const { data: userData } = await supabase.auth.getUser();
-  await (supabase as any).from('associados_historico').insert({
-    associado_id: opts.associadoId,
-    instalacao_id: opts.instalacaoId,
-    tipo: 'status_alterado',
-    acao: 'realocada',
-    descricao: `Instalação realocada para ${opts.destino === 'rota' ? 'nova rota' : 'base'}. Motivo: ${opts.motivo}`,
-    motivo: opts.motivo,
-    status_anterior: opts.statusAnterior ?? null,
-    status_novo: 'agendada',
-    dados_novos: opts.dadosNovos as any,
-    usuario_id: userData?.user?.id ?? null,
-    executado_por: userData?.user?.id ?? null,
+  categoria?: CategoriaRealocacao;
+  notificarWhatsApp?: boolean;
+}
+
+interface RpcResult {
+  ok: boolean;
+  servico_id: string;
+  destino: DestinoRealocacao;
+  nova_data: string;
+  novo_periodo: 'manha' | 'tarde';
+  associado_nome: string | null;
+  associado_telefone: string | null;
+  veiculo_placa: string | null;
+  oficina_nome: string | null;
+}
+
+async function chamarRPC(args: {
+  servicoId: string;
+  destino: DestinoRealocacao;
+  motivo: string;
+  categoria: CategoriaRealocacao;
+  dataAgendada: string;
+  periodo: 'manha' | 'tarde';
+  profissionalId?: string | null;
+  rotaId?: string | null;
+  oficinaId?: string | null;
+}): Promise<RpcResult> {
+  const { data, error } = await supabase.rpc('realocar_servico' as any, {
+    _servico_id: args.servicoId,
+    _motivo: args.motivo,
+    _destino: args.destino,
+    _categoria: args.categoria,
+    _nova_data: args.dataAgendada,
+    _novo_periodo: args.periodo,
+    _profissional_id: args.profissionalId ?? null,
+    _rota_id: args.rotaId ?? null,
+    _oficina_id: args.oficinaId ?? null,
   });
+  if (error) throw error;
+  return data as unknown as RpcResult;
 }
 
 async function notificarAssociado(telefone: string | null | undefined, mensagem: string) {
@@ -57,6 +106,17 @@ async function notificarAssociado(telefone: string | null | undefined, mensagem:
   } catch (e) {
     console.warn('Falha ao enviar WhatsApp de realocação:', e);
   }
+}
+
+function mensagemRota(r: RpcResult, oficinaNome?: string) {
+  const dataFmt = format(new Date(r.nova_data + 'T00:00:00'), 'dd/MM/yyyy');
+  const placa = r.veiculo_placa ? ` do veículo ${r.veiculo_placa}` : '';
+  return `Olá ${r.associado_nome || ''}! Sua instalação${placa} foi reagendada para ${dataFmt} — ${PERIODO_LABEL[r.novo_periodo]}. Em breve nosso instalador entrará em contato. Equipe Pratic.`;
+}
+function mensagemBase(r: RpcResult, oficinaNomeFallback?: string) {
+  const dataFmt = format(new Date(r.nova_data + 'T00:00:00'), 'dd/MM/yyyy');
+  const nome = r.oficina_nome || oficinaNomeFallback || 'nossa base';
+  return `Olá ${r.associado_nome || ''}! Sua instalação foi remarcada para ser realizada na base *${nome}* em ${dataFmt} — ${PERIODO_LABEL[r.novo_periodo]}. Por favor, compareça com o veículo. Equipe Pratic.`;
 }
 
 export function useRealocarInstalacao() {
@@ -71,67 +131,73 @@ export function useRealocarInstalacao() {
     queryClient.invalidateQueries({ queryKey: ['agendamentos-base'] });
     queryClient.invalidateQueries({ queryKey: ['mapa-vistorias'] });
     queryClient.invalidateQueries({ queryKey: ['equipe'] });
+    queryClient.invalidateQueries({ queryKey: ['servicos-para-atribuir-manual'] });
+    queryClient.invalidateQueries({ queryKey: ['vistoriadores-ativos-manual'] });
+    queryClient.invalidateQueries({ queryKey: ['servicos-travados'] });
+    queryClient.invalidateQueries({ queryKey: ['servicos-campo-unificado'] });
+    queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
   };
 
+  // ---------- FILA ----------
+  const realocarParaFila = useMutation({
+    mutationFn: async (params: RealocarParaFilaParams) => {
+      const r = await chamarRPC({
+        servicoId: params.instalacaoId,
+        destino: 'fila',
+        motivo: params.motivo,
+        categoria: params.categoria || 'reagendamento_operacional',
+        dataAgendada: params.dataAgendada,
+        periodo: params.periodo,
+      });
+      if (params.notificarWhatsApp && r.associado_telefone) {
+        await notificarAssociado(r.associado_telefone, mensagemRota(r));
+      }
+      return r;
+    },
+    onSuccess: () => { invalidar(); toast.success('Serviço enviado para a fila de atribuição manual'); },
+    onError: (e: Error) => toast.error(`Erro ao devolver à fila: ${e.message}`),
+  });
+
+  // ---------- PROFISSIONAL (reatribuição direta) ----------
+  const reatribuirProfissional = useMutation({
+    mutationFn: async (params: RealocarParaProfissionalParams) => {
+      const r = await chamarRPC({
+        servicoId: params.instalacaoId,
+        destino: 'profissional',
+        motivo: params.motivo,
+        categoria: params.categoria || 'tecnico_indisponivel',
+        dataAgendada: params.dataAgendada,
+        periodo: params.periodo,
+        profissionalId: params.profissionalId,
+      });
+      if (params.notificarWhatsApp && r.associado_telefone) {
+        await notificarAssociado(r.associado_telefone, mensagemRota(r));
+      }
+      return r;
+    },
+    onSuccess: () => { invalidar(); toast.success('Serviço reatribuído'); },
+    onError: (e: Error) => toast.error(`Erro ao reatribuir: ${e.message}`),
+  });
+
+  // ---------- ROTA ----------
   const realocarParaRota = useMutation({
     mutationFn: async (params: RealocarParaRotaParams) => {
-      // Fonte única é `servicos` (tipo = instalacao)
-      const { data: serv, error: fetchErr } = await supabase
-        .from('servicos')
-        .select(`
-          id, status, associado_id,
-          associados:associados!servicos_associado_id_fkey(nome, telefone),
-          veiculos:veiculos!servicos_veiculo_id_fkey(placa, marca, modelo)
-        `)
-        .eq('id', params.instalacaoId)
-        .eq('tipo', 'instalacao' as any)
-        .single();
-      if (fetchErr) throw fetchErr;
-
-      const modoManual = params.rotaId === null;
-      const update: Record<string, unknown> = {
-        rota_id: params.rotaId, // pode ser null no modo manual
-        data_agendada: params.dataAgendada,
-        status: 'agendada',
-        local_vistoria: 'cliente',
+      // rotaId null → fila manual
+      const destino: DestinoRealocacao = params.rotaId === null ? 'fila' : 'rota';
+      const r = await chamarRPC({
+        servicoId: params.instalacaoId,
+        destino,
+        motivo: params.motivo,
+        categoria: params.categoria || 'reagendamento_operacional',
+        dataAgendada: params.dataAgendada,
         periodo: params.periodo,
-        hora_agendada: null,
-      };
-      if (modoManual) {
-        update.profissional_id = null;
-      } else if (params.instaladorId) {
-        update.profissional_id = params.instaladorId;
-      }
-
-      const { error: updErr } = await supabase
-        .from('servicos')
-        .update(update as any)
-        .eq('id', params.instalacaoId);
-      if (updErr) throw updErr;
-
-      await registrarHistorico({
-        instalacaoId: params.instalacaoId,
-        associadoId: (serv as any).associado_id,
-        motivo: modoManual
-          ? `${params.motivo} (enviada para fila de atribuição manual)`
-          : params.motivo,
-        destino: 'rota',
-        statusAnterior: (serv as any).status,
-        dadosNovos: {
-          rota_id: params.rotaId,
-          profissional_id: modoManual ? null : params.instaladorId,
-          data_agendada: params.dataAgendada,
-          periodo: params.periodo,
-          atribuicao_manual: modoManual,
-        },
+        rotaId: params.rotaId,
+        profissionalId: destino === 'rota' ? (params.instaladorId ?? null) : null,
       });
-
-      if (params.notificarWhatsApp && (serv as any).associados?.telefone) {
-        const dataFmt = format(new Date(params.dataAgendada + 'T00:00:00'), 'dd/MM/yyyy');
-        const placa = (serv as any).veiculos?.placa || '';
-        const msg = `Olá ${(serv as any).associados?.nome || ''}! Sua instalação${placa ? ` do veículo ${placa}` : ''} foi reagendada para ${dataFmt} — ${PERIODO_LABEL[params.periodo]}. Em breve nosso instalador entrará em contato. Equipe Pratic.`;
-        await notificarAssociado((serv as any).associados.telefone, msg);
+      if (params.notificarWhatsApp && r.associado_telefone) {
+        await notificarAssociado(r.associado_telefone, mensagemRota(r));
       }
+      return r;
     },
     onSuccess: (_d, vars) => {
       invalidar();
@@ -144,111 +210,31 @@ export function useRealocarInstalacao() {
     onError: (e: Error) => toast.error(`Erro ao realocar: ${e.message}`),
   });
 
+  // ---------- BASE ----------
   const realocarParaBase = useMutation({
     mutationFn: async (params: RealocarParaBaseParams) => {
-      // Fonte única é `servicos` (tipo = instalacao)
-      const { data: serv, error: fetchErr } = await supabase
-        .from('servicos')
-        .select(`
-          id, status, associado_id, instalacao_origem_id,
-          associados:associados!servicos_associado_id_fkey(nome, telefone),
-          veiculos:veiculos!servicos_veiculo_id_fkey(placa, marca, modelo, ano_modelo)
-        `)
-        .eq('id', params.instalacaoId)
-        .eq('tipo', 'instalacao' as any)
-        .single();
-      if (fetchErr) throw fetchErr;
-
-      // Resolver o ID real em `instalacoes` (FK de agendamentos_base aponta para instalacoes.id)
-      let instalacaoIdReal: string | null = (serv as any).instalacao_origem_id ?? null;
-      if (!instalacaoIdReal) {
-        // Fallback: tentar localizar instalação vinculada a este serviço
-        const { data: instFallback } = await (supabase as any)
-          .from('instalacoes')
-          .select('id')
-          .eq('servico_id', params.instalacaoId)
-          .maybeSingle();
-        instalacaoIdReal = instFallback?.id ?? null;
-      }
-      if (!instalacaoIdReal) {
-        throw new Error('Este serviço não possui instalação vinculada — não é possível realocá-lo para uma base.');
-      }
-
-      const veiculo = (serv as any).veiculos;
-      const veiculoDescricao = veiculo
-        ? `${veiculo.marca || ''} ${veiculo.modelo || ''} ${veiculo.ano_modelo || ''}`.trim()
-        : null;
-
-      // 0) Cancelar quaisquer agendamentos_base ativos da mesma instalação
-      // para garantir uma única fonte da verdade após a realocação.
-      await (supabase as any)
-        .from('agendamentos_base')
-        .update({
-          status: 'cancelado',
-          updated_at: new Date().toISOString(),
-          observacoes: 'Realocada para nova base',
-        })
-        .eq('instalacao_id', instalacaoIdReal)
-        .in('status', ['agendado', 'pendente', 'confirmado']);
-
-      // 1) Insert agendamentos_base com horario = canônico do período
-      const { error: agErr } = await (supabase as any)
-        .from('agendamentos_base')
-        .insert({
-          instalacao_id: instalacaoIdReal,
-          oficina_id: params.oficinaId,
-          data_agendada: params.dataAgendada,
-          horario: periodoToTime(params.periodo),
-          cliente_nome: (serv as any).associados?.nome || 'Cliente',
-          cliente_telefone: (serv as any).associados?.telefone || null,
-          veiculo_placa: veiculo?.placa || null,
-          veiculo_descricao: veiculoDescricao,
-          status: 'confirmado',
-          observacoes: `Realocada do limbo. Motivo: ${params.motivo}`,
-        });
-      if (agErr) throw agErr;
-
-      // 2) Update servicos
-      const { error: updErr } = await supabase
-        .from('servicos')
-        .update({
-          status: 'agendada',
-          local_vistoria: 'base',
-          rota_id: null,
-          data_agendada: params.dataAgendada,
-          periodo: params.periodo,
-          hora_agendada: null,
-        } as any)
-        .eq('id', params.instalacaoId);
-      if (updErr) throw updErr;
-
-      await registrarHistorico({
-        instalacaoId: params.instalacaoId,
-        associadoId: (serv as any).associado_id,
-        motivo: params.motivo,
+      const r = await chamarRPC({
+        servicoId: params.instalacaoId,
         destino: 'base',
-        statusAnterior: (serv as any).status,
-        dadosNovos: {
-          oficina_id: params.oficinaId,
-          oficina_nome: params.oficinaNome,
-          data_agendada: params.dataAgendada,
-          periodo: params.periodo,
-          local_vistoria: 'base',
-        },
+        motivo: params.motivo,
+        categoria: params.categoria || 'reagendamento_operacional',
+        dataAgendada: params.dataAgendada,
+        periodo: params.periodo,
+        oficinaId: params.oficinaId,
       });
-
-      if (params.notificarWhatsApp && (serv as any).associados?.telefone) {
-        const dataFmt = format(new Date(params.dataAgendada + 'T00:00:00'), 'dd/MM/yyyy');
-        const msg = `Olá ${(serv as any).associados?.nome || ''}! Sua instalação foi remarcada para ser realizada na base *${params.oficinaNome}* em ${dataFmt} — ${PERIODO_LABEL[params.periodo]}. Por favor, compareça com o veículo. Equipe Pratic.`;
-        await notificarAssociado((serv as any).associados.telefone, msg);
+      if (params.notificarWhatsApp && r.associado_telefone) {
+        await notificarAssociado(r.associado_telefone, mensagemBase(r, params.oficinaNome));
       }
+      return r;
     },
-    onSuccess: () => {
-      invalidar();
-      toast.success('Instalação realocada para a base!');
-    },
+    onSuccess: () => { invalidar(); toast.success('Instalação realocada para a base!'); },
     onError: (e: Error) => toast.error(`Erro ao realocar: ${e.message}`),
   });
 
-  return { realocarParaRota, realocarParaBase };
+  return {
+    realocarParaFila,
+    reatribuirProfissional,
+    realocarParaRota,
+    realocarParaBase,
+  };
 }
