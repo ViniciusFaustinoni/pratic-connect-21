@@ -39,19 +39,21 @@ export function useTarefaAtual() {
       // NÃO chamar supabase.auth.getUser() aqui — antes era feito a cada 5s
       // e gerava pressão imensa no serviço de Auth. O AuthContext já valida o user.
 
-      // Usar a nova RPC que consulta a tabela servicos
+      // Usar a RPC que consulta a tabela servicos
       const { data, error } = await supabase.rpc('buscar_tarefa_atual_profissional', {
         p_profissional_id: profissionalId
       });
 
+      // Defesa em profundidade: se a RPC falhar (ex.: schema drift),
+      // NÃO propaga o erro — loga e cai no fallback direto na tabela servicos
+      // para que a tela do técnico continue funcionando.
       if (error) {
-        console.error('Erro ao buscar tarefa atual:', error);
-        throw error;
+        console.error('[useTarefaAtual] RPC falhou, usando fallback:', error);
       }
 
-      // FALLBACK: Se RPC retornou vazio, buscar diretamente na tabela servicos
+      // FALLBACK: Se RPC falhou OU retornou vazio, buscar diretamente na tabela servicos
       let tarefa: any = null;
-      if (!data || data.length === 0) {
+      if (error || !data || data.length === 0) {
         const { data: fallbackData, error: fallbackError } = await supabase
           .from('servicos')
           .select(`
