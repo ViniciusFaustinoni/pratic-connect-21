@@ -102,6 +102,7 @@ export function AssociadoFilters({
   initialFilters,
   planos,
   cidades,
+  vendedores,
 }: AssociadoFiltersProps) {
   const [statusSelecionados, setStatusSelecionados] = useState<StatusAssociado[]>(
     Array.isArray(initialFilters?.status)
@@ -114,12 +115,25 @@ export function AssociadoFilters({
   const [cidade, setCidade] = useState(initialFilters?.cidade || 'all');
   const [dataInicio, setDataInicio] = useState(initialFilters?.data_adesao_inicio || '');
   const [dataFim, setDataFim] = useState(initialFilters?.data_adesao_fim || '');
+  const [vendedorId, setVendedorId] = useState(initialFilters?.vendedor_id || '');
+  const [vendedorOpen, setVendedorOpen] = useState(false);
+  const [tiposEntrada, setTiposEntrada] = useState<string[]>(
+    initialFilters?.tipos_entrada || []
+  );
 
   const handleStatusChange = (status: StatusAssociado, checked: boolean) => {
     if (checked) {
       setStatusSelecionados([...statusSelecionados, status]);
     } else {
       setStatusSelecionados(statusSelecionados.filter(s => s !== status));
+    }
+  };
+
+  const handleTipoEntradaChange = (tipo: string, checked: boolean) => {
+    if (checked) {
+      setTiposEntrada([...tiposEntrada, tipo]);
+    } else {
+      setTiposEntrada(tiposEntrada.filter(t => t !== tipo));
     }
   };
 
@@ -141,6 +155,8 @@ export function AssociadoFilters({
     if (cidade && cidade !== 'all') filters.cidade = cidade;
     if (dataInicio) filters.data_adesao_inicio = dataInicio;
     if (dataFim) filters.data_adesao_fim = dataFim;
+    if (vendedorId) filters.vendedor_id = vendedorId;
+    if (tiposEntrada.length > 0) filters.tipos_entrada = tiposEntrada;
 
     onApply(filters);
     onClose();
@@ -152,13 +168,19 @@ export function AssociadoFilters({
     setCidade('all');
     setDataInicio('');
     setDataFim('');
+    setVendedorId('');
+    setTiposEntrada([]);
   };
 
   const activeCount =
     statusSelecionados.length +
     (plano && plano !== 'all' ? 1 : 0) +
     (cidade && cidade !== 'all' ? 1 : 0) +
-    (dataInicio || dataFim ? 1 : 0);
+    (dataInicio || dataFim ? 1 : 0) +
+    (vendedorId ? 1 : 0) +
+    tiposEntrada.length;
+
+  const vendedorSelecionado = vendedores?.find(v => v.id === vendedorId);
 
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
