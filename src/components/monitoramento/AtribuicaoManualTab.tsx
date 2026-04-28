@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, useDraggable, useDroppable, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { useServicosParaAtribuir, useVistoriadoresAtivos, useAtribuirServicoManual, useAtribuirServicoPrestador, AtribuirPrestadorResult } from '@/hooks/useAtribuicaoManual';
+import { useServicosParaAtribuir, useVistoriadoresAtivos, useAtribuirServicoManual, useAtribuirServicoPrestador, AtribuirPrestadorResult, useServicosTravados } from '@/hooks/useAtribuicaoManual';
 import { useVistoriadoresPrestadores } from '@/hooks/useVistoriadoresPrestadores';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -8,13 +8,15 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2, GripVertical, MapPin, User, Car, Clock, Wrench, ClipboardCheck, Search, Calendar, Navigation, FileText, ExternalLink } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Loader2, GripVertical, MapPin, User, Car, Clock, Wrench, ClipboardCheck, Search, Calendar, Navigation, FileText, ExternalLink, MoreVertical, RotateCcw, UserCog, AlertTriangle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { format, parseISO, isToday, isTomorrow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { TIPO_SERVICO_LABELS } from '@/hooks/useServicos';
 import { LinkPrestadorResultDialog } from './LinkPrestadorResultDialog';
+import { DevolverFilaDialog } from './DevolverFilaDialog';
 import { formatPlacaOuChassi, isPlacaPlaceholder } from '@/lib/placa-utils';
 
 function getTipoLabel(tipo: string) {
@@ -121,7 +123,13 @@ function DragOverlayCard({ servico }: { servico: any }) {
 }
 
 // ── Droppable Vistoriador Card ──
-function DroppableVistoriador({ vistoriador }: { vistoriador: any }) {
+function DroppableVistoriador({
+  vistoriador,
+  onAcaoTarefa,
+}: {
+  vistoriador: any;
+  onAcaoTarefa: (tarefa: any, modo: 'devolver' | 'reatribuir') => void;
+}) {
   const { isOver, setNodeRef } = useDroppable({ id: `vist-${vistoriador.id}` });
 
   return (
@@ -170,6 +178,11 @@ function DroppableVistoriador({ vistoriador }: { vistoriador: any }) {
             const identificador = formatPlacaOuChassi(placa, chassi, { fallback: '' });
             const emAndamento = t.status === 'em_andamento';
             const emRota = t.status === 'em_rota';
+            const tarefaParaAcao = {
+              ...t,
+              profissionalNome: vistoriador.nome,
+              profissionalIdAtual: vistoriador.id,
+            };
             return (
               <div
                 key={t.id}
@@ -186,7 +199,7 @@ function DroppableVistoriador({ vistoriador }: { vistoriador: any }) {
                 {identificador ? (
                   <span
                     className={cn(
-                      'inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-mono font-semibold tracking-wider text-[10px] max-w-[180px] truncate',
+                      'inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-mono font-semibold tracking-wider text-[10px] max-w-[160px] truncate',
                       emAndamento
                         ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
                         : 'bg-background/60 text-foreground border border-border'
@@ -205,6 +218,30 @@ function DroppableVistoriador({ vistoriador }: { vistoriador: any }) {
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="ml-auto text-[9px]">{t.status}</Badge>
+                )}
+                {!emAndamento && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 shrink-0"
+                        onPointerDown={(e) => e.stopPropagation()}
+                      >
+                        <MoreVertical className="h-3.5 w-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuItem onClick={() => onAcaoTarefa(tarefaParaAcao, 'devolver')}>
+                        <RotateCcw className="h-3.5 w-3.5 mr-2" />
+                        Devolver à fila / não compareceu
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onAcaoTarefa(tarefaParaAcao, 'reatribuir')}>
+                        <UserCog className="h-3.5 w-3.5 mr-2" />
+                        Reatribuir a outro técnico
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
               </div>
             );
@@ -269,6 +306,7 @@ export default function AtribuicaoManualTab() {
   const { data: servicos, isLoading: loadingServicos } = useServicosParaAtribuir();
   const { data: vistoriadores, isLoading: loadingVist } = useVistoriadoresAtivos();
   const { data: prestadores, isLoading: loadingPrestadores } = useVistoriadoresPrestadores();
+  const { data: travados } = useServicosTravados();
   const atribuirMutation = useAtribuirServicoManual();
   const atribuirPrestadorMutation = useAtribuirServicoPrestador();
 
@@ -276,6 +314,12 @@ export default function AtribuicaoManualTab() {
   const [busca, setBusca] = useState('');
   const [dragging, setDragging] = useState<any>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ servico: any; vistoriadorId: string } | null>(null);
+
+  // Devolver / reatribuir state
+  const [acaoDialog, setAcaoDialog] = useState<{
+    servico: any;
+    modo: 'devolver' | 'reatribuir';
+  } | null>(null);
 
   // Prestador assignment states
   const [prestadorConfirmDialog, setPrestadorConfirmDialog] = useState<{ servico: any; prestadorId: string; prestadorNome: string; prestadorTelefone?: string | null } | null>(null);
@@ -285,6 +329,20 @@ export default function AtribuicaoManualTab() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   const prestadoresAtivos = (prestadores || []).filter((p: any) => p.ativo);
+
+  const handleAcaoTarefa = (tarefa: any, modo: 'devolver' | 'reatribuir') => {
+    setAcaoDialog({
+      servico: {
+        id: tarefa.id,
+        tipo: tarefa.tipo,
+        associadoNome: tarefa.associado?.nome,
+        veiculoPlaca: tarefa.veiculo?.placa,
+        profissionalNome: tarefa.profissionalNome,
+        profissionalIdAtual: tarefa.profissionalIdAtual,
+      },
+      modo,
+    });
+  };
 
   const servicosFiltrados = (servicos || []).filter(s => {
     if (filtroTipo !== 'todos' && s.tipo !== filtroTipo) return false;
@@ -391,6 +449,70 @@ export default function AtribuicaoManualTab() {
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         {/* ── Left: Pending Services ── */}
         <div className="lg:col-span-3 space-y-4">
+          {/* Travados / atribuídos vencidos */}
+          {(travados?.length || 0) > 0 && (
+            <Card className="border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/10">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2 text-amber-700 dark:text-amber-300">
+                  <AlertTriangle className="h-4 w-4" />
+                  Atribuídos travados / vencidos
+                  <Badge variant="outline" className="ml-auto bg-amber-100 dark:bg-amber-900/40 border-amber-400 text-amber-800 dark:text-amber-200">
+                    {travados!.length}
+                  </Badge>
+                </CardTitle>
+                <p className="text-[11px] text-muted-foreground">
+                  Serviços já atribuídos cuja janela passou e ainda não iniciaram. Devolva à fila ou reatribua.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-2 max-h-[40vh] overflow-y-auto">
+                {travados!.map((t: any) => {
+                  const placa = t.veiculo?.placa as string | undefined;
+                  const chassi = t.veiculo?.chassi as string | undefined;
+                  const identificador = formatPlacaOuChassi(placa, chassi, { fallback: '—' });
+                  const tarefaParaAcao = {
+                    ...t,
+                    profissionalNome: t.profissional?.nome || 'Técnico',
+                    profissionalIdAtual: t.profissional_id,
+                  };
+                  return (
+                    <div key={t.id} className="border border-amber-300/50 rounded-md p-2 bg-background/60 flex items-center gap-2 text-xs">
+                      {getTipoIcon(t.tipo)}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-semibold tracking-wider truncate">{identificador}</span>
+                          <Badge variant="outline" className="text-[9px]">{t.status}</Badge>
+                        </div>
+                        <div className="text-muted-foreground truncate">
+                          {t.associado?.nome || 'Sem nome'} · {t.localizacaoFormatada || t.bairro || '—'}
+                        </div>
+                        <div className="text-[10px] text-amber-700 dark:text-amber-400">
+                          {format(parseISO(t.data_agendada), 'dd/MM', { locale: ptBR })} {t.periodo || ''} · técnico: {t.profissional?.nome || '—'}
+                        </div>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
+                            <MoreVertical className="h-3.5 w-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56">
+                          <DropdownMenuItem onClick={() => handleAcaoTarefa(tarefaParaAcao, 'devolver')}>
+                            <RotateCcw className="h-3.5 w-3.5 mr-2" />
+                            Devolver à fila / não compareceu
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleAcaoTarefa(tarefaParaAcao, 'reatribuir')}>
+                            <UserCog className="h-3.5 w-3.5 mr-2" />
+                            Reatribuir a outro técnico
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
@@ -454,7 +576,7 @@ export default function AtribuicaoManualTab() {
             <p className="text-sm text-muted-foreground text-center py-6">Nenhum vistoriador em serviço</p>
           )}
           {(vistoriadores || []).map(v => (
-            <DroppableVistoriador key={v.id} vistoriador={v} />
+            <DroppableVistoriador key={v.id} vistoriador={v} onAcaoTarefa={handleAcaoTarefa} />
           ))}
 
           {/* Prestadores Externos */}
@@ -566,6 +688,14 @@ export default function AtribuicaoManualTab() {
         url={linkResult?.url || ''}
         prestadorNome={linkResult?.prestadorNome || ''}
         prestadorTelefone={linkResult?.prestadorTelefone}
+      />
+
+      {/* ── Devolver à Fila / Reatribuir ── */}
+      <DevolverFilaDialog
+        open={!!acaoDialog}
+        onOpenChange={(o) => { if (!o) setAcaoDialog(null); }}
+        servico={acaoDialog?.servico ?? null}
+        modoReatribuir={acaoDialog?.modo === 'reatribuir'}
       />
     </DndContext>
   );

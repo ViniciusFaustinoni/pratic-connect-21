@@ -640,3 +640,137 @@ export function useAtribuirServicoPrestador() {
     },
   });
 }
+
+// ============================================================================
+// Devolver serviço já atribuído à fila de atribuição manual (não destrutivo).
+// Usa RPC `liberar_servico_para_reatribuicao`.
+// ============================================================================
+export interface DevolverFilaParams {
+  servicoId: string;
+  motivo: string;
+  categoria: 'nao_compareceu' | 'tecnico_indisponivel' | 'reagendamento_operacional' | 'outro';
+  novaData?: string; // yyyy-MM-dd
+  novoPeriodo?: 'manha' | 'tarde';
+}
+
+export function useDevolverServicoParaFila() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: DevolverFilaParams) => {
+      const { data, error } = await supabase.rpc('liberar_servico_para_reatribuicao' as any, {
+        _servico_id: params.servicoId,
+        _motivo: params.motivo,
+        _categoria: params.categoria,
+        _nova_data: params.novaData ?? null,
+        _novo_periodo: params.novoPeriodo ?? 'manha',
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Serviço devolvido à fila de atribuição');
+      qc.invalidateQueries({ queryKey: ['servicos-para-atribuir-manual'] });
+      qc.invalidateQueries({ queryKey: ['vistoriadores-ativos-manual'] });
+      qc.invalidateQueries({ queryKey: ['servicos-travados'] });
+      qc.invalidateQueries({ queryKey: ['servicos'] });
+      qc.invalidateQueries({ queryKey: ['instalacoes'] });
+      qc.invalidateQueries({ queryKey: ['servicos-campo-unificado'] });
+      qc.invalidateQueries({ queryKey: ['tarefa-atual'] });
+      qc.invalidateQueries({ queryKey: ['agendamentos-base'] });
+    },
+    onError: (err: any) => {
+      toast.error('Erro ao devolver à fila: ' + (err?.message || ''));
+    },
+  });
+}
+
+export interface ReatribuirServicoParams extends DevolverFilaParams {
+  novoProfissionalId: string;
+}
+
+export function useReatribuirServico() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: ReatribuirServicoParams) => {
+      const { data, error } = await supabase.rpc('reatribuir_servico_admin' as any, {
+        _servico_id: params.servicoId,
+        _novo_profissional_id: params.novoProfissionalId,
+        _motivo: params.motivo,
+        _categoria: params.categoria,
+        _nova_data: params.novaData ?? null,
+        _novo_periodo: params.novoPeriodo ?? 'manha',
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Serviço reatribuído com sucesso');
+      qc.invalidateQueries({ queryKey: ['servicos-para-atribuir-manual'] });
+      qc.invalidateQueries({ queryKey: ['vistoriadores-ativos-manual'] });
+      qc.invalidateQueries({ queryKey: ['servicos-travados'] });
+      qc.invalidateQueries({ queryKey: ['servicos'] });
+      qc.invalidateQueries({ queryKey: ['instalacoes'] });
+      qc.invalidateQueries({ queryKey: ['servicos-campo-unificado'] });
+      qc.invalidateQueries({ queryKey: ['tarefa-atual'] });
+      qc.invalidateQueries({ queryKey: ['agendamentos-base'] });
+    },
+    onError: (err: any) => {
+      toast.error('Erro ao reatribuir: ' + (err?.message || ''));
+    },
+  });
+}
+
+// ============================================================================
+// Hook auxiliar: lista serviços "travados" (já atribuídos a um técnico mas
+// com data passada ou ainda agendados sem progresso). Permite ao coordenador
+// agir sobre eles diretamente na aba de Atribuição Manual.
+// ============================================================================
+export function useServicosTravados() {
+  return useQuery({
+    queryKey: ['servicos-travados'],
+    queryFn: async () => {
+      const hoje = new Date().toISOString().split('T')[0];
+
+      const { data, error } = await supabase
+        .from('servicos')
+        .select(`
+          id, tipo, data_agendada, hora_agendada, periodo, bairro, cidade, uf,
+          status, profissional_id, iniciada_em, em_rota_em,
+          associado:associados!servicos_associado_id_fkey(id, nome, telefone),
+          veiculo:veiculos!servicos_veiculo_id_fkey(placa, chassi, marca, modelo),
+          profissional:profiles!servicos_profissional_id_fkey(id, nome, avatar_url)
+        `)
+        .not('profissional_id', 'is', null)
+        .in('status', ['agendada', 'em_rota', 'em_andamento', 'pendente'])
+        .lte('data_agendada', hoje)
+        .order('data_agendada', { ascending: true });
+
+      if (error) throw error;
+
+      // Considera "travado": data anterior a hoje (passou do dia)
+      // ou data = hoje, mas ainda não iniciou e já é tarde (após 14h).
+      const agora = new Date();
+      const horaAtual = agora.getHours();
+
+      const filtrados = (data || []).filter((s: any) => {
+        if (!s.data_agendada) return false;
+        if (s.data_agendada < hoje) return true;
+        if (s.data_agendada === hoje) {
+          // mesmo dia: trava se já passou do período (manhã > 13h, tarde > 18h) e não iniciou
+          if (s.iniciada_em || s.em_rota_em) return false;
+          if (s.periodo === 'manha' && horaAtual >= 13) return true;
+          if (s.periodo === 'tarde' && horaAtual >= 18) return true;
+        }
+        return false;
+      });
+
+      return filtrados.map((s: any) => ({
+        ...s,
+        zona: getZonaAtendimento(s.bairro, s.cidade, s.uf),
+        localizacaoFormatada: formatLocalizacaoComZona(s.bairro, s.cidade, s.uf),
+      }));
+    },
+    refetchInterval: 30000,
+    staleTime: 0,
+  });
+}
