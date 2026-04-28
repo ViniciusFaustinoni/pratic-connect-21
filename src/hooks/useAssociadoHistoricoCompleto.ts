@@ -46,6 +46,8 @@ const tipoDbParaTimeline: Record<string, TipoEvento> = {
   'ressalva_registrada': 'ressalva_registrada',
   'ressalva_aprovada_monitoramento': 'ressalva_aprovada_monitoramento',
   'ressalva_declinada_monitoramento': 'ressalva_declinada_monitoramento',
+  'protecao_360_aprovada_monitoramento': 'protecao_360_aprovada_monitoramento',
+  'protecao_360_reprovada_monitoramento': 'protecao_360_reprovada_monitoramento',
 };
 
 export function useAssociadoHistoricoCompleto(associadoId: string | undefined) {

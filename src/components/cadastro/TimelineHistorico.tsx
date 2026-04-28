@@ -5,7 +5,7 @@ import {
   UserPlus, RefreshCw, Edit, Upload, CheckCircle, XCircle,
   Car, Calendar, CheckSquare, SquareX, Receipt, DollarSign,
   PhoneCall, PhoneOff, AlertTriangle, FileText, FileCheck,
-  MessageSquare, ChevronDown, Filter, Loader2, History, X, Wrench
+  MessageSquare, ChevronDown, Filter, Loader2, History, X, Wrench, ShieldCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -58,7 +58,9 @@ export type TipoEvento =
   | 'ressalva_registrada'
   | 'ressalva_aprovada_monitoramento'
   | 'ressalva_declinada_monitoramento'
-  | 'ressalva_instalacao';
+  | 'ressalva_instalacao'
+  | 'protecao_360_aprovada_monitoramento'
+  | 'protecao_360_reprovada_monitoramento';
 
 export interface EventoHistorico {
   id: string;
@@ -242,6 +244,18 @@ const eventoConfig: Record<TipoEvento, EventoConfig> = {
     bgCor: 'bg-amber-100',
     label: 'Ressalva de instalação',
   },
+  protecao_360_aprovada_monitoramento: {
+    icone: ShieldCheck,
+    cor: 'text-green-600',
+    bgCor: 'bg-green-100',
+    label: 'Proteção 360 ativada',
+  },
+  protecao_360_reprovada_monitoramento: {
+    icone: XCircle,
+    cor: 'text-red-600',
+    bgCor: 'bg-red-100',
+    label: 'Proteção 360 reprovada',
+  },
 };
 
 // Filter categories
@@ -249,7 +263,7 @@ const filterCategories: Record<string, TipoEvento[]> = {
   todos: [],
   status: ['status_alterado', 'associado_criado', 'dados_atualizados'],
   documentos: ['documento_enviado', 'documento_aprovado', 'documento_reprovado'],
-  instalacoes: ['instalacao_agendada', 'instalacao_concluida', 'instalacao_cancelada', 'veiculo_adicionado', 'veiculo_removido'],
+  instalacoes: ['instalacao_agendada', 'instalacao_concluida', 'instalacao_cancelada', 'veiculo_adicionado', 'veiculo_removido', 'protecao_360_aprovada_monitoramento', 'protecao_360_reprovada_monitoramento'],
   financeiro: ['boleto_gerado', 'boleto_pago', 'boleto_cancelado', 'contrato_assinado'],
   sinistros: ['sinistro_aberto', 'sinistro_atualizado', 'sinistro_encerrado'],
   chamados: ['chamado_aberto', 'chamado_concluido'],

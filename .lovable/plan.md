@@ -1,62 +1,46 @@
-# Plano: corrigir definitivamente o "Erro ao iniciar rota"
+# Plano: histórico do associado não mostra a Aprovação do Monitoramento
 
-## 1. Diagnóstico (causa raiz)
+## Causa raiz
 
-Acessei o banco como diretor e investiguei o serviço da tela (Andresa, Rua Caminho dos Astros, Rafael Peixoto):
+Investiguei a tela `Monitoramento > Aprovação de Associados` (`AcionamentosRouboFurto.tsx`) e o hook `useAprovacaoMonitoramento`. Quando o analista aprova/reprova, a mutation grava em `associados_historico` com `tipo`:
 
-- O serviço exibido pelo app do técnico (`12bbff07-…`, associado 7622ee03-…, bairro "PQ CENTENARIO") **foi cancelado** às 23:08:02 — junto com várias outras instalações em massa (mesmo timestamp em ~10 registros). Outro serviço relacionado (`a4ff906f-…`) virou `nao_compareceu` às 23:10 **e perdeu o `profissional_id`**.
-- Quando o técnico toca "Iniciar Percurso/Tarefa", o hook `useIniciarRota` (`src/hooks/useTarefaAtual.ts`) executa:
-  1. `SELECT profissional_id FROM servicos WHERE id=...`
-  2. Se `profissional_id` é NULL → lança `"Serviço não atribuído a nenhum profissional"`.
-  3. Se diferente do `profile.id` → lança `"Este serviço não está atribuído a você"`.
-  4. Mesmo se passar, o trigger `validar_status_servico` no banco bloqueia qualquer transição para `em_rota`/`em_andamento` quando `profissional_id IS NULL`, com `RAISE EXCEPTION`.
-- O `onError` do hook **descarta a mensagem real** e mostra o toast genérico `"Erro ao iniciar rota"`.
-- A tela do app continua mostrando a tarefa antiga porque `useTarefaAtual` faz polling a cada 30s (com `staleTime` 15s) e o cancelamento ocorreu por trigger no banco — sem realtime forçando invalidação no aparelho do técnico até o próximo refetch.
+- `protecao_360_aprovada_monitoramento`
+- `protecao_360_reprovada_monitoramento`
 
-**Resumo da causa raiz:** o serviço foi cancelado/desatribuído por outro fluxo (cancelamento de instalação/cotação/no-show ou reatribuição) **enquanto o card já estava renderizado no aparelho do técnico**. Ao clicar, o app tenta atualizar um registro que não pertence mais a ele e mostra um toast genérico, sem atualizar a tela nem explicar o motivo.
+A INSERT funciona (RLS exige `is_funcionario(auth.uid())` e o usuário Kleytonn é funcionário válido). O problema está na **leitura/renderização** no detalhe do associado:
 
-Isso vai continuar acontecendo sempre que: (a) coordenação cancelar/reatribuir uma tarefa, (b) cron de "não compareceu" rodar, (c) trigger em cascata de cancelamento de cotação/instalação/vistoria disparar, (d) o técnico estiver com a tela aberta sem refetch recente.
+1. `src/hooks/useAssociadoHistoricoCompleto.ts` mantém um mapa fixo `tipoDbParaTimeline`. Os dois tipos acima **não estão nesse mapa** → caem no fallback `'observacao_adicionada'` (vira uma observação genérica e perde a identidade).
+2. `src/components/cadastro/TimelineHistorico.tsx` define `TipoEvento` (union), `eventoConfig` (ícone/cor/label) e `filterCategories`. Nenhum dos três contém os tipos da aprovação do monitoramento.
 
-## 2. Correção pontual (resolver o erro visível agora)
+Resultado: mesmo quando o registro existe na tabela, ele aparece como "Observação adicionada" sem ícone próprio, sem rótulo correto e sem categoria de filtro — dando a sensação de que "não está aparecendo no histórico".
 
-1. **Mensagens de erro úteis** em `useIniciarRota` (e `useIniciarTarefa`):
-   - Usar `error.message` no toast (em vez de string fixa).
-   - Detectar os 3 cenários e mostrar mensagens específicas em PT-BR:
-     - "Esta tarefa foi cancelada e não está mais disponível."
-     - "Esta tarefa foi reatribuída a outro técnico."
-     - "Esta tarefa precisa estar com status 'agendada' para iniciar."
-2. **Auto-recuperação da tela**: em qualquer erro do `useIniciarRota`/`useIniciarTarefa`, invalidar `['tarefa-atual']` e `['servicos']` para o card sumir/atualizar imediatamente.
-3. **Pré-checagem antes do clique**: ampliar o `select` inicial para trazer `status, profissional_id` e validar:
-   - status ∈ ('agendada','em_rota') → caso contrário, abortar com mensagem clara.
+Como confirmação adicional: hoje há **0 registros** com esses dois tipos em `associados_historico` (todas as instalações que entram na fila ainda não foram processadas pelo Monitoramento — KPIs `0/0/0` na imagem). Mas, assim que forem, continuariam invisíveis pelo motivo acima.
 
-## 3. Correção estrutural (evita classe inteira de bugs)
+## Correções
 
-4. **RPC transacional `iniciar_rota_servico(p_servico_id)`** (SECURITY DEFINER):
-   - Faz `SELECT … FOR UPDATE`, valida `profissional_id = auth.uid()`-mapeado-para-profile, valida status, atualiza para `em_rota` + `em_rota_em` em **uma única ida**.
-   - Retorna JSON `{ ok, codigo_erro, mensagem }` para o cliente exibir mensagem precisa.
-   - Mesma estratégia para `iniciar_tarefa_servico`.
-   - Elimina race condition entre o `SELECT` e o `UPDATE` no cliente.
-5. **Realtime no card do técnico**: assinar mudanças em `servicos` filtradas por `profissional_id=eq.<id>` no `useTarefaAtual` para refletir cancelamentos/reatribuições em segundos, em vez de aguardar o polling de 30s.
-6. **Padronizar erros do banco com SQLSTATE**:
-   - Atualizar `validar_status_servico` para usar `ERRCODE` próprios (ex.: `'P0001'` com prefixos `SERVICO_SEM_PROFISSIONAL`, `SERVICO_NAO_ATRIBUIDO`, `SERVICO_STATUS_INVALIDO`) e mensagens em PT-BR.
-   - Cliente passa a mapear esses códigos para toasts amigáveis.
-7. **Audit trail mínimo**: registrar em `error_reports` (ou tabela equivalente já existente) toda falha de transição de status com `servico_id`, `user_id`, `motivo`, para o coordenador ver no painel.
+### 1. `src/components/cadastro/TimelineHistorico.tsx`
+- Adicionar à union `TipoEvento`:
+  - `'protecao_360_aprovada_monitoramento'`
+  - `'protecao_360_reprovada_monitoramento'`
+- Adicionar entradas em `eventoConfig` com ícone `ShieldCheck`/`ShieldOff` (ou `CheckCircle`/`XCircle`), cor verde/vermelha e labels `"Proteção 360 ativada"` / `"Proteção 360 reprovada"`.
+- Incluir os dois novos tipos na categoria de filtro `instalacoes` (já agrupa o ciclo de vida da instalação).
 
-## 4. Arquivos / objetos a alterar
+### 2. `src/hooks/useAssociadoHistoricoCompleto.ts`
+- Adicionar duas linhas ao mapa `tipoDbParaTimeline`:
+  - `'protecao_360_aprovada_monitoramento': 'protecao_360_aprovada_monitoramento'`
+  - `'protecao_360_reprovada_monitoramento': 'protecao_360_reprovada_monitoramento'`
 
-- `src/hooks/useTarefaAtual.ts` — `useIniciarRota`, `useIniciarTarefa`: chamar nova RPC, mensagens úteis, invalidação no `onError`, assinatura realtime.
-- Nova migração SQL:
-  - `iniciar_rota_servico(uuid)` e `iniciar_tarefa_servico(uuid)` (SECURITY DEFINER, retorno JSON).
-  - Atualizar `validar_status_servico` com SQLSTATEs e mensagens claras.
-- Opcional: incluir badge "Tarefa indisponível — atualizando…" no `TarefaAtualCard` quando o serviço sumir entre clique e refetch.
+### 3. (Opcional, recomendado) `src/pages/monitoramento/AprovacaoInstalacaoDetalhe.tsx`
+- Mostrar uma seção "Última decisão do monitoramento" lendo o registro mais recente de `associados_historico` com esses dois tipos para o associado, para o analista ver decisões anteriores no próprio detalhe da aprovação. (Apenas se o usuário quiser; do contrário fica fora do escopo.)
 
-## 5. Validação após implantação
+## Validação
 
-- Cancelar uma tarefa atribuída pelo painel do coordenador enquanto o técnico está com o app aberto → o card deve sumir em <5s e qualquer clique tardio mostra "Esta tarefa foi cancelada".
-- Reatribuir tarefa do técnico A para o B → técnico A vê o card desaparecer; clique tardio diz "Esta tarefa foi reatribuída".
-- Tentar iniciar rota com sucesso → status muda para `em_rota` e edge `notificar-inicio-rota` continua sendo chamada.
-- Logs de `error_reports` registram todas as falhas com `codigo_erro` para análise.
+Após o deploy, fazer uma aprovação de teste pela tela `Monitoramento > Aprovação de Associados`:
+- O detalhe do associado deve passar a exibir o evento "Proteção 360 ativada" com ícone próprio e cor verde, no topo da timeline.
+- O filtro "Instalações" deve incluir o novo evento.
+- Os KPIs "Aprovados Hoje" / "Reprovados Hoje" continuam funcionando (já leem `associados_historico` por esses tipos).
 
-## 6. Nota sobre o cenário observado
+## Fora de escopo
 
-A onda de cancelamentos às 23:08:02 atingiu várias instalações simultaneamente — provavelmente um cancelamento em cascata via `cancelar_servicos_ao_cancelar_instalacao/_cotacao` ou `cron-no-show`. A correção acima trata o sintoma para o técnico, mas vale revisar separadamente **por que tantas instalações foram canceladas de uma vez** (fora do escopo deste plano, abrir tarefa específica se desejar).
+- Não alterar o esquema do banco — o tipo é `varchar` livre, não há CHECK/enum a atualizar.
+- Não alterar as RLS — INSERT e SELECT já permitem o fluxo (funcionário insere, funcionário lê; associado lê o próprio).
