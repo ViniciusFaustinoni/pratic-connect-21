@@ -2314,6 +2314,13 @@ export type Database = {
             foreignKeyName: "associados_pendencia_rastreador_servico_id_fkey"
             columns: ["pendencia_rastreador_servico_id"]
             isOneToOne: false
+            referencedRelation: "v_servicos_em_limbo_atribuicao"
+            referencedColumns: ["servico_id"]
+          },
+          {
+            foreignKeyName: "associados_pendencia_rastreador_servico_id_fkey"
+            columns: ["pendencia_rastreador_servico_id"]
+            isOneToOne: false
             referencedRelation: "v_tarefas_orfas"
             referencedColumns: ["servico_instalacao_relacionado"]
           },
@@ -7782,6 +7789,13 @@ export type Database = {
             foreignKeyName: "confirmacoes_agendamento_novo_servico_id_fkey"
             columns: ["novo_servico_id"]
             isOneToOne: false
+            referencedRelation: "v_servicos_em_limbo_atribuicao"
+            referencedColumns: ["servico_id"]
+          },
+          {
+            foreignKeyName: "confirmacoes_agendamento_novo_servico_id_fkey"
+            columns: ["novo_servico_id"]
+            isOneToOne: false
             referencedRelation: "v_tarefas_orfas"
             referencedColumns: ["servico_instalacao_relacionado"]
           },
@@ -7798,6 +7812,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "servicos"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "confirmacoes_agendamento_servico_id_fkey"
+            columns: ["servico_id"]
+            isOneToOne: false
+            referencedRelation: "v_servicos_em_limbo_atribuicao"
+            referencedColumns: ["servico_id"]
           },
           {
             foreignKeyName: "confirmacoes_agendamento_servico_id_fkey"
@@ -11601,6 +11622,13 @@ export type Database = {
             foreignKeyName: "encaixes_urgentes_servico_id_fkey"
             columns: ["servico_id"]
             isOneToOne: false
+            referencedRelation: "v_servicos_em_limbo_atribuicao"
+            referencedColumns: ["servico_id"]
+          },
+          {
+            foreignKeyName: "encaixes_urgentes_servico_id_fkey"
+            columns: ["servico_id"]
+            isOneToOne: false
             referencedRelation: "v_tarefas_orfas"
             referencedColumns: ["servico_instalacao_relacionado"]
           },
@@ -12862,6 +12890,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "servicos"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fila_servicos_servico_id_fkey"
+            columns: ["servico_id"]
+            isOneToOne: false
+            referencedRelation: "v_servicos_em_limbo_atribuicao"
+            referencedColumns: ["servico_id"]
           },
           {
             foreignKeyName: "fila_servicos_servico_id_fkey"
@@ -16219,6 +16254,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "servicos"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativas_servico_id_fkey"
+            columns: ["servico_id"]
+            isOneToOne: false
+            referencedRelation: "v_servicos_em_limbo_atribuicao"
+            referencedColumns: ["servico_id"]
           },
           {
             foreignKeyName: "manutencao_tratativas_servico_id_fkey"
@@ -21733,6 +21775,13 @@ export type Database = {
             foreignKeyName: "rastreador_manutencao_interna_servico_origem_id_fkey"
             columns: ["servico_origem_id"]
             isOneToOne: false
+            referencedRelation: "v_servicos_em_limbo_atribuicao"
+            referencedColumns: ["servico_id"]
+          },
+          {
+            foreignKeyName: "rastreador_manutencao_interna_servico_origem_id_fkey"
+            columns: ["servico_origem_id"]
+            isOneToOne: false
             referencedRelation: "v_tarefas_orfas"
             referencedColumns: ["servico_instalacao_relacionado"]
           },
@@ -23054,6 +23103,13 @@ export type Database = {
             foreignKeyName: "registros_presenca_servico_id_fkey"
             columns: ["servico_id"]
             isOneToOne: false
+            referencedRelation: "v_servicos_em_limbo_atribuicao"
+            referencedColumns: ["servico_id"]
+          },
+          {
+            foreignKeyName: "registros_presenca_servico_id_fkey"
+            columns: ["servico_id"]
+            isOneToOne: false
             referencedRelation: "v_tarefas_orfas"
             referencedColumns: ["servico_instalacao_relacionado"]
           },
@@ -23122,6 +23178,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "servicos"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "registros_recusa_tarefa_servico_id_fkey"
+            columns: ["servico_id"]
+            isOneToOne: false
+            referencedRelation: "v_servicos_em_limbo_atribuicao"
+            referencedColumns: ["servico_id"]
           },
           {
             foreignKeyName: "registros_recusa_tarefa_servico_id_fkey"
@@ -23606,6 +23669,13 @@ export type Database = {
             foreignKeyName: "servico_fotos_servico_id_fkey"
             columns: ["servico_id"]
             isOneToOne: false
+            referencedRelation: "v_servicos_em_limbo_atribuicao"
+            referencedColumns: ["servico_id"]
+          },
+          {
+            foreignKeyName: "servico_fotos_servico_id_fkey"
+            columns: ["servico_id"]
+            isOneToOne: false
             referencedRelation: "v_tarefas_orfas"
             referencedColumns: ["servico_instalacao_relacionado"]
           },
@@ -23997,6 +24067,13 @@ export type Database = {
             foreignKeyName: "servicos_agendamento_anterior_id_fkey"
             columns: ["agendamento_anterior_id"]
             isOneToOne: false
+            referencedRelation: "v_servicos_em_limbo_atribuicao"
+            referencedColumns: ["servico_id"]
+          },
+          {
+            foreignKeyName: "servicos_agendamento_anterior_id_fkey"
+            columns: ["agendamento_anterior_id"]
+            isOneToOne: false
             referencedRelation: "v_tarefas_orfas"
             referencedColumns: ["servico_instalacao_relacionado"]
           },
@@ -24344,6 +24421,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "servicos"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "servicos_atribuicoes_log_servico_id_fkey"
+            columns: ["servico_id"]
+            isOneToOne: false
+            referencedRelation: "v_servicos_em_limbo_atribuicao"
+            referencedColumns: ["servico_id"]
           },
           {
             foreignKeyName: "servicos_atribuicoes_log_servico_id_fkey"
@@ -27394,6 +27478,13 @@ export type Database = {
             foreignKeyName: "solicitacoes_troca_titularidade_servico_vistoria_id_fkey"
             columns: ["servico_vistoria_id"]
             isOneToOne: false
+            referencedRelation: "v_servicos_em_limbo_atribuicao"
+            referencedColumns: ["servico_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_troca_titularidade_servico_vistoria_id_fkey"
+            columns: ["servico_vistoria_id"]
+            isOneToOne: false
             referencedRelation: "v_tarefas_orfas"
             referencedColumns: ["servico_instalacao_relacionado"]
           },
@@ -27667,6 +27758,13 @@ export type Database = {
             foreignKeyName: "substituicoes_veiculo_servico_instalacao_id_fkey"
             columns: ["servico_instalacao_id"]
             isOneToOne: false
+            referencedRelation: "v_servicos_em_limbo_atribuicao"
+            referencedColumns: ["servico_id"]
+          },
+          {
+            foreignKeyName: "substituicoes_veiculo_servico_instalacao_id_fkey"
+            columns: ["servico_instalacao_id"]
+            isOneToOne: false
             referencedRelation: "v_tarefas_orfas"
             referencedColumns: ["servico_instalacao_relacionado"]
           },
@@ -27683,6 +27781,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "servicos"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "substituicoes_veiculo_servico_retirada_id_fkey"
+            columns: ["servico_retirada_id"]
+            isOneToOne: false
+            referencedRelation: "v_servicos_em_limbo_atribuicao"
+            referencedColumns: ["servico_id"]
           },
           {
             foreignKeyName: "substituicoes_veiculo_servico_retirada_id_fkey"
@@ -30398,6 +30503,44 @@ export type Database = {
           veiculo_id: string | null
         }
         Relationships: []
+      }
+      v_servicos_em_limbo_atribuicao: {
+        Row: {
+          associado_nome: string | null
+          data_agendada: string | null
+          instalacao_origem_id: string | null
+          instalacao_status: string | null
+          periodo: string | null
+          placa: string | null
+          profissional_id: string | null
+          servico_id: string | null
+          status: string | null
+          tipo: Database["public"]["Enums"]["tipo_servico"] | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "servicos_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "servicos_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "servicos_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
       }
       v_tarefas_orfas: {
         Row: {
