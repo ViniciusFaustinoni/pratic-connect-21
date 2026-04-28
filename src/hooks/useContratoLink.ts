@@ -533,47 +533,22 @@ export function useUploadFotoAutovistoria() {
         }
       }
       
-      // Se for foto do chassi, validar via IA
-      let chassiValidacao: { chassi: string | null; validacao: 'confere' | 'diverge' | 'ilegivel' | null; confianca: number } | null = null;
-      if (fotoId === 'chassi') {
-        try {
-          const { data: ocrResult, error: ocrError } = await supabase.functions.invoke('chassi-ocr', {
-            body: { url: publicUrl, vistoriaId }
-          });
-          
-          if (!ocrError && ocrResult) {
-            chassiValidacao = {
-              chassi: ocrResult.chassi,
-              validacao: ocrResult.validacao,
-              confianca: ocrResult.confianca,
-            };
-            console.log('[Autovistoria] Chassi OCR resultado:', chassiValidacao);
-            
-            // Alertar usuário se divergir
-            if (ocrResult.validacao === 'diverge') {
-              console.warn('[Autovistoria] CHASSI DIVERGENTE DETECTADO!');
-            }
-          }
-        } catch (error) {
-          console.error('Erro ao validar chassi:', error);
-        }
-      }
-      
+      // Chassi sempre é preenchido manualmente — nenhum OCR é executado em fotos de chassi.
+
       // Registrar no histórico
       await supabase.from('contratos_historico').insert({
         contrato_id: contratoId,
         evento: 'autovistoria_foto_enviada',
-        descricao: `Foto enviada: ${fotoId}${kmExtraido ? ` (KM: ${kmExtraido.toLocaleString('pt-BR')})` : ''}${chassiValidacao?.validacao ? ` [Chassi: ${chassiValidacao.validacao}]` : ''}`,
-        dados: { 
-          vistoria_id: vistoriaId, 
-          foto_id: fotoId, 
+        descricao: `Foto enviada: ${fotoId}${kmExtraido ? ` (KM: ${kmExtraido.toLocaleString('pt-BR')})` : ''}`,
+        dados: {
+          vistoria_id: vistoriaId,
+          foto_id: fotoId,
           url: publicUrl,
           km_extraido: kmExtraido,
-          chassi_validacao: chassiValidacao,
         },
       });
-      
-      return { fotoId, url: publicUrl, kmExtraido, chassiValidacao };
+
+      return { fotoId, url: publicUrl, kmExtraido, chassiValidacao: null as null };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contrato-publico'] });

@@ -349,7 +349,7 @@ export default function CotacaoPublicaCompleta() {
       setDocumentos(newDocs);
       toast.success(`${doc.nome} enviado!`);
 
-      // Se for CRLV, chamar OCR para extrair dados do veículo (cor, chassi, etc.)
+      // Se for CRLV, chamar OCR para extrair dados auxiliares (cor, blindado). O chassi NUNCA é preenchido por OCR — sempre digitado manualmente.
       if (doc.tipo === 'crlv' && result.url && token) {
         try {
           const { data: ocrData } = await supabase.functions.invoke('document-ocr', {
