@@ -312,7 +312,7 @@ export function useReprovarInstalacaoMonitoramento() {
         .from('contratos')
         .select('id')
         .eq('veiculo_id', data.veiculoId)
-        .in('status', ['assinado', 'ativo', 'aguardando_instalacao'])
+        .in('status', ['assinado', 'ativo'])
         .maybeSingle();
       if (contratoVinculado?.id) {
         await supabase
