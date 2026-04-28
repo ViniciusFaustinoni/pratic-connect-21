@@ -20,11 +20,15 @@ export function ChassiOcrEditor({ vistoriaId, chassiOcrAtual, chassiCadastro, on
   const [salvando, setSalvando] = useState(false);
 
   const handleSave = async () => {
+    const novoChassi = normalizeChassi(valor);
+    if (!isValidChassi(novoChassi)) {
+      toast.error('Chassi inválido', { description: chassiHelperText(novoChassi) || 'Use 17 caracteres VIN.' });
+      return;
+    }
     setSalvando(true);
     try {
-      const novoChassi = valor.trim().toUpperCase();
       const validacao = chassiCadastro
-        ? (novoChassi === chassiCadastro.toUpperCase() ? 'ok' : 'divergente')
+        ? (novoChassi === normalizeChassi(chassiCadastro) ? 'ok' : 'divergente')
         : 'sem_referencia';
 
       const { error } = await supabase
