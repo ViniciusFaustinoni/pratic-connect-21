@@ -208,16 +208,7 @@ export default function PropostaAnalise() {
       return;
     }
 
-    // Cruzamento com OCR do CRLV (quando existir): exige confirmação se divergir.
-    const chassiOcr = (proposta as any)?.ocr_dados?.crlv?.chassi
-      || (proposta as any)?.cotacao?.ocr_dados?.crlv?.chassi
-      || null;
-    if (chassiInformado && chassiOcr && chassisDivergem(chassiInformado, chassiOcr)) {
-      const ok = window.confirm(
-        `O chassi digitado (${normalizeChassi(chassiInformado)}) não confere com o chassi extraído do CRLV (${normalizeChassi(chassiOcr)}).\n\nDeseja aprovar mesmo assim?`,
-      );
-      if (!ok) return;
-    }
+    // Chassi sempre é preenchido manualmente — nenhuma comparação com OCR é feita aqui.
 
     setShowConfirmAprovar(false);
 
