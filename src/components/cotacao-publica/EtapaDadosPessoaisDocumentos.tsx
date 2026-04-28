@@ -180,7 +180,11 @@ export function EtapaDadosPessoaisDocumentos({
   
   const temDadosPessoais = !!(dadosExtraidos.nome && cpfEfetivo);
   const temEndereco = !!(dadosExtraidos.logradouro && dadosExtraidos.cidade && dadosExtraidos.uf);
-  const temDadosVeiculo = !!(dadosExtraidos.veiculo_placa || dadosExtraidos.veiculo_chassi);
+  // Em 0KM: basta chassi (placa pode não existir ainda)
+  // Caso contrário: placa OU chassi
+  const temDadosVeiculo = isZeroKm
+    ? !!dadosExtraidos.veiculo_chassi
+    : !!(dadosExtraidos.veiculo_placa || dadosExtraidos.veiculo_chassi);
   const temContato = !!(email && telefone);
 
   // Sub-flags para avisos no checklist:
@@ -188,10 +192,19 @@ export function EtapaDadosPessoaisDocumentos({
   const chassiExtraido = !!dadosExtraidos.veiculo_chassi;
   // CRLV/NF/ATPV-e enviado mas faltando motor ou chassi (não bloqueia avançar — só avisa)
   const crlvIncompleto = temCrlv && (!motorExtraido || !chassiExtraido);
+  // CRLV enviado mas IA NÃO conseguiu extrair NADA (nem placa, nem chassi)
+  const crlvSemDados = temCrlv && !dadosExtraidos.veiculo_placa && !dadosExtraidos.veiculo_chassi;
   // Comprovante enviado mas endereço incompleto (logradouro/cidade/uf/cep)
   const enderecoIncompleto = temComprovante && (!dadosExtraidos.logradouro || !dadosExtraidos.cidade || !dadosExtraidos.uf || !dadosExtraidos.cep);
 
   const podeAvancar = temDadosPessoais && temEndereco && temDadosVeiculo && temContato && cpfValido;
+
+  // Auto-abrir painel manual quando IA falhou em ler o documento do veículo
+  useEffect(() => {
+    if (crlvSemDados && !mostrarManualVeiculo) {
+      setMostrarManualVeiculo(true);
+    }
+  }, [crlvSemDados, mostrarManualVeiculo]);
 
   const formatTelefone = (value: string) => {
     const cleaned = value.replace(/\D/g, '');
