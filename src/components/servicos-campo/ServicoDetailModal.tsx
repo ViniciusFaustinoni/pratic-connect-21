@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { RealocarInstalacaoDialog } from '@/components/instalacoes/RealocarInstalacaoDialog';
 import { LiberarServicoButton } from './LiberarServicoButton';
-import { DevolverFilaButton } from './DevolverFilaButton';
+
 import { ConcluirPrestadorExternoButton } from './ConcluirPrestadorExternoButton';
 import { cn } from '@/lib/utils';
 import {
@@ -144,14 +144,6 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
                 servicoStatus={servico.status}
                 veiculoId={(servico as any).veiculo_id}
                 associadoId={(servico as any).associado_id}
-              />
-              <DevolverFilaButton
-                servicoId={servico.id}
-                servicoStatus={servico.status}
-                associadoNome={(servico as any).associado?.nome}
-                veiculoPlaca={(servico as any).veiculo?.placa}
-                profissionalNome={(servico as any).profissional?.nome}
-                profissionalIdAtual={(servico as any).profissional_id}
               />
               <LiberarServicoButton servicoId={servico.id} servicoStatus={servico.status} />
             </div>

@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Unlock, Loader2 } from 'lucide-react';
+import { Ban, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
@@ -66,8 +66,8 @@ export function LiberarServicoButton({
       const fechados = (data as any)?.agendamentos_fechados ?? 0;
       toast.success(
         fechados > 0
-          ? `Serviço liberado. Agendamento vinculado também foi fechado.`
-          : 'Serviço liberado. Técnico desbloqueado para novas atribuições.'
+          ? 'Serviço cancelado. Agendamento vinculado também foi fechado.'
+          : 'Serviço cancelado. Técnico desbloqueado para novas atribuições.'
       );
       setOpen(false);
       setMotivo('');
@@ -101,17 +101,17 @@ export function LiberarServicoButton({
         className="gap-1.5"
         onClick={() => setOpen(true)}
       >
-        <Unlock className="h-3.5 w-3.5" /> Liberar serviço
+        <Ban className="h-3.5 w-3.5" /> Cancelar serviço
       </Button>
 
       <AlertDialog open={open} onOpenChange={setOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Liberar serviço travado?</AlertDialogTitle>
+            <AlertDialogTitle>Cancelar serviço administrativamente?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação cancela administrativamente o serviço e libera a agenda do técnico
-              para receber novas atribuições. Use quando o serviço já foi feito (ou
-              abandonado) mas ficou preso na fila do técnico.
+              Esta ação <strong>cancela</strong> o serviço (status final) e libera a agenda
+              do técnico. Use quando o serviço não será mais executado. Para apenas trocar
+              de técnico ou rota, use a opção <strong>Realocar</strong>.
             </AlertDialogDescription>
           </AlertDialogHeader>
 
