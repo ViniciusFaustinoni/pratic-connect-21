@@ -449,6 +449,70 @@ export default function AtribuicaoManualTab() {
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         {/* ── Left: Pending Services ── */}
         <div className="lg:col-span-3 space-y-4">
+          {/* Travados / atribuídos vencidos */}
+          {(travados?.length || 0) > 0 && (
+            <Card className="border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/10">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2 text-amber-700 dark:text-amber-300">
+                  <AlertTriangle className="h-4 w-4" />
+                  Atribuídos travados / vencidos
+                  <Badge variant="outline" className="ml-auto bg-amber-100 dark:bg-amber-900/40 border-amber-400 text-amber-800 dark:text-amber-200">
+                    {travados!.length}
+                  </Badge>
+                </CardTitle>
+                <p className="text-[11px] text-muted-foreground">
+                  Serviços já atribuídos cuja janela passou e ainda não iniciaram. Devolva à fila ou reatribua.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-2 max-h-[40vh] overflow-y-auto">
+                {travados!.map((t: any) => {
+                  const placa = t.veiculo?.placa as string | undefined;
+                  const chassi = t.veiculo?.chassi as string | undefined;
+                  const identificador = formatPlacaOuChassi(placa, chassi, { fallback: '—' });
+                  const tarefaParaAcao = {
+                    ...t,
+                    profissionalNome: t.profissional?.nome || 'Técnico',
+                    profissionalIdAtual: t.profissional_id,
+                  };
+                  return (
+                    <div key={t.id} className="border border-amber-300/50 rounded-md p-2 bg-background/60 flex items-center gap-2 text-xs">
+                      {getTipoIcon(t.tipo)}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-semibold tracking-wider truncate">{identificador}</span>
+                          <Badge variant="outline" className="text-[9px]">{t.status}</Badge>
+                        </div>
+                        <div className="text-muted-foreground truncate">
+                          {t.associado?.nome || 'Sem nome'} · {t.localizacaoFormatada || t.bairro || '—'}
+                        </div>
+                        <div className="text-[10px] text-amber-700 dark:text-amber-400">
+                          {format(parseISO(t.data_agendada), 'dd/MM', { locale: ptBR })} {t.periodo || ''} · técnico: {t.profissional?.nome || '—'}
+                        </div>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
+                            <MoreVertical className="h-3.5 w-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56">
+                          <DropdownMenuItem onClick={() => handleAcaoTarefa(tarefaParaAcao, 'devolver')}>
+                            <RotateCcw className="h-3.5 w-3.5 mr-2" />
+                            Devolver à fila / não compareceu
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleAcaoTarefa(tarefaParaAcao, 'reatribuir')}>
+                            <UserCog className="h-3.5 w-3.5 mr-2" />
+                            Reatribuir a outro técnico
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
