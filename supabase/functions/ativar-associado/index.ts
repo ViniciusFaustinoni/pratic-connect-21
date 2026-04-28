@@ -157,7 +157,8 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (assocUpdErr) {
-      return jsonResponse({ success: false, error: 'update_associado_failed', detail: assocUpdErr.message }, 500);
+      console.error('[ativar-associado] update associados falhou:', assocUpdErr);
+      return jsonResponse({ success: false, error: 'update_associado_failed', detail: assocUpdErr.message, code: (assocUpdErr as any).code }, 500);
     }
     if (!assocUpd) {
       // Alguém mudou o status entre o read e o update — recheca idempotência
