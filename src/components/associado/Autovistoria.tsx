@@ -210,27 +210,7 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
         setKmIdentificado(result.kmExtraido);
         toast.success(`Quilometragem identificada: ${result.kmExtraido.toLocaleString('pt-BR')} km`);
       } 
-      // Se for chassi e validação foi realizada, mostrar feedback ao cliente
-      else if (fotoAtual.id === 'chassi' && result.chassiValidacao) {
-        setChassiResultado(result.chassiValidacao);
-        
-        if (result.chassiValidacao.validacao === 'confere') {
-          toast.success('✅ Chassi validado automaticamente!', {
-            duration: 5000,
-            description: 'O número confere com o cadastro.',
-          });
-        } else if (result.chassiValidacao.validacao === 'diverge') {
-          toast.error('⚠️ Atenção: O chassi da foto não confere com o cadastro!', {
-            duration: 8000,
-            description: 'Verifique se a foto está correta ou tire novamente.',
-          });
-        } else if (result.chassiValidacao.validacao === 'ilegivel') {
-          toast.warning('Não foi possível ler o chassi na foto.', {
-            duration: 6000,
-            description: 'Tente tirar uma nova foto com melhor iluminação.',
-          });
-        }
-      } else {
+      else {
         toast.success(`Foto "${fotoAtual.label}" enviada com sucesso!`);
       }
       
