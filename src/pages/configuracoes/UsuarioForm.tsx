@@ -393,6 +393,13 @@ export default function UsuarioForm() {
           tipo: formData.tipo as any, ativo: formData.ativo,
           updated_at: new Date().toISOString(),
         };
+        // Código SGA aplicável a perfis comerciais
+        const isVendasProfile = formData.perfis.some(p => ['vendedor_clt', 'vendedor_externo', 'agencia', 'supervisor', 'gerente'].includes(p));
+        if (isVendasProfile) {
+          profileUpdate.codigo_sga_voluntario = formData.codigo_sga_voluntario.trim() || null;
+        } else {
+          profileUpdate.codigo_sga_voluntario = null;
+        }
         if (isAgencia) {
           profileUpdate.cnpj = formData.cnpj;
           profileUpdate.razao_social = formData.razao_social;
