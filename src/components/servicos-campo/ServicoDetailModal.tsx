@@ -145,14 +145,6 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
                 veiculoId={(servico as any).veiculo_id}
                 associadoId={(servico as any).associado_id}
               />
-              <DevolverFilaButton
-                servicoId={servico.id}
-                servicoStatus={servico.status}
-                associadoNome={(servico as any).associado?.nome}
-                veiculoPlaca={(servico as any).veiculo?.placa}
-                profissionalNome={(servico as any).profissional?.nome}
-                profissionalIdAtual={(servico as any).profissional_id}
-              />
               <LiberarServicoButton servicoId={servico.id} servicoStatus={servico.status} />
             </div>
           </DialogHeader>
