@@ -1,79 +1,92 @@
-# Investigação: por que KXD6881 não subiu e KRX9802 subiu
+## Investigação — Chassi divergente entre CRLV e Sistema
 
-## Diagnóstico definitivo
+### Caso real
+- **Veículo:** Fiat Palio Elx Flex 2008 — Placa `KNO3F78` (associada Maria Amelia Balbi de Castro)
+- **Chassi no CRLV (correto):** `9BD17104G85241143` — 17 caracteres
+- **Chassi no sistema:** `9BD17104G8524113` — **16 caracteres** (faltou o dígito `4` antes do `3` final)
 
-Consultei `sga_sync_logs` para ambas as placas.
+### Como o erro entrou no banco
+1. A cotação `1036666f-5de5-461d-a330-061b265d6040` foi criada **manualmente pelo vendedor**, sem lead, sem CRLV anexado (`doc_crlv = null`) e sem vistoria associada (`vistoria_id = null`).
+2. Na tela `Cadastro → Propostas Pendentes → Análise da Proposta` (`src/pages/cadastro/PropostaAnalise.tsx`), o analista digita/edita o chassi no campo de `PropostaDetalhesTabs.tsx` (linha 274):
+   ```tsx
+   <Input
+     value={veiculoChassi}
+     onChange={(e) => setVeiculoChassi(
+       e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '')
+     )}
+     maxLength={17}
+   />
+   ```
+3. **O input só limita o máximo (17), não exige o mínimo.** Qualquer string de 1–17 caracteres é aceita.
+4. `handleConfirmarAprovacao` chama `aprovarMutation` enviando `veiculoChassi` direto, sem qualquer validação.
+5. `useAprovarProposta` (`src/hooks/usePropostasPendentes.ts`) faz `update veiculos set chassi = params.veiculoChassi` — grava 16 caracteres no banco.
+6. O caractere omitido (`4`) está no meio de uma sequência repetitiva (`...241143` → digitado `...24113`), exatamente o tipo de erro que validação de comprimento pegaria imediatamente.
 
-### KRX9802 (Thaís) — SUBIU
-- Marca/modelo: Ford Ka SE B 2017/2018
-- `codigo_fipe = 003412-6`, `valor_fipe = 40855`
-- Hinova aceitou de primeira → `codigo_associado=30137`, `codigo_veiculo=35861`, fotos enviadas, `sincronizado_hinova=true`.
+### Por que o caso anterior (KRX9802) "subiu" e este não
+Não há relação direta com o bug do FIPE×ano da investigação anterior. Aqui a falha é puramente **qualidade do dado de entrada**: chassi com 16 chars será reprovado em qualquer validação SGA/Hinova futura, em qualquer integração de rastreador, e cria divergência permanente com o CRLV oficial.
 
-### KXD6881 (Eduardo) — NÃO SUBIU
-- Marca/modelo: Citroën C3 Attraction 2014/2014
-- `codigo_fipe = 011145-7`, `valor_fipe = 39600`
-- Associado já foi criado com sucesso em 18/04 (`codigo_associado=30000`).
-- O cadastro do **veículo** falha sistematicamente. As últimas ~6 tentativas (cron de retry a cada 20 min) retornam:
+### Raiz do problema
+- **Ausência de validação de comprimento mínimo (17) e charset do chassi** em **todos** os pontos onde o usuário interno digita chassi:
+  - `PropostaDetalhesTabs.tsx` (aprovação da proposta) — sem validação
+  - `VeiculoEditDialog.tsx` — `chassi: z.string().optional()` sem regex/length
+  - `ChassiOcrEditor.tsx` — só exige `>= 5` chars
+- **Ausência de cruzamento automático** entre o chassi digitado e o chassi extraído do OCR do CRLV quando o documento existe.
+- **Ausência de bloqueio de I, O, Q** (caracteres proibidos pela ISO 3779 / VIN), hoje só barrados parcialmente no fluxo público.
 
-```
-HTTP 406 — Não aceitável
-"O ano 2014 não foi encontrado para o codigo fipe 011145-7"
-```
-
-Validei chamando a API FIPE oficial (parallelum):
-- Marca Citroën (id 13) → modelos com "Attraction":
-  - 7964 — `C3 Attraction 1.6 Flex 16V 5p Aut.` → anos disponíveis: **2018, 2019, 2020, 2021** (sem 2014)
-  - 7585 — `C3 Attraction Pure Tech 1.2 Flex 12V Mec`
-- Logo, o código FIPE `011145-7` que o vendedor cadastrou **não existe para o ano 2014** na tabela atual da FIPE. Provavelmente o veículo é um C3 anterior (sem o sufixo "Attraction") e o FIPE selecionado está errado, OU o ano correto é outro.
-
-Há também um log isolado de "Acesso não autorizado" em uma das tentativas, mas é transitório (token rotativo). O erro real e persistente é o ano/FIPE.
-
-### Por que o sistema não se autocorrige
-
-Em `supabase/functions/sga-hinova-sync/index.ts` (linhas 1442-1461) existe `resolverFipePorNome` (consulta parallelum por marca/modelo/ano), **mas só é executado quando `veiculo.codigo_fipe` está vazio**. Quando o Hinova devolve 406 com a mensagem de ano não encontrado, nada acontece — o veículo entra em loop eterno de retry com o mesmo payload errado.
+---
 
 ## Plano de correção
 
-### 1. Correção imediata para KXD6881 (one-shot)
-- Abrir o veículo `2f162355-b89d-462b-92ce-a76f7e979049` no admin.
-- Consultar a FIPE correta para "Citroën C3 2014" (provavelmente outro modelo da família C3, não "Attraction") e atualizar `codigo_fipe`, `valor_fipe`, e se necessário `ano_modelo/ano_fabricacao`.
-- Disparar reenvio manual.
+### 1. Utilitário central de validação de chassi
+Criar `src/lib/chassi.ts`:
+- `normalizeChassi(input)` — uppercase + remove tudo que não for `A-HJ-NPR-Z0-9` (bloqueia I/O/Q, padrão VIN).
+- `isValidChassi(input)` — deve ter exatamente 17 caracteres válidos.
+- `chassiHelperText(input)` — mensagem de erro padronizada para UI.
 
-### 2. Correção definitiva no edge function `sga-hinova-sync`
+### 2. Validação obrigatória nos formulários (camada de UI)
+Aplicar a todos os inputs de chassi internos:
+- `src/components/cadastro/proposta/PropostaDetalhesTabs.tsx` — bloquear envio se `!isValidChassi`, exibir contador `X/17` e mensagem de erro inline.
+- `src/components/veiculos/VeiculoEditDialog.tsx` — substituir `z.string().optional()` por schema Zod com regex `/^[A-HJ-NPR-Z0-9]{17}$/`.
+- `src/components/ocr/ChassiOcrEditor.tsx` — exigir 17 caracteres antes do `Save`.
+- Demais inputs de chassi do sistema (rastreadores, instalador checklist) — aplicar `normalizeChassi` + validação 17 chars.
 
-Adicionar **auto-recuperação de FIPE/ano** quando Hinova rejeitar o cadastro do veículo com erros conhecidos:
+### 3. Bloqueio na aprovação da proposta
+Em `src/pages/cadastro/PropostaAnalise.tsx → handleConfirmarAprovacao`:
+- Antes de chamar `aprovarMutation`, validar:
+  - Se há `veiculoChassi` digitado: deve ter 17 chars válidos, senão `toast.error` e abortar.
+  - Se a proposta tem `doc_crlv` com OCR processado, comparar `chassi digitado` vs `chassi_ocr` e exigir confirmação explícita do analista quando divergem (modal "Os chassis não coincidem — confirmar mesmo assim?").
 
-a. Logo após o `cadastrar_veiculo` falhar (bloco que começa na linha 1608), antes de cair em `isDuplicate`/erro final, detectar padrões:
-   - `"ano X não foi encontrado para o codigo fipe Y"`
-   - `"codigo fipe ... não encontrado"`
-   - `"valor fipe inválido"`
+### 4. Defesa em profundidade no banco (migration)
+Criar migration adicionando:
+```sql
+ALTER TABLE veiculos
+  ADD CONSTRAINT veiculos_chassi_format
+  CHECK (chassi IS NULL OR chassi ~ '^[A-HJ-NPR-Z0-9]{17}$');
 
-b. Quando detectado, executar **uma única tentativa de auto-correção**:
-   1. Chamar `resolverFipePorNome(tipoFipe, marca, modelo, ano_modelo)` ignorando o `codigo_fipe` atual.
-   2. Se a parallelum não tem o ano exato, varrer os anos retornados e escolher o mais próximo do `ano_modelo` (≤ 1 ano de diferença); caso contrário abortar a auto-correção.
-   3. Atualizar em `veiculos` os campos `codigo_fipe`, `valor_fipe` e (se ajustado) `ano_modelo` com log de auditoria (`logSync` action `auto_correcao_fipe`).
-   4. Refazer o `POST /veiculo/cadastrar` uma única vez com o payload corrigido.
+ALTER TABLE cotacoes
+  ADD CONSTRAINT cotacoes_chassi_format
+  CHECK (veiculo_chassi IS NULL OR veiculo_chassi ~ '^[A-HJ-NPR-Z0-9]{17}$');
+```
+Antes de aplicar, rodar `SELECT id, placa, chassi FROM veiculos WHERE chassi IS NOT NULL AND chassi !~ '^[A-HJ-NPR-Z0-9]{17}$'` para listar os registros legados que precisam ser corrigidos manualmente (provavelmente uma dezena).
 
-c. Se a auto-correção falhar (FIPE não resolvida ou Hinova continua rejeitando), marcar `status_sga = 'requer_revisao_manual'` (novo estado) com `error_message` claro e **interromper o cron de retry** para esse veículo, evitando ruído nos logs e gasto de tokens Hinova. Hoje fica em loop indefinido.
+### 5. Correção imediata do caso atual
+- `UPDATE veiculos SET chassi = '9BD17104G85241143' WHERE id = '6915f219-0d34-4169-89b1-758e982aa51e'` (via migration auditável).
+- `UPDATE cotacoes SET veiculo_chassi = '9BD17104G85241143' WHERE id = '1036666f-5de5-461d-a330-061b265d6040'`.
+- Reenfileirar sincronização SGA/Hinova do associado `38575c0f-...` para atualizar lá também.
 
-### 3. Ajuste no cron de retry
-- No retry automático (a cada ~20 min), pular veículos com `status_sga IN ('requer_revisao_manual')` ou com >5 falhas consecutivas com a mesma `error_message` nos últimos 24h.
-- Disparar notificação interna (toast/badge) para a equipe de cadastro/operações revisar o veículo.
+### 6. Auditoria retroativa
+- Listar todos os veículos com `LENGTH(chassi) <> 17` ou contendo `I/O/Q` e gerar relatório para a equipe de cadastro corrigir antes da migration de constraint entrar em produção.
 
-### 4. Validação preventiva no cadastro/cotação
-- No formulário de cadastro de veículo, ao selecionar marca+modelo+ano, validar contra a FIPE (parallelum) antes de gravar. Se o ano selecionado não existir para o `codigo_fipe`, bloquear submissão com mensagem clara. Isso evita o problema na origem.
+---
 
-### 5. UI de "Veículos com erro SGA"
-- Painel administrativo já existente de SGA passa a destacar os veículos com `requer_revisao_manual` em uma aba dedicada, exibindo a `error_message` do último log para ação rápida.
-
-## Arquivos impactados
-- `supabase/functions/sga-hinova-sync/index.ts` — auto-correção FIPE + novo status.
-- `supabase/functions/sga-hinova-sync-cron` (ou equivalente) — filtro de retry.
-- `src/components/cadastro/...` veículo — validação FIPE preventiva.
-- Painel SGA (componentes em `src/components/ativacao` / `src/pages/...`) — aba de revisão manual.
-- Migração: novo valor `'requer_revisao_manual'` no enum/coluna `status_sga` (se for enum) ou apenas string nova.
+## Arquivos que serão alterados
+- **novo:** `src/lib/chassi.ts`
+- **edit:** `src/components/cadastro/proposta/PropostaDetalhesTabs.tsx`
+- **edit:** `src/pages/cadastro/PropostaAnalise.tsx`
+- **edit:** `src/components/veiculos/VeiculoEditDialog.tsx`
+- **edit:** `src/components/ocr/ChassiOcrEditor.tsx`
+- **edit:** demais inputs de chassi (rastreadores/instalador) para reutilizar o util
+- **nova migration:** check constraints + correção dos dois registros do caso
 
 ## Resultado esperado
-- Veículos com FIPE/ano divergente do Hinova são auto-corrigidos quando possível.
-- Quando não for possível, ficam isolados em uma fila de revisão manual sem ruído.
-- KXD6881 sobe assim que o FIPE correto for atribuído.
+Impossível salvar veículo/cotação/proposta com chassi diferente de 17 caracteres VIN-válidos. Quando houver CRLV com OCR, o sistema avisa proativamente sobre divergências antes de aprovar.
