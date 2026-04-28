@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { formatLocalizacaoComZona, getZonaAtendimento } from '@/lib/localizacao-zonas';
+import { useRealocarInstalacao } from './useRealocarInstalacao';
 
 const PRODUCTION_BASE_URL = 'https://app.praticcar.org';
 
