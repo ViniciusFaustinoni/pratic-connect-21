@@ -791,17 +791,18 @@ serve(async (req) => {
 
                   console.log(`[asaas-webhook] Associado ${cobranca.associado_id} reativado automaticamente (${diasAtraso} dias)`);
 
-                  // Notificar Rede Veículos sobre adimplência
-                  try {
-                    await supabase.functions.invoke('rede-veiculos-informar-adimplente', {
-                      body: {
-                        associadoId: cobranca.associado_id,
-                        motivo: 'pagamento_confirmado',
-                      },
-                    });
-                  } catch (redeErr) {
-                    console.warn(`[asaas-webhook] Erro ao notificar Rede Veículos:`, redeErr);
-                  }
+                  // Notificar Rede Veículos sobre adimplência (via fila com retry)
+                  await supabase.rpc('enqueue_integration', {
+                    _integration: 'rede',
+                    _operation: 'informar_adimplente',
+                    _payload: {
+                      associadoId: cobranca.associado_id,
+                      motivo: 'pagamento_confirmado',
+                    },
+                    _correlation_id: `rede:adimplente:${cobranca.associado_id}:${Date.now()}`,
+                    _max_attempts: 5,
+                    _delay_seconds: 0,
+                  });
                 }
               }
             }
