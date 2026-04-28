@@ -67,12 +67,57 @@ function getStatusIcon(status: string) {
 
 export function ConsultorDrawer({ consultor, periodo, open, onClose }: ConsultorDrawerProps) {
   const { data, isLoading } = useConsultorPropostas(consultor?.id || null, periodo);
+  const queryClient = useQueryClient();
+  const [codigoSga, setCodigoSga] = useState('');
+
+  // Carrega profile (id + codigo_sga_voluntario) pelo user_id (consultor.id é user_id auth)
+  const { data: profile, isLoading: loadingProfile } = useQuery({
+    queryKey: ['consultor-profile-sga', consultor?.id],
+    queryFn: async () => {
+      if (!consultor?.id) return null;
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, codigo_sga_voluntario')
+        .eq('user_id', consultor.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!consultor?.id && open,
+  });
+
+  useEffect(() => {
+    setCodigoSga((profile as any)?.codigo_sga_voluntario || '');
+  }, [profile]);
+
+  const salvarSga = useMutation({
+    mutationFn: async () => {
+      if (!profile?.id) throw new Error('Profile não encontrado');
+      const valor = codigoSga.trim();
+      if (valor && !/^\d{1,20}$/.test(valor)) {
+        throw new Error('Código SGA deve conter apenas números (até 20 dígitos).');
+      }
+      const { error } = await supabase
+        .from('profiles')
+        .update({ codigo_sga_voluntario: valor || null })
+        .eq('id', profile.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Código SGA atualizado');
+      queryClient.invalidateQueries({ queryKey: ['consultor-profile-sga', consultor?.id] });
+      queryClient.invalidateQueries({ queryKey: ['consultores-sga'] });
+    },
+    onError: (e: any) => toast.error(e.message || 'Erro ao salvar Código SGA'),
+  });
 
   if (!consultor) return null;
 
   const rankingBadge = getRankingBadge(consultor.ranking);
   const performanceBadge = getPerformanceBadge(consultor.taxaConversao);
   const Icon = performanceBadge.icon;
+  const sgaAtual = (profile as any)?.codigo_sga_voluntario || '';
+  const sgaDirty = codigoSga.trim() !== (sgaAtual || '');
 
   // Combinar todas as propostas recentes (max 5)
   const recentItems = [
