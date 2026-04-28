@@ -51,6 +51,7 @@ import {
   PropostaApprovalStepper,
 } from '@/components/cadastro/proposta';
 import type { DocumentoAnexadoCompleto } from '@/types/documentos';
+import { isValidChassi, normalizeChassi, chassisDivergem } from '@/lib/chassi';
 
 // ============================================
 // COMPONENTE PRINCIPAL
@@ -197,13 +198,34 @@ export default function PropostaAnalise() {
 
   const handleConfirmarAprovacao = async () => {
     if (!id) return;
+
+    // Validação de chassi: se foi digitado nesta tela, precisa ser VIN válido (17 chars).
+    const chassiInformado = veiculoChassi?.trim();
+    if (chassiInformado && !isValidChassi(chassiInformado)) {
+      toast.error('Chassi inválido', {
+        description: 'O chassi precisa ter 17 caracteres no padrão VIN (sem I, O ou Q).',
+      });
+      return;
+    }
+
+    // Cruzamento com OCR do CRLV (quando existir): exige confirmação se divergir.
+    const chassiOcr = (proposta as any)?.ocr_dados?.crlv?.chassi
+      || (proposta as any)?.cotacao?.ocr_dados?.crlv?.chassi
+      || null;
+    if (chassiInformado && chassiOcr && chassisDivergem(chassiInformado, chassiOcr)) {
+      const ok = window.confirm(
+        `O chassi digitado (${normalizeChassi(chassiInformado)}) não confere com o chassi extraído do CRLV (${normalizeChassi(chassiOcr)}).\n\nDeseja aprovar mesmo assim?`,
+      );
+      if (!ok) return;
+    }
+
     setShowConfirmAprovar(false);
-    
+
     try {
       await aprovarMutation.mutateAsync({
         contratoId: id,
         veiculoRenavam: veiculoRenavam || undefined,
-        veiculoChassi: veiculoChassi || undefined,
+        veiculoChassi: chassiInformado ? normalizeChassi(chassiInformado) : undefined,
       });
 
       // Após aprovação documental, gerar (ou reutilizar) o link público de vistoria.
