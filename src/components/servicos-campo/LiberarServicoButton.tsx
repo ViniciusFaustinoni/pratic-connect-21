@@ -101,17 +101,17 @@ export function LiberarServicoButton({
         className="gap-1.5"
         onClick={() => setOpen(true)}
       >
-        <Unlock className="h-3.5 w-3.5" /> Liberar serviço
+        <Ban className="h-3.5 w-3.5" /> Cancelar serviço
       </Button>
 
       <AlertDialog open={open} onOpenChange={setOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Liberar serviço travado?</AlertDialogTitle>
+            <AlertDialogTitle>Cancelar serviço administrativamente?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação cancela administrativamente o serviço e libera a agenda do técnico
-              para receber novas atribuições. Use quando o serviço já foi feito (ou
-              abandonado) mas ficou preso na fila do técnico.
+              Esta ação <strong>cancela</strong> o serviço (status final) e libera a agenda
+              do técnico. Use quando o serviço não será mais executado. Para apenas trocar
+              de técnico ou rota, use a opção <strong>Realocar</strong>.
             </AlertDialogDescription>
           </AlertDialogHeader>
 
