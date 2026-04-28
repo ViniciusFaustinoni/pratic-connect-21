@@ -35,7 +35,12 @@ const schema = z.object({
   veiculo_cor: z.string().optional(),
   veiculo_combustivel: z.string().optional(),
   veiculo_ano_fabricacao: z.number().optional(),
+  veiculo_ano_modelo: z.number().optional(),
+  veiculo_placa: z.string().optional(),
   veiculo_numero_motor: z.string().optional(),
+  // Fallback manual quando OCR não consegue extrair
+  veiculo_zero_km: z.boolean().optional(),
+  veiculo_procedencia: z.string().optional(),
 });
 
 export type DadosPessoaisForm = z.infer<typeof schema>;

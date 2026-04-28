@@ -472,13 +472,20 @@ export function useCotacaoContratacao(token: string | undefined) {
           cliente_cnh_validade: dados.cnh_validade || null,
           cliente_cnh_categoria: truncar(dados.cnh_categoria, 20),
           
-          // Dados do veículo extraídos do CRLV via OCR (necessários para SGA Hinova e Termo)
+          // Dados do veículo extraídos do CRLV via OCR ou preenchidos manualmente
+          // (necessários para SGA Hinova e Termo)
           veiculo_chassi: dados.veiculo_chassi || null,
           veiculo_renavam: dados.veiculo_renavam || null,
           veiculo_cor: dados.veiculo_cor || null,
           veiculo_combustivel: truncar(dados.veiculo_combustivel, 50),
           veiculo_ano_fabricacao: dados.veiculo_ano_fabricacao || null,
+          veiculo_ano_modelo: dados.veiculo_ano_modelo || null,
           veiculo_motor: dados.veiculo_numero_motor || null,
+          // Placa só é sobrescrita se o cliente preencheu (preserva a placa original da cotação)
+          ...(dados.veiculo_placa ? { veiculo_placa: dados.veiculo_placa } : {}),
+          // Fallback manual: marcação 0KM e procedência
+          veiculo_zero_km: dados.veiculo_zero_km ?? null,
+          veiculo_procedencia: dados.veiculo_procedencia || null,
           // Persistir categoria se ainda não definida
           ...((!cotacao.categoria) ? { categoria: detectarCategoriaPorModelo(cotacao.veiculo_modelo, cotacao.veiculo_marca) } : {}),
         } as any)
