@@ -123,7 +123,13 @@ function DragOverlayCard({ servico }: { servico: any }) {
 }
 
 // ── Droppable Vistoriador Card ──
-function DroppableVistoriador({ vistoriador }: { vistoriador: any }) {
+function DroppableVistoriador({
+  vistoriador,
+  onAcaoTarefa,
+}: {
+  vistoriador: any;
+  onAcaoTarefa: (tarefa: any, modo: 'devolver' | 'reatribuir') => void;
+}) {
   const { isOver, setNodeRef } = useDroppable({ id: `vist-${vistoriador.id}` });
 
   return (
@@ -172,6 +178,11 @@ function DroppableVistoriador({ vistoriador }: { vistoriador: any }) {
             const identificador = formatPlacaOuChassi(placa, chassi, { fallback: '' });
             const emAndamento = t.status === 'em_andamento';
             const emRota = t.status === 'em_rota';
+            const tarefaParaAcao = {
+              ...t,
+              profissionalNome: vistoriador.nome,
+              profissionalIdAtual: vistoriador.id,
+            };
             return (
               <div
                 key={t.id}
@@ -188,7 +199,7 @@ function DroppableVistoriador({ vistoriador }: { vistoriador: any }) {
                 {identificador ? (
                   <span
                     className={cn(
-                      'inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-mono font-semibold tracking-wider text-[10px] max-w-[180px] truncate',
+                      'inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-mono font-semibold tracking-wider text-[10px] max-w-[160px] truncate',
                       emAndamento
                         ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
                         : 'bg-background/60 text-foreground border border-border'
@@ -207,6 +218,30 @@ function DroppableVistoriador({ vistoriador }: { vistoriador: any }) {
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="ml-auto text-[9px]">{t.status}</Badge>
+                )}
+                {!emAndamento && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 shrink-0"
+                        onPointerDown={(e) => e.stopPropagation()}
+                      >
+                        <MoreVertical className="h-3.5 w-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuItem onClick={() => onAcaoTarefa(tarefaParaAcao, 'devolver')}>
+                        <RotateCcw className="h-3.5 w-3.5 mr-2" />
+                        Devolver à fila / não compareceu
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onAcaoTarefa(tarefaParaAcao, 'reatribuir')}>
+                        <UserCog className="h-3.5 w-3.5 mr-2" />
+                        Reatribuir a outro técnico
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
               </div>
             );
