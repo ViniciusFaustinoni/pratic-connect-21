@@ -194,6 +194,19 @@ export default function Extrato() {
     return descricao.replace(/\s*[—-]\s*.+$/, '').trim() || descricao;
   };
 
+  // Fallback: extrai o nome do associado da descrição (após o último " — ").
+  // Usado quando o contrato vinculado foi excluído e o JOIN não resolve mais o associado.
+  const extrairNomeDaDescricao = (descricao: string | null): string | null => {
+    if (!descricao) return null;
+    const match = descricao.match(/[—-]\s*([^—-][^—]*)$/);
+    const nome = match?.[1]?.trim();
+    if (!nome) return null;
+    // Filtra ruído: ignora se o trecho for muito curto ou parecer rótulo técnico
+    if (nome.length < 3) return null;
+    if (/^(abate|cota[cç][aã]o|vendedor|isenta|cobra|rota)/i.test(nome)) return null;
+    return nome;
+  };
+
   const getCategoriaLabel = (categoria: string) => {
     const cat = categorias.find(c => c.value === categoria);
     return cat?.label || categoria;
