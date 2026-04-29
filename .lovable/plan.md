@@ -1,56 +1,41 @@
-## Objetivo
+# Causa raiz — "Erro ao aprovar instalação"
 
-Na tela `Financeiro > Extrato`, exibir explicitamente:
-1. **Associado** vinculado à movimentação (atualmente só aparece embutido na descrição após "—")
-2. **Data** da movimentação em cada linha (hoje a data só aparece no cabeçalho do agrupamento "ONTEM/HOJE/...")
+Investiguei a stack completa do botão **Aprovar** em Monitoramento → Aprovação de Associados:
 
-## Análise
+1. UI chama `useAprovarInstalacaoMonitoramento` (`src/hooks/useAprovacaoMonitoramento.ts`).
+2. Hook faz `UPDATE servicos SET status = 'aprovada' …`.
+3. O trigger **`trg_bloquear_servico_se_terminal`** dispara e chama a função **`fn_associado_em_estado_terminal(associado_id)`**.
+4. Essa função considera **`'suspenso'` como estado terminal** (junto com `cancelado`, `recusado`, etc.).
+5. Como acabamos de implementar o fluxo de **suspensão automática 48h/72h por não-instalação**, vários associados que chegam ao monitoramento agora estão com `status = 'suspenso'`. O trigger lança a exceção:
 
-- Arquivo: `src/pages/financeiro/Extrato.tsx`
-- Fonte: `movimentacoes_financeiras` com colunas `referencia_tipo` ('contrato' nos repasses) e `referencia_id` (id do contrato).
-- O contrato tem `associado_id` → `associados.nome`.
-- Hoje a query faz `select('*')` simples — sem join. Não há coluna direta de associado.
-- O agrupamento atual por dia (Hoje/Ontem/data) é útil, mas o usuário quer também a data explícita por linha (facilita exportar/scan visual).
+   > `Não é possível concluir serviço: associado está em status "suspenso"`
 
-## Mudanças
+6. O hook captura, mas o `onError` mostra apenas `"Erro ao aprovar instalação"` genérico — daí o toast vazio na sua tela.
 
-### 1. `src/pages/financeiro/Extrato.tsx`
+## Por que `'suspenso'` não é terminal
 
-**Query**: enriquecer movimentações buscando associado quando `referencia_tipo='contrato'`:
-- Coletar todos `referencia_id` distintos de movimentações com tipo contrato.
-- Buscar em `contratos` os pares `(id, associado_id, associados(id, nome))` em uma única query `.in('id', ids)`.
-- Montar mapa `contratoId → { associadoId, associadoNome }` e anexar a cada movimentação um campo `associado` derivado.
-- Fallback: se `referencia_tipo` for `associado` direto, buscar nome em `associados`.
+Suspensão por não-instalação é, **por design**, **reversível pela própria aprovação da instalação** — quando o monitoramento aprova a instalação tardia, a cobertura tem que voltar. Misturar `suspenso` em `fn_associado_em_estado_terminal` quebra esse fluxo (e qualquer outro que precise concluir/aprovar serviços de associados temporariamente suspensos).
 
-**Tabela**: adicionar duas colunas:
+Estados verdadeiramente terminais permanecem: `cancelado`, `cancelamento_solicitado`, `recusado`, `inadimplente_terminal`.
+
+## Correções
+
+**1. Migração** — Atualizar `public.fn_associado_em_estado_terminal` removendo `'suspenso'` da lista. Isso desbloqueia o trigger `trg_bloquear_servico_se_terminal` para serviços de associados suspensos, permitindo que a aprovação prossiga e o trigger `fn_reativar_cobertura_pos_instalacao` reative a cobertura naturalmente.
+
+```sql
+CREATE OR REPLACE FUNCTION public.fn_associado_em_estado_terminal(_associado_id uuid)
+RETURNS text LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public'
+AS $$
+  SELECT status::text FROM public.associados
+  WHERE id = _associado_id
+    AND status::text IN ('cancelado','cancelamento_solicitado','recusado','inadimplente_terminal')
+  LIMIT 1;
+$$;
 ```
-| Data | Descrição | Associado | Categoria | Valor |
-```
-- Data por linha: `format(parseISO(mov.data_movimentacao), 'dd/MM/yyyy')`.
-- Associado: link para `/cadastro/associados/:id` quando houver, senão `—`.
-- Manter o cabeçalho de agrupamento (Hoje/Ontem/data por extenso) — ele continua útil para escaneabilidade.
-- Limpar a descrição visual: como Associado vira coluna própria, manter `descricao` como está (já vem com "— NOME"), mas opcionalmente remover o sufixo "— NOME" quando o associado já estiver na coluna (regex simples). Decisão: manter como está para não quebrar outros tipos de movimentação que não são repasse.
 
-**Filtro extra (opcional, escopo desta tarefa)**: adicionar campo de busca por nome de associado no bloco de filtros (client-side sobre o resultado já carregado). Se o usuário não quiser, removo.
+**2. Hook** — `src/hooks/useAprovacaoMonitoramento.ts`: trocar o `onError` para exibir `error.message` real em vez do toast genérico, evitando que erros futuros do trigger fiquem invisíveis.
 
-**Exportação CSV**: incluir colunas `Data` e `Associado` no header e nas linhas geradas em `handleExportar`.
+## Não muda
 
-### 2. Sem mudanças de schema, sem migração
-
-A informação já existe via join — só não estava sendo carregada/exibida.
-
-## Detalhes técnicos
-
-- Usar `useQuery` única; após receber `movimentacoes`, fazer um segundo `useQuery` dependente (`enabled: !!movimentacoes`) para buscar associados dos contratos referenciados, ou consolidar em um único `queryFn` que faz as duas chamadas sequencialmente e retorna já enriquecido. Preferência: enriquecer dentro do mesmo `queryFn` para simplicidade.
-- RLS: `contratos` e `associados` já são acessíveis aos perfis financeiros (Diretor, Financeiro). Sem novas policies.
-- Layout responsivo: a coluna Associado pode ficar com `truncate max-w-[220px]` + `title` para não quebrar.
-
-## Arquivos afetados
-
-- `src/pages/financeiro/Extrato.tsx` (única alteração)
-
-## Confirmações
-
-Confirma se devo:
-- (a) **Adicionar campo de busca por associado** nos filtros? (sugiro sim)
-- (b) **Remover o sufixo "— NOME"** da descrição quando a coluna Associado estiver populada, para evitar duplicação visual? (sugiro sim)
+- `ativar-associado` (edge function), pré-validações, lógica de UI, RLS — nada disso é tocado.
+- `'suspenso'` continua sendo um status válido em `associados` e bloqueando os fluxos onde já bloqueia hoje (cobrança, sinistro, etc.).
