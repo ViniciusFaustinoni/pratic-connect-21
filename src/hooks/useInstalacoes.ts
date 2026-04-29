@@ -206,7 +206,8 @@ export function useInstalacoes(filtersOrParams?: InstalacaoFilters | UseInstalac
         const searchLower = filters.search.toLowerCase();
         result = result.filter(inst => 
           inst.associados?.nome?.toLowerCase().includes(searchLower) ||
-          inst.veiculos?.placa?.toLowerCase().includes(searchLower)
+          inst.veiculos?.placa?.toLowerCase().includes(searchLower) ||
+          inst.veiculos?.chassi?.toLowerCase().includes(searchLower)
         );
       }
 

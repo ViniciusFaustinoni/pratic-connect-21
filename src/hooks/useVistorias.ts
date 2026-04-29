@@ -91,10 +91,13 @@ export function useVistorias(filters: VistoriaFilters = {}) {
         const searchLower = filters.search.toLowerCase();
         result = result.filter((v: any) => 
           v.veiculo?.placa?.toLowerCase().includes(searchLower) ||
+          v.veiculo?.chassi?.toLowerCase().includes(searchLower) ||
           v.veiculo?.associado?.nome?.toLowerCase().includes(searchLower) ||
           v.associado?.nome?.toLowerCase().includes(searchLower) ||
           v.associado?.veiculos?.[0]?.placa?.toLowerCase().includes(searchLower) ||
+          v.associado?.veiculos?.[0]?.chassi?.toLowerCase().includes(searchLower) ||
           v.cotacao?.veiculo_placa?.toLowerCase().includes(searchLower) ||
+          v.cotacao?.veiculo_chassi?.toLowerCase().includes(searchLower) ||
           v.cotacao?.nome_solicitante?.toLowerCase().includes(searchLower)
         );
       }

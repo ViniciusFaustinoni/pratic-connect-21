@@ -158,6 +158,7 @@ export default function Veiculos() {
     const associadoNome = veiculo.associado?.nome || '';
     const matchesSearch =
       veiculo.placa.toLowerCase().includes(search.toLowerCase()) ||
+      veiculo.chassi?.toLowerCase().includes(search.toLowerCase()) ||
       veiculo.marca.toLowerCase().includes(search.toLowerCase()) ||
       veiculo.modelo.toLowerCase().includes(search.toLowerCase()) ||
       associadoNome.toLowerCase().includes(search.toLowerCase());

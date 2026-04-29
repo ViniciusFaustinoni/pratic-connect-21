@@ -225,6 +225,7 @@ export function useServicosCampoUnificado(filters: ServicosCampoFilters = {}) {
       result = result.filter((srv) =>
         srv.associado?.nome?.toLowerCase().includes(s) ||
         srv.veiculo?.placa?.toLowerCase().includes(s) ||
+        srv.veiculo?.chassi?.toLowerCase().includes(s) ||
         srv.protocolo?.toLowerCase().includes(s) ||
         (srv as any).rastreador?.codigo?.toLowerCase().includes(s) ||
         srv.imei_rastreador?.toLowerCase().includes(s)

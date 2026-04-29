@@ -13,7 +13,7 @@ export interface VeiculoOficina {
   observacoes: string | null;
   sinistro_id: string | null;
   oficina: { id: string; nome_fantasia: string; razao_social: string; cidade: string; estado: string } | null;
-  veiculo: { id: string; placa: string; marca: string; modelo: string; ano: number; cor: string } | null;
+  veiculo: { id: string; placa: string; chassi: string | null; marca: string; modelo: string; ano: number; cor: string } | null;
   associado: { id: string; nome: string; telefone: string; whatsapp: string | null } | null;
   sinistro: { id: string; protocolo: string } | null;
   auto_center: { id: string; nome_fantasia: string | null; nome: string } | null;
@@ -45,7 +45,7 @@ export function useVeiculosOficina(filters?: OficinaFilters) {
         .select(`
           id, numero, status, data_entrada, created_at, updated_at, valor_orcamento, etapas_reparo, observacoes, sinistro_id,
           oficina:oficinas(id, nome_fantasia, razao_social, cidade, estado),
-          veiculo:veiculos(id, placa, marca, modelo, ano, cor),
+          veiculo:veiculos(id, placa, chassi, marca, modelo, ano, cor),
           associado:associados(id, nome, telefone, whatsapp),
           sinistro:sinistros(id, protocolo)
         `)
@@ -86,6 +86,7 @@ export function useVeiculosOficina(filters?: OficinaFilters) {
         result = result.filter(
           (v) =>
             v.veiculo?.placa?.toLowerCase().includes(s) ||
+            v.veiculo?.chassi?.toLowerCase().includes(s) ||
             v.associado?.nome?.toLowerCase().includes(s) ||
             v.numero?.toLowerCase().includes(s)
         );

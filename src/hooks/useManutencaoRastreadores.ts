@@ -12,6 +12,7 @@ export interface VeiculoManutencao {
   associadoNome: string;
   rastreadorId: string;
   placa: string;
+  chassi: string;
   marca: string;
   modelo: string;
   ultimaComunicacao: string | null;
@@ -86,6 +87,20 @@ export function useManutencaoRastreadores() {
     [veiculosSemPontuar]
   );
 
+  // Lookup auxiliar para obter chassi (não está na view_rastreadores_posicao)
+  const { data: chassisMap } = useQuery({
+    queryKey: ['manutencao-veiculos-chassi', veiculoIds],
+    queryFn: async () => {
+      if (veiculoIds.length === 0) return new Map<string, string>();
+      const { data, error } = await supabase.from('veiculos').select('id, chassi').in('id', veiculoIds);
+      if (error) throw error;
+      const m = new Map<string, string>();
+      (data || []).forEach((v: any) => m.set(v.id, v.chassi || ''));
+      return m;
+    },
+    enabled: veiculoIds.length > 0,
+  });
+
   const { data: sinistrosAbertos } = useQuery({
     queryKey: ['manutencao-sinistros-abertos', veiculoIds],
     queryFn: async () => {
@@ -146,6 +161,7 @@ export function useManutencaoRastreadores() {
         associadoNome: v.associado_nome || 'Sem nome',
         rastreadorId: v.rastreador_id!,
         placa: v.placa || '',
+        chassi: chassisMap?.get(v.veiculo_id!) || '',
         marca: v.marca || '',
         modelo: v.modelo || '',
         ultimaComunicacao: v.ultima_comunicacao,
@@ -168,7 +184,8 @@ export function useManutencaoRastreadores() {
       const termo = busca.toLowerCase();
       lista = lista.filter(v =>
         v.associadoNome.toLowerCase().includes(termo) ||
-        v.placa.toLowerCase().includes(termo)
+        v.placa.toLowerCase().includes(termo) ||
+        v.chassi.toLowerCase().includes(termo)
       );
     }
 
