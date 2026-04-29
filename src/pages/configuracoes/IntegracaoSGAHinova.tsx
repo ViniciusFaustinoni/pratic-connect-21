@@ -12,9 +12,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TesteBoletoVeiculoHinova } from '@/components/integracoes/TesteBoletoVeiculoHinova';
 import { cn } from '@/lib/utils';
-import { useSGAHealthCheck } from '@/hooks/useSGAHealthCheck';
+import { useSGAHealthCheck, type SGAQueueItem } from '@/hooks/useSGAHealthCheck';
 import { ConfigurarIntegracaoSheet } from '@/components/integracoes/ConfigurarIntegracaoSheet';
 import { IntegracaoHealthPanel } from '@/components/integracoes/IntegracaoHealthPanel';
+import { SGAQueueItemDetailModal } from '@/components/integracoes/SGAQueueItemDetailModal';
 import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
