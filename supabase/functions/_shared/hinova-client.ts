@@ -970,6 +970,45 @@ export async function cadastrarVeiculoHinova(
   };
 }
 
+/**
+ * POST /veiculo/alterar/situacao — promove/altera a situação de um veículo já cadastrado.
+ * Endpoint padrão Hinova v2 para mudar `codigo_situacao` (ex.: pendente → ativo).
+ */
+export async function alterarSituacaoVeiculoHinova(
+  s: HinovaSession,
+  codigo_veiculo: number,
+  codigo_situacao: number,
+): Promise<{ ok: boolean; status: number; raw: any; mensagem: string | null; errors: string[] }> {
+  let r: Response;
+  const payload = { codigo_veiculo, codigo_situacao };
+  try {
+    r = await fetch(`${s.apiUrl}/veiculo/alterar/situacao`, {
+      method: 'POST',
+      headers: authHeaders(s),
+      body: JSON.stringify(payload),
+    });
+  } catch (e: any) {
+    throw new HinovaTransientError(`[alterarSituacaoVeiculo] rede: ${String(e?.message || e)}`, {
+      httpStatus: 0, reason: 'network',
+    });
+  }
+  const txt = await r.text();
+  const data = parseJsonSafe(txt);
+  if ((r.status === 401 || r.status === 403) && !isJanelaHorariaError(txt)) {
+    throwHttpError(r.status, txt, 'alterarSituacaoVeiculo');
+  }
+  if (r.status >= 500 || isJanelaHorariaError(txt)) {
+    throwHttpError(r.status, txt, 'alterarSituacaoVeiculo');
+  }
+  return {
+    ok: r.ok,
+    status: r.status,
+    raw: data ?? txt.slice(0, 500),
+    mensagem: data?.mensagem ?? null,
+    errors: extractErrors(data),
+  };
+}
+
 /** POST /veiculo/foto/cadastrar — máx 50 fotos por chamada */
 export interface FotoHinovaPayload {
   nome_arquivo: string;
