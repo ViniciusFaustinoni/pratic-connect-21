@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
 
     const { data: link, error: linkErr } = await supabase
       .from('instalacao_prestador_links')
-      .select('id, instalacao_id, vistoriador_prestador_id, prestador_id, valor, atribuido_por, status')
+      .select('id, instalacao_id, prestador_id, valor, atribuido_por, status')
       .eq('token', token)
       .in('status', ['aguardando', 'aceito', 'em_rota', 'em_execucao'])
       .maybeSingle()
