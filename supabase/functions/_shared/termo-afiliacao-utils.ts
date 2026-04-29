@@ -44,15 +44,16 @@ export interface VeiculoData {
   ano_fabricacao?: number;
   cor?: string;
   combustivel?: string;
-  categoria?: string;
-  tipo_uso?: string;
+  categoria?: string;        // CATEGORIA do CRLV: "Particular" | "Aluguel"
+  tipo_veiculo?: string;     // Tipo de carroceria: "carro" | "moto" | "utilitario" etc.
+  tipo_uso?: string;         // Uso comercial: "Particular" | "Aplicativo"
   codigo_fipe?: string;
   valor_fipe: number;
   alienado?: boolean;
   financeira?: string;
   procedencia?: string;
   cambio?: string;
-  portas?: number;
+  portas?: number | null;    // null/undefined → template imprime "—" (não chuta valor)
   uso_aplicativo?: boolean;
   leilao?: boolean;
   // Flags de depreciação
@@ -356,13 +357,22 @@ function inferirCambio(modelo: string | null | undefined): string {
   return '—';
 }
 
-function inferirPortas(categoria: string | null | undefined): number {
-  if (!categoria) return 4;
-  const c = categoria.toLowerCase();
-  if (c.includes('moto') || c.includes('motocicleta') || c.includes('scooter') || c.includes('triciclo')) return 0;
-  if (c.includes('coupe') || c.includes('cupê') || c.includes('esportivo') || c.includes('conversível') || c.includes('conversivel') || c.includes('roadster')) return 2;
-  if (c.includes('utilitário') || c.includes('utilitario') || c.includes('van') || c.includes('furgão') || c.includes('furgao')) return 4;
-  return 4;
+/**
+ * Resolve a CATEGORIA do CRLV (Particular/Aluguel) a partir dos dados disponíveis.
+ * Regra acordada com o usuário:
+ *  - uso_aplicativo = true  → "Aluguel"  (Uber/99/táxi/uso comercial via app)
+ *  - uso_aplicativo = false → "Particular"
+ *  - Se vier veiculo_tipo_uso explícito ('aluguel'/'particular'), respeita-o.
+ * Importante: NÃO usar `veiculo_categoria` (que guarda tipo de carroceria como "carro").
+ */
+function resolverCategoriaCrlv(
+  tipoUso: string | null | undefined,
+  usoAplicativo: boolean | null | undefined,
+): string {
+  const t = (tipoUso || '').toString().trim().toLowerCase();
+  if (t === 'aluguel' || t === 'aluguer') return 'Aluguel';
+  if (t === 'particular' || t === 'passeio') return 'Particular';
+  return usoAplicativo ? 'Aluguel' : 'Particular';
 }
 
 function ehLeilao(categoria: string | null | undefined, procedencia?: string | null): boolean {
@@ -427,7 +437,13 @@ export function mapearDadosParaTemplate(
         || 0,
       cor: contrato.veiculo_cor || veiculo.veiculo_cor || "",
       combustivel: contrato.veiculo_combustivel || veiculo.veiculo_combustivel || "",
-      categoria: contrato.veiculo_categoria || veiculo.veiculo_categoria || "Automóvel",
+      // CATEGORIA do CRLV (Particular/Aluguel) — derivada de uso_aplicativo / veiculo_tipo_uso
+      categoria: resolverCategoriaCrlv(
+        contrato.veiculo_tipo_uso || veiculo.veiculo_tipo_uso,
+        contrato.uso_aplicativo ?? veiculo.uso_aplicativo,
+      ),
+      // Tipo de carroceria (carro/moto/utilitário) — campo separado, mantém o valor legado
+      tipo_veiculo: contrato.veiculo_categoria || veiculo.veiculo_categoria || "",
       tipo_uso: contrato.veiculo_tipo_uso || veiculo.veiculo_tipo_uso || "Particular",
       codigo_fipe: contrato.codigo_fipe || veiculo.codigo_fipe || "",
       valor_fipe: contrato.veiculo_valor_fipe || veiculo.veiculo_fipe || 0,
@@ -435,7 +451,11 @@ export function mapearDadosParaTemplate(
       financeira: contrato.veiculo_financeira || veiculo.veiculo_financeira || "",
       procedencia: contrato.veiculo_procedencia || veiculo.veiculo_procedencia || "Usado de particular",
       cambio: inferirCambio(contrato.veiculo_modelo || veiculo.veiculo_modelo),
-      portas: inferirPortas(contrato.veiculo_categoria || veiculo.veiculo_categoria),
+      // Portas: SEM fallback. Lê do contrato → veículo (DB) → cotação. NULL se ausente.
+      portas: contrato.veiculo_numero_portas
+        ?? veiculoDB?.numero_portas
+        ?? veiculo.numero_portas
+        ?? null,
       uso_aplicativo: contrato.uso_aplicativo || false,
       leilao: ehLeilao(contrato.veiculo_categoria || veiculo.veiculo_categoria, contrato.veiculo_procedencia || veiculo.veiculo_procedencia),
       // Flags de depreciação (vindas do registro do veículo no banco)

@@ -958,6 +958,10 @@ serve(async (req) => {
             codigo_fipe: cotacao.codigo_fipe || null,
             uso_aplicativo: cotacao.uso_aplicativo || false,
             veiculo_categoria: cotacao.veiculo_categoria || await detectarCategoriaVeiculo(supabase, cotacao.veiculo_marca, cotacao.veiculo_modelo, cotacao.categoria),
+            // Número de portas (snapshot do CRLV/plate-lookup) — null se ausente
+            veiculo_numero_portas: cotacao.numero_portas ?? null,
+            // Tipo de uso (Particular/Aluguel/Particular comercial) — propaga da cotação para o termo
+            veiculo_tipo_uso: cotacao.veiculo_tipo_uso || null,
             
             // Dados obrigatórios para SGA Hinova e Termo de Afiliação (extraídos do CRLV via OCR)
             veiculo_chassi: cotacao.veiculo_chassi || null,

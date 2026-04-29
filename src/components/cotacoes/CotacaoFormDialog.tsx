@@ -1473,6 +1473,12 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         veiculo_ano: anoVeiculo,
         veiculo_placa: placa || veiculoEncontrado?.extractedPlate || null,
         veiculo_cor: veiculoEncontrado?.vehicleData?.cor || null,
+        // Número de portas vindo do CRLV/plate-lookup (snapshot para o termo)
+        numero_portas: (() => {
+          const raw = (veiculoEncontrado?.vehicleData as any)?.numero_portas;
+          const n = typeof raw === 'string' ? parseInt(raw, 10) : raw;
+          return Number.isFinite(n) && n > 0 ? n : null;
+        })(),
         codigo_fipe: veiculoEncontrado?.fipeData?.codigo || null,
         // Dados do solicitante (para exibição no card quando não há lead)
         nome_solicitante: nomeAssociado.trim() || null,
