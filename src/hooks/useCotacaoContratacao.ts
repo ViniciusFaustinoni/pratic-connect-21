@@ -11,6 +11,8 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 type Cotacao = Tables<'cotacoes'>;
 
 import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
+import { sanitizarPayloadCotacao } from '@/lib/sanitizers/cotacao-fields';
+import { descreverErroSupabase } from '@/lib/errors';
 
 function detectarCategoriaPorModelo(modelo?: string | null, marca?: string | null): string {
   const tipo = detectarTipoVeiculo(undefined, modelo, marca);
@@ -448,9 +450,7 @@ export function useCotacaoContratacao(token: string | undefined) {
       }
 
       // 1. Salvar dados pessoais + dados do veículo extraídos do CRLV
-      const { error } = await publicSupabase
-        .from('cotacoes')
-        .update({
+      const payloadBruto = {
           nome_solicitante: dados.nome,
           email_solicitante: dados.email,
           telefone1_solicitante: truncar(dados.telefone, 30),
@@ -488,7 +488,16 @@ export function useCotacaoContratacao(token: string | undefined) {
           veiculo_procedencia: dados.veiculo_procedencia || null,
           // Persistir categoria se ainda não definida
           ...((!cotacao.categoria) ? { categoria: detectarCategoriaPorModelo(cotacao.veiculo_modelo, cotacao.veiculo_marca) } : {}),
-        } as any)
+      };
+
+      // CAUSA RAIZ #fix: sanitizar TODOS os campos com limite de tamanho antes
+      // de gravar. Isso evita o erro "value too long for type character
+      // varying(N)" quando o OCR devolve, por exemplo, Renavam com 12 dígitos.
+      const payload = sanitizarPayloadCotacao(payloadBruto);
+
+      const { error } = await publicSupabase
+        .from('cotacoes')
+        .update(payload as any)
         .eq('id', cotacao.id);
 
       if (error) throw error;
@@ -515,8 +524,8 @@ export function useCotacaoContratacao(token: string | undefined) {
       setEtapaAtual(2); // Ir para assinatura do contrato (etapa 2 no novo fluxo)
       toast.success('Dados salvos com sucesso!');
     },
-    onError: (error: Error) => {
-      toast.error('Erro ao salvar dados: ' + error.message);
+    onError: (error: unknown) => {
+      toast.error(descreverErroSupabase(error, { contexto: 'salvar dados da cotação' }));
     },
   });
 
