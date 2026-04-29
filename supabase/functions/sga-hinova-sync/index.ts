@@ -831,6 +831,7 @@ serve(async (req) => {
         status_sga_destino: statusDestino,
         fotos_enviadas: fotosEnviadas,
         fotos_com_erro: fotosComErro,
+        fotos_por_codigo_tipo: porTipo,
       });
       console.log(`[sga-hinova-sync] OK veiculo=${_vid} cod_assoc=${codigoAssociadoHinova} cod_veic=${codigoVeiculoHinova}`);
 
