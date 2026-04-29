@@ -633,6 +633,9 @@ serve(async (req) => {
         }
       }
 
+      // Marca se o veículo já existia no Hinova antes desta execução
+      const veiculoJaExistiaNoHinova = !!codigoVeiculoHinova;
+
       // 6.d Cadastrar se não existe
       if (!codigoVeiculoHinova) {
         const codSituacao = statusDestino === 'ativo' ? codigoSituacaoAtivo : codigoSituacaoPendente;
