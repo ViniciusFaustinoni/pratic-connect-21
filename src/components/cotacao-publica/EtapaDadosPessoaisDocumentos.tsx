@@ -24,6 +24,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { sanitizePlaca, sanitizeChassi, sanitizeRenavam } from '@/lib/sanitizers/cotacao-fields';
 import type { DadosPessoaisForm } from './FormularioDadosPessoais';
 import { 
   UnifiedDocumentUploader, 
