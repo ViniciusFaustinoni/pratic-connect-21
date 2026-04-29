@@ -139,29 +139,29 @@ export default function Extrato() {
   }, [movimentacoes, filters.associado]);
 
   const resumo = useMemo(() => {
-    if (!movimentacoes) return { entradas: 0, saidas: 0, saldo: 0 };
+    if (!movimentacoesFiltradas) return { entradas: 0, saidas: 0, saldo: 0 };
 
-    const entradas = movimentacoes
-      .filter(m => m.tipo === 'entrada')
-      .reduce((acc, m) => acc + Number(m.valor || 0), 0);
+    const entradas = movimentacoesFiltradas
+      .filter((m: any) => m.tipo === 'entrada')
+      .reduce((acc: number, m: any) => acc + Number(m.valor || 0), 0);
 
-    const saidas = movimentacoes
-      .filter(m => m.tipo === 'saida')
-      .reduce((acc, m) => acc + Number(m.valor || 0), 0);
+    const saidas = movimentacoesFiltradas
+      .filter((m: any) => m.tipo === 'saida')
+      .reduce((acc: number, m: any) => acc + Number(m.valor || 0), 0);
 
     return { entradas, saidas, saldo: entradas - saidas };
-  }, [movimentacoes]);
+  }, [movimentacoesFiltradas]);
 
   const movimentacoesPorDia = useMemo(() => {
-    if (!movimentacoes) return {};
+    if (!movimentacoesFiltradas) return {} as Record<string, any[]>;
 
-    return movimentacoes.reduce((acc, mov) => {
+    return movimentacoesFiltradas.reduce((acc: Record<string, any[]>, mov: any) => {
       const data = mov.data_movimentacao;
       if (!acc[data]) acc[data] = [];
       acc[data].push(mov);
       return acc;
-    }, {} as Record<string, typeof movimentacoes>);
-  }, [movimentacoes]);
+    }, {} as Record<string, any[]>);
+  }, [movimentacoesFiltradas]);
 
   const datasOrdenadas = useMemo(() => {
     return Object.keys(movimentacoesPorDia).sort((a, b) =>
@@ -179,6 +179,21 @@ export default function Extrato() {
     return format(parsed, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
   };
 
+  const formatDateCell = (date: string) => {
+    try {
+      return format(parseISO(date), 'dd/MM/yyyy');
+    } catch {
+      return date;
+    }
+  };
+
+  // Remove sufixo "— NOME" da descrição quando o associado já é exibido em coluna própria
+  const stripAssociadoFromDescricao = (descricao: string | null, associadoNome?: string | null) => {
+    if (!descricao) return '';
+    if (!associadoNome) return descricao;
+    return descricao.replace(/\s*[—-]\s*.+$/, '').trim() || descricao;
+  };
+
   const getCategoriaLabel = (categoria: string) => {
     const cat = categorias.find(c => c.value === categoria);
     return cat?.label || categoria;
@@ -190,20 +205,21 @@ export default function Extrato() {
       dataFim: endOfMonth(new Date()).toISOString().split('T')[0],
       tipo: 'todos',
       categoria: 'todos',
+      associado: '',
     });
   };
 
   const handleExportar = () => {
-    if (!movimentacoes?.length) {
+    if (!movimentacoesFiltradas?.length) {
       toast.error('Nenhuma movimentação para exportar');
       return;
     }
 
-    const headers = 'Data,Tipo,Categoria,Descrição,Valor\n';
-    const rows = movimentacoes.map(m => 
-      `"${m.data_movimentacao}","${m.tipo}","${m.categoria || ''}","${m.descricao || ''}","${m.valor}"`
+    const headers = 'Data,Tipo,Categoria,Associado,Descrição,Valor\n';
+    const rows = movimentacoesFiltradas.map((m: any) =>
+      `"${m.data_movimentacao}","${m.tipo}","${m.categoria || ''}","${(m.associado?.nome || '').replace(/"/g, '""')}","${(m.descricao || '').replace(/"/g, '""')}","${m.valor}"`
     ).join('\n');
-    
+
     const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
