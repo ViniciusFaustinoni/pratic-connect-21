@@ -13,7 +13,7 @@ export interface VeiculoOficina {
   observacoes: string | null;
   sinistro_id: string | null;
   oficina: { id: string; nome_fantasia: string; razao_social: string; cidade: string; estado: string } | null;
-  veiculo: { id: string; placa: string; marca: string; modelo: string; ano: number; cor: string } | null;
+  veiculo: { id: string; placa: string; chassi: string | null; marca: string; modelo: string; ano: number; cor: string } | null;
   associado: { id: string; nome: string; telefone: string; whatsapp: string | null } | null;
   sinistro: { id: string; protocolo: string } | null;
   auto_center: { id: string; nome_fantasia: string | null; nome: string } | null;
