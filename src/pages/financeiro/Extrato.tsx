@@ -128,14 +128,15 @@ export default function Extrato() {
     }
   });
 
-  // Filtro client-side por nome do associado
+  // Filtro client-side por nome do associado (inclui nome extraído da descrição quando contrato foi removido)
   const movimentacoesFiltradas = useMemo(() => {
     if (!movimentacoes) return undefined;
     const term = filters.associado.trim().toLowerCase();
     if (!term) return movimentacoes;
-    return movimentacoes.filter((m: any) =>
-      m.associado?.nome?.toLowerCase().includes(term)
-    );
+    return movimentacoes.filter((m: any) => {
+      const nome = m.associado?.nome ?? extrairNomeDaDescricao(m.descricao) ?? '';
+      return nome.toLowerCase().includes(term);
+    });
   }, [movimentacoes, filters.associado]);
 
   const resumo = useMemo(() => {
