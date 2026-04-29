@@ -583,6 +583,8 @@ serve(async (req) => {
         }
         
         // CORREÇÃO: Buscar ou criar veículo (suporta 0km sem placa)
+        // Só executa se ainda tivermos associado válido (não foi descartado por colisão de nome)
+        if (associadoId) {
         const placaLimpaEmail = cotacao.veiculo_placa?.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || null;
         const placaParaInsertEmail = placaLimpaEmail || ('0KM' + crypto.randomUUID().replace(/-/g, '').slice(0, 5).toUpperCase());
 
@@ -667,6 +669,7 @@ serve(async (req) => {
           veiculoId = novoVeiculoEmail.id;
           console.log('Novo veículo criado para associado existente (email):', veiculoId, 'placa:', placaParaInsertEmail);
         }
+        } // fim do guard `if (associadoId)` para criação de veículo
       }
     }
     
