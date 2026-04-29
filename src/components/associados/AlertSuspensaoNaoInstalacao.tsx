@@ -57,10 +57,10 @@ export function AlertSuspensaoNaoInstalacao({ associadoId, contratoId }: Props) 
 
       const { data: assoc } = await supabase
         .from('associados')
-        .select('cliente_uf')
+        .select('uf')
         .eq('id', associadoId)
         .maybeSingle();
-      const uf = (assoc?.cliente_uf || '').toUpperCase();
+      const uf = ((assoc as any)?.uf || '').toUpperCase();
       const prazoHoras = uf === 'RJ' ? prazoRJ : uf === 'SP' ? prazoSP : prazoDefault;
 
       const assinadoEm = new Date(contrato.data_assinatura).getTime();
