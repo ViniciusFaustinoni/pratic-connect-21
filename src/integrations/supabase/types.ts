@@ -14739,13 +14739,16 @@ export type Database = {
       instalacao_prestador_links: {
         Row: {
           aceito_em: string | null
+          assinatura_url: string | null
           atribuido_por: string | null
+          checklist_data: Json | null
           chegada_em: string | null
           concluida_em: string | null
           created_at: string | null
           em_rota_em: string | null
           expires_at: string
           foto_comprovante_url: string | null
+          fotos_vistoria: Json | null
           id: string
           iniciada_em: string | null
           instalacao_id: string
@@ -14763,13 +14766,16 @@ export type Database = {
         }
         Insert: {
           aceito_em?: string | null
+          assinatura_url?: string | null
           atribuido_por?: string | null
+          checklist_data?: Json | null
           chegada_em?: string | null
           concluida_em?: string | null
           created_at?: string | null
           em_rota_em?: string | null
           expires_at?: string
           foto_comprovante_url?: string | null
+          fotos_vistoria?: Json | null
           id?: string
           iniciada_em?: string | null
           instalacao_id: string
@@ -14787,13 +14793,16 @@ export type Database = {
         }
         Update: {
           aceito_em?: string | null
+          assinatura_url?: string | null
           atribuido_por?: string | null
+          checklist_data?: Json | null
           chegada_em?: string | null
           concluida_em?: string | null
           created_at?: string | null
           em_rota_em?: string | null
           expires_at?: string
           foto_comprovante_url?: string | null
+          fotos_vistoria?: Json | null
           id?: string
           iniciada_em?: string | null
           instalacao_id?: string
@@ -32229,6 +32238,10 @@ export type Database = {
             Returns: boolean
           }
         | { Args: { _role: string; _user_id: string }; Returns: boolean }
+      has_valid_prestador_link: {
+        Args: { _instalacao_id: string }
+        Returns: boolean
+      }
       iniciar_rota_servico: { Args: { p_servico_id: string }; Returns: Json }
       iniciar_tarefa_servico: { Args: { p_servico_id: string }; Returns: Json }
       is_admin_master: { Args: { _user_id: string }; Returns: boolean }
