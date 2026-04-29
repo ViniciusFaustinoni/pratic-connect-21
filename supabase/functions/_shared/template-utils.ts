@@ -169,8 +169,10 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
     'veiculo.ano_fabricacao': String(dados.veiculo.ano_fabricacao || dados.veiculo.ano || '—'),
     'veiculo.cor': dados.veiculo.cor || '—',
     'veiculo.combustivel': dados.veiculo.combustivel || '—',
-    'veiculo.categoria': dados.veiculo.categoria || 'Automóvel',
-    'veiculo.tipo': dados.veiculo.categoria || 'Automóvel',
+    // CATEGORIA do CRLV (Particular/Aluguel) — já resolvida em mapearDadosParaTemplate
+    'veiculo.categoria': dados.veiculo.categoria || 'Particular',
+    // Tipo de carroceria (carro/moto/utilitário) — vem de tipo_veiculo se existir, senão fallback histórico
+    'veiculo.tipo': (dados.veiculo as any).tipo_veiculo || 'Automóvel',
     'veiculo.tipo_uso': dados.veiculo.tipo_uso || 'Particular',
     'veiculo.codigo_fipe': dados.veiculo.codigo_fipe || '—',
     'veiculo.valor_fipe': formatCurrency(dados.veiculo.valor_fipe),
@@ -178,7 +180,8 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
     'veiculo.financeira': dados.veiculo.financeira || '—',
     'veiculo.procedencia': dados.veiculo.procedencia || 'Usado de particular',
     'veiculo.cambio': dados.veiculo.cambio || '—',
-    'veiculo.portas': String(dados.veiculo.portas ?? 4),
+    // Portas: nunca chutar — se ausente mostra "—"
+    'veiculo.portas': dados.veiculo.portas != null ? String(dados.veiculo.portas) : '—',
     'veiculo.leilao': dados.veiculo.leilao ? 'SIM' : 'NÃO',
     'veiculo.uso_aplicativo': dados.veiculo.uso_aplicativo ? 'SIM' : 'NÃO',
     'veiculo.valor_protegido': formatCurrency(dados.veiculo.valor_fipe),
