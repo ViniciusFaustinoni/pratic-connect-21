@@ -126,6 +126,7 @@ export interface Servico {
   veiculo?: {
     id: string;
     placa: string;
+    chassi: string | null;
     marca: string;
     modelo: string;
     cor: string | null;
