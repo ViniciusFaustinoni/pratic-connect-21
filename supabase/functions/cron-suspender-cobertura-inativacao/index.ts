@@ -54,18 +54,36 @@ Deno.serve(async (req) => {
 
     if (errContratos) throw errContratos;
     if (!contratos?.length) {
-      return new Response(JSON.stringify({ message: 'Nenhum contrato a verificar', prazo_horas: prazoHoras }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(JSON.stringify({
+        message: 'Nenhum contrato a verificar',
+        prazos: { default: prazoDefault, RJ: prazoRJ, SP: prazoSP },
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     let suspensos = 0;
-    const detalhes: Array<{ veiculo_id: string; contrato_id: string; placa?: string }> = [];
+    const detalhes: Array<{ veiculo_id: string; contrato_id: string; placa?: string; uf?: string; prazo_horas: number }> = [];
     const ignorados: Array<{ contrato_id: string; motivo: string }> = [];
 
     for (const contrato of contratos) {
       if (!contrato.veiculo_id) {
         ignorados.push({ contrato_id: contrato.id, motivo: 'sem veiculo_id' });
+        continue;
+      }
+
+      // Carregar UF do associado para escolher o prazo correto
+      const { data: assocUf } = await supabase
+        .from('associados')
+        .select('cliente_uf')
+        .eq('id', contrato.associado_id)
+        .maybeSingle();
+      const uf = (assocUf?.cliente_uf || '').toUpperCase() || null;
+      const prazoHoras = prazoPorUf(uf);
+
+      // Validar se realmente expirou para a UF deste contrato (a query inicial usa o menor prazo)
+      const assinadoEm = new Date(contrato.data_assinatura).getTime();
+      const expirouEm = assinadoEm + prazoHoras * 60 * 60 * 1000;
+      if (expirouEm > Date.now()) {
+        ignorados.push({ contrato_id: contrato.id, motivo: `prazo regional ${uf ?? 'default'} (${prazoHoras}h) ainda não venceu` });
         continue;
       }
 
@@ -149,29 +167,48 @@ Deno.serve(async (req) => {
         console.error('[cron-suspender] Falha ao notificar WhatsApp', e);
       }
 
-      // Auditoria
+      // Auditoria — logs_auditoria + associados_historico
       await supabase.from('logs_auditoria').insert({
         acao: 'suspensao_automatica',
         modulo: 'monitoramento',
-        descricao: `Cobertura suspensa: instalação não realizada no prazo (${prazoHoras}h)`,
+        descricao: `Cobertura suspensa: instalação não realizada no prazo (${prazoHoras}h, UF=${uf ?? 'N/D'})`,
         dados_novos: {
           contrato_id: contrato.id,
           veiculo_id: contrato.veiculo_id,
           placa: veiculo.placa,
           prazo_horas: prazoHoras,
+          uf,
           tipo_vistoria: contrato.tipo_vistoria,
           status_contrato: contrato.status,
         },
       });
 
+      try {
+        await supabase.from('associados_historico').insert({
+          associado_id: contrato.associado_id,
+          tipo: 'suspensao_cobertura_instalacao',
+          descricao: `Cobertura suspensa automaticamente: instalação não realizada no prazo de ${prazoHoras}h (UF=${uf ?? 'N/D'})`,
+          dados_novos: {
+            contrato_id: contrato.id,
+            veiculo_id: contrato.veiculo_id,
+            placa: veiculo.placa,
+            prazo_horas: prazoHoras,
+            uf,
+            origem: 'cron',
+          },
+        });
+      } catch (e) {
+        console.error('[cron-suspender] Falha ao registrar historico', e);
+      }
+
       suspensos++;
-      detalhes.push({ veiculo_id: contrato.veiculo_id, contrato_id: contrato.id, placa: veiculo.placa });
+      detalhes.push({ veiculo_id: contrato.veiculo_id, contrato_id: contrato.id, placa: veiculo.placa, uf: uf ?? undefined, prazo_horas: prazoHoras });
     }
 
     return new Response(
       JSON.stringify({
         suspensos,
-        prazo_horas: prazoHoras,
+        prazos: { default: prazoDefault, RJ: prazoRJ, SP: prazoSP },
         total_verificados: contratos.length,
         detalhes,
         ignorados,
