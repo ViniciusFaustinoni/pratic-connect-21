@@ -73,10 +73,10 @@ Deno.serve(async (req) => {
       // Carregar UF do associado para escolher o prazo correto
       const { data: assocUf } = await supabase
         .from('associados')
-        .select('cliente_uf')
+        .select('uf')
         .eq('id', contrato.associado_id)
         .maybeSingle();
-      const uf = (assocUf?.cliente_uf || '').toUpperCase() || null;
+      const uf = (assocUf?.uf || '').toUpperCase() || null;
       const prazoHoras = prazoPorUf(uf);
 
       // Validar se realmente expirou para a UF deste contrato (a query inicial usa o menor prazo)
