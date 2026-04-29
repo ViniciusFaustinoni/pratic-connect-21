@@ -1,41 +1,53 @@
-# Causa raiz — "Erro ao aprovar instalação"
+## Diagnóstico confirmado
 
-Investiguei a stack completa do botão **Aprovar** em Monitoramento → Aprovação de Associados:
+Existem **dois associados duplicados** com o nome "Adolpho Konder Homem de Carvalho Filho", e ambos estão com o nome trocado:
 
-1. UI chama `useAprovarInstalacaoMonitoramento` (`src/hooks/useAprovacaoMonitoramento.ts`).
-2. Hook faz `UPDATE servicos SET status = 'aprovada' …`.
-3. O trigger **`trg_bloquear_servico_se_terminal`** dispara e chama a função **`fn_associado_em_estado_terminal(associado_id)`**.
-4. Essa função considera **`'suspenso'` como estado terminal** (junto com `cancelado`, `recusado`, etc.).
-5. Como acabamos de implementar o fluxo de **suspensão automática 48h/72h por não-instalação**, vários associados que chegam ao monitoramento agora estão com `status = 'suspenso'`. O trigger lança a exceção:
+| Associado ID | Nome atual (errado) | CPF | Email | Quem realmente é |
+|---|---|---|---|---|
+| `a1fac976…` | ADOLPHO KONDER… | 127.235.327-39 | cv032779@gmail.com | **Camilly Vitória Calixto Carneiro** (já corrigido em passo anterior segundo o histórico, mas ainda consta "ADOLPHO" no banco) |
+| `e4d9d1f8…` | Adolpho Konder… | 161.678.967-04 | Rayslanhudson45@gmail.com | **Rayslan Hudson Honorato Torres** (dono real do HBI8H51) |
 
-   > `Não é possível concluir serviço: associado está em status "suspenso"`
+O contrato `CTR-20260428160104-HPOGTC` (Honda CG 125 Fan ES 2011, placa HBI8H51) está corretamente vinculado ao associado `e4d9d1f8…` e ao veículo `85d3e19a…`. **O vínculo associado ↔ contrato ↔ veículo está certo** — o problema é só o **nome cadastrado**, que ficou "Adolpho" em vez de "Rayslan".
 
-6. O hook captura, mas o `onError` mostra apenas `"Erro ao aprovar instalação"` genérico — daí o toast vazio na sua tela.
+Não há duplicação real do contrato/veículo a desfazer; é uma correção de nome em cascata + reenvio do Autentique.
 
-## Por que `'suspenso'` não é terminal
+## Plano de correção
 
-Suspensão por não-instalação é, **por design**, **reversível pela própria aprovação da instalação** — quando o monitoramento aprova a instalação tardia, a cobertura tem que voltar. Misturar `suspenso` em `fn_associado_em_estado_terminal` quebra esse fluxo (e qualquer outro que precise concluir/aprovar serviços de associados temporariamente suspensos).
+### 1. Corrigir nome do associado `e4d9d1f8…` (dono do HBI8H51)
+UPDATE em `associados`:
+- `nome` = "RAYSLAN HUDSON HONORATO TORRES"
+- (CPF 161.678.967-04 e email Rayslanhudson45@gmail.com permanecem)
 
-Estados verdadeiramente terminais permanecem: `cancelado`, `cancelamento_solicitado`, `recusado`, `inadimplente_terminal`.
+### 2. Corrigir nome do cliente no contrato `CTR-20260428160104-HPOGTC`
+UPDATE em `contratos` (id `5e62227f…`):
+- `cliente_nome` = "RAYSLAN HUDSON HONORATO TORRES"
+- Os demais dados (CPF, email, telefone, veículo) já estão corretos.
 
-## Correções
+### 3. Corrigir o associado duplicado `a1fac976…` (que é a Camilly)
+UPDATE em `associados`:
+- `nome` = "CAMILLY VITÓRIA CALIXTO CARNEIRO"
+(Conforme já acordado anteriormente — confirmando que persiste a inconsistência no banco.)
 
-**1. Migração** — Atualizar `public.fn_associado_em_estado_terminal` removendo `'suspenso'` da lista. Isso desbloqueia o trigger `trg_bloquear_servico_se_terminal` para serviços de associados suspensos, permitindo que a aprovação prossiga e o trigger `fn_reativar_cobertura_pos_instalacao` reative a cobertura naturalmente.
+### 4. Cancelar e reenviar o Autentique do contrato HPOGTC
+O documento Autentique atual (`d5921bf1…`) foi gerado com o nome "Adolpho" no PDF e como signatário. Status = `viewed` (não assinado ainda). Ações:
+- Chamar `autentique-cancel` para invalidar o documento atual.
+- Regenerar o termo via fluxo padrão (`autentique-create`) com o nome correto "Rayslan Hudson Honorato Torres" como signatário, mantendo email `Rayslanhudson45@gmail.com` e telefone `21966855503`.
+- Resetar campos no contrato: `autentique_status` = `pending`, `data_envio` = now, novo `autentique_documento_id` e `autentique_url`.
 
-```sql
-CREATE OR REPLACE FUNCTION public.fn_associado_em_estado_terminal(_associado_id uuid)
-RETURNS text LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public'
-AS $$
-  SELECT status::text FROM public.associados
-  WHERE id = _associado_id
-    AND status::text IN ('cancelado','cancelamento_solicitado','recusado','inadimplente_terminal')
-  LIMIT 1;
-$$;
-```
+### 5. Verificação pós-correção
+Após as atualizações, conferir que:
+- Card de vendas mostra "Rayslan Hudson Honorato Torres" no contrato HPOGTC.
+- Veículo HBI8H51 aparece sob Rayslan.
+- Card "Adolpho/Camilly" do contrato 2RI0GS aparece como "Camilly Vitória".
 
-**2. Hook** — `src/hooks/useAprovacaoMonitoramento.ts`: trocar o `onError` para exibir `error.message` real em vez do toast genérico, evitando que erros futuros do trigger fiquem invisíveis.
+## Detalhes técnicos
 
-## Não muda
+- Operações 1, 2, 3 são `UPDATE` em tabela existente → executadas via insert/update tool.
+- Operação 4 usa as edge functions já existentes `autentique-cancel` e `autentique-create` (já mapeadas em `src/hooks/useAutentique.ts`).
+- Nenhuma alteração de schema é necessária.
+- Nenhum código de UI precisa mudar — a UI já lê `cliente_nome`/`associados.nome`, então a correção de dados resolve a exibição.
 
-- `ativar-associado` (edge function), pré-validações, lógica de UI, RLS — nada disso é tocado.
-- `'suspenso'` continua sendo um status válido em `associados` e bloqueando os fluxos onde já bloqueia hoje (cobrança, sinistro, etc.).
+## O que NÃO será feito
+- Não vou apagar nem mesclar os dois associados (são pessoas diferentes — Rayslan e Camilly).
+- Não vou mexer no contrato 2RI0GS além do nome do associado vinculado (ele já está assinado e o `cliente_nome` já está correto como "CAMILLY").
+- Não vou alterar o veículo HBI8H51 (já vinculado ao associado correto).
