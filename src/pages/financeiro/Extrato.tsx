@@ -460,9 +460,20 @@ export default function Extrato() {
                               >
                                 {mov.associado.nome}
                               </Link>
-                            ) : (
-                              <span className="text-sm text-muted-foreground">—</span>
-                            )}
+                            ) : (() => {
+                              const nomeFallback = extrairNomeDaDescricao(mov.descricao);
+                              if (!nomeFallback) {
+                                return <span className="text-sm text-muted-foreground">—</span>;
+                              }
+                              return (
+                                <span
+                                  className="text-sm text-muted-foreground truncate block italic"
+                                  title={`${nomeFallback} (cadastro removido)`}
+                                >
+                                  {nomeFallback}
+                                </span>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline">
