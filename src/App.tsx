@@ -483,6 +483,7 @@ const App = () => (
               
               {/* Vendas — VendasNotificationListener montado por rota (Fase 5) */}
               <Route path="/vendas" element={<Navigate to="/vendas/leads" replace />} />
+              <Route path="/vendas/dashboard" element={<Navigate to="/vendas/leads" replace />} />
               <Route path="/vendas/leads" element={<><VendasNotificationListener /><LeadsUnificado /></>} />
               <Route path="/vendas/leads/:id" element={<><VendasNotificationListener /><LeadDetalhe /></>} />
               <Route path="/vendas/leads/:id/editar" element={<LeadEditar />} />
