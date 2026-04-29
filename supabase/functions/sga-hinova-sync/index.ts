@@ -543,7 +543,7 @@ serve(async (req) => {
         };
         const payloadA = buildAssociadoPayload(associado, ctxA);
         try {
-          const res = await cadastrarAssociadoHinova(session, payloadA);
+          const res = await cadastrarAssociadoHinova(supabase, payloadA);
           await logSync(_vid, _aid, 'cadastrar_associado', res.ok ? 'success' : 'error',
             { ...payloadA, cpf: '***' }, res.raw,
             res.ok ? null : (res.mensagem || res.errors.join('; ') || `HTTP ${res.status}`));
@@ -613,7 +613,7 @@ serve(async (req) => {
       // 6.c Buscar por chassi (placeholder 0KM ou placa não encontrada)
       if (!codigoVeiculoHinova && chassiLimpo.length === 17) {
         try {
-          const r = await buscarVeiculoPorChassi(session, chassiLimpo);
+          const r = await buscarVeiculoPorChassi(supabase, chassiLimpo);
           if (r.found?.codigo_veiculo) {
             const codAssocRem = Number(r.found.codigo_associado || 0);
             if (codAssocRem && codAssocRem !== codigoAssociadoHinova) {
@@ -659,7 +659,7 @@ serve(async (req) => {
         const payloadV = buildVeiculoPayload(veiculo, veiculo.codigo_fipe || '', Number(veiculo.valor_fipe) || 0, ctxV);
 
         try {
-          const res = await cadastrarVeiculoHinova(session, payloadV);
+          const res = await cadastrarVeiculoHinova(supabase, payloadV);
           await logSync(_vid, _aid, 'cadastrar_veiculo', res.ok ? 'success' : 'error',
             payloadV, res.raw, res.ok ? null : (res.mensagem || res.errors.join('; ') || `HTTP ${res.status}`));
           if (!res.ok || !res.codigo) {
@@ -702,7 +702,7 @@ serve(async (req) => {
         const codSituacaoAtivo = codigoSituacaoAtivo;
         if (Number.isFinite(codSituacaoAtivo) && codSituacaoAtivo > 0) {
           try {
-            const res = await alterarSituacaoVeiculoHinova(session, codigoVeiculoHinova, codSituacaoAtivo);
+            const res = await alterarSituacaoVeiculoHinova(supabase, codigoVeiculoHinova, codSituacaoAtivo);
             await logSync(_vid, _aid, 'promover_situacao_veiculo', res.ok ? 'success' : 'error',
               { codigo_veiculo: codigoVeiculoHinova, codigo_situacao: codSituacaoAtivo },
               res.raw,
@@ -806,7 +806,7 @@ serve(async (req) => {
       if (fotos.length > 0 && codigoVeiculoHinova) {
         for (const lote of chunk(fotos, 50)) {
           try {
-            const r = await cadastrarFotosVeiculoHinova(session, codigoVeiculoHinova, lote);
+            const r = await cadastrarFotosVeiculoHinova(supabase, codigoVeiculoHinova, lote);
             await logSync(_vid, _aid, 'enviar_fotos', r.ok ? 'success' : 'error',
               { codigo_veiculo: codigoVeiculoHinova, qtd: lote.length }, r.raw,
               r.ok ? null : (r.mensagem || r.errors.join('; ')));

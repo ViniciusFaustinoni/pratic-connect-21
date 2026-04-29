@@ -954,70 +954,118 @@ function extractErrors(payload: any): string[] {
   return [];
 }
 
-/** POST /associado/cadastrar */
+/**
+ * Distingue um HinovaSession de um SupabaseClient.
+ * HinovaSession tem `tokenUsuario`; SupabaseClient não.
+ */
+function isHinovaSession(x: any): x is HinovaSession {
+  return !!(x && typeof x === 'object' && typeof x.tokenUsuario === 'string' && typeof x.apiUrl === 'string');
+}
+
+/**
+ * Helper para POST autenticados a um endpoint Hinova com retry/reauth automático.
+ * Aceita tanto `supabase` (caminho recomendado, com retry via hinovaFetch) quanto
+ * `session` legado (mantém comportamento antigo, sem retry). Centralizar este
+ * helper evita repetir o boilerplate em cada função e garante que toda nova função
+ * já nasça com retry quando chamada via supabase.
+ */
+async function hinovaPostAuth(
+  supabaseOrSession: any,
+  path: string,
+  body: unknown,
+  ctx: string,
+): Promise<{ status: number; ok: boolean; txt: string; data: any }> {
+  let status: number;
+  let ok: boolean;
+  let txt: string;
+
+  if (isHinovaSession(supabaseOrSession)) {
+    // Caminho legado — sem retry. Mantido para chamadores antigos.
+    const s = supabaseOrSession;
+    let r: Response;
+    try {
+      r = await fetch(`${s.apiUrl}${path}`, {
+        method: 'POST',
+        headers: authHeaders(s),
+        body: JSON.stringify(body),
+      });
+    } catch (e: any) {
+      throw new HinovaTransientError(`[${ctx}] rede: ${String(e?.message || e)}`, {
+        httpStatus: 0, reason: 'network',
+      });
+    }
+    status = r.status;
+    ok = r.ok;
+    txt = await r.text();
+  } else {
+    // Caminho novo — com retry/reauth via hinovaFetch.
+    const supabase = supabaseOrSession;
+    const session0 = await getHinovaSession(supabase);
+    const { response, bodyText } = await hinovaFetch(
+      supabase,
+      (token) => ({
+        url: `${session0.apiUrl}${path}`,
+        init: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(body),
+        },
+      }),
+      ctx,
+    );
+    status = response.status;
+    ok = response.ok;
+    txt = bodyText;
+  }
+
+  const data = parseJsonSafe(txt);
+  if ((status === 401 || status === 403) && !isJanelaHorariaError(txt)) {
+    throwHttpError(status, txt, ctx);
+  }
+  if (status >= 500 || isJanelaHorariaError(txt)) {
+    throwHttpError(status, txt, ctx);
+  }
+  return { status, ok, txt, data };
+}
+
+/**
+ * POST /associado/cadastrar
+ *
+ * Aceita tanto `supabase` (recomendado — habilita retry automático em 401/403)
+ * quanto um `HinovaSession` legado (compat com chamadores antigos).
+ */
 export async function cadastrarAssociadoHinova(
-  s: HinovaSession,
+  supabaseOrSession: any,
   payload: Record<string, unknown>,
 ): Promise<CadastroResultado> {
-  let r: Response;
-  try {
-    r = await fetch(`${s.apiUrl}/associado/cadastrar`, {
-      method: 'POST',
-      headers: authHeaders(s),
-      body: JSON.stringify(payload),
-    });
-  } catch (e: any) {
-    throw new HinovaTransientError(`[cadastrarAssociado] rede: ${String(e?.message || e)}`, {
-      httpStatus: 0, reason: 'network',
-    });
-  }
-  const txt = await r.text();
-  const data = parseJsonSafe(txt);
-  if ((r.status === 401 || r.status === 403) && !isJanelaHorariaError(txt)) {
-    throwHttpError(r.status, txt, 'cadastrarAssociado');
-  }
-  if (r.status >= 500 || isJanelaHorariaError(txt)) {
-    throwHttpError(r.status, txt, 'cadastrarAssociado');
-  }
+  const { ok, status, txt, data } = await hinovaPostAuth(
+    supabaseOrSession, '/associado/cadastrar', payload, 'cadastrarAssociado',
+  );
   return {
-    ok: r.ok,
+    ok,
     codigo: extractCodigo(data, 'codigo_associado'),
-    status: r.status,
+    status,
     raw: data ?? txt.slice(0, 500),
     mensagem: data?.mensagem ?? null,
     errors: extractErrors(data),
   };
 }
 
-/** POST /veiculo/cadastrar */
+/**
+ * POST /veiculo/cadastrar
+ * Aceita supabase (recomendado, com retry) ou HinovaSession (legado).
+ */
 export async function cadastrarVeiculoHinova(
-  s: HinovaSession,
+  supabaseOrSession: any,
   payload: Record<string, unknown>,
 ): Promise<CadastroResultado> {
-  let r: Response;
-  try {
-    r = await fetch(`${s.apiUrl}/veiculo/cadastrar`, {
-      method: 'POST',
-      headers: authHeaders(s),
-      body: JSON.stringify(payload),
-    });
-  } catch (e: any) {
-    throw new HinovaTransientError(`[cadastrarVeiculo] rede: ${String(e?.message || e)}`, {
-      httpStatus: 0, reason: 'network',
-    });
-  }
-  const txt = await r.text();
-  const data = parseJsonSafe(txt);
-  if ((r.status === 401 || r.status === 403) && !isJanelaHorariaError(txt)) {
-    throwHttpError(r.status, txt, 'cadastrarVeiculo');
-  }
-  if (r.status >= 500 || isJanelaHorariaError(txt)) {
-    throwHttpError(r.status, txt, 'cadastrarVeiculo');
-  }
+  const { ok, status, txt, data } = await hinovaPostAuth(
+    supabaseOrSession, '/veiculo/cadastrar', payload, 'cadastrarVeiculo',
+  );
   return {
-    ok: r.ok,
+    ok,
     codigo: extractCodigo(data, 'codigo_veiculo'),
-    status: r.status,
+    status,
     raw: data ?? txt.slice(0, 500),
     mensagem: data?.mensagem ?? null,
     errors: extractErrors(data),
@@ -1026,37 +1074,20 @@ export async function cadastrarVeiculoHinova(
 
 /**
  * POST /veiculo/alterar/situacao — promove/altera a situação de um veículo já cadastrado.
- * Endpoint padrão Hinova v2 para mudar `codigo_situacao` (ex.: pendente → ativo).
+ * Aceita supabase (recomendado, com retry) ou HinovaSession (legado).
  */
 export async function alterarSituacaoVeiculoHinova(
-  s: HinovaSession,
+  supabaseOrSession: any,
   codigo_veiculo: number,
   codigo_situacao: number,
 ): Promise<{ ok: boolean; status: number; raw: any; mensagem: string | null; errors: string[] }> {
-  let r: Response;
   const payload = { codigo_veiculo, codigo_situacao };
-  try {
-    r = await fetch(`${s.apiUrl}/veiculo/alterar/situacao`, {
-      method: 'POST',
-      headers: authHeaders(s),
-      body: JSON.stringify(payload),
-    });
-  } catch (e: any) {
-    throw new HinovaTransientError(`[alterarSituacaoVeiculo] rede: ${String(e?.message || e)}`, {
-      httpStatus: 0, reason: 'network',
-    });
-  }
-  const txt = await r.text();
-  const data = parseJsonSafe(txt);
-  if ((r.status === 401 || r.status === 403) && !isJanelaHorariaError(txt)) {
-    throwHttpError(r.status, txt, 'alterarSituacaoVeiculo');
-  }
-  if (r.status >= 500 || isJanelaHorariaError(txt)) {
-    throwHttpError(r.status, txt, 'alterarSituacaoVeiculo');
-  }
+  const { ok, status, txt, data } = await hinovaPostAuth(
+    supabaseOrSession, '/veiculo/alterar/situacao', payload, 'alterarSituacaoVeiculo',
+  );
   return {
-    ok: r.ok,
-    status: r.status,
+    ok,
+    status,
     raw: data ?? txt.slice(0, 500),
     mensagem: data?.mensagem ?? null,
     errors: extractErrors(data),
@@ -1072,8 +1103,12 @@ export interface FotoHinovaPayload {
   observacao?: string;
 }
 
+/**
+ * POST /veiculo/foto/cadastrar
+ * Aceita supabase (recomendado, com retry) ou HinovaSession (legado).
+ */
 export async function cadastrarFotosVeiculoHinova(
-  s: HinovaSession,
+  supabaseOrSession: any,
   codigo_veiculo: number,
   fotos: FotoHinovaPayload[],
 ): Promise<CadastroResultado> {
@@ -1083,57 +1118,64 @@ export async function cadastrarFotosVeiculoHinova(
   if (fotos.length > 50) {
     throw new Error('cadastrarFotosVeiculoHinova: máx. 50 fotos por chamada');
   }
-  let r: Response;
-  try {
-    r = await fetch(`${s.apiUrl}/veiculo/foto/cadastrar`, {
-      method: 'POST',
-      headers: authHeaders(s),
-      body: JSON.stringify({ codigo_veiculo, foto: fotos }),
-    });
-  } catch (e: any) {
-    throw new HinovaTransientError(`[cadastrarFotosVeiculo] rede: ${String(e?.message || e)}`, {
-      httpStatus: 0, reason: 'network',
-    });
-  }
-  const txt = await r.text();
-  const data = parseJsonSafe(txt);
-  if ((r.status === 401 || r.status === 403) && !isJanelaHorariaError(txt)) {
-    throwHttpError(r.status, txt, 'cadastrarFotosVeiculo');
-  }
-  if (r.status >= 500 || isJanelaHorariaError(txt)) {
-    throwHttpError(r.status, txt, 'cadastrarFotosVeiculo');
-  }
+  const { ok, status, txt, data } = await hinovaPostAuth(
+    supabaseOrSession, '/veiculo/foto/cadastrar', { codigo_veiculo, foto: fotos }, 'cadastrarFotosVeiculo',
+  );
   return {
-    ok: r.ok,
+    ok,
     codigo: null,
-    status: r.status,
+    status,
     raw: data ?? txt.slice(0, 500),
     mensagem: data?.mensagem ?? null,
     errors: extractErrors(data),
   };
 }
 
-/** GET /veiculo/buscar/:chassi/chassi — retorna { codigo_veiculo, codigo_associado } ou null */
+/**
+ * GET /veiculo/buscar/:chassi/chassi — retorna { codigo_veiculo, codigo_associado } ou null.
+ * Aceita supabase (recomendado, com retry) ou HinovaSession (legado).
+ */
 export async function buscarVeiculoPorChassi(
-  s: HinovaSession,
+  supabaseOrSession: any,
   chassi: string,
 ): Promise<{ found: any | null; debug: { endpoint: string; status: number; bodySample: string } }> {
   const c = (chassi || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (c.length !== 17) {
     return { found: null, debug: { endpoint: 'buscar/chassi', status: 0, bodySample: 'chassi inválido' } };
   }
-  let r: Response;
-  try {
-    r = await fetch(`${s.apiUrl}/veiculo/buscar/${c}/chassi`, { method: 'GET', headers: authHeaders(s) });
-  } catch (e: any) {
-    throw new HinovaTransientError(`[buscarVeiculoPorChassi] rede: ${String(e?.message || e)}`, {
-      httpStatus: 0, reason: 'network',
-    });
+
+  let status: number;
+  let ok: boolean;
+  let txt: string;
+
+  if (isHinovaSession(supabaseOrSession)) {
+    const s = supabaseOrSession;
+    let r: Response;
+    try {
+      r = await fetch(`${s.apiUrl}/veiculo/buscar/${c}/chassi`, { method: 'GET', headers: authHeaders(s) });
+    } catch (e: any) {
+      throw new HinovaTransientError(`[buscarVeiculoPorChassi] rede: ${String(e?.message || e)}`, {
+        httpStatus: 0, reason: 'network',
+      });
+    }
+    status = r.status; ok = r.ok; txt = await r.text();
+  } else {
+    const supabase = supabaseOrSession;
+    const session0 = await getHinovaSession(supabase);
+    const { response, bodyText } = await hinovaFetch(
+      supabase,
+      (token) => ({
+        url: `${session0.apiUrl}/veiculo/buscar/${c}/chassi`,
+        init: { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
+      }),
+      'buscarVeiculoPorChassi',
+    );
+    status = response.status; ok = response.ok; txt = bodyText;
   }
-  const txt = await r.text();
-  const debug = { endpoint: 'buscar/chassi', status: r.status, bodySample: txt.slice(0, 200) };
-  if (r.status === 404) return { found: null, debug };
-  if (!r.ok) throwHttpError(r.status, txt, 'buscarVeiculoPorChassi');
+
+  const debug = { endpoint: 'buscar/chassi', status, bodySample: txt.slice(0, 200) };
+  if (status === 404) return { found: null, debug };
+  if (!ok) throwHttpError(status, txt, 'buscarVeiculoPorChassi');
   const j = parseJsonSafe(txt);
   const root = Array.isArray(j) ? j[0] : (j?.data ?? j?.dados ?? j);
   if (root?.codigo_veiculo) return { found: root, debug };
