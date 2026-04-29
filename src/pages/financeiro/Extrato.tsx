@@ -231,7 +231,7 @@ export default function Extrato() {
 
     const headers = 'Data,Tipo,Categoria,Associado,Descrição,Valor\n';
     const rows = movimentacoesFiltradas.map((m: any) =>
-      `"${m.data_movimentacao}","${m.tipo}","${m.categoria || ''}","${(m.associado?.nome || '').replace(/"/g, '""')}","${(m.descricao || '').replace(/"/g, '""')}","${m.valor}"`
+      `"${m.data_movimentacao}","${m.tipo}","${m.categoria || ''}","${((m.associado?.nome ?? extrairNomeDaDescricao(m.descricao) ?? '')).replace(/"/g, '""')}","${(m.descricao || '').replace(/"/g, '""')}","${m.valor}"`
     ).join('\n');
 
     const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8' });
