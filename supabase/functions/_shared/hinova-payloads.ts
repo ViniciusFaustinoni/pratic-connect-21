@@ -216,6 +216,7 @@ export function buildFotosPayload(
   const aliasTipo = (t: string | null): string => {
     const s = (t || '').toLowerCase().trim();
     const aliases: Record<string, string> = {
+      // Fotos do veículo
       chassi: 'foto_chassi',
       motor: 'foto_motor',
       frente: 'foto_frontal_veiculo',
@@ -227,6 +228,25 @@ export function buildFotosPayload(
       hodometro: 'foto_hodometro',
       painel: 'foto_painel',
       km: 'foto_km',
+      foto_veiculo_frente: 'foto_frontal_veiculo',
+      foto_veiculo_traseira: 'foto_traseira_veiculo',
+      foto_veiculo_lateral_esquerda: 'foto_lateral_esquerda',
+      foto_veiculo_lateral_direita: 'foto_lateral_direita',
+      // Documentos do associado — enviados como fotos anexas ao veículo
+      foto_cnh: 'cnh',
+      cnh_frente: 'cnh',
+      cnh_verso: 'cnh',
+      cnh_aberta: 'cnh',
+      foto_crlv: 'crlv',
+      crlv_frente: 'crlv',
+      crlv_verso: 'crlv',
+      comprovante: 'comprovante_residencia',
+      comp_residencia: 'comprovante_residencia',
+      comprovante_endereco: 'comprovante_residencia',
+      foto_rg: 'rg',
+      rg_frente: 'rg',
+      rg_verso: 'rg',
+      foto_cpf: 'cpf',
     };
     return aliases[s] || s;
   };
