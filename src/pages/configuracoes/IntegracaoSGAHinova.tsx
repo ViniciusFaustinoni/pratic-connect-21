@@ -400,6 +400,13 @@ export default function IntegracaoSGAHinova() {
         nomeExibicao="SGA Hinova"
         onSuccess={() => setSheetOpen(false)}
       />
+
+      {/* Queue item details */}
+      <SGAQueueItemDetailModal
+        item={detailItem}
+        open={!!detailItem}
+        onOpenChange={(o) => !o && setDetailItem(null)}
+      />
     </div>
   );
 }
