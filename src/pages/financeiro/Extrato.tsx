@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Download, Plus, TrendingUp, TrendingDown, Wallet, X, Receipt } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Download, Plus, TrendingUp, TrendingDown, Wallet, X, Receipt, Search } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -39,10 +40,11 @@ export default function Extrato() {
     dataFim: endOfMonth(new Date()).toISOString().split('T')[0],
     tipo: 'todos',
     categoria: 'todos',
+    associado: '',
   });
 
   const { data: movimentacoes, isLoading } = useQuery({
-    queryKey: ['movimentacoes', filters],
+    queryKey: ['movimentacoes', filters.dataInicio, filters.dataFim, filters.tipo, filters.categoria],
     queryFn: async () => {
       let query = supabase
         .from('movimentacoes_financeiras')
@@ -65,34 +67,101 @@ export default function Extrato() {
 
       const { data, error } = await query.limit(500);
       if (error) throw error;
-      return data;
+      const movs = data ?? [];
+
+      // Enriquecer com associado vinculado (via contrato ou direto)
+      const contratoIds = Array.from(
+        new Set(
+          movs
+            .filter((m) => m.referencia_tipo === 'contrato' && m.referencia_id)
+            .map((m) => m.referencia_id as string)
+        )
+      );
+      const associadoIdsDiretos = Array.from(
+        new Set(
+          movs
+            .filter((m) => m.referencia_tipo === 'associado' && m.referencia_id)
+            .map((m) => m.referencia_id as string)
+        )
+      );
+
+      const contratoToAssociado = new Map<string, { id: string; nome: string }>();
+      if (contratoIds.length > 0) {
+        const { data: contratos } = await supabase
+          .from('contratos')
+          .select('id, associado_id, associados:associado_id (id, nome)')
+          .in('id', contratoIds);
+        (contratos ?? []).forEach((c: any) => {
+          if (c.associados) {
+            contratoToAssociado.set(c.id, { id: c.associados.id, nome: c.associados.nome });
+          }
+        });
+      }
+
+      const associadoMap = new Map<string, { id: string; nome: string }>();
+      const associadosToFetch = Array.from(
+        new Set([
+          ...associadoIdsDiretos,
+          ...Array.from(contratoToAssociado.values()).map((a) => a.id),
+        ])
+      );
+      if (associadosToFetch.length > 0) {
+        const { data: associados } = await supabase
+          .from('associados')
+          .select('id, nome')
+          .in('id', associadosToFetch);
+        (associados ?? []).forEach((a: any) => {
+          associadoMap.set(a.id, { id: a.id, nome: a.nome });
+        });
+      }
+
+      return movs.map((m) => {
+        let associado: { id: string; nome: string } | null = null;
+        if (m.referencia_tipo === 'contrato' && m.referencia_id) {
+          const c = contratoToAssociado.get(m.referencia_id);
+          if (c) associado = associadoMap.get(c.id) ?? c;
+        } else if (m.referencia_tipo === 'associado' && m.referencia_id) {
+          associado = associadoMap.get(m.referencia_id) ?? null;
+        }
+        return { ...m, associado };
+      });
     }
   });
 
+  // Filtro client-side por nome do associado
+  const movimentacoesFiltradas = useMemo(() => {
+    if (!movimentacoes) return undefined;
+    const term = filters.associado.trim().toLowerCase();
+    if (!term) return movimentacoes;
+    return movimentacoes.filter((m: any) =>
+      m.associado?.nome?.toLowerCase().includes(term)
+    );
+  }, [movimentacoes, filters.associado]);
+
   const resumo = useMemo(() => {
-    if (!movimentacoes) return { entradas: 0, saidas: 0, saldo: 0 };
+    if (!movimentacoesFiltradas) return { entradas: 0, saidas: 0, saldo: 0 };
 
-    const entradas = movimentacoes
-      .filter(m => m.tipo === 'entrada')
-      .reduce((acc, m) => acc + Number(m.valor || 0), 0);
+    const entradas = movimentacoesFiltradas
+      .filter((m: any) => m.tipo === 'entrada')
+      .reduce((acc: number, m: any) => acc + Number(m.valor || 0), 0);
 
-    const saidas = movimentacoes
-      .filter(m => m.tipo === 'saida')
-      .reduce((acc, m) => acc + Number(m.valor || 0), 0);
+    const saidas = movimentacoesFiltradas
+      .filter((m: any) => m.tipo === 'saida')
+      .reduce((acc: number, m: any) => acc + Number(m.valor || 0), 0);
 
     return { entradas, saidas, saldo: entradas - saidas };
-  }, [movimentacoes]);
+  }, [movimentacoesFiltradas]);
 
   const movimentacoesPorDia = useMemo(() => {
-    if (!movimentacoes) return {};
+    if (!movimentacoesFiltradas) return {} as Record<string, any[]>;
 
-    return movimentacoes.reduce((acc, mov) => {
+    return movimentacoesFiltradas.reduce((acc: Record<string, any[]>, mov: any) => {
       const data = mov.data_movimentacao;
       if (!acc[data]) acc[data] = [];
       acc[data].push(mov);
       return acc;
-    }, {} as Record<string, typeof movimentacoes>);
-  }, [movimentacoes]);
+    }, {} as Record<string, any[]>);
+  }, [movimentacoesFiltradas]);
 
   const datasOrdenadas = useMemo(() => {
     return Object.keys(movimentacoesPorDia).sort((a, b) =>
@@ -110,6 +179,21 @@ export default function Extrato() {
     return format(parsed, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
   };
 
+  const formatDateCell = (date: string) => {
+    try {
+      return format(parseISO(date), 'dd/MM/yyyy');
+    } catch {
+      return date;
+    }
+  };
+
+  // Remove sufixo "— NOME" da descrição quando o associado já é exibido em coluna própria
+  const stripAssociadoFromDescricao = (descricao: string | null, associadoNome?: string | null) => {
+    if (!descricao) return '';
+    if (!associadoNome) return descricao;
+    return descricao.replace(/\s*[—-]\s*.+$/, '').trim() || descricao;
+  };
+
   const getCategoriaLabel = (categoria: string) => {
     const cat = categorias.find(c => c.value === categoria);
     return cat?.label || categoria;
@@ -121,20 +205,21 @@ export default function Extrato() {
       dataFim: endOfMonth(new Date()).toISOString().split('T')[0],
       tipo: 'todos',
       categoria: 'todos',
+      associado: '',
     });
   };
 
   const handleExportar = () => {
-    if (!movimentacoes?.length) {
+    if (!movimentacoesFiltradas?.length) {
       toast.error('Nenhuma movimentação para exportar');
       return;
     }
 
-    const headers = 'Data,Tipo,Categoria,Descrição,Valor\n';
-    const rows = movimentacoes.map(m => 
-      `"${m.data_movimentacao}","${m.tipo}","${m.categoria || ''}","${m.descricao || ''}","${m.valor}"`
+    const headers = 'Data,Tipo,Categoria,Associado,Descrição,Valor\n';
+    const rows = movimentacoesFiltradas.map((m: any) =>
+      `"${m.data_movimentacao}","${m.tipo}","${m.categoria || ''}","${(m.associado?.nome || '').replace(/"/g, '""')}","${(m.descricao || '').replace(/"/g, '""')}","${m.valor}"`
     ).join('\n');
-    
+
     const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -278,6 +363,20 @@ export default function Extrato() {
               </Select>
             </div>
 
+            <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
+              <Label htmlFor="associadoFiltro">Associado</Label>
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="associadoFiltro"
+                  placeholder="Buscar por nome..."
+                  value={filters.associado}
+                  onChange={(e) => setFilters(prev => ({ ...prev, associado: e.target.value }))}
+                  className="pl-8"
+                />
+              </div>
+            </div>
+
             <Button variant="ghost" size="icon" onClick={limparFiltros} title="Limpar filtros">
               <X className="h-4 w-4" />
             </Button>
@@ -294,7 +393,7 @@ export default function Extrato() {
                 <Skeleton key={i} className="h-12 w-full" />
               ))}
             </div>
-          ) : !movimentacoes?.length ? (
+          ) : !movimentacoesFiltradas?.length ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Receipt className="h-12 w-12 text-muted-foreground/50 mb-4" />
               <p className="text-lg font-medium text-muted-foreground">
@@ -316,21 +415,41 @@ export default function Extrato() {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-28">Data</TableHead>
                         <TableHead>Descrição</TableHead>
-                        <TableHead>Categoria</TableHead>
-                        <TableHead className="text-right">Valor</TableHead>
+                        <TableHead className="w-[220px]">Associado</TableHead>
+                        <TableHead className="w-[200px]">Categoria</TableHead>
+                        <TableHead className="text-right w-32">Valor</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {movimentacoesPorDia[data]?.map((mov) => (
+                      {movimentacoesPorDia[data]?.map((mov: any) => (
                         <TableRow key={mov.id}>
+                          <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                            {formatDateCell(mov.data_movimentacao)}
+                          </TableCell>
                           <TableCell>
                             <div>
-                              <p className="font-medium">{mov.descricao}</p>
+                              <p className="font-medium">
+                                {stripAssociadoFromDescricao(mov.descricao, mov.associado?.nome)}
+                              </p>
                               {mov.observacao && (
                                 <p className="text-xs text-muted-foreground">{mov.observacao}</p>
                               )}
                             </div>
+                          </TableCell>
+                          <TableCell className="max-w-[220px]">
+                            {mov.associado ? (
+                              <Link
+                                to={`/cadastro/associados/${mov.associado.id}`}
+                                className="text-sm text-primary hover:underline truncate block"
+                                title={mov.associado.nome}
+                              >
+                                {mov.associado.nome}
+                              </Link>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">—</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline">
