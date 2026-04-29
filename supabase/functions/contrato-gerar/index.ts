@@ -37,6 +37,38 @@ interface GerarContratoPayload {
   vendedor_id?: string;
 }
 
+/**
+ * Normaliza nomes para comparação: remove acentos, pontuação, espaços extras,
+ * e padroniza para minúsculas. Usado para detectar colisões de identidade
+ * (ex.: associado existente vs solicitante da cotação).
+ */
+function normalizarNome(nome?: string | null): string {
+  if (!nome) return '';
+  return nome
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // remove acentos
+    .replace(/[^a-zA-Z\s]/g, '')      // remove pontuação/números
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+/** True se os dois nomes pertencem (provavelmente) à mesma pessoa. */
+function nomesCoincidem(a?: string | null, b?: string | null): boolean {
+  const na = normalizarNome(a);
+  const nb = normalizarNome(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  // tokens em comum: se ambos compartilham primeiro nome + algum sobrenome, aceita
+  const tokensA = new Set(na.split(' ').filter(t => t.length >= 3));
+  const tokensB = new Set(nb.split(' ').filter(t => t.length >= 3));
+  if (tokensA.size === 0 || tokensB.size === 0) return false;
+  let intersecao = 0;
+  for (const t of tokensA) if (tokensB.has(t)) intersecao++;
+  // exige pelo menos 2 tokens em comum (geralmente nome + sobrenome)
+  return intersecao >= 2;
+}
+
 // Keywords de modelo como fallback de último recurso (sem marcas hardcoded)
 const MOTO_MODEL_KEYWORDS = [
   'nxr', 'bros', 'cg', 'biz', 'pop', 'xre', 'cb ', 'cbr', 'cbx', 'pcx', 'sh ',
@@ -331,7 +363,7 @@ serve(async (req) => {
     const cpfNormalizado = cpfLimpo;
     const { data: associadoExistente } = await supabase
       .from('associados')
-      .select('id, email, telefone')
+      .select('id, nome, email, telefone')
       .eq('cpf', cpfNormalizado)
       .maybeSingle();
     
@@ -355,29 +387,34 @@ serve(async (req) => {
       });
 
       // ═══════════════════════════════════════════════════════════════
-      // SINCRONIZAÇÃO SEGURA: Atualiza email e telefone se diferentes
-      // Endereço e outros dados NÃO são sobrescritos automaticamente
+      // PROTEÇÃO ANTI-COLISÃO: só sincroniza PII se o nome do solicitante
+      // realmente bate com o nome do associado existente. Evita poluir o
+      // cadastro de outra pessoa quando dois titulares compartilham CPF
+      // por engano (ex.: digitação errada do operador).
       // ═══════════════════════════════════════════════════════════════
+      const mesmoTitular = nomesCoincidem(associadoExistente.nome, nomeFinal);
+      if (!mesmoTitular) {
+        console.warn(
+          `[ALERTA-COLISAO] CPF=${cpfNormalizado} associado_id=${associadoId} ` +
+          `nome_db="${associadoExistente.nome}" nome_cot="${nomeFinal}" ` +
+          `(cotação ${cotacao_id}) — PII NÃO será sincronizada.`
+        );
+      }
+
       const updateData: Record<string, string | null> = {};
 
-      // EMAIL: só atualiza se cotação tem valor novo e diferente
-      if (emailFinal && emailFinal.trim() !== '' && emailFinal !== associadoExistente.email) {
+      // EMAIL: só atualiza se nomes coincidem E cotação tem valor novo e diferente
+      if (mesmoTitular && emailFinal && emailFinal.trim() !== '' && emailFinal !== associadoExistente.email) {
         updateData.email = emailFinal;
         console.log(
           `[AUDITORIA] Email do associado ${associadoId} será atualizado: ` +
           `"${associadoExistente.email || '(vazio)'}" → "${emailFinal}" ` +
           `(cotação ${cotacao_id})`
         );
-      } else {
-        console.log('[DEBUG-SYNC] Email NÃO será atualizado:', {
-          motivo: !emailFinal ? 'emailFinal vazio/null' : 
-                  emailFinal.trim() === '' ? 'emailFinal só whitespace' : 
-                  emailFinal === associadoExistente.email ? 'emails iguais' : 'desconhecido'
-        });
       }
 
-      // TELEFONE: só atualiza se cotação tem valor novo e diferente
-      if (telefoneFinal && telefoneFinal.trim() !== '' && telefoneFinal !== associadoExistente.telefone) {
+      // TELEFONE: só atualiza se nomes coincidem E cotação tem valor novo e diferente
+      if (mesmoTitular && telefoneFinal && telefoneFinal.trim() !== '' && telefoneFinal !== associadoExistente.telefone) {
         updateData.telefone = telefoneFinal;
         console.log(
           `[AUDITORIA] Telefone do associado ${associadoId} será atualizado: ` +
@@ -386,8 +423,8 @@ serve(async (req) => {
         );
       }
 
-      // RG: sincronizar se disponível na cotação
-      if (cotacao.cliente_rg && cotacao.cliente_rg.trim() !== '') {
+      // RG: sincronizar somente se nomes coincidem
+      if (mesmoTitular && cotacao.cliente_rg && cotacao.cliente_rg.trim() !== '') {
         updateData.rg = cotacao.cliente_rg;
       }
 
@@ -428,10 +465,29 @@ serve(async (req) => {
       if (placaLimpa) {
         const { data } = await supabase
           .from('veiculos')
-          .select('id')
+          .select('id, associado_id')
           .eq('placa', placaLimpa)
           .maybeSingle();
-        veiculoExistente = data;
+
+        // BLOQUEIO ANTI-SEQUESTRO: a placa já existe sob OUTRO associado.
+        // Nunca reaproveitar — o fluxo correto seria Substituição/Troca de Titularidade.
+        if (data && data.associado_id && data.associado_id !== associadoId) {
+          console.error(
+            `[BLOQUEIO-DONO] Placa ${placaLimpa} já está vinculada ao associado ${data.associado_id}, ` +
+            `mas o solicitante atual é ${associadoId} (cotação ${cotacao_id}).`
+          );
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: `A placa ${placaLimpa} já está vinculada a outro associado no sistema. ` +
+                     `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
+              code: 'PLACA_DE_OUTRO_ASSOCIADO',
+            }),
+            { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
+        }
+
+        veiculoExistente = data ? { id: data.id } : null;
       } else {
         const { data } = await supabase
           .from('veiculos')
@@ -490,7 +546,7 @@ serve(async (req) => {
     } else if (emailFinal) {
       const { data: byEmail } = await supabase
         .from('associados')
-        .select('id, email, telefone')
+        .select('id, nome, email, telefone, cpf')
         .eq('email', emailFinal)
         .maybeSingle();
       
@@ -498,11 +554,18 @@ serve(async (req) => {
         associadoId = byEmail.id;
         console.log('Associado existente encontrado pelo email:', associadoId);
 
-        // ═══════════════════════════════════════════════════════════════
-        // SINCRONIZAÇÃO SEGURA: Atualiza telefone se diferente
-        // (Email já é igual, pois foi encontrado por email)
-        // ═══════════════════════════════════════════════════════════════
-        if (telefoneFinal && telefoneFinal.trim() !== '' && telefoneFinal !== byEmail.telefone) {
+        // PROTEÇÃO ANTI-COLISÃO: emails podem ser compartilhados entre familiares.
+        // Só sincronizar se o nome bater. Se não bater, o cadastro existente é
+        // de outra pessoa e este fluxo deve criar um novo associado.
+        const mesmoTitularEmail = nomesCoincidem(byEmail.nome, nomeFinal);
+        if (!mesmoTitularEmail) {
+          console.warn(
+            `[ALERTA-COLISAO] email=${emailFinal} associado_id=${associadoId} ` +
+            `nome_db="${byEmail.nome}" cpf_db=${byEmail.cpf} nome_cot="${nomeFinal}" cpf_cot=${cpfNormalizado} ` +
+            `(cotação ${cotacao_id}) — não reaproveitando associado, será criado um novo.`
+          );
+          associadoId = null; // força queda no branch de criação
+        } else if (telefoneFinal && telefoneFinal.trim() !== '' && telefoneFinal !== byEmail.telefone) {
           const { error: updateTelError } = await supabase
             .from('associados')
             .update({ telefone: telefoneFinal })
@@ -520,6 +583,8 @@ serve(async (req) => {
         }
         
         // CORREÇÃO: Buscar ou criar veículo (suporta 0km sem placa)
+        // Só executa se ainda tivermos associado válido (não foi descartado por colisão de nome)
+        if (associadoId) {
         const placaLimpaEmail = cotacao.veiculo_placa?.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || null;
         const placaParaInsertEmail = placaLimpaEmail || ('0KM' + crypto.randomUUID().replace(/-/g, '').slice(0, 5).toUpperCase());
 
@@ -527,10 +592,28 @@ serve(async (req) => {
         if (placaLimpaEmail) {
           const { data } = await supabase
             .from('veiculos')
-            .select('id')
+            .select('id, associado_id')
             .eq('placa', placaLimpaEmail)
             .maybeSingle();
-          veiculoExistenteEmail = data;
+
+          // BLOQUEIO ANTI-SEQUESTRO (branch email)
+          if (data && data.associado_id && data.associado_id !== associadoId) {
+            console.error(
+              `[BLOQUEIO-DONO] Placa ${placaLimpaEmail} já está vinculada ao associado ${data.associado_id}, ` +
+              `mas o solicitante atual é ${associadoId} (cotação ${cotacao_id}).`
+            );
+            return new Response(
+              JSON.stringify({
+                success: false,
+                error: `A placa ${placaLimpaEmail} já está vinculada a outro associado no sistema. ` +
+                       `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
+                code: 'PLACA_DE_OUTRO_ASSOCIADO',
+              }),
+              { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+
+          veiculoExistenteEmail = data ? { id: data.id } : null;
         } else {
           const { data } = await supabase
             .from('veiculos')
@@ -586,6 +669,7 @@ serve(async (req) => {
           veiculoId = novoVeiculoEmail.id;
           console.log('Novo veículo criado para associado existente (email):', veiculoId, 'placa:', placaParaInsertEmail);
         }
+        } // fim do guard `if (associadoId)` para criação de veículo
       }
     }
     
@@ -627,6 +711,30 @@ serve(async (req) => {
       // Suporta carros 0km (sem placa) usando placeholder
       const placaLimpaNovo = cotacao.veiculo_placa?.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || null;
       const placaParaInsertNovo = placaLimpaNovo || ('0KM' + crypto.randomUUID().replace(/-/g, '').slice(0, 5).toUpperCase());
+
+      // BLOQUEIO ANTI-SEQUESTRO: se a placa real já existe sob outro associado, abortar.
+      if (placaLimpaNovo) {
+        const { data: placaJaExiste } = await supabase
+          .from('veiculos')
+          .select('id, associado_id')
+          .eq('placa', placaLimpaNovo)
+          .maybeSingle();
+        if (placaJaExiste && placaJaExiste.associado_id && placaJaExiste.associado_id !== associadoId) {
+          console.error(
+            `[BLOQUEIO-DONO] Placa ${placaLimpaNovo} já está vinculada ao associado ${placaJaExiste.associado_id}, ` +
+            `mas o solicitante novo é ${associadoId} (cotação ${cotacao_id}).`
+          );
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: `A placa ${placaLimpaNovo} já está vinculada a outro associado no sistema. ` +
+                     `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
+              code: 'PLACA_DE_OUTRO_ASSOCIADO',
+            }),
+            { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
+        }
+      }
 
       const categoriaFlagsNovo = {
         flag_placa_vermelha: cotacao.categoria === 'placa_vermelha',
@@ -990,6 +1098,15 @@ serve(async (req) => {
     }
 
     console.log('Contrato gerado com sucesso:', contrato.numero);
+    console.log('[CONTRATO-GERAR][TELEMETRIA]', JSON.stringify({
+      cotacao_id,
+      cpf_normalizado: cpfLimpo,
+      nome_solicitante: nomeFinal,
+      associado_resolvido_id: associadoId,
+      veiculo_resolvido_id: veiculoId,
+      contrato_id: contrato.id,
+      numero: contrato.numero,
+    }));
 
     return new Response(
       JSON.stringify({ 
