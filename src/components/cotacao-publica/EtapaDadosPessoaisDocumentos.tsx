@@ -345,9 +345,9 @@ export function EtapaDadosPessoaisDocumentos({
       // De ATPV-e / CRV Digital: substituto do CRLV (veículos recém-adquiridos)
       if (tipoDocumento === 'atpv_e') {
         novosDados.origem_documento_veiculo = 'atpv_e';
-        if (dados.placa) novosDados.veiculo_placa = dados.placa;
-        if (dados.chassi) novosDados.veiculo_chassi = dados.chassi;
-        if (dados.renavam) novosDados.veiculo_renavam = dados.renavam;
+        if (dados.placa) { const v = sanitizePlaca(dados.placa); if (v) novosDados.veiculo_placa = v; }
+        if (dados.chassi) { const v = sanitizeChassi(dados.chassi); if (v) novosDados.veiculo_chassi = v; }
+        if (dados.renavam) { const v = sanitizeRenavam(dados.renavam); if (v) novosDados.veiculo_renavam = v; }
         if (dados.cor) novosDados.veiculo_cor = dados.cor;
         if (dados.combustivel) novosDados.veiculo_combustivel = dados.combustivel;
         if (dados.numero_motor) novosDados.numero_motor = dados.numero_motor;
