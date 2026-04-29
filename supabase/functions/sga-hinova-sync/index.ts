@@ -795,6 +795,31 @@ serve(async (req) => {
         });
       }
 
+      // Fotos da vistoria do veículo (chassi, motor, frente, traseira, laterais, painel etc.)
+      // Só vistorias concluídas/aprovadas. Tipos sem mapeamento caem em descartadasSemTipo
+      // (comportamento existente — não quebra fluxo atual).
+      const { data: vistoriasVeic } = await supabase.from('vistorias')
+        .select('id')
+        .eq('veiculo_id', _vid)
+        .in('status', ['concluida', 'aprovada', 'aprovado']);
+
+      if (vistoriasVeic && vistoriasVeic.length > 0) {
+        const vistoriaIds = vistoriasVeic.map((v: any) => v.id);
+        const { data: vistoriaFotos } = await supabase.from('vistoria_fotos')
+          .select('id, tipo, arquivo_url, vistoria_id')
+          .in('vistoria_id', vistoriaIds);
+
+        for (const vf of (vistoriaFotos || []) as any[]) {
+          if (!vf.arquivo_url) continue;
+          documentosEntrada.push({
+            id: `vist-${vf.id}`,
+            tipo: vf.tipo,
+            nome_arquivo: `vistoria_${vf.tipo}_${vf.id}.jpg`,
+            arquivo_url: vf.arquivo_url,
+          });
+        }
+      }
+
       const { fotos, descartadasSemLink, descartadasSemTipo } = buildFotosPayload(
         documentosEntrada,
         (tipo) => getMap('tipo_foto', tipo),
