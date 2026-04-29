@@ -55,6 +55,7 @@ import { Gift } from 'lucide-react';
 import { SubstituicaoStatusCard } from '@/components/substituicao/SubstituicaoStatusCard';
 import { TIPO_ENTRADA_SHORT_LABELS } from '@/components/associados/detalhe/OrigemCadastroCard';
 import { ReativacaoWizard } from '@/components/associados/reativacao/ReativacaoWizard';
+import { AlertSuspensaoNaoInstalacao } from '@/components/associados/AlertSuspensaoNaoInstalacao';
 import { TrocaTitularidadeDialog } from '@/components/associados/TrocaTitularidadeDialog';
 
 // New redesign components
@@ -421,6 +422,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
           </AlertDescription>
         </Alert>
       )}
+      {id && <AlertSuspensaoNaoInstalacao associadoId={id} contratoId={contrato?.id} />}
       {id && status === 'ativo' && <SubstituicaoStatusCard associadoId={id} />}
 
       {/* Hero Header */}
