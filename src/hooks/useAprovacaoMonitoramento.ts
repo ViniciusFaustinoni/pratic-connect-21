@@ -406,9 +406,10 @@ export function useReprovarInstalacaoMonitoramento() {
       queryClient.invalidateQueries({ queryKey: ['servicos-campo'] });
       toast.success('Instalação reprovada. Coordenador será notificado.');
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error('Erro ao reprovar instalação:', error);
-      toast.error('Erro ao reprovar instalação');
+      const msg = error?.message || error?.error_description || 'Erro ao reprovar instalação';
+      toast.error(msg);
     },
   });
 }
