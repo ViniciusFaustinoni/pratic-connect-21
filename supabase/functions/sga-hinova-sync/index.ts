@@ -214,6 +214,21 @@ serve(async (req) => {
     console.warn('[sga-hinova-sync] codigo_conta não configurado — usando conta default da regional.');
   }
 
+  // ---- Fallback hardcoded para situação do veículo no SGA ----
+  // Códigos confirmados via GET /listar/situacao/todos do Hinova:
+  //   1 = ATIVO, 3 = PENDENTE, 11 = EXCLUIDO, 12 = CANCELAMENTO
+  // Sem esse fallback, omitimos `codigo_situacao` no payload de cadastro e o
+  // Hinova aplica ATIVO por default — quebrando a regra "veículo entra como pendente".
+  // ENV/credencial continuam tendo prioridade; só caímos nos defaults quando ausentes.
+  if (!Number.isFinite(codigoSituacaoPendente) || codigoSituacaoPendente <= 0) {
+    console.warn('[sga-hinova-sync] HINOVA_CODIGO_SITUACAO_PENDENTE ausente — usando default 3 (PENDENTE).');
+    codigoSituacaoPendente = 3;
+  }
+  if (!Number.isFinite(codigoSituacaoAtivo) || codigoSituacaoAtivo <= 0) {
+    console.warn('[sga-hinova-sync] HINOVA_CODIGO_SITUACAO_ATIVO ausente — usando default 1 (ATIVO).');
+    codigoSituacaoAtivo = 1;
+  }
+
   let req_body: SyncRequest;
   try { req_body = await req.json(); }
   catch {

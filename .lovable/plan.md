@@ -1,111 +1,109 @@
+## Diagnóstico (com base em logs reais + retorno do GET /listar/situacao/todos)
 
-## Diagnóstico definitivo — RIR1B37 (ERICO) vinculada a TOVAR
+### Códigos oficiais do Hinova (acabamos de confirmar)
+- `1` = ATIVO
+- `3` = **PENDENTE** ← era o que faltava
+- `11` = EXCLUIDO, `12` = CANCELAMENTO, etc.
 
-### O que está certo
-- **Contratos**: os dois termos de filiação carregam o snapshot do cliente correto, foram assinados via Autentique e estão `status='assinado'`.
-  - `CTR-...9C3GBF` — cliente TOVAR (CPF 092.154.167-81), placa TCU6B84
-  - `CTR-...FVR9KA` — cliente ERICO (CPF 130.709.487-23), placa RIR1B37
-- **Cotações**: cada uma tem nome/CPF/email/telefone do titular real.
+### Problema 1 — Veículo entra no SGA como ATIVO em vez de PENDENTE
 
-### O que está errado
-- Os **dois contratos** apontam `associado_id = e8538d7a` (TOVAR).
-- O **veículo RIR1B37** (`6aae322e`) também aponta para TOVAR.
-- O **registro do associado e8538d7a** foi poluído: mantém `nome=TOVAR` e `cpf=09215416781`, mas teve `email` e `telefone` sobrescritos para os de ERICO (`ericodark91@gmail.com` / `21979213494`) durante a sincronização SGA das 19:20.
-- **ERICO não existe como `associados`** — o CPF 13070948723 não tem registro próprio.
+O payload real gravado em `sga_sync_logs.request_payload` para `POST /veiculo/cadastrar` (placa RJQ6I98, codigo_veiculo Hinova 35888) **não contém o campo `codigo_situacao`**:
 
-### Linha do tempo reconstruída (logs + DB)
-
-```
-16:08:34  TOVAR assina CTR-9C3GBF
-          → cria associado e8538d7a (CPF 092..., email Tovar.rodrigueslima@...)
-          → cria veículo TCU6B84 sob e8538d7a
-16:22:45  veículo RIR1B37 é criado SOB e8538d7a (TOVAR)
-16:22:51  autentique-create dispara (sucesso) — segundos depois
-17:00:49  cotação de ERICO é criada (vendedor LEONARDO LOPES, mesma do TOVAR)
-17:01:29  contrato de ERICO (CTR-FVR9KA) é gerado já amarrado a e8538d7a
-17:10:43  ERICO assina o termo
-17:47:01  associado vai a `aguardando_instalacao` (aprovação do analista)
-19:20:06  SGA sync sobrescreve email/telefone do associado com os de ERICO
+```json
+{ "codigo_associado":30160, "placa":"RJQ6I98", ..., "codigo_voluntario":100 }
 ```
 
-### Causa raiz
+Causa raiz (`sga-hinova-sync/index.ts` linha 643 + `_shared/hinova-payloads.ts` linha 185):
+- `const codSituacao = statusDestino === 'ativo' ? codigoSituacaoAtivo : codigoSituacaoPendente;`
+- `if (ctx.codigo_situacao) payload.codigo_situacao = ctx.codigo_situacao;`
 
-Combinação de **dois bugs** em `supabase/functions/contrato-gerar/index.ts` agindo em sequência:
+`codigoSituacaoPendente` vem da env `HINOVA_CODIGO_SITUACAO_PENDENTE` ou de `integracoes_credenciais.cred.codigo_situacao_pendente`. **Nenhum dos dois está configurado** → fica `NaN` → campo é omitido → Hinova aplica seu default (ATIVO).
 
-**Bug 1 — Reuso indevido de veículo por placa, sem checar dono**
-Linhas ~427-489 (branch CPF) e ~526-588 (branch email): quando a função encontra o veículo pela `placa`, **não valida** se `veiculo.associado_id == associadoId`. O trigger `fn_sync_veiculo_associado_from_contrato` então faz o "realinhamento" às avessas — mas aqui o problema é que o veículo já existia sob o dono errado e foi puxado de volta.
+Os chamadores (`useSGASync`, `BotaoAtivarSGA`, `aprovar-proposta`, `cron-sga-retry`, etc.) já enviam `status_sga_destino: 'pendente'` corretamente — o problema é só a omissão do código numérico no payload final.
 
-**Bug 2 — Lookup de associado tolerante demais**
-Quando o CPF de ERICO (13070948723) não casou e o email também não, o fluxo deveria criar um novo associado (linha 592). Mas a evidência mostra que o contrato saiu com `associado_id = e8538d7a` mesmo assim. A hipótese mais consistente com a linha do tempo é que o vendedor (LEONARDO LOPES) **iniciou o fluxo de "incluir veículo" às 16:22 a partir do cadastro de TOVAR, escolhendo o veículo errado (RIR1B37 em vez do que era para ser de TOVAR)**, criando o vínculo cruzado já naquele momento; quando depois gerou a cotação correta para ERICO às 17:00, o `contrato-gerar` localizou o veículo pela placa e herdou o associado_id alheio.
+### Problema 2 — Fotos da vistoria/instalação não vão para o SGA
 
-**Bug 3 — Sync de PII sobrescreve dono errado**
-Linhas ~380-387 e ~505-509: `update` em email/telefone do associado encontrado **sem comparar nome/CPF**. Foi assim que o cadastro de TOVAR ganhou os dados de contato de ERICO.
+A função busca fotos apenas em `documentos`, `contratos_documentos` e `associados.avatar_url` (linhas 748-781). Logs `enviar_fotos` mostram apenas 3-4 fotos por veículo (CNH, comprovante, avatar).
 
-### Impacto operacional
-- Cobrança, app do associado, WhatsApp e SGA/Hinova vão para a pessoa errada.
-- ERICO nunca aparece como associado — todo histórico fica encaixado em TOVAR.
-- TOVAR aparece com 2 contratos e 2 veículos no SGA.
-- Risco de a próxima sync SGA do RIR1B37 falhar ou criar duplicidade no Hinova (CPF do contrato ≠ CPF do associado vinculado).
+As ~30 fotos da vistoria do veículo (chassi, motor, frente, traseira, lateral, painel/odômetro, etc.) ficam em `vistoria_fotos` (vinculada via `vistorias.veiculo_id`) e **nunca são lidas**. Os mapeamentos `hinova_mapeamentos` tipo `tipo_foto` já cobrem `chassi`, `frente`, `traseira`, `lateral_direita/esquerda`, `motor`, `painel`, `odometro`.
 
 ---
 
-## Plano de correção
+## Correções (cirúrgicas, sem afetar o que já funciona)
 
-### Etapa 1 — Saneamento dos dados (migration)
+### Correção 1 — Fallback hardcoded com códigos confirmados do Hinova
 
-1. **Restaurar PII de TOVAR** no associado e8538d7a:
-   - `email = 'Tovar.rodrigueslima@gmail.com'`
-   - `telefone = '21997785858'`
-2. **Criar associado novo para ERICO** copiando os campos da cotação `295bb91f-...` (nome, CPF 13070948723, email, telefone, endereço, RG, CNH, data_nascimento, plano_id, dia_vencimento, status `aguardando_instalacao`, data_adesao = `2026-04-29`).
-3. **Reapontar**:
-   - `veiculos.id = 6aae322e` → novo `associado_id`
-   - `contratos.id = 7d758a1d` → novo `associado_id`
-4. **Limpar SGA**:
-   - Apagar entradas em `sga_sync_queue` que façam o par errado.
-   - Inserir nova entrada para o veículo RIR1B37 + ERICO com `status='pendente'`, sem `codigo_associado_hinova` herdado.
-5. **Auditoria**: registrar em `logs_auditoria` a correção manual com `dados_anteriores`/`dados_novos`.
+Em `supabase/functions/sga-hinova-sync/index.ts`, logo após o bloco que carrega credenciais (~linha 215):
 
-### Etapa 2 — Corrigir a raiz em `contrato-gerar`
+```ts
+if (!Number.isFinite(codigoSituacaoPendente) || codigoSituacaoPendente <= 0) {
+  console.warn('[sga-hinova-sync] HINOVA_CODIGO_SITUACAO_PENDENTE não configurado — usando default 3 (PENDENTE).');
+  codigoSituacaoPendente = 3;
+}
+if (!Number.isFinite(codigoSituacaoAtivo) || codigoSituacaoAtivo <= 0) {
+  console.warn('[sga-hinova-sync] HINOVA_CODIGO_SITUACAO_ATIVO não configurado — usando default 1 (ATIVO).');
+  codigoSituacaoAtivo = 1;
+}
+```
 
-Em `supabase/functions/contrato-gerar/index.ts`:
+ENV/credencial continuam tendo prioridade — só caem nos defaults `3`/`1` quando ausentes.
 
-**A) Validar dono do veículo encontrado por placa**
-Nos três pontos onde se faz `select id from veiculos where placa = X` (linhas ~427, ~526):
-- Trazer também `associado_id`.
-- Se `veiculo.associado_id IS NOT NULL && veiculo.associado_id !== associadoId`, **abortar** com `409`: "Placa XXX já está vinculada a outro associado. Use o fluxo de Substituição/Troca de Titularidade."
+A lógica de promoção `pendente → ativo` (linhas 697-735) NÃO muda — ela já usa `codigoSituacaoAtivo`, que agora cai no `1` quando não configurado.
 
-**B) Bloquear sobrescrita de PII em titular divergente**
-Antes de `update` em email/telefone do associado existente (linhas ~380-388, ~505-509):
-- Comparar `normalize(associadoExistente.nome)` com `normalize(nomeFinal)`. Se diferentes (Levenshtein > 3 ou tokens distintos), **não sincronizar** e logar `[ALERTA-COLISÃO] CPF=X associado_id=Y nome_db=Z nome_cot=W`.
+### Correção 2 — Incluir fotos da vistoria no envio ao SGA
 
-**C) Garantir criação de novo associado quando CPF não casa**
-Reverificar antes do `INSERT` (linha 593) com `SELECT ... WHERE cpf = $1` em transação curta para evitar race; se já existir, falhar com mensagem clara em vez de seguir.
+Em `sga-hinova-sync/index.ts`, dentro da seção "7. FOTOS" (~linha 745), adicionar uma nova fonte de fotos:
 
-**D) Telemetria estruturada**
-Logar no início e fim do handler: `cotacao_id / cpf_normalizado / associado_resolvido_id / veiculo_resolvido_id / branch_tomado` para que incidentes futuros sejam diagnosticáveis em segundos via `edge_functions_logs`.
+```text
+Buscar vistorias.id WHERE veiculo_id = _vid AND status IN ('concluida','aprovada','aprovado')
+  └─ vistoria_fotos (tipo, arquivo_url) por vistoria_id
+       └─ Acrescentar à lista documentosEntrada antes de buildFotosPayload()
+```
 
-### Etapa 3 — Auditar fluxo de "Incluir Veículo"
+Detalhes:
+- Apenas vistorias **concluídas/aprovadas** entram (não rascunho).
+- O `aliasTipo()` interno de `buildFotosPayload` (em `_shared/hinova-payloads.ts`) será estendido para mapear nomes "puros" da vistoria → mapeamentos existentes:
+  - `chassi` → `foto_chassi`
+  - `motor` → `foto_motor`
+  - `frente` → `foto_frente`
+  - `traseira` → `foto_traseira`
+  - `lateral_direita` / `lateral_esquerda` → `foto_lateral_direita/esquerda`
+  - `odometro` / `painel_completo` / `painel_km` → `foto_painel` / `foto_hodometro`
+- Tipos sem mapeamento (`bateria`, `mala_aberta`, `forracao_*`, `pneu_*`, `vistoriador_selfie`, `chave`, `estepe`, etc.) caem em `descartadasSemTipo` (já é logado, comportamento existente — não quebra).
+- Limite de 50 por lote já existe (`chunk(fotos, 50)`).
+- Selfie do vistoriador pode opcionalmente entrar como "foto_associado" (codigo 1=CNH) — preciso confirmar se você quer.
 
-Como a falha começou às 16:22 (antes da cotação de ERICO existir), verificar o componente/edge function que monta a inclusão de veículo a partir de um associado já existente:
-- Confirmar que ele **exige** que o nome/CPF do titular do novo veículo bata com o do associado base, ou ofereça opção explícita de "novo titular" que cria associado novo.
-- Adicionar confirmação visual com nome+CPF antes de gravar.
+### Correção 3 — Atualizar memória do SGA
 
-### Etapa 4 — Memória de projeto
+Atualizar `mem://features/integrations/sga-hinova-sync-and-pre-check-v3` documentando:
+- Códigos oficiais Hinova (1=ATIVO, 3=PENDENTE, 11=EXCLUIDO, 12=CANCELAMENTO).
+- Defaults hardcoded (3/1) usados quando credencial/ENV ausentes.
+- Fontes de fotos enviadas: `documentos` + `contratos_documentos` + `avatar_url` + **`vistoria_fotos`** (vistorias concluídas/aprovadas).
 
-Criar `mem://constraints/contracts/no-cross-owner-vehicle-reuse`:
-> Contratos jamais reutilizam `veiculo.associado_id` de terceiros. Se a placa já existe sob outro dono, o fluxo correto é Troca de Titularidade. PII (email/telefone) só pode ser sincronizada quando o nome do solicitante bater com o nome do associado existente.
+### Correção 4 (opcional, recomendada) — Tabela de mapeamento exposta
 
-### Validação após deploy
-1. Tela de Acompanhamento: ERICO deve aparecer como associado próprio com seu contrato e veículo.
-2. TOVAR deve voltar a ter apenas TCU6B84 e seus dados de contato originais.
-3. Re-rodar SGA sync de RIR1B37 e confirmar cadastro com CPF 13070948723.
-4. Tentar gerar um contrato de teste reutilizando uma placa de outro dono → deve ser bloqueado com mensagem clara.
+Manter `hinova_mapeamentos` como fonte de verdade dos tipos de foto, sem mudanças. Apenas o aliasTipo é estendido no código.
 
 ---
 
-### Apêndice técnico
-Arquivos tocados:
-- `supabase/functions/contrato-gerar/index.ts` — itens A, B, C, D da Etapa 2.
-- Migration nova com `UPDATE`/`INSERT` direcionados (Etapa 1).
-- `mem://constraints/contracts/no-cross-owner-vehicle-reuse.md` (Etapa 4).
-- (Possivelmente) componente da UI de inclusão de veículo (Etapa 3) — a confirmar quando entrar em build mode.
+## O que NÃO será alterado (preserva o que já funciona)
+
+- Fluxo de cadastro de associado, busca por placa/chassi, retry/queue/logs — sem mudança.
+- Caminho de promoção pendente → ativo (linhas 697-735) — sem mudança lógica.
+- Chamadores (`useSGASync`, `BotaoAtivarSGA`, `aprovar-proposta`, `cron-sga-retry`, `concluir-instalacao-prestador`, `useAtivacoes`, `useAprovacaoMonitoramento`) — NÃO precisam de mudança.
+- `buildVeiculoPayload` mantém assinatura; apenas `ctx.codigo_situacao` agora estará sempre populado.
+- Documentos sem mapeamento continuam sendo descartados silenciosamente (comportamento atual).
+- `sga-listar-situacoes` (criada para diagnóstico) fica disponível como utilitário read-only — não interfere em fluxos.
+
+## Arquivos a editar
+
+1. `supabase/functions/sga-hinova-sync/index.ts` — fallback de códigos + leitura de `vistoria_fotos`.
+2. `supabase/functions/_shared/hinova-payloads.ts` — estender `aliasTipo` em `buildFotosPayload` para tipos extras da vistoria.
+3. `mem://features/integrations/sga-hinova-sync-and-pre-check-v3.md` — atualizar documentação.
+
+## Validação pós-deploy
+
+- Próximo `cadastrar_veiculo` → `request_payload` deve conter `codigo_situacao: 3`.
+- `enviar_fotos` → `qtd` por veículo deve subir de 3-4 para 15-25+ (com vistoria completa).
+- Veículo aparece no SGA Hinova como **PENDENTE** (cor branca, descricao_situacao="PENDENTE") até aprovação no monitoramento; nesse momento promove para ATIVO.
+- Logs novos: `enviar_fotos_descarte` listará tipos da vistoria sem mapeamento (esperado: `bateria`, `forracao_*`, `pneu_*`, `chave`, `estepe`, `mala_aberta`, `banco_*`, `parabrisa`, `vistoriador_selfie` etc.).
