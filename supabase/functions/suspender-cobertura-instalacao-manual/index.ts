@@ -126,10 +126,10 @@ Deno.serve(async (req) => {
 
     const { data: assoc } = await supabase
       .from('associados')
-      .select('id, nome, telefone, cliente_uf')
+      .select('id, nome, telefone, uf')
       .eq('id', contrato.associado_id)
       .maybeSingle();
-    const uf = (assoc?.cliente_uf || '').toUpperCase() || null;
+    const uf = (assoc?.uf || '').toUpperCase() || null;
     const prazoHoras = uf === 'RJ' ? prazoRJ : uf === 'SP' ? prazoSP : prazoDefault;
 
     const { data: veiculo } = await supabase
