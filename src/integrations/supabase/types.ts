@@ -8456,6 +8456,7 @@ export type Database = {
           veiculo_id: string | null
           veiculo_marca: string | null
           veiculo_modelo: string | null
+          veiculo_numero_portas: number | null
           veiculo_placa: string | null
           veiculo_procedencia: string | null
           veiculo_renavam: string | null
@@ -8582,6 +8583,7 @@ export type Database = {
           veiculo_id?: string | null
           veiculo_marca?: string | null
           veiculo_modelo?: string | null
+          veiculo_numero_portas?: number | null
           veiculo_placa?: string | null
           veiculo_procedencia?: string | null
           veiculo_renavam?: string | null
@@ -8708,6 +8710,7 @@ export type Database = {
           veiculo_id?: string | null
           veiculo_marca?: string | null
           veiculo_modelo?: string | null
+          veiculo_numero_portas?: number | null
           veiculo_placa?: string | null
           veiculo_procedencia?: string | null
           veiculo_renavam?: string | null
@@ -9278,6 +9281,7 @@ export type Database = {
           motivo_substituicao: string | null
           nome_solicitante: string | null
           numero: string
+          numero_portas: number | null
           plano_escolhido_id: string | null
           plano_id: string | null
           regiao: string | null
@@ -9410,6 +9414,7 @@ export type Database = {
           motivo_substituicao?: string | null
           nome_solicitante?: string | null
           numero: string
+          numero_portas?: number | null
           plano_escolhido_id?: string | null
           plano_id?: string | null
           regiao?: string | null
@@ -9542,6 +9547,7 @@ export type Database = {
           motivo_substituicao?: string | null
           nome_solicitante?: string | null
           numero?: string
+          numero_portas?: number | null
           plano_escolhido_id?: string | null
           plano_id?: string | null
           regiao?: string | null
