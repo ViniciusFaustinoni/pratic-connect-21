@@ -251,6 +251,30 @@ export function usePropostasPendentes() {
             associado = data;
           }
 
+          // Buscar veículo do contrato para checar se a proposta já foi
+          // efetivamente concluída (associado ativo + veículo ativo + cobertura
+          // total). Sem isso, a fila do Cadastro mostra "voltas" indevidas
+          // após Monitoramento aprovar a instalação.
+          let veiculoContrato: { status: string | null; cobertura_total: boolean | null } | null = null;
+          if (contrato.veiculo_id) {
+            const { data: vc } = await supabase
+              .from('veiculos')
+              .select('status, cobertura_total')
+              .eq('id', contrato.veiculo_id)
+              .maybeSingle();
+            veiculoContrato = (vc as any) || null;
+          }
+
+          const propostaJaConcluida =
+            associado?.status === 'ativo' &&
+            veiculoContrato?.status === 'ativo' &&
+            veiculoContrato?.cobertura_total === true;
+
+          if (propostaJaConcluida) {
+            // Proposta já foi totalmente ativada — não exibir mais na fila do Cadastro.
+            return null;
+          }
+
           // Buscar plano
           let plano = null;
           if (contrato.plano_id) {
