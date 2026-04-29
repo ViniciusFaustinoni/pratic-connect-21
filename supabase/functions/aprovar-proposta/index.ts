@@ -483,28 +483,56 @@ serve(async (req) => {
     await Promise.all(docPromises);
 
     // SGA Hinova sync (background)
+    // 1) Primeiro envio sempre PENDENTE (se ainda não sincronizado).
+    // 2) Se a ativação completa ocorreu agora (!deveAguardarInstalacao), enfileirar
+    //    também um segundo job ATIVO para promover a situação no Hinova.
     try {
       const { data: veiculoParaSGA } = await supabase.from('veiculos')
         .select('id').eq('associado_id', associadoId).eq('sincronizado_hinova', false).limit(1).maybeSingle();
 
       if (veiculoParaSGA?.id) {
-        console.log('[aprovar-proposta] Enfileirando SGA...');
+        console.log('[aprovar-proposta] Enfileirando SGA pendente...');
         await supabase.rpc('enqueue_integration', {
           _integration: 'sga',
           _operation: 'hinova_sync',
           _payload: {
             veiculo_id: veiculoParaSGA.id,
             associado_id: associadoId,
-            status_sga_destino: statusSgaDestino,
+            status_sga_destino: 'pendente',
             usuario_id: aprovado_por,
             etapa_origem: 'aprovar-proposta',
             motivo_decisao: motivoDecisaoSga,
           },
-          _correlation_id: `sga:hinova:${veiculoParaSGA.id}:${statusSgaDestino}`,
+          _correlation_id: `sga:hinova:${veiculoParaSGA.id}:pendente`,
           _max_attempts: 5,
           _delay_seconds: 0,
           _created_by: aprovado_por ?? null,
         });
+      }
+
+      // Segundo disparo: promoção para ativo somente quando a ativação completa
+      // ocorreu nesta chamada (não há etapa de instalação pendente).
+      if (!deveAguardarInstalacao) {
+        const veiculoIdParaAtivar = veiculoIdDoContrato ?? veiculoParaSGA?.id ?? null;
+        if (veiculoIdParaAtivar) {
+          console.log('[aprovar-proposta] Enfileirando SGA ativo (ativação completa)...');
+          await supabase.rpc('enqueue_integration', {
+            _integration: 'sga',
+            _operation: 'hinova_sync',
+            _payload: {
+              veiculo_id: veiculoIdParaAtivar,
+              associado_id: associadoId,
+              status_sga_destino: 'ativo',
+              usuario_id: aprovado_por,
+              etapa_origem: 'ativacao-completa',
+              motivo_decisao: 'Ativação completa do associado — promover veículo para ativo no SGA.',
+            },
+            _correlation_id: `sga:hinova:${veiculoIdParaAtivar}:ativo`,
+            _max_attempts: 5,
+            _delay_seconds: 5, // pequeno atraso para que o pendente cadastre primeiro
+            _created_by: aprovado_por ?? null,
+          });
+        }
       }
     } catch (e) {
       console.warn('[aprovar-proposta] Erro SGA:', e);
