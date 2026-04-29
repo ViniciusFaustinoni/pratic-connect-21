@@ -393,21 +393,19 @@ export async function buscarVeiculoPorPlaca(
   // ---- Caminho recomendado: usa hinovaFetch (retry automático em 401/403) ----
   if (!isSession) {
     const supabase = sessionOrSupabase;
+    // Resolve apiUrl uma vez (hinovaFetch refresca o token internamente quando necessário).
+    const sessionForUrl = await getHinovaSession(supabase);
+    const apiUrl = sessionForUrl.apiUrl;
 
     // Endpoint primário
-    const { response: r1, bodyText: txt1, session: s1 } = await hinovaFetch(
+    const { response: r1, bodyText: txt1 } = await hinovaFetch(
       supabase,
       (token) => ({
-        url: `${(cachedSession?.session.apiUrl) || ''}/veiculo/consultar/placa/${placaLimpa}`,
+        url: `${apiUrl}/veiculo/consultar/placa/${placaLimpa}`,
         init: { method: 'GET', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` } },
       }),
       'buscarVeiculoPorPlaca/consultar',
     );
-    // url acima precisa ter apiUrl correto; resolvemos pegando do session retornado, mas
-    // hinovaFetch já fez a chamada. Para corrigir: refatoramos passando apiUrl via getHinovaSession antes.
-    // (ver implementação real abaixo)
-    void s1;
-
     lastDebug = { endpoint: 'consultar/placa', status: r1.status, bodySample: txt1.slice(0, 200) };
 
     if (r1.ok) {
@@ -421,7 +419,7 @@ export async function buscarVeiculoPorPlaca(
     const { response: r2, bodyText: txt2 } = await hinovaFetch(
       supabase,
       (token) => ({
-        url: `${(cachedSession?.session.apiUrl) || ''}/veiculo/buscar/${placaLimpa}/placa`,
+        url: `${apiUrl}/veiculo/buscar/${placaLimpa}/placa`,
         init: { method: 'GET', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` } },
       }),
       'buscarVeiculoPorPlaca/fallback',
