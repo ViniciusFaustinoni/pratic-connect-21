@@ -404,7 +404,7 @@ export default function ContratoDetalhe() {
           </li>
           <li>/</li>
           <li>
-            <Link to="/vendas/dashboard" className="hover:text-foreground">
+            <Link to="/vendas/leads" className="hover:text-foreground">
               Vendas
             </Link>
           </li>
