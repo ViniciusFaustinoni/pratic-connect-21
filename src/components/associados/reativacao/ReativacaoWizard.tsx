@@ -68,7 +68,10 @@ export function ReativacaoWizard({
   const prazoNovaAdesao = prazos?.prazoNovaAdesao ?? 180;
   const dias = situacao.diasAtraso;
 
-  // Detectar suspensão por instalação fora do prazo (lendo o motivo da cobertura suspensa do veículo do contrato)
+  // Detectar suspensão por instalação fora do prazo.
+  // Regra: se o veículo do contrato está com cobertura suspensa e NÃO existe instalação
+  // concluída/dispensada, tratamos como caminho 4 — independente do texto exato do motivo
+  // (cobre suspensão automática do cron, suspensão manual do analista e motivos legados).
   const { data: suspensaoInstalacao } = useQuery({
     queryKey: ['suspensao-instalacao-veiculo', contratoId],
     queryFn: async () => {
@@ -88,34 +91,48 @@ export function ReativacaoWizard({
         .eq('id', contrato.veiculo_id)
         .maybeSingle();
 
-      if (!v?.cobertura_suspensa || !v.cobertura_suspensa_motivo) return null;
+      if (!v?.cobertura_suspensa) return null;
 
-      const motivo = v.cobertura_suspensa_motivo.toLowerCase();
-      const isInstalacao =
+      // Verificar se já existe instalação concluída/dispensada para este contrato
+      const { data: instalacaoConcluida } = await supabase
+        .from('instalacoes')
+        .select('id')
+        .eq('contrato_id', contratoId)
+        .or('status.eq.concluida,concluida_em.not.is.null,dispensa_rastreador.eq.true')
+        .limit(1);
+      if ((instalacaoConcluida?.length ?? 0) > 0) return null;
+
+      // Heurística adicional: se o motivo casa com prefixo conhecido OU se simplesmente não
+      // há instalação concluída + cobertura suspensa, tratamos como caminho 4.
+      const motivo = (v.cobertura_suspensa_motivo || '').toLowerCase();
+      const motivoCasaPadrao =
         motivo.startsWith('instalação não realizada') ||
+        motivo.startsWith('instalacao nao realizada') ||
         motivo.includes('auto-vistoria sem instalação') ||
-        motivo.includes('autovistoria sem instalação');
+        motivo.includes('autovistoria sem instalação') ||
+        /instala[cç][aã]o.*(prazo|n[aã]o realizada|fora do prazo)/i.test(v.cobertura_suspensa_motivo || '');
 
-      if (!isInstalacao) return null;
-
+      // Se motivo não bate o padrão, ainda assim aceitamos como caminho 4 (sem instalação concluída
+      // + cobertura suspensa = bloqueio operacional resolvido só pela instalação).
       const susEm = v.cobertura_suspensa_em ? new Date(v.cobertura_suspensa_em) : new Date();
       const diasSuspenso = Math.max(0, Math.floor((Date.now() - susEm.getTime()) / (1000 * 60 * 60 * 24)));
 
       return {
-        motivo: v.cobertura_suspensa_motivo,
+        motivo: v.cobertura_suspensa_motivo || 'Cobertura suspensa (instalação pendente)',
         diasSuspenso,
         suspensaEm: v.cobertura_suspensa_em,
+        motivoCasaPadrao,
       };
     },
     enabled: !!contratoId && open,
   });
 
   // Determinar caminho:
-  // - Se há suspensão por instalação SEM dívida → caminho 4
-  // - Se há dívida → caminhos 1/2/3 conforme prazo
-  // - (Se houver os dois, dívida prevalece — caso raro; cobertura volta após pagamento normal)
+  // - Caminho 4 (suspensão por instalação) tem PRIORIDADE: pagar boleto não devolve cobertura
+  //   suspensa por não-instalação — só a instalação devolve.
+  // - Sem suspensão de instalação → caminhos 1/2/3 conforme dias de atraso.
   const caminho: Caminho = (() => {
-    if (suspensaoInstalacao && dias === 0) return 4;
+    if (suspensaoInstalacao) return 4;
     if (dias <= prazoSemRevistoria) return 1;
     if (dias <= prazoNovaAdesao) return 2;
     return 3;
