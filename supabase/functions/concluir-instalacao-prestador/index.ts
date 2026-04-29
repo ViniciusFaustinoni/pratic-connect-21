@@ -164,20 +164,23 @@ Deno.serve(async (req) => {
       .single()
 
     let prestadorNome = 'Prestador externo'
-    if (link.vistoriador_prestador_id) {
+    if (link.prestador_id) {
+      // Tenta primeiro vistoriadores_prestadores (pessoa física); depois prestadores_assistencia (PJ)
       const { data: vp } = await supabase
         .from('vistoriadores_prestadores')
         .select('nome')
-        .eq('id', link.vistoriador_prestador_id)
-        .maybeSingle()
-      prestadorNome = vp?.nome || prestadorNome
-    } else if (link.prestador_id) {
-      const { data: pa } = await supabase
-        .from('prestadores_assistencia')
-        .select('razao_social, nome_fantasia')
         .eq('id', link.prestador_id)
         .maybeSingle()
-      prestadorNome = pa?.nome_fantasia || pa?.razao_social || prestadorNome
+      if (vp?.nome) {
+        prestadorNome = vp.nome
+      } else {
+        const { data: pa } = await supabase
+          .from('prestadores_assistencia')
+          .select('razao_social, nome_fantasia')
+          .eq('id', link.prestador_id)
+          .maybeSingle()
+        prestadorNome = pa?.nome_fantasia || pa?.razao_social || prestadorNome
+      }
     }
 
     const veiculo = instalacao?.veiculos as any
