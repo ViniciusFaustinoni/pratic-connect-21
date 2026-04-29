@@ -52,7 +52,8 @@ export default function AprovacaoAssociadosMonitoramento() {
     return (
       s.associado?.nome?.toLowerCase().includes(q) ||
       s.associado?.cpf?.includes(search) ||
-      s.veiculo?.placa?.toLowerCase().includes(q)
+      s.veiculo?.placa?.toLowerCase().includes(q) ||
+      s.veiculo?.chassi?.toLowerCase().includes(q)
     );
   });
 

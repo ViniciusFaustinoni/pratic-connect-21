@@ -86,6 +86,7 @@ export function useVeiculosOficina(filters?: OficinaFilters) {
         result = result.filter(
           (v) =>
             v.veiculo?.placa?.toLowerCase().includes(s) ||
+            v.veiculo?.chassi?.toLowerCase().includes(s) ||
             v.associado?.nome?.toLowerCase().includes(s) ||
             v.numero?.toLowerCase().includes(s)
         );

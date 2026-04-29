@@ -140,6 +140,7 @@ export default function RetiradasContent() {
       result = result.filter(r =>
         r.associado?.nome?.toLowerCase().includes(searchLower) ||
         r.veiculo?.placa?.toLowerCase().includes(searchLower) ||
+        r.veiculo?.chassi?.toLowerCase().includes(searchLower) ||
         r.rastreador?.codigo?.toLowerCase().includes(searchLower) ||
         r.protocolo?.toLowerCase().includes(searchLower)
       );
