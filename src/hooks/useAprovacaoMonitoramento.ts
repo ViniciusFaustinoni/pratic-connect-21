@@ -179,12 +179,28 @@ export function useAprovarInstalacaoMonitoramento() {
           actor_id: profile?.id ?? null,
           ativar_cobertura_total: true,
           ativar_cobertura_roubo_furto: true,
-          allowed_from: ['assinado', 'aguardando_instalacao', 'pendente'],
+          allowed_from: ['assinado', 'aguardando_instalacao', 'pendente', 'em_analise', 'documentacao_pendente', 'aprovado'],
           metadata: { observacoes: data.observacoes ?? null },
         },
       });
 
-      if (ativacaoError) throw ativacaoError;
+      if (ativacaoError) {
+        let detailMsg = ativacaoError.message;
+        try {
+          const ctx = (ativacaoError as any).context;
+          if (ctx && typeof ctx.json === 'function') {
+            const body = await ctx.json();
+            if (body?.error === 'transicao_invalida') {
+              detailMsg = `Não é possível ativar: status atual do associado é "${body.from_status}". Conclua a aprovação cadastral antes de ativar.`;
+            } else if (body?.error === 'campos_obrigatorios_faltando') {
+              detailMsg = `Campos obrigatórios faltando: ${(body.campos_faltando || []).join(', ')}`;
+            } else if (body?.mensagem || body?.error) {
+              detailMsg = body.mensagem || body.error;
+            }
+          }
+        } catch { /* ignore */ }
+        throw new Error(detailMsg);
+      }
       if (ativacao && ativacao.success === false && !ativacao.idempotente) {
         throw new Error(ativacao.error === 'campos_obrigatorios_faltando'
           ? `Campos obrigatórios faltando: ${(ativacao.campos_faltando || []).join(', ')}`
