@@ -40,10 +40,11 @@ export default function Extrato() {
     dataFim: endOfMonth(new Date()).toISOString().split('T')[0],
     tipo: 'todos',
     categoria: 'todos',
+    associado: '',
   });
 
   const { data: movimentacoes, isLoading } = useQuery({
-    queryKey: ['movimentacoes', filters],
+    queryKey: ['movimentacoes', filters.dataInicio, filters.dataFim, filters.tipo, filters.categoria],
     queryFn: async () => {
       let query = supabase
         .from('movimentacoes_financeiras')
@@ -66,9 +67,76 @@ export default function Extrato() {
 
       const { data, error } = await query.limit(500);
       if (error) throw error;
-      return data;
+      const movs = data ?? [];
+
+      // Enriquecer com associado vinculado (via contrato ou direto)
+      const contratoIds = Array.from(
+        new Set(
+          movs
+            .filter((m) => m.referencia_tipo === 'contrato' && m.referencia_id)
+            .map((m) => m.referencia_id as string)
+        )
+      );
+      const associadoIdsDiretos = Array.from(
+        new Set(
+          movs
+            .filter((m) => m.referencia_tipo === 'associado' && m.referencia_id)
+            .map((m) => m.referencia_id as string)
+        )
+      );
+
+      const contratoToAssociado = new Map<string, { id: string; nome: string }>();
+      if (contratoIds.length > 0) {
+        const { data: contratos } = await supabase
+          .from('contratos')
+          .select('id, associado_id, associados:associado_id (id, nome)')
+          .in('id', contratoIds);
+        (contratos ?? []).forEach((c: any) => {
+          if (c.associados) {
+            contratoToAssociado.set(c.id, { id: c.associados.id, nome: c.associados.nome });
+          }
+        });
+      }
+
+      const associadoMap = new Map<string, { id: string; nome: string }>();
+      const associadosToFetch = Array.from(
+        new Set([
+          ...associadoIdsDiretos,
+          ...Array.from(contratoToAssociado.values()).map((a) => a.id),
+        ])
+      );
+      if (associadosToFetch.length > 0) {
+        const { data: associados } = await supabase
+          .from('associados')
+          .select('id, nome')
+          .in('id', associadosToFetch);
+        (associados ?? []).forEach((a: any) => {
+          associadoMap.set(a.id, { id: a.id, nome: a.nome });
+        });
+      }
+
+      return movs.map((m) => {
+        let associado: { id: string; nome: string } | null = null;
+        if (m.referencia_tipo === 'contrato' && m.referencia_id) {
+          const c = contratoToAssociado.get(m.referencia_id);
+          if (c) associado = associadoMap.get(c.id) ?? c;
+        } else if (m.referencia_tipo === 'associado' && m.referencia_id) {
+          associado = associadoMap.get(m.referencia_id) ?? null;
+        }
+        return { ...m, associado };
+      });
     }
   });
+
+  // Filtro client-side por nome do associado
+  const movimentacoesFiltradas = useMemo(() => {
+    if (!movimentacoes) return undefined;
+    const term = filters.associado.trim().toLowerCase();
+    if (!term) return movimentacoes;
+    return movimentacoes.filter((m: any) =>
+      m.associado?.nome?.toLowerCase().includes(term)
+    );
+  }, [movimentacoes, filters.associado]);
 
   const resumo = useMemo(() => {
     if (!movimentacoes) return { entradas: 0, saidas: 0, saldo: 0 };
