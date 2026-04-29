@@ -663,12 +663,19 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
       if (veiculo) {
         console.log('[Contrato] Veículo existente encontrado:', veiculo.id);
         
-        // Verificar se pertence ao mesmo associado
+        // BLOQUEIO ANTI-SEQUESTRO: nunca transferir veículo silenciosamente
+        // entre titulares. Se a placa pertence a outro associado, o operador
+        // deve usar Substituição/Troca de Titularidade. Isso evita o incidente
+        // RIR1B37 (placa de ERICO foi vinculada por engano ao cadastro de TOVAR).
         if (veiculo.associado_id && veiculo.associado_id !== associado.id) {
-          toast.warning('Este veículo já está vinculado a outro associado. Será atualizado.');
+          throw new Error(
+            `A placa ${data.placa} já está cadastrada em outro associado. ` +
+            `Para mudar a titularidade use o fluxo de Substituição/Troca de Titularidade. ` +
+            `Se a placa foi digitada errada, corrija antes de prosseguir.`
+          );
         }
         
-        // Atualizar veículo
+        // Atualizar veículo (apenas dados técnicos — associado_id NÃO muda)
         veiculo = await updateVeiculo.mutateAsync({
           id: veiculo.id,
           associado_id: associado.id,
@@ -685,7 +692,7 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
         
         toast.info('Veículo existente atualizado');
       } else {
-        // Criar novo veículo
+        // Criar novo veículo (useCreateVeiculo já tem guarda anti-sequestro adicional)
         console.log('[Contrato] Criando novo veículo');
         await createVeiculo.mutateAsync({
           associado_id: associado.id,

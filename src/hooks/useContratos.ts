@@ -301,6 +301,22 @@ export function useAtivarContrato() {
 
       // 5. Criar veículo se houver dados
       if (lead.veiculo_marca && lead.veiculo_placa) {
+        // GUARDA ANTI-SEQUESTRO: bloqueia reaproveitamento de placa de outro dono
+        const placaNorm = String(lead.veiculo_placa).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+        if (placaNorm.length >= 7) {
+          const { data: placaJaExiste } = await supabase
+            .from('veiculos')
+            .select('id, associado_id')
+            .eq('placa', placaNorm)
+            .maybeSingle();
+          if (placaJaExiste?.associado_id && placaJaExiste.associado_id !== novoAssociado.id) {
+            throw new Error(
+              `A placa ${placaNorm} já está cadastrada em outro associado. ` +
+              `Verifique a placa do lead antes de gerar o contrato.`
+            );
+          }
+        }
+
         const { error: veiculoError } = await supabase
           .from('veiculos')
           .insert({

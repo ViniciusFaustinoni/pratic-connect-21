@@ -131,6 +131,24 @@ export function StepNovoVeiculo({
         substId = await onIniciarSubstituicao();
       }
 
+      // GUARDA ANTI-SEQUESTRO: a nova placa não pode pertencer a outro associado.
+      const placaNorm = (dados.placa || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+      if (placaNorm.length >= 7) {
+        const { data: jaExiste } = await supabase
+          .from('veiculos')
+          .select('id, associado_id, associado:associados(nome, cpf)')
+          .eq('placa', placaNorm)
+          .maybeSingle();
+        if (jaExiste?.associado_id && jaExiste.associado_id !== associadoId) {
+          const dono = (jaExiste.associado as { nome?: string; cpf?: string } | null);
+          const detalhe = dono?.nome ? ` (titular atual: ${dono.nome}${dono.cpf ? ' — CPF ' + dono.cpf : ''})` : '';
+          throw new Error(
+            `A placa ${placaNorm} já está cadastrada em outro associado${detalhe}. ` +
+            `Confirme a placa do veículo novo antes de prosseguir com a substituição.`
+          );
+        }
+      }
+
       // Criar veículo com status em_analise
       const { data: novoVeiculo, error } = await supabase
         .from('veiculos')
