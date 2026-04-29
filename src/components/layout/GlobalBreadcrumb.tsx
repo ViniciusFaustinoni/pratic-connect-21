@@ -355,7 +355,7 @@ interface BreadcrumbItemProps {
 // Rotas que são apenas categorias (sem página própria) — redirecionar para primeiro filho
 const CATEGORY_REDIRECTS: Record<string, string> = {
   '/cadastro': '/cadastro/associados',
-  '/vendas': '/vendas/dashboard',
+  '/vendas': '/vendas/leads',
   '/eventos': '/eventos/dashboard',
   '/assistencia': '/assistencia/dashboard',
   '/financeiro': '/financeiro/dashboard',
