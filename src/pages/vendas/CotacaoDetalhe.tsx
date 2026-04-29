@@ -389,7 +389,7 @@ Ficou com alguma dúvida? Estou à disposição!
           </li>
           <li>/</li>
           <li>
-            <Link to="/vendas/dashboard" className="hover:text-foreground">Vendas</Link>
+            <Link to="/vendas/leads" className="hover:text-foreground">Vendas</Link>
           </li>
           <li>/</li>
           <li>
