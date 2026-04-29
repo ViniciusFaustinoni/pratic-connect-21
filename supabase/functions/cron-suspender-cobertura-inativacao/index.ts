@@ -16,16 +16,31 @@ Deno.serve(async (req) => {
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // 1) Carregar prazo (h) configurado pela diretoria (default 72h)
-    const { data: cfg } = await supabase
+    // 1) Carregar prazos (h) configurados pela diretoria (default + regionais RJ/SP)
+    const { data: cfgs } = await supabase
       .from('configuracoes')
-      .select('valor')
-      .eq('chave', 'prazo_instalacao_autovistoria_horas')
-      .maybeSingle();
-    const prazoHoras = Math.max(1, parseInt(cfg?.valor ?? '72', 10) || 72);
-    const limite = new Date(Date.now() - prazoHoras * 60 * 60 * 1000).toISOString();
+      .select('chave, valor')
+      .in('chave', [
+        'prazo_instalacao_autovistoria_horas',
+        'prazo_instalacao_horas_rj',
+        'prazo_instalacao_horas_sp',
+      ]);
+    const cfgMap = Object.fromEntries((cfgs ?? []).map(c => [c.chave, c.valor]));
+    const prazoDefault = Math.max(1, parseInt(cfgMap['prazo_instalacao_autovistoria_horas'] ?? '72', 10) || 72);
+    const prazoRJ = Math.max(1, parseInt(cfgMap['prazo_instalacao_horas_rj'] ?? '48', 10) || 48);
+    const prazoSP = Math.max(1, parseInt(cfgMap['prazo_instalacao_horas_sp'] ?? '72', 10) || 72);
+    const prazoPorUf = (uf?: string | null) => {
+      const u = (uf || '').trim().toUpperCase();
+      if (u === 'RJ') return prazoRJ;
+      if (u === 'SP') return prazoSP;
+      return prazoDefault;
+    };
+    // Pré-filtragem: usar o MENOR prazo (mais restritivo) para reduzir varredura;
+    // a comparação fina por UF é feita no loop.
+    const menorPrazo = Math.min(prazoDefault, prazoRJ, prazoSP);
+    const limite = new Date(Date.now() - menorPrazo * 60 * 60 * 1000).toISOString();
 
-    // 2) Buscar TODOS os contratos assinados/ativos há mais que o prazo,
+    // 2) Buscar TODOS os contratos assinados/ativos há mais que o menor prazo,
     //    sem liberação manual de reagendamento — independente de tipo_vistoria.
     //    Regra (memória suspensao-cobertura-48h): cobre todo contrato cuja instalação
     //    não foi concluída no prazo após assinatura.
