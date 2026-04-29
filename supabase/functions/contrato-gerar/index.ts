@@ -546,7 +546,7 @@ serve(async (req) => {
     } else if (emailFinal) {
       const { data: byEmail } = await supabase
         .from('associados')
-        .select('id, email, telefone')
+        .select('id, nome, email, telefone, cpf')
         .eq('email', emailFinal)
         .maybeSingle();
       
@@ -554,11 +554,18 @@ serve(async (req) => {
         associadoId = byEmail.id;
         console.log('Associado existente encontrado pelo email:', associadoId);
 
-        // ═══════════════════════════════════════════════════════════════
-        // SINCRONIZAÇÃO SEGURA: Atualiza telefone se diferente
-        // (Email já é igual, pois foi encontrado por email)
-        // ═══════════════════════════════════════════════════════════════
-        if (telefoneFinal && telefoneFinal.trim() !== '' && telefoneFinal !== byEmail.telefone) {
+        // PROTEÇÃO ANTI-COLISÃO: emails podem ser compartilhados entre familiares.
+        // Só sincronizar se o nome bater. Se não bater, o cadastro existente é
+        // de outra pessoa e este fluxo deve criar um novo associado.
+        const mesmoTitularEmail = nomesCoincidem(byEmail.nome, nomeFinal);
+        if (!mesmoTitularEmail) {
+          console.warn(
+            `[ALERTA-COLISAO] email=${emailFinal} associado_id=${associadoId} ` +
+            `nome_db="${byEmail.nome}" cpf_db=${byEmail.cpf} nome_cot="${nomeFinal}" cpf_cot=${cpfNormalizado} ` +
+            `(cotação ${cotacao_id}) — não reaproveitando associado, será criado um novo.`
+          );
+          associadoId = null; // força queda no branch de criação
+        } else if (telefoneFinal && telefoneFinal.trim() !== '' && telefoneFinal !== byEmail.telefone) {
           const { error: updateTelError } = await supabase
             .from('associados')
             .update({ telefone: telefoneFinal })
