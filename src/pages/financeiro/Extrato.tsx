@@ -393,7 +393,7 @@ export default function Extrato() {
                 <Skeleton key={i} className="h-12 w-full" />
               ))}
             </div>
-          ) : !movimentacoes?.length ? (
+          ) : !movimentacoesFiltradas?.length ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Receipt className="h-12 w-12 text-muted-foreground/50 mb-4" />
               <p className="text-lg font-medium text-muted-foreground">
@@ -415,21 +415,41 @@ export default function Extrato() {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-28">Data</TableHead>
                         <TableHead>Descrição</TableHead>
-                        <TableHead>Categoria</TableHead>
-                        <TableHead className="text-right">Valor</TableHead>
+                        <TableHead className="w-[220px]">Associado</TableHead>
+                        <TableHead className="w-[200px]">Categoria</TableHead>
+                        <TableHead className="text-right w-32">Valor</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {movimentacoesPorDia[data]?.map((mov) => (
+                      {movimentacoesPorDia[data]?.map((mov: any) => (
                         <TableRow key={mov.id}>
+                          <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                            {formatDateCell(mov.data_movimentacao)}
+                          </TableCell>
                           <TableCell>
                             <div>
-                              <p className="font-medium">{mov.descricao}</p>
+                              <p className="font-medium">
+                                {stripAssociadoFromDescricao(mov.descricao, mov.associado?.nome)}
+                              </p>
                               {mov.observacao && (
                                 <p className="text-xs text-muted-foreground">{mov.observacao}</p>
                               )}
                             </div>
+                          </TableCell>
+                          <TableCell className="max-w-[220px]">
+                            {mov.associado ? (
+                              <Link
+                                to={`/cadastro/associados/${mov.associado.id}`}
+                                className="text-sm text-primary hover:underline truncate block"
+                                title={mov.associado.nome}
+                              >
+                                {mov.associado.nome}
+                              </Link>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">—</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline">
