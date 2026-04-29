@@ -200,7 +200,7 @@ export function useAtivarRastreadorPlataforma() {
           source: 'hook:useVistoriaCompletaAnalise',
           actor_id: profile?.id ?? null,
           ativar_cobertura_total: true,
-          allowed_from: ['assinado', 'aguardando_instalacao', 'pendente'],
+          allowed_from: ['assinado', 'aguardando_instalacao', 'pendente', 'em_analise', 'documentacao_pendente', 'aprovado'],
           metadata: { rastreador_id: rastreadorId, imei, plataforma: rastreador.plataforma },
         },
       });
