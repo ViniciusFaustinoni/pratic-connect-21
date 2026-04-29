@@ -363,7 +363,7 @@ serve(async (req) => {
     const cpfNormalizado = cpfLimpo;
     const { data: associadoExistente } = await supabase
       .from('associados')
-      .select('id, email, telefone')
+      .select('id, nome, email, telefone')
       .eq('cpf', cpfNormalizado)
       .maybeSingle();
     
@@ -387,29 +387,34 @@ serve(async (req) => {
       });
 
       // ═══════════════════════════════════════════════════════════════
-      // SINCRONIZAÇÃO SEGURA: Atualiza email e telefone se diferentes
-      // Endereço e outros dados NÃO são sobrescritos automaticamente
+      // PROTEÇÃO ANTI-COLISÃO: só sincroniza PII se o nome do solicitante
+      // realmente bate com o nome do associado existente. Evita poluir o
+      // cadastro de outra pessoa quando dois titulares compartilham CPF
+      // por engano (ex.: digitação errada do operador).
       // ═══════════════════════════════════════════════════════════════
+      const mesmoTitular = nomesCoincidem(associadoExistente.nome, nomeFinal);
+      if (!mesmoTitular) {
+        console.warn(
+          `[ALERTA-COLISAO] CPF=${cpfNormalizado} associado_id=${associadoId} ` +
+          `nome_db="${associadoExistente.nome}" nome_cot="${nomeFinal}" ` +
+          `(cotação ${cotacao_id}) — PII NÃO será sincronizada.`
+        );
+      }
+
       const updateData: Record<string, string | null> = {};
 
-      // EMAIL: só atualiza se cotação tem valor novo e diferente
-      if (emailFinal && emailFinal.trim() !== '' && emailFinal !== associadoExistente.email) {
+      // EMAIL: só atualiza se nomes coincidem E cotação tem valor novo e diferente
+      if (mesmoTitular && emailFinal && emailFinal.trim() !== '' && emailFinal !== associadoExistente.email) {
         updateData.email = emailFinal;
         console.log(
           `[AUDITORIA] Email do associado ${associadoId} será atualizado: ` +
           `"${associadoExistente.email || '(vazio)'}" → "${emailFinal}" ` +
           `(cotação ${cotacao_id})`
         );
-      } else {
-        console.log('[DEBUG-SYNC] Email NÃO será atualizado:', {
-          motivo: !emailFinal ? 'emailFinal vazio/null' : 
-                  emailFinal.trim() === '' ? 'emailFinal só whitespace' : 
-                  emailFinal === associadoExistente.email ? 'emails iguais' : 'desconhecido'
-        });
       }
 
-      // TELEFONE: só atualiza se cotação tem valor novo e diferente
-      if (telefoneFinal && telefoneFinal.trim() !== '' && telefoneFinal !== associadoExistente.telefone) {
+      // TELEFONE: só atualiza se nomes coincidem E cotação tem valor novo e diferente
+      if (mesmoTitular && telefoneFinal && telefoneFinal.trim() !== '' && telefoneFinal !== associadoExistente.telefone) {
         updateData.telefone = telefoneFinal;
         console.log(
           `[AUDITORIA] Telefone do associado ${associadoId} será atualizado: ` +
@@ -418,8 +423,8 @@ serve(async (req) => {
         );
       }
 
-      // RG: sincronizar se disponível na cotação
-      if (cotacao.cliente_rg && cotacao.cliente_rg.trim() !== '') {
+      // RG: sincronizar somente se nomes coincidem
+      if (mesmoTitular && cotacao.cliente_rg && cotacao.cliente_rg.trim() !== '') {
         updateData.rg = cotacao.cliente_rg;
       }
 
