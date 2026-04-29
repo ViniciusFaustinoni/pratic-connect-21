@@ -67,6 +67,7 @@ export default function IntegracaoSGAHinova() {
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [queueFilter, setQueueFilter] = useState<string>('all');
+  const [detailItem, setDetailItem] = useState<SGAQueueItem | null>(null);
 
   const lastCheck = healthChecks[0];
   const filteredQueue = queueFilter === 'all'
