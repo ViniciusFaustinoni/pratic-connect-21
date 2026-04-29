@@ -1098,6 +1098,15 @@ serve(async (req) => {
     }
 
     console.log('Contrato gerado com sucesso:', contrato.numero);
+    console.log('[CONTRATO-GERAR][TELEMETRIA]', JSON.stringify({
+      cotacao_id,
+      cpf_normalizado: cpfLimpo,
+      nome_solicitante: nomeFinal,
+      associado_resolvido_id: associadoId,
+      veiculo_resolvido_id: veiculoId,
+      contrato_id: contrato.id,
+      numero: contrato.numero,
+    }));
 
     return new Response(
       JSON.stringify({ 
