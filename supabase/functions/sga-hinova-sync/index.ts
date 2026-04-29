@@ -214,6 +214,21 @@ serve(async (req) => {
     console.warn('[sga-hinova-sync] codigo_conta não configurado — usando conta default da regional.');
   }
 
+  // ---- Fallback hardcoded para situação do veículo no SGA ----
+  // Códigos confirmados via GET /listar/situacao/todos do Hinova:
+  //   1 = ATIVO, 3 = PENDENTE, 11 = EXCLUIDO, 12 = CANCELAMENTO
+  // Sem esse fallback, omitimos `codigo_situacao` no payload de cadastro e o
+  // Hinova aplica ATIVO por default — quebrando a regra "veículo entra como pendente".
+  // ENV/credencial continuam tendo prioridade; só caímos nos defaults quando ausentes.
+  if (!Number.isFinite(codigoSituacaoPendente) || codigoSituacaoPendente <= 0) {
+    console.warn('[sga-hinova-sync] HINOVA_CODIGO_SITUACAO_PENDENTE ausente — usando default 3 (PENDENTE).');
+    codigoSituacaoPendente = 3;
+  }
+  if (!Number.isFinite(codigoSituacaoAtivo) || codigoSituacaoAtivo <= 0) {
+    console.warn('[sga-hinova-sync] HINOVA_CODIGO_SITUACAO_ATIVO ausente — usando default 1 (ATIVO).');
+    codigoSituacaoAtivo = 1;
+  }
+
   let req_body: SyncRequest;
   try { req_body = await req.json(); }
   catch {
@@ -778,6 +793,31 @@ serve(async (req) => {
           nome_arquivo: `avatar_${_aid}.jpg`,
           arquivo_url: associadoFoto.avatar_url,
         });
+      }
+
+      // Fotos da vistoria do veículo (chassi, motor, frente, traseira, laterais, painel etc.)
+      // Só vistorias concluídas/aprovadas. Tipos sem mapeamento caem em descartadasSemTipo
+      // (comportamento existente — não quebra fluxo atual).
+      const { data: vistoriasVeic } = await supabase.from('vistorias')
+        .select('id')
+        .eq('veiculo_id', _vid)
+        .in('status', ['concluida', 'aprovada', 'aprovado']);
+
+      if (vistoriasVeic && vistoriasVeic.length > 0) {
+        const vistoriaIds = vistoriasVeic.map((v: any) => v.id);
+        const { data: vistoriaFotos } = await supabase.from('vistoria_fotos')
+          .select('id, tipo, arquivo_url, vistoria_id')
+          .in('vistoria_id', vistoriaIds);
+
+        for (const vf of (vistoriaFotos || []) as any[]) {
+          if (!vf.arquivo_url) continue;
+          documentosEntrada.push({
+            id: `vist-${vf.id}`,
+            tipo: vf.tipo,
+            nome_arquivo: `vistoria_${vf.tipo}_${vf.id}.jpg`,
+            arquivo_url: vf.arquivo_url,
+          });
+        }
       }
 
       const { fotos, descartadasSemLink, descartadasSemTipo } = buildFotosPayload(
