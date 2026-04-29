@@ -253,9 +253,10 @@ export function useAprovarInstalacaoMonitoramento() {
       queryClient.invalidateQueries({ queryKey: ['servicos-campo'] });
       toast.success('Proteção 360 ativada com sucesso! Associado notificado.');
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error('Erro ao aprovar instalação:', error);
-      toast.error('Erro ao aprovar instalação');
+      const msg = error?.message || error?.error_description || 'Erro ao aprovar instalação';
+      toast.error(msg);
     },
   });
 }
@@ -405,9 +406,10 @@ export function useReprovarInstalacaoMonitoramento() {
       queryClient.invalidateQueries({ queryKey: ['servicos-campo'] });
       toast.success('Instalação reprovada. Coordenador será notificado.');
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error('Erro ao reprovar instalação:', error);
-      toast.error('Erro ao reprovar instalação');
+      const msg = error?.message || error?.error_description || 'Erro ao reprovar instalação';
+      toast.error(msg);
     },
   });
 }
