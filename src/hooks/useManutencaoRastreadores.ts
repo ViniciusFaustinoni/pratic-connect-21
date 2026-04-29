@@ -99,6 +99,7 @@ export function useManutencaoRastreadores() {
       return m;
     },
     enabled: veiculoIds.length > 0,
+  });
 
   const { data: sinistrosAbertos } = useQuery({
     queryKey: ['manutencao-sinistros-abertos', veiculoIds],
