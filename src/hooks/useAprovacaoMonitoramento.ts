@@ -179,7 +179,7 @@ export function useAprovarInstalacaoMonitoramento() {
           actor_id: profile?.id ?? null,
           ativar_cobertura_total: true,
           ativar_cobertura_roubo_furto: true,
-          allowed_from: ['assinado', 'aguardando_instalacao', 'pendente'],
+          allowed_from: ['assinado', 'aguardando_instalacao', 'pendente', 'em_analise', 'documentacao_pendente', 'aprovado'],
           metadata: { observacoes: data.observacoes ?? null },
         },
       });
