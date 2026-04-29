@@ -197,6 +197,7 @@ const menuConfig: {
         { title: 'Recusas do Instalador', url: '/cadastro/recusas-instalador', icon: ShieldAlert },
         { title: 'Biometrias Pendentes', url: '/cadastro/biometrias-pendentes', icon: ShieldQuestion },
         { title: 'Base Antiga', url: '/cadastro/base-antiga', icon: Database },
+        { title: 'Fila SGA', url: '/configuracoes/integracoes/sga-hinova', icon: RefreshCw },
     ],
   },
   {
