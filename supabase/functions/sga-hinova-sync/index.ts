@@ -26,6 +26,7 @@ import {
   buscarVeiculoPorChassi,
   cadastrarAssociadoHinova,
   cadastrarVeiculoHinova,
+  alterarSituacaoVeiculoHinova,
   cadastrarFotosVeiculoHinova,
   HinovaTransientError,
   HinovaNotFoundError,
@@ -632,6 +633,9 @@ serve(async (req) => {
         }
       }
 
+      // Marca se o veículo já existia no Hinova antes desta execução
+      const veiculoJaExistiaNoHinova = !!codigoVeiculoHinova;
+
       // 6.d Cadastrar se não existe
       if (!codigoVeiculoHinova) {
         const codSituacao = statusDestino === 'ativo' ? codigoSituacaoAtivo : codigoSituacaoPendente;
@@ -686,6 +690,46 @@ serve(async (req) => {
             codigoAssociadoHinova);
           return;
         }
+      }
+
+      // 6.e Promoção pendente → ativo: se o veículo JÁ existia no Hinova e o destino
+      // é 'ativo', precisamos efetivamente alterar a situação no SGA (o cadastro
+      // não roda novamente). Isso atende a regra "ativação completa promove no SGA".
+      let promocaoOk = true;
+      if (statusDestino === 'ativo' && veiculoJaExistiaNoHinova && codigoVeiculoHinova) {
+        const codSituacaoAtivo = codigoSituacaoAtivo;
+        if (Number.isFinite(codSituacaoAtivo) && codSituacaoAtivo > 0) {
+          try {
+            const res = await alterarSituacaoVeiculoHinova(session, codigoVeiculoHinova, codSituacaoAtivo);
+            await logSync(_vid, _aid, 'promover_situacao_veiculo', res.ok ? 'success' : 'error',
+              { codigo_veiculo: codigoVeiculoHinova, codigo_situacao: codSituacaoAtivo },
+              res.raw,
+              res.ok ? null : (res.mensagem || res.errors.join('; ') || `HTTP ${res.status}`));
+            if (!res.ok) {
+              promocaoOk = false;
+              await setStatusSga(_vid, 'erro_sincronizacao');
+              await upsertQueue(_vid, _aid, 'veiculo',
+                `Falha ao promover situação no SGA: ${res.mensagem || res.errors.join('; ') || `HTTP ${res.status}`}`,
+                codigoAssociadoHinova);
+            }
+          } catch (e: any) {
+            promocaoOk = false;
+            await logSync(_vid, _aid, 'promover_situacao_veiculo', 'error',
+              { codigo_veiculo: codigoVeiculoHinova, codigo_situacao: codSituacaoAtivo }, null, String(e?.message || e));
+            await setStatusSga(_vid, 'erro_sincronizacao');
+            await upsertQueue(_vid, _aid, 'veiculo', `Erro rede ao promover situação: ${e?.message || e}`, codigoAssociadoHinova);
+          }
+        } else {
+          await logSync(_vid, _aid, 'promover_situacao_veiculo', 'error',
+            { codigo_veiculo: codigoVeiculoHinova }, null,
+            'codigo_situacao_ativo não configurado nas credenciais Hinova');
+          promocaoOk = false;
+        }
+      }
+
+      if (!promocaoOk) {
+        // Mantém o status atual (não regride para ativado_sga) e sai cedo.
+        return;
       }
 
       // Persistir veículo

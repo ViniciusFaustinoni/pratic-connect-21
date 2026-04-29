@@ -141,12 +141,10 @@ Deno.serve(async (req) => {
           body: {
             veiculo_id: instalSga.veiculo_id,
             associado_id: instalSga.associado_id,
-            status_sga_destino: veiculoSga?.cobertura_total === true ? 'ativo' : 'pendente',
+            status_sga_destino: 'pendente',
             force_resync_media: true,
             etapa_origem: 'concluir-instalacao-prestador',
-            motivo_decisao: veiculoSga?.cobertura_total === true
-              ? 'Instalação concluída: Proteção 360 liberada, garantir veículo ativo e documentos no SGA.'
-              : 'Instalação concluída: garantir veículo, fotos e documentos vinculados no SGA.',
+            motivo_decisao: 'Instalação concluída — garantir veículo, fotos e documentos vinculados no SGA (sempre pendente; promoção para ativo só na ativação completa).',
           },
         })
       }

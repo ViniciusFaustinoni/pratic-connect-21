@@ -1,112 +1,67 @@
-# Plano para corrigir associados que voltam/ficam presos no Cadastro
 
-## O que foi identificado
+# Envio ao SGA sempre como pendente + atualização final para ativo
 
-Há dois problemas combinados:
+## Regra de negócio
 
-1. O endpoint `aprovar-proposta` está processando todos os veículos do associado, não apenas o veículo do contrato aprovado.
-2. A fila de Cadastro (`usePropostasPendentes`) continua considerando propostas com vínculo operacional residual, mesmo quando o processo já avançou ou foi concluído.
+1. Toda vez que um associado/veículo for enviado ao SGA pela primeira vez, deve ir como **pendente** — independente do plano ter Roubo/Furto, Auto-Vistoria ou ser apenas Assistência.
+2. Somente na **ativação completa** (última aprovação, depois de instalação + monitoramento + vistoria OK) o sistema deve **reenviar/atualizar** o registro no SGA mudando a situação de pendente → ativo.
+3. Se o associado/veículo ainda não tiver sido enviado nenhuma vez, a ativação completa cadastra direto. Mas mesmo o cadastro inicial dispara como pendente; quem promove para ativo é a etapa final.
 
-Isso explica o comportamento “não linear”: Cadastro → Monitoramento → instalação/vistoria → volta para Cadastro.
+Hoje o sistema já envia como pendente quando o veículo precisa de rastreador, mas envia direto como **ativo** quando o plano não tem Roubo/Furto, ou quando a vistoria sem rastreador conclui antes. Isso quebra a regra acima.
 
-## Evidência principal encontrada
+## Mudanças
 
-### Caso do Marcos
-- Contrato `CTR-20260428214640-3UW9KI` está `ativo`
-- Associado está `ativo`
-- Veículo do contrato `KOS1G37` está `ativo`
-- Mas o mesmo contrato tem duas instalações:
-  - uma `concluida` para outro veículo (`LTB4J74`)
-  - outra `agendada` para `KOS1G37`
+### 1) `supabase/functions/aprovar-proposta/index.ts`
+- Forçar `statusSgaDestino = 'pendente'` em todos os caminhos do primeiro envio.
+- Remover o ramo que define `'ativo'` quando não há rastreador / quando já tem instalação concluída.
+- Manter o restante do fluxo (ativação local de associado/contrato/veículo via `ativar-associado`) inalterado: a ativação interna continua acontecendo, mas o envio ao SGA dessa etapa entra como pendente.
+- Após a ativação atômica concluída com sucesso, **disparar um segundo job SGA** com `status_sga_destino: 'ativo'` para promover o veículo no Hinova (será ignorado se ainda não estiver sincronizado e a etapa final cuidará dele).
 
-Ou seja: o contrato do Marcos ficou com instalações de veículos diferentes. Isso é sintoma direto do loop em `aprovar-proposta` que percorre todos os veículos do associado.
+### 2) `supabase/functions/concluir-instalacao-prestador/index.ts`
+- Hoje envia `'ativo'` quando `cobertura_total === true`. Trocar por sempre `'pendente'` neste ponto. A promoção para `'ativo'` só ocorre na etapa final de ativação (item 3).
 
-### Escopo do problema no banco
-Foram encontrados:
-- 8 instalações onde `instalacoes.veiculo_id != contratos.veiculo_id`
-- 1 contrato `ativo` ainda com instalação `agendada`
-- vários contratos com múltiplas instalações ligadas ao mesmo contrato
+### 3) Etapa de "ativação completa" — promover para ativo
+A "última aprovação" no fluxo é o ponto onde associado/contrato/veículo viram `ativo` via edge `ativar-associado`. Vou adicionar, logo após o `ativar-associado` retornar sucesso (em `aprovar-proposta` quando `!deveAguardarInstalacao`, e também ao final do fluxo de instalação/vistoria que dispara a ativação), o disparo de `sga-hinova-sync` com:
+```
+status_sga_destino: 'ativo'
+etapa_origem: 'ativacao-completa'
+motivo_decisao: 'Ativação completa do associado — promover veículo para ativo no SGA.'
+```
 
-## Correção proposta
+### 4) `supabase/functions/sga-hinova-sync/index.ts` — suportar promoção pendente → ativo
+Hoje o guard de idempotência (linhas 281-288) faz:
+```
+if (!force_resync_media && já sincronizado && (statusDestino !== 'ativo' || status_sga === 'ativado_sga'))
+  → skip
+```
+Isto já permite re-executar quando `statusDestino === 'ativo'` e `status_sga !== 'ativado_sga'`. **Mas** o restante do fluxo, ao reencontrar o veículo já cadastrado no Hinova (`codigoVeiculoHinova` veio do `buscarVeiculoPorPlaca`), pula o `cadastrarVeiculoHinova` e nunca chama nada que altere a `codigo_situacao` do veículo no SGA. Resultado: a coluna `status_sga` local vira `ativado_sga`, mas no Hinova a situação continua pendente.
 
-### 1) Corrigir a origem do bug no backend
-Ajustar `supabase/functions/aprovar-proposta/index.ts` para:
-- operar somente sobre o `veiculo_id` do contrato aprovado
-- parar de criar instalações para todos os veículos do associado
-- validar explicitamente que a instalação criada pertence ao mesmo veículo do contrato
-- reforçar idempotência por `contrato_id + veiculo_id`
-- impedir que o fluxo normal de proposta gere instalações “órfãs” ou cruzadas
+Correção:
+- Adicionar no client `_shared/hinova-client.ts` uma função `atualizarSituacaoVeiculoHinova(session, codigo_veiculo, codigo_situacao)` apontando para o endpoint Hinova de alteração de situação do veículo (a definir junto à doc Hinova já em uso — provavelmente `/veiculo/alterar` ou `/veiculo/atualizar-situacao`).
+- Em `sga-hinova-sync`, depois de obter `codigoVeiculoHinova` (seja por reuso ou cadastro), se `statusDestino === 'ativo'` e o veículo já existia no Hinova, chamar a nova função para promover a situação. Logar `promover_situacao_veiculo`.
+- Manter o `update` local de `status_sga` apenas após confirmar promoção bem sucedida.
 
-### 2) Blindar a leitura da fila de Cadastro
-Ajustar `src/hooks/usePropostasPendentes.ts` para:
-- não exibir propostas já finalizadas operacionalmente
-- usar somente instalações/vistorias compatíveis com o veículo do contrato
-- ignorar instalações antigas, cruzadas ou residuais
-- considerar como fora da fila qualquer proposta já ativada de fato
+> Observação: se o endpoint exato de atualização não estiver disponível no client atual, a etapa de implementação consulta a doc Hinova já mapeada no projeto antes de criar a função. Caso a Hinova não exponha alteração isolada de situação, a alternativa é re-`cadastrar_veiculo` reutilizando `codigo_veiculo` (idempotente do lado deles).
 
-Também ajustar a estatística (`usePropostaStats`) para não contar casos já concluídos.
+### 5) `motivoDecisaoSga` — atualizar mensagens
+Refletir nas mensagens:
+- "Primeiro envio ao SGA — sempre pendente por política."
+- "Ativação completa — promovendo veículo para situação ativo no SGA."
 
-### 3) Corrigir a tela de detalhe da proposta
-Ajustar `useProposta` / `PropostaAnalise` para:
-- carregar a instalação correta do veículo do contrato
-- não montar a tela com instalação concluída de outro veículo
-- não sugerir retorno para análise quando já houve ativação final
-
-### 4) Saneamento em massa dos casos já quebrados
-Executar uma limpeza controlada dos registros afetados para:
-- localizar contratos com instalações de veículo diferente
-- cancelar/encerrar instalações agendadas residuais que não deveriam existir
-- manter apenas a trilha operacional correta por contrato/veículo
-- reativar corretamente casos que concluíram o processo mas ficaram com contrato/status inconsistente
-
-Importante: qualquer ativação de associado/contrato/veículo continuará passando pela edge function `ativar-associado`.
-
-### 5) Validar ponta a ponta com casos reais
-Depois da correção:
-- validar novamente o caso do Marcos
-- validar pelo menos um caso com instalação agendada normal
-- validar pelo menos um caso previamente preso no Cadastro
-- confirmar que, após aprovação final, o associado não reaparece na fila
-
-## Arquivos que devem ser ajustados
+## Arquivos afetados
 
 - `supabase/functions/aprovar-proposta/index.ts`
-- `src/hooks/usePropostasPendentes.ts`
-- `src/pages/cadastro/PropostaAnalise.tsx`
-- possivelmente `src/pages/cadastro/PropostasPendentes.tsx` se houver badge/estado derivado incorreto
+- `supabase/functions/concluir-instalacao-prestador/index.ts`
+- `supabase/functions/sga-hinova-sync/index.ts`
+- `supabase/functions/_shared/hinova-client.ts` (nova função de atualização de situação)
 
-## Saneamento técnico
+## Validação
 
-Além da correção do código, vou preparar uma rotina para levantar e limpar todos os contratos afetados por:
-- instalações duplicadas no mesmo contrato
-- instalação vinculada a veículo diferente do contrato
-- contrato ativo com instalação agendada residual
-- contrato assinado mas associado/veículo já ativo
+- Caso A — plano só Assistência (sem R/F): aprovar proposta → SGA recebe pendente. Após ativação completa → SGA recebe ativo.
+- Caso B — plano com R/F + auto-vistoria sem rastreador: aprovar proposta → pendente. Vistoria aprovada e ativação completa → promove para ativo.
+- Caso C — plano com R/F + rastreador: aprovar proposta → pendente. Instalação concluída → continua pendente. Ativação completa final → promove para ativo.
+- Caso D — associado já estava ativo no SGA (re-disparo): guard atual mantém skip; sem regressão.
 
-## Observação de teste visual
+## Memória
 
-Tentei abrir a fila no browser para confirmar visualmente, mas a sessão caiu na tela de login. Posso verificar isso visualmente depois da implementação usando o acesso autorizado de diretor.
-
-## Detalhes técnicos
-
-```text
-Problema atual:
-contrato X (veículo A)
-  -> aprovar-proposta percorre veículos do associado
-  -> cria/usa instalação para veículo B
-  -> monitoramento/instalação conclui B
-  -> contrato/associado podem ativar
-  -> sobra instalação agendada de A
-  -> fila de Cadastro/Operação ainda encontra etapa residual
-  -> associado parece “voltar” para o Cadastro
-```
-
-```text
-Estado desejado:
-contrato X -> veículo A somente
-  -> uma trilha operacional coerente
-  -> uma instalação válida por contrato+veículo no fluxo normal
-  -> após ativação final, sai definitivamente da fila de Cadastro
-```
-
-Se aprovar, eu executo a correção e já deixo o saneamento dos casos presos preparado e aplicado.
+Após implementação, atualizar `mem://features/integrations/sga-hinova-sync-and-pre-check-v3` com a nova política: "primeiro envio sempre pendente; promoção para ativo só na ativação completa, via atualização de situação do veículo no Hinova".
