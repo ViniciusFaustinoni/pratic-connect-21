@@ -65,9 +65,14 @@ export function AgendamentoBase({
   }, [configBase]);
 
   // Próximos 7 dias úteis (pula domingos e datas bloqueadas)
+  // Regra: após 16h, na semana atual, ocultamos D+1 (começa em D+2)
   const diasDisponiveis = useMemo(() => {
     const dias: Date[] = [];
-    let currentDate = addDays(new Date(), weekOffset * 7);
+    const agora = new Date();
+    const pularDiaSeguinte = weekOffset === 0 && agora.getHours() >= 16;
+    let currentDate = pularDiaSeguinte
+      ? addDays(agora, 2)
+      : addDays(agora, weekOffset * 7);
     let guard = 0;
     while (dias.length < 7 && guard < 60) {
       if (!isDomingo(currentDate) && !datasBloqueadasSet.has(format(currentDate, 'yyyy-MM-dd'))) {
