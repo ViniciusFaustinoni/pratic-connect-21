@@ -248,7 +248,11 @@ export default function IntegracaoSGAHinova() {
                     </TableCell>
                   </TableRow>
                 ) : filteredQueue.map(item => (
-                  <TableRow key={item.id}>
+                  <TableRow
+                    key={item.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => setDetailItem(item)}
+                  >
                     <TableCell className="font-medium text-sm">{item.associado_nome}</TableCell>
                     <TableCell className="font-mono text-sm">{item.veiculo_placa}</TableCell>
                     <TableCell className="text-sm">{item.etapa_parou || '—'}</TableCell>
@@ -258,7 +262,7 @@ export default function IntegracaoSGAHinova() {
                       {item.erro_ultimo || '—'}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">{formatDate(item.ultima_tentativa_em)}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex gap-1 justify-end">
                         <Button
                           variant="ghost"
