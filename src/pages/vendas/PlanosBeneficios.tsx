@@ -228,7 +228,7 @@ export default function PlanosBeneficios() {
           <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
           <AlertDescription className="text-blue-700 dark:text-blue-300">
             Para criar ou editar planos e benefícios, acesse{' '}
-            <Link to="/diretoria/planos-beneficios" className="font-medium underline hover:text-blue-800 dark:hover:text-blue-200">
+            <Link to="/diretoria/gestao-comercial" className="font-medium underline hover:text-blue-800 dark:hover:text-blue-200">
               Diretoria → Planos/Benefícios
             </Link>
           </AlertDescription>
