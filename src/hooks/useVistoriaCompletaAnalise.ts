@@ -205,7 +205,24 @@ export function useAtivarRastreadorPlataforma() {
         },
       });
 
-      if (ativacaoError) throw ativacaoError;
+      // Em non-2xx o supabase-js coloca o body em error.context — extrair mensagem real
+      if (ativacaoError) {
+        let detailMsg = ativacaoError.message;
+        try {
+          const ctx = (ativacaoError as any).context;
+          if (ctx && typeof ctx.json === 'function') {
+            const body = await ctx.json();
+            if (body?.error === 'transicao_invalida') {
+              detailMsg = `Não é possível ativar: status atual do associado é "${body.from_status}". Conclua a aprovação cadastral antes de ativar.`;
+            } else if (body?.error === 'campos_obrigatorios_faltando') {
+              detailMsg = `Campos obrigatórios faltando: ${(body.campos_faltando || []).join(', ')}`;
+            } else if (body?.mensagem || body?.error) {
+              detailMsg = body.mensagem || body.error;
+            }
+          }
+        } catch { /* ignore */ }
+        throw new Error(detailMsg);
+      }
       if (ativacao && ativacao.success === false && !ativacao.idempotente) {
         throw new Error(ativacao.error === 'campos_obrigatorios_faltando'
           ? `Campos obrigatórios faltando: ${(ativacao.campos_faltando || []).join(', ')}`
