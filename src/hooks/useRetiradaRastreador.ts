@@ -292,7 +292,7 @@ export function useRetiradas(filters?: RetiradaFilters) {
         .select(`
           *,
           associado:associados!servicos_associado_id_fkey(id, nome, telefone, cpf),
-          veiculo:veiculos!servicos_veiculo_id_fkey(id, placa, marca, modelo),
+          veiculo:veiculos!servicos_veiculo_id_fkey(id, placa, chassi, marca, modelo),
           rastreador:rastreadores(id, codigo, imei),
           profissional:profiles!servicos_profissional_id_fkey(id, nome)
         `)

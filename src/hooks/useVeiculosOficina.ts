@@ -45,7 +45,7 @@ export function useVeiculosOficina(filters?: OficinaFilters) {
         .select(`
           id, numero, status, data_entrada, created_at, updated_at, valor_orcamento, etapas_reparo, observacoes, sinistro_id,
           oficina:oficinas(id, nome_fantasia, razao_social, cidade, estado),
-          veiculo:veiculos(id, placa, marca, modelo, ano, cor),
+          veiculo:veiculos(id, placa, chassi, marca, modelo, ano, cor),
           associado:associados(id, nome, telefone, whatsapp),
           sinistro:sinistros(id, protocolo)
         `)
