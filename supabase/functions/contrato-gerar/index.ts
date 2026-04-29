@@ -465,10 +465,29 @@ serve(async (req) => {
       if (placaLimpa) {
         const { data } = await supabase
           .from('veiculos')
-          .select('id')
+          .select('id, associado_id')
           .eq('placa', placaLimpa)
           .maybeSingle();
-        veiculoExistente = data;
+
+        // BLOQUEIO ANTI-SEQUESTRO: a placa já existe sob OUTRO associado.
+        // Nunca reaproveitar — o fluxo correto seria Substituição/Troca de Titularidade.
+        if (data && data.associado_id && data.associado_id !== associadoId) {
+          console.error(
+            `[BLOQUEIO-DONO] Placa ${placaLimpa} já está vinculada ao associado ${data.associado_id}, ` +
+            `mas o solicitante atual é ${associadoId} (cotação ${cotacao_id}).`
+          );
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: `A placa ${placaLimpa} já está vinculada a outro associado no sistema. ` +
+                     `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
+              code: 'PLACA_DE_OUTRO_ASSOCIADO',
+            }),
+            { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
+        }
+
+        veiculoExistente = data ? { id: data.id } : null;
       } else {
         const { data } = await supabase
           .from('veiculos')
@@ -564,10 +583,28 @@ serve(async (req) => {
         if (placaLimpaEmail) {
           const { data } = await supabase
             .from('veiculos')
-            .select('id')
+            .select('id, associado_id')
             .eq('placa', placaLimpaEmail)
             .maybeSingle();
-          veiculoExistenteEmail = data;
+
+          // BLOQUEIO ANTI-SEQUESTRO (branch email)
+          if (data && data.associado_id && data.associado_id !== associadoId) {
+            console.error(
+              `[BLOQUEIO-DONO] Placa ${placaLimpaEmail} já está vinculada ao associado ${data.associado_id}, ` +
+              `mas o solicitante atual é ${associadoId} (cotação ${cotacao_id}).`
+            );
+            return new Response(
+              JSON.stringify({
+                success: false,
+                error: `A placa ${placaLimpaEmail} já está vinculada a outro associado no sistema. ` +
+                       `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
+                code: 'PLACA_DE_OUTRO_ASSOCIADO',
+              }),
+              { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+
+          veiculoExistenteEmail = data ? { id: data.id } : null;
         } else {
           const { data } = await supabase
             .from('veiculos')
