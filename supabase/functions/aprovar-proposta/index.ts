@@ -144,8 +144,14 @@ serve(async (req) => {
     ] = await Promise.all([
       supabase.from('instalacoes').select('id, status, rastreador_id, veiculo_id')
         .eq('contrato_id', contrato_id).eq('status', 'concluida').maybeSingle(),
-      // Buscar TODOS os veículos do associado (para tratamento multi-veículo)
-      supabase.from('veiculos').select('id, placa, marca, modelo, valor_fipe').eq('associado_id', associadoId),
+      // Buscar APENAS o veículo do contrato sendo aprovado.
+      // Cada contrato representa UMA proposta (um veículo). Iterar todos os
+      // veículos do associado causava criação de instalações cruzadas
+      // (instalação de outro veículo vinculada a este contrato), gerando
+      // associados "presos" no Cadastro mesmo após o processo concluir.
+      veiculoIdDoContrato
+        ? supabase.from('veiculos').select('id, placa, marca, modelo, valor_fipe').eq('id', veiculoIdDoContrato)
+        : supabase.from('veiculos').select('id, placa, marca, modelo, valor_fipe').eq('associado_id', associadoId).limit(1),
       supabase.from('configuracoes').select('chave, valor')
         .in('chave', ['operacional_fipe_minimo_rastreador', 'operacional_fipe_minimo_rastreador_moto', 'marcas_exclusivas_moto']),
       supabase.from('associados').update({

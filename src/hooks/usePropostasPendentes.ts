@@ -251,6 +251,30 @@ export function usePropostasPendentes() {
             associado = data;
           }
 
+          // Buscar veículo do contrato para checar se a proposta já foi
+          // efetivamente concluída (associado ativo + veículo ativo + cobertura
+          // total). Sem isso, a fila do Cadastro mostra "voltas" indevidas
+          // após Monitoramento aprovar a instalação.
+          let veiculoContrato: { status: string | null; cobertura_total: boolean | null } | null = null;
+          if (contrato.veiculo_id) {
+            const { data: vc } = await supabase
+              .from('veiculos')
+              .select('status, cobertura_total')
+              .eq('id', contrato.veiculo_id)
+              .maybeSingle();
+            veiculoContrato = (vc as any) || null;
+          }
+
+          const propostaJaConcluida =
+            associado?.status === 'ativo' &&
+            veiculoContrato?.status === 'ativo' &&
+            veiculoContrato?.cobertura_total === true;
+
+          if (propostaJaConcluida) {
+            // Proposta já foi totalmente ativada — não exibir mais na fila do Cadastro.
+            return null;
+          }
+
           // Buscar plano
           let plano = null;
           if (contrato.plano_id) {
@@ -472,7 +496,7 @@ export function usePropostasPendentes() {
       // ============================================
       let instalacaoInfo: InstalacaoInfo | null = null;
       
-      const { data: instalacaoData } = await supabase
+      const instQuery = supabase
         .from('instalacoes')
         .select(`
           id,
@@ -480,10 +504,15 @@ export function usePropostasPendentes() {
           concluida_em,
           rastreador_id,
           instalador_id,
-          assinatura_cliente_url
+          assinatura_cliente_url,
+          veiculo_id
         `)
         .eq('contrato_id', contrato.id)
-        .eq('status', 'concluida')
+        .eq('status', 'concluida');
+      // Restringir ao veículo do contrato — evita exibir instalação concluída
+      // de OUTRO veículo (caso de dados cruzados) como se fosse desta proposta.
+      if (contrato.veiculo_id) instQuery.eq('veiculo_id', contrato.veiculo_id);
+      const { data: instalacaoData } = await instQuery
         .order('concluida_em', { ascending: false })
         .limit(1)
         .maybeSingle();
