@@ -325,10 +325,10 @@ export function EtapaDadosPessoaisDocumentos({
       // De Nota Fiscal de Veículo: substituto do CRLV
       if (tipoDocumento === 'nota_fiscal_veiculo') {
         novosDados.origem_documento_veiculo = 'nota_fiscal_veiculo';
-        if (dados.chassi) novosDados.veiculo_chassi = dados.chassi;
+        if (dados.chassi) { const v = sanitizeChassi(dados.chassi); if (v) novosDados.veiculo_chassi = v; }
         if (dados.numero_motor) novosDados.numero_motor = dados.numero_motor;
         if (dados.valor_nota_fiscal) novosDados.valor_nota_fiscal = dados.valor_nota_fiscal;
-        if (dados.placa) novosDados.veiculo_placa = dados.placa;
+        if (dados.placa) { const v = sanitizePlaca(dados.placa); if (v) novosDados.veiculo_placa = v; }
         if (dados.cor) novosDados.veiculo_cor = dados.cor;
         if (dados.motor) novosDados.veiculo_motor = dados.motor;
         
