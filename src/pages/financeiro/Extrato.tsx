@@ -363,6 +363,20 @@ export default function Extrato() {
               </Select>
             </div>
 
+            <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
+              <Label htmlFor="associadoFiltro">Associado</Label>
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="associadoFiltro"
+                  placeholder="Buscar por nome..."
+                  value={filters.associado}
+                  onChange={(e) => setFilters(prev => ({ ...prev, associado: e.target.value }))}
+                  className="pl-8"
+                />
+              </div>
+            </div>
+
             <Button variant="ghost" size="icon" onClick={limparFiltros} title="Limpar filtros">
               <X className="h-4 w-4" />
             </Button>
