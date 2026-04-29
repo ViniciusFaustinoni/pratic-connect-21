@@ -12,9 +12,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TesteBoletoVeiculoHinova } from '@/components/integracoes/TesteBoletoVeiculoHinova';
 import { cn } from '@/lib/utils';
-import { useSGAHealthCheck } from '@/hooks/useSGAHealthCheck';
+import { useSGAHealthCheck, type SGAQueueItem } from '@/hooks/useSGAHealthCheck';
 import { ConfigurarIntegracaoSheet } from '@/components/integracoes/ConfigurarIntegracaoSheet';
 import { IntegracaoHealthPanel } from '@/components/integracoes/IntegracaoHealthPanel';
+import { SGAQueueItemDetailModal } from '@/components/integracoes/SGAQueueItemDetailModal';
 import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -66,6 +67,7 @@ export default function IntegracaoSGAHinova() {
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [queueFilter, setQueueFilter] = useState<string>('all');
+  const [detailItem, setDetailItem] = useState<SGAQueueItem | null>(null);
 
   const lastCheck = healthChecks[0];
   const filteredQueue = queueFilter === 'all'
@@ -246,7 +248,11 @@ export default function IntegracaoSGAHinova() {
                     </TableCell>
                   </TableRow>
                 ) : filteredQueue.map(item => (
-                  <TableRow key={item.id}>
+                  <TableRow
+                    key={item.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => setDetailItem(item)}
+                  >
                     <TableCell className="font-medium text-sm">{item.associado_nome}</TableCell>
                     <TableCell className="font-mono text-sm">{item.veiculo_placa}</TableCell>
                     <TableCell className="text-sm">{item.etapa_parou || '—'}</TableCell>
@@ -256,7 +262,7 @@ export default function IntegracaoSGAHinova() {
                       {item.erro_ultimo || '—'}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">{formatDate(item.ultima_tentativa_em)}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex gap-1 justify-end">
                         <Button
                           variant="ghost"
@@ -393,6 +399,13 @@ export default function IntegracaoSGAHinova() {
         integracao="hinova"
         nomeExibicao="SGA Hinova"
         onSuccess={() => setSheetOpen(false)}
+      />
+
+      {/* Queue item details */}
+      <SGAQueueItemDetailModal
+        item={detailItem}
+        open={!!detailItem}
+        onOpenChange={(o) => !o && setDetailItem(null)}
       />
     </div>
   );
