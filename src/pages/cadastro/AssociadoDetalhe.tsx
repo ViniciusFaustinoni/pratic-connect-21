@@ -422,6 +422,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
           </AlertDescription>
         </Alert>
       )}
+      {id && <AlertSuspensaoNaoInstalacao associadoId={id} contratoId={contrato?.id} />}
       {id && status === 'ativo' && <SubstituicaoStatusCard associadoId={id} />}
 
       {/* Hero Header */}
