@@ -702,6 +702,30 @@ serve(async (req) => {
       const placaLimpaNovo = cotacao.veiculo_placa?.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || null;
       const placaParaInsertNovo = placaLimpaNovo || ('0KM' + crypto.randomUUID().replace(/-/g, '').slice(0, 5).toUpperCase());
 
+      // BLOQUEIO ANTI-SEQUESTRO: se a placa real já existe sob outro associado, abortar.
+      if (placaLimpaNovo) {
+        const { data: placaJaExiste } = await supabase
+          .from('veiculos')
+          .select('id, associado_id')
+          .eq('placa', placaLimpaNovo)
+          .maybeSingle();
+        if (placaJaExiste && placaJaExiste.associado_id && placaJaExiste.associado_id !== associadoId) {
+          console.error(
+            `[BLOQUEIO-DONO] Placa ${placaLimpaNovo} já está vinculada ao associado ${placaJaExiste.associado_id}, ` +
+            `mas o solicitante novo é ${associadoId} (cotação ${cotacao_id}).`
+          );
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: `A placa ${placaLimpaNovo} já está vinculada a outro associado no sistema. ` +
+                     `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
+              code: 'PLACA_DE_OUTRO_ASSOCIADO',
+            }),
+            { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
+        }
+      }
+
       const categoriaFlagsNovo = {
         flag_placa_vermelha: cotacao.categoria === 'placa_vermelha',
         flag_ex_taxi: cotacao.categoria === 'ex_taxi',
