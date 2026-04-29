@@ -37,6 +37,38 @@ interface GerarContratoPayload {
   vendedor_id?: string;
 }
 
+/**
+ * Normaliza nomes para comparação: remove acentos, pontuação, espaços extras,
+ * e padroniza para minúsculas. Usado para detectar colisões de identidade
+ * (ex.: associado existente vs solicitante da cotação).
+ */
+function normalizarNome(nome?: string | null): string {
+  if (!nome) return '';
+  return nome
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // remove acentos
+    .replace(/[^a-zA-Z\s]/g, '')      // remove pontuação/números
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+/** True se os dois nomes pertencem (provavelmente) à mesma pessoa. */
+function nomesCoincidem(a?: string | null, b?: string | null): boolean {
+  const na = normalizarNome(a);
+  const nb = normalizarNome(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  // tokens em comum: se ambos compartilham primeiro nome + algum sobrenome, aceita
+  const tokensA = new Set(na.split(' ').filter(t => t.length >= 3));
+  const tokensB = new Set(nb.split(' ').filter(t => t.length >= 3));
+  if (tokensA.size === 0 || tokensB.size === 0) return false;
+  let intersecao = 0;
+  for (const t of tokensA) if (tokensB.has(t)) intersecao++;
+  // exige pelo menos 2 tokens em comum (geralmente nome + sobrenome)
+  return intersecao >= 2;
+}
+
 // Keywords de modelo como fallback de último recurso (sem marcas hardcoded)
 const MOTO_MODEL_KEYWORDS = [
   'nxr', 'bros', 'cg', 'biz', 'pop', 'xre', 'cb ', 'cbr', 'cbx', 'pcx', 'sh ',
