@@ -1,47 +1,104 @@
 ## Diagnóstico
 
-**Associado:** VINICIUS DE ANDRADE BARROS SANTOS — placa HOA1B39 — etapa `veiculo`.
+**Associado:** TOVAR RODRIGUES LIMA — placa **TCU6B84** — etapa `veiculo`.
 
-**Sintoma:** `[buscarVeiculoPorPlaca/consultar] Auth recusada (http=401): "Acesso não autorizado. Verifique seu token de acesso"`.
+**Erro:** `[cadastrarVeiculo] Auth recusada (http=401)`.
 
-**Não é problema de credencial.** Os logs em `sga_sync_logs` mostram que segundos antes da falha o sistema autenticou com sucesso e até cadastrou o associado:
+**É exatamente o mesmo bug que corrigimos para o VINICIUS**, só que em outra função do mesmo arquivo. Na correção anterior, eu refatorei apenas `buscarVeiculoPorPlaca` para usar `hinovaFetch` (wrapper com retry + reauth automático em 401/403). Mas **deixei todas as outras funções de cadastro/alteração ainda chamando `fetch` direto com um token possivelmente já invalidado** pela Hinova. Foi correção parcial — agora bateu em `cadastrarVeiculoHinova`.
+
+### Sequência exata da falha (TOVAR)
 
 ```
-17:00:05  autenticar           success
-17:00:15  cadastrar_associado  success     ← reautenticou aqui (token NOVO)
-17:00:17  buscar_veiculo_placa ERROR 401   ← usou token VELHO da sessão em cache
+1. autenticar                  → token A
+2. buscar_associado_cpf        → ok com token A
+3. cadastrar_associado         → ok, MAS Hinova invalida token A e devolve token B internamente
+4. cadastrar_veiculo           → ainda usa token A em cache local da função → 401  ❌
 ```
 
-**Causa raiz (técnica):** A Hinova é stateful — cada `/usuario/autenticar` invalida o token emitido anteriormente. O fluxo `sga-hinova-sync` chama `buscarVeiculoPorPlaca(session, placa)` em `supabase/functions/sga-hinova-sync/index.ts:586` passando uma `session` capturada no início do processamento. Entre essa captura e a chamada, outras operações (busca/cadastro de associado, resolução de plano) podem ter forçado uma reautenticação dentro do helper `withHinovaSession`, gerando um novo `tokenUsuario` e invalidando o que está na variável `session` local.
+### Causa raiz definitiva
 
-A função `buscarVeiculoPorPlaca` em `_shared/hinova-client.ts:355` chama `fetch` direto com `authHeaders(s)` — **não passa pelo `withHinovaSession`**, que é justamente o wrapper que faz `invalidateHinovaSession() + retry com força reautenticar` ao receber 401/403. Resultado: o 401 sobe direto, marca veículo como `erro_sincronizacao` e enfileira como falha permanente.
+A Hinova é **stateful**: cada `/usuario/autenticar` invalida tokens emitidos anteriormente. Várias funções em `_shared/hinova-client.ts` ainda recebem `session: HinovaSession` por parâmetro e chamam `fetch` direto com `authHeaders(s)` — sem o wrapper `hinovaFetch` que detecta 401/403, invalida o cache, reautentica e refaz a chamada uma vez.
 
-Outras funções no mesmo arquivo têm o mesmo padrão frágil (ex.: `buscarSituacaoFinanceiraVeiculo`).
+**Funções vulneráveis identificadas** (todas usam `fetch` direto + `authHeaders(s)`):
 
-## Correção
+| Linha | Função | Endpoint |
+|---|---|---|
+| 442 / 461 | `buscarVeiculoPorPlaca` | já corrigida ✅ |
+| 484 | `buscarSituacaoFinanceiraVeiculo` | `GET /buscar/situacao-financeira-veiculo/:codigo` |
+| 567 | `listarBoletosVeiculoJanela` | `POST /listar/boleto-associado-veiculo` |
+| 758 | `buscarAssociadoPorCpf` | `GET /associado/buscar/:cpf/cpf` |
+| 964 | `cadastrarAssociadoHinova` | `POST /associado/cadastrar` |
+| 999 | `cadastrarVeiculoHinova` | `POST /veiculo/cadastrar` ← **erro do TOVAR** |
+| 1039 | `alterarSituacaoVeiculoHinova` | `POST /veiculo/alterar/situacao` |
+| 1088 | `cadastrarFotosVeiculoHinova` | `POST /veiculo/foto/cadastrar` |
+| 1127 | `buscarVeiculoPorChassi` | `GET /veiculo/buscar/:chassi/chassi` |
 
-Refatorar `buscarVeiculoPorPlaca` (e funções similares no mesmo arquivo) para usar `withHinovaSession`, aproveitando o retry automático com reautenticação quando o token expira/é invalidado por sessão concorrente.
+Qualquer uma destas pode disparar 401 quando outra chamada concorrente (no mesmo loop) reautenticar e invalidar o token capturado.
 
-### Mudanças
+## Correção (na raiz, definitiva)
 
-1. **`supabase/functions/_shared/hinova-client.ts`**
-   - Reescrever `buscarVeiculoPorPlaca` para receber `supabase` + `placa` (em vez de `session, placa`) e fazer ambas as chamadas (`/veiculo/consultar/placa/{placa}` e fallback `/veiculo/buscar/{placa}/placa`) através de `withHinovaSession(supabase, ctx, buildRequest)`. Assim, qualquer 401/403 dispara automaticamente `invalidateHinovaSession()` + reauth + retry.
-   - Auditar e aplicar o mesmo tratamento em `buscarSituacaoFinanceiraVeiculo` e quaisquer outras funções que ainda chamem `fetch` direto com `authHeaders(s)` sem retry.
+Refatorar **todas as 8 funções vulneráveis** para usar `hinovaFetch(supabase, buildRequest, ctx)`. Elas passam a receber `supabase` (em vez de `session`) e ganham automaticamente:
+- retry único em 401/403 com `force: true` na sessão
+- tratamento uniforme de janela horária / 5xx
+- mesma assinatura de telemetria
 
-2. **`supabase/functions/sga-hinova-sync/index.ts`**
-   - Atualizar a única chamada (`linha 586`) para a nova assinatura: `buscarVeiculoPorPlaca(supabase, placaLimpa)`.
-   - Auditar outras chamadas (`sga-buscar-associado-completo`, `sga-testar-boletos-veiculo`, `sga-sync-financeiro-veiculo`, `sga-mapear-codigos-veiculos`) e ajustar assinaturas conforme necessário.
+### Mudanças em `supabase/functions/_shared/hinova-client.ts`
 
-3. **Reprocessar a fila do VINICIUS / HOA1B39** após o deploy:
-   - Resetar `status_sga` do veículo `c52c4b7f-d879-4d10-8fe9-68ccacd064eb` para `pendente`.
-   - Remover/reativar o item da `sga_sync_queue` correspondente para que o cron `cron-sga-retry` reexecute, ou disparar `sga-hinova-sync` manualmente para esse veículo.
+Para cada função acima, trocar o padrão atual:
 
-### Por que isso resolve
+```ts
+// ❌ ANTES
+export async function cadastrarVeiculoHinova(s: HinovaSession, payload) {
+  const r = await fetch(`${s.apiUrl}/veiculo/cadastrar`, {
+    method: 'POST', headers: authHeaders(s), body: JSON.stringify(payload),
+  });
+  ...
+}
 
-A Hinova invalida tokens antigos a cada novo login. Ao fazer toda chamada autenticada ir por `withHinovaSession`, qualquer 401 detectado por sessão "morta" é tratado de forma transparente: invalida cache → reautentica → repete a chamada **uma vez**. O usuário deixa de ver erros aleatórios em fluxos que executam múltiplas operações Hinova em sequência (cadastro de associado → busca de veículo → cadastro de veículo → envio de fotos), que é justamente o cenário do VINICIUS.
+// ✅ DEPOIS
+export async function cadastrarVeiculoHinova(supabase: any, payload) {
+  const session0 = await getHinovaSession(supabase);
+  const { response: r, bodyText: txt } = await hinovaFetch(
+    supabase,
+    (token) => ({
+      url: `${session0.apiUrl}/veiculo/cadastrar`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload),
+      },
+    }),
+    'cadastrarVeiculo',
+  );
+  ...
+}
+```
 
-### Validação após implementação
+### Mudanças nos chamadores
 
-- Disparar `sga-hinova-sync` para o veículo do VINICIUS e confirmar logs `success` em `buscar_veiculo_placa`, `cadastrar_veiculo`, `enviar_fotos`, `sync_completo`.
-- Conferir no card de "Histórico de erros" que tentativas voltaram a contar sucessos.
-- Rodar um backfill pequeno (5–10 veículos) para confirmar que não regrediu.
+Atualizar a assinatura nas seguintes edge functions para passar `supabase` em vez de `session`:
+
+- `supabase/functions/sga-hinova-sync/index.ts` — chama `cadastrarAssociadoHinova`, `cadastrarVeiculoHinova`, `alterarSituacaoVeiculoHinova`, `cadastrarFotosVeiculoHinova`, `buscarSituacaoFinanceiraVeiculo`, `buscarAssociadoPorCpf`, `buscarVeiculoPorChassi`
+- `supabase/functions/sga-buscar-associado-completo/index.ts`
+- `supabase/functions/sga-sync-financeiro-veiculo/index.ts`
+- `supabase/functions/sga-testar-boletos-veiculo/index.ts`
+- `supabase/functions/sga-mapear-codigos-veiculos/index.ts`
+- `supabase/functions/sga-verificar-veiculo/index.ts`
+- `supabase/functions/sga-atualizar-placa/index.ts`
+- `supabase/functions/sga-reconciliar-codigo-veiculo/index.ts`
+- `supabase/functions/hinova-diag-placa/index.ts`
+- demais que importem essas funções (vou auditar com `rg` no momento da implementação)
+
+### Reprocessar TOVAR / TCU6B84
+
+Migration que reseta `status_sga='pendente'` e remove o item de erro da `sga_sync_queue` para o veículo do TOVAR, e dispara `sga-hinova-sync` manualmente após o deploy para validar que funciona ponta a ponta.
+
+### Validação
+
+1. Logs do TOVAR: `cadastrar_associado success → cadastrar_veiculo success → enviar_fotos success → sync_completo success`.
+2. Rodar 5–10 veículos da fila para garantir que não regrediu.
+3. Adicionar memória de projeto (`mem://...`) com a regra **"toda chamada autenticada Hinova deve usar `hinovaFetch`"** para evitar que esse padrão errado volte em código novo.
+
+### Por que dessa vez fica 100%
+
+Antes corrigi caso a caso conforme apareciam erros — abordagem reativa. Agora vamos refatorar **todas** as funções autenticadas do `hinova-client.ts` de uma vez, padronizando no único caminho seguro (`hinovaFetch`). Qualquer função futura que esquecer o wrapper vai falhar imediatamente em desenvolvimento porque não vai compilar (mudamos a assinatura: passa-se `supabase`, não mais `session`).
