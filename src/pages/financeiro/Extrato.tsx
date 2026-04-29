@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Download, Plus, TrendingUp, TrendingDown, Wallet, X, Receipt } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Download, Plus, TrendingUp, TrendingDown, Wallet, X, Receipt, Search } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
