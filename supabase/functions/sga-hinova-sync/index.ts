@@ -746,14 +746,20 @@ serve(async (req) => {
       const { data: docs } = await supabase.from('documentos')
         .select('id, tipo, nome_arquivo, arquivo_url, status')
         .or(`associado_id.eq.${_aid},veiculo_id.eq.${_vid}`)
-        .in('status', ['aprovado', 'em_analise']);
+        .in('status', ['aprovado', 'em_analise', 'pendente']);
 
       const { data: docsContrato } = contrato?.cotacao_id
         ? await supabase.from('contratos_documentos')
             .select('id, tipo, arquivo_nome, arquivo_url, status')
             .eq('cotacao_id', contrato.cotacao_id)
-            .in('status', ['aprovado', 'em_analise'])
+            .in('status', ['aprovado', 'em_analise', 'pendente'])
         : { data: [] as any[] };
+
+      // Selfie / foto pessoal do associado (avatar_url) — enviada como CNH (sem código próprio na Hinova)
+      const { data: associadoFoto } = await supabase.from('associados')
+        .select('avatar_url')
+        .eq('id', _aid)
+        .maybeSingle();
 
       const documentosEntrada: DocumentoEntrada[] = [
         ...((docs || []) as any[]).map(d => ({
@@ -763,11 +769,26 @@ serve(async (req) => {
           id: d.id, tipo: d.tipo, nome_arquivo: d.arquivo_nome, arquivo_url: d.arquivo_url,
         })),
       ];
+      if (associadoFoto?.avatar_url) {
+        documentosEntrada.push({
+          id: `avatar-${_aid}`,
+          tipo: 'foto_associado',
+          nome_arquivo: `avatar_${_aid}.jpg`,
+          arquivo_url: associadoFoto.avatar_url,
+        });
+      }
 
       const { fotos, descartadasSemLink, descartadasSemTipo } = buildFotosPayload(
         documentosEntrada,
         (tipo) => getMap('tipo_foto', tipo),
       );
+
+      // Breakdown por tipo (para diagnóstico no modal de detalhes da Fila SGA)
+      const porTipo: Record<string, number> = {};
+      for (const f of fotos) {
+        const k = String(f.codigo_tipo);
+        porTipo[k] = (porTipo[k] || 0) + 1;
+      }
 
       if (descartadasSemLink.length || descartadasSemTipo.length) {
         await logSync(_vid, _aid, 'enviar_fotos_descarte', 'info', {
