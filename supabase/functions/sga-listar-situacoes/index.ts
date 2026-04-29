@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { hinovaFetch } from '../_shared/hinova-client.ts';
+import { hinovaFetch, getHinovaCreds } from '../_shared/hinova-client.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,10 +15,23 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
+    const creds = await getHinovaCreds(supabase);
+    if (!creds) throw new Error('Credenciais Hinova não configuradas');
+    const apiUrl = creds.apiUrl;
+
     const { response, bodyText } = await hinovaFetch(
       supabase,
-      'listar/situacao/todos',
-      { method: 'GET' },
+      (token) => ({
+        url: `${apiUrl}/listar/situacao/todos`,
+        init: {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      }),
+      'listar_situacoes',
     );
 
     let parsed: unknown = bodyText;
