@@ -11,6 +11,8 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 type Cotacao = Tables<'cotacoes'>;
 
 import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
+import { sanitizarPayloadCotacao } from '@/lib/sanitizers/cotacao-fields';
+import { descreverErroSupabase } from '@/lib/errors';
 
 function detectarCategoriaPorModelo(modelo?: string | null, marca?: string | null): string {
   const tipo = detectarTipoVeiculo(undefined, modelo, marca);
