@@ -96,7 +96,10 @@ export function AgendamentoVistoria({
   // Gerar hoje (se houver períodos) + próximos dias úteis (pula domingos e datas bloqueadas)
   const hoje = new Date();
   const datasDisponiveis: Date[] = [];
-  
+
+  // Regra: após 16h, o dia seguinte (D+1) não é ofertado — pulamos para D+2
+  const pularDiaSeguinte = hoje.getHours() >= 16;
+
   // Incluir hoje se não for domingo, não estiver bloqueado E se ainda houver períodos disponíveis
   if (!isDomingo(hoje) && !datasBloqueadasSet.has(format(hoje, 'yyyy-MM-dd'))) {
     const periodosHoje = getPeriodosDisponivelsPorHora(hoje);
@@ -104,9 +107,10 @@ export function AgendamentoVistoria({
       datasDisponiveis.push(hoje);
     }
   }
-  
+
   // Continuar com dias futuros até ter no máximo 3 datas (hoje + 2 dias)
-  let dia = addDays(hoje, 1);
+  // Após 16h, começa em D+2 (oculta o dia seguinte)
+  let dia = addDays(hoje, pularDiaSeguinte ? 2 : 1);
   const maxDatas = 3;
   let guard = 0;
   while (datasDisponiveis.length < maxDatas && guard < 60) {
