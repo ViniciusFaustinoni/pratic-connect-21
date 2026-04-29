@@ -356,13 +356,22 @@ function inferirCambio(modelo: string | null | undefined): string {
   return '—';
 }
 
-function inferirPortas(categoria: string | null | undefined): number {
-  if (!categoria) return 4;
-  const c = categoria.toLowerCase();
-  if (c.includes('moto') || c.includes('motocicleta') || c.includes('scooter') || c.includes('triciclo')) return 0;
-  if (c.includes('coupe') || c.includes('cupê') || c.includes('esportivo') || c.includes('conversível') || c.includes('conversivel') || c.includes('roadster')) return 2;
-  if (c.includes('utilitário') || c.includes('utilitario') || c.includes('van') || c.includes('furgão') || c.includes('furgao')) return 4;
-  return 4;
+/**
+ * Resolve a CATEGORIA do CRLV (Particular/Aluguel) a partir dos dados disponíveis.
+ * Regra acordada com o usuário:
+ *  - uso_aplicativo = true  → "Aluguel"  (Uber/99/táxi/uso comercial via app)
+ *  - uso_aplicativo = false → "Particular"
+ *  - Se vier veiculo_tipo_uso explícito ('aluguel'/'particular'), respeita-o.
+ * Importante: NÃO usar `veiculo_categoria` (que guarda tipo de carroceria como "carro").
+ */
+function resolverCategoriaCrlv(
+  tipoUso: string | null | undefined,
+  usoAplicativo: boolean | null | undefined,
+): string {
+  const t = (tipoUso || '').toString().trim().toLowerCase();
+  if (t === 'aluguel' || t === 'aluguer') return 'Aluguel';
+  if (t === 'particular' || t === 'passeio') return 'Particular';
+  return usoAplicativo ? 'Aluguel' : 'Particular';
 }
 
 function ehLeilao(categoria: string | null | undefined, procedencia?: string | null): boolean {
