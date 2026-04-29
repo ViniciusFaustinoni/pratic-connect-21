@@ -84,6 +84,34 @@ export function useCreateVeiculo() {
   
   return useMutation({
     mutationFn: async (veiculo: VeiculoInsert) => {
+      // ═══════════════════════════════════════════════════════════════
+      // GUARDA ANTI-SEQUESTRO DE PLACA
+      // Antes de criar, verifica se a placa já pertence a OUTRO associado.
+      // Cenário evitado: operador inclui veículo num associado errado e o
+      // sistema o vincula silenciosamente (incidente RIR1B37 / TOVAR×ERICO).
+      // Placas placeholder "0KM*" são liberadas pois são únicas por geração.
+      // ═══════════════════════════════════════════════════════════════
+      const placaInput = (veiculo.placa || '').toString();
+      const placaNormalizada = placaInput.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+      const ehPlaceholder0km = placaNormalizada.startsWith('0KM');
+
+      if (placaNormalizada.length >= 7 && !ehPlaceholder0km) {
+        const { data: existente } = await supabase
+          .from('veiculos')
+          .select('id, placa, associado_id, associado:associados(nome, cpf)')
+          .eq('placa', placaNormalizada)
+          .maybeSingle();
+
+        if (existente?.associado_id && existente.associado_id !== veiculo.associado_id) {
+          const dono = (existente.associado as { nome?: string; cpf?: string } | null);
+          const detalhe = dono?.nome ? ` (titular atual: ${dono.nome}${dono.cpf ? ' — CPF ' + dono.cpf : ''})` : '';
+          throw new Error(
+            `A placa ${placaNormalizada} já está cadastrada em outro associado${detalhe}. ` +
+            `Use o fluxo de Substituição/Troca de Titularidade ou confira se a placa foi digitada corretamente.`
+          );
+        }
+      }
+
       const { data, error } = await supabase
         .from('veiculos')
         .insert(veiculo)
