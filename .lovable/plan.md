@@ -1,53 +1,47 @@
-## Diagnóstico confirmado
+## Diagnóstico
 
-Existem **dois associados duplicados** com o nome "Adolpho Konder Homem de Carvalho Filho", e ambos estão com o nome trocado:
+**Associado:** VINICIUS DE ANDRADE BARROS SANTOS — placa HOA1B39 — etapa `veiculo`.
 
-| Associado ID | Nome atual (errado) | CPF | Email | Quem realmente é |
-|---|---|---|---|---|
-| `a1fac976…` | ADOLPHO KONDER… | 127.235.327-39 | cv032779@gmail.com | **Camilly Vitória Calixto Carneiro** (já corrigido em passo anterior segundo o histórico, mas ainda consta "ADOLPHO" no banco) |
-| `e4d9d1f8…` | Adolpho Konder… | 161.678.967-04 | Rayslanhudson45@gmail.com | **Rayslan Hudson Honorato Torres** (dono real do HBI8H51) |
+**Sintoma:** `[buscarVeiculoPorPlaca/consultar] Auth recusada (http=401): "Acesso não autorizado. Verifique seu token de acesso"`.
 
-O contrato `CTR-20260428160104-HPOGTC` (Honda CG 125 Fan ES 2011, placa HBI8H51) está corretamente vinculado ao associado `e4d9d1f8…` e ao veículo `85d3e19a…`. **O vínculo associado ↔ contrato ↔ veículo está certo** — o problema é só o **nome cadastrado**, que ficou "Adolpho" em vez de "Rayslan".
+**Não é problema de credencial.** Os logs em `sga_sync_logs` mostram que segundos antes da falha o sistema autenticou com sucesso e até cadastrou o associado:
 
-Não há duplicação real do contrato/veículo a desfazer; é uma correção de nome em cascata + reenvio do Autentique.
+```
+17:00:05  autenticar           success
+17:00:15  cadastrar_associado  success     ← reautenticou aqui (token NOVO)
+17:00:17  buscar_veiculo_placa ERROR 401   ← usou token VELHO da sessão em cache
+```
 
-## Plano de correção
+**Causa raiz (técnica):** A Hinova é stateful — cada `/usuario/autenticar` invalida o token emitido anteriormente. O fluxo `sga-hinova-sync` chama `buscarVeiculoPorPlaca(session, placa)` em `supabase/functions/sga-hinova-sync/index.ts:586` passando uma `session` capturada no início do processamento. Entre essa captura e a chamada, outras operações (busca/cadastro de associado, resolução de plano) podem ter forçado uma reautenticação dentro do helper `withHinovaSession`, gerando um novo `tokenUsuario` e invalidando o que está na variável `session` local.
 
-### 1. Corrigir nome do associado `e4d9d1f8…` (dono do HBI8H51)
-UPDATE em `associados`:
-- `nome` = "RAYSLAN HUDSON HONORATO TORRES"
-- (CPF 161.678.967-04 e email Rayslanhudson45@gmail.com permanecem)
+A função `buscarVeiculoPorPlaca` em `_shared/hinova-client.ts:355` chama `fetch` direto com `authHeaders(s)` — **não passa pelo `withHinovaSession`**, que é justamente o wrapper que faz `invalidateHinovaSession() + retry com força reautenticar` ao receber 401/403. Resultado: o 401 sobe direto, marca veículo como `erro_sincronizacao` e enfileira como falha permanente.
 
-### 2. Corrigir nome do cliente no contrato `CTR-20260428160104-HPOGTC`
-UPDATE em `contratos` (id `5e62227f…`):
-- `cliente_nome` = "RAYSLAN HUDSON HONORATO TORRES"
-- Os demais dados (CPF, email, telefone, veículo) já estão corretos.
+Outras funções no mesmo arquivo têm o mesmo padrão frágil (ex.: `buscarSituacaoFinanceiraVeiculo`).
 
-### 3. Corrigir o associado duplicado `a1fac976…` (que é a Camilly)
-UPDATE em `associados`:
-- `nome` = "CAMILLY VITÓRIA CALIXTO CARNEIRO"
-(Conforme já acordado anteriormente — confirmando que persiste a inconsistência no banco.)
+## Correção
 
-### 4. Cancelar e reenviar o Autentique do contrato HPOGTC
-O documento Autentique atual (`d5921bf1…`) foi gerado com o nome "Adolpho" no PDF e como signatário. Status = `viewed` (não assinado ainda). Ações:
-- Chamar `autentique-cancel` para invalidar o documento atual.
-- Regenerar o termo via fluxo padrão (`autentique-create`) com o nome correto "Rayslan Hudson Honorato Torres" como signatário, mantendo email `Rayslanhudson45@gmail.com` e telefone `21966855503`.
-- Resetar campos no contrato: `autentique_status` = `pending`, `data_envio` = now, novo `autentique_documento_id` e `autentique_url`.
+Refatorar `buscarVeiculoPorPlaca` (e funções similares no mesmo arquivo) para usar `withHinovaSession`, aproveitando o retry automático com reautenticação quando o token expira/é invalidado por sessão concorrente.
 
-### 5. Verificação pós-correção
-Após as atualizações, conferir que:
-- Card de vendas mostra "Rayslan Hudson Honorato Torres" no contrato HPOGTC.
-- Veículo HBI8H51 aparece sob Rayslan.
-- Card "Adolpho/Camilly" do contrato 2RI0GS aparece como "Camilly Vitória".
+### Mudanças
 
-## Detalhes técnicos
+1. **`supabase/functions/_shared/hinova-client.ts`**
+   - Reescrever `buscarVeiculoPorPlaca` para receber `supabase` + `placa` (em vez de `session, placa`) e fazer ambas as chamadas (`/veiculo/consultar/placa/{placa}` e fallback `/veiculo/buscar/{placa}/placa`) através de `withHinovaSession(supabase, ctx, buildRequest)`. Assim, qualquer 401/403 dispara automaticamente `invalidateHinovaSession()` + reauth + retry.
+   - Auditar e aplicar o mesmo tratamento em `buscarSituacaoFinanceiraVeiculo` e quaisquer outras funções que ainda chamem `fetch` direto com `authHeaders(s)` sem retry.
 
-- Operações 1, 2, 3 são `UPDATE` em tabela existente → executadas via insert/update tool.
-- Operação 4 usa as edge functions já existentes `autentique-cancel` e `autentique-create` (já mapeadas em `src/hooks/useAutentique.ts`).
-- Nenhuma alteração de schema é necessária.
-- Nenhum código de UI precisa mudar — a UI já lê `cliente_nome`/`associados.nome`, então a correção de dados resolve a exibição.
+2. **`supabase/functions/sga-hinova-sync/index.ts`**
+   - Atualizar a única chamada (`linha 586`) para a nova assinatura: `buscarVeiculoPorPlaca(supabase, placaLimpa)`.
+   - Auditar outras chamadas (`sga-buscar-associado-completo`, `sga-testar-boletos-veiculo`, `sga-sync-financeiro-veiculo`, `sga-mapear-codigos-veiculos`) e ajustar assinaturas conforme necessário.
 
-## O que NÃO será feito
-- Não vou apagar nem mesclar os dois associados (são pessoas diferentes — Rayslan e Camilly).
-- Não vou mexer no contrato 2RI0GS além do nome do associado vinculado (ele já está assinado e o `cliente_nome` já está correto como "CAMILLY").
-- Não vou alterar o veículo HBI8H51 (já vinculado ao associado correto).
+3. **Reprocessar a fila do VINICIUS / HOA1B39** após o deploy:
+   - Resetar `status_sga` do veículo `c52c4b7f-d879-4d10-8fe9-68ccacd064eb` para `pendente`.
+   - Remover/reativar o item da `sga_sync_queue` correspondente para que o cron `cron-sga-retry` reexecute, ou disparar `sga-hinova-sync` manualmente para esse veículo.
+
+### Por que isso resolve
+
+A Hinova invalida tokens antigos a cada novo login. Ao fazer toda chamada autenticada ir por `withHinovaSession`, qualquer 401 detectado por sessão "morta" é tratado de forma transparente: invalida cache → reautentica → repete a chamada **uma vez**. O usuário deixa de ver erros aleatórios em fluxos que executam múltiplas operações Hinova em sequência (cadastro de associado → busca de veículo → cadastro de veículo → envio de fotos), que é justamente o cenário do VINICIUS.
+
+### Validação após implementação
+
+- Disparar `sga-hinova-sync` para o veículo do VINICIUS e confirmar logs `success` em `buscar_veiculo_placa`, `cadastrar_veiculo`, `enviar_fotos`, `sync_completo`.
+- Conferir no card de "Histórico de erros" que tentativas voltaram a contar sucessos.
+- Rodar um backfill pequeno (5–10 veículos) para confirmar que não regrediu.

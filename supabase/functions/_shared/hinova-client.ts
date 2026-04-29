@@ -352,8 +352,17 @@ function authHeaders(s: HinovaSession): HeadersInit {
  * - Lança HinovaTransientError em 401/403/429/5xx ou janela horária.
  * - Retorna { found: null } APENAS em 404 real (placa de fato não está na Hinova).
  */
+/**
+ * Busca veículo por placa.
+ *
+ * IMPORTANTE: Aceita `HinovaSession` (legado) OU o client `supabase` (recomendado).
+ * Quando recebe `supabase`, usa `hinovaFetch` que reautentica automaticamente em 401/403
+ * — necessário porque a Hinova invalida tokens antigos a cada novo `/usuario/autenticar`,
+ * e fluxos longos (sga-hinova-sync) podem ter a sessão local invalidada por chamadas
+ * intermediárias que reautenticaram.
+ */
 export async function buscarVeiculoPorPlaca(
-  s: HinovaSession,
+  sessionOrSupabase: HinovaSession | any,
   placa: string,
 ): Promise<{ found: any | null; debug: { endpoint: string; status: number; bodySample: string } }> {
   const placaLimpa = placa.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
@@ -377,7 +386,57 @@ export async function buscarVeiculoPorPlaca(
     }
   };
 
-  // Endpoint primário (consultar/placa)
+  const isSession = sessionOrSupabase && typeof sessionOrSupabase === 'object'
+    && typeof (sessionOrSupabase as any).tokenUsuario === 'string'
+    && typeof (sessionOrSupabase as any).apiUrl === 'string';
+
+  // ---- Caminho recomendado: usa hinovaFetch (retry automático em 401/403) ----
+  if (!isSession) {
+    const supabase = sessionOrSupabase;
+    // Resolve apiUrl uma vez (hinovaFetch refresca o token internamente quando necessário).
+    const sessionForUrl = await getHinovaSession(supabase);
+    const apiUrl = sessionForUrl.apiUrl;
+
+    // Endpoint primário
+    const { response: r1, bodyText: txt1 } = await hinovaFetch(
+      supabase,
+      (token) => ({
+        url: `${apiUrl}/veiculo/consultar/placa/${placaLimpa}`,
+        init: { method: 'GET', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` } },
+      }),
+      'buscarVeiculoPorPlaca/consultar',
+    );
+    lastDebug = { endpoint: 'consultar/placa', status: r1.status, bodySample: txt1.slice(0, 200) };
+
+    if (r1.ok) {
+      const found = tryParse(txt1);
+      if (found?.codigo_veiculo) return { found, debug: lastDebug };
+    } else if (r1.status !== 404) {
+      throwHttpError(r1.status, txt1, 'buscarVeiculoPorPlaca/consultar');
+    }
+
+    // Fallback
+    const { response: r2, bodyText: txt2 } = await hinovaFetch(
+      supabase,
+      (token) => ({
+        url: `${apiUrl}/veiculo/buscar/${placaLimpa}/placa`,
+        init: { method: 'GET', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` } },
+      }),
+      'buscarVeiculoPorPlaca/fallback',
+    );
+    lastDebug = { endpoint: 'buscar/placa', status: r2.status, bodySample: txt2.slice(0, 200) };
+
+    if (r2.status === 404) return { found: null, debug: lastDebug };
+    if (r2.ok) {
+      const found = tryParse(txt2);
+      return { found, debug: lastDebug };
+    }
+    throwHttpError(r2.status, txt2, 'buscarVeiculoPorPlaca/fallback');
+    return { found: null, debug: lastDebug };
+  }
+
+  // ---- Caminho legado: session direto (sem retry automático) ----
+  const s = sessionOrSupabase as HinovaSession;
   let r1: Response;
   try {
     r1 = await fetch(`${s.apiUrl}/veiculo/consultar/placa/${placaLimpa}`, { method: 'GET', headers: authHeaders(s) });
@@ -393,15 +452,10 @@ export async function buscarVeiculoPorPlaca(
   if (r1.ok) {
     const found = tryParse(txt1);
     if (found?.codigo_veiculo) return { found, debug: lastDebug };
-    // 200 OK mas sem codigo_veiculo → tenta fallback
-  } else if (r1.status === 404) {
-    // Placa de fato não encontrada — tenta fallback legado e, se também 404, retorna null
-  } else {
-    // 401/403/429/5xx ou janela horária → propaga
+  } else if (r1.status !== 404) {
     throwHttpError(r1.status, txt1, 'buscarVeiculoPorPlaca/consultar');
   }
 
-  // Fallback endpoint legado
   let r2: Response;
   try {
     r2 = await fetch(`${s.apiUrl}/veiculo/buscar/${placaLimpa}/placa`, { method: 'GET', headers: authHeaders(s) });
@@ -419,8 +473,8 @@ export async function buscarVeiculoPorPlaca(
     const found = tryParse(txt2);
     return { found, debug: lastDebug };
   }
-  // Erro transitório no fallback
   throwHttpError(r2.status, txt2, 'buscarVeiculoPorPlaca/fallback');
+  return { found: null, debug: lastDebug };
 }
 
 /** GET /buscar/situacao-financeira-veiculo/{codigo} */

@@ -583,7 +583,9 @@ serve(async (req) => {
       // 6.b Buscar por placa/chassi globalmente (detecta conflito com OUTRO associado)
       if (!codigoVeiculoHinova && placaLimpa && !isPlacaPlaceholder(veiculo.placa)) {
         try {
-          const r = await buscarVeiculoPorPlaca(session, placaLimpa);
+          // Passa supabase (não session) para que hinovaFetch reautentique automaticamente
+          // se o token cacheado tiver sido invalidado por reautenticações concorrentes.
+          const r = await buscarVeiculoPorPlaca(supabase, placaLimpa);
           if (r.found?.codigo_veiculo) {
             const codAssocRem = Number(r.found.codigo_associado || r.found.codigo_associado_pf || 0);
             if (codAssocRem && codAssocRem !== codigoAssociadoHinova) {
