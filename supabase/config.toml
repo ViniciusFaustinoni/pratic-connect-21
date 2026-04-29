@@ -201,3 +201,6 @@ verify_jwt = true
 
 [functions.gerar-prompt-correcao-erro]
 verify_jwt = true
+
+[functions.sga-listar-situacoes]
+verify_jwt = false
