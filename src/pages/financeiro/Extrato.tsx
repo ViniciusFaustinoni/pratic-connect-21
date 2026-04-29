@@ -128,14 +128,15 @@ export default function Extrato() {
     }
   });
 
-  // Filtro client-side por nome do associado
+  // Filtro client-side por nome do associado (inclui nome extraído da descrição quando contrato foi removido)
   const movimentacoesFiltradas = useMemo(() => {
     if (!movimentacoes) return undefined;
     const term = filters.associado.trim().toLowerCase();
     if (!term) return movimentacoes;
-    return movimentacoes.filter((m: any) =>
-      m.associado?.nome?.toLowerCase().includes(term)
-    );
+    return movimentacoes.filter((m: any) => {
+      const nome = m.associado?.nome ?? extrairNomeDaDescricao(m.descricao) ?? '';
+      return nome.toLowerCase().includes(term);
+    });
   }, [movimentacoes, filters.associado]);
 
   const resumo = useMemo(() => {
@@ -194,6 +195,19 @@ export default function Extrato() {
     return descricao.replace(/\s*[—-]\s*.+$/, '').trim() || descricao;
   };
 
+  // Fallback: extrai o nome do associado da descrição (após o último " — ").
+  // Usado quando o contrato vinculado foi excluído e o JOIN não resolve mais o associado.
+  const extrairNomeDaDescricao = (descricao: string | null): string | null => {
+    if (!descricao) return null;
+    const match = descricao.match(/[—-]\s*([^—-][^—]*)$/);
+    const nome = match?.[1]?.trim();
+    if (!nome) return null;
+    // Filtra ruído: ignora se o trecho for muito curto ou parecer rótulo técnico
+    if (nome.length < 3) return null;
+    if (/^(abate|cota[cç][aã]o|vendedor|isenta|cobra|rota)/i.test(nome)) return null;
+    return nome;
+  };
+
   const getCategoriaLabel = (categoria: string) => {
     const cat = categorias.find(c => c.value === categoria);
     return cat?.label || categoria;
@@ -217,7 +231,7 @@ export default function Extrato() {
 
     const headers = 'Data,Tipo,Categoria,Associado,Descrição,Valor\n';
     const rows = movimentacoesFiltradas.map((m: any) =>
-      `"${m.data_movimentacao}","${m.tipo}","${m.categoria || ''}","${(m.associado?.nome || '').replace(/"/g, '""')}","${(m.descricao || '').replace(/"/g, '""')}","${m.valor}"`
+      `"${m.data_movimentacao}","${m.tipo}","${m.categoria || ''}","${((m.associado?.nome ?? extrairNomeDaDescricao(m.descricao) ?? '')).replace(/"/g, '""')}","${(m.descricao || '').replace(/"/g, '""')}","${m.valor}"`
     ).join('\n');
 
     const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8' });
@@ -447,9 +461,20 @@ export default function Extrato() {
                               >
                                 {mov.associado.nome}
                               </Link>
-                            ) : (
-                              <span className="text-sm text-muted-foreground">—</span>
-                            )}
+                            ) : (() => {
+                              const nomeFallback = extrairNomeDaDescricao(mov.descricao);
+                              if (!nomeFallback) {
+                                return <span className="text-sm text-muted-foreground">—</span>;
+                              }
+                              return (
+                                <span
+                                  className="text-sm text-muted-foreground truncate block italic"
+                                  title={`${nomeFallback} (cadastro removido)`}
+                                >
+                                  {nomeFallback}
+                                </span>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline">
