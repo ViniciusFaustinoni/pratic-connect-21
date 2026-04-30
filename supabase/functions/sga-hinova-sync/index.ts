@@ -377,6 +377,20 @@ serve(async (req) => {
         }
       }
 
+      // Pré-flight: combustível precisa ter código SGA equivalente
+      // (1=Flex, 2=Gasolina, 3=Etanol, 4=Diesel, 5=Bio-gás, 6=Tetra-fuel)
+      // O campo veiculos.codigo_sga_combustivel é preenchido automaticamente por trigger.
+      if (!veiculo.codigo_sga_combustivel || !Number.isFinite(Number(veiculo.codigo_sga_combustivel))) {
+        const msg = veiculo.combustivel
+          ? `Combustível "${veiculo.combustivel}" não tem código SGA equivalente. SGA aceita: Flex, Gasolina, Etanol, Diesel, Bio-gás, Tetra-fuel.`
+          : 'Combustível ausente — Hinova exige codigo_combustivel.';
+        await logSync(_vid, _aid, 'validar_combustivel_sga', 'error',
+          { combustivel: veiculo.combustivel, codigo_sga_combustivel: veiculo.codigo_sga_combustivel }, null, msg);
+        await setStatusSga(_vid, 'erro_sincronizacao');
+        await upsertQueue(_vid, _aid, 'veiculo', msg, codigoAssociadoHinova);
+        return;
+      }
+
       // 2. Contrato (vendedor + plano + valores)
       const contratoSel = 'vendedor_id, veiculo_categoria, cotacao_id, plano_id, valor_mensal, valor_adesao';
       let contrato: any = null;
@@ -712,7 +726,7 @@ serve(async (req) => {
           valor_adesao: valorAdesao,
           produtos: produtos.length > 0 ? produtos : undefined,
           tipo_veiculo: tipoVeiculo,
-          codigo_combustivel: getMap('combustivel', normalCombustivel),
+          codigo_combustivel: (veiculo.codigo_sga_combustivel != null ? Number(veiculo.codigo_sga_combustivel) : null) ?? getMap('combustivel', normalCombustivel),
           codigo_cor: getMap('cor', veiculo.cor),
           data_contrato_iso: associado.created_at,
         };
