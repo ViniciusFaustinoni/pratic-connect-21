@@ -1168,6 +1168,10 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
       return ocrFallbackResponse('Erro ao processar documento com IA. Documento enviado para revisão manual.');
     }
 
+    logCtx.usage = firstPass.usage ?? null;
+    logCtx.modelo = OCR_MODEL;
+    logCtx.truncated = firstPass.finishReason === 'length' || firstPass.finishReason === 'max_tokens';
+
     let result = firstPass.result;
     let usedRetry = false;
 
