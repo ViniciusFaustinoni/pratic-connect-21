@@ -102,7 +102,9 @@ Deno.serve(async (req) => {
             instalacao_id: instMat.id,
             contrato_id: instMat.contrato_id,
             associado_id: instMat.associado_id,
+            veiculo_id: instMat.veiculo_id,
             cotacao_id: instMat.cotacao_id,
+            tipo: 'entrada', // OBRIGATÓRIO (enum tipo_vistoria): instalação = vistoria de entrada
             modalidade: 'presencial',
             origem: 'prestador',
             status: 'concluida',
