@@ -116,6 +116,21 @@ Deno.serve(async (req) => {
           if (body[f] !== undefined) insertData[f] = body[f];
         }
 
+        // Validação/normalização do dia de vencimento (5,10,15,20,25,30)
+        if (insertData.dia_vencimento !== undefined && insertData.dia_vencimento !== null) {
+          if (!isDiaVencimentoValido(insertData.dia_vencimento)) {
+            return err(
+              'dia_vencimento inválido. Valores aceitos: 5, 10, 15, 20, 25 ou 30.',
+              'INVALID_DIA_VENCIMENTO',
+              400,
+            );
+          }
+          insertData.dia_vencimento = Number(insertData.dia_vencimento);
+        } else {
+          // Sem valor → escolhe a primeira opção válida para a data atual
+          insertData.dia_vencimento = vencimentoPadraoPorData(new Date());
+        }
+
         // Sanitizar endereço: extrair número embutido no logradouro
         if (insertData.logradouro) {
           const enderecoSanitizado = sanitizarEndereco(insertData.logradouro, insertData.numero || '');
