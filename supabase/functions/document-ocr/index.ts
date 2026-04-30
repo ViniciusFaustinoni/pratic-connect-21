@@ -7,11 +7,13 @@ import { aiGatewayFetch, getActiveAIConfig, callAI } from "../_shared/ai-client.
 import { extractText, getDocumentProxy } from "https://esm.sh/unpdf@0.12.1";
 import { rasterizePdfPages, shouldRasterizePdf } from "../_shared/pdf-rasterize.ts";
 import { runMistralOcr, callPixtralChat } from "../_shared/mistral-ocr.ts";
+import { extractPdfTextUnpdf, scoreExtractedText } from "../_shared/unpdf-extract.ts";
+import { routeOcr, type OcrMethod } from "../_shared/ocr-router.ts";
 
 // ============================================================
 // Motor de OCR (engine) — lê ocr_engine_config (singleton)
 // ============================================================
-type OcrEngine = 'global' | 'mistral' | 'anthropic' | 'google';
+type OcrEngine = 'auto' | 'global' | 'mistral' | 'anthropic' | 'google';
 interface OcrEngineConfig {
   engine: OcrEngine;
   primary_model: string;
@@ -21,7 +23,7 @@ interface OcrEngineConfig {
   pdf_dpi: number;
 }
 const DEFAULT_OCR_ENGINE: OcrEngineConfig = {
-  engine: 'global',
+  engine: 'auto',
   primary_model: 'mistral-ocr-latest',
   secondary_model: 'claude-sonnet-4-5',
   dupla_leitura_tipos: ['cnh', 'crlv'],
@@ -58,13 +60,15 @@ const ENGINE_DEFAULTS: Record<'mistral'|'anthropic'|'google', { primary: string;
   google:    { primary: 'google/gemini-2.5-pro', secondary: 'google/gemini-2.5-pro' },
 };
 async function resolveEngine(cfg: OcrEngineConfig): Promise<{ engine: 'mistral'|'anthropic'|'google'; primary: string; secondary: string }> {
-  if (cfg.engine !== 'global') {
+  if (cfg.engine !== 'global' && cfg.engine !== 'auto') {
     return {
       engine: cfg.engine,
       primary: cfg.primary_model || ENGINE_DEFAULTS[cfg.engine].primary,
       secondary: cfg.secondary_model || ENGINE_DEFAULTS[cfg.engine].secondary,
     };
   }
+  // 'global' ou 'auto': usa provedor configurado no AIConfig (anthropic/google).
+  // Em 'auto' o roteador decidirá por documento se vale usar Mistral ou rasterizar.
   const ai = await getActiveAIConfig();
   const eng: 'anthropic'|'google' = ai.provider === 'anthropic' ? 'anthropic' : 'google';
   return { engine: eng, primary: ENGINE_DEFAULTS[eng].primary, secondary: ENGINE_DEFAULTS[eng].secondary };
