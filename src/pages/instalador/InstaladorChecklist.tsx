@@ -636,18 +636,36 @@ export default function InstaladorChecklist() {
     if (!id) return;
     setUploadingRessalvaFoto(true);
     try {
-      const fileName = `ressalvas/${id}/${Date.now()}.jpg`;
+      // Comprime e padroniza para JPEG (resolve HEIC do iOS, reduz tamanho)
+      let arquivoFinal: File = file;
+      try {
+        arquivoFinal = await compressImage(file);
+      } catch (compressErr) {
+        console.warn('[handleAddFotoRessalva] Falha ao comprimir, enviando original:', compressErr);
+      }
+
+      const ext =
+        arquivoFinal.type === 'image/png' ? 'png'
+        : arquivoFinal.type === 'image/webp' ? 'webp'
+        : 'jpg';
+      const contentType = arquivoFinal.type || 'image/jpeg';
+      const fileName = `ressalvas/${id}/${Date.now()}.${ext}`;
+
       const { error: uploadError } = await supabase.storage
         .from('instalacoes')
-        .upload(fileName, file, { contentType: 'image/jpeg', upsert: true });
-      if (uploadError) throw uploadError;
-      
+        .upload(fileName, arquivoFinal, { contentType, upsert: true });
+      if (uploadError) {
+        console.error('[handleAddFotoRessalva] Upload error:', uploadError.message, uploadError);
+        throw uploadError;
+      }
+
       const { data: urlData } = supabase.storage.from('instalacoes').getPublicUrl(fileName);
       const preview = urlData.publicUrl;
-      setFotosRessalva(prev => [...prev, { file, preview }]);
+      setFotosRessalva(prev => [...prev, { file: arquivoFinal, preview }]);
       toast.success('Foto adicionada');
-    } catch (err) {
-      toast.error('Erro ao enviar foto');
+    } catch (err: any) {
+      console.error('[handleAddFotoRessalva] Erro:', err);
+      toast.error(err?.message || 'Erro ao enviar foto');
     } finally {
       setUploadingRessalvaFoto(false);
     }
