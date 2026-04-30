@@ -1,69 +1,101 @@
-## Diagnóstico — OOV8C87 / GILBERTO SILVA MOREIRA
 
-O serviço `573065e2…` está com `status='cancelada'` desde **27/04 10:38**, com observação:
+## Diagnóstico
 
-> `[27/04/2026 10:38] Cancelado automaticamente por inatividade — backfill (serviço fantasma travando agenda do técnico).`
+Erro: **Minified React error #310** = *"Rendered more hooks than during the previous render."*
 
-A instalação `fd393cca…` também foi marcada como `cancelada` no mesmo momento. Não foi um cancelamento operacional — foi uma rotina automática que limpou serviços "fantasmas" antigos.
+Isso acontece quando algum componente entre dois renders consecutivos altera o número de hooks executados (tipicamente um `early return` antes de um hook, ou um hook chamado dentro de condição/loop que muda).
 
-### Por que dá erro só nele
+### O que já foi confirmado pela leitura do código
 
-No `ServicoDetailModal.tsx` (linha 132), o botão **Realocar** é exibido para qualquer serviço de instalação com status em `['agendada','nao_compareceu','reagendada','cancelada']` — **inclusive `cancelada`**.
+- `src/pages/cadastro/AssociadoDetalhe.tsx` (componente raiz da modal):
+  - Os hooks no topo do componente estão corretamente posicionados antes dos `early returns` (`if (isLoading) return …`, `if (!associado) return …`). Já existe inclusive o comentário "Hooks que antes estavam após early returns (corrige Rendered more hooks…)" — ou seja, o mesmo bug já ocorreu nesse arquivo no passado.
+  - O componente é renderizado dentro de um `<Dialog>` em `Associados.tsx`, com `{detalheAssociadoId && <AssociadoDetalhe …/>}`. A modal monta/desmonta a cada abertura — então cada clique inicia uma sequência (1ª render: dados ainda em loading → 2ª render: dados chegam) onde a contagem de hooks precisa ser idêntica.
 
-Mas a RPC `realocar_servico` (migration 20260429210653…, linha 75) trata `cancelada` como **status terminal** e bloqueia:
+- Dados do associado LRA9681 (CLEBER LUIZ DE OLIVEIRA LIMA / `ec43f40d-…`) não têm nada visivelmente corrompido; o que difere de outros associados é que **`cnh_categoria` é `NULL`** e o veículo tem `valor_fipe = 11.763` (Yamaha 2013). Esses dados sozinhos não deveriam quebrar React, mas servem para reproduzir.
 
-```sql
-IF _servico.status IN ('concluida','aprovada','reprovada','aprovada_ressalvas','cancelada') THEN
-  RAISE EXCEPTION 'Serviço em status terminal (%) não pode ser realocado', _servico.status;
-```
+### Onde está o risco real (os 3 candidatos prováveis)
 
-Resultado: a UI oferece a ação, o usuário preenche o modal, e a RPC recusa. Os outros associados que o monitoramento conseguiu realocar não estavam em `cancelada` — estavam em `agendada`/`nao_compareceu`/`reagendada`.
+1. **`AssociadoDetalhe.tsx`, linhas 762-777** — o uso de duas IIFE `(() => {…})()` dentro do `veiculos.map()` (botões "Ativar rastreador" e "Concluir instalação prestador") está OK em termos de hooks, **mas** a expressão condicional do botão de "Ativar rastreador" tem um agrupamento perigoso:
+   ```jsx
+   {v.rastreador && (
+     (v.rastreador.plataforma === 'softruck' && !v.rastreador.plataforma_device_id) ||
+     (v.rastreador.plataforma === 'rede_veiculos' && !v.rede_veiculos_cliente_id)
+   ) && ( <Button …/> )}
+   ```
+   Devido à precedência, isso pode renderizar `false` como filho ao invés de `null` em alguns ramos — não é a causa do #310, mas merece limpeza.
 
-### Escopo do problema
+2. **Render condicional do `<Dialog>`** em `Associados.tsx` (linha 970-982): o `DialogContent` envolve `AssociadoDetalhe` num `{detalheAssociadoId && (<div>…</div>)}`. Quando o usuário fecha → reabre rapidamente, a modal pode disparar dois ciclos de mount com `useAssociado(id)` em estados diferentes. **Não é a raiz**, mas vamos garantir um `key={detalheAssociadoId}` para forçar uma árvore nova a cada associado.
 
-A consulta mostrou **19 serviços** auto-cancelados pelo mesmo backfill em 27/04 (HUGO MOURA, PATRICK BONZE, RAFAEL LUCINDO, ALEX, WENDEL, LEANDRO, FABIO, HILLARY, DOUGLAS, MARCUS, CAIO, LUIZ COSME, DANIEL, SANDER, etc.). Qualquer tentativa de realocá-los via monitoramento vai reproduzir exatamente o mesmo erro.
+3. **Causa mais provável** — algum componente filho que renderiza diferentes números de hooks dependendo de uma prop que muda entre renders. Os candidatos no caminho da aba "Resumo" (default) são:
+   - `AssociadoHeroHeader` — hooks estáveis (apenas `useNavigate`).
+   - `AlertSuspensaoNaoInstalacao` — hooks estáveis (`useAuth`, `useState`, `useQuery`).
+   - `SubstituicaoStatusCard` — hooks estáveis (`useNavigate`, `useQuery`).
+   - `AssociadoSituacaoCard` — sem hooks; é puro.
+   - `OrigemCadastroCard` — usa `useOrigemCadastro` (1 query) e renderiza Render* sub-components que **não chamam hooks**. Estável.
+   - `useAssociadoSituacao` — chama hooks dependentes em cascata: `useInadimplenciaPrazos`, `useCarenciaDiasPadrao`, `useMultaRastreador`, `useMigracaoConfig`, `useInadimplenciaPorVeiculo`, mais 4 `useQuery` próprios + 1 `useMemo`. Como `planoId` (e `vendedorId`) começam `undefined` e depois assumem valor, **as queries permanecem montadas (apenas `enabled` muda)** → contagem de hooks estável. OK.
 
----
+   O candidato remanescente é o `useInadimplenciaPorVeiculo` ou algum dos `useConteudosSistema`, que precisamos auditar para garantir que nenhum chame `useQuery` condicionalmente.
 
-## Correção — raiz
+## Plano de ação
 
-### 1) RPC `realocar_servico` — aceitar `cancelada` como reabertura
+### 1. Auditar e blindar hooks suspeitos (raiz do #310)
 
-Liberar `cancelada` da lista de status terminais e tratá-lo como **reabertura controlada**:
+- Ler `src/hooks/useInadimplenciaPorVeiculo.ts` e `src/hooks/useConteudosSistema.ts` (`useInadimplenciaPrazos`, `useCarenciaDiasPadrao`, `useMultaRastreador`, `useMigracaoConfig`, `useConfiguracaoJson`) e garantir que **nenhum hook seja chamado dentro de condicional/early return**. Onde houver, mover para topo da função.
+- Confirmar que `useFotosVistoriaUnificada` mantém quantidade de hooks fixa para qualquer combinação de `contratoId`/`cotacaoId` (incluindo ambos `undefined`).
 
-- continua bloqueando `concluida`, `aprovada`, `reprovada`, `aprovada_ressalvas` (esses sim são terminais reais);
-- para `cancelada`, a RPC vai:
-  - reabrir o `servico` (`status='agendada'`, nova data/período, limpa `iniciada_em`/`em_rota_em`/`confirmacao_whatsapp`, zera `cancelada_em`/`cancelada_motivo` se existirem);
-  - reabrir a `instalacao` correspondente (`status='agendada'` quando estava `cancelada`);
-  - registrar no histórico/log a `categoria` como `reabertura_pos_cancelamento` e exigir `motivo` (já é obrigatório, mín. 5 chars);
-  - manter a auditoria que já existe (linhas seguintes da própria RPC).
+### 2. Estabilizar a modal de detalhe
 
-Sem isso, qualquer serviço cancelado (manual ou pelo backfill) fica preso para sempre.
+- Em `src/pages/cadastro/Associados.tsx`, adicionar `key={detalheAssociadoId}` no `<AssociadoDetalhe>` dentro do `Dialog`, garantindo árvore nova por associado e impedindo qualquer "vazamento" de estado entre aberturas.
+- Adicionar `<DialogTitle>` (visível ou via `VisuallyHidden`) para silenciar o warning do Radix e descartar interferência de overlay.
 
-### 2) UI `ServicoDetailModal.tsx` — alinhar rótulo
+### 3. Defesa em profundidade no `AssociadoDetalhe`
 
-Manter `cancelada` na lista que mostra o botão, mas trocar o rótulo/tooltip para **"Reabrir e reagendar"** quando o serviço está `cancelada`, deixando claro o efeito ao monitoramento. Assim a UI passa a refletir o que a RPC faz.
+- Em `src/pages/cadastro/AssociadoDetalhe.tsx`:
+  - Re-passar todos os hooks por uma checagem manual: nenhum hook deve aparecer abaixo das linhas dos `if (isLoading) return …` (347) e `if (!associado) return …` (360). Confirmar que `criarSolicitacaoRetirada` (linha 243), `useAssociadoSituacao` (281) e demais permaneçam acima.
+  - Limpar a expressão condicional do botão "Ativar rastreador" (linhas 762-777) extraindo para uma variável booleana `const precisaAtivarPlataforma = …` para evitar agrupamento ambíguo.
+  - Envolver o `return (…)` principal num `ErrorBoundary` local que mostre uma mensagem amigável (ao invés do erro genérico atual) e logue o erro com `id` do associado para facilitar reprodução futura.
 
-### 3) Backfill operacional — reabrir os 19 órfãos? (decisão)
+### 4. ErrorBoundary com diagnóstico
 
-Os 19 serviços auto-cancelados em 27/04 continuam parados. Posso, opcionalmente, executar um backfill que apenas **destrava** (não reagenda automaticamente) — devolve à fila de atribuição manual com observação "Reaberto após cancelamento automático por backfill — definir nova data". Vou perguntar antes de executar (impacto operacional alto).
+- Criar `src/components/common/AssociadoDetalheErrorBoundary.tsx`:
+  - Captura erro, mostra "Falha ao carregar associado", botão "Recarregar" e "Copiar diagnóstico".
+  - Loga `console.error` com `{ associadoId, error, componentStack }`.
+- Aplicar o boundary tanto no roteamento direto (`/cadastro/associados/:id`) quanto dentro da modal em `Associados.tsx`.
 
----
+### 5. Verificação
+
+- Rebuildar e abrir a modal em LRA9681 para confirmar que o erro sumiu.
+- Conferir 3 associados de tipos diferentes (ativo com vários veículos, suspenso, em análise) para garantir não-regressão.
+- Se o erro persistir após o passo 1, o ErrorBoundary do passo 4 dará o componente exato no `componentStack`, finalizando a investigação.
 
 ## Detalhes técnicos
 
-- Arquivo da RPC: nova migration que faz `CREATE OR REPLACE FUNCTION public.realocar_servico(...)` reaproveitando o corpo atual da migration `20260429210653_…`, mudando apenas:
-  - condição de status terminal: `IN ('concluida','aprovada','reprovada','aprovada_ressalvas')`
-  - bloco antes do `UPDATE servicos`: se `_servico.status = 'cancelada'`, marca flag `_reabertura := true` e adiciona à observação `[reabertura pós-cancelamento]`;
-  - após o `UPDATE servicos`, se `_reabertura` e existir `instalacao_origem_id`, faz `UPDATE instalacoes SET status='agendada', updated_at=now() WHERE id=_servico.instalacao_origem_id AND status='cancelada'`.
-- Frontend: `src/components/servicos-campo/ServicoDetailModal.tsx` linhas 132–141 — manter a condição, trocar texto para `Reabrir e reagendar` quando `servico.status === 'cancelada'`. Sem mudança no `useRealocarInstalacao` (a RPC continua a mesma assinatura).
-- Memória: atualizar `mem://logic/operations/dedupe-agendamentos-rule` com nota: "RPC `realocar_servico` aceita reabertura de `cancelada` (não terminal real)".
+```text
+AssociadoDetalhe (root, hooks ok)
+ ├─ AssociadoHeroHeader               (hooks ok)
+ ├─ AlertSuspensaoNaoInstalacao       (hooks ok)
+ ├─ SubstituicaoStatusCard            (hooks ok)
+ ├─ AssociadoResumoTab
+ │   ├─ AssociadoSituacaoCard         (puro)
+ │   └─ OrigemCadastroCard            (1 query — ok)
+ └─ useAssociadoSituacao              (cadeia de ~10 hooks — auditar dependências)
+      ├─ useInadimplenciaPrazos       ← AUDITAR
+      ├─ useCarenciaDiasPadrao        ← AUDITAR
+      ├─ useMultaRastreador           ← AUDITAR
+      ├─ useMigracaoConfig            ← AUDITAR
+      └─ useInadimplenciaPorVeiculo   ← AUDITAR
+```
 
-## Fora de escopo
+## O que NÃO será alterado
 
-- Não vou alterar o backfill de "serviço fantasma" — ele continua útil para limpar agendas presas. A correção é tornar o cancelamento reversível pela tela de monitoramento.
-- Não vou tocar em `concluida`/`aprovada`/`reprovada` (esses permanecem terminais).
+- A lógica de negócio (carências, inadimplência, depreciação, ativação de rastreador). Apenas o esqueleto de hooks/render para eliminar o crash.
+- Nenhuma migração de banco é necessária.
 
-## Pergunta antes de executar
+## Pergunta antes de implementar
 
-Após aprovar, devo também reabrir automaticamente os 19 serviços já presos pelo backfill de 27/04, ou deixar para o monitoramento reabrir um a um pela tela?
+O usuário relatou que **apenas LRA9681** apresenta o erro hoje, mas a correção é estrutural (mexe na cadeia de hooks que serve **todos** os associados). Você prefere:
+
+1. Aplicar tudo agora (auditar hooks + ErrorBoundary + `key` da modal) — risco baixo, cobre todos os casos.
+2. Apenas adicionar o ErrorBoundary primeiro para capturar o `componentStack` exato e depois corrigir a causa pontual em uma segunda iteração — minimiza mudanças, mas exige reabrir o caso amanhã.
+
+Recomendo a **opção 1** (mais segura para evitar que apareça em outros associados sem aviso).

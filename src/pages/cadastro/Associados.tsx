@@ -55,8 +55,9 @@ import { AssociadoFilters } from '@/components/cadastro/AssociadoFilters';
 import { ExportAssociadosDialog } from '@/components/cadastro/ExportAssociadosDialog';
 import { ConfirmacaoAcaoDialog } from '@/components/associados/ConfirmacaoAcaoDialog';
 import { useToast } from '@/hooks/use-toast';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import AssociadoDetalhe from './AssociadoDetalhe';
+import { AssociadoDetalheErrorBoundary } from '@/components/common/AssociadoDetalheErrorBoundary';
 
 const statusColors: Record<StatusAssociado, string> = {
   em_analise: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
@@ -969,13 +970,23 @@ export default function Associados() {
         {/* Detalhe do Associado em Dialog centralizado */}
         <Dialog open={!!detalheAssociadoId} onOpenChange={(open) => !open && setDetalheAssociadoId(null)}>
           <DialogContent className="max-w-5xl max-h-[92vh] p-0 overflow-y-auto overflow-x-hidden">
+            <DialogTitle className="sr-only">Detalhes do associado</DialogTitle>
+            <DialogDescription className="sr-only">
+              Visão completa do associado, veículos, documentos e histórico.
+            </DialogDescription>
             {detalheAssociadoId && (
               <div className="p-4 sm:p-6 min-w-0 w-full">
-                <AssociadoDetalhe 
-                  associadoId={detalheAssociadoId} 
-                  isModal 
-                  onClose={() => setDetalheAssociadoId(null)} 
-                />
+                <AssociadoDetalheErrorBoundary
+                  associadoId={detalheAssociadoId}
+                  onReset={() => setDetalheAssociadoId(null)}
+                >
+                  <AssociadoDetalhe
+                    key={detalheAssociadoId}
+                    associadoId={detalheAssociadoId}
+                    isModal
+                    onClose={() => setDetalheAssociadoId(null)}
+                  />
+                </AssociadoDetalheErrorBoundary>
               </div>
             )}
           </DialogContent>
