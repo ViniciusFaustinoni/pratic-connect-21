@@ -1,64 +1,85 @@
-## Diagnóstico (correção do diagnóstico anterior)
+## Diagnóstico raiz
 
-Não existe "vazamento de escopo" do `extractedPdfText`. Confirmei lendo o arquivo: a variável é declarada na linha 1200 dentro do handler principal e o bloco de tiebreaker (linhas 1851-1883) está no mesmo escopo de função — a closure enxerga normalmente.
+O link enviado (`/prestador/instalacao/447edd7c…`) corresponde ao registro `instalacao_prestador_links.id = b40587c8-9224-4856-8ea6-80d3eb7943ab`, vinculado à instalação `3ae909be-…` do veículo **LMX5A90**.
 
-O tiebreaker MRZ não dispara por outro motivo, mais profundo:
+O prestador concluiu o trabalho normalmente:
 
-- Em CNH-e SENATRAN, o `unpdf` extrai apenas o texto institucional ("Assinador Serpro… Medida Provisória 2200…"), não o conteúdo da carteira. O `scoreExtractedText` (em `_shared/unpdf-extract.ts`) corretamente devolve score ~0.05 nesses casos e o roteador escolhe `raster-vlm`.
-- Quando isso acontece, `extractedPdfText` contém apenas as instruções do Serpro — **o MRZ `I<BRA…` simplesmente não está lá**, porque o documento real é uma imagem embutida no PDF.
-- Resultado: `mrzFromString(extractedPdfText)` devolve `''`, o tiebreaker cai pra `mrzA`/`mrzB` (que vêm da IA e podem alucinar), e em vários casos nem sequer existe `mrz_registro` no JSON porque o prompt pede o campo mas não enfatiza onde lê-lo nem como validar.
+- `instalacao_prestador_links.status = 'concluida'`
+- `instalacao_prestador_links.fotos_vistoria` contém **19 fotos** (chave, motor, chassi, estepe, frente, bateria, odômetro, traseira, parabrisa, mala, banco_traseiro, banco_motorista, lateral_direita, painel_completo, banco_passageiro, lateral_esquerda, capo_aberto_placa, chave_roda_macaco e ainda mais).
+- `instalacoes.status = 'concluida'`
 
-Ou seja: a "verdade absoluta" prevista (texto nativo) não existe nesse cenário. O sinal mecânico real está **na imagem**, e precisa ser arrancado dela com instrução explícita + validação matemática.
+Mas no módulo "Veículos" e nos detalhes do associado a aba "Fotos da Vistoria" aparece vazia. Confirmado por query: `vistorias_count = 0`, `vistoria_fotos_count = 0` para esse contrato.
+
+### Por que vazio?
+
+O hook que alimenta a aba (`useFotosVistoriaPorVeiculo` em `src/hooks/useVeiculoDetalhes.ts`) busca em **três tabelas encadeadas**: `contratos → vistorias → vistoria_fotos`. As fotos do prestador, porém, são salvas **somente** num jsonb em `instalacao_prestador_links.fotos_vistoria` pela edge `concluir-instalacao-prestador`. Essa edge:
+
+1. Atualiza `instalacoes` para `concluida`.
+2. Salva o jsonb no link.
+3. Dispara sync com SGA / plataforma de rastreio.
+4. **Nunca cria registro em `vistorias` nem em `vistoria_fotos`.**
+
+Resultado: as fotos existem mas ficam isoladas no link público, sem ponte para o restante do sistema. A aba "Fotos/Docs" do veículo, os detalhes do associado e qualquer outro consumidor que use o caminho canônico `vistorias + vistoria_fotos` veem vazio.
+
+Confirmação no banco: `1` link `concluida` com fotos hoje, `1` link órfão sem vistoria — ou seja, 100% dos casos atuais estão quebrados pelo mesmo motivo.
 
 ## Plano
 
-Três ajustes coordenados em `supabase/functions/document-ocr/index.ts`:
+### 1. Correção raiz na edge `concluir-instalacao-prestador`
 
-### 1. Prompt da CNH: instruir o VLM a transcrever o MRZ literalmente
+Ao concluir, criar uma vistoria canônica e materializar cada foto do jsonb como linha em `vistoria_fotos`, dentro de uma transação lógica idempotente:
 
-No bloco de prompt da CNH (próximo da linha 405, mesma região onde já tratamos a armadilha do "ACC"), acrescentar uma seção dedicada ao MRZ:
+- **Idempotência**: antes de inserir, procurar `vistorias` existente por `instalacao_id = link.instalacao_id`. Se já existir, fazer upsert das fotos (excluir e reinserir as do tipo prestador, ou usar `tipo` único composto). Isso garante que reentregas/repostagens do mesmo link não dupliquem.
+- **Insert em `vistorias`**:
+  - `instalacao_id` = `link.instalacao_id`
+  - `contrato_id` = `instalacoes.contrato_id`
+  - `associado_id` = `instalacoes.associado_id`
+  - `cotacao_id` = `instalacoes.cotacao_id` (quando houver)
+  - `modalidade = 'prestador'` (ou o valor que já existir nesse enum; verificar enum `vistoria_modalidade`)
+  - `origem = 'prestador'`
+  - `status = 'concluida'`
+  - `concluida_em = agora`
+  - `iniciada_em = link.created_at`
+  - dados de endereço copiados de `instalacoes`
+  - `dados_parciais.checklist_data = checklist_data` (preserva o que o prestador respondeu)
+  - `assinatura_documento_url = assinatura_url` (quando houver)
+- **Insert em `vistoria_fotos`** — uma linha por entrada do `fotos_vistoria` jsonb:
+  - `vistoria_id = vistoria.id`
+  - `tipo = chave do jsonb` (ex.: `chassi`, `motor`, `frente`)
+  - `arquivo_url = valor`
+  - `visivel_cliente = true`
+- **Tolerância a falhas**: se a criação da vistoria/fotos falhar, logar mas **não bloquear** a resposta de sucesso (as fotos continuam salvas no jsonb e o link já está concluído). O backfill abaixo recupera.
 
-- Explicar que no rodapé da CNH-e existe a Zona de Leitura Mecânica (MRZ) com 3 linhas em fonte OCR-B (caracteres `<` como preenchimento).
-- Pedir que `mrz_registro` receba **a primeira linha completa**, exatamente como aparece, começando com `I<BRA` e mantendo todos os `<`.
-- Avisar que essa linha é a fonte de verdade do número de registro: se o que o modelo "lê" no campo `9 CAT HAB / Nº REGISTRO` divergir da MRZ, vale a MRZ.
-- Reforçar que NÃO deve preencher `mrz_registro` se a MRZ não estiver visível/legível (melhor vazio que inventado).
+### 2. Mapeamento `tipo` → categoria no agrupador
 
-### 2. Tiebreaker MRZ: parar de depender só do texto nativo
+O agrupador `agruparFotosVeiculo` (usado no modal de Veículos) categoriza por `tipo` em `identificacao | exterior | interior | outros`. Precisamos garantir que os `tipo`s gravados pelo prestador (`chassi`, `motor`, `frente`, `traseira`, `lateral_direita`, `lateral_esquerda`, `painel_completo`, `odometro`, `parabrisa`, `mala_aberta`, `banco_*`, `chave`, `chave_roda_macaco`, `capo_aberto_placa`, `bateria`, `estepe`, etc) sejam reconhecidos. Vou ler a função e estender o mapping para que cada chave caia numa categoria correta — sem deixar nada cair só em "outros" silenciosamente.
 
-Substituir, no bloco de dupla-leitura (linhas 1851-1883), a lógica atual por uma versão que:
+### 3. Backfill dos casos órfãos existentes
 
-- Coleta candidatos de MRZ de **três fontes**, em ordem de confiança:
-  1. Texto nativo do PDF (raro, mas quando existe é absoluto).
-  2. `mrz_registro` da passada A.
-  3. `mrz_registro` da passada B.
-- Para cada candidato, **valida o checksum ICAO 9303** sobre os 9 dígitos do número de registro + dígito verificador da MRZ (algoritmo padrão peso 7-3-1). Helper novo `validateMrzCheckDigit(line: string): boolean` em arquivo compartilhado (`_shared/mrz.ts`).
-- Só MRZs válidas entram na disputa. Empate (A e B válidos e iguais) confirma; A e B válidos e diferentes → fica sem tiebreaker MRZ e cai pro tiebreaker de CPF.
-- Mantém prioridade MRZ > CPF checksum, como hoje.
+Migration única que:
 
-### 3. Logging para confirmar que o tiebreaker passou a disparar
+- Para cada `instalacao_prestador_links` com `status = 'concluida'` e `fotos_vistoria` não-vazio e **sem** vistoria correspondente em `vistorias.instalacao_id`, cria a vistoria + fotos pelo mesmo critério da edge.
+- Hoje só há 1 caso (o do usuário, LMX5A90), mas o backfill é seguro mesmo se houver mais.
 
-Acrescentar no log `[OCR][dupla-leitura][mrz]` os campos:
-- `mrzNativeFound: boolean`
-- `mrzAValid: boolean`, `mrzBValid: boolean`
-- `mrzSource: 'native' | 'A' | 'B' | null`
+### 4. (Opcional, pequeno) Indicador no `VeiculoDetalhesModal`
 
-Assim, em produção dá pra confirmar em poucos logs se em CNH-e o MRZ passou a vir do VLM e a vencer o desempate.
-
-## Arquivos afetados
-
-- `supabase/functions/_shared/mrz.ts` (novo): helpers `extractMrzLine`, `validateMrzCheckDigit`, `getRegistroFromMrz`.
-- `supabase/functions/document-ocr/index.ts`:
-  - Prompt CNH (~linha 405): seção MRZ.
-  - Bloco tiebreaker (~linhas 1851-1883): nova lógica baseada em checksum.
-  - Imports do novo helper no topo.
+Quando a foto vier de `modalidade='prestador'`, exibir um pequeno selo "Prestador" no card da foto para deixar a origem clara. Sem mudar a query — só usa o campo já retornado por `useFotosVistoriaPorVeiculo`.
 
 ## Detalhes técnicos
 
-- O checksum ICAO 9303 sobre dígitos usa pesos cíclicos `[7,3,1]`, soma mod 10. `<` e letras seguem tabela ICAO; para a faixa de registro CNH só dígitos são esperados, simplifica.
-- Não mexemos em `routeOcr` nem no `scoreExtractedText`: a decisão de rasterizar CNH-e continua correta — o que muda é a forma como extraímos o sinal mecânico depois.
-- Sem mudanças de schema, sem migration, sem novos secrets.
+- **Sem migration de schema**. `vistorias` e `vistoria_fotos` já têm todas as colunas necessárias.
+- A migration de backfill é só DML (insert), sem alterar estrutura.
+- Confirmar enum `vistoria_modalidade` antes do insert (aceitar `'prestador'` ou usar valor existente como `'remota'` se `'prestador'` não estiver no enum). Se precisar adicionar valor ao enum, vai uma migration mínima `ALTER TYPE … ADD VALUE 'prestador'`.
+- A edge mantém o jsonb `fotos_vistoria` no link como antes (auditoria/UI do próprio link público continuam funcionando).
+- Sem mudança no Storage; as URLs já vêm de `prestador-fotos` (público). O hook `useFotosVistoriaPorVeiculo` exibe via `arquivo_url` direto, então funciona out-of-the-box.
 
-## O que não vamos fazer
+## O que NÃO vamos fazer
 
-- Não vamos forçar o `unpdf` a "ler mais" da CNH-e: o conteúdo real é imagem embutida; insistir nisso é trabalho desperdiçado.
-- Não vamos remover o tiebreaker de CPF checksum — ele continua útil quando o MRZ não está legível em nenhuma das passadas.
+- Não vamos remover/zerar o jsonb `fotos_vistoria` do link — fica como fonte de auditoria e como salvaguarda em caso de falha do passo de materialização.
+- Não vamos mexer no fluxo de vistoria do **técnico interno** (que já grava direto em `vistorias` + `vistoria_fotos`). Esse caminho está correto.
+
+## Resultado esperado
+
+- LMX5A90 passa a mostrar as 19 fotos na aba "Fotos/Docs" imediatamente após o backfill rodar.
+- Todo link de prestador concluído daqui pra frente cria automaticamente a vistoria canônica e as fotos viram visíveis em Veículos e nos detalhes do associado.
+- Reenvios do mesmo link não duplicam dados (idempotência por `instalacao_id`).
