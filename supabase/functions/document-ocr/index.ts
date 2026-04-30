@@ -10,6 +10,7 @@ import { runMistralOcr, callPixtralChat } from "../_shared/mistral-ocr.ts";
 import { extractPdfTextUnpdf, scoreExtractedText } from "../_shared/unpdf-extract.ts";
 import { routeOcr, type OcrMethod } from "../_shared/ocr-router.ts";
 import { shrinkImageBase64 } from "../_shared/image-shrink.ts";
+import { extractMrzLine, validateMrzCheckDigit, getRegistroFromMrz } from "../_shared/mrz.ts";
 
 // Teto por imagem ao mandar para provedor multimodal.
 // Anthropic e Gemini medem a STRING BASE64 contra ~5MB por imagem.
