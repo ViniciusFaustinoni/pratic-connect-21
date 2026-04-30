@@ -1596,24 +1596,106 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
       return { result: parsed, raw: contentStr, durationMs: Date.now() - t0, usage: px.data?.usage };
     };
 
-    // ── Passada A (principal) ───────────────────────────────────
-    const firstPass = resolved.engine === 'mistral'
-      ? await runMistralPass('main-mistral')
-      : await runEnginePass(resolved.primary, 'main');
+    // ── Passada A (principal) — segue cascata do roteador ───────────
+    // Helper: roda um único método.
+    const runMethod = async (method: OcrMethod, label: string) => {
+      switch (method) {
+        case 'mistral-ocr':
+          return await runMistralPass(label);
+        case 'text-llm': {
+          // Estrutura SOMENTE o texto nativo via LLM (sem visão).
+          // Vantagem: muito mais barato e exato quando há texto rico.
+          if (!extractedPdfText || extractedPdfText.length < 80) return null;
+          const provider = resolved.engine === 'anthropic' ? 'anthropic' : 'lovable';
+          const model = resolved.engine === 'anthropic' ? resolved.primary : 'google/gemini-2.5-pro';
+          const t0 = Date.now();
+          const r = await callAI({
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: `${userPrompt}\n\n--- TEXTO EXTRAÍDO DO PDF (camada nativa) ---\n${extractedPdfText.slice(0, 30_000)}\n--- FIM ---` },
+            ],
+            max_tokens: 8192,
+            temperature: 0,
+            override: { provider, model },
+            fallbackToLovable: true,
+          });
+          if (!r.ok) {
+            console.error(`[OCR][text-llm] ${JSON.stringify({ reqId, label, status: r.status, error: r.errorMessage?.slice(0,200) })}`);
+            return null;
+          }
+          const contentStr = r.data?.choices?.[0]?.message?.content ?? '';
+          if (!contentStr) return null;
+          let parsed: any;
+          try {
+            const clean = contentStr.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            parsed = JSON.parse(clean);
+          } catch {
+            const repaired = tryRepairTruncatedJSON(contentStr);
+            if (!repaired) return null;
+            parsed = repaired;
+          }
+          return {
+            result: parsed, raw: contentStr,
+            durationMs: Date.now() - t0,
+            finishReason: r.data?.choices?.[0]?.message ? 'stop' : undefined,
+            usage: r.data?.usage,
+          };
+        }
+        case 'raster-vlm':
+        case 'image-vlm':
+        default:
+          return await runEnginePass(resolved.primary, label);
+      }
+    };
 
-    if (!firstPass) {
-      // Fallback de emergência: tenta Lovable Gateway com Gemini Pro
-      console.warn(`[OCR][${reqId}] motor ${resolved.engine} falhou, tentando fallback Lovable/Gemini`);
+    // Avalia se o resultado de uma passada é "bom o suficiente" pra parar a cascata.
+    const isGoodEnough = (r: any): boolean => {
+      if (!r?.result) return false;
+      const conf = Number(r.result?.confianca ?? 0);
+      if (r.result?.legivel === false) return false;
+      if (r.result?.sucesso === false) return false;
+      // Pra crítico (CNH/CRLV) exigimos confiança maior antes de pular fallback
+      const minConf = routerDecision.critical ? 0.7 : 0.55;
+      return Number.isFinite(conf) && conf >= minConf;
+    };
+
+    const cascade: { method: OcrMethod; label: string }[] = [
+      { method: routerDecision.primary, label: `main-${routerDecision.primary}` },
+      ...routerDecision.fallbacks.map((m, i) => ({ method: m, label: `fallback${i + 1}-${m}` })),
+    ];
+
+    let firstPassResolved: any = null;
+    let usedMethod: OcrMethod = routerDecision.primary;
+    for (const step of cascade) {
+      console.log(`[OCR][cascade] ${JSON.stringify({ reqId, try: step.label })}`);
+      const r = await runMethod(step.method, step.label);
+      if (r) {
+        usedMethod = step.method;
+        firstPassResolved = r;
+        if (isGoodEnough(r)) {
+          console.log(`[OCR][cascade] ${JSON.stringify({ reqId, accepted: step.label, conf: r.result?.confianca })}`);
+          break;
+        }
+        console.warn(`[OCR][cascade] ${JSON.stringify({ reqId, weak: step.label, conf: r.result?.confianca, sugestao: r.result?.sugestao })}`);
+        // Mantém esse resultado mas tenta o próximo da cascata pra ver se melhora.
+      } else {
+        console.warn(`[OCR][cascade] ${JSON.stringify({ reqId, failed: step.label })}`);
+      }
+    }
+
+    if (!firstPassResolved) {
+      // Fallback de emergência final: Lovable Gateway com Gemini Pro
+      console.warn(`[OCR][${reqId}] cascata inteira falhou, fallback final Lovable/Gemini`);
       const fb = await runEnginePass('google/gemini-2.5-pro', 'fallback-emergency', 'lovable');
       if (!fb) {
         return await ocrFallbackResponse('Erro ao processar documento com IA. Documento enviado para revisão manual.');
       }
       logCtx.fallback_emergency = true;
       logCtx.modelo = 'google/gemini-2.5-pro';
-      var firstPassResolved = fb;
-    } else {
-      var firstPassResolved = firstPass;
+      firstPassResolved = fb;
+      usedMethod = 'image-vlm';
     }
+    logCtx.router_used_method = usedMethod;
 
     logCtx.usage = firstPassResolved.usage ?? null;
     logCtx.modelo = resolved.primary;
