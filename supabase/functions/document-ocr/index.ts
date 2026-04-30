@@ -1198,6 +1198,9 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
         if (betterByConfidence || promotedToApprove) {
           result = secondPass.result;
           usedRetry = true;
+          logCtx.used_retry = true;
+          logCtx.modelo = OCR_RETRY_MODEL;
+          logCtx.usage = secondPass.usage ?? logCtx.usage;
         }
       }
     }
