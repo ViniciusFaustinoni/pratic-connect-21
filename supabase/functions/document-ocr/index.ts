@@ -997,6 +997,13 @@ async function persistOcrLog(ctx: OcrLogCtx, outcome: {
       dados_extraidos: r?.dados ?? null,
       dados_esperados: ctx.dados_esperados ?? null,
       score_campos: scoreCampos,
+      engine: ctx.engine ?? null,
+      primary_model: ctx.primary_model ?? null,
+      secondary_model: ctx.secondary_model ?? null,
+      dupla_leitura: !!ctx.dupla_leitura,
+      divergencias: ctx.divergencias ?? null,
+      pdf_rasterizado: !!ctx.pdf_rasterizado,
+      pdf_paginas_rasterizadas: ctx.pdf_paginas_rasterizadas ?? null,
     }).select('id').maybeSingle();
 
     if (inserted?.id) {
