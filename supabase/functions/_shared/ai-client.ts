@@ -209,7 +209,7 @@ async function callOpenAI(cfg: AIConfig, opts: CallAIOptions): Promise<CallAIRes
 // ─────────────────────────────────────────── Anthropic direto (adaptador)
 
 async function callAnthropic(cfg: AIConfig, opts: CallAIOptions): Promise<CallAIResult> {
-  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  const apiKey = await getProviderKey("anthropic");
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY não configurada");
 
   // Separa system messages
