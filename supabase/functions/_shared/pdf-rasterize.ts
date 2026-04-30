@@ -1,119 +1,83 @@
 /**
- * Rasteriza páginas de PDF para JPEG em runtime Deno (edge).
- * Usa @hyzyla/pdfium (PDFium compilado para WebAssembly).
+ * Rasterização de PDF → PNG/JPEG em runtime Deno (edge).
+ *
+ * Usa @hyzyla/pdfium (PDFium compilado para WebAssembly) — funciona em Deno
+ * sem dependências de sistema (poppler/imagemagick).
  *
  * Por que rasterizar antes de mandar pra IA?
- * - PDFs como CNH-e (SENATRAN/CDT) têm camada de texto vazia ou só com instruções:
- *   nome, CPF, validade, fotos ficam dentro de imagens embutidas.
- * - Modelos como Claude e Gemini leem MUITO melhor uma imagem nítida da página
- *   do que um PDF com texto inútil + 5 imagens em baixa resolução.
- * - Mistral OCR não precisa: aceita PDF nativo via /v1/ocr.
+ * - PDFs como CNH-e (SENATRAN/CDT) têm camada de texto vazia ou só com
+ *   instruções genéricas; nome, CPF, validade ficam dentro de imagens
+ *   embutidas. Modelos como Claude Sonnet 4.5 e Gemini 2.5 Pro leem MUITO
+ *   melhor uma imagem nítida da página do que esse PDF "vazio".
+ * - Mistral OCR aceita PDF nativo via /v1/ocr — não precisa rasterizar.
  */
 
-import { getDocument, OPS } from "https://esm.sh/pdfjs-serverless@0.5.0";
+// pdfium-wasm em Deno: usa import npm: (Deno 1.40+ / edge-runtime suportam)
+import { PDFiumLibrary } from "npm:@hyzyla/pdfium@2.1.6";
+
+let _libPromise: Promise<any> | null = null;
+async function getLib() {
+  if (!_libPromise) _libPromise = PDFiumLibrary.init();
+  return _libPromise;
+}
 
 export interface RasterizedPage {
   page: number;
-  jpegBase64: string;
+  /** PNG base64 puro (sem prefixo data:). PDFium devolve PNG. */
+  pngBase64: string;
+  /** Mime correto: "image/png". */
+  mime: "image/png";
   width: number;
   height: number;
   bytes: number;
 }
 
 /**
- * Rasteriza páginas selecionadas de um PDF para JPEG.
+ * Rasteriza páginas selecionadas de um PDF para PNG.
  *
- * IMPLEMENTAÇÃO: usa pdfjs-serverless (PDF.js sem worker, otimizado para
- * runtimes serverless/Deno). Como pdfjs-serverless NÃO renderiza para canvas
- * out-of-the-box no Deno, fazemos um pipeline alternativo:
- *
- *   1. Extrair OperatorList da página (lista de ops PDF.js).
- *   2. Para CNH/CRLV digitais (caso típico) onde a página inteira é uma
- *      composição de imagens embutidas, extraímos as imagens e empilhamos.
- *
- * MAS na prática a forma mais robusta em edge runtime é usar a API
- * `getDocument` + `page.getOperatorList()` + identificar os XObjects de
- * imagem. Para casos que não dão match (PDFs vetoriais), fallback retorna
- * vazio e o caller manda o PDF original.
- *
- * Para máxima compatibilidade, este helper retorna:
- *   - imagens embutidas da primeira página relevante (com >= um XObject Image)
- *   - cada imagem convertida para JPEG base64
- *
- * Caller decide como apresentar à IA (tipicamente: várias `image_url` blocks).
+ * @param pdfBytes  Bytes do PDF.
+ * @param opts.pages  Lista 1-indexed de páginas a renderizar (default: 1..maxPages).
+ * @param opts.maxPages  Limite (default 3) — protege custo/latência em PDFs longos.
+ * @param opts.scale  Fator de escala vs. tamanho lógico do PDF (default 2.0 ≈ 200dpi para A4).
  */
 export async function rasterizePdfPages(
   pdfBytes: Uint8Array,
-  opts: { pages?: number[]; maxPages?: number; minImageBytes?: number } = {},
+  opts: { pages?: number[]; maxPages?: number; scale?: number } = {},
 ): Promise<RasterizedPage[]> {
-  const minImageBytes = opts.minImageBytes ?? 8_000; // descarta ícones/logos pequenos
+  const scale = opts.scale ?? 2.0;
   const maxPages = opts.maxPages ?? 3;
 
-  const loadingTask = getDocument({
-    data: pdfBytes,
-    useSystemFonts: false,
-    disableFontFace: true,
-    isEvalSupported: false,
-  });
-  const pdf = await loadingTask.promise;
-  const totalPages = pdf.numPages;
-  const targetPages = (opts.pages?.length ? opts.pages : Array.from({ length: Math.min(totalPages, maxPages) }, (_, i) => i + 1))
-    .filter((p) => p >= 1 && p <= totalPages);
-
+  const lib = await getLib();
+  const doc = await lib.loadDocument(pdfBytes);
   const out: RasterizedPage[] = [];
 
-  for (const pageNum of targetPages) {
-    try {
-      const page = await pdf.getPage(pageNum);
-      const opList = await page.getOperatorList();
-      const viewport = page.getViewport({ scale: 1 });
+  try {
+    const totalPages = doc.getPageCount();
+    const targets = (opts.pages?.length
+      ? opts.pages
+      : Array.from({ length: Math.min(totalPages, maxPages) }, (_, i) => i + 1)
+    ).filter((p) => p >= 1 && p <= totalPages);
 
-      // Coletar XObjects do tipo imagem
-      const objs = page.objs as any;
-      const commonObjs = page.commonObjs as any;
-
-      for (let i = 0; i < opList.fnArray.length; i++) {
-        const op = opList.fnArray[i];
-        if (op !== OPS.paintImageXObject && op !== OPS.paintJpegXObject) continue;
-        const args = opList.argsArray[i];
-        const objName = args?.[0];
-        if (!objName) continue;
-
-        // Resolver objeto (síncrono se já estiver no cache, senão promise)
-        const imgObj = await new Promise<any>((resolve) => {
-          try {
-            objs.get(objName, (val: any) => resolve(val));
-          } catch {
-            try { commonObjs.get(objName, (val: any) => resolve(val)); }
-            catch { resolve(null); }
-          }
+    for (const pageNum of targets) {
+      try {
+        const page = doc.getPage(pageNum - 1);
+        const image = await page.render({ scale, render: "bitmap" });
+        // image.data é Uint8Array PNG
+        const data: Uint8Array = image.data;
+        out.push({
+          page: pageNum,
+          pngBase64: u8ToBase64(data),
+          mime: "image/png",
+          width: image.width,
+          height: image.height,
+          bytes: data.byteLength,
         });
-        if (!imgObj) continue;
-
-        const data: Uint8Array | undefined = imgObj.data ?? imgObj.bitmap?.data;
-        const width: number = imgObj.width ?? 0;
-        const height: number = imgObj.height ?? 0;
-        if (!data || !width || !height) continue;
-
-        // JPEG embutido? (`paintJpegXObject` => bytes JÁ são JPEG)
-        if (op === OPS.paintJpegXObject) {
-          if (data.byteLength < minImageBytes) continue;
-          out.push({
-            page: pageNum,
-            jpegBase64: u8ToBase64(data),
-            width, height,
-            bytes: data.byteLength,
-          });
-          continue;
-        }
-
-        // RGBA/RGB raw → empacotar como BMP (não temos encoder JPEG nativo em Deno).
-        // Fallback: ignora rasters não-JPEG; captura só JPEGs embutidos
-        // (que é o caso real de CNH-e e CRLV digital).
+      } catch (e) {
+        console.warn(`[pdf-rasterize] page ${pageNum} failed:`, (e as Error)?.message ?? e);
       }
-    } catch (e) {
-      console.warn(`[pdf-rasterize] página ${pageNum} falhou:`, (e as Error)?.message ?? e);
     }
+  } finally {
+    try { doc.destroy?.(); } catch { /* noop */ }
   }
 
   return out;
@@ -123,21 +87,21 @@ function u8ToBase64(arr: Uint8Array): string {
   let s = "";
   const chunk = 8192;
   for (let i = 0; i < arr.length; i += chunk) {
-    s += String.fromCharCode(...arr.slice(i, i + chunk));
+    s += String.fromCharCode(...(arr.subarray(i, i + chunk) as unknown as number[]));
   }
   return btoa(s);
 }
 
 /**
  * Decide se vale a pena rasterizar este PDF antes de enviar à IA.
- * Critérios:
- *  - PDF com pouco texto nativo (< 200 chars) é forte candidato
- *  - PDF com placeholders/instruções tipo "Assinador Serpro" é candidato
+ * Critérios baseados na qualidade do texto extraído nativamente.
  */
 export function shouldRasterizePdf(nativeText: string): boolean {
   if (!nativeText || nativeText.length < 200) return true;
   const t = nativeText.toLowerCase();
+  // CNH-e digital sempre cai aqui
   if (t.includes("assinador serpro") || t.includes("medida provisória nº 2200")) return true;
-  if (t.length < 600) return true; // texto curto demais p/ extrair dados estruturados
+  // Texto curto demais para conter os campos estruturados esperados
+  if (t.length < 600) return true;
   return false;
 }
