@@ -206,6 +206,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
   const queryClient = useQueryClient();
   const [reenvioDialogOpen, setReenvioDialogOpen] = useState(false);
   const solicitarDocsMutation = useSolicitarDocumentos();
+  const { data: docsJaSolicitados } = useDocumentosSolicitadosPendentes(id);
 
   const canEditContatos = isDiretor || isAnalistaCadastroOnly || isDesenvolvedor || isAdminMaster;
 
