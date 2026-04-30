@@ -1,119 +1,96 @@
-## Objetivo
 
-Adicionar uma **aba "Testes de OCR"** dentro de Diretoria → Logs de Auditoria, ao lado da aba "OCR" já existente, permitindo:
+# Combustível com código SGA — fonte única e envio correto
 
-1. Subir um documento avulso (PDF/imagem) e rodar a edge function `document-ocr` em modo **sandbox** (sem afetar cotação/associado).
-2. Comparar o resultado com **valores esperados** (ground truth) digitados pelo testador.
-3. Anotar o resultado (aprovado / falso positivo / etc.) e salvar como **caso de teste** que vai enriquecer o aprendizado do OCR.
-4. Re-executar em lote os casos salvos (regression suite) sempre que o prompt/modelo mudar.
-5. Ver métricas históricas de acurácia por tipo de documento e por campo.
+## Problema
 
-## Diagnóstico do estado atual
+Hoje o sistema:
+- Salva combustível como texto livre em `veiculos.combustivel` (vindo da FIPE).
+- Mapeia para código Hinova **em tempo de envio** consultando `hinova_mapeamentos`.
+- A tabela `hinova_mapeamentos` está com **códigos errados** (Gasolina=1, mas no SGA real Gasolina=2) e contém combustíveis que **não existem no SGA** (GNV, Elétrico, Híbrido).
+- Resultado: veículos podem ser enviados ao Hinova com `codigo_combustivel` inválido ou nulo.
 
-- Edge function `supabase/functions/document-ocr/index.ts` já recebe `{ url, tipoEsperado, cpfEsperado, nomeEsperado, extrairDados, cotacaoId, associadoId }` e grava em `ocr_execution_logs` (33 colunas, incluindo `cpf_fonte`, `cpf_candidatos`, `cpf_contexto`, `dados_extraidos`).
-- Tela `src/pages/diretoria/LogsAuditoria.tsx` tem a aba "OCR" renderizando `<OcrLogsTab />`. Falta uma aba irmã para testes.
-- Não há tabela para armazenar casos de teste nem para anotações de qualidade.
-- Bucket `cotacoes-docs` já existe e é aceito pela edge function como URL pública.
+Códigos reais do SGA (PDF Hinova):
 
-## Mudanças propostas
+| Código | Descrição |
+|---|---|
+| 1 | Flex |
+| 2 | Gasolina |
+| 3 | Etanol |
+| 4 | Diesel |
+| 5 | Bio-gás |
+| 6 | Tetra-fuel |
 
-### 1. Banco — duas tabelas novas (migration)
+## Estratégia
 
-**`ocr_test_cases`** — biblioteca de casos de teste reutilizáveis:
-- `id`, `created_at`, `created_by`
-- `nome` (label do caso, ex: "CNH-e Marcus 2026")
-- `tipo_esperado` (cnh / crlv / rg / etc.)
-- `arquivo_path` (path no bucket `cotacoes-docs/ocr-tests/...`)
-- `arquivo_url` (URL pública)
-- `mime`, `bytes`
-- `expectativas` (jsonb): `{ cpf, nome, rg, dataNascimento, numeroCnh, categoria, validade, placa, chassi, ... }` — campos esperados por tipo
-- `observacoes` (text)
-- `ativo` (bool, para incluir/excluir do regression run)
-- RLS: somente `diretor` e `gestor_cadastro` podem ler/escrever.
+1. **Corrigir o catálogo `hinova_mapeamentos`** com os códigos reais do SGA.
+2. **Persistir o código SGA no veículo** assim que o combustível é detectado (FIPE/manual), em vez de só resolver no envio.
+3. **Sync Hinova** passa a usar o código já gravado, com fallback à normalização atual.
+4. **UI de Combustíveis** (Gestão Comercial → Cadastros Base) ganha o campo `codigo_sga` para edição futura.
 
-**`ocr_test_runs`** — execuções (1 caso → N execuções ao longo do tempo):
-- `id`, `created_at`, `executed_by`
-- `test_case_id` (fk → `ocr_test_cases`, nullable para testes ad-hoc)
-- `ocr_log_id` (fk → `ocr_execution_logs.id`) — link para o log completo
-- `provider`, `modelo`, `prompt_version` (text — capturado no momento)
-- `latency_ms`
-- `dados_extraidos` (jsonb — espelho do que veio)
-- `comparacao` (jsonb): por campo, `{ esperado, obtido, match: true|false|null, similaridade: 0..1 }`
-- `score_geral` (numeric, 0..1) — % de campos certos
-- `veredito` (`aprovado` | `parcial` | `reprovado`)
-- `anotacao_humana` (text, opcional — o testador descreve o que falhou)
+## Mudanças
 
-Função `public.calcular_score_ocr(esperado jsonb, obtido jsonb)` para padronizar o cálculo (normaliza CPF/data/string → minúsculas, remove pontuação).
+### 1. Banco (migration)
 
-### 2. Edge function — modificações mínimas no `document-ocr`
+- **Atualizar `hinova_mapeamentos` tipo `combustivel`** para refletir o SGA:
+  - `flex → 1`, `gasolina → 2`, `etanol → 3`, `alcool → 3`, `diesel → 4`, `biogas → 5`, `tetrafuel → 6`.
+  - Marcar como `ativo=false` os obsoletos: `gnv`, `eletrico`, `hibrido` (mantém histórico, mas não retorna no lookup).
+- **Adicionar coluna `codigo_sga INT` em `veiculos`** (nullable). Recebe o código no momento da detecção/edição.
+- **Backfill**: popular `veiculos.codigo_sga` para todos os veículos existentes a partir do `combustivel` atual usando a tabela corrigida (CASE quando texto contém flex/gasolina/etc.).
+- **Trigger `trg_veiculos_set_codigo_sga_combustivel`**: BEFORE INSERT/UPDATE em `veiculos`, quando `combustivel` mudar, recalcula `codigo_sga` consultando `hinova_mapeamentos`.
 
-- Aceitar dois novos campos opcionais no body: `modoTeste: boolean`, `testCaseId: uuid`.
-- Quando `modoTeste === true`:
-  - Não exige `cotacaoId`/`associadoId`.
-  - Após gravar `ocr_execution_logs`, retorna `ocrLogId` no payload (já existe internamente, basta expor).
-- Sem alteração na lógica de extração — usa exatamente o mesmo caminho da produção, garantindo paridade.
+### 2. Util compartilhado de normalização
 
-### 3. UI — nova aba `OcrTestesTab` em `LogsAuditoria.tsx`
+Criar `src/lib/combustivelSGA.ts` com:
+- `normalizarCombustivel(raw: string): { slug, codigo_sga }` — função pura usada em UI/edge.
+- Mesma lógica espelhada na trigger do banco (single source of truth da regra).
 
-Estrutura em 3 painéis dentro da aba:
+### 3. FIPE → veículo
 
-**Painel A — Executar teste novo (ad-hoc ou caso salvo)**
-- Dropdown: "Caso salvo" (lista `ocr_test_cases`) **ou** "Novo upload".
-- Se novo upload: drag-and-drop → faz upload para `cotacoes-docs/ocr-tests/{uuid}.{ext}` → preenche URL.
-- Campo "Tipo esperado" (select igual ao da produção).
-- Bloco "Valores esperados" — formulário dinâmico conforme o tipo (CPF, nome, RG, nascimento, CNH, categoria, validade para CNH; placa, chassi, renavam, marca/modelo para CRLV; etc.).
-- Botão **"Rodar OCR"** → chama `document-ocr` com `modoTeste:true` → recebe `ocrLogId` + `dados_extraidos`.
-- Renderiza imediatamente a comparação lado-a-lado: **Esperado | Obtido | ✓/✗** por campo + score geral.
-- Botões: **"Salvar como caso de teste"** (cria/atualiza `ocr_test_cases`), **"Anotar veredito"** (popup com `aprovado/parcial/reprovado` + texto livre → grava `ocr_test_runs`).
+- Em `useFipeLookup`/fluxos que gravam veículo (cotação, substituição, edição manual), além de salvar `combustivel`, calcular e salvar `codigo_sga` via util.
+- Como a trigger já garante consistência, basta enviar o texto; o `codigo_sga` cai automaticamente. A util do front é só para exibir o código previsto na UI.
 
-**Painel B — Biblioteca de casos**
-- Tabela: nome, tipo, último score, último veredito, nº de execuções, data da última run.
-- Ações por linha: ver histórico, re-executar, editar expectativas, desativar.
-- Botão **"Re-executar todos os ativos"** → fila sequencial (com pequeno delay) que dispara cada caso e mostra progresso. Resultado consolidado: x/y aprovados, regressões em relação à última run anterior (campos que passavam e agora falham — destaque vermelho).
+### 4. Edge `sga-hinova-sync`
 
-**Painel C — Métricas de aprendizado**
-- Cards: acurácia média por tipo (CNH 87%, CRLV 99%, ...), campos com pior taxa (ex: "cpf em CNH-e: 42%"), evolução semanal (gráfico simples linha).
-- Top 10 falhas recentes com link para o `ocr_log_id` e botão "Adicionar à biblioteca de testes" (cria `ocr_test_case` pré-preenchido a partir do log).
+- Trocar a resolução atual:
+  ```
+  codigo_combustivel: getMap('combustivel', normalCombustivel)
+  ```
+  por:
+  ```
+  codigo_combustivel: veiculo.codigo_sga ?? getMap('combustivel', normalCombustivel)
+  ```
+- Adicionar **pré-flight**: se `codigo_combustivel` for null, abortar com erro claro `"combustivel sem mapeamento SGA"` (igual ao padrão FIPE/CEP já implementado).
 
-### 4. Storage
+### 5. Checklist SGA (`useChecklistSGA`)
 
-- Subpasta `ocr-tests/` dentro do bucket existente `cotacoes-docs` (já aceito pela edge function).
-- Policy: leitura pública (igual ao bucket atual), escrita restrita a `diretor`/`gestor_cadastro`.
+- Adicionar item crítico **"Combustível com código SGA"** na seção Veículo. Bloqueia envio se ausente.
 
-### 5. Enriquecimento dos logs de produção
+### 6. UI de Combustíveis (Gestão Comercial)
 
-Aproveitando a migration:
-- Adicionar coluna `ocr_execution_logs.dados_esperados` (jsonb, nullable) — quando uma cotação real tem `cpfEsperado`/`nomeEsperado`, gravar o objeto completo aqui para futura análise comparativa (hoje só vai para `motivo`/`erro`).
-- Adicionar coluna `ocr_execution_logs.score_campos` (jsonb, nullable) — calculado pela função quando há esperado, marcando quais campos bateram.
-- Painel C consome essas colunas em produção também, não só na sandbox.
+- `CombustiveisTab.tsx`: adicionar coluna/input `Código SGA` em cada item.
+- Ao salvar, persistir em `hinova_mapeamentos` (não só no JSON de configuração).
+- Mostrar badge para combustíveis sem código SGA mapeado.
 
-## Fluxo de uso típico (refinamento iterativo)
+### 7. Logs
 
-1. Usuário recebe ticket: "OCR não leu CPF do CNH-e do Marcus".
-2. Vai em Diretoria → Logs OCR → aba Testes → "Adicionar à biblioteca" a partir do log que falhou.
-3. Edita o caso preenchendo o CPF correto (ground truth).
-4. AI dev altera o prompt/regex da edge function.
-5. Volta na aba Testes e clica "Re-executar todos os ativos" — vê em segundos quantos casos passaram a funcionar e se algum regrediu.
-6. Casos com `veredito='reprovado'` recorrentes viram backlog de melhoria do prompt.
+- No `sga_sync_logs`, na ação `montar_payload`, logar `combustivel_texto`, `codigo_sga_resolvido`, `origem` (`veiculo.codigo_sga` | `mapeamento_runtime` | `null`).
 
-## Arquivos / objetos a criar
+## Arquivos afetados
 
-- Migration: `ocr_test_cases`, `ocr_test_runs`, função `calcular_score_ocr`, colunas `dados_esperados` e `score_campos` em `ocr_execution_logs`, RLS, subpasta no bucket.
-- `supabase/functions/document-ocr/index.ts` — pequeno trecho para `modoTeste` + retorno `ocrLogId`.
-- `src/components/diretoria/OcrTestesTab.tsx` (novo, ~500 linhas — UI completa).
-- `src/components/diretoria/ocr-testes/ExpectativasForm.tsx` (formulário dinâmico por tipo).
-- `src/components/diretoria/ocr-testes/ResultadoComparacao.tsx` (tabela esperado/obtido).
-- `src/hooks/useOcrTestes.ts` (queries e mutations).
-- `src/pages/diretoria/LogsAuditoria.tsx` — adicionar nova `TabsTrigger` "Testes OCR" + render do componente.
+- **Migration nova**: corrige `hinova_mapeamentos`, adiciona `veiculos.codigo_sga`, trigger e backfill.
+- `supabase/functions/sga-hinova-sync/index.ts` — usa `veiculo.codigo_sga`, pré-flight, log enriquecido.
+- `src/lib/combustivelSGA.ts` — **novo** util.
+- `src/hooks/useChecklistSGA.ts` — novo item crítico.
+- `src/components/gestao-comercial/cadastros/CombustiveisTab.tsx` — campo código SGA + persistência em `hinova_mapeamentos`.
+- (Opcional) hooks de cadastro de veículo que mostram preview do combustível detectado.
 
-## Fora de escopo (intencionalmente)
+## Validação pós-deploy
 
-- Não vamos treinar/fine-tunar modelo (Lovable AI Gateway é multi-modelo gerenciado).
-- Não vamos versionar prompt automaticamente — a coluna `prompt_version` é text livre que o dev preenche na edge function antes do deploy.
-- Não criamos paywall/bypass — tudo respeita RLS de `diretor`/`gestor_cadastro`.
+1. Backfill: `SELECT combustivel, codigo_sga, count(*) FROM veiculos GROUP BY 1,2` — não pode haver `combustivel` preenchido com `codigo_sga` nulo (exceto casos exóticos).
+2. Reenviar Lucas (KPI8571) e Alair (RTY3J80) — verificar que `codigo_combustivel` vai correto no payload.
+3. Cadastrar veículo novo via FIPE — confirmar `codigo_sga` gravado automaticamente pela trigger.
 
-## Resultado esperado
+## Observações
 
-- Loop fechado de QA do OCR: log que falha → caso de teste → ajuste de prompt → regression run → confirma ganho sem regressão.
-- Visibilidade de quais campos/tipos têm pior acurácia para priorizar melhorias.
-- Logs de produção também passam a registrar comparação esperado-vs-obtido quando há ground truth disponível.
+- Não removo a tabela `hinova_mapeamentos` — ela continua sendo a fonte para outros tipos (cor, tipo_veiculo, tipo_foto).
+- GNV/Elétrico/Híbrido ficam `ativo=false`: se um veículo tiver esses combustíveis, o checklist bloqueia e o operador escolhe manualmente o código SGA mais próximo (provavelmente Flex/Gasolina) ou pede cadastro no Hinova.
