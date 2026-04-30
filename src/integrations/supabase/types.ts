@@ -29259,6 +29259,7 @@ export type Database = {
           cobertura_vidros: boolean | null
           codigo_fipe: string | null
           codigo_hinova: number | null
+          codigo_sga_combustivel: number | null
           combustivel: string | null
           cor: string | null
           created_at: string
@@ -29324,6 +29325,7 @@ export type Database = {
           cobertura_vidros?: boolean | null
           codigo_fipe?: string | null
           codigo_hinova?: number | null
+          codigo_sga_combustivel?: number | null
           combustivel?: string | null
           cor?: string | null
           created_at?: string
@@ -29389,6 +29391,7 @@ export type Database = {
           cobertura_vidros?: boolean | null
           codigo_fipe?: string | null
           codigo_hinova?: number | null
+          codigo_sga_combustivel?: number | null
           combustivel?: string | null
           cor?: string | null
           created_at?: string
@@ -32626,6 +32629,10 @@ export type Database = {
         Returns: boolean
       }
       resetar_contadores_distribuicao: { Args: never; Returns: undefined }
+      resolver_codigo_sga_combustivel: {
+        Args: { p_combustivel: string }
+        Returns: number
+      }
       set_audit_origem: { Args: { origem: string }; Returns: undefined }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
