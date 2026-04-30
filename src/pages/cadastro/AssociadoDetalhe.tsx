@@ -397,8 +397,52 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
   const totalFotos = (vistoriaUnificada?.fotosInstalador?.length || 0) + (vistoriaUnificada?.fotosAutovistoria?.length || 0);
 
   // ============================================
+  // SOLICITAR REENVIO DE DOCUMENTOS
+  // ============================================
+  const queryClient = useQueryClient();
+  const [reenvioDialogOpen, setReenvioDialogOpen] = useState(false);
+  const solicitarDocsMutation = useSolicitarDocumentos();
+  const { data: docsJaSolicitados } = useDocumentosSolicitadosPendentes(id);
+
+  // Tipos de documento já reprovados — pré-selecionados no dialog
+  const TIPO_REPROVADO_PARA_SOLICITAR: Record<string, string> = {
+    cnh: 'cnh', cnh_frente: 'cnh', cnh_verso: 'cnh',
+    crlv: 'crlv', crlv_digital: 'crlv',
+    comprovante_residencia: 'comprovante_residencia',
+    rg: 'cnh', rg_frente: 'cnh', rg_verso: 'cnh',
+  };
+  const tiposReprovadosPreSelecionados = Array.from(new Set(
+    todosDocumentos
+      .filter(d => d.status === 'reprovado')
+      .map(d => TIPO_REPROVADO_PARA_SOLICITAR[d.tipo] || 'outro')
+  ));
+
+  const handleConfirmarReenvio = async (documentos: string[], observacoes: string) => {
+    if (!contrato?.id || !id) {
+      toast.error('Contrato do associado não encontrado.');
+      return;
+    }
+    try {
+      await solicitarDocsMutation.mutateAsync({
+        contratoId: contrato.id,
+        associadoId: id,
+        documentos,
+        observacoes,
+      });
+      toast.success('Solicitação de reenvio enviada ao associado via WhatsApp.');
+      setReenvioDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['documentos', id] });
+      queryClient.invalidateQueries({ queryKey: ['documentos-cotacao'] });
+      queryClient.invalidateQueries({ queryKey: ['docs-solicitados-pendentes', id] });
+    } catch (err: any) {
+      toast.error('Falha ao solicitar reenvio: ' + (err?.message || 'erro desconhecido'));
+    }
+  };
+
+  // ============================================
   // RENDER
   // ============================================
+
   return (
     <div className="space-y-4">
       {/* Breadcrumb removido — já existe no header global */}
