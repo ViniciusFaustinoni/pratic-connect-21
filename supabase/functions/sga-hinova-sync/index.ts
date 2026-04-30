@@ -718,10 +718,9 @@ serve(async (req) => {
           codigo_voluntario: codigoVoluntario,
           codigo_situacao: Number.isFinite(codSituacao) && codSituacao > 0 ? codSituacao : undefined,
           codigo_cooperativa: Number.isFinite(codigoCooperativa) ? codigoCooperativa : undefined,
-          codigo_plano: codigoPlanoSga,
+          codigo_grupo_produto: codigoGrupoProduto,
           valor_mensalidade: valorMensalidade,
           valor_adesao: valorAdesao,
-          produtos: produtos.length > 0 ? produtos : undefined,
           tipo_veiculo: tipoVeiculo,
           codigo_combustivel: (veiculo.codigo_sga_combustivel != null ? Number(veiculo.codigo_sga_combustivel) : null) ?? getMap('combustivel', normalCombustivel),
           codigo_cor: (veiculo.codigo_sga_cor != null ? Number(veiculo.codigo_sga_cor) : null)
