@@ -1,5 +1,6 @@
 import { Fragment, useState } from 'react';
-import { FileText, Download, ChevronDown, ChevronUp, GitBranch } from 'lucide-react';
+import { FileText, Download, ChevronDown, ChevronUp, GitBranch, ScanText } from 'lucide-react';
+import OcrLogsTab from '@/components/diretoria/OcrLogsTab';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
