@@ -1172,7 +1172,7 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
     // O `model` enviado aqui só é usado quando provider=lovable.
     const firstPass = await runOcrPass(OCR_MODEL, contentParts, 'main');
     if (!firstPass) {
-      return ocrFallbackResponse('Erro ao processar documento com IA. Documento enviado para revisão manual.');
+      return await ocrFallbackResponse('Erro ao processar documento com IA. Documento enviado para revisão manual.');
     }
 
     logCtx.usage = firstPass.usage ?? null;
