@@ -688,8 +688,13 @@ serve(async (req) => {
 
         try {
           const res = await cadastrarVeiculoHinova(supabase, payloadV);
+          // Mensagem amigável: priorizamos `errors` (detalhe técnico do Hinova)
+          // sobre `mensagem` (que costuma ser apenas "Não aceitável" / "Bad Request").
+          const detalhe = res.errors.length > 0
+            ? res.errors.join('; ')
+            : (res.mensagem || `HTTP ${res.status}`);
           await logSync(_vid, _aid, 'cadastrar_veiculo', res.ok ? 'success' : 'error',
-            payloadV, res.raw, res.ok ? null : (res.mensagem || res.errors.join('; ') || `HTTP ${res.status}`));
+            payloadV, res.raw, res.ok ? null : detalhe);
           if (!res.ok || !res.codigo) {
             const allErr = [...res.errors, res.mensagem || ''].join(' ').toLowerCase();
             // Se Hinova diz que o associado não está cadastrado → invalidar e requeue
@@ -707,9 +712,7 @@ serve(async (req) => {
               return;
             }
             await setStatusSga(_vid, 'erro_sincronizacao');
-            await upsertQueue(_vid, _aid, 'veiculo',
-              `Falha cadastro veículo: ${res.mensagem || res.errors.join('; ') || `HTTP ${res.status}`}`,
-              codigoAssociadoHinova);
+            await upsertQueue(_vid, _aid, 'veiculo', `Falha cadastro veículo: ${detalhe}`, codigoAssociadoHinova);
             return;
           }
           codigoVeiculoHinova = res.codigo;
