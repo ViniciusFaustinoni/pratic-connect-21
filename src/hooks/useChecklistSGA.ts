@@ -135,7 +135,7 @@ export function useChecklistSGA(veiculoId: string, associadoId: string): Checkli
       addVeiculo('marca', 'Marca', veiculo?.marca);
       addVeiculo('modelo', 'Modelo', veiculo?.modelo);
       addVeiculo('ano_modelo', 'Ano Modelo', veiculo?.ano_modelo);
-      addVeiculo('codigo_fipe', 'Código FIPE', veiculo?.codigo_fipe);
+      addVeiculo('codigo_fipe', 'Código FIPE', veiculo?.codigo_fipe, true, 'Código FIPE ausente — Hinova rejeita o cadastro do veículo (HTTP 406 "Não aceitável")');
       addVeiculo('valor_fipe', 'Valor FIPE', veiculo?.valor_fipe);
 
       // Cor — verificar mapeamento
