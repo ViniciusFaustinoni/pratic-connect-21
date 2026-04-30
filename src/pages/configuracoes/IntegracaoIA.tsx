@@ -1,9 +1,12 @@
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Sparkles } from 'lucide-react';
+import { ArrowLeft, Sparkles, Settings2, ScanText, FlaskConical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AIModelConfigCard } from '@/components/integracoes/AIModelConfigCard';
 import { OcrEngineConfigCard } from '@/components/integracoes/OcrEngineConfigCard';
+import OcrLogsTab from '@/components/diretoria/OcrLogsTab';
+import OcrTestesTab from '@/components/diretoria/OcrTestesTab';
 
 export default function IntegracaoIA() {
   const navigate = useNavigate();
@@ -32,17 +35,44 @@ export default function IntegracaoIA() {
         </div>
       </div>
 
-      <AIModelConfigCard />
-      <OcrEngineConfigCard />
+      <Tabs defaultValue="config" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="config" className="gap-2">
+            <Settings2 className="h-4 w-4" />
+            Configuração
+          </TabsTrigger>
+          <TabsTrigger value="logs" className="gap-2">
+            <ScanText className="h-4 w-4" />
+            Logs de OCR
+          </TabsTrigger>
+          <TabsTrigger value="testes" className="gap-2">
+            <FlaskConical className="h-4 w-4" />
+            Testes de OCR
+          </TabsTrigger>
+        </TabsList>
 
-      <Alert>
-        <Sparkles className="h-4 w-4" />
-        <AlertDescription>
-          A escolha aqui se aplica <strong>globalmente</strong>: leitura de documentos (CNH/CRLV),
-          assistentes Maya e Vinicius, análise de risco de sinistros, geração de mensagens de WhatsApp,
-          formatação de texto e demais automações que usam IA.
-        </AlertDescription>
-      </Alert>
+        <TabsContent value="config" className="space-y-6">
+          <AIModelConfigCard />
+          <OcrEngineConfigCard />
+
+          <Alert>
+            <Sparkles className="h-4 w-4" />
+            <AlertDescription>
+              A escolha aqui se aplica <strong>globalmente</strong>: leitura de documentos (CNH/CRLV),
+              assistentes Maya e Vinicius, análise de risco de sinistros, geração de mensagens de WhatsApp,
+              formatação de texto e demais automações que usam IA.
+            </AlertDescription>
+          </Alert>
+        </TabsContent>
+
+        <TabsContent value="logs">
+          <OcrLogsTab />
+        </TabsContent>
+
+        <TabsContent value="testes">
+          <OcrTestesTab />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
