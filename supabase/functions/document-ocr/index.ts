@@ -1228,6 +1228,8 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
       if (Object.keys(nativeFields).length > 0) {
         console.log(`[OCR][${reqId}] Texto nativo extraiu ${Object.keys(nativeFields).length} campo(s) da CNH:`, Object.keys(nativeFields));
         result.dados = mergeNativeOverAI(result.dados, nativeFields, reqId);
+        logCtx.used_native_fallback = true;
+        if (nativeFields.cpf) logCtx.cpf_corrigido_via = 'native';
       }
     }
     // Para outros tipos (RG, Comprovante, NF, ATPV-e, CRLV) extraímos só o CPF
@@ -1242,6 +1244,8 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
             if (!aiVal || aiVal === 'ilegivel' || (typeof aiVal === 'string' && !validateCPF(aiVal.replace(/\D/g, '')))) {
               console.log(`[OCR][${reqId}] CPF nativo do PDF substitui ${field}: "${aiVal}" → "${nativeCpf}"`);
               dados[field] = nativeCpf;
+              logCtx.used_native_fallback = true;
+              logCtx.cpf_corrigido_via = 'native';
             }
           }
         }
