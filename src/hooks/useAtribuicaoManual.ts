@@ -61,7 +61,7 @@ export function useServicosParaAtribuir() {
           .from('instalacao_prestador_links')
           .select('instalacao_id, status')
           .in('instalacao_id', instalacaoIds)
-          .not('status', 'in', '(cancelado,expirado,recusado,rejeitado,revogado,concluida)');
+          .not('status', 'in', '(cancelada,expirado,concluida)');
 
         instalacoesComLinkAtivo = new Set(
           (linksAtivos || []).map((l: any) => l.instalacao_id)
@@ -581,7 +581,7 @@ export function useAtribuirServicoPrestador() {
           .from('instalacao_prestador_links')
           .select('id, status, prestador_id')
           .eq('instalacao_id', instalacaoId)
-          .not('status', 'in', '(cancelado,expirado,recusado,rejeitado,revogado,concluida)');
+          .not('status', 'in', '(cancelada,expirado,concluida)');
 
         if ((linksAtivos || []).length > 0) {
           throw new Error('Já existe um prestador atribuído a este serviço. Cancele/devolva o link atual antes de reatribuir.');
@@ -634,7 +634,7 @@ export function useAtribuirServicoPrestador() {
           .from('instalacao_prestador_links')
           .select('id, status, prestador_id')
           .eq('instalacao_id', instalacaoId)
-          .not('status', 'in', '(cancelado,expirado,recusado,rejeitado,revogado,concluida)');
+          .not('status', 'in', '(cancelada,expirado,concluida)');
 
         if ((linksAtivos || []).length > 0) {
           throw new Error('Já existe um prestador atribuído a este serviço. Cancele/devolva o link atual antes de reatribuir.');
