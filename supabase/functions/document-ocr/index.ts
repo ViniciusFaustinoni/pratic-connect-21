@@ -1577,7 +1577,10 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
 
       // Estruturar markdown via Pixtral usando o mesmo system prompt JSON
       const px = await callPixtralChat({
-        model: resolved.secondary || 'pixtral-large-latest',
+        // Mesma proteção: Pixtral só aceita modelos Mistral.
+        model: (resolved.engine === 'mistral' && /^(mistral|pixtral)/i.test(resolved.secondary ?? ''))
+          ? (resolved.secondary as string)
+          : 'pixtral-large-latest',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: `${userPrompt}\n\n--- TEXTO EXTRAÍDO PELO MISTRAL OCR (markdown) ---\n${md}\n--- FIM ---` },
