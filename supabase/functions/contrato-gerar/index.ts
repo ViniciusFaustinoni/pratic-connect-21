@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getConfiguracaoNumero } from '../_shared/config-helper.ts'
+import { resolverDiaVencimento } from '../_shared/vencimento-utils.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -684,7 +685,18 @@ serve(async (req) => {
         plano_id: cotacao.plano_escolhido_id || cotacao.plano_id,
         status: 'pendente_vistoria',
         data_adesao: new Date().toISOString().split('T')[0],
-        dia_vencimento: cotacao.dia_vencimento ? Math.min(Math.max(Number(cotacao.dia_vencimento), 1), 31) : 10,
+        dia_vencimento: (() => {
+          const r = resolverDiaVencimento(cotacao.dia_vencimento, cotacao.created_at);
+          if (r.usouFallback) {
+            console.warn('[contrato-gerar] dia_vencimento ausente/invalido na cotacao', {
+              cotacao_id: cotacao.id,
+              dia_vencimento_recebido: cotacao.dia_vencimento,
+              fallback_aplicado: r.dia,
+              regra: 'calcularOpcoesVencimento(created_at)[0]',
+            });
+          }
+          return r.dia;
+        })(),
           // Campos de endereço da cotação
           logradouro: cotacao.cliente_logradouro || null,
           numero: cotacao.cliente_numero || null,
@@ -999,7 +1011,17 @@ serve(async (req) => {
             cota_minima: cotacao.cota_minima ?? null,
             cobertura_fipe: cotacao.cobertura_fipe ?? null,
             
-            dia_vencimento: cotacao.dia_vencimento ? Math.min(Math.max(Number(cotacao.dia_vencimento), 1), 31) : 10,
+            dia_vencimento: (() => {
+              const r = resolverDiaVencimento(cotacao.dia_vencimento, cotacao.created_at);
+              if (r.usouFallback) {
+                console.warn('[contrato-gerar] dia_vencimento ausente/invalido na cotacao (contrato)', {
+                  cotacao_id: cotacao.id,
+                  dia_vencimento_recebido: cotacao.dia_vencimento,
+                  fallback_aplicado: r.dia,
+                });
+              }
+              return r.dia;
+            })(),
             data_inicio: hoje,
             validade_link: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
             created_by: vendedorIdFinal,

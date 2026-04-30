@@ -2882,6 +2882,128 @@ export type Database = {
         }
         Relationships: []
       }
+      auditoria_dia_vencimento_legado: {
+        Row: {
+          associado_id: string | null
+          contrato_id: string
+          cotacao_id: string | null
+          created_at: string
+          data_cotacao: string | null
+          dia_vencimento_atual: number | null
+          id: string
+          motivo: string
+          observacao_revisao: string | null
+          opcoes_validas_na_data: number[] | null
+          revisado: boolean
+          revisado_em: string | null
+          revisado_por: string | null
+          veiculo_placa: string | null
+        }
+        Insert: {
+          associado_id?: string | null
+          contrato_id: string
+          cotacao_id?: string | null
+          created_at?: string
+          data_cotacao?: string | null
+          dia_vencimento_atual?: number | null
+          id?: string
+          motivo: string
+          observacao_revisao?: string | null
+          opcoes_validas_na_data?: number[] | null
+          revisado?: boolean
+          revisado_em?: string | null
+          revisado_por?: string | null
+          veiculo_placa?: string | null
+        }
+        Update: {
+          associado_id?: string | null
+          contrato_id?: string
+          cotacao_id?: string | null
+          created_at?: string
+          data_cotacao?: string | null
+          dia_vencimento_atual?: number | null
+          id?: string
+          motivo?: string
+          observacao_revisao?: string | null
+          opcoes_validas_na_data?: number[] | null
+          revisado?: boolean
+          revisado_em?: string | null
+          revisado_por?: string | null
+          veiculo_placa?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auditoria_dia_vencimento_legado_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auditoria_dia_vencimento_legado_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "auditoria_dia_vencimento_legado_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "auditoria_dia_vencimento_legado_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "auditoria_dia_vencimento_legado_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auditoria_dia_vencimento_legado_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "auditoria_dia_vencimento_legado_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "auditoria_dia_vencimento_legado_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auditoria_dia_vencimento_legado_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
+          },
+          {
+            foreignKeyName: "auditoria_dia_vencimento_legado_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "cotacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       auditoria_indicios_concorrencia: {
         Row: {
           analisado_em: string | null
@@ -32655,6 +32777,10 @@ export type Database = {
         Returns: Database["public"]["Enums"]["tipo_servico"]
       }
       normalize_ocr_value: { Args: { v: string }; Returns: string }
+      opcoes_vencimento_por_dia: {
+        Args: { dia_hoje: number }
+        Returns: number[]
+      }
       processar_template: {
         Args: { p_template_id: string; p_variaveis: Json }
         Returns: string

@@ -282,6 +282,16 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     const hoje = new Date().getDate();
     return calcularOpcoesVencimento(hoje);
   }, []);
+
+  // Pré-seleciona a primeira opção válida quando o consultor ainda não escolheu.
+  // Mantém a escolha existente se já houver — apenas garante que nunca fique null.
+  useEffect(() => {
+    if (diaVencimento === null || !opcoesVencimento.includes(diaVencimento as any)) {
+      setDiaVencimento(opcoesVencimento[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opcoesVencimento]);
+
   
   // Loading states
   const [loadingMarcas, setLoadingMarcas] = useState(false);
@@ -1403,6 +1413,16 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     // Vendedor externo: validar cenário obrigatório
     if (!cenarioExterno) {
       toast.error('Selecione o cenário de adesão e instalação antes de continuar.');
+      return;
+    }
+
+    // Dia de vencimento é OBRIGATÓRIO — evita gravar NULL e cair em fallback dia 10 no backend
+    if (!diaVencimento || !opcoesVencimento.includes(diaVencimento as 5 | 10 | 15 | 20 | 25 | 30)) {
+      toast.error(`Selecione o dia de vencimento das mensalidades (${opcoesVencimento.join(' ou ')}).`);
+      // Levar o consultor até o bloco
+      try {
+        document.getElementById('bloco-dia-vencimento')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } catch { /* noop */ }
       return;
     }
 
@@ -2787,10 +2807,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             {podeAtribuirVendedor && <Separator />}
 
             {/* Data de Vencimento */}
-            <div className="space-y-3">
+            <div id="bloco-dia-vencimento" className="space-y-3">
               <h3 className="text-sm font-semibold flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-primary" />
-                Data de Vencimento
+                Data de Vencimento <span className="text-destructive">*</span>
               </h3>
               
               <p className="text-xs text-muted-foreground">
