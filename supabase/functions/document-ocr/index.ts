@@ -10,6 +10,7 @@ import { runMistralOcr, callPixtralChat } from "../_shared/mistral-ocr.ts";
 import { extractPdfTextUnpdf, scoreExtractedText } from "../_shared/unpdf-extract.ts";
 import { routeOcr, type OcrMethod } from "../_shared/ocr-router.ts";
 import { shrinkImageBase64 } from "../_shared/image-shrink.ts";
+import { extractMrzLine, validateMrzCheckDigit, getRegistroFromMrz } from "../_shared/mrz.ts";
 
 // Teto por imagem ao mandar para provedor multimodal.
 // Anthropic e Gemini medem a STRING BASE64 contra ~5MB por imagem.
@@ -400,8 +401,14 @@ const systemPrompt = `Analista de documentos brasileiros. Detecte o tipo e extra
 nome, cpf (XXX.XXX.XXX-XX - PRIORIDADE MÁXIMA), rg, numero_registro (11 dígitos), data_nascimento (YYYY-MM-DD), validade (YYYY-MM-DD), categoria, mrz_registro (string)
 
 - MRZ_REGISTRO (campo de validação cruzada — OBRIGATÓRIO em CNH-e digital):
-  No RODAPÉ da página há 3 linhas de leitura mecânica (MRZ) com letras "<" como separador. A PRIMEIRA dessas linhas começa com "I<BRA" e contém os dígitos do número de registro da CNH. Exemplo: "I<BRA070646502<024<<<<<<<<<<<<".
-  Extraia EXATAMENTE essa primeira linha (a sequência completa, com os "<" preservados) no campo "mrz_registro". Não invente: se não conseguir ler, retorne mrz_registro:"". Esse campo será usado para validar o "numero_registro".
+  No RODAPÉ da página há 3 linhas de leitura mecânica (MRZ) impressas em fonte OCR-B (monoespaçada), com 30 caracteres cada e o caractere "<" como preenchimento.
+  A PRIMEIRA dessas linhas começa com "I<BRA" seguido de 9 dígitos do número de registro, mais 1 dígito verificador, mais "<" até completar 30 caracteres.
+  Exemplo real: "I<BRA070646502<024<<<<<<<<<<<<" — aqui "070646502" são os 9 dígitos do registro e o próximo caractere ("<" ou um dígito) faz parte do payload ICAO.
+  Regras estritas para preencher "mrz_registro":
+    1. Transcreva LITERALMENTE essa primeira linha, exatamente como aparece, mantendo TODOS os "<" (não substitua por espaço, hífen ou nada).
+    2. Não invente dígitos: se a linha não estiver legível ou se você só conseguir ver parte dela, retorne mrz_registro:"" (vazio é melhor que inventado).
+    3. Em caso de divergência entre o que você lê no campo visual "5 Nº REGISTRO" e o que está na MRZ, a MRZ É A FONTE DE VERDADE — confie nos 9 dígitos da MRZ. A MRZ é leitura mecânica e não admite ambiguidade visual.
+    4. NUNCA copie um número de registro que você "leu visualmente" para o campo mrz_registro fingindo que veio da MRZ. Se a MRZ não está visível, deixe vazio.
 
 - CPF SEMPRE existe na CNH: campo "CPF"/"CPF/MF", próximo ao nome/foto. Procure sequências de 11 dígitos.
 - NÃO confunda com RENACH (tem letras), registro CNH ou RG.
@@ -1848,38 +1855,79 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           const aValidCpf = cpfA.length === 11 && validateCPF(cpfA);
           const bValidCpf = cpfB.length === 11 && validateCPF(cpfB);
 
-          // Tiebreaker #1 — MRZ da CNH-e: a 1ª linha do MRZ ("I<BRA<dígitos>")
-          // contém os 9 primeiros dígitos do nº de registro. Quem casar com o MRZ
-          // tem leitura visual fiel (não alucinou). Vale para CNH (não CRLV).
+          // Tiebreaker #1 — MRZ da CNH-e: a 1ª linha do MRZ ("I<BRA<9 dígitos><check>")
+          // contém os 9 dígitos do nº de registro + 1 dígito verificador ICAO 9303.
+          // Quem casar com uma MRZ matematicamente VÁLIDA tem leitura visual fiel
+          // (impossível alucinar uma MRZ que passe no checksum por acaso).
           //
-          // Fontes do MRZ, em ordem de preferência:
-          //   1) texto nativo do PDF (extractedPdfText) — verdade absoluta em CNH-e SENATRAN.
-          //   2) campo mrz_registro retornado pela IA (passada A ou B).
-          const mrzFromString = (s: unknown): string => {
-            if (!s) return '';
-            const str = String(s).toUpperCase().replace(/\s+/g, '');
-            const m = str.match(/I<BRA(\d{9,11})/);
-            return m ? m[1] : '';
-          };
+          // Fontes do MRZ, em ordem de confiança:
+          //   1) texto nativo do PDF (extractedPdfText) — verdade absoluta quando existe
+          //      (raro em CNH-e SENATRAN: o documento real é imagem embutida).
+          //   2) campo mrz_registro retornado pela IA (passada A ou B) — só vale se
+          //      passar no checksum ICAO 9303.
           let tiebreakerMrz: 'A' | 'B' | null = null;
+          let mrzLogCtx: any = null;
           if (tipoParaDupla === 'cnh') {
-            const mrzNative = mrzFromString(extractedPdfText);
-            const mrzA = mrzFromString(firstPassResolved.result?.dados?.mrz_registro);
-            const mrzB = mrzFromString(passB.result?.dados?.mrz_registro);
-            const regA = String(firstPassResolved.result?.dados?.numero_registro ?? '').replace(/\D/g, '');
-            const regB = String(passB.result?.dados?.numero_registro ?? '').replace(/\D/g, '');
-            // Prioridade: nativo (não pode mentir) > IA (pode alucinar)
-            const mrzAuthoritative = mrzNative || ((mrzA && mrzB && mrzA === mrzB) ? mrzA : (mrzA || mrzB));
+            const mrzNativeLine = extractMrzLine(extractedPdfText);
+            const mrzALine = extractMrzLine(firstPassResolved.result?.dados?.mrz_registro);
+            const mrzBLine = extractMrzLine(passB.result?.dados?.mrz_registro);
+            const mrzNativeValid = !!mrzNativeLine && validateMrzCheckDigit(mrzNativeLine);
+            const mrzAValid = !!mrzALine && validateMrzCheckDigit(mrzALine);
+            const mrzBValid = !!mrzBLine && validateMrzCheckDigit(mrzBLine);
+
+            // Escolhe a MRZ "autoritária": nativa válida > A==B válidos > qualquer válido
+            let mrzAuthoritative = '';
+            let mrzSource: 'native' | 'A' | 'B' | null = null;
+            if (mrzNativeValid) {
+              mrzAuthoritative = mrzNativeLine;
+              mrzSource = 'native';
+            } else if (mrzAValid && mrzBValid && mrzALine === mrzBLine) {
+              mrzAuthoritative = mrzALine;
+              mrzSource = 'A'; // empate confirmado, marca como A por convenção
+            } else if (mrzAValid && !mrzBValid) {
+              mrzAuthoritative = mrzALine;
+              mrzSource = 'A';
+            } else if (!mrzAValid && mrzBValid) {
+              mrzAuthoritative = mrzBLine;
+              mrzSource = 'B';
+            }
+
             if (mrzAuthoritative) {
-              // O MRZ tem 9 dígitos do registro (sem o último par de check).
-              // Casa se os primeiros 9 dígitos do numero_registro batem.
-              const mrzKey = mrzAuthoritative.slice(0, 9);
-              const aMatchesMrz = regA.length >= 9 && regA.slice(0, 9) === mrzKey;
-              const bMatchesMrz = regB.length >= 9 && regB.slice(0, 9) === mrzKey;
+              const mrzKey = getRegistroFromMrz(mrzAuthoritative);
+              const regA = String(firstPassResolved.result?.dados?.numero_registro ?? '').replace(/\D/g, '');
+              const regB = String(passB.result?.dados?.numero_registro ?? '').replace(/\D/g, '');
+              const aMatchesMrz = mrzKey.length === 9 && regA.length >= 9 && regA.slice(0, 9) === mrzKey;
+              const bMatchesMrz = mrzKey.length === 9 && regB.length >= 9 && regB.slice(0, 9) === mrzKey;
               if (aMatchesMrz && !bMatchesMrz) tiebreakerMrz = 'A';
               else if (!aMatchesMrz && bMatchesMrz) tiebreakerMrz = 'B';
-              console.log(`[OCR][dupla-leitura][mrz] ${JSON.stringify({ reqId, mrzNative, mrzA, mrzB, mrzAuthoritative, regA, regB, tiebreakerMrz })}`);
+              mrzLogCtx = {
+                mrzNativeFound: !!mrzNativeLine,
+                mrzNativeValid,
+                mrzAFound: !!mrzALine,
+                mrzAValid,
+                mrzBFound: !!mrzBLine,
+                mrzBValid,
+                mrzSource,
+                mrzAuthoritative,
+                mrzKey,
+                regA,
+                regB,
+                tiebreakerMrz,
+              };
+            } else {
+              mrzLogCtx = {
+                mrzNativeFound: !!mrzNativeLine,
+                mrzNativeValid,
+                mrzAFound: !!mrzALine,
+                mrzAValid,
+                mrzBFound: !!mrzBLine,
+                mrzBValid,
+                mrzSource: null,
+                tiebreakerMrz: null,
+                reason: 'no-valid-mrz',
+              };
             }
+            console.log(`[OCR][dupla-leitura][mrz] ${JSON.stringify({ reqId, ...mrzLogCtx })}`);
           }
 
 

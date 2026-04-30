@@ -1,78 +1,64 @@
-## Causa raiz
+## Diagnóstico (correção do diagnóstico anterior)
 
-Olhando a CNH-e do teste lado a lado com o que veio extraído:
+Não existe "vazamento de escopo" do `extractedPdfText`. Confirmei lendo o arquivo: a variável é declarada na linha 1200 dentro do handler principal e o bloco de tiebreaker (linhas 1851-1883) está no mesmo escopo de função — a closure enxerga normalmente.
 
-- Campo **"9 CAT HAB"** (a categoria de habilitação real, embaixo, ao lado do nº registro `07064650202`) = **`B`**
-- Campo **"ACC"** (caixinha no topo, ao lado da validade `18/01/2033`) = **`D`** — isso **NÃO é categoria**, é a observação de Atividade Remunerada / código de exercício de atividade. Aparece como uma letra solta grande, visualmente quase idêntica ao campo CAT HAB.
+O tiebreaker MRZ não dispara por outro motivo, mais profundo:
 
-A IA (Claude Sonnet) está confundindo as duas caixas porque:
-1. As duas mostram **uma única letra grande** dentro de um retângulo.
-2. As duas ficam **muito próximas** verticalmente no layout do SENATRAN.
-3. O rótulo "ACC" é pequeno e fica em cima da caixa; o rótulo "9 CAT HAB" idem. Sem leitura espacial precisa, o modelo escolhe o errado.
+- Em CNH-e SENATRAN, o `unpdf` extrai apenas o texto institucional ("Assinador Serpro… Medida Provisória 2200…"), não o conteúdo da carteira. O `scoreExtractedText` (em `_shared/unpdf-extract.ts`) corretamente devolve score ~0.05 nesses casos e o roteador escolhe `raster-vlm`.
+- Quando isso acontece, `extractedPdfText` contém apenas as instruções do Serpro — **o MRZ `I<BRA…` simplesmente não está lá**, porque o documento real é uma imagem embutida no PDF.
+- Resultado: `mrzFromString(extractedPdfText)` devolve `''`, o tiebreaker cai pra `mrzA`/`mrzB` (que vêm da IA e podem alucinar), e em vários casos nem sequer existe `mrz_registro` no JSON porque o prompt pede o campo mas não enfatiza onde lê-lo nem como validar.
 
-O prompt atual (`document-ocr/index.ts` linha 405) **já diz** "leia EXCLUSIVAMENTE do campo 9 CAT HAB", mas isso não basta — falta dizer explicitamente o que é o campo ACC e que ele **não deve** ser confundido com categoria. Também falta uma camada de validação cruzada usando a **grade de categorias habilitadas** (verso/rodapé), que tem uma data de validade ao lado da categoria principal — no nosso caso, `B → 18/01/2033` bate exatamente com a validade da CNH, confirmando que B é a correta.
+Ou seja: a "verdade absoluta" prevista (texto nativo) não existe nesse cenário. O sinal mecânico real está **na imagem**, e precisa ser arrancado dela com instrução explícita + validação matemática.
 
-O regex de fallback nativo (linha 834) está correto, mas só roda quando o PDF tem texto extraível. CNH-e SENATRAN é PDF-imagem (rasterizada), então só o caminho IA é executado e o erro passa.
+## Plano
 
-## Solução
+Três ajustes coordenados em `supabase/functions/document-ocr/index.ts`:
 
-Duas camadas defensivas no `supabase/functions/document-ocr/index.ts`:
+### 1. Prompt da CNH: instruir o VLM a transcrever o MRZ literalmente
 
-### 1. Reforçar o prompt da CNH (linha 405)
+No bloco de prompt da CNH (próximo da linha 405, mesma região onde já tratamos a armadilha do "ACC"), acrescentar uma seção dedicada ao MRZ:
 
-Trocar a instrução atual por uma que descreve explicitamente o campo ACC como armadilha:
+- Explicar que no rodapé da CNH-e existe a Zona de Leitura Mecânica (MRZ) com 3 linhas em fonte OCR-B (caracteres `<` como preenchimento).
+- Pedir que `mrz_registro` receba **a primeira linha completa**, exatamente como aparece, começando com `I<BRA` e mantendo todos os `<`.
+- Avisar que essa linha é a fonte de verdade do número de registro: se o que o modelo "lê" no campo `9 CAT HAB / Nº REGISTRO` divergir da MRZ, vale a MRZ.
+- Reforçar que NÃO deve preencher `mrz_registro` se a MRZ não estiver visível/legível (melhor vazio que inventado).
 
-```
-- CATEGORIA: leia EXCLUSIVAMENTE do campo rotulado "9 CAT HAB" 
-  (fica EMBAIXO, ao lado do "Nº REGISTRO" de 11 dígitos).
-  
-  ARMADILHA — NÃO LEIA DESTES OUTROS CAMPOS:
-  • Campo "ACC" (caixa pequena no TOPO, ao lado da VALIDADE): contém uma 
-    letra solta (frequentemente D/E) que indica Atividade Remunerada / 
-    código de exercício — NÃO é categoria de habilitação.
-  • Grade/tabela de categorias no verso (ACC, A, A1, B, B1, C, C1, D, D1, 
-    BE, CE, DE, C1E, D1E com datas ao lado): é apenas o detalhamento das 
-    categorias habilitadas, não a categoria principal.
-  
-  VALIDAÇÃO CRUZADA: a categoria do campo "9 CAT HAB" SEMPRE aparece 
-  também na grade do verso com uma data de validade ao lado — essa data 
-  bate (ou é próxima) da validade principal da CNH. Use isso para confirmar.
-  
-  Categorias válidas: ACC, A, A1, B, B1, C, C1, D, D1, E, AB, AC, AD, AE, 
-  BE, CE, DE, C1E, D1E.
-```
+### 2. Tiebreaker MRZ: parar de depender só do texto nativo
 
-### 2. Validação programática pós-IA
+Substituir, no bloco de dupla-leitura (linhas 1851-1883), a lógica atual por uma versão que:
 
-Logo após receber `dados.categoria` da IA, aplicar uma checagem em `extractCnhFields` e no merge final:
+- Coleta candidatos de MRZ de **três fontes**, em ordem de confiança:
+  1. Texto nativo do PDF (raro, mas quando existe é absoluto).
+  2. `mrz_registro` da passada A.
+  3. `mrz_registro` da passada B.
+- Para cada candidato, **valida o checksum ICAO 9303** sobre os 9 dígitos do número de registro + dígito verificador da MRZ (algoritmo padrão peso 7-3-1). Helper novo `validateMrzCheckDigit(line: string): boolean` em arquivo compartilhado (`_shared/mrz.ts`).
+- Só MRZs válidas entram na disputa. Empate (A e B válidos e iguais) confirma; A e B válidos e diferentes → fica sem tiebreaker MRZ e cai pro tiebreaker de CPF.
+- Mantém prioridade MRZ > CPF checksum, como hoje.
 
-- Se `categoria` veio como `D` ou `E` mas a IA também extraiu uma data na grade que mostra `B → <validade>` (ou outra categoria com data igual à validade da CNH), **sobrescrever** com a categoria que tem a data batendo.
-- Adicionar `categoria` à lista de campos suspeitos quando o valor for `D`/`E` mas o `numero_registro` não combina com o padrão de motorista profissional (heurística leve, só para sinalizar baixa confiança).
+### 3. Logging para confirmar que o tiebreaker passou a disparar
 
-Isso é uma rede de segurança — o reforço do prompt deve resolver 95% dos casos sozinho.
+Acrescentar no log `[OCR][dupla-leitura][mrz]` os campos:
+- `mrzNativeFound: boolean`
+- `mrzAValid: boolean`, `mrzBValid: boolean`
+- `mrzSource: 'native' | 'A' | 'B' | null`
 
-### 3. Atualizar o regex nativo (linha 834) para cobrir todas as categorias
+Assim, em produção dá pra confirmar em poucos logs se em CNH-e o MRZ passou a vir do VLM e a vencer o desempate.
 
-O regex atual `/CAT[\.\s]*HAB[^\w]*([A-E]{1,2}|ACC)/i` deixa de fora `A1`, `B1`, `C1`, `D1`, `C1E`, `D1E`. Trocar por:
+## Arquivos afetados
 
-```ts
-const catMatch = text.match(/CAT[\.\s]*HAB[^\w]*(ACC|A1|A|B1|B|C1E|C1|CE|C|D1E|D1|DE|D|E|AB|AC|AD|AE|BE)/i);
-```
+- `supabase/functions/_shared/mrz.ts` (novo): helpers `extractMrzLine`, `validateMrzCheckDigit`, `getRegistroFromMrz`.
+- `supabase/functions/document-ocr/index.ts`:
+  - Prompt CNH (~linha 405): seção MRZ.
+  - Bloco tiebreaker (~linhas 1851-1883): nova lógica baseada em checksum.
+  - Imports do novo helper no topo.
 
-(ordem por especificidade para casar `C1E` antes de `C1` antes de `C`).
+## Detalhes técnicos
 
-## Teste de validação
+- O checksum ICAO 9303 sobre dígitos usa pesos cíclicos `[7,3,1]`, soma mod 10. `<` e letras seguem tabela ICAO; para a faixa de registro CNH só dígitos são esperados, simplifica.
+- Não mexemos em `routeOcr` nem no `scoreExtractedText`: a decisão de rasterizar CNH-e continua correta — o que muda é a forma como extraímos o sinal mecânico depois.
+- Sem mudanças de schema, sem migration, sem novos secrets.
 
-Após as mudanças, reprocessar a mesma CNH-e (Marcus Vinicius — `CNH-e.pdf_1-8.pdf`) e confirmar:
+## O que não vamos fazer
 
-- `categoria === "B"` (não mais `D`)
-- `confianca >= 0.9`
-- Nenhum outro campo regrediu (nome, CPF, validade, nº registro continuam corretos)
-
-Se passar, o fix está completo. Se a IA ainda errar mesmo com o prompt reforçado, ativamos a camada (2) de validação cruzada via data da grade.
-
-## Arquivo alterado
-
-- `supabase/functions/document-ocr/index.ts` (prompt CNH + regex nativo + validação opcional pós-IA)
-
-Nenhuma migração de banco, nenhuma mudança de UI.
+- Não vamos forçar o `unpdf` a "ler mais" da CNH-e: o conteúdo real é imagem embutida; insistir nisso é trabalho desperdiçado.
+- Não vamos remover o tiebreaker de CPF checksum — ele continua útil quando o MRZ não está legível em nenhuma das passadas.
