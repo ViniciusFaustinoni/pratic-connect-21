@@ -139,7 +139,81 @@ serve(async (req) => {
 
     // Extrair dados aninhados (estrutura: { data: { veiculo: {...}, fipes: [...] } })
     const veiculo = apiData.data?.veiculo || apiData.veiculo || apiData;
-    const fipesArray = apiData.data?.fipes || apiData.fipes || [];
+    const fipesArray: any[] = apiData.data?.fipes || apiData.fipes || [];
+
+    // ===== Heurística para escolher a melhor variante FIPE =====
+    // A API retorna múltiplas variantes (manual, automático/Easytronic, anos próximos, motorizações).
+    // Pegar fipes[0] cegamente leva a erros (ex.: Agile LTZ retornando Easytronic).
+    function descricaoFipe(f: any): string {
+      return String(
+        f?.descricao || f?.modelo || f?.texto_modelo || f?.fipe_name || f?.name || ''
+      ).toUpperCase();
+    }
+
+    function pontuarFipe(f: any, v: any): { score: number; motivos: string[] } {
+      const desc = descricaoFipe(f);
+      const motivos: string[] = [];
+      let score = 0;
+
+      const combust = String(v?.combustivel || '').toUpperCase();
+      const cambio = String(v?.caixa_cambio || v?.cambio || '').toUpperCase();
+      const anoMod = String(v?.ano_modelo || v?.ano || '').match(/\d{4}/)?.[0];
+      const cilindrada = String(v?.cilindradas || '').match(/\d{3,4}/)?.[0];
+
+      // Combustível
+      if (combust) {
+        const isFlex = combust.includes('ALCOOL') && combust.includes('GASOLINA');
+        if (isFlex && /FLEX/.test(desc)) { score += 10; motivos.push('+10 flex'); }
+        else if (combust.includes('DIESEL') && /DIESEL/.test(desc)) { score += 10; motivos.push('+10 diesel'); }
+        else if (combust.includes('GASOLINA') && /GASOLINA|GASOL\./.test(desc) && !/FLEX/.test(desc)) { score += 8; motivos.push('+8 gasolina'); }
+        else if (combust.includes('ALCOOL') && /ALCOOL|ALCOOL\./.test(desc) && !/FLEX/.test(desc)) { score += 6; motivos.push('+6 alcool'); }
+        else if (combust.includes('ELETRIC') && /ELETRIC|EV\b/.test(desc)) { score += 10; motivos.push('+10 eletrico'); }
+        else if (combust.includes('HIBRID') && /HIB|HYBRID/.test(desc)) { score += 10; motivos.push('+10 hibrido'); }
+      }
+
+      // Câmbio - chave do bug do Agile
+      const tokensAuto = /(AUT|EASYTRONIC|CVT|DCT|TIPTRONIC|S-?TRONIC|MULTIDRIVE|DUALOGIC|I-?MOTION|AUTOMATIZAD)/;
+      const isAuto = tokensAuto.test(desc);
+      const cambioManual = !cambio || /MANUAL|MEC/.test(cambio) || cambio === '—' || cambio === '';
+      const cambioAuto = /AUT|AUTOMAT|CVT/.test(cambio);
+
+      if (cambioManual && !isAuto) { score += 8; motivos.push('+8 manual_match'); }
+      else if (cambioAuto && isAuto) { score += 8; motivos.push('+8 auto_match'); }
+      else if (cambioManual && isAuto) { score -= 6; motivos.push('-6 manual_vs_auto'); }
+      else if (cambioAuto && !isAuto) { score -= 4; motivos.push('-4 auto_vs_manual'); }
+
+      // Ano modelo
+      const fipeAno = String(f?.ano_modelo || f?.ano || '').match(/\d{4}/)?.[0];
+      if (anoMod && fipeAno) {
+        const diff = Math.abs(parseInt(anoMod) - parseInt(fipeAno));
+        if (diff === 0) { score += 5; motivos.push('+5 ano_exato'); }
+        else if (diff === 1) { score += 2; motivos.push('+2 ano_proximo'); }
+      }
+
+      // Cilindrada
+      if (cilindrada) {
+        const litros = (parseInt(cilindrada) / 1000).toFixed(1);
+        const re = new RegExp(`\\b${litros.replace('.', '\\.')}\\b`);
+        if (re.test(desc)) { score += 2; motivos.push(`+2 cc_${litros}`); }
+      }
+
+      return { score, motivos };
+    }
+
+    function escolherMelhorFipe(fipes: any[], v: any): { idx: number; ranking: any[] } {
+      if (!fipes.length) return { idx: -1, ranking: [] };
+      const ranking = fipes.map((f, idx) => {
+        const { score, motivos } = pontuarFipe(f, v);
+        return { idx, score, motivos, descricao: descricaoFipe(f), codigo: f?.codigo, valor: f?.valor };
+      });
+      // Estável: maior score; desempate por ordem original
+      ranking.sort((a, b) => b.score - a.score || a.idx - b.idx);
+      return { idx: ranking[0].idx, ranking };
+    }
+
+    const { idx: melhorIdx, ranking: rankingFipes } = escolherMelhorFipe(fipesArray, veiculo);
+    console.log(`[plate-lookup] Ranking FIPE (${fipesArray.length} variantes):`, JSON.stringify(rankingFipes));
+    console.log(`[plate-lookup] Variante escolhida: idx=${melhorIdx}`);
 
     if (!veiculo || !veiculo.marca_modelo) {
       console.error("[plate-lookup] Veículo não encontrado ou sem dados");
