@@ -546,6 +546,38 @@ serve(async (req) => {
 
       // 5.b — cadastrar se não existe
       if (!codigoAssociadoHinova) {
+        // Pre-flight: Hinova exige CEP de 8 dígitos. Se vier com 7 (zero à esquerda perdido),
+        // tenta auto-padding. Se ainda assim inválido, aborta com mensagem clara.
+        const cepRaw = String(associado.cep || '').replace(/\D/g, '');
+        let cepCorrigido = cepRaw;
+        if (cepRaw.length === 7) cepCorrigido = '0' + cepRaw;
+        if (cepCorrigido.length !== 8) {
+          const motivo = `CEP inválido no cadastro do associado (valor atual: "${associado.cep || 'vazio'}"). Hinova exige 8 dígitos. Edite o cadastro e corrija o CEP antes de reprocessar.`;
+          await logSync(_vid, _aid, 'validar_associado', 'error', { cep: associado.cep }, null, motivo);
+          await setStatusSga(_vid, 'erro_sincronizacao');
+          await upsertQueue(_vid, _aid, 'associado', motivo, codigoAssociadoHinova);
+          return;
+        }
+        // Aplica zero-padding em memória (não persiste — apenas para envio)
+        if (cepCorrigido !== cepRaw) {
+          (associado as any).cep = cepCorrigido;
+        }
+        // Validar campos mínimos de endereço
+        const camposEnd: Array<[string, any]> = [
+          ['logradouro', associado.logradouro],
+          ['cidade', associado.cidade],
+          ['bairro', associado.bairro],
+          ['uf', associado.uf],
+        ];
+        const faltando = camposEnd.filter(([_, v]) => !String(v || '').trim()).map(([k]) => k);
+        if (faltando.length) {
+          const motivo = `Endereço incompleto: faltando ${faltando.join(', ')}. Edite o cadastro do associado antes de reprocessar.`;
+          await logSync(_vid, _aid, 'validar_associado', 'error', { faltando }, null, motivo);
+          await setStatusSga(_vid, 'erro_sincronizacao');
+          await upsertQueue(_vid, _aid, 'associado', motivo, codigoAssociadoHinova);
+          return;
+        }
+
         const ctxA: AssociadoCtx = {
           codigo_conta: codigoConta,
           codigo_regional: Number.isFinite(codigoRegional) ? codigoRegional : undefined,
