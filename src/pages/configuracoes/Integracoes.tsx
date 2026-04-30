@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Plug, MessageSquare, CreditCard, MapPin, FileSignature, Zap, Mail,
   Search, Building2, CheckCircle, XCircle, Key, Inbox, ArrowRight,
-  Loader2, Settings, ExternalLink, HeartPulse, Code2,
+  Loader2, Settings, ExternalLink, HeartPulse, Code2, Sparkles,
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Card, CardContent } from '@/components/ui/card';
