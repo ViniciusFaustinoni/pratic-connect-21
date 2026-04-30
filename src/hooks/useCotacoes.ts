@@ -112,23 +112,47 @@ export function useCotacoes(options?: UseCotacoesOptions) {
         query = query.eq('vendedor_id', effectiveVendedorId);
       }
 
-      // Busca server-side (sem isso, busca em campos como `numero` ficava limitada
-      // ao lote inicial de 100 cotações e perdia registros antigos).
+      // Busca server-side abrangente. Sem isso, a busca em campos como `numero`,
+      // `nome_solicitante` e — principalmente — `leads.nome` ficava limitada ao
+      // lote inicial e perdia registros (causa raiz do "Nenhuma cotação encontrada"
+      // quando o termo digitado existe apenas no nome/telefone/e-mail do lead).
       if (search) {
         const safe = search.replace(/[,()]/g, '');
-        // Busca direta nos campos da cotação
-        query = query.or(
-          [
-            `numero.ilike.%${safe}%`,
-            `veiculo_placa.ilike.%${safe}%`,
-            `veiculo_marca.ilike.%${safe}%`,
-            `veiculo_modelo.ilike.%${safe}%`,
-            `nome_solicitante.ilike.%${safe}%`,
-            `telefone1_solicitante.ilike.%${safe}%`,
-            `email_solicitante.ilike.%${safe}%`,
-          ].join(',')
-        );
+        const like = `%${safe}%`;
+
+        // 1) Resolver leads que casam com o termo (nome / telefone / email)
+        //    e expandir o filtro para `cotacoes.lead_id IN (...)`.
+        const { data: leadsMatch } = await supabase
+          .from('leads')
+          .select('id')
+          .or(
+            [
+              `nome.ilike.${like}`,
+              `telefone.ilike.${like}`,
+              `email.ilike.${like}`,
+            ].join(',')
+          )
+          .limit(500);
+        const leadIds = (leadsMatch || []).map((l: any) => l.id).filter(Boolean);
+
+        const orParts = [
+          `numero.ilike.${like}`,
+          `veiculo_placa.ilike.${like}`,
+          `veiculo_marca.ilike.${like}`,
+          `veiculo_modelo.ilike.${like}`,
+          `nome_solicitante.ilike.${like}`,
+          `telefone1_solicitante.ilike.${like}`,
+          `telefone2_solicitante.ilike.${like}`,
+          `email_solicitante.ilike.${like}`,
+        ];
+        if (leadIds.length > 0) {
+          // PostgREST espera lista entre parênteses para `in.`
+          orParts.push(`lead_id.in.(${leadIds.join(',')})`);
+        }
+
+        query = query.or(orParts.join(','));
       }
+
 
       const { data, error } = await query;
       
