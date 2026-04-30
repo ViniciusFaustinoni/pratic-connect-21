@@ -23,7 +23,7 @@ export function OcrEngineConfigCard() {
   const { isDiretor, isDesenvolvedor } = usePermissions();
   const canEdit = isDiretor || isDesenvolvedor;
 
-  const [engine, setEngine] = useState<OcrEngine>('global');
+  const [engine, setEngine] = useState<OcrEngine>('auto');
   const [primaryModel, setPrimaryModel] = useState('mistral-ocr-latest');
   const [secondaryModel, setSecondaryModel] = useState('claude-sonnet-4-5');
   const [apiKey, setApiKey] = useState('');
@@ -37,12 +37,12 @@ export function OcrEngineConfigCard() {
     }
   }, [data]);
 
-  const showKeyInput = engine === 'mistral';
+  const showKeyInput = engine === 'mistral' || engine === 'auto';
   const mistralConfigured = !!keysStatus.data?.mistral;
   const dirty = data
     ? data.engine !== engine || data.primary_model !== primaryModel || (data.secondary_model ?? '') !== secondaryModel
     : true;
-  const models = engine !== 'global' ? OCR_ENGINE_MODELS[engine] : null;
+  const models = engine !== 'global' && engine !== 'auto' ? OCR_ENGINE_MODELS[engine] : null;
 
   if (isLoading) {
     return <Card><CardContent className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></CardContent></Card>;
@@ -71,6 +71,7 @@ export function OcrEngineConfigCard() {
             <Select value={engine} onValueChange={(v) => setEngine(v as OcrEngine)} disabled={!canEdit || update.isPending}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="auto">{OCR_ENGINE_LABELS.auto}</SelectItem>
                 <SelectItem value="global">{OCR_ENGINE_LABELS.global}</SelectItem>
                 <SelectItem value="mistral">{OCR_ENGINE_LABELS.mistral}</SelectItem>
                 <SelectItem value="anthropic">{OCR_ENGINE_LABELS.anthropic}</SelectItem>
@@ -142,6 +143,22 @@ export function OcrEngineConfigCard() {
               Obtenha em <code className="text-xs px-1 py-0.5 rounded bg-muted">console.mistral.ai</code>. Armazenada no backend (<code>MISTRAL_API_KEY</code>).
             </p>
           </div>
+        )}
+
+        {engine === 'auto' && (
+          <Alert>
+            <ScanText className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Modo automático ativo.</strong> Para cada documento o sistema escolhe a melhor estratégia:
+              <ul className="list-disc pl-5 mt-2 space-y-1 text-xs">
+                <li>📄 PDF com texto nativo rico (NF, comprovantes) → extração de texto + LLM (mais barato e preciso)</li>
+                <li>📋 PDF "vazio" tipo CNH-e/SENATRAN → Mistral OCR (se chave configurada) ou rasterização 200dpi + Claude/Gemini</li>
+                <li>🖼️ Imagens (JPG/PNG) → modelo multimodal direto</li>
+                <li>🔁 Cascata de fallback automática se o método primário falhar ou retornar baixa confiança</li>
+                <li>👁️ CNH e CRLV sempre passam por dupla leitura com motor diferente</li>
+              </ul>
+            </AlertDescription>
+          </Alert>
         )}
 
         {engine === 'global' && (
