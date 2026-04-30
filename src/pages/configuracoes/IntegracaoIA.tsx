@@ -47,7 +47,7 @@ export default function IntegracaoIA() {
         </div>
       </div>
 
-      <Tabs defaultValue="config" className="space-y-4">
+      <Tabs value={initialTab} onValueChange={handleTabChange} className="space-y-4">
         <TabsList>
           <TabsTrigger value="config" className="gap-2">
             <Settings2 className="h-4 w-4" />
