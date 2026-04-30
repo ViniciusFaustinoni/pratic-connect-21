@@ -72,6 +72,7 @@ import { SolicitarDocumentosDialog } from '@/components/cadastro/SolicitarDocume
 import { useSolicitarDocumentos } from '@/hooks/usePropostasPendentes';
 import { useDocumentosSolicitadosPendentes } from '@/hooks/useDocumentosSolicitados';
 import { useQueryClient } from '@tanstack/react-query';
+import { MediaViewerModal, type MediaItem } from '@/components/cadastro/MediaViewerModal';
 
 // ============================================
 // UTILITÁRIOS
@@ -179,7 +180,13 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
   const [cancelarDialogOpen, setCancelarDialogOpen] = useState(false);
   const [excluirDialogOpen, setExcluirDialogOpen] = useState(false);
   const [tipoExclusao, setTipoExclusao] = useState<TipoExclusao | null>(null);
-  const [fotoModal, setFotoModal] = useState<{ open: boolean; url: string; tipo: string; mediaType?: 'image' | 'video' | 'pdf' }>({ open: false, url: '', tipo: '' });
+  const [mediaViewer, setMediaViewer] = useState<{ open: boolean; items: MediaItem[]; index: number }>({ open: false, items: [], index: 0 });
+  const openMedia = (items: MediaItem[], index = 0) => setMediaViewer({ open: true, items, index });
+  const detectMediaType = (url: string): 'image' | 'video' | 'pdf' => {
+    if (/\.(mp4|webm|mov|avi)($|\?)/i.test(url)) return 'video';
+    if (/\.pdf($|\?)/i.test(url)) return 'pdf';
+    return 'image';
+  };
   const [veiculoDetalhesId, setVeiculoDetalhesId] = useState<string | null>(null);
   const [veiculoEditar, setVeiculoEditar] = useState<any>(null);
   const [mapaModalOpen, setMapaModalOpen] = useState(false);
@@ -878,28 +885,22 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            {'arquivo_url' in d && d.arquivo_url ? (
+                            {((d as any).arquivo_url) ? (
                               <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => {
-                                const url = d.arquivo_url as string;
-                                const isVideo = /\.(mp4|webm|mov|avi)($|\?)/i.test(url);
-                                const isPdf = /\.pdf($|\?)/i.test(url);
-                                setFotoModal({ open: true, url, tipo: TIPO_DOCUMENTO_LABELS[d.tipo] || d.tipo, mediaType: isVideo ? 'video' : isPdf ? 'pdf' : 'image' });
-                              }}>
-                                <Eye className="h-3 w-3" />
-                              </Button>
-                            ) : d.fonte === 'documentos' ? (
-                              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => {
-                                const url = (d as any).arquivo_url;
-                                if (url) {
-                                  const isVideo = /\.(mp4|webm|mov|avi)($|\?)/i.test(url);
-                                  const isPdf = /\.pdf($|\?)/i.test(url);
-                                  setFotoModal({ open: true, url, tipo: TIPO_DOCUMENTO_LABELS[d.tipo] || d.tipo, mediaType: isVideo ? 'video' : isPdf ? 'pdf' : 'image' });
-                                }
+                                const docsComArquivo = todosDocumentos.filter(x => (x as any).arquivo_url) as any[];
+                                const items: MediaItem[] = docsComArquivo.map(x => ({
+                                  url: x.arquivo_url,
+                                  tipo: TIPO_DOCUMENTO_LABELS[x.tipo] || x.tipo,
+                                  mediaType: detectMediaType(x.arquivo_url),
+                                }));
+                                const idx = docsComArquivo.findIndex(x => x.id === (d as any).id);
+                                openMedia(items, Math.max(0, idx));
                               }}>
                                 <Eye className="h-3 w-3" />
                               </Button>
                             ) : null}
                           </TableCell>
+
                         </TableRow>
                       ))}
                     </TableBody>
@@ -935,7 +936,16 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                             const isVideo = /\.(mp4|webm|mov|avi)($|\?)/i.test(foto.arquivo_url || '');
                             return (
                               <div key={foto.id} className="relative group cursor-pointer rounded-lg overflow-hidden border bg-muted/50 aspect-square"
-                                onClick={() => setFotoModal({ open: true, url: foto.arquivo_url, tipo: formatarTipoFoto(foto.tipo), mediaType: isVideo ? 'video' : 'image' })}>
+                                onClick={() => {
+                                  const todas = vistoriaUnificada?.fotosInstalador || [];
+                                  const items: MediaItem[] = todas.map((f: any) => ({
+                                    url: f.arquivo_url,
+                                    tipo: formatarTipoFoto(f.tipo),
+                                    mediaType: detectMediaType(f.arquivo_url || ''),
+                                  }));
+                                  const idx = todas.findIndex((f: any) => f.id === foto.id);
+                                  openMedia(items, Math.max(0, idx));
+                                }}>
                                 {isVideo ? (
                                   <video src={foto.arquivo_url} className="w-full h-full object-cover" muted preload="metadata" />
                                 ) : (
@@ -977,7 +987,16 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                             const isVideo = /\.(mp4|webm|mov|avi)($|\?)/i.test(foto.arquivo_url || '');
                             return (
                               <div key={foto.id} className="relative group cursor-pointer rounded-lg overflow-hidden border bg-muted/50 aspect-square"
-                                onClick={() => setFotoModal({ open: true, url: foto.arquivo_url, tipo: formatarTipoFoto(foto.tipo), mediaType: isVideo ? 'video' : 'image' })}>
+                                onClick={() => {
+                                  const todas = vistoriaUnificada?.fotosAutovistoria || [];
+                                  const items: MediaItem[] = todas.map((f: any) => ({
+                                    url: f.arquivo_url,
+                                    tipo: formatarTipoFoto(f.tipo),
+                                    mediaType: detectMediaType(f.arquivo_url || ''),
+                                  }));
+                                  const idx = todas.findIndex((f: any) => f.id === foto.id);
+                                  openMedia(items, Math.max(0, idx));
+                                }}>
                                 {isVideo ? (
                                   <video src={foto.arquivo_url} className="w-full h-full object-cover" muted preload="metadata" />
                                 ) : (
@@ -1235,19 +1254,13 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
         </DialogContent>
       </Dialog>
 
-      {/* Modal Foto/Vídeo/Documento */}
-      <Dialog open={fotoModal.open} onOpenChange={(open) => setFotoModal({ ...fotoModal, open })}>
-        <DialogContent className="max-w-3xl">
-          <h3 className="text-lg font-semibold">{fotoModal.tipo}</h3>
-          {fotoModal.mediaType === 'video' ? (
-            <video src={fotoModal.url} controls autoPlay className="w-full max-h-[70vh] rounded-lg" />
-          ) : fotoModal.mediaType === 'pdf' ? (
-            <iframe src={fotoModal.url} className="w-full h-[70vh] rounded-lg border-0" title={fotoModal.tipo} />
-          ) : (
-            <img src={fotoModal.url} alt={fotoModal.tipo} className="w-full max-h-[70vh] object-contain rounded-lg" />
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Visualizador de Mídia (galeria com setas) */}
+      <MediaViewerModal
+        open={mediaViewer.open}
+        onOpenChange={(open) => setMediaViewer((s) => ({ ...s, open }))}
+        items={mediaViewer.items}
+        initialIndex={mediaViewer.index}
+      />
 
       {/* Modal Rastreador Vinculado */}
       {rastreadorModalData && (
