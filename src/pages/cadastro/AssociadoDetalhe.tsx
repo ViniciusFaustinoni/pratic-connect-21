@@ -202,6 +202,11 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
   const [editEmail, setEditEmail] = useState('');
   const [isSavingContatos, setIsSavingContatos] = useState(false);
   const [showContratoPdf, setShowContratoPdf] = useState(false);
+  // Hooks que antes estavam após early returns (corrige "Rendered more hooks than during the previous render")
+  const queryClient = useQueryClient();
+  const [reenvioDialogOpen, setReenvioDialogOpen] = useState(false);
+  const solicitarDocsMutation = useSolicitarDocumentos();
+  const { data: docsJaSolicitados } = useDocumentosSolicitadosPendentes(id);
 
   const canEditContatos = isDiretor || isAnalistaCadastroOnly || isDesenvolvedor || isAdminMaster;
 
@@ -406,10 +411,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
   // ============================================
   // SOLICITAR REENVIO DE DOCUMENTOS
   // ============================================
-  const queryClient = useQueryClient();
-  const [reenvioDialogOpen, setReenvioDialogOpen] = useState(false);
-  const solicitarDocsMutation = useSolicitarDocumentos();
-  const { data: docsJaSolicitados } = useDocumentosSolicitadosPendentes(id);
+  // (hooks movidos para o topo do componente para respeitar regras dos hooks)
 
   // Hook expõe pendências para o card "já solicitados"
 
