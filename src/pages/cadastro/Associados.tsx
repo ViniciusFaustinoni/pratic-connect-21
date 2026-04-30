@@ -970,13 +970,23 @@ export default function Associados() {
         {/* Detalhe do Associado em Dialog centralizado */}
         <Dialog open={!!detalheAssociadoId} onOpenChange={(open) => !open && setDetalheAssociadoId(null)}>
           <DialogContent className="max-w-5xl max-h-[92vh] p-0 overflow-y-auto overflow-x-hidden">
+            <DialogTitle className="sr-only">Detalhes do associado</DialogTitle>
+            <DialogDescription className="sr-only">
+              Visão completa do associado, veículos, documentos e histórico.
+            </DialogDescription>
             {detalheAssociadoId && (
               <div className="p-4 sm:p-6 min-w-0 w-full">
-                <AssociadoDetalhe 
-                  associadoId={detalheAssociadoId} 
-                  isModal 
-                  onClose={() => setDetalheAssociadoId(null)} 
-                />
+                <AssociadoDetalheErrorBoundary
+                  associadoId={detalheAssociadoId}
+                  onReset={() => setDetalheAssociadoId(null)}
+                >
+                  <AssociadoDetalhe
+                    key={detalheAssociadoId}
+                    associadoId={detalheAssociadoId}
+                    isModal
+                    onClose={() => setDetalheAssociadoId(null)}
+                  />
+                </AssociadoDetalheErrorBoundary>
               </div>
             )}
           </DialogContent>
