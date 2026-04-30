@@ -773,8 +773,7 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           ? 'application/pdf' 
           : (fileResponse.headers.get('content-type') || 'image/jpeg');
         const dataUri = `data:${mimeType};base64,${base64}`;
-        console.log(`${fileType} downloaded: ${fileBuffer.byteLength} bytes, mime: ${mimeType}`);
-        
+
         // Para PDFs, tentar extrair texto nativo
         if (isPdfUrl) {
           try {
@@ -782,17 +781,35 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
             const pdfText = await extractTextFromPDFBuffer(uint8Array);
             if (pdfText && pdfText.length > 50) {
               extractedPdfText = pdfText;
-              console.log(`[OCR] Texto nativo extraído do PDF: ${pdfText.length} chars`);
-            } else {
-              console.log(`[OCR] PDF sem texto nativo suficiente (${pdfText?.length || 0} chars), usando OCR visual`);
             }
           } catch (pdfErr) {
-            console.warn('[OCR] Falha ao extrair texto nativo do PDF:', pdfErr);
+            console.warn(`[OCR][${reqId}] Falha ao extrair texto nativo do PDF:`, pdfErr);
           }
         }
 
+        // Heurística de qualidade: arquivos pequenos costumam ser fotos comprimidas/baixa nitidez
+        const bytes = fileBuffer.byteLength;
+        const isLikelyLowQuality = !isPdfUrl && (bytes < 80_000 || bytes > 4_500_000);
+        const isPdfScanned = isPdfUrl && !extractedPdfText;
+
+        console.log(`[OCR][file] ${JSON.stringify({
+          reqId,
+          mime: mimeType,
+          bytes,
+          isPdf: isPdfUrl,
+          hasNativeText: !!extractedPdfText,
+          nativeTextLen: extractedPdfText.length,
+          isLikelyLowQuality,
+          isPdfScanned,
+        })}`);
+
+        // Reforço de prompt para documentos de baixa qualidade
+        const lowQualityHint = (isLikelyLowQuality || isPdfScanned)
+          ? `\n\nATENÇÃO QUALIDADE BAIXA: ${isPdfScanned ? 'PDF escaneado sem camada de texto.' : 'imagem com possível baixa nitidez.'} Use OCR rigoroso letra-a-letra. Em campos numéricos críticos (CPF, placa, CEP, datas, RG), se houver QUALQUER dúvida na leitura, retorne null e marque \`confianca\` < 0.7. NÃO INVENTE dígitos.`
+          : '';
+
         contentParts = [
-          { type: 'text', text: userPrompt },
+          { type: 'text', text: userPrompt + lowQualityHint },
           { type: 'image_url', image_url: { url: dataUri } },
         ];
 
@@ -804,7 +821,7 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           contentParts = [
             { 
               type: 'text', 
-              text: `${userPrompt}\n\n--- TEXTO EXTRAÍDO DO PDF (use como referência principal para dados textuais como CPF, nome, números) ---\n${textHint}\n--- FIM DO TEXTO ---\n\nA imagem do documento também está anexada. Use o texto extraído como fonte primária para campos numéricos (CPF, RG, etc.) e a imagem para confirmar layout e campos visuais.`
+              text: `${userPrompt}${lowQualityHint}\n\n--- TEXTO EXTRAÍDO DO PDF (use como referência principal para dados textuais como CPF, nome, números) ---\n${textHint}\n--- FIM DO TEXTO ---\n\nA imagem do documento também está anexada. Use o texto extraído como fonte primária para campos numéricos (CPF, RG, etc.) e a imagem para confirmar layout e campos visuais.`
             },
             { type: 'image_url', image_url: { url: dataUri } },
           ];
