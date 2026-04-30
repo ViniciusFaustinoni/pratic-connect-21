@@ -1,0 +1,290 @@
+/**
+ * Cliente unificado de IA. Roteia chamadas para Lovable AI Gateway,
+ * OpenAI direto ou Anthropic direto, conforme `ai_model_config` global.
+ *
+ * Mantém payload compatível com o formato OpenAI Chat Completions
+ * (messages, tools, response_format). Para Anthropic, faz adaptação
+ * de mensagens/ferramentas e converte a resposta de volta no shape OpenAI
+ * para que o código existente continue funcionando.
+ */
+
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+
+export type AIProvider = "lovable" | "openai" | "anthropic";
+
+export interface AIConfig {
+  provider: AIProvider;
+  model: string;
+}
+
+const DEFAULT_CONFIG: AIConfig = {
+  provider: "lovable",
+  model: "google/gemini-3-flash-preview",
+};
+
+let _cache: { value: AIConfig; ts: number } | null = null;
+const CACHE_TTL_MS = 30_000;
+
+export async function getActiveAIConfig(): Promise<AIConfig> {
+  if (_cache && Date.now() - _cache.ts < CACHE_TTL_MS) return _cache.value;
+  try {
+    const url = Deno.env.get("SUPABASE_URL");
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!url || !key) return DEFAULT_CONFIG;
+    const sb = createClient(url, key);
+    const { data } = await sb
+      .from("ai_model_config")
+      .select("provider, model")
+      .limit(1)
+      .maybeSingle();
+    const value: AIConfig = data
+      ? { provider: data.provider as AIProvider, model: data.model }
+      : DEFAULT_CONFIG;
+    _cache = { value, ts: Date.now() };
+    return value;
+  } catch (e) {
+    console.warn("[ai-client] falha lendo ai_model_config, usando default", e);
+    return DEFAULT_CONFIG;
+  }
+}
+
+export interface CallAIOptions {
+  messages: any[];
+  tools?: any[];
+  tool_choice?: any;
+  response_format?: any;
+  temperature?: number;
+  max_tokens?: number;
+  stream?: boolean;
+  /** Força provider/model — se omitido, usa config global. */
+  override?: Partial<AIConfig>;
+  /** Se true e provider escolhido falhar por chave/erro grave, cai no Lovable Gateway. */
+  fallbackToLovable?: boolean;
+}
+
+export interface CallAIResult {
+  ok: boolean;
+  status: number;
+  /** Resposta no formato OpenAI Chat Completions (choices[0].message...). */
+  data?: any;
+  /** Resposta crua para streaming. */
+  rawResponse?: Response;
+  errorMessage?: string;
+}
+
+/**
+ * Chama IA respeitando configuração global. Para chamadas streaming, retorna
+ * `rawResponse` (Response) — caller deve repassar o body.
+ */
+export async function callAI(opts: CallAIOptions): Promise<CallAIResult> {
+  const cfg: AIConfig = {
+    provider: opts.override?.provider ?? (await getActiveAIConfig()).provider,
+    model: opts.override?.model ?? (await getActiveAIConfig()).model,
+  };
+
+  try {
+    if (cfg.provider === "openai") return await callOpenAI(cfg, opts);
+    if (cfg.provider === "anthropic") return await callAnthropic(cfg, opts);
+    return await callLovable(cfg, opts);
+  } catch (err: any) {
+    if (opts.fallbackToLovable !== false && cfg.provider !== "lovable") {
+      console.warn(`[ai-client] ${cfg.provider} falhou, fallback Lovable:`, err?.message);
+      return await callLovable(DEFAULT_CONFIG, opts);
+    }
+    return { ok: false, status: 500, errorMessage: err?.message ?? "AI call failed" };
+  }
+}
+
+// ─────────────────────────────────────────── Lovable AI Gateway
+
+async function callLovable(cfg: AIConfig, opts: CallAIOptions): Promise<CallAIResult> {
+  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!apiKey) throw new Error("LOVABLE_API_KEY não configurada");
+
+  const body: any = {
+    model: cfg.model.startsWith("google/") || cfg.model.startsWith("openai/")
+      ? cfg.model
+      : `google/${cfg.model}`,
+    messages: opts.messages,
+  };
+  if (opts.tools) body.tools = opts.tools;
+  if (opts.tool_choice) body.tool_choice = opts.tool_choice;
+  if (opts.response_format) body.response_format = opts.response_format;
+  if (typeof opts.temperature === "number") body.temperature = opts.temperature;
+  if (typeof opts.max_tokens === "number") body.max_tokens = opts.max_tokens;
+  if (opts.stream) body.stream = true;
+
+  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (opts.stream) {
+    return { ok: resp.ok, status: resp.status, rawResponse: resp };
+  }
+
+  const text = await resp.text();
+  const data = safeJSON(text);
+  if (!resp.ok) {
+    return { ok: false, status: resp.status, data, errorMessage: data?.error?.message ?? text };
+  }
+  return { ok: true, status: 200, data };
+}
+
+// ─────────────────────────────────────────── OpenAI direto
+
+async function callOpenAI(cfg: AIConfig, opts: CallAIOptions): Promise<CallAIResult> {
+  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  if (!apiKey) throw new Error("OPENAI_API_KEY não configurada");
+
+  const body: any = {
+    model: stripPrefix(cfg.model, "openai/"),
+    messages: opts.messages,
+  };
+  if (opts.tools) body.tools = opts.tools;
+  if (opts.tool_choice) body.tool_choice = opts.tool_choice;
+  if (opts.response_format) body.response_format = opts.response_format;
+  if (typeof opts.temperature === "number") body.temperature = opts.temperature;
+  if (typeof opts.max_tokens === "number") body.max_tokens = opts.max_tokens;
+  if (opts.stream) body.stream = true;
+
+  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (opts.stream) {
+    return { ok: resp.ok, status: resp.status, rawResponse: resp };
+  }
+
+  const text = await resp.text();
+  const data = safeJSON(text);
+  if (!resp.ok) {
+    return { ok: false, status: resp.status, data, errorMessage: data?.error?.message ?? text };
+  }
+  return { ok: true, status: 200, data };
+}
+
+// ─────────────────────────────────────────── Anthropic direto (adaptador)
+
+async function callAnthropic(cfg: AIConfig, opts: CallAIOptions): Promise<CallAIResult> {
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY não configurada");
+
+  // Separa system messages
+  const sys: string[] = [];
+  const userMsgs: any[] = [];
+  for (const m of opts.messages) {
+    if (m.role === "system") {
+      sys.push(typeof m.content === "string" ? m.content : JSON.stringify(m.content));
+      continue;
+    }
+    userMsgs.push(toAnthropicMessage(m));
+  }
+
+  const body: any = {
+    model: stripPrefix(cfg.model, "anthropic/"),
+    max_tokens: opts.max_tokens ?? 4096,
+    messages: userMsgs,
+  };
+  if (sys.length) body.system = sys.join("\n\n");
+  if (typeof opts.temperature === "number") body.temperature = opts.temperature;
+  if (opts.tools && opts.tools.length) body.tools = opts.tools.map(toAnthropicTool);
+
+  // Streaming não é suportado neste adaptador; cai pra non-stream.
+  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  const text = await resp.text();
+  const data = safeJSON(text);
+  if (!resp.ok) {
+    return { ok: false, status: resp.status, data, errorMessage: data?.error?.message ?? text };
+  }
+
+  // Converter resposta Anthropic → OpenAI shape
+  const openaiShape = anthropicToOpenAI(data);
+  return { ok: true, status: 200, data: openaiShape };
+}
+
+function toAnthropicMessage(m: any) {
+  // m.content pode ser string ou array de partes (text/image_url)
+  if (typeof m.content === "string") {
+    return { role: m.role === "assistant" ? "assistant" : "user", content: m.content };
+  }
+  if (Array.isArray(m.content)) {
+    const blocks = m.content.map((p: any) => {
+      if (p.type === "text") return { type: "text", text: p.text };
+      if (p.type === "image_url") {
+        const url = p.image_url?.url ?? "";
+        if (url.startsWith("data:")) {
+          const [meta, b64] = url.split(",");
+          const media_type = meta.replace("data:", "").replace(";base64", "");
+          return { type: "image", source: { type: "base64", media_type, data: b64 } };
+        }
+        return { type: "image", source: { type: "url", url } };
+      }
+      return { type: "text", text: JSON.stringify(p) };
+    });
+    return { role: m.role === "assistant" ? "assistant" : "user", content: blocks };
+  }
+  return { role: "user", content: String(m.content ?? "") };
+}
+
+function toAnthropicTool(t: any) {
+  // OpenAI: { type:'function', function:{ name, description, parameters } }
+  const fn = t.function ?? t;
+  return {
+    name: fn.name,
+    description: fn.description ?? "",
+    input_schema: fn.parameters ?? { type: "object", properties: {} },
+  };
+}
+
+function anthropicToOpenAI(resp: any) {
+  const blocks: any[] = resp?.content ?? [];
+  let text = "";
+  const tool_calls: any[] = [];
+  for (const b of blocks) {
+    if (b.type === "text") text += b.text;
+    if (b.type === "tool_use") {
+      tool_calls.push({
+        id: b.id,
+        type: "function",
+        function: { name: b.name, arguments: JSON.stringify(b.input ?? {}) },
+      });
+    }
+  }
+  const message: any = { role: "assistant", content: text || null };
+  if (tool_calls.length) message.tool_calls = tool_calls;
+  return {
+    id: resp?.id,
+    model: resp?.model,
+    choices: [{ index: 0, message, finish_reason: resp?.stop_reason ?? "stop" }],
+    usage: resp?.usage,
+  };
+}
+
+// ─────────────────────────────────────────── helpers
+
+function safeJSON(s: string) {
+  try { return JSON.parse(s); } catch { return null; }
+}
+
+function stripPrefix(s: string, p: string) {
+  return s.startsWith(p) ? s.slice(p.length) : s;
+}
