@@ -627,7 +627,7 @@ function tryRepairTruncatedJSON(raw: string): object | null {
       const dados: Record<string, string | null> = {};
       const dadosFields = [
         // pessoais
-        'nome', 'cpf', 'rg', 'data_nascimento', 'numero_registro', 'validade', 'data_expedicao', 'orgao_expedidor', 'categoria', 'variante',
+        'nome', 'cpf', 'rg', 'data_nascimento', 'numero_registro', 'validade', 'data_expedicao', 'orgao_expedidor', 'categoria', 'variante', 'mrz_registro',
         // veículo
         'placa', 'renavam', 'chassi', 'marca', 'modelo', 'cor', 'combustivel', 'motor', 'numero_motor', 'nome_proprietario',
         // comprovante de residência
