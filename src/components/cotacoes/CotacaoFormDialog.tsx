@@ -2807,10 +2807,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             {podeAtribuirVendedor && <Separator />}
 
             {/* Data de Vencimento */}
-            <div className="space-y-3">
+            <div id="bloco-dia-vencimento" className="space-y-3">
               <h3 className="text-sm font-semibold flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-primary" />
-                Data de Vencimento
+                Data de Vencimento <span className="text-destructive">*</span>
               </h3>
               
               <p className="text-xs text-muted-foreground">
