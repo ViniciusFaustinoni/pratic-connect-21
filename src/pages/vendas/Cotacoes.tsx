@@ -181,8 +181,15 @@ export default function Cotacoes() {
     return (cotacoes || []).filter((cotacao) => {
       const searchLower = search.toLowerCase();
       const matchesSearch =
-        cotacao.numero.toLowerCase().includes(searchLower) ||
+        !searchLower ||
+        cotacao.numero?.toLowerCase().includes(searchLower) ||
         (cotacao.leads?.nome?.toLowerCase().includes(searchLower) ?? false) ||
+        (cotacao.leads?.telefone?.toLowerCase().includes(searchLower) ?? false) ||
+        (cotacao.leads?.email?.toLowerCase().includes(searchLower) ?? false) ||
+        (cotacao.nome_solicitante?.toLowerCase().includes(searchLower) ?? false) ||
+        (cotacao.telefone1_solicitante?.toLowerCase().includes(searchLower) ?? false) ||
+        (cotacao.telefone2_solicitante?.toLowerCase().includes(searchLower) ?? false) ||
+        (cotacao.email_solicitante?.toLowerCase().includes(searchLower) ?? false) ||
         (cotacao.veiculo_placa?.toLowerCase().includes(searchLower) ?? false) ||
         (cotacao.veiculo_marca?.toLowerCase().includes(searchLower) ?? false) ||
         (cotacao.veiculo_modelo?.toLowerCase().includes(searchLower) ?? false);
