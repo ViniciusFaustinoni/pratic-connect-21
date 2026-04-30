@@ -269,14 +269,28 @@ function toAnthropicMessage(m: any) {
     return { role: m.role === "assistant" ? "assistant" : "user", content: m.content };
   }
   if (Array.isArray(m.content)) {
+    const SUPPORTED_IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
     const blocks = m.content.map((p: any) => {
       if (p.type === "text") return { type: "text", text: p.text };
       if (p.type === "image_url") {
         const url = p.image_url?.url ?? "";
         if (url.startsWith("data:")) {
           const [meta, b64] = url.split(",");
-          const media_type = meta.replace("data:", "").replace(";base64", "");
-          return { type: "image", source: { type: "base64", media_type, data: b64 } };
+          const media_type = meta.replace("data:", "").replace(";base64", "").toLowerCase();
+          // PDF → bloco "document" (Anthropic suporta PDF nativo)
+          if (media_type === "application/pdf") {
+            return { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } };
+          }
+          if (SUPPORTED_IMAGE_MIMES.has(media_type)) {
+            return { type: "image", source: { type: "base64", media_type, data: b64 } };
+          }
+          // MIME não suportado: degrada para texto descritivo em vez de quebrar a request
+          return { type: "text", text: `[anexo não suportado: ${media_type}]` };
+        }
+        // URL http(s)
+        const lower = url.toLowerCase();
+        if (lower.endsWith(".pdf") || lower.includes(".pdf?")) {
+          return { type: "document", source: { type: "url", url } };
         }
         return { type: "image", source: { type: "url", url } };
       }
