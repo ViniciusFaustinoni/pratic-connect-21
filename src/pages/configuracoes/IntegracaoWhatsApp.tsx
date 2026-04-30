@@ -88,6 +88,8 @@ export default function IntegracaoWhatsApp() {
 
         {/* ── Tab IA & Respostas ── */}
         <TabsContent value="ia" className="space-y-6">
+          <AIModelConfigCard />
+          <Separator />
           <div className="grid gap-6 md:grid-cols-2">
             <WhatsAppIAConfig />
             <WhatsAppStats />
