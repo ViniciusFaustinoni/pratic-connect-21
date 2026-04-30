@@ -1,50 +1,41 @@
-## Objetivo
+## Análise prévia
 
-Restaurar o OCR de documentos (CRLV, CNH, comprovante de residência etc.) após a troca para Anthropic e deixá-lo **mais preciso que antes**, eliminando os erros 500 vistos no `UnifiedDocumentUploader`.
+### Status do que foi pedido
+- **#1 PDF como `type:"document"` para Anthropic** → **já implementado** no turno anterior em `_shared/ai-client.ts` (`toAnthropicMessage`). Não há retrabalho.
+- **Anthropic como primeiro provedor** → **já é assim**: `ai_model_config` global aponta para `anthropic/claude-sonnet-4-5`; o `aiGatewayFetch` chama Anthropic primeiro e só cai em Lovable Gateway se houver erro recuperável.
+- **#2 Logs estruturados** → parcial. Hoje há só um `[OCR][summary]` no fim. Falta logar entrada, mime, tipo de bloco, modelo, payload size e resposta do provedor.
 
-## Causa raiz (confirmada nos logs)
+### O que vale agir AGORA para "OCR mais certeiro" e debug claro
 
-`document-ocr` envia PDFs para a IA como `{ type: 'image_url', image_url: { url: 'data:application/pdf;base64,...' } }`. O adaptador Anthropic em `supabase/functions/_shared/ai-client.ts` traduz isso para um bloco `image` com `media_type: application/pdf`. A Anthropic rejeita (`Input should be 'image/jpeg'…'image/webp'`), retorna 400, e o `aiGatewayFetch` propaga como erro — sem cair no fallback Lovable. O frontend recebe 500.
+#### A. Logs estruturados em `document-ocr/index.ts`
+Adicionar marcadores únicos por requisição (`reqId`) e logs JSON:
+- `[OCR][in]` no início: `reqId`, `tipoEsperado`, `urlHash`, `isAuthenticated`.
+- `[OCR][file]` após download: `mime`, `bytes`, `isPdf`, `hasNativeText`, `nativeTextLen`.
+- `[OCR][ai_request]` antes de chamar IA: `model`, `provider` (lido de `ai_model_config`), `parts_count`, `block_types` (`["text","document"]` etc.), `max_tokens`.
+- `[OCR][ai_response]` após resposta: `status`, `latencyMs`, `finish_reason`, `usage` (tokens), `content_chars`, `parsed_ok`.
+- `[OCR][confidence]` no fim: `tipo_detectado`, `confianca`, `sugestao`, `usedRetry` (bool).
 
-A Anthropic suporta PDF, mas em **outro tipo de bloco**: `type: "document", source: { type: "base64", media_type: "application/pdf", data: ... }`.
+Adicionar logs equivalentes no `_shared/ai-client.ts`:
+- `[ai-client][call]` com `provider`, `model`, `has_document_block`, `messages_count`.
+- `[ai-client][resp]` com `provider`, `status`, `latencyMs`, `errorMessage` se houver.
+- `[ai-client][fallback]` quando aciona Lovable Gateway, registrando o motivo.
 
-## Mudanças
+#### B. Qualidade do OCR para documentos ruins
+1. **Usar o modelo global em vez do hardcoded** — hoje `OCR_MODEL = 'google/gemini-2.5-flash'` ignora a config Anthropic. Trocar para deixar `aiGatewayFetch` resolver o modelo via `ai_model_config` (passar `model` como hint só para o caminho Lovable).
+2. **Retry automático com modelo mais potente** quando o primeiro resultado vier com `confianca < 0.6`, `legivel === false` ou `sugestao === 'revisar'`. Hoje `OCR_RETRY_MODEL` está declarado mas nunca acionado nesse caso. Habilitar 1 retry com `claude-opus-4-5` (Anthropic) ou `gemini-2.5-pro` (Lovable fallback) e mesclar resultados pegando o de maior confiança.
+3. **Reforço de prompt para baixa qualidade**: quando o PDF não tem texto nativo (`extractedPdfText` vazio) ou a imagem é grande (>2MB compactada), injetar parágrafo no prompt: "Documento provavelmente escaneado/foto de baixa qualidade. Use OCR rigoroso letra-a-letra; em campos numéricos, prefira a leitura mais provável e marque `confianca` < 0.7 se houver dúvida."
+4. **Anti-alucinação**: instruir o modelo a retornar `null` (não inventar) em qualquer campo cuja leitura não esteja clara — já existe parcialmente no system prompt; reforçar para CPF/placa/CEP/data.
 
-### 1. `supabase/functions/_shared/ai-client.ts` — adaptador Anthropic
-- `toAnthropicMessage`: detectar data-URI com `application/pdf` e emitir bloco `{ type: "document", source: { type: "base64", media_type: "application/pdf", data } }` em vez de `image`.
-- Detectar URLs http(s) terminando em `.pdf` e emitir `{ type: "document", source: { type: "url", url } }`.
-- Manter MIMEs de imagem suportados; quaisquer outros mimes não suportados (ex: `image/heic`) → converter para texto descritivo de erro em vez de quebrar a request.
-- Adicionar header `anthropic-beta: pdfs-2024-09-25` quando o payload contiver bloco `document` (necessário em modelos < Sonnet 4; inofensivo em 4.5).
-
-### 2. `supabase/functions/_shared/ai-client.ts` — fallback robusto
-- Em `aiGatewayFetch`, quando `result.ok === false` e provider escolhido ≠ `lovable` e o erro é "recuperável" (status 4xx por incompatibilidade de payload, 5xx, ou timeout), tentar **automaticamente** uma 2ª chamada via Lovable Gateway antes de devolver erro.
-- Logar claramente o motivo do fallback.
-
-### 3. `supabase/functions/document-ocr/index.ts` — não devolver 500 para o client
-- Capturar erros do AI gateway/Anthropic e devolver `200` com JSON `{ sucesso: false, sugestao: 'revisar', motivo: 'OCR temporariamente indisponível…', fallback: true }` para que o `UnifiedDocumentUploader` continue o upload sem quebrar a UI (o documento entra em `em_analise` para revisão manual — coerente com a regra global de revisão manual).
-- Quando há texto nativo extraído via `unpdf` (já implementado) e a IA falha, **ainda** retornar `sucesso: true` com os dados parseados do texto + `confianca: 0.6` + `sugestao: 'revisar'`. Isso elimina o erro do usuário mesmo em pane total da Anthropic.
-
-### 4. Qualidade superior (objetivo "melhor que o modelo anterior")
-- Trocar o `OCR_MODEL` default da function para `claude-sonnet-4-5` (já é o configurado globalmente; remover qualquer hardcode antigo do tipo `gemini-flash` no `document-ocr`).
-- Aumentar `max_tokens` de 2000 → 4096 para CRLV/CNH com muitos campos.
-- Para PDFs: além do texto nativo via `unpdf`, enviar o PDF inteiro como `document` (Sonnet 4.5 lê layout + imagens internamente — qualidade superior ao "extrair imagem da página 1" que era a abordagem anterior).
-- Manter retry automático com backoff já existente (`callAIGatewayWithRetry`).
-
-### 5. Diagnóstico
-- Adicionar log estruturado no início de cada chamada: `provider`, `model`, `mime`, `bytes`, `tipoEsperado`. Facilita auditoria futura.
+### O que NÃO vou fazer
+- Não vou mexer na ordem de fallback (já está Anthropic → Lovable conforme pedido).
+- Não vou re-implementar o suporte a PDF nativo (já está feito).
+- Não vou tocar no frontend `UnifiedDocumentUploader` (já lida com `sucesso:false`).
 
 ## Validação
-
 1. Login como diretor (`admin@teste.com`).
-2. Abrir uma cotação, ir ao uploader de documentos.
-3. Subir 1 PDF de CRLV + 1 imagem JPEG de comprovante + 1 PDF de CNH (mesmo cenário do log).
-4. Verificar no preview que:
-   - Os 3 documentos terminam com status definido (sem "Edge Function 500").
-   - Console limpo de `FunctionsHttpError`.
-   - Logs do `document-ocr` mostram `sucesso: true` para os 3, com bloco `document` no Anthropic.
-5. Forçar provider para `anthropic` com chave inválida temporariamente (via UI) e confirmar que o fallback Lovable assume sem mostrar erro ao usuário.
-
-## Fora de escopo
-
-- Não tocar no fluxo de **assinatura** Autentique nem no detector de tipo (`tipo_detectado`) — funcionando.
-- Não mexer no `UnifiedDocumentUploader` (frontend). A correção é toda server-side; o frontend já lida bem com `sucesso:false`.
+2. Subir 1 PDF de CRLV nítido + 1 foto de comprovante de baixa qualidade + 1 PDF escaneado.
+3. Conferir nos logs do `document-ocr` (Supabase Functions):
+   - `[OCR][in]`, `[OCR][file]`, `[OCR][ai_request]`, `[OCR][ai_response]`, `[OCR][confidence]` para cada upload.
+   - `[ai-client][call]` mostrando `provider=anthropic, has_document_block=true` para o PDF.
+   - Quando confiança < 0.6, ver `[OCR][retry]` seguido de novo `[OCR][ai_response]` e `usedRetry: true` no summary.
+4. Confirmar que não há mais erro 500/400 no console do frontend.

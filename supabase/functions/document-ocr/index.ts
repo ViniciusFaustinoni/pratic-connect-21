@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { aiGatewayFetch } from "../_shared/ai-client.ts";
+import { aiGatewayFetch, getActiveAIConfig } from "../_shared/ai-client.ts";
 // unpdf: extração de texto nativo de PDF para runtimes serverless (Deno/edge),
 // sem worker e sem dependência de canvas. Substitui pdfjs-dist que falhava com
 // "Setting up fake worker failed" no edge runtime do Supabase.
@@ -649,6 +649,8 @@ serve(async (req) => {
     
     console.log('Request mode:', isAuthenticated ? 'authenticated' : 'public');
 
+    const reqId = (crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`).slice(0, 8);
+
     const { url, tipoEsperado, cpfEsperado, nomeEsperado, extrairDados } = await req.json();
 
     if (!url) {
@@ -666,7 +668,7 @@ serve(async (req) => {
     );
 
     if (!isAuthenticated && !isAllowedUrl) {
-      console.warn('Blocked public request with external URL:', url);
+      console.warn(`[OCR][${reqId}] Blocked public request with external URL:`, url);
       return new Response(
         JSON.stringify({ 
           error: 'URL não permitida para requisições públicas',
@@ -677,7 +679,19 @@ serve(async (req) => {
       );
     }
 
-    console.log('Processing OCR for URL:', url, '| Authenticated:', isAuthenticated, '| tipoEsperado:', tipoEsperado || 'auto');
+    // Log estruturado de entrada — `urlHash` evita expor URL completa em massa
+    const urlHash = await sha1Hex(url).then(h => h.slice(0, 12)).catch(() => 'no-hash');
+    const activeCfg = await getActiveAIConfig().catch(() => ({ provider: 'lovable', model: 'unknown' }));
+    console.log(`[OCR][in] ${JSON.stringify({
+      reqId,
+      tipoEsperado: tipoEsperado || 'auto',
+      urlHash,
+      isAuthenticated,
+      hasCpfEsperado: !!cpfEsperado,
+      hasNomeEsperado: !!nomeEsperado,
+      provider_global: activeCfg.provider,
+      model_global: activeCfg.model,
+    })}`);
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
@@ -721,7 +735,7 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
 - Inclua o campo "validacao_titularidade" na resposta com os detalhes da comparação.`;
     }
 
-    console.log('Calling Lovable AI Gateway for document OCR:', url);
+    // (log de URL substituído por [OCR][in] com urlHash, evitando exposição em massa)
 
     // Baixar arquivo e converter para base64
     const isPdfUrl = url.toLowerCase().endsWith('.pdf') || url.toLowerCase().includes('.pdf?') || url.toLowerCase().includes('.pdf_');
@@ -759,8 +773,7 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           ? 'application/pdf' 
           : (fileResponse.headers.get('content-type') || 'image/jpeg');
         const dataUri = `data:${mimeType};base64,${base64}`;
-        console.log(`${fileType} downloaded: ${fileBuffer.byteLength} bytes, mime: ${mimeType}`);
-        
+
         // Para PDFs, tentar extrair texto nativo
         if (isPdfUrl) {
           try {
@@ -768,17 +781,35 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
             const pdfText = await extractTextFromPDFBuffer(uint8Array);
             if (pdfText && pdfText.length > 50) {
               extractedPdfText = pdfText;
-              console.log(`[OCR] Texto nativo extraído do PDF: ${pdfText.length} chars`);
-            } else {
-              console.log(`[OCR] PDF sem texto nativo suficiente (${pdfText?.length || 0} chars), usando OCR visual`);
             }
           } catch (pdfErr) {
-            console.warn('[OCR] Falha ao extrair texto nativo do PDF:', pdfErr);
+            console.warn(`[OCR][${reqId}] Falha ao extrair texto nativo do PDF:`, pdfErr);
           }
         }
 
+        // Heurística de qualidade: arquivos pequenos costumam ser fotos comprimidas/baixa nitidez
+        const bytes = fileBuffer.byteLength;
+        const isLikelyLowQuality = !isPdfUrl && (bytes < 80_000 || bytes > 4_500_000);
+        const isPdfScanned = isPdfUrl && !extractedPdfText;
+
+        console.log(`[OCR][file] ${JSON.stringify({
+          reqId,
+          mime: mimeType,
+          bytes,
+          isPdf: isPdfUrl,
+          hasNativeText: !!extractedPdfText,
+          nativeTextLen: extractedPdfText.length,
+          isLikelyLowQuality,
+          isPdfScanned,
+        })}`);
+
+        // Reforço de prompt para documentos de baixa qualidade
+        const lowQualityHint = (isLikelyLowQuality || isPdfScanned)
+          ? `\n\nATENÇÃO QUALIDADE BAIXA: ${isPdfScanned ? 'PDF escaneado sem camada de texto.' : 'imagem com possível baixa nitidez.'} Use OCR rigoroso letra-a-letra. Em campos numéricos críticos (CPF, placa, CEP, datas, RG), se houver QUALQUER dúvida na leitura, retorne null e marque \`confianca\` < 0.7. NÃO INVENTE dígitos.`
+          : '';
+
         contentParts = [
-          { type: 'text', text: userPrompt },
+          { type: 'text', text: userPrompt + lowQualityHint },
           { type: 'image_url', image_url: { url: dataUri } },
         ];
 
@@ -790,7 +821,7 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           contentParts = [
             { 
               type: 'text', 
-              text: `${userPrompt}\n\n--- TEXTO EXTRAÍDO DO PDF (use como referência principal para dados textuais como CPF, nome, números) ---\n${textHint}\n--- FIM DO TEXTO ---\n\nA imagem do documento também está anexada. Use o texto extraído como fonte primária para campos numéricos (CPF, RG, etc.) e a imagem para confirmar layout e campos visuais.`
+              text: `${userPrompt}${lowQualityHint}\n\n--- TEXTO EXTRAÍDO DO PDF (use como referência principal para dados textuais como CPF, nome, números) ---\n${textHint}\n--- FIM DO TEXTO ---\n\nA imagem do documento também está anexada. Use o texto extraído como fonte primária para campos numéricos (CPF, RG, etc.) e a imagem para confirmar layout e campos visuais.`
             },
             { type: 'image_url', image_url: { url: dataUri } },
           ];
@@ -827,95 +858,154 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
       );
     };
 
-    let response: Response;
-    try {
-      console.log(`[OCR] chamando IA: model=${OCR_MODEL}, max_tokens=4096, parts=${contentParts.length}, hasNativeText=${!!extractedPdfText}`);
-      response = await callAIGatewayWithRetry({
-        model: OCR_MODEL,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: contentParts },
-        ],
+    // Função encapsulada de uma "passada" de OCR contra a IA com logs estruturados.
+    // Retorna { result, raw } se sucesso, ou null se falha (já loga + repassa fallback).
+    type OcrPass = { result: any; raw: string; durationMs: number; finishReason?: string; usage?: any };
+    const runOcrPass = async (model: string, parts: any[], label: string): Promise<OcrPass | null> => {
+      const requestPayloadSummary = {
+        reqId,
+        label,
+        model,
         max_tokens: 4096,
-        temperature: 0,
-      }, LOVABLE_API_KEY, 'main');
-    } catch (gwErr) {
-      console.error('[OCR] Gateway indisponível após retries:', gwErr);
-      return ocrFallbackResponse('Serviço de OCR temporariamente indisponível. Documento enviado para revisão manual.');
-    }
+        parts: parts.length,
+        block_types: parts.map((p: any) => p?.type),
+        hasNativeText: !!extractedPdfText,
+      };
+      console.log(`[OCR][ai_request] ${JSON.stringify(requestPayloadSummary)}`);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('AI Gateway error:', response.status, errorText);
+      const t0 = Date.now();
+      let resp: Response;
+      try {
+        resp = await callAIGatewayWithRetry({
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: parts },
+          ],
+          max_tokens: 4096,
+          temperature: 0,
+        }, LOVABLE_API_KEY, label);
+      } catch (gwErr) {
+        console.error(`[OCR][ai_response] ${JSON.stringify({
+          reqId, label, model, status: 0, latencyMs: Date.now() - t0,
+          error: String((gwErr as Error)?.message ?? gwErr).slice(0, 300),
+        })}`);
+        return null;
+      }
 
-      if (response.status === 429) {
-        return ocrFallbackResponse('Limite de requisições excedido. Documento enviado para revisão manual.');
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => '');
+        console.error(`[OCR][ai_response] ${JSON.stringify({
+          reqId, label, model, status: resp.status, latencyMs: Date.now() - t0,
+          error: errText.slice(0, 300),
+        })}`);
+        return null;
       }
-      if (response.status === 402) {
-        return ocrFallbackResponse('Créditos de IA esgotados. Documento enviado para revisão manual.');
+
+      let dataObj: any;
+      let rawText: string;
+      try {
+        rawText = await resp.text();
+        if (!rawText || rawText.trim() === '') {
+          console.error(`[OCR][ai_response] ${JSON.stringify({
+            reqId, label, model, status: resp.status, latencyMs: Date.now() - t0, error: 'empty body',
+          })}`);
+          return null;
+        }
+        dataObj = JSON.parse(rawText);
+      } catch (e) {
+        console.error(`[OCR][ai_response] ${JSON.stringify({
+          reqId, label, model, status: resp.status, latencyMs: Date.now() - t0,
+          error: 'parse-failed: ' + String((e as Error)?.message ?? e).slice(0, 200),
+        })}`);
+        return null;
       }
+
+      const contentStr = dataObj?.choices?.[0]?.message?.content ?? '';
+      const finishReason = dataObj?.choices?.[0]?.finish_reason;
+      const usage = dataObj?.usage;
+
+      console.log(`[OCR][ai_response] ${JSON.stringify({
+        reqId, label, model, status: resp.status,
+        latencyMs: Date.now() - t0,
+        finish_reason: finishReason,
+        usage,
+        content_chars: contentStr.length,
+      })}`);
+
+      if (!contentStr) return null;
+
+      // Parse JSON do conteúdo
+      let parsed: any;
+      try {
+        let clean = contentStr.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        clean = clean.replace(/:\s*_[A-Z_]+_\s*([,}\]])/g, ': null$1');
+        parsed = JSON.parse(clean);
+      } catch {
+        const repaired = tryRepairTruncatedJSON(contentStr);
+        if (repaired) {
+          console.warn(`[OCR][${reqId}] JSON reparado após truncamento (${label})`);
+          parsed = repaired;
+        } else {
+          console.error(`[OCR][${reqId}] parse falhou (${label}), conteúdo:`, contentStr.slice(0, 500));
+          return null;
+        }
+      }
+
+      return { result: parsed, raw: contentStr, durationMs: Date.now() - t0, finishReason, usage };
+    };
+
+    // 1ª passada: usa o modelo configurado globalmente (resolvido pelo aiGatewayFetch via ai_model_config).
+    // O `model` enviado aqui só é usado quando provider=lovable.
+    const firstPass = await runOcrPass(OCR_MODEL, contentParts, 'main');
+    if (!firstPass) {
       return ocrFallbackResponse('Erro ao processar documento com IA. Documento enviado para revisão manual.');
     }
 
-    // Ler resposta
-    let data;
-    try {
-      const responseText = await response.text();
-      if (!responseText || responseText.trim() === '') {
-        console.error('Empty response from AI Gateway');
-        return ocrFallbackResponse('Resposta vazia do gateway de IA. Documento enviado para revisão manual.');
-      }
-      data = JSON.parse(responseText);
-    } catch (parseError) {
-      console.error('Failed to parse AI Gateway response:', parseError);
-      return ocrFallbackResponse('Erro ao processar resposta do gateway de IA. Documento enviado para revisão manual.');
-    }
+    let result = firstPass.result;
+    let usedRetry = false;
 
-    const content = data.choices?.[0]?.message?.content;
+    // Heurística: se confiança baixa, ilegível ou pediu revisão, tenta retry com modelo mais potente
+    const confianca = Number(result?.confianca ?? 1);
+    const lowQualityResult =
+      result?.legivel === false ||
+      result?.sucesso === false ||
+      result?.sugestao === 'revisar' ||
+      (Number.isFinite(confianca) && confianca < 0.6);
 
-    if (!content) {
-      console.error('No content in AI response:', JSON.stringify(data));
-      return ocrFallbackResponse('Resposta vazia da IA. Documento enviado para revisão manual.');
-    }
-
-    // Parsear JSON da resposta
-    let result;
-    try {
-      let cleanContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      // Limpar placeholders deixados pelo modelo (ex: _CONFIDENCE_, _NOME_) → null
-      // (não substituímos mais por 0.95 — confiança é calculada de verdade abaixo)
-      cleanContent = cleanContent.replace(/:\s*_[A-Z_]+_\s*([,}\]])/g, ': null$1');
-      result = JSON.parse(cleanContent);
-    } catch (parseError) {
-      console.warn('[OCR] JSON.parse falhou, tentando reparar JSON truncado...');
-      const repaired = tryRepairTruncatedJSON(content);
-      if (repaired) {
-        console.warn('[OCR] JSON reparado com sucesso após truncamento');
-        result = repaired;
-      } else {
-        console.error('[OCR] Reparo falhou. Conteúdo bruto:', content);
-        return new Response(
-          JSON.stringify({ 
-            error: 'Erro ao interpretar resultado da análise',
-            rawResponse: content,
-          }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+    if (lowQualityResult) {
+      console.log(`[OCR][retry] ${JSON.stringify({
+        reqId,
+        motivo: { confianca, legivel: result?.legivel, sugestao: result?.sugestao, sucesso: result?.sucesso },
+        model_retry: OCR_RETRY_MODEL,
+      })}`);
+      const secondPass = await runOcrPass(OCR_RETRY_MODEL, contentParts, 'retry-low-confidence');
+      if (secondPass) {
+        const c2 = Number(secondPass.result?.confianca ?? 0);
+        // Mantém o melhor: maior confiança ou que tenha virado "aprovar"
+        const betterByConfidence = Number.isFinite(c2) && c2 > confianca;
+        const promotedToApprove = secondPass.result?.sugestao === 'aprovar' && result?.sugestao !== 'aprovar';
+        if (betterByConfidence || promotedToApprove) {
+          result = secondPass.result;
+          usedRetry = true;
+        }
       }
     }
 
     const ocrDurationMs = Date.now() - ocrStartedAt;
-    console.log('[OCR][summary]', JSON.stringify({
+    console.log(`[OCR][confidence] ${JSON.stringify({
+      reqId,
       tipo_esperado: tipoEsperado || 'auto',
       tipo_detectado: result?.tipo_detectado,
       sucesso: result?.sucesso,
       sugestao: result?.sugestao,
       confianca: result?.confianca,
+      legivel: result?.legivel,
+      usedRetry,
       hasNativeText: !!extractedPdfText,
       nativeTextLen: extractedPdfText?.length || 0,
       durationMs: ocrDurationMs,
-    }));
-    console.log('OCR result:', result);
+    })}`);
 
     // Se temos texto nativo do PDF e o CPF extraído está em conflito, tentar pegar do texto
     if (result.tipo_detectado === 'cnh' && result.dados && extractedPdfText) {
@@ -1560,6 +1650,12 @@ Use a função para retornar o chassi encontrado, ou "ilegivel" se identificar o
  * Extrai texto nativo de um PDF usando unpdf (sem worker, ideal para edge runtime).
  * Retorna string vazia se for PDF escaneado puro (apenas imagens) ou se falhar.
  */
+async function sha1Hex(input: string): Promise<string> {
+  const data = new TextEncoder().encode(input);
+  const buf = await crypto.subtle.digest("SHA-1", data);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
 async function extractTextFromPDFBuffer(buffer: Uint8Array): Promise<string> {
   try {
     // unpdf precisa de Uint8Array novo (não compartilhado com fetch buffer)

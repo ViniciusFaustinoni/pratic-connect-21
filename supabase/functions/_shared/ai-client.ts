@@ -115,17 +115,80 @@ export async function callAI(opts: CallAIOptions): Promise<CallAIResult> {
     model: opts.override?.model ?? (await getActiveAIConfig()).model,
   };
 
+  const blockTypes = summarizeMessageBlocks(opts.messages);
+  const t0 = Date.now();
+  console.log(`[ai-client][call] ${JSON.stringify({
+    provider: cfg.provider,
+    model: cfg.model,
+    messages: opts.messages?.length ?? 0,
+    block_types: blockTypes,
+    has_tools: !!(opts.tools && opts.tools.length),
+    max_tokens: opts.max_tokens,
+    stream: !!opts.stream,
+  })}`);
+
   try {
-    if (cfg.provider === "openai") return await callOpenAI(cfg, opts);
-    if (cfg.provider === "anthropic") return await callAnthropic(cfg, opts);
-    return await callLovable(cfg, opts);
+    let result: CallAIResult;
+    if (cfg.provider === "openai") result = await callOpenAI(cfg, opts);
+    else if (cfg.provider === "anthropic") result = await callAnthropic(cfg, opts);
+    else result = await callLovable(cfg, opts);
+
+    console.log(`[ai-client][resp] ${JSON.stringify({
+      provider: cfg.provider,
+      model: cfg.model,
+      status: result.status,
+      ok: result.ok,
+      latencyMs: Date.now() - t0,
+      errorMessage: result.errorMessage ? String(result.errorMessage).slice(0, 200) : undefined,
+    })}`);
+    return result;
   } catch (err: any) {
+    console.warn(`[ai-client][resp] ${JSON.stringify({
+      provider: cfg.provider,
+      model: cfg.model,
+      status: 0,
+      ok: false,
+      latencyMs: Date.now() - t0,
+      errorMessage: String(err?.message ?? err).slice(0, 200),
+    })}`);
     if (opts.fallbackToLovable !== false && cfg.provider !== "lovable") {
-      console.warn(`[ai-client] ${cfg.provider} falhou, fallback Lovable:`, err?.message);
+      console.warn(`[ai-client][fallback] ${cfg.provider} → lovable (motivo: ${err?.message ?? "throw"})`);
       return await callLovable(DEFAULT_CONFIG, opts);
     }
     return { ok: false, status: 500, errorMessage: err?.message ?? "AI call failed" };
   }
+}
+
+/** Resume os tipos de blocos (text/image_url/document) para fins de log. */
+function summarizeMessageBlocks(messages: any[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const m of messages ?? []) {
+    if (typeof m?.content === "string") {
+      counts.text = (counts.text ?? 0) + 1;
+      continue;
+    }
+    if (Array.isArray(m?.content)) {
+      for (const part of m.content) {
+        const t = part?.type ?? "unknown";
+        // Detecta PDF dentro de image_url data-URI
+        if (t === "image_url" && typeof part?.image_url?.url === "string") {
+          const url = part.image_url.url as string;
+          if (url.startsWith("data:application/pdf")) {
+            counts.pdf_data = (counts.pdf_data ?? 0) + 1;
+            continue;
+          }
+          if (/\.pdf(\?|$)/i.test(url)) {
+            counts.pdf_url = (counts.pdf_url ?? 0) + 1;
+            continue;
+          }
+          counts.image = (counts.image ?? 0) + 1;
+          continue;
+        }
+        counts[t] = (counts[t] ?? 0) + 1;
+      }
+    }
+  }
+  return counts;
 }
 
 // ─────────────────────────────────────────── Lovable AI Gateway
@@ -244,6 +307,14 @@ async function callAnthropic(cfg: AIConfig, opts: CallAIOptions): Promise<CallAI
   };
   // PDFs precisam do beta header em modelos mais antigos; inofensivo em Sonnet 4.5+
   if (hasDocumentBlock) headers["anthropic-beta"] = "pdfs-2024-09-25";
+
+  console.log(`[ai-client][anthropic] ${JSON.stringify({
+    model: body.model,
+    has_document_block: hasDocumentBlock,
+    user_msgs: userMsgs.length,
+    payload_bytes: JSON.stringify(body).length,
+    beta: hasDocumentBlock ? "pdfs-2024-09-25" : undefined,
+  })}`);
 
   // Streaming não é suportado neste adaptador; cai pra non-stream.
   const resp = await fetch("https://api.anthropic.com/v1/messages", {
@@ -405,10 +476,15 @@ export async function aiGatewayFetch(init: {
   if (!result.ok && effectiveProvider !== "lovable") {
     const recoverable = !result.status || result.status >= 500 || result.status === 400 || result.status === 401 || result.status === 402 || result.status === 429;
     if (recoverable) {
-      console.warn(`[ai-client] provider=${effectiveProvider} status=${result.status} msg="${result.errorMessage}" → tentando fallback Lovable`);
+      console.warn(`[ai-client][fallback] ${JSON.stringify({
+        from: effectiveProvider,
+        to: "lovable",
+        from_status: result.status,
+        from_error: String(result.errorMessage ?? "").slice(0, 200),
+      })}`);
       const fbResult = await callAI({ ...opts, override: { provider: "lovable", model: DEFAULT_CONFIG.model } });
       if (fbResult.ok) result = fbResult;
-      else console.warn(`[ai-client] fallback Lovable também falhou: status=${fbResult.status} msg="${fbResult.errorMessage}"`);
+      else console.warn(`[ai-client][fallback] lovable também falhou: status=${fbResult.status} msg="${fbResult.errorMessage}"`);
     }
   }
 
