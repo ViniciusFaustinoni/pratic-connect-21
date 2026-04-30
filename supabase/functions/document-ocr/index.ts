@@ -1185,15 +1185,20 @@ Locais comuns do CPF na CNH:
 
 Use a função para retornar o CPF encontrado ou "ilegivel" se não conseguir ler.`;
 
-        // Adicionar texto nativo como contexto extra se disponível
+        // Adicionar texto nativo COMPLETO como contexto principal
+        // (CNH-e digital tem texto preciso — IA deve preferir ao OCR visual)
         let retryUserContent: any[] = [
-          { type: 'text', text: 'Extraia o CPF desta CNH.' },
+          { type: 'text', text: 'Extraia o CPF desta CNH lendo dígito por dígito.' },
           contentParts[1], // imagem
         ];
-        
+
         if (extractedPdfText) {
+          // Manda até 6000 chars (CNH-e cabe inteira) — texto é a fonte primária
+          const fullText = extractedPdfText.length > 6000
+            ? extractedPdfText.substring(0, 6000)
+            : extractedPdfText;
           retryUserContent = [
-            { type: 'text', text: `Extraia o CPF desta CNH.\n\nTexto nativo do PDF:\n${extractedPdfText.substring(0, 2000)}` },
+            { type: 'text', text: `Extraia o CPF desta CNH brasileira.\n\n⚠️ FONTE PRIMÁRIA: o texto abaixo foi extraído NATIVAMENTE do PDF (camada de texto, 100% precisa). Use-o como REFERÊNCIA PRINCIPAL para os dígitos do CPF. A imagem é apenas para confirmar o layout.\n\n--- TEXTO NATIVO DO PDF ---\n${fullText}\n--- FIM ---` },
             contentParts[1],
           ];
         }
