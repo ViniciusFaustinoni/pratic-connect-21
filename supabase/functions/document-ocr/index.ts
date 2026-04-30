@@ -51,7 +51,7 @@ async function getOcrEngineConfig(): Promise<OcrEngineConfig> {
       secondary_model: data.secondary_model,
       dupla_leitura_tipos: data.dupla_leitura_tipos ?? ['cnh', 'crlv'],
       pdf_rasterizar: data.pdf_rasterizar ?? true,
-      pdf_dpi: data.pdf_dpi ?? 200,
+      pdf_dpi: data.pdf_dpi ?? 144,
     } : DEFAULT_OCR_ENGINE;
     _engineCache = { value, ts: Date.now() };
     return value;
