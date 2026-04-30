@@ -54,21 +54,24 @@ const CRITICAL_TYPES = new Set(["cnh", "crlv"]);
 export function routeOcr(input: RouterInputs): RouterDecision {
   const critical = !!input.expectedDocType && CRITICAL_TYPES.has(input.expectedDocType.toLowerCase());
 
+  // ⚠️ Mistral foi REMOVIDO do pipeline runtime (decisão arquitetural — 2026-04-30).
+  // Motivo: o caminho do Mistral estava quebrado e era ponto de falha de praticamente
+  // todo PDF. O código do Mistral (mistral-ocr.ts, runMistralPass, case 'mistral-ocr')
+  // foi mantido intacto para reativação futura, mas o roteador NUNCA mais retorna
+  // 'mistral-ocr' em nenhuma cascata. Toda saída cai em Anthropic (Claude Sonnet 4.5)
+  // como primário, com fallback de emergência em Gemini (via Lovable Gateway).
+  // Forçamos hasMistralKey=false defensivamente para garantir que nenhum caminho
+  // legado dispare Mistral mesmo se a env var existir.
+  const _hasMistralKey = false; // hard-disabled
+  void input.hasMistralKey; // mantido na interface por compat
+
   // ── Modo legado: respeita engine configurada explicitamente ──────────
   if (input.configuredEngine !== "auto") {
-    if (input.configuredEngine === "mistral" && input.hasMistralKey) {
-      return {
-        primary: input.isPdf ? "mistral-ocr" : "image-vlm",
-        fallbacks: input.isPdf ? ["raster-vlm", "image-vlm"] : ["raster-vlm"],
-        reason: `engine=mistral (manual) | ${input.isPdf ? "PDF" : "image"}`,
-        critical,
-      };
-    }
-    // anthropic/google/global → vai direto pra multimodal
+    // engine=mistral foi desativado: cai no comportamento padrão (anthropic/google).
     return {
       primary: input.isPdf ? (input.nativeTextScore >= 0.7 ? "text-llm" : "raster-vlm") : "image-vlm",
       fallbacks: input.isPdf ? ["raster-vlm", "image-vlm"] : ["raster-vlm"],
-      reason: `engine=${input.configuredEngine} (manual)`,
+      reason: `engine=${input.configuredEngine === "mistral" ? "mistral→anthropic(forced)" : input.configuredEngine} (manual)`,
       critical,
     };
   }
@@ -79,47 +82,36 @@ export function routeOcr(input: RouterInputs): RouterDecision {
     return {
       primary: "image-vlm",
       fallbacks: ["raster-vlm"],
-      reason: "auto | image input → VLM direto",
+      reason: "auto | image input → VLM direto (Anthropic)",
       critical,
     };
   }
 
   // PDFs com texto nativo MUITO RICO → text-llm é mais barato e preciso.
-  // Não usamos pra documentos críticos (CNH/CRLV podem ter campos só visuais como foto).
   if (input.nativeTextScore >= 0.75 && !critical) {
     return {
       primary: "text-llm",
-      fallbacks: input.hasMistralKey ? ["mistral-ocr", "raster-vlm"] : ["raster-vlm"],
+      fallbacks: ["raster-vlm", "image-vlm"],
       reason: `auto | PDF c/ texto rico (score=${input.nativeTextScore.toFixed(2)}) → text-llm`,
       critical,
     };
   }
 
-  // PDFs com texto razoável → text-llm primeiro, mas com fallback agressivo
+  // PDFs com texto razoável → text-llm primeiro + fallback VLM
   if (input.nativeTextScore >= 0.5 && !critical) {
     return {
       primary: "text-llm",
-      fallbacks: input.hasMistralKey ? ["mistral-ocr", "raster-vlm"] : ["raster-vlm", "image-vlm"],
+      fallbacks: ["raster-vlm", "image-vlm"],
       reason: `auto | PDF c/ texto médio (score=${input.nativeTextScore.toFixed(2)}) → text-llm + fallback VLM`,
       critical,
     };
   }
 
-  // PDFs "vazios" (CNH-e digital, scans, formulários): preferir Mistral OCR
-  // se disponível; senão rasterizar e usar VLM.
-  if (input.hasMistralKey) {
-    return {
-      primary: "mistral-ocr",
-      fallbacks: ["raster-vlm", "image-vlm"],
-      reason: `auto | PDF s/ texto útil (score=${input.nativeTextScore.toFixed(2)}) → Mistral OCR`,
-      critical,
-    };
-  }
-
+  // PDFs "vazios" (CNH-e digital, scans, formulários): rasterizar e mandar pro VLM (Anthropic).
   return {
     primary: "raster-vlm",
     fallbacks: ["image-vlm"],
-    reason: `auto | PDF s/ texto útil (score=${input.nativeTextScore.toFixed(2)}), sem Mistral → rasterizar+VLM`,
+    reason: `auto | PDF s/ texto útil (score=${input.nativeTextScore.toFixed(2)}) → rasterizar+VLM (Anthropic)`,
     critical,
   };
 }
