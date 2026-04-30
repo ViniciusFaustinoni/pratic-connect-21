@@ -68,6 +68,10 @@ import { BlocoDepreciacaoVeiculo } from '@/components/associados/detalhe/BlocoDe
 import { formatPlacaExibicao } from '@/lib/placa-utils';
 import { ConcluirInstalacaoPrestadorButton } from '@/components/cadastro/ConcluirInstalacaoPrestadorButton';
 import { AlterarFormaPagamentoDialog } from '@/components/cobrancas/AlterarFormaPagamentoDialog';
+import { SolicitarDocumentosDialog } from '@/components/cadastro/SolicitarDocumentosDialog';
+import { useSolicitarDocumentos } from '@/hooks/usePropostasPendentes';
+import { useDocumentosSolicitadosPendentes } from '@/hooks/useDocumentosSolicitados';
+import { useQueryClient } from '@tanstack/react-query';
 
 // ============================================
 // UTILITÁRIOS
@@ -393,8 +397,41 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
   const totalFotos = (vistoriaUnificada?.fotosInstalador?.length || 0) + (vistoriaUnificada?.fotosAutovistoria?.length || 0);
 
   // ============================================
+  // SOLICITAR REENVIO DE DOCUMENTOS
+  // ============================================
+  const queryClient = useQueryClient();
+  const [reenvioDialogOpen, setReenvioDialogOpen] = useState(false);
+  const solicitarDocsMutation = useSolicitarDocumentos();
+  const { data: docsJaSolicitados } = useDocumentosSolicitadosPendentes(id);
+
+  // Hook expõe pendências para o card "já solicitados"
+
+  const handleConfirmarReenvio = async (documentos: string[], observacoes: string) => {
+    if (!contrato?.id || !id) {
+      toast.error('Contrato do associado não encontrado.');
+      return;
+    }
+    try {
+      await solicitarDocsMutation.mutateAsync({
+        contratoId: contrato.id,
+        associadoId: id,
+        documentos,
+        observacoes,
+      });
+      toast.success('Solicitação de reenvio enviada ao associado via WhatsApp.');
+      setReenvioDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['documentos', id] });
+      queryClient.invalidateQueries({ queryKey: ['documentos-cotacao'] });
+      queryClient.invalidateQueries({ queryKey: ['docs-solicitados-pendentes', id] });
+    } catch (err: any) {
+      toast.error('Falha ao solicitar reenvio: ' + (err?.message || 'erro desconhecido'));
+    }
+  };
+
+  // ============================================
   // RENDER
   // ============================================
+
   return (
     <div className="space-y-4">
       {/* Breadcrumb removido — já existe no header global */}
@@ -773,10 +810,37 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                     <XCircle className="h-4 w-4 text-destructive shrink-0" />
                     <span className="text-sm font-medium text-destructive">{docsReprovados} reprovado(s)</span>
                   </div>
-                  <Button size="sm" variant="outline" className="h-7 text-xs"><Send className="h-3 w-3 mr-1" /> Solicitar Reenvio</Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={() => setReenvioDialogOpen(true)}
+                    disabled={!contrato?.id}
+                    title={!contrato?.id ? 'Associado sem contrato — não é possível solicitar' : 'Solicitar reenvio ao associado via WhatsApp'}
+                  >
+                    <Send className="h-3 w-3 mr-1" /> Solicitar Reenvio
+                  </Button>
                 </CardContent>
               </Card>
             )}
+
+            {docsJaSolicitados && docsJaSolicitados.length > 0 && (
+              <Card className="border-amber-300/40 bg-amber-50/60 dark:bg-amber-900/10">
+                <CardContent className="p-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Send className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
+                    <span className="text-xs text-amber-800 dark:text-amber-300">
+                      {docsJaSolicitados.length} documento(s) já solicitado(s) — aguardando reenvio do associado
+                      {docsJaSolicitados[0]?.created_at && (
+                        <> desde {formatDate(docsJaSolicitados[0].created_at)}</>
+                      )}.
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+
 
             <Card className="border-border/60">
               <CardContent className="p-0">
@@ -1230,6 +1294,15 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
           descricao={alterarFormaState.descricao}
         />
       )}
+
+      {/* Solicitar reenvio de documentos */}
+      <SolicitarDocumentosDialog
+        open={reenvioDialogOpen}
+        onOpenChange={setReenvioDialogOpen}
+        onConfirm={handleConfirmarReenvio}
+        loading={solicitarDocsMutation.isPending}
+        tipoVeiculo={(veiculos?.[0] as any)?.tipo === 'moto' ? 'moto' : 'carro'}
+      />
     </div>
   );
 }
