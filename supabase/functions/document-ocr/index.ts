@@ -1574,6 +1574,12 @@ Use a função para retornar o chassi encontrado, ou "ilegivel" se identificar o
  * Extrai texto nativo de um PDF usando unpdf (sem worker, ideal para edge runtime).
  * Retorna string vazia se for PDF escaneado puro (apenas imagens) ou se falhar.
  */
+async function sha1Hex(input: string): Promise<string> {
+  const data = new TextEncoder().encode(input);
+  const buf = await crypto.subtle.digest("SHA-1", data);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
 async function extractTextFromPDFBuffer(buffer: Uint8Array): Promise<string> {
   try {
     // unpdf precisa de Uint8Array novo (não compartilhado com fetch buffer)
