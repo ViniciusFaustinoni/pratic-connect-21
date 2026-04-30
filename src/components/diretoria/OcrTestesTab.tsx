@@ -125,10 +125,10 @@ export default function OcrTestesTab() {
 // PAINEL A — Executar teste ad-hoc ou caso salvo
 // =====================================================
 function PainelExecutar() {
-  const userIdRef = useRef<string | null>(null);
-  if (userIdRef.current === null) {
-    supabase.auth.getUser().then(({ data }) => { userIdRef.current = data.userIdRef.current; });
-  }
+  const [userId, setUserId] = useState<string | null>(null);
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
+  }, []);
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [casoId, setCasoId] = useState<string>('novo');
