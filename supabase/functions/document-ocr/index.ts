@@ -738,6 +738,8 @@ function mergeNativeOverAI(
 ): Record<string, any> {
   const merged = { ...aiDados };
   for (const [key, val] of Object.entries(nativeDados)) {
+    // Ignorar campos meta (prefixados com __) — usados apenas para logging
+    if (key.startsWith('__')) continue;
     if (val === null || val === undefined || val === '') continue;
     const aiVal = aiDados[key];
     // CPF: nativo SEMPRE ganha (já passou checksum)
