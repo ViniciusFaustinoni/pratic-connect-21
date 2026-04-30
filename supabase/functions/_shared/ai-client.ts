@@ -171,7 +171,7 @@ async function callLovable(cfg: AIConfig, opts: CallAIOptions): Promise<CallAIRe
 // ─────────────────────────────────────────── OpenAI direto
 
 async function callOpenAI(cfg: AIConfig, opts: CallAIOptions): Promise<CallAIResult> {
-  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  const apiKey = await getProviderKey("openai");
   if (!apiKey) throw new Error("OPENAI_API_KEY não configurada");
 
   const body: any = {
