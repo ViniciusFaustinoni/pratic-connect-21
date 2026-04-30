@@ -1,41 +1,84 @@
-## Análise prévia
+# Aba OCR em Logs de Auditoria
 
-### Status do que foi pedido
-- **#1 PDF como `type:"document"` para Anthropic** → **já implementado** no turno anterior em `_shared/ai-client.ts` (`toAnthropicMessage`). Não há retrabalho.
-- **Anthropic como primeiro provedor** → **já é assim**: `ai_model_config` global aponta para `anthropic/claude-sonnet-4-5`; o `aiGatewayFetch` chama Anthropic primeiro e só cai em Lovable Gateway se houver erro recuperável.
-- **#2 Logs estruturados** → parcial. Hoje há só um `[OCR][summary]` no fim. Falta logar entrada, mime, tipo de bloco, modelo, payload size e resposta do provedor.
+## Objetivo
 
-### O que vale agir AGORA para "OCR mais certeiro" e debug claro
+Hoje os logs do `document-ocr` só vivem nos logs do Supabase (efêmeros, difíceis de cruzar com associado/cotação). Vamos persistir cada execução em tabela própria e exibi-la em uma nova aba na tela `Diretoria > Logs de Auditoria`, permitindo que a Diretoria investigue rapidamente falhas de leitura (CPF errado, truncamento, fallback acionado, etc.).
 
-#### A. Logs estruturados em `document-ocr/index.ts`
-Adicionar marcadores únicos por requisição (`reqId`) e logs JSON:
-- `[OCR][in]` no início: `reqId`, `tipoEsperado`, `urlHash`, `isAuthenticated`.
-- `[OCR][file]` após download: `mime`, `bytes`, `isPdf`, `hasNativeText`, `nativeTextLen`.
-- `[OCR][ai_request]` antes de chamar IA: `model`, `provider` (lido de `ai_model_config`), `parts_count`, `block_types` (`["text","document"]` etc.), `max_tokens`.
-- `[OCR][ai_response]` após resposta: `status`, `latencyMs`, `finish_reason`, `usage` (tokens), `content_chars`, `parsed_ok`.
-- `[OCR][confidence]` no fim: `tipo_detectado`, `confianca`, `sugestao`, `usedRetry` (bool).
+## O que será entregue
 
-Adicionar logs equivalentes no `_shared/ai-client.ts`:
-- `[ai-client][call]` com `provider`, `model`, `has_document_block`, `messages_count`.
-- `[ai-client][resp]` com `provider`, `status`, `latencyMs`, `errorMessage` se houver.
-- `[ai-client][fallback]` quando aciona Lovable Gateway, registrando o motivo.
+1. **Tabela nova `ocr_execution_logs`** — uma linha por chamada do `document-ocr`, com tudo que importa para debug:
+   - `req_id`, `created_at`, `usuario_id` (se autenticado), `cotacao_id`/`associado_id` (quando o caller passar)
+   - `tipo_esperado`, `tipo_detectado`, `arquivo_url_hash`, `mime`, `bytes`, `is_pdf`, `has_native_text`, `native_text_len`
+   - `provider`, `modelo`, `latency_ms`, `usage` (jsonb com input/output tokens)
+   - `confianca`, `legivel`, `sugestao` (`aprovar`/`revisar`/`reprovar`), `sucesso`
+   - `truncated` (bool — finish_reason=length/max_tokens), `used_retry`, `used_native_fallback`, `cpf_corrigido_via` (`native`/`retry`/`permutacao`/null)
+   - `dados_extraidos` (jsonb), `motivo` (texto), `erro` (texto quando falhou)
+   - `status` derivado: `sucesso`, `revisar`, `falha`, `truncado`
 
-#### B. Qualidade do OCR para documentos ruins
-1. **Usar o modelo global em vez do hardcoded** — hoje `OCR_MODEL = 'google/gemini-2.5-flash'` ignora a config Anthropic. Trocar para deixar `aiGatewayFetch` resolver o modelo via `ai_model_config` (passar `model` como hint só para o caminho Lovable).
-2. **Retry automático com modelo mais potente** quando o primeiro resultado vier com `confianca < 0.6`, `legivel === false` ou `sugestao === 'revisar'`. Hoje `OCR_RETRY_MODEL` está declarado mas nunca acionado nesse caso. Habilitar 1 retry com `claude-opus-4-5` (Anthropic) ou `gemini-2.5-pro` (Lovable fallback) e mesclar resultados pegando o de maior confiança.
-3. **Reforço de prompt para baixa qualidade**: quando o PDF não tem texto nativo (`extractedPdfText` vazio) ou a imagem é grande (>2MB compactada), injetar parágrafo no prompt: "Documento provavelmente escaneado/foto de baixa qualidade. Use OCR rigoroso letra-a-letra; em campos numéricos, prefira a leitura mais provável e marque `confianca` < 0.7 se houver dúvida."
-4. **Anti-alucinação**: instruir o modelo a retornar `null` (não inventar) em qualquer campo cuja leitura não esteja clara — já existe parcialmente no system prompt; reforçar para CPF/placa/CEP/data.
+2. **Edge function `document-ocr` instrumentada para gravar 1 linha ao final** de cada execução (sucesso, fallback ou erro), reaproveitando os dados que já calculamos. Sem mudar contrato da função — o caller pode opcionalmente enviar `cotacao_id` e `associado_id` no body para enriquecer o log.
 
-### O que NÃO vou fazer
-- Não vou mexer na ordem de fallback (já está Anthropic → Lovable conforme pedido).
-- Não vou re-implementar o suporte a PDF nativo (já está feito).
-- Não vou tocar no frontend `UnifiedDocumentUploader` (já lida com `sucesso:false`).
+3. **Nova aba "OCR" na página `/diretoria/logs`** com:
+   - Filtros: status (todos/sucesso/revisar/falha/truncado), tipo de documento (CNH/CRLV/RG/...), provider, busca por CPF/ID/req_id, data início/fim
+   - Tabela: data, usuário, tipo detectado, status (badge colorido), confiança, modelo, latência
+   - Linha expansível com: dados extraídos, motivo do erro, indicação se houve fallback nativo, dados do retry, link para o documento original (quando autenticado)
+   - Cards de métricas no topo: total últimas 24h, taxa de sucesso, taxa de truncamento, latência média
+   - Botão Exportar CSV
 
-## Validação
-1. Login como diretor (`admin@teste.com`).
-2. Subir 1 PDF de CRLV nítido + 1 foto de comprovante de baixa qualidade + 1 PDF escaneado.
-3. Conferir nos logs do `document-ocr` (Supabase Functions):
-   - `[OCR][in]`, `[OCR][file]`, `[OCR][ai_request]`, `[OCR][ai_response]`, `[OCR][confidence]` para cada upload.
-   - `[ai-client][call]` mostrando `provider=anthropic, has_document_block=true` para o PDF.
-   - Quando confiança < 0.6, ver `[OCR][retry]` seguido de novo `[OCR][ai_response]` e `usedRetry: true` no summary.
-4. Confirmar que não há mais erro 500/400 no console do frontend.
+4. **RLS:** apenas Diretor/Admin lê (mesmo padrão dos demais logs). Edge function escreve via service role.
+
+## Detalhes técnicos
+
+**Migration nova:**
+```sql
+create table public.ocr_execution_logs (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz default now(),
+  req_id text,
+  usuario_id uuid references auth.users(id) on delete set null,
+  cotacao_id uuid,
+  associado_id uuid,
+  tipo_esperado text,
+  tipo_detectado text,
+  arquivo_url_hash text,
+  mime text,
+  bytes integer,
+  is_pdf boolean default false,
+  has_native_text boolean default false,
+  native_text_len integer default 0,
+  provider text,
+  modelo text,
+  latency_ms integer,
+  usage jsonb,
+  confianca numeric,
+  legivel boolean,
+  sugestao text,
+  sucesso boolean,
+  truncated boolean default false,
+  used_retry boolean default false,
+  used_native_fallback boolean default false,
+  cpf_corrigido_via text,
+  status text,            -- 'sucesso' | 'revisar' | 'falha' | 'truncado'
+  motivo text,
+  erro text,
+  dados_extraidos jsonb
+);
+create index on public.ocr_execution_logs (created_at desc);
+create index on public.ocr_execution_logs (status, created_at desc);
+create index on public.ocr_execution_logs (tipo_detectado);
+create index on public.ocr_execution_logs (cotacao_id);
+alter table public.ocr_execution_logs enable row level security;
+create policy "Diretor/Admin lê logs OCR" on public.ocr_execution_logs
+  for select using (has_role(auth.uid(), 'admin') or has_role(auth.uid(), 'diretor'));
+create policy "Service role escreve logs OCR" on public.ocr_execution_logs
+  for insert with check (true);
+```
+
+**Edge function:** ao final de `document-ocr/index.ts` (em todos os caminhos: sucesso, fallback, erro), insere 1 linha. Usa `try/catch` para nunca quebrar a resposta principal por causa do log.
+
+**Frontend:** novo componente `OcrLogsTab.tsx` em `src/components/diretoria/` consumido por uma nova aba na `LogsAuditoria.tsx` (já tem estrutura de `Tabs`).
+
+## Fora de escopo
+
+- Não vamos retrabalhar UI existente (Hierarquia, Todos os logs).
+- Não vamos persistir o conteúdo binário do documento — apenas hash da URL + metadados.
+- Se a tabela crescer muito, criar política de retenção (ex.: 90 dias) entrará em iteração futura — não bloqueia este entregável.
