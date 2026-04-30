@@ -1288,14 +1288,19 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           publicUrlForMistral = isAllowedUrl ? url : null; // Mistral prefere URL pública
         }
 
-        // RASTERIZAÇÃO PDF→PNG: ativada quando o roteador escolhe raster-vlm
-        // (primário ou fallback) E o PDF tem texto nativo pobre.
-        const wantsRaster = routerDecision.primary === 'raster-vlm' || routerDecision.fallbacks.includes('raster-vlm');
+        // RASTERIZAÇÃO PDF→JPEG: ativada quando o roteador escolhe raster-vlm.
+        // Quando raster-vlm é PRIMARY, confiamos na decisão do roteador (que já
+        // analisou o unpdfScore) e rasterizamos sem segunda checagem — só assim
+        // a CNH digital SENATRAN (que tem 440 chars de texto-lixo) é lida via
+        // imagem com alta confiança em vez de cair em texto nativo inútil.
+        const isRasterPrimary = routerDecision.primary === 'raster-vlm';
+        const isRasterFallback = routerDecision.fallbacks.includes('raster-vlm');
+        const wantsRaster = isRasterPrimary || isRasterFallback;
         if (
           isPdfUrl &&
           wantsRaster &&
           engineCfg.pdf_rasterizar &&
-          shouldRasterizePdf(extractedPdfText)
+          (isRasterPrimary || shouldRasterizePdf(extractedPdfText))
         ) {
           const tRaster = Date.now();
           try {
