@@ -858,80 +858,137 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
       );
     };
 
-    let response: Response;
-    try {
-      console.log(`[OCR] chamando IA: model=${OCR_MODEL}, max_tokens=4096, parts=${contentParts.length}, hasNativeText=${!!extractedPdfText}`);
-      response = await callAIGatewayWithRetry({
-        model: OCR_MODEL,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: contentParts },
-        ],
+    // Função encapsulada de uma "passada" de OCR contra a IA com logs estruturados.
+    // Retorna { result, raw } se sucesso, ou null se falha (já loga + repassa fallback).
+    type OcrPass = { result: any; raw: string; durationMs: number; finishReason?: string; usage?: any };
+    const runOcrPass = async (model: string, parts: any[], label: string): Promise<OcrPass | null> => {
+      const requestPayloadSummary = {
+        reqId,
+        label,
+        model,
         max_tokens: 4096,
-        temperature: 0,
-      }, LOVABLE_API_KEY, 'main');
-    } catch (gwErr) {
-      console.error('[OCR] Gateway indisponível após retries:', gwErr);
-      return ocrFallbackResponse('Serviço de OCR temporariamente indisponível. Documento enviado para revisão manual.');
-    }
+        parts: parts.length,
+        block_types: parts.map((p: any) => p?.type),
+        hasNativeText: !!extractedPdfText,
+      };
+      console.log(`[OCR][ai_request] ${JSON.stringify(requestPayloadSummary)}`);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('AI Gateway error:', response.status, errorText);
+      const t0 = Date.now();
+      let resp: Response;
+      try {
+        resp = await callAIGatewayWithRetry({
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: parts },
+          ],
+          max_tokens: 4096,
+          temperature: 0,
+        }, LOVABLE_API_KEY, label);
+      } catch (gwErr) {
+        console.error(`[OCR][ai_response] ${JSON.stringify({
+          reqId, label, model, status: 0, latencyMs: Date.now() - t0,
+          error: String((gwErr as Error)?.message ?? gwErr).slice(0, 300),
+        })}`);
+        return null;
+      }
 
-      if (response.status === 429) {
-        return ocrFallbackResponse('Limite de requisições excedido. Documento enviado para revisão manual.');
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => '');
+        console.error(`[OCR][ai_response] ${JSON.stringify({
+          reqId, label, model, status: resp.status, latencyMs: Date.now() - t0,
+          error: errText.slice(0, 300),
+        })}`);
+        return null;
       }
-      if (response.status === 402) {
-        return ocrFallbackResponse('Créditos de IA esgotados. Documento enviado para revisão manual.');
+
+      let dataObj: any;
+      let rawText: string;
+      try {
+        rawText = await resp.text();
+        if (!rawText || rawText.trim() === '') {
+          console.error(`[OCR][ai_response] ${JSON.stringify({
+            reqId, label, model, status: resp.status, latencyMs: Date.now() - t0, error: 'empty body',
+          })}`);
+          return null;
+        }
+        dataObj = JSON.parse(rawText);
+      } catch (e) {
+        console.error(`[OCR][ai_response] ${JSON.stringify({
+          reqId, label, model, status: resp.status, latencyMs: Date.now() - t0,
+          error: 'parse-failed: ' + String((e as Error)?.message ?? e).slice(0, 200),
+        })}`);
+        return null;
       }
+
+      const contentStr = dataObj?.choices?.[0]?.message?.content ?? '';
+      const finishReason = dataObj?.choices?.[0]?.finish_reason;
+      const usage = dataObj?.usage;
+
+      console.log(`[OCR][ai_response] ${JSON.stringify({
+        reqId, label, model, status: resp.status,
+        latencyMs: Date.now() - t0,
+        finish_reason: finishReason,
+        usage,
+        content_chars: contentStr.length,
+      })}`);
+
+      if (!contentStr) return null;
+
+      // Parse JSON do conteúdo
+      let parsed: any;
+      try {
+        let clean = contentStr.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        clean = clean.replace(/:\s*_[A-Z_]+_\s*([,}\]])/g, ': null$1');
+        parsed = JSON.parse(clean);
+      } catch {
+        const repaired = tryRepairTruncatedJSON(contentStr);
+        if (repaired) {
+          console.warn(`[OCR][${reqId}] JSON reparado após truncamento (${label})`);
+          parsed = repaired;
+        } else {
+          console.error(`[OCR][${reqId}] parse falhou (${label}), conteúdo:`, contentStr.slice(0, 500));
+          return null;
+        }
+      }
+
+      return { result: parsed, raw: contentStr, durationMs: Date.now() - t0, finishReason, usage };
+    };
+
+    // 1ª passada: usa o modelo configurado globalmente (resolvido pelo aiGatewayFetch via ai_model_config).
+    // O `model` enviado aqui só é usado quando provider=lovable.
+    const firstPass = await runOcrPass(OCR_MODEL, contentParts, 'main');
+    if (!firstPass) {
       return ocrFallbackResponse('Erro ao processar documento com IA. Documento enviado para revisão manual.');
     }
 
-    // Ler resposta
-    let data;
-    try {
-      const responseText = await response.text();
-      if (!responseText || responseText.trim() === '') {
-        console.error('Empty response from AI Gateway');
-        return ocrFallbackResponse('Resposta vazia do gateway de IA. Documento enviado para revisão manual.');
-      }
-      data = JSON.parse(responseText);
-    } catch (parseError) {
-      console.error('Failed to parse AI Gateway response:', parseError);
-      return ocrFallbackResponse('Erro ao processar resposta do gateway de IA. Documento enviado para revisão manual.');
-    }
+    let result = firstPass.result;
+    let usedRetry = false;
 
-    const content = data.choices?.[0]?.message?.content;
+    // Heurística: se confiança baixa, ilegível ou pediu revisão, tenta retry com modelo mais potente
+    const confianca = Number(result?.confianca ?? 1);
+    const lowQualityResult =
+      result?.legivel === false ||
+      result?.sucesso === false ||
+      result?.sugestao === 'revisar' ||
+      (Number.isFinite(confianca) && confianca < 0.6);
 
-    if (!content) {
-      console.error('No content in AI response:', JSON.stringify(data));
-      return ocrFallbackResponse('Resposta vazia da IA. Documento enviado para revisão manual.');
-    }
-
-    // Parsear JSON da resposta
-    let result;
-    try {
-      let cleanContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      // Limpar placeholders deixados pelo modelo (ex: _CONFIDENCE_, _NOME_) → null
-      // (não substituímos mais por 0.95 — confiança é calculada de verdade abaixo)
-      cleanContent = cleanContent.replace(/:\s*_[A-Z_]+_\s*([,}\]])/g, ': null$1');
-      result = JSON.parse(cleanContent);
-    } catch (parseError) {
-      console.warn('[OCR] JSON.parse falhou, tentando reparar JSON truncado...');
-      const repaired = tryRepairTruncatedJSON(content);
-      if (repaired) {
-        console.warn('[OCR] JSON reparado com sucesso após truncamento');
-        result = repaired;
-      } else {
-        console.error('[OCR] Reparo falhou. Conteúdo bruto:', content);
-        return new Response(
-          JSON.stringify({ 
-            error: 'Erro ao interpretar resultado da análise',
-            rawResponse: content,
-          }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+    if (lowQualityResult) {
+      console.log(`[OCR][retry] ${JSON.stringify({
+        reqId,
+        motivo: { confianca, legivel: result?.legivel, sugestao: result?.sugestao, sucesso: result?.sucesso },
+        model_retry: OCR_RETRY_MODEL,
+      })}`);
+      const secondPass = await runOcrPass(OCR_RETRY_MODEL, contentParts, 'retry-low-confidence');
+      if (secondPass) {
+        const c2 = Number(secondPass.result?.confianca ?? 0);
+        // Mantém o melhor: maior confiança ou que tenha virado "aprovar"
+        const betterByConfidence = Number.isFinite(c2) && c2 > confianca;
+        const promotedToApprove = secondPass.result?.sugestao === 'aprovar' && result?.sugestao !== 'aprovar';
+        if (betterByConfidence || promotedToApprove) {
+          result = secondPass.result;
+          usedRetry = true;
+        }
       }
     }
 
