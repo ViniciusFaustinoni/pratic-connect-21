@@ -828,6 +828,9 @@ type OcrLogCtx = {
   used_retry?: boolean;
   used_native_fallback?: boolean;
   cpf_corrigido_via?: string | null;
+  cpf_fonte?: string | null;
+  cpf_contexto?: string | null;
+  cpf_candidatos?: any;
 };
 
 async function persistOcrLog(ctx: OcrLogCtx, outcome: {
