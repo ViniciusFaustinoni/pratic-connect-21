@@ -14,7 +14,8 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useFipe } from '@/hooks/useFipe';
+import { useFipe, FipeAlternativa } from '@/hooks/useFipe';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 
 interface VeiculoEncontrado {
@@ -85,6 +86,8 @@ export function EtapaConsultaFipe({
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [camposAutoPreenchidos, setCamposAutoPreenchidos] = useState<string[]>([]);
+  const [fipeAlternativas, setFipeAlternativas] = useState<FipeAlternativa[]>([]);
+  const [fipeSelecionada, setFipeSelecionada] = useState<string>('');
   const { getByPlaca } = useFipe();
 
   const handlePlacaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,7 +116,7 @@ export function EtapaConsultaFipe({
       const result = await getByPlaca(placaClean);
       
       if (result.success && result.vehicleData) {
-        const { vehicleData, fipeData } = result;
+        const { vehicleData, fipeData, fipeAlternativas: alts } = result;
         
         setVeiculoEncontrado({
           placa: vehicleData.placa,
@@ -128,11 +131,15 @@ export function EtapaConsultaFipe({
         
         // PREENCHER CAMPOS AUTOMATICAMENTE
         setMarca(vehicleData.marca);
-        setModelo(vehicleData.modelo);
+        setModelo(fipeData?.descricao || vehicleData.modelo);
         setAno(vehicleData.ano);
         if (fipeData?.valor) {
           setValorFipe(fipeData.valor);
         }
+        
+        // Salvar alternativas para permitir troca manual
+        setFipeAlternativas(alts || []);
+        setFipeSelecionada(fipeData?.codigo || '');
         
         // Marcar quais campos foram auto-preenchidos
         const camposPreenchidos = ['marca', 'modelo', 'ano'];
@@ -164,6 +171,22 @@ export function EtapaConsultaFipe({
     const parsed = parseCurrency(value);
     setValorFipe(parsed);
     setCamposAutoPreenchidos(prev => prev.filter(c => c !== 'valorFipe'));
+  };
+
+  const handleTrocarFipe = (codigo: string) => {
+    const escolhida = fipeAlternativas.find(f => String(f.codigo) === String(codigo));
+    if (!escolhida) return;
+    setFipeSelecionada(codigo);
+    setValorFipe(escolhida.valor);
+    setModelo(escolhida.descricao || modelo);
+    setVeiculoEncontrado(veiculoEncontrado ? {
+      ...veiculoEncontrado,
+      codigoFipe: escolhida.codigo,
+      valorFipe: escolhida.valor,
+      modelo: escolhida.descricao || veiculoEncontrado.modelo,
+    } : null);
+    setCamposAutoPreenchidos(prev => Array.from(new Set([...prev, 'modelo', 'valorFipe'])));
+    toast.success('Versão FIPE atualizada');
   };
 
   // Pode avançar se tem marca, modelo, ano e valorFipe preenchidos
@@ -234,7 +257,35 @@ export function EtapaConsultaFipe({
               </div>
             )}
           </div>
-          
+
+          {/* Seletor de variante FIPE — quando a API retorna múltiplas versões */}
+          {fipeAlternativas.length > 1 && (
+            <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
+              <AlertDescription className="space-y-2">
+                <div className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                  Foram encontradas {fipeAlternativas.length} versões FIPE para esta placa. Confira se a versão selecionada bate com o CRLV (combustível, câmbio, motorização):
+                </div>
+                <Select value={String(fipeSelecionada)} onValueChange={handleTrocarFipe}>
+                  <SelectTrigger className="bg-background">
+                    <SelectValue placeholder="Selecione a versão correta" />
+                  </SelectTrigger>
+                  <SelectContent className="max-w-[600px]">
+                    {fipeAlternativas.map((alt) => (
+                      <SelectItem key={String(alt.codigo)} value={String(alt.codigo)}>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{alt.descricao}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {formatCurrency(alt.valor)} · cód. {alt.codigo}{alt.ano ? ` · ${alt.ano}` : ''}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </AlertDescription>
+            </Alert>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Marca */}
             <div className="space-y-2">

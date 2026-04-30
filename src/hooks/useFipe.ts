@@ -60,6 +60,15 @@ export interface FipeData {
   codigo: string;
   valor: number;
   mesReferencia: string;
+  descricao?: string;
+}
+
+export interface FipeAlternativa {
+  codigo: string;
+  valor: number;
+  mesReferencia?: string;
+  descricao: string;
+  ano?: string | number | null;
 }
 
 export interface PlateResult {
@@ -67,6 +76,8 @@ export interface PlateResult {
   extractedPlate?: string;
   vehicleData?: VehicleData;
   fipeData?: FipeData;
+  /** Todas as variantes FIPE retornadas pela API — usuário pode trocar quando a heurística erra. */
+  fipeAlternativas?: FipeAlternativa[];
   error?: string;
 }
 
