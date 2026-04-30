@@ -173,6 +173,22 @@ export function EtapaConsultaFipe({
     setCamposAutoPreenchidos(prev => prev.filter(c => c !== 'valorFipe'));
   };
 
+  const handleTrocarFipe = (codigo: string) => {
+    const escolhida = fipeAlternativas.find(f => String(f.codigo) === String(codigo));
+    if (!escolhida) return;
+    setFipeSelecionada(codigo);
+    setValorFipe(escolhida.valor);
+    setModelo(escolhida.descricao || modelo);
+    setVeiculoEncontrado(veiculoEncontrado ? {
+      ...veiculoEncontrado,
+      codigoFipe: escolhida.codigo,
+      valorFipe: escolhida.valor,
+      modelo: escolhida.descricao || veiculoEncontrado.modelo,
+    } : null);
+    setCamposAutoPreenchidos(prev => Array.from(new Set([...prev, 'modelo', 'valorFipe'])));
+    toast.success('Versão FIPE atualizada');
+  };
+
   // Pode avançar se tem marca, modelo, ano e valorFipe preenchidos
   const canProceed = marca && modelo && ano && valorFipe !== null;
 
