@@ -31,7 +31,7 @@ export function useChecklistSGA(veiculoId: string, associadoId: string): Checkli
     queryKey: ['checklist-sga', veiculoId, associadoId],
     queryFn: async () => {
       const [veiculoRes, associadoRes, contratoRes, credenciaisRes, mapeamentosRes] = await Promise.all([
-        supabase.from('veiculos').select('placa, chassi, renavam, cor, combustivel, ano_modelo, codigo_fipe, valor_fipe, marca, modelo').eq('id', veiculoId).single(),
+        supabase.from('veiculos').select('placa, chassi, renavam, cor, combustivel, codigo_sga_combustivel, ano_modelo, codigo_fipe, valor_fipe, marca, modelo').eq('id', veiculoId).single(),
         supabase.from('associados').select('nome, cpf, rg, data_nascimento, email, telefone, whatsapp, cep, logradouro, numero, bairro, cidade, uf, dia_vencimento').eq('id', associadoId).single(),
         supabase.from('contratos').select('vendedor_id, veiculo_categoria, plano_id').eq('veiculo_id', veiculoId).eq('associado_id', associadoId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
         supabase.from('integracoes_credenciais').select('configurado, teste_sucesso').eq('integracao', 'hinova').maybeSingle(),
@@ -161,16 +161,17 @@ export function useChecklistSGA(veiculoId: string, associadoId: string): Checkli
           : (!corMapeada ? `Cor "${veiculo?.cor}" sem mapeamento na tabela hinova_mapeamentos` : undefined),
       });
 
-      // Combustível — verificar mapeamento
-      const combPreenchido = veiculo?.combustivel && String(veiculo.combustivel).trim() !== '';
-      const combMapeado = combPreenchido && combustiveisDisponiveis.includes(String(veiculo.combustivel).toLowerCase());
+      // Combustível — código SGA persistido (preenchido por trigger no banco)
+      const combPreenchido = !!(veiculo?.combustivel && String(veiculo.combustivel).trim() !== '');
+      const codigoSgaComb = (veiculo as any)?.codigo_sga_combustivel as number | null | undefined;
+      const combMapeado = combPreenchido && !!codigoSgaComb;
       itens.push({
-        campo: 'combustivel', label: 'Combustível (mapeamento Hinova)', secao: 'veiculo',
-        status: combMapeado ? 'ok' : (combPreenchido ? 'risco' : 'faltando'),
-        valor: veiculo?.combustivel || null,
+        campo: 'combustivel', label: 'Combustível (código SGA)', secao: 'veiculo', critico: true,
+        status: combMapeado ? 'ok' : 'faltando',
+        valor: combPreenchido ? `${veiculo?.combustivel}${codigoSgaComb ? ` → SGA ${codigoSgaComb}` : ''}` : null,
         detalhe: !combPreenchido
-          ? 'Combustível não preenchido — será null no payload'
-          : (!combMapeado ? `Combustível "${veiculo?.combustivel}" sem mapeamento na tabela hinova_mapeamentos` : undefined),
+          ? 'Combustível não preenchido — Hinova exige codigo_combustivel'
+          : (!combMapeado ? `Combustível "${veiculo?.combustivel}" sem código SGA equivalente (SGA aceita: Flex=1, Gasolina=2, Etanol=3, Diesel=4, Bio-gás=5, Tetra-fuel=6)` : undefined),
       });
 
       // Tipo de veículo (categoria do contrato) — verificar mapeamento Hinova
