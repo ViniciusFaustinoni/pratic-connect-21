@@ -56,7 +56,6 @@ import { ExportAssociadosDialog } from '@/components/cadastro/ExportAssociadosDi
 import { ConfirmacaoAcaoDialog } from '@/components/associados/ConfirmacaoAcaoDialog';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import AssociadoDetalhe from './AssociadoDetalhe';
 import { AssociadoDetalheErrorBoundary } from '@/components/common/AssociadoDetalheErrorBoundary';
 
