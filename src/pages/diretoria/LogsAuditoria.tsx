@@ -370,12 +370,19 @@ export default function LogsAuditoria() {
             <GitBranch className="h-4 w-4" />
             Histórico de Hierarquia ({historicoHierarquia.length})
           </TabsTrigger>
+          <TabsTrigger value="ocr" className="gap-2">
+            <ScanText className="h-4 w-4" />
+            OCR
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="todos">
           {renderLogsTable(logs, isLoading, 'Nenhum log encontrado')}
         </TabsContent>
         <TabsContent value="hierarquia">
           {renderLogsTable(historicoHierarquia, isLoadingHierarquia, 'Nenhum histórico de hierarquia encontrado')}
+        </TabsContent>
+        <TabsContent value="ocr">
+          <OcrLogsTab />
         </TabsContent>
       </Tabs>
     </div>
