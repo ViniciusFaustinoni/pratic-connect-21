@@ -1282,21 +1282,42 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
         ) {
           const tRaster = Date.now();
           try {
-            const scale = (engineCfg.pdf_dpi ?? 200) / 72; // PDF user-unit = 1/72 polegada
+            const scale = (engineCfg.pdf_dpi ?? 144) / 72; // PDF user-unit = 1/72 polegada
             const pages = await rasterizePdfPages(uint8Array, { maxPages: 3, scale });
-            rasterizedImages = pages.map((p) => ({
-              dataUri: `data:${p.mime};base64,${p.pngBase64}`,
+
+            // Comprime cada página para caber no limite por imagem do provedor.
+            // PNGs de PDFium podem facilmente passar de 10MB; Anthropic recusa >5MB.
+            const shrunkPages = await Promise.all(pages.map(async (p) => {
+              try {
+                const r = await shrinkImageBase64(p.pngBase64, p.mime, MAX_IMAGE_BYTES);
+                return {
+                  page: p.page,
+                  base64: r.base64,
+                  mime: r.mime,
+                  width: r.width || p.width,
+                  height: r.height || p.height,
+                  bytes: r.bytes,
+                  shrunk: r.shrunk,
+                };
+              } catch (e) {
+                console.warn(`[OCR][shrink] page ${p.page} falhou (${(e as Error)?.message}) — usando PNG original`);
+                return { page: p.page, base64: p.pngBase64, mime: p.mime, width: p.width, height: p.height, bytes: p.bytes, shrunk: false };
+              }
+            }));
+
+            rasterizedImages = shrunkPages.map((p) => ({
+              dataUri: `data:${p.mime};base64,${p.base64}`,
               page: p.page,
               width: p.width,
               height: p.height,
               bytes: p.bytes,
             }));
             console.log(`[OCR][rasterize] ${JSON.stringify({
-              reqId, pages: pages.length, ms: Date.now() - tRaster,
-              sizes: pages.map((p) => `${p.width}x${p.height} (${Math.round(p.bytes/1024)}KB)`),
+              reqId, pages: shrunkPages.length, ms: Date.now() - tRaster,
+              sizes: shrunkPages.map((p) => `${p.width}x${p.height} ${p.mime} (${Math.round(p.bytes/1024)}KB${p.shrunk ? ' shrunk' : ''})`),
             })}`);
-            logCtx.pdf_rasterizado = pages.length > 0;
-            logCtx.pdf_paginas_rasterizadas = pages.length;
+            logCtx.pdf_rasterizado = shrunkPages.length > 0;
+            logCtx.pdf_paginas_rasterizadas = shrunkPages.length;
           } catch (rErr) {
             console.warn(`[OCR][${reqId}] rasterização PDF falhou — usando PDF original:`, (rErr as Error)?.message);
             logCtx.pdf_rasterizado = false;
