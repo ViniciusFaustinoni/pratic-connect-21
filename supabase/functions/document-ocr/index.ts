@@ -835,8 +835,9 @@ function extractCNHFromText(text: string): Record<string, any> {
   const regMatch = text.match(/(?:N[ºO°]\s*REGISTRO|REGISTRO\s+CNH|REGISTRO)[^\d]*(\d{11})/i);
   if (regMatch) out.numero_registro = regMatch[1];
 
-  // Categoria CAT HAB
-  const catMatch = text.match(/CAT[\.\s]*HAB[^\w]*([A-E]{1,2}|ACC)/i);
+  // Categoria CAT HAB — ordem importa: prefixos longos antes dos curtos
+  // (ex.: C1E antes de C1 antes de C; AB/AC/AD/AE antes de A; BE antes de B).
+  const catMatch = text.match(/CAT[\.\s]*HAB[^\w]*(ACC|C1E|D1E|A1|B1|C1|D1|AB|AC|AD|AE|BE|CE|DE|A|B|C|D|E)\b/i);
   if (catMatch) out.categoria = catMatch[1].toUpperCase();
 
   // RG
