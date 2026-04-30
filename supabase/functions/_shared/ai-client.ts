@@ -308,6 +308,14 @@ async function callAnthropic(cfg: AIConfig, opts: CallAIOptions): Promise<CallAI
   // PDFs precisam do beta header em modelos mais antigos; inofensivo em Sonnet 4.5+
   if (hasDocumentBlock) headers["anthropic-beta"] = "pdfs-2024-09-25";
 
+  console.log(`[ai-client][anthropic] ${JSON.stringify({
+    model: body.model,
+    has_document_block: hasDocumentBlock,
+    user_msgs: userMsgs.length,
+    payload_bytes: JSON.stringify(body).length,
+    beta: hasDocumentBlock ? "pdfs-2024-09-25" : undefined,
+  })}`);
+
   // Streaming não é suportado neste adaptador; cai pra non-stream.
   const resp = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
