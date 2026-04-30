@@ -1,71 +1,71 @@
-## Problema
+## O que acontece hoje (o "limbo")
 
-Placa **FIC9E65** (Chevrolet Agile LTZ 1.4 MPFI) retorna o modelo errado: o sistema está mostrando uma variante "EASYTRONIC" (câmbio automatizado), quando o CRLV indica a versão manual flex.
+Em `src/pages/cadastro/AssociadoDetalhe.tsx` linha 776, na aba **Documentos**, o botão "Solicitar Reenvio" é apenas decorativo:
 
-## Causa raiz
-
-Em `supabase/functions/plate-lookup/index.ts` (linhas 142, 207–211):
-
-```ts
-const fipesArray = apiData.data?.fipes || apiData.fipes || [];
-...
-const fipeData = fipesArray[0] ? { codigo, valor, mesReferencia } : null;
+```tsx
+<Button size="sm" variant="outline" className="h-7 text-xs">
+  <Send className="h-3 w-3 mr-1" /> Solicitar Reenvio
+</Button>
 ```
 
-A API `placas.fipeapi.com.br` devolve **várias variantes FIPE** (manual, automatizado/Easytronic, automático, anos próximos, etc.). O código pega cegamente `fipesArray[0]`, sem comparar com:
-- combustível do CRLV (`veiculo.combustivel`)
-- câmbio do CRLV (`veiculo.caixa_cambio`)
-- ano modelo do CRLV (`veiculo.ano_modelo`)
+Não tem `onClick`, não dispara mutation, não cria registro, não notifica ninguém. O usuário clica e nada acontece — daí a sensação de "limbo".
 
-Resultado: para o Agile, a primeira posição do array é a variante Easytronic, então é escolhida indevidamente. Além disso, o `modelo` exibido no formulário vem de `marca_modelo` (texto cru da API, sem versão), e o "EASYTRONIC" aparece via o **código FIPE** selecionado (que carrega a descrição da variante quando o front busca o nome na tabela FIPE).
+## O que JÁ existe no projeto e pode ser reaproveitado
 
-## Plano
+A lógica completa do reenvio já está implementada e em uso em **PropostaAnalise.tsx**:
 
-### 1. Heurística de matching no `plate-lookup` (edge function)
+1. **Hook `useSolicitarDocumentos`** (`src/hooks/usePropostasPendentes.ts:1532`) que faz:
+   - INSERT em `documentos_solicitados` (status `pendente`, com `solicitado_por`, `observacao_solicitacao`).
+   - UPDATE no associado para `status = 'documentacao_pendente'`.
+   - Registro em `associados_historico`.
+   - Chama edge function `notificar-cliente` com tipo `documentos_solicitados`, mandando WhatsApp com link `/{APP_BASE_URL}/acompanhar/{link_token}` (ou `/cotacao/{cotacao_token_publico}` como fallback).
+   - Log em `logs_auditoria`.
 
-Substituir `fipesArray[0]` por uma função `escolherMelhorFipe(fipes, veiculo)` com pontuação:
+2. **Dialog `SolicitarDocumentosDialog`** (`src/components/cadastro/SolicitarDocumentosDialog.tsx`) — UI com checklist categorizado (Pessoais, Vistoria, Outros) + textarea de observação.
 
-- **+10** se a descrição FIPE (`fipes[i].descricao` / `modelo` / `texto_modelo`) bate com o combustível do CRLV (FLEX/GASOLINA/DIESEL/ÁLCOOL).
-- **+8** se o câmbio do CRLV é **manual** e a descrição **NÃO** contém `AUT`, `EASYTRONIC`, `CVT`, `DCT`, `TIPTRONIC`, `S-TRONIC`. Inverso para automático.
-- **+5** se o ano FIPE (`fipes[i].ano` ou ano referenciado) coincide com `ano_modelo`.
-- **+2** se a descrição menciona a cilindrada do CRLV (1.0 / 1.4 / 1.6 / 1.8 / 2.0…).
-- Desempate: menor diferença de valor para a mediana das variantes (evita outliers); persistindo empate, mantém ordem original.
+3. **Onde o associado vê:**
+   - Componente `DocumentosPendentes` (associado logado) → consulta `useDocumentosSolicitadosPendentes(associadoId)`.
+   - Componente `DocumentosPendentesPublico` → renderizado em `/acompanhar/:token` (`AcompanhamentoProposta.tsx`) — é o link que o WhatsApp envia. Esse link **funciona sem login**, então qualquer associado consegue abrir, ver os pendentes e fazer upload.
 
-Logar o array completo + pontuações no `console.log` para inspeção via OCR/Audit logs.
+Ou seja: o pipeline ponta a ponta já funciona para propostas. O botão da aba Documentos do detalhe do associado simplesmente nunca foi conectado a esse mesmo pipeline.
 
-### 2. Retornar todas as variantes para o front
+## Solução (sem quebrar nada)
 
-Ampliar o payload:
+Conectar o botão existente ao fluxo já testado:
 
-```ts
-fipeData: { codigo, valor, mesReferencia, descricao },
-fipeAlternativas: fipesArray.map(f => ({ codigo, valor, descricao, ano }))
-```
+### 1. `AssociadoDetalhe.tsx` (única tela alterada)
 
-Assim o usuário pode trocar manualmente quando a heurística errar.
+- Importar `useSolicitarDocumentos` de `usePropostasPendentes` e `SolicitarDocumentosDialog`.
+- Adicionar estado `openReenvioDialog`.
+- Pré-selecionar no dialog os tipos dos documentos que estão **reprovados** (já temos `todosDocumentos.filter(d => d.status === 'reprovado')`).
+- Resolver `contratoId`: usar o contrato ativo do associado (já carregado na página). Se houver mais de um, escolher o do veículo do documento reprovado (a tabela `documentos.veiculo_id` permite essa associação) ou abrir um Select rápido.
+- `onConfirm` → chamar `useSolicitarDocumentos.mutateAsync({ contratoId, associadoId: id, documentos, observacoes })`.
+- Toast de sucesso + invalidate `['documentos', id]` para o badge "1 reprovado(s)" sair na hora.
 
-### 3. UI: seletor de variante FIPE
+### 2. Tornar o card mais informativo (UX, não-bloqueante)
 
-Em `src/components/cotacao/EtapaConsultaFipe.tsx` e `src/components/cotacoes/CotacaoFormDialog.tsx`:
+Logo abaixo do botão, mostrar um pequeno indicador quando já existirem `documentos_solicitados` com `status='pendente'` para o associado:
 
-- Quando `fipeAlternativas.length > 1`, exibir um `Select` "Confirme a versão FIPE" com cada variante (descrição + valor + código).
-- Selecionar por padrão a recomendada pela heurística, mas permitir troca.
-- Ao trocar, atualizar `codigoFipe`, `valorFipe` e o campo `modelo` (concatenando a descrição da variante quando útil).
+> "📨 3 documento(s) já solicitado(s) ao associado em 30/04 — aguardando reenvio."
 
-### 4. Auditoria (opcional, baixo custo)
+Reusa `useDocumentosSolicitadosPendentes(id)` que já existe. Evita o cadastro duplicar a solicitação e dá visibilidade do que está em curso.
 
-Persistir em `ocr_execution_logs` (ou nova tabela `plate_lookup_logs`) a placa consultada, o array de variantes recebido, a escolhida e a "fonte" (`heuristica` vs `usuario_trocou`) para futuras análises de erro como este do Agile.
+### 3. (Opcional) Botão "Ver link enviado ao associado"
 
-## Arquivos afetados
+Mostrar/copiar o `link_token` do contrato (mesma URL que vai pelo WhatsApp). Útil quando o cliente diz "não recebi nada" — o atendente copia e manda manualmente.
 
-- `supabase/functions/plate-lookup/index.ts` — heurística + payload com alternativas.
-- `src/hooks/useFipe.ts` — tipagem `PlateResult` ganha `fipeAlternativas`.
-- `src/components/cotacao/EtapaConsultaFipe.tsx` — Select de variante.
-- `src/components/cotacoes/CotacaoFormDialog.tsx` — Select de variante.
-- (Opcional) migration criando `plate_lookup_logs` + aba na tela de Logs de Auditoria.
+## Por que isso resolve o limbo
 
-## Validação
+- O associado **já tem** uma tela própria (`/acompanhar/:token`) que lista os pendentes e aceita upload — só faltava popular `documentos_solicitados`.
+- O WhatsApp do cliente recebe a mensagem com o link direto, automaticamente, via edge function `notificar-cliente` (que já está em produção).
+- O cadastro vê o estado em tempo real ("aguardando reenvio") e o histórico fica registrado em `associados_historico` + `logs_auditoria`.
 
-1. Refazer consulta com placa **FIC9E65**: deve sugerir a variante manual flex (Agile LTZ 1.4) com base no CRLV (câmbio "—"/manual, combustível ÁLCOOL/GASOLINA), e mostrar Easytronic apenas como alternativa.
-2. Testar uma placa de carro automático (ex.: HB20 Automático) para garantir que a heurística inverte corretamente.
-3. Confirmar que os logs mostram pontuação de cada variante.
+## Fora de escopo (intencionalmente)
+
+- Não criar tabela nova, não alterar RLS, não mexer em edge function — todo o backend já está pronto.
+- Não tocar no `PropostaAnalise.tsx` (fluxo paralelo continua funcionando do mesmo jeito).
+- Não trocar a UI do `DocumentosPendentesPublico` — o associado continua vendo no mesmo lugar.
+
+## Arquivos a alterar
+
+- `src/pages/cadastro/AssociadoDetalhe.tsx` — único arquivo de produção; ~30 linhas adicionadas (import + state + handler + props no Button + indicador de pendentes em curso).
