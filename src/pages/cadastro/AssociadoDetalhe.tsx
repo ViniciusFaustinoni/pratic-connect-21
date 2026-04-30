@@ -1254,19 +1254,13 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
         </DialogContent>
       </Dialog>
 
-      {/* Modal Foto/Vídeo/Documento */}
-      <Dialog open={fotoModal.open} onOpenChange={(open) => setFotoModal({ ...fotoModal, open })}>
-        <DialogContent className="max-w-3xl">
-          <h3 className="text-lg font-semibold">{fotoModal.tipo}</h3>
-          {fotoModal.mediaType === 'video' ? (
-            <video src={fotoModal.url} controls autoPlay className="w-full max-h-[70vh] rounded-lg" />
-          ) : fotoModal.mediaType === 'pdf' ? (
-            <iframe src={fotoModal.url} className="w-full h-[70vh] rounded-lg border-0" title={fotoModal.tipo} />
-          ) : (
-            <img src={fotoModal.url} alt={fotoModal.tipo} className="w-full max-h-[70vh] object-contain rounded-lg" />
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Visualizador de Mídia (galeria com setas) */}
+      <MediaViewerModal
+        open={mediaViewer.open}
+        onOpenChange={(open) => setMediaViewer((s) => ({ ...s, open }))}
+        items={mediaViewer.items}
+        initialIndex={mediaViewer.index}
+      />
 
       {/* Modal Rastreador Vinculado */}
       {rastreadorModalData && (
