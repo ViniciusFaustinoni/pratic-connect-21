@@ -35,7 +35,7 @@ export function useServicosParaAtribuir() {
         .from('servicos')
         .select(`
           id, tipo, data_agendada, hora_agendada, periodo, bairro, cidade, uf, logradouro, numero,
-          permite_encaixe, status, contrato_id,
+          permite_encaixe, status, contrato_id, instalacao_origem_id,
           associado:associados!servicos_associado_id_fkey(id, nome, telefone, whatsapp),
           veiculo:veiculos!servicos_veiculo_id_fkey(placa, chassi, marca, modelo),
           contrato:contratos!servicos_contrato_id_fkey(aprovado_em)
@@ -48,10 +48,33 @@ export function useServicosParaAtribuir() {
 
       if (error) throw error;
 
+      // Buscar links de prestador ATIVOS (não-terminais) para excluir serviços
+      // que já foram atribuídos a um prestador externo. Sem isso, o serviço
+      // permanece visível na fila de pendentes mesmo após a atribuição.
+      const instalacaoIds = (servicos || [])
+        .map((s: any) => s.instalacao_origem_id)
+        .filter(Boolean);
+
+      let instalacoesComLinkAtivo = new Set<string>();
+      if (instalacaoIds.length > 0) {
+        const { data: linksAtivos } = await supabase
+          .from('instalacao_prestador_links')
+          .select('instalacao_id, status')
+          .in('instalacao_id', instalacaoIds)
+          .not('status', 'in', '(cancelada,expirado,concluida)');
+
+        instalacoesComLinkAtivo = new Set(
+          (linksAtivos || []).map((l: any) => l.instalacao_id)
+        );
+      }
+
       // Filtra serviços sem contrato aprovado (defesa em profundidade contra
       // regressões no trigger). Serviços sem contrato vinculado são tolerados
       // (ex.: vistorias avulsas criadas manualmente).
       const servicosFiltrados = (servicos || []).filter((s: any) => {
+        if (s.instalacao_origem_id && instalacoesComLinkAtivo.has(s.instalacao_origem_id)) {
+          return false;
+        }
         if (!s.contrato_id) return true;
         return !!s.contrato?.aprovado_em;
       });
@@ -553,6 +576,17 @@ export function useAtribuirServicoPrestador() {
 
         if (!instalacaoId) throw new Error('Instalação não encontrada para este serviço');
 
+        // Bloquear nova atribuição se já existe link ativo (não-terminal) para esta instalação
+        const { data: linksAtivos } = await supabase
+          .from('instalacao_prestador_links')
+          .select('id, status, prestador_id')
+          .eq('instalacao_id', instalacaoId)
+          .not('status', 'in', '(cancelada,expirado,concluida)');
+
+        if ((linksAtivos || []).length > 0) {
+          throw new Error('Já existe um prestador atribuído a este serviço. Cancele/devolva o link atual antes de reatribuir.');
+        }
+
         const { data, error } = await supabase.functions.invoke('gerar-link-prestador', {
           body: {
             instalacao_id: instalacaoId,
@@ -595,6 +629,17 @@ export function useAtribuirServicoPrestador() {
 
         if (!instalacaoId) throw new Error('Instalação de origem não encontrada para vistoria');
 
+        // Bloquear nova atribuição se já existe link ativo
+        const { data: linksAtivos } = await supabase
+          .from('instalacao_prestador_links')
+          .select('id, status, prestador_id')
+          .eq('instalacao_id', instalacaoId)
+          .not('status', 'in', '(cancelada,expirado,concluida)');
+
+        if ((linksAtivos || []).length > 0) {
+          throw new Error('Já existe um prestador atribuído a este serviço. Cancele/devolva o link atual antes de reatribuir.');
+        }
+
         const { data, error } = await supabase.functions.invoke('gerar-link-vistoriador-prestador', {
           body: {
             instalacao_id: instalacaoId,
@@ -608,6 +653,20 @@ export function useAtribuirServicoPrestador() {
         if (error) throw new Error(error.message || 'Erro ao gerar link do prestador');
         if (!data?.success) throw new Error(data?.error || 'Erro ao gerar link');
         result = data;
+      }
+
+      // Marca o serviço como atribuído para que ele saia da fila de "Serviços Pendentes".
+      // profissional_id continua null (FK aponta para profiles internos; prestador
+      // externo é rastreado via instalacao_prestador_links). Status='agendada'
+      // sinaliza que há uma atribuição ativa.
+      try {
+        const { error: updErr } = await supabase
+          .from('servicos')
+          .update({ status: 'agendada', updated_at: new Date().toISOString() } as any)
+          .eq('id', servicoId);
+        if (updErr) console.error('[atribuicao-prestador] Erro ao atualizar status do serviço:', updErr);
+      } catch (e) {
+        console.error('[atribuicao-prestador] Falha ao atualizar status do serviço:', e);
       }
 
       // Log assignment
