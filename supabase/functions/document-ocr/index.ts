@@ -1199,6 +1199,44 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
         const isLikelyLowQuality = !isPdfUrl && (bytes < 80_000 || bytes > 4_500_000);
         const isPdfScanned = isPdfUrl && !extractedPdfText;
 
+        // Guarda PDF para Mistral (que aceita PDF nativo via /v1/ocr)
+        if (isPdfUrl && resolved.engine === 'mistral') {
+          pdfBytesForMistral = uint8Array;
+          publicUrlForMistral = isAllowedUrl ? url : null; // Mistral prefere URL pública
+        }
+
+        // RASTERIZAÇÃO PDF→PNG: para engines não-Mistral, quando o PDF tem
+        // texto nativo pobre (ex.: CNH-e SENATRAN com só "Assinador Serpro"),
+        // converter as primeiras páginas em imagens nítidas para a IA ler.
+        if (
+          isPdfUrl &&
+          resolved.engine !== 'mistral' &&
+          engineCfg.pdf_rasterizar &&
+          shouldRasterizePdf(extractedPdfText)
+        ) {
+          const tRaster = Date.now();
+          try {
+            const scale = (engineCfg.pdf_dpi ?? 200) / 72; // PDF user-unit = 1/72 polegada
+            const pages = await rasterizePdfPages(uint8Array, { maxPages: 3, scale });
+            rasterizedImages = pages.map((p) => ({
+              dataUri: `data:${p.mime};base64,${p.pngBase64}`,
+              page: p.page,
+              width: p.width,
+              height: p.height,
+              bytes: p.bytes,
+            }));
+            console.log(`[OCR][rasterize] ${JSON.stringify({
+              reqId, pages: pages.length, ms: Date.now() - tRaster,
+              sizes: pages.map((p) => `${p.width}x${p.height} (${Math.round(p.bytes/1024)}KB)`),
+            })}`);
+            logCtx.pdf_rasterizado = pages.length > 0;
+            logCtx.pdf_paginas_rasterizadas = pages.length;
+          } catch (rErr) {
+            console.warn(`[OCR][${reqId}] rasterização PDF falhou — usando PDF original:`, (rErr as Error)?.message);
+            logCtx.pdf_rasterizado = false;
+          }
+        }
+
         console.log(`[OCR][file] ${JSON.stringify({
           reqId,
           mime: mimeType,
@@ -1208,6 +1246,7 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           nativeTextLen: extractedPdfText.length,
           isLikelyLowQuality,
           isPdfScanned,
+          rasterizedPages: rasterizedImages.length,
         })}`);
         logCtx.mime = mimeType;
         logCtx.bytes = bytes;
@@ -1220,24 +1259,21 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           ? `\n\nATENÇÃO QUALIDADE BAIXA: ${isPdfScanned ? 'PDF escaneado sem camada de texto.' : 'imagem com possível baixa nitidez.'} Use OCR rigoroso letra-a-letra. Em campos numéricos críticos (CPF, placa, CEP, datas, RG), se houver QUALQUER dúvida na leitura, retorne null e marque \`confianca\` < 0.7. NÃO INVENTE dígitos.`
           : '';
 
-        contentParts = [
-          { type: 'text', text: userPrompt + lowQualityHint },
-          { type: 'image_url', image_url: { url: dataUri } },
-        ];
+        // Decide qual mídia mandar para a IA:
+        //   - se rasterizamos: mandamos as imagens das páginas (substitui o PDF "vazio")
+        //   - senão: mandamos o arquivo original (PDF ou imagem)
+        const mediaParts = rasterizedImages.length > 0
+          ? rasterizedImages.map((img) => ({ type: 'image_url' as const, image_url: { url: img.dataUri } }))
+          : [{ type: 'image_url' as const, image_url: { url: dataUri } }];
 
-        // Se temos texto nativo do PDF, adicionar ao prompt para melhorar precisão
-        if (extractedPdfText) {
-          const textHint = extractedPdfText.length > 3000 
-            ? extractedPdfText.substring(0, 3000) + '...' 
-            : extractedPdfText;
-          contentParts = [
-            { 
-              type: 'text', 
-              text: `${userPrompt}${lowQualityHint}\n\n--- TEXTO EXTRAÍDO DO PDF (use como referência principal para dados textuais como CPF, nome, números) ---\n${textHint}\n--- FIM DO TEXTO ---\n\nA imagem do documento também está anexada. Use o texto extraído como fonte primária para campos numéricos (CPF, RG, etc.) e a imagem para confirmar layout e campos visuais.`
-            },
-            { type: 'image_url', image_url: { url: dataUri } },
-          ];
-        }
+        const promptText = extractedPdfText
+          ? `${userPrompt}${lowQualityHint}\n\n--- TEXTO EXTRAÍDO DO PDF (use como referência principal para dados textuais como CPF, nome, números) ---\n${extractedPdfText.length > 3000 ? extractedPdfText.substring(0, 3000) + '...' : extractedPdfText}\n--- FIM DO TEXTO ---\n\n${rasterizedImages.length > 0 ? `${rasterizedImages.length} página(s) do PDF foram rasterizadas em alta resolução e estão anexadas como imagem. Use AS IMAGENS como fonte primária; o texto acima é só fallback.` : 'A imagem do documento também está anexada. Use o texto extraído como fonte primária para campos numéricos (CPF, RG, etc.) e a imagem para confirmar layout e campos visuais.'}`
+          : userPrompt + lowQualityHint;
+
+        contentParts = [
+          { type: 'text', text: promptText },
+          ...mediaParts,
+        ];
       } catch (downloadError) {
         console.error(`Failed to download ${fileType}:`, downloadError);
         return new Response(
