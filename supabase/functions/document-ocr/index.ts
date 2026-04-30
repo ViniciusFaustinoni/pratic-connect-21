@@ -679,9 +679,19 @@ function extractCNHFromText(text: string): Record<string, any> {
   const out: Record<string, any> = {};
   if (!text) return out;
 
-  // CPF (com checksum)
-  const cpf = extractValidCPFFromText(text);
-  if (cpf) out.cpf = cpf;
+  // CPF: prefere ancoragem ao rótulo "CPF" / "4d CPF"; se falhar, primeiro válido
+  const anchored = extractAnchoredCPFFromText(text);
+  if (anchored.cpf) {
+    out.cpf = anchored.cpf;
+    out.__cpf_fonte = 'native_anchored';
+    out.__cpf_contexto = anchored.contexto;
+  } else {
+    const cpf = extractValidCPFFromText(text);
+    if (cpf) {
+      out.cpf = cpf;
+      out.__cpf_fonte = 'native_first_valid';
+    }
+  }
 
   // Datas DD/MM/YYYY → YYYY-MM-DD
   const toIso = (d: string) => {
@@ -693,23 +703,23 @@ function extractCNHFromText(text: string): Record<string, any> {
   const nomeMatch = text.match(/(?:^|\n)\s*(?:1\s+)?NOME\s*\/?\s*[A-Z\s]*\n?\s*([A-ZÁÂÃÀÉÊÍÓÔÕÚÇ ]{6,})/m);
   if (nomeMatch) out.nome = nomeMatch[1].trim().replace(/\s+/g, ' ');
 
-  // Data de nascimento: rótulo "DATA NASCIMENTO" ou "5 DATA NASCIMENTO"
+  // Data de nascimento
   const nascMatch = text.match(/(?:DATA\s+NASCIMENTO|DATA\s+DE\s+NASCIMENTO)[^\d]*(\d{2}\/\d{2}\/\d{4})/i);
   if (nascMatch) out.data_nascimento = toIso(nascMatch[1]);
 
-  // Validade: rótulo "VALIDADE"
+  // Validade
   const valMatch = text.match(/VALIDADE[^\d]*(\d{2}\/\d{2}\/\d{4})/i);
   if (valMatch) out.validade = toIso(valMatch[1]);
 
-  // Nº Registro CNH (11 dígitos após "REGISTRO" ou "Nº REGISTRO")
+  // Nº Registro CNH
   const regMatch = text.match(/(?:N[ºO°]\s*REGISTRO|REGISTRO\s+CNH|REGISTRO)[^\d]*(\d{11})/i);
   if (regMatch) out.numero_registro = regMatch[1];
 
-  // Categoria CAT HAB: AAB, B, C, D, E, AB, AC, AD, AE, ACC
+  // Categoria CAT HAB
   const catMatch = text.match(/CAT[\.\s]*HAB[^\w]*([A-E]{1,2}|ACC)/i);
   if (catMatch) out.categoria = catMatch[1].toUpperCase();
 
-  // RG (DOC. IDENTIDADE): número estadual, geralmente até 11 chars com / e -
+  // RG
   const rgMatch = text.match(/(?:DOC[\.\s]*IDENTIDADE|RG)[^\n]*?([\d.\-/]{6,15})/i);
   if (rgMatch) out.rg = rgMatch[1].replace(/\s+/g, '');
 
