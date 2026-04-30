@@ -9,6 +9,12 @@ import { rasterizePdfPages, shouldRasterizePdf } from "../_shared/pdf-rasterize.
 import { runMistralOcr, callPixtralChat } from "../_shared/mistral-ocr.ts";
 import { extractPdfTextUnpdf, scoreExtractedText } from "../_shared/unpdf-extract.ts";
 import { routeOcr, type OcrMethod } from "../_shared/ocr-router.ts";
+import { shrinkImageBase64 } from "../_shared/image-shrink.ts";
+
+// Teto por imagem ao mandar para provedor multimodal.
+// Anthropic: 5MB hard limit por imagem (https://docs.anthropic.com/en/docs/build-with-claude/vision)
+// Gemini: ~7MB. Usamos 4.5MB para folga + base64 overhead.
+const MAX_IMAGE_BYTES = 4_500_000;
 
 // ============================================================
 // Motor de OCR (engine) — lê ocr_engine_config (singleton)
@@ -28,7 +34,7 @@ const DEFAULT_OCR_ENGINE: OcrEngineConfig = {
   secondary_model: 'claude-sonnet-4-5',
   dupla_leitura_tipos: ['cnh', 'crlv'],
   pdf_rasterizar: true,
-  pdf_dpi: 200,
+  pdf_dpi: 144,
 };
 let _engineCache: { value: OcrEngineConfig; ts: number } | null = null;
 async function getOcrEngineConfig(): Promise<OcrEngineConfig> {
@@ -45,7 +51,7 @@ async function getOcrEngineConfig(): Promise<OcrEngineConfig> {
       secondary_model: data.secondary_model,
       dupla_leitura_tipos: data.dupla_leitura_tipos ?? ['cnh', 'crlv'],
       pdf_rasterizar: data.pdf_rasterizar ?? true,
-      pdf_dpi: data.pdf_dpi ?? 200,
+      pdf_dpi: data.pdf_dpi ?? 144,
     } : DEFAULT_OCR_ENGINE;
     _engineCache = { value, ts: Date.now() };
     return value;
@@ -1276,21 +1282,42 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
         ) {
           const tRaster = Date.now();
           try {
-            const scale = (engineCfg.pdf_dpi ?? 200) / 72; // PDF user-unit = 1/72 polegada
+            const scale = (engineCfg.pdf_dpi ?? 144) / 72; // PDF user-unit = 1/72 polegada
             const pages = await rasterizePdfPages(uint8Array, { maxPages: 3, scale });
-            rasterizedImages = pages.map((p) => ({
-              dataUri: `data:${p.mime};base64,${p.pngBase64}`,
+
+            // Comprime cada página para caber no limite por imagem do provedor.
+            // PNGs de PDFium podem facilmente passar de 10MB; Anthropic recusa >5MB.
+            const shrunkPages = await Promise.all(pages.map(async (p) => {
+              try {
+                const r = await shrinkImageBase64(p.pngBase64, p.mime, MAX_IMAGE_BYTES);
+                return {
+                  page: p.page,
+                  base64: r.base64,
+                  mime: r.mime,
+                  width: r.width || p.width,
+                  height: r.height || p.height,
+                  bytes: r.bytes,
+                  shrunk: r.shrunk,
+                };
+              } catch (e) {
+                console.warn(`[OCR][shrink] page ${p.page} falhou (${(e as Error)?.message}) — usando PNG original`);
+                return { page: p.page, base64: p.pngBase64, mime: p.mime, width: p.width, height: p.height, bytes: p.bytes, shrunk: false };
+              }
+            }));
+
+            rasterizedImages = shrunkPages.map((p) => ({
+              dataUri: `data:${p.mime};base64,${p.base64}`,
               page: p.page,
               width: p.width,
               height: p.height,
               bytes: p.bytes,
             }));
             console.log(`[OCR][rasterize] ${JSON.stringify({
-              reqId, pages: pages.length, ms: Date.now() - tRaster,
-              sizes: pages.map((p) => `${p.width}x${p.height} (${Math.round(p.bytes/1024)}KB)`),
+              reqId, pages: shrunkPages.length, ms: Date.now() - tRaster,
+              sizes: shrunkPages.map((p) => `${p.width}x${p.height} ${p.mime} (${Math.round(p.bytes/1024)}KB${p.shrunk ? ' shrunk' : ''})`),
             })}`);
-            logCtx.pdf_rasterizado = pages.length > 0;
-            logCtx.pdf_paginas_rasterizadas = pages.length;
+            logCtx.pdf_rasterizado = shrunkPages.length > 0;
+            logCtx.pdf_paginas_rasterizadas = shrunkPages.length;
           } catch (rErr) {
             console.warn(`[OCR][${reqId}] rasterização PDF falhou — usando PDF original:`, (rErr as Error)?.message);
             logCtx.pdf_rasterizado = false;
@@ -1560,7 +1587,13 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
         target = { type: 'image_url', url };
       }
 
-      const ocr = await runMistralOcr({ ...target, model: resolved.primary });
+      // IMPORTANTE: Mistral OCR só aceita modelos Mistral. Se a engine ativa for
+      // anthropic/google, resolved.primary é um modelo dessas — não pode ser
+      // enviado pra /v1/ocr (gera 400 Invalid Model). Forçamos o default.
+      const mistralModel = (resolved.engine === 'mistral' && /^(mistral|pixtral)/i.test(resolved.primary))
+        ? resolved.primary
+        : 'mistral-ocr-latest';
+      const ocr = await runMistralOcr({ ...target, model: mistralModel });
       if (!ocr.ok) {
         console.error(`[OCR][mistral] ${JSON.stringify({ reqId, label, status: ocr.status, error: ocr.error })}`);
         return null;
@@ -1571,7 +1604,10 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
 
       // Estruturar markdown via Pixtral usando o mesmo system prompt JSON
       const px = await callPixtralChat({
-        model: resolved.secondary || 'pixtral-large-latest',
+        // Mesma proteção: Pixtral só aceita modelos Mistral.
+        model: (resolved.engine === 'mistral' && /^(mistral|pixtral)/i.test(resolved.secondary ?? ''))
+          ? (resolved.secondary as string)
+          : 'pixtral-large-latest',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: `${userPrompt}\n\n--- TEXTO EXTRAÍDO PELO MISTRAL OCR (markdown) ---\n${md}\n--- FIM ---` },
