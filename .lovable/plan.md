@@ -1,64 +1,116 @@
-## Diagnóstico — caso LTG3H67 (JEFFERSON RICARDO)
+## Contexto
 
-Confirmado no banco:
-- Cotação `d35f9447…` criada em 26/04/2026 com `dia_vencimento = NULL`
-- `contrato-gerar` aplicou fallback hardcoded **10**
-- Constraint do banco aceita 1..31, então o `10` passou direto
-- Pela regra de `calcularOpcoesVencimento(26)` = `[30, 5]`, o `10` é **inválido** para essa data de cadastro
+No SGA/Hinova **não existe "plano"** — existe **grupo de produto**. O grupo já contém todos os produtos (coberturas + benefícios) configurados lá no painel do Hinova. Para vincular tudo a um veículo, basta enviar `codigo_grupo_produto` no `/veiculo/cadastrar`.
 
-**Causa raiz**: o consultor consegue salvar a cotação **sem clicar em nenhuma das duas opções de vencimento**. O front (`CotacaoFormDialog.tsx`) inicia `diaVencimento = null`, não trava o submit, e o backend (`contrato-gerar`, `termo-afiliacao-utils`) tem fallback `|| 10` — sempre dia 10, independente da data de cadastro.
+A edge function atual está fazendo errado:
+1. Inventa um campo `codigo_plano` que não existe na doc oficial
+2. Tenta montar `produtos: [...]` lendo `codigo_sga` das nossas coberturas/benefícios — isso é desnecessário e errado
+3. Quando o plano não tem código → manda pelado e a Hinova só vincula compulsórios
 
-**Impacto**: 26 cotações nos últimos 90 dias salvas com `dia_vencimento = NULL` — todas geraram contrato com vencimento 10 silenciosamente, mesmo quando 10 não estava entre as opções válidas (caso do LTG3H67).
+Resultado: veículo chega no Hinova sem nenhuma cobertura/benefício do grupo correto.
 
 ---
 
-## Plano de correção (defesa em profundidade)
+## Mudanças
 
-### 1. Frontend — bloquear envio sem vencimento escolhido
-`src/components/cotacoes/CotacaoFormDialog.tsx`
-- Tornar o card "Data de Vencimento" obrigatório: validar `diaVencimento !== null` antes de submeter, com toast claro ("Selecione o dia de vencimento") e scroll/foco no bloco.
-- Marcar o bloco visualmente como obrigatório (asterisco + borda destacada quando inválido).
-- Pré-selecionar a primeira opção (`opcoesVencimento[0]`) quando o form abre vazio, mantendo a escolha do consultor se já tiver valor — reduz erro humano sem remover a decisão.
-- Rascunho local (`draftSnapshot`) já persiste `diaVencimento`; nada muda lá.
+### 1. Edge function `sga-hinova-sync` — corrigir o payload
 
-### 2. Backend — fallback inteligente baseado na data de cadastro (não mais `|| 10`)
-Criar helper compartilhado `supabase/functions/_shared/vencimento-utils.ts` espelhando `src/utils/vencimento.ts`:
+**Remover:**
+- Bloco que monta `produtos: []` lendo `planos_beneficios` + `planos_coberturas` + `codigo_sga` dos itens (linhas ~451–462)
+- Variável `produtos` e seu envio no `ctxV` (linha 727)
+- Envio do campo `codigo_plano` (linha 724)
+
+**Adicionar:**
+- Ler `planos.codigo_sga_plano` e enviar como **`codigo_grupo_produto`** (campo oficial da doc)
+- Se `codigo_sga_plano` estiver NULL/vazio → **abortar** com erro claro `plano_sem_codigo_grupo_sga` (mesmo padrão do `codigo_fipe ausente` que já existe), em vez de mandar pelado e cair no default da conta
+- Atualizar `setStatusSga` para `erro_sincronizacao` e `upsertQueue` com motivo amigável: *"Plano '{nome}' não tem código de grupo SGA configurado. Cadastre o grupo no painel Hinova e preencha o código no plano antes de reprocessar."*
+
+**Manter intacto:** toda a lógica de associado, vendedor, FIPE, mapeamentos de cor/combustível/tipo, fotos, valores de mensalidade/adesão.
+
+### 2. Helper `buildVeiculoPayload` — trocar campo de saída
+
+Onde hoje sai `codigo_plano`, passar a sair `codigo_grupo_produto`. Remover qualquer referência ao array `produtos`.
+
+### 3. UI — renomear o campo no formulário do plano
+
+Arquivo do form de edição de plano (componente em `src/components/admin/planos/`):
+- Label: `"Código SGA do Plano (Hinova)"` → **`"Código do Grupo de Produto (SGA/Hinova)"`**
+- Helper text: `"Código do plano no painel Hinova..."` → **`"Código do GRUPO no painel Hinova. O grupo já contém todas as coberturas e benefícios configurados lá. Sem este código, o veículo não será vinculado e a sincronização será bloqueada com erro plano_sem_codigo_grupo_sga."`**
+
+A coluna do banco continua se chamando `codigo_sga_plano` (não vale o churn de migration só pelo nome).
+
+### 4. Função `cron-sga-retry` e fila de erros
+
+Verificar se a fila de retry trata o novo motivo `plano_sem_codigo_grupo_sga` da mesma forma que `vendedor_sem_codigo_sga` (não tenta retry automático, espera intervenção humana). Se não tratar, adicionar.
+
+### 5. Memória do projeto
+
+Atualizar `mem://features/integrations/sga-hinova-sync-and-pre-check-v3`:
+- Documentar que `planos.codigo_sga_plano` = `codigo_grupo_produto` da Hinova
+- Que **não** se envia array `produtos[]` (o grupo já resolve)
+- Que `coberturas.codigo_sga` e `benefits.codigo_sga` **não são mais lidos** pela sync (mas os campos continuam no banco, podem ser usados em relatórios futuros)
+
+---
+
+## O que NÃO vou mexer
+
+- ❌ Não vou remover as colunas `codigo_sga` de `coberturas` e `benefits` (você pediu pra deixar).
+- ❌ Não vou popular `codigo_sga_plano` nas 23 variantes do Select Basic — você vai cadastrar cada grupo no Hinova primeiro e depois preencher um a um aqui (ou me passa o mapa pronto e eu rodo um UPDATE).
+- ❌ Não vou mexer em `cron-sga-health-check`, `sga-buscar-associado-completo`, `sga-listar-catalogo` etc. — eles não enviam veículo.
+
+---
+
+## Como você vai testar depois
+
+1. Garante que o "Select Basic" base (id `cfe38797…`) está com `codigo_sga_plano = 40` ✅ (já está).
+2. Pega um contrato de teste vinculado a esse plano e dispara a sync.
+3. Confere em `sga_sync_logs` que o `request_payload` agora tem `codigo_grupo_produto: 40` e **não tem mais** `codigo_plano` nem `produtos`.
+4. Confere no painel Hinova que o veículo apareceu com todos os produtos do grupo 40 vinculados.
+5. Pega um contrato de teste vinculado a uma variante sem código (ex: "Select Basic - SP") e tenta sincronizar — deve **bloquear** com a mensagem amigável, em vez de mandar pelado.
+
+---
+
+## Detalhes técnicos (para referência)
+
+**Arquivo:** `supabase/functions/sga-hinova-sync/index.ts`
+
+Trecho atual problemático (linhas 436–468 e 724–727):
 ```ts
-export function calcularOpcoesVencimento(diaHoje: number): [number, number] { ... }
-export function vencimentoPadraoPorData(data: Date): number {
-  return calcularOpcoesVencimento(data.getDate())[0]; // primeira opção válida
+const produtos: Array<{ codigo_produto: number }> = [];
+if (contrato?.plano_id) {
+  const { data: planoRow } = await supabase.from('planos')
+    .select('id, nome, codigo_sga_plano, valor_adesao')...
+  // ... monta array produtos lendo planos_beneficios + planos_coberturas
 }
-```
-Substituir os fallbacks `|| 10` em:
-- `supabase/functions/contrato-gerar/index.ts` (linhas 687 e 1002) — usar `vencimentoPadraoPorData(new Date(cotacao.created_at))` quando `cotacao.dia_vencimento` for null
-- `supabase/functions/_shared/termo-afiliacao-utils.ts` (linha 487) — mesma lógica usando `contrato.created_at`
-- Logar warning no edge log quando o fallback for usado, para auditoria
-
-### 3. Banco — constraint mais estrita + correção dos casos existentes
-Migration nova:
-- Restringir `cotacoes.dia_vencimento` e `contratos.dia_vencimento` ao conjunto **`(5, 10, 15, 20, 25, 30)`** (dias permitidos pela regra de negócio). Hoje aceita 1..31.
-- Para os contratos já criados com vencimento "10" indevido (a partir de cotações com `dia_vencimento NULL`), gerar relatório (não corrigir automaticamente — mudança de vencimento envolve cobrança Asaas e Hinova). Entregar SQL/CSV listando os 26 casos para o time financeiro reavaliar manualmente.
-
-### 4. Outros pontos de entrada
-- `supabase/functions/api-externa/index.ts` (criação de associado via API): validar que `dia_vencimento` recebido é um dos valores permitidos para a data atual; se vier ausente, calcular dinamicamente em vez de cair no default do banco.
-- `supabase/functions/agente-consultor-ia/index.ts` já exige `dia_vencimento` como obrigatório no tool — manter.
-
-### 5. QA
-- Testar: cotação criada hoje sem clicar vencimento → bloqueia no front.
-- Testar: forçar `dia_vencimento NULL` direto no banco e rodar `contrato-gerar` → contrato sai com a primeira opção válida da data de criação, não mais com 10 fixo.
-- Testar: tentar gravar `dia_vencimento = 7` → constraint rejeita.
-
----
-
-## Resumo dos arquivos
-
-```text
-NOVO   supabase/functions/_shared/vencimento-utils.ts
-NOVA   migration: constraint dia_vencimento IN (5,10,15,20,25,30) + script CSV dos 26 casos
-EDIT   src/components/cotacoes/CotacaoFormDialog.tsx (validação obrigatória + pré-seleção)
-EDIT   supabase/functions/contrato-gerar/index.ts (fallback inteligente)
-EDIT   supabase/functions/_shared/termo-afiliacao-utils.ts (fallback inteligente)
-EDIT   supabase/functions/api-externa/index.ts (validação na entrada)
+// ...
+codigo_plano: codigoPlanoSga,
+produtos: produtos.length > 0 ? produtos : undefined,
 ```
 
-Sem alteração no Asaas/Hinova nem reemissão automática de boletos — caso LTG3H67 e os outros 25 ficam para revisão manual do financeiro com o relatório.
+Vai virar (simplificado):
+```ts
+let codigoGrupoProduto: number | undefined;
+if (contrato?.plano_id) {
+  const { data: planoRow } = await supabase.from('planos')
+    .select('id, nome, codigo_sga_plano, valor_adesao')
+    .eq('id', contrato.plano_id).maybeSingle();
+  const cg = planoRow?.codigo_sga_plano ? Number.parseInt(planoRow.codigo_sga_plano, 10) : NaN;
+  if (Number.isFinite(cg) && cg > 0) {
+    codigoGrupoProduto = cg;
+    valorMensalidade = ...;
+    valorAdesao = ...;
+  } else {
+    // ABORTA — bloqueio claro
+    const motivo = `Plano '${planoRow?.nome}' não tem código de grupo SGA. Cadastre o grupo no Hinova e preencha o código antes de reprocessar.`;
+    await logSync(_vid, _aid, 'resolver_grupo_sga', 'error', {...}, null, motivo);
+    await setStatusSga(_vid, 'erro_sincronizacao');
+    await upsertQueue(_vid, _aid, 'plano_sem_codigo_grupo_sga', motivo, codigoAssociadoHinova);
+    return;
+  }
+}
+// no payload:
+codigo_grupo_produto: codigoGrupoProduto,
+// (sem `produtos`, sem `codigo_plano`)
+```
+
+Posso executar?
