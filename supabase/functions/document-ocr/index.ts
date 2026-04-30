@@ -402,7 +402,12 @@ nome, cpf (XXX.XXX.XXX-XX - PRIORIDADE MÁXIMA), rg, numero_registro (11 dígito
 - NÃO confunda com RENACH (tem letras), registro CNH ou RG.
 - NUNCA retorne cpf:null. Se ilegível: cpf:"ilegivel"
 - LEIA CADA DÍGITO DO CPF INDIVIDUALMENTE, DA ESQUERDA PARA A DIREITA. O CPF possui dígitos verificadores matemáticos — se tiver dúvida em qualquer dígito, retorne cpf:"ilegivel" em vez de adivinhar.
-- CATEGORIA: leia EXCLUSIVAMENTE do campo "9 CAT HAB" que fica na frente da CNH, ao lado do CPF e nº registro. NÃO extraia da grade/tabela de categorias (verso ou rodapé) que lista ACC, A, B, C, D, BE, CE, DE etc com datas de habilitação. A grade é apenas um detalhamento — a categoria principal está no campo "9 CAT HAB". Categorias válidas: A, B, C, D, E, AB, AC, AD, AE, ACC.
+- CATEGORIA (REGRA CRÍTICA — LEIA COM ATENÇÃO):
+  • Leia EXCLUSIVAMENTE do campo rotulado "9 CAT HAB", que fica EMBAIXO/À DIREITA, ao lado do "5 Nº REGISTRO" (sequência de 11 dígitos). É a letra/sigla dentro da caixinha rotulada com o número "9" e o texto "CAT HAB".
+  • ARMADILHA #1 — Campo "ACC": existe uma OUTRA caixinha pequena no TOPO/À DIREITA, ao lado do campo "4b VALIDADE" (data dd/mm/aaaa). Essa caixa é rotulada "ACC" e contém uma única letra grande (frequentemente D, E ou vazia). ESSA LETRA NÃO É CATEGORIA — é o código de Atividade Remunerada / Exercício de Atividade. NUNCA use o conteúdo do campo ACC como categoria.
+  • ARMADILHA #2 — Grade do verso/rodapé: existe uma tabela com linhas ACC, A, A1, B, B1, C, C1, D, D1, BE, CE, DE, C1E, D1E e datas ao lado. Essa tabela é apenas o detalhamento das categorias habilitadas — não a categoria principal.
+  • DICA DE VALIDAÇÃO: a categoria correta (do campo "9 CAT HAB") SEMPRE aparece também na grade do verso com uma data de validade ao lado, e essa data normalmente coincide (ou é a mesma) da validade principal "4b" da CNH. Se você está em dúvida entre duas letras, escolha a que tem data igual à validade principal.
+  • Categorias válidas: ACC, A, A1, B, B1, C, C1, D, D1, E, AB, AC, AD, AE, BE, CE, DE, C1E, D1E.
 
 ### RG / CIN (Carteira de Identidade Nacional)
 Aceite TANTO o RG antigo (modelo estadual com REGISTRO GERAL próprio) QUANTO a nova CIN (Carteira de Identidade Nacional - válida em todo território nacional, com QR Code, layout bilíngue PT/EN, texto "VÁLIDA EM TODO O TERRITÓRIO NACIONAL"). Ambos retornam tipo_detectado:"rg".
