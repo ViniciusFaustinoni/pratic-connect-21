@@ -572,25 +572,100 @@ const OCR_MODEL = 'google/gemini-2.5-flash';
 const OCR_RETRY_MODEL = 'google/gemini-2.5-pro';
 
 /**
- * Extrai um CPF VÁLIDO (passa checksum) do texto nativo do PDF.
- * Retorna o primeiro CPF válido encontrado, formatado XXX.XXX.XXX-XX.
- * Útil para CNH-e e PDFs digitais onde o texto embutido é 100% confiável.
+ * Formata um CPF de 11 dígitos puros para XXX.XXX.XXX-XX.
+ */
+function formatCPF(digits: string): string {
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
+}
+
+/**
+ * Coleta todos os candidatos a CPF (11 dígitos OU formato XXX.XXX.XXX-XX)
+ * presentes no texto, retornando posição (offset) de cada ocorrência.
+ */
+function collectCPFCandidates(text: string): Array<{ digits: string; index: number; raw: string; valid: boolean }> {
+  const out: Array<{ digits: string; index: number; raw: string; valid: boolean }> = [];
+  if (!text) return out;
+  // Formato XXX.XXX.XXX-XX (com possíveis espaços)
+  for (const m of text.matchAll(/(\d{3})[.\s]?(\d{3})[.\s]?(\d{3})[-\s]?(\d{2})/g)) {
+    const digits = `${m[1]}${m[2]}${m[3]}${m[4]}`;
+    out.push({ digits, index: m.index ?? -1, raw: m[0], valid: validateCPF(digits) });
+  }
+  // 11 dígitos contíguos (CNH-e digital costuma trazer assim)
+  for (const m of text.matchAll(/(?<!\d)(\d{11})(?!\d)/g)) {
+    const digits = m[1];
+    // Evitar duplicar candidatos já capturados pelo regex pontuado
+    if (!out.some((c) => c.index === m.index && c.digits === digits)) {
+      out.push({ digits, index: m.index ?? -1, raw: m[0], valid: validateCPF(digits) });
+    }
+  }
+  return out;
+}
+
+/**
+ * Procura o trecho do texto onde aparece o rótulo "CPF" (variantes inclusas)
+ * e devolve o primeiro CPF VÁLIDO que apareça logo após esse rótulo.
+ *
+ * Variantes aceitas: "CPF", "CPF/MF", "CPF / MF", "4d CPF", "4d. CPF",
+ * "CPF do contribuinte", "CPF/CNPJ".
+ *
+ * Diferente de `extractValidCPFFromText`, NÃO retorna o primeiro número
+ * válido qualquer — exige proximidade com o rótulo, evitando trocar o CPF
+ * pelo Nº Registro / RENACH / RG / numeração lateral.
+ */
+function extractAnchoredCPFFromText(text: string): { cpf: string | null; contexto: string | null } {
+  if (!text) return { cpf: null, contexto: null };
+
+  // Acha posições do rótulo "CPF" (com possíveis prefixos numéricos tipo "4d ")
+  const labelRegex = /(?:^|\n|\s)(?:\d{1,2}\s?[a-z]?\s+)?CPF(?:\s*\/?\s*(?:MF|CNPJ))?/gi;
+  const matches: Array<{ index: number; len: number }> = [];
+  let m: RegExpExecArray | null;
+  while ((m = labelRegex.exec(text)) !== null) {
+    matches.push({ index: m.index, len: m[0].length });
+    if (m.index === labelRegex.lastIndex) labelRegex.lastIndex++;
+  }
+
+  if (matches.length === 0) return { cpf: null, contexto: null };
+
+  // Para cada rótulo, olhar uma janela de até 80 chars depois e tentar achar CPF válido
+  for (const lbl of matches) {
+    const windowStart = lbl.index + lbl.len;
+    const windowEnd = Math.min(windowStart + 80, text.length);
+    const window = text.slice(windowStart, windowEnd);
+
+    // Procurar CPF formatado primeiro
+    const fmt = window.match(/(\d{3})[.\s]?(\d{3})[.\s]?(\d{3})[-\s]?(\d{2})/);
+    if (fmt) {
+      const digits = `${fmt[1]}${fmt[2]}${fmt[3]}${fmt[4]}`;
+      if (validateCPF(digits)) {
+        return {
+          cpf: formatCPF(digits),
+          contexto: text.slice(Math.max(0, lbl.index - 20), windowEnd).trim().slice(0, 200),
+        };
+      }
+    }
+    // 11 dígitos contíguos
+    const cont = window.match(/(?<!\d)(\d{11})(?!\d)/);
+    if (cont && validateCPF(cont[1])) {
+      return {
+        cpf: formatCPF(cont[1]),
+        contexto: text.slice(Math.max(0, lbl.index - 20), windowEnd).trim().slice(0, 200),
+      };
+    }
+  }
+
+  return { cpf: null, contexto: text.slice(matches[0].index, Math.min(matches[0].index + 200, text.length)).trim() };
+}
+
+/**
+ * Extrai o primeiro CPF VÁLIDO do texto, sem ancoragem a rótulo.
+ * Mantido como fallback (compatibilidade), mas o caminho preferencial agora
+ * é `extractAnchoredCPFFromText`.
  */
 function extractValidCPFFromText(text: string): string | null {
   if (!text) return null;
-  const candidates = new Set<string>();
-  // Formato com pontuação
-  for (const m of text.matchAll(/(\d{3})[.\s]?(\d{3})[.\s]?(\d{3})[-\s]?(\d{2})/g)) {
-    candidates.add(`${m[1]}${m[2]}${m[3]}${m[4]}`);
-  }
-  // 11 dígitos contíguos
-  for (const m of text.matchAll(/\b(\d{11})\b/g)) {
-    candidates.add(m[1]);
-  }
-  for (const c of candidates) {
-    if (validateCPF(c)) {
-      return `${c.slice(0,3)}.${c.slice(3,6)}.${c.slice(6,9)}-${c.slice(9,11)}`;
-    }
+  const cands = collectCPFCandidates(text);
+  for (const c of cands) {
+    if (c.valid) return formatCPF(c.digits);
   }
   return null;
 }
@@ -604,9 +679,19 @@ function extractCNHFromText(text: string): Record<string, any> {
   const out: Record<string, any> = {};
   if (!text) return out;
 
-  // CPF (com checksum)
-  const cpf = extractValidCPFFromText(text);
-  if (cpf) out.cpf = cpf;
+  // CPF: prefere ancoragem ao rótulo "CPF" / "4d CPF"; se falhar, primeiro válido
+  const anchored = extractAnchoredCPFFromText(text);
+  if (anchored.cpf) {
+    out.cpf = anchored.cpf;
+    out.__cpf_fonte = 'native_anchored';
+    out.__cpf_contexto = anchored.contexto;
+  } else {
+    const cpf = extractValidCPFFromText(text);
+    if (cpf) {
+      out.cpf = cpf;
+      out.__cpf_fonte = 'native_first_valid';
+    }
+  }
 
   // Datas DD/MM/YYYY → YYYY-MM-DD
   const toIso = (d: string) => {
@@ -618,23 +703,23 @@ function extractCNHFromText(text: string): Record<string, any> {
   const nomeMatch = text.match(/(?:^|\n)\s*(?:1\s+)?NOME\s*\/?\s*[A-Z\s]*\n?\s*([A-ZÁÂÃÀÉÊÍÓÔÕÚÇ ]{6,})/m);
   if (nomeMatch) out.nome = nomeMatch[1].trim().replace(/\s+/g, ' ');
 
-  // Data de nascimento: rótulo "DATA NASCIMENTO" ou "5 DATA NASCIMENTO"
+  // Data de nascimento
   const nascMatch = text.match(/(?:DATA\s+NASCIMENTO|DATA\s+DE\s+NASCIMENTO)[^\d]*(\d{2}\/\d{2}\/\d{4})/i);
   if (nascMatch) out.data_nascimento = toIso(nascMatch[1]);
 
-  // Validade: rótulo "VALIDADE"
+  // Validade
   const valMatch = text.match(/VALIDADE[^\d]*(\d{2}\/\d{2}\/\d{4})/i);
   if (valMatch) out.validade = toIso(valMatch[1]);
 
-  // Nº Registro CNH (11 dígitos após "REGISTRO" ou "Nº REGISTRO")
+  // Nº Registro CNH
   const regMatch = text.match(/(?:N[ºO°]\s*REGISTRO|REGISTRO\s+CNH|REGISTRO)[^\d]*(\d{11})/i);
   if (regMatch) out.numero_registro = regMatch[1];
 
-  // Categoria CAT HAB: AAB, B, C, D, E, AB, AC, AD, AE, ACC
+  // Categoria CAT HAB
   const catMatch = text.match(/CAT[\.\s]*HAB[^\w]*([A-E]{1,2}|ACC)/i);
   if (catMatch) out.categoria = catMatch[1].toUpperCase();
 
-  // RG (DOC. IDENTIDADE): número estadual, geralmente até 11 chars com / e -
+  // RG
   const rgMatch = text.match(/(?:DOC[\.\s]*IDENTIDADE|RG)[^\n]*?([\d.\-/]{6,15})/i);
   if (rgMatch) out.rg = rgMatch[1].replace(/\s+/g, '');
 
@@ -653,6 +738,8 @@ function mergeNativeOverAI(
 ): Record<string, any> {
   const merged = { ...aiDados };
   for (const [key, val] of Object.entries(nativeDados)) {
+    // Ignorar campos meta (prefixados com __) — usados apenas para logging
+    if (key.startsWith('__')) continue;
     if (val === null || val === undefined || val === '') continue;
     const aiVal = aiDados[key];
     // CPF: nativo SEMPRE ganha (já passou checksum)
@@ -741,6 +828,9 @@ type OcrLogCtx = {
   used_retry?: boolean;
   used_native_fallback?: boolean;
   cpf_corrigido_via?: string | null;
+  cpf_fonte?: string | null;
+  cpf_contexto?: string | null;
+  cpf_candidatos?: any;
 };
 
 async function persistOcrLog(ctx: OcrLogCtx, outcome: {
@@ -781,6 +871,9 @@ async function persistOcrLog(ctx: OcrLogCtx, outcome: {
       used_retry: !!ctx.used_retry,
       used_native_fallback: !!ctx.used_native_fallback,
       cpf_corrigido_via: ctx.cpf_corrigido_via ?? null,
+      cpf_fonte: ctx.cpf_fonte ?? null,
+      cpf_contexto: ctx.cpf_contexto ?? null,
+      cpf_candidatos: ctx.cpf_candidatos ?? null,
       status: outcome.status,
       motivo: outcome.motivo ?? r?.motivo ?? null,
       erro: outcome.erro ?? null,
@@ -1230,20 +1323,43 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
     // FUSÃO COM TEXTO NATIVO DO PDF (CNH-e digital tem layout estável)
     // Para PDFs com camada de texto, o texto extraído é 100% confiável.
     // Sobrepomos campos da IA com os do texto nativo quando disponíveis.
+    // Coleta candidatos para auditoria/diagnóstico
+    if (extractedPdfText) {
+      try {
+        const cands = collectCPFCandidates(extractedPdfText)
+          .map((c) => ({ cpf: formatCPF(c.digits), valido: c.valid, pos: c.index }))
+          .slice(0, 20);
+        if (cands.length) logCtx.cpf_candidatos = cands;
+      } catch { /* noop */ }
+    }
+
     if (result?.tipo_detectado === 'cnh' && result.dados && extractedPdfText) {
       const nativeFields = extractCNHFromText(extractedPdfText);
       if (Object.keys(nativeFields).length > 0) {
         console.log(`[OCR][${reqId}] Texto nativo extraiu ${Object.keys(nativeFields).length} campo(s) da CNH:`, Object.keys(nativeFields));
+        // Captura metadados de CPF antes do merge consumir/limpar (não vão para dados finais)
+        if (nativeFields.__cpf_fonte) logCtx.cpf_fonte = nativeFields.__cpf_fonte;
+        if (nativeFields.__cpf_contexto) logCtx.cpf_contexto = nativeFields.__cpf_contexto;
+
         result.dados = mergeNativeOverAI(result.dados, nativeFields, reqId);
         logCtx.used_native_fallback = true;
-        if (nativeFields.cpf) logCtx.cpf_corrigido_via = 'native';
+        if (nativeFields.cpf) {
+          logCtx.cpf_corrigido_via = nativeFields.__cpf_fonte || 'native';
+        }
       }
     }
     // Para outros tipos (RG, Comprovante, NF, ATPV-e, CRLV) extraímos só o CPF
-    // do titular/comprador quando aplicável.
+    // do titular/comprador quando aplicável — usando ancoragem ao rótulo.
     if (result?.dados && extractedPdfText && result.tipo_detectado !== 'cnh') {
-      const nativeCpf = extractValidCPFFromText(extractedPdfText);
+      const anchored = extractAnchoredCPFFromText(extractedPdfText);
+      const nativeCpf = anchored.cpf || extractValidCPFFromText(extractedPdfText);
       if (nativeCpf) {
+        if (anchored.cpf) {
+          logCtx.cpf_fonte = 'native_anchored';
+          logCtx.cpf_contexto = anchored.contexto || null;
+        } else {
+          logCtx.cpf_fonte = 'native_first_valid';
+        }
         const dados = result.dados as Record<string, any>;
         for (const field of ['cpf', 'cpf_titular', 'cpf_comprador', 'cpf_cnpj_comprador']) {
           if (field in dados) {
@@ -1252,7 +1368,7 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
               console.log(`[OCR][${reqId}] CPF nativo do PDF substitui ${field}: "${aiVal}" → "${nativeCpf}"`);
               dados[field] = nativeCpf;
               logCtx.used_native_fallback = true;
-              logCtx.cpf_corrigido_via = 'native';
+              logCtx.cpf_corrigido_via = anchored.cpf ? 'native_anchored' : 'native_first_valid';
             }
           }
         }
@@ -1372,42 +1488,48 @@ Use a função para retornar o CPF encontrado ou "ilegivel" se não conseguir le
               if (validateCPF(retryCpf.replace(/\D/g, ''))) {
                 console.log('[OCR] CPF válido extraído na segunda tentativa:', retryCpf);
                 result.dados.cpf = retryCpf;
+                logCtx.cpf_fonte = 'ia_retry';
               } else {
                 console.log('[OCR] CPF da segunda tentativa também inválido:', retryCpf, '→ tentando correção por permutação');
                 const cpfCorrigido = tryFixCPFByPermutation(retryCpf);
                 if (cpfCorrigido) {
                   console.log(`[OCR] CPF corrigido por permutação: ${retryCpf} → ${cpfCorrigido}`);
                   result.dados.cpf = cpfCorrigido;
+                  logCtx.cpf_fonte = 'permutacao';
                 } else {
                   const cpfCorrigido1 = cpfExtraido ? tryFixCPFByPermutation(cpfExtraido) : null;
                   if (cpfCorrigido1) {
                     console.log(`[OCR] CPF corrigido por permutação (1ª tentativa): ${cpfExtraido} → ${cpfCorrigido1}`);
                     result.dados.cpf = cpfCorrigido1;
+                    logCtx.cpf_fonte = 'permutacao';
                   } else {
                     result.dados.cpf = 'ilegivel';
+                    logCtx.cpf_fonte = 'none';
                     result.motivo = (result.motivo || '') + ' CPF não pôde ser lido com precisão (dígito verificador inválido em ambas tentativas).';
                   }
                 }
               }
             } else if (retryCpf === 'ilegivel') {
               console.log('[OCR] CPF marcado como ilegível na segunda tentativa');
-              // Ainda tentar permutação com CPF da 1ª tentativa
               const cpfCorrigido = cpfExtraido ? tryFixCPFByPermutation(cpfExtraido) : null;
               if (cpfCorrigido) {
                 console.log(`[OCR] CPF corrigido por permutação após ilegível: ${cpfExtraido} → ${cpfCorrigido}`);
                 result.dados.cpf = cpfCorrigido;
+                logCtx.cpf_fonte = 'permutacao';
               } else {
                 result.dados.cpf = 'ilegivel';
+                logCtx.cpf_fonte = 'none';
                 result.motivo = (result.motivo || '') + ' CPF não pôde ser lido (documento danificado ou cortado).';
               }
             } else {
-              // Nenhum CPF extraído no retry - tentar permutação
               const cpfCorrigido = cpfExtraido ? tryFixCPFByPermutation(cpfExtraido) : null;
               if (cpfCorrigido) {
                 console.log(`[OCR] CPF corrigido por permutação (fallback): ${cpfExtraido} → ${cpfCorrigido}`);
                 result.dados.cpf = cpfCorrigido;
+                logCtx.cpf_fonte = 'permutacao';
               } else {
                 result.dados.cpf = 'ilegivel';
+                logCtx.cpf_fonte = 'none';
               }
             }
           } else {

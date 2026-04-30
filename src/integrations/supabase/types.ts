@@ -17529,7 +17529,10 @@ export type Database = {
           bytes: number | null
           confianca: number | null
           cotacao_id: string | null
+          cpf_candidatos: Json | null
+          cpf_contexto: string | null
           cpf_corrigido_via: string | null
+          cpf_fonte: string | null
           created_at: string
           dados_extraidos: Json | null
           erro: string | null
@@ -17561,7 +17564,10 @@ export type Database = {
           bytes?: number | null
           confianca?: number | null
           cotacao_id?: string | null
+          cpf_candidatos?: Json | null
+          cpf_contexto?: string | null
           cpf_corrigido_via?: string | null
+          cpf_fonte?: string | null
           created_at?: string
           dados_extraidos?: Json | null
           erro?: string | null
@@ -17593,7 +17599,10 @@ export type Database = {
           bytes?: number | null
           confianca?: number | null
           cotacao_id?: string | null
+          cpf_candidatos?: Json | null
+          cpf_contexto?: string | null
           cpf_corrigido_via?: string | null
+          cpf_fonte?: string | null
           created_at?: string
           dados_extraidos?: Json | null
           erro?: string | null
