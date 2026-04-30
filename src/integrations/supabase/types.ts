@@ -17522,6 +17522,105 @@ export type Database = {
           },
         ]
       }
+      ocr_execution_logs: {
+        Row: {
+          arquivo_url_hash: string | null
+          associado_id: string | null
+          bytes: number | null
+          confianca: number | null
+          cotacao_id: string | null
+          cpf_corrigido_via: string | null
+          created_at: string
+          dados_extraidos: Json | null
+          erro: string | null
+          has_native_text: boolean | null
+          id: string
+          is_pdf: boolean | null
+          latency_ms: number | null
+          legivel: boolean | null
+          mime: string | null
+          modelo: string | null
+          motivo: string | null
+          native_text_len: number | null
+          provider: string | null
+          req_id: string | null
+          status: string | null
+          sucesso: boolean | null
+          sugestao: string | null
+          tipo_detectado: string | null
+          tipo_esperado: string | null
+          truncated: boolean | null
+          usage: Json | null
+          used_native_fallback: boolean | null
+          used_retry: boolean | null
+          usuario_id: string | null
+        }
+        Insert: {
+          arquivo_url_hash?: string | null
+          associado_id?: string | null
+          bytes?: number | null
+          confianca?: number | null
+          cotacao_id?: string | null
+          cpf_corrigido_via?: string | null
+          created_at?: string
+          dados_extraidos?: Json | null
+          erro?: string | null
+          has_native_text?: boolean | null
+          id?: string
+          is_pdf?: boolean | null
+          latency_ms?: number | null
+          legivel?: boolean | null
+          mime?: string | null
+          modelo?: string | null
+          motivo?: string | null
+          native_text_len?: number | null
+          provider?: string | null
+          req_id?: string | null
+          status?: string | null
+          sucesso?: boolean | null
+          sugestao?: string | null
+          tipo_detectado?: string | null
+          tipo_esperado?: string | null
+          truncated?: boolean | null
+          usage?: Json | null
+          used_native_fallback?: boolean | null
+          used_retry?: boolean | null
+          usuario_id?: string | null
+        }
+        Update: {
+          arquivo_url_hash?: string | null
+          associado_id?: string | null
+          bytes?: number | null
+          confianca?: number | null
+          cotacao_id?: string | null
+          cpf_corrigido_via?: string | null
+          created_at?: string
+          dados_extraidos?: Json | null
+          erro?: string | null
+          has_native_text?: boolean | null
+          id?: string
+          is_pdf?: boolean | null
+          latency_ms?: number | null
+          legivel?: boolean | null
+          mime?: string | null
+          modelo?: string | null
+          motivo?: string | null
+          native_text_len?: number | null
+          provider?: string | null
+          req_id?: string | null
+          status?: string | null
+          sucesso?: boolean | null
+          sugestao?: string | null
+          tipo_detectado?: string | null
+          tipo_esperado?: string | null
+          truncated?: boolean | null
+          usage?: Json | null
+          used_native_fallback?: boolean | null
+          used_retry?: boolean | null
+          usuario_id?: string | null
+        }
+        Relationships: []
+      }
       oficinas: {
         Row: {
           agencia: string | null
