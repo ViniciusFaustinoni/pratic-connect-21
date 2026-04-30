@@ -407,7 +407,7 @@ export function PlanFormModal({
                           inputMode="numeric"
                         />
                         <p className="text-xs text-muted-foreground">
-                          Código do <strong>GRUPO</strong> no painel Hinova (campo <code>codigo_grupo_produto</code>). O grupo já contém todas as coberturas e benefícios configurados lá — não enviamos a lista de produtos individualmente. Sem este código, a sincronização de novos veículos com o SGA será bloqueada com erro <code>plano_sem_codigo_grupo_sga</code>.
+                          Código do <strong>GRUPO</strong> no painel Hinova (campo <code>codigo_grupo_produto</code>). O grupo já contém todas as coberturas e benefícios configurados lá — não enviamos a lista de produtos individualmente. Sem este código, o associado, veículo e fotos <strong>continuam sendo enviados normalmente</strong> ao SGA — apenas o vínculo do grupo no veículo não é feito (fica registrado um aviso <code>plano_sem_codigo_grupo_sga_aviso</code> para vincular manualmente depois).
                         </p>
                       </div>
                     </section>
