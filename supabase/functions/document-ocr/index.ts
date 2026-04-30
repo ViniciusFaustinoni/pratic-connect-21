@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { aiGatewayFetch } from "../_shared/ai-client.ts";
 // unpdf: extração de texto nativo de PDF para runtimes serverless (Deno/edge),
 // sem worker e sem dependência de canvas. Substitui pdfjs-dist que falhava com
 // "Setting up fake worker failed" no edge runtime do Supabase.
@@ -585,7 +586,7 @@ async function callAIGatewayWithRetry(
   let lastErr: unknown = null;
   for (let attempt = 0; attempt < delays.length; attempt++) {
     try {
-      const resp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      const resp = await aiGatewayFetch({
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
