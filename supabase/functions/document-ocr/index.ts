@@ -572,6 +572,107 @@ const OCR_MODEL = 'google/gemini-2.5-flash';
 const OCR_RETRY_MODEL = 'google/gemini-2.5-pro';
 
 /**
+ * Extrai um CPF VÁLIDO (passa checksum) do texto nativo do PDF.
+ * Retorna o primeiro CPF válido encontrado, formatado XXX.XXX.XXX-XX.
+ * Útil para CNH-e e PDFs digitais onde o texto embutido é 100% confiável.
+ */
+function extractValidCPFFromText(text: string): string | null {
+  if (!text) return null;
+  const candidates = new Set<string>();
+  // Formato com pontuação
+  for (const m of text.matchAll(/(\d{3})[.\s]?(\d{3})[.\s]?(\d{3})[-\s]?(\d{2})/g)) {
+    candidates.add(`${m[1]}${m[2]}${m[3]}${m[4]}`);
+  }
+  // 11 dígitos contíguos
+  for (const m of text.matchAll(/\b(\d{11})\b/g)) {
+    candidates.add(m[1]);
+  }
+  for (const c of candidates) {
+    if (validateCPF(c)) {
+      return `${c.slice(0,3)}.${c.slice(3,6)}.${c.slice(6,9)}-${c.slice(9,11)}`;
+    }
+  }
+  return null;
+}
+
+/**
+ * Extrai dados confiáveis de uma CNH a partir do texto nativo do PDF.
+ * CNH-e (digital) tem layout estável com rótulos: NOME, CPF, DOC. IDENTIDADE,
+ * DATA NASCIMENTO, VALIDADE, Nº REGISTRO, CAT. HAB.
+ */
+function extractCNHFromText(text: string): Record<string, any> {
+  const out: Record<string, any> = {};
+  if (!text) return out;
+
+  // CPF (com checksum)
+  const cpf = extractValidCPFFromText(text);
+  if (cpf) out.cpf = cpf;
+
+  // Datas DD/MM/YYYY → YYYY-MM-DD
+  const toIso = (d: string) => {
+    const m = d.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
+  };
+
+  // Nome: linha após "NOME" / "1 NOME"
+  const nomeMatch = text.match(/(?:^|\n)\s*(?:1\s+)?NOME\s*\/?\s*[A-Z\s]*\n?\s*([A-ZÁÂÃÀÉÊÍÓÔÕÚÇ ]{6,})/m);
+  if (nomeMatch) out.nome = nomeMatch[1].trim().replace(/\s+/g, ' ');
+
+  // Data de nascimento: rótulo "DATA NASCIMENTO" ou "5 DATA NASCIMENTO"
+  const nascMatch = text.match(/(?:DATA\s+NASCIMENTO|DATA\s+DE\s+NASCIMENTO)[^\d]*(\d{2}\/\d{2}\/\d{4})/i);
+  if (nascMatch) out.data_nascimento = toIso(nascMatch[1]);
+
+  // Validade: rótulo "VALIDADE"
+  const valMatch = text.match(/VALIDADE[^\d]*(\d{2}\/\d{2}\/\d{4})/i);
+  if (valMatch) out.validade = toIso(valMatch[1]);
+
+  // Nº Registro CNH (11 dígitos após "REGISTRO" ou "Nº REGISTRO")
+  const regMatch = text.match(/(?:N[ºO°]\s*REGISTRO|REGISTRO\s+CNH|REGISTRO)[^\d]*(\d{11})/i);
+  if (regMatch) out.numero_registro = regMatch[1];
+
+  // Categoria CAT HAB: AAB, B, C, D, E, AB, AC, AD, AE, ACC
+  const catMatch = text.match(/CAT[\.\s]*HAB[^\w]*([A-E]{1,2}|ACC)/i);
+  if (catMatch) out.categoria = catMatch[1].toUpperCase();
+
+  // RG (DOC. IDENTIDADE): número estadual, geralmente até 11 chars com / e -
+  const rgMatch = text.match(/(?:DOC[\.\s]*IDENTIDADE|RG)[^\n]*?([\d.\-/]{6,15})/i);
+  if (rgMatch) out.rg = rgMatch[1].replace(/\s+/g, '');
+
+  return out;
+}
+
+/**
+ * Mescla campos extraídos do texto nativo SOBREPONDO os da IA quando temos
+ * alta confiança (CPF passou checksum, datas no formato correto, etc.).
+ * Garantia: NUNCA degrada — só substitui se o valor nativo for melhor.
+ */
+function mergeNativeOverAI(
+  aiDados: Record<string, any>,
+  nativeDados: Record<string, any>,
+  reqId: string
+): Record<string, any> {
+  const merged = { ...aiDados };
+  for (const [key, val] of Object.entries(nativeDados)) {
+    if (val === null || val === undefined || val === '') continue;
+    const aiVal = aiDados[key];
+    // CPF: nativo SEMPRE ganha (já passou checksum)
+    if (key === 'cpf' && val) {
+      if (aiVal !== val) {
+        console.log(`[OCR][${reqId}] CPF do texto nativo sobrepõe IA: "${aiVal}" → "${val}"`);
+      }
+      merged[key] = val;
+      continue;
+    }
+    // Demais: só sobrepõe se IA não tem valor ou tem "ilegivel"/null
+    if (!aiVal || aiVal === 'ilegivel' || aiVal === null) {
+      merged[key] = val;
+      console.log(`[OCR][${reqId}] Campo "${key}" preenchido do texto nativo: "${val}"`);
+    }
+  }
+  return merged;
+}
+
+/**
  * Chama o Lovable AI Gateway com retry exponencial em falhas transitórias.
  * - Retenta em erros de rede e respostas 500/502/503/504.
  * - NÃO retenta em 401/402/429 (erros legítimos que devem chegar ao usuário).
