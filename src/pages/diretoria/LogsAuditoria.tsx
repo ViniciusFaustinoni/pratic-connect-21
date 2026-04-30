@@ -1,5 +1,6 @@
 import { Fragment, useState } from 'react';
-import { FileText, Download, ChevronDown, ChevronUp, GitBranch } from 'lucide-react';
+import { FileText, Download, ChevronDown, ChevronUp, GitBranch, ScanText } from 'lucide-react';
+import OcrLogsTab from '@/components/diretoria/OcrLogsTab';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -369,12 +370,19 @@ export default function LogsAuditoria() {
             <GitBranch className="h-4 w-4" />
             Histórico de Hierarquia ({historicoHierarquia.length})
           </TabsTrigger>
+          <TabsTrigger value="ocr" className="gap-2">
+            <ScanText className="h-4 w-4" />
+            OCR
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="todos">
           {renderLogsTable(logs, isLoading, 'Nenhum log encontrado')}
         </TabsContent>
         <TabsContent value="hierarquia">
           {renderLogsTable(historicoHierarquia, isLoadingHierarquia, 'Nenhum histórico de hierarquia encontrado')}
+        </TabsContent>
+        <TabsContent value="ocr">
+          <OcrLogsTab />
         </TabsContent>
       </Tabs>
     </div>

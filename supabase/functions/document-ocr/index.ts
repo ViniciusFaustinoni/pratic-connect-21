@@ -718,10 +718,88 @@ async function callAIGatewayWithRetry(
   throw lastErr instanceof Error ? lastErr : new Error('AI Gateway indisponível após retries');
 }
 
+// ============================================================
+// Persistência de logs de execução do OCR (tabela ocr_execution_logs)
+// ============================================================
+type OcrLogCtx = {
+  reqId?: string;
+  startedAt: number;
+  usuario_id?: string | null;
+  cotacao_id?: string | null;
+  associado_id?: string | null;
+  tipo_esperado?: string | null;
+  arquivo_url_hash?: string | null;
+  mime?: string | null;
+  bytes?: number | null;
+  is_pdf?: boolean;
+  has_native_text?: boolean;
+  native_text_len?: number;
+  provider?: string | null;
+  modelo?: string | null;
+  usage?: any;
+  truncated?: boolean;
+  used_retry?: boolean;
+  used_native_fallback?: boolean;
+  cpf_corrigido_via?: string | null;
+};
+
+async function persistOcrLog(ctx: OcrLogCtx, outcome: {
+  result?: any;
+  status: 'sucesso' | 'revisar' | 'falha' | 'truncado';
+  motivo?: string | null;
+  erro?: string | null;
+  sucesso?: boolean | null;
+}) {
+  try {
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+    const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!SUPABASE_URL || !SERVICE_KEY) return;
+    const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+    const r = outcome.result || {};
+    await admin.from('ocr_execution_logs').insert({
+      req_id: ctx.reqId ?? null,
+      usuario_id: ctx.usuario_id ?? null,
+      cotacao_id: ctx.cotacao_id ?? null,
+      associado_id: ctx.associado_id ?? null,
+      tipo_esperado: ctx.tipo_esperado ?? null,
+      tipo_detectado: r?.tipo_detectado ?? null,
+      arquivo_url_hash: ctx.arquivo_url_hash ?? null,
+      mime: ctx.mime ?? null,
+      bytes: ctx.bytes ?? null,
+      is_pdf: !!ctx.is_pdf,
+      has_native_text: !!ctx.has_native_text,
+      native_text_len: ctx.native_text_len ?? 0,
+      provider: ctx.provider ?? null,
+      modelo: ctx.modelo ?? null,
+      latency_ms: Date.now() - ctx.startedAt,
+      usage: ctx.usage ?? null,
+      confianca: typeof r?.confianca === 'number' ? r.confianca : null,
+      legivel: typeof r?.legivel === 'boolean' ? r.legivel : null,
+      sugestao: r?.sugestao ?? null,
+      sucesso: outcome.sucesso ?? (typeof r?.sucesso === 'boolean' ? r.sucesso : null),
+      truncated: !!ctx.truncated,
+      used_retry: !!ctx.used_retry,
+      used_native_fallback: !!ctx.used_native_fallback,
+      cpf_corrigido_via: ctx.cpf_corrigido_via ?? null,
+      status: outcome.status,
+      motivo: outcome.motivo ?? r?.motivo ?? null,
+      erro: outcome.erro ?? null,
+      dados_extraidos: r?.dados ?? null,
+    });
+  } catch (err) {
+    // Nunca falhar a resposta principal por causa do log
+    console.warn('[OCR][log] Falha ao persistir log de execução:', err);
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  // Contexto compartilhado entre try/catch para garantir que o log seja
+  // persistido mesmo em caminhos de erro/fallback.
+  const logCtx: OcrLogCtx = { startedAt: Date.now() };
 
   try {
     // Autenticação OPCIONAL - permite uso público para cotações
@@ -741,6 +819,7 @@ serve(async (req) => {
         
         if (!claimsError && claimsData?.claims) {
           isAuthenticated = true;
+          logCtx.usuario_id = (claimsData.claims as any).sub ?? null;
           console.log('Authenticated request from user:', claimsData.claims.sub);
         }
       } catch (authErr) {
@@ -751,8 +830,12 @@ serve(async (req) => {
     console.log('Request mode:', isAuthenticated ? 'authenticated' : 'public');
 
     const reqId = (crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`).slice(0, 8);
+    logCtx.reqId = reqId;
 
-    const { url, tipoEsperado, cpfEsperado, nomeEsperado, extrairDados } = await req.json();
+    const { url, tipoEsperado, cpfEsperado, nomeEsperado, extrairDados, cotacaoId, associadoId } = await req.json();
+    logCtx.tipo_esperado = tipoEsperado || null;
+    logCtx.cotacao_id = cotacaoId || null;
+    logCtx.associado_id = associadoId || null;
 
     if (!url) {
       return new Response(
@@ -783,6 +866,9 @@ serve(async (req) => {
     // Log estruturado de entrada — `urlHash` evita expor URL completa em massa
     const urlHash = await sha1Hex(url).then(h => h.slice(0, 12)).catch(() => 'no-hash');
     const activeCfg = await getActiveAIConfig().catch(() => ({ provider: 'lovable', model: 'unknown' }));
+    logCtx.arquivo_url_hash = urlHash;
+    logCtx.provider = activeCfg.provider;
+    logCtx.modelo = activeCfg.model;
     console.log(`[OCR][in] ${JSON.stringify({
       reqId,
       tipoEsperado: tipoEsperado || 'auto',
@@ -903,6 +989,11 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           isLikelyLowQuality,
           isPdfScanned,
         })}`);
+        logCtx.mime = mimeType;
+        logCtx.bytes = bytes;
+        logCtx.is_pdf = isPdfUrl;
+        logCtx.has_native_text = !!extractedPdfText;
+        logCtx.native_text_len = extractedPdfText.length;
 
         // Reforço de prompt para documentos de baixa qualidade
         const lowQualityHint = (isLikelyLowQuality || isPdfScanned)
@@ -938,23 +1029,30 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
 
     const ocrStartedAt = Date.now();
     // Helper: resposta de erro 200 com fallback flag (não quebra UI)
-    const ocrFallbackResponse = (motivo: string, extra: Record<string, unknown> = {}) => {
+    const ocrFallbackResponse = async (motivo: string, extra: Record<string, unknown> = {}) => {
       // Se temos texto nativo do PDF, devolve um payload mínimo "revisar" — UI mantém upload
       const baseDados = extractedPdfText
         ? { texto_extraido: extractedPdfText.substring(0, 4000) }
         : {};
+      const payload = {
+        sucesso: false,
+        fallback: true,
+        tipo_detectado: tipoEsperado || 'desconhecido',
+        dados: { ...baseDados, ...extra },
+        legivel: !!extractedPdfText,
+        valido: false,
+        sugestao: 'revisar',
+        motivo,
+        confianca: extractedPdfText ? 0.4 : 0,
+      };
+      await persistOcrLog(logCtx, {
+        result: payload,
+        status: 'falha',
+        motivo,
+        sucesso: false,
+      });
       return new Response(
-        JSON.stringify({
-          sucesso: false,
-          fallback: true,
-          tipo_detectado: tipoEsperado || 'desconhecido',
-          dados: { ...baseDados, ...extra },
-          legivel: !!extractedPdfText,
-          valido: false,
-          sugestao: 'revisar',
-          motivo,
-          confianca: extractedPdfText ? 0.4 : 0,
-        }),
+        JSON.stringify(payload),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     };
@@ -1074,8 +1172,12 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
     // O `model` enviado aqui só é usado quando provider=lovable.
     const firstPass = await runOcrPass(OCR_MODEL, contentParts, 'main');
     if (!firstPass) {
-      return ocrFallbackResponse('Erro ao processar documento com IA. Documento enviado para revisão manual.');
+      return await ocrFallbackResponse('Erro ao processar documento com IA. Documento enviado para revisão manual.');
     }
+
+    logCtx.usage = firstPass.usage ?? null;
+    logCtx.modelo = OCR_MODEL;
+    logCtx.truncated = firstPass.finishReason === 'length' || firstPass.finishReason === 'max_tokens';
 
     let result = firstPass.result;
     let usedRetry = false;
@@ -1103,6 +1205,9 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
         if (betterByConfidence || promotedToApprove) {
           result = secondPass.result;
           usedRetry = true;
+          logCtx.used_retry = true;
+          logCtx.modelo = OCR_RETRY_MODEL;
+          logCtx.usage = secondPass.usage ?? logCtx.usage;
         }
       }
     }
@@ -1130,6 +1235,8 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
       if (Object.keys(nativeFields).length > 0) {
         console.log(`[OCR][${reqId}] Texto nativo extraiu ${Object.keys(nativeFields).length} campo(s) da CNH:`, Object.keys(nativeFields));
         result.dados = mergeNativeOverAI(result.dados, nativeFields, reqId);
+        logCtx.used_native_fallback = true;
+        if (nativeFields.cpf) logCtx.cpf_corrigido_via = 'native';
       }
     }
     // Para outros tipos (RG, Comprovante, NF, ATPV-e, CRLV) extraímos só o CPF
@@ -1144,6 +1251,8 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
             if (!aiVal || aiVal === 'ilegivel' || (typeof aiVal === 'string' && !validateCPF(aiVal.replace(/\D/g, '')))) {
               console.log(`[OCR][${reqId}] CPF nativo do PDF substitui ${field}: "${aiVal}" → "${nativeCpf}"`);
               dados[field] = nativeCpf;
+              logCtx.used_native_fallback = true;
+              logCtx.cpf_corrigido_via = 'native';
             }
           }
         }
@@ -1742,6 +1851,22 @@ Use a função para retornar o chassi encontrado, ou "ilegivel" se identificar o
       result._checksums = checksumResults;
     }
 
+    // Status derivado para a tabela de logs
+    const derivedStatus: 'sucesso' | 'revisar' | 'truncado' | 'falha' =
+      logCtx.truncated
+        ? 'truncado'
+        : (result?.sugestao === 'aprovar' && result?.sucesso !== false)
+          ? 'sucesso'
+          : (result?.sugestao === 'reprovar' || result?.sucesso === false)
+            ? 'falha'
+            : 'revisar';
+    await persistOcrLog(logCtx, {
+      result,
+      status: derivedStatus,
+      sucesso: result?.sucesso ?? null,
+      motivo: result?.motivo ?? null,
+    });
+
     return new Response(
       JSON.stringify(result),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -1752,19 +1877,27 @@ Use a função para retornar o chassi encontrado, ou "ilegivel" se identificar o
     const errorMessage = error instanceof Error ? error.message : 'Erro interno';
     // Devolve 200 com fallback para que o uploader não exiba "Edge Function 500".
     // O documento ficará para revisão manual no fluxo de cotação.
+    const payload = {
+      sucesso: false,
+      fallback: true,
+      tipo_detectado: 'desconhecido',
+      dados: {},
+      legivel: false,
+      valido: false,
+      sugestao: 'revisar',
+      motivo: `Erro inesperado no OCR: ${errorMessage}. Documento enviado para revisão manual.`,
+      confianca: 0,
+      error: errorMessage,
+    };
+    await persistOcrLog(logCtx, {
+      result: payload,
+      status: 'falha',
+      sucesso: false,
+      motivo: payload.motivo,
+      erro: errorMessage,
+    });
     return new Response(
-      JSON.stringify({
-        sucesso: false,
-        fallback: true,
-        tipo_detectado: 'desconhecido',
-        dados: {},
-        legivel: false,
-        valido: false,
-        sugestao: 'revisar',
-        motivo: `Erro inesperado no OCR: ${errorMessage}. Documento enviado para revisão manual.`,
-        confianca: 0,
-        error: errorMessage,
-      }),
+      JSON.stringify(payload),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
