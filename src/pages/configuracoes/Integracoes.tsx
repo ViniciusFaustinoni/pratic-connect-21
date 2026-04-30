@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Plug, MessageSquare, CreditCard, MapPin, FileSignature, Zap, Mail,
   Search, Building2, CheckCircle, XCircle, Key, Inbox, ArrowRight,
-  Loader2, Settings, ExternalLink, HeartPulse, Code2,
+  Loader2, Settings, ExternalLink, HeartPulse, Code2, Sparkles,
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Card, CardContent } from '@/components/ui/card';
@@ -178,6 +178,29 @@ const categorias: Categoria[] = [
         href: '/configuracoes/api',
         sempreAtivo: true,
         diretorOnly: true,
+      },
+    ],
+  },
+  {
+    titulo: 'Inteligência Artificial',
+    icone: '🤖',
+    items: [
+      {
+        id: 'ia-modelo',
+        nome: 'Modelo de IA do Sistema',
+        descricao: 'Provedor e modelo aplicados a OCR, chat, análise de risco, WhatsApp e automações',
+        icon: Sparkles,
+        href: '/configuracoes/integracoes/ia',
+        sempreAtivo: true,
+        diretorOnly: true,
+      },
+      {
+        id: 'agente-consultor',
+        nome: 'Agente Consultor IA',
+        descricao: 'Persona e prompts do consultor virtual',
+        icon: Sparkles,
+        href: '/configuracoes/agente-consultor-ia',
+        sempreAtivo: true,
       },
     ],
   },
