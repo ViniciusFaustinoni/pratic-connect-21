@@ -66,6 +66,7 @@
     "embla-carousel-react": "^8.6.0",
     "fabric": "^6.6.6",
     "framer-motion": "^12.26.2",
+    "heic2any": "^0.0.4",
     "html2canvas": "^1.4.1",
     "input-otp": "^1.4.2",
     "jspdf": "^4.0.0",
