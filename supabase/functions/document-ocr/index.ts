@@ -1,10 +1,100 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { aiGatewayFetch, getActiveAIConfig } from "../_shared/ai-client.ts";
+import { aiGatewayFetch, getActiveAIConfig, callAI } from "../_shared/ai-client.ts";
 // unpdf: extração de texto nativo de PDF para runtimes serverless (Deno/edge),
 // sem worker e sem dependência de canvas. Substitui pdfjs-dist que falhava com
 // "Setting up fake worker failed" no edge runtime do Supabase.
 import { extractText, getDocumentProxy } from "https://esm.sh/unpdf@0.12.1";
+import { rasterizePdfPages, shouldRasterizePdf } from "../_shared/pdf-rasterize.ts";
+import { runMistralOcr, callPixtralChat } from "../_shared/mistral-ocr.ts";
+
+// ============================================================
+// Motor de OCR (engine) — lê ocr_engine_config (singleton)
+// ============================================================
+type OcrEngine = 'global' | 'mistral' | 'anthropic' | 'google';
+interface OcrEngineConfig {
+  engine: OcrEngine;
+  primary_model: string;
+  secondary_model: string | null;
+  dupla_leitura_tipos: string[];
+  pdf_rasterizar: boolean;
+  pdf_dpi: number;
+}
+const DEFAULT_OCR_ENGINE: OcrEngineConfig = {
+  engine: 'global',
+  primary_model: 'mistral-ocr-latest',
+  secondary_model: 'claude-sonnet-4-5',
+  dupla_leitura_tipos: ['cnh', 'crlv'],
+  pdf_rasterizar: true,
+  pdf_dpi: 200,
+};
+let _engineCache: { value: OcrEngineConfig; ts: number } | null = null;
+async function getOcrEngineConfig(): Promise<OcrEngineConfig> {
+  if (_engineCache && Date.now() - _engineCache.ts < 30_000) return _engineCache.value;
+  try {
+    const url = Deno.env.get('SUPABASE_URL');
+    const srk = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!url || !srk) return DEFAULT_OCR_ENGINE;
+    const sb = createClient(url, srk);
+    const { data } = await sb.from('ocr_engine_config').select('*').limit(1).maybeSingle();
+    const value: OcrEngineConfig = data ? {
+      engine: data.engine,
+      primary_model: data.primary_model,
+      secondary_model: data.secondary_model,
+      dupla_leitura_tipos: data.dupla_leitura_tipos ?? ['cnh', 'crlv'],
+      pdf_rasterizar: data.pdf_rasterizar ?? true,
+      pdf_dpi: data.pdf_dpi ?? 200,
+    } : DEFAULT_OCR_ENGINE;
+    _engineCache = { value, ts: Date.now() };
+    return value;
+  } catch (e) {
+    console.warn('[OCR] falha lendo ocr_engine_config:', (e as Error)?.message);
+    return DEFAULT_OCR_ENGINE;
+  }
+}
+const ENGINE_DEFAULTS: Record<'mistral'|'anthropic'|'google', { primary: string; secondary: string }> = {
+  mistral:   { primary: 'mistral-ocr-latest',    secondary: 'pixtral-large-latest' },
+  anthropic: { primary: 'claude-sonnet-4-5',     secondary: 'claude-opus-4-5' },
+  google:    { primary: 'google/gemini-2.5-pro', secondary: 'google/gemini-2.5-pro' },
+};
+async function resolveEngine(cfg: OcrEngineConfig): Promise<{ engine: 'mistral'|'anthropic'|'google'; primary: string; secondary: string }> {
+  if (cfg.engine !== 'global') {
+    return {
+      engine: cfg.engine,
+      primary: cfg.primary_model || ENGINE_DEFAULTS[cfg.engine].primary,
+      secondary: cfg.secondary_model || ENGINE_DEFAULTS[cfg.engine].secondary,
+    };
+  }
+  const ai = await getActiveAIConfig();
+  const eng: 'anthropic'|'google' = ai.provider === 'anthropic' ? 'anthropic' : 'google';
+  return { engine: eng, primary: ENGINE_DEFAULTS[eng].primary, secondary: ENGINE_DEFAULTS[eng].secondary };
+}
+
+/** Compara campos críticos entre duas leituras (para CNH/CRLV). */
+function compareCriticalFields(a: any, b: any, tipo: string): {
+  matches: number; total: number; mismatches: Array<{ field: string; a: any; b: any }>;
+} {
+  const fieldsByType: Record<string, string[]> = {
+    cnh:  ['cpf', 'nome', 'numero_registro', 'validade', 'categoria'],
+    crlv: ['placa', 'renavam', 'chassi', 'ano_modelo', 'marca', 'modelo'],
+  };
+  const fields = fieldsByType[tipo] ?? [];
+  const dadosA = a?.dados ?? {};
+  const dadosB = b?.dados ?? {};
+  const mismatches: Array<{ field: string; a: any; b: any }> = [];
+  let matches = 0;
+  for (const f of fields) {
+    const va = normForCompare(dadosA[f]);
+    const vb = normForCompare(dadosB[f]);
+    if (va && vb && va === vb) matches++;
+    else if (va !== vb) mismatches.push({ field: f, a: dadosA[f] ?? null, b: dadosB[f] ?? null });
+  }
+  return { matches, total: fields.length, mismatches };
+}
+function normForCompare(v: any): string {
+  if (v == null) return '';
+  return String(v).toLowerCase().replace(/[^\w]/g, '');
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
