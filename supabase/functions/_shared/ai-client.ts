@@ -476,10 +476,15 @@ export async function aiGatewayFetch(init: {
   if (!result.ok && effectiveProvider !== "lovable") {
     const recoverable = !result.status || result.status >= 500 || result.status === 400 || result.status === 401 || result.status === 402 || result.status === 429;
     if (recoverable) {
-      console.warn(`[ai-client] provider=${effectiveProvider} status=${result.status} msg="${result.errorMessage}" → tentando fallback Lovable`);
+      console.warn(`[ai-client][fallback] ${JSON.stringify({
+        from: effectiveProvider,
+        to: "lovable",
+        from_status: result.status,
+        from_error: String(result.errorMessage ?? "").slice(0, 200),
+      })}`);
       const fbResult = await callAI({ ...opts, override: { provider: "lovable", model: DEFAULT_CONFIG.model } });
       if (fbResult.ok) result = fbResult;
-      else console.warn(`[ai-client] fallback Lovable também falhou: status=${fbResult.status} msg="${fbResult.errorMessage}"`);
+      else console.warn(`[ai-client][fallback] lovable também falhou: status=${fbResult.status} msg="${fbResult.errorMessage}"`);
     }
   }
 
