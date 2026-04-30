@@ -118,26 +118,38 @@ export const UnifiedDocumentUploader = forwardRef<
   const [isProcessing, setIsProcessing] = useState(false);
   const [reprocessingTipo, setReprocessingTipo] = useState<TipoDocumentoDetectado | null>(null);
   const processFile = useCallback(async (file: File) => {
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-    const allowedExtensions = ['jpg', 'jpeg', 'png', 'webp', 'pdf', 'jfif', 'bmp', 'gif', 'heic'];
-    const ext = file.name.split('.').pop()?.toLowerCase() || '';
-    if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(ext)) {
-      toast.error('Formato não suportado. Use JPG, PNG ou PDF.');
-      return;
-    }
-
     if (file.size > 10 * 1024 * 1024) {
       toast.error('Arquivo muito grande. Máximo 10MB.');
       return;
     }
 
+    // Pré-processa: converte HEIC/HEIF → JPEG no navegador (foto de iPhone)
+    // e rejeita formatos não suportados pelo pipeline (BMP, TIFF, JFIF, etc.)
+    // ANTES de qualquer upload pro Storage.
+    let preprocessed: Awaited<ReturnType<typeof import('@/lib/upload/preprocessUploadFile').preprocessUploadFile>>;
+    try {
+      const { preprocessUploadFile, isHeicLike } = await import('@/lib/upload/preprocessUploadFile');
+      const conversionToastId = isHeicLike(file)
+        ? toast.loading('Preparando documento (convertendo foto do iPhone)...')
+        : null;
+      try {
+        preprocessed = await preprocessUploadFile(file);
+      } finally {
+        if (conversionToastId !== null) toast.dismiss(conversionToastId);
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Formato não suportado.');
+      return;
+    }
+
+    const fileToUpload = preprocessed.file;
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(7)}`;
     const entityId = contratoId || cotacaoId;
-    const originalFileName = file.name;
-    
+    const originalFileName = fileToUpload.name;
+
     const newDoc: DocumentoUnificado = {
       id: tempId,
-      arquivo_url: URL.createObjectURL(file),
+      arquivo_url: URL.createObjectURL(fileToUpload),
       arquivo_nome: originalFileName,
       status: 'uploading',
     };
