@@ -111,11 +111,22 @@ export function useChecklistSGA(veiculoId: string, associadoId: string): Checkli
       addAssociado('email', 'E-mail', associado?.email);
       addAssociado('rg', 'RG', associado?.rg, false, 'RG não preenchido — será enviado vazio ao SGA');
       addAssociado('data_nascimento', 'Data de Nascimento', associado?.data_nascimento, false, 'Data de nascimento ausente — campo formatado vazio no SGA');
-      addAssociado('cep', 'CEP', associado?.cep, false, 'Endereço incompleto — CEP faltando');
-      addAssociado('logradouro', 'Logradouro', associado?.logradouro, false, 'Endereço incompleto');
-      addAssociado('bairro', 'Bairro', associado?.bairro, false, 'Endereço incompleto');
-      addAssociado('cidade', 'Cidade', associado?.cidade, false, 'Endereço incompleto');
-      addAssociado('uf', 'UF', associado?.uf, false, 'Endereço incompleto');
+      // CEP — Hinova exige 8 dígitos. 7 dígitos (zero perdido) é normalizado pela edge function,
+      // mas qualquer outro formato bloqueia o cadastro com HTTP 406.
+      const cepDigits = String(associado?.cep || '').replace(/\D/g, '');
+      const cepOk = cepDigits.length === 8 || cepDigits.length === 7;
+      itens.push({
+        campo: 'cep', label: 'CEP', secao: 'associado', critico: true,
+        status: cepOk ? 'ok' : (associado?.cep ? 'risco' : 'faltando'),
+        valor: associado?.cep || null,
+        detalhe: !associado?.cep
+          ? 'CEP não preenchido — Hinova exige 8 dígitos'
+          : (!cepOk ? `CEP "${associado?.cep}" inválido — Hinova rejeita formato com ${cepDigits.length} dígitos (HTTP 406)` : undefined),
+      });
+      addAssociado('logradouro', 'Logradouro', associado?.logradouro, true, 'Endereço incompleto — Hinova exige logradouro');
+      addAssociado('bairro', 'Bairro', associado?.bairro, true, 'Endereço incompleto — Hinova exige bairro');
+      addAssociado('cidade', 'Cidade', associado?.cidade, true, 'Endereço incompleto — Hinova exige cidade');
+      addAssociado('uf', 'UF', associado?.uf, true, 'Endereço incompleto — Hinova exige UF');
       addAssociado('dia_vencimento', 'Dia de Vencimento', associado?.dia_vencimento);
 
       // === VEÍCULO ===
