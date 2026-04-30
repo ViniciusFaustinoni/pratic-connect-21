@@ -34,7 +34,7 @@ const DEFAULT_OCR_ENGINE: OcrEngineConfig = {
   secondary_model: 'claude-sonnet-4-5',
   dupla_leitura_tipos: ['cnh', 'crlv'],
   pdf_rasterizar: true,
-  pdf_dpi: 200,
+  pdf_dpi: 144,
 };
 let _engineCache: { value: OcrEngineConfig; ts: number } | null = null;
 async function getOcrEngineConfig(): Promise<OcrEngineConfig> {
