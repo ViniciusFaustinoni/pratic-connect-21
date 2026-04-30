@@ -29260,6 +29260,7 @@ export type Database = {
           codigo_fipe: string | null
           codigo_hinova: number | null
           codigo_sga_combustivel: number | null
+          codigo_sga_cor: number | null
           combustivel: string | null
           cor: string | null
           created_at: string
@@ -29326,6 +29327,7 @@ export type Database = {
           codigo_fipe?: string | null
           codigo_hinova?: number | null
           codigo_sga_combustivel?: number | null
+          codigo_sga_cor?: number | null
           combustivel?: string | null
           cor?: string | null
           created_at?: string
@@ -29392,6 +29394,7 @@ export type Database = {
           codigo_fipe?: string | null
           codigo_hinova?: number | null
           codigo_sga_combustivel?: number | null
+          codigo_sga_cor?: number | null
           combustivel?: string | null
           cor?: string | null
           created_at?: string
@@ -32633,6 +32636,7 @@ export type Database = {
         Args: { p_combustivel: string }
         Returns: number
       }
+      resolver_codigo_sga_cor: { Args: { p_cor: string }; Returns: number }
       set_audit_origem: { Args: { origem: string }; Returns: undefined }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
