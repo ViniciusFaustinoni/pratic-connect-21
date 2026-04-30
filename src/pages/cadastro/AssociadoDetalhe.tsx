@@ -885,28 +885,22 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            {'arquivo_url' in d && d.arquivo_url ? (
+                            {((d as any).arquivo_url) ? (
                               <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => {
-                                const url = d.arquivo_url as string;
-                                const isVideo = /\.(mp4|webm|mov|avi)($|\?)/i.test(url);
-                                const isPdf = /\.pdf($|\?)/i.test(url);
-                                setFotoModal({ open: true, url, tipo: TIPO_DOCUMENTO_LABELS[d.tipo] || d.tipo, mediaType: isVideo ? 'video' : isPdf ? 'pdf' : 'image' });
-                              }}>
-                                <Eye className="h-3 w-3" />
-                              </Button>
-                            ) : d.fonte === 'documentos' ? (
-                              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => {
-                                const url = (d as any).arquivo_url;
-                                if (url) {
-                                  const isVideo = /\.(mp4|webm|mov|avi)($|\?)/i.test(url);
-                                  const isPdf = /\.pdf($|\?)/i.test(url);
-                                  setFotoModal({ open: true, url, tipo: TIPO_DOCUMENTO_LABELS[d.tipo] || d.tipo, mediaType: isVideo ? 'video' : isPdf ? 'pdf' : 'image' });
-                                }
+                                const docsComArquivo = todosDocumentos.filter(x => (x as any).arquivo_url) as any[];
+                                const items: MediaItem[] = docsComArquivo.map(x => ({
+                                  url: x.arquivo_url,
+                                  tipo: TIPO_DOCUMENTO_LABELS[x.tipo] || x.tipo,
+                                  mediaType: detectMediaType(x.arquivo_url),
+                                }));
+                                const idx = docsComArquivo.findIndex(x => x.id === (d as any).id);
+                                openMedia(items, Math.max(0, idx));
                               }}>
                                 <Eye className="h-3 w-3" />
                               </Button>
                             ) : null}
                           </TableCell>
+
                         </TableRow>
                       ))}
                     </TableBody>
