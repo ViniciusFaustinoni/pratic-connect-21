@@ -148,6 +148,7 @@ const UsuarioForm = lazy(() => import("./pages/configuracoes/UsuarioForm"));
 const Perfis = lazy(() => import("./pages/configuracoes/Perfis"));
 const Integracoes = lazy(() => import("./pages/configuracoes/Integracoes"));
 const IntegracaoWhatsApp = lazy(() => import("./pages/configuracoes/IntegracaoWhatsApp"));
+const IntegracaoIA = lazy(() => import("./pages/configuracoes/IntegracaoIA"));
 const IntegracaoApiKeys = lazy(() => import("./pages/configuracoes/IntegracaoApiKeys"));
 const IntegracaoFontesLeads = lazy(() => import("./pages/configuracoes/IntegracaoFontesLeads"));
 const IntegracaoSGAHinova = lazy(() => import("./pages/configuracoes/IntegracaoSGAHinova"));
