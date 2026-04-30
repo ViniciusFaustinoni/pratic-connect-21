@@ -282,6 +282,16 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     const hoje = new Date().getDate();
     return calcularOpcoesVencimento(hoje);
   }, []);
+
+  // Pré-seleciona a primeira opção válida quando o consultor ainda não escolheu.
+  // Mantém a escolha existente se já houver — apenas garante que nunca fique null.
+  useEffect(() => {
+    if (diaVencimento === null || !opcoesVencimento.includes(diaVencimento as any)) {
+      setDiaVencimento(opcoesVencimento[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opcoesVencimento]);
+
   
   // Loading states
   const [loadingMarcas, setLoadingMarcas] = useState(false);
