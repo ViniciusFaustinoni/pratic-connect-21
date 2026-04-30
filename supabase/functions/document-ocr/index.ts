@@ -1851,30 +1851,37 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           // Tiebreaker #1 — MRZ da CNH-e: a 1ª linha do MRZ ("I<BRA<dígitos>")
           // contém os 9 primeiros dígitos do nº de registro. Quem casar com o MRZ
           // tem leitura visual fiel (não alucinou). Vale para CNH (não CRLV).
-          const mrzExtractRegistro = (mrz: unknown): string => {
-            if (!mrz) return '';
-            const s = String(mrz).toUpperCase().replace(/\s+/g, '');
-            const m = s.match(/I<BRA(\d{9,11})/);
+          //
+          // Fontes do MRZ, em ordem de preferência:
+          //   1) texto nativo do PDF (extractedPdfText) — verdade absoluta em CNH-e SENATRAN.
+          //   2) campo mrz_registro retornado pela IA (passada A ou B).
+          const mrzFromString = (s: unknown): string => {
+            if (!s) return '';
+            const str = String(s).toUpperCase().replace(/\s+/g, '');
+            const m = str.match(/I<BRA(\d{9,11})/);
             return m ? m[1] : '';
           };
           let tiebreakerMrz: 'A' | 'B' | null = null;
           if (tipoParaDupla === 'cnh') {
-            const mrzA = mrzExtractRegistro(firstPassResolved.result?.dados?.mrz_registro);
-            const mrzB = mrzExtractRegistro(passB.result?.dados?.mrz_registro);
+            const mrzNative = mrzFromString(extractedPdfText);
+            const mrzA = mrzFromString(firstPassResolved.result?.dados?.mrz_registro);
+            const mrzB = mrzFromString(passB.result?.dados?.mrz_registro);
             const regA = String(firstPassResolved.result?.dados?.numero_registro ?? '').replace(/\D/g, '');
             const regB = String(passB.result?.dados?.numero_registro ?? '').replace(/\D/g, '');
-            // Usa o MRZ que existe (idealmente os dois leram a mesma faixa). Se
-            // os dois leram, eles devem ser iguais; se diferem, o MRZ não é
-            // confiável e ignoramos esse critério.
-            const mrzAuthoritative = (mrzA && mrzB && mrzA === mrzB) ? mrzA : (mrzA || mrzB);
+            // Prioridade: nativo (não pode mentir) > IA (pode alucinar)
+            const mrzAuthoritative = mrzNative || ((mrzA && mrzB && mrzA === mrzB) ? mrzA : (mrzA || mrzB));
             if (mrzAuthoritative) {
-              const aMatchesMrz = regA.length >= 9 && regA.startsWith(mrzAuthoritative.slice(0, 9));
-              const bMatchesMrz = regB.length >= 9 && regB.startsWith(mrzAuthoritative.slice(0, 9));
+              // O MRZ tem 9 dígitos do registro (sem o último par de check).
+              // Casa se os primeiros 9 dígitos do numero_registro batem.
+              const mrzKey = mrzAuthoritative.slice(0, 9);
+              const aMatchesMrz = regA.length >= 9 && regA.slice(0, 9) === mrzKey;
+              const bMatchesMrz = regB.length >= 9 && regB.slice(0, 9) === mrzKey;
               if (aMatchesMrz && !bMatchesMrz) tiebreakerMrz = 'A';
               else if (!aMatchesMrz && bMatchesMrz) tiebreakerMrz = 'B';
-              console.log(`[OCR][dupla-leitura][mrz] ${JSON.stringify({ reqId, mrzA, mrzB, mrzAuthoritative, regA, regB, tiebreakerMrz })}`);
+              console.log(`[OCR][dupla-leitura][mrz] ${JSON.stringify({ reqId, mrzNative, mrzA, mrzB, mrzAuthoritative, regA, regB, tiebreakerMrz })}`);
             }
           }
+
 
           // Tiebreaker #2 — CPF checksum (mantém comportamento antigo)
           const tiebreakerCpf =
