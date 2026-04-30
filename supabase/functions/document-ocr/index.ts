@@ -1424,45 +1424,213 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
       return { result: parsed, raw: contentStr, durationMs: Date.now() - t0, finishReason, usage };
     };
 
-    // 1ª passada: usa o modelo configurado globalmente (resolvido pelo aiGatewayFetch via ai_model_config).
-    // O `model` enviado aqui só é usado quando provider=lovable.
-    const firstPass = await runOcrPass(OCR_MODEL, contentParts, 'main');
+    // ============================================================
+    // EXECUÇÃO DAS PASSADAS
+    //
+    // 3 caminhos:
+    //   A) engine=mistral → /v1/ocr + pixtral-large para estruturar
+    //   B) engine=anthropic|google → callAI direto com modelo escolhido
+    //   C) dupla leitura para CNH/CRLV (passada B com modelo secundário)
+    // ============================================================
+
+    // Helper interno: roda uma passada com o modelo escolhido (engine != mistral)
+    const runEnginePass = async (
+      modelId: string, label: string, providerOverride?: 'anthropic'|'google'|'lovable',
+    ): Promise<{ result: any; raw: string; durationMs: number; finishReason?: string; usage?: any } | null> => {
+      // Para anthropic, callAI já roteia para Anthropic direto.
+      // Para google, mandamos via Lovable Gateway (funciona com modelos google/*).
+      const provider = providerOverride ?? (resolved.engine === 'anthropic' ? 'anthropic' : 'lovable');
+      const t0 = Date.now();
+      try {
+        const r = await callAI({
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: contentParts },
+          ],
+          max_tokens: 8192,
+          temperature: 0,
+          override: { provider, model: modelId },
+          fallbackToLovable: true,
+        });
+        if (!r.ok) {
+          console.error(`[OCR][engine-pass] ${JSON.stringify({ reqId, label, model: modelId, status: r.status, error: r.errorMessage?.slice(0,200) })}`);
+          return null;
+        }
+        const contentStr = r.data?.choices?.[0]?.message?.content ?? '';
+        if (!contentStr) return null;
+        let parsed: any;
+        try {
+          const clean = contentStr.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          parsed = JSON.parse(clean);
+        } catch {
+          const repaired = tryRepairTruncatedJSON(contentStr);
+          if (!repaired) return null;
+          parsed = repaired;
+        }
+        return {
+          result: parsed, raw: contentStr,
+          durationMs: Date.now() - t0,
+          finishReason: r.data?.choices?.[0]?.finish_reason,
+          usage: r.data?.usage,
+        };
+      } catch (e) {
+        console.error(`[OCR][engine-pass] ${JSON.stringify({ reqId, label, model: modelId, error: String((e as Error)?.message ?? e).slice(0,200) })}`);
+        return null;
+      }
+    };
+
+    // Helper interno: roda Mistral OCR (PDF/image) + Pixtral para estruturar
+    const runMistralPass = async (label: string): Promise<{ result: any; raw: string; durationMs: number; usage?: any } | null> => {
+      const t0 = Date.now();
+      // Mistral aceita URL (preferível) ou data-uri. Para PDF, usa /v1/ocr.
+      let target: { type: 'document_url' | 'image_url'; url: string };
+      if (isPdfUrl) {
+        if (publicUrlForMistral) target = { type: 'document_url', url: publicUrlForMistral };
+        else if (pdfBytesForMistral) {
+          const b64 = btoa(String.fromCharCode(...new Uint8Array(pdfBytesForMistral.subarray(0, 0)))) // noop placeholder
+            ? '' : '';
+          // data-URI fallback
+          let s = '';
+          const arr = pdfBytesForMistral;
+          for (let i = 0; i < arr.length; i += 8192) s += String.fromCharCode(...arr.subarray(i, i + 8192));
+          target = { type: 'document_url', url: `data:application/pdf;base64,${btoa(s)}` };
+        } else target = { type: 'document_url', url };
+      } else {
+        target = { type: 'image_url', url };
+      }
+
+      const ocr = await runMistralOcr({ ...target, model: resolved.primary });
+      if (!ocr.ok) {
+        console.error(`[OCR][mistral] ${JSON.stringify({ reqId, label, status: ocr.status, error: ocr.error })}`);
+        return null;
+      }
+      const md = ocr.result?.markdown ?? '';
+      console.log(`[OCR][mistral] ${JSON.stringify({ reqId, label, pages: ocr.result?.pages.length, markdownChars: md.length })}`);
+      if (!md.trim()) return null;
+
+      // Estruturar markdown via Pixtral usando o mesmo system prompt JSON
+      const px = await callPixtralChat({
+        model: resolved.secondary || 'pixtral-large-latest',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `${userPrompt}\n\n--- TEXTO EXTRAÍDO PELO MISTRAL OCR (markdown) ---\n${md}\n--- FIM ---` },
+        ],
+        max_tokens: 4096,
+        temperature: 0,
+      });
+      if (!px.ok) {
+        console.error(`[OCR][pixtral-structure] ${JSON.stringify({ reqId, label, status: px.status, error: px.error })}`);
+        return null;
+      }
+      const contentStr = px.data?.choices?.[0]?.message?.content ?? '';
+      let parsed: any;
+      try {
+        const clean = contentStr.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        parsed = JSON.parse(clean);
+      } catch {
+        const repaired = tryRepairTruncatedJSON(contentStr);
+        if (!repaired) return null;
+        parsed = repaired;
+      }
+      return { result: parsed, raw: contentStr, durationMs: Date.now() - t0, usage: px.data?.usage };
+    };
+
+    // ── Passada A (principal) ───────────────────────────────────
+    const firstPass = resolved.engine === 'mistral'
+      ? await runMistralPass('main-mistral')
+      : await runEnginePass(resolved.primary, 'main');
+
     if (!firstPass) {
-      return await ocrFallbackResponse('Erro ao processar documento com IA. Documento enviado para revisão manual.');
+      // Fallback de emergência: tenta Lovable Gateway com Gemini Pro
+      console.warn(`[OCR][${reqId}] motor ${resolved.engine} falhou, tentando fallback Lovable/Gemini`);
+      const fb = await runEnginePass('google/gemini-2.5-pro', 'fallback-emergency', 'lovable');
+      if (!fb) {
+        return await ocrFallbackResponse('Erro ao processar documento com IA. Documento enviado para revisão manual.');
+      }
+      logCtx.fallback_emergency = true;
+      logCtx.modelo = 'google/gemini-2.5-pro';
+      var firstPassResolved = fb;
+    } else {
+      var firstPassResolved = firstPass;
     }
 
-    logCtx.usage = firstPass.usage ?? null;
-    logCtx.modelo = OCR_MODEL;
-    logCtx.truncated = firstPass.finishReason === 'length' || firstPass.finishReason === 'max_tokens';
+    logCtx.usage = firstPassResolved.usage ?? null;
+    logCtx.modelo = resolved.primary;
+    logCtx.truncated = firstPassResolved.finishReason === 'length' || firstPassResolved.finishReason === 'max_tokens';
 
-    let result = firstPass.result;
+    let result = firstPassResolved.result;
     let usedRetry = false;
 
-    // Heurística: se confiança baixa, ilegível ou pediu revisão, tenta retry com modelo mais potente
+    // ── DUPLA LEITURA (CNH/CRLV) ────────────────────────────────
+    const tipoDetectadoLower = String(result?.tipo_detectado ?? tipoEsperado ?? '').toLowerCase();
+    const tipoParaDupla = ['cnh', 'crlv'].includes(tipoDetectadoLower) ? tipoDetectadoLower : null;
+    const aplicaDupla = !!tipoParaDupla && engineCfg.dupla_leitura_tipos.includes(tipoParaDupla);
+
+    if (aplicaDupla) {
+      console.log(`[OCR][dupla-leitura] ${JSON.stringify({ reqId, tipo: tipoParaDupla, secondary: resolved.secondary })}`);
+      // Passada B: usa motor diferente quando primário é mistral; senão, secondary do mesmo motor
+      const passB = resolved.engine === 'mistral'
+        ? await runEnginePass(resolved.secondary || 'claude-sonnet-4-5', 'dupla-B-anthropic', 'anthropic')
+        : await runEnginePass(resolved.secondary || resolved.primary, 'dupla-B-secondary');
+
+      if (passB) {
+        const cmp = compareCriticalFields(firstPassResolved.result, passB.result, tipoParaDupla);
+        const allMatch = cmp.matches === cmp.total && cmp.total > 0;
+        const cpfPlacaDiverge = cmp.mismatches.some((m) => ['cpf', 'placa'].includes(m.field));
+        const muitasDiv = cmp.mismatches.length >= 2;
+
+        logCtx.dupla_leitura = true;
+        logCtx.divergencias = cmp.mismatches.length ? cmp.mismatches : null;
+
+        console.log(`[OCR][dupla-leitura][result] ${JSON.stringify({ reqId, ...cmp, allMatch, cpfPlacaDiverge })}`);
+
+        if (allMatch) {
+          // Concordância total → boost de confiança
+          result.confianca = Math.min(1, Math.max(Number(result.confianca ?? 0.8), Number(passB.result.confianca ?? 0.8)) + 0.1);
+        } else if (cpfPlacaDiverge || muitasDiv) {
+          // Divergência crítica → revisão manual obrigatória
+          result.sugestao = 'revisar';
+          result.confianca = Math.min(Number(result.confianca ?? 0.5), 0.5);
+          result.divergencias = cmp.mismatches;
+        } else {
+          // 1 divergência leve → marca pra revisão mas mantém dados primários
+          result.sugestao = result.sugestao === 'aprovar' ? 'revisar' : result.sugestao;
+          result.divergencias = cmp.mismatches;
+        }
+      } else {
+        console.warn(`[OCR][dupla-leitura][${reqId}] passada B falhou — mantendo só passada A`);
+      }
+    }
+
+    // Heurística antiga de retry (mantida para casos não-dupla-leitura)
     const confianca = Number(result?.confianca ?? 1);
     const lowQualityResult =
-      result?.legivel === false ||
-      result?.sucesso === false ||
-      result?.sugestao === 'revisar' ||
-      (Number.isFinite(confianca) && confianca < 0.6);
+      !aplicaDupla && (
+        result?.legivel === false ||
+        result?.sucesso === false ||
+        result?.sugestao === 'revisar' ||
+        (Number.isFinite(confianca) && confianca < 0.6)
+      );
 
     if (lowQualityResult) {
       console.log(`[OCR][retry] ${JSON.stringify({
         reqId,
         motivo: { confianca, legivel: result?.legivel, sugestao: result?.sugestao, sucesso: result?.sucesso },
-        model_retry: OCR_RETRY_MODEL,
+        retry_engine: resolved.engine,
+        retry_model: resolved.secondary,
       })}`);
-      const secondPass = await runOcrPass(OCR_RETRY_MODEL, contentParts, 'retry-low-confidence');
+      const secondPass = resolved.engine === 'mistral'
+        ? await runEnginePass('claude-sonnet-4-5', 'retry-low-confidence', 'anthropic')
+        : await runEnginePass(resolved.secondary || resolved.primary, 'retry-low-confidence');
       if (secondPass) {
         const c2 = Number(secondPass.result?.confianca ?? 0);
-        // Mantém o melhor: maior confiança ou que tenha virado "aprovar"
         const betterByConfidence = Number.isFinite(c2) && c2 > confianca;
         const promotedToApprove = secondPass.result?.sugestao === 'aprovar' && result?.sugestao !== 'aprovar';
         if (betterByConfidence || promotedToApprove) {
           result = secondPass.result;
           usedRetry = true;
           logCtx.used_retry = true;
-          logCtx.modelo = OCR_RETRY_MODEL;
+          logCtx.modelo = resolved.secondary;
           logCtx.usage = secondPass.usage ?? logCtx.usage;
         }
       }
