@@ -17522,6 +17522,42 @@ export type Database = {
           },
         ]
       }
+      ocr_engine_config: {
+        Row: {
+          dupla_leitura_tipos: string[]
+          engine: string
+          id: string
+          pdf_dpi: number
+          pdf_rasterizar: boolean
+          primary_model: string
+          secondary_model: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          dupla_leitura_tipos?: string[]
+          engine?: string
+          id?: string
+          pdf_dpi?: number
+          pdf_rasterizar?: boolean
+          primary_model?: string
+          secondary_model?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          dupla_leitura_tipos?: string[]
+          engine?: string
+          id?: string
+          pdf_dpi?: number
+          pdf_rasterizar?: boolean
+          primary_model?: string
+          secondary_model?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       ocr_execution_logs: {
         Row: {
           arquivo_url_hash: string | null
@@ -17536,6 +17572,9 @@ export type Database = {
           created_at: string
           dados_esperados: Json | null
           dados_extraidos: Json | null
+          divergencias: Json | null
+          dupla_leitura: boolean | null
+          engine: string | null
           erro: string | null
           has_native_text: boolean | null
           id: string
@@ -17546,9 +17585,13 @@ export type Database = {
           modelo: string | null
           motivo: string | null
           native_text_len: number | null
+          pdf_paginas_rasterizadas: number | null
+          pdf_rasterizado: boolean | null
+          primary_model: string | null
           provider: string | null
           req_id: string | null
           score_campos: Json | null
+          secondary_model: string | null
           status: string | null
           sucesso: boolean | null
           sugestao: string | null
@@ -17573,6 +17616,9 @@ export type Database = {
           created_at?: string
           dados_esperados?: Json | null
           dados_extraidos?: Json | null
+          divergencias?: Json | null
+          dupla_leitura?: boolean | null
+          engine?: string | null
           erro?: string | null
           has_native_text?: boolean | null
           id?: string
@@ -17583,9 +17629,13 @@ export type Database = {
           modelo?: string | null
           motivo?: string | null
           native_text_len?: number | null
+          pdf_paginas_rasterizadas?: number | null
+          pdf_rasterizado?: boolean | null
+          primary_model?: string | null
           provider?: string | null
           req_id?: string | null
           score_campos?: Json | null
+          secondary_model?: string | null
           status?: string | null
           sucesso?: boolean | null
           sugestao?: string | null
@@ -17610,6 +17660,9 @@ export type Database = {
           created_at?: string
           dados_esperados?: Json | null
           dados_extraidos?: Json | null
+          divergencias?: Json | null
+          dupla_leitura?: boolean | null
+          engine?: string | null
           erro?: string | null
           has_native_text?: boolean | null
           id?: string
@@ -17620,9 +17673,13 @@ export type Database = {
           modelo?: string | null
           motivo?: string | null
           native_text_len?: number | null
+          pdf_paginas_rasterizadas?: number | null
+          pdf_rasterizado?: boolean | null
+          primary_model?: string | null
           provider?: string | null
           req_id?: string | null
           score_campos?: Json | null
+          secondary_model?: string | null
           status?: string | null
           sucesso?: boolean | null
           sugestao?: string | null
