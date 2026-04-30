@@ -86,6 +86,8 @@ export function EtapaConsultaFipe({
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [camposAutoPreenchidos, setCamposAutoPreenchidos] = useState<string[]>([]);
+  const [fipeAlternativas, setFipeAlternativas] = useState<FipeAlternativa[]>([]);
+  const [fipeSelecionada, setFipeSelecionada] = useState<string>('');
   const { getByPlaca } = useFipe();
 
   const handlePlacaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
