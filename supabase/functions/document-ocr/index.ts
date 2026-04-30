@@ -993,17 +993,19 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
     }
 
     const ocrDurationMs = Date.now() - ocrStartedAt;
-    console.log('[OCR][summary]', JSON.stringify({
+    console.log(`[OCR][confidence] ${JSON.stringify({
+      reqId,
       tipo_esperado: tipoEsperado || 'auto',
       tipo_detectado: result?.tipo_detectado,
       sucesso: result?.sucesso,
       sugestao: result?.sugestao,
       confianca: result?.confianca,
+      legivel: result?.legivel,
+      usedRetry,
       hasNativeText: !!extractedPdfText,
       nativeTextLen: extractedPdfText?.length || 0,
       durationMs: ocrDurationMs,
-    }));
-    console.log('OCR result:', result);
+    })}`);
 
     // Se temos texto nativo do PDF e o CPF extraído está em conflito, tentar pegar do texto
     if (result.tipo_detectado === 'cnh' && result.dados && extractedPdfText) {
