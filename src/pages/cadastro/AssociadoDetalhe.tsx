@@ -821,10 +821,50 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                     <XCircle className="h-4 w-4 text-destructive shrink-0" />
                     <span className="text-sm font-medium text-destructive">{docsReprovados} reprovado(s)</span>
                   </div>
-                  <Button size="sm" variant="outline" className="h-7 text-xs"><Send className="h-3 w-3 mr-1" /> Solicitar Reenvio</Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={() => setReenvioDialogOpen(true)}
+                    disabled={!contrato?.id}
+                    title={!contrato?.id ? 'Associado sem contrato — não é possível solicitar' : 'Solicitar reenvio ao associado via WhatsApp'}
+                  >
+                    <Send className="h-3 w-3 mr-1" /> Solicitar Reenvio
+                  </Button>
                 </CardContent>
               </Card>
             )}
+
+            {docsJaSolicitados && docsJaSolicitados.length > 0 && (
+              <Card className="border-amber-300/40 bg-amber-50/60 dark:bg-amber-900/10">
+                <CardContent className="p-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Send className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
+                    <span className="text-xs text-amber-800 dark:text-amber-300">
+                      {docsJaSolicitados.length} documento(s) já solicitado(s) — aguardando reenvio do associado
+                      {docsJaSolicitados[0]?.created_at && (
+                        <> desde {formatDate(docsJaSolicitados[0].created_at)}</>
+                      )}.
+                    </span>
+                  </div>
+                  {contrato?.link_token && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        const url = `https://app.praticcar.org/acompanhar/${contrato.link_token}`;
+                        navigator.clipboard.writeText(url);
+                        toast.success('Link copiado — envie ao associado.');
+                      }}
+                    >
+                      Copiar link
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
 
             <Card className="border-border/60">
               <CardContent className="p-0">
