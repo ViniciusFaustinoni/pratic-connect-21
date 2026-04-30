@@ -759,22 +759,30 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                           <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setVeiculoEditar(v)}>
                             <Edit className="h-3 w-3 mr-1" /> Editar
                           </Button>
-                          {v.rastreador && (
-                            (v.rastreador.plataforma === 'softruck' && !v.rastreador.plataforma_device_id) ||
-                            (v.rastreador.plataforma === 'rede_veiculos' && !v.rede_veiculos_cliente_id)
-                          ) && (
-                            <Button size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
-                              onClick={() => ativarRastreadorMutation.mutateAsync({
-                                instalacaoId: '', veiculoId: v.id, associadoId: id!,
-                                rastreadorId: v.rastreador!.id, imei: v.rastreador!.imei!,
-                              })}
-                              disabled={ativarRastreadorMutation.isPending}>
-                              {ativarRastreadorMutation.isPending
-                                ? <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                : <Radio className="h-3 w-3 mr-1" />}
-                              Ativar
-                            </Button>
-                          )}
+                          {(() => {
+                            const r = v.rastreador;
+                            if (!r) return null;
+                            const precisaAtivarPlataforma =
+                              (r.plataforma === 'softruck' && !r.plataforma_device_id) ||
+                              (r.plataforma === 'rede_veiculos' && !(v as any).rede_veiculos_cliente_id);
+                            if (!precisaAtivarPlataforma) return null;
+                            return (
+                              <Button
+                                size="sm"
+                                className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                                onClick={() => ativarRastreadorMutation.mutateAsync({
+                                  instalacaoId: '', veiculoId: v.id, associadoId: id!,
+                                  rastreadorId: r.id, imei: r.imei!,
+                                })}
+                                disabled={ativarRastreadorMutation.isPending}
+                              >
+                                {ativarRastreadorMutation.isPending
+                                  ? <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                  : <Radio className="h-3 w-3 mr-1" />}
+                                Ativar
+                              </Button>
+                            );
+                          })()}
                           {(() => {
                             const inst = instalacoesAbertas?.find((i) => i.veiculo_id === v.id);
                             return inst ? (
