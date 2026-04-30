@@ -1828,10 +1828,37 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           // Concordância total → boost de confiança
           result.confianca = Math.min(1, Math.max(Number(result.confianca ?? 0.8), Number(passB.result.confianca ?? 0.8)) + 0.1);
         } else if (cpfPlacaDiverge || muitasDiv) {
-          // Divergência crítica → revisão manual obrigatória
-          result.sugestao = 'revisar';
-          result.confianca = Math.min(Number(result.confianca ?? 0.5), 0.5);
-          result.divergencias = cmp.mismatches;
+          // Divergência crítica → tenta desempate por CHECKSUM antes de jogar pra revisão.
+          // Caso clássico: Sonnet lê CPF correto (passa dígito verificador) e Opus
+          // alucina dígitos diferentes (não passa checksum). Confiar no que valida
+          // matematicamente é melhor que descartar ambas as leituras.
+          const cpfA = String(firstPassResolved.result?.dados?.cpf ?? '').replace(/\D/g, '');
+          const cpfB = String(passB.result?.dados?.cpf ?? '').replace(/\D/g, '');
+          const aValidCpf = cpfA.length === 11 && validateCPF(cpfA);
+          const bValidCpf = cpfB.length === 11 && validateCPF(cpfB);
+          const tiebreaker =
+            aValidCpf && !bValidCpf ? 'A' :
+            !aValidCpf && bValidCpf ? 'B' : null;
+
+          if (tiebreaker === 'A') {
+            console.log(`[OCR][dupla-leitura][tiebreaker] ${JSON.stringify({ reqId, winner: 'A', reason: 'cpf-checksum', cpfA, cpfB })}`);
+            // A venceu por checksum → mantém dados de A com confiança da primária menos 0.05
+            result.sugestao = 'revisar';
+            result.confianca = Math.min(1, Math.max(Number(result.confianca ?? 0.85), 0.9));
+            result.divergencias = cmp.mismatches;
+          } else if (tiebreaker === 'B') {
+            console.log(`[OCR][dupla-leitura][tiebreaker] ${JSON.stringify({ reqId, winner: 'B', reason: 'cpf-checksum', cpfA, cpfB })}`);
+            // B venceu por checksum → adota dados de B
+            Object.assign(result, passB.result);
+            result.sugestao = 'revisar';
+            result.confianca = Math.min(1, Math.max(Number(passB.result.confianca ?? 0.85), 0.9));
+            result.divergencias = cmp.mismatches;
+          } else {
+            // Sem tiebreaker (ambos válidos OU ambos inválidos) → revisão manual
+            result.sugestao = 'revisar';
+            result.confianca = Math.min(Number(result.confianca ?? 0.5), 0.5);
+            result.divergencias = cmp.mismatches;
+          }
         } else {
           // 1 divergência leve → marca pra revisão mas mantém dados primários
           result.sugestao = result.sugestao === 'aprovar' ? 'revisar' : result.sugestao;
