@@ -847,23 +847,10 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                       )}.
                     </span>
                   </div>
-                  {contrato?.link_token && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 text-xs"
-                      onClick={() => {
-                        const url = `https://app.praticcar.org/acompanhar/${contrato.link_token}`;
-                        navigator.clipboard.writeText(url);
-                        toast.success('Link copiado — envie ao associado.');
-                      }}
-                    >
-                      Copiar link
-                    </Button>
-                  )}
                 </CardContent>
               </Card>
             )}
+
 
 
             <Card className="border-border/60">
