@@ -1029,23 +1029,30 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
 
     const ocrStartedAt = Date.now();
     // Helper: resposta de erro 200 com fallback flag (não quebra UI)
-    const ocrFallbackResponse = (motivo: string, extra: Record<string, unknown> = {}) => {
+    const ocrFallbackResponse = async (motivo: string, extra: Record<string, unknown> = {}) => {
       // Se temos texto nativo do PDF, devolve um payload mínimo "revisar" — UI mantém upload
       const baseDados = extractedPdfText
         ? { texto_extraido: extractedPdfText.substring(0, 4000) }
         : {};
+      const payload = {
+        sucesso: false,
+        fallback: true,
+        tipo_detectado: tipoEsperado || 'desconhecido',
+        dados: { ...baseDados, ...extra },
+        legivel: !!extractedPdfText,
+        valido: false,
+        sugestao: 'revisar',
+        motivo,
+        confianca: extractedPdfText ? 0.4 : 0,
+      };
+      await persistOcrLog(logCtx, {
+        result: payload,
+        status: 'falha',
+        motivo,
+        sucesso: false,
+      });
       return new Response(
-        JSON.stringify({
-          sucesso: false,
-          fallback: true,
-          tipo_detectado: tipoEsperado || 'desconhecido',
-          dados: { ...baseDados, ...extra },
-          legivel: !!extractedPdfText,
-          valido: false,
-          sugestao: 'revisar',
-          motivo,
-          confianca: extractedPdfText ? 0.4 : 0,
-        }),
+        JSON.stringify(payload),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     };
