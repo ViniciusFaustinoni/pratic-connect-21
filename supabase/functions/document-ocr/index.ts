@@ -1133,11 +1133,22 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
 
     // (log de URL substituído por [OCR][in] com urlHash, evitando exposição em massa)
 
+    // Carrega configuração do motor de OCR (singleton, com cache)
+    const engineCfg = await getOcrEngineConfig();
+    const resolved = await resolveEngine(engineCfg);
+    logCtx.engine = resolved.engine;
+    logCtx.primary_model = resolved.primary;
+    logCtx.secondary_model = resolved.secondary;
+    console.log(`[OCR][engine] ${JSON.stringify({ reqId, ...resolved, configured: engineCfg.engine })}`);
+
     // Baixar arquivo e converter para base64
     const isPdfUrl = url.toLowerCase().endsWith('.pdf') || url.toLowerCase().includes('.pdf?') || url.toLowerCase().includes('.pdf_');
     const isDataUri = url.startsWith('data:');
     let contentParts: any[];
     let extractedPdfText = '';
+    let rasterizedImages: Array<{ dataUri: string; page: number; width: number; height: number; bytes: number }> = [];
+    let pdfBytesForMistral: Uint8Array | null = null;
+    let publicUrlForMistral: string | null = null;
 
     if (isDataUri) {
       console.log('Data URI detected, sending directly...');
