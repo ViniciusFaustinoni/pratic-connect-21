@@ -12,11 +12,13 @@ import { routeOcr, type OcrMethod } from "../_shared/ocr-router.ts";
 import { shrinkImageBase64 } from "../_shared/image-shrink.ts";
 
 // Teto por imagem ao mandar para provedor multimodal.
-// Anthropic mede a STRING BASE64 contra 5MB (não o binário decodificado):
+// Anthropic e Gemini medem a STRING BASE64 contra ~5MB por imagem.
+// Usamos 4MB de teto em base64 como margem de segurança contra o hard limit.
+// Aplicado independente do modelo destino (Anthropic OU Gemini).
 // https://docs.anthropic.com/en/docs/build-with-claude/vision#image-size
-// base64 inflate = 4/3 ≈ 1.37x → bytes raw devem ficar ≤ ~3.6MB para caber.
-// Usamos 3.5MB raw com folga (resulta em ~4.7MB base64 < 5MB hard limit).
-const MAX_IMAGE_BYTES = 3_500_000;
+const MAX_IMAGE_BASE64_BYTES = 4_000_000;
+// Equivalente em bytes raw (binário) para checagens legadas.
+const MAX_IMAGE_BYTES = Math.floor((MAX_IMAGE_BASE64_BYTES * 3) / 4); // ~3MB raw
 
 // ============================================================
 // Motor de OCR (engine) — lê ocr_engine_config (singleton)
