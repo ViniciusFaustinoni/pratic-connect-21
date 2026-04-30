@@ -685,7 +685,18 @@ serve(async (req) => {
         plano_id: cotacao.plano_escolhido_id || cotacao.plano_id,
         status: 'pendente_vistoria',
         data_adesao: new Date().toISOString().split('T')[0],
-        dia_vencimento: cotacao.dia_vencimento ? Math.min(Math.max(Number(cotacao.dia_vencimento), 1), 31) : 10,
+        dia_vencimento: (() => {
+          const r = resolverDiaVencimento(cotacao.dia_vencimento, cotacao.created_at);
+          if (r.usouFallback) {
+            console.warn('[contrato-gerar] dia_vencimento ausente/invalido na cotacao', {
+              cotacao_id: cotacao.id,
+              dia_vencimento_recebido: cotacao.dia_vencimento,
+              fallback_aplicado: r.dia,
+              regra: 'calcularOpcoesVencimento(created_at)[0]',
+            });
+          }
+          return r.dia;
+        })(),
           // Campos de endereço da cotação
           logradouro: cotacao.cliente_logradouro || null,
           numero: cotacao.cliente_numero || null,
