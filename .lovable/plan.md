@@ -1,125 +1,50 @@
 ## Objetivo
 
-Permitir gerenciar as **API Keys** de OpenAI e Anthropic diretamente no card de IA (em `/configuracoes/integracoes/ia`), e corrigir a lista de modelos para refletir os lançamentos mais recentes (com **Claude Opus 4.5** como topo da Anthropic).
+Restaurar o OCR de documentos (CRLV, CNH, comprovante de residência etc.) após a troca para Anthropic e deixá-lo **mais preciso que antes**, eliminando os erros 500 vistos no `UnifiedDocumentUploader`.
 
----
+## Causa raiz (confirmada nos logs)
 
-## 1. Inputs de API Key no front
+`document-ocr` envia PDFs para a IA como `{ type: 'image_url', image_url: { url: 'data:application/pdf;base64,...' } }`. O adaptador Anthropic em `supabase/functions/_shared/ai-client.ts` traduz isso para um bloco `image` com `media_type: application/pdf`. A Anthropic rejeita (`Input should be 'image/jpeg'…'image/webp'`), retorna 400, e o `aiGatewayFetch` propaga como erro — sem cair no fallback Lovable. O frontend recebe 500.
 
-No `AIModelConfigCard.tsx`, quando o provedor for `openai` ou `anthropic`, mostrar:
+A Anthropic suporta PDF, mas em **outro tipo de bloco**: `type: "document", source: { type: "base64", media_type: "application/pdf", data: ... }`.
 
-- Campo `Input` mascarado (type=password, com botão olho para revelar) para a chave correspondente:
-  - `OPENAI_API_KEY` quando provedor = OpenAI
-  - `ANTHROPIC_API_KEY` quando provedor = Anthropic
-- Badge "Configurada ✓" / "Não configurada" indicando se já existe a secret no backend.
-- Botão **Salvar chave** que envia para uma nova edge function `ai-secret-manager`.
-- Link/ajuda discreta: "A chave fica armazenada de forma segura no backend (nunca exposta ao navegador)."
+## Mudanças
 
-Alterar a `Alert` atual (que pedia para configurar manualmente em Cloud → Settings) para algo mais simples, já que agora a configuração é feita pela UI.
+### 1. `supabase/functions/_shared/ai-client.ts` — adaptador Anthropic
+- `toAnthropicMessage`: detectar data-URI com `application/pdf` e emitir bloco `{ type: "document", source: { type: "base64", media_type: "application/pdf", data } }` em vez de `image`.
+- Detectar URLs http(s) terminando em `.pdf` e emitir `{ type: "document", source: { type: "url", url } }`.
+- Manter MIMEs de imagem suportados; quaisquer outros mimes não suportados (ex: `image/heic`) → converter para texto descritivo de erro em vez de quebrar a request.
+- Adicionar header `anthropic-beta: pdfs-2024-09-25` quando o payload contiver bloco `document` (necessário em modelos < Sonnet 4; inofensivo em 4.5).
 
-## 2. Edge function `ai-secret-manager`
+### 2. `supabase/functions/_shared/ai-client.ts` — fallback robusto
+- Em `aiGatewayFetch`, quando `result.ok === false` e provider escolhido ≠ `lovable` e o erro é "recuperável" (status 4xx por incompatibilidade de payload, 5xx, ou timeout), tentar **automaticamente** uma 2ª chamada via Lovable Gateway antes de devolver erro.
+- Logar claramente o motivo do fallback.
 
-Nova função (`supabase/functions/ai-secret-manager/index.ts`) com duas ações:
+### 3. `supabase/functions/document-ocr/index.ts` — não devolver 500 para o client
+- Capturar erros do AI gateway/Anthropic e devolver `200` com JSON `{ sucesso: false, sugestao: 'revisar', motivo: 'OCR temporariamente indisponível…', fallback: true }` para que o `UnifiedDocumentUploader` continue o upload sem quebrar a UI (o documento entra em `em_analise` para revisão manual — coerente com a regra global de revisão manual).
+- Quando há texto nativo extraído via `unpdf` (já implementado) e a IA falha, **ainda** retornar `sucesso: true` com os dados parseados do texto + `confianca: 0.6` + `sugestao: 'revisar'`. Isso elimina o erro do usuário mesmo em pane total da Anthropic.
 
-- `GET status` → retorna `{ openai: boolean, anthropic: boolean }` indicando presença das secrets (nunca o valor).
-- `POST set` → recebe `{ provider: 'openai'|'anthropic', value: string }`, valida que o usuário autenticado é Diretor ou Desenvolvedor, e grava a secret usando a Management API do Supabase.
+### 4. Qualidade superior (objetivo "melhor que o modelo anterior")
+- Trocar o `OCR_MODEL` default da function para `claude-sonnet-4-5` (já é o configurado globalmente; remover qualquer hardcode antigo do tipo `gemini-flash` no `document-ocr`).
+- Aumentar `max_tokens` de 2000 → 4096 para CRLV/CNH com muitos campos.
+- Para PDFs: além do texto nativo via `unpdf`, enviar o PDF inteiro como `document` (Sonnet 4.5 lê layout + imagens internamente — qualidade superior ao "extrair imagem da página 1" que era a abordagem anterior).
+- Manter retry automático com backoff já existente (`callAIGatewayWithRetry`).
 
-Como secrets de runtime de Edge Functions não podem ser gravadas pelo runtime padrão, a função vai usar a **Supabase Management API** (`PATCH /v1/projects/{ref}/secrets`) com um `SUPABASE_ACCESS_TOKEN`. Caso o token não esteja disponível, a função retorna 501 com instrução clara.
+### 5. Diagnóstico
+- Adicionar log estruturado no início de cada chamada: `provider`, `model`, `mime`, `bytes`, `tipoEsperado`. Facilita auditoria futura.
 
-Alternativa mais simples (preferida): armazenar as keys cifradas em uma nova tabela `ai_provider_keys` (singleton por provedor, RLS apenas Diretor/Desenvolvedor leem; gravação via service role na edge), e o `_shared/ai-client.ts` passa a ler dessa tabela como **prioridade**, caindo para `Deno.env.get(...)` se a tabela estiver vazia. Isso evita depender de Management API e funciona 100% pelo front.
+## Validação
 
-**Decisão técnica:** usaremos a tabela `ai_provider_keys` (mais simples e auditável).
+1. Login como diretor (`admin@teste.com`).
+2. Abrir uma cotação, ir ao uploader de documentos.
+3. Subir 1 PDF de CRLV + 1 imagem JPEG de comprovante + 1 PDF de CNH (mesmo cenário do log).
+4. Verificar no preview que:
+   - Os 3 documentos terminam com status definido (sem "Edge Function 500").
+   - Console limpo de `FunctionsHttpError`.
+   - Logs do `document-ocr` mostram `sucesso: true` para os 3, com bloco `document` no Anthropic.
+5. Forçar provider para `anthropic` com chave inválida temporariamente (via UI) e confirmar que o fallback Lovable assume sem mostrar erro ao usuário.
 
-### Schema novo
-```sql
-create table public.ai_provider_keys (
-  provider text primary key check (provider in ('openai','anthropic')),
-  api_key text not null,                      -- valor em claro (acessado só via service role na edge)
-  updated_at timestamptz not null default now(),
-  updated_by uuid references auth.users(id)
-);
-alter table public.ai_provider_keys enable row level security;
+## Fora de escopo
 
--- Apenas leitura de presença (boolean) feita via RPC; nenhuma policy de SELECT direto para clientes
-create policy "diretor_dev_can_manage" on public.ai_provider_keys
-  for all
-  using (public.has_role(auth.uid(),'diretor') or public.has_role(auth.uid(),'desenvolvedor'))
-  with check (public.has_role(auth.uid(),'diretor') or public.has_role(auth.uid(),'desenvolvedor'));
-
-create or replace function public.ai_provider_keys_status()
-returns table(provider text, configured boolean)
-language sql security definer set search_path=public as $$
-  select p.provider, exists(select 1 from public.ai_provider_keys k where k.provider = p.provider) as configured
-  from (values ('openai'),('anthropic')) p(provider);
-$$;
-```
-
-### `_shared/ai-client.ts`
-Adicionar helper `getProviderKey(provider)` que:
-1. Tenta `select api_key from ai_provider_keys where provider = ?` usando service role.
-2. Se vazio, cai para `Deno.env.get('OPENAI_API_KEY' | 'ANTHROPIC_API_KEY')`.
-3. Se ambos vazios e provider != lovable, faz fallback para Lovable Gateway (já existe).
-
-### Edge function `ai-secret-manager`
-- `POST { action: 'set', provider, value }` → upsert na tabela (service role).
-- `POST { action: 'remove', provider }` → delete.
-- `POST { action: 'status' }` → chama RPC `ai_provider_keys_status`.
-
-## 3. Hook `useAIProviderKeys`
-
-Novo hook em `src/hooks/useAIProviderKeys.ts`:
-- `useAIProviderKeysStatus()` → react-query que invoca a edge `ai-secret-manager` action `status`.
-- `useSetAIProviderKey()` → mutation para gravar a chave.
-- `useRemoveAIProviderKey()` → mutation para remover.
-
-## 4. Atualização da lista de modelos
-
-Em `src/hooks/useAIModelConfig.ts`, atualizar `AI_PROVIDER_MODELS`:
-
-**Anthropic** (mais recente primeiro):
-- `claude-opus-4-5` — Claude Opus 4.5 (mais recente)
-- `claude-sonnet-4-5` — Claude Sonnet 4.5
-- `claude-haiku-4-5` — Claude Haiku 4.5 (rápido)
-- `claude-opus-4-1` — Claude Opus 4.1
-- `claude-3-7-sonnet-latest` — Claude 3.7 Sonnet
-
-**OpenAI** (manter "mais recente" no topo):
-- `gpt-5.2` — GPT-5.2 (mais recente)
-- `gpt-5.1` — GPT-5.1
-- `gpt-5` — GPT-5
-- `gpt-5-mini` — GPT-5 Mini
-- `gpt-5-nano` — GPT-5 Nano
-- `o4-mini` — o4-mini (raciocínio)
-- `gpt-4.1` — GPT-4.1
-- `gpt-4o` — GPT-4o (multimodal)
-
-**Lovable Gateway**: adicionar `google/gemini-3-pro-preview` no topo, manter os demais.
-
-## 5. UX do card
-
-```
-Provedor: [Anthropic ▼]    Modelo: [Claude Opus 4.5 ▼]
-
-┌─ Chave da API Anthropic ─────────────────────────────┐
-│ [••••••••••••••••••••••••]  [👁]  [Salvar] [Remover] │
-│ Status: ✓ Configurada                                │
-└──────────────────────────────────────────────────────┘
-
-[Salvar configuração]   ← grava provider+model
-```
-
-Quando provedor = Lovable, esconde o bloco de chave e mantém o alert verde atual.
-
----
-
-## Arquivos
-
-**Criar**
-- `supabase/migrations/<ts>_ai_provider_keys.sql`
-- `supabase/functions/ai-secret-manager/index.ts`
-- `src/hooks/useAIProviderKeys.ts`
-
-**Editar**
-- `src/components/integracoes/AIModelConfigCard.tsx` — adicionar bloco de API key, badge de status, mutations.
-- `src/hooks/useAIModelConfig.ts` — atualizar listas de modelos (Opus 4.5 no topo da Anthropic, GPT-5.2/5.1 no topo da OpenAI, Gemini 3 Pro no Lovable).
-- `supabase/functions/_shared/ai-client.ts` — `getProviderKey()` consulta tabela antes do `Deno.env`.
+- Não tocar no fluxo de **assinatura** Autentique nem no detector de tipo (`tipo_detectado`) — funcionando.
+- Não mexer no `UnifiedDocumentUploader` (frontend). A correção é toda server-side; o frontend já lida bem com `sucesso:false`.

@@ -215,12 +215,17 @@ async function callAnthropic(cfg: AIConfig, opts: CallAIOptions): Promise<CallAI
   // Separa system messages
   const sys: string[] = [];
   const userMsgs: any[] = [];
+  let hasDocumentBlock = false;
   for (const m of opts.messages) {
     if (m.role === "system") {
       sys.push(typeof m.content === "string" ? m.content : JSON.stringify(m.content));
       continue;
     }
-    userMsgs.push(toAnthropicMessage(m));
+    const converted = toAnthropicMessage(m);
+    if (Array.isArray(converted.content) && converted.content.some((b: any) => b?.type === "document")) {
+      hasDocumentBlock = true;
+    }
+    userMsgs.push(converted);
   }
 
   const body: any = {
@@ -232,14 +237,18 @@ async function callAnthropic(cfg: AIConfig, opts: CallAIOptions): Promise<CallAI
   if (typeof opts.temperature === "number") body.temperature = opts.temperature;
   if (opts.tools && opts.tools.length) body.tools = opts.tools.map(toAnthropicTool);
 
+  const headers: Record<string, string> = {
+    "x-api-key": apiKey,
+    "anthropic-version": "2023-06-01",
+    "Content-Type": "application/json",
+  };
+  // PDFs precisam do beta header em modelos mais antigos; inofensivo em Sonnet 4.5+
+  if (hasDocumentBlock) headers["anthropic-beta"] = "pdfs-2024-09-25";
+
   // Streaming não é suportado neste adaptador; cai pra non-stream.
   const resp = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify(body),
   });
 
@@ -260,14 +269,28 @@ function toAnthropicMessage(m: any) {
     return { role: m.role === "assistant" ? "assistant" : "user", content: m.content };
   }
   if (Array.isArray(m.content)) {
+    const SUPPORTED_IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
     const blocks = m.content.map((p: any) => {
       if (p.type === "text") return { type: "text", text: p.text };
       if (p.type === "image_url") {
         const url = p.image_url?.url ?? "";
         if (url.startsWith("data:")) {
           const [meta, b64] = url.split(",");
-          const media_type = meta.replace("data:", "").replace(";base64", "");
-          return { type: "image", source: { type: "base64", media_type, data: b64 } };
+          const media_type = meta.replace("data:", "").replace(";base64", "").toLowerCase();
+          // PDF → bloco "document" (Anthropic suporta PDF nativo)
+          if (media_type === "application/pdf") {
+            return { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } };
+          }
+          if (SUPPORTED_IMAGE_MIMES.has(media_type)) {
+            return { type: "image", source: { type: "base64", media_type, data: b64 } };
+          }
+          // MIME não suportado: degrada para texto descritivo em vez de quebrar a request
+          return { type: "text", text: `[anexo não suportado: ${media_type}]` };
+        }
+        // URL http(s)
+        const lower = url.toLowerCase();
+        if (lower.endsWith(".pdf") || lower.includes(".pdf?")) {
+          return { type: "document", source: { type: "url", url } };
         }
         return { type: "image", source: { type: "url", url } };
       }
@@ -373,9 +396,21 @@ export async function aiGatewayFetch(init: {
     },
   };
 
-  const result = await callAI(opts);
+  let result = await callAI(opts);
 
   if (stream && result.rawResponse) return result.rawResponse;
+
+  // Fallback automático: se provider escolhido não-Lovable retornou erro recuperável,
+  // tenta Lovable Gateway antes de devolver erro pro caller.
+  if (!result.ok && effectiveProvider !== "lovable") {
+    const recoverable = !result.status || result.status >= 500 || result.status === 400 || result.status === 401 || result.status === 402 || result.status === 429;
+    if (recoverable) {
+      console.warn(`[ai-client] provider=${effectiveProvider} status=${result.status} msg="${result.errorMessage}" → tentando fallback Lovable`);
+      const fbResult = await callAI({ ...opts, override: { provider: "lovable", model: DEFAULT_CONFIG.model } });
+      if (fbResult.ok) result = fbResult;
+      else console.warn(`[ai-client] fallback Lovable também falhou: status=${fbResult.status} msg="${fbResult.errorMessage}"`);
+    }
+  }
 
   if (!result.ok) {
     return new Response(

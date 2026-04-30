@@ -805,46 +805,56 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
     }
 
     const ocrStartedAt = Date.now();
+    // Helper: resposta de erro 200 com fallback flag (não quebra UI)
+    const ocrFallbackResponse = (motivo: string, extra: Record<string, unknown> = {}) => {
+      // Se temos texto nativo do PDF, devolve um payload mínimo "revisar" — UI mantém upload
+      const baseDados = extractedPdfText
+        ? { texto_extraido: extractedPdfText.substring(0, 4000) }
+        : {};
+      return new Response(
+        JSON.stringify({
+          sucesso: false,
+          fallback: true,
+          tipo_detectado: tipoEsperado || 'desconhecido',
+          dados: { ...baseDados, ...extra },
+          legivel: !!extractedPdfText,
+          valido: false,
+          sugestao: 'revisar',
+          motivo,
+          confianca: extractedPdfText ? 0.4 : 0,
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    };
+
     let response: Response;
     try {
+      console.log(`[OCR] chamando IA: model=${OCR_MODEL}, max_tokens=4096, parts=${contentParts.length}, hasNativeText=${!!extractedPdfText}`);
       response = await callAIGatewayWithRetry({
         model: OCR_MODEL,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: contentParts },
         ],
-        max_tokens: 2000,
+        max_tokens: 4096,
         temperature: 0,
       }, LOVABLE_API_KEY, 'main');
     } catch (gwErr) {
       console.error('[OCR] Gateway indisponível após retries:', gwErr);
-      return new Response(
-        JSON.stringify({ error: 'Serviço de OCR temporariamente indisponível. Tente novamente em instantes.' }),
-        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return ocrFallbackResponse('Serviço de OCR temporariamente indisponível. Documento enviado para revisão manual.');
     }
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Lovable AI Gateway error:', response.status, errorText);
-      
+      console.error('AI Gateway error:', response.status, errorText);
+
       if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: 'Limite de requisições excedido, tente novamente mais tarde.' }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return ocrFallbackResponse('Limite de requisições excedido. Documento enviado para revisão manual.');
       }
       if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: 'Créditos esgotados, adicione créditos ao workspace.' }),
-          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return ocrFallbackResponse('Créditos de IA esgotados. Documento enviado para revisão manual.');
       }
-      
-      return new Response(
-        JSON.stringify({ error: 'Erro ao processar documento com IA' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return ocrFallbackResponse('Erro ao processar documento com IA. Documento enviado para revisão manual.');
     }
 
     // Ler resposta
@@ -853,28 +863,19 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
       const responseText = await response.text();
       if (!responseText || responseText.trim() === '') {
         console.error('Empty response from AI Gateway');
-        return new Response(
-          JSON.stringify({ error: 'Resposta vazia do gateway de IA. Tente novamente.' }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return ocrFallbackResponse('Resposta vazia do gateway de IA. Documento enviado para revisão manual.');
       }
       data = JSON.parse(responseText);
     } catch (parseError) {
       console.error('Failed to parse AI Gateway response:', parseError);
-      return new Response(
-        JSON.stringify({ error: 'Erro ao processar resposta do gateway de IA. Tente novamente.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return ocrFallbackResponse('Erro ao processar resposta do gateway de IA. Documento enviado para revisão manual.');
     }
 
     const content = data.choices?.[0]?.message?.content;
 
     if (!content) {
       console.error('No content in AI response:', JSON.stringify(data));
-      return new Response(
-        JSON.stringify({ error: 'Resposta vazia da IA. Tente novamente.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return ocrFallbackResponse('Resposta vazia da IA. Documento enviado para revisão manual.');
     }
 
     // Parsear JSON da resposta
@@ -1535,9 +1536,22 @@ Use a função para retornar o chassi encontrado, ou "ilegivel" se identificar o
   } catch (error) {
     console.error('Error in document-ocr function:', error);
     const errorMessage = error instanceof Error ? error.message : 'Erro interno';
+    // Devolve 200 com fallback para que o uploader não exiba "Edge Function 500".
+    // O documento ficará para revisão manual no fluxo de cotação.
     return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({
+        sucesso: false,
+        fallback: true,
+        tipo_detectado: 'desconhecido',
+        dados: {},
+        legivel: false,
+        valido: false,
+        sugestao: 'revisar',
+        motivo: `Erro inesperado no OCR: ${errorMessage}. Documento enviado para revisão manual.`,
+        confianca: 0,
+        error: errorMessage,
+      }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
