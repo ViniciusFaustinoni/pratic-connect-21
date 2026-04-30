@@ -1299,14 +1299,19 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
         ) {
           const tRaster = Date.now();
           try {
-            const initialScale = (engineCfg.pdf_dpi ?? 144) / 72; // PDF user-unit = 1/72 polegada
+            // Novo padrão: 150 DPI (era 200). Reduz tamanho ~40% mantendo
+            // legibilidade pra OCR de documento brasileiro padrão A4.
+            const initialScale = (engineCfg.pdf_dpi ?? 150) / 72; // PDF user-unit = 1/72 polegada
             let pages = await rasterizePdfPages(uint8Array, { maxPages: 3, scale: initialScale });
 
-            // Comprime cada página para caber no limite por imagem do provedor.
-            // PNGs de PDFium podem facilmente passar de 8MB; Anthropic recusa >5MB.
+            // Aplica cascata de redução em cada página, medindo SEMPRE em base64
+            // (que é o que Anthropic/Gemini efetivamente recebem no payload):
+            //   1) JPEG q=85 no tamanho atual
+            //   2) Reduz dimensões pela METADE e tenta de novo (até MIN_DIM)
+            //   3) Se ainda passar de 4MB em base64, descarta a página
             const shrunkPages = await Promise.all(pages.map(async (p) => {
               try {
-                const r = await shrinkImageBase64(p.pngBase64, p.mime, MAX_IMAGE_BYTES);
+                const r = await shrinkImageBase64(p.pngBase64, p.mime, MAX_IMAGE_BASE64_BYTES);
                 return {
                   page: p.page,
                   base64: r.base64,
@@ -1314,44 +1319,43 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
                   width: r.width || p.width,
                   height: r.height || p.height,
                   bytes: r.bytes,
+                  base64Bytes: r.base64Bytes,
                   shrunk: r.shrunk,
+                  tooLarge: r.tooLarge,
                 };
               } catch (e) {
-                console.warn(`[OCR][shrink] page ${p.page} falhou (${(e as Error)?.message}) — usando PNG original`);
-                return { page: p.page, base64: p.pngBase64, mime: p.mime, width: p.width, height: p.height, bytes: p.bytes, shrunk: false };
+                console.warn(`[OCR][shrink] page ${p.page} falhou (${(e as Error)?.message}) — usando original`);
+                const b64Len = p.pngBase64.length;
+                return { page: p.page, base64: p.pngBase64, mime: p.mime, width: p.width, height: p.height, bytes: p.bytes, base64Bytes: b64Len, shrunk: false, tooLarge: b64Len > MAX_IMAGE_BASE64_BYTES };
               }
             }));
 
-            // FALLBACK: se alguma página continua acima do limite (shrink falhou
-            // por "Unsupported image type" no decoder), re-rasterizamos a página
-            // com escala progressivamente menor até caber. PDFium é robusto e
-            // garante PNG válido em qualquer escala — só assim conseguimos
-            // garantir entrega abaixo do limite do Anthropic (5MB) sem decoder.
+            // Fallback final: páginas que ainda estouraram em base64 são re-rasterizadas
+            // em escala progressivamente menor pelo PDFium (caso o decoder do shrink
+            // tenha falhado). Última opção: descartar a página.
             for (let i = 0; i < shrunkPages.length; i++) {
               const sp = shrunkPages[i];
-              if (sp.bytes <= MAX_IMAGE_BYTES) continue;
+              if (!sp.tooLarge && sp.base64Bytes <= MAX_IMAGE_BASE64_BYTES) continue;
               const pageNum = sp.page;
               let scale = initialScale;
               for (let attempt = 0; attempt < 4; attempt++) {
-                scale = scale * 0.75; // 144→108→81→61→46 dpi
+                scale = scale * 0.5; // pela metade a cada tentativa
                 const reraster = await rasterizePdfPages(uint8Array, { pages: [pageNum], scale });
                 if (!reraster.length) break;
                 const rr = reraster[0];
-                console.log(`[OCR][raster-fallback] ${JSON.stringify({ reqId, page: pageNum, attempt: attempt + 1, scale: scale.toFixed(2), bytes: rr.bytes, w: rr.width, h: rr.height })}`);
-                if (rr.bytes <= MAX_IMAGE_BYTES) {
+                const b64Len = rr.pngBase64.length;
+                console.log(`[OCR][raster-fallback] ${JSON.stringify({ reqId, page: pageNum, attempt: attempt + 1, scale: scale.toFixed(2), bytesRaw: rr.bytes, base64Bytes: b64Len, w: rr.width, h: rr.height })}`);
+                if (b64Len <= MAX_IMAGE_BASE64_BYTES) {
                   shrunkPages[i] = {
                     page: rr.page, base64: rr.pngBase64, mime: rr.mime,
-                    width: rr.width, height: rr.height, bytes: rr.bytes, shrunk: true,
+                    width: rr.width, height: rr.height, bytes: rr.bytes, base64Bytes: b64Len, shrunk: true, tooLarge: false,
                   };
                   break;
                 }
               }
-              // Se ainda não couber após 4 tentativas, descartamos a página
-              // (melhor mandar nada pra Anthropic do que estourar e perder a
-              // request inteira). text-llm com texto nativo vira fallback.
-              if (shrunkPages[i].bytes > MAX_IMAGE_BYTES) {
-                console.warn(`[OCR][raster-fallback] ${JSON.stringify({ reqId, page: pageNum, dropped: true, finalBytes: shrunkPages[i].bytes })}`);
-                shrunkPages[i] = { ...shrunkPages[i], base64: '', bytes: 0 };
+              if (shrunkPages[i].tooLarge || shrunkPages[i].base64Bytes > MAX_IMAGE_BASE64_BYTES) {
+                console.warn(`[OCR][raster-fallback] ${JSON.stringify({ reqId, page: pageNum, dropped: true, finalBase64Bytes: shrunkPages[i].base64Bytes })}`);
+                shrunkPages[i] = { ...shrunkPages[i], base64: '', bytes: 0, base64Bytes: 0 };
               }
             }
             const validPages = shrunkPages.filter((p) => p.base64.length > 0);
@@ -1365,7 +1369,8 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
             }));
             console.log(`[OCR][rasterize] ${JSON.stringify({
               reqId, pages: validPages.length, dropped: shrunkPages.length - validPages.length, ms: Date.now() - tRaster,
-              sizes: validPages.map((p) => `${p.width}x${p.height} ${p.mime} (${Math.round(p.bytes/1024)}KB${p.shrunk ? ' shrunk' : ''})`),
+              dpi: engineCfg.pdf_dpi ?? 150,
+              sizes: validPages.map((p) => `${p.width}x${p.height} ${p.mime} raw=${Math.round(p.bytes/1024)}KB b64=${Math.round(p.base64Bytes/1024)}KB${p.shrunk ? ' shrunk' : ''}`),
             })}`);
             logCtx.pdf_rasterizado = validPages.length > 0;
             logCtx.pdf_paginas_rasterizadas = validPages.length;
