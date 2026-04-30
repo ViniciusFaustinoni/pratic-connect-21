@@ -1305,6 +1305,15 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
           descricao={alterarFormaState.descricao}
         />
       )}
+
+      {/* Solicitar reenvio de documentos */}
+      <SolicitarDocumentosDialog
+        open={reenvioDialogOpen}
+        onOpenChange={setReenvioDialogOpen}
+        onConfirm={handleConfirmarReenvio}
+        loading={solicitarDocsMutation.isPending}
+        tipoVeiculo={(veiculos?.[0] as any)?.tipo === 'moto' ? 'moto' : 'carro'}
+      />
     </div>
   );
 }
