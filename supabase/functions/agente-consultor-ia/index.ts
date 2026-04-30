@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+import { aiGatewayFetch } from "../_shared/ai-client.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -631,7 +632,7 @@ ${contato?.nome || "Não informado ainda"}`;
     ];
 
     for (let iteration = 0; iteration < 5; iteration++) {
-      const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const aiResponse = await aiGatewayFetch({
         method: "POST",
         headers: {
           "Content-Type": "application/json",

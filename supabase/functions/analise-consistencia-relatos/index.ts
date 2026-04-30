@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+import { aiGatewayFetch } from "../_shared/ai-client.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -162,7 +163,7 @@ REGRAS:
 - Se um relato adiciona detalhes que outro omite, isso é uma OMISSÃO, não necessariamente inconsistência
 - Pontue o impacto na credibilidade de 0 a 5 (0=totalmente consistente, 5=contradições graves)`;
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResponse = await aiGatewayFetch({
       method: "POST",
       headers: {
         Authorization: `Bearer ${LOVABLE_API_KEY}`,

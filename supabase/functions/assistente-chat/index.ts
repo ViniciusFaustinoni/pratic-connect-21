@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getConfiguracaoNumero } from "../_shared/config-helper.ts";
 
+import { aiGatewayFetch } from "../_shared/ai-client.ts";
 // Mapa de estados brasileiros → sigla UF
 const ESTADOS_MAP_CHAT: Record<string, string> = {
   "acre": "AC", "alagoas": "AL", "amapa": "AP", "amazonas": "AM",
@@ -1284,7 +1285,7 @@ ${assistenciasTexto}
     console.log(`[assistente-chat] tool_choice=${initialToolChoice} (action=${isActionContext}, msg="${lastUserMsg.substring(0, 80)}")`);
 
     // Initial AI call
-    let response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    let response = await aiGatewayFetch({
       method: "POST",
       headers: {
         Authorization: `Bearer ${LOVABLE_API_KEY}`,
@@ -1369,7 +1370,7 @@ ${assistenciasTexto}
       aiMessages.push(assistantMessage);
       aiMessages.push(...toolResults);
 
-      response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      response = await aiGatewayFetch({
         method: "POST",
         headers: {
           Authorization: `Bearer ${LOVABLE_API_KEY}`,
@@ -1402,7 +1403,7 @@ ${assistenciasTexto}
       console.warn(`[assistente-chat] Texto fabricado: ${finalContent.substring(0, 200)}`);
       
       // Retry forçando tool call
-      const retryResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const retryResponse = await aiGatewayFetch({
         method: "POST",
         headers: {
           Authorization: `Bearer ${LOVABLE_API_KEY}`,
@@ -1444,7 +1445,7 @@ ${assistenciasTexto}
           }
           
           // Get final response after tool execution
-          const finalResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          const finalResponse = await aiGatewayFetch({
             method: "POST",
             headers: {
               Authorization: `Bearer ${LOVABLE_API_KEY}`,
