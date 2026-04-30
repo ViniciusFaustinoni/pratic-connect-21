@@ -396,9 +396,21 @@ export async function aiGatewayFetch(init: {
     },
   };
 
-  const result = await callAI(opts);
+  let result = await callAI(opts);
 
   if (stream && result.rawResponse) return result.rawResponse;
+
+  // Fallback automático: se provider escolhido não-Lovable retornou erro recuperável,
+  // tenta Lovable Gateway antes de devolver erro pro caller.
+  if (!result.ok && effectiveProvider !== "lovable") {
+    const recoverable = !result.status || result.status >= 500 || result.status === 400 || result.status === 401 || result.status === 402 || result.status === 429;
+    if (recoverable) {
+      console.warn(`[ai-client] provider=${effectiveProvider} status=${result.status} msg="${result.errorMessage}" → tentando fallback Lovable`);
+      const fbResult = await callAI({ ...opts, override: { provider: "lovable", model: DEFAULT_CONFIG.model } });
+      if (fbResult.ok) result = fbResult;
+      else console.warn(`[ai-client] fallback Lovable também falhou: status=${fbResult.status} msg="${fbResult.errorMessage}"`);
+    }
+  }
 
   if (!result.ok) {
     return new Response(
