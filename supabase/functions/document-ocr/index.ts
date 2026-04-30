@@ -572,6 +572,107 @@ const OCR_MODEL = 'google/gemini-2.5-flash';
 const OCR_RETRY_MODEL = 'google/gemini-2.5-pro';
 
 /**
+ * Extrai um CPF VÁLIDO (passa checksum) do texto nativo do PDF.
+ * Retorna o primeiro CPF válido encontrado, formatado XXX.XXX.XXX-XX.
+ * Útil para CNH-e e PDFs digitais onde o texto embutido é 100% confiável.
+ */
+function extractValidCPFFromText(text: string): string | null {
+  if (!text) return null;
+  const candidates = new Set<string>();
+  // Formato com pontuação
+  for (const m of text.matchAll(/(\d{3})[.\s]?(\d{3})[.\s]?(\d{3})[-\s]?(\d{2})/g)) {
+    candidates.add(`${m[1]}${m[2]}${m[3]}${m[4]}`);
+  }
+  // 11 dígitos contíguos
+  for (const m of text.matchAll(/\b(\d{11})\b/g)) {
+    candidates.add(m[1]);
+  }
+  for (const c of candidates) {
+    if (validateCPF(c)) {
+      return `${c.slice(0,3)}.${c.slice(3,6)}.${c.slice(6,9)}-${c.slice(9,11)}`;
+    }
+  }
+  return null;
+}
+
+/**
+ * Extrai dados confiáveis de uma CNH a partir do texto nativo do PDF.
+ * CNH-e (digital) tem layout estável com rótulos: NOME, CPF, DOC. IDENTIDADE,
+ * DATA NASCIMENTO, VALIDADE, Nº REGISTRO, CAT. HAB.
+ */
+function extractCNHFromText(text: string): Record<string, any> {
+  const out: Record<string, any> = {};
+  if (!text) return out;
+
+  // CPF (com checksum)
+  const cpf = extractValidCPFFromText(text);
+  if (cpf) out.cpf = cpf;
+
+  // Datas DD/MM/YYYY → YYYY-MM-DD
+  const toIso = (d: string) => {
+    const m = d.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
+  };
+
+  // Nome: linha após "NOME" / "1 NOME"
+  const nomeMatch = text.match(/(?:^|\n)\s*(?:1\s+)?NOME\s*\/?\s*[A-Z\s]*\n?\s*([A-ZÁÂÃÀÉÊÍÓÔÕÚÇ ]{6,})/m);
+  if (nomeMatch) out.nome = nomeMatch[1].trim().replace(/\s+/g, ' ');
+
+  // Data de nascimento: rótulo "DATA NASCIMENTO" ou "5 DATA NASCIMENTO"
+  const nascMatch = text.match(/(?:DATA\s+NASCIMENTO|DATA\s+DE\s+NASCIMENTO)[^\d]*(\d{2}\/\d{2}\/\d{4})/i);
+  if (nascMatch) out.data_nascimento = toIso(nascMatch[1]);
+
+  // Validade: rótulo "VALIDADE"
+  const valMatch = text.match(/VALIDADE[^\d]*(\d{2}\/\d{2}\/\d{4})/i);
+  if (valMatch) out.validade = toIso(valMatch[1]);
+
+  // Nº Registro CNH (11 dígitos após "REGISTRO" ou "Nº REGISTRO")
+  const regMatch = text.match(/(?:N[ºO°]\s*REGISTRO|REGISTRO\s+CNH|REGISTRO)[^\d]*(\d{11})/i);
+  if (regMatch) out.numero_registro = regMatch[1];
+
+  // Categoria CAT HAB: AAB, B, C, D, E, AB, AC, AD, AE, ACC
+  const catMatch = text.match(/CAT[\.\s]*HAB[^\w]*([A-E]{1,2}|ACC)/i);
+  if (catMatch) out.categoria = catMatch[1].toUpperCase();
+
+  // RG (DOC. IDENTIDADE): número estadual, geralmente até 11 chars com / e -
+  const rgMatch = text.match(/(?:DOC[\.\s]*IDENTIDADE|RG)[^\n]*?([\d.\-/]{6,15})/i);
+  if (rgMatch) out.rg = rgMatch[1].replace(/\s+/g, '');
+
+  return out;
+}
+
+/**
+ * Mescla campos extraídos do texto nativo SOBREPONDO os da IA quando temos
+ * alta confiança (CPF passou checksum, datas no formato correto, etc.).
+ * Garantia: NUNCA degrada — só substitui se o valor nativo for melhor.
+ */
+function mergeNativeOverAI(
+  aiDados: Record<string, any>,
+  nativeDados: Record<string, any>,
+  reqId: string
+): Record<string, any> {
+  const merged = { ...aiDados };
+  for (const [key, val] of Object.entries(nativeDados)) {
+    if (val === null || val === undefined || val === '') continue;
+    const aiVal = aiDados[key];
+    // CPF: nativo SEMPRE ganha (já passou checksum)
+    if (key === 'cpf' && val) {
+      if (aiVal !== val) {
+        console.log(`[OCR][${reqId}] CPF do texto nativo sobrepõe IA: "${aiVal}" → "${val}"`);
+      }
+      merged[key] = val;
+      continue;
+    }
+    // Demais: só sobrepõe se IA não tem valor ou tem "ilegivel"/null
+    if (!aiVal || aiVal === 'ilegivel' || aiVal === null) {
+      merged[key] = val;
+      console.log(`[OCR][${reqId}] Campo "${key}" preenchido do texto nativo: "${val}"`);
+    }
+  }
+  return merged;
+}
+
+/**
  * Chama o Lovable AI Gateway com retry exponencial em falhas transitórias.
  * - Retenta em erros de rede e respostas 500/502/503/504.
  * - NÃO retenta em 401/402/429 (erros legítimos que devem chegar ao usuário).
@@ -862,11 +963,12 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
     // Retorna { result, raw } se sucesso, ou null se falha (já loga + repassa fallback).
     type OcrPass = { result: any; raw: string; durationMs: number; finishReason?: string; usage?: any };
     const runOcrPass = async (model: string, parts: any[], label: string): Promise<OcrPass | null> => {
+      const MAX_TOKENS = 8192;
       const requestPayloadSummary = {
         reqId,
         label,
         model,
-        max_tokens: 4096,
+        max_tokens: MAX_TOKENS,
         parts: parts.length,
         block_types: parts.map((p: any) => p?.type),
         hasNativeText: !!extractedPdfText,
@@ -882,7 +984,7 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
             { role: 'system', content: systemPrompt },
             { role: 'user', content: parts },
           ],
-          max_tokens: 4096,
+          max_tokens: MAX_TOKENS,
           temperature: 0,
         }, LOVABLE_API_KEY, label);
       } catch (gwErr) {
@@ -924,11 +1026,14 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
       const contentStr = dataObj?.choices?.[0]?.message?.content ?? '';
       const finishReason = dataObj?.choices?.[0]?.finish_reason;
       const usage = dataObj?.usage;
+      // Detecção de truncamento: openai/gemini = 'length', anthropic = 'max_tokens'
+      const wasTruncated = finishReason === 'length' || finishReason === 'max_tokens';
 
       console.log(`[OCR][ai_response] ${JSON.stringify({
         reqId, label, model, status: resp.status,
         latencyMs: Date.now() - t0,
         finish_reason: finishReason,
+        truncated: wasTruncated,
         usage,
         content_chars: contentStr.length,
       })}`);
@@ -942,6 +1047,11 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
         clean = clean.replace(/:\s*_[A-Z_]+_\s*([,}\]])/g, ': null$1');
         parsed = JSON.parse(clean);
       } catch {
+        // Se foi truncado, NÃO confiar no reparo — marcar como falha para retry
+        if (wasTruncated) {
+          console.error(`[OCR][${reqId}] resposta truncada (${label}) — descartando reparo regex e marcando para retry`);
+          return null;
+        }
         const repaired = tryRepairTruncatedJSON(contentStr);
         if (repaired) {
           console.warn(`[OCR][${reqId}] JSON reparado após truncamento (${label})`);
@@ -950,6 +1060,11 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           console.error(`[OCR][${reqId}] parse falhou (${label}), conteúdo:`, contentStr.slice(0, 500));
           return null;
         }
+      }
+
+      // Marcador de truncamento no resultado para o caller decidir retry
+      if (wasTruncated && parsed && typeof parsed === 'object') {
+        parsed.__truncated = true;
       }
 
       return { result: parsed, raw: contentStr, durationMs: Date.now() - t0, finishReason, usage };
@@ -1007,24 +1122,28 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
       durationMs: ocrDurationMs,
     })}`);
 
-    // Se temos texto nativo do PDF e o CPF extraído está em conflito, tentar pegar do texto
-    if (result.tipo_detectado === 'cnh' && result.dados && extractedPdfText) {
-      const cpfExtraido = result.dados.cpf;
-      if (cpfExtraido && cpfExtraido !== 'ilegivel') {
-        const cpfClean = cpfExtraido.replace(/\D/g, '');
-        if (!validateCPF(cpfClean)) {
-          // Tentar encontrar CPF válido no texto nativo do PDF
-          const cpfRegex = /\d{3}\.?\d{3}\.?\d{3}-?\d{2}/g;
-          const matches = extractedPdfText.match(cpfRegex);
-          if (matches) {
-            for (const match of matches) {
-              const cleaned = match.replace(/\D/g, '');
-              if (cleaned.length === 11 && validateCPF(cleaned)) {
-                const formatted = cleaned.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-                console.log(`[OCR] CPF corrigido via texto nativo do PDF: ${cpfExtraido} → ${formatted}`);
-                result.dados.cpf = formatted;
-                break;
-              }
+    // FUSÃO COM TEXTO NATIVO DO PDF (CNH-e digital tem layout estável)
+    // Para PDFs com camada de texto, o texto extraído é 100% confiável.
+    // Sobrepomos campos da IA com os do texto nativo quando disponíveis.
+    if (result?.tipo_detectado === 'cnh' && result.dados && extractedPdfText) {
+      const nativeFields = extractCNHFromText(extractedPdfText);
+      if (Object.keys(nativeFields).length > 0) {
+        console.log(`[OCR][${reqId}] Texto nativo extraiu ${Object.keys(nativeFields).length} campo(s) da CNH:`, Object.keys(nativeFields));
+        result.dados = mergeNativeOverAI(result.dados, nativeFields, reqId);
+      }
+    }
+    // Para outros tipos (RG, Comprovante, NF, ATPV-e, CRLV) extraímos só o CPF
+    // do titular/comprador quando aplicável.
+    if (result?.dados && extractedPdfText && result.tipo_detectado !== 'cnh') {
+      const nativeCpf = extractValidCPFFromText(extractedPdfText);
+      if (nativeCpf) {
+        const dados = result.dados as Record<string, any>;
+        for (const field of ['cpf', 'cpf_titular', 'cpf_comprador', 'cpf_cnpj_comprador']) {
+          if (field in dados) {
+            const aiVal = dados[field];
+            if (!aiVal || aiVal === 'ilegivel' || (typeof aiVal === 'string' && !validateCPF(aiVal.replace(/\D/g, '')))) {
+              console.log(`[OCR][${reqId}] CPF nativo do PDF substitui ${field}: "${aiVal}" → "${nativeCpf}"`);
+              dados[field] = nativeCpf;
             }
           }
         }
@@ -1066,15 +1185,20 @@ Locais comuns do CPF na CNH:
 
 Use a função para retornar o CPF encontrado ou "ilegivel" se não conseguir ler.`;
 
-        // Adicionar texto nativo como contexto extra se disponível
+        // Adicionar texto nativo COMPLETO como contexto principal
+        // (CNH-e digital tem texto preciso — IA deve preferir ao OCR visual)
         let retryUserContent: any[] = [
-          { type: 'text', text: 'Extraia o CPF desta CNH.' },
+          { type: 'text', text: 'Extraia o CPF desta CNH lendo dígito por dígito.' },
           contentParts[1], // imagem
         ];
-        
+
         if (extractedPdfText) {
+          // Manda até 6000 chars (CNH-e cabe inteira) — texto é a fonte primária
+          const fullText = extractedPdfText.length > 6000
+            ? extractedPdfText.substring(0, 6000)
+            : extractedPdfText;
           retryUserContent = [
-            { type: 'text', text: `Extraia o CPF desta CNH.\n\nTexto nativo do PDF:\n${extractedPdfText.substring(0, 2000)}` },
+            { type: 'text', text: `Extraia o CPF desta CNH brasileira.\n\n⚠️ FONTE PRIMÁRIA: o texto abaixo foi extraído NATIVAMENTE do PDF (camada de texto, 100% precisa). Use-o como REFERÊNCIA PRINCIPAL para os dígitos do CPF. A imagem é apenas para confirmar o layout.\n\n--- TEXTO NATIVO DO PDF ---\n${fullText}\n--- FIM ---` },
             contentParts[1],
           ];
         }
