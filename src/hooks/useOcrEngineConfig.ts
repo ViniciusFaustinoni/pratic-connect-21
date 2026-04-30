@@ -23,7 +23,7 @@ export const OCR_ENGINE_LABELS: Record<OcrEngine, string> = {
   google: 'Google Gemini (2.5 Pro)',
 };
 
-export const OCR_ENGINE_MODELS: Record<Exclude<OcrEngine, 'global'>, { primary: string[]; secondary: string[] }> = {
+export const OCR_ENGINE_MODELS: Record<Exclude<OcrEngine, 'global' | 'auto'>, { primary: string[]; secondary: string[] }> = {
   mistral:   { primary: ['mistral-ocr-latest'], secondary: ['pixtral-large-latest', 'claude-sonnet-4-5'] },
   anthropic: { primary: ['claude-sonnet-4-5', 'claude-opus-4-5'], secondary: ['claude-opus-4-5', 'claude-sonnet-4-5'] },
   google:    { primary: ['google/gemini-2.5-pro', 'google/gemini-2.5-flash'], secondary: ['google/gemini-2.5-pro'] },
