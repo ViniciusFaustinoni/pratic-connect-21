@@ -1323,20 +1323,43 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
     // FUSÃO COM TEXTO NATIVO DO PDF (CNH-e digital tem layout estável)
     // Para PDFs com camada de texto, o texto extraído é 100% confiável.
     // Sobrepomos campos da IA com os do texto nativo quando disponíveis.
+    // Coleta candidatos para auditoria/diagnóstico
+    if (extractedPdfText) {
+      try {
+        const cands = collectCPFCandidates(extractedPdfText)
+          .map((c) => ({ cpf: formatCPF(c.digits), valido: c.valid, pos: c.index }))
+          .slice(0, 20);
+        if (cands.length) logCtx.cpf_candidatos = cands;
+      } catch { /* noop */ }
+    }
+
     if (result?.tipo_detectado === 'cnh' && result.dados && extractedPdfText) {
       const nativeFields = extractCNHFromText(extractedPdfText);
       if (Object.keys(nativeFields).length > 0) {
         console.log(`[OCR][${reqId}] Texto nativo extraiu ${Object.keys(nativeFields).length} campo(s) da CNH:`, Object.keys(nativeFields));
+        // Captura metadados de CPF antes do merge consumir/limpar (não vão para dados finais)
+        if (nativeFields.__cpf_fonte) logCtx.cpf_fonte = nativeFields.__cpf_fonte;
+        if (nativeFields.__cpf_contexto) logCtx.cpf_contexto = nativeFields.__cpf_contexto;
+
         result.dados = mergeNativeOverAI(result.dados, nativeFields, reqId);
         logCtx.used_native_fallback = true;
-        if (nativeFields.cpf) logCtx.cpf_corrigido_via = 'native';
+        if (nativeFields.cpf) {
+          logCtx.cpf_corrigido_via = nativeFields.__cpf_fonte || 'native';
+        }
       }
     }
     // Para outros tipos (RG, Comprovante, NF, ATPV-e, CRLV) extraímos só o CPF
-    // do titular/comprador quando aplicável.
+    // do titular/comprador quando aplicável — usando ancoragem ao rótulo.
     if (result?.dados && extractedPdfText && result.tipo_detectado !== 'cnh') {
-      const nativeCpf = extractValidCPFFromText(extractedPdfText);
+      const anchored = extractAnchoredCPFFromText(extractedPdfText);
+      const nativeCpf = anchored.cpf || extractValidCPFFromText(extractedPdfText);
       if (nativeCpf) {
+        if (anchored.cpf) {
+          logCtx.cpf_fonte = 'native_anchored';
+          logCtx.cpf_contexto = anchored.contexto || null;
+        } else {
+          logCtx.cpf_fonte = 'native_first_valid';
+        }
         const dados = result.dados as Record<string, any>;
         for (const field of ['cpf', 'cpf_titular', 'cpf_comprador', 'cpf_cnpj_comprador']) {
           if (field in dados) {
@@ -1345,7 +1368,7 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
               console.log(`[OCR][${reqId}] CPF nativo do PDF substitui ${field}: "${aiVal}" → "${nativeCpf}"`);
               dados[field] = nativeCpf;
               logCtx.used_native_fallback = true;
-              logCtx.cpf_corrigido_via = 'native';
+              logCtx.cpf_corrigido_via = anchored.cpf ? 'native_anchored' : 'native_first_valid';
             }
           }
         }
