@@ -9,6 +9,12 @@ import { rasterizePdfPages, shouldRasterizePdf } from "../_shared/pdf-rasterize.
 import { runMistralOcr, callPixtralChat } from "../_shared/mistral-ocr.ts";
 import { extractPdfTextUnpdf, scoreExtractedText } from "../_shared/unpdf-extract.ts";
 import { routeOcr, type OcrMethod } from "../_shared/ocr-router.ts";
+import { shrinkImageBase64 } from "../_shared/image-shrink.ts";
+
+// Teto por imagem ao mandar para provedor multimodal.
+// Anthropic: 5MB hard limit por imagem (https://docs.anthropic.com/en/docs/build-with-claude/vision)
+// Gemini: ~7MB. Usamos 4.5MB para folga + base64 overhead.
+const MAX_IMAGE_BYTES = 4_500_000;
 
 // ============================================================
 // Motor de OCR (engine) — lê ocr_engine_config (singleton)
