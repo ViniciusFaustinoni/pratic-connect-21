@@ -1,19 +1,24 @@
 /**
- * Rasterização de PDF → PNG/JPEG em runtime Deno (edge).
+ * Rasterização de PDF → JPEG em runtime Deno (edge).
  *
- * Usa @hyzyla/pdfium (PDFium compilado para WebAssembly) — funciona em Deno
- * sem dependências de sistema (poppler/imagemagick).
+ * Usa @hyzyla/pdfium (PDFium compilado para WebAssembly) para extrair o bitmap
+ * raw das páginas e ImageScript para encodar como JPEG real (decodificável
+ * por Anthropic/Gemini).
+ *
+ * IMPORTANTE: a versão anterior usava render: "bitmap" e tratava image.data
+ * como se fosse PNG válido — não é. É um bitmap raw RGBA/BGRA cru. Anthropic
+ * recusava com "Could not process image" e ImageScript com "Unsupported image
+ * type". Agora rodamos render com callback que constrói JPEG real.
  *
  * Por que rasterizar antes de mandar pra IA?
  * - PDFs como CNH-e (SENATRAN/CDT) têm camada de texto vazia ou só com
  *   instruções genéricas; nome, CPF, validade ficam dentro de imagens
  *   embutidas. Modelos como Claude Sonnet 4.5 e Gemini 2.5 Pro leem MUITO
  *   melhor uma imagem nítida da página do que esse PDF "vazio".
- * - Mistral OCR aceita PDF nativo via /v1/ocr — não precisa rasterizar.
  */
 
-// pdfium-wasm em Deno: usa import npm: (Deno 1.40+ / edge-runtime suportam)
 import { PDFiumLibrary } from "npm:@hyzyla/pdfium@2.1.6";
+import { Image } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
 
 let _libPromise: Promise<any> | null = null;
 async function getLib() {
@@ -23,29 +28,51 @@ async function getLib() {
 
 export interface RasterizedPage {
   page: number;
-  /** PNG base64 puro (sem prefixo data:). PDFium devolve PNG. */
-  pngBase64: string;
-  /** Mime correto: "image/png". */
-  mime: "image/png";
+  /** JPEG base64 puro (sem prefixo data:). */
+  pngBase64: string; // nome mantido por compatibilidade com callers
+  /** Mime correto: agora SEMPRE "image/jpeg" (era "image/png"). */
+  mime: "image/jpeg";
   width: number;
   height: number;
   bytes: number;
 }
 
 /**
- * Rasteriza páginas selecionadas de um PDF para PNG.
+ * Render callback para PDFium: recebe bitmap BGRA cru e devolve JPEG.
+ * PDFium retorna BGRA por padrão — convertemos para RGBA antes de encodar.
+ */
+async function bitmapToJpeg(opts: { width: number; height: number; data: Uint8Array }, quality: number): Promise<Uint8Array> {
+  const { width, height, data } = opts;
+  // BGRA → RGBA in-place (cópia para não mutar buffer interno do PDFium)
+  const rgba = new Uint8Array(data.length);
+  for (let i = 0; i < data.length; i += 4) {
+    rgba[i]     = data[i + 2]; // R ← B
+    rgba[i + 1] = data[i + 1]; // G
+    rgba[i + 2] = data[i];     // B ← R
+    rgba[i + 3] = data[i + 3]; // A
+  }
+  const img = new Image(width, height);
+  // ImageScript expõe .bitmap como Uint8ClampedArray (RGBA contínuo)
+  (img as any).bitmap = new Uint8ClampedArray(rgba.buffer, rgba.byteOffset, rgba.byteLength);
+  return await img.encodeJPEG(quality);
+}
+
+/**
+ * Rasteriza páginas selecionadas de um PDF para JPEG.
  *
  * @param pdfBytes  Bytes do PDF.
  * @param opts.pages  Lista 1-indexed de páginas a renderizar (default: 1..maxPages).
  * @param opts.maxPages  Limite (default 3) — protege custo/latência em PDFs longos.
  * @param opts.scale  Fator de escala vs. tamanho lógico do PDF (default 2.0 ≈ 200dpi para A4).
+ * @param opts.quality  Qualidade JPEG (default 82).
  */
 export async function rasterizePdfPages(
   pdfBytes: Uint8Array,
-  opts: { pages?: number[]; maxPages?: number; scale?: number } = {},
+  opts: { pages?: number[]; maxPages?: number; scale?: number; quality?: number } = {},
 ): Promise<RasterizedPage[]> {
   const scale = opts.scale ?? 2.0;
   const maxPages = opts.maxPages ?? 3;
+  const quality = opts.quality ?? 82;
 
   const lib = await getLib();
   const doc = await lib.loadDocument(pdfBytes);
@@ -61,13 +88,16 @@ export async function rasterizePdfPages(
     for (const pageNum of targets) {
       try {
         const page = doc.getPage(pageNum - 1);
-        const image = await page.render({ scale, render: "bitmap" });
-        // image.data é Uint8Array PNG
+        // Render callback recebe bitmap BGRA cru e produz JPEG real.
+        const image = await page.render({
+          scale,
+          render: (renderOpts: any) => bitmapToJpeg(renderOpts, quality),
+        });
         const data: Uint8Array = image.data;
         out.push({
           page: pageNum,
           pngBase64: u8ToBase64(data),
-          mime: "image/png",
+          mime: "image/jpeg",
           width: image.width,
           height: image.height,
           bytes: data.byteLength,
@@ -93,15 +123,13 @@ function u8ToBase64(arr: Uint8Array): string {
 }
 
 /**
- * Decide se vale a pena rasterizar este PDF antes de enviar à IA.
- * Critérios baseados na qualidade do texto extraído nativamente.
+ * Heurística: vale rasterizar este PDF? Sim quando o texto extraído nativo
+ * é insuficiente para inferir os campos críticos.
  */
-export function shouldRasterizePdf(nativeText: string): boolean {
-  if (!nativeText || nativeText.length < 200) return true;
-  const t = nativeText.toLowerCase();
-  // CNH-e digital sempre cai aqui
-  if (t.includes("assinador serpro") || t.includes("medida provisória nº 2200")) return true;
-  // Texto curto demais para conter os campos estruturados esperados
-  if (t.length < 600) return true;
+export function shouldRasterizePdf(extractedText: string): boolean {
+  const t = (extractedText ?? "").trim();
+  if (!t) return true;
+  // Texto muito curto ou só com headers/disclaimers → rasterizar
+  if (t.length < 200) return true;
   return false;
 }
