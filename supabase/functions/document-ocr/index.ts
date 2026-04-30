@@ -949,10 +949,12 @@ serve(async (req) => {
     const reqId = (crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`).slice(0, 8);
     logCtx.reqId = reqId;
 
-    const { url, tipoEsperado, cpfEsperado, nomeEsperado, extrairDados, cotacaoId, associadoId } = await req.json();
+    const { url, tipoEsperado, cpfEsperado, nomeEsperado, extrairDados, cotacaoId, associadoId, modoTeste, dadosEsperados } = await req.json();
     logCtx.tipo_esperado = tipoEsperado || null;
     logCtx.cotacao_id = cotacaoId || null;
     logCtx.associado_id = associadoId || null;
+    logCtx.modo_teste = !!modoTeste;
+    logCtx.dados_esperados = dadosEsperados ?? null;
 
     if (!url) {
       return new Response(
