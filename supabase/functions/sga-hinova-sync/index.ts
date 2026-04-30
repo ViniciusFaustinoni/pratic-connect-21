@@ -452,15 +452,16 @@ serve(async (req) => {
           valorAdesao = contrato.valor_adesao != null ? Number(contrato.valor_adesao)
             : (planoRow?.valor_adesao != null ? Number(planoRow.valor_adesao) : undefined);
         } else {
-          // Bloqueio claro: sem código de grupo SGA, o veículo chegaria "pelado"
-          // no Hinova (só com produtos compulsórios). Aborta com mensagem amigável.
-          const motivo = `Plano '${planoRow?.nome ?? contrato.plano_id}' não tem código de grupo SGA configurado. Cadastre o grupo no painel Hinova e preencha o código no plano antes de reprocessar.`;
-          await logSync(_vid, _aid, 'resolver_grupo_sga', 'error',
+          // NÃO bloqueia o envio: cadastra associado/veículo/fotos normalmente,
+          // apenas sem vincular o grupo de produto. Fica registrado um aviso
+          // (warning) na fila para que a equipe vincule o grupo manualmente
+          // no SGA depois (ou preencha o código e reprocesse só essa parte).
+          const motivo = `Plano '${planoRow?.nome ?? contrato.plano_id}' sem código de grupo SGA. Veículo será enviado SEM vínculo de grupo — vincule manualmente no Hinova ou preencha o código e reprocesse.`;
+          await logSync(_vid, _aid, 'resolver_grupo_sga', 'warning',
             { plano_id: contrato.plano_id, plano_nome: planoRow?.nome, codigo_sga_plano: planoRow?.codigo_sga_plano ?? null },
             null, motivo);
-          await setStatusSga(_vid, 'erro_sincronizacao');
-          await upsertQueue(_vid, _aid, 'plano_sem_codigo_grupo_sga', motivo, codigoAssociadoHinova);
-          return;
+          await upsertQueue(_vid, _aid, 'plano_sem_codigo_grupo_sga_aviso', motivo, codigoAssociadoHinova);
+          // Segue o fluxo sem codigoGrupoProduto/valorMensalidade/valorAdesao.
         }
       }
 
