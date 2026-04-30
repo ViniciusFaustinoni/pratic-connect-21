@@ -217,10 +217,22 @@ export function useEventosVeiculo(veiculoId: string | undefined) {
   });
 }
 
-// Tipos de foto agrupados por categoria
-const TIPOS_IDENTIFICACAO = ['selfie', 'chassi', 'motor'];
-const TIPOS_EXTERIOR = ['frente', 'traseira', 'lateral_esquerda', 'lateral_direita', 'roda'];
-const TIPOS_INTERIOR = ['painel', 'hodometro', 'interior'];
+// Tipos de foto agrupados por categoria.
+// Cobre tanto o vocabulário do técnico interno quanto o do prestador
+// (`PrestadorInstalacao` envia chaves como `chave`, `bateria`, `estepe`,
+// `mala_aberta`, `banco_*`, `capo_aberto_placa`, `parabrisa`, `odometro`,
+// `painel_completo`, `chave_roda_macaco`).
+const TIPOS_IDENTIFICACAO = ['selfie', 'chassi', 'motor', 'capo_aberto_placa'];
+const TIPOS_EXTERIOR = [
+  'frente', 'traseira', 'lateral_esquerda', 'lateral_direita', 'roda',
+  'parabrisa', 'mala_aberta', 'capo',
+];
+const TIPOS_INTERIOR = [
+  'painel', 'painel_completo', 'hodometro', 'odometro', 'interior',
+  'banco_motorista', 'banco_passageiro', 'banco_traseiro',
+];
+// Acessórios e itens avulsos (estepe, chave, bateria, ferramentas) caem em "outros"
+// por padrão — explícito para não parecerem "perdidos".
 
 export interface FotosAgrupadas {
   identificacao: FotoVistoriaVeiculo[];
@@ -230,7 +242,8 @@ export interface FotosAgrupadas {
 }
 
 /**
- * Agrupa fotos por categoria
+ * Agrupa fotos por categoria. Match por `includes` para tolerar variações
+ * de prefixo/sufixo nos `tipo`s vindos de fontes diferentes.
  */
 export function agruparFotosVeiculo(fotos: FotoVistoriaVeiculo[]): FotosAgrupadas {
   const agrupadas: FotosAgrupadas = {
@@ -242,13 +255,14 @@ export function agruparFotosVeiculo(fotos: FotoVistoriaVeiculo[]): FotosAgrupada
 
   fotos.forEach((foto) => {
     const tipoLower = foto.tipo.toLowerCase();
-    
+
     if (TIPOS_IDENTIFICACAO.some(t => tipoLower.includes(t))) {
       agrupadas.identificacao.push(foto);
+    } else if (TIPOS_INTERIOR.some(t => tipoLower.includes(t))) {
+      // INTERIOR antes de EXTERIOR para evitar que `painel_completo` caia em "capo"/"frente" por includes
+      agrupadas.interior.push(foto);
     } else if (TIPOS_EXTERIOR.some(t => tipoLower.includes(t))) {
       agrupadas.exterior.push(foto);
-    } else if (TIPOS_INTERIOR.some(t => tipoLower.includes(t))) {
-      agrupadas.interior.push(foto);
     } else {
       agrupadas.outros.push(foto);
     }
@@ -271,14 +285,31 @@ export function formatarTipoFotoVeiculo(tipo: string): string {
     lateral_direita: 'Lateral Direita',
     roda: 'Roda',
     painel: 'Painel',
+    painel_completo: 'Painel Completo',
     hodometro: 'Hodômetro',
+    odometro: 'Odômetro',
     interior: 'Interior',
+    parabrisa: 'Parabrisa',
+    mala_aberta: 'Mala Aberta',
+    capo_aberto_placa: 'Capô Aberto (Placa)',
+    banco_motorista: 'Banco do Motorista',
+    banco_passageiro: 'Banco do Passageiro',
+    banco_traseiro: 'Banco Traseiro',
+    estepe: 'Estepe',
+    chave: 'Chave',
+    chave_roda_macaco: 'Chave de Roda / Macaco',
+    bateria: 'Bateria',
   };
+
+  // Match exato primeiro (evita "chave" pegar "chave_roda_macaco")
+  const exact = labels[tipo.toLowerCase()];
+  if (exact) return exact;
 
   const tipoLower = tipo.toLowerCase();
   for (const [key, label] of Object.entries(labels)) {
     if (tipoLower.includes(key)) return label;
   }
-  
+
   return tipo.charAt(0).toUpperCase() + tipo.slice(1).replace(/_/g, ' ');
 }
+
