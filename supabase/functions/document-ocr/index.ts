@@ -831,6 +831,9 @@ type OcrLogCtx = {
   cpf_fonte?: string | null;
   cpf_contexto?: string | null;
   cpf_candidatos?: any;
+  dados_esperados?: any;
+  modo_teste?: boolean;
+  ocrLogId?: string | null;
 };
 
 async function persistOcrLog(ctx: OcrLogCtx, outcome: {
