@@ -1855,38 +1855,79 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           const aValidCpf = cpfA.length === 11 && validateCPF(cpfA);
           const bValidCpf = cpfB.length === 11 && validateCPF(cpfB);
 
-          // Tiebreaker #1 — MRZ da CNH-e: a 1ª linha do MRZ ("I<BRA<dígitos>")
-          // contém os 9 primeiros dígitos do nº de registro. Quem casar com o MRZ
-          // tem leitura visual fiel (não alucinou). Vale para CNH (não CRLV).
+          // Tiebreaker #1 — MRZ da CNH-e: a 1ª linha do MRZ ("I<BRA<9 dígitos><check>")
+          // contém os 9 dígitos do nº de registro + 1 dígito verificador ICAO 9303.
+          // Quem casar com uma MRZ matematicamente VÁLIDA tem leitura visual fiel
+          // (impossível alucinar uma MRZ que passe no checksum por acaso).
           //
-          // Fontes do MRZ, em ordem de preferência:
-          //   1) texto nativo do PDF (extractedPdfText) — verdade absoluta em CNH-e SENATRAN.
-          //   2) campo mrz_registro retornado pela IA (passada A ou B).
-          const mrzFromString = (s: unknown): string => {
-            if (!s) return '';
-            const str = String(s).toUpperCase().replace(/\s+/g, '');
-            const m = str.match(/I<BRA(\d{9,11})/);
-            return m ? m[1] : '';
-          };
+          // Fontes do MRZ, em ordem de confiança:
+          //   1) texto nativo do PDF (extractedPdfText) — verdade absoluta quando existe
+          //      (raro em CNH-e SENATRAN: o documento real é imagem embutida).
+          //   2) campo mrz_registro retornado pela IA (passada A ou B) — só vale se
+          //      passar no checksum ICAO 9303.
           let tiebreakerMrz: 'A' | 'B' | null = null;
+          let mrzLogCtx: any = null;
           if (tipoParaDupla === 'cnh') {
-            const mrzNative = mrzFromString(extractedPdfText);
-            const mrzA = mrzFromString(firstPassResolved.result?.dados?.mrz_registro);
-            const mrzB = mrzFromString(passB.result?.dados?.mrz_registro);
-            const regA = String(firstPassResolved.result?.dados?.numero_registro ?? '').replace(/\D/g, '');
-            const regB = String(passB.result?.dados?.numero_registro ?? '').replace(/\D/g, '');
-            // Prioridade: nativo (não pode mentir) > IA (pode alucinar)
-            const mrzAuthoritative = mrzNative || ((mrzA && mrzB && mrzA === mrzB) ? mrzA : (mrzA || mrzB));
+            const mrzNativeLine = extractMrzLine(extractedPdfText);
+            const mrzALine = extractMrzLine(firstPassResolved.result?.dados?.mrz_registro);
+            const mrzBLine = extractMrzLine(passB.result?.dados?.mrz_registro);
+            const mrzNativeValid = !!mrzNativeLine && validateMrzCheckDigit(mrzNativeLine);
+            const mrzAValid = !!mrzALine && validateMrzCheckDigit(mrzALine);
+            const mrzBValid = !!mrzBLine && validateMrzCheckDigit(mrzBLine);
+
+            // Escolhe a MRZ "autoritária": nativa válida > A==B válidos > qualquer válido
+            let mrzAuthoritative = '';
+            let mrzSource: 'native' | 'A' | 'B' | null = null;
+            if (mrzNativeValid) {
+              mrzAuthoritative = mrzNativeLine;
+              mrzSource = 'native';
+            } else if (mrzAValid && mrzBValid && mrzALine === mrzBLine) {
+              mrzAuthoritative = mrzALine;
+              mrzSource = 'A'; // empate confirmado, marca como A por convenção
+            } else if (mrzAValid && !mrzBValid) {
+              mrzAuthoritative = mrzALine;
+              mrzSource = 'A';
+            } else if (!mrzAValid && mrzBValid) {
+              mrzAuthoritative = mrzBLine;
+              mrzSource = 'B';
+            }
+
             if (mrzAuthoritative) {
-              // O MRZ tem 9 dígitos do registro (sem o último par de check).
-              // Casa se os primeiros 9 dígitos do numero_registro batem.
-              const mrzKey = mrzAuthoritative.slice(0, 9);
-              const aMatchesMrz = regA.length >= 9 && regA.slice(0, 9) === mrzKey;
-              const bMatchesMrz = regB.length >= 9 && regB.slice(0, 9) === mrzKey;
+              const mrzKey = getRegistroFromMrz(mrzAuthoritative);
+              const regA = String(firstPassResolved.result?.dados?.numero_registro ?? '').replace(/\D/g, '');
+              const regB = String(passB.result?.dados?.numero_registro ?? '').replace(/\D/g, '');
+              const aMatchesMrz = mrzKey.length === 9 && regA.length >= 9 && regA.slice(0, 9) === mrzKey;
+              const bMatchesMrz = mrzKey.length === 9 && regB.length >= 9 && regB.slice(0, 9) === mrzKey;
               if (aMatchesMrz && !bMatchesMrz) tiebreakerMrz = 'A';
               else if (!aMatchesMrz && bMatchesMrz) tiebreakerMrz = 'B';
-              console.log(`[OCR][dupla-leitura][mrz] ${JSON.stringify({ reqId, mrzNative, mrzA, mrzB, mrzAuthoritative, regA, regB, tiebreakerMrz })}`);
+              mrzLogCtx = {
+                mrzNativeFound: !!mrzNativeLine,
+                mrzNativeValid,
+                mrzAFound: !!mrzALine,
+                mrzAValid,
+                mrzBFound: !!mrzBLine,
+                mrzBValid,
+                mrzSource,
+                mrzAuthoritative,
+                mrzKey,
+                regA,
+                regB,
+                tiebreakerMrz,
+              };
+            } else {
+              mrzLogCtx = {
+                mrzNativeFound: !!mrzNativeLine,
+                mrzNativeValid,
+                mrzAFound: !!mrzALine,
+                mrzAValid,
+                mrzBFound: !!mrzBLine,
+                mrzBValid,
+                mrzSource: null,
+                tiebreakerMrz: null,
+                reason: 'no-valid-mrz',
+              };
             }
+            console.log(`[OCR][dupla-leitura][mrz] ${JSON.stringify({ reqId, ...mrzLogCtx })}`);
           }
 
 
