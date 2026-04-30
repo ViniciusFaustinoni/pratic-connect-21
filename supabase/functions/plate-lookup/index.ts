@@ -277,18 +277,31 @@ serve(async (req) => {
       cambio: veiculo.caixa_cambio || veiculo.cambio || '',
     };
 
-    // FIPE já vem na resposta da API
-    const fipeData = fipesArray[0] ? {
-      codigo: fipesArray[0].codigo,
-      valor: fipesArray[0].valor,
-      mesReferencia: fipesArray[0].mes_referencia,
+    // FIPE escolhida pela heurística
+    const fipeEscolhida = melhorIdx >= 0 ? fipesArray[melhorIdx] : null;
+    const fipeData = fipeEscolhida ? {
+      codigo: fipeEscolhida.codigo,
+      valor: fipeEscolhida.valor,
+      mesReferencia: fipeEscolhida.mes_referencia,
+      descricao: descricaoFipe(fipeEscolhida),
     } : null;
+
+    // Lista completa de variantes para o usuário poder trocar manualmente
+    const fipeAlternativas = fipesArray.map((f: any) => ({
+      codigo: f?.codigo,
+      valor: f?.valor,
+      mesReferencia: f?.mes_referencia,
+      descricao: descricaoFipe(f),
+      ano: f?.ano_modelo || f?.ano || null,
+    }));
 
     const result = {
       success: true,
       extractedPlate: formatarPlaca(placaNormalizada),
       vehicleData,
       fipeData,
+      fipeAlternativas,
+      fipeRanking: rankingFipes, // útil para debug nos logs do front
     };
 
     console.log(`[plate-lookup] Sucesso:`, JSON.stringify(result));
