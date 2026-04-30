@@ -26,10 +26,15 @@ export interface VeiculoCtx {
   codigo_voluntario: number;
   codigo_situacao?: number;
   codigo_cooperativa?: number;
-  codigo_plano?: number;
+  /**
+   * Código do GRUPO de produto no Hinova (campo `codigo_grupo_produto` da doc oficial /veiculo/cadastrar).
+   * O grupo já contém todas as coberturas e benefícios cadastrados no painel Hinova,
+   * portanto NÃO enviamos array `produtos[]`.
+   * Vem de `planos.codigo_sga_plano` (nome legado da coluna no banco).
+   */
+  codigo_grupo_produto?: number;
   valor_mensalidade?: number;
   valor_adesao?: number;
-  produtos?: Array<{ codigo_produto: number }>;
   tipo_veiculo: number;
   codigo_combustivel?: number | null;
   codigo_cor?: number | null;
