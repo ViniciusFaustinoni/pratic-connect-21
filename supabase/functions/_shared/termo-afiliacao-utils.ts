@@ -1,6 +1,7 @@
 // ============================================
 // TERMO DE AFILIAÇÃO - UTILITÁRIOS
 // ============================================
+import { resolverDiaVencimento } from './vencimento-utils.ts';
 
 // ============= INTERFACES =============
 
