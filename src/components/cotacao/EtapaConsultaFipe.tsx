@@ -116,7 +116,7 @@ export function EtapaConsultaFipe({
       const result = await getByPlaca(placaClean);
       
       if (result.success && result.vehicleData) {
-        const { vehicleData, fipeData } = result;
+        const { vehicleData, fipeData, fipeAlternativas: alts } = result;
         
         setVeiculoEncontrado({
           placa: vehicleData.placa,
@@ -131,11 +131,15 @@ export function EtapaConsultaFipe({
         
         // PREENCHER CAMPOS AUTOMATICAMENTE
         setMarca(vehicleData.marca);
-        setModelo(vehicleData.modelo);
+        setModelo(fipeData?.descricao || vehicleData.modelo);
         setAno(vehicleData.ano);
         if (fipeData?.valor) {
           setValorFipe(fipeData.valor);
         }
+        
+        // Salvar alternativas para permitir troca manual
+        setFipeAlternativas(alts || []);
+        setFipeSelecionada(fipeData?.codigo || '');
         
         // Marcar quais campos foram auto-preenchidos
         const camposPreenchidos = ['marca', 'modelo', 'ano'];
