@@ -1,61 +1,69 @@
-# Causa raiz
+## Diagnóstico — OOV8C87 / GILBERTO SILVA MOREIRA
 
-A query da aba **Serviços Pendentes / Atribuição Manual** lista todo serviço com `profissional_id IS NULL` e `status IN ('pendente','agendada')`.
+O serviço `573065e2…` está com `status='cancelada'` desde **27/04 10:38**, com observação:
 
-No fluxo de prestador externo (`useAtribuirServicoPrestador`):
-- Cria o link na `instalacao_prestador_links` (via edge `gerar-link-prestador` / `gerar-link-vistoriador-prestador`).
-- Insere log em `servicos_atribuicoes_log`.
-- **Nunca atualiza o registro em `servicos`** (não muda `profissional_id`, não muda `status`).
+> `[27/04/2026 10:38] Cancelado automaticamente por inatividade — backfill (serviço fantasma travando agenda do técnico).`
 
-Resultado: o serviço continua aparecendo como pendente até o prestador concluir a instalação (que zera via outro fluxo). Pior — durante a janela de execução, qualquer coordenador pode reatribuí-lo. Confirmado no LMX5A90: existem **dois links** para a mesma instalação (`b40587c8` concluído pelo SHALOM e `bcc1af41` ainda `aguardando` em outro prestador).
+A instalação `fd393cca…` também foi marcada como `cancelada` no mesmo momento. Não foi um cancelamento operacional — foi uma rotina automática que limpou serviços "fantasmas" antigos.
 
-Diferente do fluxo interno (`useAtribuirServicoManual`), que faz `UPDATE servicos SET profissional_id=…, status='agendada'` e portanto remove da fila imediatamente.
+### Por que dá erro só nele
 
-# Solução
+No `ServicoDetailModal.tsx` (linha 132), o botão **Realocar** é exibido para qualquer serviço de instalação com status em `['agendada','nao_compareceu','reagendada','cancelada']` — **inclusive `cancelada`**.
 
-## 1. Atualizar `servicos` na atribuição a prestador
-Em `src/hooks/useAtribuicaoManual.ts → useAtribuirServicoPrestador`, após o link ser gerado com sucesso e antes do log:
+Mas a RPC `realocar_servico` (migration 20260429210653…, linha 75) trata `cancelada` como **status terminal** e bloqueia:
 
-- `UPDATE servicos SET status='agendada', updated_at=now() WHERE id=servicoId`.
-- Não setar `profissional_id` (coluna FK para `profiles` interno; prestador não tem profile). Em vez disso, marcar o vínculo via `status='agendada'` + a presença do link em `instalacao_prestador_links` (já é a fonte canônica).
-
-## 2. Ajustar a query de `Serviços Pendentes`
-Em `useServicosParaAtribuir`, filtrar também serviços que já tenham link de prestador ativo:
-
-```text
-status='pendente' AND profissional_id IS NULL
-AND NOT EXISTS (
-  SELECT 1 FROM instalacao_prestador_links l
-  JOIN instalacoes i ON i.id = l.instalacao_id
-  WHERE i.veiculo_id = servicos.veiculo_id
-    AND l.status IN ('aguardando','aceito','em_rota','iniciada','em_execucao','concluida')
-)
+```sql
+IF _servico.status IN ('concluida','aprovada','reprovada','aprovada_ressalvas','cancelada') THEN
+  RAISE EXCEPTION 'Serviço em status terminal (%) não pode ser realocado', _servico.status;
 ```
 
-Implementação em duas fases:
-- (a) buscar `instalacao_prestador_links` ativos do dia em uma query e fazer set-difference no client (mais simples, sem RPC).
-- (b) filtrar pelo status do serviço em `('pendente')` ao invés de `('pendente','agendada')`, já que após o passo 1 a presença de prestador resulta em `agendada`.
+Resultado: a UI oferece a ação, o usuário preenche o modal, e a RPC recusa. Os outros associados que o monitoramento conseguiu realocar não estavam em `cancelada` — estavam em `agendada`/`nao_compareceu`/`reagendada`.
 
-## 3. Bloquear reatribuição com link ativo
-No `useAtribuirServicoPrestador`, antes de chamar a edge function: verificar se já existe link ativo (`status NOT IN ('concluida','cancelado','expirado','recusado')`) para a mesma `instalacao_id`. Se existir, abortar com mensagem clara: "Já há um prestador atribuído a este serviço. Cancele/devolva antes de reatribuir."
+### Escopo do problema
 
-## 4. Sincronizar quando link cancelado/expirado
-Quando um link de prestador é cancelado, expirado ou recusado, o serviço precisa voltar para `status='pendente'`. Adicionar um trigger em `instalacao_prestador_links` (AFTER UPDATE) que:
-- Se `status` mudar para `cancelado/expirado/recusado` e não existir outro link ativo para a mesma instalação → `UPDATE servicos SET status='pendente' WHERE instalacao_origem_id = link.instalacao_id`.
-- Se `status` mudar para `concluida` → `UPDATE servicos SET status='concluida'` (defesa em profundidade; a edge `concluir-instalacao-prestador` já faz isso indiretamente).
+A consulta mostrou **19 serviços** auto-cancelados pelo mesmo backfill em 27/04 (HUGO MOURA, PATRICK BONZE, RAFAEL LUCINDO, ALEX, WENDEL, LEANDRO, FABIO, HILLARY, DOUGLAS, MARCUS, CAIO, LUIZ COSME, DANIEL, SANDER, etc.). Qualquer tentativa de realocá-los via monitoramento vai reproduzir exatamente o mesmo erro.
 
-## 5. Backfill imediato
-Para o LMX5A90 (e qualquer outro caso travado):
-- Cancelar o link `bcc1af41` (ainda `aguardando`) que sobrou após o SHALOM concluir.
-- Garantir `servicos.status='concluida'` para `cc991c24` (já está) — só limpar a fila visualmente.
-- Varrer `servicos` com `status IN ('pendente','agendada')` cujo link ativo está concluído e marcar como `concluida`.
+---
 
-# Detalhes técnicos
+## Correção — raiz
 
-**Arquivos a editar**:
-- `src/hooks/useAtribuicaoManual.ts` — passos 1, 2, 3.
-- Migration nova — passo 4 (trigger) e passo 5 (DML backfill).
+### 1) RPC `realocar_servico` — aceitar `cancelada` como reabertura
 
-**Por que não usar `profissional_id` para prestador**: a FK aponta para `profiles` (técnicos internos). Prestador externo vive em `vistoriadores_prestadores` / `prestadores_assistencia`. Usar `status='agendada'` + presença do link é o caminho consistente com o fluxo já existente em `concluir-instalacao-prestador`.
+Liberar `cancelada` da lista de status terminais e tratá-lo como **reabertura controlada**:
 
-**Memória a registrar**: nova entry em `mem://logic/operations/atribuicao-prestador-status-sync` documentando: "Atribuir a prestador externo OBRIGATORIAMENTE muda servicos.status para 'agendada' e exige checagem de link ativo antes de gerar novo link."
+- continua bloqueando `concluida`, `aprovada`, `reprovada`, `aprovada_ressalvas` (esses sim são terminais reais);
+- para `cancelada`, a RPC vai:
+  - reabrir o `servico` (`status='agendada'`, nova data/período, limpa `iniciada_em`/`em_rota_em`/`confirmacao_whatsapp`, zera `cancelada_em`/`cancelada_motivo` se existirem);
+  - reabrir a `instalacao` correspondente (`status='agendada'` quando estava `cancelada`);
+  - registrar no histórico/log a `categoria` como `reabertura_pos_cancelamento` e exigir `motivo` (já é obrigatório, mín. 5 chars);
+  - manter a auditoria que já existe (linhas seguintes da própria RPC).
+
+Sem isso, qualquer serviço cancelado (manual ou pelo backfill) fica preso para sempre.
+
+### 2) UI `ServicoDetailModal.tsx` — alinhar rótulo
+
+Manter `cancelada` na lista que mostra o botão, mas trocar o rótulo/tooltip para **"Reabrir e reagendar"** quando o serviço está `cancelada`, deixando claro o efeito ao monitoramento. Assim a UI passa a refletir o que a RPC faz.
+
+### 3) Backfill operacional — reabrir os 19 órfãos? (decisão)
+
+Os 19 serviços auto-cancelados em 27/04 continuam parados. Posso, opcionalmente, executar um backfill que apenas **destrava** (não reagenda automaticamente) — devolve à fila de atribuição manual com observação "Reaberto após cancelamento automático por backfill — definir nova data". Vou perguntar antes de executar (impacto operacional alto).
+
+---
+
+## Detalhes técnicos
+
+- Arquivo da RPC: nova migration que faz `CREATE OR REPLACE FUNCTION public.realocar_servico(...)` reaproveitando o corpo atual da migration `20260429210653_…`, mudando apenas:
+  - condição de status terminal: `IN ('concluida','aprovada','reprovada','aprovada_ressalvas')`
+  - bloco antes do `UPDATE servicos`: se `_servico.status = 'cancelada'`, marca flag `_reabertura := true` e adiciona à observação `[reabertura pós-cancelamento]`;
+  - após o `UPDATE servicos`, se `_reabertura` e existir `instalacao_origem_id`, faz `UPDATE instalacoes SET status='agendada', updated_at=now() WHERE id=_servico.instalacao_origem_id AND status='cancelada'`.
+- Frontend: `src/components/servicos-campo/ServicoDetailModal.tsx` linhas 132–141 — manter a condição, trocar texto para `Reabrir e reagendar` quando `servico.status === 'cancelada'`. Sem mudança no `useRealocarInstalacao` (a RPC continua a mesma assinatura).
+- Memória: atualizar `mem://logic/operations/dedupe-agendamentos-rule` com nota: "RPC `realocar_servico` aceita reabertura de `cancelada` (não terminal real)".
+
+## Fora de escopo
+
+- Não vou alterar o backfill de "serviço fantasma" — ele continua útil para limpar agendas presas. A correção é tornar o cancelamento reversível pela tela de monitoramento.
+- Não vou tocar em `concluida`/`aprovada`/`reprovada` (esses permanecem terminais).
+
+## Pergunta antes de executar
+
+Após aprovar, devo também reabrir automaticamente os 19 serviços já presos pelo backfill de 27/04, ou deixar para o monitoramento reabrir um a um pela tela?
