@@ -1536,9 +1536,22 @@ Use a função para retornar o chassi encontrado, ou "ilegivel" se identificar o
   } catch (error) {
     console.error('Error in document-ocr function:', error);
     const errorMessage = error instanceof Error ? error.message : 'Erro interno';
+    // Devolve 200 com fallback para que o uploader não exiba "Edge Function 500".
+    // O documento ficará para revisão manual no fluxo de cotação.
     return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({
+        sucesso: false,
+        fallback: true,
+        tipo_detectado: 'desconhecido',
+        dados: {},
+        legivel: false,
+        valido: false,
+        sugestao: 'revisar',
+        motivo: `Erro inesperado no OCR: ${errorMessage}. Documento enviado para revisão manual.`,
+        confianca: 0,
+        error: errorMessage,
+      }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
