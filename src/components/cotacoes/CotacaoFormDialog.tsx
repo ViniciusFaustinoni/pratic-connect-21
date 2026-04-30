@@ -1908,6 +1908,53 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 </div>
               )}
 
+              {/* Seletor de versão FIPE — quando a API retorna múltiplas variantes (ex.: manual vs Easytronic) */}
+              {veiculoEncontrado?.success && (veiculoEncontrado.fipeAlternativas?.length ?? 0) > 1 && (
+                <div className="space-y-1 p-2 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-700">
+                  <Label className="text-xs text-amber-900 dark:text-amber-200">
+                    {veiculoEncontrado.fipeAlternativas!.length} versões FIPE encontradas — confira combustível/câmbio/motorização do CRLV
+                  </Label>
+                  <Select
+                    value={String(veiculoEncontrado.fipeData?.codigo || '')}
+                    onValueChange={(codigo) => {
+                      const escolhida = veiculoEncontrado.fipeAlternativas!.find(f => String(f.codigo) === codigo);
+                      if (!escolhida) return;
+                      setVeiculoEncontrado({
+                        ...veiculoEncontrado,
+                        fipeData: {
+                          codigo: escolhida.codigo,
+                          valor: escolhida.valor,
+                          mesReferencia: escolhida.mesReferencia || veiculoEncontrado.fipeData?.mesReferencia || '',
+                          descricao: escolhida.descricao,
+                        },
+                        vehicleData: veiculoEncontrado.vehicleData ? {
+                          ...veiculoEncontrado.vehicleData,
+                          modelo: escolhida.descricao || veiculoEncontrado.vehicleData.modelo,
+                        } : veiculoEncontrado.vehicleData,
+                      });
+                      form.setValue('valor_fipe', escolhida.valor);
+                      toast.success('Versão FIPE atualizada');
+                    }}
+                  >
+                    <SelectTrigger className="h-9 bg-background">
+                      <SelectValue placeholder="Selecione a versão correta" />
+                    </SelectTrigger>
+                    <SelectContent className="max-w-[600px]">
+                      {veiculoEncontrado.fipeAlternativas!.map((alt) => (
+                        <SelectItem key={String(alt.codigo)} value={String(alt.codigo)}>
+                          <div className="flex flex-col text-left">
+                            <span className="font-medium">{alt.descricao}</span>
+                            <span className="text-xs text-muted-foreground">
+                              R$ {Number(alt.valor).toLocaleString('pt-BR')} · cód. {alt.codigo}{alt.ano ? ` · ${alt.ano}` : ''}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               {/* Divisor e Seleção manual - só aparece se FIPE não retornou dados */}
               {!(veiculoEncontrado?.success && veiculoEncontrado.vehicleData && valorFipe > 0) && (
                 <>
