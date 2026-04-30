@@ -866,6 +866,9 @@ serve(async (req) => {
     // Log estruturado de entrada — `urlHash` evita expor URL completa em massa
     const urlHash = await sha1Hex(url).then(h => h.slice(0, 12)).catch(() => 'no-hash');
     const activeCfg = await getActiveAIConfig().catch(() => ({ provider: 'lovable', model: 'unknown' }));
+    logCtx.arquivo_url_hash = urlHash;
+    logCtx.provider = activeCfg.provider;
+    logCtx.modelo = activeCfg.model;
     console.log(`[OCR][in] ${JSON.stringify({
       reqId,
       tipoEsperado: tipoEsperado || 'auto',
