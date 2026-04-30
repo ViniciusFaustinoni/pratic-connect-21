@@ -127,7 +127,7 @@ export default function OcrTestesTab() {
 function PainelExecutar() {
   const userIdRef = useRef<string | null>(null);
   if (userIdRef.current === null) {
-    supabase.auth.getUser().then(({ data }) => { userIdRef.current = data.user?.id ?? null; });
+    supabase.auth.getUser().then(({ data }) => { userIdRef.current = data.userIdRef.current; });
   }
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -222,7 +222,7 @@ function PainelExecutar() {
         mime: arquivo.mime,
         bytes: arquivo.bytes,
         expectativas,
-        created_by: user?.id ?? null,
+        created_by: userIdRef.current,
       };
       if (casoId !== 'novo') {
         const { error } = await (supabase as any).from('ocr_test_cases').update(payload).eq('id', casoId);
@@ -249,7 +249,7 @@ function PainelExecutar() {
       if (!veredito) throw new Error('Escolha um veredito.');
       const cmp = resultado.comparacao_local;
       const { error } = await (supabase as any).from('ocr_test_runs').insert({
-        executed_by: user?.id ?? null,
+        executed_by: userIdRef.current,
         test_case_id: casoId !== 'novo' ? casoId : null,
         ocr_log_id: resultado?.ocrLogId ?? null,
         provider: null,
