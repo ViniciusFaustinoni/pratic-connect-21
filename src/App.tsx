@@ -91,6 +91,16 @@ const SubstituicaoVeiculoPage = lazy(() => import("./pages/cadastro/Substituicao
 const SubstituicoesPendentesPage = lazy(() => import("./pages/cadastro/SubstituicoesPendentesPage"));
 const SubstituicaoDetalhePage = lazy(() => import("./pages/cadastro/SubstituicaoDetalhePage"));
 const AssociadoDetalhe = lazy(() => import("./pages/cadastro/AssociadoDetalhe"));
+const RoutedAssociadoDetalhe = () => {
+  // Importação local para não impactar bundle inicial — boundary é leve.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { AssociadoDetalheErrorBoundary } = require('@/components/common/AssociadoDetalheErrorBoundary');
+  return (
+    <AssociadoDetalheErrorBoundary>
+      <AssociadoDetalhe />
+    </AssociadoDetalheErrorBoundary>
+  );
+};
 const Veiculos = lazy(() => import("./pages/cadastro/Veiculos"));
 const FilaDocumentos = lazy(() => import("./pages/cadastro/FilaDocumentos"));
 const AnaliseDocumento = lazy(() => import("./pages/cadastro/AnaliseDocumento"));
