@@ -222,14 +222,20 @@ export function useEventosVeiculo(veiculoId: string | undefined) {
 // (`PrestadorInstalacao` envia chaves como `chave`, `bateria`, `estepe`,
 // `mala_aberta`, `banco_*`, `capo_aberto_placa`, `parabrisa`, `odometro`,
 // `painel_completo`, `chave_roda_macaco`).
-const TIPOS_IDENTIFICACAO = ['selfie', 'chassi', 'motor', 'capo_aberto_placa'];
+const TIPOS_IDENTIFICACAO = ['selfie', 'chassi', 'motor', 'capo_aberto_placa', 'vistoriador_selfie'];
 const TIPOS_EXTERIOR = [
   'frente', 'traseira', 'lateral_esquerda', 'lateral_direita', 'roda',
   'parabrisa', 'mala_aberta', 'capo',
+  'frente_lateral_direita', 'frente_lateral_esquerda',
+  'traseira_lateral_direita', 'traseira_lateral_esquerda',
+  'pneu_dianteiro_direito', 'pneu_dianteiro_esquerdo',
+  'pneu_traseiro_direito', 'pneu_traseiro_esquerdo',
 ];
 const TIPOS_INTERIOR = [
   'painel', 'painel_completo', 'hodometro', 'odometro', 'interior',
   'banco_motorista', 'banco_passageiro', 'banco_traseiro',
+  'forracao_porta_dianteira_direita', 'forracao_porta_dianteira_esquerda',
+  'forracao_porta_traseira_direita', 'forracao_porta_traseira_esquerda',
 ];
 // Acessórios e itens avulsos (estepe, chave, bateria, ferramentas) caem em "outros"
 // por padrão — explícito para não parecerem "perdidos".
