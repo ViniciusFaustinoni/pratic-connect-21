@@ -189,11 +189,12 @@ export function buildVeiculoPayload(
   if (ctx.codigo_cor) payload.codigo_cor = ctx.codigo_cor;
   if (ctx.codigo_situacao) payload.codigo_situacao = ctx.codigo_situacao;
   if (ctx.codigo_cooperativa) payload.codigo_cooperativa = ctx.codigo_cooperativa;
-  if (ctx.codigo_plano) payload.codigo_plano = ctx.codigo_plano;
+  if (ctx.codigo_grupo_produto) payload.codigo_grupo_produto = ctx.codigo_grupo_produto;
   if (typeof ctx.valor_mensalidade === 'number') payload.valor_fixo = ctx.valor_mensalidade;
   if (typeof ctx.valor_adesao === 'number') payload.valor_adesao = ctx.valor_adesao;
   if (ctx.data_contrato_iso) payload.data_contrato = formatDateBR(ctx.data_contrato_iso);
-  if (ctx.produtos && ctx.produtos.length > 0) payload.produtos = ctx.produtos;
+  // NÃO enviamos `produtos[]`: o grupo (codigo_grupo_produto) já vincula
+  // todas as coberturas e benefícios configurados no painel Hinova.
 
   return payload;
 }
