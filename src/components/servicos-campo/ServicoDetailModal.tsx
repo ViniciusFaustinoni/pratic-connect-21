@@ -131,12 +131,16 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
               </Button>
               {isInstalacao && ['agendada', 'nao_compareceu', 'reagendada', 'cancelada'].includes(servico.status) && (
                 <Button
-                  variant="outline"
+                  variant={servico.status === 'cancelada' ? 'default' : 'outline'}
                   size="sm"
                   className="gap-1.5"
                   onClick={() => setRealocarOpen(true)}
+                  title={servico.status === 'cancelada'
+                    ? 'Reabrir este serviço cancelado e reagendar'
+                    : 'Realocar este serviço para outra data, técnico, rota ou base'}
                 >
-                  <MapPinned className="h-3.5 w-3.5" /> Realocar
+                  <MapPinned className="h-3.5 w-3.5" />
+                  {servico.status === 'cancelada' ? 'Reabrir e reagendar' : 'Realocar'}
                 </Button>
               )}
               <ConcluirPrestadorExternoButton
