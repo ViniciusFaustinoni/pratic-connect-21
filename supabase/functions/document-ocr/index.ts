@@ -1488,42 +1488,48 @@ Use a função para retornar o CPF encontrado ou "ilegivel" se não conseguir le
               if (validateCPF(retryCpf.replace(/\D/g, ''))) {
                 console.log('[OCR] CPF válido extraído na segunda tentativa:', retryCpf);
                 result.dados.cpf = retryCpf;
+                logCtx.cpf_fonte = 'ia_retry';
               } else {
                 console.log('[OCR] CPF da segunda tentativa também inválido:', retryCpf, '→ tentando correção por permutação');
                 const cpfCorrigido = tryFixCPFByPermutation(retryCpf);
                 if (cpfCorrigido) {
                   console.log(`[OCR] CPF corrigido por permutação: ${retryCpf} → ${cpfCorrigido}`);
                   result.dados.cpf = cpfCorrigido;
+                  logCtx.cpf_fonte = 'permutacao';
                 } else {
                   const cpfCorrigido1 = cpfExtraido ? tryFixCPFByPermutation(cpfExtraido) : null;
                   if (cpfCorrigido1) {
                     console.log(`[OCR] CPF corrigido por permutação (1ª tentativa): ${cpfExtraido} → ${cpfCorrigido1}`);
                     result.dados.cpf = cpfCorrigido1;
+                    logCtx.cpf_fonte = 'permutacao';
                   } else {
                     result.dados.cpf = 'ilegivel';
+                    logCtx.cpf_fonte = 'none';
                     result.motivo = (result.motivo || '') + ' CPF não pôde ser lido com precisão (dígito verificador inválido em ambas tentativas).';
                   }
                 }
               }
             } else if (retryCpf === 'ilegivel') {
               console.log('[OCR] CPF marcado como ilegível na segunda tentativa');
-              // Ainda tentar permutação com CPF da 1ª tentativa
               const cpfCorrigido = cpfExtraido ? tryFixCPFByPermutation(cpfExtraido) : null;
               if (cpfCorrigido) {
                 console.log(`[OCR] CPF corrigido por permutação após ilegível: ${cpfExtraido} → ${cpfCorrigido}`);
                 result.dados.cpf = cpfCorrigido;
+                logCtx.cpf_fonte = 'permutacao';
               } else {
                 result.dados.cpf = 'ilegivel';
+                logCtx.cpf_fonte = 'none';
                 result.motivo = (result.motivo || '') + ' CPF não pôde ser lido (documento danificado ou cortado).';
               }
             } else {
-              // Nenhum CPF extraído no retry - tentar permutação
               const cpfCorrigido = cpfExtraido ? tryFixCPFByPermutation(cpfExtraido) : null;
               if (cpfCorrigido) {
                 console.log(`[OCR] CPF corrigido por permutação (fallback): ${cpfExtraido} → ${cpfCorrigido}`);
                 result.dados.cpf = cpfCorrigido;
+                logCtx.cpf_fonte = 'permutacao';
               } else {
                 result.dados.cpf = 'ilegivel';
+                logCtx.cpf_fonte = 'none';
               }
             }
           } else {
