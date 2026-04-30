@@ -514,7 +514,7 @@ const App = () => (
               
               {/* Cadastro */}
               <Route path="/cadastro/associados" element={<Associados />} />
-              <Route path="/cadastro/associados/:id" element={<AssociadoDetalhe />} />
+              <Route path="/cadastro/associados/:id" element={<AssociadoDetalheErrorBoundary><AssociadoDetalhe /></AssociadoDetalheErrorBoundary>} />
               <Route path="/cadastro/associados/:associadoId/substituicao" element={<SubstituicaoVeiculoPage />} />
               <Route path="/cadastro/substituicoes" element={<SubstituicoesPendentesPage />} />
               <Route path="/cadastro/substituicoes/:id" element={<SubstituicaoDetalhePage />} />
