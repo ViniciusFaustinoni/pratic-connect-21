@@ -433,37 +433,34 @@ serve(async (req) => {
         return;
       }
 
-      // Plano + produtos
-      let codigoPlanoSga: number | undefined;
+      // Plano → resolve o GRUPO de produto no Hinova.
+      // No SGA não existe "plano" — existe `codigo_grupo_produto` (campo oficial
+      // do /veiculo/cadastrar). O grupo já contém TODAS as coberturas e benefícios
+      // cadastrados no painel Hinova, então NÃO enviamos array `produtos[]`
+      // nem lemos `coberturas.codigo_sga` / `benefits.codigo_sga`.
+      // A coluna `planos.codigo_sga_plano` (nome legado) guarda esse código de grupo.
+      let codigoGrupoProduto: number | undefined;
       let valorMensalidade: number | undefined;
       let valorAdesao: number | undefined;
-      const produtos: Array<{ codigo_produto: number }> = [];
       if (contrato?.plano_id) {
         const { data: planoRow } = await supabase.from('planos')
           .select('id, nome, codigo_sga_plano, valor_adesao').eq('id', contrato.plano_id).maybeSingle();
-        const cp = planoRow?.codigo_sga_plano ? Number.parseInt(planoRow.codigo_sga_plano, 10) : NaN;
-        if (Number.isFinite(cp) && cp > 0) {
-          codigoPlanoSga = cp;
+        const cg = planoRow?.codigo_sga_plano ? Number.parseInt(planoRow.codigo_sga_plano, 10) : NaN;
+        if (Number.isFinite(cg) && cg > 0) {
+          codigoGrupoProduto = cg;
           valorMensalidade = contrato.valor_mensal != null ? Number(contrato.valor_mensal) : undefined;
           valorAdesao = contrato.valor_adesao != null ? Number(contrato.valor_adesao)
             : (planoRow?.valor_adesao != null ? Number(planoRow.valor_adesao) : undefined);
-
-          const { data: pBen } = await supabase.from('planos_beneficios')
-            .select('benefits!inner(codigo_sga, name)').eq('plano_id', contrato.plano_id);
-          for (const pb of (pBen || []) as any[]) {
-            const c = pb.benefits?.codigo_sga ? Number.parseInt(pb.benefits.codigo_sga, 10) : NaN;
-            if (Number.isFinite(c) && c > 0) produtos.push({ codigo_produto: c });
-          }
-          const { data: pCob } = await supabase.from('planos_coberturas')
-            .select('coberturas!inner(codigo_sga, nome)').eq('plano_id', contrato.plano_id);
-          for (const pc of (pCob || []) as any[]) {
-            const c = pc.coberturas?.codigo_sga ? Number.parseInt(pc.coberturas.codigo_sga, 10) : NaN;
-            if (Number.isFinite(c) && c > 0) produtos.push({ codigo_produto: c });
-          }
         } else {
-          await logSync(_vid, _aid, 'resolver_plano', 'warning',
-            { plano_id: contrato.plano_id, codigo_sga_plano: planoRow?.codigo_sga_plano ?? null },
-            null, 'Sem codigo_sga_plano — Hinova usará default da conta');
+          // Bloqueio claro: sem código de grupo SGA, o veículo chegaria "pelado"
+          // no Hinova (só com produtos compulsórios). Aborta com mensagem amigável.
+          const motivo = `Plano '${planoRow?.nome ?? contrato.plano_id}' não tem código de grupo SGA configurado. Cadastre o grupo no painel Hinova e preencha o código no plano antes de reprocessar.`;
+          await logSync(_vid, _aid, 'resolver_grupo_sga', 'error',
+            { plano_id: contrato.plano_id, plano_nome: planoRow?.nome, codigo_sga_plano: planoRow?.codigo_sga_plano ?? null },
+            null, motivo);
+          await setStatusSga(_vid, 'erro_sincronizacao');
+          await upsertQueue(_vid, _aid, 'plano_sem_codigo_grupo_sga', motivo, codigoAssociadoHinova);
+          return;
         }
       }
 
@@ -721,10 +718,9 @@ serve(async (req) => {
           codigo_voluntario: codigoVoluntario,
           codigo_situacao: Number.isFinite(codSituacao) && codSituacao > 0 ? codSituacao : undefined,
           codigo_cooperativa: Number.isFinite(codigoCooperativa) ? codigoCooperativa : undefined,
-          codigo_plano: codigoPlanoSga,
+          codigo_grupo_produto: codigoGrupoProduto,
           valor_mensalidade: valorMensalidade,
           valor_adesao: valorAdesao,
-          produtos: produtos.length > 0 ? produtos : undefined,
           tipo_veiculo: tipoVeiculo,
           codigo_combustivel: (veiculo.codigo_sga_combustivel != null ? Number(veiculo.codigo_sga_combustivel) : null) ?? getMap('combustivel', normalCombustivel),
           codigo_cor: (veiculo.codigo_sga_cor != null ? Number(veiculo.codigo_sga_cor) : null)

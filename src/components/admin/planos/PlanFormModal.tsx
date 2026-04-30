@@ -398,16 +398,16 @@ export function PlanFormModal({
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="plan-codigo-sga">Código SGA do Plano (Hinova)</Label>
+                        <Label htmlFor="plan-codigo-sga">Código do Grupo de Produto (SGA / Hinova)</Label>
                         <Input
                           id="plan-codigo-sga"
                           value={formData.codigo_sga_plano}
                           onChange={(event) => setFormData((previous) => ({ ...previous, codigo_sga_plano: event.target.value }))}
-                          placeholder="Ex: 1234"
+                          placeholder="Ex: 40"
                           inputMode="numeric"
                         />
                         <p className="text-xs text-muted-foreground">
-                          Código do plano no painel Hinova. Sem este código, a sincronização de novos contratos com SGA será bloqueada com erro <code>plano_sem_codigo_sga</code>.
+                          Código do <strong>GRUPO</strong> no painel Hinova (campo <code>codigo_grupo_produto</code>). O grupo já contém todas as coberturas e benefícios configurados lá — não enviamos a lista de produtos individualmente. Sem este código, a sincronização de novos veículos com o SGA será bloqueada com erro <code>plano_sem_codigo_grupo_sga</code>.
                         </p>
                       </div>
                     </section>
