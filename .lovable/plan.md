@@ -1,53 +1,82 @@
+## Objetivo
 
-# Limpeza da tabela `hinova_mapeamentos` — combustíveis
+Permitir que o diretor escolha **qual motor faz o OCR de documentos** (CNH, RG, CRLV, ATPV-e, comprovante, NF), incluindo o **Mistral OCR** (`mistral-ocr-latest`, API `/v1/ocr`) — sem afetar o provedor global de IA usado em chat, análise de risco, WhatsApp etc.
 
-## Estado atual
+Bônus crítico que o seu segundo ponto destravou: hoje o retry de baixa confiança está hardcoded em `google/gemini-2.5-pro`, **mesmo quando o provedor global é Anthropic**. Isso vai ser corrigido junto.
 
-| codigo_local | codigo_hinova | descrição | ativo |
-|---|---|---|---|
-| flex | 1 | FLEX | ✅ |
-| gasolina | 2 | GASOLINA | ✅ |
-| alcool | 3 | ETANOL | ✅ |
-| etanol | 3 | ETANOL | ✅ |
-| diesel | 4 | DIESEL | ✅ |
-| biogas | 5 | BIO-GAS | ✅ |
-| tetrafuel | 6 | TETRA-FUEL | ✅ |
-| **gnv** | **5** | GNV | ❌ inativo |
-| **eletrico** | **6** | ELETRICO | ❌ inativo |
-| **hibrido** | **7** | HIBRIDO | ❌ inativo |
+---
 
-Os 6 combustíveis oficiais do SGA já estão corretos. Mas as 3 últimas linhas (`gnv`, `eletrico`, `hibrido`) **não existem no SGA** e estão **reaproveitando códigos válidos** (5 e 6) — risco real: se alguém reativar `gnv` na UI, o sistema passa a enviar GNV como código 5 (Bio-gás) no Hinova, causando cadastro errado.
+## O que muda para o diretor
 
-## Mudança
+Em **Configurações → Inteligência Artificial**, abaixo do card atual "Provedor e modelo globais", aparece um **segundo card: "Motor de OCR de documentos"** com 4 opções:
 
-Uma única operação de DELETE remove as 3 entradas inexistentes:
+1. **Usar o provedor global** (padrão atual — comportamento de hoje)
+2. **Mistral OCR** (`mistral-ocr-latest` — API especializada em documentos)
+3. **Anthropic Claude** (Sonnet 4.5 / Opus 4.5)
+4. **Google Gemini** (2.5 Pro / Flash)
 
-```sql
-DELETE FROM public.hinova_mapeamentos
- WHERE tipo = 'combustivel'
-   AND codigo_local IN ('gnv', 'eletrico', 'hibrido');
+Para cada opção (exceto "global"), um select de modelo. A escolha vale **só para `document-ocr`** — chat, Maya, Vinicius, análise de sinistro etc. continuam no provedor global.
+
+---
+
+## Regra de retry (resposta ao seu segundo ponto)
+
+Hoje: confiança < 0.6 → retry forçado em `google/gemini-2.5-pro`, ignorando o provedor escolhido.
+Depois: o retry usa **um modelo "potente" do mesmo provedor do OCR**:
+
+| Motor de OCR escolhido | Primeira passada | Retry baixa confiança |
+|---|---|---|
+| Mistral OCR | `mistral-ocr-latest` | `pixtral-large-latest` (visão) |
+| Anthropic | `claude-haiku-4-5` | `claude-sonnet-4-5` |
+| Google | `gemini-2.5-flash` | `gemini-2.5-pro` |
+| Lovable Gateway | modelo escolhido | versão "pro" do mesmo |
+
+Coerente com a sua observação: se o provedor global está em Anthropic, **nunca** caímos em Gemini sem o diretor pedir.
+
+---
+
+## Detalhes técnicos
+
+### 1. Banco
+Migration adicionando tabela `ocr_engine_config` (singleton, igual `ai_model_config`):
 ```
+id uuid PK
+engine text  -- 'global' | 'mistral' | 'anthropic' | 'google'
+model text   -- ex: 'mistral-ocr-latest', 'claude-haiku-4-5', etc.
+retry_model text  -- modelo do retry (auto-preenchido pela UI)
+updated_at, updated_by
+```
+RLS: SELECT autenticado, UPDATE só diretor (mesma policy do `ai_model_config`).
 
-## Resultado esperado
+### 2. Secret
+`MISTRAL_API_KEY` via `add_secret` (eu peço quando aprovar). Endpoint: `https://api.mistral.ai/v1/ocr`.
 
-Tabela final com exatamente 7 linhas (6 códigos SGA — etanol aparece duas vezes como `alcool` e `etanol` apontando para o mesmo código 3, o que é intencional para tolerar variações da FIPE):
+### 3. Edge function `document-ocr/index.ts`
+- Lê `ocr_engine_config` no início da request.
+- Se `engine = 'global'` → comportamento atual (intacto).
+- Se `engine = 'mistral'` → novo branch que chama `/v1/ocr` com `document.document_url` (URL assinada do Storage) ou `image_url` base64. Retorno do Mistral é **markdown estruturado**, então adicionamos um pós-processador que extrai os campos do schema Pratic (CNH/CRLV/etc) usando o próprio prompt JSON atual numa segunda chamada leve (`mistral-small-latest`) — ou, se for documento simples, parse por regex já cobre.
+- Se `engine = 'anthropic'` ou `'google'` → reutiliza pipeline atual mudando só o `model` passado para `callAIGatewayWithRetry`.
+- `OCR_RETRY_MODEL` deixa de ser constante e passa a vir de `ocr_engine_config.retry_model`.
+- Logs em `ocr_execution_logs` ganham coluna `engine` (qual motor foi usado) — facilita comparar qualidade depois.
 
-| codigo_local | codigo_hinova |
-|---|---|
-| flex | 1 |
-| gasolina | 2 |
-| alcool / etanol | 3 |
-| diesel | 4 |
-| biogas | 5 |
-| tetrafuel | 6 |
+### 4. Frontend
+- Novo hook `useOcrEngineConfig` (espelho do `useAIModelConfig`).
+- Novo componente `OcrEngineConfigCard` colocado em `IntegracaoIA.tsx` abaixo do card existente.
+- Mapa estático `OCR_ENGINE_MODELS` com modelos válidos por motor + retry padrão sugerido.
 
-## Impacto em outros lugares
+### 5. Coluna `model` nos logs
+Há um bug conhecido (do diagnóstico anterior): logs gravam `gemini-2.5-flash` quando rodou Claude. Vai ser corrigido nesta mesma passada — passa a gravar o modelo realmente usado em cada passada (primária e retry).
 
-- **`veiculos.codigo_sga_combustivel`** — não afetado (já populado por trigger com base no texto, não na tabela de mapeamento).
-- **`useChecklistSGA`** — continua funcionando: o select filtra por `ativo=true` e nenhuma linha removida estava ativa.
-- **Edge `sga-hinova-sync`** — usa `codigo_sga_combustivel` persistido no veículo como fonte primária; mapeamento é fallback.
-- **Tela de gestão `CombustiveisTab`** (se existir) — uma linha a menos para listar; nenhuma quebra.
+---
 
-## Observação
+## Não faz parte deste plano
+- Não troca o provedor global (continua Lovable/OpenAI/Anthropic).
+- Não migra o OCR existente para Mistral automaticamente — diretor precisa escolher.
+- Não mexe em outros usos de IA (chat, risco, WhatsApp).
+- Não adiciona Mistral à lista de modelos globais (você pediu "só para OCR").
 
-Veículos elétricos / híbridos / GNV continuam podendo ser cadastrados no sistema, mas **não podem ser sincronizados com o SGA Hinova** — o checklist SGA já bloqueia o envio quando `codigo_sga_combustivel` é nulo (regra implementada anteriormente). Esse é o comportamento correto, pois o SGA realmente não suporta esses tipos.
+---
+
+## Riscos
+- **Mistral OCR retorna markdown, não JSON estruturado.** Precisamos de uma camada de extração — incluí no plano um segundo passo leve com `mistral-small-latest` para mapear ao schema Pratic. Se essa abordagem mostrar baixa precisão na CNH/CRLV em testes, alternativa é manter Mistral só para "extrair texto bruto" e usar o LLM global para estruturar — fácil de pivotar depois.
+- **Sem créditos Mistral configurados** → erro 401/402; tratamos como `fallback: true` (igual hoje com Anthropic).
