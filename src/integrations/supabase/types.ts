@@ -978,6 +978,27 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_provider_keys: {
+        Row: {
+          api_key: string
+          provider: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          api_key: string
+          provider: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          api_key?: string
+          provider?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       alocacoes_diarias: {
         Row: {
           base_id: string | null
@@ -31821,6 +31842,13 @@ export type Database = {
           p_prioridade?: number
         }
         Returns: string
+      }
+      ai_provider_keys_status: {
+        Args: never
+        Returns: {
+          configured: boolean
+          provider: string
+        }[]
       }
       alternar_perfil_operacional_tecnico: {
         Args: { _profissional_id: string }
