@@ -819,6 +819,7 @@ serve(async (req) => {
         
         if (!claimsError && claimsData?.claims) {
           isAuthenticated = true;
+          logCtx.usuario_id = (claimsData.claims as any).sub ?? null;
           console.log('Authenticated request from user:', claimsData.claims.sub);
         }
       } catch (authErr) {
@@ -829,8 +830,12 @@ serve(async (req) => {
     console.log('Request mode:', isAuthenticated ? 'authenticated' : 'public');
 
     const reqId = (crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`).slice(0, 8);
+    logCtx.reqId = reqId;
 
-    const { url, tipoEsperado, cpfEsperado, nomeEsperado, extrairDados } = await req.json();
+    const { url, tipoEsperado, cpfEsperado, nomeEsperado, extrairDados, cotacaoId, associadoId } = await req.json();
+    logCtx.tipo_esperado = tipoEsperado || null;
+    logCtx.cotacao_id = cotacaoId || null;
+    logCtx.associado_id = associadoId || null;
 
     if (!url) {
       return new Response(
