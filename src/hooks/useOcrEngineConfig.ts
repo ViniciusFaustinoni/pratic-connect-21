@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-export type OcrEngine = 'global' | 'mistral' | 'anthropic' | 'google';
+export type OcrEngine = 'auto' | 'global' | 'mistral' | 'anthropic' | 'google';
 
 export interface OcrEngineConfig {
   id: string;
@@ -16,6 +16,7 @@ export interface OcrEngineConfig {
 }
 
 export const OCR_ENGINE_LABELS: Record<OcrEngine, string> = {
+  auto: '🤖 Automático (recomendado) — escolhe o melhor método por documento',
   global: 'Provedor global do sistema',
   mistral: 'Mistral OCR (especializado em documentos)',
   anthropic: 'Anthropic Claude (Sonnet 4.5)',
