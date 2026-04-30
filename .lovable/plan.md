@@ -1,82 +1,53 @@
 
-# Cor do veículo com código SGA — mesma lógica aplicada ao combustível
+# Limpeza da tabela `hinova_mapeamentos` — combustíveis
 
-## Códigos reais do SGA (PDF Hinova)
+## Estado atual
 
-| Código | Cor | | Código | Cor |
-|---|---|---|---|---|
-| 1 | Preto | | 10 | Não especificado |
-| 2 | Branca | | 11 | Dourado |
-| 3 | Azul | | 12 | Laranja |
-| 4 | Vermelho | | 13 | Marrom |
-| 5 | Verde | | 14 | Fantasia |
-| 6 | Cinza | | 15 | Roxo |
-| 7 | Bege | | 16 | Rosa |
-| 8 | Amarelo | | 19 | Teste |
-| 9 | Prata | | | |
+| codigo_local | codigo_hinova | descrição | ativo |
+|---|---|---|---|
+| flex | 1 | FLEX | ✅ |
+| gasolina | 2 | GASOLINA | ✅ |
+| alcool | 3 | ETANOL | ✅ |
+| etanol | 3 | ETANOL | ✅ |
+| diesel | 4 | DIESEL | ✅ |
+| biogas | 5 | BIO-GAS | ✅ |
+| tetrafuel | 6 | TETRA-FUEL | ✅ |
+| **gnv** | **5** | GNV | ❌ inativo |
+| **eletrico** | **6** | ELETRICO | ❌ inativo |
+| **hibrido** | **7** | HIBRIDO | ❌ inativo |
 
-## Problema atual
+Os 6 combustíveis oficiais do SGA já estão corretos. Mas as 3 últimas linhas (`gnv`, `eletrico`, `hibrido`) **não existem no SGA** e estão **reaproveitando códigos válidos** (5 e 6) — risco real: se alguém reativar `gnv` na UI, o sistema passa a enviar GNV como código 5 (Bio-gás) no Hinova, causando cadastro errado.
 
-A tabela `hinova_mapeamentos` (tipo `cor`) está com **códigos completamente errados** — exemplo: hoje tem Branco=2, Prata=3, Azul=6, Vermelho=5, e contém "bronze" (que não existe no SGA). Vermelho real é 4, Azul é 3, etc. Resultado: veículos podem ser sincronizados com cor errada no Hinova.
+## Mudança
 
-Além disso, hoje o código é resolvido em runtime no `sga-hinova-sync` consultando texto livre, sem persistir no veículo.
+Uma única operação de DELETE remove as 3 entradas inexistentes:
 
-## Mudanças (idênticas ao fluxo de combustível já implementado)
-
-### 1. Migration
-
-- **Atualizar `hinova_mapeamentos` tipo `cor`** com os 16 códigos reais do SGA.
-- Inserir entradas faltantes: `nao_especificado→10`, `fantasia→14`.
-- Marcar `bronze` como inativo (não existe no SGA — fallback no normalizador para Dourado).
-- **Adicionar coluna `codigo_sga_cor INT`** em `veiculos`.
-- **Criar função `resolver_codigo_sga_cor(text) RETURNS int`** com normalização tolerante:
-  - Aceita variações: `branca/branco`, `preta/preto`, `vermelha/vermelho`, `amarela/amarelo`, `roxa/roxo`.
-  - Aceita modificadores: `azul perolizado`, `prata pyrit`, `vermelha perolizada`, `cinza grafite`.
-  - Sinônimos: `silver→prata`, `gold→dourado`, `castanho→marrom`, `lilás/violeta→roxo`, `pink→rosa`, `multicolor/personalizada→fantasia`.
-  - Cor não reconhecida → retorna **10 (Não especificado)** em vez de NULL (cor é menos crítica que combustível).
-- **Trigger BEFORE INSERT/UPDATE OF cor** em `veiculos` mantém `codigo_sga_cor` sempre sincronizado.
-- **Backfill seguro** com bloco DO (pula linhas que tenham chassi legado inválido, igual ao backfill de combustível).
-
-### 2. Edge `sga-hinova-sync`
-
-Substituir a linha:
-```ts
-codigo_cor: getMap('cor', veiculo.cor)
-```
-por:
-```ts
-codigo_cor: (veiculo.codigo_sga_cor != null ? Number(veiculo.codigo_sga_cor) : null) 
-            ?? getMap('cor', veiculo.cor) 
-            ?? 10  // fallback final: Não especificado
+```sql
+DELETE FROM public.hinova_mapeamentos
+ WHERE tipo = 'combustivel'
+   AND codigo_local IN ('gnv', 'eletrico', 'hibrido');
 ```
 
-A cor **não bloqueia** o envio (diferente do combustível) — fallback final 10 (Não especificado) garante que a sincronização nunca falhe por isso, e logamos em `sga_sync_logs` quando o fallback é usado.
+## Resultado esperado
 
-### 3. Checklist SGA (`useChecklistSGA.ts`)
+Tabela final com exatamente 7 linhas (6 códigos SGA — etanol aparece duas vezes como `alcool` e `etanol` apontando para o mesmo código 3, o que é intencional para tolerar variações da FIPE):
 
-Atualizar item de Cor para usar `codigo_sga_cor` persistido:
-- Status **ok** se `codigo_sga_cor` ∈ {1..16} mapeada de texto reconhecido.
-- Status **risco** (não bloqueia) se cor cair no fallback 10 (Não especificado) ou estiver vazia.
-- Mostrar `cor → SGA N` no valor.
+| codigo_local | codigo_hinova |
+|---|---|
+| flex | 1 |
+| gasolina | 2 |
+| alcool / etanol | 3 |
+| diesel | 4 |
+| biogas | 5 |
+| tetrafuel | 6 |
 
-### 4. Não há mudança no `useFipeLookup` nem em telas de cadastro
+## Impacto em outros lugares
 
-A trigger no banco garante que toda inserção/edição de `veiculos.cor` (via FIPE, manual, OCR, importação) preencha automaticamente `codigo_sga_cor`. Nenhuma alteração necessária no front-end de cadastro.
+- **`veiculos.codigo_sga_combustivel`** — não afetado (já populado por trigger com base no texto, não na tabela de mapeamento).
+- **`useChecklistSGA`** — continua funcionando: o select filtra por `ativo=true` e nenhuma linha removida estava ativa.
+- **Edge `sga-hinova-sync`** — usa `codigo_sga_combustivel` persistido no veículo como fonte primária; mapeamento é fallback.
+- **Tela de gestão `CombustiveisTab`** (se existir) — uma linha a menos para listar; nenhuma quebra.
 
-## Arquivos afetados
+## Observação
 
-- **Migration nova** — atualiza `hinova_mapeamentos`, adiciona `veiculos.codigo_sga_cor`, função, trigger, backfill.
-- `supabase/functions/sga-hinova-sync/index.ts` — usa `veiculo.codigo_sga_cor` com fallback final 10.
-- `src/hooks/useChecklistSGA.ts` — exibe código SGA resolvido para cor.
-
-## Validação pós-deploy
-
-1. `SELECT codigo_sga_cor, count(*) FROM veiculos WHERE cor IS NOT NULL GROUP BY 1` — esperado: maioria em 1/2/6/9 (Preto/Branca/Cinza/Prata).
-2. Reenviar um veículo de teste — confirmar que `codigo_cor` no payload Hinova bate com a cor real.
-3. Cadastrar veículo com cor exótica ("azul perolizado") — verificar que `codigo_sga_cor=3` (Azul) é gravado pela trigger.
-
-## Observações
-
-- Diferente do combustível, **cor desconhecida não bloqueia** o envio — usa fallback "Não especificado" (10), pois SGA aceita esse valor e cor é dado secundário.
-- `bronze` (que não existe no SGA) cai em "Dourado" (11), aproximação razoável.
-- Mantém a tabela `hinova_mapeamentos` ativa para compatibilidade com a edge function (fallback `getMap`).
+Veículos elétricos / híbridos / GNV continuam podendo ser cadastrados no sistema, mas **não podem ser sincronizados com o SGA Hinova** — o checklist SGA já bloqueia o envio quando `codigo_sga_combustivel` é nulo (regra implementada anteriormente). Esse é o comportamento correto, pois o SGA realmente não suporta esses tipos.
