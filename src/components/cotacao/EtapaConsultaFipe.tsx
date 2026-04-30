@@ -257,7 +257,35 @@ export function EtapaConsultaFipe({
               </div>
             )}
           </div>
-          
+
+          {/* Seletor de variante FIPE — quando a API retorna múltiplas versões */}
+          {fipeAlternativas.length > 1 && (
+            <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
+              <AlertDescription className="space-y-2">
+                <div className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                  Foram encontradas {fipeAlternativas.length} versões FIPE para esta placa. Confira se a versão selecionada bate com o CRLV (combustível, câmbio, motorização):
+                </div>
+                <Select value={String(fipeSelecionada)} onValueChange={handleTrocarFipe}>
+                  <SelectTrigger className="bg-background">
+                    <SelectValue placeholder="Selecione a versão correta" />
+                  </SelectTrigger>
+                  <SelectContent className="max-w-[600px]">
+                    {fipeAlternativas.map((alt) => (
+                      <SelectItem key={String(alt.codigo)} value={String(alt.codigo)}>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{alt.descricao}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {formatCurrency(alt.valor)} · cód. {alt.codigo}{alt.ano ? ` · ${alt.ano}` : ''}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </AlertDescription>
+            </Alert>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Marca */}
             <div className="space-y-2">
