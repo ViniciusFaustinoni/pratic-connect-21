@@ -195,6 +195,15 @@ const categorias: Categoria[] = [
         diretorOnly: true,
       },
       {
+        id: 'ocr-logs-testes',
+        nome: 'OCR — Logs & Testes',
+        descricao: 'Histórico de leituras (CNH/CRLV) e bancada de testes do OCR',
+        icon: ScanText,
+        href: '/configuracoes/integracoes/ia?tab=logs',
+        sempreAtivo: true,
+        diretorOnly: true,
+      },
+      {
         id: 'agente-consultor',
         nome: 'Agente Consultor IA',
         descricao: 'Persona e prompts do consultor virtual',
