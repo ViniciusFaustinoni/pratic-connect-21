@@ -1,6 +1,7 @@
 import { Fragment, useState } from 'react';
-import { FileText, Download, ChevronDown, ChevronUp, GitBranch, ScanText } from 'lucide-react';
+import { FileText, Download, ChevronDown, ChevronUp, GitBranch, ScanText, FlaskConical } from 'lucide-react';
 import OcrLogsTab from '@/components/diretoria/OcrLogsTab';
+import OcrTestesTab from '@/components/diretoria/OcrTestesTab';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -374,6 +375,10 @@ export default function LogsAuditoria() {
             <ScanText className="h-4 w-4" />
             OCR
           </TabsTrigger>
+          <TabsTrigger value="ocr-testes" className="gap-2">
+            <FlaskConical className="h-4 w-4" />
+            Testes de OCR
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="todos">
           {renderLogsTable(logs, isLoading, 'Nenhum log encontrado')}
@@ -383,6 +388,9 @@ export default function LogsAuditoria() {
         </TabsContent>
         <TabsContent value="ocr">
           <OcrLogsTab />
+        </TabsContent>
+        <TabsContent value="ocr-testes">
+          <OcrTestesTab />
         </TabsContent>
       </Tabs>
     </div>

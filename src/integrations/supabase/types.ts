@@ -17534,6 +17534,7 @@ export type Database = {
           cpf_corrigido_via: string | null
           cpf_fonte: string | null
           created_at: string
+          dados_esperados: Json | null
           dados_extraidos: Json | null
           erro: string | null
           has_native_text: boolean | null
@@ -17547,6 +17548,7 @@ export type Database = {
           native_text_len: number | null
           provider: string | null
           req_id: string | null
+          score_campos: Json | null
           status: string | null
           sucesso: boolean | null
           sugestao: string | null
@@ -17569,6 +17571,7 @@ export type Database = {
           cpf_corrigido_via?: string | null
           cpf_fonte?: string | null
           created_at?: string
+          dados_esperados?: Json | null
           dados_extraidos?: Json | null
           erro?: string | null
           has_native_text?: boolean | null
@@ -17582,6 +17585,7 @@ export type Database = {
           native_text_len?: number | null
           provider?: string | null
           req_id?: string | null
+          score_campos?: Json | null
           status?: string | null
           sucesso?: boolean | null
           sugestao?: string | null
@@ -17604,6 +17608,7 @@ export type Database = {
           cpf_corrigido_via?: string | null
           cpf_fonte?: string | null
           created_at?: string
+          dados_esperados?: Json | null
           dados_extraidos?: Json | null
           erro?: string | null
           has_native_text?: boolean | null
@@ -17617,6 +17622,7 @@ export type Database = {
           native_text_len?: number | null
           provider?: string | null
           req_id?: string | null
+          score_campos?: Json | null
           status?: string | null
           sucesso?: boolean | null
           sugestao?: string | null
@@ -17629,6 +17635,123 @@ export type Database = {
           usuario_id?: string | null
         }
         Relationships: []
+      }
+      ocr_test_cases: {
+        Row: {
+          arquivo_path: string
+          arquivo_url: string
+          ativo: boolean
+          bytes: number | null
+          created_at: string
+          created_by: string | null
+          expectativas: Json
+          id: string
+          mime: string | null
+          nome: string
+          observacoes: string | null
+          tipo_esperado: string
+          updated_at: string
+        }
+        Insert: {
+          arquivo_path: string
+          arquivo_url: string
+          ativo?: boolean
+          bytes?: number | null
+          created_at?: string
+          created_by?: string | null
+          expectativas?: Json
+          id?: string
+          mime?: string | null
+          nome: string
+          observacoes?: string | null
+          tipo_esperado: string
+          updated_at?: string
+        }
+        Update: {
+          arquivo_path?: string
+          arquivo_url?: string
+          ativo?: boolean
+          bytes?: number | null
+          created_at?: string
+          created_by?: string | null
+          expectativas?: Json
+          id?: string
+          mime?: string | null
+          nome?: string
+          observacoes?: string | null
+          tipo_esperado?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ocr_test_runs: {
+        Row: {
+          anotacao_humana: string | null
+          comparacao: Json | null
+          created_at: string
+          dados_esperados: Json | null
+          dados_extraidos: Json | null
+          executed_by: string | null
+          id: string
+          latency_ms: number | null
+          modelo: string | null
+          ocr_log_id: string | null
+          prompt_version: string | null
+          provider: string | null
+          score_geral: number | null
+          test_case_id: string | null
+          veredito: string | null
+        }
+        Insert: {
+          anotacao_humana?: string | null
+          comparacao?: Json | null
+          created_at?: string
+          dados_esperados?: Json | null
+          dados_extraidos?: Json | null
+          executed_by?: string | null
+          id?: string
+          latency_ms?: number | null
+          modelo?: string | null
+          ocr_log_id?: string | null
+          prompt_version?: string | null
+          provider?: string | null
+          score_geral?: number | null
+          test_case_id?: string | null
+          veredito?: string | null
+        }
+        Update: {
+          anotacao_humana?: string | null
+          comparacao?: Json | null
+          created_at?: string
+          dados_esperados?: Json | null
+          dados_extraidos?: Json | null
+          executed_by?: string | null
+          id?: string
+          latency_ms?: number | null
+          modelo?: string | null
+          ocr_log_id?: string | null
+          prompt_version?: string | null
+          provider?: string | null
+          score_geral?: number | null
+          test_case_id?: string | null
+          veredito?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ocr_test_runs_ocr_log_id_fkey"
+            columns: ["ocr_log_id"]
+            isOneToOne: false
+            referencedRelation: "ocr_execution_logs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ocr_test_runs_test_case_id_fkey"
+            columns: ["test_case_id"]
+            isOneToOne: false
+            referencedRelation: "ocr_test_cases"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       oficinas: {
         Row: {
@@ -32058,6 +32181,10 @@ export type Database = {
         Args: { p_contrato_id: string }
         Returns: string
       }
+      calcular_score_ocr: {
+        Args: { esperado: Json; obtido: Json }
+        Returns: Json
+      }
       calcular_sinistralidade: {
         Args: { p_ano: number; p_mes: number }
         Returns: {
@@ -32464,6 +32591,7 @@ export type Database = {
         Args: { p_tipo: string }
         Returns: Database["public"]["Enums"]["tipo_servico"]
       }
+      normalize_ocr_value: { Args: { v: string }; Returns: string }
       processar_template: {
         Args: { p_template_id: string; p_variaveis: Json }
         Returns: string

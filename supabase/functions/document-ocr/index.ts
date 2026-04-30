@@ -831,6 +831,9 @@ type OcrLogCtx = {
   cpf_fonte?: string | null;
   cpf_contexto?: string | null;
   cpf_candidatos?: any;
+  dados_esperados?: any;
+  modo_teste?: boolean;
+  ocrLogId?: string | null;
 };
 
 async function persistOcrLog(ctx: OcrLogCtx, outcome: {
@@ -846,7 +849,22 @@ async function persistOcrLog(ctx: OcrLogCtx, outcome: {
     if (!SUPABASE_URL || !SERVICE_KEY) return;
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
     const r = outcome.result || {};
-    await admin.from('ocr_execution_logs').insert({
+
+    // Calcular score_campos quando há ground truth
+    let scoreCampos: any = null;
+    if (ctx.dados_esperados && r?.dados) {
+      try {
+        const { data: scoreData } = await admin.rpc('calcular_score_ocr', {
+          esperado: ctx.dados_esperados,
+          obtido: r.dados,
+        });
+        scoreCampos = scoreData ?? null;
+      } catch (e) {
+        console.warn('[OCR][score] Falha ao calcular score:', e);
+      }
+    }
+
+    const { data: inserted } = await admin.from('ocr_execution_logs').insert({
       req_id: ctx.reqId ?? null,
       usuario_id: ctx.usuario_id ?? null,
       cotacao_id: ctx.cotacao_id ?? null,
@@ -878,7 +896,13 @@ async function persistOcrLog(ctx: OcrLogCtx, outcome: {
       motivo: outcome.motivo ?? r?.motivo ?? null,
       erro: outcome.erro ?? null,
       dados_extraidos: r?.dados ?? null,
-    });
+      dados_esperados: ctx.dados_esperados ?? null,
+      score_campos: scoreCampos,
+    }).select('id').maybeSingle();
+
+    if (inserted?.id) {
+      ctx.ocrLogId = inserted.id;
+    }
   } catch (err) {
     // Nunca falhar a resposta principal por causa do log
     console.warn('[OCR][log] Falha ao persistir log de execução:', err);
@@ -925,10 +949,12 @@ serve(async (req) => {
     const reqId = (crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`).slice(0, 8);
     logCtx.reqId = reqId;
 
-    const { url, tipoEsperado, cpfEsperado, nomeEsperado, extrairDados, cotacaoId, associadoId } = await req.json();
+    const { url, tipoEsperado, cpfEsperado, nomeEsperado, extrairDados, cotacaoId, associadoId, modoTeste, dadosEsperados } = await req.json();
     logCtx.tipo_esperado = tipoEsperado || null;
     logCtx.cotacao_id = cotacaoId || null;
     logCtx.associado_id = associadoId || null;
+    logCtx.modo_teste = !!modoTeste;
+    logCtx.dados_esperados = dadosEsperados ?? null;
 
     if (!url) {
       return new Response(
@@ -1990,7 +2016,7 @@ Use a função para retornar o chassi encontrado, ou "ilegivel" se identificar o
     });
 
     return new Response(
-      JSON.stringify(result),
+      JSON.stringify({ ...result, ocrLogId: logCtx.ocrLogId ?? null, scoreCampos: logCtx.dados_esperados ? (result?.scoreCampos ?? null) : null }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
@@ -2019,7 +2045,7 @@ Use a função para retornar o chassi encontrado, ou "ilegivel" se identificar o
       erro: errorMessage,
     });
     return new Response(
-      JSON.stringify(payload),
+      JSON.stringify({ ...payload, ocrLogId: logCtx.ocrLogId ?? null }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
