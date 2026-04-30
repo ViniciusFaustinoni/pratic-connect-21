@@ -1847,19 +1847,53 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           const cpfB = String(passB.result?.dados?.cpf ?? '').replace(/\D/g, '');
           const aValidCpf = cpfA.length === 11 && validateCPF(cpfA);
           const bValidCpf = cpfB.length === 11 && validateCPF(cpfB);
-          const tiebreaker =
+
+          // Tiebreaker #1 — MRZ da CNH-e: a 1ª linha do MRZ ("I<BRA<dígitos>")
+          // contém os 9 primeiros dígitos do nº de registro. Quem casar com o MRZ
+          // tem leitura visual fiel (não alucinou). Vale para CNH (não CRLV).
+          const mrzExtractRegistro = (mrz: unknown): string => {
+            if (!mrz) return '';
+            const s = String(mrz).toUpperCase().replace(/\s+/g, '');
+            const m = s.match(/I<BRA(\d{9,11})/);
+            return m ? m[1] : '';
+          };
+          let tiebreakerMrz: 'A' | 'B' | null = null;
+          if (tipoParaDupla === 'cnh') {
+            const mrzA = mrzExtractRegistro(firstPassResolved.result?.dados?.mrz_registro);
+            const mrzB = mrzExtractRegistro(passB.result?.dados?.mrz_registro);
+            const regA = String(firstPassResolved.result?.dados?.numero_registro ?? '').replace(/\D/g, '');
+            const regB = String(passB.result?.dados?.numero_registro ?? '').replace(/\D/g, '');
+            // Usa o MRZ que existe (idealmente os dois leram a mesma faixa). Se
+            // os dois leram, eles devem ser iguais; se diferem, o MRZ não é
+            // confiável e ignoramos esse critério.
+            const mrzAuthoritative = (mrzA && mrzB && mrzA === mrzB) ? mrzA : (mrzA || mrzB);
+            if (mrzAuthoritative) {
+              const aMatchesMrz = regA.length >= 9 && regA.startsWith(mrzAuthoritative.slice(0, 9));
+              const bMatchesMrz = regB.length >= 9 && regB.startsWith(mrzAuthoritative.slice(0, 9));
+              if (aMatchesMrz && !bMatchesMrz) tiebreakerMrz = 'A';
+              else if (!aMatchesMrz && bMatchesMrz) tiebreakerMrz = 'B';
+              console.log(`[OCR][dupla-leitura][mrz] ${JSON.stringify({ reqId, mrzA, mrzB, mrzAuthoritative, regA, regB, tiebreakerMrz })}`);
+            }
+          }
+
+          // Tiebreaker #2 — CPF checksum (mantém comportamento antigo)
+          const tiebreakerCpf =
             aValidCpf && !bValidCpf ? 'A' :
             !aValidCpf && bValidCpf ? 'B' : null;
 
+          // MRZ tem prioridade sobre CPF checksum (ambos podem passar checksum
+          // por coincidência; MRZ é leitura mecânica direta da imagem).
+          const tiebreaker = tiebreakerMrz ?? tiebreakerCpf;
+
           if (tiebreaker === 'A') {
-            console.log(`[OCR][dupla-leitura][tiebreaker] ${JSON.stringify({ reqId, winner: 'A', reason: 'cpf-checksum', cpfA, cpfB })}`);
-            // A venceu por checksum → mantém dados de A com confiança da primária menos 0.05
+            console.log(`[OCR][dupla-leitura][tiebreaker] ${JSON.stringify({ reqId, winner: 'A', reason: tiebreakerMrz ? 'mrz' : 'cpf-checksum', cpfA, cpfB })}`);
+            // A venceu → mantém dados de A
             result.sugestao = 'revisar';
             result.confianca = Math.min(1, Math.max(Number(result.confianca ?? 0.85), 0.9));
             result.divergencias = cmp.mismatches;
           } else if (tiebreaker === 'B') {
-            console.log(`[OCR][dupla-leitura][tiebreaker] ${JSON.stringify({ reqId, winner: 'B', reason: 'cpf-checksum', cpfA, cpfB })}`);
-            // B venceu por checksum → adota dados de B
+            console.log(`[OCR][dupla-leitura][tiebreaker] ${JSON.stringify({ reqId, winner: 'B', reason: tiebreakerMrz ? 'mrz' : 'cpf-checksum', cpfA, cpfB })}`);
+            // B venceu → adota dados de B
             Object.assign(result, passB.result);
             result.sugestao = 'revisar';
             result.confianca = Math.min(1, Math.max(Number(passB.result.confianca ?? 0.85), 0.9));
