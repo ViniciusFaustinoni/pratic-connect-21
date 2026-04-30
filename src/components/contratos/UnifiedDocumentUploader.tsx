@@ -615,7 +615,7 @@ export const UnifiedDocumentUploader = forwardRef<
             <input
               type="file"
               className="hidden"
-              accept="image/jpeg,image/png,image/webp,application/pdf"
+              accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,application/pdf,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif,.pdf"
               multiple
               onChange={(e) => {
                 handleFileSelect(e.target.files);
