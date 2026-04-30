@@ -849,7 +849,22 @@ async function persistOcrLog(ctx: OcrLogCtx, outcome: {
     if (!SUPABASE_URL || !SERVICE_KEY) return;
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
     const r = outcome.result || {};
-    await admin.from('ocr_execution_logs').insert({
+
+    // Calcular score_campos quando há ground truth
+    let scoreCampos: any = null;
+    if (ctx.dados_esperados && r?.dados) {
+      try {
+        const { data: scoreData } = await admin.rpc('calcular_score_ocr', {
+          esperado: ctx.dados_esperados,
+          obtido: r.dados,
+        });
+        scoreCampos = scoreData ?? null;
+      } catch (e) {
+        console.warn('[OCR][score] Falha ao calcular score:', e);
+      }
+    }
+
+    const { data: inserted } = await admin.from('ocr_execution_logs').insert({
       req_id: ctx.reqId ?? null,
       usuario_id: ctx.usuario_id ?? null,
       cotacao_id: ctx.cotacao_id ?? null,
@@ -881,7 +896,13 @@ async function persistOcrLog(ctx: OcrLogCtx, outcome: {
       motivo: outcome.motivo ?? r?.motivo ?? null,
       erro: outcome.erro ?? null,
       dados_extraidos: r?.dados ?? null,
-    });
+      dados_esperados: ctx.dados_esperados ?? null,
+      score_campos: scoreCampos,
+    }).select('id').maybeSingle();
+
+    if (inserted?.id) {
+      ctx.ocrLogId = inserted.id;
+    }
   } catch (err) {
     // Nunca falhar a resposta principal por causa do log
     console.warn('[OCR][log] Falha ao persistir log de execução:', err);
