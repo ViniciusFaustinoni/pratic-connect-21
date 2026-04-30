@@ -79,11 +79,13 @@ Deno.serve(async (req) => {
     // Idempotente por instalacao_id: se a vistoria já existe (re-execução
     // ou backfill), reutiliza e faz upsert das fotos.
     try {
-      const { data: instMat } = await supabase
+      const { data: instMat, error: instMatErr } = await supabase
         .from('instalacoes')
-        .select('id, contrato_id, associado_id, cotacao_id, cep, logradouro, numero, complemento, bairro, cidade, uf, endereco_latitude, endereco_longitude, imei_rastreador, quilometragem, created_at')
+        .select('id, contrato_id, associado_id, veiculo_id, cotacao_id, cep, logradouro, numero, complemento, bairro, cidade, uf, endereco_latitude, endereco_longitude, imei_rastreador, quilometragem, created_at')
         .eq('id', link.instalacao_id)
         .maybeSingle()
+
+      if (instMatErr) console.error('[concluir-instalacao] erro ao buscar instalacao p/ materializar:', instMatErr)
 
       if (instMat?.contrato_id) {
         // 3.1 — vistoria canônica (uma por instalação)
@@ -100,7 +102,9 @@ Deno.serve(async (req) => {
             instalacao_id: instMat.id,
             contrato_id: instMat.contrato_id,
             associado_id: instMat.associado_id,
+            veiculo_id: instMat.veiculo_id,
             cotacao_id: instMat.cotacao_id,
+            tipo: 'entrada', // OBRIGATÓRIO (enum tipo_vistoria): instalação = vistoria de entrada
             modalidade: 'presencial',
             origem: 'prestador',
             status: 'concluida',
