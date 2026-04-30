@@ -1406,6 +1406,16 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       return;
     }
 
+    // Dia de vencimento é OBRIGATÓRIO — evita gravar NULL e cair em fallback dia 10 no backend
+    if (!diaVencimento || !opcoesVencimento.includes(diaVencimento as 5 | 10 | 15 | 20 | 25 | 30)) {
+      toast.error(`Selecione o dia de vencimento das mensalidades (${opcoesVencimento.join(' ou ')}).`);
+      // Levar o consultor até o bloco
+      try {
+        document.getElementById('bloco-dia-vencimento')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } catch { /* noop */ }
+      return;
+    }
+
     // Validação de adesão: pular para externo com cenário isento
     if (!isCenarioIsento) {
       if (data.valor_adesao <= 0) {
