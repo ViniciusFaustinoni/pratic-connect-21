@@ -161,7 +161,7 @@ export const UnifiedDocumentUploader = forwardRef<
     });
 
     try {
-      const fileToUpload = file;
+      // fileToUpload já foi definido pelo preprocess (HEIC convertido pra JPEG quando aplicável)
       const finalFileName = originalFileName;
 
       // 1. Upload para storage
