@@ -182,6 +182,29 @@ const categorias: Categoria[] = [
     ],
   },
   {
+    titulo: 'Inteligência Artificial',
+    icone: '🤖',
+    items: [
+      {
+        id: 'ia-modelo',
+        nome: 'Modelo de IA do Sistema',
+        descricao: 'Provedor e modelo aplicados a OCR, chat, análise de risco, WhatsApp e automações',
+        icon: Sparkles,
+        href: '/configuracoes/integracoes/ia',
+        sempreAtivo: true,
+        diretorOnly: true,
+      },
+      {
+        id: 'agente-consultor',
+        nome: 'Agente Consultor IA',
+        descricao: 'Persona e prompts do consultor virtual',
+        icon: Sparkles,
+        href: '/configuracoes/agente-consultor-ia',
+        sempreAtivo: true,
+      },
+    ],
+  },
+  {
     titulo: 'Captação de Leads',
     icone: '📥',
     items: [
