@@ -726,7 +726,7 @@ serve(async (req) => {
           valor_adesao: valorAdesao,
           produtos: produtos.length > 0 ? produtos : undefined,
           tipo_veiculo: tipoVeiculo,
-          codigo_combustivel: getMap('combustivel', normalCombustivel),
+          codigo_combustivel: (veiculo.codigo_sga_combustivel != null ? Number(veiculo.codigo_sga_combustivel) : null) ?? getMap('combustivel', normalCombustivel),
           codigo_cor: getMap('cor', veiculo.cor),
           data_contrato_iso: associado.created_at,
         };
