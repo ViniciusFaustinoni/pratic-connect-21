@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Bot, Loader2, AlertCircle, Sparkles } from 'lucide-react';
+import { Bot, Loader2, AlertCircle, Sparkles, Eye, EyeOff, KeyRound, Check, X } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -15,16 +16,26 @@ import {
   useAIModelConfig,
   useUpdateAIModelConfig,
 } from '@/hooks/useAIModelConfig';
+import {
+  useAIProviderKeysStatus,
+  useSetAIProviderKey,
+  useRemoveAIProviderKey,
+} from '@/hooks/useAIProviderKeys';
 import { usePermissions } from '@/hooks/usePermissions';
 
 export function AIModelConfigCard() {
   const { data, isLoading } = useAIModelConfig();
   const update = useUpdateAIModelConfig();
+  const keysStatus = useAIProviderKeysStatus();
+  const setKey = useSetAIProviderKey();
+  const removeKey = useRemoveAIProviderKey();
   const { isDiretor, isDesenvolvedor } = usePermissions();
   const canEdit = isDiretor || isDesenvolvedor;
 
   const [provider, setProvider] = useState<AIProvider>('lovable');
   const [model, setModel] = useState<string>('google/gemini-3-flash-preview');
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [showKey, setShowKey] = useState(false);
 
   useEffect(() => {
     if (data) {
@@ -33,13 +44,24 @@ export function AIModelConfigCard() {
     }
   }, [data]);
 
+  // Reset campo de chave ao trocar provedor
+  useEffect(() => {
+    setApiKeyInput('');
+    setShowKey(false);
+  }, [provider]);
+
   const models = AI_PROVIDER_MODELS[provider];
   const requiresKey = provider === 'openai' || provider === 'anthropic';
   const keyName = provider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY';
+  const keyConfigured =
+    provider === 'openai'
+      ? !!keysStatus.data?.openai
+      : provider === 'anthropic'
+      ? !!keysStatus.data?.anthropic
+      : false;
 
   const handleProviderChange = (next: AIProvider) => {
     setProvider(next);
-    // Seleciona o primeiro modelo do novo provedor
     setModel(AI_PROVIDER_MODELS[next][0].value);
   };
 
@@ -106,14 +128,79 @@ export function AIModelConfigCard() {
         </div>
 
         {requiresKey && (
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Este provedor exige a secret <code className="text-xs px-1 py-0.5 rounded bg-muted">{keyName}</code> configurada
-              em <strong>Cloud → Settings → Functions → Secrets</strong>. Sem ela, o sistema cairá automaticamente para o
-              Lovable AI Gateway com Gemini.
-            </AlertDescription>
-          </Alert>
+          <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <KeyRound className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium">
+                  Chave de API — {AI_PROVIDER_LABELS[provider]}
+                </span>
+              </div>
+              {keyConfigured ? (
+                <Badge variant="default" className="gap-1">
+                  <Check className="h-3 w-3" /> Configurada
+                </Badge>
+              ) : (
+                <Badge variant="destructive" className="gap-1">
+                  <X className="h-3 w-3" /> Não configurada
+                </Badge>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="relative flex-1">
+                <Input
+                  type={showKey ? 'text' : 'password'}
+                  value={apiKeyInput}
+                  onChange={(e) => setApiKeyInput(e.target.value)}
+                  placeholder={
+                    keyConfigured
+                      ? '•••••••• (digite para substituir)'
+                      : provider === 'openai'
+                      ? 'sk-...'
+                      : 'sk-ant-...'
+                  }
+                  disabled={!canEdit || setKey.isPending}
+                  className="pr-10 font-mono text-xs"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowKey((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  tabIndex={-1}
+                >
+                  {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <Button
+                onClick={() =>
+                  setKey.mutate(
+                    { provider: provider as 'openai' | 'anthropic', value: apiKeyInput },
+                    { onSuccess: () => setApiKeyInput('') },
+                  )
+                }
+                disabled={!canEdit || setKey.isPending || apiKeyInput.trim().length < 10}
+              >
+                {setKey.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Salvar chave
+              </Button>
+              {keyConfigured && (
+                <Button
+                  variant="outline"
+                  onClick={() => removeKey.mutate(provider as 'openai' | 'anthropic')}
+                  disabled={!canEdit || removeKey.isPending}
+                >
+                  Remover
+                </Button>
+              )}
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              A chave é armazenada com segurança no backend e usada apenas em chamadas server-side.
+              Nome interno: <code className="text-xs px-1 py-0.5 rounded bg-muted">{keyName}</code>.
+              Sem chave configurada, o sistema cai automaticamente para o Lovable AI Gateway com Gemini.
+            </p>
+          </div>
         )}
 
         {provider === 'lovable' && (
