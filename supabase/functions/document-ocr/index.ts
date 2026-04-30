@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { aiGatewayFetch } from "../_shared/ai-client.ts";
+import { aiGatewayFetch, getActiveAIConfig } from "../_shared/ai-client.ts";
 // unpdf: extração de texto nativo de PDF para runtimes serverless (Deno/edge),
 // sem worker e sem dependência de canvas. Substitui pdfjs-dist que falhava com
 // "Setting up fake worker failed" no edge runtime do Supabase.
