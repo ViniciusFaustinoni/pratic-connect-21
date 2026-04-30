@@ -400,8 +400,14 @@ const systemPrompt = `Analista de documentos brasileiros. Detecte o tipo e extra
 nome, cpf (XXX.XXX.XXX-XX - PRIORIDADE MÁXIMA), rg, numero_registro (11 dígitos), data_nascimento (YYYY-MM-DD), validade (YYYY-MM-DD), categoria, mrz_registro (string)
 
 - MRZ_REGISTRO (campo de validação cruzada — OBRIGATÓRIO em CNH-e digital):
-  No RODAPÉ da página há 3 linhas de leitura mecânica (MRZ) com letras "<" como separador. A PRIMEIRA dessas linhas começa com "I<BRA" e contém os dígitos do número de registro da CNH. Exemplo: "I<BRA070646502<024<<<<<<<<<<<<".
-  Extraia EXATAMENTE essa primeira linha (a sequência completa, com os "<" preservados) no campo "mrz_registro". Não invente: se não conseguir ler, retorne mrz_registro:"". Esse campo será usado para validar o "numero_registro".
+  No RODAPÉ da página há 3 linhas de leitura mecânica (MRZ) impressas em fonte OCR-B (monoespaçada), com 30 caracteres cada e o caractere "<" como preenchimento.
+  A PRIMEIRA dessas linhas começa com "I<BRA" seguido de 9 dígitos do número de registro, mais 1 dígito verificador, mais "<" até completar 30 caracteres.
+  Exemplo real: "I<BRA070646502<024<<<<<<<<<<<<" — aqui "070646502" são os 9 dígitos do registro e o próximo caractere ("<" ou um dígito) faz parte do payload ICAO.
+  Regras estritas para preencher "mrz_registro":
+    1. Transcreva LITERALMENTE essa primeira linha, exatamente como aparece, mantendo TODOS os "<" (não substitua por espaço, hífen ou nada).
+    2. Não invente dígitos: se a linha não estiver legível ou se você só conseguir ver parte dela, retorne mrz_registro:"" (vazio é melhor que inventado).
+    3. Em caso de divergência entre o que você lê no campo visual "5 Nº REGISTRO" e o que está na MRZ, a MRZ É A FONTE DE VERDADE — confie nos 9 dígitos da MRZ. A MRZ é leitura mecânica e não admite ambiguidade visual.
+    4. NUNCA copie um número de registro que você "leu visualmente" para o campo mrz_registro fingindo que veio da MRZ. Se a MRZ não está visível, deixe vazio.
 
 - CPF SEMPRE existe na CNH: campo "CPF"/"CPF/MF", próximo ao nome/foto. Procure sequências de 11 dígitos.
 - NÃO confunda com RENACH (tem letras), registro CNH ou RG.
