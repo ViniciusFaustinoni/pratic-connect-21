@@ -14,28 +14,32 @@ export interface AIModelConfig {
 
 export const AI_PROVIDER_MODELS: Record<AIProvider, { value: string; label: string }[]> = {
   lovable: [
+    { value: 'google/gemini-3-pro-preview', label: 'Gemini 3 Pro (preview) — mais recente' },
     { value: 'google/gemini-3-flash-preview', label: 'Gemini 3 Flash (preview) — padrão' },
-    { value: 'google/gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (preview)' },
     { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
     { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
     { value: 'google/gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' },
     { value: 'openai/gpt-5.2', label: 'GPT-5.2 (via Lovable)' },
+    { value: 'openai/gpt-5.1', label: 'GPT-5.1 (via Lovable)' },
     { value: 'openai/gpt-5', label: 'GPT-5 (via Lovable)' },
     { value: 'openai/gpt-5-mini', label: 'GPT-5 Mini (via Lovable)' },
     { value: 'openai/gpt-5-nano', label: 'GPT-5 Nano (via Lovable)' },
   ],
   openai: [
     { value: 'gpt-5.2', label: 'GPT-5.2 (mais recente)' },
+    { value: 'gpt-5.1', label: 'GPT-5.1' },
     { value: 'gpt-5', label: 'GPT-5' },
     { value: 'gpt-5-mini', label: 'GPT-5 Mini' },
+    { value: 'gpt-5-nano', label: 'GPT-5 Nano' },
+    { value: 'o4-mini', label: 'o4-mini (raciocínio)' },
     { value: 'gpt-4.1', label: 'GPT-4.1' },
     { value: 'gpt-4o', label: 'GPT-4o (multimodal)' },
-    { value: 'o4-mini', label: 'o4-mini (raciocínio)' },
   ],
   anthropic: [
-    { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5 (mais recente)' },
-    { value: 'claude-opus-4-1', label: 'Claude Opus 4.1' },
+    { value: 'claude-opus-4-5', label: 'Claude Opus 4.5 (mais recente)' },
+    { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' },
     { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5 (rápido)' },
+    { value: 'claude-opus-4-1', label: 'Claude Opus 4.1' },
     { value: 'claude-3-7-sonnet-latest', label: 'Claude 3.7 Sonnet' },
   ],
 };
