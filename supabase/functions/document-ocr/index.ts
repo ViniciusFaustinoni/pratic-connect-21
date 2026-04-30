@@ -1851,6 +1851,22 @@ Use a função para retornar o chassi encontrado, ou "ilegivel" se identificar o
       result._checksums = checksumResults;
     }
 
+    // Status derivado para a tabela de logs
+    const derivedStatus: 'sucesso' | 'revisar' | 'truncado' | 'falha' =
+      logCtx.truncated
+        ? 'truncado'
+        : (result?.sugestao === 'aprovar' && result?.sucesso !== false)
+          ? 'sucesso'
+          : (result?.sugestao === 'reprovar' || result?.sucesso === false)
+            ? 'falha'
+            : 'revisar';
+    await persistOcrLog(logCtx, {
+      result,
+      status: derivedStatus,
+      sucesso: result?.sucesso ?? null,
+      motivo: result?.motivo ?? null,
+    });
+
     return new Response(
       JSON.stringify(result),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -1861,19 +1877,27 @@ Use a função para retornar o chassi encontrado, ou "ilegivel" se identificar o
     const errorMessage = error instanceof Error ? error.message : 'Erro interno';
     // Devolve 200 com fallback para que o uploader não exiba "Edge Function 500".
     // O documento ficará para revisão manual no fluxo de cotação.
+    const payload = {
+      sucesso: false,
+      fallback: true,
+      tipo_detectado: 'desconhecido',
+      dados: {},
+      legivel: false,
+      valido: false,
+      sugestao: 'revisar',
+      motivo: `Erro inesperado no OCR: ${errorMessage}. Documento enviado para revisão manual.`,
+      confianca: 0,
+      error: errorMessage,
+    };
+    await persistOcrLog(logCtx, {
+      result: payload,
+      status: 'falha',
+      sucesso: false,
+      motivo: payload.motivo,
+      erro: errorMessage,
+    });
     return new Response(
-      JSON.stringify({
-        sucesso: false,
-        fallback: true,
-        tipo_detectado: 'desconhecido',
-        dados: {},
-        legivel: false,
-        valido: false,
-        sugestao: 'revisar',
-        motivo: `Erro inesperado no OCR: ${errorMessage}. Documento enviado para revisão manual.`,
-        confianca: 0,
-        error: errorMessage,
-      }),
+      JSON.stringify(payload),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
