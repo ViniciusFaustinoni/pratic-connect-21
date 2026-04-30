@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Plug, MessageSquare, CreditCard, MapPin, FileSignature, Zap, Mail,
   Search, Building2, CheckCircle, XCircle, Key, Inbox, ArrowRight,
-  Loader2, Settings, ExternalLink, HeartPulse, Code2, Sparkles,
+  Loader2, Settings, ExternalLink, HeartPulse, Code2, Sparkles, ScanText,
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Card, CardContent } from '@/components/ui/card';
@@ -191,6 +191,15 @@ const categorias: Categoria[] = [
         descricao: 'Provedor e modelo aplicados a OCR, chat, análise de risco, WhatsApp e automações',
         icon: Sparkles,
         href: '/configuracoes/integracoes/ia',
+        sempreAtivo: true,
+        diretorOnly: true,
+      },
+      {
+        id: 'ocr-logs-testes',
+        nome: 'OCR — Logs & Testes',
+        descricao: 'Histórico de leituras (CNH/CRLV) e bancada de testes do OCR',
+        icon: ScanText,
+        href: '/configuracoes/integracoes/ia?tab=logs',
         sempreAtivo: true,
         diretorOnly: true,
       },

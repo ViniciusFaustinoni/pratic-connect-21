@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Sparkles, Settings2, ScanText, FlaskConical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -10,6 +10,18 @@ import OcrTestesTab from '@/components/diretoria/OcrTestesTab';
 
 export default function IntegracaoIA() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const initialTab = tabParam === 'logs' || tabParam === 'testes' ? tabParam : 'config';
+
+  const handleTabChange = (value: string) => {
+    if (value === 'config') {
+      searchParams.delete('tab');
+    } else {
+      searchParams.set('tab', value);
+    }
+    setSearchParams(searchParams, { replace: true });
+  };
 
   return (
     <div className="space-y-6">
@@ -35,7 +47,7 @@ export default function IntegracaoIA() {
         </div>
       </div>
 
-      <Tabs defaultValue="config" className="space-y-4">
+      <Tabs value={initialTab} onValueChange={handleTabChange} className="space-y-4">
         <TabsList>
           <TabsTrigger value="config" className="gap-2">
             <Settings2 className="h-4 w-4" />
