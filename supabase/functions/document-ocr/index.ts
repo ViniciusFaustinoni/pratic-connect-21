@@ -2045,7 +2045,7 @@ Use a função para retornar o chassi encontrado, ou "ilegivel" se identificar o
       erro: errorMessage,
     });
     return new Response(
-      JSON.stringify(payload),
+      JSON.stringify({ ...payload, ocrLogId: logCtx.ocrLogId ?? null }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
