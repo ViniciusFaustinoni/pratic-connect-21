@@ -49,17 +49,19 @@ Deno.serve(async (req) => {
     if (action === "status") {
       const { data, error } = await admin.rpc("ai_provider_keys_status");
       if (error) return json({ error: error.message }, 500);
-      const map: Record<string, boolean> = { openai: false, anthropic: false };
+      const map: Record<string, boolean> = { openai: false, anthropic: false, mistral: false };
       (data ?? []).forEach((row: any) => (map[row.provider] = !!row.configured));
       return json({ status: map });
     }
 
     if (!allowed) return json({ error: "forbidden" }, 403);
 
+    const VALID_PROVIDERS = ["openai", "anthropic", "mistral"];
+
     if (action === "set") {
       const provider = body.provider;
       const value = (body.value ?? "").toString().trim();
-      if (!["openai", "anthropic"].includes(provider))
+      if (!VALID_PROVIDERS.includes(provider))
         return json({ error: "provider inválido" }, 400);
       if (!value) return json({ error: "chave vazia" }, 400);
 
@@ -75,7 +77,7 @@ Deno.serve(async (req) => {
 
     if (action === "remove") {
       const provider = body.provider;
-      if (!["openai", "anthropic"].includes(provider))
+      if (!VALID_PROVIDERS.includes(provider))
         return json({ error: "provider inválido" }, 400);
       const { error } = await admin
         .from("ai_provider_keys")

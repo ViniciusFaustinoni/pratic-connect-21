@@ -3,6 +3,7 @@ import { ArrowLeft, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AIModelConfigCard } from '@/components/integracoes/AIModelConfigCard';
+import { OcrEngineConfigCard } from '@/components/integracoes/OcrEngineConfigCard';
 
 export default function IntegracaoIA() {
   const navigate = useNavigate();
@@ -32,6 +33,7 @@ export default function IntegracaoIA() {
       </div>
 
       <AIModelConfigCard />
+      <OcrEngineConfigCard />
 
       <Alert>
         <Sparkles className="h-4 w-4" />

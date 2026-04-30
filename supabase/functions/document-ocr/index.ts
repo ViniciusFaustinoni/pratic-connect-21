@@ -1,10 +1,100 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { aiGatewayFetch, getActiveAIConfig } from "../_shared/ai-client.ts";
+import { aiGatewayFetch, getActiveAIConfig, callAI } from "../_shared/ai-client.ts";
 // unpdf: extração de texto nativo de PDF para runtimes serverless (Deno/edge),
 // sem worker e sem dependência de canvas. Substitui pdfjs-dist que falhava com
 // "Setting up fake worker failed" no edge runtime do Supabase.
 import { extractText, getDocumentProxy } from "https://esm.sh/unpdf@0.12.1";
+import { rasterizePdfPages, shouldRasterizePdf } from "../_shared/pdf-rasterize.ts";
+import { runMistralOcr, callPixtralChat } from "../_shared/mistral-ocr.ts";
+
+// ============================================================
+// Motor de OCR (engine) — lê ocr_engine_config (singleton)
+// ============================================================
+type OcrEngine = 'global' | 'mistral' | 'anthropic' | 'google';
+interface OcrEngineConfig {
+  engine: OcrEngine;
+  primary_model: string;
+  secondary_model: string | null;
+  dupla_leitura_tipos: string[];
+  pdf_rasterizar: boolean;
+  pdf_dpi: number;
+}
+const DEFAULT_OCR_ENGINE: OcrEngineConfig = {
+  engine: 'global',
+  primary_model: 'mistral-ocr-latest',
+  secondary_model: 'claude-sonnet-4-5',
+  dupla_leitura_tipos: ['cnh', 'crlv'],
+  pdf_rasterizar: true,
+  pdf_dpi: 200,
+};
+let _engineCache: { value: OcrEngineConfig; ts: number } | null = null;
+async function getOcrEngineConfig(): Promise<OcrEngineConfig> {
+  if (_engineCache && Date.now() - _engineCache.ts < 30_000) return _engineCache.value;
+  try {
+    const url = Deno.env.get('SUPABASE_URL');
+    const srk = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!url || !srk) return DEFAULT_OCR_ENGINE;
+    const sb = createClient(url, srk);
+    const { data } = await sb.from('ocr_engine_config').select('*').limit(1).maybeSingle();
+    const value: OcrEngineConfig = data ? {
+      engine: data.engine,
+      primary_model: data.primary_model,
+      secondary_model: data.secondary_model,
+      dupla_leitura_tipos: data.dupla_leitura_tipos ?? ['cnh', 'crlv'],
+      pdf_rasterizar: data.pdf_rasterizar ?? true,
+      pdf_dpi: data.pdf_dpi ?? 200,
+    } : DEFAULT_OCR_ENGINE;
+    _engineCache = { value, ts: Date.now() };
+    return value;
+  } catch (e) {
+    console.warn('[OCR] falha lendo ocr_engine_config:', (e as Error)?.message);
+    return DEFAULT_OCR_ENGINE;
+  }
+}
+const ENGINE_DEFAULTS: Record<'mistral'|'anthropic'|'google', { primary: string; secondary: string }> = {
+  mistral:   { primary: 'mistral-ocr-latest',    secondary: 'pixtral-large-latest' },
+  anthropic: { primary: 'claude-sonnet-4-5',     secondary: 'claude-opus-4-5' },
+  google:    { primary: 'google/gemini-2.5-pro', secondary: 'google/gemini-2.5-pro' },
+};
+async function resolveEngine(cfg: OcrEngineConfig): Promise<{ engine: 'mistral'|'anthropic'|'google'; primary: string; secondary: string }> {
+  if (cfg.engine !== 'global') {
+    return {
+      engine: cfg.engine,
+      primary: cfg.primary_model || ENGINE_DEFAULTS[cfg.engine].primary,
+      secondary: cfg.secondary_model || ENGINE_DEFAULTS[cfg.engine].secondary,
+    };
+  }
+  const ai = await getActiveAIConfig();
+  const eng: 'anthropic'|'google' = ai.provider === 'anthropic' ? 'anthropic' : 'google';
+  return { engine: eng, primary: ENGINE_DEFAULTS[eng].primary, secondary: ENGINE_DEFAULTS[eng].secondary };
+}
+
+/** Compara campos críticos entre duas leituras (para CNH/CRLV). */
+function compareCriticalFields(a: any, b: any, tipo: string): {
+  matches: number; total: number; mismatches: Array<{ field: string; a: any; b: any }>;
+} {
+  const fieldsByType: Record<string, string[]> = {
+    cnh:  ['cpf', 'nome', 'numero_registro', 'validade', 'categoria'],
+    crlv: ['placa', 'renavam', 'chassi', 'ano_modelo', 'marca', 'modelo'],
+  };
+  const fields = fieldsByType[tipo] ?? [];
+  const dadosA = a?.dados ?? {};
+  const dadosB = b?.dados ?? {};
+  const mismatches: Array<{ field: string; a: any; b: any }> = [];
+  let matches = 0;
+  for (const f of fields) {
+    const va = normForCompare(dadosA[f]);
+    const vb = normForCompare(dadosB[f]);
+    if (va && vb && va === vb) matches++;
+    else if (va !== vb) mismatches.push({ field: f, a: dadosA[f] ?? null, b: dadosB[f] ?? null });
+  }
+  return { matches, total: fields.length, mismatches };
+}
+function normForCompare(v: any): string {
+  if (v == null) return '';
+  return String(v).toLowerCase().replace(/[^\w]/g, '');
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -834,6 +924,15 @@ type OcrLogCtx = {
   dados_esperados?: any;
   modo_teste?: boolean;
   ocrLogId?: string | null;
+  // Motor OCR (v5)
+  engine?: string | null;
+  primary_model?: string | null;
+  secondary_model?: string | null;
+  dupla_leitura?: boolean;
+  divergencias?: any;
+  pdf_rasterizado?: boolean;
+  pdf_paginas_rasterizadas?: number | null;
+  fallback_emergency?: boolean;
 };
 
 async function persistOcrLog(ctx: OcrLogCtx, outcome: {
@@ -898,6 +997,13 @@ async function persistOcrLog(ctx: OcrLogCtx, outcome: {
       dados_extraidos: r?.dados ?? null,
       dados_esperados: ctx.dados_esperados ?? null,
       score_campos: scoreCampos,
+      engine: ctx.engine ?? null,
+      primary_model: ctx.primary_model ?? null,
+      secondary_model: ctx.secondary_model ?? null,
+      dupla_leitura: !!ctx.dupla_leitura,
+      divergencias: ctx.divergencias ?? null,
+      pdf_rasterizado: !!ctx.pdf_rasterizado,
+      pdf_paginas_rasterizadas: ctx.pdf_paginas_rasterizadas ?? null,
     }).select('id').maybeSingle();
 
     if (inserted?.id) {
@@ -1043,11 +1149,22 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
 
     // (log de URL substituído por [OCR][in] com urlHash, evitando exposição em massa)
 
+    // Carrega configuração do motor de OCR (singleton, com cache)
+    const engineCfg = await getOcrEngineConfig();
+    const resolved = await resolveEngine(engineCfg);
+    logCtx.engine = resolved.engine;
+    logCtx.primary_model = resolved.primary;
+    logCtx.secondary_model = resolved.secondary;
+    console.log(`[OCR][engine] ${JSON.stringify({ reqId, ...resolved, configured: engineCfg.engine })}`);
+
     // Baixar arquivo e converter para base64
     const isPdfUrl = url.toLowerCase().endsWith('.pdf') || url.toLowerCase().includes('.pdf?') || url.toLowerCase().includes('.pdf_');
     const isDataUri = url.startsWith('data:');
     let contentParts: any[];
     let extractedPdfText = '';
+    let rasterizedImages: Array<{ dataUri: string; page: number; width: number; height: number; bytes: number }> = [];
+    let pdfBytesForMistral: Uint8Array | null = null;
+    let publicUrlForMistral: string | null = null;
 
     if (isDataUri) {
       console.log('Data URI detected, sending directly...');
@@ -1098,6 +1215,44 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
         const isLikelyLowQuality = !isPdfUrl && (bytes < 80_000 || bytes > 4_500_000);
         const isPdfScanned = isPdfUrl && !extractedPdfText;
 
+        // Guarda PDF para Mistral (que aceita PDF nativo via /v1/ocr)
+        if (isPdfUrl && resolved.engine === 'mistral') {
+          pdfBytesForMistral = uint8Array;
+          publicUrlForMistral = isAllowedUrl ? url : null; // Mistral prefere URL pública
+        }
+
+        // RASTERIZAÇÃO PDF→PNG: para engines não-Mistral, quando o PDF tem
+        // texto nativo pobre (ex.: CNH-e SENATRAN com só "Assinador Serpro"),
+        // converter as primeiras páginas em imagens nítidas para a IA ler.
+        if (
+          isPdfUrl &&
+          resolved.engine !== 'mistral' &&
+          engineCfg.pdf_rasterizar &&
+          shouldRasterizePdf(extractedPdfText)
+        ) {
+          const tRaster = Date.now();
+          try {
+            const scale = (engineCfg.pdf_dpi ?? 200) / 72; // PDF user-unit = 1/72 polegada
+            const pages = await rasterizePdfPages(uint8Array, { maxPages: 3, scale });
+            rasterizedImages = pages.map((p) => ({
+              dataUri: `data:${p.mime};base64,${p.pngBase64}`,
+              page: p.page,
+              width: p.width,
+              height: p.height,
+              bytes: p.bytes,
+            }));
+            console.log(`[OCR][rasterize] ${JSON.stringify({
+              reqId, pages: pages.length, ms: Date.now() - tRaster,
+              sizes: pages.map((p) => `${p.width}x${p.height} (${Math.round(p.bytes/1024)}KB)`),
+            })}`);
+            logCtx.pdf_rasterizado = pages.length > 0;
+            logCtx.pdf_paginas_rasterizadas = pages.length;
+          } catch (rErr) {
+            console.warn(`[OCR][${reqId}] rasterização PDF falhou — usando PDF original:`, (rErr as Error)?.message);
+            logCtx.pdf_rasterizado = false;
+          }
+        }
+
         console.log(`[OCR][file] ${JSON.stringify({
           reqId,
           mime: mimeType,
@@ -1107,6 +1262,7 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           nativeTextLen: extractedPdfText.length,
           isLikelyLowQuality,
           isPdfScanned,
+          rasterizedPages: rasterizedImages.length,
         })}`);
         logCtx.mime = mimeType;
         logCtx.bytes = bytes;
@@ -1119,24 +1275,21 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           ? `\n\nATENÇÃO QUALIDADE BAIXA: ${isPdfScanned ? 'PDF escaneado sem camada de texto.' : 'imagem com possível baixa nitidez.'} Use OCR rigoroso letra-a-letra. Em campos numéricos críticos (CPF, placa, CEP, datas, RG), se houver QUALQUER dúvida na leitura, retorne null e marque \`confianca\` < 0.7. NÃO INVENTE dígitos.`
           : '';
 
-        contentParts = [
-          { type: 'text', text: userPrompt + lowQualityHint },
-          { type: 'image_url', image_url: { url: dataUri } },
-        ];
+        // Decide qual mídia mandar para a IA:
+        //   - se rasterizamos: mandamos as imagens das páginas (substitui o PDF "vazio")
+        //   - senão: mandamos o arquivo original (PDF ou imagem)
+        const mediaParts = rasterizedImages.length > 0
+          ? rasterizedImages.map((img) => ({ type: 'image_url' as const, image_url: { url: img.dataUri } }))
+          : [{ type: 'image_url' as const, image_url: { url: dataUri } }];
 
-        // Se temos texto nativo do PDF, adicionar ao prompt para melhorar precisão
-        if (extractedPdfText) {
-          const textHint = extractedPdfText.length > 3000 
-            ? extractedPdfText.substring(0, 3000) + '...' 
-            : extractedPdfText;
-          contentParts = [
-            { 
-              type: 'text', 
-              text: `${userPrompt}${lowQualityHint}\n\n--- TEXTO EXTRAÍDO DO PDF (use como referência principal para dados textuais como CPF, nome, números) ---\n${textHint}\n--- FIM DO TEXTO ---\n\nA imagem do documento também está anexada. Use o texto extraído como fonte primária para campos numéricos (CPF, RG, etc.) e a imagem para confirmar layout e campos visuais.`
-            },
-            { type: 'image_url', image_url: { url: dataUri } },
-          ];
-        }
+        const promptText = extractedPdfText
+          ? `${userPrompt}${lowQualityHint}\n\n--- TEXTO EXTRAÍDO DO PDF (use como referência principal para dados textuais como CPF, nome, números) ---\n${extractedPdfText.length > 3000 ? extractedPdfText.substring(0, 3000) + '...' : extractedPdfText}\n--- FIM DO TEXTO ---\n\n${rasterizedImages.length > 0 ? `${rasterizedImages.length} página(s) do PDF foram rasterizadas em alta resolução e estão anexadas como imagem. Use AS IMAGENS como fonte primária; o texto acima é só fallback.` : 'A imagem do documento também está anexada. Use o texto extraído como fonte primária para campos numéricos (CPF, RG, etc.) e a imagem para confirmar layout e campos visuais.'}`
+          : userPrompt + lowQualityHint;
+
+        contentParts = [
+          { type: 'text', text: promptText },
+          ...mediaParts,
+        ];
       } catch (downloadError) {
         console.error(`Failed to download ${fileType}:`, downloadError);
         return new Response(
@@ -1287,45 +1440,213 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
       return { result: parsed, raw: contentStr, durationMs: Date.now() - t0, finishReason, usage };
     };
 
-    // 1ª passada: usa o modelo configurado globalmente (resolvido pelo aiGatewayFetch via ai_model_config).
-    // O `model` enviado aqui só é usado quando provider=lovable.
-    const firstPass = await runOcrPass(OCR_MODEL, contentParts, 'main');
+    // ============================================================
+    // EXECUÇÃO DAS PASSADAS
+    //
+    // 3 caminhos:
+    //   A) engine=mistral → /v1/ocr + pixtral-large para estruturar
+    //   B) engine=anthropic|google → callAI direto com modelo escolhido
+    //   C) dupla leitura para CNH/CRLV (passada B com modelo secundário)
+    // ============================================================
+
+    // Helper interno: roda uma passada com o modelo escolhido (engine != mistral)
+    const runEnginePass = async (
+      modelId: string, label: string, providerOverride?: 'anthropic'|'google'|'lovable',
+    ): Promise<{ result: any; raw: string; durationMs: number; finishReason?: string; usage?: any } | null> => {
+      // Para anthropic, callAI já roteia para Anthropic direto.
+      // Para google, mandamos via Lovable Gateway (funciona com modelos google/*).
+      const provider = providerOverride ?? (resolved.engine === 'anthropic' ? 'anthropic' : 'lovable');
+      const t0 = Date.now();
+      try {
+        const r = await callAI({
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: contentParts },
+          ],
+          max_tokens: 8192,
+          temperature: 0,
+          override: { provider, model: modelId },
+          fallbackToLovable: true,
+        });
+        if (!r.ok) {
+          console.error(`[OCR][engine-pass] ${JSON.stringify({ reqId, label, model: modelId, status: r.status, error: r.errorMessage?.slice(0,200) })}`);
+          return null;
+        }
+        const contentStr = r.data?.choices?.[0]?.message?.content ?? '';
+        if (!contentStr) return null;
+        let parsed: any;
+        try {
+          const clean = contentStr.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          parsed = JSON.parse(clean);
+        } catch {
+          const repaired = tryRepairTruncatedJSON(contentStr);
+          if (!repaired) return null;
+          parsed = repaired;
+        }
+        return {
+          result: parsed, raw: contentStr,
+          durationMs: Date.now() - t0,
+          finishReason: r.data?.choices?.[0]?.finish_reason,
+          usage: r.data?.usage,
+        };
+      } catch (e) {
+        console.error(`[OCR][engine-pass] ${JSON.stringify({ reqId, label, model: modelId, error: String((e as Error)?.message ?? e).slice(0,200) })}`);
+        return null;
+      }
+    };
+
+    // Helper interno: roda Mistral OCR (PDF/image) + Pixtral para estruturar
+    const runMistralPass = async (label: string): Promise<{ result: any; raw: string; durationMs: number; usage?: any } | null> => {
+      const t0 = Date.now();
+      // Mistral aceita URL (preferível) ou data-uri. Para PDF, usa /v1/ocr.
+      let target: { type: 'document_url' | 'image_url'; url: string };
+      if (isPdfUrl) {
+        if (publicUrlForMistral) target = { type: 'document_url', url: publicUrlForMistral };
+        else if (pdfBytesForMistral) {
+          const b64 = btoa(String.fromCharCode(...new Uint8Array(pdfBytesForMistral.subarray(0, 0)))) // noop placeholder
+            ? '' : '';
+          // data-URI fallback
+          let s = '';
+          const arr = pdfBytesForMistral;
+          for (let i = 0; i < arr.length; i += 8192) s += String.fromCharCode(...arr.subarray(i, i + 8192));
+          target = { type: 'document_url', url: `data:application/pdf;base64,${btoa(s)}` };
+        } else target = { type: 'document_url', url };
+      } else {
+        target = { type: 'image_url', url };
+      }
+
+      const ocr = await runMistralOcr({ ...target, model: resolved.primary });
+      if (!ocr.ok) {
+        console.error(`[OCR][mistral] ${JSON.stringify({ reqId, label, status: ocr.status, error: ocr.error })}`);
+        return null;
+      }
+      const md = ocr.result?.markdown ?? '';
+      console.log(`[OCR][mistral] ${JSON.stringify({ reqId, label, pages: ocr.result?.pages.length, markdownChars: md.length })}`);
+      if (!md.trim()) return null;
+
+      // Estruturar markdown via Pixtral usando o mesmo system prompt JSON
+      const px = await callPixtralChat({
+        model: resolved.secondary || 'pixtral-large-latest',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `${userPrompt}\n\n--- TEXTO EXTRAÍDO PELO MISTRAL OCR (markdown) ---\n${md}\n--- FIM ---` },
+        ],
+        max_tokens: 4096,
+        temperature: 0,
+      });
+      if (!px.ok) {
+        console.error(`[OCR][pixtral-structure] ${JSON.stringify({ reqId, label, status: px.status, error: px.error })}`);
+        return null;
+      }
+      const contentStr = px.data?.choices?.[0]?.message?.content ?? '';
+      let parsed: any;
+      try {
+        const clean = contentStr.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        parsed = JSON.parse(clean);
+      } catch {
+        const repaired = tryRepairTruncatedJSON(contentStr);
+        if (!repaired) return null;
+        parsed = repaired;
+      }
+      return { result: parsed, raw: contentStr, durationMs: Date.now() - t0, usage: px.data?.usage };
+    };
+
+    // ── Passada A (principal) ───────────────────────────────────
+    const firstPass = resolved.engine === 'mistral'
+      ? await runMistralPass('main-mistral')
+      : await runEnginePass(resolved.primary, 'main');
+
     if (!firstPass) {
-      return await ocrFallbackResponse('Erro ao processar documento com IA. Documento enviado para revisão manual.');
+      // Fallback de emergência: tenta Lovable Gateway com Gemini Pro
+      console.warn(`[OCR][${reqId}] motor ${resolved.engine} falhou, tentando fallback Lovable/Gemini`);
+      const fb = await runEnginePass('google/gemini-2.5-pro', 'fallback-emergency', 'lovable');
+      if (!fb) {
+        return await ocrFallbackResponse('Erro ao processar documento com IA. Documento enviado para revisão manual.');
+      }
+      logCtx.fallback_emergency = true;
+      logCtx.modelo = 'google/gemini-2.5-pro';
+      var firstPassResolved = fb;
+    } else {
+      var firstPassResolved = firstPass;
     }
 
-    logCtx.usage = firstPass.usage ?? null;
-    logCtx.modelo = OCR_MODEL;
-    logCtx.truncated = firstPass.finishReason === 'length' || firstPass.finishReason === 'max_tokens';
+    logCtx.usage = firstPassResolved.usage ?? null;
+    logCtx.modelo = resolved.primary;
+    logCtx.truncated = firstPassResolved.finishReason === 'length' || firstPassResolved.finishReason === 'max_tokens';
 
-    let result = firstPass.result;
+    let result = firstPassResolved.result;
     let usedRetry = false;
 
-    // Heurística: se confiança baixa, ilegível ou pediu revisão, tenta retry com modelo mais potente
+    // ── DUPLA LEITURA (CNH/CRLV) ────────────────────────────────
+    const tipoDetectadoLower = String(result?.tipo_detectado ?? tipoEsperado ?? '').toLowerCase();
+    const tipoParaDupla = ['cnh', 'crlv'].includes(tipoDetectadoLower) ? tipoDetectadoLower : null;
+    const aplicaDupla = !!tipoParaDupla && engineCfg.dupla_leitura_tipos.includes(tipoParaDupla);
+
+    if (aplicaDupla) {
+      console.log(`[OCR][dupla-leitura] ${JSON.stringify({ reqId, tipo: tipoParaDupla, secondary: resolved.secondary })}`);
+      // Passada B: usa motor diferente quando primário é mistral; senão, secondary do mesmo motor
+      const passB = resolved.engine === 'mistral'
+        ? await runEnginePass(resolved.secondary || 'claude-sonnet-4-5', 'dupla-B-anthropic', 'anthropic')
+        : await runEnginePass(resolved.secondary || resolved.primary, 'dupla-B-secondary');
+
+      if (passB) {
+        const cmp = compareCriticalFields(firstPassResolved.result, passB.result, tipoParaDupla);
+        const allMatch = cmp.matches === cmp.total && cmp.total > 0;
+        const cpfPlacaDiverge = cmp.mismatches.some((m) => ['cpf', 'placa'].includes(m.field));
+        const muitasDiv = cmp.mismatches.length >= 2;
+
+        logCtx.dupla_leitura = true;
+        logCtx.divergencias = cmp.mismatches.length ? cmp.mismatches : null;
+
+        console.log(`[OCR][dupla-leitura][result] ${JSON.stringify({ reqId, ...cmp, allMatch, cpfPlacaDiverge })}`);
+
+        if (allMatch) {
+          // Concordância total → boost de confiança
+          result.confianca = Math.min(1, Math.max(Number(result.confianca ?? 0.8), Number(passB.result.confianca ?? 0.8)) + 0.1);
+        } else if (cpfPlacaDiverge || muitasDiv) {
+          // Divergência crítica → revisão manual obrigatória
+          result.sugestao = 'revisar';
+          result.confianca = Math.min(Number(result.confianca ?? 0.5), 0.5);
+          result.divergencias = cmp.mismatches;
+        } else {
+          // 1 divergência leve → marca pra revisão mas mantém dados primários
+          result.sugestao = result.sugestao === 'aprovar' ? 'revisar' : result.sugestao;
+          result.divergencias = cmp.mismatches;
+        }
+      } else {
+        console.warn(`[OCR][dupla-leitura][${reqId}] passada B falhou — mantendo só passada A`);
+      }
+    }
+
+    // Heurística antiga de retry (mantida para casos não-dupla-leitura)
     const confianca = Number(result?.confianca ?? 1);
     const lowQualityResult =
-      result?.legivel === false ||
-      result?.sucesso === false ||
-      result?.sugestao === 'revisar' ||
-      (Number.isFinite(confianca) && confianca < 0.6);
+      !aplicaDupla && (
+        result?.legivel === false ||
+        result?.sucesso === false ||
+        result?.sugestao === 'revisar' ||
+        (Number.isFinite(confianca) && confianca < 0.6)
+      );
 
     if (lowQualityResult) {
       console.log(`[OCR][retry] ${JSON.stringify({
         reqId,
         motivo: { confianca, legivel: result?.legivel, sugestao: result?.sugestao, sucesso: result?.sucesso },
-        model_retry: OCR_RETRY_MODEL,
+        retry_engine: resolved.engine,
+        retry_model: resolved.secondary,
       })}`);
-      const secondPass = await runOcrPass(OCR_RETRY_MODEL, contentParts, 'retry-low-confidence');
+      const secondPass = resolved.engine === 'mistral'
+        ? await runEnginePass('claude-sonnet-4-5', 'retry-low-confidence', 'anthropic')
+        : await runEnginePass(resolved.secondary || resolved.primary, 'retry-low-confidence');
       if (secondPass) {
         const c2 = Number(secondPass.result?.confianca ?? 0);
-        // Mantém o melhor: maior confiança ou que tenha virado "aprovar"
         const betterByConfidence = Number.isFinite(c2) && c2 > confianca;
         const promotedToApprove = secondPass.result?.sugestao === 'aprovar' && result?.sugestao !== 'aprovar';
         if (betterByConfidence || promotedToApprove) {
           result = secondPass.result;
           usedRetry = true;
           logCtx.used_retry = true;
-          logCtx.modelo = OCR_RETRY_MODEL;
+          logCtx.modelo = resolved.secondary;
           logCtx.usage = secondPass.usage ?? logCtx.usage;
         }
       }
