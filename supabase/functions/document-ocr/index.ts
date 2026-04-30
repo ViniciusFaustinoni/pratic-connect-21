@@ -1122,24 +1122,28 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
       durationMs: ocrDurationMs,
     })}`);
 
-    // Se temos texto nativo do PDF e o CPF extraído está em conflito, tentar pegar do texto
-    if (result.tipo_detectado === 'cnh' && result.dados && extractedPdfText) {
-      const cpfExtraido = result.dados.cpf;
-      if (cpfExtraido && cpfExtraido !== 'ilegivel') {
-        const cpfClean = cpfExtraido.replace(/\D/g, '');
-        if (!validateCPF(cpfClean)) {
-          // Tentar encontrar CPF válido no texto nativo do PDF
-          const cpfRegex = /\d{3}\.?\d{3}\.?\d{3}-?\d{2}/g;
-          const matches = extractedPdfText.match(cpfRegex);
-          if (matches) {
-            for (const match of matches) {
-              const cleaned = match.replace(/\D/g, '');
-              if (cleaned.length === 11 && validateCPF(cleaned)) {
-                const formatted = cleaned.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-                console.log(`[OCR] CPF corrigido via texto nativo do PDF: ${cpfExtraido} → ${formatted}`);
-                result.dados.cpf = formatted;
-                break;
-              }
+    // FUSÃO COM TEXTO NATIVO DO PDF (CNH-e digital tem layout estável)
+    // Para PDFs com camada de texto, o texto extraído é 100% confiável.
+    // Sobrepomos campos da IA com os do texto nativo quando disponíveis.
+    if (result?.tipo_detectado === 'cnh' && result.dados && extractedPdfText) {
+      const nativeFields = extractCNHFromText(extractedPdfText);
+      if (Object.keys(nativeFields).length > 0) {
+        console.log(`[OCR][${reqId}] Texto nativo extraiu ${Object.keys(nativeFields).length} campo(s) da CNH:`, Object.keys(nativeFields));
+        result.dados = mergeNativeOverAI(result.dados, nativeFields, reqId);
+      }
+    }
+    // Para outros tipos (RG, Comprovante, NF, ATPV-e, CRLV) extraímos só o CPF
+    // do titular/comprador quando aplicável.
+    if (result?.dados && extractedPdfText && result.tipo_detectado !== 'cnh') {
+      const nativeCpf = extractValidCPFFromText(extractedPdfText);
+      if (nativeCpf) {
+        const dados = result.dados as Record<string, any>;
+        for (const field of ['cpf', 'cpf_titular', 'cpf_comprador', 'cpf_cnpj_comprador']) {
+          if (field in dados) {
+            const aiVal = dados[field];
+            if (!aiVal || aiVal === 'ilegivel' || (typeof aiVal === 'string' && !validateCPF(aiVal.replace(/\D/g, '')))) {
+              console.log(`[OCR][${reqId}] CPF nativo do PDF substitui ${field}: "${aiVal}" → "${nativeCpf}"`);
+              dados[field] = nativeCpf;
             }
           }
         }
