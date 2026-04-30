@@ -1560,7 +1560,13 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
         target = { type: 'image_url', url };
       }
 
-      const ocr = await runMistralOcr({ ...target, model: resolved.primary });
+      // IMPORTANTE: Mistral OCR só aceita modelos Mistral. Se a engine ativa for
+      // anthropic/google, resolved.primary é um modelo dessas — não pode ser
+      // enviado pra /v1/ocr (gera 400 Invalid Model). Forçamos o default.
+      const mistralModel = (resolved.engine === 'mistral' && /^(mistral|pixtral)/i.test(resolved.primary))
+        ? resolved.primary
+        : 'mistral-ocr-latest';
+      const ocr = await runMistralOcr({ ...target, model: mistralModel });
       if (!ocr.ok) {
         console.error(`[OCR][mistral] ${JSON.stringify({ reqId, label, status: ocr.status, error: ocr.error })}`);
         return null;
