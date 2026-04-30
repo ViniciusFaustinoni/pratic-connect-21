@@ -1,15 +1,16 @@
 /**
- * Reduz uma imagem (PNG ou JPEG) para caber em um teto de bytes,
- * convertendo PNG → JPEG e diminuindo dimensões/qualidade iterativamente.
+ * Reduz uma imagem (PNG ou JPEG) para caber em um TETO DE BASE64
+ * (e não bytes raw), pois Anthropic e Gemini medem o limite de 5MB
+ * sobre a string base64 transportada no payload JSON.
  *
- * Usado para que páginas rasterizadas de PDF não estourem o limite de 5MB
- * por imagem do Anthropic Claude (e ~7MB do Gemini).
- *
- * Estratégia:
- *   1. Decodifica via @workers/imagescript (puro WASM/JS, roda em Deno).
- *   2. Se já está abaixo do teto e é JPEG, retorna como está.
- *   3. Tenta encode JPEG q=85; se ainda grande, vai reduzindo dimensões
- *      em passos de 0.85x até caber ou bater no mínimo (800px do maior lado).
+ * Estratégia escalonada (sem configuração externa):
+ *   1. Mede o tamanho que a imagem teria em base64 (~1.37x bytes raw).
+ *   2. Se já cabe e é JPEG, devolve como está.
+ *   3. Reencoda como JPEG q=85 (PNG comprime mal pra documento).
+ *   4. Se ainda passar, reduz a resolução pela METADE e tenta novamente.
+ *   5. Não reduz abaixo de 800px no menor lado (ilegível pra OCR).
+ *   6. Se mesmo assim não couber, devolve a última tentativa marcada
+ *      como `tooLarge=true` para o caller decidir descartar.
  */
 
 import { Image, decode } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
