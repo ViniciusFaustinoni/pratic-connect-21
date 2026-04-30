@@ -572,25 +572,100 @@ const OCR_MODEL = 'google/gemini-2.5-flash';
 const OCR_RETRY_MODEL = 'google/gemini-2.5-pro';
 
 /**
- * Extrai um CPF VÁLIDO (passa checksum) do texto nativo do PDF.
- * Retorna o primeiro CPF válido encontrado, formatado XXX.XXX.XXX-XX.
- * Útil para CNH-e e PDFs digitais onde o texto embutido é 100% confiável.
+ * Formata um CPF de 11 dígitos puros para XXX.XXX.XXX-XX.
+ */
+function formatCPF(digits: string): string {
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
+}
+
+/**
+ * Coleta todos os candidatos a CPF (11 dígitos OU formato XXX.XXX.XXX-XX)
+ * presentes no texto, retornando posição (offset) de cada ocorrência.
+ */
+function collectCPFCandidates(text: string): Array<{ digits: string; index: number; raw: string; valid: boolean }> {
+  const out: Array<{ digits: string; index: number; raw: string; valid: boolean }> = [];
+  if (!text) return out;
+  // Formato XXX.XXX.XXX-XX (com possíveis espaços)
+  for (const m of text.matchAll(/(\d{3})[.\s]?(\d{3})[.\s]?(\d{3})[-\s]?(\d{2})/g)) {
+    const digits = `${m[1]}${m[2]}${m[3]}${m[4]}`;
+    out.push({ digits, index: m.index ?? -1, raw: m[0], valid: validateCPF(digits) });
+  }
+  // 11 dígitos contíguos (CNH-e digital costuma trazer assim)
+  for (const m of text.matchAll(/(?<!\d)(\d{11})(?!\d)/g)) {
+    const digits = m[1];
+    // Evitar duplicar candidatos já capturados pelo regex pontuado
+    if (!out.some((c) => c.index === m.index && c.digits === digits)) {
+      out.push({ digits, index: m.index ?? -1, raw: m[0], valid: validateCPF(digits) });
+    }
+  }
+  return out;
+}
+
+/**
+ * Procura o trecho do texto onde aparece o rótulo "CPF" (variantes inclusas)
+ * e devolve o primeiro CPF VÁLIDO que apareça logo após esse rótulo.
+ *
+ * Variantes aceitas: "CPF", "CPF/MF", "CPF / MF", "4d CPF", "4d. CPF",
+ * "CPF do contribuinte", "CPF/CNPJ".
+ *
+ * Diferente de `extractValidCPFFromText`, NÃO retorna o primeiro número
+ * válido qualquer — exige proximidade com o rótulo, evitando trocar o CPF
+ * pelo Nº Registro / RENACH / RG / numeração lateral.
+ */
+function extractAnchoredCPFFromText(text: string): { cpf: string | null; contexto: string | null } {
+  if (!text) return { cpf: null, contexto: null };
+
+  // Acha posições do rótulo "CPF" (com possíveis prefixos numéricos tipo "4d ")
+  const labelRegex = /(?:^|\n|\s)(?:\d{1,2}\s?[a-z]?\s+)?CPF(?:\s*\/?\s*(?:MF|CNPJ))?/gi;
+  const matches: Array<{ index: number; len: number }> = [];
+  let m: RegExpExecArray | null;
+  while ((m = labelRegex.exec(text)) !== null) {
+    matches.push({ index: m.index, len: m[0].length });
+    if (m.index === labelRegex.lastIndex) labelRegex.lastIndex++;
+  }
+
+  if (matches.length === 0) return { cpf: null, contexto: null };
+
+  // Para cada rótulo, olhar uma janela de até 80 chars depois e tentar achar CPF válido
+  for (const lbl of matches) {
+    const windowStart = lbl.index + lbl.len;
+    const windowEnd = Math.min(windowStart + 80, text.length);
+    const window = text.slice(windowStart, windowEnd);
+
+    // Procurar CPF formatado primeiro
+    const fmt = window.match(/(\d{3})[.\s]?(\d{3})[.\s]?(\d{3})[-\s]?(\d{2})/);
+    if (fmt) {
+      const digits = `${fmt[1]}${fmt[2]}${fmt[3]}${fmt[4]}`;
+      if (validateCPF(digits)) {
+        return {
+          cpf: formatCPF(digits),
+          contexto: text.slice(Math.max(0, lbl.index - 20), windowEnd).trim().slice(0, 200),
+        };
+      }
+    }
+    // 11 dígitos contíguos
+    const cont = window.match(/(?<!\d)(\d{11})(?!\d)/);
+    if (cont && validateCPF(cont[1])) {
+      return {
+        cpf: formatCPF(cont[1]),
+        contexto: text.slice(Math.max(0, lbl.index - 20), windowEnd).trim().slice(0, 200),
+      };
+    }
+  }
+
+  return { cpf: null, contexto: text.slice(matches[0].index, Math.min(matches[0].index + 200, text.length)).trim() };
+}
+
+/**
+ * Extrai o primeiro CPF VÁLIDO do texto, sem ancoragem a rótulo.
+ * Mantido como fallback (compatibilidade), mas o caminho preferencial agora
+ * é `extractAnchoredCPFFromText`.
  */
 function extractValidCPFFromText(text: string): string | null {
   if (!text) return null;
-  const candidates = new Set<string>();
-  // Formato com pontuação
-  for (const m of text.matchAll(/(\d{3})[.\s]?(\d{3})[.\s]?(\d{3})[-\s]?(\d{2})/g)) {
-    candidates.add(`${m[1]}${m[2]}${m[3]}${m[4]}`);
-  }
-  // 11 dígitos contíguos
-  for (const m of text.matchAll(/\b(\d{11})\b/g)) {
-    candidates.add(m[1]);
-  }
-  for (const c of candidates) {
-    if (validateCPF(c)) {
-      return `${c.slice(0,3)}.${c.slice(3,6)}.${c.slice(6,9)}-${c.slice(9,11)}`;
-    }
+  const cands = collectCPFCandidates(text);
+  for (const c of cands) {
+    if (c.valid) return formatCPF(c.digits);
   }
   return null;
 }
