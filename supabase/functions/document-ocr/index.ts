@@ -649,6 +649,8 @@ serve(async (req) => {
     
     console.log('Request mode:', isAuthenticated ? 'authenticated' : 'public');
 
+    const reqId = (crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`).slice(0, 8);
+
     const { url, tipoEsperado, cpfEsperado, nomeEsperado, extrairDados } = await req.json();
 
     if (!url) {
@@ -666,7 +668,7 @@ serve(async (req) => {
     );
 
     if (!isAuthenticated && !isAllowedUrl) {
-      console.warn('Blocked public request with external URL:', url);
+      console.warn(`[OCR][${reqId}] Blocked public request with external URL:`, url);
       return new Response(
         JSON.stringify({ 
           error: 'URL não permitida para requisições públicas',
@@ -677,7 +679,19 @@ serve(async (req) => {
       );
     }
 
-    console.log('Processing OCR for URL:', url, '| Authenticated:', isAuthenticated, '| tipoEsperado:', tipoEsperado || 'auto');
+    // Log estruturado de entrada — `urlHash` evita expor URL completa em massa
+    const urlHash = await sha1Hex(url).then(h => h.slice(0, 12)).catch(() => 'no-hash');
+    const activeCfg = await getActiveAIConfig().catch(() => ({ provider: 'lovable', model: 'unknown' }));
+    console.log(`[OCR][in] ${JSON.stringify({
+      reqId,
+      tipoEsperado: tipoEsperado || 'auto',
+      urlHash,
+      isAuthenticated,
+      hasCpfEsperado: !!cpfEsperado,
+      hasNomeEsperado: !!nomeEsperado,
+      provider_global: activeCfg.provider,
+      model_global: activeCfg.model,
+    })}`);
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
