@@ -91,6 +91,11 @@ const SubstituicaoVeiculoPage = lazy(() => import("./pages/cadastro/Substituicao
 const SubstituicoesPendentesPage = lazy(() => import("./pages/cadastro/SubstituicoesPendentesPage"));
 const SubstituicaoDetalhePage = lazy(() => import("./pages/cadastro/SubstituicaoDetalhePage"));
 const AssociadoDetalhe = lazy(() => import("./pages/cadastro/AssociadoDetalhe"));
+const AssociadoDetalheErrorBoundary = lazy(() =>
+  import("@/components/common/AssociadoDetalheErrorBoundary").then((m) => ({
+    default: m.AssociadoDetalheErrorBoundary,
+  }))
+);
 const Veiculos = lazy(() => import("./pages/cadastro/Veiculos"));
 const FilaDocumentos = lazy(() => import("./pages/cadastro/FilaDocumentos"));
 const AnaliseDocumento = lazy(() => import("./pages/cadastro/AnaliseDocumento"));
