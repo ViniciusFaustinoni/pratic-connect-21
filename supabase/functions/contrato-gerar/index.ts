@@ -1011,7 +1011,17 @@ serve(async (req) => {
             cota_minima: cotacao.cota_minima ?? null,
             cobertura_fipe: cotacao.cobertura_fipe ?? null,
             
-            dia_vencimento: cotacao.dia_vencimento ? Math.min(Math.max(Number(cotacao.dia_vencimento), 1), 31) : 10,
+            dia_vencimento: (() => {
+              const r = resolverDiaVencimento(cotacao.dia_vencimento, cotacao.created_at);
+              if (r.usouFallback) {
+                console.warn('[contrato-gerar] dia_vencimento ausente/invalido na cotacao (contrato)', {
+                  cotacao_id: cotacao.id,
+                  dia_vencimento_recebido: cotacao.dia_vencimento,
+                  fallback_aplicado: r.dia,
+                });
+              }
+              return r.dia;
+            })(),
             data_inicio: hoje,
             validade_link: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
             created_by: vendedorIdFinal,
