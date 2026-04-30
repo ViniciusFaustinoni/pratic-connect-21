@@ -936,7 +936,16 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                             const isVideo = /\.(mp4|webm|mov|avi)($|\?)/i.test(foto.arquivo_url || '');
                             return (
                               <div key={foto.id} className="relative group cursor-pointer rounded-lg overflow-hidden border bg-muted/50 aspect-square"
-                                onClick={() => setFotoModal({ open: true, url: foto.arquivo_url, tipo: formatarTipoFoto(foto.tipo), mediaType: isVideo ? 'video' : 'image' })}>
+                                onClick={() => {
+                                  const todas = vistoriaUnificada?.fotosInstalador || [];
+                                  const items: MediaItem[] = todas.map((f: any) => ({
+                                    url: f.arquivo_url,
+                                    tipo: formatarTipoFoto(f.tipo),
+                                    mediaType: detectMediaType(f.arquivo_url || ''),
+                                  }));
+                                  const idx = todas.findIndex((f: any) => f.id === foto.id);
+                                  openMedia(items, Math.max(0, idx));
+                                }}>
                                 {isVideo ? (
                                   <video src={foto.arquivo_url} className="w-full h-full object-cover" muted preload="metadata" />
                                 ) : (
