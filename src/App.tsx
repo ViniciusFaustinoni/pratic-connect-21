@@ -742,6 +742,7 @@ const App = () => (
                 <Route path="usuarios/:id" element={<UsuarioForm />} />
                 <Route path="integracoes" element={<Integracoes />} />
                 <Route path="integracoes/whatsapp" element={<IntegracaoWhatsApp />} />
+                <Route path="integracoes/ia" element={<IntegracaoIA />} />
                 <Route path="integracoes/api-keys" element={<IntegracaoApiKeys />} />
                 <Route path="integracoes/fontes-leads" element={<IntegracaoFontesLeads />} />
                 <Route path="integracoes/sga-hinova" element={<IntegracaoSGAHinova />} />
