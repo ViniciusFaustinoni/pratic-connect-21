@@ -397,7 +397,12 @@ const systemPrompt = `Analista de documentos brasileiros. Detecte o tipo e extra
 ## Tipos e campos obrigatórios:
 
 ### CNH
-nome, cpf (XXX.XXX.XXX-XX - PRIORIDADE MÁXIMA), rg, numero_registro (11 dígitos), data_nascimento (YYYY-MM-DD), validade (YYYY-MM-DD), categoria
+nome, cpf (XXX.XXX.XXX-XX - PRIORIDADE MÁXIMA), rg, numero_registro (11 dígitos), data_nascimento (YYYY-MM-DD), validade (YYYY-MM-DD), categoria, mrz_registro (string)
+
+- MRZ_REGISTRO (campo de validação cruzada — OBRIGATÓRIO em CNH-e digital):
+  No RODAPÉ da página há 3 linhas de leitura mecânica (MRZ) com letras "<" como separador. A PRIMEIRA dessas linhas começa com "I<BRA" e contém os dígitos do número de registro da CNH. Exemplo: "I<BRA070646502<024<<<<<<<<<<<<".
+  Extraia EXATAMENTE essa primeira linha (a sequência completa, com os "<" preservados) no campo "mrz_registro". Não invente: se não conseguir ler, retorne mrz_registro:"". Esse campo será usado para validar o "numero_registro".
+
 - CPF SEMPRE existe na CNH: campo "CPF"/"CPF/MF", próximo ao nome/foto. Procure sequências de 11 dígitos.
 - NÃO confunda com RENACH (tem letras), registro CNH ou RG.
 - NUNCA retorne cpf:null. Se ilegível: cpf:"ilegivel"
