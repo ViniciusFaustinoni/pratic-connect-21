@@ -13,6 +13,7 @@ import { WhatsAppMetaTemplates } from '@/components/integracoes/WhatsAppMetaTemp
 import { WhatsAppConversasPainel } from '@/components/integracoes/WhatsAppConversasPainel';
 import { WhatsAppTestChat } from '@/components/whatsapp/WhatsAppTestChat';
 import { IntegracaoHealthPanel } from '@/components/integracoes/IntegracaoHealthPanel';
+import { AIModelConfigCard } from '@/components/integracoes/AIModelConfigCard';
 
 export default function IntegracaoWhatsApp() {
   const navigate = useNavigate();
