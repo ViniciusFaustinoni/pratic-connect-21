@@ -1,101 +1,64 @@
+## Diagnóstico — caso LTG3H67 (JEFFERSON RICARDO)
 
-## Diagnóstico
+Confirmado no banco:
+- Cotação `d35f9447…` criada em 26/04/2026 com `dia_vencimento = NULL`
+- `contrato-gerar` aplicou fallback hardcoded **10**
+- Constraint do banco aceita 1..31, então o `10` passou direto
+- Pela regra de `calcularOpcoesVencimento(26)` = `[30, 5]`, o `10` é **inválido** para essa data de cadastro
 
-Erro: **Minified React error #310** = *"Rendered more hooks than during the previous render."*
+**Causa raiz**: o consultor consegue salvar a cotação **sem clicar em nenhuma das duas opções de vencimento**. O front (`CotacaoFormDialog.tsx`) inicia `diaVencimento = null`, não trava o submit, e o backend (`contrato-gerar`, `termo-afiliacao-utils`) tem fallback `|| 10` — sempre dia 10, independente da data de cadastro.
 
-Isso acontece quando algum componente entre dois renders consecutivos altera o número de hooks executados (tipicamente um `early return` antes de um hook, ou um hook chamado dentro de condição/loop que muda).
+**Impacto**: 26 cotações nos últimos 90 dias salvas com `dia_vencimento = NULL` — todas geraram contrato com vencimento 10 silenciosamente, mesmo quando 10 não estava entre as opções válidas (caso do LTG3H67).
 
-### O que já foi confirmado pela leitura do código
+---
 
-- `src/pages/cadastro/AssociadoDetalhe.tsx` (componente raiz da modal):
-  - Os hooks no topo do componente estão corretamente posicionados antes dos `early returns` (`if (isLoading) return …`, `if (!associado) return …`). Já existe inclusive o comentário "Hooks que antes estavam após early returns (corrige Rendered more hooks…)" — ou seja, o mesmo bug já ocorreu nesse arquivo no passado.
-  - O componente é renderizado dentro de um `<Dialog>` em `Associados.tsx`, com `{detalheAssociadoId && <AssociadoDetalhe …/>}`. A modal monta/desmonta a cada abertura — então cada clique inicia uma sequência (1ª render: dados ainda em loading → 2ª render: dados chegam) onde a contagem de hooks precisa ser idêntica.
+## Plano de correção (defesa em profundidade)
 
-- Dados do associado LRA9681 (CLEBER LUIZ DE OLIVEIRA LIMA / `ec43f40d-…`) não têm nada visivelmente corrompido; o que difere de outros associados é que **`cnh_categoria` é `NULL`** e o veículo tem `valor_fipe = 11.763` (Yamaha 2013). Esses dados sozinhos não deveriam quebrar React, mas servem para reproduzir.
+### 1. Frontend — bloquear envio sem vencimento escolhido
+`src/components/cotacoes/CotacaoFormDialog.tsx`
+- Tornar o card "Data de Vencimento" obrigatório: validar `diaVencimento !== null` antes de submeter, com toast claro ("Selecione o dia de vencimento") e scroll/foco no bloco.
+- Marcar o bloco visualmente como obrigatório (asterisco + borda destacada quando inválido).
+- Pré-selecionar a primeira opção (`opcoesVencimento[0]`) quando o form abre vazio, mantendo a escolha do consultor se já tiver valor — reduz erro humano sem remover a decisão.
+- Rascunho local (`draftSnapshot`) já persiste `diaVencimento`; nada muda lá.
 
-### Onde está o risco real (os 3 candidatos prováveis)
+### 2. Backend — fallback inteligente baseado na data de cadastro (não mais `|| 10`)
+Criar helper compartilhado `supabase/functions/_shared/vencimento-utils.ts` espelhando `src/utils/vencimento.ts`:
+```ts
+export function calcularOpcoesVencimento(diaHoje: number): [number, number] { ... }
+export function vencimentoPadraoPorData(data: Date): number {
+  return calcularOpcoesVencimento(data.getDate())[0]; // primeira opção válida
+}
+```
+Substituir os fallbacks `|| 10` em:
+- `supabase/functions/contrato-gerar/index.ts` (linhas 687 e 1002) — usar `vencimentoPadraoPorData(new Date(cotacao.created_at))` quando `cotacao.dia_vencimento` for null
+- `supabase/functions/_shared/termo-afiliacao-utils.ts` (linha 487) — mesma lógica usando `contrato.created_at`
+- Logar warning no edge log quando o fallback for usado, para auditoria
 
-1. **`AssociadoDetalhe.tsx`, linhas 762-777** — o uso de duas IIFE `(() => {…})()` dentro do `veiculos.map()` (botões "Ativar rastreador" e "Concluir instalação prestador") está OK em termos de hooks, **mas** a expressão condicional do botão de "Ativar rastreador" tem um agrupamento perigoso:
-   ```jsx
-   {v.rastreador && (
-     (v.rastreador.plataforma === 'softruck' && !v.rastreador.plataforma_device_id) ||
-     (v.rastreador.plataforma === 'rede_veiculos' && !v.rede_veiculos_cliente_id)
-   ) && ( <Button …/> )}
-   ```
-   Devido à precedência, isso pode renderizar `false` como filho ao invés de `null` em alguns ramos — não é a causa do #310, mas merece limpeza.
+### 3. Banco — constraint mais estrita + correção dos casos existentes
+Migration nova:
+- Restringir `cotacoes.dia_vencimento` e `contratos.dia_vencimento` ao conjunto **`(5, 10, 15, 20, 25, 30)`** (dias permitidos pela regra de negócio). Hoje aceita 1..31.
+- Para os contratos já criados com vencimento "10" indevido (a partir de cotações com `dia_vencimento NULL`), gerar relatório (não corrigir automaticamente — mudança de vencimento envolve cobrança Asaas e Hinova). Entregar SQL/CSV listando os 26 casos para o time financeiro reavaliar manualmente.
 
-2. **Render condicional do `<Dialog>`** em `Associados.tsx` (linha 970-982): o `DialogContent` envolve `AssociadoDetalhe` num `{detalheAssociadoId && (<div>…</div>)}`. Quando o usuário fecha → reabre rapidamente, a modal pode disparar dois ciclos de mount com `useAssociado(id)` em estados diferentes. **Não é a raiz**, mas vamos garantir um `key={detalheAssociadoId}` para forçar uma árvore nova a cada associado.
+### 4. Outros pontos de entrada
+- `supabase/functions/api-externa/index.ts` (criação de associado via API): validar que `dia_vencimento` recebido é um dos valores permitidos para a data atual; se vier ausente, calcular dinamicamente em vez de cair no default do banco.
+- `supabase/functions/agente-consultor-ia/index.ts` já exige `dia_vencimento` como obrigatório no tool — manter.
 
-3. **Causa mais provável** — algum componente filho que renderiza diferentes números de hooks dependendo de uma prop que muda entre renders. Os candidatos no caminho da aba "Resumo" (default) são:
-   - `AssociadoHeroHeader` — hooks estáveis (apenas `useNavigate`).
-   - `AlertSuspensaoNaoInstalacao` — hooks estáveis (`useAuth`, `useState`, `useQuery`).
-   - `SubstituicaoStatusCard` — hooks estáveis (`useNavigate`, `useQuery`).
-   - `AssociadoSituacaoCard` — sem hooks; é puro.
-   - `OrigemCadastroCard` — usa `useOrigemCadastro` (1 query) e renderiza Render* sub-components que **não chamam hooks**. Estável.
-   - `useAssociadoSituacao` — chama hooks dependentes em cascata: `useInadimplenciaPrazos`, `useCarenciaDiasPadrao`, `useMultaRastreador`, `useMigracaoConfig`, `useInadimplenciaPorVeiculo`, mais 4 `useQuery` próprios + 1 `useMemo`. Como `planoId` (e `vendedorId`) começam `undefined` e depois assumem valor, **as queries permanecem montadas (apenas `enabled` muda)** → contagem de hooks estável. OK.
+### 5. QA
+- Testar: cotação criada hoje sem clicar vencimento → bloqueia no front.
+- Testar: forçar `dia_vencimento NULL` direto no banco e rodar `contrato-gerar` → contrato sai com a primeira opção válida da data de criação, não mais com 10 fixo.
+- Testar: tentar gravar `dia_vencimento = 7` → constraint rejeita.
 
-   O candidato remanescente é o `useInadimplenciaPorVeiculo` ou algum dos `useConteudosSistema`, que precisamos auditar para garantir que nenhum chame `useQuery` condicionalmente.
+---
 
-## Plano de ação
-
-### 1. Auditar e blindar hooks suspeitos (raiz do #310)
-
-- Ler `src/hooks/useInadimplenciaPorVeiculo.ts` e `src/hooks/useConteudosSistema.ts` (`useInadimplenciaPrazos`, `useCarenciaDiasPadrao`, `useMultaRastreador`, `useMigracaoConfig`, `useConfiguracaoJson`) e garantir que **nenhum hook seja chamado dentro de condicional/early return**. Onde houver, mover para topo da função.
-- Confirmar que `useFotosVistoriaUnificada` mantém quantidade de hooks fixa para qualquer combinação de `contratoId`/`cotacaoId` (incluindo ambos `undefined`).
-
-### 2. Estabilizar a modal de detalhe
-
-- Em `src/pages/cadastro/Associados.tsx`, adicionar `key={detalheAssociadoId}` no `<AssociadoDetalhe>` dentro do `Dialog`, garantindo árvore nova por associado e impedindo qualquer "vazamento" de estado entre aberturas.
-- Adicionar `<DialogTitle>` (visível ou via `VisuallyHidden`) para silenciar o warning do Radix e descartar interferência de overlay.
-
-### 3. Defesa em profundidade no `AssociadoDetalhe`
-
-- Em `src/pages/cadastro/AssociadoDetalhe.tsx`:
-  - Re-passar todos os hooks por uma checagem manual: nenhum hook deve aparecer abaixo das linhas dos `if (isLoading) return …` (347) e `if (!associado) return …` (360). Confirmar que `criarSolicitacaoRetirada` (linha 243), `useAssociadoSituacao` (281) e demais permaneçam acima.
-  - Limpar a expressão condicional do botão "Ativar rastreador" (linhas 762-777) extraindo para uma variável booleana `const precisaAtivarPlataforma = …` para evitar agrupamento ambíguo.
-  - Envolver o `return (…)` principal num `ErrorBoundary` local que mostre uma mensagem amigável (ao invés do erro genérico atual) e logue o erro com `id` do associado para facilitar reprodução futura.
-
-### 4. ErrorBoundary com diagnóstico
-
-- Criar `src/components/common/AssociadoDetalheErrorBoundary.tsx`:
-  - Captura erro, mostra "Falha ao carregar associado", botão "Recarregar" e "Copiar diagnóstico".
-  - Loga `console.error` com `{ associadoId, error, componentStack }`.
-- Aplicar o boundary tanto no roteamento direto (`/cadastro/associados/:id`) quanto dentro da modal em `Associados.tsx`.
-
-### 5. Verificação
-
-- Rebuildar e abrir a modal em LRA9681 para confirmar que o erro sumiu.
-- Conferir 3 associados de tipos diferentes (ativo com vários veículos, suspenso, em análise) para garantir não-regressão.
-- Se o erro persistir após o passo 1, o ErrorBoundary do passo 4 dará o componente exato no `componentStack`, finalizando a investigação.
-
-## Detalhes técnicos
+## Resumo dos arquivos
 
 ```text
-AssociadoDetalhe (root, hooks ok)
- ├─ AssociadoHeroHeader               (hooks ok)
- ├─ AlertSuspensaoNaoInstalacao       (hooks ok)
- ├─ SubstituicaoStatusCard            (hooks ok)
- ├─ AssociadoResumoTab
- │   ├─ AssociadoSituacaoCard         (puro)
- │   └─ OrigemCadastroCard            (1 query — ok)
- └─ useAssociadoSituacao              (cadeia de ~10 hooks — auditar dependências)
-      ├─ useInadimplenciaPrazos       ← AUDITAR
-      ├─ useCarenciaDiasPadrao        ← AUDITAR
-      ├─ useMultaRastreador           ← AUDITAR
-      ├─ useMigracaoConfig            ← AUDITAR
-      └─ useInadimplenciaPorVeiculo   ← AUDITAR
+NOVO   supabase/functions/_shared/vencimento-utils.ts
+NOVA   migration: constraint dia_vencimento IN (5,10,15,20,25,30) + script CSV dos 26 casos
+EDIT   src/components/cotacoes/CotacaoFormDialog.tsx (validação obrigatória + pré-seleção)
+EDIT   supabase/functions/contrato-gerar/index.ts (fallback inteligente)
+EDIT   supabase/functions/_shared/termo-afiliacao-utils.ts (fallback inteligente)
+EDIT   supabase/functions/api-externa/index.ts (validação na entrada)
 ```
 
-## O que NÃO será alterado
-
-- A lógica de negócio (carências, inadimplência, depreciação, ativação de rastreador). Apenas o esqueleto de hooks/render para eliminar o crash.
-- Nenhuma migração de banco é necessária.
-
-## Pergunta antes de implementar
-
-O usuário relatou que **apenas LRA9681** apresenta o erro hoje, mas a correção é estrutural (mexe na cadeia de hooks que serve **todos** os associados). Você prefere:
-
-1. Aplicar tudo agora (auditar hooks + ErrorBoundary + `key` da modal) — risco baixo, cobre todos os casos.
-2. Apenas adicionar o ErrorBoundary primeiro para capturar o `componentStack` exato e depois corrigir a causa pontual em uma segunda iteração — minimiza mudanças, mas exige reabrir o caso amanhã.
-
-Recomendo a **opção 1** (mais segura para evitar que apareça em outros associados sem aviso).
+Sem alteração no Asaas/Hinova nem reemissão automática de boletos — caso LTG3H67 e os outros 25 ficam para revisão manual do financeiro com o relatório.
