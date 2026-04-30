@@ -1201,13 +1201,22 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           : (fileResponse.headers.get('content-type') || 'image/jpeg');
         const dataUri = `data:${mimeType};base64,${base64}`;
 
-        // Para PDFs, tentar extrair texto nativo
+        // Para PDFs, tentar extrair texto nativo via unpdf (mais robusto que
+        // o extrator regex antigo; funciona em edge runtime sem worker).
+        let unpdfScore = 0;
         if (isPdfUrl) {
           try {
-            // Decodificar o PDF e procurar texto embutido
-            const pdfText = await extractTextFromPDFBuffer(uint8Array);
-            if (pdfText && pdfText.length > 50) {
-              extractedPdfText = pdfText;
+            const u = await extractPdfTextUnpdf(uint8Array);
+            if (u.ok && u.text && u.text.length > 50) {
+              extractedPdfText = u.text;
+              unpdfScore = scoreExtractedText(u.text, tipoEsperado ?? undefined);
+            } else {
+              // fallback ao extrator antigo (regex sobre bytes brutos)
+              const pdfText = await extractTextFromPDFBuffer(uint8Array);
+              if (pdfText && pdfText.length > 50) {
+                extractedPdfText = pdfText;
+                unpdfScore = scoreExtractedText(pdfText, tipoEsperado ?? undefined);
+              }
             }
           } catch (pdfErr) {
             console.warn(`[OCR][${reqId}] Falha ao extrair texto nativo do PDF:`, pdfErr);
@@ -1219,18 +1228,49 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
         const isLikelyLowQuality = !isPdfUrl && (bytes < 80_000 || bytes > 4_500_000);
         const isPdfScanned = isPdfUrl && !extractedPdfText;
 
-        // Guarda PDF para Mistral (que aceita PDF nativo via /v1/ocr)
-        if (isPdfUrl && resolved.engine === 'mistral') {
+        // ───────────── ROTEADOR HEURÍSTICO DE OCR ─────────────
+        // Decide o método primário e a cascata de fallbacks com base em:
+        // tipo de arquivo, qualidade do texto nativo, tipo de doc esperado,
+        // engine configurada e disponibilidade de chaves.
+        const hasMistralKey = !!Deno.env.get('MISTRAL_API_KEY');
+        const hasAnthropicKey = !!Deno.env.get('ANTHROPIC_API_KEY');
+        var routerDecision = routeOcr({
+          isPdf: isPdfUrl,
+          isDataUri,
+          bytes,
+          nativeText: extractedPdfText,
+          nativeTextScore: unpdfScore,
+          expectedDocType: tipoEsperado ?? null,
+          configuredEngine: engineCfg.engine as any,
+          hasMistralKey,
+          hasAnthropicKey,
+        });
+        console.log(`[OCR][router] ${JSON.stringify({
+          reqId,
+          primary: routerDecision.primary,
+          fallbacks: routerDecision.fallbacks,
+          critical: routerDecision.critical,
+          reason: routerDecision.reason,
+          unpdfScore: unpdfScore.toFixed(2),
+        })}`);
+        logCtx.router_primary = routerDecision.primary;
+        logCtx.router_fallbacks = routerDecision.fallbacks;
+        logCtx.router_reason = routerDecision.reason;
+        logCtx.unpdf_score = Number(unpdfScore.toFixed(2));
+
+        // Guarda PDF para Mistral (que aceita PDF nativo via /v1/ocr) — usado
+        // se o roteador escolher mistral-ocr OU se for fallback.
+        if (isPdfUrl && (routerDecision.primary === 'mistral-ocr' || routerDecision.fallbacks.includes('mistral-ocr'))) {
           pdfBytesForMistral = uint8Array;
           publicUrlForMistral = isAllowedUrl ? url : null; // Mistral prefere URL pública
         }
 
-        // RASTERIZAÇÃO PDF→PNG: para engines não-Mistral, quando o PDF tem
-        // texto nativo pobre (ex.: CNH-e SENATRAN com só "Assinador Serpro"),
-        // converter as primeiras páginas em imagens nítidas para a IA ler.
+        // RASTERIZAÇÃO PDF→PNG: ativada quando o roteador escolhe raster-vlm
+        // (primário ou fallback) E o PDF tem texto nativo pobre.
+        const wantsRaster = routerDecision.primary === 'raster-vlm' || routerDecision.fallbacks.includes('raster-vlm');
         if (
           isPdfUrl &&
-          resolved.engine !== 'mistral' &&
+          wantsRaster &&
           engineCfg.pdf_rasterizar &&
           shouldRasterizePdf(extractedPdfText)
         ) {
@@ -1264,6 +1304,7 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           isPdf: isPdfUrl,
           hasNativeText: !!extractedPdfText,
           nativeTextLen: extractedPdfText.length,
+          unpdfScore: unpdfScore.toFixed(2),
           isLikelyLowQuality,
           isPdfScanned,
           rasterizedPages: rasterizedImages.length,
