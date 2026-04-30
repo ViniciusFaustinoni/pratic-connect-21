@@ -7,11 +7,13 @@ import { aiGatewayFetch, getActiveAIConfig, callAI } from "../_shared/ai-client.
 import { extractText, getDocumentProxy } from "https://esm.sh/unpdf@0.12.1";
 import { rasterizePdfPages, shouldRasterizePdf } from "../_shared/pdf-rasterize.ts";
 import { runMistralOcr, callPixtralChat } from "../_shared/mistral-ocr.ts";
+import { extractPdfTextUnpdf, scoreExtractedText } from "../_shared/unpdf-extract.ts";
+import { routeOcr, type OcrMethod } from "../_shared/ocr-router.ts";
 
 // ============================================================
 // Motor de OCR (engine) — lê ocr_engine_config (singleton)
 // ============================================================
-type OcrEngine = 'global' | 'mistral' | 'anthropic' | 'google';
+type OcrEngine = 'auto' | 'global' | 'mistral' | 'anthropic' | 'google';
 interface OcrEngineConfig {
   engine: OcrEngine;
   primary_model: string;
@@ -21,7 +23,7 @@ interface OcrEngineConfig {
   pdf_dpi: number;
 }
 const DEFAULT_OCR_ENGINE: OcrEngineConfig = {
-  engine: 'global',
+  engine: 'auto',
   primary_model: 'mistral-ocr-latest',
   secondary_model: 'claude-sonnet-4-5',
   dupla_leitura_tipos: ['cnh', 'crlv'],
@@ -58,13 +60,15 @@ const ENGINE_DEFAULTS: Record<'mistral'|'anthropic'|'google', { primary: string;
   google:    { primary: 'google/gemini-2.5-pro', secondary: 'google/gemini-2.5-pro' },
 };
 async function resolveEngine(cfg: OcrEngineConfig): Promise<{ engine: 'mistral'|'anthropic'|'google'; primary: string; secondary: string }> {
-  if (cfg.engine !== 'global') {
+  if (cfg.engine !== 'global' && cfg.engine !== 'auto') {
     return {
       engine: cfg.engine,
       primary: cfg.primary_model || ENGINE_DEFAULTS[cfg.engine].primary,
       secondary: cfg.secondary_model || ENGINE_DEFAULTS[cfg.engine].secondary,
     };
   }
+  // 'global' ou 'auto': usa provedor configurado no AIConfig (anthropic/google).
+  // Em 'auto' o roteador decidirá por documento se vale usar Mistral ou rasterizar.
   const ai = await getActiveAIConfig();
   const eng: 'anthropic'|'google' = ai.provider === 'anthropic' ? 'anthropic' : 'google';
   return { engine: eng, primary: ENGINE_DEFAULTS[eng].primary, secondary: ENGINE_DEFAULTS[eng].secondary };
@@ -1197,13 +1201,22 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           : (fileResponse.headers.get('content-type') || 'image/jpeg');
         const dataUri = `data:${mimeType};base64,${base64}`;
 
-        // Para PDFs, tentar extrair texto nativo
+        // Para PDFs, tentar extrair texto nativo via unpdf (mais robusto que
+        // o extrator regex antigo; funciona em edge runtime sem worker).
+        let unpdfScore = 0;
         if (isPdfUrl) {
           try {
-            // Decodificar o PDF e procurar texto embutido
-            const pdfText = await extractTextFromPDFBuffer(uint8Array);
-            if (pdfText && pdfText.length > 50) {
-              extractedPdfText = pdfText;
+            const u = await extractPdfTextUnpdf(uint8Array);
+            if (u.ok && u.text && u.text.length > 50) {
+              extractedPdfText = u.text;
+              unpdfScore = scoreExtractedText(u.text, tipoEsperado ?? undefined);
+            } else {
+              // fallback ao extrator antigo (regex sobre bytes brutos)
+              const pdfText = await extractTextFromPDFBuffer(uint8Array);
+              if (pdfText && pdfText.length > 50) {
+                extractedPdfText = pdfText;
+                unpdfScore = scoreExtractedText(pdfText, tipoEsperado ?? undefined);
+              }
             }
           } catch (pdfErr) {
             console.warn(`[OCR][${reqId}] Falha ao extrair texto nativo do PDF:`, pdfErr);
@@ -1215,18 +1228,49 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
         const isLikelyLowQuality = !isPdfUrl && (bytes < 80_000 || bytes > 4_500_000);
         const isPdfScanned = isPdfUrl && !extractedPdfText;
 
-        // Guarda PDF para Mistral (que aceita PDF nativo via /v1/ocr)
-        if (isPdfUrl && resolved.engine === 'mistral') {
+        // ───────────── ROTEADOR HEURÍSTICO DE OCR ─────────────
+        // Decide o método primário e a cascata de fallbacks com base em:
+        // tipo de arquivo, qualidade do texto nativo, tipo de doc esperado,
+        // engine configurada e disponibilidade de chaves.
+        const hasMistralKey = !!Deno.env.get('MISTRAL_API_KEY');
+        const hasAnthropicKey = !!Deno.env.get('ANTHROPIC_API_KEY');
+        var routerDecision = routeOcr({
+          isPdf: isPdfUrl,
+          isDataUri,
+          bytes,
+          nativeText: extractedPdfText,
+          nativeTextScore: unpdfScore,
+          expectedDocType: tipoEsperado ?? null,
+          configuredEngine: engineCfg.engine as any,
+          hasMistralKey,
+          hasAnthropicKey,
+        });
+        console.log(`[OCR][router] ${JSON.stringify({
+          reqId,
+          primary: routerDecision.primary,
+          fallbacks: routerDecision.fallbacks,
+          critical: routerDecision.critical,
+          reason: routerDecision.reason,
+          unpdfScore: unpdfScore.toFixed(2),
+        })}`);
+        logCtx.router_primary = routerDecision.primary;
+        logCtx.router_fallbacks = routerDecision.fallbacks;
+        logCtx.router_reason = routerDecision.reason;
+        logCtx.unpdf_score = Number(unpdfScore.toFixed(2));
+
+        // Guarda PDF para Mistral (que aceita PDF nativo via /v1/ocr) — usado
+        // se o roteador escolher mistral-ocr OU se for fallback.
+        if (isPdfUrl && (routerDecision.primary === 'mistral-ocr' || routerDecision.fallbacks.includes('mistral-ocr'))) {
           pdfBytesForMistral = uint8Array;
           publicUrlForMistral = isAllowedUrl ? url : null; // Mistral prefere URL pública
         }
 
-        // RASTERIZAÇÃO PDF→PNG: para engines não-Mistral, quando o PDF tem
-        // texto nativo pobre (ex.: CNH-e SENATRAN com só "Assinador Serpro"),
-        // converter as primeiras páginas em imagens nítidas para a IA ler.
+        // RASTERIZAÇÃO PDF→PNG: ativada quando o roteador escolhe raster-vlm
+        // (primário ou fallback) E o PDF tem texto nativo pobre.
+        const wantsRaster = routerDecision.primary === 'raster-vlm' || routerDecision.fallbacks.includes('raster-vlm');
         if (
           isPdfUrl &&
-          resolved.engine !== 'mistral' &&
+          wantsRaster &&
           engineCfg.pdf_rasterizar &&
           shouldRasterizePdf(extractedPdfText)
         ) {
@@ -1260,6 +1304,7 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           isPdf: isPdfUrl,
           hasNativeText: !!extractedPdfText,
           nativeTextLen: extractedPdfText.length,
+          unpdfScore: unpdfScore.toFixed(2),
           isLikelyLowQuality,
           isPdfScanned,
           rasterizedPages: rasterizedImages.length,
@@ -1551,24 +1596,106 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
       return { result: parsed, raw: contentStr, durationMs: Date.now() - t0, usage: px.data?.usage };
     };
 
-    // ── Passada A (principal) ───────────────────────────────────
-    const firstPass = resolved.engine === 'mistral'
-      ? await runMistralPass('main-mistral')
-      : await runEnginePass(resolved.primary, 'main');
+    // ── Passada A (principal) — segue cascata do roteador ───────────
+    // Helper: roda um único método.
+    const runMethod = async (method: OcrMethod, label: string) => {
+      switch (method) {
+        case 'mistral-ocr':
+          return await runMistralPass(label);
+        case 'text-llm': {
+          // Estrutura SOMENTE o texto nativo via LLM (sem visão).
+          // Vantagem: muito mais barato e exato quando há texto rico.
+          if (!extractedPdfText || extractedPdfText.length < 80) return null;
+          const provider = resolved.engine === 'anthropic' ? 'anthropic' : 'lovable';
+          const model = resolved.engine === 'anthropic' ? resolved.primary : 'google/gemini-2.5-pro';
+          const t0 = Date.now();
+          const r = await callAI({
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: `${userPrompt}\n\n--- TEXTO EXTRAÍDO DO PDF (camada nativa) ---\n${extractedPdfText.slice(0, 30_000)}\n--- FIM ---` },
+            ],
+            max_tokens: 8192,
+            temperature: 0,
+            override: { provider, model },
+            fallbackToLovable: true,
+          });
+          if (!r.ok) {
+            console.error(`[OCR][text-llm] ${JSON.stringify({ reqId, label, status: r.status, error: r.errorMessage?.slice(0,200) })}`);
+            return null;
+          }
+          const contentStr = r.data?.choices?.[0]?.message?.content ?? '';
+          if (!contentStr) return null;
+          let parsed: any;
+          try {
+            const clean = contentStr.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            parsed = JSON.parse(clean);
+          } catch {
+            const repaired = tryRepairTruncatedJSON(contentStr);
+            if (!repaired) return null;
+            parsed = repaired;
+          }
+          return {
+            result: parsed, raw: contentStr,
+            durationMs: Date.now() - t0,
+            finishReason: r.data?.choices?.[0]?.message ? 'stop' : undefined,
+            usage: r.data?.usage,
+          };
+        }
+        case 'raster-vlm':
+        case 'image-vlm':
+        default:
+          return await runEnginePass(resolved.primary, label);
+      }
+    };
 
-    if (!firstPass) {
-      // Fallback de emergência: tenta Lovable Gateway com Gemini Pro
-      console.warn(`[OCR][${reqId}] motor ${resolved.engine} falhou, tentando fallback Lovable/Gemini`);
+    // Avalia se o resultado de uma passada é "bom o suficiente" pra parar a cascata.
+    const isGoodEnough = (r: any): boolean => {
+      if (!r?.result) return false;
+      const conf = Number(r.result?.confianca ?? 0);
+      if (r.result?.legivel === false) return false;
+      if (r.result?.sucesso === false) return false;
+      // Pra crítico (CNH/CRLV) exigimos confiança maior antes de pular fallback
+      const minConf = routerDecision.critical ? 0.7 : 0.55;
+      return Number.isFinite(conf) && conf >= minConf;
+    };
+
+    const cascade: { method: OcrMethod; label: string }[] = [
+      { method: routerDecision.primary, label: `main-${routerDecision.primary}` },
+      ...routerDecision.fallbacks.map((m, i) => ({ method: m, label: `fallback${i + 1}-${m}` })),
+    ];
+
+    let firstPassResolved: any = null;
+    let usedMethod: OcrMethod = routerDecision.primary;
+    for (const step of cascade) {
+      console.log(`[OCR][cascade] ${JSON.stringify({ reqId, try: step.label })}`);
+      const r = await runMethod(step.method, step.label);
+      if (r) {
+        usedMethod = step.method;
+        firstPassResolved = r;
+        if (isGoodEnough(r)) {
+          console.log(`[OCR][cascade] ${JSON.stringify({ reqId, accepted: step.label, conf: r.result?.confianca })}`);
+          break;
+        }
+        console.warn(`[OCR][cascade] ${JSON.stringify({ reqId, weak: step.label, conf: r.result?.confianca, sugestao: r.result?.sugestao })}`);
+        // Mantém esse resultado mas tenta o próximo da cascata pra ver se melhora.
+      } else {
+        console.warn(`[OCR][cascade] ${JSON.stringify({ reqId, failed: step.label })}`);
+      }
+    }
+
+    if (!firstPassResolved) {
+      // Fallback de emergência final: Lovable Gateway com Gemini Pro
+      console.warn(`[OCR][${reqId}] cascata inteira falhou, fallback final Lovable/Gemini`);
       const fb = await runEnginePass('google/gemini-2.5-pro', 'fallback-emergency', 'lovable');
       if (!fb) {
         return await ocrFallbackResponse('Erro ao processar documento com IA. Documento enviado para revisão manual.');
       }
       logCtx.fallback_emergency = true;
       logCtx.modelo = 'google/gemini-2.5-pro';
-      var firstPassResolved = fb;
-    } else {
-      var firstPassResolved = firstPass;
+      firstPassResolved = fb;
+      usedMethod = 'image-vlm';
     }
+    logCtx.router_used_method = usedMethod;
 
     logCtx.usage = firstPassResolved.usage ?? null;
     logCtx.modelo = resolved.primary;
