@@ -1,104 +1,125 @@
 ## Objetivo
 
-Permitir que o usuário escolha o **provedor de IA** (Lovable AI Gateway, OpenAI direto, Anthropic direto) e o **modelo específico** em um único lugar (`Configurações → Integrações → WhatsApp → IA & Respostas`). A escolha vale para **TODAS** as funcionalidades de IA do sistema, inclusive leitura de documentos (OCR).
+Permitir gerenciar as **API Keys** de OpenAI e Anthropic diretamente no card de IA (em `/configuracoes/integracoes/ia`), e corrigir a lista de modelos para refletir os lançamentos mais recentes (com **Claude Opus 4.5** como topo da Anthropic).
 
-## Escopo
+---
 
-### 1. Banco de dados
+## 1. Inputs de API Key no front
 
-Nova tabela `ai_model_config` (singleton — uma linha global) com migração:
+No `AIModelConfigCard.tsx`, quando o provedor for `openai` ou `anthropic`, mostrar:
 
-```
-- id (uuid, pk)
-- provider (text: 'lovable' | 'openai' | 'anthropic')
-- model (text: ex.: 'google/gemini-3-flash-preview', 'gpt-5.2', 'claude-sonnet-4-5')
-- updated_by (uuid, profiles)
-- updated_at (timestamptz)
-```
+- Campo `Input` mascarado (type=password, com botão olho para revelar) para a chave correspondente:
+  - `OPENAI_API_KEY` quando provedor = OpenAI
+  - `ANTHROPIC_API_KEY` quando provedor = Anthropic
+- Badge "Configurada ✓" / "Não configurada" indicando se já existe a secret no backend.
+- Botão **Salvar chave** que envia para uma nova edge function `ai-secret-manager`.
+- Link/ajuda discreta: "A chave fica armazenada de forma segura no backend (nunca exposta ao navegador)."
 
-RLS: SELECT para qualquer usuário autenticado (edge functions via service role); UPDATE/INSERT só para diretores/desenvolvedores.
+Alterar a `Alert` atual (que pedia para configurar manualmente em Cloud → Settings) para algo mais simples, já que agora a configuração é feita pela UI.
 
-Tabela auxiliar opcional **não criada** — lista de modelos por provedor fica hardcoded no front (atualizável via deploy).
+## 2. Edge function `ai-secret-manager`
 
-### 2. Secrets necessários (sob demanda)
+Nova função (`supabase/functions/ai-secret-manager/index.ts`) com duas ações:
 
-- `LOVABLE_API_KEY` — já existe.
-- `OPENAI_API_KEY` — solicitado ao usuário ao escolher OpenAI pela primeira vez (se ainda não existir).
-- `ANTHROPIC_API_KEY` — solicitado ao escolher Anthropic.
+- `GET status` → retorna `{ openai: boolean, anthropic: boolean }` indicando presença das secrets (nunca o valor).
+- `POST set` → recebe `{ provider: 'openai'|'anthropic', value: string }`, valida que o usuário autenticado é Diretor ou Desenvolvedor, e grava a secret usando a Management API do Supabase.
 
-A UI mostra um aviso "Chave não configurada — clique para adicionar" quando o provedor selecionado exige uma chave ausente.
+Como secrets de runtime de Edge Functions não podem ser gravadas pelo runtime padrão, a função vai usar a **Supabase Management API** (`PATCH /v1/projects/{ref}/secrets`) com um `SUPABASE_ACCESS_TOKEN`. Caso o token não esteja disponível, a função retorna 501 com instrução clara.
 
-### 3. Helper compartilhado (novo)
+Alternativa mais simples (preferida): armazenar as keys cifradas em uma nova tabela `ai_provider_keys` (singleton por provedor, RLS apenas Diretor/Desenvolvedor leem; gravação via service role na edge), e o `_shared/ai-client.ts` passa a ler dessa tabela como **prioridade**, caindo para `Deno.env.get(...)` se a tabela estiver vazia. Isso evita depender de Management API e funciona 100% pelo front.
 
-Criar `supabase/functions/_shared/ai-client.ts` exportando:
+**Decisão técnica:** usaremos a tabela `ai_provider_keys` (mais simples e auditável).
 
-- `getActiveAIConfig(supabase)` — lê `ai_model_config`; fallback `{provider:'lovable', model:'google/gemini-3-flash-preview'}`.
-- `callAI({ messages, tools?, response_format?, stream?, imageInputs? })` — roteia transparentemente:
-  - **lovable** → `https://ai.gateway.lovable.dev/v1/chat/completions` (formato OpenAI compatível, payload e tools idênticos ao atual).
-  - **openai** → `https://api.openai.com/v1/chat/completions` (mesmo shape OpenAI).
-  - **anthropic** → `https://api.anthropic.com/v1/messages` com adaptador (converte messages/tools OpenAI-style → Anthropic e resposta de volta).
-- Trata 429/402 e devolve erros padronizados.
-- Suporta visão (imageInputs) — necessário para OCR; se Anthropic, converte para blocks `image`.
+### Schema novo
+```sql
+create table public.ai_provider_keys (
+  provider text primary key check (provider in ('openai','anthropic')),
+  api_key text not null,                      -- valor em claro (acessado só via service role na edge)
+  updated_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id)
+);
+alter table public.ai_provider_keys enable row level security;
 
-### 4. Refator das edge functions de IA
+-- Apenas leitura de presença (boolean) feita via RPC; nenhuma policy de SELECT direto para clientes
+create policy "diretor_dev_can_manage" on public.ai_provider_keys
+  for all
+  using (public.has_role(auth.uid(),'diretor') or public.has_role(auth.uid(),'desenvolvedor'))
+  with check (public.has_role(auth.uid(),'diretor') or public.has_role(auth.uid(),'desenvolvedor'));
 
-Substituir todas as chamadas diretas a `ai.gateway.lovable.dev` pelo novo `callAI()`. Funções afetadas:
-
-```
-analise-risco-ia, assistente-chat, agente-consultor-ia,
-document-ocr, chassi-ocr, odometro-ocr,
-analise-consistencia-relatos, melhorar-texto-relato-erro,
-pesquisar-antecedentes, gerar-prompt-correcao-erro,
-formatar-texto-ia, gerar-mensagem-whatsapp,
-gerar-descricao-linha, sugerir-ressalva-ia,
-extract-orcamento-pdf, whatsapp-webhook,
-whatsapp-template-validar, whatsapp-meta-webhook
-```
-
-`gerar-imagem-plano` permanece em Lovable Gateway (geração de imagem; OpenAI/Anthropic não são equivalentes diretos — registramos isso como limitação visível).
-
-OCR (`document-ocr`, `chassi-ocr`, `odometro-ocr`): mantém a lógica de retry; só troca o transport. Se o modelo selecionado não for multimodal, faz fallback automático para `google/gemini-3-flash-preview` no Lovable Gateway e loga aviso.
-
-### 5. UI — novo card "Modelo de IA"
-
-Localização: `src/pages/configuracoes/IntegracaoWhatsApp.tsx` aba **IA & Respostas**, acima do `WhatsAppIAConfig`.
-
-Componente novo: `src/components/integracoes/AIModelConfigCard.tsx`
-
-```text
-┌─ Modelo de IA (global) ─────────────────────┐
-│ Provedor: [ Lovable AI ▾ ]                  │
-│ Modelo:   [ google/gemini-3-flash-preview ▾]│
-│                                             │
-│ ⓘ Aplicado a: OCR, Chat IA, Consultor,      │
-│   Análise de risco, WhatsApp e demais       │
-│   automações.                               │
-│                                             │
-│ [Salvar]                                    │
-└─────────────────────────────────────────────┘
+create or replace function public.ai_provider_keys_status()
+returns table(provider text, configured boolean)
+language sql security definer set search_path=public as $$
+  select p.provider, exists(select 1 from public.ai_provider_keys k where k.provider = p.provider) as configured
+  from (values ('openai'),('anthropic')) p(provider);
+$$;
 ```
 
-Listas de modelos:
-- **Lovable**: gemini-3-flash-preview, gemini-3.1-pro-preview, gemini-2.5-pro, gemini-2.5-flash, gemini-2.5-flash-lite, gpt-5, gpt-5-mini, gpt-5-nano, gpt-5.2.
-- **OpenAI** (direto): gpt-5.2, gpt-5, gpt-5-mini, gpt-4.1, gpt-4o, o4-mini.
-- **Anthropic**: claude-sonnet-4-5, claude-opus-4-1, claude-haiku-4-5, claude-3-7-sonnet.
+### `_shared/ai-client.ts`
+Adicionar helper `getProviderKey(provider)` que:
+1. Tenta `select api_key from ai_provider_keys where provider = ?` usando service role.
+2. Se vazio, cai para `Deno.env.get('OPENAI_API_KEY' | 'ANTHROPIC_API_KEY')`.
+3. Se ambos vazios e provider != lovable, faz fallback para Lovable Gateway (já existe).
 
-Se provedor exige chave ausente, exibe alerta com botão "Adicionar chave" (abre instruções) — bloqueia salvar.
+### Edge function `ai-secret-manager`
+- `POST { action: 'set', provider, value }` → upsert na tabela (service role).
+- `POST { action: 'remove', provider }` → delete.
+- `POST { action: 'status' }` → chama RPC `ai_provider_keys_status`.
 
-Acesso restrito a diretor / desenvolvedor (via `usePermissions`).
+## 3. Hook `useAIProviderKeys`
 
-### 6. Hook front
+Novo hook em `src/hooks/useAIProviderKeys.ts`:
+- `useAIProviderKeysStatus()` → react-query que invoca a edge `ai-secret-manager` action `status`.
+- `useSetAIProviderKey()` → mutation para gravar a chave.
+- `useRemoveAIProviderKey()` → mutation para remover.
 
-`src/hooks/useAIModelConfig.ts` — TanStack Query (`select` + `update`) com invalidação.
+## 4. Atualização da lista de modelos
 
-## Fora do escopo
+Em `src/hooks/useAIModelConfig.ts`, atualizar `AI_PROVIDER_MODELS`:
 
-- Não criamos UI por funcionalidade (modelo único global, conforme pedido).
-- Modelo de geração de imagem fica fixo no Lovable Gateway (a UI deixa isso explícito).
+**Anthropic** (mais recente primeiro):
+- `claude-opus-4-5` — Claude Opus 4.5 (mais recente)
+- `claude-sonnet-4-5` — Claude Sonnet 4.5
+- `claude-haiku-4-5` — Claude Haiku 4.5 (rápido)
+- `claude-opus-4-1` — Claude Opus 4.1
+- `claude-3-7-sonnet-latest` — Claude 3.7 Sonnet
 
-## Critérios de aceite
+**OpenAI** (manter "mais recente" no topo):
+- `gpt-5.2` — GPT-5.2 (mais recente)
+- `gpt-5.1` — GPT-5.1
+- `gpt-5` — GPT-5
+- `gpt-5-mini` — GPT-5 Mini
+- `gpt-5-nano` — GPT-5 Nano
+- `o4-mini` — o4-mini (raciocínio)
+- `gpt-4.1` — GPT-4.1
+- `gpt-4o` — GPT-4o (multimodal)
 
-1. Trocar para `openai/gpt-5.2` faz o `assistente-chat` responder via OpenAI direto (verificável nos logs).
-2. Trocar para `anthropic/claude-sonnet-4-5` faz o `document-ocr` processar uma CNH usando Anthropic.
-3. Ausência de `OPENAI_API_KEY` ao salvar OpenAI bloqueia gravação com mensagem clara.
-4. Sem configuração salva, sistema continua funcionando com fallback Lovable + gemini-3-flash-preview (zero regressão).
+**Lovable Gateway**: adicionar `google/gemini-3-pro-preview` no topo, manter os demais.
+
+## 5. UX do card
+
+```
+Provedor: [Anthropic ▼]    Modelo: [Claude Opus 4.5 ▼]
+
+┌─ Chave da API Anthropic ─────────────────────────────┐
+│ [••••••••••••••••••••••••]  [👁]  [Salvar] [Remover] │
+│ Status: ✓ Configurada                                │
+└──────────────────────────────────────────────────────┘
+
+[Salvar configuração]   ← grava provider+model
+```
+
+Quando provedor = Lovable, esconde o bloco de chave e mantém o alert verde atual.
+
+---
+
+## Arquivos
+
+**Criar**
+- `supabase/migrations/<ts>_ai_provider_keys.sql`
+- `supabase/functions/ai-secret-manager/index.ts`
+- `src/hooks/useAIProviderKeys.ts`
+
+**Editar**
+- `src/components/integracoes/AIModelConfigCard.tsx` — adicionar bloco de API key, badge de status, mutations.
+- `src/hooks/useAIModelConfig.ts` — atualizar listas de modelos (Opus 4.5 no topo da Anthropic, GPT-5.2/5.1 no topo da OpenAI, Gemini 3 Pro no Lovable).
+- `supabase/functions/_shared/ai-client.ts` — `getProviderKey()` consulta tabela antes do `Deno.env`.

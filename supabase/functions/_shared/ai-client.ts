@@ -25,6 +25,39 @@ const DEFAULT_CONFIG: AIConfig = {
 let _cache: { value: AIConfig; ts: number } | null = null;
 const CACHE_TTL_MS = 30_000;
 
+const _keyCache: Record<string, { value: string | null; ts: number }> = {};
+
+/**
+ * Busca a chave do provedor preferindo a tabela `ai_provider_keys` (configurada
+ * pela UI) e caindo para a env var como fallback.
+ */
+export async function getProviderKey(provider: "openai" | "anthropic"): Promise<string | null> {
+  const cached = _keyCache[provider];
+  if (cached && Date.now() - cached.ts < CACHE_TTL_MS) return cached.value;
+
+  let value: string | null = null;
+  try {
+    const url = Deno.env.get("SUPABASE_URL");
+    const srk = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (url && srk) {
+      const sb = createClient(url, srk);
+      const { data } = await sb
+        .from("ai_provider_keys")
+        .select("api_key")
+        .eq("provider", provider)
+        .maybeSingle();
+      if (data?.api_key) value = data.api_key as string;
+    }
+  } catch (e) {
+    console.warn(`[ai-client] falha lendo ai_provider_keys(${provider})`, e);
+  }
+  if (!value) {
+    value = Deno.env.get(provider === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY") ?? null;
+  }
+  _keyCache[provider] = { value, ts: Date.now() };
+  return value;
+}
+
 export async function getActiveAIConfig(): Promise<AIConfig> {
   if (_cache && Date.now() - _cache.ts < CACHE_TTL_MS) return _cache.value;
   try {
@@ -138,7 +171,7 @@ async function callLovable(cfg: AIConfig, opts: CallAIOptions): Promise<CallAIRe
 // ─────────────────────────────────────────── OpenAI direto
 
 async function callOpenAI(cfg: AIConfig, opts: CallAIOptions): Promise<CallAIResult> {
-  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  const apiKey = await getProviderKey("openai");
   if (!apiKey) throw new Error("OPENAI_API_KEY não configurada");
 
   const body: any = {
@@ -176,7 +209,7 @@ async function callOpenAI(cfg: AIConfig, opts: CallAIOptions): Promise<CallAIRes
 // ─────────────────────────────────────────── Anthropic direto (adaptador)
 
 async function callAnthropic(cfg: AIConfig, opts: CallAIOptions): Promise<CallAIResult> {
-  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  const apiKey = await getProviderKey("anthropic");
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY não configurada");
 
   // Separa system messages
