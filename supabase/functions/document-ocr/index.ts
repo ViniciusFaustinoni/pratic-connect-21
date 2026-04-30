@@ -924,6 +924,15 @@ type OcrLogCtx = {
   dados_esperados?: any;
   modo_teste?: boolean;
   ocrLogId?: string | null;
+  // Motor OCR (v5)
+  engine?: string | null;
+  primary_model?: string | null;
+  secondary_model?: string | null;
+  dupla_leitura?: boolean;
+  divergencias?: any;
+  pdf_rasterizado?: boolean;
+  pdf_paginas_rasterizadas?: number | null;
+  fallback_emergency?: boolean;
 };
 
 async function persistOcrLog(ctx: OcrLogCtx, outcome: {
