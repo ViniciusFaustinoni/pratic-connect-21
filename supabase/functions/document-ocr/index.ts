@@ -963,11 +963,12 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
     // Retorna { result, raw } se sucesso, ou null se falha (já loga + repassa fallback).
     type OcrPass = { result: any; raw: string; durationMs: number; finishReason?: string; usage?: any };
     const runOcrPass = async (model: string, parts: any[], label: string): Promise<OcrPass | null> => {
+      const MAX_TOKENS = 8192;
       const requestPayloadSummary = {
         reqId,
         label,
         model,
-        max_tokens: 4096,
+        max_tokens: MAX_TOKENS,
         parts: parts.length,
         block_types: parts.map((p: any) => p?.type),
         hasNativeText: !!extractedPdfText,
@@ -983,7 +984,7 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
             { role: 'system', content: systemPrompt },
             { role: 'user', content: parts },
           ],
-          max_tokens: 4096,
+          max_tokens: MAX_TOKENS,
           temperature: 0,
         }, LOVABLE_API_KEY, label);
       } catch (gwErr) {
@@ -1025,11 +1026,14 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
       const contentStr = dataObj?.choices?.[0]?.message?.content ?? '';
       const finishReason = dataObj?.choices?.[0]?.finish_reason;
       const usage = dataObj?.usage;
+      // Detecção de truncamento: openai/gemini = 'length', anthropic = 'max_tokens'
+      const wasTruncated = finishReason === 'length' || finishReason === 'max_tokens';
 
       console.log(`[OCR][ai_response] ${JSON.stringify({
         reqId, label, model, status: resp.status,
         latencyMs: Date.now() - t0,
         finish_reason: finishReason,
+        truncated: wasTruncated,
         usage,
         content_chars: contentStr.length,
       })}`);
@@ -1043,6 +1047,11 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
         clean = clean.replace(/:\s*_[A-Z_]+_\s*([,}\]])/g, ': null$1');
         parsed = JSON.parse(clean);
       } catch {
+        // Se foi truncado, NÃO confiar no reparo — marcar como falha para retry
+        if (wasTruncated) {
+          console.error(`[OCR][${reqId}] resposta truncada (${label}) — descartando reparo regex e marcando para retry`);
+          return null;
+        }
         const repaired = tryRepairTruncatedJSON(contentStr);
         if (repaired) {
           console.warn(`[OCR][${reqId}] JSON reparado após truncamento (${label})`);
@@ -1051,6 +1060,11 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           console.error(`[OCR][${reqId}] parse falhou (${label}), conteúdo:`, contentStr.slice(0, 500));
           return null;
         }
+      }
+
+      // Marcador de truncamento no resultado para o caller decidir retry
+      if (wasTruncated && parsed && typeof parsed === 'object') {
+        parsed.__truncated = true;
       }
 
       return { result: parsed, raw: contentStr, durationMs: Date.now() - t0, finishReason, usage };
