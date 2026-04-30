@@ -215,12 +215,17 @@ async function callAnthropic(cfg: AIConfig, opts: CallAIOptions): Promise<CallAI
   // Separa system messages
   const sys: string[] = [];
   const userMsgs: any[] = [];
+  let hasDocumentBlock = false;
   for (const m of opts.messages) {
     if (m.role === "system") {
       sys.push(typeof m.content === "string" ? m.content : JSON.stringify(m.content));
       continue;
     }
-    userMsgs.push(toAnthropicMessage(m));
+    const converted = toAnthropicMessage(m);
+    if (Array.isArray(converted.content) && converted.content.some((b: any) => b?.type === "document")) {
+      hasDocumentBlock = true;
+    }
+    userMsgs.push(converted);
   }
 
   const body: any = {
@@ -232,14 +237,18 @@ async function callAnthropic(cfg: AIConfig, opts: CallAIOptions): Promise<CallAI
   if (typeof opts.temperature === "number") body.temperature = opts.temperature;
   if (opts.tools && opts.tools.length) body.tools = opts.tools.map(toAnthropicTool);
 
+  const headers: Record<string, string> = {
+    "x-api-key": apiKey,
+    "anthropic-version": "2023-06-01",
+    "Content-Type": "application/json",
+  };
+  // PDFs precisam do beta header em modelos mais antigos; inofensivo em Sonnet 4.5+
+  if (hasDocumentBlock) headers["anthropic-beta"] = "pdfs-2024-09-25";
+
   // Streaming não é suportado neste adaptador; cai pra non-stream.
   const resp = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify(body),
   });
 
