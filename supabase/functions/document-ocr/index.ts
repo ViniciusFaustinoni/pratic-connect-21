@@ -397,12 +397,22 @@ const systemPrompt = `Analista de documentos brasileiros. Detecte o tipo e extra
 ## Tipos e campos obrigatórios:
 
 ### CNH
-nome, cpf (XXX.XXX.XXX-XX - PRIORIDADE MÁXIMA), rg, numero_registro (11 dígitos), data_nascimento (YYYY-MM-DD), validade (YYYY-MM-DD), categoria
+nome, cpf (XXX.XXX.XXX-XX - PRIORIDADE MÁXIMA), rg, numero_registro (11 dígitos), data_nascimento (YYYY-MM-DD), validade (YYYY-MM-DD), categoria, mrz_registro (string)
+
+- MRZ_REGISTRO (campo de validação cruzada — OBRIGATÓRIO em CNH-e digital):
+  No RODAPÉ da página há 3 linhas de leitura mecânica (MRZ) com letras "<" como separador. A PRIMEIRA dessas linhas começa com "I<BRA" e contém os dígitos do número de registro da CNH. Exemplo: "I<BRA070646502<024<<<<<<<<<<<<".
+  Extraia EXATAMENTE essa primeira linha (a sequência completa, com os "<" preservados) no campo "mrz_registro". Não invente: se não conseguir ler, retorne mrz_registro:"". Esse campo será usado para validar o "numero_registro".
+
 - CPF SEMPRE existe na CNH: campo "CPF"/"CPF/MF", próximo ao nome/foto. Procure sequências de 11 dígitos.
 - NÃO confunda com RENACH (tem letras), registro CNH ou RG.
 - NUNCA retorne cpf:null. Se ilegível: cpf:"ilegivel"
 - LEIA CADA DÍGITO DO CPF INDIVIDUALMENTE, DA ESQUERDA PARA A DIREITA. O CPF possui dígitos verificadores matemáticos — se tiver dúvida em qualquer dígito, retorne cpf:"ilegivel" em vez de adivinhar.
-- CATEGORIA: leia EXCLUSIVAMENTE do campo "9 CAT HAB" que fica na frente da CNH, ao lado do CPF e nº registro. NÃO extraia da grade/tabela de categorias (verso ou rodapé) que lista ACC, A, B, C, D, BE, CE, DE etc com datas de habilitação. A grade é apenas um detalhamento — a categoria principal está no campo "9 CAT HAB". Categorias válidas: A, B, C, D, E, AB, AC, AD, AE, ACC.
+- CATEGORIA (REGRA CRÍTICA — LEIA COM ATENÇÃO):
+  • Leia EXCLUSIVAMENTE do campo rotulado "9 CAT HAB", que fica EMBAIXO/À DIREITA, ao lado do "5 Nº REGISTRO" (sequência de 11 dígitos). É a letra/sigla dentro da caixinha rotulada com o número "9" e o texto "CAT HAB".
+  • ARMADILHA #1 — Campo "ACC": existe uma OUTRA caixinha pequena no TOPO/À DIREITA, ao lado do campo "4b VALIDADE" (data dd/mm/aaaa). Essa caixa é rotulada "ACC" e contém uma única letra grande (frequentemente D, E ou vazia). ESSA LETRA NÃO É CATEGORIA — é o código de Atividade Remunerada / Exercício de Atividade. NUNCA use o conteúdo do campo ACC como categoria.
+  • ARMADILHA #2 — Grade do verso/rodapé: existe uma tabela com linhas ACC, A, A1, B, B1, C, C1, D, D1, BE, CE, DE, C1E, D1E e datas ao lado. Essa tabela é apenas o detalhamento das categorias habilitadas — não a categoria principal.
+  • DICA DE VALIDAÇÃO: a categoria correta (do campo "9 CAT HAB") SEMPRE aparece também na grade do verso com uma data de validade ao lado, e essa data normalmente coincide (ou é a mesma) da validade principal "4b" da CNH. Se você está em dúvida entre duas letras, escolha a que tem data igual à validade principal.
+  • Categorias válidas: ACC, A, A1, B, B1, C, C1, D, D1, E, AB, AC, AD, AE, BE, CE, DE, C1E, D1E.
 
 ### RG / CIN (Carteira de Identidade Nacional)
 Aceite TANTO o RG antigo (modelo estadual com REGISTRO GERAL próprio) QUANTO a nova CIN (Carteira de Identidade Nacional - válida em todo território nacional, com QR Code, layout bilíngue PT/EN, texto "VÁLIDA EM TODO O TERRITÓRIO NACIONAL"). Ambos retornam tipo_detectado:"rg".
@@ -617,7 +627,7 @@ function tryRepairTruncatedJSON(raw: string): object | null {
       const dados: Record<string, string | null> = {};
       const dadosFields = [
         // pessoais
-        'nome', 'cpf', 'rg', 'data_nascimento', 'numero_registro', 'validade', 'data_expedicao', 'orgao_expedidor', 'categoria', 'variante',
+        'nome', 'cpf', 'rg', 'data_nascimento', 'numero_registro', 'validade', 'data_expedicao', 'orgao_expedidor', 'categoria', 'variante', 'mrz_registro',
         // veículo
         'placa', 'renavam', 'chassi', 'marca', 'modelo', 'cor', 'combustivel', 'motor', 'numero_motor', 'nome_proprietario',
         // comprovante de residência
@@ -830,8 +840,9 @@ function extractCNHFromText(text: string): Record<string, any> {
   const regMatch = text.match(/(?:N[ºO°]\s*REGISTRO|REGISTRO\s+CNH|REGISTRO)[^\d]*(\d{11})/i);
   if (regMatch) out.numero_registro = regMatch[1];
 
-  // Categoria CAT HAB
-  const catMatch = text.match(/CAT[\.\s]*HAB[^\w]*([A-E]{1,2}|ACC)/i);
+  // Categoria CAT HAB — ordem importa: prefixos longos antes dos curtos
+  // (ex.: C1E antes de C1 antes de C; AB/AC/AD/AE antes de A; BE antes de B).
+  const catMatch = text.match(/CAT[\.\s]*HAB[^\w]*(ACC|C1E|D1E|A1|B1|C1|D1|AB|AC|AD|AE|BE|CE|DE|A|B|C|D|E)\b/i);
   if (catMatch) out.categoria = catMatch[1].toUpperCase();
 
   // RG
@@ -1836,19 +1847,60 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           const cpfB = String(passB.result?.dados?.cpf ?? '').replace(/\D/g, '');
           const aValidCpf = cpfA.length === 11 && validateCPF(cpfA);
           const bValidCpf = cpfB.length === 11 && validateCPF(cpfB);
-          const tiebreaker =
+
+          // Tiebreaker #1 — MRZ da CNH-e: a 1ª linha do MRZ ("I<BRA<dígitos>")
+          // contém os 9 primeiros dígitos do nº de registro. Quem casar com o MRZ
+          // tem leitura visual fiel (não alucinou). Vale para CNH (não CRLV).
+          //
+          // Fontes do MRZ, em ordem de preferência:
+          //   1) texto nativo do PDF (extractedPdfText) — verdade absoluta em CNH-e SENATRAN.
+          //   2) campo mrz_registro retornado pela IA (passada A ou B).
+          const mrzFromString = (s: unknown): string => {
+            if (!s) return '';
+            const str = String(s).toUpperCase().replace(/\s+/g, '');
+            const m = str.match(/I<BRA(\d{9,11})/);
+            return m ? m[1] : '';
+          };
+          let tiebreakerMrz: 'A' | 'B' | null = null;
+          if (tipoParaDupla === 'cnh') {
+            const mrzNative = mrzFromString(extractedPdfText);
+            const mrzA = mrzFromString(firstPassResolved.result?.dados?.mrz_registro);
+            const mrzB = mrzFromString(passB.result?.dados?.mrz_registro);
+            const regA = String(firstPassResolved.result?.dados?.numero_registro ?? '').replace(/\D/g, '');
+            const regB = String(passB.result?.dados?.numero_registro ?? '').replace(/\D/g, '');
+            // Prioridade: nativo (não pode mentir) > IA (pode alucinar)
+            const mrzAuthoritative = mrzNative || ((mrzA && mrzB && mrzA === mrzB) ? mrzA : (mrzA || mrzB));
+            if (mrzAuthoritative) {
+              // O MRZ tem 9 dígitos do registro (sem o último par de check).
+              // Casa se os primeiros 9 dígitos do numero_registro batem.
+              const mrzKey = mrzAuthoritative.slice(0, 9);
+              const aMatchesMrz = regA.length >= 9 && regA.slice(0, 9) === mrzKey;
+              const bMatchesMrz = regB.length >= 9 && regB.slice(0, 9) === mrzKey;
+              if (aMatchesMrz && !bMatchesMrz) tiebreakerMrz = 'A';
+              else if (!aMatchesMrz && bMatchesMrz) tiebreakerMrz = 'B';
+              console.log(`[OCR][dupla-leitura][mrz] ${JSON.stringify({ reqId, mrzNative, mrzA, mrzB, mrzAuthoritative, regA, regB, tiebreakerMrz })}`);
+            }
+          }
+
+
+          // Tiebreaker #2 — CPF checksum (mantém comportamento antigo)
+          const tiebreakerCpf =
             aValidCpf && !bValidCpf ? 'A' :
             !aValidCpf && bValidCpf ? 'B' : null;
 
+          // MRZ tem prioridade sobre CPF checksum (ambos podem passar checksum
+          // por coincidência; MRZ é leitura mecânica direta da imagem).
+          const tiebreaker = tiebreakerMrz ?? tiebreakerCpf;
+
           if (tiebreaker === 'A') {
-            console.log(`[OCR][dupla-leitura][tiebreaker] ${JSON.stringify({ reqId, winner: 'A', reason: 'cpf-checksum', cpfA, cpfB })}`);
-            // A venceu por checksum → mantém dados de A com confiança da primária menos 0.05
+            console.log(`[OCR][dupla-leitura][tiebreaker] ${JSON.stringify({ reqId, winner: 'A', reason: tiebreakerMrz ? 'mrz' : 'cpf-checksum', cpfA, cpfB })}`);
+            // A venceu → mantém dados de A
             result.sugestao = 'revisar';
             result.confianca = Math.min(1, Math.max(Number(result.confianca ?? 0.85), 0.9));
             result.divergencias = cmp.mismatches;
           } else if (tiebreaker === 'B') {
-            console.log(`[OCR][dupla-leitura][tiebreaker] ${JSON.stringify({ reqId, winner: 'B', reason: 'cpf-checksum', cpfA, cpfB })}`);
-            // B venceu por checksum → adota dados de B
+            console.log(`[OCR][dupla-leitura][tiebreaker] ${JSON.stringify({ reqId, winner: 'B', reason: tiebreakerMrz ? 'mrz' : 'cpf-checksum', cpfA, cpfB })}`);
+            // B venceu → adota dados de B
             Object.assign(result, passB.result);
             result.sugestao = 'revisar';
             result.confianca = Math.min(1, Math.max(Number(passB.result.confianca ?? 0.85), 0.9));
