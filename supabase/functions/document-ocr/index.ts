@@ -2016,7 +2016,7 @@ Use a função para retornar o chassi encontrado, ou "ilegivel" se identificar o
     });
 
     return new Response(
-      JSON.stringify(result),
+      JSON.stringify({ ...result, ocrLogId: logCtx.ocrLogId ?? null, scoreCampos: logCtx.dados_esperados ? (result?.scoreCampos ?? null) : null }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
