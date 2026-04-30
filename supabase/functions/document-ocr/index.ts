@@ -735,7 +735,7 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
 - Inclua o campo "validacao_titularidade" na resposta com os detalhes da comparação.`;
     }
 
-    console.log('Calling Lovable AI Gateway for document OCR:', url);
+    // (log de URL substituído por [OCR][in] com urlHash, evitando exposição em massa)
 
     // Baixar arquivo e converter para base64
     const isPdfUrl = url.toLowerCase().endsWith('.pdf') || url.toLowerCase().includes('.pdf?') || url.toLowerCase().includes('.pdf_');
