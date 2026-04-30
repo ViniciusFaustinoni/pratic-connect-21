@@ -30,8 +30,9 @@ interface OcrEngineConfig {
 }
 const DEFAULT_OCR_ENGINE: OcrEngineConfig = {
   engine: 'auto',
-  primary_model: 'mistral-ocr-latest',
-  secondary_model: 'claude-sonnet-4-5',
+  // Mistral REMOVIDO do pipeline (2026-04-30): default agora é Claude Sonnet 4.5.
+  primary_model: 'claude-sonnet-4-5',
+  secondary_model: 'claude-opus-4-5',
   dupla_leitura_tipos: ['cnh', 'crlv'],
   pdf_rasterizar: true,
   pdf_dpi: 144,
@@ -66,6 +67,17 @@ const ENGINE_DEFAULTS: Record<'mistral'|'anthropic'|'google', { primary: string;
   google:    { primary: 'google/gemini-2.5-pro', secondary: 'google/gemini-2.5-pro' },
 };
 async function resolveEngine(cfg: OcrEngineConfig): Promise<{ engine: 'mistral'|'anthropic'|'google'; primary: string; secondary: string }> {
+  // ⚠️ Mistral REMOVIDO do pipeline runtime (2026-04-30). Se a config persistida
+  // ainda apontar engine='mistral', forçamos Anthropic. Código do Mistral
+  // permanece no repositório (mistral-ocr.ts, runMistralPass) para reativação
+  // futura, mas nunca é executado.
+  if (cfg.engine === 'mistral') {
+    return {
+      engine: 'anthropic',
+      primary: ENGINE_DEFAULTS.anthropic.primary,
+      secondary: ENGINE_DEFAULTS.anthropic.secondary,
+    };
+  }
   if (cfg.engine !== 'global' && cfg.engine !== 'auto') {
     return {
       engine: cfg.engine,
@@ -74,7 +86,6 @@ async function resolveEngine(cfg: OcrEngineConfig): Promise<{ engine: 'mistral'|
     };
   }
   // 'global' ou 'auto': usa provedor configurado no AIConfig (anthropic/google).
-  // Em 'auto' o roteador decidirá por documento se vale usar Mistral ou rasterizar.
   const ai = await getActiveAIConfig();
   const eng: 'anthropic'|'google' = ai.provider === 'anthropic' ? 'anthropic' : 'google';
   return { engine: eng, primary: ENGINE_DEFAULTS[eng].primary, secondary: ENGINE_DEFAULTS[eng].secondary };
@@ -1238,7 +1249,9 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
         // Decide o método primário e a cascata de fallbacks com base em:
         // tipo de arquivo, qualidade do texto nativo, tipo de doc esperado,
         // engine configurada e disponibilidade de chaves.
-        const hasMistralKey = !!Deno.env.get('MISTRAL_API_KEY');
+        // Mistral REMOVIDO do pipeline (2026-04-30): hasMistralKey forçado a false
+        // para que o roteador nunca selecione 'mistral-ocr' em nenhuma cascata.
+        const hasMistralKey = false;
         const hasAnthropicKey = !!Deno.env.get('ANTHROPIC_API_KEY');
         var routerDecision = routeOcr({
           isPdf: isPdfUrl,
