@@ -2,11 +2,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-export type ProviderName = 'openai' | 'anthropic';
+export type ProviderName = 'openai' | 'anthropic' | 'mistral';
 
 export interface AIKeysStatus {
   openai: boolean;
   anthropic: boolean;
+  mistral: boolean;
 }
 
 async function callManager(action: 'status' | 'set' | 'remove', payload?: Record<string, unknown>) {
