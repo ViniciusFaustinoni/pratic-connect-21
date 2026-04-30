@@ -989,6 +989,11 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           isLikelyLowQuality,
           isPdfScanned,
         })}`);
+        logCtx.mime = mimeType;
+        logCtx.bytes = bytes;
+        logCtx.is_pdf = isPdfUrl;
+        logCtx.has_native_text = !!extractedPdfText;
+        logCtx.native_text_len = extractedPdfText.length;
 
         // Reforço de prompt para documentos de baixa qualidade
         const lowQualityHint = (isLikelyLowQuality || isPdfScanned)
