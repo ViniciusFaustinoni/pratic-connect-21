@@ -72,6 +72,96 @@ Deno.serve(async (req) => {
       )
     }
 
+    // ── AÇÃO 3: Materializar fotos do prestador como vistoria + vistoria_fotos canônicas ──
+    // Por que: o módulo "Veículos" e os detalhes do associado leem de
+    // contratos→vistorias→vistoria_fotos. Sem essa ponte, as fotos do
+    // prestador ficam isoladas no jsonb do link e parecem "perdidas".
+    // Idempotente por instalacao_id: se a vistoria já existe (re-execução
+    // ou backfill), reutiliza e faz upsert das fotos.
+    try {
+      const { data: instMat } = await supabase
+        .from('instalacoes')
+        .select('id, contrato_id, associado_id, cotacao_id, cep, logradouro, numero, complemento, bairro, cidade, uf, endereco_latitude, endereco_longitude, imei_rastreador, quilometragem, created_at')
+        .eq('id', link.instalacao_id)
+        .maybeSingle()
+
+      if (instMat?.contrato_id) {
+        // 3.1 — vistoria canônica (uma por instalação)
+        const { data: existingVistoria } = await supabase
+          .from('vistorias')
+          .select('id')
+          .eq('instalacao_id', link.instalacao_id)
+          .maybeSingle()
+
+        let vistoriaId = existingVistoria?.id as string | undefined
+
+        if (!vistoriaId) {
+          const vistoriaPayload: Record<string, any> = {
+            instalacao_id: instMat.id,
+            contrato_id: instMat.contrato_id,
+            associado_id: instMat.associado_id,
+            cotacao_id: instMat.cotacao_id,
+            modalidade: 'presencial',
+            origem: 'prestador',
+            status: 'concluida',
+            iniciada_em: instMat.created_at ?? agora,
+            concluida_em: agora,
+            endereco_cep: instMat.cep,
+            endereco_logradouro: instMat.logradouro,
+            endereco_numero: instMat.numero,
+            endereco_bairro: instMat.bairro,
+            endereco_cidade: instMat.cidade,
+            endereco_estado: instMat.uf,
+            endereco_latitude: instMat.endereco_latitude,
+            endereco_longitude: instMat.endereco_longitude,
+            imei_rastreador: instMat.imei_rastreador,
+            km_atual: instMat.quilometragem,
+            dados_parciais: { checklist_data: checklist_data ?? null, origem_link: link.id },
+            assinatura_documento_url: assinatura_url ?? null,
+          }
+          const { data: newVistoria, error: errVistoria } = await supabase
+            .from('vistorias')
+            .insert(vistoriaPayload)
+            .select('id')
+            .single()
+          if (errVistoria) throw errVistoria
+          vistoriaId = newVistoria.id
+          console.log(`[concluir-instalacao] vistoria canônica criada ${vistoriaId} para instalação ${link.instalacao_id}`)
+        } else {
+          // Atualiza dados (idempotente em retentativas)
+          await supabase
+            .from('vistorias')
+            .update({
+              status: 'concluida',
+              concluida_em: agora,
+              dados_parciais: { checklist_data: checklist_data ?? null, origem_link: link.id },
+              assinatura_documento_url: assinatura_url ?? null,
+            })
+            .eq('id', vistoriaId)
+        }
+
+        // 3.2 — fotos: limpa as anteriores dessa vistoria e reinsere a partir do jsonb
+        if (vistoriaId && fotos_vistoria && typeof fotos_vistoria === 'object') {
+          const entries = Object.entries(fotos_vistoria as Record<string, unknown>)
+            .filter(([tipo, url]) => typeof tipo === 'string' && typeof url === 'string' && (url as string).length > 0)
+            .map(([tipo, url]) => ({ vistoria_id: vistoriaId, tipo, arquivo_url: url as string, visivel_cliente: true }))
+
+          if (entries.length > 0) {
+            await supabase.from('vistoria_fotos').delete().eq('vistoria_id', vistoriaId)
+            const { error: errFotos } = await supabase.from('vistoria_fotos').insert(entries)
+            if (errFotos) throw errFotos
+            console.log(`[concluir-instalacao] ${entries.length} fotos materializadas em vistoria_fotos para vistoria ${vistoriaId}`)
+          }
+        }
+      } else {
+        console.warn(`[concluir-instalacao] Instalação ${link.instalacao_id} sem contrato_id — não é possível materializar vistoria`)
+      }
+    } catch (matErr) {
+      // Não bloqueia a resposta de sucesso: as fotos seguem salvas no jsonb e o backfill recupera.
+      console.error('[concluir-instalacao] Falha ao materializar vistoria/fotos (não bloqueante):', matErr)
+    }
+
+
     // ── DISPARO AUTOMÁTICO: enviar veículo para a plataforma de rastreamento ──
     let plataformaSyncResult: { plataforma?: string; ok: boolean; error?: string } = { ok: false }
     try {
