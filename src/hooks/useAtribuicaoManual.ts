@@ -35,7 +35,7 @@ export function useServicosParaAtribuir() {
         .from('servicos')
         .select(`
           id, tipo, data_agendada, hora_agendada, periodo, bairro, cidade, uf, logradouro, numero,
-          permite_encaixe, status, contrato_id,
+          permite_encaixe, status, contrato_id, instalacao_origem_id,
           associado:associados!servicos_associado_id_fkey(id, nome, telefone, whatsapp),
           veiculo:veiculos!servicos_veiculo_id_fkey(placa, chassi, marca, modelo),
           contrato:contratos!servicos_contrato_id_fkey(aprovado_em)
@@ -48,10 +48,33 @@ export function useServicosParaAtribuir() {
 
       if (error) throw error;
 
+      // Buscar links de prestador ATIVOS (não-terminais) para excluir serviços
+      // que já foram atribuídos a um prestador externo. Sem isso, o serviço
+      // permanece visível na fila de pendentes mesmo após a atribuição.
+      const instalacaoIds = (servicos || [])
+        .map((s: any) => s.instalacao_origem_id)
+        .filter(Boolean);
+
+      let instalacoesComLinkAtivo = new Set<string>();
+      if (instalacaoIds.length > 0) {
+        const { data: linksAtivos } = await supabase
+          .from('instalacao_prestador_links')
+          .select('instalacao_id, status')
+          .in('instalacao_id', instalacaoIds)
+          .not('status', 'in', '(cancelado,expirado,recusado,rejeitado,revogado,concluida)');
+
+        instalacoesComLinkAtivo = new Set(
+          (linksAtivos || []).map((l: any) => l.instalacao_id)
+        );
+      }
+
       // Filtra serviços sem contrato aprovado (defesa em profundidade contra
       // regressões no trigger). Serviços sem contrato vinculado são tolerados
       // (ex.: vistorias avulsas criadas manualmente).
       const servicosFiltrados = (servicos || []).filter((s: any) => {
+        if (s.instalacao_origem_id && instalacoesComLinkAtivo.has(s.instalacao_origem_id)) {
+          return false;
+        }
         if (!s.contrato_id) return true;
         return !!s.contrato?.aprovado_em;
       });
