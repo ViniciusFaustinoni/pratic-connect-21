@@ -288,3 +288,70 @@ function safeJSON(s: string) {
 function stripPrefix(s: string, p: string) {
   return s.startsWith(p) ? s.slice(p.length) : s;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Drop-in replacement para chamadas legadas que faziam:
+//   fetch("https://ai.gateway.lovable.dev/v1/chat/completions", { method, headers, body })
+// Uso:
+//   const resp = await aiGatewayFetch({ method, headers, body });
+// `body` deve ser uma string JSON (igual ao código antigo). Streaming suportado.
+// Retorna sempre um `Response` no shape OpenAI Chat Completions (compatível
+// com o que `ai.gateway.lovable.dev` devolvia), permitindo trocar 1 linha em
+// cada edge function existente.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function aiGatewayFetch(init: {
+  method?: string;
+  headers?: Record<string, string>;
+  body: string | Uint8Array;
+}): Promise<Response> {
+  let parsed: any;
+  try {
+    parsed = typeof init.body === "string"
+      ? JSON.parse(init.body)
+      : JSON.parse(new TextDecoder().decode(init.body));
+  } catch {
+    return new Response(JSON.stringify({ error: { message: "invalid body" } }), {
+      status: 400, headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const cfg = await getActiveAIConfig();
+  const stream = !!parsed.stream;
+
+  // Streaming Anthropic não é suportado pelo adaptador → cai pra Lovable.
+  const effectiveProvider: AIProvider =
+    (stream && cfg.provider === "anthropic") ? "lovable" : cfg.provider;
+
+  const opts: CallAIOptions = {
+    messages: parsed.messages,
+    tools: parsed.tools,
+    tool_choice: parsed.tool_choice,
+    response_format: parsed.response_format,
+    temperature: parsed.temperature,
+    max_tokens: parsed.max_tokens ?? parsed.max_completion_tokens,
+    stream,
+    override: {
+      provider: effectiveProvider,
+      // Se config global é Lovable, respeita o modelo pedido pela função;
+      // caso contrário usa o modelo configurado globalmente.
+      model: (effectiveProvider === "lovable" && cfg.provider === "lovable" && parsed.model)
+        ? parsed.model
+        : cfg.model,
+    },
+  };
+
+  const result = await callAI(opts);
+
+  if (stream && result.rawResponse) return result.rawResponse;
+
+  if (!result.ok) {
+    return new Response(
+      JSON.stringify(result.data ?? { error: { message: result.errorMessage } }),
+      { status: result.status || 500, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  return new Response(JSON.stringify(result.data), {
+    status: 200, headers: { "Content-Type": "application/json" },
+  });
+}
