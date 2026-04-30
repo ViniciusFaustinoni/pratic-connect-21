@@ -180,7 +180,13 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
   const [cancelarDialogOpen, setCancelarDialogOpen] = useState(false);
   const [excluirDialogOpen, setExcluirDialogOpen] = useState(false);
   const [tipoExclusao, setTipoExclusao] = useState<TipoExclusao | null>(null);
-  const [fotoModal, setFotoModal] = useState<{ open: boolean; url: string; tipo: string; mediaType?: 'image' | 'video' | 'pdf' }>({ open: false, url: '', tipo: '' });
+  const [mediaViewer, setMediaViewer] = useState<{ open: boolean; items: MediaItem[]; index: number }>({ open: false, items: [], index: 0 });
+  const openMedia = (items: MediaItem[], index = 0) => setMediaViewer({ open: true, items, index });
+  const detectMediaType = (url: string): 'image' | 'video' | 'pdf' => {
+    if (/\.(mp4|webm|mov|avi)($|\?)/i.test(url)) return 'video';
+    if (/\.pdf($|\?)/i.test(url)) return 'pdf';
+    return 'image';
+  };
   const [veiculoDetalhesId, setVeiculoDetalhesId] = useState<string | null>(null);
   const [veiculoEditar, setVeiculoEditar] = useState<any>(null);
   const [mapaModalOpen, setMapaModalOpen] = useState(false);
