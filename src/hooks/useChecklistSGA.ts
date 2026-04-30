@@ -31,7 +31,7 @@ export function useChecklistSGA(veiculoId: string, associadoId: string): Checkli
     queryKey: ['checklist-sga', veiculoId, associadoId],
     queryFn: async () => {
       const [veiculoRes, associadoRes, contratoRes, credenciaisRes, mapeamentosRes] = await Promise.all([
-        supabase.from('veiculos').select('placa, chassi, renavam, cor, combustivel, codigo_sga_combustivel, ano_modelo, codigo_fipe, valor_fipe, marca, modelo').eq('id', veiculoId).single(),
+        supabase.from('veiculos').select('placa, chassi, renavam, cor, codigo_sga_cor, combustivel, codigo_sga_combustivel, ano_modelo, codigo_fipe, valor_fipe, marca, modelo').eq('id', veiculoId).single(),
         supabase.from('associados').select('nome, cpf, rg, data_nascimento, email, telefone, whatsapp, cep, logradouro, numero, bairro, cidade, uf, dia_vencimento').eq('id', associadoId).single(),
         supabase.from('contratos').select('vendedor_id, veiculo_categoria, plano_id').eq('veiculo_id', veiculoId).eq('associado_id', associadoId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
         supabase.from('integracoes_credenciais').select('configurado, teste_sucesso').eq('integracao', 'hinova').maybeSingle(),
@@ -149,16 +149,17 @@ export function useChecklistSGA(veiculoId: string, associadoId: string): Checkli
       addVeiculo('codigo_fipe', 'Código FIPE', veiculo?.codigo_fipe, true, 'Código FIPE ausente — Hinova rejeita o cadastro do veículo (HTTP 406 "Não aceitável")');
       addVeiculo('valor_fipe', 'Valor FIPE', veiculo?.valor_fipe);
 
-      // Cor — verificar mapeamento
-      const corPreenchida = veiculo?.cor && String(veiculo.cor).trim() !== '';
-      const corMapeada = corPreenchida && coresDisponiveis.includes(String(veiculo.cor).toLowerCase());
+      // Cor — código SGA persistido (preenchido por trigger no banco)
+      const corPreenchida = !!(veiculo?.cor && String(veiculo.cor).trim() !== '');
+      const codigoSgaCor = (veiculo as any)?.codigo_sga_cor as number | null | undefined;
+      const corMapeadaOk = corPreenchida && !!codigoSgaCor && codigoSgaCor !== 10; // 10 = "Não especificado" (fallback)
       itens.push({
-        campo: 'cor', label: 'Cor (mapeamento Hinova)', secao: 'veiculo',
-        status: corMapeada ? 'ok' : (corPreenchida ? 'risco' : 'faltando'),
-        valor: veiculo?.cor || null,
+        campo: 'cor', label: 'Cor (código SGA)', secao: 'veiculo',
+        status: corMapeadaOk ? 'ok' : 'risco',
+        valor: corPreenchida && codigoSgaCor ? `${veiculo!.cor} → SGA ${codigoSgaCor}` : (veiculo?.cor || null),
         detalhe: !corPreenchida
-          ? 'Cor não preenchida — será null no payload'
-          : (!corMapeada ? `Cor "${veiculo?.cor}" sem mapeamento na tabela hinova_mapeamentos` : undefined),
+          ? 'Cor não preenchida — será enviada como SGA 10 ("Não especificado")'
+          : (codigoSgaCor === 10 ? `Cor "${veiculo?.cor}" não reconhecida — será enviada como SGA 10 ("Não especificado")` : undefined),
       });
 
       // Combustível — código SGA persistido (preenchido por trigger no banco)
