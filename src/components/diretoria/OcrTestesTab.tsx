@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -222,7 +222,7 @@ function PainelExecutar() {
         mime: arquivo.mime,
         bytes: arquivo.bytes,
         expectativas,
-        created_by: userIdRef.current,
+        created_by: userId,
       };
       if (casoId !== 'novo') {
         const { error } = await (supabase as any).from('ocr_test_cases').update(payload).eq('id', casoId);
@@ -249,7 +249,7 @@ function PainelExecutar() {
       if (!veredito) throw new Error('Escolha um veredito.');
       const cmp = resultado.comparacao_local;
       const { error } = await (supabase as any).from('ocr_test_runs').insert({
-        executed_by: userIdRef.current,
+        executed_by: userId,
         test_case_id: casoId !== 'novo' ? casoId : null,
         ocr_log_id: resultado?.ocrLogId ?? null,
         provider: null,
