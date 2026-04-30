@@ -1,60 +1,29 @@
-## Objetivo
+## Bug
 
-Centralizar tudo que é relacionado a OCR na tela **Configurações → Integrações → Inteligência Artificial** (`/configuracoes/integracoes/ia`):
+Ao abrir um associado, a página quebra com `RUNTIME_ERROR: Rendered more hooks than during the previous render`. Os warnings de `forwardRef` (Select/Dialog) que aparecem antes são ruído — não causam o crash.
 
-- **Configuração** do modelo de IA + motor de OCR (já está lá)
-- **Logs de OCR** (auditoria das execuções)
-- **Testes de OCR** (banco de fixtures, baseline, comparação por modelo)
+## Causa raiz
 
-Hoje "Logs de OCR" e "Testes de OCR" vivem dentro de **Diretoria → Logs de Auditoria**, o que é confuso (não são logs de auditoria genéricos, são logs operacionais de OCR).
-
-## Mudanças
-
-### 1. `src/pages/configuracoes/IntegracaoIA.tsx`
-
-Reorganizar em **3 abas**:
+Em `src/pages/cadastro/AssociadoDetalhe.tsx`, quatro hooks são chamados **depois** dos early returns:
 
 ```text
-┌─ Inteligência Artificial ───────────────────────────┐
-│ [ Configuração ] [ Logs de OCR ] [ Testes de OCR ]  │
-├─────────────────────────────────────────────────────┤
-│ Conteúdo da aba ativa                                │
-└─────────────────────────────────────────────────────┘
+linha 342:  if (isLoading) return <Skeleton />;     ← early return #1
+linha 355:  if (!associado) return <NotFound />;     ← early return #2
+...
+linha 409:  const queryClient = useQueryClient();        ← hook
+linha 410:  const [reenvioDialogOpen, setReenvioDialogOpen] = useState(false);
+linha 411:  const solicitarDocsMutation = useSolicitarDocumentos();
+linha 412:  const { data: docsJaSolicitados } = useDocumentosSolicitadosPendentes(id);
 ```
 
-- **Configuração**: `AIModelConfigCard` + `OcrEngineConfigCard` + Alert global (conteúdo atual)
-- **Logs de OCR**: reusa `<OcrLogsTab />` (componente já pronto e autocontido)
-- **Testes de OCR**: reusa `<OcrTestesTab />` (componente já pronto e autocontido)
+Na primeira render `isLoading=true` → React conta N hooks. Na segunda render `isLoading=false` → React encontra N+4 hooks → crash. É a regra dos hooks do React (sempre na mesma ordem, sem condicionais nem returns antes deles).
 
-Ambos os componentes já fazem suas próprias queries no Supabase, então não precisam de props ou contexto.
+## Correção
 
-### 2. `src/pages/diretoria/LogsAuditoria.tsx`
+Mover os 4 hooks (linhas 409-412) para junto dos outros `useState`/`useQuery` no topo do componente, antes do bloco `if (isLoading)`. Nenhuma mudança de comportamento — só reordenação para respeitar a regra dos hooks.
 
-Remover as duas abas duplicadas para evitar dois pontos de entrada divergentes:
+## Validação
 
-- Remover `TabsTrigger value="ocr"` e `TabsTrigger value="ocr-testes"`
-- Remover `TabsContent value="ocr"` e `TabsContent value="ocr-testes"`
-- Remover imports de `OcrLogsTab`, `OcrTestesTab`, `ScanText`, `FlaskConical`
-
-A página continua existindo só com **Todos os logs** + **Histórico de Hierarquia**, que é o escopo correto de uma tela de auditoria genérica.
-
-### 3. Sem mudanças nos componentes
-
-`OcrLogsTab.tsx` e `OcrTestesTab.tsx` ficam como estão — só mudam de lugar onde são montados.
-
-### 4. Sem mudanças no banco / edge functions
-
-Nenhuma alteração de schema ou lógica de OCR — é puramente reorganização de UI.
-
-## Acesso e permissões
-
-A rota `/configuracoes/integracoes/ia` já é restrita (configurações do sistema). `OcrEngineConfigCard` já valida `isDiretor || isDesenvolvedor` antes de permitir edição. `OcrLogsTab` e `OcrTestesTab` já estão sendo usados pela diretoria — mantém o mesmo nível de acesso (só leitura para não-diretor, edição para diretor).
-
-## Resultado visual
-
-A tela `/configuracoes/integracoes/ia` passa a ter as 3 abas no topo. Quem entrar nessa tela vai conseguir, sem trocar de menu:
-
-- Trocar provedor/modelo de IA
-- Configurar motor de OCR (Auto / Mistral / Anthropic / Google) e chave Mistral
-- Ver últimas execuções de OCR com filtros (status, tipo de doc, datas)
-- Rodar testes em PDFs/imagens de fixtures e comparar resultado por modelo
+- A tela de detalhe do associado abre sem crash.
+- O dialog de "Solicitar reenvio de documentos" continua funcionando (mesmo state, mesma mutation, só movidos de lugar).
+- Sem regressão em outras telas (mudança isolada em um único arquivo).
