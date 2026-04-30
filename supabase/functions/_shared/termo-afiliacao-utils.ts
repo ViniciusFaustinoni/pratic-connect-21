@@ -485,7 +485,10 @@ export function mapearDadosParaTemplate(
       valor_adesao: contrato.valor_adesao || 0,
       valor_mensal: contrato.valor_mensal || 0,
       valor_adicional: contrato.valor_adicional || 0,
-      dia_vencimento: contrato.dia_vencimento || 10,
+      dia_vencimento: resolverDiaVencimento(
+        contrato.dia_vencimento,
+        (contrato as any).created_at || (contrato as any).data_inicio || new Date(),
+      ).dia,
       data_inicio: contrato.data_inicio || "",
       forma_pagamento: "Boleto Bancário",
       tipo_entrada: (
