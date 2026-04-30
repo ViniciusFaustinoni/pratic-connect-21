@@ -1,3 +1,4 @@
+import { aiGatewayFetch } from "../_shared/ai-client.ts";
 // Edge Function: melhorar-texto-relato-erro
 // Reescreve a descrição de um relato de erro de forma mais clara/técnica,
 // sem alterar fatos. Usado pelo diretor no modal de detalhes.
@@ -68,7 +69,7 @@ Responda APENAS com o texto melhorado, sem cabeçalho, sem aspas, sem markdown e
 
     const userPrompt = `Área: ${report.area}\nAutor: ${report.reporter_nome ?? 'desconhecido'}\n\nTexto original:\n"""\n${textoBase}\n"""`
 
-    const aiResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const aiResp = await aiGatewayFetch({
       method: 'POST',
       headers: {
         Authorization: `Bearer ${LOVABLE_API_KEY}`,

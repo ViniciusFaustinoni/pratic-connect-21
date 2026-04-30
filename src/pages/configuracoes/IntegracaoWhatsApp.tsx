@@ -13,6 +13,7 @@ import { WhatsAppMetaTemplates } from '@/components/integracoes/WhatsAppMetaTemp
 import { WhatsAppConversasPainel } from '@/components/integracoes/WhatsAppConversasPainel';
 import { WhatsAppTestChat } from '@/components/whatsapp/WhatsAppTestChat';
 import { IntegracaoHealthPanel } from '@/components/integracoes/IntegracaoHealthPanel';
+import { AIModelConfigCard } from '@/components/integracoes/AIModelConfigCard';
 
 export default function IntegracaoWhatsApp() {
   const navigate = useNavigate();
@@ -87,6 +88,8 @@ export default function IntegracaoWhatsApp() {
 
         {/* ── Tab IA & Respostas ── */}
         <TabsContent value="ia" className="space-y-6">
+          <AIModelConfigCard />
+          <Separator />
           <div className="grid gap-6 md:grid-cols-2">
             <WhatsAppIAConfig />
             <WhatsAppStats />

@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getConfiguracaoNumero } from "../_shared/config-helper.ts";
 
+import { aiGatewayFetch } from "../_shared/ai-client.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -1881,7 +1882,7 @@ async function callAI(messages: any[], systemPrompt: string, useTools: boolean =
     body.tool_choice = "auto";
   }
 
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const response = await aiGatewayFetch({
     method: "POST",
     headers: {
       "Content-Type": "application/json",

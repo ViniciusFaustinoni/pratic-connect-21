@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 
+import { aiGatewayFetch } from "../_shared/ai-client.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -119,7 +120,7 @@ ${regrasTexto || "Sem restrições específicas."}
 
 Escreva APENAS a descrição, sem títulos, sem aspas, sem markdown.`;
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResponse = await aiGatewayFetch({
       method: "POST",
       headers: {
         Authorization: `Bearer ${lovableKey}`,

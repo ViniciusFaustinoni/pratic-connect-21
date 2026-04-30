@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+import { aiGatewayFetch } from "../_shared/ai-client.ts";
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -59,7 +60,7 @@ serve(async (req) => {
     console.log('[Chassi-OCR] Analisando imagem:', url.substring(0, 100));
     console.log('[Chassi-OCR] Chassi esperado:', chassiEsperado || 'não informado');
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const response = await aiGatewayFetch({
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${LOVABLE_API_KEY}`,

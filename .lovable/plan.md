@@ -1,75 +1,104 @@
-## Diagnóstico (raiz)
+## Objetivo
 
-Auditando o caso do contrato KXT0874 (DAVID VIEIRA DOS SANTOS / Marcos Vinícius), encontrei **dois bugs distintos** na geração do termo:
+Permitir que o usuário escolha o **provedor de IA** (Lovable AI Gateway, OpenAI direto, Anthropic direto) e o **modelo específico** em um único lugar (`Configurações → Integrações → WhatsApp → IA & Respostas`). A escolha vale para **TODAS** as funcionalidades de IA do sistema, inclusive leitura de documentos (OCR).
 
-### Bug 1 — `{{veiculo.categoria}}` imprime tipo de carroceria, não a CATEGORIA do CRLV
+## Escopo
 
-- No CRLV, **CATEGORIA** = uso jurídico do veículo: **Particular** ou **Aluguel**.
-- No nosso schema, `contratos.veiculo_categoria` está guardando `"carro"` (vem da `cotacoes.categoria`, que na verdade é o tipo de veículo). 
-- O termo (`template-utils.ts:172` e `termo-afiliacao-utils.ts:430`) usa esse campo direto → imprime "carro" no contrato.
-- A informação correta JÁ EXISTE: `cotacoes.veiculo_tipo_uso = 'particular'` e `contratos.uso_aplicativo` (boolean). Não foi propagada.
+### 1. Banco de dados
 
-### Bug 2 — `{{veiculo.portas}}` é INFERIDA por categoria → sempre cai em 4
+Nova tabela `ai_model_config` (singleton — uma linha global) com migração:
 
-- `termo-afiliacao-utils.ts:359` (`inferirPortas`) chuta 4 portas para qualquer "carro".
-- `template-utils.ts:181` tem fallback hardcoded `?? 4`.
-- Resultado: Celta 2P imprime "4 portas" no contrato vs. 2 no CRLV.
-- A `plate-lookup` já retorna `numero_portas` da API, mas esse dado **não é persistido** em `cotacoes`/`veiculos`/`contratos` hoje.
-
----
-
-## Correções na raiz (sem afetar o que funciona)
-
-### 1. `supabase/functions/_shared/termo-afiliacao-utils.ts`
-
-- **Remover** a função `inferirPortas` e o uso dela.
-- Adicionar campo `tipo_veiculo` (carro/moto) separado de `categoria` no objeto.
-- Em `mapearDadosParaTemplate`:
-  - `veiculo.categoria` ← derivar de `uso_aplicativo`: `true → "Aluguel"`, `false → "Particular"`. Se vier `veiculo_tipo_uso` explícito (`'aluguel'`/`'particular'`), respeitar.
-  - `veiculo.tipo_veiculo` ← guardar o atual `"carro"`/`"moto"` (vem de `contrato.veiculo_categoria`).
-  - `veiculo.portas` ← ler de `veiculoDB?.numero_portas` ou `cotacao?.numero_portas`; **sem fallback numérico**.
-
-### 2. `supabase/functions/_shared/template-utils.ts`
-
-- `'veiculo.categoria'` → mostrar `Particular`/`Aluguel` conforme regra acima (não mais o tipo de carroceria).
-- `'veiculo.tipo'` → manter como tipo de veículo (carro/moto/utilitário) — separar das duas variáveis.
-- `'veiculo.portas'` → `dados.veiculo.portas ? String(dados.veiculo.portas) : '—'` (parar de chutar 4).
-- `'veiculo.tipo_uso'` → continua mostrando "Particular"/"Aplicativo" (não mexe; é variável diferente).
-
-### 3. Persistência do `numero_portas` (mínima, sem migration de schema)
-
-- `contratos.veiculo_categoria` permanece intocado no banco para compatibilidade (continua "carro"); o termo deixa de usá-lo como CATEGORIA.
-- Para portas: adicionar coluna `cotacoes.numero_portas INTEGER NULL` via migration (campo opcional, sem default — não quebra nada). 
-- Em `EtapaConsultaFipe.tsx`, quando o `vehicleData.numero_portas` vier preenchido, gravar na cotação (já há fluxo de update por placa).
-- Em `contrato-gerar/index.ts`, ao criar o contrato, copiar `cotacao.numero_portas` para um campo equivalente. Como `contratos` não tem coluna ainda, adicionar `contratos.veiculo_numero_portas INTEGER NULL`.
-- O termo lê dessa coluna se existir; se não, mostra "—".
-
-### 4. Backfill leve do registro afetado
-
-- Atualizar a cotação/contrato de `KXT0874` para `numero_portas = 2` (consta no CRLV anexado pelo usuário) e regerar o termo, validando antes de fechar.
-
----
-
-## Arquivos a tocar
-
-```text
-supabase/functions/_shared/termo-afiliacao-utils.ts   (lógica categoria + portas)
-supabase/functions/_shared/template-utils.ts          (variáveis do template)
-supabase/functions/plate-lookup/index.ts              (já retorna numero_portas — só conferir)
-supabase/functions/contrato-gerar/index.ts            (copiar numero_portas da cotação p/ contrato)
-src/components/cotacao/EtapaConsultaFipe.tsx          (persistir numero_portas vindo da plate-lookup)
-supabase/migrations/<novo>.sql                         (ADD COLUMN numero_portas em cotacoes e contratos)
+```
+- id (uuid, pk)
+- provider (text: 'lovable' | 'openai' | 'anthropic')
+- model (text: ex.: 'google/gemini-3-flash-preview', 'gpt-5.2', 'claude-sonnet-4-5')
+- updated_by (uuid, profiles)
+- updated_at (timestamptz)
 ```
 
-## O que NÃO muda (zero regressão)
+RLS: SELECT para qualquer usuário autenticado (edge functions via service role); UPDATE/INSERT só para diretores/desenvolvedores.
 
-- `contratos.veiculo_categoria` continua sendo gravado igual — qualquer relatório/integração que lê esse campo segue funcionando.
-- `veiculo_tipo_uso`, flags de depreciação, fluxo Hinova, fluxo de assinatura, vistoria e tudo mais permanecem intocados.
-- A variável `{{veiculo.tipo_uso}}` segue mostrando Particular/Aplicativo (semântica diferente — é a comercial, não a do CRLV).
-- Apenas as variáveis do template `{{veiculo.categoria}}` e `{{veiculo.portas}}` mudam de comportamento.
+Tabela auxiliar opcional **não criada** — lista de modelos por provedor fica hardcoded no front (atualizável via deploy).
 
-## Validação
+### 2. Secrets necessários (sob demanda)
 
-1. Regerar termo do contrato KXT0874 → verificar Categoria = "Particular" e Portas = "2".
-2. Smoke test: criar uma cotação nova → conferir que `numero_portas` persiste e aparece no termo.
-3. Caso o `plate-lookup` falhe ou a API não retorne portas, o termo deve imprimir "—" sem quebrar.
+- `LOVABLE_API_KEY` — já existe.
+- `OPENAI_API_KEY` — solicitado ao usuário ao escolher OpenAI pela primeira vez (se ainda não existir).
+- `ANTHROPIC_API_KEY` — solicitado ao escolher Anthropic.
+
+A UI mostra um aviso "Chave não configurada — clique para adicionar" quando o provedor selecionado exige uma chave ausente.
+
+### 3. Helper compartilhado (novo)
+
+Criar `supabase/functions/_shared/ai-client.ts` exportando:
+
+- `getActiveAIConfig(supabase)` — lê `ai_model_config`; fallback `{provider:'lovable', model:'google/gemini-3-flash-preview'}`.
+- `callAI({ messages, tools?, response_format?, stream?, imageInputs? })` — roteia transparentemente:
+  - **lovable** → `https://ai.gateway.lovable.dev/v1/chat/completions` (formato OpenAI compatível, payload e tools idênticos ao atual).
+  - **openai** → `https://api.openai.com/v1/chat/completions` (mesmo shape OpenAI).
+  - **anthropic** → `https://api.anthropic.com/v1/messages` com adaptador (converte messages/tools OpenAI-style → Anthropic e resposta de volta).
+- Trata 429/402 e devolve erros padronizados.
+- Suporta visão (imageInputs) — necessário para OCR; se Anthropic, converte para blocks `image`.
+
+### 4. Refator das edge functions de IA
+
+Substituir todas as chamadas diretas a `ai.gateway.lovable.dev` pelo novo `callAI()`. Funções afetadas:
+
+```
+analise-risco-ia, assistente-chat, agente-consultor-ia,
+document-ocr, chassi-ocr, odometro-ocr,
+analise-consistencia-relatos, melhorar-texto-relato-erro,
+pesquisar-antecedentes, gerar-prompt-correcao-erro,
+formatar-texto-ia, gerar-mensagem-whatsapp,
+gerar-descricao-linha, sugerir-ressalva-ia,
+extract-orcamento-pdf, whatsapp-webhook,
+whatsapp-template-validar, whatsapp-meta-webhook
+```
+
+`gerar-imagem-plano` permanece em Lovable Gateway (geração de imagem; OpenAI/Anthropic não são equivalentes diretos — registramos isso como limitação visível).
+
+OCR (`document-ocr`, `chassi-ocr`, `odometro-ocr`): mantém a lógica de retry; só troca o transport. Se o modelo selecionado não for multimodal, faz fallback automático para `google/gemini-3-flash-preview` no Lovable Gateway e loga aviso.
+
+### 5. UI — novo card "Modelo de IA"
+
+Localização: `src/pages/configuracoes/IntegracaoWhatsApp.tsx` aba **IA & Respostas**, acima do `WhatsAppIAConfig`.
+
+Componente novo: `src/components/integracoes/AIModelConfigCard.tsx`
+
+```text
+┌─ Modelo de IA (global) ─────────────────────┐
+│ Provedor: [ Lovable AI ▾ ]                  │
+│ Modelo:   [ google/gemini-3-flash-preview ▾]│
+│                                             │
+│ ⓘ Aplicado a: OCR, Chat IA, Consultor,      │
+│   Análise de risco, WhatsApp e demais       │
+│   automações.                               │
+│                                             │
+│ [Salvar]                                    │
+└─────────────────────────────────────────────┘
+```
+
+Listas de modelos:
+- **Lovable**: gemini-3-flash-preview, gemini-3.1-pro-preview, gemini-2.5-pro, gemini-2.5-flash, gemini-2.5-flash-lite, gpt-5, gpt-5-mini, gpt-5-nano, gpt-5.2.
+- **OpenAI** (direto): gpt-5.2, gpt-5, gpt-5-mini, gpt-4.1, gpt-4o, o4-mini.
+- **Anthropic**: claude-sonnet-4-5, claude-opus-4-1, claude-haiku-4-5, claude-3-7-sonnet.
+
+Se provedor exige chave ausente, exibe alerta com botão "Adicionar chave" (abre instruções) — bloqueia salvar.
+
+Acesso restrito a diretor / desenvolvedor (via `usePermissions`).
+
+### 6. Hook front
+
+`src/hooks/useAIModelConfig.ts` — TanStack Query (`select` + `update`) com invalidação.
+
+## Fora do escopo
+
+- Não criamos UI por funcionalidade (modelo único global, conforme pedido).
+- Modelo de geração de imagem fica fixo no Lovable Gateway (a UI deixa isso explícito).
+
+## Critérios de aceite
+
+1. Trocar para `openai/gpt-5.2` faz o `assistente-chat` responder via OpenAI direto (verificável nos logs).
+2. Trocar para `anthropic/claude-sonnet-4-5` faz o `document-ocr` processar uma CNH usando Anthropic.
+3. Ausência de `OPENAI_API_KEY` ao salvar OpenAI bloqueia gravação com mensagem clara.
+4. Sem configuração salva, sistema continua funcionando com fallback Lovable + gemini-3-flash-preview (zero regressão).

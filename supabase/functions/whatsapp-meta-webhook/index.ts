@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+import { aiGatewayFetch } from "../_shared/ai-client.ts";
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -64,7 +65,7 @@ async function gerarRespostaConfirmacaoIA(
   try {
     const prompt = `Cliente: ${nomeCliente}\nDia: ${dataServico ?? "—"}\nHora: ${horaServico ?? "—"}\nEndereço: ${enderecoServico ?? "—"}\n\nGere uma mensagem CURTA (até 3 linhas), calorosa e em português do Brasil, agradecendo a confirmação, lembrando o dia e horário, dizendo que o técnico será designado e que ele receberá os detalhes em breve. Use o primeiro nome do cliente. Use 1-2 emojis apropriados. NÃO use markdown pesado, apenas asteriscos para negrito quando útil.`;
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const res = await aiGatewayFetch({
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({

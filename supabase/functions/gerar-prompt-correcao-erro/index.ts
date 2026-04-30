@@ -1,3 +1,4 @@
+import { aiGatewayFetch } from "../_shared/ai-client.ts";
 // Edge Function: gerar-prompt-correcao-erro
 // Recebe um relato de erro (texto + imagens anexadas) e devolve um prompt
 // pronto para colar no chat do Lovable, considerando o contexto do sistema.
@@ -120,7 +121,7 @@ Tarefa: gere o prompt para colar no chat do Lovable corrigir esse bug.`
 
     const userContent: any[] = [{ type: 'text', text: userText }, ...imageContents]
 
-    const aiResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const aiResp = await aiGatewayFetch({
       method: 'POST',
       headers: {
         Authorization: `Bearer ${LOVABLE_API_KEY}`,

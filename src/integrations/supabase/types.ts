@@ -951,6 +951,33 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_model_config: {
+        Row: {
+          created_at: string
+          id: string
+          model: string
+          provider: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          model?: string
+          provider?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          model?: string
+          provider?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       alocacoes_diarias: {
         Row: {
           base_id: string | null
