@@ -392,7 +392,7 @@ serve(async (req) => {
       }
 
       // 2. Contrato (vendedor + plano + valores)
-      const contratoSel = 'vendedor_id, veiculo_categoria, cotacao_id, plano_id, valor_mensal, valor_adesao';
+      const contratoSel = 'numero, vendedor_id, veiculo_categoria, cotacao_id, plano_id, valor_mensal, valor_adesao, cobertura_fipe';
       let contrato: any = null;
       const { data: cByVeic } = await supabase.from('contratos').select(contratoSel)
         .eq('veiculo_id', _vid).order('created_at', { ascending: false }).limit(1).maybeSingle();
@@ -713,6 +713,28 @@ serve(async (req) => {
         }
 
         const codSituacao = statusDestino === 'ativo' ? codigoSituacaoAtivo : codigoSituacaoPendente;
+
+        // Categoria do veículo (Táxi/Leilão/Placa Vermelha/Ex-Táxi) — opcional, vai se houver mapeamento.
+        let categoriaLocal: string | null = null;
+        if (veiculo.flag_taxi_ativo) categoriaLocal = 'taxi';
+        else if (veiculo.flag_leilao) categoriaLocal = 'leilao';
+        else if (veiculo.flag_placa_vermelha) categoriaLocal = 'placa_vermelha';
+        else if (veiculo.flag_ex_taxi) categoriaLocal = 'ex_taxi';
+        const codigoCategoriaVeiculo = categoriaLocal
+          ? (getMap('categoria_veiculo', categoriaLocal) ?? undefined)
+          : undefined;
+
+        // Valor protegido (R$) e % FIPE protegido (deságio do contrato)
+        const valorFipeProtegido = veiculo.valor_fipe_protegido != null && Number(veiculo.valor_fipe_protegido) > 0
+          ? Number(veiculo.valor_fipe_protegido)
+          : undefined;
+        const porcentagemFipeProtegido = contrato?.cobertura_fipe != null && Number(contrato.cobertura_fipe) > 0
+          ? Number(contrato.cobertura_fipe)
+          : undefined;
+
+        // Observação rastreável (ajuda a auditoria do SGA)
+        const observacao = `Cadastro via Pratic Connect — contrato ${contrato?.numero ?? _vid}`;
+
         const ctxV: VeiculoCtx = {
           codigo_associado: codigoAssociadoHinova!,
           codigo_conta: codigoConta,
@@ -720,8 +742,12 @@ serve(async (req) => {
           codigo_situacao: Number.isFinite(codSituacao) && codSituacao > 0 ? codSituacao : undefined,
           codigo_cooperativa: Number.isFinite(codigoCooperativa) ? codigoCooperativa : undefined,
           codigo_grupo_produto: codigoGrupoProduto,
+          codigo_categoria_veiculo: codigoCategoriaVeiculo,
           valor_mensalidade: valorMensalidade,
           valor_adesao: valorAdesao,
+          valor_fipe_protegido: valorFipeProtegido,
+          porcentagem_fipe_protegido: porcentagemFipeProtegido,
+          observacao,
           tipo_veiculo: tipoVeiculo,
           codigo_combustivel: (veiculo.codigo_sga_combustivel != null ? Number(veiculo.codigo_sga_combustivel) : null) ?? getMap('combustivel', normalCombustivel),
           codigo_cor: (veiculo.codigo_sga_cor != null ? Number(veiculo.codigo_sga_cor) : null)
