@@ -1,116 +1,131 @@
-## Contexto
+## Diagnóstico — o sistema respeita o endpoint?
 
-No SGA/Hinova **não existe "plano"** — existe **grupo de produto**. O grupo já contém todos os produtos (coberturas + benefícios) configurados lá no painel do Hinova. Para vincular tudo a um veículo, basta enviar `codigo_grupo_produto` no `/veiculo/cadastrar`.
+Conferi `supabase/functions/sga-hinova-sync/index.ts` (cadastro de veículo, linhas 700–770) e `supabase/functions/_shared/hinova-payloads.ts` (`buildVeiculoPayload`).
 
-A edge function atual está fazendo errado:
-1. Inventa um campo `codigo_plano` que não existe na doc oficial
-2. Tenta montar `produtos: [...]` lendo `codigo_sga` das nossas coberturas/benefícios — isso é desnecessário e errado
-3. Quando o plano não tem código → manda pelado e a Hinova só vincula compulsórios
+### Já está conforme a doc oficial `/veiculo/cadastrar`
+Todos esses campos já são enviados corretamente, com nomes idênticos à doc:
+`codigo_associado`, `codigo_voluntario`, `codigo_conta` (quando configurado), `codigo_cooperativa`, `codigo_situacao`, `codigo_grupo_produto`, `placa`, `chassi`, `renavam`, `ano_fabricacao`, `ano_modelo`, `codigo_fipe`, `valor_fipe`, `kilometragem`, `numero_motor`, `dia_vencimento`, `codigo_tipo_veiculo`, `codigo_combustivel`, `codigo_cor`, `valor_fixo` (mensalidade), `valor_adesao`, `data_contrato`.
 
-Resultado: veículo chega no Hinova sem nenhuma cobertura/benefício do grupo correto.
+Confirmado também:
+- **Não** mandamos mais `produtos[]` nem o campo inventado `codigo_plano` — o grupo já vincula tudo
+- **Não** mandamos vídeo hoje (a sync só usa `documentos`, `contratos_documentos`, `vistoria_fotos` — varredura no banco mostrou 0 arquivos `.mp4/.webm/.mov`)
+
+### Vídeo — proteção que falta
+Apesar de hoje não haver vídeo no banco, **não existe filtro defensivo** em `buildFotosPayload`. Se um dia algum upload de `.mp4` cair em `documentos.arquivo_url`, ele seria enviado. Vou adicionar guard por extensão e content-type.
+
+### Campos da doc que poderíamos enviar e hoje não enviamos
+Cruzando o schema da tabela `veiculos` com a doc:
+
+| Campo doc | Origem no banco | Status hoje |
+|---|---|---|
+| `codigo_categoria_veiculo` | `veiculos.flag_taxi_ativo`, `flag_placa_vermelha`, `flag_leilao`, `flag_ex_taxi` (via mapeamento `hinova_mapeamentos` tipo `categoria_veiculo`) | **não enviado** |
+| `valor_fipe_protegido` | `veiculos.valor_fipe_protegido` | **não enviado** |
+| `porcentagem_fipe_protegido` | `planos.percentual_desagio` (quando há deságio 70/75%) | **não enviado** |
+| `observacao` | gerada: `"Cadastro via Pratic Connect — contrato {numero|id}"` | **não enviado** |
+| Endereço correspondência (`logradouro`, `numero`, `bairro`, `cidade`, `estado`, `cep`) | endereço do associado (mesmo do `/associado/cadastrar`) | opcional na doc — hoje omitimos (Hinova herda do associado). Manter omitido. |
+| `cilindrada`, `quantidade_portas`, `quantidade_passageiros`, `cambio` | **não temos no schema** | manter omitido |
+| `codigo_forma_pagamento_adesao`, `codigo_tipo_envio_boleto`, `codigo_tipo_adesao`, `codigo_tabela_avaliacao` | poderiam vir de `integracoes_credenciais` (defaults da conta) | manter omitido (default da regional) |
+| `numero_nota`, `data_emissao_nota` | poderia vir de `contratos_documentos` tipo `nota_fiscal_veiculo` (só zero-km) | manter omitido (raro e exige parsing) |
 
 ---
 
-## Mudanças
+## Mudanças propostas
 
-### 1. Edge function `sga-hinova-sync` — corrigir o payload
+### 1. `supabase/functions/_shared/hinova-payloads.ts`
 
-**Remover:**
-- Bloco que monta `produtos: []` lendo `planos_beneficios` + `planos_coberturas` + `codigo_sga` dos itens (linhas ~451–462)
-- Variável `produtos` e seu envio no `ctxV` (linha 727)
-- Envio do campo `codigo_plano` (linha 724)
+**Em `VeiculoCtx`**, adicionar:
+- `codigo_categoria_veiculo?: number`
+- `valor_fipe_protegido?: number`
+- `porcentagem_fipe_protegido?: number`
+- `observacao?: string`
 
-**Adicionar:**
-- Ler `planos.codigo_sga_plano` e enviar como **`codigo_grupo_produto`** (campo oficial da doc)
-- Se `codigo_sga_plano` estiver NULL/vazio → **abortar** com erro claro `plano_sem_codigo_grupo_sga` (mesmo padrão do `codigo_fipe ausente` que já existe), em vez de mandar pelado e cair no default da conta
-- Atualizar `setStatusSga` para `erro_sincronizacao` e `upsertQueue` com motivo amigável: *"Plano '{nome}' não tem código de grupo SGA configurado. Cadastre o grupo no painel Hinova e preencha o código no plano antes de reprocessar."*
+**Em `buildVeiculoPayload`**, anexar esses 4 campos ao payload quando vierem definidos (mesmo padrão dos demais opcionais).
 
-**Manter intacto:** toda a lógica de associado, vendedor, FIPE, mapeamentos de cor/combustível/tipo, fotos, valores de mensalidade/adesão.
+**Em `buildFotosPayload`**, adicionar guard que descarta vídeos:
+- regex de extensão: `/\.(mp4|m4v|mov|webm|avi|mkv|3gp|hevc)(\?|$)/i` na `arquivo_url`
+- além do alias de tipo, ignorar tipos contendo `video` ou `audio`
+- novo array de retorno: `descartadasVideo: string[]` (logado como `enviar_fotos_descarte`)
 
-### 2. Helper `buildVeiculoPayload` — trocar campo de saída
+### 2. `supabase/functions/sga-hinova-sync/index.ts`
 
-Onde hoje sai `codigo_plano`, passar a sair `codigo_grupo_produto`. Remover qualquer referência ao array `produtos`.
+Antes de montar `ctxV` (perto da linha 715), resolver os novos campos:
 
-### 3. UI — renomear o campo no formulário do plano
+```ts
+// Categoria do veículo (táxi, leilão, placa vermelha, ex-táxi)
+let categoriaLocal: string | null = null;
+if (veiculo.flag_taxi_ativo) categoriaLocal = 'taxi';
+else if (veiculo.flag_leilao) categoriaLocal = 'leilao';
+else if (veiculo.flag_placa_vermelha) categoriaLocal = 'placa_vermelha';
+else if (veiculo.flag_ex_taxi) categoriaLocal = 'ex_taxi';
+const codigoCategoriaVeiculo = categoriaLocal
+  ? getMap('categoria_veiculo', categoriaLocal) ?? undefined
+  : undefined;
 
-Arquivo do form de edição de plano (componente em `src/components/admin/planos/`):
-- Label: `"Código SGA do Plano (Hinova)"` → **`"Código do Grupo de Produto (SGA/Hinova)"`**
-- Helper text: `"Código do plano no painel Hinova..."` → **`"Código do GRUPO no painel Hinova. O grupo já contém todas as coberturas e benefícios configurados lá. Sem este código, o veículo não será vinculado e a sincronização será bloqueada com erro plano_sem_codigo_grupo_sga."`**
+// Valor protegido + % deságio do plano
+const valorFipeProtegido = veiculo.valor_fipe_protegido != null
+  ? Number(veiculo.valor_fipe_protegido) : undefined;
 
-A coluna do banco continua se chamando `codigo_sga_plano` (não vale o churn de migration só pelo nome).
+let porcentagemFipeProtegido: number | undefined;
+if (contrato?.plano_id) {
+  const { data: planoDes } = await supabase.from('planos')
+    .select('percentual_desagio').eq('id', contrato.plano_id).maybeSingle();
+  if (planoDes?.percentual_desagio != null) {
+    porcentagemFipeProtegido = Number(planoDes.percentual_desagio);
+  }
+}
 
-### 4. Função `cron-sga-retry` e fila de erros
+// Observação rastreável
+const { data: contratoNum } = contrato
+  ? await supabase.from('contratos').select('numero').eq('veiculo_id', _vid).maybeSingle()
+  : { data: null };
+const observacao = `Cadastro via Pratic Connect — contrato ${contratoNum?.numero ?? _vid}`;
+```
 
-Verificar se a fila de retry trata o novo motivo `plano_sem_codigo_grupo_sga` da mesma forma que `vendedor_sem_codigo_sga` (não tenta retry automático, espera intervenção humana). Se não tratar, adicionar.
+E acrescentar no `ctxV`:
+```ts
+codigo_categoria_veiculo: codigoCategoriaVeiculo,
+valor_fipe_protegido: valorFipeProtegido,
+porcentagem_fipe_protegido: porcentagemFipeProtegido,
+observacao,
+```
+
+### 3. Remover qualquer risco de vídeo nas fotos
+
+Na seção 7 (linhas 822–887), depois do `buildFotosPayload`, logar `descartadasVideo` (se houver) com `action: 'enviar_fotos_descarte'`. Nenhuma mudança de comportamento na sync — só garante que vídeos nunca vão pra `cadastrar_fotos`.
+
+### 4. Mapeamentos de categoria de veículo
+
+Inserir (via migration) registros em `hinova_mapeamentos` para `tipo='categoria_veiculo'` com pelo menos:
+- `taxi` → código Hinova de Táxi
+- `leilao` → código Hinova de Leilão
+- `placa_vermelha` → código Hinova de Aluguel/Especial
+- `ex_taxi` → código Hinova de Ex-Táxi (ou mesmo de Táxi se a Hinova não diferencia)
+
+Como **não tenho os códigos certos da sua conta Hinova**, vou criar a migration apenas com `INSERT ... ON CONFLICT DO NOTHING` da estrutura, deixando `codigo_hinova` em `NULL` e `ativo=false`. Você preenche via UI de mapeamentos ou eu rodo um UPDATE quando você me passar os códigos.
+
+> Sem mapeamento configurado, `codigo_categoria_veiculo` simplesmente não vai no payload (omitido). Não bloqueia envio.
 
 ### 5. Memória do projeto
 
-Atualizar `mem://features/integrations/sga-hinova-sync-and-pre-check-v3`:
-- Documentar que `planos.codigo_sga_plano` = `codigo_grupo_produto` da Hinova
-- Que **não** se envia array `produtos[]` (o grupo já resolve)
-- Que `coberturas.codigo_sga` e `benefits.codigo_sga` **não são mais lidos** pela sync (mas os campos continuam no banco, podem ser usados em relatórios futuros)
+Atualizar `mem://features/integrations/sga-hinova-sync-and-pre-check-v3` documentando:
+- Vídeo é explicitamente bloqueado em `buildFotosPayload`
+- Novos 4 campos opcionais enviados (`codigo_categoria_veiculo`, `valor_fipe_protegido`, `porcentagem_fipe_protegido`, `observacao`)
 
 ---
 
 ## O que NÃO vou mexer
 
-- ❌ Não vou remover as colunas `codigo_sga` de `coberturas` e `benefits` (você pediu pra deixar).
-- ❌ Não vou popular `codigo_sga_plano` nas 23 variantes do Select Basic — você vai cadastrar cada grupo no Hinova primeiro e depois preencher um a um aqui (ou me passa o mapa pronto e eu rodo um UPDATE).
-- ❌ Não vou mexer em `cron-sga-health-check`, `sga-buscar-associado-completo`, `sga-listar-catalogo` etc. — eles não enviam veículo.
+- Endereço de correspondência (Hinova herda do associado — enviar de novo só duplica)
+- `cilindrada`, `quantidade_portas`, `quantidade_passageiros`, `cambio` (não temos no schema)
+- `numero_nota` / `data_emissao_nota` (não temos extração estruturada)
+- Defaults bancários (`codigo_forma_pagamento_adesao`, `codigo_tipo_envio_boleto`) — seguem default da regional
+- Lógica de fotos (vistoria, contrato, avatar) — só adiciono o filtro de vídeo
 
----
+## Como testar depois
 
-## Como você vai testar depois
-
-1. Garante que o "Select Basic" base (id `cfe38797…`) está com `codigo_sga_plano = 40` ✅ (já está).
-2. Pega um contrato de teste vinculado a esse plano e dispara a sync.
-3. Confere em `sga_sync_logs` que o `request_payload` agora tem `codigo_grupo_produto: 40` e **não tem mais** `codigo_plano` nem `produtos`.
-4. Confere no painel Hinova que o veículo apareceu com todos os produtos do grupo 40 vinculados.
-5. Pega um contrato de teste vinculado a uma variante sem código (ex: "Select Basic - SP") e tenta sincronizar — deve **bloquear** com a mensagem amigável, em vez de mandar pelado.
-
----
-
-## Detalhes técnicos (para referência)
-
-**Arquivo:** `supabase/functions/sga-hinova-sync/index.ts`
-
-Trecho atual problemático (linhas 436–468 e 724–727):
-```ts
-const produtos: Array<{ codigo_produto: number }> = [];
-if (contrato?.plano_id) {
-  const { data: planoRow } = await supabase.from('planos')
-    .select('id, nome, codigo_sga_plano, valor_adesao')...
-  // ... monta array produtos lendo planos_beneficios + planos_coberturas
-}
-// ...
-codigo_plano: codigoPlanoSga,
-produtos: produtos.length > 0 ? produtos : undefined,
-```
-
-Vai virar (simplificado):
-```ts
-let codigoGrupoProduto: number | undefined;
-if (contrato?.plano_id) {
-  const { data: planoRow } = await supabase.from('planos')
-    .select('id, nome, codigo_sga_plano, valor_adesao')
-    .eq('id', contrato.plano_id).maybeSingle();
-  const cg = planoRow?.codigo_sga_plano ? Number.parseInt(planoRow.codigo_sga_plano, 10) : NaN;
-  if (Number.isFinite(cg) && cg > 0) {
-    codigoGrupoProduto = cg;
-    valorMensalidade = ...;
-    valorAdesao = ...;
-  } else {
-    // ABORTA — bloqueio claro
-    const motivo = `Plano '${planoRow?.nome}' não tem código de grupo SGA. Cadastre o grupo no Hinova e preencha o código antes de reprocessar.`;
-    await logSync(_vid, _aid, 'resolver_grupo_sga', 'error', {...}, null, motivo);
-    await setStatusSga(_vid, 'erro_sincronizacao');
-    await upsertQueue(_vid, _aid, 'plano_sem_codigo_grupo_sga', motivo, codigoAssociadoHinova);
-    return;
-  }
-}
-// no payload:
-codigo_grupo_produto: codigoGrupoProduto,
-// (sem `produtos`, sem `codigo_plano`)
-```
+1. Cotação com Select Basic + valor protegido + % deságio → conferir `request_payload` em `sga_sync_logs` action `cadastrar_veiculo`: deve ter `valor_fipe_protegido`, `porcentagem_fipe_protegido`, `observacao`.
+2. Veículo táxi (`flag_taxi_ativo=true`) com mapeamento configurado → `codigo_categoria_veiculo` presente.
+3. Veículo táxi sem mapeamento → campo omitido, sync segue normal.
+4. Inserir manualmente (no Supabase) um `vistoria_fotos` com `arquivo_url` `.mp4` e rodar sync → log `enviar_fotos_descarte` mostra a foto em `descartadasVideo`, e o lote enviado à Hinova não inclui ela.
 
 Posso executar?
