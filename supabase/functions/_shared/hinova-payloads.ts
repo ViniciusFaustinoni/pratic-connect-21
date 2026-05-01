@@ -39,6 +39,14 @@ export interface VeiculoCtx {
   codigo_combustivel?: number | null;
   codigo_cor?: number | null;
   data_contrato_iso?: string | null;
+  /** Categoria do veículo (Táxi, Leilão, Placa Vermelha, Ex-Táxi). Resolvido via hinova_mapeamentos tipo='categoria_veiculo'. */
+  codigo_categoria_veiculo?: number;
+  /** Valor FIPE protegido (R$). Doc oficial /veiculo/cadastrar — opcional. */
+  valor_fipe_protegido?: number;
+  /** % FIPE protegido (deságio). Vem de contratos.cobertura_fipe (ex: 70, 75, 100). */
+  porcentagem_fipe_protegido?: number;
+  /** Observação livre (ex: "Cadastro via Pratic Connect — contrato XYZ"). */
+  observacao?: string;
 }
 
 // ============================================================
@@ -190,8 +198,16 @@ export function buildVeiculoPayload(
   if (ctx.codigo_situacao) payload.codigo_situacao = ctx.codigo_situacao;
   if (ctx.codigo_cooperativa) payload.codigo_cooperativa = ctx.codigo_cooperativa;
   if (ctx.codigo_grupo_produto) payload.codigo_grupo_produto = ctx.codigo_grupo_produto;
+  if (ctx.codigo_categoria_veiculo) payload.codigo_categoria_veiculo = ctx.codigo_categoria_veiculo;
   if (typeof ctx.valor_mensalidade === 'number') payload.valor_fixo = ctx.valor_mensalidade;
   if (typeof ctx.valor_adesao === 'number') payload.valor_adesao = ctx.valor_adesao;
+  if (typeof ctx.valor_fipe_protegido === 'number' && ctx.valor_fipe_protegido > 0) {
+    payload.valor_fipe_protegido = ctx.valor_fipe_protegido;
+  }
+  if (typeof ctx.porcentagem_fipe_protegido === 'number' && ctx.porcentagem_fipe_protegido > 0) {
+    payload.porcentagem_fipe_protegido = ctx.porcentagem_fipe_protegido;
+  }
+  if (ctx.observacao && ctx.observacao.trim()) payload.observacao = ctx.observacao.trim();
   if (ctx.data_contrato_iso) payload.data_contrato = formatDateBR(ctx.data_contrato_iso);
   // NÃO enviamos `produtos[]`: o grupo (codigo_grupo_produto) já vincula
   // todas as coberturas e benefícios configurados no painel Hinova.
