@@ -230,10 +230,26 @@ export interface DocumentoEntrada {
 export function buildFotosPayload(
   documentos: DocumentoEntrada[],
   resolverCodigoTipo: (tipo: string) => number | null,
-): { fotos: FotoHinovaPayload[]; descartadasSemLink: string[]; descartadasSemTipo: Array<{ id: string; tipo: string }> } {
+): {
+  fotos: FotoHinovaPayload[];
+  descartadasSemLink: string[];
+  descartadasSemTipo: Array<{ id: string; tipo: string }>;
+  descartadasVideo: Array<{ id: string; arquivo_url: string }>;
+} {
   const fotos: FotoHinovaPayload[] = [];
   const descartadasSemLink: string[] = [];
   const descartadasSemTipo: Array<{ id: string; tipo: string }> = [];
+  const descartadasVideo: Array<{ id: string; arquivo_url: string }> = [];
+
+  // Hinova /veiculo/foto/cadastrar aceita apenas IMAGENS e PDFs.
+  // Vídeo é descartado defensivamente — extensões na URL ou tipo contendo "video"/"audio".
+  const VIDEO_EXT_RE = /\.(mp4|m4v|mov|webm|avi|mkv|3gp|3g2|hevc|wmv|flv|ogv|mts|m2ts)(\?|#|$)/i;
+  const isVideoLike = (url: string, tipo: string | null): boolean => {
+    if (VIDEO_EXT_RE.test(url)) return true;
+    const t = (tipo || '').toLowerCase();
+    if (t.includes('video') || t.includes('vídeo') || t.includes('audio') || t.includes('áudio')) return true;
+    return false;
+  };
 
   const aliasTipo = (t: string | null): string => {
     const s = (t || '').toLowerCase().trim();
@@ -287,6 +303,10 @@ export function buildFotosPayload(
       descartadasSemLink.push(doc.id);
       continue;
     }
+    if (isVideoLike(doc.arquivo_url, doc.tipo)) {
+      descartadasVideo.push({ id: doc.id, arquivo_url: doc.arquivo_url });
+      continue;
+    }
     const tipoNorm = aliasTipo(doc.tipo);
     const codigoTipo = resolverCodigoTipo(tipoNorm);
     if (!codigoTipo) {
@@ -300,7 +320,7 @@ export function buildFotosPayload(
     });
   }
 
-  return { fotos, descartadasSemLink, descartadasSemTipo };
+  return { fotos, descartadasSemLink, descartadasSemTipo, descartadasVideo };
 }
 
 export function chunk<T>(arr: T[], size: number): T[][] {
