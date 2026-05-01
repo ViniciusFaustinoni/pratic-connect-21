@@ -907,7 +907,7 @@ serve(async (req) => {
         }
       }
 
-      const { fotos, descartadasSemLink, descartadasSemTipo } = buildFotosPayload(
+      const { fotos, descartadasSemLink, descartadasSemTipo, descartadasVideo } = buildFotosPayload(
         documentosEntrada,
         (tipo) => getMap('tipo_foto', tipo),
       );
@@ -919,12 +919,13 @@ serve(async (req) => {
         porTipo[k] = (porTipo[k] || 0) + 1;
       }
 
-      if (descartadasSemLink.length || descartadasSemTipo.length) {
+      if (descartadasSemLink.length || descartadasSemTipo.length || descartadasVideo.length) {
         await logSync(_vid, _aid, 'enviar_fotos_descarte', 'info', {
           qtd_total: documentosEntrada.length,
           qtd_validas: fotos.length,
           descartadas_sem_link: descartadasSemLink,
           descartadas_sem_mapeamento: descartadasSemTipo,
+          descartadas_video: descartadasVideo, // Hinova não aceita vídeo — sempre filtrado
         }, null);
       }
 
