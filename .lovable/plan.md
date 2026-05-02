@@ -1,131 +1,109 @@
-## Diagnóstico — o sistema respeita o endpoint?
+## Diagnóstico — motivo raiz
 
-Conferi `supabase/functions/sga-hinova-sync/index.ts` (cadastro de veículo, linhas 700–770) e `supabase/functions/_shared/hinova-payloads.ts` (`buildVeiculoPayload`).
+A tela de Aprovação do Monitoramento chama a RPC `fn_validar_campos_ativacao` antes de ativar. Essa RPC exige `length(veiculos.chassi) >= 17`.
 
-### Já está conforme a doc oficial `/veiculo/cadastrar`
-Todos esses campos já são enviados corretamente, com nomes idênticos à doc:
-`codigo_associado`, `codigo_voluntario`, `codigo_conta` (quando configurado), `codigo_cooperativa`, `codigo_situacao`, `codigo_grupo_produto`, `placa`, `chassi`, `renavam`, `ano_fabricacao`, `ano_modelo`, `codigo_fipe`, `valor_fipe`, `kilometragem`, `numero_motor`, `dia_vencimento`, `codigo_tipo_veiculo`, `codigo_combustivel`, `codigo_cor`, `valor_fixo` (mensalidade), `valor_adesao`, `data_contrato`.
+No caso do **MOACIR JACINTO FERREIRA** (associado `82a4284a…`, veículo `c25fd80c…`, placa `KQB6655`):
 
-Confirmado também:
-- **Não** mandamos mais `produtos[]` nem o campo inventado `codigo_plano` — o grupo já vincula tudo
-- **Não** mandamos vídeo hoje (a sync só usa `documentos`, `contratos_documentos`, `vistoria_fotos` — varredura no banco mostrou 0 arquivos `.mp4/.webm/.mov`)
+- Chassi gravado em `veiculos.chassi`: `8AP372171E608693` → **16 caracteres**
+- Chassi correto (que você informou): `8AP372171E6086953` → 17 caracteres (faltou o `5` antes do último `3`).
+- Não existe registro em `documentos` com OCR para esse veículo, então o chassi entrou por digitação manual em algum form e ficou.
 
-### Vídeo — proteção que falta
-Apesar de hoje não haver vídeo no banco, **não existe filtro defensivo** em `buildFotosPayload`. Se um dia algum upload de `.mp4` cair em `documentos.arquivo_url`, ele seria enviado. Vou adicionar guard por extensão e content-type.
+### Por que conseguiu ser salvo sendo inválido?
 
-### Campos da doc que poderíamos enviar e hoje não enviamos
-Cruzando o schema da tabela `veiculos` com a doc:
+A constraint `veiculos_chassi_format` no banco está marcada como **`NOT VALID`**. Isso significa:
+- O Postgres só aplica a regex (`^[A-HJ-NPR-Z0-9]{17}$`) em **novos** INSERTs/UPDATEs feitos a partir do momento em que a constraint foi criada.
+- Linhas pré-existentes (e qualquer caminho que tenha contornado a constraint) ficaram com chassi inválido sem rejeição.
 
-| Campo doc | Origem no banco | Status hoje |
-|---|---|---|
-| `codigo_categoria_veiculo` | `veiculos.flag_taxi_ativo`, `flag_placa_vermelha`, `flag_leilao`, `flag_ex_taxi` (via mapeamento `hinova_mapeamentos` tipo `categoria_veiculo`) | **não enviado** |
-| `valor_fipe_protegido` | `veiculos.valor_fipe_protegido` | **não enviado** |
-| `porcentagem_fipe_protegido` | `planos.percentual_desagio` (quando há deságio 70/75%) | **não enviado** |
-| `observacao` | gerada: `"Cadastro via Pratic Connect — contrato {numero|id}"` | **não enviado** |
-| Endereço correspondência (`logradouro`, `numero`, `bairro`, `cidade`, `estado`, `cep`) | endereço do associado (mesmo do `/associado/cadastrar`) | opcional na doc — hoje omitimos (Hinova herda do associado). Manter omitido. |
-| `cilindrada`, `quantidade_portas`, `quantidade_passageiros`, `cambio` | **não temos no schema** | manter omitido |
-| `codigo_forma_pagamento_adesao`, `codigo_tipo_envio_boleto`, `codigo_tipo_adesao`, `codigo_tabela_avaliacao` | poderiam vir de `integracoes_credenciais` (defaults da conta) | manter omitido (default da regional) |
-| `numero_nota`, `data_emissao_nota` | poderia vir de `contratos_documentos` tipo `nota_fiscal_veiculo` (só zero-km) | manter omitido (raro e exige parsing) |
+Levantamento no banco mostra **dezenas de veículos com chassi inválido** (16 caracteres, ou contendo `O` proibido pelo padrão VIN), por exemplo: `KQB6655` (16), `OIJ7I10` (16), `TTH0I61` (16), `MTU3188` (16), `RVN4G04` (16), `LSA3223` (16), `9BGJC69ZOFB148539` (contém `O` proibido), etc.
+
+O `VeiculoEditDialog` (UI de edição manual de veículo) já valida `^[A-HJ-NPR-Z0-9]{17}$` no Zod **e exige checkbox "permitir edição de chassi"**. Então a UI atual já permite corrigir — mas só se o usuário souber abrir esse diálogo. No fluxo de Aprovação do Monitoramento não há atalho para editar chassi: só dá erro e trava.
 
 ---
 
-## Mudanças propostas
+## Plano
 
-### 1. `supabase/functions/_shared/hinova-payloads.ts`
+### 1. Correção pontual (Moacir / KQB6655)
 
-**Em `VeiculoCtx`**, adicionar:
-- `codigo_categoria_veiculo?: number`
-- `valor_fipe_protegido?: number`
-- `porcentagem_fipe_protegido?: number`
-- `observacao?: string`
+Atualizar `veiculos.chassi` de `8AP372171E608693` → `8AP372171E6086953` para o veículo `c25fd80c-6ce5-4e1f-8098-eb13117b6fb8`. Feito via migration (data fix), com log em `associados_historico`.
 
-**Em `buildVeiculoPayload`**, anexar esses 4 campos ao payload quando vierem definidos (mesmo padrão dos demais opcionais).
+### 2. Correção dos demais casos — não em massa, sob demanda controlada
 
-**Em `buildFotosPayload`**, adicionar guard que descarta vídeos:
-- regex de extensão: `/\.(mp4|m4v|mov|webm|avi|mkv|3gp|hevc)(\?|$)/i` na `arquivo_url`
-- além do alias de tipo, ignorar tipos contendo `video` ou `audio`
-- novo array de retorno: `descartadasVideo: string[]` (logado como `enviar_fotos_descarte`)
+Não vou "advinhar" o dígito faltante de 50+ chassis (gera dado falso, pior que dado errado). Em vez disso:
 
-### 2. `supabase/functions/sga-hinova-sync/index.ts`
+- (a) Gerar um relatório SQL listando todos os veículos com chassi inválido (placa, associado, chassi atual, motivo da invalidez) e gravar em `/mnt/documents/chassis_invalidos.csv` para você revisar / acionar atendimento.
+- (b) Destravar a UI para que monitoramento e cadastro consigam corrigir caso a caso sem ficar pulando entre telas.
 
-Antes de montar `ctxV` (perto da linha 715), resolver os novos campos:
+### 3. Destravar a tela de Aprovação do Monitoramento (raiz da reclamação)
 
-```ts
-// Categoria do veículo (táxi, leilão, placa vermelha, ex-táxi)
-let categoriaLocal: string | null = null;
-if (veiculo.flag_taxi_ativo) categoriaLocal = 'taxi';
-else if (veiculo.flag_leilao) categoriaLocal = 'leilao';
-else if (veiculo.flag_placa_vermelha) categoriaLocal = 'placa_vermelha';
-else if (veiculo.flag_ex_taxi) categoriaLocal = 'ex_taxi';
-const codigoCategoriaVeiculo = categoriaLocal
-  ? getMap('categoria_veiculo', categoriaLocal) ?? undefined
-  : undefined;
+No `useAprovarInstalacaoMonitoramento` (e na UI da fila de aprovação), quando `fn_validar_campos_ativacao` devolver `chassi`/`placa`/`renavam` faltando:
 
-// Valor protegido + % deságio do plano
-const valorFipeProtegido = veiculo.valor_fipe_protegido != null
-  ? Number(veiculo.valor_fipe_protegido) : undefined;
+- Em vez de só dar `toast.error(...)`, abrir um modal "Corrigir dados do veículo" com os campos faltantes pré-preenchidos com o valor atual.
+- Validar chassi com `isValidChassi` (`src/lib/chassi.ts`) antes de gravar.
+- Após gravar com sucesso, refazer automaticamente a tentativa de aprovação.
 
-let porcentagemFipeProtegido: number | undefined;
-if (contrato?.plano_id) {
-  const { data: planoDes } = await supabase.from('planos')
-    .select('percentual_desagio').eq('id', contrato.plano_id).maybeSingle();
-  if (planoDes?.percentual_desagio != null) {
-    porcentagemFipeProtegido = Number(planoDes.percentual_desagio);
-  }
-}
+Componente novo: `src/components/monitoramento/CorrigirDadosVeiculoDialog.tsx`.
+Hook ajustado: `src/hooks/useAprovacaoMonitoramento.ts` para expor `camposFaltando` no erro estruturado, em vez de só uma string.
 
-// Observação rastreável
-const { data: contratoNum } = contrato
-  ? await supabase.from('contratos').select('numero').eq('veiculo_id', _vid).maybeSingle()
-  : { data: null };
-const observacao = `Cadastro via Pratic Connect — contrato ${contratoNum?.numero ?? _vid}`;
-```
+### 4. Endurecer o banco (evitar reincidência)
 
-E acrescentar no `ctxV`:
-```ts
-codigo_categoria_veiculo: codigoCategoriaVeiculo,
-valor_fipe_protegido: valorFipeProtegido,
-porcentagem_fipe_protegido: porcentagemFipeProtegido,
-observacao,
-```
+- Validar a constraint existente: `ALTER TABLE veiculos VALIDATE CONSTRAINT veiculos_chassi_format` **só funciona se todas as linhas atuais estiverem válidas**. Como ainda existem inválidas, vamos:
+  - (i) Manter a constraint NOT VALID por enquanto (não quebra nada).
+  - (ii) Adicionar um **trigger BEFORE INSERT/UPDATE** `trg_veiculos_chassi_strict` que rejeita chassi não-NULL com formato inválido (regex VIN 17 chars, sem I/O/Q). NULL continua permitido para preenchimento posterior.
+  - (iii) Depois que o relatório do passo 2 for resolvido, podemos rodar `VALIDATE CONSTRAINT` em uma migration futura. Isso fica como follow-up, não nesta entrega.
 
-### 3. Remover qualquer risco de vídeo nas fotos
+### 5. Reforçar sanitizer no front
 
-Na seção 7 (linhas 822–887), depois do `buildFotosPayload`, logar `descartadasVideo` (se houver) com `action: 'enviar_fotos_descarte'`. Nenhuma mudança de comportamento na sync — só garante que vídeos nunca vão pra `cadastrar_fotos`.
-
-### 4. Mapeamentos de categoria de veículo
-
-Inserir (via migration) registros em `hinova_mapeamentos` para `tipo='categoria_veiculo'` com pelo menos:
-- `taxi` → código Hinova de Táxi
-- `leilao` → código Hinova de Leilão
-- `placa_vermelha` → código Hinova de Aluguel/Especial
-- `ex_taxi` → código Hinova de Ex-Táxi (ou mesmo de Táxi se a Hinova não diferencia)
-
-Como **não tenho os códigos certos da sua conta Hinova**, vou criar a migration apenas com `INSERT ... ON CONFLICT DO NOTHING` da estrutura, deixando `codigo_hinova` em `NULL` e `ativo=false`. Você preenche via UI de mapeamentos ou eu rodo um UPDATE quando você me passar os códigos.
-
-> Sem mapeamento configurado, `codigo_categoria_veiculo` simplesmente não vai no payload (omitido). Não bloqueia envio.
-
-### 5. Memória do projeto
-
-Atualizar `mem://features/integrations/sga-hinova-sync-and-pre-check-v3` documentando:
-- Vídeo é explicitamente bloqueado em `buildFotosPayload`
-- Novos 4 campos opcionais enviados (`codigo_categoria_veiculo`, `valor_fipe_protegido`, `porcentagem_fipe_protegido`, `observacao`)
+`src/lib/sanitizers/cotacao-fields.ts::sanitizeChassi` já descarta < 17. Adicionar utilitário equivalente para uso em `VeiculoEditDialog` e em `useUpdateVeiculo` (se existir hook genérico de update de veículo) para que **toda gravação em `veiculos.chassi` passe por `sanitizeChassi` ou seja explicitamente NULL**. Isso fecha o caminho que deixou o dado entrar no banco no Moacir.
 
 ---
 
-## O que NÃO vou mexer
+## Detalhes técnicos
 
-- Endereço de correspondência (Hinova herda do associado — enviar de novo só duplica)
-- `cilindrada`, `quantidade_portas`, `quantidade_passageiros`, `cambio` (não temos no schema)
-- `numero_nota` / `data_emissao_nota` (não temos extração estruturada)
-- Defaults bancários (`codigo_forma_pagamento_adesao`, `codigo_tipo_envio_boleto`) — seguem default da regional
-- Lógica de fotos (vistoria, contrato, avatar) — só adiciono o filtro de vídeo
+**Arquivos novos:**
+- `src/components/monitoramento/CorrigirDadosVeiculoDialog.tsx`
+- `supabase/migrations/<ts>_fix_chassi_moacir_and_strict_trigger.sql`
 
-## Como testar depois
+**Arquivos editados:**
+- `src/hooks/useAprovacaoMonitoramento.ts` — detectar erro estruturado da RPC, abrir dialog de correção.
+- `src/pages/monitoramento/VistoriasInstalacoesMon.tsx` (ou a página/lista que usa o hook — confirmar antes de editar) — montar o dialog e re-tentar approve no `onSuccess` da correção.
+- `src/components/veiculos/VeiculoEditDialog.tsx` — chamar `sanitizeChassi` antes do submit (defesa em profundidade).
 
-1. Cotação com Select Basic + valor protegido + % deságio → conferir `request_payload` em `sga_sync_logs` action `cadastrar_veiculo`: deve ter `valor_fipe_protegido`, `porcentagem_fipe_protegido`, `observacao`.
-2. Veículo táxi (`flag_taxi_ativo=true`) com mapeamento configurado → `codigo_categoria_veiculo` presente.
-3. Veículo táxi sem mapeamento → campo omitido, sync segue normal.
-4. Inserir manualmente (no Supabase) um `vistoria_fotos` com `arquivo_url` `.mp4` e rodar sync → log `enviar_fotos_descarte` mostra a foto em `descartadasVideo`, e o lote enviado à Hinova não inclui ela.
+**Migration SQL (resumo):**
+```sql
+-- 1) Fix pontual Moacir
+UPDATE veiculos SET chassi='8AP372171E6086953', updated_at=now()
+ WHERE id='c25fd80c-6ce5-4e1f-8098-eb13117b6fb8' AND chassi='8AP372171E608693';
 
-Posso executar?
+INSERT INTO associados_historico(associado_id, tipo, descricao, dados_novos)
+VALUES ('82a4284a-0bbf-4168-a5f0-3cf95e756e02','correcao_chassi',
+        'Chassi corrigido: 8AP372171E608693 -> 8AP372171E6086953 (Lovable, suporte a aprovação monitoramento)',
+        jsonb_build_object('veiculo_id','c25fd80c-6ce5-4e1f-8098-eb13117b6fb8'));
+
+-- 2) Trigger de proteção (NULL ok, valor inválido rejeitado)
+CREATE OR REPLACE FUNCTION public.fn_validar_chassi_strict()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.chassi IS NOT NULL AND NEW.chassi <> ''
+     AND NEW.chassi !~ '^[A-HJ-NPR-Z0-9]{17}$' THEN
+    RAISE EXCEPTION 'Chassi inválido: % (precisa ter 17 caracteres VIN, sem I/O/Q)', NEW.chassi
+      USING ERRCODE = '22000';
+  END IF;
+  RETURN NEW;
+END$$;
+
+DROP TRIGGER IF EXISTS trg_veiculos_chassi_strict ON public.veiculos;
+CREATE TRIGGER trg_veiculos_chassi_strict
+BEFORE INSERT OR UPDATE OF chassi ON public.veiculos
+FOR EACH ROW EXECUTE FUNCTION public.fn_validar_chassi_strict();
+```
+
+**Comportamento esperado depois:**
+- Aprovar Moacir funciona normalmente (chassi corrigido).
+- Para os outros associados na mesma situação, o monitoramento agora consegue corrigir o chassi pelo próprio modal antes de aprovar, sem ter que sair da tela.
+- Tentar gravar chassi com 16 chars / com `O` é rejeitado pelo banco (HTTP 500 com mensagem clara), forçando correção no front.
+- Relatório CSV em `/mnt/documents/chassis_invalidos.csv` lista os casos legados para tratamento.
+
+## Fora do escopo (sugestões de follow-up)
+
+- Rodar `ALTER TABLE veiculos VALIDATE CONSTRAINT veiculos_chassi_format` depois que todos os legados forem corrigidos.
+- Aplicar mesma proteção (trigger) em `cotacoes.veiculo_chassi`, hoje protegido só por CHECK que pode estar NOT VALID também — verificar e seguir mesma estratégia.
