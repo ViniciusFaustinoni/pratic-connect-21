@@ -144,6 +144,20 @@ Deno.serve(async (req) => {
     const agora = new Date().toISOString();
 
     // ----- 6) Compare-and-swap no associado -----
+    // IMPORTANTE: o enum `status_associado` NÃO contém 'assinado' (esse valor existe só
+    // em `status_contrato`). Se passarmos 'assinado' para `.in('status', ...)` no PostgREST,
+    // o cast text[] -> status_associado[] falha com 22P02 ("invalid input value for enum
+    // status_associado: 'assinado'") e a ativação trava. Aqui filtramos para apenas
+    // valores válidos do enum do associado.
+    const ASSOC_VALID_FROM: AllowedFromStatus[] = ['aguardando_instalacao', 'pendente'];
+    const allowed_from_assoc = allowed_from.filter((s) =>
+      ASSOC_VALID_FROM.includes(s as AllowedFromStatus)
+    );
+    if (allowed_from_assoc.length === 0) {
+      // Fallback seguro: aceita os dois estados padrão de pré-ativação.
+      allowed_from_assoc.push('aguardando_instalacao', 'pendente');
+    }
+
     const { data: assocUpd, error: assocUpdErr } = await supabase
       .from('associados')
       .update({
@@ -152,7 +166,7 @@ Deno.serve(async (req) => {
         updated_at: agora,
       })
       .eq('id', associado_id)
-      .in('status', allowed_from)
+      .in('status', allowed_from_assoc)
       .select('id, status')
       .maybeSingle();
 
