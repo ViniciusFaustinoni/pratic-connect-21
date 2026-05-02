@@ -198,38 +198,31 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
       diasAtraso: v.diasAtraso,
     }));
 
-    // Build per-item carências — items with carencia_ativa use their own days, others inherit contract period
+    // Build per-item carências
+    // REGRA: só entram itens com `carencia_ativa = true` E `carencia_dias > 0`.
+    // Itens sem carência configurada NÃO devem aparecer como "Em carência" só
+    // porque o contrato tem uma carência geral preenchida — isso confundia o
+    // associado/atendimento ao mostrar todos os benefícios/coberturas em carência
+    // mesmo quando só "Vidros e Faróis" estava configurado com carência no plano.
     const allCarenciaItems = [...(carenciasBeneficios || []), ...(carenciasCoberturas || [])];
-    const carenciasItens: CarenciaItem[] = (carenciaInicio && carenciaFim)
-      ? allCarenciaItems.map(item => {
-          const inicio = new Date(carenciaInicio!);
-          let fim: Date;
-          let dias: number;
-          let carenciaTipo = item.carenciaTipo;
-
-          if (item.carenciaAtiva && item.dias > 0) {
-            // Item has specific carência config — use its own days
-            fim = new Date(inicio);
+    const carenciasItens: CarenciaItem[] = (carenciaInicio && allCarenciaItems.length > 0)
+      ? allCarenciaItems
+          .filter(item => item.carenciaAtiva === true && (item.dias || 0) > 0)
+          .map(item => {
+            const inicio = new Date(carenciaInicio!);
+            const fim = new Date(inicio);
             fim.setDate(fim.getDate() + item.dias);
-            dias = item.dias;
-          } else {
-            // Inherit general contract carência period
-            fim = new Date(carenciaFim!);
-            dias = Math.round((fim.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24));
-            carenciaTipo = 'liberacao';
-          }
-
-          return {
-            nome: item.nome,
-            tipo: item.tipo,
-            carenciaTipo,
-            dias,
-            multiplicador: item.multiplicador,
-            inicio: carenciaInicio!,
-            fim: fim.toISOString().split('T')[0],
-            emCarencia: fim > now,
-          };
-        })
+            return {
+              nome: item.nome,
+              tipo: item.tipo,
+              carenciaTipo: item.carenciaTipo,
+              dias: item.dias,
+              multiplicador: item.multiplicador,
+              inicio: carenciaInicio!,
+              fim: fim.toISOString().split('T')[0],
+              emCarencia: fim > now,
+            };
+          })
       : [];
 
     return {
