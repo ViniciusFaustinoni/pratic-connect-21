@@ -160,7 +160,10 @@ export function VeiculoEditDialog({ open, onClose, veiculo }: VeiculoEditDialogP
         camposAlterados.placa = data.placa;
       }
       if (data.chassi !== veiculo.chassi && data.permitir_edicao_chassi) {
-        camposAlterados.chassi = data.chassi;
+        // Defesa em profundidade: nunca grava chassi com formato inválido
+        // (zod já valida, mas se algum byte vazar, o trigger no banco rejeita)
+        const c = (data.chassi || '').toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g, '');
+        camposAlterados.chassi = c.length === 17 ? c : null;
       }
       if (data.renavam !== veiculo.renavam) {
         camposAlterados.renavam = data.renavam;
