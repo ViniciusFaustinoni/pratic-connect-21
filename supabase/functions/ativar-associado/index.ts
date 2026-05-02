@@ -149,13 +149,17 @@ Deno.serve(async (req) => {
     // o cast text[] -> status_associado[] falha com 22P02 ("invalid input value for enum
     // status_associado: 'assinado'") e a ativação trava. Aqui filtramos para apenas
     // valores válidos do enum do associado.
-    const ASSOC_VALID_FROM: AllowedFromStatus[] = ['aguardando_instalacao', 'pendente'];
-    const allowed_from_assoc = allowed_from.filter((s) =>
-      ASSOC_VALID_FROM.includes(s as AllowedFromStatus)
-    );
+    const ASSOC_VALID_FROM = new Set<string>([
+      'em_analise',
+      'pendente_vistoria',
+      'aprovado',
+      'documentacao_pendente',
+      'aguardando_instalacao',
+    ]);
+    const allowed_from_assoc = allowed_from.filter((s) => ASSOC_VALID_FROM.has(s as string));
     if (allowed_from_assoc.length === 0) {
-      // Fallback seguro: aceita os dois estados padrão de pré-ativação.
-      allowed_from_assoc.push('aguardando_instalacao', 'pendente');
+      // Fallback seguro: aceita os estados padrão de pré-ativação válidos no enum.
+      allowed_from_assoc.push('aguardando_instalacao', 'aprovado');
     }
 
     const { data: assocUpd, error: assocUpdErr } = await supabase
