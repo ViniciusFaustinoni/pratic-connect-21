@@ -121,7 +121,13 @@ export function useAprovarInstalacaoMonitoramento() {
       if (valErr) throw valErr;
       const faltando = (validacao as any)?.faltando ?? (validacao as any)?.campos_faltando ?? [];
       if (Array.isArray(faltando) && faltando.length > 0) {
-        throw new Error(`Não é possível aprovar: campos obrigatórios faltando — ${faltando.join(', ')}`);
+        // Erro estruturado: a UI consegue abrir o dialog de correção em vez de só toast
+        const err: any = new Error(
+          `Não é possível aprovar: campos obrigatórios faltando — ${faltando.join(', ')}`,
+        );
+        err.code = 'campos_obrigatorios_faltando';
+        err.camposFaltando = faltando;
+        throw err;
       }
 
       // 0b. Bloquear se associado já está em estado terminal
