@@ -221,6 +221,8 @@ export default function AprovacaoInstalacaoDetalhe() {
   const [observacoesAprovacao, setObservacoesAprovacao] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [videoExpandido, setVideoExpandido] = useState<string | null>(null);
+  const [corrigirOpen, setCorrigirOpen] = useState(false);
+  const [camposFaltando, setCamposFaltando] = useState<string[]>([]);
 
   if (isLoading) {
     return (
@@ -246,7 +248,7 @@ export default function AprovacaoInstalacaoDetalhe() {
   const veiculo = servico.veiculo as any;
   const profissional = servico.profissional as any;
 
-  const handleAprovar = () => {
+  const tentarAprovar = () => {
     aprovar.mutate({
       servicoId: servico.id,
       veiculoId: veiculo.id,
@@ -254,8 +256,18 @@ export default function AprovacaoInstalacaoDetalhe() {
       observacoes: observacoesAprovacao || undefined,
     }, {
       onSuccess: () => navigate('/monitoramento/aprovacao-associados'),
+      onError: (err: any) => {
+        // Se for o erro estruturado de campos faltando, abre o dialog de correção
+        if (err?.code === 'campos_obrigatorios_faltando' && Array.isArray(err.camposFaltando)) {
+          setCamposFaltando(err.camposFaltando);
+          setCorrigirOpen(true);
+        }
+        // demais erros já são tratados via toast no onError do hook
+      },
     });
   };
+
+  const handleAprovar = () => tentarAprovar();
 
   const handleReprovar = () => {
     if (!motivoReprovar.trim()) return;
