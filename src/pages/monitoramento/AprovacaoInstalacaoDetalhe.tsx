@@ -711,6 +711,19 @@ export default function AprovacaoInstalacaoDetalhe() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Correção de dados faltantes — abre quando fn_validar_campos_ativacao bloqueia */}
+      <CorrigirDadosVeiculoDialog
+        open={corrigirOpen}
+        onOpenChange={setCorrigirOpen}
+        veiculoId={veiculo?.id}
+        associadoId={associado?.id}
+        camposFaltando={camposFaltando}
+        onSaved={() => {
+          // re-tenta aprovação automaticamente após correção
+          tentarAprovar();
+        }}
+      />
     </div>
   );
 }
