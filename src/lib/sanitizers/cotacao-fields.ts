@@ -37,11 +37,22 @@ export function sanitizeRenavam(v: unknown): string | null {
   return null;
 }
 
-/** Chassi (VIN): 17 caracteres alfanuméricos, sem I/O/Q. */
+/**
+ * Chassi (VIN): EXATAMENTE 17 caracteres alfanuméricos, sem I/O/Q.
+ *
+ * O banco tem CHECK constraint `cotacoes_chassi_format` que rejeita qualquer
+ * valor diferente de NULL/'' que não case com `^[A-HJ-NPR-Z0-9]{17}$`. Se
+ * sanitizarmos para um valor com 16 chars (ex.: chassi digitado errado), o
+ * UPDATE inteiro falha com 500 ao finalizar a cotação. Como chassi é sempre
+ * manual (ver mem://constraints/operations/chassi-sempre-manual), preferimos
+ * descartar valores inválidos e exigir nova digitação.
+ */
 export function sanitizeChassi(v: unknown): string | null {
   if (v === null || v === undefined) return null;
   const s = String(v).toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g, '');
-  return s ? s.slice(0, 17) : null;
+  if (!s) return null;
+  // Só aceita se tiver exatamente 17 caracteres válidos.
+  return s.length === 17 ? s : null;
 }
 
 /** Placa Mercosul ou padrão antigo: até 10 chars (coluna varchar(10)). */
