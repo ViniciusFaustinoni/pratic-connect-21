@@ -29,11 +29,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { data: profile } = await supabase
+    const { data: profile, error: profErr } = await supabase
       .from('profiles')
-      .select('id, nome, role')
+      .select('id, nome, tipo')
       .eq('user_id', userRes.user.id)
       .maybeSingle();
+    if (profErr) console.error('[liberar-autovistoria] profile error', profErr);
 
     if (!profile) {
       return new Response(JSON.stringify({ error: 'Profile não encontrado' }), {
