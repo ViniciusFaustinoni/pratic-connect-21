@@ -195,7 +195,10 @@ export function buildVeiculoPayload(
   }
   if (ctx.codigo_combustivel) payload.codigo_combustivel = ctx.codigo_combustivel;
   if (ctx.codigo_cor) payload.codigo_cor = ctx.codigo_cor;
-  if (ctx.codigo_situacao) payload.codigo_situacao = ctx.codigo_situacao;
+  // NÃO enviar `codigo_situacao` no cadastro: a Hinova rejeita códigos que não
+  // existem na conta da regional (Parâmetros Inválidos: CODIGO_SITUACAO).
+  // O default da conta é aplicado automaticamente. A transição
+  // pendente→ativo é feita depois via /veiculo/alterar-situacao quando aplicável.
   if (ctx.codigo_cooperativa) payload.codigo_cooperativa = ctx.codigo_cooperativa;
   if (ctx.codigo_grupo_produto) payload.codigo_grupo_produto = ctx.codigo_grupo_produto;
   if (ctx.codigo_categoria_veiculo) payload.codigo_categoria_veiculo = ctx.codigo_categoria_veiculo;
