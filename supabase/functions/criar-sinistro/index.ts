@@ -363,38 +363,73 @@ Deno.serve(async (req) => {
     }
 
     // ============================================
-    // 4.2.1 GAP 1: VALIDAÇÃO CARÊNCIA 120d E LIMITE 12 MESES PARA VIDROS
+    // 4.2.1 VALIDAÇÃO DE CARÊNCIA POR COBERTURA DO PLANO
     // ============================================
-    if (payload.tipo_sinistro === 'vidros') {
-      // Buscar contrato ativo do associado para verificar carência
+    // Mapa tipo_sinistro -> código de cobertura (espelha src/hooks/useCoberturasBeneficiosPlano.ts)
+    const TIPO_TO_COBERTURA_CODIGO: Record<string, string[]> = {
+      colisao: ['COB-COL'],
+      roubo: ['COB-RF'],
+      furto: ['COB-RF'],
+      incendio: ['COB-INC'],
+      fenomeno_natural: ['COB-FN'],
+      vidros: ['COB-VID'],
+      vandalismo: ['COB-VAN'],
+      terceiros: ['COB-TER'],
+    };
+
+    {
+      // Buscar contrato ativo do associado
       const { data: contrato } = await supabaseAdmin
         .from('contratos')
-        .select('data_ativacao')
+        .select('id, data_ativacao, data_carencia_fim, carencia_isenta, data_carencia_vidros_fim, carencia_vidros_isenta, plano_id')
         .eq('associado_id', associado.id)
         .eq('status', 'ativo')
         .maybeSingle();
 
-      if (contrato?.data_ativacao) {
-        const dataAtivacao = new Date(contrato.data_ativacao);
-        const hoje = new Date();
-        const diffMs = hoje.getTime() - dataAtivacao.getTime();
-        const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const codigos = TIPO_TO_COBERTURA_CODIGO[payload.tipo_sinistro] || [];
 
-        if (diffDias < 120) {
-          const dataDisponivel = new Date(dataAtivacao);
-          dataDisponivel.setDate(dataDisponivel.getDate() + 120);
-          const dataFormatada = dataDisponivel.toLocaleDateString('pt-BR');
+      if (contrato && codigos.length > 0) {
+        const planoId = (contrato as any).plano_id;
+        // Buscar carencia_dias da cobertura no plano
+        const { data: pcs } = await supabaseAdmin
+          .from('planos_coberturas')
+          .select('carencia_dias, coberturas!inner(codigo, nome, carencia_dias, carencia_ativa)')
+          .eq('plano_id', planoId)
+          .in('coberturas.codigo', codigos);
 
-          console.warn('[criar-sinistro] Carência de vidros não cumprida:', diffDias, 'dias');
-          return new Response(
-            JSON.stringify({
-              success: false,
-              error: `Benefício de vidros possui carência de 120 dias. Disponível a partir de ${dataFormatada}.`,
-            }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
+        const pc = (pcs || [])[0] as any;
+        const coberturaNome = pc?.coberturas?.nome || payload.tipo_sinistro;
+        const carenciaAtivaCob = pc?.coberturas?.carencia_ativa !== false;
+        const diasCarencia = (pc?.carencia_dias ?? pc?.coberturas?.carencia_dias ?? 0) as number;
+
+        // Override por isenção: vidros usa flag dedicada; demais usam carencia_isenta global do contrato
+        const isVidros = payload.tipo_sinistro === 'vidros';
+        const isento = isVidros
+          ? !!(contrato as any).carencia_vidros_isenta
+          : !!(contrato as any).carencia_isenta;
+
+        if (carenciaAtivaCob && diasCarencia > 0 && !isento && (contrato as any).data_ativacao) {
+          const dataAtivacao = new Date((contrato as any).data_ativacao);
+          const dataLiberacao = new Date(dataAtivacao);
+          dataLiberacao.setDate(dataLiberacao.getDate() + diasCarencia);
+          const hoje = new Date();
+          if (hoje < dataLiberacao) {
+            const dataFormatada = dataLiberacao.toLocaleDateString('pt-BR');
+            console.warn(`[criar-sinistro] Carência da cobertura ${coberturaNome} não cumprida (${diasCarencia} dias)`);
+            return new Response(
+              JSON.stringify({
+                success: false,
+                error: `A cobertura "${coberturaNome}" do seu plano possui carência de ${diasCarencia} dias. Disponível a partir de ${dataFormatada}.`,
+              }),
+              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
         }
       }
+    }
+
+    // Validações específicas adicionais de vidros (limite 12 meses por peça)
+    if (payload.tipo_sinistro === 'vidros') {
 
       // Verificar limite de 1 uso por peça a cada 12 meses
       if (payload.peca_danificada) {
