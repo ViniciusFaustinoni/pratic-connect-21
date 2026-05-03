@@ -30666,6 +30666,8 @@ export type Database = {
           endereco_longitude: number | null
           endereco_numero: string | null
           endereco_rua: string | null
+          executor_id: string | null
+          executor_tipo: string | null
           horario_agendado: string
           id: string
           iniciada_em: string | null
@@ -30689,6 +30691,8 @@ export type Database = {
           endereco_longitude?: number | null
           endereco_numero?: string | null
           endereco_rua?: string | null
+          executor_id?: string | null
+          executor_tipo?: string | null
           horario_agendado: string
           id?: string
           iniciada_em?: string | null
@@ -30712,6 +30716,8 @@ export type Database = {
           endereco_longitude?: number | null
           endereco_numero?: string | null
           endereco_rua?: string | null
+          executor_id?: string | null
+          executor_tipo?: string | null
           horario_agendado?: string
           id?: string
           iniciada_em?: string | null
