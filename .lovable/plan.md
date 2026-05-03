@@ -45,3 +45,21 @@
 
 6. **Aprovação complementar**: novo status `aguardando_aprovacao_complementar` em `ordens_servico_itens`, fluxo de aprovação pelo analista, lançamento financeiro adicional após aprovação.
 7. **Custo por cobertura**: adicionar `cobertura_id` em `contas_pagar`, `evento_cotacoes_pecas`, `ordens_servico_itens`; backfill via `TIPO_SINISTRO_TO_COBERTURA`; view `vw_custo_evento_por_cobertura`; nova aba "Custo por cobertura" no detalhe do evento + relatório agregado em `SinistrosDashboard`.
+
+## Fase 4 — Interpretação enriquecida do orçamento (em andamento)
+
+### Fase 4.1 — Extração enriquecida (✅ entregue)
+- `extract-orcamento-pdf` migrado para **Gemini 2.5 Pro** com schema enriquecido:
+  - `header`: placa, chassi, marca/modelo/ano/cor, KM, FIPE, oficina (nome/CNPJ/cidade-UF), nº/data do orçamento, tipo de sinistro.
+  - `impact_areas`: lista de regiões de impacto (Cilia/Audatex) com qtd de peças.
+  - `pecas`: agora com `operacao` (T/R&I/REP/PIN), `area_impacto`, `horas_funilaria/pintura/reparo`, `valor_mao_obra` (MO vinculada à peça pai), `origem` e `flags` (`sem_amparo`, `inclusao_manual`).
+  - `servicos`: somente serviços avulsos (não duplica MO já vinculada à peça).
+  - `orcamento_hash` (SHA-256 do PDF) retornado para idempotência.
+- Conversão base64 em chunks (evita stack overflow em PDFs grandes).
+- Tipos do client (`OrcamentoPDFImport.tsx`) atualizados.
+
+### Próximas etapas
+- 4.2 Migração: colunas `area_impacto`, `horas`, `operacao`, `flags`, `peca_pai_id` em `ordens_servico_itens`; `dados_orcamento` JSONB + `orcamento_hash` UNIQUE em `vistorias_evento`.
+- 4.3 `OrcamentoReviewModal.tsx` — confronto header PDF × sistema, revisão por área de impacto.
+- 4.4 Persistência em `VistoriaEventoOrcamento.tsx` usando `peca_pai_id` para vincular MO à peça.
+- 4.5 Atualizar `vw_custo_evento_por_cobertura` para somar MO vinculada na cobertura da peça pai.
