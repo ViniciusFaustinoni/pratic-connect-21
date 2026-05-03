@@ -101,6 +101,7 @@ export function AtribuirVistoriadorModal({
   onSave,
 }: AtribuirVistoriadorModalProps) {
   const [selectedVistoriadorId, setSelectedVistoriadorId] = useState<string | null>(null);
+  const [executorTipo, setExecutorTipo] = useState<ExecutorTipo>('tecnico_interno');
   const [mostrarApenasDisponiveis, setMostrarApenasDisponiveis] = useState(true);
   const [mostrarOutrasRegioes, setMostrarOutrasRegioes] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -109,14 +110,15 @@ export function AtribuirVistoriadorModal({
   useEffect(() => {
     if (open) {
       setSelectedVistoriadorId(null);
+      setExecutorTipo(vistoria?.isVistoriaEvento ? 'regulador' : 'tecnico_interno');
       setMostrarApenasDisponiveis(true);
       setMostrarOutrasRegioes(false);
     }
-  }, [open]);
+  }, [open, vistoria?.isVistoriaEvento]);
 
-  // Buscar vistoriadores com role de instalador_vistoriador ou vistoriador_base
+  // Buscar vistoriadores conforme o tipo de executor selecionado
   const { data: vistoriadores = [], isLoading } = useQuery({
-    queryKey: ['vistoriadores-para-atribuir', vistoria?.dataAgendada, vistoria?.regiao],
+    queryKey: ['vistoriadores-para-atribuir', vistoria?.dataAgendada, vistoria?.regiao, executorTipo],
     queryFn: async (): Promise<VistoriadorDisponivel[]> => {
       // 1. Buscar roles operacionais (instaladores/vistoriadores) dinamicamente
       const { data: configs } = await supabase
