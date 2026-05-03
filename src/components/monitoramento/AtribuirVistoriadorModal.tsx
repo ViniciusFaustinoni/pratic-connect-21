@@ -238,7 +238,7 @@ export function AtribuirVistoriadorModal({
 
     setIsSubmitting(true);
     try {
-      await onSave(selectedVistoriadorId);
+      await onSave(selectedVistoriadorId, vistoria?.isVistoriaEvento ? executorTipo : undefined);
     } finally {
       setIsSubmitting(false);
     }
