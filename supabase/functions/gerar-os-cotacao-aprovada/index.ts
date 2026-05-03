@@ -23,14 +23,24 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // 1. Buscar sinistro com veículo e associado
+    // 1. Buscar sinistro com veículo, associado e status da cota
     const { data: sinistro, error: errSinistro } = await supabase
       .from("sinistros")
-      .select("id, protocolo, veiculo_id, associado_id, oficina_id")
+      .select("id, protocolo, veiculo_id, associado_id, oficina_id, cota_paga, valor_cota_participacao")
       .eq("id", sinistro_id)
       .single();
     if (errSinistro || !sinistro) throw new Error("Sinistro não encontrado");
     if (!sinistro.oficina_id) throw new Error("Oficina não atribuída ao sinistro. Atribua fornecedores antes de gerar a OS.");
+
+    // GUARD: só gera OS se a cota estiver paga ou se o associado for isento (valor 0)
+    const isentoCota = !sinistro.valor_cota_participacao || Number(sinistro.valor_cota_participacao) === 0;
+    if (!sinistro.cota_paga && !isentoCota) {
+      return new Response(JSON.stringify({
+        error: "Aguardando confirmação de pagamento da coparticipação. A OS será gerada automaticamente após o pagamento.",
+        aguardando_pagamento: true,
+      }), { status: 409, headers: corsHeaders });
+    }
+
 
     // 1b. Buscar prestadores vinculados ao sinistro
     const { data: prestadoresVinculados } = await supabase
