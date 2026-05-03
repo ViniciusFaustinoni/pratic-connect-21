@@ -6,17 +6,40 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const systemPrompt = `Você é um especialista em análise de orçamentos de reparo automotivo em PDF.
-Analise o conteúdo do PDF e extraia TODOS os itens encontrados.
+const systemPrompt = `Você é um especialista em análise de orçamentos de reparo automotivo (Cilia, Audatex, Orion, Sinistro Auto e similares) em PDF.
+Sua tarefa: extrair TODOS os dados estruturados do documento, preservando a hierarquia entre peças e suas operações de mão de obra.
 
-REGRAS IMPORTANTES:
-- Peças com operação "T" (Troca) devem ser tipo "peca"
-- Peças com operação "R&I" (Remover & Instalar) devem ser tipo "peca" com observação "R&I"
-- Serviços de mão de obra (funilaria, pintura, reparação, vidraçaria, tapeçaria, elétrica, mecânica) devem ser tipo "mao_de_obra"
-- Para peças: use o preço líquido (após desconto) como valor_unitario
-- Para mão de obra: use o valor total da categoria
-- Quantidade padrão é 1, a menos que explicitamente indicado diferente
-- Extraia o resumo geral com totais`;
+REGRAS DE EXTRAÇÃO:
+
+1) METADADOS DO CABEÇALHO (header):
+   - Identifique placa, chassi (VIN), marca, modelo, ano, cor, KM, valor FIPE.
+   - Identifique a oficina/reparador (nome, CNPJ, cidade/UF) quando disponível.
+   - Identifique número/código do orçamento, data de emissão e tipo de sinistro (colisão, roubo, etc) quando explicitado.
+
+2) ÁREAS DE IMPACTO (impact_areas):
+   - Cilia/Audatex agrupam peças por região do veículo (ex: "Dianteira Esquerda", "Lateral Direita", "Traseira").
+   - Liste cada área encontrada com a quantidade de peças que pertencem a ela.
+
+3) PEÇAS (pecas) - uma linha por peça física:
+   - operacao: SEMPRE classifique como uma das seguintes:
+       * "T"   = Troca (peça nova substitui)
+       * "R&I" = Remover e Instalar (peça reaproveitada, sem substituição)
+       * "REP" = Reparar (a peça em si será reparada, não trocada)
+       * "PIN" = Apenas pintar (peça já existente recebe pintura)
+   - area_impacto: nome da área agrupadora (igual ao listado em impact_areas).
+   - horas_funilaria, horas_pintura, horas_reparo: TODAS as horas associadas àquela peça específica (não some em linhas separadas — vincule à peça pai).
+   - valor_unitario: preço LÍQUIDO (após desconto) da peça em si. Se for R&I/REP/PIN sem peça nova, valor_unitario = 0.
+   - flags: marque "sem_amparo" se a peça aparece como não coberta/excluída do orçamento; "inclusao_manual" se foi incluída fora da varredura automática.
+   - origem: original | seminova | paralela | reaproveitada (quando identificável).
+
+4) SERVIÇOS AVULSOS (servicos) - apenas serviços que NÃO estão vinculados a uma peça específica:
+   - Ex: lavagem, alinhamento geral, diagnóstico, transporte/guincho.
+   - NÃO duplique aqui horas que já foram vinculadas a uma peça em "pecas".
+
+5) RESUMO (resumo):
+   - Some os totais conforme aparecem no rodapé do PDF (peças, mão de obra, total geral).
+
+ATENÇÃO: NÃO invente valores. Se um campo não existe no PDF, omita ou retorne null. Quantidade padrão = 1.`;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -43,7 +66,20 @@ serve(async (req) => {
       throw new Error(`Falha ao baixar PDF: ${pdfResponse.status}`);
     }
     const pdfBuffer = await pdfResponse.arrayBuffer();
-    const pdfBase64 = btoa(String.fromCharCode(...new Uint8Array(pdfBuffer)));
+    // Convert to base64 in chunks to avoid stack overflow on large PDFs
+    const bytes = new Uint8Array(pdfBuffer);
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+    }
+    const pdfBase64 = btoa(binary);
+
+    // Hash do PDF (para idempotência futura na Fase 4)
+    const hashBuffer = await crypto.subtle.digest('SHA-256', pdfBuffer);
+    const orcamento_hash = Array.from(new Uint8Array(hashBuffer))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
 
     const response = await aiGatewayFetch({
       method: 'POST',
@@ -52,7 +88,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'google/gemini-2.5-pro',
         messages: [
           { role: 'system', content: systemPrompt },
           {
@@ -60,7 +96,7 @@ serve(async (req) => {
             content: [
               {
                 type: 'text',
-                text: 'Analise este PDF de orçamento de reparo automotivo e extraia todas as peças, serviços de mão de obra e o resumo de valores.',
+                text: 'Analise este PDF de orçamento de reparo automotivo e extraia metadados, áreas de impacto, peças (com horas vinculadas), serviços avulsos e resumo.',
               },
               {
                 type: 'image_url',
@@ -76,38 +112,93 @@ serve(async (req) => {
             type: 'function',
             function: {
               name: 'extrair_orcamento',
-              description: 'Extrai peças, serviços e resumo de um orçamento de reparo automotivo em PDF',
+              description: 'Extrai metadados, áreas de impacto, peças (com horas vinculadas), serviços avulsos e resumo de um orçamento de reparo automotivo em PDF.',
               parameters: {
                 type: 'object',
                 properties: {
-                  pecas: {
+                  header: {
+                    type: 'object',
+                    description: 'Metadados do cabeçalho do orçamento.',
+                    properties: {
+                      placa: { type: ['string', 'null'] },
+                      chassi: { type: ['string', 'null'] },
+                      marca: { type: ['string', 'null'] },
+                      modelo: { type: ['string', 'null'] },
+                      ano: { type: ['string', 'null'] },
+                      cor: { type: ['string', 'null'] },
+                      km: { type: ['number', 'null'] },
+                      valor_fipe: { type: ['number', 'null'] },
+                      oficina_nome: { type: ['string', 'null'] },
+                      oficina_cnpj: { type: ['string', 'null'] },
+                      oficina_cidade_uf: { type: ['string', 'null'] },
+                      numero_orcamento: { type: ['string', 'null'] },
+                      data_emissao: { type: ['string', 'null'], description: 'YYYY-MM-DD se possível' },
+                      tipo_sinistro: { type: ['string', 'null'] },
+                    },
+                    required: [
+                      'placa', 'chassi', 'marca', 'modelo', 'ano', 'cor', 'km', 'valor_fipe',
+                      'oficina_nome', 'oficina_cnpj', 'oficina_cidade_uf',
+                      'numero_orcamento', 'data_emissao', 'tipo_sinistro',
+                    ],
+                    additionalProperties: false,
+                  },
+                  impact_areas: {
                     type: 'array',
-                    description: 'Lista de peças extraídas do orçamento',
+                    description: 'Áreas de impacto identificadas no orçamento.',
                     items: {
                       type: 'object',
                       properties: {
-                        descricao: { type: 'string', description: 'Nome/título da peça' },
-                        operacao: { type: 'string', description: 'Tipo de operação: T (troca) ou R&I (remover e instalar)' },
-                        quantidade: { type: 'number', description: 'Quantidade (padrão 1)' },
-                        valor_unitario: { type: 'number', description: 'Preço líquido unitário da peça (após desconto)' },
-                        valor_total: { type: 'number', description: 'Valor total (qtd x unitário)' },
-                        origem: { type: 'string', description: 'Origem da peça se identificável: original, seminova, paralela' },
+                        nome: { type: 'string', description: 'Ex: Dianteira Esquerda, Traseira, Lateral Direita' },
+                        qtd_pecas: { type: 'number' },
                       },
-                      required: ['descricao', 'quantidade', 'valor_unitario', 'valor_total'],
+                      required: ['nome', 'qtd_pecas'],
+                      additionalProperties: false,
+                    },
+                  },
+                  pecas: {
+                    type: 'array',
+                    description: 'Peças do orçamento. Cada peça pode ter horas de funilaria/pintura/reparo vinculadas.',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        descricao: { type: 'string' },
+                        operacao: {
+                          type: 'string',
+                          enum: ['T', 'R&I', 'REP', 'PIN'],
+                          description: 'T=Troca, R&I=Remover e Instalar, REP=Reparar, PIN=Pintar',
+                        },
+                        area_impacto: { type: ['string', 'null'] },
+                        quantidade: { type: 'number' },
+                        valor_unitario: { type: 'number', description: 'Preço líquido da peça (0 se R&I/REP/PIN sem peça nova)' },
+                        valor_total: { type: 'number' },
+                        horas_funilaria: { type: ['number', 'null'] },
+                        horas_pintura: { type: ['number', 'null'] },
+                        horas_reparo: { type: ['number', 'null'] },
+                        valor_mao_obra: { type: ['number', 'null'], description: 'Custo total de MO vinculada a esta peça (somatório das horas x valor/hora)' },
+                        origem: {
+                          type: ['string', 'null'],
+                          enum: ['original', 'seminova', 'paralela', 'reaproveitada', null],
+                        },
+                        flags: {
+                          type: 'array',
+                          items: { type: 'string', enum: ['sem_amparo', 'inclusao_manual'] },
+                        },
+                      },
+                      required: ['descricao', 'operacao', 'quantidade', 'valor_unitario', 'valor_total', 'flags'],
                       additionalProperties: false,
                     },
                   },
                   servicos: {
                     type: 'array',
-                    description: 'Lista de serviços de mão de obra',
+                    description: 'Serviços avulsos NÃO vinculados a peça específica (lavagem, guincho, diagnóstico, etc).',
                     items: {
                       type: 'object',
                       properties: {
-                        descricao: { type: 'string', description: 'Descrição do serviço (ex: Funilaria, Pintura, Reparação)' },
-                        horas: { type: 'number', description: 'Quantidade de horas' },
-                        valor_unitario: { type: 'number', description: 'Valor por hora ou valor total do serviço' },
-                        valor_total: { type: 'number', description: 'Valor total do serviço' },
-                        tipo_servico: { type: 'string', description: 'Tipo: funilaria, pintura, reparacao, vidracaria, tapecaria, eletrica, mecanica' },
+                        descricao: { type: 'string' },
+                        horas: { type: ['number', 'null'] },
+                        valor_unitario: { type: ['number', 'null'] },
+                        valor_total: { type: 'number' },
+                        tipo_servico: { type: ['string', 'null'] },
                       },
                       required: ['descricao', 'valor_total'],
                       additionalProperties: false,
@@ -115,17 +206,16 @@ serve(async (req) => {
                   },
                   resumo: {
                     type: 'object',
-                    description: 'Resumo geral dos valores',
                     properties: {
-                      total_pecas: { type: 'number', description: 'Total de peças' },
-                      total_mao_obra: { type: 'number', description: 'Total de mão de obra' },
-                      total_geral: { type: 'number', description: 'Total geral do orçamento' },
+                      total_pecas: { type: 'number' },
+                      total_mao_obra: { type: 'number' },
+                      total_geral: { type: 'number' },
                     },
                     required: ['total_pecas', 'total_mao_obra', 'total_geral'],
                     additionalProperties: false,
                   },
                 },
-                required: ['pecas', 'servicos', 'resumo'],
+                required: ['header', 'impact_areas', 'pecas', 'servicos', 'resumo'],
                 additionalProperties: false,
               },
             },
@@ -161,6 +251,17 @@ serve(async (req) => {
     }
 
     const extracted = JSON.parse(toolCall.function.arguments);
+
+    // Backfill defensivo: garante presença dos novos campos
+    extracted.header = extracted.header ?? null;
+    extracted.impact_areas = extracted.impact_areas ?? [];
+    extracted.pecas = (extracted.pecas ?? []).map((p: any) => ({
+      ...p,
+      flags: Array.isArray(p.flags) ? p.flags : [],
+      operacao: p.operacao ?? 'T',
+    }));
+    extracted.servicos = extracted.servicos ?? [];
+    extracted.orcamento_hash = orcamento_hash;
 
     return new Response(JSON.stringify(extracted), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
