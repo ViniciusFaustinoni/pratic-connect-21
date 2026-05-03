@@ -43,6 +43,13 @@ interface ItemParecer {
   valor_estimado: number;
   prioridade: 'essencial' | 'necessario' | 'opcional';
   observacao?: string;
+  // ⬇️ Campos enriquecidos vindos do PDF (Fase 4)
+  operacao?: 'T' | 'R&I' | 'REP' | 'PIN' | string;
+  area_impacto?: string | null;
+  horas?: number | null;
+  flags?: Array<'sem_amparo' | 'inclusao_manual'>;
+  /** Índice da peça pai dentro de `itens` (resolvido para uuid pelo gerar-OS). */
+  peca_pai_idx?: number | null;
 }
 
 interface FotoTecnica {
