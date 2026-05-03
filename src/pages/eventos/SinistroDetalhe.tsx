@@ -372,9 +372,11 @@ export default function SinistroDetalhe() {
             </TabsContent>
           </Tabs>
 
-          {/* Coberturas/Benefícios utilizados */}
-          <div className="mt-4">
+          {/* Coberturas/Benefícios utilizados + Custo + Itens complementares */}
+          <div className="mt-4 space-y-4">
             <SinistroCoberturaUtilizada sinistroId={id!} />
+            <AprovacaoComplementarPanel sinistroId={id!} canDecide={isAnalistaEventosOnly || isDiretor} />
+            <CustoEventoPorCobertura sinistroId={id!} />
           </div>
         </div>
 
