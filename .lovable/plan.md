@@ -79,6 +79,8 @@
   - Propaga `operacao`, `area_impacto`, `horas`, `flags` em todos os itens.
   - Peças herdam `operacao/area_impacto/flags` da peça correspondente do orçamento original.
 
+### Fase 4.5 — Custo por cobertura com herança de MO (✅ entregue)
+- `vw_custo_evento_por_cobertura` agora resolve `cobertura_id` de itens de MO/serviço via `peca_pai_id` quando o item filho não tem cobertura própria, somando funilaria/pintura/reparo na mesma cobertura da peça pai.
+
 ### Pendências da Fase 4
 - 4.3 `OrcamentoReviewModal.tsx` (revisão visual de header × sistema antes de persistir).
-- 4.5 Atualizar `vw_custo_evento_por_cobertura` para somar MO vinculada na cobertura da peça pai.
