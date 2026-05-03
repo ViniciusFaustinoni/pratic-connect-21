@@ -199,14 +199,18 @@ Deno.serve(async (req) => {
         itens_parecer: dados.itens_parecer || [],
       };
 
-      // Update vistoria
+      // Update vistoria — também grava payload bruto da IA + hash (Fase 4)
+      const updatePayload: Record<string, unknown> = {
+        dados_vistoria: dadosFinais,
+        status: "concluida",
+        concluida_em: new Date().toISOString(),
+      };
+      if (dados.dados_orcamento) updatePayload.dados_orcamento = dados.dados_orcamento;
+      if (dados.orcamento_hash) updatePayload.orcamento_hash = dados.orcamento_hash;
+
       const { error: updateVistoriaError } = await supabase
         .from("vistorias_evento")
-        .update({
-          dados_vistoria: dadosFinais,
-          status: "concluida",
-          concluida_em: new Date().toISOString(),
-        })
+        .update(updatePayload)
         .eq("id", vistoriaId);
       if (updateVistoriaError) throw updateVistoriaError;
 
