@@ -891,6 +891,14 @@ export interface OrdemServicoItem {
   marca?: string;
   numero_peca?: string;
   created_at: string;
+  cobertura_id?: string | null;
+  complementar?: boolean;
+  status_aprovacao?: 'pendente' | 'aprovado' | 'rejeitado';
+  aprovado_por?: string | null;
+  aprovado_em?: string | null;
+  motivo_rejeicao?: string | null;
+  descoberto_em?: string | null;
+  observacao?: string | null;
 }
 
 export interface OrdemServicoHistorico {
