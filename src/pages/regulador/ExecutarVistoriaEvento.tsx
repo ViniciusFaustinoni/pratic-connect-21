@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, ArrowLeft } from 'lucide-react';
@@ -20,6 +20,10 @@ const STATUS_LABELS: Record<string, string> = {
 export default function ExecutarVistoriaEvento() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const backUrl = location.pathname.startsWith('/regulador')
+    ? '/regulador/vistorias'
+    : '/monitoramento/vistorias';
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useVistoriaEventoDetalhe(id);
 
@@ -85,7 +89,7 @@ export default function ExecutarVistoriaEvento() {
     return (
       <div className="p-4 text-center">
         <p className="text-destructive">Erro ao carregar vistoria</p>
-        <Button variant="outline" className="mt-4" onClick={() => navigate('/regulador/vistorias')}>
+        <Button variant="outline" className="mt-4" onClick={() => navigate(backUrl)}>
           Voltar
         </Button>
       </div>
@@ -100,7 +104,7 @@ export default function ExecutarVistoriaEvento() {
     <div className="p-4 space-y-4 pb-24">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/regulador/vistorias')}>
+        <Button variant="ghost" size="icon" onClick={() => navigate(backUrl)}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="flex-1">

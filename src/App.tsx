@@ -836,7 +836,10 @@ const App = () => (
               <Route path="/regulador/perfil" element={<InstaladorPerfil />} />
               <Route path="/regulador/sincronizacao" element={<SincronizacaoPage />} />
             </Route>
-            
+
+            {/* Vistoria de evento unificada — acessível por técnicos internos e prestadores externos atribuídos */}
+            <Route path="/vistoria-evento/:id" element={<ExecutarVistoriaEvento />} />
+
             {/* Analista de Eventos Routes */}
             <Route element={<AnalistaEventosLayout />}>
               <Route path="/analista-eventos" element={<AnalistaEventosHome />} />

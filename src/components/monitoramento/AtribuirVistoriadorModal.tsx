@@ -26,6 +26,8 @@ import { supabase } from '@/integrations/supabase/client';
 
 type StatusVistoriador = 'disponivel' | 'lotado' | 'indisponivel';
 
+export type ExecutorTipo = 'regulador' | 'tecnico_interno' | 'prestador_externo';
+
 export interface VistoriaParaAtribuir {
   id: string;
   protocolo: string;
@@ -38,6 +40,8 @@ export interface VistoriaParaAtribuir {
   periodo: 'manha' | 'tarde';
   vistoriadorAtualId?: string | null;
   vistoriadorAtualNome?: string | null;
+  /** Quando true, exibe o seletor de tipo de executor (Regulador / Técnico / Prestador) */
+  isVistoriaEvento?: boolean;
 }
 
 interface VistoriadorDisponivel {
@@ -58,7 +62,7 @@ export interface AtribuirVistoriadorModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   vistoria: VistoriaParaAtribuir | null;
-  onSave: (vistoriadorId: string) => void;
+  onSave: (vistoriadorId: string, executorTipo?: ExecutorTipo) => void;
 }
 
 // ============================================
@@ -97,6 +101,7 @@ export function AtribuirVistoriadorModal({
   onSave,
 }: AtribuirVistoriadorModalProps) {
   const [selectedVistoriadorId, setSelectedVistoriadorId] = useState<string | null>(null);
+  const [executorTipo, setExecutorTipo] = useState<ExecutorTipo>('tecnico_interno');
   const [mostrarApenasDisponiveis, setMostrarApenasDisponiveis] = useState(true);
   const [mostrarOutrasRegioes, setMostrarOutrasRegioes] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -105,30 +110,38 @@ export function AtribuirVistoriadorModal({
   useEffect(() => {
     if (open) {
       setSelectedVistoriadorId(null);
+      setExecutorTipo(vistoria?.isVistoriaEvento ? 'regulador' : 'tecnico_interno');
       setMostrarApenasDisponiveis(true);
       setMostrarOutrasRegioes(false);
     }
-  }, [open]);
+  }, [open, vistoria?.isVistoriaEvento]);
 
-  // Buscar vistoriadores com role de instalador_vistoriador ou vistoriador_base
+  // Buscar vistoriadores conforme o tipo de executor selecionado
   const { data: vistoriadores = [], isLoading } = useQuery({
-    queryKey: ['vistoriadores-para-atribuir', vistoria?.dataAgendada, vistoria?.regiao],
+    queryKey: ['vistoriadores-para-atribuir', vistoria?.dataAgendada, vistoria?.regiao, executorTipo],
     queryFn: async (): Promise<VistoriadorDisponivel[]> => {
-      // 1. Buscar roles operacionais (instaladores/vistoriadores) dinamicamente
-      const { data: configs } = await supabase
-        .from('app_roles_config')
-        .select('role')
-        .eq('is_operational', true)
-        .eq('is_active', true);
-      const opRoles = (configs || [])
-        .map((c: any) => c.role)
-        .filter((r: string) => r.includes('instalador') || r.includes('vistoriador'));
-      if (opRoles.length === 0) opRoles.push('instalador_vistoriador');
+      // 1. Buscar roles operacionais conforme o tipo de executor escolhido
+      let opRoles: string[] = [];
+      if (executorTipo === 'regulador') {
+        opRoles = ['regulador'];
+      } else if (executorTipo === 'prestador_externo') {
+        opRoles = ['prestador_externo'];
+      } else {
+        const { data: configs } = await supabase
+          .from('app_roles_config')
+          .select('role')
+          .eq('is_operational', true)
+          .eq('is_active', true);
+        opRoles = (configs || [])
+          .map((c: any) => c.role)
+          .filter((r: string) => r.includes('instalador') || r.includes('vistoriador'));
+        if (opRoles.length === 0) opRoles.push('instalador_vistoriador');
+      }
 
       const { data: roles, error: rolesError } = await supabase
         .from('user_roles')
         .select('user_id')
-        .in('role', opRoles);
+        .in('role', opRoles as any);
 
       if (rolesError) throw rolesError;
       if (!roles?.length) return [];
@@ -225,7 +238,7 @@ export function AtribuirVistoriadorModal({
 
     setIsSubmitting(true);
     try {
-      await onSave(selectedVistoriadorId);
+      await onSave(selectedVistoriadorId, vistoria?.isVistoriaEvento ? executorTipo : undefined);
     } finally {
       setIsSubmitting(false);
     }
@@ -285,7 +298,35 @@ export function AtribuirVistoriadorModal({
             </CardContent>
           </Card>
 
-          {/* Filtros Rápidos */}
+          {/* Seletor de tipo de executor — só para vistoria de evento */}
+          {vistoria.isVistoriaEvento && (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Tipo de executor</Label>
+              <RadioGroup
+                value={executorTipo}
+                onValueChange={(v) => { setExecutorTipo(v as ExecutorTipo); setSelectedVistoriadorId(null); }}
+                className="grid grid-cols-3 gap-2"
+              >
+                {([
+                  { v: 'regulador', label: 'Regulador' },
+                  { v: 'tecnico_interno', label: 'Técnico interno' },
+                  { v: 'prestador_externo', label: 'Prestador externo' },
+                ] as { v: ExecutorTipo; label: string }[]).map(opt => (
+                  <label
+                    key={opt.v}
+                    className={cn(
+                      'flex items-center gap-2 rounded-md border p-2 cursor-pointer text-xs',
+                      executorTipo === opt.v ? 'border-primary bg-primary/5' : 'hover:border-muted-foreground/40'
+                    )}
+                  >
+                    <RadioGroupItem value={opt.v} id={`exec-${opt.v}`} />
+                    <span>{opt.label}</span>
+                  </label>
+                ))}
+              </RadioGroup>
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-4">
             <div className="flex items-center space-x-2">
               <Checkbox

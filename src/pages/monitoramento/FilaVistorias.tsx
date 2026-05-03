@@ -455,6 +455,7 @@ export default function FilaVistorias() {
       periodo: 'manha', // TODO: extrair do horário real
       vistoriadorAtualId: vistoria.vistoriadorId,
       vistoriadorAtualNome: vistoria.vistoriador,
+      isVistoriaEvento: vistoria.tipo === 'evento',
     });
     setAtribuirModalOpen(true);
   };
@@ -463,16 +464,31 @@ export default function FilaVistorias() {
   const queryClient = useQueryClient();
 
   // Handler para salvar atribuição
-  const handleSaveAtribuicao = async (vistoriadorId: string) => {
+  const handleSaveAtribuicao = async (vistoriadorId: string, executorTipo?: 'regulador' | 'tecnico_interno' | 'prestador_externo') => {
     if (!vistoriaParaAtribuir) return;
-    
+
     try {
-      // Determinar qual tabela atualizar baseado no tipo
-      const isServico = vistoriaParaAtribuir.id && 
+      const isEvento = vistoriasEventoRaw?.some((ve: any) => ve.id === vistoriaParaAtribuir.id);
+      const isServico = !isEvento && vistoriaParaAtribuir.id &&
         servicosRaw?.some(s => s.id === vistoriaParaAtribuir.id);
-      
-      if (isServico) {
-        // É um serviço (manutenção/retirada)
+
+      if (isEvento) {
+        const tipoFinal = executorTipo || 'regulador';
+        const update: any = {
+          executor_tipo: tipoFinal,
+          executor_id: vistoriadorId,
+          status: 'agendada',
+          updated_at: new Date().toISOString(),
+        };
+        // Mantém regulador_id em sync para compatibilidade da UI atual do regulador
+        if (tipoFinal === 'regulador') update.regulador_id = vistoriadorId;
+
+        const { error } = await supabase
+          .from('vistorias_evento' as any)
+          .update(update)
+          .eq('id', vistoriaParaAtribuir.id);
+        if (error) throw error;
+      } else if (isServico) {
         const { error } = await supabase
           .from('servicos')
           .update({
@@ -484,7 +500,6 @@ export default function FilaVistorias() {
 
         if (error) throw error;
       } else {
-        // É uma vistoria tradicional
         const { error } = await supabase
           .from('vistorias')
           .update({
@@ -502,12 +517,13 @@ export default function FilaVistorias() {
       queryClient.invalidateQueries({ queryKey: ['vistorias-fila'] });
       queryClient.invalidateQueries({ queryKey: ['vistorias-manutencao'] });
       queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      queryClient.invalidateQueries({ queryKey: ['vistorias-evento'] });
 
-      toast.success('Vistoriador atribuído com sucesso!');
+      toast.success('Atribuição registrada com sucesso!');
       setAtribuirModalOpen(false);
     } catch (error) {
       console.error('Erro ao atribuir vistoriador:', error);
-      toast.error('Erro ao atribuir vistoriador. Tente novamente.');
+      toast.error('Erro ao atribuir. Tente novamente.');
     }
   };
 

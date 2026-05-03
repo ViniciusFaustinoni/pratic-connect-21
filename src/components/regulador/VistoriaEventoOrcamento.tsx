@@ -480,14 +480,11 @@ export function VistoriaEventoOrcamento({
                 </div>
               ))}
 
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => adicionarItem('peca')} className="flex-1 gap-1">
-                  <Plus className="h-3 w-3" /> Peça
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => adicionarItem('servico')} className="flex-1 gap-1">
-                  <Plus className="h-3 w-3" /> Serviço
-                </Button>
-              </div>
+              {itens.length === 0 && (
+                <div className="rounded-lg border border-dashed p-3 text-center text-[11px] text-muted-foreground">
+                  A criação manual de itens foi desativada. Importe o PDF do orçamento — a IA preenche peças, serviços e valores automaticamente. Você poderá ajustar quantidades e valores depois.
+                </div>
+              )}
 
               {/* Resumo de itens */}
               {itens.length > 0 && (
