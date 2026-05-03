@@ -298,7 +298,35 @@ export function AtribuirVistoriadorModal({
             </CardContent>
           </Card>
 
-          {/* Filtros Rápidos */}
+          {/* Seletor de tipo de executor — só para vistoria de evento */}
+          {vistoria.isVistoriaEvento && (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Tipo de executor</Label>
+              <RadioGroup
+                value={executorTipo}
+                onValueChange={(v) => { setExecutorTipo(v as ExecutorTipo); setSelectedVistoriadorId(null); }}
+                className="grid grid-cols-3 gap-2"
+              >
+                {([
+                  { v: 'regulador', label: 'Regulador' },
+                  { v: 'tecnico_interno', label: 'Técnico interno' },
+                  { v: 'prestador_externo', label: 'Prestador externo' },
+                ] as { v: ExecutorTipo; label: string }[]).map(opt => (
+                  <label
+                    key={opt.v}
+                    className={cn(
+                      'flex items-center gap-2 rounded-md border p-2 cursor-pointer text-xs',
+                      executorTipo === opt.v ? 'border-primary bg-primary/5' : 'hover:border-muted-foreground/40'
+                    )}
+                  >
+                    <RadioGroupItem value={opt.v} id={`exec-${opt.v}`} />
+                    <span>{opt.label}</span>
+                  </label>
+                ))}
+              </RadioGroup>
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-4">
             <div className="flex items-center space-x-2">
               <Checkbox
