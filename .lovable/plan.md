@@ -63,3 +63,22 @@
 - 4.3 `OrcamentoReviewModal.tsx` — confronto header PDF × sistema, revisão por área de impacto.
 - 4.4 Persistência em `VistoriaEventoOrcamento.tsx` usando `peca_pai_id` para vincular MO à peça.
 - 4.5 Atualizar `vw_custo_evento_por_cobertura` para somar MO vinculada na cobertura da peça pai.
+
+### Fase 4.2 — Schema enriquecido (✅ entregue)
+- `ordens_servico_itens`: `area_impacto`, `operacao` (T/R&I/REP/PIN), `horas`, `flags[]`, `peca_pai_id` (FK auto-relacional). Índices em `peca_pai_id` e `area_impacto`.
+- `vistorias_evento`: `dados_orcamento` (JSONB com header/impact_areas) e `orcamento_hash` + UNIQUE `(id, orcamento_hash)`.
+
+### Fase 4.4 — Persistência vinculada (✅ entregue)
+- `VistoriaEventoOrcamento`:
+  - Mantém `dados_orcamento` bruto (header, impact_areas, hash) e envia ao salvar.
+  - Converte cada peça do PDF em 1 linha `peca` + N linhas `servico` (Funilaria/Pintura/Reparo) com `peca_pai_idx` e `horas`, distribuindo `valor_mao_obra` proporcionalmente às horas.
+  - `ItemParecer` ganhou `operacao`, `area_impacto`, `horas`, `flags`, `peca_pai_idx`.
+- `salvar-vistoria-regulador`: grava `dados_orcamento` e `orcamento_hash` na vistoria.
+- `gerar-os-cotacao-aprovada`:
+  - Insere peças primeiro, captura ids e resolve `peca_pai_id` das linhas de MO/serviço via `peca_pai_idx` → descrição → id.
+  - Propaga `operacao`, `area_impacto`, `horas`, `flags` em todos os itens.
+  - Peças herdam `operacao/area_impacto/flags` da peça correspondente do orçamento original.
+
+### Pendências da Fase 4
+- 4.3 `OrcamentoReviewModal.tsx` (revisão visual de header × sistema antes de persistir).
+- 4.5 Atualizar `vw_custo_evento_por_cobertura` para somar MO vinculada na cobertura da peça pai.

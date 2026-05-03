@@ -107,14 +107,20 @@ serve(async (req) => {
       .single();
     if (errOS) throw new Error("Erro ao criar OS: " + errOS.message);
 
-    // 7. Inserir itens — peças da cotação + MO/serviços do orçamento
-    const itensParaInserir: any[] = [];
+    // 7. Inserir itens — peças da cotação primeiro (precisamos do id para vincular MO)
+    const orcamentoItens: any[] = vistoria?.itens_orcamento || [];
 
     // Peças da cotação aprovada
     const respostaItens = cotacao.resposta?.itens || [];
+    const pecasParaInserir: any[] = [];
     for (const item of respostaItens) {
       if (item.disponibilidade === "indisponivel") continue;
-      itensParaInserir.push({
+      // Tenta achar a peça correspondente no orçamento original p/ herdar área/operação/flags
+      const orcPeca = orcamentoItens.find(
+        (o) => o.tipo === "peca" &&
+          (o.descricao || "").toLowerCase().trim() === (item.descricao || item.nome || "").toLowerCase().trim()
+      );
+      pecasParaInserir.push({
         ordem_servico_id: os.id,
         tipo: "peca",
         descricao: item.descricao || item.nome,
@@ -122,14 +128,37 @@ serve(async (req) => {
         valor_unitario: item.valor_unitario || 0,
         valor_total: (item.valor_unitario || 0) * (item.quantidade || 1),
         aprovado: true,
+        operacao: orcPeca?.operacao ?? "T",
+        area_impacto: orcPeca?.area_impacto ?? null,
+        flags: orcPeca?.flags ?? [],
       });
     }
 
-    // MO e serviços do orçamento do regulador
-    const orcamentoItens = vistoria?.itens_orcamento || [];
+    // Insere peças e captura ids para resolver peca_pai_id da MO
+    const pecaIdByDescricao = new Map<string, string>();
+    if (pecasParaInserir.length > 0) {
+      const { data: pecasInseridas, error: errPecas } = await supabase
+        .from("ordens_servico_itens")
+        .insert(pecasParaInserir)
+        .select("id, descricao");
+      if (errPecas) console.error("Erro ao inserir peças:", errPecas.message);
+      for (const p of pecasInseridas ?? []) {
+        pecaIdByDescricao.set((p.descricao || "").toLowerCase().trim(), p.id);
+      }
+    }
+
+    // MO e serviços do orçamento do regulador (vinculados à peça pai quando aplicável)
+    const moParaInserir: any[] = [];
     for (const item of orcamentoItens) {
       if (item.tipo === "peca") continue; // peças vêm da cotação
-      itensParaInserir.push({
+      let peca_pai_id: string | null = null;
+      if (typeof item.peca_pai_idx === "number") {
+        const pecaPai = orcamentoItens[item.peca_pai_idx];
+        if (pecaPai?.descricao) {
+          peca_pai_id = pecaIdByDescricao.get(pecaPai.descricao.toLowerCase().trim()) ?? null;
+        }
+      }
+      moParaInserir.push({
         ordem_servico_id: os.id,
         tipo: item.tipo || "servico",
         descricao: item.descricao || item.nome,
@@ -137,13 +166,19 @@ serve(async (req) => {
         valor_unitario: item.valor_unitario || 0,
         valor_total: (item.valor_unitario || 0) * (item.quantidade || 1),
         aprovado: true,
+        operacao: item.operacao ?? null,
+        area_impacto: item.area_impacto ?? null,
+        horas: item.horas ?? null,
+        flags: item.flags ?? [],
+        peca_pai_id,
       });
     }
-
-    if (itensParaInserir.length > 0) {
-      const { error: errItens } = await supabase.from("ordens_servico_itens").insert(itensParaInserir);
-      if (errItens) console.error("Erro ao inserir itens:", errItens.message);
+    if (moParaInserir.length > 0) {
+      const { error: errMO } = await supabase.from("ordens_servico_itens").insert(moParaInserir);
+      if (errMO) console.error("Erro ao inserir MO/serviços:", errMO.message);
     }
+
+    const itensParaInserir = [...pecasParaInserir, ...moParaInserir];
 
     // Calcular valor total da OS
     const valorTotal = itensParaInserir.reduce((sum, i) => sum + (i.valor_total || 0), 0);

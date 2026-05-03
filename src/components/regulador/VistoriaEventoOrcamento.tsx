@@ -43,6 +43,13 @@ interface ItemParecer {
   valor_estimado: number;
   prioridade: 'essencial' | 'necessario' | 'opcional';
   observacao?: string;
+  // ⬇️ Campos enriquecidos vindos do PDF (Fase 4)
+  operacao?: 'T' | 'R&I' | 'REP' | 'PIN' | string;
+  area_impacto?: string | null;
+  horas?: number | null;
+  flags?: Array<'sem_amparo' | 'inclusao_manual'>;
+  /** Índice da peça pai dentro de `itens` (resolvido para uuid pelo gerar-OS). */
+  peca_pai_idx?: number | null;
 }
 
 interface FotoTecnica {
@@ -82,12 +89,26 @@ export function VistoriaEventoOrcamento({
   const [itens, setItens] = useState<ItemParecer[]>([]);
   const [etapasReparo, setEtapasReparo] = useState<string[]>([]);
 
-  // PDF Import callback
+  // Payload bruto extraído pela IA (header, impact_areas, hash) — persistido junto ao parecer
+  const [dadosOrcamento, setDadosOrcamento] = useState<DadosExtraidos | null>(null);
+
+  // PDF Import callback — converte payload enriquecido em ItemParecer
   const handleDadosExtraidos = useCallback((dados: DadosExtraidos) => {
+    setDadosOrcamento(dados);
     const novosItens: ItemParecer[] = [];
+
+    // Cabeçalho informativo enviado para a UI (compara com sistema na próxima fase)
+    if (dados.header?.placa || dados.header?.numero_orcamento) {
+      console.info('[Orçamento] Header extraído:', dados.header);
+    }
 
     if (dados.pecas?.length) {
       for (const p of dados.pecas) {
+        const pecaIdx = novosItens.length;
+        const opLabel = p.operacao && p.operacao !== 'T' ? `Operação: ${p.operacao}` : '';
+        const areaLabel = p.area_impacto ? `Área: ${p.area_impacto}` : '';
+        const obs = [opLabel, areaLabel].filter(Boolean).join(' • ');
+
         novosItens.push({
           tipo: 'peca',
           descricao: p.descricao || '',
@@ -95,11 +116,41 @@ export function VistoriaEventoOrcamento({
           quantidade: p.quantidade || 1,
           valor_estimado: p.valor_unitario || 0,
           prioridade: 'necessario',
-          observacao: p.operacao === 'R&I' ? 'R&I - Remover e Instalar' : (p.operacao ? `Operação: ${p.operacao}` : ''),
+          observacao: obs || undefined,
+          operacao: p.operacao || 'T',
+          area_impacto: p.area_impacto ?? null,
+          flags: p.flags ?? [],
         });
+
+        // Cria linhas-filhas de mão de obra vinculadas à peça pai
+        const horasPorTipo: Array<{ horas: number | null | undefined; rotulo: string }> = [
+          { horas: p.horas_funilaria, rotulo: 'Funilaria' },
+          { horas: p.horas_pintura, rotulo: 'Pintura' },
+          { horas: p.horas_reparo, rotulo: 'Reparo' },
+        ];
+        const totalHoras = horasPorTipo.reduce((s, h) => s + (h.horas || 0), 0);
+        const valorMOTotal = p.valor_mao_obra || 0;
+        const valorPorHora = totalHoras > 0 ? valorMOTotal / totalHoras : 0;
+
+        for (const h of horasPorTipo) {
+          if (!h.horas || h.horas <= 0) continue;
+          novosItens.push({
+            tipo: 'servico',
+            descricao: `${h.rotulo} — ${p.descricao}`,
+            quantidade: 1,
+            valor_estimado: +(valorPorHora * h.horas).toFixed(2),
+            prioridade: 'necessario',
+            observacao: `${h.horas}h em ${p.area_impacto || 'peça vinculada'}`,
+            horas: h.horas,
+            area_impacto: p.area_impacto ?? null,
+            peca_pai_idx: pecaIdx,
+            flags: p.flags ?? [],
+          });
+        }
       }
     }
 
+    // Serviços avulsos (não vinculados a peça)
     if (dados.servicos?.length) {
       for (const s of dados.servicos) {
         novosItens.push({
@@ -109,6 +160,8 @@ export function VistoriaEventoOrcamento({
           valor_estimado: s.valor_total || 0,
           prioridade: 'necessario',
           observacao: s.tipo_servico || '',
+          horas: s.horas ?? null,
+          peca_pai_idx: null,
         });
       }
     }
@@ -207,14 +260,24 @@ export function VistoriaEventoOrcamento({
         // Legacy compatibility
         tipo_dano: gravidade === 'possivel_perda_total' ? 'total' : 'parcial',
         parecer_tecnico: descricaoTecnica,
-        itens_orcamento: itens.map(i => ({
+        itens_orcamento: itens.map((i, idx) => ({
+          idx,
           descricao: i.descricao,
           tipo: i.tipo === 'peca' ? 'peca' : 'servico',
           valor_unitario: i.valor_estimado,
           quantidade: i.quantidade,
           valor_total: i.valor_estimado * i.quantidade,
+          // Campos enriquecidos (Fase 4)
+          operacao: i.operacao ?? null,
+          area_impacto: i.area_impacto ?? null,
+          horas: i.horas ?? null,
+          flags: i.flags ?? [],
+          peca_pai_idx: i.peca_pai_idx ?? null,
         })),
         valor_total_orcamento: totalGeral,
+        // Payload bruto da IA (header, impact_areas, hash) para auditoria/idempotência
+        dados_orcamento: dadosOrcamento ?? null,
+        orcamento_hash: dadosOrcamento?.orcamento_hash ?? null,
       };
 
       // Upload fotos first

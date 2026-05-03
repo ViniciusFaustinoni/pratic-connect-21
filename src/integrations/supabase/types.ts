@@ -18999,17 +18999,22 @@ export type Database = {
           aprovado: boolean | null
           aprovado_em: string | null
           aprovado_por: string | null
+          area_impacto: string | null
           cobertura_id: string | null
           complementar: boolean
           created_at: string | null
           descoberto_em: string | null
           descricao: string
+          flags: string[]
+          horas: number | null
           id: string
           marca: string | null
           motivo_rejeicao: string | null
           numero_peca: string | null
           observacao: string | null
+          operacao: string | null
           ordem_servico_id: string
+          peca_pai_id: string | null
           quantidade: number | null
           status_aprovacao: string
           tipo: Database["public"]["Enums"]["tipo_item_os"]
@@ -19020,17 +19025,22 @@ export type Database = {
           aprovado?: boolean | null
           aprovado_em?: string | null
           aprovado_por?: string | null
+          area_impacto?: string | null
           cobertura_id?: string | null
           complementar?: boolean
           created_at?: string | null
           descoberto_em?: string | null
           descricao: string
+          flags?: string[]
+          horas?: number | null
           id?: string
           marca?: string | null
           motivo_rejeicao?: string | null
           numero_peca?: string | null
           observacao?: string | null
+          operacao?: string | null
           ordem_servico_id: string
+          peca_pai_id?: string | null
           quantidade?: number | null
           status_aprovacao?: string
           tipo: Database["public"]["Enums"]["tipo_item_os"]
@@ -19041,17 +19051,22 @@ export type Database = {
           aprovado?: boolean | null
           aprovado_em?: string | null
           aprovado_por?: string | null
+          area_impacto?: string | null
           cobertura_id?: string | null
           complementar?: boolean
           created_at?: string | null
           descoberto_em?: string | null
           descricao?: string
+          flags?: string[]
+          horas?: number | null
           id?: string
           marca?: string | null
           motivo_rejeicao?: string | null
           numero_peca?: string | null
           observacao?: string | null
+          operacao?: string | null
           ordem_servico_id?: string
+          peca_pai_id?: string | null
           quantidade?: number | null
           status_aprovacao?: string
           tipo?: Database["public"]["Enums"]["tipo_item_os"]
@@ -19078,6 +19093,13 @@ export type Database = {
             columns: ["ordem_servico_id"]
             isOneToOne: false
             referencedRelation: "ordens_servico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ordens_servico_itens_peca_pai_id_fkey"
+            columns: ["peca_pai_id"]
+            isOneToOne: false
+            referencedRelation: "ordens_servico_itens"
             referencedColumns: ["id"]
           },
         ]
@@ -30942,6 +30964,7 @@ export type Database = {
         Row: {
           concluida_em: string | null
           created_at: string
+          dados_orcamento: Json | null
           dados_vistoria: Json | null
           data_agendada: string
           endereco_bairro: string | null
@@ -30958,6 +30981,7 @@ export type Database = {
           iniciada_em: string | null
           link_id: string | null
           observacoes: string | null
+          orcamento_hash: string | null
           permite_encaixe: boolean
           regulador_id: string | null
           sinistro_id: string
@@ -30967,6 +30991,7 @@ export type Database = {
         Insert: {
           concluida_em?: string | null
           created_at?: string
+          dados_orcamento?: Json | null
           dados_vistoria?: Json | null
           data_agendada: string
           endereco_bairro?: string | null
@@ -30983,6 +31008,7 @@ export type Database = {
           iniciada_em?: string | null
           link_id?: string | null
           observacoes?: string | null
+          orcamento_hash?: string | null
           permite_encaixe?: boolean
           regulador_id?: string | null
           sinistro_id: string
@@ -30992,6 +31018,7 @@ export type Database = {
         Update: {
           concluida_em?: string | null
           created_at?: string
+          dados_orcamento?: Json | null
           dados_vistoria?: Json | null
           data_agendada?: string
           endereco_bairro?: string | null
@@ -31008,6 +31035,7 @@ export type Database = {
           iniciada_em?: string | null
           link_id?: string | null
           observacoes?: string | null
+          orcamento_hash?: string | null
           permite_encaixe?: boolean
           regulador_id?: string | null
           sinistro_id?: string
