@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, ArrowLeft } from 'lucide-react';
@@ -20,6 +20,10 @@ const STATUS_LABELS: Record<string, string> = {
 export default function ExecutarVistoriaEvento() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const backUrl = location.pathname.startsWith('/regulador')
+    ? '/regulador/vistorias'
+    : '/monitoramento/vistorias';
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useVistoriaEventoDetalhe(id);
 
