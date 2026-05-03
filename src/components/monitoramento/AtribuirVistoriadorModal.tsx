@@ -26,6 +26,8 @@ import { supabase } from '@/integrations/supabase/client';
 
 type StatusVistoriador = 'disponivel' | 'lotado' | 'indisponivel';
 
+export type ExecutorTipo = 'regulador' | 'tecnico_interno' | 'prestador_externo';
+
 export interface VistoriaParaAtribuir {
   id: string;
   protocolo: string;
@@ -38,6 +40,8 @@ export interface VistoriaParaAtribuir {
   periodo: 'manha' | 'tarde';
   vistoriadorAtualId?: string | null;
   vistoriadorAtualNome?: string | null;
+  /** Quando true, exibe o seletor de tipo de executor (Regulador / Técnico / Prestador) */
+  isVistoriaEvento?: boolean;
 }
 
 interface VistoriadorDisponivel {
@@ -58,7 +62,7 @@ export interface AtribuirVistoriadorModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   vistoria: VistoriaParaAtribuir | null;
-  onSave: (vistoriadorId: string) => void;
+  onSave: (vistoriadorId: string, executorTipo?: ExecutorTipo) => void;
 }
 
 // ============================================
