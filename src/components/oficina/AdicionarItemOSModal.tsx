@@ -120,7 +120,12 @@ export function AdicionarItemOSModal({
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Adicionar Item</DialogTitle>
+          <DialogTitle>{complementar ? 'Adicionar item complementar' : 'Adicionar Item'}</DialogTitle>
+          {complementar && (
+            <p className="text-sm text-muted-foreground">
+              Este item foi descoberto durante o reparo e ficará pendente de aprovação pelo analista antes de ser cobrado.
+            </p>
+          )}
         </DialogHeader>
 
         <Form {...form}>
