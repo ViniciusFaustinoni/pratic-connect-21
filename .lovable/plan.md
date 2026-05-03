@@ -1,95 +1,120 @@
-## Diagnóstico — motivo raiz
+# Alinhamento Completo do Fluxo de Eventos
 
-Confirmado in-loco no banco e no código.
-
-### O que a UI deveria mostrar
-Para o plano `Select One - Passeio 5%` (e o `Aplicativo - 5%`), a configuração de carência por item está assim:
-
-- **Vidros e Faróis** → `carencia_ativa = true`, `carencia_dias = 120` ✅ (único item realmente configurado)
-- Todos os demais (Kit Gás, Danos a Terceiros, Carro Reserva, Assistência 24h, Reboque Excedente, Rastreador, Clube Gás, Colisão, Furto, 100% FIPE, Roubo, Chuva de Granizo, Alagamento, Perda Total, Taxa Administrativa, Incêndio) → `carencia_ativa = false`
-
-Então a UI deveria listar **só Vidros e Faróis** em "Carências por item" (ou nada para os outros).
-
-### O que a UI mostra (errado)
-Todos os 17 itens aparecem com "Em carência" / "114d restantes / até 24/08/2026".
-
-### Onde está o bug
-Arquivo: `src/hooks/useAssociadoSituacao.ts`, linhas 201–233.
-
-A lógica atual faz:
-
-```ts
-if (item.carenciaAtiva && item.dias > 0) {
-  // usa carência específica do item
-} else {
-  // HERDA o período geral do contrato (data_carencia_inicio → data_carencia_fim)
-  fim = new Date(carenciaFim!);
-  dias = ...;
-}
-```
-
-Resultado: se o **contrato** tem carência geral preenchida (e tem, porque é o padrão), todo item com `carencia_ativa=false` é renderizado como "Em carência" usando o período do contrato. Isso quebra a promessa da configuração ("desliguei carência desse item, mas continua aparecendo em carência").
-
-### Por que aparece para 17 itens
-A query do hook (`planos_coberturas` + `planos_beneficios`) puxa **todos** os itens do plano, e o mapper inclui todos. Como nenhum tem `carencia_ativa=true` exceto Vidros, o `else` herda contrato → renderiza 17 cards "Em carência".
+Sete frentes de ajuste, em ordem de prioridade. Cada item já foi validado contra o que existe hoje no projeto.
 
 ---
 
-## Correção (raiz)
+## 1. Validação de carência por cobertura na abertura
 
-Em `src/hooks/useAssociadoSituacao.ts`, substituir o `map` por um `filter` + `map`:
+**Hoje:** o modal de abertura só bloqueia carência de **vidros**. Demais coberturas (colisão, roubo, furto, fenômeno natural, vandalismo, terceiros) e benefícios de assistência não são validados.
 
-- Só entram no array `carenciasItens` os itens com `carencia_ativa === true` E `carencia_dias > 0`.
-- Remover o branch que herda o período geral do contrato.
-- Resultado: o card "Carências por item" mostra exatamente o que foi configurado em "Configurações de Benefícios e Coberturas". Para o caso da tela enviada, vai aparecer **apenas** "Vidros e Faróis – 120 dias".
+**O que fazer:**
+- Estender `NovoSinistroModal` e `criar-sinistro` para, ao escolher o tipo, consultar a carência da cobertura correspondente do plano do associado (lendo de `coberturas` + `planos_coberturas` + dados do contrato).
+- Bloquear abertura quando a data atual estiver dentro da carência, mostrando data de liberação. Permitir override apenas com `carencia_X_isenta = true` no contrato (mesmo padrão do vidros).
+- Mesma checagem para benefícios de assistência (reboque, chaveiro, etc.) ao abrir chamado de assistência.
+- A IA do WhatsApp (Maya) deve consultar a mesma função antes de criar o sinistro e responder ao associado se estiver em carência.
 
-A carência geral do contrato (badge "Em carência" + "Início/Término" no topo do card) continua funcionando como hoje — não mexo nela. O ajuste é só no detalhamento por item.
+---
 
-### Patch resumido
+## 2. Unificar atribuição Regulador OU Técnico no Monitoramento
 
-```ts
-const allCarenciaItems = [...(carenciasBeneficios || []), ...(carenciasCoberturas || [])];
-const carenciasItens: CarenciaItem[] = (carenciaInicio && allCarenciaItems.length > 0)
-  ? allCarenciaItems
-      .filter(item => item.carenciaAtiva === true && (item.dias || 0) > 0)
-      .map(item => {
-        const inicio = new Date(carenciaInicio!);
-        const fim = new Date(inicio);
-        fim.setDate(fim.getDate() + item.dias);
-        return {
-          nome: item.nome,
-          tipo: item.tipo,
-          carenciaTipo: item.carenciaTipo,
-          dias: item.dias,
-          multiplicador: item.multiplicador,
-          inicio: carenciaInicio!,
-          fim: fim.toISOString().split('T')[0],
-          emCarencia: fim > new Date(),
-        };
-      })
-  : [];
+**Hoje:** Regulador existe como perfil, mas opera por fila própria. O Monitoramento atribui apenas técnicos via `agendamentos_base` / `servicos`.
+
+**O que fazer:**
+- No agendamento da vistoria de evento gerada pelo link público, exibir no Monitoramento um seletor "Tipo de executor: Técnico interno / Regulador / Prestador externo".
+- Criar registro em `servicos` com `executor_tipo` (novo campo) e `executor_id` apontando para o user do regulador quando aplicável.
+- A tela `ExecutarVistoriaEvento` (regulador) e a tela do técnico devem compartilhar o mesmo componente de execução, garantindo paridade — incluindo o upload do PDF de orçamento (item 3).
+- Ao concluir, fechar em cascata o serviço e o agendamento_base (já existe o trigger `trg_sync_agendamento_base_on_servico_terminal`).
+
+---
+
+## 3. Vistoria sem materiais manuais — PDF + IA para todos os executores
+
+**Hoje:** `extract-orcamento-pdf` + `OrcamentoPDFImport` existe **só na UI do Regulador**.
+
+**O que fazer:**
+- Mover `OrcamentoPDFImport` + `VistoriaEventoOrcamento` para um componente compartilhado usado por Regulador, Técnico e Prestador.
+- Bloquear input manual de itens — só aceita peças/valores vindos do PDF interpretado (com possibilidade de editar quantidades, mas não criar item do zero).
+- Garantir que o PDF original fica anexado à `vistorias_evento` para auditoria do analista.
+
+---
+
+## 4. Cron de lembretes de coparticipação (3/3 dias, expira em 60 dias)
+
+**Hoje:** não existe. Há `enviar-lembretes-vencimento` genérico de cobrança, não de coparticipação de evento.
+
+**O que fazer:**
+- Nova edge function `cron-lembrete-coparticipacao` agendada via pg_cron diário.
+- Lê coparticipações pendentes (status, `data_geracao`), envia template Meta a cada 3 dias contados da geração.
+- Aos 60 dias sem pagamento: marca `expirada`, notifica analista de eventos, bloqueia geração de OS.
+- Quando a taxa é gerada, disparar `enviar-mensagem-sinistro` com o link público atualizado e template específico "Sua taxa de coparticipação foi gerada" (a IA reenvia o link no WhatsApp).
+- Templates Meta a criar: `coparticipacao_gerada`, `coparticipacao_lembrete`, `coparticipacao_expirando_72h`, `coparticipacao_expirada`.
+
+---
+
+## 5. OS só após confirmação do pagamento
+
+**Hoje:** `gerar-os-cotacao-aprovada` é disparada na aprovação da cotação pelo analista.
+
+**O que fazer:**
+- Mover o gatilho de criação da OS para o webhook do Asaas (`asaas-verificar-cota-sinistro`) — quando o pagamento é confirmado, então cria a OS automaticamente.
+- Na aprovação da cotação, apenas marcar `aguardando_pagamento_coparticipacao` e gerar a cobrança.
+- Caso o associado seja isento de coparticipação no plano, OS é gerada na hora da aprovação (mantém comportamento atual condicionalmente).
+
+---
+
+## 6. Aprovação complementar de itens descobertos no reparo
+
+**Hoje:** `AdicionarItemOSModal` adiciona item direto na OS, sem aprovação formal.
+
+**O que fazer:**
+- Novo status em `ordens_servico_itens`: `aguardando_aprovacao_complementar`.
+- Itens adicionados pela oficina entram nesse status; OS pausa execução do item.
+- Notificar analista de eventos via app + WhatsApp template.
+- Tela do analista: aprovar/recusar com justificativa. Aprovado vira `aprovado` e gera lançamento adicional em `contas_pagar`. Recusado é descartado.
+- Eventual coparticipação adicional segue o mesmo fluxo do item 4/5.
+
+---
+
+## 7. Custo total por cobertura
+
+**Hoje:** lançamentos em `contas_pagar` referenciam o sinistro mas não a cobertura específica.
+
+**O que fazer:**
+- Adicionar `cobertura_id` (FK para `coberturas`) em: `contas_pagar`, `evento_cotacoes_pecas`, `ordens_servico_itens`, lançamentos de reboque vinculados ao evento.
+- Backfill: preencher `cobertura_id` dos eventos existentes a partir de `sinistros.tipo` mapeado por `TIPO_SINISTRO_TO_COBERTURA`.
+- Nova view `vw_custo_evento_por_cobertura` agregando todos os lançamentos do evento por `cobertura_id`.
+- Tela do analista: nova aba "Custo por cobertura" no detalhe do evento mostrando peças, mão-de-obra, reboque, depreciação, total por cobertura.
+- Relatório agregado em `eventos/SinistrosDashboard` com filtro por período: custo por cobertura por plano (insumo de pricing).
+
+---
+
+## Ordem de execução sugerida
+
+```text
+Fase 1 (curto prazo, alto impacto)
+  1. Validação de carência por cobertura
+  4. Cron de lembretes de coparticipação + templates Meta
+  5. OS pós-pagamento
+
+Fase 2 (estrutural)
+  2. Unificação Regulador/Técnico no monitoramento
+  3. PDF+IA compartilhado entre executores
+
+Fase 3 (analytics e governança)
+  6. Aprovação complementar de itens
+  7. Custo por cobertura (schema + view + UI + relatório)
 ```
 
 ---
 
-## Impacto / Compatibilidade
+## Detalhes técnicos
 
-- **Onde é usado**: hook `useAssociadoSituacao` → `AssociadoSituacaoCard` (ficha do associado). Não afeta cálculo de elegibilidade de evento, Hinova/SGA, regras de cobertura efetiva — esses caminhos têm suas próprias funções e não consomem `carenciasItens`.
-- **Para os planos que de fato configurarem carência item-a-item** (ex.: ative `carencia_ativa=true` em algumas coberturas), o card continua mostrando esses itens corretamente, com os dias específicos.
-- **Para planos com carência só geral** (sem nenhum item ativo), o bloco "Carências por item" simplesmente não renderiza (o componente já tem o `length > 0` guard) — a info de carência geral continua no topo do card.
+- **Migrações novas:** colunas `cobertura_id` em 4 tabelas; coluna `executor_tipo` em `servicos`; novo enum status `aguardando_aprovacao_complementar`; view `vw_custo_evento_por_cobertura`.
+- **Edge functions novas:** `cron-lembrete-coparticipacao`, `validar-carencia-cobertura` (compartilhada UI + Maya).
+- **Edge functions alteradas:** `criar-sinistro` (carência), `gerar-os-cotacao-aprovada` (mover gatilho), `asaas-verificar-cota-sinistro` (criar OS no pagamento confirmado), `extract-orcamento-pdf` (unificar consumidores).
+- **Componentes novos/alterados:** componente compartilhado `ExecutarVistoriaUnificada`, aba "Custo por cobertura" no `SinistroAnalise`, modal de aprovação complementar.
+- **Templates Meta a aprovar (4):** geração, lembrete, expirando, expirada da coparticipação.
+- **pg_cron:** novo job diário para lembretes; revisão dos demais já existentes.
 
-## Fora do escopo (sugestões de follow-up, não nesta entrega)
-
-- O App do Associado (`src/pages/app/AppPlano.tsx`) tem lógica própria de "Em carência — N dias restantes". Vale auditar depois se ele também herda período do contrato indevidamente. Posso abrir como tarefa separada.
-- Considerar mostrar uma legenda ("Itens sem carência configurada são liberados desde a ativação") no card para deixar explícito ao atendimento.
-
-## Arquivos editados
-
-- `src/hooks/useAssociadoSituacao.ts` — única alteração.
-
-## Como validar depois do deploy
-
-1. Abrir a ficha do associado da tela enviada (consultora TAIANY, plano `Select One - Passeio 5%`).
-2. Card "Carência" → bloco "Carências por item" deve listar **só** "Vidros e Faróis · Liberação · 120d · até 24/08/2026 · Em carência".
-3. Os demais 16 itens não aparecem mais lá.
-4. A badge "Em carência" do topo + datas Início/Término continuam aparecendo (carência geral do contrato).
+Aprove para eu começar pela Fase 1 (itens 1, 4 e 5).
