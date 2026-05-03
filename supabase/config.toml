@@ -204,3 +204,6 @@ verify_jwt = true
 
 [functions.sga-listar-situacoes]
 verify_jwt = false
+
+[functions.cron-lembrete-coparticipacao]
+verify_jwt = false
