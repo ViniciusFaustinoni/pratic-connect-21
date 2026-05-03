@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { OrcamentoPDFImport, type DadosExtraidos } from './OrcamentoPDFImport';
+import { OrcamentoReviewModal } from './OrcamentoReviewModal';
 
 const ETAPAS_REPARO = [
   { id: 'lanternagem', nome: 'Lanternagem', descricao: 'Chaparia e estrutura da carroceria' },
@@ -91,9 +92,16 @@ export function VistoriaEventoOrcamento({
 
   // Payload bruto extraído pela IA (header, impact_areas, hash) — persistido junto ao parecer
   const [dadosOrcamento, setDadosOrcamento] = useState<DadosExtraidos | null>(null);
+  // Payload aguardando revisão antes de virar itens
+  const [pendingReview, setPendingReview] = useState<DadosExtraidos | null>(null);
 
-  // PDF Import callback — converte payload enriquecido em ItemParecer
-  const handleDadosExtraidos = useCallback((dados: DadosExtraidos) => {
+  // Ao receber do importador, NÃO converte direto: abre modal de revisão
+  const handleDadosExtraidosFromPDF = useCallback((dados: DadosExtraidos) => {
+    setPendingReview(dados);
+  }, []);
+
+  // PDF Import callback — converte payload enriquecido em ItemParecer (após confirmação)
+  const aplicarDadosExtraidos = useCallback((dados: DadosExtraidos) => {
     setDadosOrcamento(dados);
     const novosItens: ItemParecer[] = [];
 
@@ -451,7 +459,7 @@ export function VistoriaEventoOrcamento({
               {/* PDF Import - Componente reutilizável */}
               <div className="space-y-2">
                 <Label className="text-xs font-medium">Importar orçamento via PDF</Label>
-                <OrcamentoPDFImport onDadosExtraidos={handleDadosExtraidos} />
+                <OrcamentoPDFImport onDadosExtraidos={handleDadosExtraidosFromPDF} />
               </div>
 
               {/* Itens list */}
@@ -664,6 +672,22 @@ export function VistoriaEventoOrcamento({
           </Button>
         </div>
       </DialogContent>
+      <OrcamentoReviewModal
+        open={!!pendingReview}
+        onClose={() => setPendingReview(null)}
+        onConfirm={() => {
+          if (pendingReview) aplicarDadosExtraidos(pendingReview);
+          setPendingReview(null);
+        }}
+        dados={pendingReview}
+        sistema={{
+          placa: null,
+          chassi: null,
+          marca: veiculo?.marca ?? null,
+          modelo: veiculo?.modelo ?? null,
+          ano: veiculo?.ano_modelo ?? null,
+        }}
+      />
     </Dialog>
   );
 }
