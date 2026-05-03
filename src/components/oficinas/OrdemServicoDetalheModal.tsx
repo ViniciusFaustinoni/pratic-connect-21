@@ -143,12 +143,22 @@ export function OrdemServicoDetalheModal({ osId, open, onOpenChange }: OrdemServ
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {itens?.map((item) => (
-                            <TableRow key={item.id}>
+                          {itens?.map((item: any) => (
+                            <TableRow key={item.id} className={item.complementar && item.status_aprovacao === 'pendente' ? 'bg-amber-50/50 dark:bg-amber-950/20' : item.status_aprovacao === 'rejeitado' ? 'opacity-60' : ''}>
                               <TableCell>
                                 <Badge variant="outline">{TIPO_ITEM_OS_LABELS[item.tipo]}</Badge>
                               </TableCell>
-                              <TableCell>{item.descricao}</TableCell>
+                              <TableCell>
+                                <div>{item.descricao}</div>
+                                {item.complementar && (
+                                  <Badge
+                                    variant={item.status_aprovacao === 'pendente' ? 'secondary' : item.status_aprovacao === 'rejeitado' ? 'destructive' : 'default'}
+                                    className="mt-1 text-[10px]"
+                                  >
+                                    Complementar · {item.status_aprovacao}
+                                  </Badge>
+                                )}
+                              </TableCell>
                               <TableCell className="text-right">{item.quantidade}</TableCell>
                               <TableCell className="text-right">{formatCurrency(item.valor_unitario)}</TableCell>
                               <TableCell className="text-right font-medium">{formatCurrency(item.valor_total)}</TableCell>
