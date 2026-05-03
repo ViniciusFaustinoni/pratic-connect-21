@@ -90,7 +90,12 @@ export function OSItemFormDialog({ osId, open, onOpenChange, complementar = fals
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Adicionar Item</DialogTitle>
+          <DialogTitle>{complementar ? 'Adicionar item complementar' : 'Adicionar Item'}</DialogTitle>
+          {complementar && (
+            <p className="text-sm text-muted-foreground">
+              Item descoberto durante o reparo. Ficará pendente até aprovação do analista.
+            </p>
+          )}
         </DialogHeader>
 
         <Form {...form}>
