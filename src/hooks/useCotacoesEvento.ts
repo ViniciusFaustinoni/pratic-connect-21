@@ -116,6 +116,21 @@ export function useCotacoesEvento(sinistroId: string | undefined) {
       toast.success('Cotação aprovada com sucesso');
       queryClient.invalidateQueries({ queryKey: ['cotacoes-evento', sinistroId] });
 
+      // Marcar sinistro como aguardando pagamento da coparticipação
+      // (a OS será gerada automaticamente quando o webhook do Asaas confirmar o pagamento)
+      try {
+        await supabase
+          .from('sinistros')
+          .update({
+            aguardando_pagamento_cota: true,
+            cota_data_geracao: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', sinistroId!);
+      } catch (e) {
+        console.error('Erro ao marcar aguardando pagamento da cota:', e);
+      }
+
       // Criar conta a pagar para o auto center
       try {
         const cotacao = query.data?.find(c => c.id === cotacaoId);

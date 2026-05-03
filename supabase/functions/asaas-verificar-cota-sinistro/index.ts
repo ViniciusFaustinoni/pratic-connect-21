@@ -167,6 +167,7 @@ async function atualizarSinistro(supabase: any, sinistroId: string, statusAtual:
     .update({
       cota_paga: true,
       cota_paga_em: new Date().toISOString(),
+      aguardando_pagamento_cota: false,
       status: 'pecas_em_cotacao',
       updated_at: new Date().toISOString(),
     })
@@ -187,4 +188,33 @@ async function atualizarSinistro(supabase: any, sinistroId: string, statusAtual:
     });
 
   console.log('[asaas-verificar-cota-sinistro] Sinistro atualizado com sucesso!');
+
+  // Disparar geração automática da OS (se houver cotação aprovada)
+  try {
+    const { data: cotacaoAprovada } = await supabase
+      .from('evento_cotacoes_pecas')
+      .select('id')
+      .eq('sinistro_id', sinistroId)
+      .eq('aprovada', true)
+      .order('aprovada_em', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (cotacaoAprovada?.id) {
+      const url = `${Deno.env.get('SUPABASE_URL')}/functions/v1/gerar-os-cotacao-aprovada`;
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        },
+        body: JSON.stringify({ sinistro_id: sinistroId, cotacao_id: cotacaoAprovada.id }),
+      });
+      console.log('[asaas-verificar-cota-sinistro] OS gerada automaticamente, status:', resp.status);
+    } else {
+      console.log('[asaas-verificar-cota-sinistro] Nenhuma cotação aprovada encontrada — OS não gerada agora');
+    }
+  } catch (e) {
+    console.error('[asaas-verificar-cota-sinistro] Erro ao gerar OS automática:', e);
+  }
 }

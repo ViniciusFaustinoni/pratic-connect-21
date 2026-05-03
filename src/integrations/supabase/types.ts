@@ -26969,6 +26969,7 @@ export type Database = {
           agendamento_regulagem_local: string | null
           agendamento_regulagem_obs: string | null
           agendamento_regulagem_periodo: string | null
+          aguardando_pagamento_cota: boolean
           alerta_inadimplente: boolean | null
           alerta_recem_ativado: boolean | null
           analise_interna: boolean | null
@@ -26994,6 +26995,11 @@ export type Database = {
           condutor_embriaguez: boolean | null
           condutor_nome: string | null
           condutor_relacao: string | null
+          cota_data_geracao: string | null
+          cota_expirada: boolean
+          cota_expirada_em: string | null
+          cota_lembrete_ultimo_em: string | null
+          cota_lembretes_enviados: number
           cota_paga: boolean | null
           cota_paga_em: string | null
           created_at: string
@@ -27099,6 +27105,7 @@ export type Database = {
           agendamento_regulagem_local?: string | null
           agendamento_regulagem_obs?: string | null
           agendamento_regulagem_periodo?: string | null
+          aguardando_pagamento_cota?: boolean
           alerta_inadimplente?: boolean | null
           alerta_recem_ativado?: boolean | null
           analise_interna?: boolean | null
@@ -27124,6 +27131,11 @@ export type Database = {
           condutor_embriaguez?: boolean | null
           condutor_nome?: string | null
           condutor_relacao?: string | null
+          cota_data_geracao?: string | null
+          cota_expirada?: boolean
+          cota_expirada_em?: string | null
+          cota_lembrete_ultimo_em?: string | null
+          cota_lembretes_enviados?: number
           cota_paga?: boolean | null
           cota_paga_em?: string | null
           created_at?: string
@@ -27229,6 +27241,7 @@ export type Database = {
           agendamento_regulagem_local?: string | null
           agendamento_regulagem_obs?: string | null
           agendamento_regulagem_periodo?: string | null
+          aguardando_pagamento_cota?: boolean
           alerta_inadimplente?: boolean | null
           alerta_recem_ativado?: boolean | null
           analise_interna?: boolean | null
@@ -27254,6 +27267,11 @@ export type Database = {
           condutor_embriaguez?: boolean | null
           condutor_nome?: string | null
           condutor_relacao?: string | null
+          cota_data_geracao?: string | null
+          cota_expirada?: boolean
+          cota_expirada_em?: string | null
+          cota_lembrete_ultimo_em?: string | null
+          cota_lembretes_enviados?: number
           cota_paga?: boolean | null
           cota_paga_em?: string | null
           created_at?: string
