@@ -209,7 +209,12 @@ export function OrdemServicoDetalheModal({ osId, open, onOpenChange }: OrdemServ
             </div>
 
             <OSStatusDialog os={os} open={statusOpen} onOpenChange={setStatusOpen} />
-            <OSItemFormDialog osId={os.id} open={itemOpen} onOpenChange={setItemOpen} />
+            <OSItemFormDialog
+              osId={os.id}
+              open={itemOpen}
+              onOpenChange={setItemOpen}
+              complementar={['em_execucao', 'em_andamento', 'aguardando_pecas'].includes(String(os.status))}
+            />
             <OSConclusaoModal os={os} open={conclusaoOpen} onOpenChange={setConclusaoOpen} />
           </div>
         )}
