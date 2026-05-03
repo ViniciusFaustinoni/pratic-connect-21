@@ -229,6 +229,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "acionamentos_roubo_furto_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
+          },
+          {
             foreignKeyName: "acionamentos_roubo_furto_solicitado_por_fkey"
             columns: ["solicitado_por"]
             isOneToOne: false
@@ -5555,6 +5562,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "chamados_assistencia_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
+          },
+          {
             foreignKeyName: "chamados_assistencia_veiculo_id_fkey"
             columns: ["veiculo_id"]
             isOneToOne: false
@@ -8328,6 +8342,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "consultas_juridicas_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
+          },
+          {
             foreignKeyName: "consultas_juridicas_solicitante_id_fkey"
             columns: ["solicitante_id"]
             isOneToOne: false
@@ -8405,6 +8426,7 @@ export type Database = {
           aprovado_por: string | null
           banco: string | null
           categoria: string
+          cobertura_id: string | null
           comprovante_url: string | null
           conta: string | null
           created_at: string | null
@@ -8420,6 +8442,7 @@ export type Database = {
           pix_chave: string | null
           referencia_id: string | null
           referencia_tipo: string | null
+          sinistro_id: string | null
           status: string | null
           subcategoria: string | null
           updated_at: string | null
@@ -8432,6 +8455,7 @@ export type Database = {
           aprovado_por?: string | null
           banco?: string | null
           categoria: string
+          cobertura_id?: string | null
           comprovante_url?: string | null
           conta?: string | null
           created_at?: string | null
@@ -8447,6 +8471,7 @@ export type Database = {
           pix_chave?: string | null
           referencia_id?: string | null
           referencia_tipo?: string | null
+          sinistro_id?: string | null
           status?: string | null
           subcategoria?: string | null
           updated_at?: string | null
@@ -8459,6 +8484,7 @@ export type Database = {
           aprovado_por?: string | null
           banco?: string | null
           categoria?: string
+          cobertura_id?: string | null
           comprovante_url?: string | null
           conta?: string | null
           created_at?: string | null
@@ -8474,6 +8500,7 @@ export type Database = {
           pix_chave?: string | null
           referencia_id?: string | null
           referencia_tipo?: string | null
+          sinistro_id?: string | null
           status?: string | null
           subcategoria?: string | null
           updated_at?: string | null
@@ -8503,6 +8530,20 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
           {
+            foreignKeyName: "contas_pagar_cobertura_id_fkey"
+            columns: ["cobertura_id"]
+            isOneToOne: false
+            referencedRelation: "coberturas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contas_pagar_cobertura_id_fkey"
+            columns: ["cobertura_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["cobertura_id"]
+          },
+          {
             foreignKeyName: "contas_pagar_pago_por_fkey"
             columns: ["pago_por"]
             isOneToOne: false
@@ -8522,6 +8563,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "contas_pagar_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contas_pagar_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
           },
         ]
       }
@@ -12414,6 +12469,7 @@ export type Database = {
           aprovada_em: string | null
           aprovada_por: string | null
           auto_center_id: string
+          cobertura_id: string | null
           created_at: string | null
           id: string
           itens: Json
@@ -12433,6 +12489,7 @@ export type Database = {
           aprovada_em?: string | null
           aprovada_por?: string | null
           auto_center_id: string
+          cobertura_id?: string | null
           created_at?: string | null
           id?: string
           itens?: Json
@@ -12452,6 +12509,7 @@ export type Database = {
           aprovada_em?: string | null
           aprovada_por?: string | null
           auto_center_id?: string
+          cobertura_id?: string | null
           created_at?: string | null
           id?: string
           itens?: Json
@@ -12496,11 +12554,32 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "evento_cotacoes_pecas_cobertura_id_fkey"
+            columns: ["cobertura_id"]
+            isOneToOne: false
+            referencedRelation: "coberturas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evento_cotacoes_pecas_cobertura_id_fkey"
+            columns: ["cobertura_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["cobertura_id"]
+          },
+          {
             foreignKeyName: "evento_cotacoes_pecas_sinistro_id_fkey"
             columns: ["sinistro_id"]
             isOneToOne: false
             referencedRelation: "sinistros"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evento_cotacoes_pecas_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
           },
           {
             foreignKeyName: "evento_cotacoes_pecas_whatsapp_mensagem_id_fkey"
@@ -14187,6 +14266,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sinistros"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gastos_beneficios_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
           },
         ]
       }
@@ -18322,6 +18408,13 @@ export type Database = {
             referencedRelation: "sinistros"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "orcamento_reparo_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: true
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
+          },
         ]
       }
       orcamento_reparo_cotacoes: {
@@ -18764,6 +18857,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "ordens_servico_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
+          },
+          {
             foreignKeyName: "ordens_servico_veiculo_id_fkey"
             columns: ["veiculo_id"]
             isOneToOne: false
@@ -18897,44 +18997,82 @@ export type Database = {
       ordens_servico_itens: {
         Row: {
           aprovado: boolean | null
+          aprovado_em: string | null
+          aprovado_por: string | null
+          cobertura_id: string | null
+          complementar: boolean
           created_at: string | null
+          descoberto_em: string | null
           descricao: string
           id: string
           marca: string | null
+          motivo_rejeicao: string | null
           numero_peca: string | null
+          observacao: string | null
           ordem_servico_id: string
           quantidade: number | null
+          status_aprovacao: string
           tipo: Database["public"]["Enums"]["tipo_item_os"]
           valor_total: number
           valor_unitario: number
         }
         Insert: {
           aprovado?: boolean | null
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          cobertura_id?: string | null
+          complementar?: boolean
           created_at?: string | null
+          descoberto_em?: string | null
           descricao: string
           id?: string
           marca?: string | null
+          motivo_rejeicao?: string | null
           numero_peca?: string | null
+          observacao?: string | null
           ordem_servico_id: string
           quantidade?: number | null
+          status_aprovacao?: string
           tipo: Database["public"]["Enums"]["tipo_item_os"]
           valor_total: number
           valor_unitario: number
         }
         Update: {
           aprovado?: boolean | null
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          cobertura_id?: string | null
+          complementar?: boolean
           created_at?: string | null
+          descoberto_em?: string | null
           descricao?: string
           id?: string
           marca?: string | null
+          motivo_rejeicao?: string | null
           numero_peca?: string | null
+          observacao?: string | null
           ordem_servico_id?: string
           quantidade?: number | null
+          status_aprovacao?: string
           tipo?: Database["public"]["Enums"]["tipo_item_os"]
           valor_total?: number
           valor_unitario?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "ordens_servico_itens_cobertura_id_fkey"
+            columns: ["cobertura_id"]
+            isOneToOne: false
+            referencedRelation: "coberturas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ordens_servico_itens_cobertura_id_fkey"
+            columns: ["cobertura_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["cobertura_id"]
+          },
           {
             foreignKeyName: "ordens_servico_itens_ordem_servico_id_fkey"
             columns: ["ordem_servico_id"]
@@ -19725,6 +19863,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "parecer_tecnico_regulador_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: true
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
+          },
+          {
             foreignKeyName: "parecer_tecnico_regulador_vistoria_id_fkey"
             columns: ["vistoria_id"]
             isOneToOne: false
@@ -20352,6 +20497,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "coberturas"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planos_coberturas_cobertura_id_fkey"
+            columns: ["cobertura_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["cobertura_id"]
           },
           {
             foreignKeyName: "planos_coberturas_plano_id_fkey"
@@ -21365,6 +21517,13 @@ export type Database = {
             referencedRelation: "sinistros"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "processos_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
+          },
         ]
       }
       processos_andamentos: {
@@ -21842,6 +22001,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sinistros"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "processos_prazos_evento_id_fkey"
+            columns: ["evento_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
           },
           {
             foreignKeyName: "processos_prazos_processo_id_fkey"
@@ -24972,6 +25138,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "servicos_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
+          },
+          {
             foreignKeyName: "servicos_solicitacao_id_fkey"
             columns: ["solicitacao_id"]
             isOneToOne: false
@@ -25843,6 +26016,13 @@ export type Database = {
             referencedRelation: "sinistros"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "sindicancia_evidencias_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
+          },
         ]
       }
       sindicancia_solicitacoes: {
@@ -26100,6 +26280,13 @@ export type Database = {
             referencedRelation: "sinistros"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "sindicancias_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
+          },
         ]
       }
       sinistro_analises_ia: {
@@ -26146,6 +26333,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sinistros"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistro_analises_ia_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
           },
         ]
       }
@@ -26206,11 +26400,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "sinistro_coberturas_utilizadas_cobertura_id_fkey"
+            columns: ["cobertura_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["cobertura_id"]
+          },
+          {
             foreignKeyName: "sinistro_coberturas_utilizadas_sinistro_id_fkey"
             columns: ["sinistro_id"]
             isOneToOne: false
             referencedRelation: "sinistros"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistro_coberturas_utilizadas_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
           },
         ]
       }
@@ -26266,6 +26474,13 @@ export type Database = {
             referencedRelation: "sinistros"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "sinistro_contatos_agendados_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
+          },
         ]
       }
       sinistro_documentos: {
@@ -26309,6 +26524,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sinistros"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistro_documentos_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
           },
         ]
       }
@@ -26387,6 +26609,13 @@ export type Database = {
             referencedRelation: "sinistros"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "sinistro_evento_links_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
+          },
         ]
       }
       sinistro_fotos: {
@@ -26452,6 +26681,13 @@ export type Database = {
             referencedRelation: "sinistros"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "sinistro_fotos_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
+          },
         ]
       }
       sinistro_historico: {
@@ -26489,6 +26725,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sinistros"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistro_historico_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
           },
           {
             foreignKeyName: "sinistro_historico_usuario_id_fkey"
@@ -26579,6 +26822,13 @@ export type Database = {
             referencedRelation: "sinistros"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "sinistro_mensagens_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
+          },
         ]
       }
       sinistro_prestadores: {
@@ -26618,6 +26868,13 @@ export type Database = {
             referencedRelation: "sinistros"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "sinistro_prestadores_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
+          },
         ]
       }
       sinistro_suspensoes_prazo: {
@@ -26655,6 +26912,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sinistros"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistro_suspensoes_prazo_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
           },
         ]
       }
@@ -26837,6 +27101,13 @@ export type Database = {
             referencedRelation: "sinistros"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "sinistro_terceiros_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
+          },
         ]
       }
       sinistro_vidros_historico: {
@@ -26923,6 +27194,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sinistros"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistro_vidros_historico_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
           },
           {
             foreignKeyName: "sinistro_vidros_historico_veiculo_id_fkey"
@@ -30596,6 +30874,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "vistorias_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
+          },
+          {
             foreignKeyName: "vistorias_veiculo_id_fkey"
             columns: ["veiculo_id"]
             isOneToOne: false
@@ -30764,6 +31049,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sinistros"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vistorias_evento_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_evento_por_cobertura"
+            referencedColumns: ["sinistro_id"]
           },
         ]
       }
@@ -32040,6 +32332,20 @@ export type Database = {
           total_leads: number | null
           ultimo_lead: string | null
           vendedores_ids: string[] | null
+        }
+        Relationships: []
+      }
+      vw_custo_evento_por_cobertura: {
+        Row: {
+          cobertura_codigo: string | null
+          cobertura_id: string | null
+          cobertura_nome: string | null
+          protocolo: string | null
+          sinistro_id: string | null
+          valor_contas_pagar: number | null
+          valor_cotacoes_aprovadas: number | null
+          valor_pecas_os: number | null
+          valor_total: number | null
         }
         Relationships: []
       }

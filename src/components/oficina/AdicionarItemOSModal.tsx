@@ -41,6 +41,7 @@ const formSchema = z.object({
   valor_unitario: z.coerce.number().min(0.01, 'Valor deve ser maior que 0'),
   marca: z.string().optional(),
   numero_peca: z.string().optional(),
+  observacao: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -49,12 +50,15 @@ interface AdicionarItemOSModalProps {
   open: boolean;
   onClose: () => void;
   ordemServicoId: string;
+  /** Quando true, o item entra como complementar e precisa de aprovação do analista */
+  complementar?: boolean;
 }
 
 export function AdicionarItemOSModal({
   open,
   onClose,
   ordemServicoId,
+  complementar = false,
 }: AdicionarItemOSModalProps) {
   const addItemMutation = useAddOSItem();
 
@@ -67,6 +71,7 @@ export function AdicionarItemOSModal({
       valor_unitario: 0,
       marca: '',
       numero_peca: '',
+      observacao: '',
     },
   });
 
@@ -91,10 +96,14 @@ export function AdicionarItemOSModal({
       quantidade: data.quantidade,
       valor_unitario: data.valor_unitario,
       valor_total: total,
-      aprovado: false,
+      aprovado: !complementar,
       marca: data.tipo === 'peca' ? data.marca || undefined : undefined,
       numero_peca: data.tipo === 'peca' ? data.numero_peca || undefined : undefined,
-    });
+      complementar,
+      status_aprovacao: complementar ? 'pendente' : 'aprovado',
+      descoberto_em: complementar ? new Date().toISOString() : undefined,
+      observacao: data.observacao || undefined,
+    } as any);
 
     form.reset();
     onClose();
@@ -111,7 +120,12 @@ export function AdicionarItemOSModal({
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Adicionar Item</DialogTitle>
+          <DialogTitle>{complementar ? 'Adicionar item complementar' : 'Adicionar Item'}</DialogTitle>
+          {complementar && (
+            <p className="text-sm text-muted-foreground">
+              Este item foi descoberto durante o reparo e ficará pendente de aprovação pelo analista antes de ser cobrado.
+            </p>
+          )}
         </DialogHeader>
 
         <Form {...form}>

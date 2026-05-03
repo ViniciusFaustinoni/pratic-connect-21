@@ -37,9 +37,11 @@ interface Props {
   osId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Quando true, item entra como complementar e aguarda aprovação do analista */
+  complementar?: boolean;
 }
 
-export function OSItemFormDialog({ osId, open, onOpenChange }: Props) {
+export function OSItemFormDialog({ osId, open, onOpenChange, complementar = false }: Props) {
   const addItem = useAddOSItem();
 
   const form = useForm<FormData>({
@@ -67,10 +69,13 @@ export function OSItemFormDialog({ osId, open, onOpenChange }: Props) {
       quantidade: data.quantidade,
       valor_unitario: data.valor_unitario,
       valor_total: data.quantidade * data.valor_unitario,
-      aprovado: false,
+      aprovado: !complementar,
       marca: data.marca || undefined,
       numero_peca: data.numero_peca || undefined,
-    });
+      complementar,
+      status_aprovacao: complementar ? 'pendente' : 'aprovado',
+      descoberto_em: complementar ? new Date().toISOString() : undefined,
+    } as any);
     onOpenChange(false);
     form.reset();
   };
@@ -85,7 +90,12 @@ export function OSItemFormDialog({ osId, open, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Adicionar Item</DialogTitle>
+          <DialogTitle>{complementar ? 'Adicionar item complementar' : 'Adicionar Item'}</DialogTitle>
+          {complementar && (
+            <p className="text-sm text-muted-foreground">
+              Item descoberto durante o reparo. Ficará pendente até aprovação do analista.
+            </p>
+          )}
         </DialogHeader>
 
         <Form {...form}>

@@ -3,8 +3,25 @@
 ## Status
 
 - ✅ **Fase 1** concluída — carência por cobertura, lembretes de coparticipação, OS pós-pagamento.
-- ✅ **Fase 2** concluída — executor unificado (Regulador / Técnico / Prestador) e bloqueio de input manual de itens (PDF+IA obrigatório).
-- ⏳ **Fase 3** pendente — aprovação complementar de itens e custo total por cobertura.
+- ✅ **Fase 2** concluída — executor unificado e PDF+IA obrigatório.
+- ✅ **Fase 3** concluída — aprovação complementar de itens e custo por cobertura.
+
+## Fase 3 — entregue
+
+1. **Schema**:
+   - `ordens_servico_itens`: `cobertura_id`, `complementar`, `status_aprovacao` (`pendente|aprovado|rejeitado`), `aprovado_por`, `aprovado_em`, `motivo_rejeicao`, `descoberto_em`, `observacao`.
+   - `evento_cotacoes_pecas`: `cobertura_id`.
+   - `contas_pagar`: `cobertura_id`, `sinistro_id`.
+   - Trigger `fn_set_cobertura_from_sinistro` preenche `cobertura_id` automaticamente a partir do tipo do sinistro.
+   - View `vw_custo_evento_por_cobertura` agrega peças/OS, cotações aprovadas e contas a pagar por cobertura.
+
+2. **Aprovação complementar**:
+   - `OSItemFormDialog` e `AdicionarItemOSModal` aceitam `complementar` — quando OS está em execução, o item entra como `pendente` e fica destacado em âmbar na tabela.
+   - Hook `useItensComplementaresPendentes` + `useDecidirItemComplementar` expõem fila e ação do analista.
+   - Componente `AprovacaoComplementarPanel` renderizado no detalhe do evento (`SinistroDetalhe`) — botões Aprovar/Rejeitar (com motivo) liberados para Analista de Eventos e Diretor.
+
+3. **Custo por cobertura**:
+   - Componente `CustoEventoPorCobertura` renderizado abaixo das coberturas/benefícios utilizados, mostrando peças/OS, cotações, contas a pagar e total por cobertura.
 
 ## Fase 2 — entregue
 
