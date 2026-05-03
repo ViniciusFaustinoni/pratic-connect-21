@@ -89,7 +89,7 @@ export default function ExecutarVistoriaEvento() {
     return (
       <div className="p-4 text-center">
         <p className="text-destructive">Erro ao carregar vistoria</p>
-        <Button variant="outline" className="mt-4" onClick={() => navigate('/regulador/vistorias')}>
+        <Button variant="outline" className="mt-4" onClick={() => navigate(backUrl)}>
           Voltar
         </Button>
       </div>
@@ -104,7 +104,7 @@ export default function ExecutarVistoriaEvento() {
     <div className="p-4 space-y-4 pb-24">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/regulador/vistorias')}>
+        <Button variant="ghost" size="icon" onClick={() => navigate(backUrl)}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="flex-1">
