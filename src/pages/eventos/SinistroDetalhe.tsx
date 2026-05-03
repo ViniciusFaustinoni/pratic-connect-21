@@ -20,6 +20,8 @@ import { EncaminharJuridicoEventoModal } from '@/components/sinistros/Encaminhar
 import { AtribuirFornecedoresDialog } from '@/components/sinistros/AtribuirFornecedoresDialog';
 import { TimelineEventoTab } from '@/components/sinistros/TimelineEventoTab';
 import { SinistroCoberturaUtilizada } from '@/components/eventos/SinistroCoberturaUtilizada';
+import { CustoEventoPorCobertura } from '@/components/sinistros/CustoEventoPorCobertura';
+import { AprovacaoComplementarPanel } from '@/components/sinistros/AprovacaoComplementarPanel';
 import { MapaRastreador } from '@/components/rastreadores/MapaRastreador';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
