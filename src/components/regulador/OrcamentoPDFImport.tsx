@@ -6,21 +6,49 @@ import { Loader2, FileUp, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+export interface HeaderExtraido {
+  placa?: string | null;
+  chassi?: string | null;
+  marca?: string | null;
+  modelo?: string | null;
+  ano?: string | null;
+  cor?: string | null;
+  km?: number | null;
+  valor_fipe?: number | null;
+  oficina_nome?: string | null;
+  oficina_cnpj?: string | null;
+  oficina_cidade_uf?: string | null;
+  numero_orcamento?: string | null;
+  data_emissao?: string | null;
+  tipo_sinistro?: string | null;
+}
+
+export interface AreaImpactoExtraida {
+  nome: string;
+  qtd_pecas: number;
+}
+
 export interface PecaExtraida {
   descricao: string;
-  operacao?: string;
+  operacao?: 'T' | 'R&I' | 'REP' | 'PIN' | string;
+  area_impacto?: string | null;
   quantidade: number;
   valor_unitario: number;
   valor_total: number;
-  origem?: string;
+  horas_funilaria?: number | null;
+  horas_pintura?: number | null;
+  horas_reparo?: number | null;
+  valor_mao_obra?: number | null;
+  origem?: string | null;
+  flags?: Array<'sem_amparo' | 'inclusao_manual'>;
 }
 
 export interface ServicoExtraido {
   descricao: string;
-  horas?: number;
-  valor_unitario?: number;
+  horas?: number | null;
+  valor_unitario?: number | null;
   valor_total: number;
-  tipo_servico?: string;
+  tipo_servico?: string | null;
 }
 
 export interface ResumoExtraido {
@@ -30,9 +58,12 @@ export interface ResumoExtraido {
 }
 
 export interface DadosExtraidos {
+  header?: HeaderExtraido | null;
+  impact_areas?: AreaImpactoExtraida[];
   pecas: PecaExtraida[];
   servicos: ServicoExtraido[];
   resumo: ResumoExtraido;
+  orcamento_hash?: string;
 }
 
 interface OrcamentoPDFImportProps {
