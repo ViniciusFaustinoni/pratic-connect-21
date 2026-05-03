@@ -459,7 +459,7 @@ export function VistoriaEventoOrcamento({
               {/* PDF Import - Componente reutilizável */}
               <div className="space-y-2">
                 <Label className="text-xs font-medium">Importar orçamento via PDF</Label>
-                <OrcamentoPDFImport onDadosExtraidos={handleDadosExtraidos} />
+                <OrcamentoPDFImport onDadosExtraidos={handleDadosExtraidosFromPDF} />
               </div>
 
               {/* Itens list */}
