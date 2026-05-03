@@ -82,5 +82,8 @@
 ### Fase 4.5 — Custo por cobertura com herança de MO (✅ entregue)
 - `vw_custo_evento_por_cobertura` agora resolve `cobertura_id` de itens de MO/serviço via `peca_pai_id` quando o item filho não tem cobertura própria, somando funilaria/pintura/reparo na mesma cobertura da peça pai.
 
-### Pendências da Fase 4
-- 4.3 `OrcamentoReviewModal.tsx` (revisão visual de header × sistema antes de persistir).
+### Fase 4.3 — Modal de revisão (✅ entregue)
+- Novo `OrcamentoReviewModal` exibido entre o upload e a importação dos itens. Mostra Placa/Chassi/Marca/Modelo/Ano do PDF × Sistema com badges de confere/divergente, dados de oficina, áreas de impacto e resumo. Só aplica os itens em `VistoriaEventoOrcamento` após confirmação.
+
+### Fase 4 — concluída
+Todas as etapas (4.1 extração enriquecida, 4.2 schema, 4.3 modal de revisão, 4.4 persistência vinculada, 4.5 view de custo) foram entregues.
