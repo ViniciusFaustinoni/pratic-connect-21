@@ -260,14 +260,24 @@ export function VistoriaEventoOrcamento({
         // Legacy compatibility
         tipo_dano: gravidade === 'possivel_perda_total' ? 'total' : 'parcial',
         parecer_tecnico: descricaoTecnica,
-        itens_orcamento: itens.map(i => ({
+        itens_orcamento: itens.map((i, idx) => ({
+          idx,
           descricao: i.descricao,
           tipo: i.tipo === 'peca' ? 'peca' : 'servico',
           valor_unitario: i.valor_estimado,
           quantidade: i.quantidade,
           valor_total: i.valor_estimado * i.quantidade,
+          // Campos enriquecidos (Fase 4)
+          operacao: i.operacao ?? null,
+          area_impacto: i.area_impacto ?? null,
+          horas: i.horas ?? null,
+          flags: i.flags ?? [],
+          peca_pai_idx: i.peca_pai_idx ?? null,
         })),
         valor_total_orcamento: totalGeral,
+        // Payload bruto da IA (header, impact_areas, hash) para auditoria/idempotência
+        dados_orcamento: dadosOrcamento ?? null,
+        orcamento_hash: dadosOrcamento?.orcamento_hash ?? null,
       };
 
       // Upload fotos first
