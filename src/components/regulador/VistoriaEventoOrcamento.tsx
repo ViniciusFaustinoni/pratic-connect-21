@@ -92,9 +92,16 @@ export function VistoriaEventoOrcamento({
 
   // Payload bruto extraído pela IA (header, impact_areas, hash) — persistido junto ao parecer
   const [dadosOrcamento, setDadosOrcamento] = useState<DadosExtraidos | null>(null);
+  // Payload aguardando revisão antes de virar itens
+  const [pendingReview, setPendingReview] = useState<DadosExtraidos | null>(null);
 
-  // PDF Import callback — converte payload enriquecido em ItemParecer
-  const handleDadosExtraidos = useCallback((dados: DadosExtraidos) => {
+  // Ao receber do importador, NÃO converte direto: abre modal de revisão
+  const handleDadosExtraidosFromPDF = useCallback((dados: DadosExtraidos) => {
+    setPendingReview(dados);
+  }, []);
+
+  // PDF Import callback — converte payload enriquecido em ItemParecer (após confirmação)
+  const aplicarDadosExtraidos = useCallback((dados: DadosExtraidos) => {
     setDadosOrcamento(dados);
     const novosItens: ItemParecer[] = [];
 
