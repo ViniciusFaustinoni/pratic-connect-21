@@ -672,6 +672,22 @@ export function VistoriaEventoOrcamento({
           </Button>
         </div>
       </DialogContent>
+      <OrcamentoReviewModal
+        open={!!pendingReview}
+        onClose={() => setPendingReview(null)}
+        onConfirm={() => {
+          if (pendingReview) aplicarDadosExtraidos(pendingReview);
+          setPendingReview(null);
+        }}
+        dados={pendingReview}
+        sistema={{
+          placa: null,
+          chassi: null,
+          marca: veiculo?.marca ?? null,
+          modelo: veiculo?.modelo ?? null,
+          ano: veiculo?.ano_modelo ?? null,
+        }}
+      />
     </Dialog>
   );
 }
