@@ -120,16 +120,23 @@ export function AtribuirVistoriadorModal({
   const { data: vistoriadores = [], isLoading } = useQuery({
     queryKey: ['vistoriadores-para-atribuir', vistoria?.dataAgendada, vistoria?.regiao, executorTipo],
     queryFn: async (): Promise<VistoriadorDisponivel[]> => {
-      // 1. Buscar roles operacionais (instaladores/vistoriadores) dinamicamente
-      const { data: configs } = await supabase
-        .from('app_roles_config')
-        .select('role')
-        .eq('is_operational', true)
-        .eq('is_active', true);
-      const opRoles = (configs || [])
-        .map((c: any) => c.role)
-        .filter((r: string) => r.includes('instalador') || r.includes('vistoriador'));
-      if (opRoles.length === 0) opRoles.push('instalador_vistoriador');
+      // 1. Buscar roles operacionais conforme o tipo de executor escolhido
+      let opRoles: string[] = [];
+      if (executorTipo === 'regulador') {
+        opRoles = ['regulador'];
+      } else if (executorTipo === 'prestador_externo') {
+        opRoles = ['prestador_externo'];
+      } else {
+        const { data: configs } = await supabase
+          .from('app_roles_config')
+          .select('role')
+          .eq('is_operational', true)
+          .eq('is_active', true);
+        opRoles = (configs || [])
+          .map((c: any) => c.role)
+          .filter((r: string) => r.includes('instalador') || r.includes('vistoriador'));
+        if (opRoles.length === 0) opRoles.push('instalador_vistoriador');
+      }
 
       const { data: roles, error: rolesError } = await supabase
         .from('user_roles')
