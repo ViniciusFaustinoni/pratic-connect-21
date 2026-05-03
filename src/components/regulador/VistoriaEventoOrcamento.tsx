@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { OrcamentoPDFImport, type DadosExtraidos } from './OrcamentoPDFImport';
+import { OrcamentoReviewModal } from './OrcamentoReviewModal';
 
 const ETAPAS_REPARO = [
   { id: 'lanternagem', nome: 'Lanternagem', descricao: 'Chaparia e estrutura da carroceria' },
