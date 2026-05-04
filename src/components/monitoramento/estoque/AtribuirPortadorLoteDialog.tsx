@@ -124,7 +124,7 @@ export function AtribuirPortadorLoteDialog({
               <SelectTrigger>
                 <SelectValue placeholder="Selecione o profissional" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-[300px]">
                 {loadingProfissionais ? (
                   <SelectItem value="_loading" disabled>
                     Carregando...

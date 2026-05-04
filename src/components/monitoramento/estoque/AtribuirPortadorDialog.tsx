@@ -135,7 +135,7 @@ export function AtribuirPortadorDialog({
               <SelectTrigger>
                 <SelectValue placeholder="Selecione o profissional" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-[300px]">
                 {rastreador?.portador_id && (
                   <SelectItem value="remover" className="text-destructive">
                     <span className="flex items-center gap-2">
