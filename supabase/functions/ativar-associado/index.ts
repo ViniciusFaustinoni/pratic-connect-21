@@ -109,13 +109,90 @@ Deno.serve(async (req) => {
     }
 
     // ----- 3) Idempotência: já ativo -----
+    // IMPORTANTE: mesmo quando o associado já está 'ativo' (ex.: já tem contrato anterior ativo),
+    // ainda precisamos aplicar side-effects de ativação para o NOVO contrato/veículo/cotação,
+    // caso contrário um veículo novo do mesmo associado fica preso em 'em_analise' (limbo).
     if (assoc.status === 'ativo') {
+      const agora = new Date().toISOString();
+      const targetContratoId = contrato_id ?? assoc.contrato_id;
+      const sideEffects: Record<string, unknown> = {};
+
+      if (targetContratoId) {
+        const { error: contratoErr } = await supabase
+          .from('contratos')
+          .update({ status: 'ativo', data_ativacao: agora })
+          .eq('id', targetContratoId)
+          .neq('status', 'cancelado')
+          .neq('status', 'ativo');
+        if (contratoErr) {
+          console.warn('[ativar-associado][idem] update contrato erro:', contratoErr.message);
+          sideEffects.contrato_erro = contratoErr.message;
+        } else {
+          sideEffects.contrato_atualizado = targetContratoId;
+        }
+      }
+
+      if (veiculo_id) {
+        const veiculoUpdate: Record<string, unknown> = {
+          status: 'ativo',
+          updated_at: agora,
+        };
+        if (ativar_cobertura_total) veiculoUpdate.cobertura_total = true;
+        if (ativar_cobertura_roubo_furto) veiculoUpdate.cobertura_roubo_furto = true;
+        const { error: veicErr } = await supabase
+          .from('veiculos')
+          .update(veiculoUpdate)
+          .eq('id', veiculo_id)
+          .neq('status', 'cancelado')
+          .neq('status', 'ativo');
+        if (veicErr) {
+          console.warn('[ativar-associado][idem] update veiculo erro:', veicErr.message);
+          sideEffects.veiculo_erro = veicErr.message;
+        } else {
+          sideEffects.veiculo_atualizado = veiculo_id;
+        }
+      }
+
+      if (cotacao_id) {
+        const { error: cotErr } = await supabase
+          .from('cotacoes')
+          .update({ status_contratacao: 'ativo' })
+          .eq('id', cotacao_id);
+        if (cotErr) {
+          console.warn('[ativar-associado][idem] update cotacao erro:', cotErr.message);
+          sideEffects.cotacao_erro = cotErr.message;
+        } else {
+          sideEffects.cotacao_atualizado = cotacao_id;
+        }
+      }
+
+      // Log da reativação idempotente para auditoria
+      await supabase.from('ativacao_status_log').insert({
+        associado_id,
+        contrato_id: targetContratoId,
+        from_status: 'ativo',
+        to_status: 'ativo',
+        source: `edge:ativar-associado<-${source}#idem-side-effects`,
+        actor_id,
+        payload: {
+          veiculo_id,
+          servico_id,
+          instalacao_id,
+          cotacao_id,
+          ativar_cobertura_total,
+          ativar_cobertura_roubo_furto,
+          side_effects: sideEffects,
+          ...metadata,
+        },
+      });
+
       return jsonResponse({
         success: true,
         idempotente: true,
-        mensagem: 'Associado já está ativo.',
+        mensagem: 'Associado já estava ativo. Side-effects aplicados ao contrato/veículo/cotação informados.',
         associado_id,
         status: 'ativo',
+        side_effects: sideEffects,
       });
     }
 
