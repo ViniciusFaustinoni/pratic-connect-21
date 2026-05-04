@@ -27,6 +27,9 @@ import {
   ArrowRight,
   ClipboardList,
   Inbox,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePropostasPendentes, usePropostaStats, PropostaPendente } from '@/hooks/usePropostasPendentes';
