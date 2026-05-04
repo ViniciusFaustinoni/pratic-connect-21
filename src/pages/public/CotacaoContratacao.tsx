@@ -133,6 +133,34 @@ export default function CotacaoContratacao() {
 
   const [planoSelecionadoId, setPlanoSelecionadoId] = useState<string | null>(null);
 
+  const instalacaoAgendadaPublica = useMemo(() => {
+    if (instalacaoPublica?.data_agendada) {
+      return {
+        data: instalacaoPublica.data_agendada,
+        horario: instalacaoPublica.periodo || instalacaoPublica.hora_agendada || null,
+        logradouro: instalacaoPublica.logradouro || null,
+        numero: instalacaoPublica.numero || null,
+        bairro: instalacaoPublica.bairro || null,
+        cidade: instalacaoPublica.cidade || null,
+        uf: instalacaoPublica.uf || null,
+      };
+    }
+
+    if (cotacao?.vistoria_completa_data_agendada) {
+      return {
+        data: cotacao.vistoria_completa_data_agendada,
+        horario: cotacao.vistoria_completa_periodo || cotacao.vistoria_completa_horario_agendado || null,
+        logradouro: cotacao.vistoria_completa_endereco_logradouro || null,
+        numero: cotacao.vistoria_completa_endereco_numero || null,
+        bairro: cotacao.vistoria_completa_endereco_bairro || null,
+        cidade: cotacao.vistoria_completa_endereco_cidade || null,
+        uf: cotacao.vistoria_completa_endereco_estado || null,
+      };
+    }
+
+    return null;
+  }, [instalacaoPublica, cotacao]);
+
   // Substituição: detectar se é substituição e controlar etapa de "mesmo local"
   const dadosExtras = (cotacao as any)?.dados_extras as Record<string, any> | null;
   const isSubstituicao = dadosExtras?.tipo_entrada === 'substituicao';
@@ -919,7 +947,7 @@ export default function CotacaoContratacao() {
                           </div>
 
                           {/* Detalhes do agendamento da instalação */}
-                          {cotacao?.vistoria_completa_data_agendada && (
+                          {instalacaoAgendadaPublica?.data && (
                             <div className="bg-muted/30 rounded-lg p-4 max-w-md mx-auto text-left space-y-3">
                               <div className="flex items-center gap-2 mb-3">
                                 <CalendarCheck className="h-5 w-5 text-primary" />
@@ -931,34 +959,34 @@ export default function CotacaoContratacao() {
                                 <div>
                                   <p className="text-sm text-muted-foreground">Data</p>
                                   <p className="font-medium">
-                                    {format(new Date(cotacao.vistoria_completa_data_agendada + 'T12:00:00'), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                                    {format(new Date(instalacaoAgendadaPublica.data + 'T12:00:00'), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
                                   </p>
                                 </div>
                               </div>
                               
-                              {cotacao?.vistoria_completa_horario_agendado && (
+                              {instalacaoAgendadaPublica?.horario && (
                                 <div className="flex items-center gap-3">
                                   <Clock className="h-5 w-5 text-primary flex-shrink-0" />
                                   <div>
                                     <p className="text-sm text-muted-foreground">Horário</p>
-                                    <p className="font-medium">{cotacao.vistoria_completa_horario_agendado}</p>
+                                    <p className="font-medium">{instalacaoAgendadaPublica.horario}</p>
                                   </div>
                                 </div>
                               )}
                               
-                              {cotacao?.vistoria_completa_endereco_logradouro && (
+                              {instalacaoAgendadaPublica?.logradouro && (
                                 <div className="flex items-start gap-3">
                                   <MapPin className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                                   <div>
                                     <p className="text-sm text-muted-foreground">Local</p>
                                     <p className="font-medium">
-                                      {cotacao.vistoria_completa_endereco_logradouro}
-                                      {cotacao.vistoria_completa_endereco_numero && `, ${cotacao.vistoria_completa_endereco_numero}`}
+                                      {instalacaoAgendadaPublica.logradouro}
+                                      {instalacaoAgendadaPublica.numero && `, ${instalacaoAgendadaPublica.numero}`}
                                     </p>
                                     <p className="text-sm text-muted-foreground">
-                                      {cotacao.vistoria_completa_endereco_bairro}
-                                      {cotacao.vistoria_completa_endereco_cidade && ` - ${cotacao.vistoria_completa_endereco_cidade}`}
-                                      {cotacao.vistoria_completa_endereco_estado && `/${cotacao.vistoria_completa_endereco_estado}`}
+                                      {instalacaoAgendadaPublica.bairro}
+                                      {instalacaoAgendadaPublica.cidade && ` - ${instalacaoAgendadaPublica.cidade}`}
+                                      {instalacaoAgendadaPublica.uf && `/${instalacaoAgendadaPublica.uf}`}
                                     </p>
                                   </div>
                                 </div>
