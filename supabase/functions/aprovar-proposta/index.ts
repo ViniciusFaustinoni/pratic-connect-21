@@ -62,7 +62,7 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const { contrato_id, aprovado_por, veiculo_renavam, veiculo_chassi } = await req.json();
+    const { contrato_id, aprovado_por, veiculo_renavam, veiculo_chassi, veiculo_numero_motor } = await req.json();
 
     if (!contrato_id || !aprovado_por) {
       throw new Error('contrato_id e aprovado_por são obrigatórios');
@@ -160,10 +160,11 @@ serve(async (req) => {
     ]);
 
     // Atualizar renavam/chassi no veículo do contrato se fornecidos
-    if (veiculoIdDoContrato && (veiculo_renavam || veiculo_chassi)) {
+    if (veiculoIdDoContrato && (veiculo_renavam || veiculo_chassi || veiculo_numero_motor)) {
       const updateData: Record<string, string> = {};
       if (veiculo_renavam) updateData.renavam = veiculo_renavam;
       if (veiculo_chassi) updateData.chassi = veiculo_chassi;
+      if (veiculo_numero_motor) updateData.numero_motor = veiculo_numero_motor;
       await supabase.from('veiculos').update(updateData).eq('id', veiculoIdDoContrato);
     }
 
