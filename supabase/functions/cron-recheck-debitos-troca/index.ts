@@ -17,12 +17,22 @@ Deno.serve(async (req) => {
 
   const stats = { verificados: 0, resolvidos: 0, ainda_devedor: 0, erros: 0 };
 
+  let only_id: string | null = null;
   try {
-    const { data: pendentes, error } = await admin
+    if (req.method === 'POST') {
+      const body = await req.json().catch(() => ({}));
+      if (body && typeof body.only_id === 'string') only_id = body.only_id;
+    }
+  } catch { /* noop */ }
+
+  try {
+    let query = admin
       .from('relacionamento_debitos_pendentes')
       .select('id, cpf, solicitacao_troca_id, valor_total')
       .eq('status', 'aberto')
-      .limit(500);
+      .limit(only_id ? 1 : 500);
+    if (only_id) query = query.eq('id', only_id);
+    const { data: pendentes, error } = await query;
     if (error) throw error;
 
     for (const p of pendentes || []) {
