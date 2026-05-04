@@ -1,83 +1,83 @@
+## Diagnóstico
 
-# Parte B — Correção arquitetural do fluxo de Inclusão
+Você está certo — minha conclusão anterior estava errada. O fluxo atual está ativando veículos novos cedo demais.
 
-Objetivo: garantir que toda Inclusão siga o **mesmo pipeline da Nova Adesão** (Documentos → Assinatura → Pagamento/Isenção → Agendamento → Ativação), com **gate de débitos via SGA** e **hardening** para impedir novos casos como o do JOAO VICTOR (limbo: contrato assinado, sem agendamento, sem instalação, sem sync SGA).
+**Estado atual no banco (associado JOAO VICTOR — `e6551c17-…`):**
 
----
+| Placa     | status   | cobertura_total | cobertura_roubo_furto | observação |
+|-----------|----------|-----------------|-----------------------|------------|
+| KZF2D20   | ativo    | —               | —                     | veículo antigo, ok |
+| KZF8992   | ativo    | —               | —                     | veículo antigo, ok |
+| RKL6I08   | **ativo** | true           | true                  | **inclusão nova, instalação ainda `agendada` (05/05) — não deveria estar ativo** |
 
-## 1. Gate de débitos (SGA) — reforço no início
+A instalação `3cbd44ea-…` está com `status='agendada'`, `concluida_em=null`. Mesmo assim, o veículo já está `ativo`.
 
-Já existe `useVerificarDebitosAssociado` (consome `sga-buscar-associado-completo`) e `useInclusaoBloqueioDebito`. O bloqueio já está em `OutrasEntradasMenu` e `DialogTipoOperacao`. Ações:
+### Causa raiz
 
-- Adicionar **double-check server-side** na edge `contrato-gerar` quando `tipo_entrada='inclusao'`: chamar `sga-buscar-associado-completo` pelo CPF do associado e **rejeitar (HTTP 409 `DEBITO_PENDENTE`)** se houver boletos abertos. Isso impede bypass via URL direta.
-- Mensagem clara de bloqueio (lista boletos + saldo) — UI já renderiza via `DebitosCard`, ok.
-- Negociação de débito: **fora de escopo** desta entrega (placeholder de mensagem "Negociação em breve").
+`criar-instalacao-pos-pagamento` (linha 794-824), assim que cria a instalação, encadeia `ativar-associado` passando `veiculo_id`. O `ativar-associado` (linha 292-307) executa incondicionalmente:
 
-## 2. Fluxo público idêntico ao da Nova Adesão
-
-O fluxo público `/c/:slug` (CotacaoContratacao) hoje só roda integralmente quando `valor_adesao > 0`. Para Inclusão precisamos garantir as **5 etapas sempre**:
-
-```text
-Plano (já escolhido) → Documentos → Contrato → Agendamento → Pagamento/Isenção → Ativação
+```ts
+.update({ status: 'ativo', updated_at: agora, ...coberturas })
 ```
 
-Mudanças:
+Ou seja: o veículo é promovido a `ativo` **na criação** da instalação, não na **conclusão**. O trigger `fn_reativar_cobertura_pos_instalacao` existe mas só roda quando `servicos.status='concluida'` — e mesmo assim só mexe em coberturas, nunca em `veiculos.status`.
 
-- `CotacaoContratacao.tsx`: quando `cotacao.tipo_entrada === 'inclusao'`, **forçar exibição da Etapa Agendamento** mesmo se `valor_adesao = 0` (hoje a etapa é pulada porque o gatilho de ativação está atrelado ao pagamento).
-- Em adesão isenta (valor 0) na inclusão: substituir a etapa "Pagamento" por uma etapa **"Confirmação de Isenção"** (botão único "Confirmar inclusão") que dispara o mesmo handler de pós-pagamento.
-- Persistência por etapa já é resiliente (memory: `public-flow-resilience`), aproveitar.
+### Regra correta (confirmada por você)
 
-## 3. Hardening da edge `criar-instalacao-pos-pagamento`
+Para veículo **novo** (inclusão / adesão):
+- Se cliente optou por **Roubo/Furto**: ativar imediatamente após contrato/pagamento (R/F não depende de instalação física).
+- Se **NÃO** optou por R/F (só assistência + rastreador via instalação): veículo fica `instalacao_pendente` com coberturas `false` até a instalação concluir. Aí o trigger religa coberturas **e** status.
 
-Hoje a função **não valida** se há agendamento antes de criar a instalação, e não é chamada quando `valor_adesao=0`. Mudanças:
+Associado e contrato seguem `ativo` normalmente (mensalidade roda) — só o veículo novo aguarda.
 
-- Validar antes de criar instalação:
-  ```ts
-  if (!cotacao.vistoria_data_agendada || !cotacao.vistoria_endereco_logradouro) {
-    return 422 { code: 'AGENDAMENTO_AUSENTE' }
-  }
-  ```
-- Após criar instalação + serviço, **chamar `ativar-associado`** (memória `single-source-activation`) em cadeia para fechar o ciclo de ativação para inclusões com adesão isenta.
-- Log estruturado em `logs_operacionais` com `etapa`, `cotacao_id`, `tipo_entrada`.
+## Mudanças
 
-## 4. Trigger/auto-cura do gatilho de Inclusão isenta
+### 1. `supabase/functions/ativar-associado/index.ts` (bloco veículo, ~linha 291-307)
 
-Adicionar trigger em `contratos` (AFTER UPDATE de `assinado_em`) que, quando:
-- `tipo_entrada='inclusao'` AND `valor_adesao=0` AND `vistoria_data_agendada IS NOT NULL`
+Tornar a atualização de `veiculos.status='ativo'` condicional:
 
-→ enfileira chamada (via `pg_net` ou tabela de fila já existente) para `criar-instalacao-pos-pagamento` com `skipPaymentCheck=true`.
+- Se `ativar_cobertura_roubo_furto === true` OU `ativar_cobertura_total === true` → ativar status normalmente (cobertura imediata vale).
+- Se nenhuma das duas e há `instalacao_id` (ou flag `aguardar_instalacao`) → setar `status='instalacao_pendente'`, manter coberturas em `false`, **não** marcar ativo.
+- Demais campos (cobertura_suspensa, motivo) ficam intocados.
 
-Isso garante que mesmo se a UI falhar, o backend conclui o processo.
+### 2. Trigger `fn_reativar_cobertura_pos_instalacao` (migration nova)
 
-## 5. Detecção e relatório de "limbos" existentes
-
-Criar view `vw_cotacoes_em_limbo` para o painel de operação:
+Estender para também promover `veiculos.status` para `'ativo'` quando instalação conclui (`servicos.tipo='instalacao'` AND novo status `'concluida'`), independentemente de `cobertura_suspensa`. Mantém comportamento atual de coberturas.
 
 ```sql
-CREATE VIEW vw_cotacoes_em_limbo AS
-SELECT c.id, c.numero, c.tipo_entrada, c.associado_id, ct.assinado_em,
-       c.vistoria_data_agendada,
-       (SELECT count(*) FROM instalacoes i WHERE i.cotacao_id = c.id) AS qtd_instalacoes
-FROM cotacoes c
-JOIN contratos ct ON ct.cotacao_id = c.id
-WHERE ct.assinado_em IS NOT NULL
-  AND NOT EXISTS (SELECT 1 FROM instalacoes i WHERE i.cotacao_id = c.id);
+UPDATE public.veiculos
+   SET status = 'ativo',
+       cobertura_suspensa = false,
+       cobertura_suspensa_motivo = NULL,
+       cobertura_suspensa_em = NULL,
+       cobertura_total = COALESCE(cobertura_total, false) OR true,  -- religa se estava suspensa
+       cobertura_roubo_furto = COALESCE(cobertura_roubo_furto, false) OR true
+ WHERE id = NEW.veiculo_id
+   AND status <> 'ativo';
 ```
 
-Usar isso para varrer histórico e tratar manualmente os casos antigos. **Sem UI nova** nesta entrega — só a view (operação consulta direto).
+(Refinar para não forçar coberturas em planos sem R/F — só religar as que já existiam antes da suspensão. Vou verificar `cobertura_suspensa_motivo` para decidir.)
 
----
+### 3. Correção pontual (RKL6I08)
 
-## Resumo dos arquivos a alterar
+Migration de correção: voltar `veiculos.status` de `RKL6I08` (id `1b63e620-…`) para `instalacao_pendente`, manter `cobertura_total` e `cobertura_roubo_furto` conforme escolha do cliente na cotação `d60c6dec-…`. Conferir cotação: `cobertura_total` e `cobertura_roubo_furto` no payload — se ambos `true`, o veículo PODE ficar ativo (regra acima); se ambos `false`, voltar a `instalacao_pendente` + coberturas `false`.
 
-- `supabase/functions/contrato-gerar/index.ts` — gate server-side de débito para inclusão.
-- `supabase/functions/criar-instalacao-pos-pagamento/index.ts` — validação de agendamento + chain `ativar-associado`.
-- `src/pages/public/CotacaoContratacao.tsx` — forçar etapa de agendamento + tela de "Confirmar inclusão" para isentos.
-- Migration: trigger em `contratos` para inclusão isenta + view `vw_cotacoes_em_limbo`.
+> Vou consultar a cotação no momento da execução para decidir.
 
-## Fora de escopo
+### 4. Memória
 
-- Tela/fluxo de **negociação** de débito (próxima fase).
-- UI de painel de limbos (só view SQL por enquanto).
+Atualizar `mem://logic/operations/suspensao-cobertura-nao-instalacao-escopo` (ou criar nova) para documentar:
 
-Confirma para implementar?
+> Veículo NOVO de inclusão sem R/F só vira `ativo` quando a instalação concluir. Trigger `fn_reativar_cobertura_pos_instalacao` é a única fonte que promove `veiculos.status` nesse caminho.
+
+## Não muda
+
+- Busca por nome/CPF/telefone/placa (já corrigida).
+- `ativar-associado` continua ativando associado + contrato + cotação normalmente.
+- KZF8992 e KZF2D20 (veículos antigos do associado) permanecem `ativo`.
+
+## Verificação pós-deploy
+
+1. Confirmar RKL6I08 = `instalacao_pendente` (ou conforme R/F escolhido).
+2. Concluir manualmente um serviço de instalação de teste e ver o trigger promover `status='ativo'`.
+3. Criar nova inclusão sem R/F e validar que o veículo fica `instalacao_pendente` no banco até a instalação concluir.
