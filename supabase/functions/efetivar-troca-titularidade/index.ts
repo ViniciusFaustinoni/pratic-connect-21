@@ -509,7 +509,176 @@ serve(async (req) => {
       console.error("[efetivar-troca] Erro ao notificar novo titular (não bloqueante):", whatsErr);
     }
 
+    // 15. Sincronização SGA (Hinova) — não bloqueia o retorno em caso de erro;
+    // grava status na tabela solicitacoes_troca_titularidade para retry posterior.
+    let sgaStatus: 'sincronizado' | 'pendente' | 'falha' | 'nao_aplicavel' = 'nao_aplicavel';
+    let sgaErro: string | null = null;
+    let sgaCodigoAssociadoNovo: number | null = null;
+    let sgaCodigoVeiculoNovo: number | null = null;
+
+    try {
+      const codAntigoExistente = (await supabase
+        .from('associados').select('codigo_hinova').eq('id', solicitacao.associado_id).maybeSingle()
+      ).data?.codigo_hinova as number | null | undefined;
+
+      const veiculoChassi = veiculoData?.chassi || null;
+      const veiculoPlaca = veiculoData?.placa || null;
+
+      // 15.1 Garantir/criar novo associado no SGA
+      let codigoAssociadoNovo: number | null = null;
+      try {
+        const buscaNovo = await buscarAssociadoComVeiculosPorCpf(
+          await (await import('../_shared/hinova-client.ts')).getHinovaSession(supabase),
+          cpfLimpo,
+        );
+        codigoAssociadoNovo = buscaNovo.codigo_associado;
+      } catch (e) {
+        if (!(e instanceof HinovaNotFoundError)) throw e;
+      }
+
+      if (!codigoAssociadoNovo) {
+        const cadAss = await cadastrarAssociadoHinova(supabase, {
+          nome: dadosNovoTitular.nome,
+          cpf: cpfLimpo,
+          email: dadosNovoTitular.email || undefined,
+          telefone_celular: (dadosNovoTitular.telefone || '').replace(/\D/g, '') || undefined,
+        });
+        if (!cadAss.ok || !cadAss.codigo) {
+          throw new Error(`SGA cadastrarAssociado falhou: ${cadAss.errors.join('; ') || cadAss.mensagem || cadAss.status}`);
+        }
+        codigoAssociadoNovo = cadAss.codigo;
+      } else {
+        // Atualiza dados do associado existente (telefone/email)
+        await alterarAssociadoHinova(supabase, {
+          codigo_associado: codigoAssociadoNovo,
+          nome: dadosNovoTitular.nome,
+          email: dadosNovoTitular.email || undefined,
+          telefone_celular: (dadosNovoTitular.telefone || '').replace(/\D/g, '') || undefined,
+        }).catch((e) => console.warn('[efetivar-troca][SGA] alterarAssociado:', e?.message || e));
+      }
+      sgaCodigoAssociadoNovo = codigoAssociadoNovo;
+
+      // Persiste código no associado local
+      await supabase.from('associados').update({
+        codigo_hinova: codigoAssociadoNovo,
+        sincronizado_hinova: true,
+        sincronizado_hinova_em: new Date().toISOString(),
+      }).eq('id', novoAssociadoId);
+
+      // 15.2 Localizar codigo_veiculo atual no SGA pelo chassi (idempotência)
+      let codigoVeiculoSga: number | null = null;
+      let codigoAssociadoVeiculoAtual: number | null = null;
+      if (veiculoChassi) {
+        try {
+          const found = await buscarVeiculoPorChassi(supabase, veiculoChassi);
+          if (found.found) {
+            codigoVeiculoSga = Number(found.found.codigo_veiculo) || null;
+            codigoAssociadoVeiculoAtual = Number(found.found.codigo_associado) || null;
+          }
+        } catch (e) {
+          console.warn('[efetivar-troca][SGA] buscarVeiculoPorChassi:', (e as Error).message);
+        }
+      }
+
+      // 15.3 Se já vinculado ao novo titular → idempotência: nada a fazer
+      const jaTransferido = codigoVeiculoSga && codigoAssociadoVeiculoAtual === codigoAssociadoNovo;
+
+      if (!jaTransferido) {
+        // 15.4 Cancelar veículo no titular antigo (se existir no SGA)
+        if (codigoVeiculoSga) {
+          const codSituacaoCancelado = await getConfiguracaoNumero(
+            supabase, 'sga_codigo_situacao_veiculo_cancelado', 3,
+          );
+          const altSit = await alterarSituacaoVeiculoHinova(
+            supabase, codigoVeiculoSga, codSituacaoCancelado,
+          );
+          if (!altSit.ok) {
+            console.warn('[efetivar-troca][SGA] alterarSituacaoVeiculo (antigo) falhou:', altSit.errors, altSit.mensagem);
+          }
+        }
+
+        // 15.5 Re-cadastrar veículo no novo titular
+        const codigoGrupoProduto = await getConfiguracaoNumero(supabase, 'sga_codigo_grupo_produto_padrao', 0);
+        const cadVeic = await cadastrarVeiculoHinova(supabase, {
+          codigo_associado: codigoAssociadoNovo,
+          placa: veiculoPlaca,
+          chassi: veiculoChassi,
+          renavam: veiculoData?.renavam || undefined,
+          marca: veiculoData?.marca || undefined,
+          modelo: veiculoData?.modelo || undefined,
+          ano_fabricacao: veiculoData?.ano || undefined,
+          ano_modelo: veiculoData?.ano || undefined,
+          cor: veiculoData?.cor || undefined,
+          valor_fipe: veiculoData?.valor_fipe || undefined,
+          codigo_grupo_produto: codigoGrupoProduto || undefined,
+        });
+        if (!cadVeic.ok || !cadVeic.codigo) {
+          throw new Error(`SGA cadastrarVeiculo (novo titular) falhou: ${cadVeic.errors.join('; ') || cadVeic.mensagem || cadVeic.status}`);
+        }
+        sgaCodigoVeiculoNovo = cadVeic.codigo;
+      } else {
+        sgaCodigoVeiculoNovo = codigoVeiculoSga;
+      }
+
+      // Persiste código no veículo local
+      if (sgaCodigoVeiculoNovo) {
+        await supabase.from('veiculos').update({
+          codigo_hinova: sgaCodigoVeiculoNovo,
+          sincronizado_hinova: true,
+          sincronizado_hinova_em: new Date().toISOString(),
+        }).eq('id', veiculoId);
+      }
+
+      // 15.6 Histórico de atendimento em ambos os associados
+      const descSaida = `Troca de titularidade: veículo placa ${veiculoPlaca || '?'} transferido para ${dadosNovoTitular.nome} (CPF ${cpfLimpo}). Contrato ${novoContrato.numero}.`;
+      const descEntrada = `Troca de titularidade: veículo placa ${veiculoPlaca || '?'} recebido de ${associadoAntigo?.nome || 'titular anterior'}. Contrato ${novoContrato.numero}.`;
+
+      if (codAntigoExistente) {
+        await cadastrarHistoricoAtendimentoHinova(supabase, {
+          codigo_associado: Number(codAntigoExistente),
+          descricao: descSaida,
+        }).catch((e) => console.warn('[efetivar-troca][SGA] historico antigo:', e?.message || e));
+      }
+      await cadastrarHistoricoAtendimentoHinova(supabase, {
+        codigo_associado: codigoAssociadoNovo,
+        descricao: descEntrada,
+      }).catch((e) => console.warn('[efetivar-troca][SGA] historico novo:', e?.message || e));
+
+      sgaStatus = 'sincronizado';
+      console.log('[efetivar-troca][SGA] ✅ Sincronização concluída');
+    } catch (sgaErr) {
+      sgaStatus = 'pendente';
+      sgaErro = (sgaErr as Error)?.message || String(sgaErr);
+      console.error('[efetivar-troca][SGA] ⚠️ Falha (não bloqueante):', sgaErro);
+
+      // Enfileira retry
+      await supabase.from('sga_sync_queue').insert({
+        veiculo_id: veiculoId,
+        associado_id: novoAssociadoId,
+        status: 'pendente',
+        etapa_parou: 'troca_titularidade',
+        erro_ultimo: sgaErro,
+        origem: 'troca_titularidade',
+        codigo_associado_hinova: sgaCodigoAssociadoNovo,
+        codigo_veiculo_hinova: sgaCodigoVeiculoNovo,
+      }).then(({ error }) => {
+        if (error) console.warn('[efetivar-troca][SGA] enqueue retry falhou:', error.message);
+      });
+    }
+
+    // 16. Atualiza solicitacoes_troca_titularidade (se este registro existir)
+    await supabase.from('solicitacoes_troca_titularidade').update({
+      sga_status: sgaStatus === 'nao_aplicavel' ? 'pendente' : sgaStatus,
+      sga_erro: sgaErro,
+      sga_codigo_associado_novo: sgaCodigoAssociadoNovo,
+      sga_codigo_veiculo_novo: sgaCodigoVeiculoNovo,
+      sga_sincronizado_em: sgaStatus === 'sincronizado' ? new Date().toISOString() : null,
+    }).eq('id', solicitacao_id).then(({ error }) => {
+      if (error) console.warn('[efetivar-troca] update solicitacoes_troca:', error.message);
+    });
+
     console.log(`[efetivar-troca] ✅ Efetivação concluída com sucesso`);
+
 
     return new Response(
       JSON.stringify({
