@@ -551,7 +551,7 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
                               })()}
                               <span className="flex items-center gap-1 text-xs text-muted-foreground">
                                 <Clock className="h-3 w-3" />
-                                {ag.horario}
+                                {ag.horario ? PERIODO_LABEL[normalizePeriodo(ag.horario)] : '—'}
                               </span>
                               {(ag as any).oficina?.nome_fantasia || (ag as any).oficina?.razao_social ? (
                                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
