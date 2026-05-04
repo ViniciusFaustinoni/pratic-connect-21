@@ -170,6 +170,13 @@ function useAcompanhamentoProposta(token: string | undefined) {
           status, 
           data_agendada,
           hora_agendada,
+          periodo,
+          logradouro,
+          numero,
+          complemento,
+          bairro,
+          cidade,
+          uf,
           rota_id,
           instalador_responsavel:profiles!instalador_responsavel_id(nome)
         `)
@@ -1122,14 +1129,36 @@ export default function AcompanhamentoProposta() {
                     <span className="text-success">Instalação concluída</span>
                   </div>
                 ) : instalacao.data_agendada ? (
-                  <div className="flex items-center gap-3">
-                    <Calendar className="h-5 w-5 text-primary" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Agendada para</p>
-                      <p className="font-medium">
-                        {(() => { const d = parseDataLocal(instalacao.data_agendada); return d ? format(d, "EEEE, dd 'de' MMMM", { locale: ptBR }) : '—'; })()}
-                      </p>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3">
+                      <Calendar className="h-5 w-5 text-primary" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">Agendada para</p>
+                        <p className="font-medium">
+                          {(() => { const d = parseDataLocal(instalacao.data_agendada); return d ? format(d, "EEEE, dd 'de' MMMM", { locale: ptBR }) : '—'; })()}
+                          {((instalacao as any).periodo || instalacao.hora_agendada) && (
+                            <span className="text-muted-foreground"> · {(instalacao as any).periodo || instalacao.hora_agendada}</span>
+                          )}
+                        </p>
+                      </div>
                     </div>
+                    {(instalacao as any).logradouro && (
+                      <div className="flex items-start gap-3">
+                        <MapPin className="h-5 w-5 text-primary mt-0.5" />
+                        <div>
+                          <p className="text-sm text-muted-foreground">Local</p>
+                          <p className="font-medium">
+                            {(instalacao as any).logradouro}
+                            {(instalacao as any).numero && `, ${(instalacao as any).numero}`}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {(instalacao as any).bairro}
+                            {(instalacao as any).cidade && ` · ${(instalacao as any).cidade}`}
+                            {(instalacao as any).uf && `/${(instalacao as any).uf}`}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">

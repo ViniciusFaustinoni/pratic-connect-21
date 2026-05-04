@@ -81,6 +81,12 @@ export interface InstalacaoAgendadaInfo {
   data: string;
   horario: string;
   permite_encaixe: boolean;
+  // Endereço de INSTALAÇÃO (vindo da tabela `instalacoes`, não do snapshot da vistoria)
+  endereco_logradouro?: string | null;
+  endereco_numero?: string | null;
+  endereco_bairro?: string | null;
+  endereco_cidade?: string | null;
+  endereco_uf?: string | null;
 }
 
 // Informações da vistoria na base
@@ -360,6 +366,34 @@ export function usePropostasPendentes() {
                   permite_encaixe: cotacao.vistoria_permite_encaixe || false,
                 };
               }
+            }
+          }
+
+          // ============================================
+          // SOBREESCREVER com dados REAIS da instalação ativa
+          // (a tabela `instalacoes` é a verdade — endereço de instalação,
+          // data e período podem ter sido reagendados após a cotação)
+          // ============================================
+          {
+            const instAtivaQuery = supabase
+              .from('instalacoes')
+              .select('data_agendada, periodo, hora_agendada, permite_encaixe, logradouro, numero, bairro, cidade, uf, status, created_at')
+              .eq('contrato_id', contrato.id)
+              .not('status', 'in', '(cancelada,concluida)')
+              .order('created_at', { ascending: false })
+              .limit(1);
+            const { data: instAtiva } = await instAtivaQuery.maybeSingle();
+            if (instAtiva) {
+              instalacaoAgendada = {
+                data: instAtiva.data_agendada || instalacaoAgendada?.data || '',
+                horario: instAtiva.periodo || instAtiva.hora_agendada || instalacaoAgendada?.horario || '---',
+                permite_encaixe: instAtiva.permite_encaixe ?? instalacaoAgendada?.permite_encaixe ?? false,
+                endereco_logradouro: instAtiva.logradouro,
+                endereco_numero: instAtiva.numero,
+                endereco_bairro: instAtiva.bairro,
+                endereco_cidade: instAtiva.cidade,
+                endereco_uf: instAtiva.uf,
+              };
             }
           }
 
@@ -881,6 +915,30 @@ export function useProposta(contratoId: string | undefined) {
               permite_encaixe: cotacao.vistoria_permite_encaixe || false,
             };
           }
+        }
+      }
+
+      // Sobreescrever com dados REAIS da instalação ativa
+      {
+        const { data: instAtiva } = await supabase
+          .from('instalacoes')
+          .select('data_agendada, periodo, hora_agendada, permite_encaixe, logradouro, numero, bairro, cidade, uf, status, created_at')
+          .eq('contrato_id', contrato.id)
+          .not('status', 'in', '(cancelada,concluida)')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (instAtiva) {
+          instalacaoAgendada = {
+            data: instAtiva.data_agendada || instalacaoAgendada?.data || '',
+            horario: instAtiva.periodo || instAtiva.hora_agendada || instalacaoAgendada?.horario || '---',
+            permite_encaixe: instAtiva.permite_encaixe ?? instalacaoAgendada?.permite_encaixe ?? false,
+            endereco_logradouro: instAtiva.logradouro,
+            endereco_numero: instAtiva.numero,
+            endereco_bairro: instAtiva.bairro,
+            endereco_cidade: instAtiva.cidade,
+            endereco_uf: instAtiva.uf,
+          };
         }
       }
 

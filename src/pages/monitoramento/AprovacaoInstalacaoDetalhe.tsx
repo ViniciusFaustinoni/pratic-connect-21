@@ -181,6 +181,28 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
       // Checklist
       const checklist: any[] = [];
 
+      // Endereço de INSTALAÇÃO (instalacoes ativa do contrato)
+      let enderecoInstalacao: any = null;
+      if (servico.instalacao_origem_id) {
+        const { data: inst } = await supabase
+          .from('instalacoes')
+          .select('logradouro, numero, complemento, bairro, cidade, uf, cep, data_agendada, periodo, hora_agendada')
+          .eq('id', servico.instalacao_origem_id)
+          .maybeSingle();
+        enderecoInstalacao = inst || null;
+      }
+
+      // Endereço CADASTRAL (do associado)
+      let enderecoCadastral: any = null;
+      if (servico.associado_id) {
+        const { data: assoc } = await supabase
+          .from('associados')
+          .select('logradouro, numero, complemento, bairro, cidade, uf, cep')
+          .eq('id', servico.associado_id)
+          .maybeSingle();
+        enderecoCadastral = assoc || null;
+      }
+
       return {
         servico,
         fotos: [...fotos, ...vistoriaFotos],
@@ -189,6 +211,8 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         documentos,
         videoInstalador,
         videoAssociado,
+        enderecoInstalacao,
+        enderecoCadastral,
       };
     },
     enabled: !!servicoId,
@@ -243,7 +267,7 @@ export default function AprovacaoInstalacaoDetalhe() {
     );
   }
 
-  const { servico, fotos, rastreador, checklist, documentos, videoInstalador, videoAssociado } = data;
+  const { servico, fotos, rastreador, checklist, documentos, videoInstalador, videoAssociado, enderecoInstalacao, enderecoCadastral } = data as any;
   const associado = servico.associado as any;
   const veiculo = servico.veiculo as any;
   const profissional = servico.profissional as any;
@@ -356,6 +380,68 @@ export default function AprovacaoInstalacaoDetalhe() {
           <div>
             <span className="text-muted-foreground text-xs">Instalador</span>
             <p className="font-medium text-foreground">{profissional?.nome || '---'}</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Endereços (Cadastral x Instalação) */}
+      <Card className="border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <MapPin className="h-4 w-4 text-primary" />
+            Endereços
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+          <div className="rounded-lg border border-border/60 p-3 bg-muted/20">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+              Endereço cadastral
+            </p>
+            {enderecoCadastral?.logradouro ? (
+              <>
+                <p className="font-medium text-foreground">
+                  {enderecoCadastral.logradouro}
+                  {enderecoCadastral.numero && `, ${enderecoCadastral.numero}`}
+                  {enderecoCadastral.complemento && ` — ${enderecoCadastral.complemento}`}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {enderecoCadastral.bairro}
+                  {enderecoCadastral.cidade && ` · ${enderecoCadastral.cidade}`}
+                  {enderecoCadastral.uf && `/${enderecoCadastral.uf}`}
+                  {enderecoCadastral.cep && ` · CEP ${enderecoCadastral.cep}`}
+                </p>
+              </>
+            ) : (
+              <p className="text-muted-foreground italic">Não informado</p>
+            )}
+          </div>
+          <div className="rounded-lg border border-primary/30 p-3 bg-primary/5">
+            <p className="text-xs font-semibold text-primary uppercase tracking-wide mb-1">
+              Endereço de instalação
+            </p>
+            {enderecoInstalacao?.logradouro ? (
+              <>
+                <p className="font-medium text-foreground">
+                  {enderecoInstalacao.logradouro}
+                  {enderecoInstalacao.numero && `, ${enderecoInstalacao.numero}`}
+                  {enderecoInstalacao.complemento && ` — ${enderecoInstalacao.complemento}`}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {enderecoInstalacao.bairro}
+                  {enderecoInstalacao.cidade && ` · ${enderecoInstalacao.cidade}`}
+                  {enderecoInstalacao.uf && `/${enderecoInstalacao.uf}`}
+                  {enderecoInstalacao.cep && ` · CEP ${enderecoInstalacao.cep}`}
+                </p>
+                {(enderecoInstalacao.data_agendada || enderecoInstalacao.periodo || enderecoInstalacao.hora_agendada) && (
+                  <p className="text-xs text-foreground/80 mt-1">
+                    {enderecoInstalacao.data_agendada && enderecoInstalacao.data_agendada.split('-').reverse().join('/')}
+                    {(enderecoInstalacao.periodo || enderecoInstalacao.hora_agendada) && ` · ${enderecoInstalacao.periodo || enderecoInstalacao.hora_agendada}`}
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-muted-foreground italic">Sem instalação vinculada</p>
+            )}
           </div>
         </CardContent>
       </Card>

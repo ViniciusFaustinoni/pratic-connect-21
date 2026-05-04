@@ -70,6 +70,40 @@ export function EtapaPagamentoCotacao({
   const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>('PIX');
   const [adesaoZerada, setAdesaoZerada] = useState(false);
   const [msgAdesaoZerada, setMsgAdesaoZerada] = useState<string>('');
+  const [instalacaoReal, setInstalacaoReal] = useState<VistoriaAgendadaInfo | null>(null);
+
+  // Preferir dados da instalação ATIVA sobre o snapshot da vistoria na cotação
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await publicSupabase
+          .from('instalacoes')
+          .select('data_agendada, periodo, hora_agendada, logradouro, numero, bairro, cidade, uf, status, created_at')
+          .eq('cotacao_id', cotacaoId)
+          .not('status', 'in', '(cancelada,concluida)')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!cancelled && data?.data_agendada) {
+          setInstalacaoReal({
+            data: data.data_agendada,
+            horario: (data as any).periodo || data.hora_agendada || undefined,
+            logradouro: data.logradouro || undefined,
+            numero: data.numero || undefined,
+            bairro: data.bairro || undefined,
+            cidade: data.cidade || undefined,
+            estado: data.uf || undefined,
+          });
+        }
+      } catch (e) {
+        // silencioso — fallback para vistoriaAgendada do snapshot
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [cotacaoId]);
+
+  const vistoriaAgendadaEfetiva = instalacaoReal || vistoriaAgendada;
 
   // 1. Buscar contrato existente (NÃO gera — contrato deve existir da etapa de assinatura)
   const buscarContrato = useCallback(async () => {
@@ -424,7 +458,7 @@ export function EtapaPagamentoCotacao({
 
   // Componente reutilizável para detalhes da instalação agendada
   const InstalacaoAgendadaInfo = () => {
-    if (tipoVistoria !== 'agendada' || !vistoriaAgendada) return null;
+    if (tipoVistoria !== 'agendada' || !vistoriaAgendadaEfetiva) return null;
     
     return (
       <motion.div 
@@ -445,34 +479,34 @@ export function EtapaPagamentoCotacao({
               <div>
                 <p className="text-xs text-muted-foreground">Data</p>
                 <p className="text-sm font-medium">
-                  {format(new Date(vistoriaAgendada.data + 'T12:00:00'), "EEEE, dd 'de' MMMM", { locale: ptBR })}
+                  {format(new Date(vistoriaAgendadaEfetiva.data + 'T12:00:00'), "EEEE, dd 'de' MMMM", { locale: ptBR })}
                 </p>
               </div>
             </div>
             
-            {vistoriaAgendada.horario && (
+            {vistoriaAgendadaEfetiva.horario && (
               <div className="flex items-center gap-3">
                 <Clock className="h-4 w-4 text-primary flex-shrink-0" />
                 <div>
                   <p className="text-xs text-muted-foreground">Horário</p>
-                  <p className="text-sm font-medium">{vistoriaAgendada.horario}</p>
+                  <p className="text-sm font-medium">{vistoriaAgendadaEfetiva.horario}</p>
                 </div>
               </div>
             )}
             
-            {vistoriaAgendada.logradouro && (
+            {vistoriaAgendadaEfetiva.logradouro && (
               <div className="flex items-start gap-3">
                 <MapPin className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="text-xs text-muted-foreground">Local</p>
                   <p className="text-sm font-medium">
-                    {vistoriaAgendada.logradouro}
-                    {vistoriaAgendada.numero && `, ${vistoriaAgendada.numero}`}
+                    {vistoriaAgendadaEfetiva.logradouro}
+                    {vistoriaAgendadaEfetiva.numero && `, ${vistoriaAgendadaEfetiva.numero}`}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {vistoriaAgendada.bairro}
-                    {vistoriaAgendada.cidade && ` - ${vistoriaAgendada.cidade}`}
-                    {vistoriaAgendada.estado && `/${vistoriaAgendada.estado}`}
+                    {vistoriaAgendadaEfetiva.bairro}
+                    {vistoriaAgendadaEfetiva.cidade && ` - ${vistoriaAgendadaEfetiva.cidade}`}
+                    {vistoriaAgendadaEfetiva.estado && `/${vistoriaAgendadaEfetiva.estado}`}
                   </p>
                 </div>
               </div>
