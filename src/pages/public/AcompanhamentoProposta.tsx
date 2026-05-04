@@ -170,6 +170,13 @@ function useAcompanhamentoProposta(token: string | undefined) {
           status, 
           data_agendada,
           hora_agendada,
+          periodo,
+          logradouro,
+          numero,
+          complemento,
+          bairro,
+          cidade,
+          uf,
           rota_id,
           instalador_responsavel:profiles!instalador_responsavel_id(nome)
         `)
