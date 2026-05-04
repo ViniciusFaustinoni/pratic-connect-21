@@ -109,6 +109,7 @@ export default function PropostasPendentes() {
   const [ativandoRastreadorId, setAtivandoRastreadorId] = useState<string | null>(null);
   const [dialogExcluirAberto, setDialogExcluirAberto] = useState(false);
   const [associadoParaExcluir, setAssociadoParaExcluir] = useState<{ id: string; nome: string } | null>(null);
+  const [ativacoesExpandido, setAtivacoesExpandido] = useState(true);
 
   const { isDiretor } = usePermissions();
   const { mutate: deleteAssociado, isPending: isExcluindo } = useDeleteAssociado();
