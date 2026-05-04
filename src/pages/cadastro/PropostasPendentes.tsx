@@ -229,29 +229,85 @@ export default function PropostasPendentes() {
         )}
       </div>
 
-      {/* Ativação de Rastreador */}
+      {/* ALERTA DE ATIVAÇÃO DE RASTREADOR — destaque máximo, lista completa */}
       {instalacoesPendentes && instalacoesPendentes.length > 0 && (
-        <div className="flex items-center gap-3 p-3.5 rounded-xl border-2 border-purple-500/30 bg-purple-500/5">
-          <div className="p-2 rounded-lg bg-purple-500/20">
-            <Zap className="h-4 w-4 text-purple-500" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-foreground">
-              {instalacoesPendentes.length} instalação(ões) aguardando ativação
-            </p>
-            <p className="text-xs text-muted-foreground">Rastreadores instalados prontos para ativação</p>
-          </div>
-          <Button
-            size="sm"
-            className="bg-purple-500 hover:bg-purple-600 text-white text-xs flex-shrink-0"
-            onClick={() => {
-              const first = instalacoesPendentes[0] as any;
-              if (first) navigate(`/cadastro/instalacoes/${first.id}/ativar`);
-            }}
+        <div className="rounded-xl border-2 border-purple-500/40 bg-gradient-to-r from-purple-500/10 via-purple-500/5 to-transparent shadow-lg shadow-purple-500/10 overflow-hidden">
+          {/* Header do alerta */}
+          <button
+            onClick={() => setAtivacoesExpandido(v => !v)}
+            className="w-full flex items-center gap-3 p-4 hover:bg-purple-500/5 transition-colors"
           >
-            <Zap className="mr-1 h-3 w-3" />
-            Ativar
-          </Button>
+            <div className="relative flex-shrink-0">
+              <span className="absolute inset-0 rounded-full bg-purple-500/40 animate-ping" />
+              <div className="relative p-2.5 rounded-full bg-purple-500 text-white">
+                <AlertCircle className="h-5 w-5" />
+              </div>
+            </div>
+            <div className="flex-1 min-w-0 text-left">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-sm font-bold text-purple-700 dark:text-purple-300">
+                  Aprovação pendente: ativação de rastreador
+                </p>
+                <Badge className="bg-purple-500 hover:bg-purple-600 text-white text-[10px] px-1.5">
+                  {instalacoesPendentes.length}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {instalacoesPendentes.length === 1
+                  ? '1 rastreador instalado pronto para ser ativado e liberar a cobertura total'
+                  : `${instalacoesPendentes.length} rastreadores instalados prontos para ativação e liberação de cobertura total`}
+              </p>
+            </div>
+            <div className="flex-shrink-0 text-purple-500">
+              {ativacoesExpandido ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </div>
+          </button>
+
+          {/* Lista de instalações pendentes */}
+          {ativacoesExpandido && (
+            <div className="border-t border-purple-500/20 divide-y divide-purple-500/10 bg-card/40 max-h-80 overflow-y-auto">
+              {instalacoesPendentes.map((inst: any) => {
+                const associado = inst.associados;
+                const veiculo = inst.veiculos;
+                const rastreador = inst.rastreadores;
+                return (
+                  <div
+                    key={inst.id}
+                    className="flex items-center gap-3 p-3 hover:bg-purple-500/5 transition-colors"
+                  >
+                    <div className="p-1.5 rounded-lg bg-purple-500/15 flex-shrink-0">
+                      <Zap className="h-3.5 w-3.5 text-purple-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-foreground truncate">
+                        {associado?.nome || 'Associado'}
+                      </p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                        <span className="font-mono font-medium">{veiculo?.placa}</span>
+                        <span>·</span>
+                        <span className="truncate">{veiculo?.marca} {veiculo?.modelo}</span>
+                        {rastreador?.imei && (
+                          <>
+                            <span>·</span>
+                            <span className="font-mono text-[10px]">IMEI {rastreador.imei.slice(-6)}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      className="bg-purple-500 hover:bg-purple-600 text-white text-xs flex-shrink-0 h-8"
+                      onClick={() => navigate(`/cadastro/instalacoes/${inst.id}/ativar`)}
+                    >
+                      <Zap className="mr-1 h-3 w-3" />
+                      Ativar
+                      <ArrowRight className="ml-1 h-3 w-3" />
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
