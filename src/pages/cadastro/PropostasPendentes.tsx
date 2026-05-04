@@ -109,14 +109,12 @@ export default function PropostasPendentes() {
   const [ativandoRastreadorId, setAtivandoRastreadorId] = useState<string | null>(null);
   const [dialogExcluirAberto, setDialogExcluirAberto] = useState(false);
   const [associadoParaExcluir, setAssociadoParaExcluir] = useState<{ id: string; nome: string } | null>(null);
-  const [ativacoesExpandido, setAtivacoesExpandido] = useState(true);
 
   const { isDiretor } = usePermissions();
   const { mutate: deleteAssociado, isPending: isExcluindo } = useDeleteAssociado();
 
   const { data: propostas, isLoading: propostasLoading, refetch } = usePropostasPendentes();
   const { data: stats, isLoading: statsLoading } = usePropostaStats();
-  const { data: instalacoesPendentes, isLoading: instalacoesPendentesLoading } = useInstalacoesAguardandoAtivacao();
 
   // Função para ativar rastreador (mantida sem alteração)
   const handleAtivarRastreador = async (proposta: PropostaPendente) => {
