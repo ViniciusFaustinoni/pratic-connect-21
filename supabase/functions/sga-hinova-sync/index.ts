@@ -340,12 +340,22 @@ serve(async (req) => {
       codigoAssociadoHinova = associado.codigo_hinova ?? null;
 
       // Guard base antiga
+      // Regra: associado vindo de 'api_externa' NÃO pode ser cadastrado novamente no SGA
+      // (evita duplicidade). PORÉM, se ele já tem codigo_hinova preenchido, significa
+      // que o associado já existe no SGA e estamos apenas ADICIONANDO uma nova placa
+      // a ele — esse caso é seguro, pois o fluxo abaixo reaproveita o codigo_associado
+      // existente e só cadastra o veículo novo. Por isso fazemos bypass automático.
       if (associado.origem_cadastro === 'api_externa') {
-        if (req_body.bypass_guard_base_antiga && associado.codigo_hinova) {
-          await logSync(_vid, _aid, 'guard_base_antiga_bypass', 'info',
-            { codigo_hinova_reutilizado: associado.codigo_hinova }, null);
+        if (associado.codigo_hinova) {
+          await logSync(_vid, _aid, 'guard_base_antiga_auto_bypass', 'info',
+            { codigo_hinova_reutilizado: associado.codigo_hinova,
+              motivo: 'Associado já existe no SGA (codigo_hinova preenchido). Cadastrando apenas o novo veículo.' },
+            null);
+        } else if (req_body.bypass_guard_base_antiga) {
+          await logSync(_vid, _aid, 'guard_base_antiga_bypass_manual', 'info',
+            { motivo: 'Bypass manual solicitado via flag' }, null);
         } else {
-          const msg = `Associado base antiga (codigo_hinova=${associado.codigo_hinova ?? 'null'}). Envio bloqueado para evitar duplicidade.`;
+          const msg = `Associado base antiga sem codigo_hinova. Envio bloqueado para evitar duplicidade — preencha o codigo_hinova ou use bypass_guard_base_antiga=true para forçar.`;
           await logSync(_vid, _aid, 'guard_base_antiga', 'error', null, null, msg);
           await setStatusSga(_vid, 'erro_sincronizacao');
           return;
