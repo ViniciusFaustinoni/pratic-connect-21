@@ -14,7 +14,8 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { User } from 'lucide-react';
 import { useProfissionaisEquipe } from '@/hooks/useEquipe';
-import { ProfissionalCombobox } from './ProfissionalCombobox';
+import { ProfissionalPicker } from './ProfissionalPicker';
+import { Badge } from '@/components/ui/badge';
 
 interface AtribuirPortadorDialogProps {
   open: boolean;
@@ -102,41 +103,49 @@ export function AtribuirPortadorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <User className="h-5 w-5" />
+      <DialogContent className="sm:max-w-lg p-0 gap-0 overflow-hidden">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b">
+          <DialogTitle className="flex items-center gap-2 text-lg">
+            <div className="h-9 w-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+              <User className="h-4 w-4" />
+            </div>
             Atribuir Portador
           </DialogTitle>
-          <DialogDescription>
-            Rastreador: <span className="font-mono font-medium">{rastreador?.codigo}</span>
+          <DialogDescription className="flex items-center gap-2 pt-1">
+            <Badge variant="outline" className="font-mono">
+              {rastreador?.codigo}
+            </Badge>
+            {rastreador?.portador_nome && (
+              <span className="text-xs">
+                Atualmente com{' '}
+                <strong className="text-foreground">
+                  {rastreador.portador_nome}
+                </strong>
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          {rastreador?.portador_nome && (
-            <Alert>
-              <User className="h-4 w-4" />
-              <AlertDescription>
-                Atualmente com: <strong>{rastreador.portador_nome}</strong>
-              </AlertDescription>
-            </Alert>
-          )}
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Profissional Responsável</label>
-            <ProfissionalCombobox
-              profissionais={profissionaisAtivos}
-              value={portadorId}
-              onChange={setPortadorId}
-              loading={loadingProfissionais}
-              currentPortadorId={rastreador?.portador_id}
-              allowRemove
-            />
+        <div className="px-6 py-4">
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-sm font-medium">
+              Profissional Responsável
+            </label>
+            <span className="text-xs text-muted-foreground">
+              {profissionaisAtivos.length} disponíveis
+            </span>
           </div>
+          <ProfissionalPicker
+            profissionais={profissionaisAtivos}
+            value={portadorId}
+            onChange={setPortadorId}
+            loading={loadingProfissionais}
+            currentPortadorId={rastreador?.portador_id}
+            allowRemove
+          />
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="px-6 py-4 border-t bg-muted/30">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
@@ -144,7 +153,7 @@ export function AtribuirPortadorDialog({
             onClick={() => atribuirMutation.mutate()}
             disabled={!portadorId || atribuirMutation.isPending}
           >
-            {atribuirMutation.isPending ? 'Salvando...' : 'Atribuir'}
+            {atribuirMutation.isPending ? 'Salvando...' : 'Confirmar Atribuição'}
           </Button>
         </DialogFooter>
       </DialogContent>

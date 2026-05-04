@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Users, Loader2 } from 'lucide-react';
 import { useProfissionaisEquipe } from '@/hooks/useEquipe';
-import { ProfissionalCombobox } from './ProfissionalCombobox';
+import { ProfissionalPicker } from './ProfissionalPicker';
 
 interface AtribuirPortadorLoteDialogProps {
   open: boolean;
@@ -113,8 +113,13 @@ export function AtribuirPortadorLoteDialog({
           </Alert>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Profissional Responsável</label>
-            <ProfissionalCombobox
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium">Profissional Responsável</label>
+              <span className="text-xs text-muted-foreground">
+                {profissionaisAtivos.length} disponíveis
+              </span>
+            </div>
+            <ProfissionalPicker
               profissionais={profissionaisAtivos}
               value={portadorId}
               onChange={setPortadorId}
