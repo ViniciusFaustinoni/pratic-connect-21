@@ -168,9 +168,11 @@ Deno.serve(async (req) => {
       if (assoc?.telefone) {
         const msg =
           `Olá ${assoc.nome?.split(' ')[0] ?? ''}! ⚠️\n\n` +
-          `A cobertura do seu veículo *${veiculo.placa ?? veiculo.modelo ?? ''}* foi *suspensa temporariamente* porque a instalação do rastreador não foi realizada dentro do prazo de ${prazoHoras}h após a assinatura do contrato.\n\n` +
-          `🚫 Você está *sem cobertura de roubo e furto* enquanto a instalação não for concluída.\n\n` +
-          `Para reativar sua proteção, fale com nosso time de monitoramento. Após liberação, você poderá reagendar a vistoria/instalação pelo link de cadastro.`;
+          `A *cobertura de Roubo e Furto* do seu veículo *${veiculo.placa ?? veiculo.modelo ?? ''}* foi *suspensa* porque a instalação do rastreador não foi realizada dentro do prazo de ${prazoHoras}h após a assinatura do contrato.\n\n` +
+          `✅ *Seu contrato continua ativo* e sua mensalidade segue normalmente — você não precisa refazer nada.\n` +
+          `🚫 *Apenas a cobertura de Roubo e Furto está suspensa* até que a instalação seja concluída.\n` +
+          `🔄 *Assim que a instalação for finalizada, a cobertura volta automaticamente.*\n\n` +
+          `Para agendar/reagendar a instalação, fale com nosso time de monitoramento.`;
         await supabase.functions.invoke('enviar-whatsapp', {
           body: {
             telefone: assoc.telefone,
