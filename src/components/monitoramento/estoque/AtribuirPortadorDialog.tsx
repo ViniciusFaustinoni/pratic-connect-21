@@ -10,17 +10,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { User, UserMinus } from 'lucide-react';
+import { User } from 'lucide-react';
 import { useProfissionaisEquipe } from '@/hooks/useEquipe';
+import { ProfissionalCombobox } from './ProfissionalCombobox';
 
 interface AtribuirPortadorDialogProps {
   open: boolean;
