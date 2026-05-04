@@ -9,6 +9,7 @@ import {
   type VistoriaBaseFila,
 } from '@/hooks/useFilaBaseHoje';
 import { toast } from 'sonner';
+import { normalizePeriodo, PERIODO_LABEL, PERIODO_FAIXA } from '@/lib/periodo-utils';
 
 export function FilaBaseSection() {
   const navigate = useNavigate();
@@ -122,7 +123,8 @@ function FilaItemCard({
       ? `${item.veiculo_descricao} • ${item.veiculo_placa}`
       : item.veiculo_placa || item.veiculo_descricao || 'Veículo não informado';
 
-  const horario = item.horario?.slice(0, 5) || '--:--';
+  const periodo = normalizePeriodo(item.horario);
+  const periodoLabel = `${PERIODO_LABEL[periodo]} (${PERIODO_FAIXA[periodo]})`;
 
   return (
     <Card className="border-slate-700 bg-slate-800">
@@ -150,7 +152,7 @@ function FilaItemCard({
             <div className="flex items-center gap-3 text-slate-500 text-xs mt-1">
               <span className="flex items-center gap-1">
                 <Clock className="h-3 w-3" />
-                {horario}
+                {periodoLabel}
               </span>
               {item.cliente_telefone && (
                 <span className="flex items-center gap-1 truncate">
