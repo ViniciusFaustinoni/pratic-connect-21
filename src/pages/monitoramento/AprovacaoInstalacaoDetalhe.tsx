@@ -181,6 +181,28 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
       // Checklist
       const checklist: any[] = [];
 
+      // Endereço de INSTALAÇÃO (instalacoes ativa do contrato)
+      let enderecoInstalacao: any = null;
+      if (servico.instalacao_origem_id) {
+        const { data: inst } = await supabase
+          .from('instalacoes')
+          .select('logradouro, numero, complemento, bairro, cidade, uf, cep, data_agendada, periodo, hora_agendada')
+          .eq('id', servico.instalacao_origem_id)
+          .maybeSingle();
+        enderecoInstalacao = inst || null;
+      }
+
+      // Endereço CADASTRAL (do associado)
+      let enderecoCadastral: any = null;
+      if (servico.associado_id) {
+        const { data: assoc } = await supabase
+          .from('associados')
+          .select('logradouro, numero, complemento, bairro, cidade, uf, cep')
+          .eq('id', servico.associado_id)
+          .maybeSingle();
+        enderecoCadastral = assoc || null;
+      }
+
       return {
         servico,
         fotos: [...fotos, ...vistoriaFotos],
@@ -189,6 +211,8 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         documentos,
         videoInstalador,
         videoAssociado,
+        enderecoInstalacao,
+        enderecoCadastral,
       };
     },
     enabled: !!servicoId,
