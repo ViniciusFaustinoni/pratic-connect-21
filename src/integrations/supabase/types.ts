@@ -33326,6 +33326,10 @@ export type Database = {
       set_audit_origem: { Args: { origem: string }; Returns: undefined }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      sync_instalacao_from_cotacao: {
+        Args: { p_cotacao_id: string }
+        Returns: undefined
+      }
       update_associado_contatos: {
         Args: {
           _associado_id: string
