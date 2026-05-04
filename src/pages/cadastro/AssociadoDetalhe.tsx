@@ -60,6 +60,7 @@ import { TrocaTitularidadeDialog } from '@/components/associados/TrocaTitularida
 
 // New redesign components
 import { AssociadoHeroHeader } from '@/components/associados/detalhe/AssociadoHeroHeader';
+import { AlertAguardandoAprovacaoMonitoramento } from '@/components/associados/detalhe/AlertAguardandoAprovacaoMonitoramento';
 import { AssociadoResumoTab } from '@/components/associados/detalhe/AssociadoResumoTab';
 import { AssociadoTabNav } from '@/components/associados/detalhe/AssociadoTabNav';
 import { AdicionarRessalva } from '@/components/cadastro/AdicionarRessalva';
