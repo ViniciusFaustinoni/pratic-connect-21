@@ -781,7 +781,7 @@ O técnico mais próximo será designado em breve.
       try {
         const { data: cotEntrada } = await supabase
           .from('cotacoes')
-          .select('tipo_entrada, dados_extras, valor_adesao')
+          .select('tipo_entrada, dados_extras, valor_adesao, cobertura_total, cobertura_roubo_furto')
           .eq('id', cotacaoId)
           .maybeSingle();
         const tipoEntradaCot = (cotEntrada as any)?.tipo_entrada
@@ -792,7 +792,7 @@ O técnico mais próximo será designado em breve.
         const isAdesaoIsenta = valorAdesaoCot <= 0;
 
         if (isInclusao || isAdesaoIsenta) {
-          console.log(`[CriarInstalacaoPosPagamento] Chain ativar-associado (tipo=${tipoEntradaCot}, isento=${isAdesaoIsenta})`);
+          console.log(`[CriarInstalacaoPosPagamento] Chain ativar-associado (tipo=${tipoEntradaCot}, isento=${isAdesaoIsenta}, veiculo=${veiculoIdFinal})`);
           const ativResp = await fetch(`${supabaseUrl}/functions/v1/ativar-associado`, {
             method: 'POST',
             headers: {
@@ -802,8 +802,17 @@ O técnico mais próximo será designado em breve.
             body: JSON.stringify({
               associado_id: contrato.associado_id,
               contrato_id: contrato.id,
+              veiculo_id: veiculoIdFinal,
               cotacao_id: cotacaoId,
-              motivo: isInclusao ? 'inclusao_pos_instalacao' : 'adesao_isenta_pos_instalacao',
+              instalacao_id: novaInstalacaoId,
+              source: 'edge:criar-instalacao-pos-pagamento',
+              ativar_cobertura_total: !!(cotEntrada as any)?.cobertura_total,
+              ativar_cobertura_roubo_furto: !!(cotEntrada as any)?.cobertura_roubo_furto,
+              metadata: {
+                tipo_entrada: tipoEntradaCot,
+                isento: isAdesaoIsenta,
+                motivo: isInclusao ? 'inclusao_pos_instalacao' : 'adesao_isenta_pos_instalacao',
+              },
             }),
           });
           if (!ativResp.ok) {
