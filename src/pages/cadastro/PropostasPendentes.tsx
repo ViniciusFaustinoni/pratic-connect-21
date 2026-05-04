@@ -194,15 +194,14 @@ export default function PropostasPendentes() {
       </div>
 
       {/* KPIs como cards interativos */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {statsLoading ? (
-          Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl bg-muted" />)
+          Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl bg-muted" />)
         ) : (
           <>
             {[
               { label: 'Aguardando', value: stats?.aguardando || 0, icon: <Clock className="h-3.5 w-3.5" />, color: 'warning', filter: 'assinado' },
               { label: 'Em Análise', value: stats?.emAnalise || 0, icon: <Eye className="h-3.5 w-3.5" />, color: 'info', filter: 'em_analise' },
-              { label: 'Ativação', value: instalacoesPendentes?.length || 0, icon: <Zap className="h-3.5 w-3.5" />, color: 'purple-500', filter: null },
               { label: 'Aprovados', value: stats?.aprovadosHoje || 0, icon: <CheckCircle className="h-3.5 w-3.5" />, color: 'success', filter: null },
               { label: 'Reprovados', value: stats?.reprovadosHoje || 0, icon: <XCircle className="h-3.5 w-3.5" />, color: 'destructive', filter: null },
             ].map((kpi) => (
