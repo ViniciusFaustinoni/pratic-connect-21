@@ -9,6 +9,7 @@ import {
   cadastrarAssociadoHinova,
   cadastrarHistoricoAtendimentoHinova,
   cadastrarVeiculoHinova,
+  getHinovaSession,
   HinovaNotFoundError,
 } from "../_shared/hinova-client.ts";
 
