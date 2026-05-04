@@ -24256,6 +24256,135 @@ export type Database = {
         }
         Relationships: []
       }
+      relacionamento_debitos_pendentes: {
+        Row: {
+          associado_id: string | null
+          cpf: string
+          created_at: string
+          detalhe_boletos: Json | null
+          id: string
+          nome: string | null
+          observacao: string | null
+          quantidade_boletos: number
+          resolvido_em: string | null
+          responsavel_id: string | null
+          solicitacao_troca_id: string | null
+          status: string
+          updated_at: string
+          valor_total: number
+        }
+        Insert: {
+          associado_id?: string | null
+          cpf: string
+          created_at?: string
+          detalhe_boletos?: Json | null
+          id?: string
+          nome?: string | null
+          observacao?: string | null
+          quantidade_boletos?: number
+          resolvido_em?: string | null
+          responsavel_id?: string | null
+          solicitacao_troca_id?: string | null
+          status?: string
+          updated_at?: string
+          valor_total?: number
+        }
+        Update: {
+          associado_id?: string | null
+          cpf?: string
+          created_at?: string
+          detalhe_boletos?: Json | null
+          id?: string
+          nome?: string | null
+          observacao?: string | null
+          quantidade_boletos?: number
+          resolvido_em?: string | null
+          responsavel_id?: string | null
+          solicitacao_troca_id?: string | null
+          status?: string
+          updated_at?: string
+          valor_total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "relacionamento_debitos_pendentes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "relacionamento_debitos_pendentes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "relacionamento_debitos_pendentes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "relacionamento_debitos_pendentes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "relacionamento_debitos_pendentes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "relacionamento_debitos_pendentes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "relacionamento_debitos_pendentes_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "relacionamento_debitos_pendentes_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "relacionamento_debitos_pendentes_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "relacionamento_debitos_pendentes_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "relacionamento_debitos_pendentes_solicitacao_troca_id_fkey"
+            columns: ["solicitacao_troca_id"]
+            isOneToOne: false
+            referencedRelation: "solicitacoes_troca_titularidade"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       role_module_item_visibility: {
         Row: {
           created_at: string | null
@@ -33154,6 +33283,7 @@ export type Database = {
         Args: { dia_hoje: number }
         Returns: number[]
       }
+      placa_bloqueada_por_troca: { Args: { p_placa: string }; Returns: boolean }
       processar_template: {
         Args: { p_template_id: string; p_variaveis: Json }
         Returns: string

@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
 
     const { data: associadoAntigo } = await admin
       .from('associados')
-      .select('id, nome, cpf, email')
+      .select('id, nome, cpf, email, telefone')
       .eq('id', solicitacao.associado_antigo_id)
       .maybeSingle();
     if (!associadoAntigo?.email) throw new Error('Associado antigo sem email cadastrado');
@@ -117,16 +117,32 @@ Deno.serve(async (req) => {
     const docId = json.data?.createDocument?.id;
     if (!docId) throw new Error('Documento sem ID retornado');
 
+    const termoUrl = `https://app.autentique.com.br/documentos/${docId}`;
+
     await admin
       .from('solicitacoes_troca_titularidade')
       .update({
         termo_cancelamento_autentique_id: docId,
+        termo_cancelamento_url: termoUrl,
         termo_cancelamento_enviado_em: new Date().toISOString(),
+        status: 'aguardando_cadastro',
       })
       .eq('id', solicitacao_id);
 
+    // Disparo WhatsApp (best-effort, não falha a requisição se der erro)
+    if (associadoAntigo.telefone) {
+      try {
+        const msg = `Olá, ${associadoAntigo.nome}!\n\nRecebemos uma solicitação de troca de titularidade do veículo *${veiculo?.marca} ${veiculo?.modelo} - ${veiculo?.placa}*.\n\nPara liberar a transferência, é necessário assinar o termo de cancelamento abaixo (assinatura por reconhecimento facial):\n\n${termoUrl}\n\nApós sua assinatura, o processo segue automaticamente.`;
+        await admin.functions.invoke('whatsapp-send-text', {
+          body: { telefone: associadoAntigo.telefone, mensagem: msg },
+        });
+      } catch (waErr) {
+        console.warn('[enviar-termo-cancelamento-troca] WhatsApp falhou:', waErr);
+      }
+    }
+
     return new Response(
-      JSON.stringify({ success: true, autentique_id: docId }),
+      JSON.stringify({ success: true, autentique_id: docId, termo_url: termoUrl }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (e) {
