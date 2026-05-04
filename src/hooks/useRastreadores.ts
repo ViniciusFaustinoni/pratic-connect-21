@@ -127,7 +127,7 @@ export function useRastreadores(filters?: RastreadorFilters) {
       }
 
       if (filters?.search) {
-        const { raw, digits, placa } = normalizarBusca(filters.search);
+        const { raw, digits, placa, placaForte } = normalizarBusca(filters.search);
         const rawSafe = escapeOrValue(raw);
 
         // 1) Veículos por placa (normalizada, sem hífen)
@@ -142,38 +142,49 @@ export function useRastreadores(filters?: RastreadorFilters) {
           (veics || []).forEach((v: any) => veiculoIdsByPlaca.add(v.id));
         }
 
-        // 2) Veículos cujo associado bate por nome OU CPF (consultas separadas — embed OR no PostgREST é frágil)
-        const associadoIds = new Set<string>();
-        const assocPromises: Array<PromiseLike<any>> = [
-          supabase.from('associados').select('id').ilike('nome', `%${rawSafe}%`).limit(200),
-        ];
-        if (digits.length >= 3) {
-          assocPromises.push(
-            supabase.from('associados').select('id').ilike('cpf', `%${digits}%`).limit(200)
-          );
-        }
-        const assocResults = await Promise.all(assocPromises);
-        assocResults.forEach((r: any) => {
-          if (r?.error) console.warn('[useRastreadores] busca associado erro:', r.error);
-          (r?.data || []).forEach((a: any) => associadoIds.add(a.id));
-        });
-
-        if (associadoIds.size > 0) {
-          const { data: vAssoc } = await supabase
-            .from('veiculos')
-            .select('id')
-            .in('associado_id', Array.from(associadoIds))
-            .limit(500);
-          (vAssoc || []).forEach((v: any) => veiculoIdsByPlaca.add(v.id));
-        }
-
-        const directFilter = `codigo.ilike.%${rawSafe}%,numero_serie.ilike.%${rawSafe}%,imei.ilike.%${rawSafe}%`;
-
-        if (veiculoIdsByPlaca.size > 0) {
-          const ids = Array.from(veiculoIdsByPlaca);
-          query = query.or(`${directFilter},veiculo_id.in.(${ids.join(',')})`);
+        // Quando o termo é claramente uma placa (placaForte), restringimos a busca
+        // a veículos cuja placa case. Sem isso, os dígitos extraídos (ex.: "684" de
+        // "TCU6B84") casariam por ilike em CPFs e códigos/imei aleatórios,
+        // poluindo o resultado com rastreadores não relacionados.
+        if (placaForte) {
+          if (veiculoIdsByPlaca.size === 0) {
+            return { items: [], total: 0, totalPages: 0 };
+          }
+          query = query.in('veiculo_id', Array.from(veiculoIdsByPlaca));
         } else {
-          query = query.or(directFilter);
+          // 2) Veículos cujo associado bate por nome OU CPF (consultas separadas)
+          const associadoIds = new Set<string>();
+          const assocPromises: Array<PromiseLike<any>> = [
+            supabase.from('associados').select('id').ilike('nome', `%${rawSafe}%`).limit(200),
+          ];
+          if (digits.length >= 3) {
+            assocPromises.push(
+              supabase.from('associados').select('id').ilike('cpf', `%${digits}%`).limit(200)
+            );
+          }
+          const assocResults = await Promise.all(assocPromises);
+          assocResults.forEach((r: any) => {
+            if (r?.error) console.warn('[useRastreadores] busca associado erro:', r.error);
+            (r?.data || []).forEach((a: any) => associadoIds.add(a.id));
+          });
+
+          if (associadoIds.size > 0) {
+            const { data: vAssoc } = await supabase
+              .from('veiculos')
+              .select('id')
+              .in('associado_id', Array.from(associadoIds))
+              .limit(500);
+            (vAssoc || []).forEach((v: any) => veiculoIdsByPlaca.add(v.id));
+          }
+
+          const directFilter = `codigo.ilike.%${rawSafe}%,numero_serie.ilike.%${rawSafe}%,imei.ilike.%${rawSafe}%`;
+
+          if (veiculoIdsByPlaca.size > 0) {
+            const ids = Array.from(veiculoIdsByPlaca);
+            query = query.or(`${directFilter},veiculo_id.in.(${ids.join(',')})`);
+          } else {
+            query = query.or(directFilter);
+          }
         }
       }
 
