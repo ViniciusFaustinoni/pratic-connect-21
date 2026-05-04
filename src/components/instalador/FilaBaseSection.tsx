@@ -123,7 +123,8 @@ function FilaItemCard({
       ? `${item.veiculo_descricao} • ${item.veiculo_placa}`
       : item.veiculo_placa || item.veiculo_descricao || 'Veículo não informado';
 
-  const horario = item.horario?.slice(0, 5) || '--:--';
+  const periodo = normalizePeriodo(item.horario);
+  const periodoLabel = `${PERIODO_LABEL[periodo]} (${PERIODO_FAIXA[periodo]})`;
 
   return (
     <Card className="border-slate-700 bg-slate-800">
