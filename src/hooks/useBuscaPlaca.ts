@@ -19,7 +19,10 @@ export interface PlacaSearchResult {
  */
 export function useBuscaPlaca(termo: string) {
   const placaLimpa = (termo || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-  const enabled = placaLimpa.length >= 7;
+  // Só consulta SGA quando o termo bate o formato real de placa (Mercosul AAA0A00 ou antiga AAA0000).
+  // Evita disparar SGA para nomes longos (ex.: "MARCOSVINICIUS"), o que gerava 503/runtime error.
+  const PLACA_REGEX = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
+  const enabled = PLACA_REGEX.test(placaLimpa);
 
   const sga = useBuscaSGA({ placa: placaLimpa, enabled });
 
