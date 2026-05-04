@@ -9,6 +9,7 @@ import {
   type VistoriaBaseFila,
 } from '@/hooks/useFilaBaseHoje';
 import { toast } from 'sonner';
+import { normalizePeriodo, PERIODO_LABEL, PERIODO_FAIXA } from '@/lib/periodo-utils';
 
 export function FilaBaseSection() {
   const navigate = useNavigate();
