@@ -95,10 +95,12 @@ export function CorrigirDadosVeiculoDialog({
     return () => { active = false; };
   }, [open, veiculoId, associadoId]);
 
+  const isZeroKm = isZeroKmVeiculo(veic.placa, veic.renavam);
   const chassiHelp = chassiHelperText(veic.chassi || '');
   const chassiOk = !camposVeic.includes('chassi') || isValidChassi(veic.chassi || '');
-  const placaOk = !camposVeic.includes('placa') || (veic.placa || '').replace(/[^A-Z0-9]/gi, '').length >= 7;
-  const renavamOk = !camposVeic.includes('renavam') ||
+  // Para 0KM, placa e renavam são opcionais (regra alinhada com fn_validar_campos_ativacao)
+  const placaOk = isZeroKm || !camposVeic.includes('placa') || (veic.placa || '').replace(/[^A-Z0-9]/gi, '').length >= 7;
+  const renavamOk = isZeroKm || !camposVeic.includes('renavam') ||
     (veic.renavam || '').replace(/\D/g, '').length === 11;
   const cpfOk = !camposAssoc.includes('cpf') || (assoc.cpf || '').replace(/\D/g, '').length === 11;
   const emailOk = !camposAssoc.includes('email') || /\S+@\S+\.\S+/.test(assoc.email || '');
