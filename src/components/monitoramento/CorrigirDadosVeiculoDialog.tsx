@@ -163,6 +163,14 @@ export function CorrigirDadosVeiculoDialog({
           <div className="py-8 text-center text-sm text-muted-foreground">Carregando...</div>
         ) : (
           <div className="space-y-4">
+            {isZeroKm && (
+              <Alert className="border-emerald-500/40 bg-emerald-500/10">
+                <AlertTitle className="text-emerald-700 dark:text-emerald-300">Veículo 0KM</AlertTitle>
+                <AlertDescription className="text-xs text-emerald-700/90 dark:text-emerald-200/90">
+                  Placa e Renavam serão atualizados após o emplacamento. Para ativar a Proteção 360 agora, basta o chassi (17 caracteres) estar correto.
+                </AlertDescription>
+              </Alert>
+            )}
             <Alert>
               <AlertTriangle className="h-4 w-4" />
               <AlertTitle>Campos sinalizados</AlertTitle>
