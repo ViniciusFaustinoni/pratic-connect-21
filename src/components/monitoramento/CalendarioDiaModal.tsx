@@ -301,7 +301,7 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
               template_params: [
                 profissional.nome?.split(' ')[0] || 'Técnico',
                 'Vistoria Base',
-                `${baseData?.cliente_nome || 'Cliente'} - ${baseData?.veiculo_placa || ''} (${baseData?.data_agendada || ''} ${baseData?.horario || ''})`,
+                `${baseData?.cliente_nome || 'Cliente'} - ${baseData?.veiculo_placa || ''} (${baseData?.data_agendada || ''} ${baseData?.horario ? PERIODO_LABEL[normalizePeriodo(baseData.horario)] : ''})`,
               ],
               referencia_tipo: 'agendamento_base',
               referencia_id: id,
