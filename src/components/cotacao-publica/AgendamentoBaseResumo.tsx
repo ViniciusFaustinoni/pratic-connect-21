@@ -81,15 +81,19 @@ export function AgendamentoBaseResumo({ cotacaoId }: AgendamentoBaseResumoProps)
         </div>
       )}
       
-      {agendamento.horario && (
-        <div className="flex items-center gap-3">
-          <Clock className="h-5 w-5 text-primary flex-shrink-0" />
-          <div>
-            <p className="text-sm text-muted-foreground">Horário</p>
-            <p className="font-medium">{agendamento.horario}</p>
+      {agendamento.horario && (() => {
+        const periodo = normalizePeriodo(agendamento.horario);
+        return (
+          <div className="flex items-center gap-3">
+            <Clock className="h-5 w-5 text-primary flex-shrink-0" />
+            <div>
+              <p className="text-sm text-muted-foreground">Período</p>
+              <p className="font-medium">{PERIODO_LABEL[periodo]}</p>
+              <p className="text-xs text-muted-foreground">{PERIODO_FAIXA[periodo]}</p>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
       
       {configBase && enderecoCompleto && (
         <div className="flex items-start gap-3">
