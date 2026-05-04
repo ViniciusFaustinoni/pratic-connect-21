@@ -1,26 +1,21 @@
-## Ajustar texto da mensagem de WhatsApp da suspensão por não-instalação
+## Objetivo
 
-Substituir o texto atual (em ambos os pontos onde é gerado) pela versão exata solicitada pelo usuário, mantendo as variáveis dinâmicas já disponíveis (primeiro nome, placa, prazo em horas).
+Tirar o card de ativação de rastreador da tela `/cadastro/propostas` e exibi-lo na aba `/monitoramento/aprovacao-associados`, que é o lugar correto (Monitoramento já é responsável por aprovar instalações concluídas).
 
-### Texto novo (único, padronizado)
+## Mudanças
 
-```
-Olá {primeiroNome}! ⚠️ A cobertura ( Roubo e Furto ) do seu veículo {placa} foi suspensa temporariamente porque a instalação do rastreador não foi realizada dentro do prazo de {prazoHoras}h após a assinatura do contrato. 🚫 Você está sem cobertura de roubo e furto enquanto a instalação não for concluída. Assim que a instalação for finalizada, a cobertura volta automaticamente.
-```
+### 1. Remover de `src/pages/cadastro/PropostasPendentes.tsx`
+- Apagar o bloco do alerta roxo "Aprovação pendente: ativação de rastreador" (linhas ~232–312).
+- Remover imports/estado não mais usados nessa página: `useInstalacoesAguardandoAtivacao`, `ativacoesExpandido`/`setAtivacoesExpandido`, `AlertCircle`, `ChevronDown`, `ChevronUp`, `Zap`, `ArrowRight` (manter os que ainda forem usados em outros pontos da página — verificar antes de remover cada um).
 
-- `{primeiroNome}` = `assoc.nome?.split(' ')[0] ?? ''`
-- `{placa}` = `veiculo.placa ?? veiculo.modelo ?? ''`
-- `{prazoHoras}` = variável `prazoHoras` já calculada (48h/72h conforme UF)
+### 2. Adicionar em `src/pages/monitoramento/AcionamentosRouboFurto.tsx` (página "Aprovação de Associados")
+- Importar `useInstalacoesAguardandoAtivacao` de `@/hooks/useVistoriaCompletaAnalise`.
+- Renderizar o mesmo card colapsável no topo do conteúdo (logo abaixo do header, antes dos KPIs), com idêntico visual roxo, contador, lista de instalações pendentes e botão "Ativar" navegando para `/cadastro/instalacoes/:id/ativar` (rota da tela de ativação permanece onde está — só o ponto de entrada muda).
 
-### Arquivos a editar
+### 3. Sem alterações de rota / hook / edge function
+- A rota `/cadastro/instalacoes/:id/ativar` (`VistoriaCompletaAnalise`) continua existindo e funcionando.
+- O hook `useInstalacoesAguardandoAtivacao` permanece igual.
+- Nenhuma migração de banco necessária.
 
-1. `supabase/functions/cron-suspender-cobertura-inativacao/index.ts` (linhas ~151-157) — substituir bloco `msg = ...` pelo novo texto.
-2. `supabase/functions/suspender-cobertura-instalacao-manual/index.ts` (linhas ~169-175) — mesmo ajuste.
-
-Nenhuma outra lógica é alterada: trigger de reativação, fluxo de cobrança, auditoria e payload do `enviar-whatsapp` (`tipo: 'suspensao_instalacao_prazo'`) permanecem iguais.
-
-### Deploy
-
-Após a edição, redeployar as duas edge functions:
-- `cron-suspender-cobertura-inativacao`
-- `suspender-cobertura-instalacao-manual`
+## Observação
+A página `AcionamentosRouboFurto.tsx` já lista instalações concluídas aguardando aprovação do Monitoramento via `useInstalacoesAguardandoAprovacao` (baseado em `servicos`). O card de ativação de rastreador é uma camada complementar (baseada em `instalacoes` com `cobertura_roubo_furto=true` e `cobertura_total=false`) — coexistirá com a listagem principal sem conflito.
