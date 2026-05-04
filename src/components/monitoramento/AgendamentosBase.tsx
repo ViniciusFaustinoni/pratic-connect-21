@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAgendamentosBaseDia, useAtualizarAgendamentoBase } from '@/hooks/useAgendamentoBase';
 import { useAuth } from '@/contexts/AuthContext';
+import { normalizePeriodo, PERIODO_LABEL } from '@/lib/periodo-utils';
 
 const STATUS_CONFIG: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: React.ElementType }> = {
   agendado: { label: 'Aguardando', variant: 'secondary', icon: Clock },
