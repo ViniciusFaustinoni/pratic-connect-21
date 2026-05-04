@@ -792,7 +792,12 @@ O técnico mais próximo será designado em breve.
         const isAdesaoIsenta = valorAdesaoCot <= 0;
 
         if (isInclusao || isAdesaoIsenta) {
-          console.log(`[CriarInstalacaoPosPagamento] Chain ativar-associado (tipo=${tipoEntradaCot}, isento=${isAdesaoIsenta}, veiculo=${veiculoIdFinal})`);
+          // Veículo NOVO com instalação física pendente (não dispensa rastreador)
+          // NÃO pode ficar 'ativo' antes da instalação concluir. O trigger
+          // fn_reativar_cobertura_pos_instalacao promove para 'ativo' quando
+          // o serviço de instalação muda para 'concluida'.
+          const aguardarInstalacaoFisica = !instalacaoData?.dispensa_rastreador && !cotEntrada?.dispensa_rastreador;
+          console.log(`[CriarInstalacaoPosPagamento] Chain ativar-associado (tipo=${tipoEntradaCot}, isento=${isAdesaoIsenta}, veiculo=${veiculoIdFinal}, aguardar_instalacao=${aguardarInstalacaoFisica})`);
           const ativResp = await fetch(`${supabaseUrl}/functions/v1/ativar-associado`, {
             method: 'POST',
             headers: {
@@ -808,10 +813,12 @@ O técnico mais próximo será designado em breve.
               source: 'edge:criar-instalacao-pos-pagamento',
               ativar_cobertura_total: !!(cotEntrada as any)?.cobertura_total,
               ativar_cobertura_roubo_furto: !!(cotEntrada as any)?.cobertura_roubo_furto,
+              aguardar_instalacao: aguardarInstalacaoFisica,
               metadata: {
                 tipo_entrada: tipoEntradaCot,
                 isento: isAdesaoIsenta,
                 motivo: isInclusao ? 'inclusao_pos_instalacao' : 'adesao_isenta_pos_instalacao',
+                aguardar_instalacao: aguardarInstalacaoFisica,
               },
             }),
           });
