@@ -331,6 +331,15 @@ export default function PropostasPendentes() {
                       </>
                     )}
                   </div>
+                  {proposta.instalacao_agendada?.endereco_logradouro && (
+                    <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                      📍 Instalação: {proposta.instalacao_agendada.endereco_logradouro}
+                      {proposta.instalacao_agendada.endereco_numero && `, ${proposta.instalacao_agendada.endereco_numero}`}
+                      {proposta.instalacao_agendada.endereco_bairro && ` — ${proposta.instalacao_agendada.endereco_bairro}`}
+                      {proposta.instalacao_agendada.data && ` · ${proposta.instalacao_agendada.data.split('-').reverse().join('/')}`}
+                      {proposta.instalacao_agendada.horario && ` ${proposta.instalacao_agendada.horario}`}
+                    </p>
+                  )}
                 </div>
 
                 {/* Status + Tempo */}
