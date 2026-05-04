@@ -25,7 +25,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { formatarMoeda } from '@/utils/format';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { publicSupabase } from '@/integrations/supabase/publicClient';
 
 import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
@@ -91,6 +92,41 @@ export default function CotacaoContratacao() {
   
   // Estado local para travar UI após agendamento bem-sucedido
   const [agendamentoConcluido, setAgendamentoConcluido] = useState(false);
+
+  const { data: instalacaoPublica } = useQuery({
+    queryKey: ['cotacao-contratacao-instalacao', cotacao?.id, contratoFallback?.id, associadoId],
+    queryFn: async () => {
+      if (!cotacao?.id && !contratoFallback?.id && !associadoId) return null;
+
+      let query = publicSupabase
+        .from('instalacoes')
+        .select('id, status, data_agendada, hora_agendada, periodo, logradouro, numero, bairro, cidade, uf, created_at')
+        .not('status', 'in', '(cancelada,concluida)');
+
+      if (contratoFallback?.id) {
+        query = query.eq('contrato_id', contratoFallback.id);
+      } else if (cotacao?.id) {
+        query = query.eq('cotacao_id', cotacao.id);
+      } else if (associadoId) {
+        query = query.eq('associado_id', associadoId);
+      }
+
+      const { data, error } = await query
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.warn('[CotacaoContratacao] Erro ao buscar instalação pública:', error);
+        return null;
+      }
+
+      return data;
+    },
+    enabled: !!cotacao?.id || !!contratoFallback?.id || !!associadoId,
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
+  });
 
   // Estado para navegação manual (quando usuário clica em etapas anteriores para revisar)
   const [navegacaoManual, setNavegacaoManual] = useState(false);
