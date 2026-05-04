@@ -1,50 +1,28 @@
-## Diagnóstico revisado (sem migration)
+## Causa raiz
 
-A estrutura para endereço de instalação **já existe e está correta**:
+O contrato `b64c7ea7…` (veículo KWM9443 / FRANCISCO CARDINELE) está com `vendedor_id = 37beadcf…` (perfil "Teste"), que **não tem `codigo_sga_voluntario`**. O job `sga-hinova-sync` falha sempre na etapa `resolver_vendedor` com `"Vendedor Teste não possui codigo_sga_voluntario"`, deixando o veículo em `status_sga = erro_sincronizacao` e `sincronizado_hinova = false`.
 
-- A edge `agendar-vistoria-presencial` cria a `instalacoes` com seus próprios `logradouro/numero/bairro/cidade/uf/cep/data_agendada/periodo/permite_encaixe`.
-- Para o caso da Hayssa (placa TDC6E30), o banco confirma:
-  - `cotacoes.vistoria_*` = ESTRADA INTENDENTE MAGALHÃES, 05/05, tarde (vistoria base — snapshot)
-  - `instalacoes` ativa = R INACIA GERTRUDES 310, PARQUE ANCHIETA, 04/05, manhã (instalação real reagendada)
+O consultor correto é **BRUNO CARVALHO** (`profiles.id = 4d2c7ddd-9781-484b-8e0a-db3c9271a58c`, `codigo_sga_voluntario = 177`).
 
-Portanto **não há perda de dado, não falta coluna, não precisa migração**. O bug é só de leitura: três telas estão mostrando os campos antigos `vistoria_*` da cotação em vez de ler da `instalacoes` ativa.
+## Plano de correção (sem gambiarra)
 
-## Correções
+1. **Reatribuir vendedor no contrato** (fonte canônica usada pelo `sga-hinova-sync`):
+   - `UPDATE contratos SET vendedor_id = '4d2c7ddd-9781-484b-8e0a-db3c9271a58c' WHERE id = 'b64c7ea7-b62e-4a31-ab1b-8c31b381d28b'`
+   - Também atualizar `leads` e `cotacoes` vinculadas ao mesmo associado/veículo, se apontarem para o vendedor "Teste", para manter consistência de hierarquia/comissão.
 
-### 1. `src/hooks/usePropostasPendentes.ts` + `src/pages/cadastro/PropostasPendentes.tsx`
-Carregar a `instalacoes` ativa (status diferente de `cancelada`/`concluida`) por contrato/cotação e expor `instalacao_endereco`, `instalacao_data`, `instalacao_periodo`. No card, adicionar uma linha:
-`📍 Instalação: {logradouro}, {numero} — {bairro}/{cidade} · {data} {periodo}`.
+2. **Limpar estado de erro do veículo** para liberar nova tentativa:
+   - `UPDATE veiculos SET status_sga = 'pendente', sincronizado_hinova = false WHERE id = '4f42daa9-…'`
 
-### 2. `src/pages/monitoramento/AcionamentosRouboFurto.tsx` (aba Aprovação) e `ServicoDetalheModal`
-Na aba "Aprovação de Associados" do monitoramento, exibir dois blocos:
-- **Endereço cadastral** (do associado/contrato)
-- **Endereço de instalação** (da `instalacoes` ativa) com data e período corretos.
+3. **Disparar a sincronização oficial** via edge function `sga-hinova-sync` com `veiculo_id` + `associado_id` (mesmo caminho do botão "Ativar SGA" — usa lock, CAS e logs em `sga_sync_logs`). Não escrever `codigo_hinova` manualmente.
 
-### 3. Portal público — `src/components/cotacao-publica/EtapaPagamentoCotacao.tsx` e `src/pages/public/AcompanhamentoProposta.tsx`
-Hierarquia de leitura:
-1. `instalacoes` ativa da cotação (preferencial)
-2. `servicos` ativo do tipo instalação
-3. fallback `cotacoes.vistoria_*` (apenas se não houver instalação criada)
+4. **Validar resultado**:
+   - Confirmar `associados.codigo_hinova`, `veiculos.codigo_hinova`, `sincronizado_hinova = true`.
+   - Conferir `sga_sync_logs` (último registro = `success`).
+   - Confirmar que comissões futuras desse contrato passam pela grade do Bruno (memória: "Grade do vendedor prevalece").
 
-Card "Instalação do Rastreador" mostra endereço completo + data + período vindos da instalação ativa.
+## Observações
 
-## Arquivos a editar
+- Não altero histórico de comissões já lançadas — se houver lançamento atrelado ao "Teste", trato em passo separado depois que confirmar com você.
+- Tudo via edge function/migrations padrão — nenhum bypass de trigger/lock.
 
-- `src/hooks/usePropostasPendentes.ts`
-- `src/pages/cadastro/PropostasPendentes.tsx`
-- `src/pages/monitoramento/AcionamentosRouboFurto.tsx` (e modal de detalhe usado lá)
-- `src/components/cotacao-publica/EtapaPagamentoCotacao.tsx`
-- `src/pages/public/AcompanhamentoProposta.tsx`
-
-## Não faremos
-
-- Nenhuma migração de schema (estrutura já suficiente).
-- Nenhuma alteração no fluxo de coleta do endereço (já coleta corretamente em `AgendamentoVistoria.tsx` e persiste via `agendar-vistoria-presencial`).
-- Nenhuma alteração na edge `criar-instalacao-pos-pagamento` para este bug (ela já é fallback quando não houve agendamento prévio).
-
-## Validação
-
-Reabrir a proposta da Hayssa (TDC6E30) após o deploy e confirmar que:
-- PropostasPendentes mostra `R INACIA GERTRUDES 310 · 04/05 manhã`.
-- Aba Aprovação no monitoramento mostra os dois endereços distintos.
-- Portal público da cotação mostra a data/período/endereço da instalação real (não mais Intendente Magalhães 05/05 tarde).
+Confirma para eu executar?
