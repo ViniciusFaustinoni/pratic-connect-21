@@ -16,6 +16,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { UserAvatar } from '@/components/UserAvatar';
+import { TrocaTitularidadeBadge } from '@/components/cotacoes/TrocaTitularidadeBadge';
+import { useTrocaTitularidadePorCotacao } from '@/components/cotacoes/TrocaTitularidadeBadge';
 import type { CotacaoWithRelations } from '@/hooks/useCotacoes';
 import type { StatusCotacao } from '@/types/database';
 import { toast } from 'sonner';
