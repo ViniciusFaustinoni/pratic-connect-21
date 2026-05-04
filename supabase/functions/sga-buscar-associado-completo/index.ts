@@ -156,14 +156,15 @@ serve(async (req) => {
     console.error('[sga-buscar-associado-completo] auth falhou:', e?.message);
     if (e instanceof HinovaTransientError) {
       const retry = calcularProximoRetry(e.reason);
-      return json(503, {
+      // 200 (não 503) — invoke() do supabase-js trata 5xx como exceção e quebra a UI.
+      return json(200, {
         ...emptyResponse(origem),
         erro_transitorio: true,
         motivo: e.reason,
         retry_em: retry.toISOString(),
       });
     }
-    return json(500, { ...emptyResponse(origem), motivo: 'auth_falhou' });
+    return json(200, { ...emptyResponse(origem), erro_transitorio: true, motivo: 'auth_falhou' });
   }
 
   try {
