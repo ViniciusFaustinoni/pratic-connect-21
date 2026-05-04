@@ -13,11 +13,17 @@ import {
   ShieldCheck,
   Inbox,
   Wrench,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  Zap,
+  ArrowRight,
 } from 'lucide-react';
 import {
   useInstalacoesAguardandoAprovacao,
   useAprovacaoMonitoramentoStats,
 } from '@/hooks/useAprovacaoMonitoramento';
+import { useInstalacoesAguardandoAtivacao } from '@/hooks/useVistoriaCompletaAnalise';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
