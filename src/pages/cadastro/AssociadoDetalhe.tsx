@@ -60,6 +60,7 @@ import { TrocaTitularidadeDialog } from '@/components/associados/TrocaTitularida
 
 // New redesign components
 import { AssociadoHeroHeader } from '@/components/associados/detalhe/AssociadoHeroHeader';
+import { AlertAguardandoAprovacaoMonitoramento } from '@/components/associados/detalhe/AlertAguardandoAprovacaoMonitoramento';
 import { AssociadoResumoTab } from '@/components/associados/detalhe/AssociadoResumoTab';
 import { AssociadoTabNav } from '@/components/associados/detalhe/AssociadoTabNav';
 import { AdicionarRessalva } from '@/components/cadastro/AdicionarRessalva';
@@ -469,6 +470,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
         </Alert>
       )}
       {id && <AlertSuspensaoNaoInstalacao associadoId={id} contratoId={contrato?.id} />}
+      {id && <AlertAguardandoAprovacaoMonitoramento associadoId={id} associadoStatus={status} />}
       {id && status === 'ativo' && <SubstituicaoStatusCard associadoId={id} />}
 
       {/* Hero Header */}
