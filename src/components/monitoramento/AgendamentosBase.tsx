@@ -101,10 +101,10 @@ export function AgendamentosBase({ data }: AgendamentosBaseProps) {
                     key={agendamento.id}
                     className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors"
                   >
-                    {/* Horário */}
-                    <div className="flex flex-col items-center justify-center w-14 flex-shrink-0">
+                    {/* Período */}
+                    <div className="flex flex-col items-center justify-center w-20 flex-shrink-0">
                       <Clock className="h-3.5 w-3.5 text-muted-foreground mb-0.5" />
-                      <span className="text-lg font-bold">{agendamento.horario.slice(0, 5)}</span>
+                      <span className="text-sm font-bold">{PERIODO_LABEL[normalizePeriodo(agendamento.horario)]}</span>
                     </div>
 
                     {/* Divisor */}
