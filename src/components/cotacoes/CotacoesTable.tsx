@@ -635,7 +635,32 @@ export function CotacoesTable({
                               </DropdownMenuItem>
                             </>
                           )}
-                          
+
+                          {(cotacao.dados_extras as any)?.tipo_entrada === 'troca_titularidade' && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={async () => {
+                                  const { data } = await (await import('@/integrations/supabase/client')).supabase
+                                    .from('solicitacoes_troca_titularidade' as any)
+                                    .select('termo_cancelamento_url')
+                                    .eq('cotacao_id', cotacao.id)
+                                    .maybeSingle();
+                                  const url = (data as any)?.termo_cancelamento_url;
+                                  if (!url) {
+                                    toast.error('Link do termo ainda não disponível');
+                                    return;
+                                  }
+                                  await navigator.clipboard.writeText(url);
+                                  toast.success('Link do termo copiado!');
+                                }}
+                              >
+                                <Link2 className="h-4 w-4 mr-2" />
+                                Copiar link do termo
+                              </DropdownMenuItem>
+                            </>
+                          )}
+
                           <DropdownMenuSeparator />
                           <Tooltip>
                             <TooltipTrigger asChild>
