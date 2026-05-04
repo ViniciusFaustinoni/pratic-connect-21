@@ -289,7 +289,7 @@ export function RastreadorFormDialog({
                               <SelectValue placeholder="Selecione" />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent>
+                          <SelectContent className="max-h-[300px]">
                             {loadingPlataformas ? (
                               <SelectItem value="" disabled>Carregando...</SelectItem>
                             ) : plataformas?.map((p) => (
@@ -320,7 +320,7 @@ export function RastreadorFormDialog({
                               <SelectValue placeholder="Em Estoque" />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent>
+                          <SelectContent className="max-h-[300px]">
                             {Object.entries(STATUS_CRIACAO).map(([value, label]) => (
                               <SelectItem key={value} value={value}>
                                 {label}
@@ -350,7 +350,7 @@ export function RastreadorFormDialog({
                                 <SelectValue placeholder="Nenhum portador" />
                               </SelectTrigger>
                             </FormControl>
-                            <SelectContent>
+                            <SelectContent className="max-h-[300px]">
                               <SelectItem value="none">Nenhum portador</SelectItem>
                               {loadingProfissionais ? (
                                 <SelectItem value="loading" disabled>Carregando...</SelectItem>
@@ -470,7 +470,7 @@ export function RastreadorFormDialog({
                                 <SelectValue placeholder="Selecione" />
                               </SelectTrigger>
                             </FormControl>
-                            <SelectContent>
+                            <SelectContent className="max-h-[300px]">
                               {loadingPlataformas ? (
                                 <SelectItem value="" disabled>Carregando...</SelectItem>
                               ) : plataformas?.map((p) => (
@@ -519,7 +519,7 @@ export function RastreadorFormDialog({
                               <SelectValue placeholder="Selecione" />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent>
+                          <SelectContent className="max-h-[300px]">
                             {Object.entries(STATUS_RASTREADOR_LABELS).map(
                               ([value, label]) => (
                                 <SelectItem key={value} value={value}>
@@ -550,7 +550,7 @@ export function RastreadorFormDialog({
                                 <SelectValue placeholder="Selecione um veículo" />
                               </SelectTrigger>
                             </FormControl>
-                            <SelectContent>
+                            <SelectContent className="max-h-[300px]">
                               {veiculoOptions.length === 0 && (
                                 <SelectItem value="none" disabled>
                                   Nenhum veículo disponível
@@ -586,7 +586,7 @@ export function RastreadorFormDialog({
                                 <SelectValue placeholder="Nenhum portador atribuído" />
                               </SelectTrigger>
                             </FormControl>
-                            <SelectContent>
+                            <SelectContent className="max-h-[300px]">
                               <SelectItem value="none">Nenhum portador</SelectItem>
                               {loadingProfissionais ? (
                                 <SelectItem value="loading" disabled>Carregando...</SelectItem>
