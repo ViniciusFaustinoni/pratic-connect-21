@@ -70,6 +70,40 @@ export function EtapaPagamentoCotacao({
   const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>('PIX');
   const [adesaoZerada, setAdesaoZerada] = useState(false);
   const [msgAdesaoZerada, setMsgAdesaoZerada] = useState<string>('');
+  const [instalacaoReal, setInstalacaoReal] = useState<VistoriaAgendadaInfo | null>(null);
+
+  // Preferir dados da instalação ATIVA sobre o snapshot da vistoria na cotação
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await publicSupabase
+          .from('instalacoes')
+          .select('data_agendada, periodo, hora_agendada, logradouro, numero, bairro, cidade, uf, status, created_at')
+          .eq('cotacao_id', cotacaoId)
+          .not('status', 'in', '(cancelada,concluida)')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!cancelled && data?.data_agendada) {
+          setInstalacaoReal({
+            data: data.data_agendada,
+            horario: (data as any).periodo || data.hora_agendada || undefined,
+            logradouro: data.logradouro || undefined,
+            numero: data.numero || undefined,
+            bairro: data.bairro || undefined,
+            cidade: data.cidade || undefined,
+            estado: data.uf || undefined,
+          });
+        }
+      } catch (e) {
+        // silencioso — fallback para vistoriaAgendada do snapshot
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [cotacaoId]);
+
+  const vistoriaAgendadaEfetiva = instalacaoReal || vistoriaAgendada;
 
   // 1. Buscar contrato existente (NÃO gera — contrato deve existir da etapa de assinatura)
   const buscarContrato = useCallback(async () => {
