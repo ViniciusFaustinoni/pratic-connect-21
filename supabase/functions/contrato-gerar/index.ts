@@ -655,6 +655,7 @@ serve(async (req) => {
               codigo_fipe: cotacao.codigo_fipe || null,
               chassi: cotacao.veiculo_chassi || null,
               renavam: cotacao.veiculo_renavam || null,
+              numero_motor: cotacao.veiculo_motor || null,
               status: 'em_analise',
               cobertura_roubo_furto: false,
               cobertura_total: false,
