@@ -1,57 +1,83 @@
-## Diagnóstico — THAYSSA FALCON (placa TDC6E30)
 
-Comparando o que o associado preencheu (`cotacoes.vistoria_*`) com o que existe nas tabelas operacionais:
+# Parte B — Correção arquitetural do fluxo de Inclusão
 
-| Onde | Endereço | Data | Período |
-|------|----------|------|---------|
-| **Cotação (escolha real do cliente)** | ESTRADA INTENDENTE MAGALHÃES, 177 — Campinho | 05/05 | tarde |
-| `instalacoes` (ativa, id `b18b88b7…`) | R INACIA GERTRUDES, 310 — Parque Anchieta | 04/05 | manhã |
-| `servicos` (agendada, id `27db6b9f…`) | R INACIA GERTRUDES, 310 | **09/05** | manhã |
-| `instalacoes` cancelada anterior (`1ba3d371…`) | R INACIA GERTRUDES, 310 | 04/05 | manhã |
+Objetivo: garantir que toda Inclusão siga o **mesmo pipeline da Nova Adesão** (Documentos → Assinatura → Pagamento/Isenção → Agendamento → Ativação), com **gate de débitos via SGA** e **hardening** para impedir novos casos como o do JOAO VICTOR (limbo: contrato assinado, sem agendamento, sem instalação, sem sync SGA).
 
-### Causas raiz
+---
 
-1. **Snapshot estagnado em `instalacoes`** — `criar-instalacao-pos-pagamento` (e `aprovar-proposta`) materializam endereço/data a partir de `cotacoes.vistoria_*` **uma única vez**. Quando o associado depois edita o endereço/data de instalação na cotação, o registro em `instalacoes` (e o `servicos` derivado) **não é re-sincronizado**. Por isso o cadastro/monitoramento ainda exibe o endereço residencial antigo.
+## 1. Gate de débitos (SGA) — reforço no início
 
-2. **`servicos` com data divergente da `instalacao`** — a instalação ativa tem `data_agendada=04/05`, mas o `servicos` espelhado tem `data_agendada=09/05`. Houve reagendamento parcial: alguém moveu o serviço sem atualizar a instalação (ou vice-versa). O resultado é a tela de Monitoramento puxar 09/05 enquanto Cadastro mostra 04/05 — exatamente o "erro que nunca pode acontecer" relatado.
+Já existe `useVerificarDebitosAssociado` (consome `sga-buscar-associado-completo`) e `useInclusaoBloqueioDebito`. O bloqueio já está em `OutrasEntradasMenu` e `DialogTipoOperacao`. Ações:
 
-3. **UI de Propostas Pendentes e Aprovação de Instalação** continuam lendo o endereço residencial (`associados.endereco_*`) sem mostrar o endereço de instalação efetivo. Apesar de o último ajuste ter incluído o endereço de instalação na maioria das telas, ele puxa do snapshot da `instalacoes` — que está desatualizado pelo motivo (1).
+- Adicionar **double-check server-side** na edge `contrato-gerar` quando `tipo_entrada='inclusao'`: chamar `sga-buscar-associado-completo` pelo CPF do associado e **rejeitar (HTTP 409 `DEBITO_PENDENTE`)** se houver boletos abertos. Isso impede bypass via URL direta.
+- Mensagem clara de bloqueio (lista boletos + saldo) — UI já renderiza via `DebitosCard`, ok.
+- Negociação de débito: **fora de escopo** desta entrega (placeholder de mensagem "Negociação em breve").
 
-## Plano de correção
+## 2. Fluxo público idêntico ao da Nova Adesão
 
-### A. Backend — manter `instalacoes` e `servicos` sempre fiéis à cotação
+O fluxo público `/c/:slug` (CotacaoContratacao) hoje só roda integralmente quando `valor_adesao > 0`. Para Inclusão precisamos garantir as **5 etapas sempre**:
 
-1. **Trigger `trg_sync_instalacao_from_cotacao`** em `cotacoes` (AFTER UPDATE OF `vistoria_*` / `vistoria_completa_*`):
-   - Se existe `instalacoes` com `status NOT IN ('concluida','cancelada')` para a mesma `cotacao_id`, atualiza endereço/data/período/responsável a partir dos campos canônicos da cotação (mesma lógica do `criar-instalacao-pos-pagamento` por `tipo_vistoria`).
-   - Em cascata, atualiza o `servicos` ativo (`status IN ('agendada','aguardando_atribuicao','em_rota')`) vinculado via `instalacao_origem_id`, mantendo paridade endereço+data+período.
-   - Loga em `instalacao_eventos` a mudança (origem = "edicao_cotacao").
+```text
+Plano (já escolhido) → Documentos → Contrato → Agendamento → Pagamento/Isenção → Ativação
+```
 
-2. **Edge function `sync-instalacao-from-cotacao`** invocável manualmente pelo Cadastro/Monitoramento como botão "Sincronizar com cotação", para casos como o atual e como rede de segurança após backfill.
+Mudanças:
 
-3. **Garantir `instalacao_origem_id` no `servicos`** — `aprovar-proposta` e demais geradores devem sempre setar esse vínculo (hoje há `servicos` sem ele, o que quebra a sincronização).
+- `CotacaoContratacao.tsx`: quando `cotacao.tipo_entrada === 'inclusao'`, **forçar exibição da Etapa Agendamento** mesmo se `valor_adesao = 0` (hoje a etapa é pulada porque o gatilho de ativação está atrelado ao pagamento).
+- Em adesão isenta (valor 0) na inclusão: substituir a etapa "Pagamento" por uma etapa **"Confirmação de Isenção"** (botão único "Confirmar inclusão") que dispara o mesmo handler de pós-pagamento.
+- Persistência por etapa já é resiliente (memory: `public-flow-resilience`), aproveitar.
 
-### B. Backfill imediato (este caso e demais inconsistentes)
+## 3. Hardening da edge `criar-instalacao-pos-pagamento`
 
-1. **Cancelar instalação `b18b88b7…` e o serviço `27db6b9f…`** (ambos com endereço/data errados) via fluxo padrão (`reagendar`/`cancelar` com motivo "correção endereço/data divergente da cotação").
-2. **Recriar instalação** chamando `criar-instalacao-pos-pagamento` com `skipPaymentCheck=true` — agora pegará ESTRADA INTENDENTE MAGALHÃES, 177 / 05/05 tarde da cotação atual.
-3. **Query de auditoria** para listar todos os contratos onde `instalacoes` ativa diverge dos campos `vistoria_*` da cotação e de `servicos` ativo — gerar relatório para o Cadastro decidir caso a caso.
+Hoje a função **não valida** se há agendamento antes de criar a instalação, e não é chamada quando `valor_adesao=0`. Mudanças:
 
-### C. Frontend — exibir endereço e data da instalação em todos os pontos
+- Validar antes de criar instalação:
+  ```ts
+  if (!cotacao.vistoria_data_agendada || !cotacao.vistoria_endereco_logradouro) {
+    return 422 { code: 'AGENDAMENTO_AUSENTE' }
+  }
+  ```
+- Após criar instalação + serviço, **chamar `ativar-associado`** (memória `single-source-activation`) em cadeia para fechar o ciclo de ativação para inclusões com adesão isenta.
+- Log estruturado em `logs_operacionais` com `etapa`, `cotacao_id`, `tipo_entrada`.
 
-1. **Propostas Pendentes (Cadastro)** — card já mostra "📍 Instalação", mas deve sempre vir da `instalacoes` ativa (não do snapshot da cotação) e exibir um aviso visual quando ela divergir do endereço residencial.
-2. **Aba Monitoramento → Aprovação de Associados** — exibir lado-a-lado **Endereço residencial** e **Endereço de instalação**, com data + período da instalação ativa (não do `servicos`, que pode estar dessincronizado até o backfill).
-3. **Detalhe da instalação no Monitoramento** — mostrar badge "⚠ Divergência" quando `instalacoes.data_agendada ≠ servicos.data_agendada` ou endereços diferirem; oferece o botão "Sincronizar com cotação" (B.2).
+## 4. Trigger/auto-cura do gatilho de Inclusão isenta
 
-### D. Validação
+Adicionar trigger em `contratos` (AFTER UPDATE de `assinado_em`) que, quando:
+- `tipo_entrada='inclusao'` AND `valor_adesao=0` AND `vistoria_data_agendada IS NOT NULL`
 
-- Após implantação, reabrir a tela do associado THAYSSA: deve aparecer Estrada Intendente Magalhães, 177 — Campinho, 05/05 tarde tanto em Cadastro quanto em Monitoramento; sem badges de divergência.
-- Editar manualmente o endereço de instalação numa cotação de teste e confirmar que `instalacoes` + `servicos` atualizam sozinhos.
+→ enfileira chamada (via `pg_net` ou tabela de fila já existente) para `criar-instalacao-pos-pagamento` com `skipPaymentCheck=true`.
 
-## Observações técnicas
+Isso garante que mesmo se a UI falhar, o backend conclui o processo.
 
-- Não toco em `cotacoes.vistoria_*` — é a fonte de verdade.
-- A trigger respeita o estado terminal: instalações já concluídas/canceladas nunca são reescritas.
-- Não há migração destrutiva — só nova trigger + nova edge function + UI.
-- Memória relevante: "Dedupe agendamentos" (uma origem = um agendamento ativo) já cobre o fechamento do `servicos` antigo antes de criar o novo.
+## 5. Detecção e relatório de "limbos" existentes
 
-Confirma para eu implementar A → C e rodar o backfill da THAYSSA?
+Criar view `vw_cotacoes_em_limbo` para o painel de operação:
+
+```sql
+CREATE VIEW vw_cotacoes_em_limbo AS
+SELECT c.id, c.numero, c.tipo_entrada, c.associado_id, ct.assinado_em,
+       c.vistoria_data_agendada,
+       (SELECT count(*) FROM instalacoes i WHERE i.cotacao_id = c.id) AS qtd_instalacoes
+FROM cotacoes c
+JOIN contratos ct ON ct.cotacao_id = c.id
+WHERE ct.assinado_em IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM instalacoes i WHERE i.cotacao_id = c.id);
+```
+
+Usar isso para varrer histórico e tratar manualmente os casos antigos. **Sem UI nova** nesta entrega — só a view (operação consulta direto).
+
+---
+
+## Resumo dos arquivos a alterar
+
+- `supabase/functions/contrato-gerar/index.ts` — gate server-side de débito para inclusão.
+- `supabase/functions/criar-instalacao-pos-pagamento/index.ts` — validação de agendamento + chain `ativar-associado`.
+- `src/pages/public/CotacaoContratacao.tsx` — forçar etapa de agendamento + tela de "Confirmar inclusão" para isentos.
+- Migration: trigger em `contratos` para inclusão isenta + view `vw_cotacoes_em_limbo`.
+
+## Fora de escopo
+
+- Tela/fluxo de **negociação** de débito (próxima fase).
+- UI de painel de limbos (só view SQL por enquanto).
+
+Confirma para implementar?
