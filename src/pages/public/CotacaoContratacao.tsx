@@ -25,7 +25,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { formatarMoeda } from '@/utils/format';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { publicSupabase } from '@/integrations/supabase/publicClient';
 
 import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
@@ -92,10 +93,73 @@ export default function CotacaoContratacao() {
   // Estado local para travar UI após agendamento bem-sucedido
   const [agendamentoConcluido, setAgendamentoConcluido] = useState(false);
 
+  const { data: instalacaoPublica } = useQuery({
+    queryKey: ['cotacao-contratacao-instalacao', cotacao?.id, contratoFallback?.id, associadoId],
+    queryFn: async () => {
+      if (!cotacao?.id && !contratoFallback?.id && !associadoId) return null;
+
+      let query = publicSupabase
+        .from('instalacoes')
+        .select('id, status, data_agendada, hora_agendada, periodo, logradouro, numero, bairro, cidade, uf, created_at')
+        .not('status', 'in', '(cancelada,concluida)');
+
+      if (contratoFallback?.id) {
+        query = query.eq('contrato_id', contratoFallback.id);
+      } else if (cotacao?.id) {
+        query = query.eq('cotacao_id', cotacao.id);
+      } else if (associadoId) {
+        query = query.eq('associado_id', associadoId);
+      }
+
+      const { data, error } = await query
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.warn('[CotacaoContratacao] Erro ao buscar instalação pública:', error);
+        return null;
+      }
+
+      return data;
+    },
+    enabled: !!cotacao?.id || !!contratoFallback?.id || !!associadoId,
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
+  });
+
   // Estado para navegação manual (quando usuário clica em etapas anteriores para revisar)
   const [navegacaoManual, setNavegacaoManual] = useState(false);
 
   const [planoSelecionadoId, setPlanoSelecionadoId] = useState<string | null>(null);
+
+  const instalacaoAgendadaPublica = useMemo(() => {
+    if (instalacaoPublica?.data_agendada) {
+      return {
+        data: instalacaoPublica.data_agendada,
+        horario: instalacaoPublica.periodo || instalacaoPublica.hora_agendada || null,
+        logradouro: instalacaoPublica.logradouro || null,
+        numero: instalacaoPublica.numero || null,
+        bairro: instalacaoPublica.bairro || null,
+        cidade: instalacaoPublica.cidade || null,
+        uf: instalacaoPublica.uf || null,
+      };
+    }
+
+    if (cotacao?.vistoria_completa_data_agendada) {
+      return {
+        data: cotacao.vistoria_completa_data_agendada,
+        horario: cotacao.vistoria_completa_periodo || cotacao.vistoria_completa_horario_agendado || null,
+        logradouro: cotacao.vistoria_completa_endereco_logradouro || null,
+        numero: cotacao.vistoria_completa_endereco_numero || null,
+        bairro: cotacao.vistoria_completa_endereco_bairro || null,
+        cidade: cotacao.vistoria_completa_endereco_cidade || null,
+        uf: cotacao.vistoria_completa_endereco_estado || null,
+      };
+    }
+
+    return null;
+  }, [instalacaoPublica, cotacao]);
 
   // Substituição: detectar se é substituição e controlar etapa de "mesmo local"
   const dadosExtras = (cotacao as any)?.dados_extras as Record<string, any> | null;
@@ -719,14 +783,14 @@ export default function CotacaoContratacao() {
                     }}
                     readOnly={isEtapaConcluida(4)}
                     tipoVistoria={cotacao.tipo_vistoria as 'autovistoria' | 'agendada'}
-                    vistoriaAgendada={cotacao.vistoria_data_agendada ? {
-                      data: cotacao.vistoria_data_agendada,
-                      horario: cotacao.vistoria_horario_agendado || undefined,
-                      logradouro: cotacao.vistoria_endereco_logradouro || undefined,
-                      numero: cotacao.vistoria_endereco_numero || undefined,
-                      bairro: cotacao.vistoria_endereco_bairro || undefined,
-                      cidade: cotacao.vistoria_endereco_cidade || undefined,
-                      estado: cotacao.vistoria_endereco_estado || undefined,
+                    vistoriaAgendada={instalacaoAgendadaPublica ? {
+                      data: instalacaoAgendadaPublica.data,
+                      horario: instalacaoAgendadaPublica.horario || undefined,
+                      logradouro: instalacaoAgendadaPublica.logradouro || undefined,
+                      numero: instalacaoAgendadaPublica.numero || undefined,
+                      bairro: instalacaoAgendadaPublica.bairro || undefined,
+                      cidade: instalacaoAgendadaPublica.cidade || undefined,
+                      estado: instalacaoAgendadaPublica.uf || undefined,
                     } : undefined}
                   />
                   <NavegacaoEtapas
@@ -883,7 +947,7 @@ export default function CotacaoContratacao() {
                           </div>
 
                           {/* Detalhes do agendamento da instalação */}
-                          {cotacao?.vistoria_completa_data_agendada && (
+                          {instalacaoAgendadaPublica?.data && (
                             <div className="bg-muted/30 rounded-lg p-4 max-w-md mx-auto text-left space-y-3">
                               <div className="flex items-center gap-2 mb-3">
                                 <CalendarCheck className="h-5 w-5 text-primary" />
@@ -895,34 +959,34 @@ export default function CotacaoContratacao() {
                                 <div>
                                   <p className="text-sm text-muted-foreground">Data</p>
                                   <p className="font-medium">
-                                    {format(new Date(cotacao.vistoria_completa_data_agendada + 'T12:00:00'), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                                    {format(new Date(instalacaoAgendadaPublica.data + 'T12:00:00'), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
                                   </p>
                                 </div>
                               </div>
                               
-                              {cotacao?.vistoria_completa_horario_agendado && (
+                              {instalacaoAgendadaPublica?.horario && (
                                 <div className="flex items-center gap-3">
                                   <Clock className="h-5 w-5 text-primary flex-shrink-0" />
                                   <div>
                                     <p className="text-sm text-muted-foreground">Horário</p>
-                                    <p className="font-medium">{cotacao.vistoria_completa_horario_agendado}</p>
+                                    <p className="font-medium">{instalacaoAgendadaPublica.horario}</p>
                                   </div>
                                 </div>
                               )}
                               
-                              {cotacao?.vistoria_completa_endereco_logradouro && (
+                              {instalacaoAgendadaPublica?.logradouro && (
                                 <div className="flex items-start gap-3">
                                   <MapPin className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                                   <div>
                                     <p className="text-sm text-muted-foreground">Local</p>
                                     <p className="font-medium">
-                                      {cotacao.vistoria_completa_endereco_logradouro}
-                                      {cotacao.vistoria_completa_endereco_numero && `, ${cotacao.vistoria_completa_endereco_numero}`}
+                                      {instalacaoAgendadaPublica.logradouro}
+                                      {instalacaoAgendadaPublica.numero && `, ${instalacaoAgendadaPublica.numero}`}
                                     </p>
                                     <p className="text-sm text-muted-foreground">
-                                      {cotacao.vistoria_completa_endereco_bairro}
-                                      {cotacao.vistoria_completa_endereco_cidade && ` - ${cotacao.vistoria_completa_endereco_cidade}`}
-                                      {cotacao.vistoria_completa_endereco_estado && `/${cotacao.vistoria_completa_endereco_estado}`}
+                                      {instalacaoAgendadaPublica.bairro}
+                                      {instalacaoAgendadaPublica.cidade && ` - ${instalacaoAgendadaPublica.cidade}`}
+                                      {instalacaoAgendadaPublica.uf && `/${instalacaoAgendadaPublica.uf}`}
                                     </p>
                                   </div>
                                 </div>
