@@ -30,6 +30,10 @@ interface AtivarBody {
   // Atualizações opcionais que devem acompanhar a ativação
   ativar_cobertura_total?: boolean;       // veiculos.cobertura_total = true
   ativar_cobertura_roubo_furto?: boolean; // veiculos.cobertura_roubo_furto = true
+  // Se true, NÃO promove veiculos.status para 'ativo' — mantém 'instalacao_pendente'
+  // até o trigger fn_reativar_cobertura_pos_instalacao disparar quando a instalação concluir.
+  // Use para inclusão/adesão nova com instalação física agendada.
+  aguardar_instalacao?: boolean;
   // Marca cotação como ativa (status_contratacao = 'ativo')
   cotacao_id?: string | null;
   // Metadata livre para o log
