@@ -10,17 +10,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { User, UserMinus } from 'lucide-react';
+import { User } from 'lucide-react';
 import { useProfissionaisEquipe } from '@/hooks/useEquipe';
+import { ProfissionalCombobox } from './ProfissionalCombobox';
 
 interface AtribuirPortadorDialogProps {
   open: boolean;
@@ -131,41 +125,14 @@ export function AtribuirPortadorDialog({
 
           <div className="space-y-2">
             <label className="text-sm font-medium">Profissional Responsável</label>
-            <Select value={portadorId} onValueChange={setPortadorId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o profissional" />
-              </SelectTrigger>
-              <SelectContent className="max-h-[300px]">
-                {rastreador?.portador_id && (
-                  <SelectItem value="remover" className="text-destructive">
-                    <span className="flex items-center gap-2">
-                      <UserMinus className="h-4 w-4" />
-                      Remover atribuição
-                    </span>
-                  </SelectItem>
-                )}
-                {loadingProfissionais ? (
-                  <SelectItem value="_loading" disabled>
-                    Carregando...
-                  </SelectItem>
-                ) : profissionaisAtivos.length === 0 ? (
-                  <SelectItem value="_empty" disabled>
-                    Nenhum profissional disponível
-                  </SelectItem>
-                ) : (
-                  profissionaisAtivos.map((p) => (
-                    <SelectItem 
-                      key={p.id} 
-                      value={p.id}
-                      disabled={p.id === rastreador?.portador_id}
-                    >
-                      {p.nome}
-                      {p.id === rastreador?.portador_id && ' (atual)'}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+            <ProfissionalCombobox
+              profissionais={profissionaisAtivos}
+              value={portadorId}
+              onChange={setPortadorId}
+              loading={loadingProfissionais}
+              currentPortadorId={rastreador?.portador_id}
+              allowRemove
+            />
           </div>
         </div>
 

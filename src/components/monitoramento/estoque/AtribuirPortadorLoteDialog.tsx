@@ -10,17 +10,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Users, Loader2 } from 'lucide-react';
 import { useProfissionaisEquipe } from '@/hooks/useEquipe';
+import { ProfissionalCombobox } from './ProfissionalCombobox';
 
 interface AtribuirPortadorLoteDialogProps {
   open: boolean;
@@ -120,33 +114,12 @@ export function AtribuirPortadorLoteDialog({
 
           <div className="space-y-2">
             <label className="text-sm font-medium">Profissional Responsável</label>
-            <Select value={portadorId} onValueChange={setPortadorId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o profissional" />
-              </SelectTrigger>
-              <SelectContent className="max-h-[300px]">
-                {loadingProfissionais ? (
-                  <SelectItem value="_loading" disabled>
-                    Carregando...
-                  </SelectItem>
-                ) : profissionaisAtivos.length === 0 ? (
-                  <SelectItem value="_empty" disabled>
-                    Nenhum profissional disponível
-                  </SelectItem>
-                ) : (
-                  profissionaisAtivos.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.nome}
-                      {p.rastreadores_atribuidos > 0 && (
-                        <span className="ml-2 text-muted-foreground">
-                          ({p.rastreadores_atribuidos} em posse)
-                        </span>
-                      )}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+            <ProfissionalCombobox
+              profissionais={profissionaisAtivos}
+              value={portadorId}
+              onChange={setPortadorId}
+              loading={loadingProfissionais}
+            />
           </div>
         </div>
 
