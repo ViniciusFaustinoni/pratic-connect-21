@@ -51,6 +51,8 @@ export default function AprovacaoAssociadosMonitoramento() {
 
   const { data: instalacoes, isLoading } = useInstalacoesAguardandoAprovacao();
   const { data: stats, isLoading: statsLoading } = useAprovacaoMonitoramentoStats();
+  const { data: instalacoesPendentes } = useInstalacoesAguardandoAtivacao();
+  const [ativacoesExpandido, setAtivacoesExpandido] = useState(true);
 
   const filtradas = instalacoes?.filter((s: any) => {
     if (!search) return true;
