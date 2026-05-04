@@ -313,9 +313,59 @@ serve(async (req) => {
             .from('solicitacoes_troca_titularidade')
             .update({
               termo_cancelamento_assinado_em: payload.event?.data?.signed || new Date().toISOString(),
+              status: 'aguardando_cadastro',
               updated_at: new Date().toISOString(),
             })
             .eq('id', solTroca.id);
+
+          // Enfileira débitos do associado antigo na fila de Relacionamento (best-effort)
+          try {
+            const { data: solFull } = await supabase
+              .from('solicitacoes_troca_titularidade')
+              .select('id, associado_antigo_id, veiculo_id')
+              .eq('id', solTroca.id)
+              .maybeSingle();
+            if (solFull?.associado_antigo_id) {
+              const { data: assoc } = await supabase
+                .from('associados')
+                .select('id, nome, cpf')
+                .eq('id', solFull.associado_antigo_id)
+                .maybeSingle();
+              const cpfLimpo = (assoc?.cpf || '').replace(/\D/g, '');
+              if (cpfLimpo.length === 11) {
+                const { data: dbResp } = await supabase.functions.invoke('sga-buscar-associado-completo', {
+                  body: { cpf: cpfLimpo },
+                });
+                const veiculos = (dbResp as any)?.veiculos || [];
+                let valorTotal = 0;
+                let qtd = 0;
+                const detalhe: any[] = [];
+                for (const v of veiculos) {
+                  const boletos = v?.boletos_abertos || [];
+                  for (const b of boletos) {
+                    valorTotal += Number(b.valor || 0);
+                    qtd++;
+                    detalhe.push({ placa: v.placa, ...b });
+                  }
+                }
+                if (qtd > 0) {
+                  await supabase.from('relacionamento_debitos_pendentes').insert({
+                    solicitacao_troca_id: solFull.id,
+                    associado_id: solFull.associado_antigo_id,
+                    cpf: cpfLimpo,
+                    nome: assoc?.nome || null,
+                    valor_total: valorTotal,
+                    quantidade_boletos: qtd,
+                    detalhe_boletos: detalhe,
+                    status: 'aberto',
+                  });
+                }
+              }
+            }
+          } catch (qErr) {
+            console.warn('[autentique-webhook] enfileirar débitos troca falhou:', qErr);
+          }
+
           console.log('[autentique-webhook] ✓ Termo de cancelamento de troca assinado para solicitação', solTroca.id);
         }
         return new Response(JSON.stringify({ received: true, troca_titularidade: solTroca.id }), {
