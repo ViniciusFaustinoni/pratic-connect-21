@@ -1181,3 +1181,55 @@ export async function buscarVeiculoPorChassi(
   if (root?.codigo_veiculo) return { found: root, debug };
   return { found: null, debug };
 }
+
+/**
+ * POST /alterar/associado — atualiza dados cadastrais de um associado existente no SGA.
+ * Aceita supabase (recomendado, com retry) ou HinovaSession (legado).
+ */
+export async function alterarAssociadoHinova(
+  supabaseOrSession: any,
+  payload: Record<string, unknown>,
+): Promise<CadastroResultado> {
+  const { ok, status, txt, data } = await hinovaPostAuth(
+    supabaseOrSession, '/alterar/associado', payload, 'alterarAssociado',
+  );
+  return {
+    ok,
+    codigo: extractCodigo(data, 'codigo_associado'),
+    status,
+    raw: data ?? txt.slice(0, 500),
+    mensagem: data?.mensagem ?? null,
+    errors: extractErrors(data),
+  };
+}
+
+/**
+ * POST /cadastrar/historico-atendimento-associado
+ * Registra uma anotação no histórico de atendimento do associado no SGA.
+ *
+ * Doc oficial: campos esperados podem variar por instalação; enviamos os mais comuns
+ * (`codigo_associado`, `descricao`, `codigo_tipo_atendimento`, `codigo_status_atendimento`,
+ * `codigo_departamento`). Campos faltantes são ignorados pelo SGA.
+ */
+export async function cadastrarHistoricoAtendimentoHinova(
+  supabaseOrSession: any,
+  payload: {
+    codigo_associado: number;
+    descricao: string;
+    codigo_tipo_atendimento?: number;
+    codigo_status_atendimento?: number;
+    codigo_departamento?: number;
+  },
+): Promise<{ ok: boolean; status: number; raw: any; mensagem: string | null; errors: string[] }> {
+  const { ok, status, txt, data } = await hinovaPostAuth(
+    supabaseOrSession, '/cadastrar/historico-atendimento-associado', payload, 'cadastrarHistoricoAtendimento',
+  );
+  return {
+    ok,
+    status,
+    raw: data ?? txt.slice(0, 500),
+    mensagem: data?.mensagem ?? null,
+    errors: extractErrors(data),
+  };
+}
+

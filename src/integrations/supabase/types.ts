@@ -28214,6 +28214,11 @@ export type Database = {
           reprovado_em: string | null
           reprovado_por: string | null
           servico_vistoria_id: string | null
+          sga_codigo_associado_novo: number | null
+          sga_codigo_veiculo_novo: number | null
+          sga_erro: string | null
+          sga_sincronizado_em: string | null
+          sga_status: string
           status: Database["public"]["Enums"]["status_troca_titularidade"]
           termo_cancelamento_assinado_em: string | null
           termo_cancelamento_autentique_id: string | null
@@ -28242,6 +28247,11 @@ export type Database = {
           reprovado_em?: string | null
           reprovado_por?: string | null
           servico_vistoria_id?: string | null
+          sga_codigo_associado_novo?: number | null
+          sga_codigo_veiculo_novo?: number | null
+          sga_erro?: string | null
+          sga_sincronizado_em?: string | null
+          sga_status?: string
           status?: Database["public"]["Enums"]["status_troca_titularidade"]
           termo_cancelamento_assinado_em?: string | null
           termo_cancelamento_autentique_id?: string | null
@@ -28270,6 +28280,11 @@ export type Database = {
           reprovado_em?: string | null
           reprovado_por?: string | null
           servico_vistoria_id?: string | null
+          sga_codigo_associado_novo?: number | null
+          sga_codigo_veiculo_novo?: number | null
+          sga_erro?: string | null
+          sga_sincronizado_em?: string | null
+          sga_status?: string
           status?: Database["public"]["Enums"]["status_troca_titularidade"]
           termo_cancelamento_assinado_em?: string | null
           termo_cancelamento_autentique_id?: string | null

@@ -1,89 +1,101 @@
-# Alinhamento Completo do Fluxo de Eventos
 
-## Status
+# Integração SGA na Troca de Titularidade
 
-- ✅ **Fase 1** concluída — carência por cobertura, lembretes de coparticipação, OS pós-pagamento.
-- ✅ **Fase 2** concluída — executor unificado e PDF+IA obrigatório.
-- ✅ **Fase 3** concluída — aprovação complementar de itens e custo por cobertura.
+## Diagnóstico
 
-## Fase 3 — entregue
+Hoje a edge function `efetivar-troca-titularidade` faz toda a operação **somente no banco local** (atualiza `veiculos.associado_id`, cancela contrato antigo, cria novo, cobranças no Asaas). **Nenhuma chamada SGA acontece.** Resultado: no Hinova o veículo continua vinculado ao associado antigo e o novo associado pode nem existir lá. Isso quebra cobranças, sinistros e relatórios oficiais.
 
-1. **Schema**:
-   - `ordens_servico_itens`: `cobertura_id`, `complementar`, `status_aprovacao` (`pendente|aprovado|rejeitado`), `aprovado_por`, `aprovado_em`, `motivo_rejeicao`, `descoberto_em`, `observacao`.
-   - `evento_cotacoes_pecas`: `cobertura_id`.
-   - `contas_pagar`: `cobertura_id`, `sinistro_id`.
-   - Trigger `fn_set_cobertura_from_sinistro` preenche `cobertura_id` automaticamente a partir do tipo do sinistro.
-   - View `vw_custo_evento_por_cobertura` agrega peças/OS, cotações aprovadas e contas a pagar por cobertura.
+As demais operações de troca (`criar-solicitacao-troca-titularidade`, `aprovar-troca-cadastro`, `aprovar-troca-monitoramento`, `enviar-termo-cancelamento-troca`, `reprovar-troca-titularidade`) também não tocam o SGA.
 
-2. **Aprovação complementar**:
-   - `OSItemFormDialog` e `AdicionarItemOSModal` aceitam `complementar` — quando OS está em execução, o item entra como `pendente` e fica destacado em âmbar na tabela.
-   - Hook `useItensComplementaresPendentes` + `useDecidirItemComplementar` expõem fila e ação do analista.
-   - Componente `AprovacaoComplementarPanel` renderizado no detalhe do evento (`SinistroDetalhe`) — botões Aprovar/Rejeitar (com motivo) liberados para Analista de Eventos e Diretor.
+O cliente compartilhado `_shared/hinova-client.ts` já implementa os blocos de baixo nível necessários (auth, retry, log em `hinova_logs`, sessão Bearer). Falta apenas orquestrar.
 
-3. **Custo por cobertura**:
-   - Componente `CustoEventoPorCobertura` renderizado abaixo das coberturas/benefícios utilizados, mostrando peças/OS, cotações, contas a pagar e total por cobertura.
+## Endpoints SGA relevantes para a Troca
 
-## Fase 2 — entregue
+Mapeados a partir da doc oficial (`https://api.hinova.com.br/api/sga/v2/doc/`):
 
-1. **Schema** (`vistorias_evento`):
-   - `executor_tipo` (`regulador` | `tecnico_interno` | `prestador_externo`)
-   - `executor_id` (uuid do user/profissional)
-   - Backfill: registros antigos com `regulador_id` viram `executor_tipo='regulador'`.
+### Autenticação
+- `POST /usuario/autenticar` — já encapsulado em `getHinovaSession()`.
 
-2. **Atribuição unificada no Monitoramento**:
-   - `AtribuirVistoriadorModal` ganhou seletor "Tipo de executor" quando `isVistoriaEvento=true`.
-   - Lista de profissionais filtra por role conforme o tipo (`regulador` / `instalador*|vistoriador*` / `prestador_externo`).
-   - `FilaVistorias.handleSaveAtribuicao` grava em `vistorias_evento` (e mantém `regulador_id` em sync quando o tipo é Regulador), preservando o caminho legado para vistorias tradicionais e serviços de campo.
+### Associado (novo titular)
+- `POST associado/buscar/:cpfOuCodigo/:buscar_por` — verifica se o novo titular já existe no SGA (por CPF). Decide entre cadastrar ou reutilizar `codigo_associado`.
+- `POST /associado/cadastrar` — cria o novo associado quando não existe. Usar dados validados na etapa "Cadastro" da troca (nome, CPF, RG, endereço, contatos, vencimento, plano).
+- `POST /alterar/associado` — atualizar dados do novo titular se ele já existia mas com cadastro desatualizado (telefone, endereço, e-mail).
+- `POST associado/alterar-situacao-para/:codigo_situacao/:codigo_associado` — opcional: garantir que o novo titular fique "Ativo" após a transferência, ou colocar o antigo em situação "Inativo/Cancelado" caso ele não tenha mais nenhum veículo (regra de negócio a confirmar).
+- `POST associado/buscar-por-cpf-senha` / `associado/cartao/listar` — não aplicáveis ao fluxo.
 
-3. **Componente compartilhado**:
-   - `src/components/vistoria-evento/index.ts` reexporta os componentes do regulador como fonte canônica para os 3 perfis.
-   - `ExecutarVistoriaEvento` agora detecta a rota e usa back URL contextual.
-   - Nova rota neutra `/vistoria-evento/:id` para técnicos internos e prestadores externos atribuídos.
-   - `VistoriaEventoOrcamento` removeu botões "+ Peça / + Serviço" — itens só entram via PDF+IA (`OrcamentoPDFImport`), com edição posterior de quantidades/valores. Mensagem explicativa quando lista vazia.
+### Veículo (transferência)
+A doc pública lista apenas grupos Associado/Beneficiário/Atendimento, mas o cliente Hinova já usa rotas oficiais de Veículo:
+- `GET /veiculo/buscar/:placa/placa` e `GET /veiculo/buscar/:chassi/chassi` — localiza `codigo_veiculo` e `codigo_associado` atuais no SGA. Confirma origem antes de cancelar.
+- `POST /veiculo/alterar/situacao` — **passo 1 da troca**: marcar o veículo do associado antigo como "cancelado/inativo" (situação de saída). Mesma rota usada hoje em `cancelar-contrato`.
+- `POST /veiculo/cadastrar` — **passo 2 da troca**: re-cadastrar o veículo vinculado ao novo `codigo_associado`, herdando `codigo_grupo_produto`, valor FIPE e dados técnicos (mesmo payload usado em `sga-hinova-sync`).
+- `POST /veiculo/foto/cadastrar` — re-anexa as fotos da vistoria de troca ao novo registro (lotes ≤ 50).
+- `GET /buscar/situacao-financeira-veiculo/:codigo` — antes de efetivar, confirma que o veículo no SGA está sem débito em aberto (mesma regra da inclusão).
 
-## Fase 3 — pendente
+### Histórico / Atendimento
+- `POST /cadastrar/historico-atendimento-associado` — registra um histórico no SGA tanto no associado antigo ("Veículo XXX transferido para CPF YYY") quanto no novo ("Veículo XXX recebido de CPF ZZZ"), espelhando o que já gravamos em `associados_historico`.
 
-6. **Aprovação complementar**: novo status `aguardando_aprovacao_complementar` em `ordens_servico_itens`, fluxo de aprovação pelo analista, lançamento financeiro adicional após aprovação.
-7. **Custo por cobertura**: adicionar `cobertura_id` em `contas_pagar`, `evento_cotacoes_pecas`, `ordens_servico_itens`; backfill via `TIPO_SINISTRO_TO_COBERTURA`; view `vw_custo_evento_por_cobertura`; nova aba "Custo por cobertura" no detalhe do evento + relatório agregado em `SinistrosDashboard`.
+## Arquitetura proposta
 
-## Fase 4 — Interpretação enriquecida do orçamento (em andamento)
+```text
+efetivar-troca-titularidade  (orquestrador único, transação local + SGA)
+ ├─ 1. Lock + validações locais (igual hoje)
+ ├─ 2. SGA: garantir novo associado
+ │     ├─ associado/buscar (CPF) → existe?
+ │     │     ├─ sim  → /alterar/associado (sync de dados)
+ │     │     └─ não  → /associado/cadastrar
+ │     └─ persistir codigo_associado_novo em associados.codigo_sga
+ ├─ 3. SGA: situação financeira do veículo
+ │     └─ /buscar/situacao-financeira-veiculo  → bloqueia se débito
+ ├─ 4. SGA: cancelar veículo no titular antigo
+ │     └─ /veiculo/alterar/situacao  (situação "cancelado por troca")
+ ├─ 5. SGA: cadastrar veículo no titular novo
+ │     ├─ /veiculo/cadastrar  → grava novo codigo_veiculo
+ │     └─ /veiculo/foto/cadastrar  (fotos da vistoria de troca)
+ ├─ 6. Banco local (transação atual): troca contrato, veiculos.associado_id,
+ │     historico, Asaas — usando os novos códigos SGA
+ ├─ 7. SGA: histórico em ambos os associados
+ │     └─ /cadastrar/historico-atendimento-associado  (×2)
+ └─ 8. Em qualquer falha SGA não-recuperável → enfileira em
+       sga_outbox (já existente) para retry automático e marca a
+       solicitação como "efetivado_local_pendente_sga".
+```
 
-### Fase 4.1 — Extração enriquecida (✅ entregue)
-- `extract-orcamento-pdf` migrado para **Gemini 2.5 Pro** com schema enriquecido:
-  - `header`: placa, chassi, marca/modelo/ano/cor, KM, FIPE, oficina (nome/CNPJ/cidade-UF), nº/data do orçamento, tipo de sinistro.
-  - `impact_areas`: lista de regiões de impacto (Cilia/Audatex) com qtd de peças.
-  - `pecas`: agora com `operacao` (T/R&I/REP/PIN), `area_impacto`, `horas_funilaria/pintura/reparo`, `valor_mao_obra` (MO vinculada à peça pai), `origem` e `flags` (`sem_amparo`, `inclusao_manual`).
-  - `servicos`: somente serviços avulsos (não duplica MO já vinculada à peça).
-  - `orcamento_hash` (SHA-256 do PDF) retornado para idempotência.
-- Conversão base64 em chunks (evita stack overflow em PDFs grandes).
-- Tipos do client (`OrcamentoPDFImport.tsx`) atualizados.
+Nenhum endpoint novo é exposto ao frontend. A UI (`TelaAnaliseTrocaTitularidade`) só passa a exibir, no card de status, se ainda há sincronização SGA pendente — usando dados que já existem em `solicitacoes_troca_titularidade`.
 
-### Próximas etapas
-- 4.2 Migração: colunas `area_impacto`, `horas`, `operacao`, `flags`, `peca_pai_id` em `ordens_servico_itens`; `dados_orcamento` JSONB + `orcamento_hash` UNIQUE em `vistorias_evento`.
-- 4.3 `OrcamentoReviewModal.tsx` — confronto header PDF × sistema, revisão por área de impacto.
-- 4.4 Persistência em `VistoriaEventoOrcamento.tsx` usando `peca_pai_id` para vincular MO à peça.
-- 4.5 Atualizar `vw_custo_evento_por_cobertura` para somar MO vinculada na cobertura da peça pai.
+## Mudanças por arquivo
 
-### Fase 4.2 — Schema enriquecido (✅ entregue)
-- `ordens_servico_itens`: `area_impacto`, `operacao` (T/R&I/REP/PIN), `horas`, `flags[]`, `peca_pai_id` (FK auto-relacional). Índices em `peca_pai_id` e `area_impacto`.
-- `vistorias_evento`: `dados_orcamento` (JSONB com header/impact_areas) e `orcamento_hash` + UNIQUE `(id, orcamento_hash)`.
+**Edge functions**
+- `supabase/functions/efetivar-troca-titularidade/index.ts` — adicionar etapas 2-5 e 7 acima, com tratamento de erro e fallback para `sga_outbox`. Mover a transação local para depois da confirmação dos passos SGA críticos (passos 4 e 5).
+- `supabase/functions/_shared/hinova-client.ts` — adicionar dois helpers que ainda faltam:
+  - `buscarAssociadoPorCpf(cpf)` (POST `associado/buscar/:cpf/cpf`).
+  - `cadastrarHistoricoAssociado({ codigo_associado, descricao, ... })` (POST `/cadastrar/historico-atendimento-associado`).
+  - `cadastrarAssociado(payload)` e `alterarAssociado(payload)` se ainda não existirem.
+- `supabase/functions/_shared/hinova-payloads.ts` — tipos para o payload de cadastro/alteração de associado e de histórico.
+- `supabase/functions/criar-solicitacao-troca-titularidade/index.ts` — opcional: pré-checar `associado/buscar` para já alertar se o CPF do novo titular já tem cadastro/SGA divergente.
 
-### Fase 4.4 — Persistência vinculada (✅ entregue)
-- `VistoriaEventoOrcamento`:
-  - Mantém `dados_orcamento` bruto (header, impact_areas, hash) e envia ao salvar.
-  - Converte cada peça do PDF em 1 linha `peca` + N linhas `servico` (Funilaria/Pintura/Reparo) com `peca_pai_idx` e `horas`, distribuindo `valor_mao_obra` proporcionalmente às horas.
-  - `ItemParecer` ganhou `operacao`, `area_impacto`, `horas`, `flags`, `peca_pai_idx`.
-- `salvar-vistoria-regulador`: grava `dados_orcamento` e `orcamento_hash` na vistoria.
-- `gerar-os-cotacao-aprovada`:
-  - Insere peças primeiro, captura ids e resolve `peca_pai_id` das linhas de MO/serviço via `peca_pai_idx` → descrição → id.
-  - Propaga `operacao`, `area_impacto`, `horas`, `flags` em todos os itens.
-  - Peças herdam `operacao/area_impacto/flags` da peça correspondente do orçamento original.
+**Banco**
+- Migration: adicionar colunas em `solicitacoes_troca_titularidade`:
+  - `sga_codigo_associado_novo bigint`
+  - `sga_codigo_veiculo_novo bigint`
+  - `sga_status text default 'pendente'` (`pendente | sincronizado | falha`)
+  - `sga_erro text`, `sga_sincronizado_em timestamptz`.
+- Reaproveitar tabela `sga_outbox` existente para enfileirar retries.
 
-### Fase 4.5 — Custo por cobertura com herança de MO (✅ entregue)
-- `vw_custo_evento_por_cobertura` agora resolve `cobertura_id` de itens de MO/serviço via `peca_pai_id` quando o item filho não tem cobertura própria, somando funilaria/pintura/reparo na mesma cobertura da peça pai.
+**Frontend (cosmético)**
+- `src/components/troca-titularidade/TelaAnaliseTrocaTitularidade.tsx` — exibir badge "SGA: sincronizado / pendente / falha" usando os novos campos.
+- `src/components/troca-titularidade/TimelineAprovacao.tsx` — adicionar etapa "Sincronização SGA" depois de "Efetivada".
 
-### Fase 4.3 — Modal de revisão (✅ entregue)
-- Novo `OrcamentoReviewModal` exibido entre o upload e a importação dos itens. Mostra Placa/Chassi/Marca/Modelo/Ano do PDF × Sistema com badges de confere/divergente, dados de oficina, áreas de impacto e resumo. Só aplica os itens em `VistoriaEventoOrcamento` após confirmação.
+## Casos de borda tratados
 
-### Fase 4 — concluída
-Todas as etapas (4.1 extração enriquecida, 4.2 schema, 4.3 modal de revisão, 4.4 persistência vinculada, 4.5 view de custo) foram entregues.
+- **Novo titular já é associado SGA com débitos** → bloquear efetivação e exibir mensagem (mesma UX da inclusão de veículo).
+- **Veículo não encontrado no SGA** → seguir só com cadastro novo (passo 5) e pular o passo 4.
+- **Erro transitório SGA** → grava `sga_status='pendente'`, enfileira `sga_outbox`, retorna sucesso parcial; cron `cron-sga-retry` finaliza.
+- **Reentrada (idempotência)** → antes de cadastrar veículo no novo titular, fazer `GET /veiculo/buscar/:chassi/chassi`; se já vinculado ao novo `codigo_associado`, pular.
+
+## Pontos a confirmar com você
+
+1. Quando o associado **antigo** fica sem nenhum outro veículo após a troca, devemos alterar a situação dele no SGA para "Inativo"? (hoje o sistema local não inativa.)
+2. O histórico de atendimento no SGA deve ser criado em **ambos** os associados ou só no antigo?
+3. Há um código de "situação de cancelamento por troca" específico no SGA do cliente, ou usamos o mesmo código de cancelamento padrão hoje empregado?
+
+Após sua aprovação implemento a migration, os helpers no `hinova-client`, a reescrita do `efetivar-troca-titularidade` e o badge de status na UI.
