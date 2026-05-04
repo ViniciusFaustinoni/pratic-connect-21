@@ -1,28 +1,57 @@
-## Causa raiz
+## Diagnóstico — THAYSSA FALCON (placa TDC6E30)
 
-O contrato `b64c7ea7…` (veículo KWM9443 / FRANCISCO CARDINELE) está com `vendedor_id = 37beadcf…` (perfil "Teste"), que **não tem `codigo_sga_voluntario`**. O job `sga-hinova-sync` falha sempre na etapa `resolver_vendedor` com `"Vendedor Teste não possui codigo_sga_voluntario"`, deixando o veículo em `status_sga = erro_sincronizacao` e `sincronizado_hinova = false`.
+Comparando o que o associado preencheu (`cotacoes.vistoria_*`) com o que existe nas tabelas operacionais:
 
-O consultor correto é **BRUNO CARVALHO** (`profiles.id = 4d2c7ddd-9781-484b-8e0a-db3c9271a58c`, `codigo_sga_voluntario = 177`).
+| Onde | Endereço | Data | Período |
+|------|----------|------|---------|
+| **Cotação (escolha real do cliente)** | ESTRADA INTENDENTE MAGALHÃES, 177 — Campinho | 05/05 | tarde |
+| `instalacoes` (ativa, id `b18b88b7…`) | R INACIA GERTRUDES, 310 — Parque Anchieta | 04/05 | manhã |
+| `servicos` (agendada, id `27db6b9f…`) | R INACIA GERTRUDES, 310 | **09/05** | manhã |
+| `instalacoes` cancelada anterior (`1ba3d371…`) | R INACIA GERTRUDES, 310 | 04/05 | manhã |
 
-## Plano de correção (sem gambiarra)
+### Causas raiz
 
-1. **Reatribuir vendedor no contrato** (fonte canônica usada pelo `sga-hinova-sync`):
-   - `UPDATE contratos SET vendedor_id = '4d2c7ddd-9781-484b-8e0a-db3c9271a58c' WHERE id = 'b64c7ea7-b62e-4a31-ab1b-8c31b381d28b'`
-   - Também atualizar `leads` e `cotacoes` vinculadas ao mesmo associado/veículo, se apontarem para o vendedor "Teste", para manter consistência de hierarquia/comissão.
+1. **Snapshot estagnado em `instalacoes`** — `criar-instalacao-pos-pagamento` (e `aprovar-proposta`) materializam endereço/data a partir de `cotacoes.vistoria_*` **uma única vez**. Quando o associado depois edita o endereço/data de instalação na cotação, o registro em `instalacoes` (e o `servicos` derivado) **não é re-sincronizado**. Por isso o cadastro/monitoramento ainda exibe o endereço residencial antigo.
 
-2. **Limpar estado de erro do veículo** para liberar nova tentativa:
-   - `UPDATE veiculos SET status_sga = 'pendente', sincronizado_hinova = false WHERE id = '4f42daa9-…'`
+2. **`servicos` com data divergente da `instalacao`** — a instalação ativa tem `data_agendada=04/05`, mas o `servicos` espelhado tem `data_agendada=09/05`. Houve reagendamento parcial: alguém moveu o serviço sem atualizar a instalação (ou vice-versa). O resultado é a tela de Monitoramento puxar 09/05 enquanto Cadastro mostra 04/05 — exatamente o "erro que nunca pode acontecer" relatado.
 
-3. **Disparar a sincronização oficial** via edge function `sga-hinova-sync` com `veiculo_id` + `associado_id` (mesmo caminho do botão "Ativar SGA" — usa lock, CAS e logs em `sga_sync_logs`). Não escrever `codigo_hinova` manualmente.
+3. **UI de Propostas Pendentes e Aprovação de Instalação** continuam lendo o endereço residencial (`associados.endereco_*`) sem mostrar o endereço de instalação efetivo. Apesar de o último ajuste ter incluído o endereço de instalação na maioria das telas, ele puxa do snapshot da `instalacoes` — que está desatualizado pelo motivo (1).
 
-4. **Validar resultado**:
-   - Confirmar `associados.codigo_hinova`, `veiculos.codigo_hinova`, `sincronizado_hinova = true`.
-   - Conferir `sga_sync_logs` (último registro = `success`).
-   - Confirmar que comissões futuras desse contrato passam pela grade do Bruno (memória: "Grade do vendedor prevalece").
+## Plano de correção
 
-## Observações
+### A. Backend — manter `instalacoes` e `servicos` sempre fiéis à cotação
 
-- Não altero histórico de comissões já lançadas — se houver lançamento atrelado ao "Teste", trato em passo separado depois que confirmar com você.
-- Tudo via edge function/migrations padrão — nenhum bypass de trigger/lock.
+1. **Trigger `trg_sync_instalacao_from_cotacao`** em `cotacoes` (AFTER UPDATE OF `vistoria_*` / `vistoria_completa_*`):
+   - Se existe `instalacoes` com `status NOT IN ('concluida','cancelada')` para a mesma `cotacao_id`, atualiza endereço/data/período/responsável a partir dos campos canônicos da cotação (mesma lógica do `criar-instalacao-pos-pagamento` por `tipo_vistoria`).
+   - Em cascata, atualiza o `servicos` ativo (`status IN ('agendada','aguardando_atribuicao','em_rota')`) vinculado via `instalacao_origem_id`, mantendo paridade endereço+data+período.
+   - Loga em `instalacao_eventos` a mudança (origem = "edicao_cotacao").
 
-Confirma para eu executar?
+2. **Edge function `sync-instalacao-from-cotacao`** invocável manualmente pelo Cadastro/Monitoramento como botão "Sincronizar com cotação", para casos como o atual e como rede de segurança após backfill.
+
+3. **Garantir `instalacao_origem_id` no `servicos`** — `aprovar-proposta` e demais geradores devem sempre setar esse vínculo (hoje há `servicos` sem ele, o que quebra a sincronização).
+
+### B. Backfill imediato (este caso e demais inconsistentes)
+
+1. **Cancelar instalação `b18b88b7…` e o serviço `27db6b9f…`** (ambos com endereço/data errados) via fluxo padrão (`reagendar`/`cancelar` com motivo "correção endereço/data divergente da cotação").
+2. **Recriar instalação** chamando `criar-instalacao-pos-pagamento` com `skipPaymentCheck=true` — agora pegará ESTRADA INTENDENTE MAGALHÃES, 177 / 05/05 tarde da cotação atual.
+3. **Query de auditoria** para listar todos os contratos onde `instalacoes` ativa diverge dos campos `vistoria_*` da cotação e de `servicos` ativo — gerar relatório para o Cadastro decidir caso a caso.
+
+### C. Frontend — exibir endereço e data da instalação em todos os pontos
+
+1. **Propostas Pendentes (Cadastro)** — card já mostra "📍 Instalação", mas deve sempre vir da `instalacoes` ativa (não do snapshot da cotação) e exibir um aviso visual quando ela divergir do endereço residencial.
+2. **Aba Monitoramento → Aprovação de Associados** — exibir lado-a-lado **Endereço residencial** e **Endereço de instalação**, com data + período da instalação ativa (não do `servicos`, que pode estar dessincronizado até o backfill).
+3. **Detalhe da instalação no Monitoramento** — mostrar badge "⚠ Divergência" quando `instalacoes.data_agendada ≠ servicos.data_agendada` ou endereços diferirem; oferece o botão "Sincronizar com cotação" (B.2).
+
+### D. Validação
+
+- Após implantação, reabrir a tela do associado THAYSSA: deve aparecer Estrada Intendente Magalhães, 177 — Campinho, 05/05 tarde tanto em Cadastro quanto em Monitoramento; sem badges de divergência.
+- Editar manualmente o endereço de instalação numa cotação de teste e confirmar que `instalacoes` + `servicos` atualizam sozinhos.
+
+## Observações técnicas
+
+- Não toco em `cotacoes.vistoria_*` — é a fonte de verdade.
+- A trigger respeita o estado terminal: instalações já concluídas/canceladas nunca são reescritas.
+- Não há migração destrutiva — só nova trigger + nova edge function + UI.
+- Memória relevante: "Dedupe agendamentos" (uma origem = um agendamento ativo) já cobre o fechamento do `servicos` antigo antes de criar o novo.
+
+Confirma para eu implementar A → C e rodar o backfill da THAYSSA?
