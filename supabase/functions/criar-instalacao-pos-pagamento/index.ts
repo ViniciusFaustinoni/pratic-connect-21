@@ -774,6 +774,50 @@ O técnico mais próximo será designado em breve.
       }
     }
 
+    // 9. CHAIN ATIVAÇÃO — para inclusão/adesão isenta com instalação criada,
+    // dispara ativar-associado (single-source-activation). Idempotente: edge
+    // valida lock + CAS internamente.
+    if (novaInstalacaoId && contrato.associado_id) {
+      try {
+        const { data: cotEntrada } = await supabase
+          .from('cotacoes')
+          .select('tipo_entrada, dados_extras, valor_adesao')
+          .eq('id', cotacaoId)
+          .maybeSingle();
+        const tipoEntradaCot = (cotEntrada as any)?.tipo_entrada
+          || ((cotEntrada as any)?.dados_extras?.tipo_entrada)
+          || 'adesao';
+        const valorAdesaoCot = Number((cotEntrada as any)?.valor_adesao || 0);
+        const isInclusao = tipoEntradaCot === 'inclusao';
+        const isAdesaoIsenta = valorAdesaoCot <= 0;
+
+        if (isInclusao || isAdesaoIsenta) {
+          console.log(`[CriarInstalacaoPosPagamento] Chain ativar-associado (tipo=${tipoEntradaCot}, isento=${isAdesaoIsenta})`);
+          const ativResp = await fetch(`${supabaseUrl}/functions/v1/ativar-associado`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${serviceRoleKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              associado_id: contrato.associado_id,
+              contrato_id: contrato.id,
+              cotacao_id: cotacaoId,
+              motivo: isInclusao ? 'inclusao_pos_instalacao' : 'adesao_isenta_pos_instalacao',
+            }),
+          });
+          if (!ativResp.ok) {
+            const txt = await ativResp.text();
+            console.warn(`[CriarInstalacaoPosPagamento] ativar-associado retornou ${ativResp.status}: ${txt}`);
+          } else {
+            console.log('[CriarInstalacaoPosPagamento] ✓ ativar-associado concluído');
+          }
+        }
+      } catch (ativErr) {
+        console.warn('[CriarInstalacaoPosPagamento] Chain ativar-associado falhou (não bloqueante):', ativErr);
+      }
+    }
+
     return new Response(JSON.stringify({
       success: true,
       instalacaoId: novaInstalacaoId,
