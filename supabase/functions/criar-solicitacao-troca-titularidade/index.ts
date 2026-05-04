@@ -68,6 +68,17 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (veiculoErr || !veiculo) throw new Error('Veículo não encontrado');
 
+    // Guard: bloqueia se já existe outra troca em andamento para a mesma placa
+    if (veiculo.placa) {
+      const { data: blocked } = await admin.rpc('placa_bloqueada_por_troca', { p_placa: veiculo.placa });
+      if (blocked === true) {
+        return new Response(
+          JSON.stringify({ error: 'Já existe uma solicitação de troca de titularidade em andamento para esta placa.' }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+    }
+
     const { data: associadoAntigo } = await admin
       .from('associados')
       .select('id, nome, cidade, estado')
