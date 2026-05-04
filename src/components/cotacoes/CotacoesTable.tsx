@@ -466,9 +466,13 @@ export function CotacoesTable({
                           {etapaInfo.label}
                         </div>
                       )}
+                      <TrocaTitularidadeBadge
+                        cotacaoId={cotacao.id}
+                        tipoEntrada={(cotacao.dados_extras as any)?.tipo_entrada ?? null}
+                      />
                     </div>
                   </TableCell>
-                  
+
                   {/* Cliente */}
                   <TableCell className="py-3">
                     <div className="flex items-center gap-3">
