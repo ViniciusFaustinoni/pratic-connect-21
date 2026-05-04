@@ -35,6 +35,14 @@ interface VeiculoSnapshot {
   chassi: string | null;
   renavam: string | null;
 }
+
+function isZeroKmVeiculo(placa: string | null, renavam: string | null): boolean {
+  const p = (placa || '').toUpperCase().trim();
+  const r = (renavam || '').replace(/\D/g, '');
+  if (!p || p.startsWith('0KM') || p.startsWith('SEM_PLACA') || p.startsWith('SEMPLACA') || p === 'NULL') return true;
+  if (!r || /^0+$/.test(r)) return true;
+  return false;
+}
 interface AssociadoSnapshot {
   cpf: string | null;
   email: string | null;
