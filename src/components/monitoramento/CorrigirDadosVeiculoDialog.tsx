@@ -35,6 +35,14 @@ interface VeiculoSnapshot {
   chassi: string | null;
   renavam: string | null;
 }
+
+function isZeroKmVeiculo(placa: string | null, renavam: string | null): boolean {
+  const p = (placa || '').toUpperCase().trim();
+  const r = (renavam || '').replace(/\D/g, '');
+  if (!p || p.startsWith('0KM') || p.startsWith('SEM_PLACA') || p.startsWith('SEMPLACA') || p === 'NULL') return true;
+  if (!r || /^0+$/.test(r)) return true;
+  return false;
+}
 interface AssociadoSnapshot {
   cpf: string | null;
   email: string | null;
@@ -87,10 +95,12 @@ export function CorrigirDadosVeiculoDialog({
     return () => { active = false; };
   }, [open, veiculoId, associadoId]);
 
+  const isZeroKm = isZeroKmVeiculo(veic.placa, veic.renavam);
   const chassiHelp = chassiHelperText(veic.chassi || '');
   const chassiOk = !camposVeic.includes('chassi') || isValidChassi(veic.chassi || '');
-  const placaOk = !camposVeic.includes('placa') || (veic.placa || '').replace(/[^A-Z0-9]/gi, '').length >= 7;
-  const renavamOk = !camposVeic.includes('renavam') ||
+  // Para 0KM, placa e renavam são opcionais (regra alinhada com fn_validar_campos_ativacao)
+  const placaOk = isZeroKm || !camposVeic.includes('placa') || (veic.placa || '').replace(/[^A-Z0-9]/gi, '').length >= 7;
+  const renavamOk = isZeroKm || !camposVeic.includes('renavam') ||
     (veic.renavam || '').replace(/\D/g, '').length === 11;
   const cpfOk = !camposAssoc.includes('cpf') || (assoc.cpf || '').replace(/\D/g, '').length === 11;
   const emailOk = !camposAssoc.includes('email') || /\S+@\S+\.\S+/.test(assoc.email || '');
@@ -153,6 +163,14 @@ export function CorrigirDadosVeiculoDialog({
           <div className="py-8 text-center text-sm text-muted-foreground">Carregando...</div>
         ) : (
           <div className="space-y-4">
+            {isZeroKm && (
+              <Alert className="border-emerald-500/40 bg-emerald-500/10">
+                <AlertTitle className="text-emerald-700 dark:text-emerald-300">Veículo 0KM</AlertTitle>
+                <AlertDescription className="text-xs text-emerald-700/90 dark:text-emerald-200/90">
+                  Placa e Renavam serão atualizados após o emplacamento. Para ativar a Proteção 360 agora, basta o chassi (17 caracteres) estar correto.
+                </AlertDescription>
+              </Alert>
+            )}
             <Alert>
               <AlertTriangle className="h-4 w-4" />
               <AlertTitle>Campos sinalizados</AlertTitle>
