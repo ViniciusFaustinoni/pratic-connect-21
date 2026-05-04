@@ -5,6 +5,7 @@ import { Calendar, Clock, MapPin } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
+import { normalizePeriodo, PERIODO_LABEL, PERIODO_FAIXA } from '@/lib/periodo-utils';
 
 interface AgendamentoBaseResumoProps {
   cotacaoId: string;
