@@ -42,7 +42,17 @@ serve(async (req) => {
         erro_ultimo: 'Reaberto pela reconciliação automática SGA: falha recuperável',
       })
       .eq('status', 'falha_permanente')
-      .or('erro_ultimo.ilike.%Placa duplicada%,erro_ultimo.ilike.%HTML%,erro_ultimo.ilike.%502%,erro_ultimo.ilike.%rate%,erro_ultimo.ilike.%token%,erro_ultimo.ilike.%autorizado%');
+      .or([
+        'erro_ultimo.ilike.%Placa duplicada%',
+        'erro_ultimo.ilike.%HTML%',
+        'erro_ultimo.ilike.%502%',
+        'erro_ultimo.ilike.%rate%',
+        'erro_ultimo.ilike.%token%',
+        'erro_ultimo.ilike.%autorizado%',
+        'erro_ultimo.ilike.%autentica%',
+        'erro_ultimo.ilike.%restri%hor%',
+        'erro_ultimo.ilike.%401%',
+      ].join(','));
 
     const { data: candidatosBase, error } = await supabase
       .from('veiculos')
