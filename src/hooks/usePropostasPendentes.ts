@@ -81,6 +81,12 @@ export interface InstalacaoAgendadaInfo {
   data: string;
   horario: string;
   permite_encaixe: boolean;
+  // Endereço de INSTALAÇÃO (vindo da tabela `instalacoes`, não do snapshot da vistoria)
+  endereco_logradouro?: string | null;
+  endereco_numero?: string | null;
+  endereco_bairro?: string | null;
+  endereco_cidade?: string | null;
+  endereco_uf?: string | null;
 }
 
 // Informações da vistoria na base
