@@ -1,0 +1,1 @@
+UPDATE public.whatsapp_meta_templates SET status='DRAFT' WHERE nome='suspensao_cobertura_nao_instalacao_v1' AND status='RASCUNHO';
