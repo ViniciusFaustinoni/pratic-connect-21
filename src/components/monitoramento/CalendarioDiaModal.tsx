@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { STATUS_INSTALACAO_COLORS } from '@/types/monitoramento';
 import { useDatasBloqueadasSet } from '@/hooks/useDatasBloqueadas';
 import { AlterarEnderecoTipoDialog } from '@/components/mapa/AlterarEnderecoTipoDialog';
+import { normalizePeriodo, PERIODO_LABEL } from '@/lib/periodo-utils';
 
 interface CalendarioDiaModalProps {
   open: boolean;
