@@ -529,7 +529,7 @@ serve(async (req) => {
       let codigoAssociadoNovo: number | null = null;
       try {
         const buscaNovo = await buscarAssociadoComVeiculosPorCpf(
-          await (await import('../_shared/hinova-client.ts')).getHinovaSession(supabase),
+          await getHinovaSession(supabase),
           cpfLimpo,
         );
         codigoAssociadoNovo = buscaNovo.codigo_associado;
