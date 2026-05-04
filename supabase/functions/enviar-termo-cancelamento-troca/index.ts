@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
 
     const { data: associadoAntigo } = await admin
       .from('associados')
-      .select('id, nome, cpf, email')
+      .select('id, nome, cpf, email, telefone')
       .eq('id', solicitacao.associado_antigo_id)
       .maybeSingle();
     if (!associadoAntigo?.email) throw new Error('Associado antigo sem email cadastrado');
