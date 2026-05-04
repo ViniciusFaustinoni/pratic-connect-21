@@ -294,18 +294,38 @@ Deno.serve(async (req) => {
     }
 
     // ----- 8) Atualizar veículo (cobertura + status) -----
+    // Regra: veículo só vira 'ativo' imediatamente se houver cobertura imediata
+    // (Roubo/Furto ou Total). Caso contrário (ex: inclusão só com assistência+rastreador
+    // dependente de instalação física), permanece 'instalacao_pendente' e é promovido
+    // para 'ativo' pelo trigger fn_reativar_cobertura_pos_instalacao quando a
+    // instalação concluir.
     if (veiculo_id) {
+      const temCoberturaImediata = ativar_cobertura_total || ativar_cobertura_roubo_furto;
+      const promoverStatus = temCoberturaImediata && !aguardar_instalacao;
+
       const veiculoUpdate: Record<string, unknown> = {
-        status: 'ativo',
         updated_at: agora,
       };
+      if (promoverStatus) {
+        veiculoUpdate.status = 'ativo';
+      } else {
+        // Garante que veículo novo aguarde instalação (não força se já estiver ativo
+        // por fluxo anterior — usa CAS via .neq mais abaixo).
+        veiculoUpdate.status = 'instalacao_pendente';
+      }
       if (ativar_cobertura_total) veiculoUpdate.cobertura_total = true;
       if (ativar_cobertura_roubo_furto) veiculoUpdate.cobertura_roubo_furto = true;
 
-      const { error: veicErr } = await supabase
+      let veicQuery = supabase
         .from('veiculos')
         .update(veiculoUpdate)
         .eq('id', veiculo_id);
+      // Se NÃO vamos promover para ativo, só rebaixa para instalacao_pendente
+      // se o veículo ainda NÃO estiver ativo (evita downgrade indevido).
+      if (!promoverStatus) {
+        veicQuery = veicQuery.neq('status', 'ativo');
+      }
+      const { error: veicErr } = await veicQuery;
       if (veicErr) {
         console.warn('[ativar-associado] update veiculo erro (não bloqueante):', veicErr.message);
       }
