@@ -62,7 +62,7 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const { contrato_id, aprovado_por, veiculo_renavam, veiculo_chassi } = await req.json();
+    const { contrato_id, aprovado_por, veiculo_renavam, veiculo_chassi, veiculo_numero_motor } = await req.json();
 
     if (!contrato_id || !aprovado_por) {
       throw new Error('contrato_id e aprovado_por são obrigatórios');
