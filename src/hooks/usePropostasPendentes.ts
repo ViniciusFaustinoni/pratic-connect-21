@@ -918,6 +918,30 @@ export function useProposta(contratoId: string | undefined) {
         }
       }
 
+      // Sobreescrever com dados REAIS da instalação ativa
+      {
+        const { data: instAtiva } = await supabase
+          .from('instalacoes')
+          .select('data_agendada, periodo, hora_agendada, permite_encaixe, logradouro, numero, bairro, cidade, uf, status, created_at')
+          .eq('contrato_id', contrato.id)
+          .not('status', 'in', '(cancelada,concluida)')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (instAtiva) {
+          instalacaoAgendada = {
+            data: instAtiva.data_agendada || instalacaoAgendada?.data || '',
+            horario: instAtiva.periodo || instAtiva.hora_agendada || instalacaoAgendada?.horario || '---',
+            permite_encaixe: instAtiva.permite_encaixe ?? instalacaoAgendada?.permite_encaixe ?? false,
+            endereco_logradouro: instAtiva.logradouro,
+            endereco_numero: instAtiva.numero,
+            endereco_bairro: instAtiva.bairro,
+            endereco_cidade: instAtiva.cidade,
+            endereco_uf: instAtiva.uf,
+          };
+        }
+      }
+
       // Verificar se há documentos pendentes
       let temDocumentoPendente = false;
       if (contrato.associado_id) {
