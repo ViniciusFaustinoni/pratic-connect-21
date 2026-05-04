@@ -376,7 +376,7 @@ serve(async (req) => {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${serviceRoleKey}`,
+              'Authorization': `Bearer ${supabaseServiceKey}`,
             },
             body: JSON.stringify({ cpf: cpfLimpo }),
           });
