@@ -174,9 +174,13 @@ export function buildVeiculoPayload(
   valor_fipe: number,
   ctx: VeiculoCtx,
 ): Record<string, unknown> {
+  const placaSga = placaParaSga(veiculo.placa);
   const payload: Record<string, unknown> = {
     codigo_associado: ctx.codigo_associado,
-    placa: placaParaSga(veiculo.placa),
+    // Hinova doc: "Caso o veículo seja ZERO KM não necessário enviar ou enviar vazio".
+    // Enviar string vazia faz a API responder "Já existe um veículo com a placa cadastrado".
+    // Por isso OMITIMOS a chave inteira quando 0KM/placeholder.
+    ...(placaSga ? { placa: placaSga } : {}),
     chassi: cleanAlphaNum(veiculo.chassi),
     renavam: cleanDigits(veiculo.renavam),
     ano_fabricacao: veiculo.ano_fabricacao || veiculo.ano_modelo,
