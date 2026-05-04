@@ -77,6 +77,7 @@ Deno.serve(async (req) => {
       allowed_from = ['assinado', 'aguardando_instalacao', 'pendente'],
       ativar_cobertura_total = false,
       ativar_cobertura_roubo_furto = false,
+      aguardar_instalacao = false,
       cotacao_id = null,
       metadata = {},
     } = body || ({} as AtivarBody);
