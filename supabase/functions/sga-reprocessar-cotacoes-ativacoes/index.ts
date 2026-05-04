@@ -109,7 +109,8 @@ serve(async (req) => {
         const exigeSga = v.cobertura_roubo_furto === true || v.cobertura_total === true || instalacaoConcluida;
         const semVeiculoSga = !v.codigo_hinova || v.sincronizado_hinova !== true;
         const travado = ['erro_sincronizacao', 'sincronizando'].includes(String(v.status_sga || ''));
-        const destino = v.cobertura_total === true ? 'ativo' : 'pendente';
+        // Destino: instalação concluída OU cobertura_total → ativo; só R/F sem instalação → pendente
+        const destino = (v.cobertura_total === true || instalacaoConcluida) ? 'ativo' : 'pendente';
         return { ...v, instalacaoConcluida, exigeSga, semVeiculoSga, travado, destino };
       })
       .filter((v: any) => v.exigeSga && (v.semVeiculoSga || v.travado || body.force_resync_media === true))
