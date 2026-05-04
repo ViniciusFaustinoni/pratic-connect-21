@@ -14,7 +14,8 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { User } from 'lucide-react';
 import { useProfissionaisEquipe } from '@/hooks/useEquipe';
-import { ProfissionalCombobox } from './ProfissionalCombobox';
+import { ProfissionalPicker } from './ProfissionalPicker';
+import { Badge } from '@/components/ui/badge';
 
 interface AtribuirPortadorDialogProps {
   open: boolean;
