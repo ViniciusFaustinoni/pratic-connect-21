@@ -814,7 +814,7 @@ serve(async (req) => {
             ?? 10, // fallback final: "Não especificado" (cor não bloqueia envio)
           data_contrato_iso: associado.created_at,
         };
-        const payloadV = buildVeiculoPayload(veiculo, codigoFipeLimpo, Number(veiculo.valor_fipe) || 0, ctxV);
+        const payloadV = buildVeiculoPayload(veiculo, codigoFipeLimpo, Number(veiculo.valor_fipe) || valorFipeAuto || 0, ctxV);
 
         try {
           const res = await cadastrarVeiculoHinova(supabase, payloadV);
