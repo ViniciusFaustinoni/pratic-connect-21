@@ -135,19 +135,22 @@ Deno.serve(async (req) => {
       )
     }
 
-    // ── 4.5) Se dispensou instalação, marcar a instalação como concluída
-    // (fecha o ciclo no módulo de instalações; trigger de cascata cuida de
-    // serviços/agendamentos órfãos pelo padrão de dedupe do projeto).
-    if (dispensaInstalacao && link.instalacao_id) {
+    // ── 4.5) Marcar a vistoria como em_analise (paridade total com fluxo ≥30k/9k).
+    // O Monitoramento aprova manualmente via aprovar-vistoria, que dispara
+    // ativar-associado e fecha a instalação em cascata.
+    if (vistoriaId) {
       await supabase
-        .from('instalacoes')
-        .update({ status: 'concluida', data_conclusao: agora })
-        .eq('id', link.instalacao_id)
-        .neq('status', 'concluida')
+        .from('vistorias')
+        .update({ status: 'em_analise', updated_at: agora })
+        .eq('id', vistoriaId)
+        .neq('status', 'aprovada')
+        .neq('status', 'reprovada')
     }
 
-    // ── 5) Se a outra etapa já foi concluída (ou foi auto-concluída acima), aplicar conclusão final
-    if (dispensaInstalacao || link.instalacao_etapa_status === 'concluida') {
+    // ── 5) Quando há rastreador (≥30k/9k) e a etapa de instalação física já foi
+    // concluída pelo técnico, dispara aplicar-conclusao-vistoria como antes.
+    // Para dispensa_rastreador, NÃO disparamos — aprovação é manual no Monitoramento.
+    if (!dispensaInstalacao && link.instalacao_etapa_status === 'concluida') {
       try {
         await supabase.functions.invoke('aplicar-conclusao-vistoria', {
           body: { vistoria_link_id: link.id },
