@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Search, Car, User, Smartphone, Loader2, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
