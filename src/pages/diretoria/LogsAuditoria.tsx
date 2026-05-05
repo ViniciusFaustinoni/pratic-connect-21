@@ -66,41 +66,69 @@ const formatJSON = (data: unknown) => {
   }
 };
 
+type LogFilters = {
+  acao: string;
+  modulo: string;
+  tabela: string;
+  dataInicio: string;
+  dataFim: string;
+};
+
+const DEFAULT_FILTERS: LogFilters = {
+  acao: '',
+  modulo: '',
+  tabela: '',
+  dataInicio: '',
+  dataFim: '',
+};
+
+import { useServerList } from '@/hooks/useServerList';
+import { ListToolbar } from '@/components/lists/ListToolbar';
+import { ServerPagination } from '@/components/lists/ServerPagination';
+
 export default function LogsAuditoria() {
-  const [filters, setFilters] = useState({
-    acao: '',
-    modulo: '',
-    tabela: '',
-    busca: '',
-    dataInicio: '',
-    dataFim: '',
-  });
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
-  const { data: logs, isLoading } = useQuery({
-    queryKey: ['logs-auditoria', filters],
-    queryFn: async () => {
+  const list = useServerList<any, LogFilters>({
+    key: 'logs',
+    defaultPageSize: 50,
+    defaultFilters: DEFAULT_FILTERS,
+    fetcher: async ({ search, page, pageSize, filters }) => {
       let query = (supabase as any)
         .from('logs_auditoria')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(200);
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false });
 
       if (filters.acao) query = query.eq('acao', filters.acao);
       if (filters.modulo) query = query.eq('modulo', filters.modulo);
       if (filters.tabela) query = query.eq('tabela', filters.tabela);
       if (filters.dataInicio) query = query.gte('created_at', filters.dataInicio);
       if (filters.dataFim) query = query.lte('created_at', `${filters.dataFim}T23:59:59`);
-      if (filters.busca.trim()) {
-        const term = filters.busca.trim().replace(/[%_]/g, '');
-        query = query.or(`descricao.ilike.%${term}%,usuario_nome.ilike.%${term}%,tabela.ilike.%${term}%,modulo.ilike.%${term}%,registro_id.eq.${term}`);
+      if (search.trim()) {
+        const term = search.trim().replace(/[%_]/g, '');
+        const orParts = [
+          `descricao.ilike.%${term}%`,
+          `usuario_nome.ilike.%${term}%`,
+          `tabela.ilike.%${term}%`,
+          `modulo.ilike.%${term}%`,
+        ];
+        // Só inclui registro_id se for UUID válido (evita erro de cast)
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(term)) {
+          orParts.push(`registro_id.eq.${term}`);
+        }
+        query = query.or(orParts.join(','));
       }
 
-      const { data, error } = await query;
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+      const { data, error, count } = await query.range(from, to);
       if (error) throw error;
-      return data || [];
+      return { data: data || [], count: count ?? 0 };
     },
   });
+
+  const logs = list.items;
+  const isLoading = list.isLoading;
 
   const { data: tabelaOptions = [] } = useQuery({
     queryKey: ['logs-auditoria-tabelas'],
