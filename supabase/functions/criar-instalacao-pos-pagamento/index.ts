@@ -792,11 +792,11 @@ O técnico mais próximo será designado em breve.
         const isAdesaoIsenta = valorAdesaoCot <= 0;
 
         if (isInclusao || isAdesaoIsenta) {
-          // Veículo NOVO com instalação física pendente (não dispensa rastreador)
-          // NÃO pode ficar 'ativo' antes da instalação concluir. O trigger
-          // fn_reativar_cobertura_pos_instalacao promove para 'ativo' quando
-          // o serviço de instalação muda para 'concluida'.
-          const aguardarInstalacaoFisica = !instalacaoData?.dispensa_rastreador && !cotEntrada?.dispensa_rastreador;
+          // Veículo NOVO sempre aguarda a vistoria/instalação concluir antes de
+          // virar 'ativo'. Mesmo veículos com dispensa_rastreador (FIPE < limite)
+          // precisam passar pela vistoria fotográfica aprovada manualmente —
+          // paridade total com fluxo ≥30k/9k.
+          const aguardarInstalacaoFisica = true;
           console.log(`[CriarInstalacaoPosPagamento] Chain ativar-associado (tipo=${tipoEntradaCot}, isento=${isAdesaoIsenta}, veiculo=${veiculoIdFinal}, aguardar_instalacao=${aguardarInstalacaoFisica})`);
           const ativResp = await fetch(`${supabaseUrl}/functions/v1/ativar-associado`, {
             method: 'POST',
