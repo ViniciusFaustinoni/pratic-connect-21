@@ -164,6 +164,7 @@ async function fetchCotacoesCore(params: {
         nome_solicitante, telefone1_solicitante, telefone2_solicitante, email_solicitante,
         veiculo_placa, veiculo_marca, veiculo_modelo, veiculo_ano, valor_fipe,
         valor_adesao, tipo_entrada, dados_extras,
+        tipo_vistoria, vistoria_data_agendada,
         substituida_por_cotacao_id, motivo_substituicao,
         leads:leads!fk_cotacoes_lead_id(id, nome, telefone, email),
         planos:planos!plano_id(id, nome, codigo),
