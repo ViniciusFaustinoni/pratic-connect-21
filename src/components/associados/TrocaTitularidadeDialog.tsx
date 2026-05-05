@@ -18,6 +18,7 @@ interface TrocaTitularidadeDialogProps {
   onOpenChange: (open: boolean) => void;
   associadoId: string;
   associadoNome: string;
+  associadoCpf?: string | null;
 }
 
 interface VeiculoOpcao {
@@ -27,7 +28,7 @@ interface VeiculoOpcao {
 }
 
 export function TrocaTitularidadeDialog({
-  open, onOpenChange, associadoId, associadoNome,
+  open, onOpenChange, associadoId, associadoNome, associadoCpf,
 }: TrocaTitularidadeDialogProps) {
   const navigate = useNavigate();
   const [nome, setNome] = useState('');
@@ -48,10 +49,10 @@ export function TrocaTitularidadeDialog({
         .maybeSingle();
       return data?.cpf || null;
     },
-    enabled: open && !!associadoId,
+    enabled: open && !!associadoId && !associadoCpf,
   });
 
-  const cpfAntigo = (associadoLocal || '').replace(/\D/g, '');
+  const cpfAntigo = (associadoCpf || associadoLocal || '').replace(/\D/g, '');
 
   // 2) Lista veículos do associado antigo NO SGA
   const sga = useBuscaSGA({ cpf: cpfAntigo, enabled: open && cpfAntigo.length === 11 });
