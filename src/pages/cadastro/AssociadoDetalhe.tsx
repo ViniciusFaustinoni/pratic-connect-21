@@ -898,18 +898,25 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                           </TableCell>
                           <TableCell>
                             {((d as any).arquivo_url) ? (
-                              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => {
-                                const docsComArquivo = todosDocumentos.filter(x => (x as any).arquivo_url) as any[];
-                                const items: MediaItem[] = docsComArquivo.map(x => ({
-                                  url: x.arquivo_url,
-                                  tipo: TIPO_DOCUMENTO_LABELS[x.tipo] || x.tipo,
-                                  mediaType: detectMediaType(x.arquivo_url),
-                                }));
-                                const idx = docsComArquivo.findIndex(x => x.id === (d as any).id);
-                                openMedia(items, Math.max(0, idx));
-                              }}>
-                                <Eye className="h-3 w-3" />
-                              </Button>
+                              <div className="flex items-center gap-1">
+                                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => {
+                                  const docsComArquivo = todosDocumentos.filter(x => (x as any).arquivo_url) as any[];
+                                  const items: MediaItem[] = docsComArquivo.map(x => ({
+                                    url: x.arquivo_url,
+                                    tipo: TIPO_DOCUMENTO_LABELS[x.tipo] || x.tipo,
+                                    mediaType: detectMediaType(x.arquivo_url),
+                                  }));
+                                  const idx = docsComArquivo.findIndex(x => x.id === (d as any).id);
+                                  openMedia(items, Math.max(0, idx));
+                                }}>
+                                  <Eye className="h-3 w-3" />
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-7 text-xs" asChild title="Abrir em nova aba">
+                                  <a href={(d as any).arquivo_url} target="_blank" rel="noopener noreferrer">
+                                    <ExternalLink className="h-3 w-3" />
+                                  </a>
+                                </Button>
+                              </div>
                             ) : null}
                           </TableCell>
 
