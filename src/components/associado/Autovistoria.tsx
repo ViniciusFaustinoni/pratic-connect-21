@@ -34,6 +34,9 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   const [vistoriaId, setVistoriaId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [kmIdentificado, setKmIdentificado] = useState<number | null>(null);
+  const [kmOcrFalhou, setKmOcrFalhou] = useState(false);
+  const [kmManualInput, setKmManualInput] = useState('');
+  const [salvandoKm, setSalvandoKm] = useState(false);
   const [previewsLocais, setPreviewsLocais] = useState<Record<string, string>>({});
   const [hidratado, setHidratado] = useState(false);
   const [imagensComErro, setImagensComErro] = useState<Record<string, boolean>>({});
