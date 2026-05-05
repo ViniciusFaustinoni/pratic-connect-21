@@ -732,6 +732,34 @@ export default function Contratos() {
         </CardContent>
       </Card>
 
+      {/* Paginação */}
+      {totalRegistros > 0 && (
+        <div className="flex items-center justify-between gap-3 px-1">
+          <p className="text-sm text-muted-foreground">
+            Mostrando {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, totalRegistros)} de {totalRegistros}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1 || isLoading}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              Anterior
+            </Button>
+            <span className="text-sm">Página {page} de {totalPages}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages || isLoading}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Próxima
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Dialog e Drawer */}
       <ContratoFormDialog 
         open={formDialogOpen} 
