@@ -1,0 +1,83 @@
+import { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { ShieldCheck, ArrowRightLeft, ShieldAlert, AlertTriangle } from 'lucide-react';
+import AprovacaoAssociados from './AcionamentosRouboFurto';
+import AprovacoesTroca from './AprovacoesTroca';
+import LiberacoesAutoVistoria from './LiberacoesAutoVistoria';
+import RecusasInstalador from '../cadastro/RecusasInstalador';
+
+type Aba = 'associados' | 'troca' | 'liberacao-suspensao' | 'recusas';
+
+const TAB_TO_HASH: Record<Aba, string> = {
+  associados: 'associados',
+  troca: 'troca',
+  'liberacao-suspensao': 'liberacao-suspensao',
+  recusas: 'recusas',
+};
+
+export default function AprovacoesUnificadas() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const initial = (location.hash.replace('#', '') as Aba) || 'associados';
+  const [aba, setAba] = useState<Aba>(
+    (['associados', 'troca', 'liberacao-suspensao', 'recusas'].includes(initial) ? initial : 'associados') as Aba,
+  );
+
+  const handleChange = (v: string) => {
+    setAba(v as Aba);
+    navigate(`${location.pathname}#${TAB_TO_HASH[v as Aba]}`, { replace: true });
+  };
+
+  return (
+    <div className="space-y-4 p-4 md:p-6">
+      <div>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <ShieldCheck className="h-6 w-6 text-primary" />
+          Aprovações do Monitoramento
+        </h1>
+        <p className="text-muted-foreground">
+          Centraliza aprovação de associados, troca de titularidade, liberação de suspensão e recusas do instalador.
+        </p>
+      </div>
+
+      <Tabs value={aba} onValueChange={handleChange}>
+        <TabsList className="grid grid-cols-2 md:grid-cols-4 w-full">
+          <TabsTrigger value="associados" className="gap-2">
+            <ShieldCheck className="h-4 w-4" />
+            <span className="hidden sm:inline">Aprovação de Associados</span>
+            <span className="sm:hidden">Associados</span>
+          </TabsTrigger>
+          <TabsTrigger value="troca" className="gap-2">
+            <ArrowRightLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">Troca de Titularidade</span>
+            <span className="sm:hidden">Troca</span>
+          </TabsTrigger>
+          <TabsTrigger value="liberacao-suspensao" className="gap-2">
+            <AlertTriangle className="h-4 w-4" />
+            <span className="hidden sm:inline">Liberação de Suspensão</span>
+            <span className="sm:hidden">Liberação</span>
+          </TabsTrigger>
+          <TabsTrigger value="recusas" className="gap-2">
+            <ShieldAlert className="h-4 w-4" />
+            <span className="hidden sm:inline">Recusas do Instalador</span>
+            <span className="sm:hidden">Recusas</span>
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="associados" className="pt-2">
+          <AprovacaoAssociados />
+        </TabsContent>
+        <TabsContent value="troca" className="pt-2">
+          <AprovacoesTroca />
+        </TabsContent>
+        <TabsContent value="liberacao-suspensao" className="pt-2">
+          <LiberacoesAutoVistoria />
+        </TabsContent>
+        <TabsContent value="recusas" className="pt-2">
+          <RecusasInstalador />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}

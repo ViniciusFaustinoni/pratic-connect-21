@@ -208,6 +208,7 @@ const TrocaTitularidade = lazy(() => import("./pages/cobranca/TrocaTitularidade"
 const RelacionamentoTrocas = lazy(() => import("./pages/cobranca/RelacionamentoTrocas"));
 const AprovacoesTroca = lazy(() => import("./pages/monitoramento/AprovacoesTroca"));
 const LiberacoesAutoVistoria = lazy(() => import("./pages/monitoramento/LiberacoesAutoVistoria"));
+const AprovacoesUnificadas = lazy(() => import("./pages/monitoramento/AprovacoesUnificadas"));
 
 // Agência
 const AgenciaDashboard = lazy(() => import("./pages/agencia/AgenciaDashboard"));
@@ -673,6 +674,7 @@ const App = () => (
               <Route path="/monitoramento/prestadores-parceiros" element={<PrestadoresParceiros />} />
               <Route path="/monitoramento/aprovacoes" element={<AprovacoesTroca />} />
               <Route path="/monitoramento/liberacoes-autovistoria" element={<LiberacoesAutoVistoria />} />
+              <Route path="/monitoramento/aprovacoes-monitoramento" element={<AprovacoesUnificadas />} />
               
               {/* Marketing */}
               <Route path="/marketing" element={<MarketingDashboard />} />

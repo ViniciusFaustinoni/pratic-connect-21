@@ -234,23 +234,12 @@ const menuConfig: {
           icon: AlertTriangle,
         },
         {
-          title: 'Aprovação de Associados',
-          url: '/monitoramento/aprovacao-associados',
-          icon: ShieldAlert,
-        },
-        {
-          title: 'Aprovações Troca Titularidade',
-          url: '/monitoramento/aprovacoes',
-          icon: ShieldAlert,
-        },
-        {
-          title: 'Liberações Auto-Vistoria',
-          url: '/monitoramento/liberacoes-autovistoria',
+          title: 'Aprovações do Monitoramento',
+          url: '/monitoramento/aprovacoes-monitoramento',
           icon: ShieldAlert,
         },
         { title: 'Prestadores Parceiros', url: '/monitoramento/prestadores-parceiros', icon: Truck },
         { title: 'Veículos', url: '/cadastro/veiculos', icon: Car },
-        { title: 'Recusas do Instalador', url: '/cadastro/recusas-instalador', icon: ShieldAlert },
       ],
     },
     {
