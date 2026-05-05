@@ -30,7 +30,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { StatusContrato } from '@/types/database';
-import { useContratos, useUpdateContrato, useAtivarContrato } from '@/hooks/useContratos';
+import { useContratos, useContratosPaginados, useContratosStatusCounts, useUpdateContrato, useAtivarContrato } from '@/hooks/useContratos';
 import { useSendToAutentique, useResendAutentique, useCancelAutentique, getWhatsAppLink } from '@/hooks/useAutentique';
 import { ContratoFormDialog, type PrefilledCotacaoData } from '@/components/contratos/ContratoFormDialog';
 import { ContratoDetailDrawer } from '@/components/contratos/ContratoDetailDrawer';
@@ -58,6 +58,8 @@ export default function Contratos() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<TabValue>('all');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 50;
   const [formDialogOpen, setFormDialogOpen] = useState(false);
   const [drawerContratoId, setDrawerContratoId] = useState<string | null>(null);
   const [prefilledData, setPrefilledData] = useState<PrefilledCotacaoData | null>(null);
@@ -69,7 +71,21 @@ export default function Contratos() {
   // Ativar listener realtime para atualizações automáticas
   useContratosRealtime();
 
-  const { data: contratos, isLoading } = useContratos();
+  // Reset de página ao mudar filtros
+  useEffect(() => { setPage(1); }, [search, activeTab]);
+
+  const statusFilter = activeTab === 'all' ? 'all' : (activeTab as StatusContrato);
+  const { data: paginated, isLoading } = useContratosPaginados({
+    status: statusFilter,
+    search,
+    page,
+    pageSize: PAGE_SIZE,
+  });
+  const { data: counts } = useContratosStatusCounts({ search });
+  const contratos = paginated?.contratos;
+  const totalRegistros = paginated?.pagination.total ?? 0;
+  const totalPages = paginated?.pagination.totalPages ?? 1;
+
   const updateContrato = useUpdateContrato();
   const ativarContrato = useAtivarContrato();
   const sendToAutentique = useSendToAutentique();
@@ -97,15 +113,8 @@ export default function Contratos() {
     }
   }, [location.state]);
 
-  const filteredContratos = (contratos || []).filter((contrato) => {
-    const matchesSearch =
-      contrato.numero.toLowerCase().includes(search.toLowerCase()) ||
-      (contrato.associados?.nome?.toLowerCase().includes(search.toLowerCase()) ?? false) ||
-      (contrato.leads?.nome?.toLowerCase().includes(search.toLowerCase()) ?? false) ||
-      (contrato.associados?.cpf?.includes(search) ?? false);
-    const matchesTab = activeTab === 'all' || contrato.status === activeTab;
-    return matchesSearch && matchesTab;
-  });
+  // Lista já vem filtrada/paginada do servidor
+  const filteredContratos = contratos || [];
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('pt-BR');
@@ -118,16 +127,15 @@ export default function Contratos() {
     }).format(value);
   };
 
-  // Stats por status
+  // Stats por status (vêm da RPC global, não da página atual)
+  const porStatus = counts?.porStatus ?? {};
   const stats = {
-    total: contratos?.length || 0,
-    rascunho: contratos?.filter((c) => c.status === 'rascunho').length || 0,
-    enviado: contratos?.filter((c) => c.status === 'enviado').length || 0,
-    assinado: contratos?.filter((c) => c.status === 'assinado').length || 0,
-    ativo: contratos?.filter((c) => c.status === 'ativo').length || 0,
-    valorTotal: contratos
-      ?.filter((c) => c.status === 'ativo')
-      .reduce((acc, c) => acc + c.valor_mensal, 0) || 0,
+    total: counts?.total ?? 0,
+    rascunho: porStatus['rascunho'] ?? 0,
+    enviado: porStatus['enviado'] ?? 0,
+    assinado: porStatus['assinado'] ?? 0,
+    ativo: porStatus['ativo'] ?? 0,
+    valorTotal: counts?.valor_mensal_ativo ?? 0,
   };
 
   // Ordenação lógica do fluxo de contratos
@@ -144,26 +152,23 @@ export default function Contratos() {
     expirado: 10,
   };
 
-  // Gerar abas dinamicamente com base nos dados reais
+  // Gerar abas dinamicamente com base nos contadores reais (todos os contratos)
   const getActiveTabs = (): { value: TabValue; label: string; count: number }[] => {
-    const uniqueStatuses = new Set(contratos?.map(c => c.status) || []);
-    
     const activeTabs: { value: TabValue; label: string; count: number }[] = [
       { value: 'all', label: 'Todos', count: stats.total },
     ];
 
-    // Adicionar abas apenas para statuses que existem
-    const statusesToShow: StatusContrato[] = Array.from(uniqueStatuses)
+    const statusesToShow = (Object.keys(porStatus) as StatusContrato[])
+      .filter((s) => (porStatus[s] ?? 0) > 0)
       .sort((a, b) => (statusOrder[a] || 999) - (statusOrder[b] || 999));
 
     statusesToShow.forEach((status) => {
       const config = statusConfig[status];
       if (config) {
-        const count = contratos?.filter(c => c.status === status).length || 0;
         activeTabs.push({
           value: status,
           label: config.label,
-          count,
+          count: porStatus[status] ?? 0,
         });
       }
     });
@@ -726,6 +731,34 @@ export default function Contratos() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Paginação */}
+      {totalRegistros > 0 && (
+        <div className="flex items-center justify-between gap-3 px-1">
+          <p className="text-sm text-muted-foreground">
+            Mostrando {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, totalRegistros)} de {totalRegistros}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1 || isLoading}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              Anterior
+            </Button>
+            <span className="text-sm">Página {page} de {totalPages}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages || isLoading}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Próxima
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Dialog e Drawer */}
       <ContratoFormDialog 

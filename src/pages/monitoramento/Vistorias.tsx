@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Search, Clock, RefreshCw, CheckCircle, XCircle, ClipboardList } from 'lucide-react';
 import { useFilasRealtime } from '@/hooks/useFilasRealtime';
 import { Button } from '@/components/ui/button';
@@ -20,11 +20,19 @@ export default function Vistorias() {
 
   const [filter, setFilter] = useState<FilterStatus>('todos');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 50;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedVistoriaId, setSelectedVistoriaId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const { data: vistorias = [], isLoading } = useVistorias({ status: filter, search });
+  // Reset de página ao mudar filtros
+  useEffect(() => { setPage(1); }, [filter, search]);
+
+  const { data: vistorias = [], isLoading } = useVistorias({ status: filter, search, page, pageSize: PAGE_SIZE });
+  const pagination = (vistorias as any)?.pagination as { page: number; pageSize: number; total: number; totalPages: number } | undefined;
+  const totalRegistros = pagination?.total ?? vistorias.length;
+  const totalPages = pagination?.totalPages ?? 1;
   const { data: metricas } = useVistoriasMetricas();
 
   const metricasCards = [
@@ -167,6 +175,24 @@ export default function Vistorias() {
           ))
         )}
       </div>
+
+      {/* Paginação */}
+      {totalRegistros > PAGE_SIZE && (
+        <div className="flex items-center justify-between gap-3 px-1">
+          <p className="text-sm text-muted-foreground">
+            Mostrando {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, totalRegistros)} de {totalRegistros}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" disabled={page <= 1 || isLoading} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+              Anterior
+            </Button>
+            <span className="text-sm">Página {page} de {totalPages}</span>
+            <Button variant="outline" size="sm" disabled={page >= totalPages || isLoading} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+              Próxima
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Dialog de realizar vistoria */}
       <RealizarVistoriaDialog

@@ -33253,6 +33253,10 @@ export type Database = {
         Args: { p_encaixe_id: string; p_profissional_id: string }
         Returns: boolean
       }
+      contratos_status_counts: {
+        Args: { p_search?: string; p_vendedor_id?: string }
+        Returns: Json
+      }
       cotacoes_funil_counts: {
         Args: {
           p_search?: string
