@@ -553,7 +553,7 @@ export function useUploadFotoAutovistoria() {
         },
       });
 
-      return { fotoId, url: publicUrl, kmExtraido, chassiValidacao: null as null };
+      return { fotoId, url: publicUrl, kmExtraido, ocrFalhou, chassiValidacao: null as null };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contrato-publico'] });
