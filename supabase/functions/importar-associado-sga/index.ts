@@ -75,13 +75,15 @@ Deno.serve(async (req) => {
     if (cpf.length !== 11) return json(400, { error: 'CPF inválido' });
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
+    // Usa a sessão apenas para metadados (apiUrl/token) — chamadas de busca passam o
+    // client `admin` para entrar no caminho com reauth automático em 401/403.
     const session = await getHinovaSession(admin);
 
-    // 1) Busca associado + lista de placas no SGA
+    // 1) Busca associado + lista de placas no SGA (com reauth automático)
     let codigoAssociado: number | null = null;
     let placasSGA: Array<{ placa: string; codigo_veiculo: number }> = [];
     try {
-      const r = await buscarAssociadoComVeiculosPorCpf(session, cpf);
+      const r = await buscarAssociadoComVeiculosPorCpf(admin, cpf);
       codigoAssociado = r.codigo_associado;
       placasSGA = r.veiculos;
     } catch (e) {
