@@ -83,6 +83,26 @@ export function useSGAHealthCheck() {
     },
   });
 
+  // Queue counts (totals globais por status)
+  const queueCounts = useQuery({
+    queryKey: ['sga-sync-queue-counts'],
+    queryFn: async () => {
+      const statuses = ['pendente', 'falha', 'falha_permanente'] as const;
+      const [totalRes, ...rest] = await Promise.all([
+        supabase.from('sga_sync_queue').select('id', { count: 'exact', head: true }),
+        ...statuses.map((s) =>
+          supabase.from('sga_sync_queue').select('id', { count: 'exact', head: true }).eq('status', s),
+        ),
+      ]);
+      return {
+        total: totalRes.count || 0,
+        pendente: rest[0].count || 0,
+        falha: rest[1].count || 0,
+        falha_permanente: rest[2].count || 0,
+      };
+    },
+  });
+
   // Recent logs
   const logs = useQuery({
     queryKey: ['sga-sync-logs-recent'],
