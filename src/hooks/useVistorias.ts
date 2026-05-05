@@ -59,12 +59,19 @@ export interface Vistoria {
 export interface VistoriaFilters {
   status?: VistoriaStatus | 'todos';
   search?: string;
+  page?: number;
+  pageSize?: number;
 }
 
 export function useVistorias(filters: VistoriaFilters = {}) {
+  const page = filters.page ?? 1;
+  const pageSize = filters.pageSize ?? 50;
   return useQuery({
     queryKey: ['vistorias', filters],
     queryFn: async () => {
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
       let query = supabase
         .from('vistorias')
         .select(`
@@ -73,7 +80,7 @@ export function useVistorias(filters: VistoriaFilters = {}) {
           associado:associados!vistorias_associado_id_fkey(id, nome, telefone, veiculos(id, placa, marca, modelo)),
           vistoriador:profiles!vistorias_vistoriador_id_fkey(id, nome),
           cotacao:cotacoes(id, nome_solicitante, telefone1_solicitante, veiculo_placa, veiculo_marca, veiculo_modelo)
-        `)
+        `, { count: 'exact' })
         .eq('tipo', 'entrada')
         .order('created_at', { ascending: false });
 
@@ -81,15 +88,21 @@ export function useVistorias(filters: VistoriaFilters = {}) {
         query = query.eq('status', filters.status);
       }
 
-      const { data, error } = await query;
+      // Sem busca: aplicar range no servidor
+      if (!filters.search) {
+        query = query.range(from, to);
+      }
+
+      const { data, error, count } = await query;
 
       if (error) throw error;
 
-      // Filtrar por busca se necessário
-      let result = data || [];
+      // Filtrar por busca em cliente quando informado (mantém comportamento existente)
+      let result = (data || []) as Vistoria[];
+      let total = count ?? result.length;
       if (filters.search) {
         const searchLower = filters.search.toLowerCase();
-        result = result.filter((v: any) => 
+        result = (result as any[]).filter((v: any) =>
           v.veiculo?.placa?.toLowerCase().includes(searchLower) ||
           v.veiculo?.chassi?.toLowerCase().includes(searchLower) ||
           v.veiculo?.associado?.nome?.toLowerCase().includes(searchLower) ||
@@ -99,10 +112,24 @@ export function useVistorias(filters: VistoriaFilters = {}) {
           v.cotacao?.veiculo_placa?.toLowerCase().includes(searchLower) ||
           v.cotacao?.veiculo_chassi?.toLowerCase().includes(searchLower) ||
           v.cotacao?.nome_solicitante?.toLowerCase().includes(searchLower)
-        );
+        ) as Vistoria[];
+        total = result.length;
+        // Pagina apenas o resultado filtrado
+        result = result.slice(from, to + 1);
       }
 
-      return result as Vistoria[];
+      // Anexa metadados de paginação como propriedade não-enumerável para preservar
+      // chamadas legadas que tratam o retorno como array.
+      Object.defineProperty(result, 'pagination', {
+        value: {
+          page,
+          pageSize,
+          total,
+          totalPages: Math.max(1, Math.ceil(total / pageSize)),
+        },
+        enumerable: false,
+      });
+      return result as Vistoria[] & { pagination?: any };
     },
   });
 }
