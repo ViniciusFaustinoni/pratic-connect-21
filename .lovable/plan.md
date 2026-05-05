@@ -1,115 +1,68 @@
-# Plano final — Adesão sem rastreador (carro <30k / moto <9k, não-Diesel)
+## Problema
 
-> **Funcionalidade já existe parcialmente.** Esqueleto pronto (`dispensa_rastreador`, `exige_etapa_instalacao`, autovistoria, vistoria agendada). Faltam ajustes pontuais para paridade total com o fluxo ≥30k/9k.
+Hoje, na autovistoria e nos uploads da cotação pública, quando o OCR não consegue ler um documento/foto, o sistema **falha silenciosamente** ou **só pede o chassi manual**. O associado não é avisado e não tem como preencher os dados que o OCR perdeu (KM do odômetro, cor/blindado do CRLV, dados da CNH, etc.). Isso trava ou degrada a vistoria sem dar saída ao usuário.
 
----
+Pontos confirmados na auditoria do código:
 
-## Como deve ficar na prática
+- `src/hooks/useContratoLink.ts` (`useUploadFotoAutovistoria`): chama `odometro-ocr`; se falhar ou confiança < 0.7, **não avisa** e não pede KM manual.
+- `src/components/associado/Autovistoria.tsx` e `src/components/cotacao-publica/AutovistoriaCotacao.tsx`: só exibem KM quando OCR teve sucesso. Sem fallback.
+- `src/pages/public/CotacaoPublicaCompleta.tsx` (upload CRLV): se OCR falhar, apenas faz `console.warn` e segue sem cor/blindado.
+- `src/components/cotacao-publica/DocumentosPendentesPublico.tsx` já usa `OcrDadosEditor` (suporta `forceEdit`/`legivel=false`) — bom como referência, mas não é aplicado no fluxo da cotação pública nova nem na autovistoria.
 
-Para qualquer adesão (≥30k ou <30k), o cliente recebe o link público e **sempre escolhe entre 2 caminhos**:
+Já existe componente reusável: `src/components/ocr/OcrDadosEditor.tsx` (renderiza os campos do schema, abre automaticamente em modo edição quando `legivel=false` ou `sugestao='reprovar'`). Vamos reaproveitar.
+
+## O que vai mudar
+
+### 1. Autovistoria — fallback de KM (odômetro)
+**Arquivos:** `src/hooks/useContratoLink.ts`, `src/components/associado/Autovistoria.tsx`, `src/components/cotacao-publica/AutovistoriaCotacao.tsx`
+
+- `useUploadFotoAutovistoria` passa a retornar `ocrFalhou: boolean` (true quando `odometro-ocr` errou, retornou confiança < 0.7 ou KM nulo).
+- Quando `fotoAtual.id === 'odometro'` e `ocrFalhou`, o componente mostra:
+  - Toast de aviso: *"Não conseguimos ler o odômetro. Informe a quilometragem manualmente."*
+  - Card com `Input` numérico para KM (`Quilometragem atual`) + botão **Salvar KM**.
+- Ao salvar manualmente:
+  - Persiste `km_extraido` em `vistoria_fotos` (nova coluna `dados_manuais jsonb` se necessário, ou usa coluna existente — verificar via migration).
+  - Avança para próxima foto normalmente.
+- Mesmo comportamento espelhado em `Autovistoria.tsx` (associado logado) e `AutovistoriaCotacao.tsx` (cotação pública).
+
+### 2. Cotação pública — fallback de CRLV/CNH/comprovante
+**Arquivo:** `src/pages/public/CotacaoPublicaCompleta.tsx`
+
+- Após o upload de **qualquer** documento (CNH, CRLV, comprovante) chamar `document-ocr` e:
+  - Se `ocrData?.sucesso === false`, `legivel === false`, ou `sugestao === 'reprovar'`/`'revisar'`, **abrir um modal** com `<OcrDadosEditor forceEdit dados={ocrData?.dados} tipoDocumento={doc.tipo} legivel={false} onSave={...} />`.
+  - Toast: *"Não conseguimos ler {doc.nome}. Por favor, confirme/preencha os dados manualmente."*
+- O `onSave` salva os campos no destino correto (cotação pública: `veiculo_cor`, `veiculo_blindado`, etc; CNH: dados do lead; comprovante: endereço).
+- Hoje só CRLV é processado — **estender** para `cnh_frente`, `cnh_verso`, `comprovante` usando o mesmo padrão (chamada `document-ocr` + fallback editor).
+
+### 3. Generalização visual e mensagens
+**Arquivo:** novo helper `src/components/ocr/OcrFallbackBanner.tsx`
+
+- Banner padrão amarelo/âmbar com ícone `AlertTriangle`:
+  *"Não foi possível ler automaticamente o(s) dados de {tipoDocumento}. Preencha manualmente abaixo."*
+- Usado em todos os pontos acima para garantir UX consistente.
+
+### 4. Regras de negócio respeitadas
+- **Chassi continua sempre manual** (memory `chassi-sempre-manual`). Nada muda nessa parte.
+- O OCR continua sendo **best-effort**: nunca bloqueia o fluxo. A diferença é que agora, ao falhar, **abre o editor manual** em vez de silenciar.
+- Documentos aprovados pelo OCR continuam indo para `em_analise` (memory `aprovacao-manual-documentos-vistoria`); o preenchimento manual também entra como `em_analise`.
+
+## Resumo técnico
 
 ```text
-                    [ LINK PÚBLICO ]
-                          │
-            ┌─────────────┴─────────────┐
-            │                           │
-     AUTOVISTORIA                VISTORIA PRESENCIAL
-   (cliente faz pelo cel)        (técnico vai até ele)
-   2 fotos + 1 vídeo                fotos completas
-            │                           │
-       Aprovação                   Aprovação
-       Monitoramento               Monitoramento
-            │                           │
-   ✓ Ativa R&F                    ✓ Ativa R&F
-   ✗ Cobertura total              ✓ Cobertura total
-     pendente                       (proteção principal)
-            │                           │
-            └─── ≥30k/9k: precisa ──────┤
-                 técnico instalar       │
-                 rastreador depois      │
-                                        │
-            └─── <30k/9k: técnico ──────┘
-                 só tira fotos
-                 (sem instalação)
+upload foto/doc
+   │
+   ▼
+chama edge OCR (document-ocr | odometro-ocr)
+   │
+   ├── sucesso + confiança ok ──► segue fluxo (KM exibido / dados gravados)
+   │
+   └── falha / confiança baixa / legivel=false
+         │
+         ▼
+   OcrFallbackBanner + OcrDadosEditor(forceEdit)
+         │
+         ▼
+   onSave grava dados manuais no mesmo destino (cotacao_publica / vistoria_fotos)
 ```
 
-**A única diferença real entre ≥30k e <30k é o que o técnico faz na vistoria presencial:**
-- ≥30k/9k → tira fotos **e** instala rastreador
-- <30k/9k → tira **só** fotos (sem equipamento)
-
-Tudo o mais é igual: autovistoria, agendamento, atribuição, aprovação manual no Monitoramento, ativação via `ativar-associado`, SGA.
-
----
-
-## Os 2 caminhos em detalhe
-
-### Caminho A — Autovistoria (rápido, ativa só R&F)
-1. Cliente abre link, escolhe "Autovistoria".
-2. Tira **2 fotos + 1 vídeo** pelo celular (componente `Autovistoria.tsx` já existe).
-3. Mídias entram em `em_analise` no Monitoramento.
-4. Aprovação manual → **`cobertura_roubo_furto = true`** (se plano inclui R&F).
-5. **`cobertura_total` continua `false`** — para ativar precisa da vistoria presencial depois.
-6. Veículo continua `instalacao_pendente` para a etapa de cobertura total.
-
-### Caminho B — Vistoria presencial (ativa cobertura total)
-1. Cliente escolhe "Agendar Vistoria".
-2. Técnico vai até ele.
-   - **≥30k/9k:** tira fotos + instala rastreador.
-   - **<30k/9k:** tira só fotos (link mostra só a etapa de fotos, etapa "Instalar" oculta).
-3. Mídias entram em `em_analise` no Monitoramento.
-4. Aprovação manual → ativa **R&F** (se plano inclui) **e cobertura total**.
-5. Veículo vira `ativo`.
-
----
-
-## Estado atual vs. esperado
-
-| Item | Hoje | Esperado | Ação |
-|---|---|---|---|
-| Escolha autovistoria/agendada no link público | ✓ existe (`EscolhaVistoria.tsx`) | igual | nenhuma |
-| Veículo <30k vê opção de autovistoria | ⚠ a confirmar | deve ver | **verificar e liberar** |
-| Vistoria presencial <30k esconde etapa instalação | ✓ existe (`exige_etapa_instalacao=false`) | igual | nenhuma |
-| Fotos da vistoria presencial <30k vão para `em_analise` | ✗ auto-aprova | **manual** | **corrigir** |
-| Veículo <30k já fica `ativo` na aprovação da proposta | ✗ ativa imediato | **`instalacao_pendente`** até vistoria aprovar | **corrigir** |
-| Autovistoria ativa só R&F | ✓ existe | igual | nenhuma |
-| Vistoria presencial ativa R&F + cobertura total | ✓ existe | igual | nenhuma |
-| SGA sem IMEI quando dispensa | ✓ existe | igual | nenhuma |
-
----
-
-## Mudanças (3 ajustes pontuais)
-
-### 1. `concluir-etapa-fotos-publica`
-Remover auto-aprovação quando `exige_etapa_instalacao=false`. Fotos vão para `em_analise` igual aos demais.
-
-### 2. `aprovar-proposta`
-Não setar `cobertura_total=true` para veículos `dispensa_rastreador`. Veículo entra em `instalacao_pendente` até a vistoria aprovar (a aprovação dispara `ativar-associado` via trigger já existente).
-
-### 3. `criar-instalacao-pos-pagamento`
-Forçar `aguardar_instalacao=true` mesmo com `dispensa_rastreador`.
-
-### 4. UI (pequenos ajustes)
-- Garantir que `EscolhaVistoria` aparece no link público também para `dispensa_rastreador=true` (autovistoria + presencial sem instalação).
-- Badge "Sem rastreador" no Monitoramento para o operador entender.
-- `AtivacaoProgressIcons` opcional: ocultar ícone "Radio" quando dispensa.
-
-### 5. Memória
-Atualizar `mem://logic/operations/vistoria-sem-rastreador-flow`:
-> "FIPE < 30k carro / 9k moto não-Diesel: mesma jornada do ≥30k (autovistoria OU presencial). Diferença única: na presencial, técnico só fotografa (sem instalar). Aprovação manual obrigatória. R&F ativa após autovistoria; cobertura total só após presencial. SGA enviado sem IMEI."
-
----
-
-## Arquivos afetados
-
-- `supabase/functions/concluir-etapa-fotos-publica/index.ts`
-- `supabase/functions/aprovar-proposta/index.ts`
-- `supabase/functions/criar-instalacao-pos-pagamento/index.ts`
-- `src/pages/public/VistoriaPublica.tsx` (verificar exibição de `EscolhaVistoria`)
-- `src/components/ativacao/AtivacaoProgressIcons.tsx` (opcional)
-- `src/pages/monitoramento/Vistorias.tsx` (badge)
-
-Sem migration de schema.
-
----
-
-Bate com o que você tem em mente? Aprovando, parto para a implementação.
+Sem alteração de schema obrigatória — usaremos colunas já existentes (`km_extraido`, `veiculo_cor`, `veiculo_blindado`, `lead.endereco_*`, etc.). Caso falte coluna para algum dado avulso, criaremos uma migration pequena para `vistoria_fotos.dados_manuais jsonb`.

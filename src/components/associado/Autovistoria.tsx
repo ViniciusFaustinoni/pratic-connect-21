@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { getFotosAutovistoria, getInstrucoesVideo360, getLabelVideo360, TipoVeiculo } from '@/data/autovistoriaConfig';
@@ -15,6 +17,8 @@ import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imag
 import { LocationCapture, Coordenadas } from './LocationCapture';
 import { VideoCapture } from '@/components/instalador/VideoCapture';
 import { InAppBrowserBanner } from '@/components/shared/InAppBrowserBanner';
+import { OcrFallbackBanner } from '@/components/ocr/OcrFallbackBanner';
+import { supabase } from '@/integrations/supabase/client';
 
 interface AutovistoriaProps {
   contratoId: string;
@@ -34,6 +38,9 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   const [vistoriaId, setVistoriaId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [kmIdentificado, setKmIdentificado] = useState<number | null>(null);
+  const [kmOcrFalhou, setKmOcrFalhou] = useState(false);
+  const [kmManualInput, setKmManualInput] = useState('');
+  const [salvandoKm, setSalvandoKm] = useState(false);
   const [previewsLocais, setPreviewsLocais] = useState<Record<string, string>>({});
   const [hidratado, setHidratado] = useState(false);
   const [imagensComErro, setImagensComErro] = useState<Record<string, boolean>>({});
@@ -208,14 +215,23 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
       // Se for odômetro e KM foi extraído, mostrar
       if (fotoAtual.id === 'odometro' && result.kmExtraido) {
         setKmIdentificado(result.kmExtraido);
+        setKmOcrFalhou(false);
         toast.success(`Quilometragem identificada: ${result.kmExtraido.toLocaleString('pt-BR')} km`);
       } 
+      else if (fotoAtual.id === 'odometro' && (result as any).ocrFalhou) {
+        setKmOcrFalhou(true);
+        setKmIdentificado(null);
+        toast.warning('Não conseguimos ler a quilometragem. Por favor, informe manualmente abaixo.', {
+          duration: 6000,
+        });
+      }
       else {
         toast.success(`Foto "${fotoAtual.label}" enviada com sucesso!`);
       }
       
       // Avançar automaticamente para a próxima foto após sucesso
-      if (!isUltimaFoto) {
+      // (exceto se for odômetro com OCR falho — usuário precisa preencher KM manual)
+      if (!isUltimaFoto && !(fotoAtual.id === 'odometro' && (result as any).ocrFalhou)) {
         setTimeout(() => {
           avancarFoto();
         }, 500);
@@ -526,6 +542,67 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
             </div>
           </div>
         )}
+
+        {/* Fallback manual: OCR não conseguiu ler o odômetro */}
+        {fotoAtual.id === 'odometro' && kmOcrFalhou && !kmIdentificado && (
+          <div className="space-y-2">
+            <OcrFallbackBanner
+              documento="a quilometragem do odômetro"
+              detalhe="Informe abaixo o número exato exibido no painel para podermos prosseguir."
+            />
+            <div className="space-y-1">
+              <Label htmlFor="km-manual" className="text-xs">
+                Quilometragem atual (km) <span className="text-destructive">*</span>
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="km-manual"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  placeholder="Ex.: 45230"
+                  value={kmManualInput}
+                  onChange={(e) => setKmManualInput(e.target.value.replace(/\D/g, ''))}
+                  disabled={salvandoKm}
+                />
+                <Button
+                  type="button"
+                  onClick={async () => {
+                    const n = Number(kmManualInput);
+                    if (!Number.isFinite(n) || n <= 0) {
+                      toast.error('Informe um valor válido de KM.');
+                      return;
+                    }
+                    if (!vistoriaId) return;
+                    setSalvandoKm(true);
+                    try {
+                      const { error } = await (supabase as any)
+                        .from('vistorias')
+                        .update({ km_atual: n })
+                        .eq('id', vistoriaId);
+                      if (error) throw error;
+                      setKmIdentificado(n);
+                      setKmOcrFalhou(false);
+                      toast.success(`Quilometragem registrada: ${n.toLocaleString('pt-BR')} km`);
+                      if (!isUltimaFoto) {
+                        setTimeout(() => avancarFoto(), 400);
+                      }
+                    } catch (e: any) {
+                      console.error('[Autovistoria] erro ao salvar KM manual:', e);
+                      toast.error('Não foi possível salvar a quilometragem. Tente novamente.');
+                    } finally {
+                      setSalvandoKm(false);
+                    }
+                  }}
+                  disabled={salvandoKm || !kmManualInput}
+                >
+                  {salvandoKm ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
 
         {/* Instruções - O que fazer */}
         <div className="space-y-2">

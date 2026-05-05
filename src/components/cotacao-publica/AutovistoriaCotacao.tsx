@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -26,6 +28,8 @@ import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imag
 import { VideoCapture } from '@/components/instalador/VideoCapture';
 import { InAppBrowserBanner } from '@/components/shared/InAppBrowserBanner';
 import { useDeviceCapability } from '@/hooks/useDeviceCapability';
+import { OcrFallbackBanner } from '@/components/ocr/OcrFallbackBanner';
+import { publicSupabase } from '@/integrations/supabase/publicClient';
 
 
 interface AutovistoriaCotacaoProps {
@@ -41,6 +45,9 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
   const [fotoAtualIndex, setFotoAtualIndex] = useState(0);
   const [fotosEnviadas, setFotosEnviadas] = useState<Record<string, string>>({});
   const [kmIdentificado, setKmIdentificado] = useState<number | null>(null);
+  const [kmOcrFalhou, setKmOcrFalhou] = useState(false);
+  const [kmManualInput, setKmManualInput] = useState('');
+  const [salvandoKm, setSalvandoKm] = useState(false);
   const [previewLocal, setPreviewLocal] = useState<string | null>(null);
   const [hidratado, setHidratado] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -197,15 +204,25 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
       setPreviewLocal(null);
       
       // Se extraiu KM do odômetro
+      const odometroOcrFalhou = fotoAtual.id === 'odometro' && !result.kmExtraido && (result as any).ocrFalhou;
       if (result.kmExtraido) {
         setKmIdentificado(result.kmExtraido);
+        setKmOcrFalhou(false);
+        // Persiste KM na cotação
+        try {
+          await (publicSupabase as any).from('cotacoes').update({ km_atual: result.kmExtraido }).eq('id', cotacaoId);
+        } catch (e) { console.warn('[AutovistoriaCotacao] erro ao salvar km_atual:', e); }
         toast.success(`Quilometragem identificada: ${result.kmExtraido.toLocaleString('pt-BR')} km`);
+      } else if (odometroOcrFalhou) {
+        setKmOcrFalhou(true);
+        setKmIdentificado(null);
+        toast.warning('Não conseguimos ler a quilometragem. Por favor, informe manualmente abaixo.', { duration: 6000 });
       } else {
         toast.success('Foto enviada com sucesso!');
       }
       
-      // Avançar para próxima foto automaticamente
-      if (fotoAtualIndex < totalFotos - 1) {
+      // Avançar para próxima foto automaticamente (não avança se OCR do odômetro falhou)
+      if (fotoAtualIndex < totalFotos - 1 && !odometroOcrFalhou) {
         setTimeout(() => setFotoAtualIndex(fotoAtualIndex + 1), 800);
       }
     } catch (error: any) {
@@ -509,6 +526,66 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
                 </div>
               </div>
             )}
+
+            {/* Fallback manual: OCR do odômetro falhou */}
+            {fotoAtual.id === 'odometro' && kmOcrFalhou && !kmIdentificado && (
+              <div className="space-y-2">
+                <OcrFallbackBanner
+                  documento="a quilometragem do odômetro"
+                  detalhe="Informe abaixo o número exato exibido no painel para podermos prosseguir."
+                />
+                <div className="space-y-1">
+                  <Label htmlFor="km-manual-cot" className="text-xs">
+                    Quilometragem atual (km) <span className="text-destructive">*</span>
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="km-manual-cot"
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      placeholder="Ex.: 45230"
+                      value={kmManualInput}
+                      onChange={(e) => setKmManualInput(e.target.value.replace(/\D/g, ''))}
+                      disabled={salvandoKm}
+                    />
+                    <Button
+                      type="button"
+                      onClick={async () => {
+                        const n = Number(kmManualInput);
+                        if (!Number.isFinite(n) || n <= 0) {
+                          toast.error('Informe um valor válido de KM.');
+                          return;
+                        }
+                        setSalvandoKm(true);
+                        try {
+                          const { error } = await (publicSupabase as any)
+                            .from('cotacoes')
+                            .update({ km_atual: n })
+                            .eq('id', cotacaoId);
+                          if (error) throw error;
+                          setKmIdentificado(n);
+                          setKmOcrFalhou(false);
+                          toast.success(`Quilometragem registrada: ${n.toLocaleString('pt-BR')} km`);
+                          if (fotoAtualIndex < totalFotos - 1) {
+                            setTimeout(() => setFotoAtualIndex(fotoAtualIndex + 1), 400);
+                          }
+                        } catch (e: any) {
+                          console.error('[AutovistoriaCotacao] erro ao salvar KM manual:', e);
+                          toast.error('Não foi possível salvar a quilometragem. Tente novamente.');
+                        } finally {
+                          setSalvandoKm(false);
+                        }
+                      }}
+                      disabled={salvandoKm || !kmManualInput}
+                    >
+                      {salvandoKm ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             
             {/* Instruções */}
             <div className="bg-muted/30 rounded-lg p-3 space-y-2">

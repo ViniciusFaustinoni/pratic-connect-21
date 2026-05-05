@@ -54,6 +54,7 @@ export interface UploadFotoResult {
   fotoId: string;
   url: string;
   kmExtraido?: number;
+  ocrFalhou?: boolean;
 }
 
 export function useUploadFotoCotacaoVistoria() {
@@ -107,13 +108,21 @@ export function useUploadFotoCotacaoVistoria() {
       if (dbError) throw dbError;
       
       let kmExtraido: number | undefined;
+      let ocrFalhou = false;
       if (fotoId === 'odometro') {
         try {
           const { data: ocrData } = await supabase.functions.invoke('odometro-ocr', { body: { url } });
-          if (ocrData?.km) kmExtraido = ocrData.km;
-        } catch (e) { console.warn('OCR falhou:', e); }
+          if (ocrData?.km && (ocrData.confianca == null || ocrData.confianca >= 0.7)) {
+            kmExtraido = ocrData.km;
+          } else {
+            ocrFalhou = true;
+          }
+        } catch (e) {
+          ocrFalhou = true;
+          console.warn('OCR falhou:', e);
+        }
       }
-      return { fotoId, url, kmExtraido };
+      return { fotoId, url, kmExtraido, ocrFalhou };
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['cotacao-vistoria-fotos', variables.cotacaoId] });

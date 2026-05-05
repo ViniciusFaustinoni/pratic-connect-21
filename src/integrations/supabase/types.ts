@@ -9633,6 +9633,7 @@ export type Database = {
           id: string
           indicador_id: string | null
           indicador_nome: string | null
+          km_atual: number | null
           lead_id: string | null
           meses_desconto_campanha: number | null
           motivo_cancelamento: string | null
@@ -9766,6 +9767,7 @@ export type Database = {
           id?: string
           indicador_id?: string | null
           indicador_nome?: string | null
+          km_atual?: number | null
           lead_id?: string | null
           meses_desconto_campanha?: number | null
           motivo_cancelamento?: string | null
@@ -9899,6 +9901,7 @@ export type Database = {
           id?: string
           indicador_id?: string | null
           indicador_nome?: string | null
+          km_atual?: number | null
           lead_id?: string | null
           meses_desconto_campanha?: number | null
           motivo_cancelamento?: string | null
