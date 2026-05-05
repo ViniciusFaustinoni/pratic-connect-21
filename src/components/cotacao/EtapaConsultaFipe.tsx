@@ -96,6 +96,20 @@ export function EtapaConsultaFipe({
   const [fipeSelecionada, setFipeSelecionada] = useState<string>('');
   const { getByPlaca } = useFipe();
 
+  // Ao ativar modo Nota Fiscal, limpa estado da busca FIPE
+  useEffect(() => {
+    if (modoNotaFiscal) {
+      setStatus('idle');
+      setErrorMessage(null);
+      setVeiculoEncontrado(null);
+      setFipeAlternativas([]);
+      setFipeSelecionada('');
+      setCamposAutoPreenchidos([]);
+      setPlaca('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modoNotaFiscal]);
+
   const handlePlacaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formatted = formatPlaca(e.target.value);
     setPlaca(formatted);
