@@ -196,7 +196,7 @@ export default function IntegracaoSGAHinova() {
       <Tabs defaultValue="queue" className="space-y-4">
         <TabsList>
           <TabsTrigger value="queue" className="gap-1.5">
-            <List className="h-4 w-4" /> Fila ({queue.length})
+            <List className="h-4 w-4" /> Fila ({queueCounts.total})
           </TabsTrigger>
           <TabsTrigger value="logs" className="gap-1.5">
             <Activity className="h-4 w-4" /> Logs ({logs.length})
