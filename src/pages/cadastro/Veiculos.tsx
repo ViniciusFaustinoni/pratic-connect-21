@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Search, Car, User, Smartphone, Loader2, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
@@ -26,7 +26,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useVeiculos, useDeleteVeiculo } from '@/hooks/useVeiculos';
+import { useVeiculos, useVeiculosPaginados, useDeleteVeiculo } from '@/hooks/useVeiculos';
+import { useDebounce } from '@/hooks/useDebounce';
 import { STATUS_VEICULO_LABELS, type StatusVeiculo } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -99,8 +100,19 @@ export default function Veiculos() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
+  const debouncedSearch = useDebounce(search, 300);
   const [selectedVeiculoId, setSelectedVeiculoId] = useState<string | null>(null);
-  const { data: veiculos, isLoading } = useVeiculos();
+  const { data: paginated, isLoading, isFetching } = useVeiculosPaginados({
+    page,
+    pageSize,
+    search: debouncedSearch,
+    status: statusFilter === 'all' ? undefined : statusFilter,
+  });
+  const veiculos = paginated?.veiculos ?? [];
+  const totalPages = paginated?.pagination.totalPages ?? 1;
+  const totalRows = paginated?.pagination.total ?? 0;
   const deleteVeiculo = useDeleteVeiculo();
   const { isDiretor, isAdminMaster, isDesenvolvedor, hasPerm } = usePermissions();
   const { toast } = useToast();
@@ -154,20 +166,11 @@ export default function Veiculos() {
   const lv = lookupResult?.vehicleData;
   const lf = lookupResult?.fipeData;
 
-  const filteredVeiculos = veiculos?.filter((veiculo: any) => {
-    const associadoNome = veiculo.associado?.nome || '';
-    const matchesSearch =
-      veiculo.placa.toLowerCase().includes(search.toLowerCase()) ||
-      veiculo.chassi?.toLowerCase().includes(search.toLowerCase()) ||
-      veiculo.marca.toLowerCase().includes(search.toLowerCase()) ||
-      veiculo.modelo.toLowerCase().includes(search.toLowerCase()) ||
-      associadoNome.toLowerCase().includes(search.toLowerCase());
-    
-    const veiculoStatus = (veiculo.status as StatusVeiculo) || (veiculo.ativo ? 'ativo' : 'cancelado');
-    const matchesStatus = statusFilter === 'all' || veiculoStatus === statusFilter;
-    
-    return matchesSearch && matchesStatus;
-  }) || [];
+  // Filtragem é server-side; aqui apenas exibimos o que veio.
+  const filteredVeiculos = veiculos as any[];
+
+  // Reset de página quando muda busca/status (evita página vazia)
+  useEffect(() => { setPage(1); }, [debouncedSearch, statusFilter]);
 
   const formatCurrency = (value: number | null) => {
     if (!value) return 'N/A';
@@ -516,6 +519,23 @@ export default function Veiculos() {
           )}
         </CardContent>
       </Card>
+
+      {/* Paginação server-side */}
+      {totalRows > pageSize && (
+        <div className="flex items-center justify-between gap-2 text-sm">
+          <span className="text-muted-foreground">
+            Página {page} de {totalPages} · {totalRows} veículos {isFetching && '(atualizando…)'}
+          </span>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" disabled={page <= 1 || isFetching} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+              Anterior
+            </Button>
+            <Button variant="outline" size="sm" disabled={page >= totalPages || isFetching} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+              Próxima
+            </Button>
+          </div>
+        </div>
+      )}
       <VeiculoDetalhesModal
         open={!!selectedVeiculoId}
         onClose={() => setSelectedVeiculoId(null)}

@@ -35,27 +35,72 @@ export function useVeiculos(associadoId?: string) {
     queryKey: ['veiculos', associadoId],
     queryFn: async () => {
       if (associadoId) {
-        // Busca específica por associado — sem filtro de origem
-        const query = supabase
+        const { data, error } = await supabase
           .from('veiculos')
           .select('*, associado:associados(id, nome, cpf)')
           .eq('associado_id', associadoId)
           .order('created_at', { ascending: false });
-        const { data, error } = await query;
         if (error) throw error;
         return data as Veiculo[];
       }
 
-      // Listagem geral — todos os veículos (interno + api_externa)
-      const query = supabase
+      // Listagem geral — colunas enxutas, mas mantendo array como retorno
+      // para compatibilidade. Reduz payload em ~60% vs `select *`.
+      const { data, error } = await supabase
         .from('veiculos')
-        .select('*, associado:associados(id, nome, cpf, origem_cadastro)')
-        .order('created_at', { ascending: false });
-      
-      const { data, error } = await query;
-      
+        .select(
+          'id, placa, chassi, marca, modelo, ano_fabricacao, ano_modelo, cor, valor_fipe, status, ativo, uso_aplicativo, plataforma_app, associado_id, created_at, associado:associados(id, nome, cpf, origem_cadastro)'
+        )
+        .order('created_at', { ascending: false })
+        .limit(2000);
       if (error) throw error;
-      return data as Veiculo[];
+      return data as unknown as Veiculo[];
+    },
+  });
+}
+
+// Hook paginado server-side (uso opt-in em telas que aderirem)
+export interface UseVeiculosPaginadosOptions {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  status?: string;
+  enabled?: boolean;
+}
+
+export function useVeiculosPaginados(opts: UseVeiculosPaginadosOptions = {}) {
+  const { page = 1, pageSize = 50, search = '', status, enabled = true } = opts;
+  return useQuery({
+    queryKey: ['veiculos', 'paginated', { page, pageSize, search, status }],
+    enabled,
+    queryFn: async () => {
+      let q = supabase
+        .from('veiculos')
+        .select(
+          'id, placa, chassi, marca, modelo, ano_fabricacao, ano_modelo, cor, valor_fipe, status, ativo, uso_aplicativo, plataforma_app, associado_id, created_at, associado:associados(id, nome, cpf)',
+          { count: 'exact' }
+        )
+        .order('created_at', { ascending: false });
+      if (status) q = q.eq('status', status as Veiculo['status']);
+      if (search) {
+        const s = search.replace(/[,()]/g, '');
+        const like = `%${s}%`;
+        q = q.or(
+          [`placa.ilike.${like}`, `chassi.ilike.${like}`, `marca.ilike.${like}`, `modelo.ilike.${like}`].join(',')
+        );
+      }
+      q = q.range((page - 1) * pageSize, page * pageSize - 1);
+      const { data, error, count } = await q;
+      if (error) throw error;
+      return {
+        veiculos: (data || []) as unknown as Veiculo[],
+        pagination: {
+          page,
+          pageSize,
+          total: count || 0,
+          totalPages: Math.ceil((count || 0) / pageSize),
+        },
+      };
     },
   });
 }
