@@ -176,6 +176,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   type CenarioExterno = 'cobra_rota' | 'isenta_rota' | 'isenta_base' | 'cobra_base';
   const [cenarioExterno, setCenarioExterno] = useState<CenarioExterno | null>(null);
   const isCenarioIsento = cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base';
+  const isCenarioSemMinimo = isCenarioIsento || cenarioExterno === 'cobra_base';
 
   // Mínimo efetivo: volante quando cenário inclui rota
   const minimoAdesaoVolante = isVendedorExterno ? minimoVolanteExterno : minimoVolanteInterno;
@@ -1434,7 +1435,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       }
       
       // Validar valor mínimo de adesão dinâmico
-      if (data.valor_adesao < minimoAdesaoConfig) {
+      if (!isCenarioSemMinimo && data.valor_adesao < minimoAdesaoConfig) {
         toast.error(`O valor de adesão (${formatCurrency(data.valor_adesao)}) está abaixo do mínimo configurado (${formatCurrency(minimoAdesaoConfig)}).`);
         return;
       }
@@ -2735,7 +2736,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             {/* Blocos informativos dinâmicos */}
             <div className="space-y-2">
               {/* Alerta de adesão abaixo do mínimo */}
-              {!isCenarioIsento && form.watch('valor_adesao') > 0 && form.watch('valor_adesao') < minimoAdesaoConfig && (
+              {!isCenarioSemMinimo && form.watch('valor_adesao') > 0 && form.watch('valor_adesao') < minimoAdesaoConfig && (
                 <Alert className="border-destructive/50 bg-destructive/10">
                   <AlertTriangle className="h-4 w-4 text-destructive" />
                   <AlertDescription className="text-sm text-destructive">
