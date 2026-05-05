@@ -36,19 +36,21 @@ export const FOTOS_AUTOVISTORIA_CARRO: FotoAutovistoria[] = [
   { 
     id: 'motor', 
     label: 'Foto do Motor', 
-    descricao: 'Uma foto do compartimento do motor — qualquer ângulo serve. A equipe revisa depois.',
+    descricao: 'Foto do compartimento do motor com o capô aberto',
     ordem: 2,
     categoria: 'identificacao',
     instrucoes: [
-      'Abra o capô (mesmo que parcialmente já está OK)',
-      'Tire uma foto que mostre o motor',
-      'Não precisa estar perfeita — qualquer foto do motor é aceita',
-      'Se conseguir mostrar o número gravado, ótimo (mas é opcional)',
+      'Abra o capô completamente',
+      'Enquadre o compartimento do motor por inteiro',
+      'Mantenha boa iluminação e foco',
+      'Se possível, mostre o número do motor gravado no bloco',
     ],
     evitar: [
-      'Foto totalmente preta ou desfocada a ponto de não ver nada',
+      'Capô fechado ou parcialmente aberto',
+      'Foto desfocada, escura ou tremida',
+      'Enquadramento cortando partes do motor',
     ],
-    dicaExtra: 'Não se preocupe com perfeição. Nossa equipe confere a foto manualmente depois.',
+    dicaExtra: 'Uma foto nítida agiliza a análise e evita reenvio.',
   },
 ];
 // MOTOS (2 fotos) + vídeo 360° obrigatório
@@ -61,29 +63,31 @@ export const FOTOS_AUTOVISTORIA_MOTO: FotoAutovistoria[] = [
     categoria: 'identificacao',
     instrucoes: [
       'Fotografe o chassi (geralmente no tubo do garfo dianteiro)',
-      'Tente deixar os números legíveis',
+      'Deixe os números legíveis e enquadrados',
       'Use flash se necessário',
     ],
     evitar: [
-      'Foto totalmente preta ou desfocada a ponto de não ver nada',
+      'Foto desfocada ou com números ilegíveis',
+      'Enquadramento cortando parte da numeração',
     ],
     dicaExtra: 'O chassi da moto geralmente está gravado no tubo do garfo dianteiro.',
   },
   { 
     id: 'motor', 
     label: 'Motor da Moto', 
-    descricao: 'Uma foto do motor da moto — qualquer ângulo serve. A equipe revisa depois.',
+    descricao: 'Foto aproximada do motor da moto',
     ordem: 2,
     categoria: 'identificacao',
     instrucoes: [
-      'Tire uma foto que mostre o motor da moto',
-      'Não precisa estar perfeita — qualquer foto do motor é aceita',
-      'Se conseguir mostrar o número gravado, ótimo (mas é opcional)',
+      'Enquadre o motor por inteiro com boa iluminação',
+      'Mantenha o foco nítido',
+      'Se possível, mostre o número do motor gravado no bloco',
     ],
     evitar: [
-      'Foto totalmente preta ou desfocada a ponto de não ver nada',
+      'Foto desfocada, escura ou tremida',
+      'Enquadramento cortando partes do motor',
     ],
-    dicaExtra: 'Não se preocupe com perfeição. Nossa equipe confere a foto manualmente depois.',
+    dicaExtra: 'Uma foto nítida agiliza a análise e evita reenvio.',
   },
 ];
 
