@@ -560,7 +560,7 @@ function EtapaFotos({
       let toUpload: File | Blob = file;
       if (file.size > 250 * 1024) {
         try {
-          toUpload = await compressImage(file, { maxWidth: 1920, maxHeight: 1920, quality: 0.75 });
+          toUpload = await compressImage(file);
         } catch {
           /* original */
         }
@@ -872,7 +872,7 @@ function EtapaInstalacao({
         let toUpload = file;
         if (file.size > 500 * 1024) {
           try {
-            toUpload = await compressImage(file, { maxWidth: 1920, maxHeight: 1920, quality: 0.75 });
+            toUpload = await compressImage(file);
           } catch {
             /* original */
           }
