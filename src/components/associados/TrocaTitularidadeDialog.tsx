@@ -186,7 +186,8 @@ export function TrocaTitularidadeDialog({
             <Label>Veículo a transferir *</Label>
             {carregando ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" /> Buscando veículos no SGA…
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {importando ? 'Importando dados do SGA…' : 'Buscando veículos no SGA…'}
               </div>
             ) : semVeiculosSGA ? (
               <Alert variant="destructive">
@@ -199,7 +200,9 @@ export function TrocaTitularidadeDialog({
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription className="text-sm">
-                  O SGA tem {sga.data?.veiculos.length} veículo(s) para este associado, mas eles ainda não foram sincronizados com a nossa base. Rode a sincronização SGA antes de prosseguir.
+                  {importErro
+                    ? `Falha ao importar do SGA: ${importErro}`
+                    : `O SGA tem ${sga.data?.veiculos.length} veículo(s) para este associado, mas o import automático ainda não concluiu. Tente novamente em instantes.`}
                 </AlertDescription>
               </Alert>
             ) : (
