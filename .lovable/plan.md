@@ -1,83 +1,69 @@
-## Diagnóstico
+## Objetivo
 
-Você está certo — minha conclusão anterior estava errada. O fluxo atual está ativando veículos novos cedo demais.
+Hoje, no fluxo de troca de titularidade, quando o sistema mostra os boletos pendentes do titular antigo (com linha digitável + link do boleto), só rechecamos o pagamento via cron diário (00:00) ou pelo botão "Re-checar SGA" da fila interna `Relacionamento — Débitos Pendentes`.
 
-**Estado atual no banco (associado JOAO VICTOR — `e6551c17-…`):**
+O usuário do fluxo público / consultor não tem como confirmar imediatamente que pagou. Precisamos de um botão **"Verificar pagamento agora"** abaixo das linhas digitáveis (em cada boleto e/ou no rodapé do card) que consulte o SGA na hora.
 
-| Placa     | status   | cobertura_total | cobertura_roubo_furto | observação |
-|-----------|----------|-----------------|-----------------------|------------|
-| KZF2D20   | ativo    | —               | —                     | veículo antigo, ok |
-| KZF8992   | ativo    | —               | —                     | veículo antigo, ok |
-| RKL6I08   | **ativo** | true           | true                  | **inclusão nova, instalação ainda `agendada` (05/05) — não deveria estar ativo** |
+## Onde mexer
 
-A instalação `3cbd44ea-…` está com `status='agendada'`, `concluida_em=null`. Mesmo assim, o veículo já está `ativo`.
+### 1. `src/components/cotacao/DebitosCard.tsx` (UI)
 
-### Causa raiz
+Adicionar na barra de ações de cada boleto, ao lado de "Copiar linha" / "Boleto", um botão **"Verificar pagamento"** que:
 
-`criar-instalacao-pos-pagamento` (linha 794-824), assim que cria a instalação, encadeia `ativar-associado` passando `veiculo_id`. O `ativar-associado` (linha 292-307) executa incondicionalmente:
+- Chama um hook/edge function que reconsulta o SGA pelo CPF.
+- Enquanto carrega: ícone com spinner e botão desabilitado.
+- Resultado:
+  - Pago → toast verde "Boleto quitado", remove a linha do card e dispara um `onPagamentoConfirmado` opcional (callback novo da prop), para o pai recarregar débitos / liberar o fluxo.
+  - Ainda em aberto → toast neutro "Pagamento ainda não identificado no SGA. Tente novamente em alguns minutos."
+  - Erro → toast destrutivo.
 
-```ts
-.update({ status: 'ativo', updated_at: agora, ...coberturas })
-```
+Adicionar também um botão único **"Verificar todos"** no rodapé do card (mais discreto), para reverificar tudo de uma vez.
 
-Ou seja: o veículo é promovido a `ativo` **na criação** da instalação, não na **conclusão**. O trigger `fn_reativar_cobertura_pos_instalacao` existe mas só roda quando `servicos.status='concluida'` — e mesmo assim só mexe em coberturas, nunca em `veiculos.status`.
+Adicionar nova prop opcional ao `DebitosCardProps`:
+- `cpf?: string` — CPF do associado dono dos débitos (para fazer o recheck via SGA).
+- `onAtualizado?: () => void` — callback chamado quando o SGA mostra que pelo menos um boleto foi quitado.
 
-### Regra correta (confirmada por você)
+Comportamento client-side: como a fonte de verdade é o SGA e o `useVerificarDebitosAssociado` já lê de lá, a forma mais simples é, ao clicar:
+1. Invalidar a query do `useBuscaSGA` para o CPF (queryKey já existente em `useBuscaSGA`).
+2. Aguardar o refetch.
+3. Comparar a lista nova com a antiga; se o `nosso_numero` clicado sumiu da lista de abertos → pago.
+4. Disparar `onAtualizado()` para o pai esconder o card se tudo zerou.
 
-Para veículo **novo** (inclusão / adesão):
-- Se cliente optou por **Roubo/Furto**: ativar imediatamente após contrato/pagamento (R/F não depende de instalação física).
-- Se **NÃO** optou por R/F (só assistência + rastreador via instalação): veículo fica `instalacao_pendente` com coberturas `false` até a instalação concluir. Aí o trigger religa coberturas **e** status.
+### 2. Componentes que renderizam `DebitosCard`
 
-Associado e contrato seguem `ativo` normalmente (mensalidade roda) — só o veículo novo aguarda.
+Passar o CPF e um callback de invalidação:
 
-## Mudanças
+- `src/components/cotacao/EtapaDadosAssociado.tsx` — passar `cpf={cpfDigits}` e `onAtualizado={() => qc.invalidateQueries(['busca-sga'])}` (chave já existente do hook).
+- `src/components/cotacao/DialogTipoOperacao.tsx` — idem.
+- `src/components/vendas/OutrasEntradasMenu.tsx` — idem.
 
-### 1. `supabase/functions/ativar-associado/index.ts` (bloco veículo, ~linha 291-307)
+### 3. Edge function (já existe — só conferir e, se faltar, expor)
 
-Tornar a atualização de `veiculos.status='ativo'` condicional:
+`sga-buscar-associado-completo` é o que o `useBuscaSGA` consome. O recheck por boleto pode ser apenas reconsulta do CPF inteiro (não há endpoint individual por boleto no SGA). O custo é baixo e a UX é "verifiquei agora".
 
-- Se `ativar_cobertura_roubo_furto === true` OU `ativar_cobertura_total === true` → ativar status normalmente (cobertura imediata vale).
-- Se nenhuma das duas e há `instalacao_id` (ou flag `aguardar_instalacao`) → setar `status='instalacao_pendente'`, manter coberturas em `false`, **não** marcar ativo.
-- Demais campos (cobertura_suspensa, motivo) ficam intocados.
+Não precisa criar nova edge function. Apenas garantir `staleTime: 0` na re-query e usar `refetch()` retornado por `useBuscaSGA`.
 
-### 2. Trigger `fn_reativar_cobertura_pos_instalacao` (migration nova)
+### 4. Mensagem auxiliar
 
-Estender para também promover `veiculos.status` para `'ativo'` quando instalação conclui (`servicos.tipo='instalacao'` AND novo status `'concluida'`), independentemente de `cobertura_suspensa`. Mantém comportamento atual de coberturas.
+Substituir/adicionar o texto atual:
+> "É necessário quitar todos os boletos antes de prosseguir com a contratação."
 
-```sql
-UPDATE public.veiculos
-   SET status = 'ativo',
-       cobertura_suspensa = false,
-       cobertura_suspensa_motivo = NULL,
-       cobertura_suspensa_em = NULL,
-       cobertura_total = COALESCE(cobertura_total, false) OR true,  -- religa se estava suspensa
-       cobertura_roubo_furto = COALESCE(cobertura_roubo_furto, false) OR true
- WHERE id = NEW.veiculo_id
-   AND status <> 'ativo';
-```
+Por:
+> "Após pagar, clique em **Verificar pagamento** para liberar a contratação imediatamente — sem precisar esperar até o próximo dia."
 
-(Refinar para não forçar coberturas em planos sem R/F — só religar as que já existiam antes da suspensão. Vou verificar `cobertura_suspensa_motivo` para decidir.)
+### 5. Já existe? — confirmação
 
-### 3. Correção pontual (RKL6I08)
+Verifiquei: o botão atual de recheck do SGA só existe na fila interna `pages/cobranca/RelacionamentoTrocas.tsx` (botão "Re-checar SGA" por linha de associado), e o polling automático só existe na cobrança ASAAS (`EtapaPagamentoCotacao`). **Não existe** botão de verificar pagamento abaixo das linhas digitáveis dos boletos do SGA mostrados no `DebitosCard`. Vamos criar.
 
-Migration de correção: voltar `veiculos.status` de `RKL6I08` (id `1b63e620-…`) para `instalacao_pendente`, manter `cobertura_total` e `cobertura_roubo_furto` conforme escolha do cliente na cotação `d60c6dec-…`. Conferir cotação: `cobertura_total` e `cobertura_roubo_furto` no payload — se ambos `true`, o veículo PODE ficar ativo (regra acima); se ambos `false`, voltar a `instalacao_pendente` + coberturas `false`.
+## Detalhes técnicos
 
-> Vou consultar a cotação no momento da execução para decidir.
+- `useBuscaSGA` retorna o objeto `useQuery` completo (incluindo `refetch`); o `useVerificarDebitosAssociado` repassa via `...sga`. Logo, no `DebitosCard` podemos receber o `refetch` opcional e chamar `await refetch()` no clique. Para evitar acoplamento, vamos preferir invalidar a queryKey via `useQueryClient()` dentro do próprio `DebitosCard` — mais simples e isolado.
+- Para identificar se o boleto específico foi quitado, comparar o `nosso_numero` antes/depois do refetch. Como o componente é re-renderizado pelo pai, basta detectar que o boleto sumiu/permaneceu via callback de comparação.
+- Loading por linha: `useState<string | null>(verificandoKey)`.
 
-### 4. Memória
+## Critérios de aceite
 
-Atualizar `mem://logic/operations/suspensao-cobertura-nao-instalacao-escopo` (ou criar nova) para documentar:
-
-> Veículo NOVO de inclusão sem R/F só vira `ativo` quando a instalação concluir. Trigger `fn_reativar_cobertura_pos_instalacao` é a única fonte que promove `veiculos.status` nesse caminho.
-
-## Não muda
-
-- Busca por nome/CPF/telefone/placa (já corrigida).
-- `ativar-associado` continua ativando associado + contrato + cotação normalmente.
-- KZF8992 e KZF2D20 (veículos antigos do associado) permanecem `ativo`.
-
-## Verificação pós-deploy
-
-1. Confirmar RKL6I08 = `instalacao_pendente` (ou conforme R/F escolhido).
-2. Concluir manualmente um serviço de instalação de teste e ver o trigger promover `status='ativo'`.
-3. Criar nova inclusão sem R/F e validar que o veículo fica `instalacao_pendente` no banco até a instalação concluir.
+- No `DebitosCard`, abaixo de cada boleto (junto a "Copiar linha" / "Boleto") aparece o botão **"Verificar pagamento"**.
+- Há também um botão **"Verificar todos"** no rodapé do card.
+- Ao clicar: refetch do SGA, toast de sucesso/info/erro, atualização imediata da lista; se zerou tudo, o pai libera o fluxo (não precisa esperar a meia-noite).
+- Funciona nos três pontos onde o `DebitosCard` aparece (cotação direta, dialog de tipo de operação, menu de outras entradas / migração).

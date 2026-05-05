@@ -115,6 +115,7 @@ export function DialogTipoOperacao({
                   debitos={debitos.debitosPorVeiculo}
                   saldoTotal={debitos.saldoTotal}
                   bloqueante={bloqueioAtivo}
+                  cpf={veiculoAtivo.associado_id}
                   descricao={
                     bloqueioAtivo
                       ? 'É necessário quitar todos os débitos antes de incluir um novo veículo.'
