@@ -735,8 +735,8 @@ export default function Cotacoes() {
             {permissions.cotacao.viewScope === 'all' 
               ? `Gerencie todas as cotações`
               : 'Gerencie suas cotações'}
-            {cotacoes && cotacoes.length > 0 && (
-              <span className="text-foreground font-medium"> · {cotacoes.length} no total</span>
+            {funilCounts && funilCounts.total > 0 && (
+              <span className="text-foreground font-medium"> · {funilCounts.total} no total</span>
             )}
           </p>
         </div>
