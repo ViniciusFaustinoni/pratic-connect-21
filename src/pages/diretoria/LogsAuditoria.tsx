@@ -12,6 +12,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { gerarResumoAuditoria, resumoAuditoriaTexto } from '@/lib/auditoria-formatters';
+import { useServerList } from '@/hooks/useServerList';
+import { ListToolbar } from '@/components/lists/ListToolbar';
+import { ServerPagination } from '@/components/lists/ServerPagination';
 
 const acaoConfig: Record<string, { label: string; className: string }> = {
   login: { label: 'Login', className: 'border-primary/30 bg-primary/10 text-primary' },
@@ -82,9 +85,6 @@ const DEFAULT_FILTERS: LogFilters = {
   dataFim: '',
 };
 
-import { useServerList } from '@/hooks/useServerList';
-import { ListToolbar } from '@/components/lists/ListToolbar';
-import { ServerPagination } from '@/components/lists/ServerPagination';
 
 export default function LogsAuditoria() {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
