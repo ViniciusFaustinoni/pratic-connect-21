@@ -473,6 +473,7 @@ export default function CotacaoPage() {
             onIniciarCadastro={handleIniciarCadastro}
             isLoading={isCalculando || isLoadingPlanos}
             isCenarioIsento={isVendedorExterno}
+            origemValor={modoNotaFiscal ? 'nota' : 'fipe'}
             />
           </>
         )}
