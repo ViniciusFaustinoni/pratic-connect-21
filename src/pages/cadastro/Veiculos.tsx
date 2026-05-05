@@ -519,6 +519,23 @@ export default function Veiculos() {
           )}
         </CardContent>
       </Card>
+
+      {/* Paginação server-side */}
+      {totalRows > pageSize && (
+        <div className="flex items-center justify-between gap-2 text-sm">
+          <span className="text-muted-foreground">
+            Página {page} de {totalPages} · {totalRows} veículos {isFetching && '(atualizando…)'}
+          </span>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" disabled={page <= 1 || isFetching} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+              Anterior
+            </Button>
+            <Button variant="outline" size="sm" disabled={page >= totalPages || isFetching} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+              Próxima
+            </Button>
+          </div>
+        </div>
+      )}
       <VeiculoDetalhesModal
         open={!!selectedVeiculoId}
         onClose={() => setSelectedVeiculoId(null)}
