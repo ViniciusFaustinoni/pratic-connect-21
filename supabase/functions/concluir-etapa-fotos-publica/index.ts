@@ -101,9 +101,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── 4) Marcar etapa concluída no link.
-    // Quando o veículo dispensa rastreador (exige_etapa_instalacao=false), também
-    // fechamos a etapa de instalação automaticamente e auto-aprovamos as fotos.
+    // ── 4) Marcar etapa de fotos como concluída.
+    // Quando o veículo dispensa rastreador (exige_etapa_instalacao=false), fechamos
+    // também a etapa de instalação (não há o que instalar), MAS as fotos NÃO são
+    // auto-aprovadas — vão para `em_analise` no Monitoramento, igual ao fluxo ≥30k/9k.
     const dispensaInstalacao = link.exige_etapa_instalacao === false
     const linkPatch: Record<string, any> = {
       fotos_etapa_status: 'concluida',
@@ -112,12 +113,14 @@ Deno.serve(async (req) => {
       vistoria_id: vistoriaId,
     }
     if (dispensaInstalacao) {
+      // Fecha a etapa de instalação no link (não há equipamento a instalar),
+      // mas mantém status do link em andamento até a vistoria ser aprovada.
       linkPatch.instalacao_etapa_status = 'concluida'
       linkPatch.instalacao_concluida_em = agora
       linkPatch.instalacao_executor_nome = executor_nome
-      linkPatch.instalacao_executor_tipo = 'cliente'
-      linkPatch.fotos_aprovadas_em = agora
-      linkPatch.status = 'concluida'
+      linkPatch.instalacao_executor_tipo = 'tecnico'
+      // NÃO setar fotos_aprovadas_em nem status='concluida' aqui.
+      // Aprovação manual via Monitoramento (mesma RPC do fluxo ≥30k).
     }
 
     const { error: linkUpd } = await supabase
