@@ -133,19 +133,20 @@ export function useRastreadores(filters?: RastreadorFilters) {
         // 1) Veículos por placa (normalizada, sem hífen)
         const veiculoIdsByPlaca = new Set<string>();
         if (placa) {
-          const { data: veics, error: vErr } = await supabase
-            .from('veiculos')
-            .select('id')
-            .ilike('placa', `%${placa}%`)
-            .limit(200);
+          // Quando o termo é claramente uma placa (placaForte), busca EXATA
+          // para evitar que substring case com placas não relacionadas.
+          // Quando é parcial (ex.: "KVR3"), permite ILIKE.
+          const veicQuery = supabase.from('veiculos').select('id');
+          const { data: veics, error: vErr } = placaForte
+            ? await veicQuery.eq('placa', placaForte).limit(200)
+            : await veicQuery.ilike('placa', `%${placa}%`).limit(200);
           if (vErr) console.warn('[useRastreadores] busca placa erro:', vErr);
           (veics || []).forEach((v: any) => veiculoIdsByPlaca.add(v.id));
         }
 
         // Quando o termo é claramente uma placa (placaForte), restringimos a busca
-        // a veículos cuja placa case. Sem isso, os dígitos extraídos (ex.: "684" de
-        // "TCU6B84") casariam por ilike em CPFs e códigos/imei aleatórios,
-        // poluindo o resultado com rastreadores não relacionados.
+        // a veículos cuja placa case EXATAMENTE. Sem isso, dígitos extraídos
+        // poluiriam o resultado com CPFs/imeis aleatórios.
         if (placaForte) {
           if (veiculoIdsByPlaca.size === 0) {
             return { items: [], total: 0, totalPages: 0 };
