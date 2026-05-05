@@ -116,10 +116,11 @@ export function useAssociados({ filters, pagination, enabled = true }: UseAssoci
       let query = supabase
         .from('associados')
         .select(`
-          id, nome, cpf, email, telefone, status, plano_id, uf, cidade, data_adesao, created_at, updated_at, origem_cadastro,
+          id, nome, cpf, email, telefone, status, plano_id, uf, cidade, data_adesao,
+          created_at, updated_at, origem_cadastro, sincronizado_hinova, tipo_saida,
           planos:planos!plano_id (id, nome, codigo),
           contratos:contratos!fk_contratos_associado (id, numero, status),
-          veiculos (id, placa, marca, modelo, ano_modelo, status)
+          veiculos (id, placa, marca, modelo, ano_modelo, status, cobertura_total, cobertura_roubo_furto, cobertura_suspensa)
         `, { count: 'exact' });
 
       // Pré-busca em contratos quando filtra por consultor ou tipo de adesão
