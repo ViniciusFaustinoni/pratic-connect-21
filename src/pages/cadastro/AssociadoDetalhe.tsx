@@ -398,7 +398,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
         arquivo_nome: `Proposta de Filiação ${contrato?.numero || ''}.pdf`,
         arquivo_url: propostaUrl,
         status: contrato?.pdf_assinado_url ? 'aprovado' : 'pendente',
-        created_at: contrato?.data_assinatura || contrato?.created_at || new Date().toISOString(),
+        created_at: (contrato as any)?.data_assinatura || (contrato as any)?.created_at || new Date().toISOString(),
         fonte: 'contrato' as const,
         veiculo: null,
       }]
