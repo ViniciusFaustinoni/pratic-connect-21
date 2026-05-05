@@ -58,6 +58,8 @@ export default function Contratos() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<TabValue>('all');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 50;
   const [formDialogOpen, setFormDialogOpen] = useState(false);
   const [drawerContratoId, setDrawerContratoId] = useState<string | null>(null);
   const [prefilledData, setPrefilledData] = useState<PrefilledCotacaoData | null>(null);
@@ -69,7 +71,21 @@ export default function Contratos() {
   // Ativar listener realtime para atualizações automáticas
   useContratosRealtime();
 
-  const { data: contratos, isLoading } = useContratos();
+  // Reset de página ao mudar filtros
+  useEffect(() => { setPage(1); }, [search, activeTab]);
+
+  const statusFilter = activeTab === 'all' ? 'all' : (activeTab as StatusContrato);
+  const { data: paginated, isLoading } = useContratosPaginados({
+    status: statusFilter,
+    search,
+    page,
+    pageSize: PAGE_SIZE,
+  });
+  const { data: counts } = useContratosStatusCounts({ search });
+  const contratos = paginated?.contratos;
+  const totalRegistros = paginated?.pagination.total ?? 0;
+  const totalPages = paginated?.pagination.totalPages ?? 1;
+
   const updateContrato = useUpdateContrato();
   const ativarContrato = useAtivarContrato();
   const sendToAutentique = useSendToAutentique();
