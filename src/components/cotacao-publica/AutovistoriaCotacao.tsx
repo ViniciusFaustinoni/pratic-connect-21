@@ -218,12 +218,13 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
         setKmIdentificado(null);
         toast.warning('Não conseguimos ler a quilometragem. Por favor, informe manualmente abaixo.', { duration: 6000 });
       } else {
-        toast.success('Foto enviada com sucesso!');
+        toast.success('Foto recebida! Nossa equipe vai conferir depois.');
       }
       
-      // Avançar para próxima foto automaticamente (não avança se OCR do odômetro falhou)
+      // Avançar para próxima foto automaticamente (rápido, sem delay artificial)
+      // Não avança se OCR do odômetro falhou (precisa de input manual)
       if (fotoAtualIndex < totalFotos - 1 && !odometroOcrFalhou) {
-        setTimeout(() => setFotoAtualIndex(fotoAtualIndex + 1), 800);
+        setTimeout(() => setFotoAtualIndex(fotoAtualIndex + 1), 300);
       }
     } catch (error: any) {
       console.error('[AutovistoriaCotacao] Erro no upload:', error);
@@ -516,7 +517,18 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
                 </button>
               )}
             </div>
-            
+
+            {/* Mensagem tranquilizadora pós-envio */}
+            {fotoJaEnviada && !isUploading && fotoAtual.id !== 'odometro' && (
+              <div className="bg-success/5 border border-success/20 rounded-lg p-3 flex items-start gap-2">
+                <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
+                <p className="text-xs text-foreground/80 leading-relaxed">
+                  <strong>Foto recebida!</strong> Não se preocupe se não ficou perfeita —
+                  nossa equipe vai conferir todas as fotos manualmente. Você pode refazer
+                  clicando no número da etapa acima se quiser.
+                </p>
+              </div>
+            )}
             {/* KM identificado (odômetro) */}
             {fotoAtual.id === 'odometro' && kmIdentificado && (
               <div className="bg-primary/5 p-3 rounded-lg flex items-center gap-3 border border-primary/20">
