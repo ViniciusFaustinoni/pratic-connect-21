@@ -55,9 +55,6 @@ import { AssociadoFilters } from '@/components/cadastro/AssociadoFilters';
 import { ExportAssociadosDialog } from '@/components/cadastro/ExportAssociadosDialog';
 import { ConfirmacaoAcaoDialog } from '@/components/associados/ConfirmacaoAcaoDialog';
 import { useToast } from '@/hooks/use-toast';
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import AssociadoDetalhe from './AssociadoDetalhe';
-import { AssociadoDetalheErrorBoundary } from '@/components/common/AssociadoDetalheErrorBoundary';
 
 const statusColors: Record<StatusAssociado, string> = {
   em_analise: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
@@ -122,7 +119,7 @@ export default function Associados() {
   } | null>(null);
   const [filtersSheetOpen, setFiltersSheetOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const [detalheAssociadoId, setDetalheAssociadoId] = useState<string | null>(null);
+  
   const [sheetFilters, setSheetFilters] = useState<{
     status?: StatusAssociado[];
     plano_id?: string;
@@ -359,7 +356,7 @@ export default function Associados() {
         return;
       }
     }
-    setDetalheAssociadoId(associado.id);
+    navigate(`/cadastro/associados/${associado.id}`);
   };
 
   // Exportação inteligente movida para ExportAssociadosDialog.
@@ -737,7 +734,7 @@ export default function Associados() {
                                 variant="ghost" 
                                 size="icon" 
                                 className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
-                                onClick={() => setDetalheAssociadoId(associado.id)}
+                                onClick={() => navigate(`/cadastro/associados/${associado.id}`)}
                               >
                                 <Eye className="h-3.5 w-3.5" />
                               </Button>
@@ -752,19 +749,19 @@ export default function Associados() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => setDetalheAssociadoId(associado.id)}>
+                              <DropdownMenuItem onClick={() => navigate(`/cadastro/associados/${associado.id}`)}>
                                 <Eye className="mr-2 h-4 w-4" />
                                 Ver detalhes
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setDetalheAssociadoId(associado.id)}>
+                              <DropdownMenuItem onClick={() => navigate(`/cadastro/associados/${associado.id}`)}>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Editar dados
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setDetalheAssociadoId(associado.id)}>
+                              <DropdownMenuItem onClick={() => navigate(`/cadastro/associados/${associado.id}`)}>
                                 <FileText className="mr-2 h-4 w-4" />
                                 Ver documentos
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setDetalheAssociadoId(associado.id)}>
+                              <DropdownMenuItem onClick={() => navigate(`/cadastro/associados/${associado.id}`)}>
                                 <Receipt className="mr-2 h-4 w-4" />
                                 Ver boletos
                               </DropdownMenuItem>
@@ -967,30 +964,7 @@ export default function Associados() {
           planos={planos}
         />
 
-        {/* Detalhe do Associado em Dialog centralizado */}
-        <Dialog open={!!detalheAssociadoId} onOpenChange={(open) => !open && setDetalheAssociadoId(null)}>
-          <DialogContent className="max-w-5xl max-h-[92vh] p-0 overflow-y-auto overflow-x-hidden">
-            <DialogTitle className="sr-only">Detalhes do associado</DialogTitle>
-            <DialogDescription className="sr-only">
-              Visão completa do associado, veículos, documentos e histórico.
-            </DialogDescription>
-            {detalheAssociadoId && (
-              <div className="p-4 sm:p-6 min-w-0 w-full">
-                <AssociadoDetalheErrorBoundary
-                  associadoId={detalheAssociadoId}
-                  onReset={() => setDetalheAssociadoId(null)}
-                >
-                  <AssociadoDetalhe
-                    key={detalheAssociadoId}
-                    associadoId={detalheAssociadoId}
-                    isModal
-                    onClose={() => setDetalheAssociadoId(null)}
-                  />
-                </AssociadoDetalheErrorBoundary>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
+        {/* Detalhe agora abre na rota /cadastro/associados/:id (sem Dialog aninhado para evitar conflito de portais) */}
       </div>
     </TooltipProvider>
   );
