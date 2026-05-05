@@ -418,6 +418,8 @@ export default function CotacaoPage() {
               setValorFipe={setValorFipe}
               onNext={handleEtapa2Next}
               onManualEntry={handleEntradaManual}
+              modoNotaFiscal={modoNotaFiscal}
+              setModoNotaFiscal={setModoNotaFiscal}
             />
             {/* Botão Voltar - só mostra se não for inclusão/substituição */}
             {!skipEtapa1 && (
