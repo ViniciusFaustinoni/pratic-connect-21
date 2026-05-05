@@ -97,6 +97,14 @@ export function useResolverRecusa() {
       const { servicoId, veiculoId, associadoId, placa, acao, justificativa } = params;
       const agora = new Date().toISOString();
 
+      // Buscar instalacao_origem_id do serviço para sincronizar a instalação derivada
+      const { data: servicoRow } = await supabase
+        .from('servicos')
+        .select('instalacao_origem_id')
+        .eq('id', servicoId)
+        .maybeSingle();
+      const instalacaoId = (servicoRow as any)?.instalacao_origem_id as string | null;
+
       switch (acao) {
         case 'reverter_recusa': {
           // Reset service to agendada
@@ -112,6 +120,26 @@ export function useResolverRecusa() {
             })
             .eq('id', servicoId);
           if (error) throw error;
+
+          // Reabrir veículo (volta a aguardar instalação) e limpar suspensão por recusa
+          await supabase
+            .from('veiculos')
+            .update({
+              status: 'instalacao_pendente',
+              cobertura_suspensa: false,
+              cobertura_suspensa_motivo: null,
+              cobertura_suspensa_em: null,
+              updated_at: agora,
+            })
+            .eq('id', veiculoId);
+
+          // Reabrir instalação derivada
+          if (instalacaoId) {
+            await supabase
+              .from('instalacoes')
+              .update({ status: 'agendada', updated_at: agora })
+              .eq('id', instalacaoId);
+          }
 
           await supabase.from('associados_historico').insert({
             associado_id: associadoId,
@@ -129,6 +157,26 @@ export function useResolverRecusa() {
             .from('servicos')
             .update({ status: 'cancelada', observacoes: `Contrato cancelado após recusa: ${justificativa}`, updated_at: agora })
             .eq('id', servicoId);
+
+          // Marcar veículo como recusado
+          await supabase
+            .from('veiculos')
+            .update({
+              status: 'recusado',
+              motivo_recusa_veiculo: justificativa,
+              recusado_por: profile?.id,
+              recusado_em: agora,
+              updated_at: agora,
+            })
+            .eq('id', veiculoId);
+
+          // Encerrar instalação derivada
+          if (instalacaoId) {
+            await supabase
+              .from('instalacoes')
+              .update({ status: 'cancelada', updated_at: agora })
+              .eq('id', instalacaoId);
+          }
 
           // Cancel associado
           await supabase
@@ -178,6 +226,24 @@ export function useResolverRecusa() {
             .eq('id', servicoId);
 
           await supabase
+            .from('veiculos')
+            .update({
+              status: 'recusado',
+              motivo_recusa_veiculo: `Blacklist - ${justificativa}`,
+              recusado_por: profile?.id,
+              recusado_em: agora,
+              updated_at: agora,
+            })
+            .eq('id', veiculoId);
+
+          if (instalacaoId) {
+            await supabase
+              .from('instalacoes')
+              .update({ status: 'cancelada', updated_at: agora })
+              .eq('id', instalacaoId);
+          }
+
+          await supabase
             .from('associados')
             .update({
               status: 'cancelado',
@@ -210,6 +276,14 @@ export function useResolverRecusa() {
             .from('servicos')
             .update({ status: 'cancelada', observacoes: `Nova vistoria solicitada: ${justificativa}`, updated_at: agora })
             .eq('id', servicoId);
+
+          // Encerrar instalação antiga (nova será gerada pós-vistoria)
+          if (instalacaoId) {
+            await supabase
+              .from('instalacoes')
+              .update({ status: 'cancelada', updated_at: agora })
+              .eq('id', instalacaoId);
+          }
 
           // Create new vistoria_entrada
           await supabase.from('servicos').insert({

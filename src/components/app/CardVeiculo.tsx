@@ -42,6 +42,7 @@ interface VeiculoData {
   ano_modelo: number;
   cor?: string;
   status: string | null;
+  cobertura_suspensa_motivo?: string | null;
 }
 
 interface RastreadorData {
@@ -286,7 +287,9 @@ export function CardVeiculo({
 
           {veiculo.status === 'em_analise' && (
             <p className="text-sm text-yellow-600 bg-yellow-50 p-2 rounded-lg">
-              Documentação em análise. Você será notificado em breve.
+              {veiculo.cobertura_suspensa_motivo?.toLowerCase().includes('recusa do instalador')
+                ? 'Instalação negada pelo técnico. Aguardando análise do monitoramento — não é necessário reagendar agora.'
+                : 'Documentação em análise. Você será notificado em breve.'}
             </p>
           )}
 
