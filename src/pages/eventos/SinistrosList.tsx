@@ -49,6 +49,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { ServerPagination } from '@/components/lists/ServerPagination';
 
 import { STATUS_SINISTRO_LABELS, STATUS_SINISTRO_COLORS } from '@/types/sinistros';
 
@@ -631,6 +632,15 @@ export default function SinistrosList() {
               )}
             </TableBody>
           </Table>
+          <ServerPagination
+            page={page}
+            totalPages={sinistrosTotalPages}
+            pageSize={PAGE_SIZE}
+            total={sinistrosTotal}
+            range={sinistrosRange}
+            onPageChange={setPage}
+            isFetching={isFetchingSinistros}
+          />
         </CardContent>
       </Card>
 
