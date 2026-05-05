@@ -1117,15 +1117,33 @@ export async function alterarSituacaoVeiculoHinova(
   codigo_situacao: number,
 ): Promise<{ ok: boolean; status: number; raw: any; mensagem: string | null; errors: string[] }> {
   const payload = { codigo_veiculo, codigo_situacao };
-  const { ok, status, txt, data } = await hinovaPostAuth(
-    supabaseOrSession, '/veiculo/alterar/situacao', payload, 'alterarSituacaoVeiculo',
-  );
+  // Hinova já variou o nome desse endpoint entre versões. Tentamos alternativas
+  // até alguma responder com sucesso (ou com erro != "Página não encontrada").
+  const candidates = [
+    '/veiculo/alterar/situacao',
+    '/alterar/situacao/veiculo',
+    '/alterar/situacao-veiculo',
+    '/veiculo/alterar-situacao',
+    '/veiculo/alterar',
+    '/alterar/veiculo/situacao',
+  ];
+  let last: any = null;
+  for (const path of candidates) {
+    const { ok, status, txt, data } = await hinovaPostAuth(
+      supabaseOrSession, path, payload, 'alterarSituacaoVeiculo',
+    );
+    last = { ok, status, txt, data, path };
+    const isPaginaNaoEncontrada = status === 404 || /página não encontrada|endpoint não encontrado/i.test(
+      `${data?.mensagem || ''} ${JSON.stringify(data?.error || '')}`
+    );
+    if (ok || !isPaginaNaoEncontrada) break;
+  }
   return {
-    ok,
-    status,
-    raw: data ?? txt.slice(0, 500),
-    mensagem: data?.mensagem ?? null,
-    errors: extractErrors(data),
+    ok: last.ok,
+    status: last.status,
+    raw: last.data ?? last.txt.slice(0, 500),
+    mensagem: (last.data?.mensagem ?? null) ? `${last.data.mensagem} (path tentado: ${last.path})` : null,
+    errors: extractErrors(last.data),
   };
 }
 
