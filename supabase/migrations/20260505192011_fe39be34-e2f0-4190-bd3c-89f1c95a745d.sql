@@ -1,0 +1,1 @@
+UPDATE public.veiculos SET codigo_fipe = '025145-3', valor_fipe = 33481 WHERE id = '83b2a1e4-54c1-4b90-a9e6-c4469bc47ece';
