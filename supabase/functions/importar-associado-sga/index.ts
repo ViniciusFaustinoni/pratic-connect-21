@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
       return json(404, { error: 'Associado/veículos não encontrados no SGA' });
     }
 
-    // 2) Busca metadados do associado (best-effort)
+    // 2) Busca metadados do associado (best-effort) — reusa a session já obtida
     const meta = await fetchAssociadoMeta(session, cpf);
 
     // 3) UPSERT do associado (por CPF). Se já existir, só atualizamos codigo_hinova.
