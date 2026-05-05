@@ -390,7 +390,22 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
     return STATUS_ASSOCIADO_COLORS[status];
   };
 
+  const propostaUrl = contrato?.pdf_assinado_url || contrato?.pdf_url || null;
+  const propostaDoc = propostaUrl
+    ? [{
+        id: `proposta-${contrato?.id}`,
+        tipo: contrato?.pdf_assinado_url ? 'proposta_assinada' : 'proposta_filiacao',
+        arquivo_nome: `Proposta de Filiação ${contrato?.numero || ''}.pdf`,
+        arquivo_url: propostaUrl,
+        status: contrato?.pdf_assinado_url ? 'aprovado' : 'pendente',
+        created_at: contrato?.data_assinatura || contrato?.created_at || new Date().toISOString(),
+        fonte: 'contrato' as const,
+        veiculo: null,
+      }]
+    : [];
+
   const todosDocumentos = [
+    ...propostaDoc,
     ...(documentos || []).map(d => ({ ...d, fonte: 'documentos' as const })),
     ...(documentosCotacao || []).map(d => {
       const tiposDocPessoal = ['cnh', 'cnh_frente', 'cnh_verso', 'comprovante_residencia', 'selfie', 'rg', 'rg_frente', 'rg_verso'];
@@ -401,7 +416,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
     }),
   ].map(d => ({
     ...d,
-    status: (status === 'ativo' && d.status === 'pendente') ? 'aprovado' : d.status
+    status: (status === 'ativo' && d.status === 'pendente' && d.fonte !== 'contrato') ? 'aprovado' : d.status
   }));
 
   const docsPendentes = todosDocumentos.filter(d => d.status === 'pendente').length;
