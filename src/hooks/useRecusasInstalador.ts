@@ -33,8 +33,8 @@ export function useRecusasInstalador() {
         .select(`
           id, status, decisao_instalador, ressalvas_instalador, fotos_ressalva,
           updated_at, veiculo_id, associado_id, profissional_id, tipo,
-          associados!inner(nome),
-          veiculos!inner(placa, modelo, marca),
+          associados!servicos_associado_id_fkey(nome),
+          veiculos!servicos_veiculo_id_fkey(placa, modelo, marca),
           profiles!servicos_profissional_id_fkey(nome)
         `)
         .eq('decisao_instalador', 'negado')
