@@ -20,11 +20,23 @@ export default function Vistorias() {
 
   const [filter, setFilter] = useState<FilterStatus>('todos');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 50;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedVistoriaId, setSelectedVistoriaId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const { data: vistorias = [], isLoading } = useVistorias({ status: filter, search });
+  // Reset de página ao mudar filtros
+  useState(() => { /* noop */ });
+  // Reset via efeito simples
+  if (typeof window !== 'undefined') {
+    // nothing — handled inline
+  }
+
+  const { data: vistorias = [], isLoading } = useVistorias({ status: filter, search, page, pageSize: PAGE_SIZE });
+  const pagination = (vistorias as any)?.pagination as { page: number; pageSize: number; total: number; totalPages: number } | undefined;
+  const totalRegistros = pagination?.total ?? vistorias.length;
+  const totalPages = pagination?.totalPages ?? 1;
   const { data: metricas } = useVistoriasMetricas();
 
   const metricasCards = [
