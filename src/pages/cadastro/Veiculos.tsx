@@ -166,20 +166,13 @@ export default function Veiculos() {
   const lv = lookupResult?.vehicleData;
   const lf = lookupResult?.fipeData;
 
-  const filteredVeiculos = veiculos?.filter((veiculo: any) => {
-    const associadoNome = veiculo.associado?.nome || '';
-    const matchesSearch =
-      veiculo.placa.toLowerCase().includes(search.toLowerCase()) ||
-      veiculo.chassi?.toLowerCase().includes(search.toLowerCase()) ||
-      veiculo.marca.toLowerCase().includes(search.toLowerCase()) ||
-      veiculo.modelo.toLowerCase().includes(search.toLowerCase()) ||
-      associadoNome.toLowerCase().includes(search.toLowerCase());
-    
-    const veiculoStatus = (veiculo.status as StatusVeiculo) || (veiculo.ativo ? 'ativo' : 'cancelado');
-    const matchesStatus = statusFilter === 'all' || veiculoStatus === statusFilter;
-    
-    return matchesSearch && matchesStatus;
-  }) || [];
+  // Filtragem é server-side; aqui apenas exibimos o que veio.
+  const filteredVeiculos = veiculos as any[];
+
+  // Reset de página quando muda busca/status
+  // (evita ficar numa página vazia após filtrar)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useMemo(() => { setPage(1); }, [debouncedSearch, statusFilter]);
 
   const formatCurrency = (value: number | null) => {
     if (!value) return 'N/A';
