@@ -204,15 +204,25 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
       setPreviewLocal(null);
       
       // Se extraiu KM do odômetro
+      const odometroOcrFalhou = fotoAtual.id === 'odometro' && !result.kmExtraido && (result as any).ocrFalhou;
       if (result.kmExtraido) {
         setKmIdentificado(result.kmExtraido);
+        setKmOcrFalhou(false);
+        // Persiste KM na cotação
+        try {
+          await (publicSupabase as any).from('cotacoes').update({ km_atual: result.kmExtraido }).eq('id', cotacaoId);
+        } catch (e) { console.warn('[AutovistoriaCotacao] erro ao salvar km_atual:', e); }
         toast.success(`Quilometragem identificada: ${result.kmExtraido.toLocaleString('pt-BR')} km`);
+      } else if (odometroOcrFalhou) {
+        setKmOcrFalhou(true);
+        setKmIdentificado(null);
+        toast.warning('Não conseguimos ler a quilometragem. Por favor, informe manualmente abaixo.', { duration: 6000 });
       } else {
         toast.success('Foto enviada com sucesso!');
       }
       
-      // Avançar para próxima foto automaticamente
-      if (fotoAtualIndex < totalFotos - 1) {
+      // Avançar para próxima foto automaticamente (não avança se OCR do odômetro falhou)
+      if (fotoAtualIndex < totalFotos - 1 && !odometroOcrFalhou) {
         setTimeout(() => setFotoAtualIndex(fotoAtualIndex + 1), 800);
       }
     } catch (error: any) {
