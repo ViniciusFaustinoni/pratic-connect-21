@@ -363,21 +363,31 @@ export default function CotacaoPublicaCompleta() {
       setDocumentos(newDocs);
       toast.success(`${doc.nome} enviado!`);
 
-      // Se for CRLV, chamar OCR para extrair dados auxiliares (cor, blindado). O chassi NUNCA é preenchido por OCR — sempre digitado manualmente.
-      if (doc.tipo === 'crlv' && result.url && token) {
+      // OCR para todos os documentos suportados (CRLV, CNH, comprovante).
+      // Chassi NUNCA é preenchido por OCR — sempre digitado manualmente.
+      const tipoSchema =
+        doc.tipo === 'crlv' ? 'crlv' :
+        doc.tipo === 'cnh_frente' || doc.tipo === 'cnh_verso' ? 'cnh' :
+        doc.tipo === 'comprovante' ? 'comprovante_residencia' :
+        null;
+
+      if (tipoSchema && result.url && token) {
         try {
-          const { data: ocrData } = await supabase.functions.invoke('document-ocr', {
-            body: { url: result.url }
+          const { data: ocrData, error: ocrErr } = await supabase.functions.invoke('document-ocr', {
+            body: { url: result.url, tipoEsperado: tipoSchema }
           });
 
-          // Se conseguiu extrair dados do CRLV
-          if (ocrData?.sucesso && ocrData?.tipo_detectado === 'crlv' && ocrData?.dados) {
+          const sucessoOcr =
+            !ocrErr &&
+            ocrData?.sucesso &&
+            ocrData?.legivel !== false &&
+            ocrData?.sugestao !== 'reprovar' &&
+            ocrData?.dados;
+
+          // Caso CRLV com sucesso: aplicar regras de cor/blindado já existentes
+          if (sucessoOcr && doc.tipo === 'crlv' && (ocrData?.tipo_detectado === 'crlv' || tipoSchema === 'crlv')) {
             const dados = ocrData.dados;
-            
-            // Detectar blindado
             const isBlindado = dados.blindado === 'true' || dados.blindado === true;
-            
-            // Atualizar cotação com dados extraídos (cor e blindado)
             await atualizarCotacao.mutateAsync({
               token,
               updates: {
@@ -385,36 +395,23 @@ export default function CotacaoPublicaCompleta() {
                 veiculo_blindado: isBlindado,
               },
             });
-            
-            if (dados.cor) {
-              toast.success(`Cor do veículo detectada: ${dados.cor}`);
-            }
-            
-            // Se blindado detectado, disparar aprovação da diretoria (mesma regra de FIPE alta)
+            if (dados.cor) toast.success(`Cor do veículo detectada: ${dados.cor}`);
             if (isBlindado && cotacao?.id) {
-              // Verificar se restricao_blindado_absoluta está ativa
               const { data: configBlindado } = await (supabase as any)
                 .from('configuracoes')
                 .select('valor')
                 .eq('chave', 'restricao_blindado_absoluta')
                 .maybeSingle();
-              
               const bloqueioAbsoluto = configBlindado?.valor === 'true';
-              
               if (bloqueioAbsoluto) {
-                toast.error('Veículo blindado não é aceito para proteção.', {
-                  duration: 10000,
-                });
+                toast.error('Veículo blindado não é aceito para proteção.', { duration: 10000 });
               } else {
-                // Verificar se dupla aprovação está ativa
                 const { data: configDupla } = await (supabase as any)
                   .from('configuracoes')
                   .select('valor')
                   .eq('chave', 'dupla_aprovacao_fipe_diretoria_ativa')
                   .maybeSingle();
-                
                 if (configDupla?.valor === 'true') {
-                  // Disparar notificação para diretoria (mesmo mecanismo de FIPE alta)
                   try {
                     await supabase.functions.invoke('notificar-diretoria-fipe', {
                       body: {
@@ -426,9 +423,7 @@ export default function CotacaoPublicaCompleta() {
                         veiculo_placa: cotacao.veiculo_placa,
                       },
                     });
-                    toast.warning('Veículo blindado detectado. Sua cotação será analisada internamente.', {
-                      duration: 8000,
-                    });
+                    toast.warning('Veículo blindado detectado. Sua cotação será analisada internamente.', { duration: 8000 });
                   } catch (e) {
                     console.error('Erro ao notificar diretoria sobre blindado:', e);
                   }
@@ -436,9 +431,34 @@ export default function CotacaoPublicaCompleta() {
               }
             }
           }
+
+          // OCR falhou OU pediu revisão → abrir editor manual
+          if (!sucessoOcr || ocrData?.sugestao === 'revisar') {
+            setOcrFallback({
+              open: true,
+              docTipo: doc.tipo,
+              docNome: doc.nome,
+              schemaTipo: tipoSchema,
+              dados: (ocrData?.dados as Record<string, unknown>) || null,
+              sugestao: ocrData?.sugestao,
+              legivel: ocrData?.legivel,
+            });
+            toast.warning(`Não conseguimos ler ${doc.nome} automaticamente. Confirme/preencha os dados.`, {
+              duration: 6000,
+            });
+          }
         } catch (ocrError) {
-          // Não bloquear o fluxo se OCR falhar
-          console.warn('OCR do CRLV falhou, continuando sem extração automática:', ocrError);
+          // Erro de rede/timeout — abrir editor manual também
+          console.warn(`OCR de ${doc.tipo} falhou, abrindo editor manual:`, ocrError);
+          setOcrFallback({
+            open: true,
+            docTipo: doc.tipo,
+            docNome: doc.nome,
+            schemaTipo: tipoSchema,
+            dados: null,
+            legivel: false,
+          });
+          toast.warning(`Não conseguimos ler ${doc.nome}. Preencha os dados manualmente.`, { duration: 6000 });
         }
       }
     } catch {
