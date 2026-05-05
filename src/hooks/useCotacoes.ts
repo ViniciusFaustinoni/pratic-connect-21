@@ -75,6 +75,63 @@ export interface UseCotacoesOptions {
   searchTerm?: string;
 }
 
+export interface CotacoesFunilCounts {
+  total: number;
+  em_andamento_total: number;
+  finalizadas_total: number;
+  rascunho: number;
+  enviada: number;
+  escolhendo_plano: number;
+  enviando_documentos: number;
+  em_analise: number;
+  assinando_contrato: number;
+  pagando_taxa: number;
+  agendando_vistoria: number;
+  concluido: number;
+  perdida: number;
+}
+
+/**
+ * Contadores do funil calculados no servidor via RPC `cotacoes_funil_counts`.
+ * Permite mostrar totais reais sem trazer todas as linhas para o cliente.
+ */
+export function useCotacoesFunilCounts(options?: UseCotacoesOptions) {
+  const search = (options?.searchTerm || '').trim();
+  const effectiveScope: 'own' | 'team' | 'all' =
+    options?.viewScope === 'all' || options?.viewScope === 'team' ? options.viewScope : 'own';
+  const effectiveVendedorId = effectiveScope === 'own' ? options?.vendedorId : null;
+
+  return useQuery({
+    queryKey: ['cotacoes', 'funil-counts', effectiveScope, effectiveVendedorId, search],
+    queryFn: async (): Promise<CotacoesFunilCounts> => {
+      const { data, error } = await supabase.rpc('cotacoes_funil_counts', {
+        p_vendedor_id: effectiveVendedorId,
+        p_view_scope: effectiveScope,
+        p_search: search || null,
+      });
+      if (error) throw error;
+      const v = (data || {}) as Partial<CotacoesFunilCounts>;
+      return {
+        total: v.total ?? 0,
+        em_andamento_total: v.em_andamento_total ?? 0,
+        finalizadas_total: v.finalizadas_total ?? 0,
+        rascunho: v.rascunho ?? 0,
+        enviada: v.enviada ?? 0,
+        escolhendo_plano: v.escolhendo_plano ?? 0,
+        enviando_documentos: v.enviando_documentos ?? 0,
+        em_analise: v.em_analise ?? 0,
+        assinando_contrato: v.assinando_contrato ?? 0,
+        pagando_taxa: v.pagando_taxa ?? 0,
+        agendando_vistoria: v.agendando_vistoria ?? 0,
+        concluido: v.concluido ?? 0,
+        perdida: v.perdida ?? 0,
+      };
+    },
+    placeholderData: keepPreviousData,
+    staleTime: 1000 * 30,
+  });
+}
+
 export function useCotacoes(options?: UseCotacoesOptions) {
   const search = (options?.searchTerm || '').trim();
   // Defesa em profundidade: se o caller não declarou explicitamente um escopo
