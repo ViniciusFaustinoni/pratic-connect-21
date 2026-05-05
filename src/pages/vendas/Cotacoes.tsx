@@ -800,12 +800,12 @@ export default function Cotacoes() {
       </div>
 
       {/* Card mobile: total de cotações (visível mesmo com filtros aplicados) */}
-      {cotacoes && cotacoes.length > 0 && (
+      {funilCounts && funilCounts.total > 0 && (
         <div className="md:hidden">
           <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 flex items-center justify-between">
             <div className="text-sm">
               <span className="text-muted-foreground">Você tem </span>
-              <span className="font-bold text-primary">{cotacoes.length}</span>
+              <span className="font-bold text-primary">{funilCounts.total}</span>
               <span className="text-muted-foreground"> cotação(ões) no total</span>
             </div>
             {hasActiveFilters && (
