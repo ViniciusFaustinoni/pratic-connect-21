@@ -47,6 +47,8 @@ interface EtapaConsultaFipeProps {
   setValorFipe: (valor: number | null) => void;
   onNext: () => void;
   onManualEntry: () => void;
+  modoNotaFiscal?: boolean;
+  setModoNotaFiscal?: (v: boolean) => void;
 }
 
 const formatPlaca = (value: string): string => {
