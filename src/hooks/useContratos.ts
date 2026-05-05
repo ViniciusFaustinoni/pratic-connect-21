@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
@@ -21,6 +21,7 @@ export interface ContratoWithRelations extends Contrato {
   } | null;
 }
 
+// Hook legado (mantido para compat — limit 200, sem paginação)
 export function useContratos(vendedorId?: string | null) {
   return useQuery({
     queryKey: ['contratos', vendedorId || 'all'],
@@ -47,6 +48,116 @@ export function useContratos(vendedorId?: string | null) {
     staleTime: 1000 * 60 * 5, // 5 minutos
   });
 }
+
+// ============================================
+// HOOK PAGINADO (server-side range + count)
+// ============================================
+export interface UseContratosPaginadosOptions {
+  vendedorId?: string | null;
+  status?: StatusContrato | 'all';
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export function useContratosPaginados({
+  vendedorId,
+  status = 'all',
+  search = '',
+  page = 1,
+  pageSize = 50,
+}: UseContratosPaginadosOptions) {
+  const trimmed = search.trim();
+  return useQuery({
+    queryKey: ['contratos', 'paginados', vendedorId || 'all', status, trimmed, page, pageSize],
+    placeholderData: keepPreviousData,
+    queryFn: async () => {
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      let q = supabase
+        .from('contratos')
+        .select(`
+          *,
+          leads (id, nome, telefone, email, veiculo_marca, veiculo_modelo, veiculo_ano, veiculo_placa),
+          associados:associados!fk_contratos_associado (id, nome, telefone, cpf, email),
+          planos (id, nome, codigo),
+          cotacoes:cotacoes!contratos_cotacao_id_fkey (id, veiculo_marca, veiculo_modelo, veiculo_ano, valor_adesao, valor_total_mensal)
+        `, { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
+      if (vendedorId) q = q.eq('vendedor_id', vendedorId);
+      if (status && status !== 'all') q = q.eq('status', status);
+
+      // Busca: número OU CPF/nome de associado/lead via subqueries
+      if (trimmed) {
+        const safe = trimmed.replace(/[%,()]/g, '');
+        const orParts: string[] = [`numero.ilike.%${safe}%`];
+
+        // Busca em associados
+        const { data: assocIds } = await supabase
+          .from('associados')
+          .select('id')
+          .or(`nome.ilike.%${safe}%,cpf.ilike.%${safe}%`)
+          .limit(500);
+        const aIds = (assocIds || []).map((r: any) => r.id);
+        if (aIds.length) orParts.push(`associado_id.in.(${aIds.join(',')})`);
+
+        // Busca em leads
+        const { data: leadIds } = await supabase
+          .from('leads')
+          .select('id')
+          .ilike('nome', `%${safe}%`)
+          .limit(500);
+        const lIds = (leadIds || []).map((r: any) => r.id);
+        if (lIds.length) orParts.push(`lead_id.in.(${lIds.join(',')})`);
+
+        q = q.or(orParts.join(','));
+      }
+
+      const { data, error, count } = await q;
+      if (error) throw error;
+
+      const total = count ?? 0;
+      return {
+        contratos: (data || []) as ContratoWithRelations[],
+        pagination: {
+          page,
+          pageSize,
+          total,
+          totalPages: Math.max(1, Math.ceil(total / pageSize)),
+        },
+      };
+    },
+    staleTime: 1000 * 30,
+  });
+}
+
+// Contadores por status (para abas)
+export function useContratosStatusCounts(opts: { vendedorId?: string | null; search?: string }) {
+  const trimmed = (opts.search || '').trim();
+  return useQuery({
+    queryKey: ['contratos', 'status-counts', opts.vendedorId || 'all', trimmed],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('contratos_status_counts', {
+        p_vendedor_id: opts.vendedorId || null,
+        p_search: trimmed || null,
+      });
+      if (error) throw error;
+      const obj = (data as any) || {};
+      const porStatus = (obj.por_status || {}) as Record<string, number>;
+      return {
+        total: Number(obj.total || 0),
+        valor_mensal_ativo: Number(obj.valor_mensal_ativo || 0),
+        porStatus,
+      };
+    },
+    staleTime: 1000 * 30,
+  });
+}
+
+
 
 export function useContrato(id: string | undefined) {
   return useQuery({
