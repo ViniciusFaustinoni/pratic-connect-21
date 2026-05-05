@@ -228,12 +228,13 @@ export default function VistoriaCompletaAnalise() {
       if (!id) return null;
       const { data } = await supabase
         .from('servicos')
-        .select('id, decisao_instalador, ressalvas_instalador, fotos_ressalva, veiculo_id, associado_id')
+        .select('id, decisao_instalador, ressalvas_instalador, fotos_ressalva, veiculo_id, associado_id, instalacao_origem_id, status')
         .eq('tipo', 'instalacao')
         .eq('decisao_instalador', 'negado')
-        .limit(1);
-      if (!data || data.length === 0) return null;
-      return data[0];
+        .eq('instalacao_origem_id', id)
+        .eq('status', 'em_analise')
+        .maybeSingle();
+      return data;
     },
     enabled: !!id && !!instalacao,
   });

@@ -1,42 +1,47 @@
-## Objetivo
+## Causa raiz
 
-Adicionar na Etapa 2 da Cotação (`/vendas/cotacao`) um toggle **"Veículo dentro da Agência (0km)"**. Quando ativo, oculta toda a UI de consulta/preenchimento FIPE (placa, botão "Consultar FIPE", seletor de variantes, alternativas, indicadores de auto-preenchimento) e exibe apenas:
-- Marca, Modelo, Ano (manuais)
-- **Valor da Nota Fiscal** (campo monetário) — usado em todo o cálculo no lugar do `valorFipe`
+`src/pages/cadastro/VistoriaCompletaAnalise.tsx` (linhas 225–239) busca o serviço negado **sem escopo nenhum**:
 
-O valor da nota alimenta `valorFipe` no estado da cotação, de modo que `usePlanosCotacao`, depreciação, taxa de adesão (% sobre FIPE), regra do 1%, etc., funcionam sem nenhuma mudança nos hooks/cálculos a jusante.
+```ts
+.from('servicos')
+.select('id, decisao_instalador, ressalvas_instalador, fotos_ressalva, veiculo_id, associado_id')
+.eq('tipo', 'instalacao')
+.eq('decisao_instalador', 'negado')
+.limit(1);
+```
 
-## Mudanças
+Não filtra por `instalacao_origem_id`, nem por `associado_id`, nem por `veiculo_id`. Resultado: enquanto existir **qualquer** serviço negado no banco, ele é injetado em **toda** página `/cadastro/instalacoes/:id/ativar`.
 
-### 1. `src/components/cotacao/EtapaConsultaFipe.tsx`
-- Adicionar prop `modoNotaFiscal: boolean` e `setModoNotaFiscal: (v: boolean) => void`.
-- No topo do `CardContent`, render do `Switch` (shadcn) com label **"Veículo dentro da Agência (0km)"** e descrição curta ("Use o valor da Nota Fiscal no lugar da FIPE").
-- Quando `modoNotaFiscal === true`:
-  - Não renderizar: input de placa + botão "Consultar FIPE", alerta de variantes FIPE, badges de auto-preenchimento.
-  - Limpar `placa`, `veiculoEncontrado`, `fipeAlternativas`, `camposAutoPreenchidos` ao ativar.
-  - Renderizar Marca / Modelo / Ano (sem ícone "auto-preenchido") + campo **"Valor da Nota Fiscal"** (substituindo o label "Valor FIPE", reaproveitando `valorFipe`/`setValorFipe` com `parseCurrency`/`formatCurrency` já existentes).
-  - `canProceed` continua exigindo marca, modelo, ano e valor > 0.
-- Quando `modoNotaFiscal === false`: comportamento atual inalterado.
+Confirmado no banco: hoje há exatamente um registro `decisao_instalador='negado'` — moto RKL6I08 (Honda CG 160, JOAO VICTOR PEREIRA, instalação `3cbd44ea-4f92-…`). Por isso, ao abrir a ativação de THAYSSA (TDC6E30) ou qualquer outra, o banner exibe placa, motivo e foto da moto do João — corpo da página continua sendo do associado aberto, gerando a confusão.
 
-### 2. `src/pages/vendas/Cotacao.tsx`
-- Novo estado: `const [modoNotaFiscal, setModoNotaFiscal] = useState(false);`
-- Resetar em `handleNovaCotacao`.
-- Passar props para `EtapaConsultaFipe`.
-- Em `handleEtapa2Next`: se `modoNotaFiscal`, **não** sobrescrever campos com `veiculoEncontrado` (forçar `setModoEntrada('manual')` e manter `placa` vazia).
-- Em `handleIniciarCadastro` / `handleGerarPDF`: nada muda — `valorFipe` já carrega o valor da nota; placa segue vazia ou o que o usuário digitou.
-- (Opcional, não requerido agora) propagar flag `origem_valor: 'nota_fiscal' | 'fipe'` no `dadosCotacao` para o contrato saber a origem.
+## Correção
 
-### 3. `src/components/cotacao/EtapaResultado.tsx` (ajuste mínimo de label)
-- Quando `modoNotaFiscal` (passar como prop opcional `origemValor?: 'fipe' | 'nota'`), trocar o label exibido "Valor FIPE: R$ X" para "Valor da Nota: R$ X" no resumo do veículo. Sem mudança em cálculo.
+Em `VistoriaCompletaAnalise.tsx`, escopar a query `servico-recusa-instalacao`:
 
-## Detalhes técnicos
+- Filtrar por `instalacao_origem_id = id` (param da rota = id da instalação aberta).
+- Adicionar `status = 'em_analise'` para ignorar negativas já resolvidas/realocadas.
+- Trocar `.limit(1)` + `data[0]` por `.maybeSingle()`.
 
-- Os hooks de cálculo (`usePlanosCotacao`, taxa de adesão, depreciação, regra do 1%) já operam sobre `valorFipe: number`. Reutilizar esse mesmo campo evita duplicação e mantém compatibilidade com Aprovações por FIPE alta, regra do 1%, etc.
-- Não alteramos schema de banco nesta entrega; o valor da nota é tratado como FIPE para fins de cálculo.
-- Toggle implementado com `<Switch />` do shadcn já existente no projeto.
-- Detecção de tipo de veículo (`useDetectarTipoVeiculo(marca, modelo)`) continua funcionando porque marca/modelo seguem preenchidos.
+Trecho-alvo:
 
-## Fora de escopo
+```ts
+const { data } = await supabase
+  .from('servicos')
+  .select('id, decisao_instalador, ressalvas_instalador, fotos_ressalva, veiculo_id, associado_id, instalacao_origem_id, status')
+  .eq('tipo', 'instalacao')
+  .eq('decisao_instalador', 'negado')
+  .eq('instalacao_origem_id', id)
+  .eq('status', 'em_analise')
+  .maybeSingle();
+return data;
+```
 
-- Persistir flag `origem_valor` no banco (`cotacoes`/`contratos`).
-- Replicar o toggle no fluxo público (`/cotacao-publica/...`) — só `/vendas/cotacao`. Confirmar antes se também é desejado no público.
+Defensivo extra (renderização do banner): só renderizar `temRecusaPendente` quando `servicoRecusa.instalacao_origem_id === id`, garantindo que mesmo que a query mude no futuro, o card nunca extravase de contexto.
+
+## Validação
+
+1. Abrir as 3 ativações pendentes hoje (TDC6E30 / RIR1B37 / KRX9802) → nenhum banner vermelho de "NEGADO".
+2. Abrir a instalação real de RKL6I08 → banner continua aparecendo com motivo, fotos e botão "Tomar Decisão" funcionando normalmente.
+3. Cabeçalho ("Ativação de Rastreador — placa • nome") deixa de exibir o veículo errado.
+
+Sem migração de dados; o registro negado de RKL6I08 segue válido e visível apenas no contexto correto.
