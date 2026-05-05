@@ -12,6 +12,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { gerarResumoAuditoria, resumoAuditoriaTexto } from '@/lib/auditoria-formatters';
+import { useServerList } from '@/hooks/useServerList';
+import { ListToolbar } from '@/components/lists/ListToolbar';
+import { ServerPagination } from '@/components/lists/ServerPagination';
 
 const acaoConfig: Record<string, { label: string; className: string }> = {
   login: { label: 'Login', className: 'border-primary/30 bg-primary/10 text-primary' },
@@ -66,41 +69,66 @@ const formatJSON = (data: unknown) => {
   }
 };
 
+type LogFilters = {
+  acao: string;
+  modulo: string;
+  tabela: string;
+  dataInicio: string;
+  dataFim: string;
+};
+
+const DEFAULT_FILTERS: LogFilters = {
+  acao: '',
+  modulo: '',
+  tabela: '',
+  dataInicio: '',
+  dataFim: '',
+};
+
+
 export default function LogsAuditoria() {
-  const [filters, setFilters] = useState({
-    acao: '',
-    modulo: '',
-    tabela: '',
-    busca: '',
-    dataInicio: '',
-    dataFim: '',
-  });
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
-  const { data: logs, isLoading } = useQuery({
-    queryKey: ['logs-auditoria', filters],
-    queryFn: async () => {
+  const list = useServerList<any, LogFilters>({
+    key: 'logs',
+    defaultPageSize: 50,
+    defaultFilters: DEFAULT_FILTERS,
+    fetcher: async ({ search, page, pageSize, filters }) => {
       let query = (supabase as any)
         .from('logs_auditoria')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(200);
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false });
 
       if (filters.acao) query = query.eq('acao', filters.acao);
       if (filters.modulo) query = query.eq('modulo', filters.modulo);
       if (filters.tabela) query = query.eq('tabela', filters.tabela);
       if (filters.dataInicio) query = query.gte('created_at', filters.dataInicio);
       if (filters.dataFim) query = query.lte('created_at', `${filters.dataFim}T23:59:59`);
-      if (filters.busca.trim()) {
-        const term = filters.busca.trim().replace(/[%_]/g, '');
-        query = query.or(`descricao.ilike.%${term}%,usuario_nome.ilike.%${term}%,tabela.ilike.%${term}%,modulo.ilike.%${term}%,registro_id.eq.${term}`);
+      if (search.trim()) {
+        const term = search.trim().replace(/[%_]/g, '');
+        const orParts = [
+          `descricao.ilike.%${term}%`,
+          `usuario_nome.ilike.%${term}%`,
+          `tabela.ilike.%${term}%`,
+          `modulo.ilike.%${term}%`,
+        ];
+        // Só inclui registro_id se for UUID válido (evita erro de cast)
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(term)) {
+          orParts.push(`registro_id.eq.${term}`);
+        }
+        query = query.or(orParts.join(','));
       }
 
-      const { data, error } = await query;
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+      const { data, error, count } = await query.range(from, to);
       if (error) throw error;
-      return data || [];
+      return { data: data || [], count: count ?? 0 };
     },
   });
+
+  const logs = list.items;
+  const isLoading = list.isLoading;
 
   const { data: tabelaOptions = [] } = useQuery({
     queryKey: ['logs-auditoria-tabelas'],
@@ -324,19 +352,28 @@ export default function LogsAuditoria() {
       </div>
 
       <Card>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-6">
-            <div>
-              <label className="mb-1 block text-sm font-medium">Busca</label>
-              <Input
-                value={filters.busca}
-                onChange={(e) => setFilters((f) => ({ ...f, busca: e.target.value }))}
-                placeholder="Usuário, grade, vendedor ou ID"
-              />
-            </div>
+        <CardContent className="space-y-4 pt-6">
+          <ListToolbar
+            search={list.search}
+            onSearchChange={list.setSearch}
+            searchPlaceholder="Buscar por usuário, descrição, tabela ou ID…"
+            hasActiveFilters={
+              !!list.search ||
+              !!list.filters.acao ||
+              !!list.filters.modulo ||
+              !!list.filters.tabela ||
+              !!list.filters.dataInicio ||
+              !!list.filters.dataFim
+            }
+            onClearFilters={list.clearFilters}
+          />
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-5">
             <div>
               <label className="mb-1 block text-sm font-medium">Ação</label>
-              <Select value={filters.acao} onValueChange={(value) => setFilters((f) => ({ ...f, acao: value === 'all' ? '' : value }))}>
+              <Select
+                value={list.filters.acao || 'all'}
+                onValueChange={(v) => list.setFilters({ acao: v === 'all' ? '' : v } as Partial<LogFilters>)}
+              >
                 <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas</SelectItem>
@@ -346,7 +383,10 @@ export default function LogsAuditoria() {
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium">Módulo</label>
-              <Select value={filters.modulo} onValueChange={(value) => setFilters((f) => ({ ...f, modulo: value === 'all' ? '' : value }))}>
+              <Select
+                value={list.filters.modulo || 'all'}
+                onValueChange={(v) => list.setFilters({ modulo: v === 'all' ? '' : v } as Partial<LogFilters>)}
+              >
                 <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
@@ -356,7 +396,10 @@ export default function LogsAuditoria() {
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium">Origem/Tabela</label>
-              <Select value={filters.tabela} onValueChange={(value) => setFilters((f) => ({ ...f, tabela: value === 'all' ? '' : value }))}>
+              <Select
+                value={list.filters.tabela || 'all'}
+                onValueChange={(v) => list.setFilters({ tabela: v === 'all' ? '' : v } as Partial<LogFilters>)}
+              >
                 <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas</SelectItem>
@@ -366,11 +409,19 @@ export default function LogsAuditoria() {
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium">Data Início</label>
-              <Input type="date" value={filters.dataInicio} onChange={(e) => setFilters((f) => ({ ...f, dataInicio: e.target.value }))} />
+              <Input
+                type="date"
+                value={list.filters.dataInicio}
+                onChange={(e) => list.setFilters({ dataInicio: e.target.value } as Partial<LogFilters>)}
+              />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium">Data Fim</label>
-              <Input type="date" value={filters.dataFim} onChange={(e) => setFilters((f) => ({ ...f, dataFim: e.target.value }))} />
+              <Input
+                type="date"
+                value={list.filters.dataFim}
+                onChange={(e) => list.setFilters({ dataFim: e.target.value } as Partial<LogFilters>)}
+              />
             </div>
           </div>
         </CardContent>
@@ -380,15 +431,25 @@ export default function LogsAuditoria() {
         <TabsList>
           <TabsTrigger value="todos" className="gap-2">
             <FileText className="h-4 w-4" />
-            Todos os logs
+            Todos os logs ({list.total.toLocaleString('pt-BR')})
           </TabsTrigger>
           <TabsTrigger value="hierarquia" className="gap-2">
             <GitBranch className="h-4 w-4" />
             Histórico de Hierarquia ({historicoHierarquia.length})
           </TabsTrigger>
         </TabsList>
-        <TabsContent value="todos">
+        <TabsContent value="todos" className="space-y-2">
           {renderLogsTable(logs, isLoading, 'Nenhum log encontrado')}
+          <ServerPagination
+            page={list.page}
+            totalPages={list.totalPages}
+            pageSize={list.pageSize}
+            total={list.total}
+            range={list.range}
+            onPageChange={list.setPage}
+            onPageSizeChange={list.setPageSize}
+            isFetching={list.isFetching}
+          />
         </TabsContent>
         <TabsContent value="hierarquia">
           {renderLogsTable(historicoHierarquia, isLoadingHierarquia, 'Nenhum histórico de hierarquia encontrado')}
