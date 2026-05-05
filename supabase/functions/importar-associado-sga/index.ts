@@ -161,10 +161,10 @@ Deno.serve(async (req) => {
       const placa = cleanPlaca(v.placa);
       if (!placa) continue;
 
-      // Buscar detalhes na Hinova (best-effort)
+      // Buscar detalhes na Hinova (best-effort) — admin = caminho com reauth
       let det: any = null;
       try {
-        const { found } = await buscarVeiculoPorPlaca(session, placa);
+        const { found } = await buscarVeiculoPorPlaca(admin, placa);
         det = found;
       } catch (e) {
         console.warn(`[importar-associado-sga] detalhe placa ${placa} falhou:`, (e as any)?.message);
