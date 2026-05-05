@@ -1,80 +1,92 @@
-## Contexto
+## Diagnóstico do giro 360°
 
-A infraestrutura de auditoria já existe:
+Login realizado como diretor; testei `/cadastro/associados` e `/vendas/cotacoes` e mapei o resto por código (106 telas têm campo de busca).
 
-- Tabela `public.logs_auditoria` (usuario_id, usuario_nome, acao, modulo, tabela, registro_id, dados_anteriores, dados_novos, descricao, ip_address, user_agent, created_at).
-- Helper frontend `registrarLog()` em `src/hooks/useAuditLog.ts` (chamado em alguns fluxos).
-- Tela `/diretoria/logs` (`src/pages/diretoria/LogsAuditoria.tsx`) com filtros por ação/módulo/tabela/data/busca.
+### Achados macro
 
-**Problema:** hoje só caem logs gerados manualmente nos pontos que chamam `registrarLog` (concentrados em cotações, contratos, instalações, veículos, associados parciais). Ações como "técnico iniciou serviço", "atribuição de prestador", "mudança em cadastro", "aprovação de vistoria/sinistro/diretoria", "alteração de plano/comissão", etc. não caem porque dependeriam de chamadas espalhadas em dezenas de telas/edges.
+| Categoria | Contagem | Observação |
+|---|---|---|
+| Telas com tabela/grid + dados | ~120 | base do giro |
+| Já têm paginação server-side | 12 | Associados, Veículos, Leads, Propostas, Cotações, Inadimplentes, Cobranças, Comissões/Pagamentos, Conta Corrente, Chamados, Agência |
+| Sem paginação, com `.limit(50‑1000)` fixo | ~25 | listas truncam silenciosamente após o teto |
+| Sem paginação E sem limit (carregam tudo) | ~40 | pesado em telas como `RH/Funcionarios`, `Juridico/Casos`, `Eventos/Sindicancias`, `Configuracoes/Perfis`, `Diretoria/TabelaPrecos`, `Cobrança/RelacionamentoTrocas`, `Marketing/ComunicacaoMassa` |
+| Filtro só client-side (`.filter().toLowerCase().includes()`) | espalhado | não acha registros que estão depois do limit |
+| Sem `useDebounce` na busca | maioria | dispara request a cada tecla |
 
-## Estratégia
+### Bugs concretos observados em runtime
 
-Mover a auditoria para o **banco**, via trigger genérico que captura toda escrita em uma whitelist de tabelas críticas. O usuário executor é resolvido a partir do JWT (`auth.uid()` → `profiles`). Isso captura tudo automaticamente — UI, edge functions, scripts — sem precisar instrumentar cada ponto.
+1. **`/vendas/cotacoes`**: header diz "295 Em Andamento" mas a tabela renderiza vazia "Nenhuma cotação encontrada" sem qualquer filtro aplicado. Filtro/paginação está dessincronizado dos counts.
+2. **`/cadastro/associados`**: busca funciona, mas só busca os já carregados (não dispara nova query no servidor — confirmar se `useAssociadoSearch` cobre).
+3. Counts dos cards de KPI batem 9.534 mas a tabela tem `.limit` interno que não é exposto na UI (sem indicador "mostrando X de Y").
 
-### 1. Função genérica de auditoria (migration)
+## Estratégia: padrão único de listagem paginada
 
-Criar `public.fn_auditoria_generica()` (`SECURITY DEFINER`) que, para cada `TG_OP`:
+Em vez de retocar 100+ telas, criar **3 primitivas reusáveis** e migrar telas em ordem de impacto:
 
-- Calcula `usuario_id`/`usuario_nome` via `auth.uid()` + `profiles` (fallback para `'Sistema'` quando não houver JWT — edges com service role).
-- Mapeia `TG_TABLE_NAME` para `modulo` via `CASE` (ex.: `servicos`/`agendamentos_base`/`vistorias`/`instalacoes` → `operacoes`; `associados` → `associados`; `contratos`/`contratos_historico` → `contratos`; `veiculos` → `veiculos`; `aprovacoes_*` → `aprovacoes`; `user_roles`/`profiles` → `usuarios`; `planos`/`coberturas`/`beneficios*` → `planos`; `grades_comissao*`/`hierarquia_vendas`/`comissoes*` → `comissoes`).
-- Determina `acao` por heurística:
-  - `INSERT` → `criar`.
-  - `DELETE` → `excluir`.
-  - `UPDATE` em coluna `status`: se passou para `ativo`/`aprovado`/`concluida` → `aprovar`/`ativar`/`concluir`; se `cancelado`/`reprovado` → `reprovar`/`cancelar`; se passou a ter `prestador_id`/`vendedor_id`/`tecnico_id` → `atribuir`; senão `editar`.
-- Calcula diff: `dados_anteriores`/`dados_novos` apenas com colunas que mudaram (usar `to_jsonb(OLD)`/`to_jsonb(NEW)` filtrado), evitando colunas ruidosas (`updated_at`, `embeddings`, etc.).
-- Gera `descricao` curta (`<acao> em <tabela> #<registro_id>` + nome humano quando disponível: placa, nome, número do contrato).
-- Insere em `logs_auditoria` (silenciar erros via `EXCEPTION WHEN OTHERS THEN ...` para nunca derrubar a operação principal).
+### 1. Hook `useServerList<T>` — `src/hooks/useServerList.ts`
 
-Adicionar nova ação `'concluir'` ao enum implícito (texto livre — só listar nos filtros da UI).
+Wrapper sobre `@tanstack/react-query` que padroniza:
 
-### 2. Triggers nas tabelas críticas (migration)
+- Estado: `{ search, page, pageSize, sort, filters }` em URL (`useSearchParams`) — link compartilhável e back-button funciona.
+- Debounce automático de `search` (300 ms via `useDebounce` já existente).
+- Query factory recebe `(supabase, { search, page, pageSize, filters })` e devolve `{ data, count }` usando `.range((page-1)*size, page*size-1)` + `count: 'exact'`.
+- Retorna `{ items, total, totalPages, page, setPage, search, setSearch, filters, setFilters, isLoading, isFetching }`.
 
-Anexar `AFTER INSERT OR UPDATE OR DELETE FOR EACH ROW EXECUTE FUNCTION fn_auditoria_generica()` em:
+### 2. Componente `<ListToolbar />` — `src/components/lists/ListToolbar.tsx`
 
-- **Operações:** `servicos`, `agendamentos_base`, `vistorias`, `vistoria_fotos`, `instalacoes`, `acionamentos_roubo_furto`, `despacho_reboque`, `chamados_assistencia`, `confirmacoes_agendamento`, `encaixes_urgentes`, `ordens_servico`.
-- **Cadastro:** `associados`, `veiculos`, `contratos`, `contratos_documentos`, `documento_gerados`.
-- **Comercial/comissões:** `cotacoes`, `hierarquia_vendas`, `usuario_grade_comissao`, `grades_comissao`, `grades_comissao_versoes`, `comissoes_pagamentos`, `cc_vendedor_lancamentos`.
-- **Aprovações:** `aprovacoes_fipe_diretoria`, `aprovacoes_fipe_menor`, `aprovacoes_elegibilidade`, `chat_solicitacoes_ia`.
-- **Acesso/usuários:** `profiles`, `user_roles`, `app_roles_config`.
-- **Produto/preço:** `planos`, `coberturas`, `beneficios`, `beneficios_adicionais`, `entity_eligibility_rules`, `campanhas_desconto`.
-- **Cobrança/sinistros:** `cobrancas`, `acordos`, `sinistros` (se existir como tabela), `caso_juridico_historico`.
+Barra padrão: input de busca (com X para limpar), slots para selects de filtro, botão "Limpar filtros", contagem "Mostrando A–B de N".
 
-Tabelas que já têm triggers próprias (`audit_cotacao_delete`, `fn_log_associado_status_change`, `log_rastreador_vinculo_change`, `log_error_report_status_change`) continuam — o trigger genérico complementa sem duplicar (a função detecta `pg_trigger_depth() > 1` para evitar reentrância caso necessário).
+### 3. Componente `<ServerPagination />` — `src/components/lists/ServerPagination.tsx`
 
-### 3. Tabelas a NÃO auditar (ruído)
+Reusa `src/components/ui/pagination.tsx`. Mostra Anterior/Próxima, números (com ellipsis), seletor de tamanho de página (25/50/100), e botão "Ir para página".
 
-Excluir explicitamente da whitelist (ou nunca anexar trigger): `client_telemetry`, `edge_functions_logs`, `auth_logs`, `auth_tentativas`, `auth_sessoes`, `cobranca_eventos`, `asaas_webhooks_log`, `api_leads_logs`, `cotacoes_historico`, `contratos_historico`, `associados_historico` (já são históricos), `chat_mensagens_ia`, `client_telemetry`, `*_metrics`, `*_log` antigos.
+### 4. Migração das telas — em ondas
 
-### 4. Atualizar a UI `/diretoria/logs`
+**Onda 1 — bugs críticos visíveis (essa entrega):**
 
-Em `src/pages/diretoria/LogsAuditoria.tsx`:
+- `/vendas/cotacoes` — corrigir o desalinhamento entre counts e tabela (provavelmente a query da tabela aplica filtros que o counter não aplica; checar `useCotacoesPaginadas` vs `useCotacoesFunilCounts`).
+- `/cadastro/associados` — confirmar que a busca dispara server-side e mostrar "X de Y".
 
-- Ampliar `acaoConfig` com `concluir`, `iniciar`, `cancelar`, `sincronizar`.
-- Ampliar `moduloOptions` com `operacoes`, `aprovacoes`, `vendas`, `vistorias`, `instalacoes`, `eventos`, `juridico`, `cadastro`.
-- Trocar `tabelaOptions` (hoje só comissões) por uma lista derivada de `select distinct tabela from logs_auditoria` via query, para os filtros refletirem o que realmente está sendo logado.
-- Manter o restante (export CSV, expand row com diff) inalterado.
+**Onda 2 — telas que truncam silenciosamente (`.limit` fixo sem paginação):**
 
-### 5. Backfill / verificação
+`PosVenda`, `Logs` (configurações), `Negativacao`, `SinistrosList`, `SolicitacoesIA`, `FilaTrabalho`, `EventosPreAnalise`, `ContasPagar`, `AlertasMonitoramento`, `Extrato`, `ProcessosList` (jurídico), `ReguladorOficina`, `LogsAuditoria`, `EventosChatIA`. Adotam `useServerList` + `<ServerPagination />`. Default 50/pg.
 
-Após aplicar a migration, rodar SELECT de smoke test (já em modo build) confirmando que um UPDATE em `servicos.status` gera linha em `logs_auditoria` com `acao='iniciar'` e `usuario_nome` preenchido.
+**Onda 3 — telas grandes sem nenhum limite:**
+
+`rh/FuncionariosList`, `rh/ControlePonto`, `rh/FolhaPagamento`, `juridico/CasosJuridicosList`, `juridico/PrazosControl`, `eventos/SindicanciasList`, `configuracoes/Perfis`, `configuracoes/PlanosSGA`, `diretoria/TabelaPrecos`, `diretoria/IndicadoresAtuariais`, `diretoria/PerfisAcesso`, `cobranca/RelacionamentoTrocas`, `marketing/ComunicacaoMassa`, `monitoramento/FilaVistorias`, `monitoramento/RetiradasPage`, `assistencia/PrestadoresList`, `oficinas/AutoCenters`, `oficinas/Oficinas`. Idem.
+
+**Onda 4 — buscas client-only que precisam ir pro servidor:**
+
+Onde hoje é `array.filter(toLowerCase().includes())` aplicar a busca via `.or('campo1.ilike.%x%,campo2.ilike.%x%')` na query.
+
+### 5. Padrão de busca server-side
+
+Toda lista usa `.or(...)` com `ilike` nos campos textuais relevantes (nome/placa/CPF/numero/telefone/email/ID). CPF/telefone normalizados (remover máscara antes de comparar). Em colunas indexadas pesadas, considerar trigram (`pg_trgm`) — fora desta entrega, registrar TODO.
+
+## Critérios de aceitação por tela migrada
+
+- Total visível "Mostrando 1–50 de 9.534".
+- Busca dispara após 300 ms, atualiza URL (`?q=marcos&page=1`).
+- Paginação navega sem reload e preserva filtros.
+- Filtros mostram chip "Limpar" quando ativos.
+- F5 / compartilhar URL restaura o estado completo.
 
 ## Detalhes técnicos
 
-- Função em PL/pgSQL, `SECURITY DEFINER`, `SET search_path = public, auth`.
-- Resolver usuário: `select id, nome from profiles where user_id = auth.uid() limit 1`. Se nulo → `usuario_nome = 'Sistema'`.
-- Diff: iterar `jsonb_each(to_jsonb(NEW))` e comparar com `to_jsonb(OLD)`, ignorando lista fixa (`updated_at`, `created_at`, `search_vector`, `embedding`).
-- `registro_id`: tentar `NEW.id` (cast para uuid via `(to_jsonb(NEW)->>'id')::uuid` em bloco `EXCEPTION` para tabelas sem `id` uuid).
-- `descricao`: `format('%s em %s', acao, TG_TABLE_NAME)` + sufixo opcional via lookup de coluna conhecida (`placa`, `nome`, `numero`, `codigo`).
-- Trigger genérico acrescenta ~1ms por write; aceitável para tabelas alvo (não está na hot-path de telemetria).
-
-## Arquivos afetados
-
-- **Nova migration**: `fn_auditoria_generica()` + ~30 `CREATE TRIGGER`.
-- **Edit:** `src/pages/diretoria/LogsAuditoria.tsx` (filtros) e, opcionalmente, `src/hooks/useAuditLog.ts` (adicionar `'iniciar'`/`'concluir'`/`'sincronizar'` ao tipo `AcaoAuditoria`).
+- `useServerList` aceita `queryKey` array para invalidação seletiva e `enabled` opcional.
+- `count: 'exact'` em todas as queries paginadas (custo aceitável para listas filtradas).
+- Para telas com counts/KPIs separados (ex.: Cotações tem cards por status), manter hook dedicado de counts mas garantir mesma cláusula `where` que a tabela quando os filtros se aplicam.
+- Mobile: paginação vira "Carregar mais" via prop `mode="loadMore"` no mesmo hook.
 
 ## Fora de escopo
 
-- Logs de leitura ("visualizou X") — não solicitado e geraria volume gigante.
-- Auditoria de webhooks externos (Asaas/Hinova) — já existem tabelas dedicadas.
-- Retenção/particionamento da `logs_auditoria` — pode entrar em iteração futura se o volume crescer.
+- Reescrever as telas de detalhes (não-listas).
+- Indexação trigram / full-text — apenas registrar como melhoria futura.
+- Telas de dashboard (Diretoria/Indicadores etc.) sem natureza de "lista pesquisável".
+
+## Entregáveis desta primeira execução
+
+1. Criar `useServerList`, `ListToolbar`, `ServerPagination`.
+2. Aplicar onda 1 (corrigir bug Cotações + ajustar Associados).
+3. Aplicar onda 2 (telas com `.limit` fixo) — ~14 telas.
+4. Após validação, abrir nova entrega para ondas 3 e 4.
