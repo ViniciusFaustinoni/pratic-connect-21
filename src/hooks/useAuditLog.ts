@@ -1,11 +1,12 @@
 import { supabase } from '@/integrations/supabase/client';
 
 // Tipos de ações possíveis no sistema
-export type AcaoAuditoria = 
+export type AcaoAuditoria =
   | 'criar' | 'editar' | 'excluir' | 'visualizar'
   | 'aprovar' | 'reprovar' | 'cancelar' | 'reativar'
   | 'enviar' | 'duplicar' | 'exportar' | 'importar'
   | 'ativar' | 'desativar' | 'atribuir' | 'baixar'
+  | 'iniciar' | 'concluir' | 'sincronizar'
   | 'login' | 'logout';
 
 // Módulos do sistema
