@@ -122,7 +122,7 @@ export default function Associados() {
   } | null>(null);
   const [filtersSheetOpen, setFiltersSheetOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const [detalheAssociadoId, setDetalheAssociadoId] = useState<string | null>(null);
+  
   const [sheetFilters, setSheetFilters] = useState<{
     status?: StatusAssociado[];
     plano_id?: string;
