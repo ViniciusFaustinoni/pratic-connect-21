@@ -495,11 +495,26 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
                     </div>
                   )}
                   {fotoJaEnviada && !isUploading && (
-                    <div className="absolute top-3 right-3">
-                      <div className="bg-success text-white rounded-full p-1.5">
-                        <CheckCircle2 className="h-5 w-5" />
+                    <>
+                      <div className="absolute top-3 right-3">
+                        <div className="bg-success text-white rounded-full p-1.5">
+                          <CheckCircle2 className="h-5 w-5" />
+                        </div>
                       </div>
-                    </div>
+                      {/* Botão "Refazer" sobreposto, sempre visível (parity com vídeo) */}
+                      <div className="absolute bottom-3 right-3">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          onClick={handleCapturarFoto}
+                          className="h-8 text-xs shadow-lg backdrop-blur-sm bg-background/90 hover:bg-background"
+                        >
+                          <RefreshCw className="h-3 w-3 mr-1" />
+                          Refazer
+                        </Button>
+                      </div>
+                    </>
                   )}
                 </div>
               ) : (
