@@ -718,11 +718,6 @@ serve(async (req) => {
           const tipoFipe = tipoVeiculo === 2 ? 'motos'
             : (tipoVeiculo === 3 ? 'caminhoes' : 'carros');
           try {
-            const { data: lookup, error: lkErr } = await supabase.functions.invoke('fipe-lookup', {
-              body: null,
-            });
-            // invoke não suporta query string, então usamos fetch direto
-            void lookup; void lkErr;
             const url = new URL(`${Deno.env.get('SUPABASE_URL')}/functions/v1/fipe-lookup`);
             url.searchParams.set('action', 'buscar-por-nome');
             url.searchParams.set('tipo', tipoFipe);
