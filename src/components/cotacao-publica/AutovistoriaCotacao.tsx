@@ -517,7 +517,18 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
                 </button>
               )}
             </div>
-            
+
+            {/* Mensagem tranquilizadora pós-envio */}
+            {fotoJaEnviada && !isUploading && fotoAtual.id !== 'odometro' && (
+              <div className="bg-success/5 border border-success/20 rounded-lg p-3 flex items-start gap-2">
+                <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
+                <p className="text-xs text-foreground/80 leading-relaxed">
+                  <strong>Foto recebida!</strong> Não se preocupe se não ficou perfeita —
+                  nossa equipe vai conferir todas as fotos manualmente. Você pode refazer
+                  clicando no número da etapa acima se quiser.
+                </p>
+              </div>
+            )}
             {/* KM identificado (odômetro) */}
             {fotoAtual.id === 'odometro' && kmIdentificado && (
               <div className="bg-primary/5 p-3 rounded-lg flex items-center gap-3 border border-primary/20">
