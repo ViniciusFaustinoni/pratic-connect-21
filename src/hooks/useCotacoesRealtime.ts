@@ -1,7 +1,26 @@
-import { useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
+import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+
+// Throttle por chave para reduzir tempestade de invalidações via realtime.
+// Em vez de refetch imediato a cada payload, agrupamos invalidações numa janela
+// curta. O React Query refaz só o que está montado/em uso.
+function makeThrottledInvalidator(qc: QueryClient, windowMs = 1500) {
+  const pending = new Map<string, ReturnType<typeof setTimeout>>();
+  return (keys: (string | string[])[]) => {
+    for (const k of keys) {
+      const arr = Array.isArray(k) ? k : [k];
+      const id = arr.join('|');
+      if (pending.has(id)) continue;
+      const t = setTimeout(() => {
+        pending.delete(id);
+        qc.invalidateQueries({ queryKey: arr });
+      }, windowMs);
+      pending.set(id, t);
+    }
+  };
+}
 
 /**
  * Hook para escutar atualizações em tempo real relacionadas a cotações.
@@ -14,6 +33,7 @@ import { toast } from 'sonner';
  */
 export function useCotacoesRealtime() {
   const queryClient = useQueryClient();
+  const throttledInvalidate = useRef(makeThrottledInvalidator(queryClient)).current;
 
   useEffect(() => {
     console.log('[useCotacoesRealtime] Iniciando listeners realtime');
@@ -31,16 +51,16 @@ export function useCotacoesRealtime() {
         (payload) => {
           console.log('[useCotacoesRealtime] Cotação alterada:', payload.eventType, payload.new);
           
-          // Forçar refetch imediato de todas as cotações
-          queryClient.refetchQueries({ queryKey: ['cotacoes'] });
-          
+          // Throttle: apenas marca como stale; React Query refaz só queries montadas
+          throttledInvalidate([['cotacoes']]);
+
           // Se for update de uma cotação específica
           if (payload.eventType === 'UPDATE' && payload.new) {
             const newData = payload.new as { id?: string; status?: string; status_contratacao?: string; cliente_nome?: string };
             const oldData = payload.old as { status_contratacao?: string; status?: string };
-            
+
             if (newData.id) {
-              queryClient.refetchQueries({ queryKey: ['cotacoes', newData.id] });
+              throttledInvalidate([['cotacoes', newData.id]]);
             }
             
             // Labels específicos para cada etapa do status_contratacao
@@ -97,9 +117,9 @@ export function useCotacoesRealtime() {
           console.log('[useCotacoesRealtime] Contrato alterado:', payload.eventType);
           
           // Invalidar cotações porque a etapa de venda depende do contrato
-          queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
-          queryClient.invalidateQueries({ queryKey: ['contratos'] });
-          queryClient.invalidateQueries({ queryKey: ['ativacoes'] });
+          throttledInvalidate([['cotacoes']]);
+          throttledInvalidate([['contratos']]);
+          throttledInvalidate([['ativacoes']]);
         }
       )
       // Escutar mudanças em instalações (afeta etapa instalacao_agendada/vistoria_agendada)
@@ -114,9 +134,9 @@ export function useCotacoesRealtime() {
           console.log('[useCotacoesRealtime] Instalação alterada:', payload.eventType);
           
           // Invalidar cotações e instalações
-          queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
-          queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
-          queryClient.invalidateQueries({ queryKey: ['instalacoes-disponiveis'] });
+          throttledInvalidate([['cotacoes']]);
+          throttledInvalidate([['instalacoes']]);
+          throttledInvalidate([['instalacoes-disponiveis']]);
           
           // Toast para instalação concluída
           if (payload.eventType === 'UPDATE') {
@@ -141,10 +161,10 @@ export function useCotacoesRealtime() {
           console.log('[useCotacoesRealtime] Vistoria alterada:', payload.eventType);
           
           // Invalidar cotações e vistorias
-          queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
-          queryClient.invalidateQueries({ queryKey: ['vistorias'] });
-          queryClient.invalidateQueries({ queryKey: ['vistorias-mapa'] });
-          queryClient.invalidateQueries({ queryKey: ['ativacoes'] });
+          throttledInvalidate([['cotacoes']]);
+          throttledInvalidate([['vistorias']]);
+          throttledInvalidate([['vistorias-mapa']]);
+          throttledInvalidate([['ativacoes']]);
           
           // Toast para vistoria concluída
           if (payload.eventType === 'UPDATE') {
@@ -172,7 +192,7 @@ export function useCotacoesRealtime() {
           
           // Invalidar histórico da cotação específica
           if (evento.cotacao_id) {
-            queryClient.invalidateQueries({ queryKey: ['cotacao-historico', evento.cotacao_id] });
+            throttledInvalidate([['cotacao-historico', evento.cotacao_id]]);
           }
           
           // Notificação especial para visualização do cliente
@@ -204,9 +224,9 @@ export function useCotacoesRealtime() {
           console.log('[useCotacoesRealtime] Associado alterado:', payload.eventType);
           
           // Invalidar cotações pois a etapa de venda depende do status do associado
-          queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
-          queryClient.invalidateQueries({ queryKey: ['ativacoes'] });
-          queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
+          throttledInvalidate([['cotacoes']]);
+          throttledInvalidate([['ativacoes']]);
+          throttledInvalidate([['propostas-pendentes']]);
           
           // Toast para associado ativado
           const newData = payload.new as { status?: string; nome?: string };
@@ -230,9 +250,9 @@ export function useCotacoesRealtime() {
           console.log('[useCotacoesRealtime] Novo evento no histórico do associado:', payload.new);
           const evento = payload.new as { associado_id?: string };
           if (evento.associado_id) {
-            queryClient.invalidateQueries({ queryKey: ['associado-historico-completo', evento.associado_id] });
+            throttledInvalidate([['associado-historico-completo', evento.associado_id]]);
           }
-          queryClient.invalidateQueries({ queryKey: ['associado-historico-completo'] });
+          throttledInvalidate([['associado-historico-completo']]);
         }
       )
       .subscribe((status) => {
