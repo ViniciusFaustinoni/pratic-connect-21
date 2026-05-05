@@ -1,92 +1,115 @@
-## Diagnóstico do giro 360°
+# Plano final — Adesão sem rastreador (carro <30k / moto <9k, não-Diesel)
 
-Login realizado como diretor; testei `/cadastro/associados` e `/vendas/cotacoes` e mapei o resto por código (106 telas têm campo de busca).
+> **Funcionalidade já existe parcialmente.** Esqueleto pronto (`dispensa_rastreador`, `exige_etapa_instalacao`, autovistoria, vistoria agendada). Faltam ajustes pontuais para paridade total com o fluxo ≥30k/9k.
 
-### Achados macro
+---
 
-| Categoria | Contagem | Observação |
-|---|---|---|
-| Telas com tabela/grid + dados | ~120 | base do giro |
-| Já têm paginação server-side | 12 | Associados, Veículos, Leads, Propostas, Cotações, Inadimplentes, Cobranças, Comissões/Pagamentos, Conta Corrente, Chamados, Agência |
-| Sem paginação, com `.limit(50‑1000)` fixo | ~25 | listas truncam silenciosamente após o teto |
-| Sem paginação E sem limit (carregam tudo) | ~40 | pesado em telas como `RH/Funcionarios`, `Juridico/Casos`, `Eventos/Sindicancias`, `Configuracoes/Perfis`, `Diretoria/TabelaPrecos`, `Cobrança/RelacionamentoTrocas`, `Marketing/ComunicacaoMassa` |
-| Filtro só client-side (`.filter().toLowerCase().includes()`) | espalhado | não acha registros que estão depois do limit |
-| Sem `useDebounce` na busca | maioria | dispara request a cada tecla |
+## Como deve ficar na prática
 
-### Bugs concretos observados em runtime
+Para qualquer adesão (≥30k ou <30k), o cliente recebe o link público e **sempre escolhe entre 2 caminhos**:
 
-1. **`/vendas/cotacoes`**: header diz "295 Em Andamento" mas a tabela renderiza vazia "Nenhuma cotação encontrada" sem qualquer filtro aplicado. Filtro/paginação está dessincronizado dos counts.
-2. **`/cadastro/associados`**: busca funciona, mas só busca os já carregados (não dispara nova query no servidor — confirmar se `useAssociadoSearch` cobre).
-3. Counts dos cards de KPI batem 9.534 mas a tabela tem `.limit` interno que não é exposto na UI (sem indicador "mostrando X de Y").
+```text
+                    [ LINK PÚBLICO ]
+                          │
+            ┌─────────────┴─────────────┐
+            │                           │
+     AUTOVISTORIA                VISTORIA PRESENCIAL
+   (cliente faz pelo cel)        (técnico vai até ele)
+   2 fotos + 1 vídeo                fotos completas
+            │                           │
+       Aprovação                   Aprovação
+       Monitoramento               Monitoramento
+            │                           │
+   ✓ Ativa R&F                    ✓ Ativa R&F
+   ✗ Cobertura total              ✓ Cobertura total
+     pendente                       (proteção principal)
+            │                           │
+            └─── ≥30k/9k: precisa ──────┤
+                 técnico instalar       │
+                 rastreador depois      │
+                                        │
+            └─── <30k/9k: técnico ──────┘
+                 só tira fotos
+                 (sem instalação)
+```
 
-## Estratégia: padrão único de listagem paginada
+**A única diferença real entre ≥30k e <30k é o que o técnico faz na vistoria presencial:**
+- ≥30k/9k → tira fotos **e** instala rastreador
+- <30k/9k → tira **só** fotos (sem equipamento)
 
-Em vez de retocar 100+ telas, criar **3 primitivas reusáveis** e migrar telas em ordem de impacto:
+Tudo o mais é igual: autovistoria, agendamento, atribuição, aprovação manual no Monitoramento, ativação via `ativar-associado`, SGA.
 
-### 1. Hook `useServerList<T>` — `src/hooks/useServerList.ts`
+---
 
-Wrapper sobre `@tanstack/react-query` que padroniza:
+## Os 2 caminhos em detalhe
 
-- Estado: `{ search, page, pageSize, sort, filters }` em URL (`useSearchParams`) — link compartilhável e back-button funciona.
-- Debounce automático de `search` (300 ms via `useDebounce` já existente).
-- Query factory recebe `(supabase, { search, page, pageSize, filters })` e devolve `{ data, count }` usando `.range((page-1)*size, page*size-1)` + `count: 'exact'`.
-- Retorna `{ items, total, totalPages, page, setPage, search, setSearch, filters, setFilters, isLoading, isFetching }`.
+### Caminho A — Autovistoria (rápido, ativa só R&F)
+1. Cliente abre link, escolhe "Autovistoria".
+2. Tira **2 fotos + 1 vídeo** pelo celular (componente `Autovistoria.tsx` já existe).
+3. Mídias entram em `em_analise` no Monitoramento.
+4. Aprovação manual → **`cobertura_roubo_furto = true`** (se plano inclui R&F).
+5. **`cobertura_total` continua `false`** — para ativar precisa da vistoria presencial depois.
+6. Veículo continua `instalacao_pendente` para a etapa de cobertura total.
 
-### 2. Componente `<ListToolbar />` — `src/components/lists/ListToolbar.tsx`
+### Caminho B — Vistoria presencial (ativa cobertura total)
+1. Cliente escolhe "Agendar Vistoria".
+2. Técnico vai até ele.
+   - **≥30k/9k:** tira fotos + instala rastreador.
+   - **<30k/9k:** tira só fotos (link mostra só a etapa de fotos, etapa "Instalar" oculta).
+3. Mídias entram em `em_analise` no Monitoramento.
+4. Aprovação manual → ativa **R&F** (se plano inclui) **e cobertura total**.
+5. Veículo vira `ativo`.
 
-Barra padrão: input de busca (com X para limpar), slots para selects de filtro, botão "Limpar filtros", contagem "Mostrando A–B de N".
+---
 
-### 3. Componente `<ServerPagination />` — `src/components/lists/ServerPagination.tsx`
+## Estado atual vs. esperado
 
-Reusa `src/components/ui/pagination.tsx`. Mostra Anterior/Próxima, números (com ellipsis), seletor de tamanho de página (25/50/100), e botão "Ir para página".
+| Item | Hoje | Esperado | Ação |
+|---|---|---|---|
+| Escolha autovistoria/agendada no link público | ✓ existe (`EscolhaVistoria.tsx`) | igual | nenhuma |
+| Veículo <30k vê opção de autovistoria | ⚠ a confirmar | deve ver | **verificar e liberar** |
+| Vistoria presencial <30k esconde etapa instalação | ✓ existe (`exige_etapa_instalacao=false`) | igual | nenhuma |
+| Fotos da vistoria presencial <30k vão para `em_analise` | ✗ auto-aprova | **manual** | **corrigir** |
+| Veículo <30k já fica `ativo` na aprovação da proposta | ✗ ativa imediato | **`instalacao_pendente`** até vistoria aprovar | **corrigir** |
+| Autovistoria ativa só R&F | ✓ existe | igual | nenhuma |
+| Vistoria presencial ativa R&F + cobertura total | ✓ existe | igual | nenhuma |
+| SGA sem IMEI quando dispensa | ✓ existe | igual | nenhuma |
 
-### 4. Migração das telas — em ondas
+---
 
-**Onda 1 — bugs críticos visíveis (essa entrega):**
+## Mudanças (3 ajustes pontuais)
 
-- `/vendas/cotacoes` — corrigir o desalinhamento entre counts e tabela (provavelmente a query da tabela aplica filtros que o counter não aplica; checar `useCotacoesPaginadas` vs `useCotacoesFunilCounts`).
-- `/cadastro/associados` — confirmar que a busca dispara server-side e mostrar "X de Y".
+### 1. `concluir-etapa-fotos-publica`
+Remover auto-aprovação quando `exige_etapa_instalacao=false`. Fotos vão para `em_analise` igual aos demais.
 
-**Onda 2 — telas que truncam silenciosamente (`.limit` fixo sem paginação):**
+### 2. `aprovar-proposta`
+Não setar `cobertura_total=true` para veículos `dispensa_rastreador`. Veículo entra em `instalacao_pendente` até a vistoria aprovar (a aprovação dispara `ativar-associado` via trigger já existente).
 
-`PosVenda`, `Logs` (configurações), `Negativacao`, `SinistrosList`, `SolicitacoesIA`, `FilaTrabalho`, `EventosPreAnalise`, `ContasPagar`, `AlertasMonitoramento`, `Extrato`, `ProcessosList` (jurídico), `ReguladorOficina`, `LogsAuditoria`, `EventosChatIA`. Adotam `useServerList` + `<ServerPagination />`. Default 50/pg.
+### 3. `criar-instalacao-pos-pagamento`
+Forçar `aguardar_instalacao=true` mesmo com `dispensa_rastreador`.
 
-**Onda 3 — telas grandes sem nenhum limite:**
+### 4. UI (pequenos ajustes)
+- Garantir que `EscolhaVistoria` aparece no link público também para `dispensa_rastreador=true` (autovistoria + presencial sem instalação).
+- Badge "Sem rastreador" no Monitoramento para o operador entender.
+- `AtivacaoProgressIcons` opcional: ocultar ícone "Radio" quando dispensa.
 
-`rh/FuncionariosList`, `rh/ControlePonto`, `rh/FolhaPagamento`, `juridico/CasosJuridicosList`, `juridico/PrazosControl`, `eventos/SindicanciasList`, `configuracoes/Perfis`, `configuracoes/PlanosSGA`, `diretoria/TabelaPrecos`, `diretoria/IndicadoresAtuariais`, `diretoria/PerfisAcesso`, `cobranca/RelacionamentoTrocas`, `marketing/ComunicacaoMassa`, `monitoramento/FilaVistorias`, `monitoramento/RetiradasPage`, `assistencia/PrestadoresList`, `oficinas/AutoCenters`, `oficinas/Oficinas`. Idem.
+### 5. Memória
+Atualizar `mem://logic/operations/vistoria-sem-rastreador-flow`:
+> "FIPE < 30k carro / 9k moto não-Diesel: mesma jornada do ≥30k (autovistoria OU presencial). Diferença única: na presencial, técnico só fotografa (sem instalar). Aprovação manual obrigatória. R&F ativa após autovistoria; cobertura total só após presencial. SGA enviado sem IMEI."
 
-**Onda 4 — buscas client-only que precisam ir pro servidor:**
+---
 
-Onde hoje é `array.filter(toLowerCase().includes())` aplicar a busca via `.or('campo1.ilike.%x%,campo2.ilike.%x%')` na query.
+## Arquivos afetados
 
-### 5. Padrão de busca server-side
+- `supabase/functions/concluir-etapa-fotos-publica/index.ts`
+- `supabase/functions/aprovar-proposta/index.ts`
+- `supabase/functions/criar-instalacao-pos-pagamento/index.ts`
+- `src/pages/public/VistoriaPublica.tsx` (verificar exibição de `EscolhaVistoria`)
+- `src/components/ativacao/AtivacaoProgressIcons.tsx` (opcional)
+- `src/pages/monitoramento/Vistorias.tsx` (badge)
 
-Toda lista usa `.or(...)` com `ilike` nos campos textuais relevantes (nome/placa/CPF/numero/telefone/email/ID). CPF/telefone normalizados (remover máscara antes de comparar). Em colunas indexadas pesadas, considerar trigram (`pg_trgm`) — fora desta entrega, registrar TODO.
+Sem migration de schema.
 
-## Critérios de aceitação por tela migrada
+---
 
-- Total visível "Mostrando 1–50 de 9.534".
-- Busca dispara após 300 ms, atualiza URL (`?q=marcos&page=1`).
-- Paginação navega sem reload e preserva filtros.
-- Filtros mostram chip "Limpar" quando ativos.
-- F5 / compartilhar URL restaura o estado completo.
-
-## Detalhes técnicos
-
-- `useServerList` aceita `queryKey` array para invalidação seletiva e `enabled` opcional.
-- `count: 'exact'` em todas as queries paginadas (custo aceitável para listas filtradas).
-- Para telas com counts/KPIs separados (ex.: Cotações tem cards por status), manter hook dedicado de counts mas garantir mesma cláusula `where` que a tabela quando os filtros se aplicam.
-- Mobile: paginação vira "Carregar mais" via prop `mode="loadMore"` no mesmo hook.
-
-## Fora de escopo
-
-- Reescrever as telas de detalhes (não-listas).
-- Indexação trigram / full-text — apenas registrar como melhoria futura.
-- Telas de dashboard (Diretoria/Indicadores etc.) sem natureza de "lista pesquisável".
-
-## Entregáveis desta primeira execução
-
-1. Criar `useServerList`, `ListToolbar`, `ServerPagination`.
-2. Aplicar onda 1 (corrigir bug Cotações + ajustar Associados).
-3. Aplicar onda 2 (telas com `.limit` fixo) — ~14 telas.
-4. Após validação, abrir nova entrega para ondas 3 e 4.
+Bate com o que você tem em mente? Aprovando, parto para a implementação.
