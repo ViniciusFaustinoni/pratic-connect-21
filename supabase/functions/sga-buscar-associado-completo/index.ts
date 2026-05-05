@@ -1,4 +1,4 @@
-// Endpoint único usado pelo fluxo de cotação para consultar a base SGA (Hinova)
+// Endpoint único usado pelo fluxo de cotação para consultar a base SGA (Hinova) — v2 (406 boletos vazio)
 // em vez da base local. Retorna, em uma chamada:
 //   - dados do associado (se existir no SGA)
 //   - veículos vinculados (placa + codigo_veiculo)
