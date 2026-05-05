@@ -276,18 +276,21 @@ export default function Cotacoes() {
     });
   }, [sortedCotacoes]);
 
-  // Totais SEM filtros — para badges das abas, garantindo visibilidade real
+  // Totais SEM filtros — preferimos os contadores do servidor (RPC) para refletir
+  // a base completa mesmo quando o array carregado está limitado.
   const cotacoesEmAndamentoTotal = useMemo(() => {
+    if (funilCounts) return funilCounts.em_andamento_total;
     return (cotacoes || []).filter(c =>
       STATUS_EM_ANDAMENTO.includes(c.status) && c.status_contratacao !== 'concluido'
     ).length;
-  }, [cotacoes]);
+  }, [cotacoes, funilCounts]);
 
   const cotacoesFinalizadasTotal = useMemo(() => {
+    if (funilCounts) return funilCounts.finalizadas_total;
     return (cotacoes || []).filter(c =>
       STATUS_FINALIZADAS.includes(c.status) || c.status_contratacao === 'concluido'
     ).length;
-  }, [cotacoes]);
+  }, [cotacoes, funilCounts]);
   
   const mesesDisponiveis = [...new Set((cotacoes || []).map(c => {
     const date = new Date(c.created_at);
