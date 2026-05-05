@@ -113,15 +113,8 @@ export default function Contratos() {
     }
   }, [location.state]);
 
-  const filteredContratos = (contratos || []).filter((contrato) => {
-    const matchesSearch =
-      contrato.numero.toLowerCase().includes(search.toLowerCase()) ||
-      (contrato.associados?.nome?.toLowerCase().includes(search.toLowerCase()) ?? false) ||
-      (contrato.leads?.nome?.toLowerCase().includes(search.toLowerCase()) ?? false) ||
-      (contrato.associados?.cpf?.includes(search) ?? false);
-    const matchesTab = activeTab === 'all' || contrato.status === activeTab;
-    return matchesSearch && matchesTab;
-  });
+  // Lista já vem filtrada/paginada do servidor
+  const filteredContratos = contratos || [];
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('pt-BR');
@@ -134,16 +127,15 @@ export default function Contratos() {
     }).format(value);
   };
 
-  // Stats por status
+  // Stats por status (vêm da RPC global, não da página atual)
+  const porStatus = counts?.porStatus ?? {};
   const stats = {
-    total: contratos?.length || 0,
-    rascunho: contratos?.filter((c) => c.status === 'rascunho').length || 0,
-    enviado: contratos?.filter((c) => c.status === 'enviado').length || 0,
-    assinado: contratos?.filter((c) => c.status === 'assinado').length || 0,
-    ativo: contratos?.filter((c) => c.status === 'ativo').length || 0,
-    valorTotal: contratos
-      ?.filter((c) => c.status === 'ativo')
-      .reduce((acc, c) => acc + c.valor_mensal, 0) || 0,
+    total: counts?.total ?? 0,
+    rascunho: porStatus['rascunho'] ?? 0,
+    enviado: porStatus['enviado'] ?? 0,
+    assinado: porStatus['assinado'] ?? 0,
+    ativo: porStatus['ativo'] ?? 0,
+    valorTotal: counts?.valor_mensal_ativo ?? 0,
   };
 
   // Ordenação lógica do fluxo de contratos
@@ -160,26 +152,23 @@ export default function Contratos() {
     expirado: 10,
   };
 
-  // Gerar abas dinamicamente com base nos dados reais
+  // Gerar abas dinamicamente com base nos contadores reais (todos os contratos)
   const getActiveTabs = (): { value: TabValue; label: string; count: number }[] => {
-    const uniqueStatuses = new Set(contratos?.map(c => c.status) || []);
-    
     const activeTabs: { value: TabValue; label: string; count: number }[] = [
       { value: 'all', label: 'Todos', count: stats.total },
     ];
 
-    // Adicionar abas apenas para statuses que existem
-    const statusesToShow: StatusContrato[] = Array.from(uniqueStatuses)
+    const statusesToShow = (Object.keys(porStatus) as StatusContrato[])
+      .filter((s) => (porStatus[s] ?? 0) > 0)
       .sort((a, b) => (statusOrder[a] || 999) - (statusOrder[b] || 999));
 
     statusesToShow.forEach((status) => {
       const config = statusConfig[status];
       if (config) {
-        const count = contratos?.filter(c => c.status === status).length || 0;
         activeTabs.push({
           value: status,
           label: config.label,
-          count,
+          count: porStatus[status] ?? 0,
         });
       }
     });
