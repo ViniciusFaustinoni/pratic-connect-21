@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { getFotosAutovistoria, getInstrucoesVideo360, getLabelVideo360, TipoVeiculo } from '@/data/autovistoriaConfig';
@@ -15,6 +17,8 @@ import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imag
 import { LocationCapture, Coordenadas } from './LocationCapture';
 import { VideoCapture } from '@/components/instalador/VideoCapture';
 import { InAppBrowserBanner } from '@/components/shared/InAppBrowserBanner';
+import { OcrFallbackBanner } from '@/components/ocr/OcrFallbackBanner';
+import { supabase } from '@/integrations/supabase/client';
 
 interface AutovistoriaProps {
   contratoId: string;
