@@ -30,30 +30,81 @@ export async function buscarVeiculoPorPlaca(placa: string): Promise<Veiculo | nu
   return data as Veiculo | null;
 }
 
-export function useVeiculos(associadoId?: string) {
+// Sobrecargas: mantém compatibilidade com `useVeiculos(associadoId?)` e
+// adiciona paginação server-side via `useVeiculos({ page, pageSize, search, status })`.
+export interface UseVeiculosOptions {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  status?: string;
+  enabled?: boolean;
+}
+
+export function useVeiculos(arg?: string | UseVeiculosOptions) {
+  const associadoId = typeof arg === 'string' ? arg : undefined;
+  const opts: UseVeiculosOptions = (arg && typeof arg === 'object') ? arg : {};
+  const { page = 1, pageSize = 50, search = '', status, enabled = true } = opts;
+  const usePagination = arg && typeof arg === 'object';
+
   return useQuery({
-    queryKey: ['veiculos', associadoId],
+    queryKey: usePagination
+      ? ['veiculos', 'paginated', { page, pageSize, search, status }]
+      : ['veiculos', associadoId],
+    enabled,
     queryFn: async () => {
+      // Modo legado: por associado (mantém payload completo p/ telas que precisam)
       if (associadoId) {
-        // Busca específica por associado — sem filtro de origem
-        const query = supabase
+        const { data, error } = await supabase
           .from('veiculos')
           .select('*, associado:associados(id, nome, cpf)')
           .eq('associado_id', associadoId)
           .order('created_at', { ascending: false });
-        const { data, error } = await query;
         if (error) throw error;
         return data as Veiculo[];
       }
 
-      // Listagem geral — todos os veículos (interno + api_externa)
-      const query = supabase
+      // Modo paginado (listagem geral) — colunas enxutas + range + count
+      if (usePagination) {
+        let q = supabase
+          .from('veiculos')
+          .select(
+            'id, placa, chassi, marca, modelo, ano_fabricacao, ano_modelo, cor, valor_fipe, status, ativo, uso_aplicativo, plataforma_app, associado_id, created_at, associado:associados(id, nome, cpf)',
+            { count: 'exact' }
+          )
+          .order('created_at', { ascending: false });
+
+        if (status) q = q.eq('status', status);
+        if (search) {
+          const s = search.replace(/[,()]/g, '');
+          const like = `%${s}%`;
+          q = q.or(
+            [
+              `placa.ilike.${like}`,
+              `chassi.ilike.${like}`,
+              `marca.ilike.${like}`,
+              `modelo.ilike.${like}`,
+            ].join(',')
+          );
+        }
+        q = q.range((page - 1) * pageSize, page * pageSize - 1);
+        const { data, error, count } = await q;
+        if (error) throw error;
+        return {
+          veiculos: (data || []) as unknown as Veiculo[],
+          pagination: {
+            page,
+            pageSize,
+            total: count || 0,
+            totalPages: Math.ceil((count || 0) / pageSize),
+          },
+        };
+      }
+
+      // Compat antigo: lista geral sem paginação (ainda usado por algumas telas)
+      const { data, error } = await supabase
         .from('veiculos')
         .select('*, associado:associados(id, nome, cpf, origem_cadastro)')
         .order('created_at', { ascending: false });
-      
-      const { data, error } = await query;
-      
       if (error) throw error;
       return data as Veiculo[];
     },
