@@ -55,9 +55,6 @@ import { AssociadoFilters } from '@/components/cadastro/AssociadoFilters';
 import { ExportAssociadosDialog } from '@/components/cadastro/ExportAssociadosDialog';
 import { ConfirmacaoAcaoDialog } from '@/components/associados/ConfirmacaoAcaoDialog';
 import { useToast } from '@/hooks/use-toast';
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import AssociadoDetalhe from './AssociadoDetalhe';
-import { AssociadoDetalheErrorBoundary } from '@/components/common/AssociadoDetalheErrorBoundary';
 
 const statusColors: Record<StatusAssociado, string> = {
   em_analise: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
