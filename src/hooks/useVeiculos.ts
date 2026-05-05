@@ -30,16 +30,6 @@ export async function buscarVeiculoPorPlaca(placa: string): Promise<Veiculo | nu
   return data as Veiculo | null;
 }
 
-// Sobrecargas: mantém compatibilidade com `useVeiculos(associadoId?)` e
-// adiciona paginação server-side via `useVeiculos({ page, pageSize, search, status })`.
-export interface UseVeiculosOptions {
-  page?: number;
-  pageSize?: number;
-  search?: string;
-  status?: string;
-  enabled?: boolean;
-}
-
 export function useVeiculos(associadoId?: string) {
   return useQuery({
     queryKey: ['veiculos', associadoId],
