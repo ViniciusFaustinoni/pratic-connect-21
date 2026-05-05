@@ -220,6 +220,7 @@ export function EtapaDadosAssociado({
                 debitos={debitosSGA.debitosPorVeiculo}
                 saldoTotal={debitosSGA.saldoTotal}
                 bloqueante
+                cpf={cpfDigits}
                 titulo="Este CPF já foi cliente Pratic e está com saldo devedor"
                 descricao="É necessário quitar os boletos abaixo no SGA antes de iniciar uma nova cotação."
               />
