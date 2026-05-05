@@ -185,7 +185,7 @@ async function fetchCotacoesCore(params: {
   // Em Andamento: status nos transitórios E status_contratacao != 'concluido'.
   // Finalizadas: status terminal OU status_contratacao = 'concluido'.
   if (statusGroup === 'em_andamento') {
-    query = query.in('status', STATUS_EM_ANDAMENTO_LIST).neq('status_contratacao', 'concluido');
+    query = query.in('status', STATUS_EM_ANDAMENTO_LIST as any).neq('status_contratacao', 'concluido');
   } else if (statusGroup === 'finalizadas') {
     query = query.or(
       `status.in.(${STATUS_FINALIZADAS_LIST.join(',')}),status_contratacao.eq.concluido`
