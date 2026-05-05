@@ -1,7 +1,26 @@
-import { useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
+import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+
+// Throttle por chave para reduzir tempestade de invalidações via realtime.
+// Em vez de refetch imediato a cada payload, agrupamos invalidações numa janela
+// curta. O React Query refaz só o que está montado/em uso.
+function makeThrottledInvalidator(qc: QueryClient, windowMs = 1500) {
+  const pending = new Map<string, ReturnType<typeof setTimeout>>();
+  return (keys: (string | string[])[]) => {
+    for (const k of keys) {
+      const arr = Array.isArray(k) ? k : [k];
+      const id = arr.join('|');
+      if (pending.has(id)) continue;
+      const t = setTimeout(() => {
+        pending.delete(id);
+        qc.invalidateQueries({ queryKey: arr });
+      }, windowMs);
+      pending.set(id, t);
+    }
+  };
+}
 
 /**
  * Hook para escutar atualizações em tempo real relacionadas a cotações.
