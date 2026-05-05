@@ -518,6 +518,7 @@ export function useUploadFotoAutovistoria() {
       
       // Se for foto do odômetro, extrair quilometragem via IA
       let kmExtraido: number | null = null;
+      let ocrFalhou = false;
       if (fotoId === 'odometro') {
         try {
           const { data: ocrResult, error: ocrError } = await supabase.functions.invoke('odometro-ocr', {
@@ -527,8 +528,12 @@ export function useUploadFotoAutovistoria() {
           if (!ocrError && ocrResult?.km && ocrResult.confianca >= 0.7) {
             kmExtraido = ocrResult.km;
             console.log('KM extraído do odômetro:', kmExtraido);
+          } else {
+            ocrFalhou = true;
+            console.warn('OCR do odômetro falhou ou confiança baixa — usuário deverá preencher manualmente.');
           }
         } catch (error) {
+          ocrFalhou = true;
           console.error('Erro ao extrair km do odômetro:', error);
         }
       }
