@@ -387,13 +387,53 @@ serve(async (req) => {
         }
       }
 
+      // Pré-flight: se faltar combustível OU codigo_fipe, tentar enriquecer
+      // automaticamente via fipe-lookup (marca + modelo + ano).
+      if (!veiculo.combustivel || !veiculo.codigo_fipe || !Number(veiculo.valor_fipe)) {
+        try {
+          const tipoFipePre = /MOTO/i.test(veiculo.marca || '') || /CG |FAN|HONDA.*16|YBR|YAMAHA/i.test(`${veiculo.marca} ${veiculo.modelo}`)
+            ? 'motos' : 'carros';
+          const url = new URL(`${Deno.env.get('SUPABASE_URL')}/functions/v1/fipe-lookup`);
+          url.searchParams.set('action', 'buscar-por-nome');
+          url.searchParams.set('tipo', tipoFipePre);
+          url.searchParams.set('marca', String(veiculo.marca || '').trim());
+          url.searchParams.set('modelo', String(veiculo.modelo || '').trim());
+          if (veiculo.ano_modelo) url.searchParams.set('ano', String(veiculo.ano_modelo));
+          const resp = await fetch(url.toString(), {
+            headers: {
+              Authorization: `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`,
+              apikey: Deno.env.get('SUPABASE_ANON_KEY') || '',
+            },
+          });
+          const json = await resp.json().catch(() => null);
+          if (json?.success && json?.found) {
+            const upd: any = {};
+            if (!veiculo.codigo_fipe && json.data?.codigoFipe) upd.codigo_fipe = String(json.data.codigoFipe).trim();
+            if (!Number(veiculo.valor_fipe) && json.data?.valorNumerico) upd.valor_fipe = Number(json.data.valorNumerico);
+            if (!veiculo.combustivel && json.data?.combustivel) upd.combustivel = String(json.data.combustivel).trim();
+            if (Object.keys(upd).length > 0) {
+              await supabase.from('veiculos').update(upd).eq('id', _vid);
+              Object.assign(veiculo, upd);
+              await logSync(_vid, _aid, 'fipe_auto_lookup_preflight', 'success',
+                { marca: veiculo.marca, modelo: veiculo.modelo }, upd);
+              // Recarregar para pegar codigo_sga_combustivel preenchido pela trigger
+              const { data: vRefetch } = await supabase.from('veiculos').select('*').eq('id', _vid).single();
+              if (vRefetch) Object.assign(veiculo, vRefetch);
+            }
+          }
+        } catch (e: any) {
+          await logSync(_vid, _aid, 'fipe_auto_lookup_preflight', 'error',
+            { marca: veiculo.marca, modelo: veiculo.modelo }, null, e?.message || String(e));
+        }
+      }
+
       // Pré-flight: combustível precisa ter código SGA equivalente
       // (1=Flex, 2=Gasolina, 3=Etanol, 4=Diesel, 5=Bio-gás, 6=Tetra-fuel)
       // O campo veiculos.codigo_sga_combustivel é preenchido automaticamente por trigger.
       if (!veiculo.codigo_sga_combustivel || !Number.isFinite(Number(veiculo.codigo_sga_combustivel))) {
         const msg = veiculo.combustivel
           ? `Combustível "${veiculo.combustivel}" não tem código SGA equivalente. SGA aceita: Flex, Gasolina, Etanol, Diesel, Bio-gás, Tetra-fuel.`
-          : 'Combustível ausente — Hinova exige codigo_combustivel.';
+          : 'Combustível ausente — Hinova exige codigo_combustivel. Edite o veículo e preencha o combustível antes de reprocessar.';
         await logSync(_vid, _aid, 'validar_combustivel_sga', 'error',
           { combustivel: veiculo.combustivel, codigo_sga_combustivel: veiculo.codigo_sga_combustivel }, null, msg);
         await setStatusSga(_vid, 'erro_sincronizacao');
