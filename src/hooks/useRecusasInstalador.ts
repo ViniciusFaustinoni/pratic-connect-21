@@ -226,6 +226,24 @@ export function useResolverRecusa() {
             .eq('id', servicoId);
 
           await supabase
+            .from('veiculos')
+            .update({
+              status: 'recusado',
+              motivo_recusa_veiculo: `Blacklist - ${justificativa}`,
+              recusado_por: profile?.id,
+              recusado_em: agora,
+              updated_at: agora,
+            })
+            .eq('id', veiculoId);
+
+          if (instalacaoId) {
+            await supabase
+              .from('instalacoes')
+              .update({ status: 'cancelada', updated_at: agora })
+              .eq('id', instalacaoId);
+          }
+
+          await supabase
             .from('associados')
             .update({
               status: 'cancelado',
