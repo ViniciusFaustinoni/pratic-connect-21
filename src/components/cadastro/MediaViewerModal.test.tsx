@@ -25,11 +25,11 @@ describe("MediaViewerModal", () => {
   });
 
   it("renderiza iframe de PDF quando o tipo é pdf", () => {
-    render(
+    const { container } = render(
       <MediaViewerModal open items={items} initialIndex={1} onOpenChange={() => {}} />
     );
-    const iframe = screen.getByTitle("Laudo") as HTMLIFrameElement;
-    expect(iframe.tagName).toBe("IFRAME");
+    const iframe = container.querySelector('iframe[title="Laudo"]') as HTMLIFrameElement;
+    expect(iframe).not.toBeNull();
     expect(iframe.src).toContain("laudo.pdf");
   });
 
@@ -37,8 +37,8 @@ describe("MediaViewerModal", () => {
     render(
       <MediaViewerModal open items={items} initialIndex={0} onOpenChange={() => {}} />
     );
-    const link = screen.getByTitle("Abrir em nova aba").querySelector("a") as HTMLAnchorElement;
-    expect(link).not.toBeNull();
+    const link = screen.getByTitle("Abrir em nova aba") as HTMLAnchorElement;
+    expect(link.tagName).toBe("A");
     expect(link.getAttribute("href")).toBe("https://example.com/foto.jpg");
     expect(link.getAttribute("target")).toBe("_blank");
   });
