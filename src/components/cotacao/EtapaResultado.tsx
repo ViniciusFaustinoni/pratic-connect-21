@@ -90,6 +90,7 @@ export function EtapaResultado({
   onGerarPDF,
   onIniciarCadastro,
   isLoading = false,
+  origemValor = 'fipe',
 }: EtapaResultadoProps) {
   const [showAllPlanos, setShowAllPlanos] = useState(false);
 
