@@ -30,7 +30,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { StatusContrato } from '@/types/database';
-import { useContratos, useUpdateContrato, useAtivarContrato } from '@/hooks/useContratos';
+import { useContratos, useContratosPaginados, useContratosStatusCounts, useUpdateContrato, useAtivarContrato } from '@/hooks/useContratos';
 import { useSendToAutentique, useResendAutentique, useCancelAutentique, getWhatsAppLink } from '@/hooks/useAutentique';
 import { ContratoFormDialog, type PrefilledCotacaoData } from '@/components/contratos/ContratoFormDialog';
 import { ContratoDetailDrawer } from '@/components/contratos/ContratoDetailDrawer';
