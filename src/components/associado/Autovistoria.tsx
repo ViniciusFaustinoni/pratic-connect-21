@@ -211,14 +211,23 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
       // Se for odômetro e KM foi extraído, mostrar
       if (fotoAtual.id === 'odometro' && result.kmExtraido) {
         setKmIdentificado(result.kmExtraido);
+        setKmOcrFalhou(false);
         toast.success(`Quilometragem identificada: ${result.kmExtraido.toLocaleString('pt-BR')} km`);
       } 
+      else if (fotoAtual.id === 'odometro' && (result as any).ocrFalhou) {
+        setKmOcrFalhou(true);
+        setKmIdentificado(null);
+        toast.warning('Não conseguimos ler a quilometragem. Por favor, informe manualmente abaixo.', {
+          duration: 6000,
+        });
+      }
       else {
         toast.success(`Foto "${fotoAtual.label}" enviada com sucesso!`);
       }
       
       // Avançar automaticamente para a próxima foto após sucesso
-      if (!isUltimaFoto) {
+      // (exceto se for odômetro com OCR falho — usuário precisa preencher KM manual)
+      if (!isUltimaFoto && !(fotoAtual.id === 'odometro' && (result as any).ocrFalhou)) {
         setTimeout(() => {
           avancarFoto();
         }, 500);
