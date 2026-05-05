@@ -117,9 +117,9 @@ export default function SinistrosList() {
     };
   }, [queryClient]);
 
-  // Query principal
-  const { data: sinistros, isLoading } = useQuery({
-    queryKey: ['sinistros', filters, isAnalistaEventos, isDiretor],
+  // Query principal (paginada server-side)
+  const { data: sinistrosPage, isLoading, isFetching: isFetchingSinistros } = useQuery({
+    queryKey: ['sinistros', filters, page, PAGE_SIZE, isAnalistaEventos, isDiretor],
     enabled: !!profile,
     queryFn: async () => {
       let query = supabase
@@ -128,10 +128,9 @@ export default function SinistrosList() {
           *,
           associado:associados(id, nome, cpf, telefone),
           veiculo:veiculos(id, placa, marca, modelo, ano_modelo, valor_fipe)
-        `)
+        `, { count: 'exact' })
         .order('created_at', { ascending: false });
 
-      // Analista de eventos só vê sinistros pós-vistoria
       if (isAnalistaEventos && !isDiretor) {
         query = query.in('status', [
           'aguardando_analise', 'aprovado', 'negado', 'reprovado',
@@ -143,37 +142,48 @@ export default function SinistrosList() {
         ] as any);
       }
 
-      if (filters.status && filters.status !== 'todos') {
-        query = query.eq('status', filters.status as any);
-      }
-      if (filters.tipo && filters.tipo !== 'todos') {
-        query = query.eq('tipo', filters.tipo as any);
-      }
+      if (filters.status && filters.status !== 'todos') query = query.eq('status', filters.status as any);
+      if (filters.tipo && filters.tipo !== 'todos') query = query.eq('tipo', filters.tipo as any);
+
       if (filters.busca) {
-        query = query.or(`protocolo.ilike.%${filters.busca}%`);
+        const term = filters.busca.replace(/[%_,()]/g, '');
+        const [{ data: assocMatches }, { data: veicMatches }] = await Promise.all([
+          supabase.from('associados').select('id').or(`nome.ilike.%${term}%,cpf.ilike.%${term}%`).limit(500),
+          supabase.from('veiculos').select('id').or(`placa.ilike.%${term}%,modelo.ilike.%${term}%,marca.ilike.%${term}%`).limit(500),
+        ]);
+        const assocIds = (assocMatches || []).map((a: any) => a.id);
+        const veicIds = (veicMatches || []).map((v: any) => v.id);
+        const orParts = [`protocolo.ilike.%${term}%`];
+        if (assocIds.length) orParts.push(`associado_id.in.(${assocIds.join(',')})`);
+        if (veicIds.length) orParts.push(`veiculo_id.in.(${veicIds.join(',')})`);
+        query = query.or(orParts.join(','));
       }
 
-      // Filtro por parecer do regulador
       if (filters.parecer && filters.parecer !== 'todos') {
         const { data: vistoriasComParecer } = await supabase
           .from('vistorias_evento')
           .select('sinistro_id')
           .eq('status', 'concluida')
           .filter('dados_vistoria->>recomendacao', 'eq', filters.parecer);
-
         const ids = (vistoriasComParecer || []).map((v: any) => v.sinistro_id);
-        if (ids.length > 0) {
-          query = query.in('id', ids);
-        } else {
-          query = query.eq('id', '00000000-0000-0000-0000-000000000000' as any);
-        }
+        if (ids.length > 0) query = query.in('id', ids);
+        else query = query.eq('id', '00000000-0000-0000-0000-000000000000' as any);
       }
 
-      const { data, error } = await query.limit(50);
+      const from = (page - 1) * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+      const { data, error, count } = await query.range(from, to);
       if (error) throw error;
-      return data;
+      return { data: data || [], count: count ?? 0 };
     },
   });
+
+  const sinistros = sinistrosPage?.data;
+  const sinistrosTotal = sinistrosPage?.count ?? 0;
+  const sinistrosTotalPages = Math.max(1, Math.ceil(sinistrosTotal / PAGE_SIZE));
+  const sinistrosRange = sinistrosTotal === 0
+    ? { from: 0, to: 0 }
+    : { from: (page - 1) * PAGE_SIZE + 1, to: Math.min(page * PAGE_SIZE, sinistrosTotal) };
 
   // Query para contadores
   const { data: contadores } = useQuery({
