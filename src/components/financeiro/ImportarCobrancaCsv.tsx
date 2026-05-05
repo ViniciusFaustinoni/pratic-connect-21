@@ -220,13 +220,23 @@ export function ImportarCobrancaCsv() {
         </div>
 
         {/* KPIs */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           <KpiCard label="Boletos no CSV" value={resultado.total_boletos} />
           <KpiCard label="Associados únicos" value={resultado.total_associados} />
           <KpiCard label="Com WhatsApp" value={resultado.com_whatsapp} accent="success" />
           <KpiCard label="Sem WhatsApp" value={resultado.sem_whatsapp} accent="warning" />
           <KpiCard label="Telefones a receber" value={resultado.total_telefones} accent="primary" />
+          <KpiCard label="Valor total" valueText={formatBRL(resultado.valor_total)} accent="primary" />
         </div>
+
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Ao confirmar, esta lista será comparada com a anterior. Boletos que não estiverem mais presentes
+            serão marcados automaticamente como <strong>Recuperados</strong> (pagos) na aba
+            Financeiro › Cobranças › Recuperados. Apenas os boletos desta nova lista receberão WhatsApp.
+          </AlertDescription>
+        </Alert>
 
         {/* Tabela preview */}
         <Card>
