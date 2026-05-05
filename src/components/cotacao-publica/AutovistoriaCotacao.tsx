@@ -533,14 +533,13 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
               )}
             </div>
 
-            {/* Mensagem tranquilizadora pós-envio */}
+            {/* Confirmação pós-envio */}
             {fotoJaEnviada && !isUploading && fotoAtual.id !== 'odometro' && (
               <div className="bg-success/5 border border-success/20 rounded-lg p-3 flex items-start gap-2">
                 <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
                 <p className="text-xs text-foreground/80 leading-relaxed">
-                  <strong>Foto recebida!</strong> Não se preocupe se não ficou perfeita —
-                  nossa equipe vai conferir todas as fotos manualmente. Você pode refazer
-                  clicando no número da etapa acima se quiser.
+                  <strong>Foto enviada.</strong> Caso queira refazer, use o botão "Refazer" ou
+                  toque no número da etapa acima.
                 </p>
               </div>
             )}
