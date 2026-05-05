@@ -169,10 +169,8 @@ export default function Veiculos() {
   // Filtragem é server-side; aqui apenas exibimos o que veio.
   const filteredVeiculos = veiculos as any[];
 
-  // Reset de página quando muda busca/status
-  // (evita ficar numa página vazia após filtrar)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useMemo(() => { setPage(1); }, [debouncedSearch, statusFilter]);
+  // Reset de página quando muda busca/status (evita página vazia)
+  useEffect(() => { setPage(1); }, [debouncedSearch, statusFilter]);
 
   const formatCurrency = (value: number | null) => {
     if (!value) return 'N/A';
