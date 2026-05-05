@@ -1398,6 +1398,56 @@ export default function CotacaoPublicaCompleta() {
           </div>
         )}
       </main>
+
+      {/* Modal de fallback OCR — preenchimento manual quando OCR falhar */}
+      <Dialog
+        open={!!ocrFallback?.open}
+        onOpenChange={(o) => { if (!o) setOcrFallback(null); }}
+      >
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Confirme os dados do documento</DialogTitle>
+            <DialogDescription>
+              Não conseguimos ler {ocrFallback?.docNome} automaticamente. Por favor, preencha os campos abaixo manualmente para continuar.
+            </DialogDescription>
+          </DialogHeader>
+          {ocrFallback && (
+            <div className="space-y-3">
+              <OcrFallbackBanner documento={ocrFallback.docNome} />
+              <OcrDadosEditor
+                tipoDocumento={ocrFallback.schemaTipo}
+                dados={ocrFallback.dados}
+                legivel={ocrFallback.legivel}
+                sugestao={ocrFallback.sugestao}
+                forceEdit
+                hideHeader
+                onSave={async (dadosEditados) => {
+                  if (!token) return;
+                  try {
+                    if (ocrFallback.docTipo === 'crlv') {
+                      const isBlindado = dadosEditados.blindado === 'true';
+                      await atualizarCotacao.mutateAsync({
+                        token,
+                        updates: {
+                          veiculo_cor: dadosEditados.cor || undefined,
+                          veiculo_blindado: isBlindado,
+                          veiculo_placa: dadosEditados.placa || undefined,
+                        },
+                      });
+                    }
+                    // Para CNH/comprovante, dados ficam no doc para análise manual.
+                    toast.success('Dados confirmados!');
+                    setOcrFallback(null);
+                  } catch (e: any) {
+                    console.error('[OcrFallback] erro ao salvar:', e);
+                    toast.error('Erro ao salvar dados. Tente novamente.');
+                  }
+                }}
+              />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
