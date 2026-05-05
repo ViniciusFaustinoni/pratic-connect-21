@@ -218,7 +218,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
         setKmIdentificado(null);
         toast.warning('Não conseguimos ler a quilometragem. Por favor, informe manualmente abaixo.', { duration: 6000 });
       } else {
-        toast.success('Foto recebida! Nossa equipe vai conferir depois.');
+        toast.success('Foto enviada com sucesso.');
       }
       
       // Avançar para próxima foto automaticamente (rápido, sem delay artificial)
