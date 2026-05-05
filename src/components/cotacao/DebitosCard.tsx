@@ -17,7 +17,9 @@ interface DebitosCardProps {
   titulo?: string;
   /** Texto adicional explicativo (subtítulo). */
   descricao?: string;
-  /** CPF do associado (apenas dígitos) — necessário para reconsultar o SGA na hora. */
+  /** CPF (11 dígitos) ou UUID do associado — usado para reconsultar o SGA na hora.
+   * Se vier UUID, o componente lê o CPF do cache da query `['associado-cpf-from-uuid', uuid]`
+   * (já preenchida pelo hook `useVerificarDebitosAssociado`). */
   cpf?: string;
   /** Callback opcional disparado quando uma reverificação confirma quitação (parcial ou total). */
   onAtualizado?: (info: { totalAntes: number; totalDepois: number }) => void;
