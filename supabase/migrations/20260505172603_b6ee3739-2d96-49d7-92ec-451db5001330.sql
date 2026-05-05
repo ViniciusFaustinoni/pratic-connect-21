@@ -1,0 +1,2 @@
+ALTER TABLE public.cotacoes ADD COLUMN IF NOT EXISTS km_atual integer;
+COMMENT ON COLUMN public.cotacoes.km_atual IS 'Quilometragem atual do veículo informada na autovistoria (OCR do odômetro ou preenchimento manual).';
