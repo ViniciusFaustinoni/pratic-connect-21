@@ -203,38 +203,27 @@ export default function Cotacoes() {
     }).format(value);
   };
 
-  // Filtrar cotações
+  // Filtros adicionais aplicados sobre o resultado já paginado/filtrado pelo servidor.
+  // IMPORTANTE: a busca textual NÃO é reaplicada aqui — ela já é feita server-side
+  // em useCotacoesPaginadas. Reaplicá-la causava lista vazia quando o servidor já
+  // havia limitado a 50 itens (ex: tab "Em Andamento" mostrava 0 com 295 no funil).
   const filteredCotacoes = useMemo(() => {
     return (cotacoes || []).filter((cotacao) => {
-      const searchLower = search.toLowerCase();
-      const matchesSearch =
-        !searchLower ||
-        cotacao.numero?.toLowerCase().includes(searchLower) ||
-        (cotacao.leads?.nome?.toLowerCase().includes(searchLower) ?? false) ||
-        (cotacao.leads?.telefone?.toLowerCase().includes(searchLower) ?? false) ||
-        (cotacao.leads?.email?.toLowerCase().includes(searchLower) ?? false) ||
-        (cotacao.nome_solicitante?.toLowerCase().includes(searchLower) ?? false) ||
-        (cotacao.telefone1_solicitante?.toLowerCase().includes(searchLower) ?? false) ||
-        (cotacao.telefone2_solicitante?.toLowerCase().includes(searchLower) ?? false) ||
-        (cotacao.email_solicitante?.toLowerCase().includes(searchLower) ?? false) ||
-        (cotacao.veiculo_placa?.toLowerCase().includes(searchLower) ?? false) ||
-        (cotacao.veiculo_marca?.toLowerCase().includes(searchLower) ?? false) ||
-        (cotacao.veiculo_modelo?.toLowerCase().includes(searchLower) ?? false);
       const matchesStatus = statusFilter === 'all' || cotacao.status === statusFilter;
-      
+
       let matchesMes = true;
       if (mesFilter !== 'all') {
         const cotacaoDate = new Date(cotacao.created_at);
         const [year, month] = mesFilter.split('-').map(Number);
         matchesMes = cotacaoDate.getFullYear() === year && cotacaoDate.getMonth() === month - 1;
       }
-      
+
       let matchesData = true;
       if (dataFilter) {
         const cotacaoDate = new Date(cotacao.created_at);
         matchesData = isSameDay(cotacaoDate, dataFilter);
       }
-      
+
       let matchesConsultor = true;
       if (consultorFilter !== 'all') {
         matchesConsultor = cotacao.vendedor_id === consultorFilter;
@@ -264,9 +253,9 @@ export default function Cotacoes() {
         }
       }
 
-      return matchesSearch && matchesStatus && matchesMes && matchesData && matchesConsultor && matchesOrfas && matchesEtapa;
+      return matchesStatus && matchesMes && matchesData && matchesConsultor && matchesOrfas && matchesEtapa;
     });
-  }, [cotacoes, search, statusFilter, mesFilter, dataFilter, consultorFilter, filtroOrfas, etapaFunilFilter]);
+  }, [cotacoes, statusFilter, mesFilter, dataFilter, consultorFilter, filtroOrfas, etapaFunilFilter]);
 
   // Ordenação cronológica — mais recentes primeiro
   const sortedCotacoes = useMemo(() => {
