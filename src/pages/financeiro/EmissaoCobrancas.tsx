@@ -8,9 +8,11 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Send, Download, RefreshCw, AlertCircle, CheckCircle2, Clock, Search, Plus, ExternalLink, Bell } from 'lucide-react';
+import { Send, Download, RefreshCw, AlertCircle, CheckCircle2, Clock, Search, Plus, ExternalLink, Bell, FileText, Upload } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { NovaCobrancaModal } from '@/components/financeiro/NovaCobrancaModal';
+import { ImportarCobrancaCsv } from '@/components/financeiro/ImportarCobrancaCsv';
 
 type CobrancaStatus = 'pendente' | 'emitido' | 'erro';
 
@@ -58,7 +60,7 @@ function mapCobranca(c: any): CobrancaLocal {
   };
 }
 
-export default function EmissaoCobrancas() {
+function EmissaoCobrancasFechamento() {
   const queryClient = useQueryClient();
   const [filtroNome, setFiltroNome] = useState('');
   const [filtroStatus, setFiltroStatus] = useState<string>('todos');
@@ -517,6 +519,30 @@ export default function EmissaoCobrancas() {
       </Card>
 
       <NovaCobrancaModal open={modalCobranca} onClose={() => setModalCobranca(false)} />
+    </div>
+  );
+}
+
+export default function EmissaoCobrancas() {
+  const [tab, setTab] = useState<'fechamento' | 'csv'>('fechamento');
+  return (
+    <div className="p-6">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
+        <TabsList>
+          <TabsTrigger value="fechamento" className="gap-2">
+            <FileText className="h-4 w-4" /> Fechamento Mensal
+          </TabsTrigger>
+          <TabsTrigger value="csv" className="gap-2">
+            <Upload className="h-4 w-4" /> Importar CSV (SGA)
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="fechamento" className="mt-4 -mx-6">
+          <EmissaoCobrancasFechamento />
+        </TabsContent>
+        <TabsContent value="csv" className="mt-4">
+          <ImportarCobrancaCsv />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
