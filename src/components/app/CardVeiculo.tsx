@@ -42,6 +42,7 @@ interface VeiculoData {
   ano_modelo: number;
   cor?: string;
   status: string | null;
+  cobertura_suspensa_motivo?: string | null;
 }
 
 interface RastreadorData {
