@@ -251,7 +251,7 @@ export default function VistoriaPrestador() {
       let fileToUpload = file;
       if (file.size > 500 * 1024) {
         try {
-          fileToUpload = await compressImage(file, { maxWidth: 1920, maxHeight: 1920, quality: 0.75, maxSizeKB: 800 });
+          fileToUpload = await compressImage(file);
         } catch { /* use original */ }
       }
 
