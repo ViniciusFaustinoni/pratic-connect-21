@@ -132,8 +132,9 @@ export function useCotacoesFunilCounts(options?: UseCotacoesOptions) {
   });
 }
 
-// Status que compõem cada aba da tela de Cotações
-const STATUS_EM_ANDAMENTO_LIST = ['rascunho', 'enviada', 'visualizada'];
+// Status que compõem cada aba da tela de Cotações.
+// IMPORTANTE: enum status_cotacao só tem rascunho/enviada/aceita/recusada/expirada.
+const STATUS_EM_ANDAMENTO_LIST = ['rascunho', 'enviada'];
 const STATUS_FINALIZADAS_LIST = ['aceita', 'recusada', 'expirada'];
 
 type CotacoesStatusGroup = 'em_andamento' | 'finalizadas' | 'all';
