@@ -526,6 +526,66 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
                 </div>
               </div>
             )}
+
+            {/* Fallback manual: OCR do odômetro falhou */}
+            {fotoAtual.id === 'odometro' && kmOcrFalhou && !kmIdentificado && (
+              <div className="space-y-2">
+                <OcrFallbackBanner
+                  documento="a quilometragem do odômetro"
+                  detalhe="Informe abaixo o número exato exibido no painel para podermos prosseguir."
+                />
+                <div className="space-y-1">
+                  <Label htmlFor="km-manual-cot" className="text-xs">
+                    Quilometragem atual (km) <span className="text-destructive">*</span>
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="km-manual-cot"
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      placeholder="Ex.: 45230"
+                      value={kmManualInput}
+                      onChange={(e) => setKmManualInput(e.target.value.replace(/\D/g, ''))}
+                      disabled={salvandoKm}
+                    />
+                    <Button
+                      type="button"
+                      onClick={async () => {
+                        const n = Number(kmManualInput);
+                        if (!Number.isFinite(n) || n <= 0) {
+                          toast.error('Informe um valor válido de KM.');
+                          return;
+                        }
+                        setSalvandoKm(true);
+                        try {
+                          const { error } = await (publicSupabase as any)
+                            .from('cotacoes')
+                            .update({ km_atual: n })
+                            .eq('id', cotacaoId);
+                          if (error) throw error;
+                          setKmIdentificado(n);
+                          setKmOcrFalhou(false);
+                          toast.success(`Quilometragem registrada: ${n.toLocaleString('pt-BR')} km`);
+                          if (fotoAtualIndex < totalFotos - 1) {
+                            setTimeout(() => setFotoAtualIndex(fotoAtualIndex + 1), 400);
+                          }
+                        } catch (e: any) {
+                          console.error('[AutovistoriaCotacao] erro ao salvar KM manual:', e);
+                          toast.error('Não foi possível salvar a quilometragem. Tente novamente.');
+                        } finally {
+                          setSalvandoKm(false);
+                        }
+                      }}
+                      disabled={salvandoKm || !kmManualInput}
+                    >
+                      {salvandoKm ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             
             {/* Instruções */}
             <div className="bg-muted/30 rounded-lg p-3 space-y-2">
