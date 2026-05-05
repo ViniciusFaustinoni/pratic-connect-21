@@ -810,9 +810,10 @@ export default function CotadorPage() {
       return;
     }
 
-    // Validar adesão mínima (exceto cenários isentos)
-    const cenarioIsento = cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base';
-    if (!cenarioIsento && valorAdesaoCustom !== null && valorAdesaoCustom < minimoAdesaoConfig) {
+    // Validar adesão mínima — só vale para cenários com repasse à empresa.
+    // 'isenta_rota' e 'isenta_base' não cobram adesão; 'cobra_base' fica 100% com o consultor (sem repasse → sem mínimo).
+    const cenarioSemMinimo = cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base' || cenarioExterno === 'cobra_base';
+    if (!cenarioSemMinimo && valorAdesaoCustom !== null && valorAdesaoCustom < minimoAdesaoConfig) {
       toast.error(`O valor de adesão (${formatCurrency(valorAdesaoCustom)}) está abaixo do mínimo configurado (${formatCurrency(minimoAdesaoConfig)}). Ajuste o valor para continuar.`);
       return;
     }
@@ -1929,7 +1930,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
 
 
             {/* Alerta de adesão abaixo do mínimo */}
-            {valorAdesaoCustom !== null && valorAdesaoCustom > 0 && valorAdesaoCustom < minimoAdesaoConfig && !(cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base') && (
+            {valorAdesaoCustom !== null && valorAdesaoCustom > 0 && valorAdesaoCustom < minimoAdesaoConfig && !(cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base' || cenarioExterno === 'cobra_base') && (
               <Alert className="border-destructive/50 bg-destructive/10">
                 <AlertTriangle className="h-4 w-4 text-destructive" />
                 <AlertDescription className="text-sm text-destructive">
@@ -1951,7 +1952,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                     onChange={(e) => setValorAdesaoCustom(parseFloat(e.target.value) || 0)}
                     className={cn(
                       "text-center font-bold text-lg h-10",
-                      valorAdesaoCustom !== null && valorAdesaoCustom > 0 && valorAdesaoCustom < minimoAdesaoConfig && !(cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base')
+                      valorAdesaoCustom !== null && valorAdesaoCustom > 0 && valorAdesaoCustom < minimoAdesaoConfig && !(cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base' || cenarioExterno === 'cobra_base')
                         ? "border-destructive text-destructive"
                         : ""
                     )}
