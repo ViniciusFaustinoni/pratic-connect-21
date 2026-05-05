@@ -899,11 +899,24 @@ serve(async (req) => {
         if (Number.isFinite(codSituacaoAtivo) && codSituacaoAtivo > 0) {
           try {
             const res = await alterarSituacaoVeiculoHinova(supabase, codigoVeiculoHinova, codSituacaoAtivo);
-            await logSync(_vid, _aid, 'promover_situacao_veiculo', res.ok ? 'success' : 'error',
-              { codigo_veiculo: codigoVeiculoHinova, codigo_situacao: codSituacaoAtivo },
-              res.raw,
-              res.ok ? null : (res.mensagem || res.errors.join('; ') || `HTTP ${res.status}`));
-            if (!res.ok) {
+            const isEndpointMissing = res.status === 404 || /página não encontrada|endpoint não encontrado/i.test(
+              `${res.mensagem || ''} ${JSON.stringify(res.errors || [])}`,
+            );
+            if (res.ok) {
+              await logSync(_vid, _aid, 'promover_situacao_veiculo', 'success',
+                { codigo_veiculo: codigoVeiculoHinova, codigo_situacao: codSituacaoAtivo }, res.raw);
+            } else if (isEndpointMissing) {
+              // Endpoint não disponível nessa instância Hinova — promoção precisa ser
+              // feita manualmente no painel SGA. Não bloqueia o sync (cadastro/fotos
+              // já foram enviados). Apenas registra warning.
+              await logSync(_vid, _aid, 'promover_situacao_veiculo', 'warning',
+                { codigo_veiculo: codigoVeiculoHinova, codigo_situacao: codSituacaoAtivo },
+                res.raw,
+                'Endpoint de alteração de situação indisponível na API Hinova — promova manualmente no painel SGA.');
+            } else {
+              await logSync(_vid, _aid, 'promover_situacao_veiculo', 'error',
+                { codigo_veiculo: codigoVeiculoHinova, codigo_situacao: codSituacaoAtivo },
+                res.raw, res.mensagem || res.errors.join('; ') || `HTTP ${res.status}`);
               promocaoOk = false;
               await setStatusSga(_vid, 'erro_sincronizacao');
               await upsertQueue(_vid, _aid, 'veiculo',
@@ -918,10 +931,9 @@ serve(async (req) => {
             await upsertQueue(_vid, _aid, 'veiculo', `Erro rede ao promover situação: ${e?.message || e}`, codigoAssociadoHinova);
           }
         } else {
-          await logSync(_vid, _aid, 'promover_situacao_veiculo', 'error',
+          await logSync(_vid, _aid, 'promover_situacao_veiculo', 'warning',
             { codigo_veiculo: codigoVeiculoHinova }, null,
-            'codigo_situacao_ativo não configurado nas credenciais Hinova');
-          promocaoOk = false;
+            'codigo_situacao_ativo não configurado — promova manualmente no SGA.');
         }
       }
 
