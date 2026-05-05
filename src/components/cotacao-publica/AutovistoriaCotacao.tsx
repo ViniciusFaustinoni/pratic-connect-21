@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -26,6 +28,8 @@ import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imag
 import { VideoCapture } from '@/components/instalador/VideoCapture';
 import { InAppBrowserBanner } from '@/components/shared/InAppBrowserBanner';
 import { useDeviceCapability } from '@/hooks/useDeviceCapability';
+import { OcrFallbackBanner } from '@/components/ocr/OcrFallbackBanner';
+import { publicSupabase } from '@/integrations/supabase/publicClient';
 
 
 interface AutovistoriaCotacaoProps {
