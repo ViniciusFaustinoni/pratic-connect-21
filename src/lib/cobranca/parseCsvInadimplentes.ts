@@ -179,6 +179,7 @@ export function parseCsvInadimplentes(conteudo: string): ParseResultado {
       sem_whatsapp: 0,
       total_telefones: 0,
       total_boletos: 0,
+      valor_total: 0,
       erros: ['CSV vazio ou sem dados.'],
     };
   }
@@ -197,6 +198,7 @@ export function parseCsvInadimplentes(conteudo: string): ParseResultado {
       sem_whatsapp: 0,
       total_telefones: 0,
       total_boletos: 0,
+      valor_total: 0,
       erros: [`Colunas obrigatórias ausentes: ${faltando.join(', ')}`],
     };
   }
@@ -245,13 +247,17 @@ export function parseCsvInadimplentes(conteudo: string): ParseResultado {
       dest.telefones_invalidos = invs;
       mapa.set(chave, dest);
     }
-    dest.boletos.push({ placa, vencimento: venc, linha_digitavel: linhaDig });
+    dest.boletos.push({ placa, vencimento: venc, linha_digitavel: linhaDig, valor: extrairValorBoleto(linhaDig) });
     totalBoletos++;
   }
 
   const destinatarios = Array.from(mapa.values());
   const comWhats = destinatarios.filter((d) => d.telefones_validos.length > 0).length;
   const totalTel = destinatarios.reduce((s, d) => s + d.telefones_validos.length, 0);
+  const valorTotal = destinatarios.reduce(
+    (s, d) => s + d.boletos.reduce((bs, b) => bs + (b.valor || 0), 0),
+    0,
+  );
 
   return {
     destinatarios,
@@ -261,6 +267,7 @@ export function parseCsvInadimplentes(conteudo: string): ParseResultado {
     sem_whatsapp: destinatarios.length - comWhats,
     total_telefones: totalTel,
     total_boletos: totalBoletos,
+    valor_total: valorTotal,
     erros,
   };
 }
