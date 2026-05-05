@@ -167,7 +167,10 @@ export default function CotacaoPage() {
   }, [marcarEtapaCompleta]);
 
   const handleEtapa2Next = useCallback(() => {
-    if (veiculoEncontrado) {
+    if (modoNotaFiscal) {
+      // Modo Nota Fiscal: marca/modelo/ano/valor já estão no estado, não usar veiculoEncontrado
+      setModoEntrada('manual');
+    } else if (veiculoEncontrado) {
       setMarca(veiculoEncontrado.marca);
       setModelo(veiculoEncontrado.modelo);
       setAno(veiculoEncontrado.ano);
@@ -176,7 +179,7 @@ export default function CotacaoPage() {
     }
     marcarEtapaCompleta(2);
     setEtapaAtual(3);
-  }, [veiculoEncontrado, marcarEtapaCompleta]);
+  }, [veiculoEncontrado, modoNotaFiscal, marcarEtapaCompleta]);
 
   const handleEntradaManual = useCallback(() => {
     setModoEntrada('manual');
