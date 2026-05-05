@@ -294,7 +294,10 @@ serve(async (req) => {
       // Criar instalação se necessário (sempre, para permitir geração do link público de vistoria)
       if (!instalacaoDesteVeiculo && !jaTemInstalacaoAtivaDesteVeic) {
         const associadoData = contrato.associado as any;
-        let dataAgendada = new Date().toISOString().split('T')[0];
+        // IMPORTANTE: NÃO usar default = hoje. A data DEVE vir da etapa "Instalação"
+        // do link público (vistoria_completa_data_agendada). Se não houver, pulamos
+        // a criação da instalação para não jogar o cadastro do dia na fila do dia.
+        let dataAgendada: string | null = null;
         let periodoPreferido = 'manha';
         let enderecoLogradouro = associadoData?.logradouro || null;
         let enderecoNumero = associadoData?.numero || null;
