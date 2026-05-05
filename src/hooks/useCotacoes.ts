@@ -132,12 +132,135 @@ export function useCotacoesFunilCounts(options?: UseCotacoesOptions) {
   });
 }
 
+// Status que compõem cada aba da tela de Cotações
+const STATUS_EM_ANDAMENTO_LIST = ['rascunho', 'enviada', 'visualizada'];
+const STATUS_FINALIZADAS_LIST = ['aceita', 'recusada', 'expirada'];
+
+type CotacoesStatusGroup = 'em_andamento' | 'finalizadas' | 'all';
+
+export interface UseCotacoesPaginadasOptions extends UseCotacoesOptions {
+  page?: number;
+  pageSize?: number;
+  statusGroup?: CotacoesStatusGroup;
+}
+
+async function fetchCotacoesCore(params: {
+  effectiveScope: 'own' | 'team' | 'all';
+  effectiveVendedorId?: string;
+  search: string;
+  page?: number;
+  pageSize?: number;
+  statusGroup?: CotacoesStatusGroup;
+}) {
+  const { effectiveScope, effectiveVendedorId, search, page, pageSize, statusGroup } = params;
+
+  let query = supabase
+    .from('cotacoes')
+    .select(
+      `
+        id, numero, status, status_contratacao, created_at, updated_at,
+        vendedor_id, lead_id, plano_id, token_publico,
+        cliente_nome, nome_solicitante, telefone1_solicitante, telefone2_solicitante, email_solicitante,
+        veiculo_placa, veiculo_marca, veiculo_modelo, veiculo_ano, valor_fipe,
+        valor_mensalidade, valor_adesao, tipo_entrada, dados_extras,
+        substituida_por_cotacao_id, motivo_substituicao,
+        leads:leads!fk_cotacoes_lead_id(id, nome, telefone, email),
+        planos:planos!plano_id(id, nome, codigo),
+        contrato:contratos!contratos_cotacao_id_fkey(
+          id, numero, status, adesao_paga,
+          associados:associados!fk_contratos_associado(id, status)
+        ),
+        instalacoes:instalacoes!instalacoes_cotacao_id_fkey(id, status, data_agendada)
+      `,
+      pageSize ? { count: 'exact' } : undefined
+    )
+    .order('created_at', { ascending: false });
+
+  // Escopo "own": filtra explicitamente por vendedor logado.
+  if (effectiveScope === 'own' && effectiveVendedorId) {
+    query = query.eq('vendedor_id', effectiveVendedorId);
+  }
+
+  // Filtro server-side por aba (Em Andamento / Finalizadas).
+  // Em Andamento: status nos transitórios E status_contratacao != 'concluido'.
+  // Finalizadas: status terminal OU status_contratacao = 'concluido'.
+  if (statusGroup === 'em_andamento') {
+    query = query.in('status', STATUS_EM_ANDAMENTO_LIST as any).neq('status_contratacao', 'concluido');
+  } else if (statusGroup === 'finalizadas') {
+    query = query.or(
+      `status.in.(${STATUS_FINALIZADAS_LIST.join(',')}),status_contratacao.eq.concluido`
+    );
+  }
+
+  if (search) {
+    const safe = search.replace(/[,()]/g, '');
+    const like = `%${safe}%`;
+
+    const { data: leadsMatch } = await supabase
+      .from('leads')
+      .select('id')
+      .or([`nome.ilike.${like}`, `telefone.ilike.${like}`, `email.ilike.${like}`].join(','))
+      .limit(500);
+    const leadIds = (leadsMatch || []).map((l: any) => l.id).filter(Boolean);
+
+    const orParts = [
+      `numero.ilike.${like}`,
+      `veiculo_placa.ilike.${like}`,
+      `veiculo_marca.ilike.${like}`,
+      `veiculo_modelo.ilike.${like}`,
+      `nome_solicitante.ilike.${like}`,
+      `telefone1_solicitante.ilike.${like}`,
+      `telefone2_solicitante.ilike.${like}`,
+      `email_solicitante.ilike.${like}`,
+    ];
+    if (leadIds.length > 0) {
+      orParts.push(`lead_id.in.(${leadIds.join(',')})`);
+    }
+    query = query.or(orParts.join(','));
+  }
+
+  if (pageSize) {
+    const p = Math.max(1, page ?? 1);
+    const from = (p - 1) * pageSize;
+    const to = from + pageSize - 1;
+    query = query.range(from, to);
+  } else {
+    query = query.limit(1000);
+  }
+
+  const { data, error, count } = await query;
+  if (error) throw error;
+
+  // Buscar vendedores em lote
+  const vendedorIds = Array.from(
+    new Set((data || []).map((c: any) => c.vendedor_id).filter(Boolean))
+  );
+  const vendedoresMap = new Map<string, any>();
+  if (vendedorIds.length > 0) {
+    const { data: vendedores } = await supabase
+      .from('profiles')
+      .select('user_id, nome, email, whatsapp, full_name')
+      .in('user_id', vendedorIds);
+    (vendedores || []).forEach((v: any) => vendedoresMap.set(v.user_id, v));
+  }
+
+  const mapped = (data || []).map((cotacao: any) => {
+    const v = cotacao.vendedor_id ? vendedoresMap.get(cotacao.vendedor_id) : null;
+    return {
+      ...cotacao,
+      vendedor: v
+        ? { id: v.user_id, nome: v.nome, email: v.email, whatsapp: v.whatsapp, full_name: v.full_name || v.nome }
+        : null,
+      profiles: v ? { full_name: v.full_name || v.nome, whatsapp: v.whatsapp } : null,
+      contrato: Array.isArray(cotacao.contrato) ? cotacao.contrato[0] || null : cotacao.contrato || null,
+    };
+  }) as CotacaoWithRelations[];
+
+  return { data: mapped, count: count ?? mapped.length };
+}
+
 export function useCotacoes(options?: UseCotacoesOptions) {
   const search = (options?.searchTerm || '').trim();
-  // Defesa em profundidade: se o caller não declarou explicitamente um escopo
-  // amplo ('team' ou 'all'), forçamos filtro por vendedor_id do usuário logado.
-  // Mesmo que a UI esqueça de passar viewScope, o consultor nunca verá cotações
-  // de outros consultores. A RLS no banco garante a regra final.
   const effectiveScope: 'own' | 'team' | 'all' =
     options?.viewScope === 'all' || options?.viewScope === 'team' ? options.viewScope : 'own';
   const effectiveVendedorId = effectiveScope === 'own' ? options?.vendedorId : undefined;
@@ -145,122 +268,57 @@ export function useCotacoes(options?: UseCotacoesOptions) {
   return useQuery({
     queryKey: ['cotacoes', effectiveScope, effectiveVendedorId, search],
     queryFn: async () => {
-      // Projeção enxuta — apenas colunas usadas pela listagem (cards/tabela/funil).
-      // Antes era SELECT *, trazendo dados_extras (planos_comparacao, JSONs grandes)
-      // que inflam o payload em ~5–10x sem serem usados na listagem.
-      let query = supabase
-        .from('cotacoes')
-        .select(`
-          id, numero, status, status_contratacao, created_at, updated_at,
-          vendedor_id, lead_id, plano_id, token_publico,
-          cliente_nome, nome_solicitante, telefone1_solicitante, telefone2_solicitante, email_solicitante,
-          veiculo_placa, veiculo_marca, veiculo_modelo, veiculo_ano, valor_fipe,
-          valor_mensalidade, valor_adesao, tipo_entrada, dados_extras,
-          substituida_por_cotacao_id, motivo_substituicao,
-          leads:leads!fk_cotacoes_lead_id(id, nome, telefone, email),
-          planos:planos!plano_id(id, nome, codigo),
-          contrato:contratos!contratos_cotacao_id_fkey(
-            id, numero, status, adesao_paga,
-            associados:associados!fk_contratos_associado(id, status)
-          ),
-          instalacoes:instalacoes!instalacoes_cotacao_id_fkey(id, status, data_agendada)
-        `)
-        .order('created_at', { ascending: false })
-        .limit(1000);
-
-      // Escopo "own": filtra explicitamente por vendedor logado.
-      // Escopo "team"/"all": confia na RLS para liberar somente quem tem permissão.
-      if (effectiveScope === 'own' && effectiveVendedorId) {
-        query = query.eq('vendedor_id', effectiveVendedorId);
-      }
-
-      // Busca server-side abrangente. Sem isso, a busca em campos como `numero`,
-      // `nome_solicitante` e — principalmente — `leads.nome` ficava limitada ao
-      // lote inicial e perdia registros (causa raiz do "Nenhuma cotação encontrada"
-      // quando o termo digitado existe apenas no nome/telefone/e-mail do lead).
-      if (search) {
-        const safe = search.replace(/[,()]/g, '');
-        const like = `%${safe}%`;
-
-        // 1) Resolver leads que casam com o termo (nome / telefone / email)
-        //    e expandir o filtro para `cotacoes.lead_id IN (...)`.
-        const { data: leadsMatch } = await supabase
-          .from('leads')
-          .select('id')
-          .or(
-            [
-              `nome.ilike.${like}`,
-              `telefone.ilike.${like}`,
-              `email.ilike.${like}`,
-            ].join(',')
-          )
-          .limit(500);
-        const leadIds = (leadsMatch || []).map((l: any) => l.id).filter(Boolean);
-
-        const orParts = [
-          `numero.ilike.${like}`,
-          `veiculo_placa.ilike.${like}`,
-          `veiculo_marca.ilike.${like}`,
-          `veiculo_modelo.ilike.${like}`,
-          `nome_solicitante.ilike.${like}`,
-          `telefone1_solicitante.ilike.${like}`,
-          `telefone2_solicitante.ilike.${like}`,
-          `email_solicitante.ilike.${like}`,
-        ];
-        if (leadIds.length > 0) {
-          // PostgREST espera lista entre parênteses para `in.`
-          orParts.push(`lead_id.in.(${leadIds.join(',')})`);
-        }
-
-        query = query.or(orParts.join(','));
-      }
-
-
-      const { data, error } = await query;
-      
-      if (error) throw error;
-
-      // Buscar vendedores em lote (relacionando profiles.user_id = cotacoes.vendedor_id)
-      const vendedorIds = Array.from(
-        new Set((data || []).map((c: any) => c.vendedor_id).filter(Boolean))
-      );
-      const vendedoresMap = new Map<string, any>();
-      if (vendedorIds.length > 0) {
-        const { data: vendedores } = await supabase
-          .from('profiles')
-          .select('user_id, nome, email, whatsapp, full_name')
-          .in('user_id', vendedorIds);
-        (vendedores || []).forEach((v: any) => vendedoresMap.set(v.user_id, v));
-      }
-
-      // Mapear vendedor para formato esperado (incluindo whatsapp para PDF)
-      const mapped = (data || []).map((cotacao: any) => {
-        const v = cotacao.vendedor_id ? vendedoresMap.get(cotacao.vendedor_id) : null;
-        return {
-          ...cotacao,
-          vendedor: v ? {
-            id: v.user_id,
-            nome: v.nome,
-            email: v.email,
-            whatsapp: v.whatsapp,
-            full_name: v.full_name || v.nome,
-          } : null,
-          profiles: v ? {
-            full_name: v.full_name || v.nome,
-            whatsapp: v.whatsapp,
-          } : null,
-          contrato: Array.isArray(cotacao.contrato) 
-            ? cotacao.contrato[0] || null 
-            : cotacao.contrato || null,
-        };
+      const { data } = await fetchCotacoesCore({
+        effectiveScope,
+        effectiveVendedorId,
+        search,
       });
-      
-      return mapped as CotacaoWithRelations[];
+      return data;
     },
     placeholderData: keepPreviousData,
-    staleTime: 1000 * 60 * 1, // Reduzido para 1 minuto para melhor responsividade
+    staleTime: 1000 * 60 * 1,
   });
 }
+
+/**
+ * Versão paginada server-side via .range() + count: 'exact'.
+ * Permite renderizar a lista de cotações sem trazer tudo para o cliente.
+ * Os contadores de funil/aba devem vir de useCotacoesFunilCounts (RPC).
+ */
+export function useCotacoesPaginadas(options: UseCotacoesPaginadasOptions) {
+  const search = (options.searchTerm || '').trim();
+  const effectiveScope: 'own' | 'team' | 'all' =
+    options.viewScope === 'all' || options.viewScope === 'team' ? options.viewScope : 'own';
+  const effectiveVendedorId = effectiveScope === 'own' ? options.vendedorId : undefined;
+  const page = Math.max(1, options.page ?? 1);
+  const pageSize = options.pageSize ?? 50;
+  const statusGroup = options.statusGroup ?? 'all';
+
+  return useQuery({
+    queryKey: [
+      'cotacoes',
+      'paginadas',
+      effectiveScope,
+      effectiveVendedorId,
+      search,
+      statusGroup,
+      page,
+      pageSize,
+    ],
+    queryFn: () =>
+      fetchCotacoesCore({
+        effectiveScope,
+        effectiveVendedorId,
+        search,
+        page,
+        pageSize,
+        statusGroup,
+      }),
+    placeholderData: keepPreviousData,
+    staleTime: 1000 * 30,
+  });
+}
+
 
 export function useCotacao(id: string | undefined) {
   return useQuery({

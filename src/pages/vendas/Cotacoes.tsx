@@ -21,7 +21,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { useCotacoes, useCotacoesFunilCounts, useUpdateCotacao, useDuplicarCotacao, useExcluirCotacao, type CotacaoWithRelations } from '@/hooks/useCotacoes';
+import { useCotacoes, useCotacoesPaginadas, useCotacoesFunilCounts, useUpdateCotacao, useDuplicarCotacao, useExcluirCotacao, type CotacaoWithRelations } from '@/hooks/useCotacoes';
 import { useGerarContrato } from '@/hooks/useContratos';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -126,11 +126,31 @@ export default function Cotacoes() {
 
   const search = useDebounce(searchInput, 350);
 
-  const { data: cotacoes, isLoading, isFetching } = useCotacoes({
+  const PAGE_SIZE = 50;
+  const [pageEmAndamento, setPageEmAndamento] = useState(1);
+  const [pageFinalizadas, setPageFinalizadas] = useState(1);
+
+  // Reset de paginação ao mudar busca/filtros relevantes
+  useEffect(() => {
+    setPageEmAndamento(1);
+    setPageFinalizadas(1);
+  }, [search, permissions.cotacao.viewScope, permissions.userId]);
+
+  const isEmAndamentoTab = activeTab === 'em_andamento';
+  const currentPage = isEmAndamentoTab ? pageEmAndamento : pageFinalizadas;
+  const setCurrentPage = isEmAndamentoTab ? setPageEmAndamento : setPageFinalizadas;
+
+  const { data: paginatedResult, isLoading, isFetching } = useCotacoesPaginadas({
     vendedorId: permissions.userId,
     viewScope: permissions.cotacao.viewScope,
     searchTerm: search,
+    page: currentPage,
+    pageSize: PAGE_SIZE,
+    statusGroup: isEmAndamentoTab ? 'em_andamento' : 'finalizadas',
   });
+  const cotacoes = paginatedResult?.data;
+  const totalPaginaAtual = paginatedResult?.count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalPaginaAtual / PAGE_SIZE));
 
   // Contadores do funil calculados no servidor — independente do array carregado
   const { data: funilCounts } = useCotacoesFunilCounts({
@@ -715,8 +735,8 @@ export default function Cotacoes() {
             {permissions.cotacao.viewScope === 'all' 
               ? `Gerencie todas as cotações`
               : 'Gerencie suas cotações'}
-            {cotacoes && cotacoes.length > 0 && (
-              <span className="text-foreground font-medium"> · {cotacoes.length} no total</span>
+            {funilCounts && funilCounts.total > 0 && (
+              <span className="text-foreground font-medium"> · {funilCounts.total} no total</span>
             )}
           </p>
         </div>
@@ -780,12 +800,12 @@ export default function Cotacoes() {
       </div>
 
       {/* Card mobile: total de cotações (visível mesmo com filtros aplicados) */}
-      {cotacoes && cotacoes.length > 0 && (
+      {funilCounts && funilCounts.total > 0 && (
         <div className="md:hidden">
           <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 flex items-center justify-between">
             <div className="text-sm">
               <span className="text-muted-foreground">Você tem </span>
-              <span className="font-bold text-primary">{cotacoes.length}</span>
+              <span className="font-bold text-primary">{funilCounts.total}</span>
               <span className="text-muted-foreground"> cotação(ões) no total</span>
             </div>
             {hasActiveFilters && (
@@ -1092,6 +1112,36 @@ export default function Cotacoes() {
             />
           </div>
         </TabsContent>
+
+        {/* Paginação server-side (50/página) — vale para a aba ativa */}
+        {totalPaginaAtual > PAGE_SIZE && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-2 py-3 border-t border-border/40 mt-2">
+            <div className="text-xs text-muted-foreground">
+              Página <strong>{currentPage}</strong> de <strong>{totalPages}</strong>
+              {' · '}
+              {totalPaginaAtual} resultado(s)
+              {isFetching && <span className="ml-2 italic">atualizando…</span>}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage <= 1 || isFetching}
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              >
+                Anterior
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage >= totalPages || isFetching}
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              >
+                Próxima
+              </Button>
+            </div>
+          </div>
+        )}
       </Tabs>
 
       {/* Modal de Detalhes */}
