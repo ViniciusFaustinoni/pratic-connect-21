@@ -57,18 +57,17 @@ export function TrocaTitularidadeDialog({
   // 2) Lista veículos do associado antigo NO SGA
   const sga = useBuscaSGA({ cpf: cpfAntigo, enabled: open && cpfAntigo.length === 11 });
 
-  // 3) Para cada veículo SGA, mapeia para o UUID local pela placa
-  //    (o backend de troca espera o veiculo_id da nossa base).
+  // 3) Para cada veículo SGA, mapeia para o UUID local pela placa.
+  //    Se não houver espelho local, dispara import automático do SGA (cria associado + veículos).
   const placas = (sga.data?.veiculos || []).map((v) => v.placa).filter(Boolean);
 
-  const { data: veiculosLocais } = useQuery({
-    queryKey: ['troca-tit-veiculos-local', associadoId, placas.join(',')],
+  const { data: veiculosLocais, refetch: refetchLocais } = useQuery({
+    queryKey: ['troca-tit-veiculos-local-by-placa', placas.join(',')],
     queryFn: async () => {
-      if (placas.length === 0) return [] as Array<{ id: string; placa: string; marca: string; modelo: string; ano_modelo: number | null }>;
+      if (placas.length === 0) return [] as Array<{ id: string; placa: string; marca: string; modelo: string; ano_modelo: number | null; associado_id: string }>;
       const { data } = await supabase
         .from('veiculos')
-        .select('id, placa, marca, modelo, ano_modelo')
-        .eq('associado_id', associadoId)
+        .select('id, placa, marca, modelo, ano_modelo, associado_id')
         .in('placa', placas);
       return data || [];
     },
@@ -81,7 +80,7 @@ export function TrocaTitularidadeDialog({
       const local = (veiculosLocais || []).find(
         (l) => (l.placa || '').toUpperCase() === (v.placa || '').toUpperCase(),
       );
-      if (!local) return null; // sem espelho local não conseguimos transferir
+      if (!local) return null;
       return {
         id: local.id,
         placa: v.placa,
@@ -89,6 +88,37 @@ export function TrocaTitularidadeDialog({
       };
     })
     .filter((x): x is VeiculoOpcao => !!x);
+
+  // Auto-import: quando SGA tem veículos mas nenhum espelho local existe ainda
+  const [importando, setImportando] = useState(false);
+  const [importErro, setImportErro] = useState<string | null>(null);
+  useEffect(() => {
+    const semEspelho =
+      open &&
+      !sga.isLoading &&
+      (sga.data?.veiculos || []).length > 0 &&
+      veiculos.length === 0 &&
+      !importando &&
+      cpfAntigo.length === 11;
+    if (!semEspelho) return;
+    (async () => {
+      try {
+        setImportando(true);
+        setImportErro(null);
+        const { data, error } = await supabase.functions.invoke('importar-associado-sga', {
+          body: { cpf: cpfAntigo },
+        });
+        if (error) throw error;
+        if ((data as any)?.error) throw new Error((data as any).error);
+        await refetchLocais();
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Falha ao importar do SGA';
+        setImportErro(msg);
+      } finally {
+        setImportando(false);
+      }
+    })();
+  }, [open, sga.isLoading, sga.data, veiculos.length, importando, cpfAntigo, refetchLocais]);
 
   // Auto-seleciona se só houver 1
   useEffect(() => {
