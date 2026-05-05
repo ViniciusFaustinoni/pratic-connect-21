@@ -149,6 +149,17 @@ export default function CotacaoPublicaCompleta() {
   const [videoVistoriaUrl, setVideoVistoriaUrl] = useState<string | null>(null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [videoUploadProgress, setVideoUploadProgress] = useState<number>(0);
+
+  // Estado para fallback de OCR (preenchimento manual quando OCR falha)
+  const [ocrFallback, setOcrFallback] = useState<{
+    open: boolean;
+    docTipo: string;
+    docNome: string;
+    schemaTipo: string;
+    dados: Record<string, unknown> | null;
+    sugestao?: 'aprovar' | 'reprovar' | 'revisar';
+    legivel?: boolean;
+  } | null>(null);
   
   // Ref para prevenir duplo clique
   const isSubmittingRef = useRef(false);
