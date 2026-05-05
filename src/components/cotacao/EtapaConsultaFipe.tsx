@@ -450,7 +450,7 @@ export function EtapaConsultaFipe({
           </div>
         )}
 
-        {status === 'error' && (
+        {!modoNotaFiscal && status === 'error' && (
           <div className="space-y-3">
             <Alert className="border-destructive/50 bg-destructive/10">
               <XCircle className="h-4 w-4 text-destructive" />
