@@ -48,7 +48,10 @@ export function DebitosCard({
 
   if (!debitos || debitos.length === 0) return null;
 
-  const cpfLimpo = (cpf || '').replace(/\D/g, '');
+  // Resolve cpf — pode vir CPF direto ou UUID (lê do cache do hook useVerificarDebitosAssociado)
+  const isUuid = !!cpf && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cpf);
+  const cpfDoCache = isUuid ? (qc.getQueryData(['associado-cpf-from-uuid', cpf]) as string | undefined) : undefined;
+  const cpfLimpo = ((isUuid ? cpfDoCache : cpf) || '').replace(/\D/g, '');
   const podeVerificar = cpfLimpo.length === 11;
 
   const handleCopy = async (linha: string, key: string) => {
