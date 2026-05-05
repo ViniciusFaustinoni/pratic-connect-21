@@ -752,19 +752,19 @@ export default function Associados() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => setDetalheAssociadoId(associado.id)}>
+                              <DropdownMenuItem onClick={() => navigate(`/cadastro/associados/${associado.id}`)}>
                                 <Eye className="mr-2 h-4 w-4" />
                                 Ver detalhes
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setDetalheAssociadoId(associado.id)}>
+                              <DropdownMenuItem onClick={() => navigate(`/cadastro/associados/${associado.id}`)}>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Editar dados
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setDetalheAssociadoId(associado.id)}>
+                              <DropdownMenuItem onClick={() => navigate(`/cadastro/associados/${associado.id}`)}>
                                 <FileText className="mr-2 h-4 w-4" />
                                 Ver documentos
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setDetalheAssociadoId(associado.id)}>
+                              <DropdownMenuItem onClick={() => navigate(`/cadastro/associados/${associado.id}`)}>
                                 <Receipt className="mr-2 h-4 w-4" />
                                 Ver boletos
                               </DropdownMenuItem>
