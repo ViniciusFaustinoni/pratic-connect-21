@@ -58,6 +58,7 @@ interface EtapaResultadoProps {
   onIniciarCadastro: () => void;
   isLoading?: boolean;
   isCenarioIsento?: boolean;
+  origemValor?: 'fipe' | 'nota';
 }
 
 const formatCurrency = (value: number) => {
