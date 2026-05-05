@@ -158,6 +158,26 @@ export function useResolverRecusa() {
             .update({ status: 'cancelada', observacoes: `Contrato cancelado após recusa: ${justificativa}`, updated_at: agora })
             .eq('id', servicoId);
 
+          // Marcar veículo como recusado
+          await supabase
+            .from('veiculos')
+            .update({
+              status: 'recusado',
+              motivo_recusa_veiculo: justificativa,
+              recusado_por: profile?.id,
+              recusado_em: agora,
+              updated_at: agora,
+            })
+            .eq('id', veiculoId);
+
+          // Encerrar instalação derivada
+          if (instalacaoId) {
+            await supabase
+              .from('instalacoes')
+              .update({ status: 'cancelada', updated_at: agora })
+              .eq('id', instalacaoId);
+          }
+
           // Cancel associado
           await supabase
             .from('associados')
