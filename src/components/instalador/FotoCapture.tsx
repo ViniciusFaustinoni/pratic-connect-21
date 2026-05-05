@@ -55,17 +55,14 @@ export function FotoCapture({
       const previewUrl = createOptimizedPreview(file);
       setPreview(previewUrl);
       
-      // Comprimir se necessário
+      // Comprimir (perfil adaptativo do imageCompressor decide max/quality
+      // conforme deviceMemory — não passamos overrides hardcoded para não
+      // anular a proteção de Android low-end).
       let arquivoFinal = file;
       if (file.size > 500 * 1024) {
         setIsCompressing(true);
         try {
-          arquivoFinal = await compressImage(file, { 
-            maxWidth: 1920, 
-            maxHeight: 1920, 
-            quality: 0.75,
-            maxSizeKB: 800 
-          });
+          arquivoFinal = await compressImage(file);
         } catch (compressError) {
           console.warn('[FotoCapture] Erro na compressão:', compressError);
         }
