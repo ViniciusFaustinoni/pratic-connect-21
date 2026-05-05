@@ -208,6 +208,7 @@ const TrocaTitularidade = lazy(() => import("./pages/cobranca/TrocaTitularidade"
 const RelacionamentoTrocas = lazy(() => import("./pages/cobranca/RelacionamentoTrocas"));
 const AprovacoesTroca = lazy(() => import("./pages/monitoramento/AprovacoesTroca"));
 const LiberacoesAutoVistoria = lazy(() => import("./pages/monitoramento/LiberacoesAutoVistoria"));
+const AprovacoesUnificadas = lazy(() => import("./pages/monitoramento/AprovacoesUnificadas"));
 
 // Agência
 const AgenciaDashboard = lazy(() => import("./pages/agencia/AgenciaDashboard"));
