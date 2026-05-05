@@ -26,7 +26,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useVeiculos, useDeleteVeiculo } from '@/hooks/useVeiculos';
+import { useVeiculos, useVeiculosPaginados, useDeleteVeiculo } from '@/hooks/useVeiculos';
+import { useDebounce } from '@/hooks/useDebounce';
 import { STATUS_VEICULO_LABELS, type StatusVeiculo } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
 import {
