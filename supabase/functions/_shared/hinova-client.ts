@@ -584,8 +584,17 @@ export async function listarBoletosVeiculoJanela(
   }
   // Hinova retorna 406 com mensagem "Não foram encontrados boletos dentro dos parâmetros enviados"
   // quando a janela está vazia — é um resultado válido (sem boletos), não um erro.
-  if (r.status === 406 && /n[aã]o\s+foram\s+encontrados\s+boletos/i.test(txt)) {
-    return { boletos: [], raw, request_payload: payload, http_status: 406 };
+  // Atenção: o body cru pode vir com escapes unicode (`N\u00e3o`), então testamos
+  // também o conteúdo já decodificado (raw.error / raw.mensagem) e uma variante com `\u00e3o`.
+  if (r.status === 406) {
+    const errStr = Array.isArray(raw?.error) ? raw.error.join(' ') : String(raw?.error ?? '');
+    const msgStr = String(raw?.mensagem ?? '');
+    const decoded = `${errStr} ${msgStr}`;
+    const reEmpty = /n[aã]o\s+foram\s+encontrados\s+boletos/i;
+    const reEmptyEscaped = /n\\u00e3o\s+foram\s+encontrados\s+boletos/i;
+    if (reEmpty.test(decoded) || reEmpty.test(txt) || reEmptyEscaped.test(txt)) {
+      return { boletos: [], raw, request_payload: payload, http_status: 406 };
+    }
   }
   if (!r.ok) {
     throwHttpError(r.status, txt, 'listarBoletosVeiculoJanela');
