@@ -737,7 +737,7 @@ export default function Associados() {
                                 variant="ghost" 
                                 size="icon" 
                                 className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
-                                onClick={() => setDetalheAssociadoId(associado.id)}
+                                onClick={() => navigate(`/cadastro/associados/${associado.id}`)}
                               >
                                 <Eye className="h-3.5 w-3.5" />
                               </Button>
