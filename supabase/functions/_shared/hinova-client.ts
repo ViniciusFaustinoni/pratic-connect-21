@@ -749,7 +749,7 @@ export function toNumber(v: any): number {
  * - Lança HinovaNotFoundError em 404 confirmado em ambos formatos.
  */
 export async function buscarAssociadoComVeiculosPorCpf(
-  s: HinovaSession,
+  sessionOrSupabase: HinovaSession | any,
   cpf: string,
 ): Promise<{ codigo_associado: number | null; veiculos: Array<{ placa: string; codigo_veiculo: number }> }> {
   const cpfDigitos = (cpf || '').replace(/\D/g, '');
@@ -759,22 +759,48 @@ export async function buscarAssociadoComVeiculosPorCpf(
   const cpfFormatado = `${cpfDigitos.slice(0, 3)}.${cpfDigitos.slice(3, 6)}.${cpfDigitos.slice(6, 9)}-${cpfDigitos.slice(9, 11)}`;
   const tentativas = [cpfDigitos, cpfFormatado];
 
+  const isSession = isHinovaSession(sessionOrSupabase);
+  // Resolve apiUrl: para session, usa direto; para supabase, busca via getHinovaSession
+  const apiUrl = isSession
+    ? (sessionOrSupabase as HinovaSession).apiUrl
+    : (await getHinovaSession(sessionOrSupabase)).apiUrl;
+
   let last404Body = '';
   for (let i = 0; i < tentativas.length; i++) {
     const cpfTentativa = tentativas[i];
     let r: Response;
+    let txt: string;
     try {
-      r = await fetch(`${s.apiUrl}/associado/buscar/${encodeURIComponent(cpfTentativa)}/cpf`, {
-        method: 'GET',
-        headers: authHeaders(s),
-      });
+      if (isSession) {
+        const s = sessionOrSupabase as HinovaSession;
+        r = await fetch(`${s.apiUrl}/associado/buscar/${encodeURIComponent(cpfTentativa)}/cpf`, {
+          method: 'GET',
+          headers: authHeaders(s),
+        });
+        txt = await r.text();
+      } else {
+        // Caminho novo — com retry/reauth automático em 401/403
+        const fetched = await hinovaFetch(
+          sessionOrSupabase,
+          (token) => ({
+            url: `${apiUrl}/associado/buscar/${encodeURIComponent(cpfTentativa)}/cpf`,
+            init: {
+              method: 'GET',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            },
+          }),
+          'buscarAssociadoPorCpf',
+        );
+        r = fetched.response;
+        txt = fetched.bodyText;
+      }
     } catch (e: any) {
+      if (e instanceof HinovaTransientError || e instanceof HinovaNotFoundError) throw e;
       throw new HinovaTransientError(`[buscarAssociadoPorCpf] rede: ${String(e?.message || e)}`, {
         httpStatus: 0,
         reason: 'network',
       });
     }
-    const txt = await r.text();
 
     if (r.status === 404) {
       last404Body = txt.slice(0, 200);
