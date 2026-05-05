@@ -432,10 +432,13 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
             const atual = index === fotoAtualIndex;
             
             return (
-              <div
+              <button
+                type="button"
                 key={foto.id}
+                onClick={() => setFotoAtualIndex(index)}
+                title={`Ir para: ${foto.label}`}
                 className={cn(
-                  "shrink-0 w-10 h-10 rounded-lg border-2 transition-all flex items-center justify-center",
+                  "shrink-0 w-10 h-10 rounded-lg border-2 transition-all flex items-center justify-center cursor-pointer hover:opacity-80",
                   atual && "border-primary ring-2 ring-primary/20",
                   !atual && enviada && "border-success bg-success/10",
                   !atual && !enviada && "border-border/50 bg-muted/30"
@@ -446,7 +449,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
                 ) : (
                   <span className="text-xs font-medium text-muted-foreground">{index + 1}</span>
                 )}
-              </div>
+              </button>
             );
           })}
         </div>
