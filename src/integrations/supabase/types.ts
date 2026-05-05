@@ -6238,6 +6238,114 @@ export type Database = {
           },
         ]
       }
+      cobranca_csv_boletos: {
+        Row: {
+          created_at: string
+          enviado_em: string | null
+          id: string
+          linha_digitavel: string
+          lote_id: string
+          matricula: string
+          nome: string
+          placa: string | null
+          recuperado_em: string | null
+          recuperado_no_lote_id: string | null
+          status: string
+          telefones: Json | null
+          valor: number
+          vencimento: string
+        }
+        Insert: {
+          created_at?: string
+          enviado_em?: string | null
+          id?: string
+          linha_digitavel: string
+          lote_id: string
+          matricula: string
+          nome: string
+          placa?: string | null
+          recuperado_em?: string | null
+          recuperado_no_lote_id?: string | null
+          status?: string
+          telefones?: Json | null
+          valor?: number
+          vencimento: string
+        }
+        Update: {
+          created_at?: string
+          enviado_em?: string | null
+          id?: string
+          linha_digitavel?: string
+          lote_id?: string
+          matricula?: string
+          nome?: string
+          placa?: string | null
+          recuperado_em?: string | null
+          recuperado_no_lote_id?: string | null
+          status?: string
+          telefones?: Json | null
+          valor?: number
+          vencimento?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cobranca_csv_boletos_lote_id_fkey"
+            columns: ["lote_id"]
+            isOneToOne: false
+            referencedRelation: "cobranca_csv_lotes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobranca_csv_boletos_recuperado_no_lote_id_fkey"
+            columns: ["recuperado_no_lote_id"]
+            isOneToOne: false
+            referencedRelation: "cobranca_csv_lotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cobranca_csv_lotes: {
+        Row: {
+          created_at: string
+          criado_por: string | null
+          id: string
+          nome_arquivo: string
+          observacao: string | null
+          status: string
+          total_associados: number
+          total_boletos: number
+          total_enviados: number
+          updated_at: string
+          valor_total: number
+        }
+        Insert: {
+          created_at?: string
+          criado_por?: string | null
+          id?: string
+          nome_arquivo: string
+          observacao?: string | null
+          status?: string
+          total_associados?: number
+          total_boletos?: number
+          total_enviados?: number
+          updated_at?: string
+          valor_total?: number
+        }
+        Update: {
+          created_at?: string
+          criado_por?: string | null
+          id?: string
+          nome_arquivo?: string
+          observacao?: string | null
+          status?: string
+          total_associados?: number
+          total_boletos?: number
+          total_enviados?: number
+          updated_at?: string
+          valor_total?: number
+        }
+        Relationships: []
+      }
       cobranca_eventos: {
         Row: {
           associado_id: string
