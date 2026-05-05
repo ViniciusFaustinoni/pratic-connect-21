@@ -218,12 +218,13 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
         setKmIdentificado(null);
         toast.warning('Não conseguimos ler a quilometragem. Por favor, informe manualmente abaixo.', { duration: 6000 });
       } else {
-        toast.success('Foto enviada com sucesso!');
+        toast.success('Foto recebida! Nossa equipe vai conferir depois.');
       }
       
-      // Avançar para próxima foto automaticamente (não avança se OCR do odômetro falhou)
+      // Avançar para próxima foto automaticamente (rápido, sem delay artificial)
+      // Não avança se OCR do odômetro falhou (precisa de input manual)
       if (fotoAtualIndex < totalFotos - 1 && !odometroOcrFalhou) {
-        setTimeout(() => setFotoAtualIndex(fotoAtualIndex + 1), 800);
+        setTimeout(() => setFotoAtualIndex(fotoAtualIndex + 1), 300);
       }
     } catch (error: any) {
       console.error('[AutovistoriaCotacao] Erro no upload:', error);
