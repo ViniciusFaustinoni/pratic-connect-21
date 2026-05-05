@@ -111,13 +111,15 @@ export function useAssociados({ filters, pagination, enabled = true }: UseAssoci
     refetchOnMount: 'always',
     placeholderData: keepPreviousData,
     queryFn: async () => {
+      // Projeção enxuta — antes trazia `*` em associados + planos + contratos + veiculos,
+      // o que inflava o payload da listagem em ~5x. Mantemos só o necessário p/ cards/tabela.
       let query = supabase
         .from('associados')
         .select(`
-          *,
-          planos (*),
-          contratos!fk_contratos_associado (*),
-          veiculos (*)
+          id, nome, cpf, email, telefone, status, plano_id, uf, cidade, data_adesao, created_at, updated_at, origem_cadastro,
+          planos:planos!plano_id (id, nome, codigo),
+          contratos:contratos!fk_contratos_associado (id, numero, status),
+          veiculos (id, placa, marca, modelo, ano_modelo, status)
         `, { count: 'exact' });
 
       // Pré-busca em contratos quando filtra por consultor ou tipo de adesão
