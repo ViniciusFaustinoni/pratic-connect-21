@@ -122,6 +122,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/monitoramento/alertas': { label: 'Alertas' },
   '/monitoramento/aprovacao-associados': { label: 'Aprovação de Associados' },
   '/monitoramento/imprevistos': { label: 'Imprevistos' },
+  '/monitoramento/aprovacoes-monitoramento': { label: 'Aprovações do Monitoramento' },
   
   // Marketing
   '/marketing': { label: 'Marketing' },
