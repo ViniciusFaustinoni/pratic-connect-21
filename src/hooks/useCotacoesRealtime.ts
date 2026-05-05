@@ -117,9 +117,9 @@ export function useCotacoesRealtime() {
           console.log('[useCotacoesRealtime] Contrato alterado:', payload.eventType);
           
           // Invalidar cotações porque a etapa de venda depende do contrato
-          queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
-          queryClient.invalidateQueries({ queryKey: ['contratos'] });
-          queryClient.invalidateQueries({ queryKey: ['ativacoes'] });
+          throttledInvalidate([['cotacoes']]);
+          throttledInvalidate([['contratos']]);
+          throttledInvalidate([['ativacoes']]);
         }
       )
       // Escutar mudanças em instalações (afeta etapa instalacao_agendada/vistoria_agendada)
@@ -134,9 +134,9 @@ export function useCotacoesRealtime() {
           console.log('[useCotacoesRealtime] Instalação alterada:', payload.eventType);
           
           // Invalidar cotações e instalações
-          queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
-          queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
-          queryClient.invalidateQueries({ queryKey: ['instalacoes-disponiveis'] });
+          throttledInvalidate([['cotacoes']]);
+          throttledInvalidate([['instalacoes']]);
+          throttledInvalidate([['instalacoes-disponiveis']]);
           
           // Toast para instalação concluída
           if (payload.eventType === 'UPDATE') {
@@ -161,10 +161,10 @@ export function useCotacoesRealtime() {
           console.log('[useCotacoesRealtime] Vistoria alterada:', payload.eventType);
           
           // Invalidar cotações e vistorias
-          queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
-          queryClient.invalidateQueries({ queryKey: ['vistorias'] });
-          queryClient.invalidateQueries({ queryKey: ['vistorias-mapa'] });
-          queryClient.invalidateQueries({ queryKey: ['ativacoes'] });
+          throttledInvalidate([['cotacoes']]);
+          throttledInvalidate([['vistorias']]);
+          throttledInvalidate([['vistorias-mapa']]);
+          throttledInvalidate([['ativacoes']]);
           
           // Toast para vistoria concluída
           if (payload.eventType === 'UPDATE') {
@@ -192,7 +192,7 @@ export function useCotacoesRealtime() {
           
           // Invalidar histórico da cotação específica
           if (evento.cotacao_id) {
-            queryClient.invalidateQueries({ queryKey: ['cotacao-historico', evento.cotacao_id] });
+            throttledInvalidate([['cotacao-historico', evento.cotacao_id]]);
           }
           
           // Notificação especial para visualização do cliente
@@ -224,9 +224,9 @@ export function useCotacoesRealtime() {
           console.log('[useCotacoesRealtime] Associado alterado:', payload.eventType);
           
           // Invalidar cotações pois a etapa de venda depende do status do associado
-          queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
-          queryClient.invalidateQueries({ queryKey: ['ativacoes'] });
-          queryClient.invalidateQueries({ queryKey: ['propostas-pendentes'] });
+          throttledInvalidate([['cotacoes']]);
+          throttledInvalidate([['ativacoes']]);
+          throttledInvalidate([['propostas-pendentes']]);
           
           // Toast para associado ativado
           const newData = payload.new as { status?: string; nome?: string };
@@ -250,9 +250,9 @@ export function useCotacoesRealtime() {
           console.log('[useCotacoesRealtime] Novo evento no histórico do associado:', payload.new);
           const evento = payload.new as { associado_id?: string };
           if (evento.associado_id) {
-            queryClient.invalidateQueries({ queryKey: ['associado-historico-completo', evento.associado_id] });
+            throttledInvalidate([['associado-historico-completo', evento.associado_id]]);
           }
-          queryClient.invalidateQueries({ queryKey: ['associado-historico-completo'] });
+          throttledInvalidate([['associado-historico-completo']]);
         }
       )
       .subscribe((status) => {
