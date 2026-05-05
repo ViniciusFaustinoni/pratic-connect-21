@@ -1112,6 +1112,36 @@ export default function Cotacoes() {
             />
           </div>
         </TabsContent>
+
+        {/* Paginação server-side (50/página) — vale para a aba ativa */}
+        {totalPaginaAtual > PAGE_SIZE && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-2 py-3 border-t border-border/40 mt-2">
+            <div className="text-xs text-muted-foreground">
+              Página <strong>{currentPage}</strong> de <strong>{totalPages}</strong>
+              {' · '}
+              {totalPaginaAtual} resultado(s)
+              {isFetching && <span className="ml-2 italic">atualizando…</span>}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage <= 1 || isFetching}
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              >
+                Anterior
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage >= totalPages || isFetching}
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              >
+                Próxima
+              </Button>
+            </div>
+          </div>
+        )}
       </Tabs>
 
       {/* Modal de Detalhes */}
