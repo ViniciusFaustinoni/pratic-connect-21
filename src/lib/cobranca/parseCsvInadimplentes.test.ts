@@ -49,8 +49,8 @@ MARIA SOUZA,1002,DEF9876|8888,(11)97777-6666,(11)96666-5555,15/03/2024,15/03/202
 describe('montarBlocoBoletos', () => {
   it('formata lista', () => {
     const txt = montarBlocoBoletos([
-      { placa: 'ABC1234', vencimento: '10/04/2024', linha_digitavel: '34191.09123' },
-      { placa: 'XYZ5678', vencimento: '10/05/2024', linha_digitavel: '34191.09124' },
+      { placa: 'ABC1234', vencimento: '10/04/2024', linha_digitavel: '34191.09123', valor: 0 },
+      { placa: 'XYZ5678', vencimento: '10/05/2024', linha_digitavel: '34191.09124', valor: 0 },
     ]);
     expect(txt).toContain('Placa ABC1234');
     expect(txt).toContain('venc. 10/04/2024');
