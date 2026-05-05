@@ -710,13 +710,57 @@ serve(async (req) => {
       // 6.d Cadastrar se não existe
       if (!codigoVeiculoHinova) {
         // Pre-flight: Hinova exige codigo_fipe OU codigo_modelo. Hoje só temos
-        // mapeamento via FIPE — se vier vazio, abortar com mensagem útil em
-        // vez de mandar e travar com "Não aceitável".
-        const codigoFipeLimpo = String(veiculo.codigo_fipe || '').trim();
+        // mapeamento via FIPE — se vier vazio, tentamos buscar automaticamente
+        // via fipe-lookup (marca + modelo + ano) antes de abortar.
+        let codigoFipeLimpo = String(veiculo.codigo_fipe || '').trim();
+        let valorFipeAuto = Number(veiculo.valor_fipe) || 0;
         if (!codigoFipeLimpo) {
-          const motivo = 'codigo_fipe ausente no cadastro do veículo — Hinova exige FIPE ou código de modelo. Edite o veículo e preencha o código FIPE antes de reprocessar.';
+          const tipoFipe = tipoVeiculo === 2 ? 'motos'
+            : (tipoVeiculo === 3 ? 'caminhoes' : 'carros');
+          try {
+            const url = new URL(`${Deno.env.get('SUPABASE_URL')}/functions/v1/fipe-lookup`);
+            url.searchParams.set('action', 'buscar-por-nome');
+            url.searchParams.set('tipo', tipoFipe);
+            url.searchParams.set('marca', String(veiculo.marca || '').trim());
+            url.searchParams.set('modelo', String(veiculo.modelo || '').trim());
+            if (veiculo.ano_modelo || veiculo.ano) {
+              url.searchParams.set('ano', String(veiculo.ano_modelo || veiculo.ano));
+            }
+            const resp = await fetch(url.toString(), {
+              headers: {
+                Authorization: `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`,
+                apikey: Deno.env.get('SUPABASE_ANON_KEY') || '',
+              },
+            });
+            const json = await resp.json().catch(() => null);
+            if (json?.success && json?.found && json?.data?.codigoFipe) {
+              codigoFipeLimpo = String(json.data.codigoFipe).trim();
+              if (json.data.valorNumerico && !valorFipeAuto) {
+                valorFipeAuto = Number(json.data.valorNumerico);
+              }
+              await supabase.from('veiculos').update({
+                codigo_fipe: codigoFipeLimpo,
+                ...(json.data.valorNumerico && !Number(veiculo.valor_fipe)
+                  ? { valor_fipe: Number(json.data.valorNumerico) }
+                  : {}),
+              }).eq('id', _vid);
+              await logSync(_vid, _aid, 'fipe_auto_lookup', 'success',
+                { marca: veiculo.marca, modelo: veiculo.modelo, ano: veiculo.ano_modelo || veiculo.ano },
+                { codigo_fipe: codigoFipeLimpo, valor: json.data.valorNumerico });
+            } else {
+              await logSync(_vid, _aid, 'fipe_auto_lookup', 'error',
+                { marca: veiculo.marca, modelo: veiculo.modelo, ano: veiculo.ano_modelo || veiculo.ano },
+                json, json?.error || 'FIPE não encontrada');
+            }
+          } catch (e: any) {
+            await logSync(_vid, _aid, 'fipe_auto_lookup', 'error',
+              { marca: veiculo.marca, modelo: veiculo.modelo }, null, e?.message || String(e));
+          }
+        }
+        if (!codigoFipeLimpo) {
+          const motivo = 'codigo_fipe ausente no cadastro do veículo e busca automática FIPE (marca/modelo/ano) não retornou resultado. Edite o veículo e preencha o código FIPE manualmente antes de reprocessar.';
           await logSync(_vid, _aid, 'cadastrar_veiculo', 'error',
-            { veiculo_id: _vid, placa: veiculo.placa }, null, motivo);
+            { veiculo_id: _vid, placa: veiculo.placa, marca: veiculo.marca, modelo: veiculo.modelo }, null, motivo);
           await setStatusSga(_vid, 'erro_sincronizacao');
           await upsertQueue(_vid, _aid, 'veiculo', motivo, codigoAssociadoHinova);
           return;
@@ -765,7 +809,7 @@ serve(async (req) => {
             ?? 10, // fallback final: "Não especificado" (cor não bloqueia envio)
           data_contrato_iso: associado.created_at,
         };
-        const payloadV = buildVeiculoPayload(veiculo, codigoFipeLimpo, Number(veiculo.valor_fipe) || 0, ctxV);
+        const payloadV = buildVeiculoPayload(veiculo, codigoFipeLimpo, Number(veiculo.valor_fipe) || valorFipeAuto || 0, ctxV);
 
         try {
           const res = await cadastrarVeiculoHinova(supabase, payloadV);
