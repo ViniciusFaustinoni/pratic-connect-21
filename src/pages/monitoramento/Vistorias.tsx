@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Search, Clock, RefreshCw, CheckCircle, XCircle, ClipboardList } from 'lucide-react';
 import { useFilasRealtime } from '@/hooks/useFilasRealtime';
 import { Button } from '@/components/ui/button';
@@ -27,11 +27,7 @@ export default function Vistorias() {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Reset de página ao mudar filtros
-  useState(() => { /* noop */ });
-  // Reset via efeito simples
-  if (typeof window !== 'undefined') {
-    // nothing — handled inline
-  }
+  useEffect(() => { setPage(1); }, [filter, search]);
 
   const { data: vistorias = [], isLoading } = useVistorias({ status: filter, search, page, pageSize: PAGE_SIZE });
   const pagination = (vistorias as any)?.pagination as { page: number; pageSize: number; total: number; totalPages: number } | undefined;
