@@ -1,7 +1,18 @@
 // ============================================
 // UTILITÁRIO: COMPRESSÃO DE IMAGENS
-// Otimizado para dispositivos com baixa memória
-// Aplica perfil adaptativo conforme deviceMemory.
+// Otimizado para dispositivos com baixa memória.
+//
+// Estratégia em ordem de preferência (todas com perfil adaptativo
+// por deviceMemory):
+//   1. createImageBitmap(file, { resizeWidth, resizeHeight }) +
+//      OffscreenCanvas → decodifica JÁ no tamanho final, peak RAM
+//      cai ~10× (não materializa o RGBA da imagem original).
+//   2. createImageBitmap + Canvas DOM (quando OffscreenCanvas
+//      não está disponível, ex.: Safari antigo).
+//   3. Fallback <img> + Canvas (último recurso, alto peak RAM).
+//
+// IMPORTANTE: nenhum chamador deve passar maxWidth/maxHeight maior
+// do que o perfil — isso anula a proteção em Android low-end.
 // ============================================
 
 import { getDeviceCapabilitySnapshot } from '@/hooks/useDeviceCapability';
@@ -42,9 +53,9 @@ const PROFILES = {
     profileLabel: 'mid-end',
   },
   high: {
-    maxWidth: 1280,
-    maxHeight: 1280,
-    quality: 0.7,
+    maxWidth: 1600,
+    maxHeight: 1600,
+    quality: 0.72,
     maxSizeKB: 800,
     skipThresholdKB: 500,
     profileLabel: 'high-end',
@@ -56,9 +67,14 @@ function resolveOptions(options: CompressOptions): ResolvedOptions {
   const profileKey =
     options.profile ?? (cap.lowEnd ? 'low' : cap.midEnd ? 'mid' : 'high');
   const base = PROFILES[profileKey];
+  // Cap explícito: nunca permite override acima do perfil.
+  // Isso evita que chamadores antigos com `maxWidth: 1920` derrubem
+  // a proteção low-end.
+  const maxWidth = Math.min(options.maxWidth ?? base.maxWidth, base.maxWidth);
+  const maxHeight = Math.min(options.maxHeight ?? base.maxHeight, base.maxHeight);
   return {
-    maxWidth: options.maxWidth ?? base.maxWidth,
-    maxHeight: options.maxHeight ?? base.maxHeight,
+    maxWidth,
+    maxHeight,
     quality: options.quality ?? base.quality,
     maxSizeKB: options.maxSizeKB ?? base.maxSizeKB,
     skipThresholdKB: base.skipThresholdKB,
@@ -66,34 +82,141 @@ function resolveOptions(options: CompressOptions): ResolvedOptions {
   };
 }
 
-/**
- * Comprime uma imagem para reduzir uso de memória e tempo de upload.
- * Usa canvas para redimensionar e recomprimir a imagem.
- */
-export async function compressImage(
-  file: File,
-  options: CompressOptions = {}
-): Promise<File> {
-  const opts = resolveOptions(options);
-  const cap = getDeviceCapabilitySnapshot();
-
-  console.log(
-    `[compressImage] Perfil ${opts.profileLabel} ativo: maxWidth=${opts.maxWidth} quality=${opts.quality} (deviceMemory=${cap.deviceMemory ?? '?'}GB, cores=${cap.hardwareConcurrency ?? '?'}, heap=${cap.usedHeapMB ?? '?'}MB)`
-  );
-
-  // Threshold dinâmico: em low-end, sempre processa para liberar o File original
-  if (file.size <= opts.skipThresholdKB * 1024) {
-    console.log(`[compressImage] Arquivo já pequeno: ${(file.size / 1024).toFixed(0)}KB`);
-    return file;
+function computeFitSize(
+  srcW: number,
+  srcH: number,
+  maxW: number,
+  maxH: number,
+): { width: number; height: number } {
+  let width = srcW;
+  let height = srcH;
+  if (width > maxW) {
+    height = Math.round((height * maxW) / width);
+    width = maxW;
   }
+  if (height > maxH) {
+    width = Math.round((width * maxH) / height);
+    height = maxH;
+  }
+  return { width, height };
+}
 
+async function blobFromCanvas(
+  canvas: HTMLCanvasElement | OffscreenCanvas,
+  quality: number,
+): Promise<Blob | null> {
+  if ('convertToBlob' in canvas) {
+    try {
+      return await (canvas as OffscreenCanvas).convertToBlob({
+        type: 'image/jpeg',
+        quality,
+      });
+    } catch {
+      return null;
+    }
+  }
+  return new Promise<Blob | null>((resolve) => {
+    (canvas as HTMLCanvasElement).toBlob(
+      (b) => resolve(b),
+      'image/jpeg',
+      quality,
+    );
+  });
+}
+
+/** Tenta caminho moderno: createImageBitmap com resize no decode. */
+async function compressViaImageBitmap(
+  file: File,
+  opts: ResolvedOptions,
+): Promise<File | null> {
+  if (typeof createImageBitmap !== 'function') return null;
+  let probe: ImageBitmap | null = null;
+  let bitmap: ImageBitmap | null = null;
+  try {
+    // Decodifica em tamanho mínimo só pra ler dimensões reais
+    // (resizeWidth=1 evita materializar o bitmap inteiro).
+    probe = await createImageBitmap(file);
+    const { width, height } = computeFitSize(
+      probe.width,
+      probe.height,
+      opts.maxWidth,
+      opts.maxHeight,
+    );
+    probe.close?.();
+    probe = null;
+
+    // Re-decodifica já no tamanho final.
+    bitmap = await createImageBitmap(file, {
+      resizeWidth: width,
+      resizeHeight: height,
+      resizeQuality: 'medium',
+    });
+
+    let canvas: HTMLCanvasElement | OffscreenCanvas;
+    let ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+    if (typeof OffscreenCanvas !== 'undefined') {
+      canvas = new OffscreenCanvas(width, height);
+      ctx = canvas.getContext('2d') as OffscreenCanvasRenderingContext2D | null;
+    } else {
+      canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      ctx = canvas.getContext('2d');
+    }
+    if (!ctx) {
+      bitmap.close?.();
+      return null;
+    }
+    ctx.drawImage(bitmap as CanvasImageSource, 0, 0, width, height);
+    bitmap.close?.();
+    bitmap = null;
+
+    const blob = await blobFromCanvas(canvas, opts.quality);
+    // Libera memória do canvas
+    if ('width' in canvas) {
+      try {
+        (canvas as HTMLCanvasElement).width = 0;
+        (canvas as HTMLCanvasElement).height = 0;
+      } catch {
+        // ignore
+      }
+    }
+    if (!blob) return null;
+    const compressed = new File([blob], file.name, {
+      type: 'image/jpeg',
+      lastModified: Date.now(),
+    });
+    console.log(
+      `[compressImage] (bitmap) ${(file.size / 1024).toFixed(0)}KB → ${(compressed.size / 1024).toFixed(0)}KB @ ${width}x${height}`,
+    );
+    return compressed;
+  } catch (err) {
+    try {
+      probe?.close?.();
+    } catch {
+      // ignore
+    }
+    try {
+      bitmap?.close?.();
+    } catch {
+      // ignore
+    }
+    console.warn('[compressImage] bitmap path falhou, fallback:', err);
+    return null;
+  }
+}
+
+/** Fallback legado: <img> + Canvas (alto peak RAM). */
+function compressViaImgCanvas(
+  file: File,
+  opts: ResolvedOptions,
+): Promise<File> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     const objectUrl = URL.createObjectURL(file);
 
-    // Limpa recursos. CRÍTICO em low-end: zerar img.src força GC do bitmap decodificado.
     const cleanup = () => {
       try {
         canvas.width = 0;
@@ -120,23 +243,15 @@ export async function compressImage(
           reject(new Error('Canvas não suportado'));
           return;
         }
-
-        let { width, height } = img;
-
-        if (width > opts.maxWidth) {
-          height = Math.round((height * opts.maxWidth) / width);
-          width = opts.maxWidth;
-        }
-
-        if (height > opts.maxHeight) {
-          width = Math.round((width * opts.maxHeight) / height);
-          height = opts.maxHeight;
-        }
-
+        const { width, height } = computeFitSize(
+          img.width,
+          img.height,
+          opts.maxWidth,
+          opts.maxHeight,
+        );
         canvas.width = width;
         canvas.height = height;
         ctx.drawImage(img, 0, 0, width, height);
-
         canvas.toBlob(
           (blob) => {
             if (!blob) {
@@ -144,23 +259,18 @@ export async function compressImage(
               reject(new Error('Falha ao comprimir imagem'));
               return;
             }
-
             const compressedFile = new File([blob], file.name, {
               type: 'image/jpeg',
               lastModified: Date.now(),
             });
-
             console.log(
-              `[compressImage] Comprimido: ${(file.size / 1024).toFixed(0)}KB → ${(compressedFile.size / 1024).toFixed(0)}KB (${Math.round(
-                (1 - compressedFile.size / file.size) * 100
-              )}% redução, ${width}x${height})`
+              `[compressImage] (canvas) ${(file.size / 1024).toFixed(0)}KB → ${(compressedFile.size / 1024).toFixed(0)}KB @ ${width}x${height}`,
             );
-
             cleanup();
             resolve(compressedFile);
           },
           'image/jpeg',
-          opts.quality
+          opts.quality,
         );
       } catch (error) {
         cleanup();
@@ -176,6 +286,42 @@ export async function compressImage(
 
     img.src = objectUrl;
   });
+}
+
+/**
+ * Comprime uma imagem para reduzir uso de memória e tempo de upload.
+ * Aplica perfil adaptativo (low/mid/high) por deviceMemory e usa o
+ * caminho de menor peak RAM disponível.
+ */
+export async function compressImage(
+  file: File,
+  options: CompressOptions = {},
+): Promise<File> {
+  const opts = resolveOptions(options);
+  const cap = getDeviceCapabilitySnapshot();
+
+  console.log(
+    `[compressImage] Perfil ${opts.profileLabel} (deviceMemory=${cap.deviceMemory ?? '?'}GB, cores=${cap.hardwareConcurrency ?? '?'}, heap=${cap.usedHeapMB ?? '?'}MB) max=${opts.maxWidth}x${opts.maxHeight} q=${opts.quality}`,
+  );
+
+  if (file.size <= opts.skipThresholdKB * 1024) {
+    console.log(
+      `[compressImage] Arquivo já pequeno: ${(file.size / 1024).toFixed(0)}KB`,
+    );
+    return file;
+  }
+
+  // 1) Caminho moderno (peak RAM baixo)
+  const fast = await compressViaImageBitmap(file, opts);
+  if (fast) return fast;
+
+  // 2) Fallback compatível
+  try {
+    return await compressViaImgCanvas(file, opts);
+  } catch (err) {
+    console.warn('[compressImage] Fallback falhou, retornando original:', err);
+    return file;
+  }
 }
 
 /**
