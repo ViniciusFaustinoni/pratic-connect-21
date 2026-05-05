@@ -350,45 +350,53 @@ serve(async (req) => {
           }
         }
 
-        // Guard de idempotência: não criar nova instalação se já existe ativa para a mesma cotação+veículo
-        const { data: instJaExiste } = await supabase
-          .from('instalacoes')
-          .select('id')
-          .eq('cotacao_id', contrato.cotacao_id || '')
-          .eq('veiculo_id', veiculoId)
-          .in('status', ['agendada', 'em_andamento', 'em_analise'])
-          .limit(1)
-          .maybeSingle();
-
-        let instalacaoCriadaId: string | null = instJaExiste?.id ?? null;
-        if (instJaExiste?.id) {
-          console.log(`[aprovar-proposta] Instalação já existe (${instJaExiste.id}) — pulando criação para veículo ${veiculo.placa}`);
+        // Se não há data agendada (cliente não completou etapa "Instalação" do link público),
+        // NÃO criar instalação — evita poluir fila do dia com data=hoje. A instalação será
+        // criada por criar-instalacao-pos-pagamento quando o cliente concluir o agendamento.
+        let instalacaoCriadaId: string | null = null;
+        if (!dataAgendada) {
+          console.warn(`[aprovar-proposta] Sem data agendada para ${veiculo.placa} — instalação NÃO será criada agora (aguardando agendamento via link público).`);
         } else {
-          const { data: novaInst, error: insErr } = await supabase.from('instalacoes').insert({
-            associado_id: associadoId,
-            veiculo_id: veiculoId,
-            contrato_id: contrato_id,
-            cotacao_id: contrato.cotacao_id || null,
-            status: 'agendada',
-            data_agendada: dataAgendada,
-            periodo: ['manha', 'tarde'].includes(periodoPreferido) ? periodoPreferido : 'manha',
-            logradouro: enderecoLogradouro,
-            numero: enderecoNumero,
-            bairro: enderecoBairro,
-            cidade: enderecoCidade,
-            uf: enderecoUf,
-            cep: enderecoCep,
-            endereco_latitude,
-            endereco_longitude,
-            local_vistoria: 'cliente',
-            permite_encaixe: permiteEncaixe,
-            dispensa_rastreador: !veiculoPrecisaRastreador,
-          }).select('id').single();
-          if (insErr) {
-            console.error(`[aprovar-proposta] Erro ao criar instalação para ${veiculo.placa}:`, insErr);
+          // Guard de idempotência: não criar nova instalação se já existe ativa para a mesma cotação+veículo
+          const { data: instJaExiste } = await supabase
+            .from('instalacoes')
+            .select('id')
+            .eq('cotacao_id', contrato.cotacao_id || '')
+            .eq('veiculo_id', veiculoId)
+            .in('status', ['agendada', 'em_andamento', 'em_analise'])
+            .limit(1)
+            .maybeSingle();
+
+          instalacaoCriadaId = instJaExiste?.id ?? null;
+          if (instJaExiste?.id) {
+            console.log(`[aprovar-proposta] Instalação já existe (${instJaExiste.id}) — pulando criação para veículo ${veiculo.placa}`);
           } else {
-            instalacaoCriadaId = novaInst?.id ?? null;
-            console.log(`[aprovar-proposta] Instalação criada (${instalacaoCriadaId}) para veículo ${veiculo.placa}`);
+            const { data: novaInst, error: insErr } = await supabase.from('instalacoes').insert({
+              associado_id: associadoId,
+              veiculo_id: veiculoId,
+              contrato_id: contrato_id,
+              cotacao_id: contrato.cotacao_id || null,
+              status: 'agendada',
+              data_agendada: dataAgendada,
+              periodo: ['manha', 'tarde'].includes(periodoPreferido) ? periodoPreferido : 'manha',
+              logradouro: enderecoLogradouro,
+              numero: enderecoNumero,
+              bairro: enderecoBairro,
+              cidade: enderecoCidade,
+              uf: enderecoUf,
+              cep: enderecoCep,
+              endereco_latitude,
+              endereco_longitude,
+              local_vistoria: 'cliente',
+              permite_encaixe: permiteEncaixe,
+              dispensa_rastreador: !veiculoPrecisaRastreador,
+            }).select('id').single();
+            if (insErr) {
+              console.error(`[aprovar-proposta] Erro ao criar instalação para ${veiculo.placa}:`, insErr);
+            } else {
+              instalacaoCriadaId = novaInst?.id ?? null;
+              console.log(`[aprovar-proposta] Instalação criada (${instalacaoCriadaId}) para veículo ${veiculo.placa}`);
+            }
           }
         }
 
