@@ -93,6 +93,9 @@ export default function SinistrosList() {
     tipo: 'todos',
     parecer: 'todos',
   });
+  const PAGE_SIZE = 50;
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [filters.busca, filters.status, filters.tipo, filters.parecer]);
 
   // Realtime subscription para atualizar lista automaticamente
   useEffect(() => {
