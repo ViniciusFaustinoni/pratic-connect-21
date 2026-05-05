@@ -1,32 +1,26 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { ShieldCheck, ArrowRightLeft, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, ArrowRightLeft, ShieldAlert, AlertTriangle, ClipboardList } from 'lucide-react';
 import AprovacaoAssociados from './AcionamentosRouboFurto';
 import AprovacoesTroca from './AprovacoesTroca';
 import LiberacoesAutoVistoria from './LiberacoesAutoVistoria';
 import RecusasInstalador from '../cadastro/RecusasInstalador';
+import RessalvasPendentes from './RessalvasPendentes';
 
-type Aba = 'associados' | 'troca' | 'liberacao-suspensao' | 'recusas';
+type Aba = 'associados' | 'troca' | 'liberacao-suspensao' | 'recusas' | 'ressalvas';
 
-const TAB_TO_HASH: Record<Aba, string> = {
-  associados: 'associados',
-  troca: 'troca',
-  'liberacao-suspensao': 'liberacao-suspensao',
-  recusas: 'recusas',
-};
+const ABAS: Aba[] = ['associados', 'troca', 'liberacao-suspensao', 'recusas', 'ressalvas'];
 
 export default function AprovacoesUnificadas() {
   const location = useLocation();
   const navigate = useNavigate();
-  const initial = (location.hash.replace('#', '') as Aba) || 'associados';
-  const [aba, setAba] = useState<Aba>(
-    (['associados', 'troca', 'liberacao-suspensao', 'recusas'].includes(initial) ? initial : 'associados') as Aba,
-  );
+  const initial = location.hash.replace('#', '') as Aba;
+  const [aba, setAba] = useState<Aba>(ABAS.includes(initial) ? initial : 'associados');
 
   const handleChange = (v: string) => {
     setAba(v as Aba);
-    navigate(`${location.pathname}#${TAB_TO_HASH[v as Aba]}`, { replace: true });
+    navigate(`${location.pathname}#${v}`, { replace: true });
   };
 
   return (
@@ -37,12 +31,12 @@ export default function AprovacoesUnificadas() {
           Aprovações do Monitoramento
         </h1>
         <p className="text-muted-foreground">
-          Centraliza aprovação de associados, troca de titularidade, liberação de suspensão e recusas do instalador.
+          Centraliza aprovação de associados, troca de titularidade, liberação de suspensão, recusas do instalador e ressalvas pendentes.
         </p>
       </div>
 
       <Tabs value={aba} onValueChange={handleChange}>
-        <TabsList className="grid grid-cols-2 md:grid-cols-4 w-full">
+        <TabsList className="grid grid-cols-2 md:grid-cols-5 w-full">
           <TabsTrigger value="associados" className="gap-2">
             <ShieldCheck className="h-4 w-4" />
             <span className="hidden sm:inline">Aprovação de Associados</span>
@@ -63,6 +57,11 @@ export default function AprovacoesUnificadas() {
             <span className="hidden sm:inline">Recusas do Instalador</span>
             <span className="sm:hidden">Recusas</span>
           </TabsTrigger>
+          <TabsTrigger value="ressalvas" className="gap-2">
+            <ClipboardList className="h-4 w-4" />
+            <span className="hidden sm:inline">Ressalvas Pendentes</span>
+            <span className="sm:hidden">Ressalvas</span>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="associados" className="pt-2">
@@ -76,6 +75,9 @@ export default function AprovacoesUnificadas() {
         </TabsContent>
         <TabsContent value="recusas" className="pt-2">
           <RecusasInstalador />
+        </TabsContent>
+        <TabsContent value="ressalvas" className="pt-2">
+          <RessalvasPendentes />
         </TabsContent>
       </Tabs>
     </div>
