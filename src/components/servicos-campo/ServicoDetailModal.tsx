@@ -13,10 +13,13 @@ import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@/components/ui/tabs';
 import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel,
+} from '@/components/ui/dropdown-menu';
+import {
   User, Car, MapPin, Calendar, Clock, FileText,
   MessageSquare, Navigation, ExternalLink, Cpu, AlertTriangle,
   DollarSign, Info, Camera, Receipt, History, IdCard, Loader2,
-  MapPinned,
+  MapPinned, MoreHorizontal, Hash,
 } from 'lucide-react';
 import { RealocarInstalacaoDialog } from '@/components/instalacoes/RealocarInstalacaoDialog';
 import { LiberarServicoButton } from './LiberarServicoButton';
@@ -84,97 +87,151 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-4xl max-h-[90vh] p-0 flex flex-col">
-          <DialogHeader className="p-6 pb-4 border-b">
-            <DialogTitle className="flex items-center gap-3 flex-wrap">
-              <ServicoTipoBadge servico={servico} />
-              <Badge className={cn('text-xs border-transparent', STATUS_SERVICO_COLORS[servico.status])}>
-                {STATUS_SERVICO_LABELS[servico.status]}
-              </Badge>
-              {servico.protocolo && (
-                <span className="text-sm font-mono text-muted-foreground">
-                  {servico.protocolo}
+        <DialogContent className="max-w-5xl max-h-[92vh] p-0 flex flex-col gap-0 overflow-hidden">
+          {/* ============= HEADER REDESIGN ============= */}
+          <DialogHeader className="px-6 pt-5 pb-4 border-b bg-gradient-to-b from-muted/40 to-background space-y-4">
+            {/* Linha 1: identidade do serviço */}
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="text-xl font-bold tracking-tight flex items-center gap-2 flex-wrap">
+                  <span className="font-mono uppercase">{servico.veiculo?.placa || '—'}</span>
+                  {servico.veiculo?.marca && (
+                    <span className="text-sm font-normal text-muted-foreground">
+                      · {servico.veiculo?.marca} {servico.veiculo?.modelo}
+                    </span>
+                  )}
+                </DialogTitle>
+                <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5 truncate">
+                  <User className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{servico.associado?.nome || 'Sem cliente vinculado'}</span>
+                </p>
+              </div>
+
+              <div className="flex flex-col items-end gap-1.5 shrink-0">
+                <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                  <ServicoTipoBadge servico={servico} />
+                  <Badge className={cn('text-xs border-transparent', STATUS_SERVICO_COLORS[servico.status])}>
+                    {STATUS_SERVICO_LABELS[servico.status]}
+                  </Badge>
+                </div>
+                {servico.protocolo && (
+                  <span className="text-[11px] font-mono text-muted-foreground inline-flex items-center gap-1">
+                    <Hash className="h-3 w-3" />
+                    {servico.protocolo}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Linha 2: meta-info compacta */}
+            <div className="flex items-center gap-x-4 gap-y-1 flex-wrap text-xs text-muted-foreground">
+              {servico.data_agendada && (
+                <span className="inline-flex items-center gap-1.5">
+                  <Calendar className="h-3.5 w-3.5" />
+                  {(() => {
+                    const d = parseDataLocal(servico.data_agendada);
+                    return d ? format(d, "dd 'de' MMM 'de' yyyy", { locale: ptBR }) : '—';
+                  })()}
                 </span>
               )}
-            </DialogTitle>
+              {servico.periodo && (
+                <span className="inline-flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5" />
+                  {PERIODO_LABELS[servico.periodo]}
+                  {servico.hora_agendada && ` · ${servico.hora_agendada.slice(0, 5)}`}
+                </span>
+              )}
+              {(servico.bairro || servico.cidade) && (
+                <span className="inline-flex items-center gap-1.5 min-w-0">
+                  <MapPin className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{[servico.bairro, servico.cidade].filter(Boolean).join(' · ')}</span>
+                </span>
+              )}
+              {servico.profissional?.nome && (
+                <span className="inline-flex items-center gap-1.5">
+                  <User className="h-3.5 w-3.5" />
+                  {servico.profissional.nome}
+                </span>
+              )}
+            </div>
 
-            {/* Quick actions */}
-            <div className="flex flex-wrap gap-2 mt-3">
+            {/* Linha 3: ações — primárias inline, secundárias no menu */}
+            <div className="flex items-center gap-2 flex-wrap">
               {associadoId && (
                 <Button
                   variant="default"
                   size="sm"
-                  className="gap-1.5"
+                  className="gap-1.5 h-9"
                   onClick={() => setFichaOpen(true)}
                 >
-                  <IdCard className="h-3.5 w-3.5" /> Ficha completa do associado
+                  <IdCard className="h-4 w-4" /> Ficha do associado
                 </Button>
               )}
               {wppNumero && (
-                <Button asChild variant="outline" size="sm" className="gap-1.5">
+                <Button asChild variant="outline" size="sm" className="gap-1.5 h-9">
                   <a href={`https://wa.me/55${wppNumero}`} target="_blank" rel="noreferrer">
-                    <MessageSquare className="h-3.5 w-3.5" /> WhatsApp
+                    <MessageSquare className="h-4 w-4" /> WhatsApp
                   </a>
                 </Button>
               )}
               {mapsUrl && (
-                <Button asChild variant="outline" size="sm" className="gap-1.5">
+                <Button asChild variant="outline" size="sm" className="gap-1.5 h-9">
                   <a href={mapsUrl} target="_blank" rel="noreferrer">
-                    <Navigation className="h-3.5 w-3.5" /> Maps
+                    <Navigation className="h-4 w-4" /> Rota no Maps
                   </a>
                 </Button>
               )}
-              <Button asChild variant="outline" size="sm" className="gap-1.5">
-                <a href="/monitoramento/mapa" target="_blank" rel="noreferrer">
-                  <ExternalLink className="h-3.5 w-3.5" /> Ver no mapa
-                </a>
-              </Button>
-              {isInstalacao && ['agendada', 'nao_compareceu', 'reagendada', 'cancelada'].includes(servico.status) && (
-                <Button
-                  variant={servico.status === 'cancelada' ? 'default' : 'outline'}
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={() => setRealocarOpen(true)}
-                  title={servico.status === 'cancelada'
-                    ? 'Reabrir este serviço cancelado e reagendar'
-                    : 'Realocar este serviço para outra data, técnico, rota ou base'}
-                >
-                  <MapPinned className="h-3.5 w-3.5" />
-                  {servico.status === 'cancelada' ? 'Reabrir e reagendar' : 'Realocar'}
-                </Button>
-              )}
-              <ConcluirPrestadorExternoButton
-                servicoId={servico.id}
-                servicoStatus={servico.status}
-                veiculoId={(servico as any).veiculo_id}
-                associadoId={(servico as any).associado_id}
-              />
-              <LiberarServicoButton servicoId={servico.id} servicoStatus={servico.status} />
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1.5 h-9 ml-auto">
+                    <MoreHorizontal className="h-4 w-4" /> Mais ações
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-60 bg-popover z-[60]">
+                  <DropdownMenuLabel className="text-xs">Ações do serviço</DropdownMenuLabel>
+                  <DropdownMenuItem asChild>
+                    <a href="/monitoramento/mapa" target="_blank" rel="noreferrer" className="cursor-pointer">
+                      <ExternalLink className="h-4 w-4 mr-2" /> Ver no mapa de campo
+                    </a>
+                  </DropdownMenuItem>
+                  {isInstalacao && ['agendada', 'nao_compareceu', 'reagendada', 'cancelada'].includes(servico.status) && (
+                    <DropdownMenuItem onClick={() => setRealocarOpen(true)} className="cursor-pointer">
+                      <MapPinned className="h-4 w-4 mr-2" />
+                      {servico.status === 'cancelada' ? 'Reabrir e reagendar' : 'Realocar serviço'}
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <div className="px-1 py-0.5 [&>*]:w-full [&_button]:w-full [&_button]:justify-start [&_button]:h-8">
+                    <ConcluirPrestadorExternoButton
+                      servicoId={servico.id}
+                      servicoStatus={servico.status}
+                      veiculoId={(servico as any).veiculo_id}
+                      associadoId={(servico as any).associado_id}
+                    />
+                    <LiberarServicoButton servicoId={servico.id} servicoStatus={servico.status} />
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </DialogHeader>
 
           <ScrollArea className="flex-1">
             <Tabs defaultValue="resumo" className="w-full">
-              <TabsList className="mx-6 mt-4 flex-wrap h-auto">
-                <TabsTrigger value="resumo">Resumo</TabsTrigger>
-                <TabsTrigger value="cliente">Cliente & Veículo</TabsTrigger>
-                <TabsTrigger value="endereco">Endereço</TabsTrigger>
-                {isRetirada && <TabsTrigger value="retirada">Retirada</TabsTrigger>}
-                {isInstalacao && <TabsTrigger value="rastreador">Rastreador</TabsTrigger>}
-                <TabsTrigger value="documentos" className="gap-1">
-                  <FileText className="h-3 w-3" /> Documentos
-                </TabsTrigger>
-                <TabsTrigger value="fotos" className="gap-1">
-                  <Camera className="h-3 w-3" /> Fotos
-                </TabsTrigger>
-                <TabsTrigger value="financeiro" className="gap-1">
-                  <Receipt className="h-3 w-3" /> Financeiro
-                </TabsTrigger>
-                <TabsTrigger value="historico-associado" className="gap-1">
-                  <History className="h-3 w-3" /> Histórico
-                </TabsTrigger>
-                <TabsTrigger value="historico">Timeline</TabsTrigger>
-              </TabsList>
+              <div className="px-6 pt-3 pb-0 sticky top-0 bg-background/95 backdrop-blur z-20 border-b">
+                <TabsList className="h-10 w-full justify-start gap-1 bg-transparent p-0 overflow-x-auto">
+                  <TabsTrigger value="resumo">Resumo</TabsTrigger>
+                  <TabsTrigger value="cliente" className="gap-1.5"><User className="h-3.5 w-3.5" /> Cliente & Veículo</TabsTrigger>
+                  <TabsTrigger value="endereco" className="gap-1.5"><MapPin className="h-3.5 w-3.5" /> Endereço</TabsTrigger>
+                  {isRetirada && <TabsTrigger value="retirada">Retirada</TabsTrigger>}
+                  {isInstalacao && <TabsTrigger value="rastreador" className="gap-1.5"><Cpu className="h-3.5 w-3.5" /> Rastreador</TabsTrigger>}
+                  <TabsTrigger value="documentos" className="gap-1.5"><FileText className="h-3.5 w-3.5" /> Documentos</TabsTrigger>
+                  <TabsTrigger value="fotos" className="gap-1.5"><Camera className="h-3.5 w-3.5" /> Fotos</TabsTrigger>
+                  <TabsTrigger value="financeiro" className="gap-1.5"><Receipt className="h-3.5 w-3.5" /> Financeiro</TabsTrigger>
+                  <TabsTrigger value="historico-associado" className="gap-1.5"><History className="h-3.5 w-3.5" /> Histórico</TabsTrigger>
+                  <TabsTrigger value="historico" className="gap-1.5"><Clock className="h-3.5 w-3.5" /> Timeline</TabsTrigger>
+                </TabsList>
+              </div>
 
               {/* RESUMO */}
               <TabsContent value="resumo" className="p-6 space-y-4">
