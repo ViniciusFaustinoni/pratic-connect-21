@@ -135,9 +135,10 @@ export function TrocaTitularidadeDialog({
     }
   }, [open]);
 
-  const carregando = sga.isLoading;
-  const semVeiculosSGA = !carregando && (!sga.data?.encontrado || (sga.data?.veiculos || []).length === 0);
-  const semEspelhoLocal = !carregando && (sga.data?.veiculos || []).length > 0 && veiculos.length === 0;
+  const carregando = sga.isLoading || importando;
+  const semVeiculosSGA = !sga.isLoading && (!sga.data?.encontrado || (sga.data?.veiculos || []).length === 0);
+  const semEspelhoLocal =
+    !carregando && (sga.data?.veiculos || []).length > 0 && veiculos.length === 0;
 
   const handleSubmit = async () => {
     if (!nome.trim() || !cpf.trim() || !veiculoId) {
