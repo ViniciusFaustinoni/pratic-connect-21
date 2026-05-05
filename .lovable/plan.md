@@ -1,74 +1,25 @@
-## Objetivo
+## Problema
 
-No `OutrasEntradasMenu` (Substituição / Migração / Inclusão), quando o associado é detectado como inadimplente no SGA, a UI atual mostra apenas uma lista resumida (marca, modelo, placa, total) — **sem linha digitável** e **sem botão de verificar pagamento**. O usuário precisa esperar até a meia-noite (cron) para o sistema reconhecer o pagamento.
+No KWM9443 (e qualquer associado aberto via `/cadastro/associados`), clicar nos documentos anexados não abre nada. Causa: a listagem renderiza `<AssociadoDetalhe>` dentro de um `<Dialog>` Radix (Associados.tsx L971-993). Quando o usuário clica no ícone "olho" da tabela de documentos, o `MediaViewerModal` (outro `Dialog`) tenta abrir como portal aninhado e fica bloqueado pelo overlay do dialog externo (`pointer-events`). Os arquivos existem e as URLs são públicas — confirmado no banco.
 
-Vamos reaproveitar o `DebitosCard` (que já tem linha digitável visível, copiar linha, abrir boleto, **Verificar pagamento** por boleto e **Verificar todos**) nos três fluxos.
+## Mudanças
 
-## Onde mexer
+### 1. `src/pages/cadastro/Associados.tsx`
+- Substituir abertura do detalhe em modal por navegação para a rota dedicada que já existe (`/cadastro/associados/:id`, registrada em `App.tsx` L518).
+- `handleAssociadoClick`: trocar `setDetalheAssociadoId(associado.id)` por `navigate(\`/cadastro/associados/\${associado.id}\`)`.
+- Substituir os 5 `onClick={() => setDetalheAssociadoId(associado.id)}` (linhas 740, 755, 759, 763, 767) por `navigate(...)`.
+- Remover o bloco `<Dialog>` de detalhe (L970-993), o estado `detalheAssociadoId` e o import não usado (`AssociadoDetalhe`, `AssociadoDetalheErrorBoundary`, `Dialog`, `DialogContent`, `DialogTitle`, `DialogDescription` se não usados em outro lugar).
 
-Arquivo único: `src/components/vendas/OutrasEntradasMenu.tsx`
+### 2. `src/pages/cadastro/AssociadoDetalhe.tsx`
+- Endurecer o botão "olho" da tabela de documentos (L900-913): adicionar um botão extra "abrir em nova aba" (`<a target="_blank">`) ao lado, como fallback robusto. Mantém o `MediaViewerModal` como visual principal.
 
-### 1. Import
+## Validação
 
-Adicionar:
-```ts
-import { DebitosCard } from '@/components/cotacao/DebitosCard';
-```
+1. `/cadastro/associados` → buscar KWM9443 → clicar na linha → navega para `/cadastro/associados/{id}`.
+2. Aba **Documentos** → clicar no olho → `MediaViewerModal` abre com PDF/imagem.
+3. Botão "Ver Contrato Assinado" e "Galeria do Instalador" funcionam normalmente.
 
-### 2. Bloco Migração (linha ~417-431)
+## Arquivos afetados
 
-Substituir a renderização manual dos débitos (loop atual mostrando só `marca/modelo/placa/total`) por:
-
-```tsx
-<DebitosCard
-  debitos={migracaoDebitos!.debitosPorVeiculo}
-  saldoTotal={migracaoDebitos!.saldoTotal}
-  bloqueante
-  cpf={migracaoAssociadoId}
-  titulo="Débitos pendentes"
-  descricao="Este CPF possui débitos que precisam ser quitados antes de qualquer nova filiação."
-/>
-```
-
-(mantém o `<Alert>` externo se quisermos preservar título/ícone, mas o card já carrega seu próprio Alert; melhor remover o wrapper `Alert` e usar só o `DebitosCard`.)
-
-### 3. Bloco Substituição (linha ~487-506)
-
-Onde hoje renderiza `<Alert variant="destructive">` com lista resumida quando `bloqueado && temDebitos`, manter o Alert para a mensagem geral, mas trocar o `.map(...)` por `<DebitosCard>` quando `temDebitos`. Para evitar duplo Alert, simplificar: quando `bloqueado && temDebitos` renderizar o `<DebitosCard>` no lugar do `<Alert>`, e quando `bloqueado` por outro motivo (sem débito) mantém o Alert atual.
-
-```tsx
-{temDebitos ? (
-  <DebitosCard
-    debitos={debitosData!.debitosPorVeiculo}
-    saldoTotal={debitosData!.saldoTotal}
-    bloqueante
-    cpf={selectedAssociadoId!}
-    titulo="Substituição bloqueada — associado inadimplente"
-    descricao={
-      repasseConfig?.repasse_maior_percentual
-        ? `Repasse maior: ${repasseConfig.repasse_maior_percentual}%${repasseConfig.repasse_maior_descricao ? ` — ${repasseConfig.repasse_maior_descricao}` : ''}`
-        : undefined
-    }
-  />
-) : (
-  // Alert atual para outros bloqueios
-)}
-```
-
-### 4. Bloco Inclusão (linha ~588-609)
-
-Mesma lógica do bloco Substituição: quando `bloqueado && temDebitos`, renderizar o `<DebitosCard>` com `cpf={selectedAssociadoId}`. Quando bloqueado por status/limite, manter o Alert original com a mensagem específica (sem o loop manual de débitos, que vira responsabilidade do card quando aplicável).
-
-### 5. Comportamento
-
-- O `DebitosCard` já recebe UUID do associado e resolve o CPF via cache do hook `useVerificarDebitosAssociado` (já consumido no mesmo componente). Não precisa de prop nova.
-- Ao clicar **Verificar pagamento** (em um boleto) ou **Verificar todos**: invalida `['sga-busca', cpf, '']` e refaz a consulta. Como esse mesmo componente também consome `useVerificarDebitosAssociado`, o `bloqueado` recalcula automaticamente e libera o botão de prosseguir quando o saldo zerar.
-
-## Já existe? — confirmação
-
-Verifiquei: no `OutrasEntradasMenu` os débitos são renderizados manualmente (sem linha digitável, sem botão de verificar). O `DebitosCard` já existe e já tem todos os recursos necessários (implementados na rodada anterior). Vamos apenas reaproveitá-lo nos três pontos.
-
-## Critérios de aceite
-
-- Nos três fluxos (Substituição, Migração, Inclusão), quando há débito pendente, aparece a linha digitável de cada boleto + botões **Copiar linha**, **Boleto**, **Verificar pagamento** e, no rodapé, **Verificar todos**.
-- Após o pagamento ser confirmado pelo SGA via clique no botão, o bloqueio cai imediatamente e o botão "Prosseguir / Iniciar / Confirmar" é liberado, sem precisar esperar a rotina noturna.
+- `src/pages/cadastro/Associados.tsx`
+- `src/pages/cadastro/AssociadoDetalhe.tsx`

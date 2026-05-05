@@ -359,7 +359,7 @@ export default function Associados() {
         return;
       }
     }
-    setDetalheAssociadoId(associado.id);
+    navigate(`/cadastro/associados/${associado.id}`);
   };
 
   // Exportação inteligente movida para ExportAssociadosDialog.
