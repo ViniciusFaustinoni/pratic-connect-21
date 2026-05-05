@@ -88,17 +88,22 @@ export function useCotacoes(options?: UseCotacoesOptions) {
   return useQuery({
     queryKey: ['cotacoes', effectiveScope, effectiveVendedorId, search],
     queryFn: async () => {
+      // Projeção enxuta — apenas colunas usadas pela listagem (cards/tabela/funil).
+      // Antes era SELECT *, trazendo dados_extras (planos_comparacao, JSONs grandes)
+      // que inflam o payload em ~5–10x sem serem usados na listagem.
       let query = supabase
         .from('cotacoes')
         .select(`
-          *,
+          id, numero, status, status_contratacao, created_at, updated_at,
+          vendedor_id, lead_id, plano_id, token_publico,
+          cliente_nome, nome_solicitante, telefone1_solicitante, telefone2_solicitante, email_solicitante,
+          veiculo_placa, veiculo_marca, veiculo_modelo, veiculo_ano, valor_fipe,
+          valor_mensalidade, valor_adesao, tipo_entrada,
+          substituida_por_cotacao_id, motivo_substituicao,
           leads:leads!fk_cotacoes_lead_id(id, nome, telefone, email),
-          planos:planos!plano_id(id, nome, codigo, coberturas),
+          planos:planos!plano_id(id, nome, codigo),
           contrato:contratos!contratos_cotacao_id_fkey(
-            id, 
-            numero, 
-            status,
-            adesao_paga,
+            id, numero, status, adesao_paga,
             associados:associados!fk_contratos_associado(id, status)
           ),
           instalacoes:instalacoes!instalacoes_cotacao_id_fkey(id, status, data_agendada)
