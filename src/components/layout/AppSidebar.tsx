@@ -249,6 +249,8 @@ const menuConfig: {
           icon: ShieldAlert,
         },
         { title: 'Prestadores Parceiros', url: '/monitoramento/prestadores-parceiros', icon: Truck },
+        { title: 'Veículos', url: '/cadastro/veiculos', icon: Car },
+        { title: 'Recusas do Instalador', url: '/cadastro/recusas-instalador', icon: ShieldAlert },
       ],
     },
     {
