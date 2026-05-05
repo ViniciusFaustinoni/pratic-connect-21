@@ -100,8 +100,19 @@ export default function Veiculos() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
+  const debouncedSearch = useDebounce(search, 300);
   const [selectedVeiculoId, setSelectedVeiculoId] = useState<string | null>(null);
-  const { data: veiculos, isLoading } = useVeiculos();
+  const { data: paginated, isLoading, isFetching } = useVeiculosPaginados({
+    page,
+    pageSize,
+    search: debouncedSearch,
+    status: statusFilter === 'all' ? undefined : statusFilter,
+  });
+  const veiculos = paginated?.veiculos ?? [];
+  const totalPages = paginated?.pagination.totalPages ?? 1;
+  const totalRows = paginated?.pagination.total ?? 0;
   const deleteVeiculo = useDeleteVeiculo();
   const { isDiretor, isAdminMaster, isDesenvolvedor, hasPerm } = usePermissions();
   const { toast } = useToast();
