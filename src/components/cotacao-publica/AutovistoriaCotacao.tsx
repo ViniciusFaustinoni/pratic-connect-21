@@ -45,6 +45,9 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
   const [fotoAtualIndex, setFotoAtualIndex] = useState(0);
   const [fotosEnviadas, setFotosEnviadas] = useState<Record<string, string>>({});
   const [kmIdentificado, setKmIdentificado] = useState<number | null>(null);
+  const [kmOcrFalhou, setKmOcrFalhou] = useState(false);
+  const [kmManualInput, setKmManualInput] = useState('');
+  const [salvandoKm, setSalvandoKm] = useState(false);
   const [previewLocal, setPreviewLocal] = useState<string | null>(null);
   const [hidratado, setHidratado] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
