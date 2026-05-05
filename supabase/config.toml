@@ -207,3 +207,6 @@ verify_jwt = false
 
 [functions.cron-lembrete-coparticipacao]
 verify_jwt = false
+
+[functions.disparar-cobranca-csv-meta]
+verify_jwt = true
