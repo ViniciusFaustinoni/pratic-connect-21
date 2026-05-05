@@ -224,6 +224,7 @@ export default function CotacaoPage() {
     setPlaca('');
     setVeiculoEncontrado(null);
     setModoEntrada('fipe');
+    setModoNotaFiscal(false);
     setMarca('');
     setModelo('');
     setAno('');
