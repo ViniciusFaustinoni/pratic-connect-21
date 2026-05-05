@@ -86,6 +86,8 @@ export function EtapaConsultaFipe({
   setValorFipe,
   onNext,
   onManualEntry,
+  modoNotaFiscal = false,
+  setModoNotaFiscal,
 }: EtapaConsultaFipeProps) {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
