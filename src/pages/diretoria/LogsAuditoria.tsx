@@ -26,18 +26,20 @@ const acaoConfig: Record<string, { label: string; className: string }> = {
   ativar: { label: 'Ativar', className: 'border-success/30 bg-success/10 text-success' },
   desativar: { label: 'Desativar', className: 'border-muted-foreground/30 bg-muted text-muted-foreground' },
   reativar: { label: 'Reativar', className: 'border-success/30 bg-success/10 text-success' },
+  iniciar: { label: 'Iniciar', className: 'border-primary/30 bg-primary/10 text-primary' },
+  concluir: { label: 'Concluir', className: 'border-success/30 bg-success/10 text-success' },
+  cancelar: { label: 'Cancelar', className: 'border-destructive/30 bg-destructive/10 text-destructive' },
+  sincronizar: { label: 'Sincronizar', className: 'border-primary/30 bg-primary/10 text-primary' },
   configuracao: { label: 'Configuração', className: 'border-warning/30 bg-warning/10 text-warning' },
   exportar: { label: 'Exportar', className: 'border-primary/30 bg-primary/10 text-primary' },
 };
 
 const moduloOptions = [
-  'comissoes', 'configuracoes', 'diretoria', 'financeiro', 'cobrancas', 'contratos',
-  'associados', 'planos', 'usuarios', 'rh', 'marketing', 'monitoramento', 'sinistros',
-];
-
-const tabelaOptions = [
-  'grades_comissao', 'grades_comissao_versoes', 'usuario_grade_comissao',
-  'hierarquia_vendas', 'comissoes', 'comissoes_pagamentos', 'comissoes_pagamento_itens',
+  'operacoes', 'vistorias', 'instalacoes', 'eventos',
+  'cotacoes', 'contratos', 'associados', 'veiculos', 'documentos',
+  'aprovacoes', 'comissoes', 'planos', 'marketing',
+  'cobrancas', 'juridico', 'usuarios', 'configuracoes', 'diretoria',
+  'financeiro', 'rh', 'monitoramento', 'sinistros', 'sistema',
 ];
 
 const tabelaLabels: Record<string, string> = {
