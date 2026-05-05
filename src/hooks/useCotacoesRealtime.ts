@@ -115,11 +115,21 @@ export function useCotacoesRealtime() {
         },
         (payload) => {
           console.log('[useCotacoesRealtime] Contrato alterado:', payload.eventType);
-          
+
           // Invalidar cotações porque a etapa de venda depende do contrato
           throttledInvalidate([['cotacoes']]);
           throttledInvalidate([['contratos']]);
           throttledInvalidate([['ativacoes']]);
+
+          // Toast quando o pagamento da adesão é confirmado
+          if (payload.eventType === 'UPDATE') {
+            const newData = payload.new as { adesao_paga?: boolean; cliente_nome?: string };
+            const oldData = payload.old as { adesao_paga?: boolean };
+            if (newData.adesao_paga === true && oldData?.adesao_paga !== true) {
+              const nome = newData.cliente_nome ? ` - ${newData.cliente_nome}` : '';
+              toast.success(`💰 Pagamento confirmado${nome}`, { duration: 5000 });
+            }
+          }
         }
       )
       // Escutar mudanças em instalações (afeta etapa instalacao_agendada/vistoria_agendada)
