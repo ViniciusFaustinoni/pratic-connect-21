@@ -542,7 +542,7 @@ serve(async (req) => {
 
       let veiculosNoAssociado: Array<{ placa: string; codigo_veiculo: number }> = [];
       try {
-        const r = await buscarAssociadoComVeiculosPorCpf(session, cpfDigitos);
+        const r = await buscarAssociadoComVeiculosPorCpf(supabase, cpfDigitos);
         if (r.codigo_associado) {
           codigoAssociadoHinova = r.codigo_associado;
           veiculosNoAssociado = r.veiculos || [];
