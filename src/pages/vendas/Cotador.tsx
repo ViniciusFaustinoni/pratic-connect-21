@@ -1930,7 +1930,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
 
 
             {/* Alerta de adesão abaixo do mínimo */}
-            {valorAdesaoCustom !== null && valorAdesaoCustom > 0 && valorAdesaoCustom < minimoAdesaoConfig && !(cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base') && (
+            {valorAdesaoCustom !== null && valorAdesaoCustom > 0 && valorAdesaoCustom < minimoAdesaoConfig && !(cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base' || cenarioExterno === 'cobra_base') && (
               <Alert className="border-destructive/50 bg-destructive/10">
                 <AlertTriangle className="h-4 w-4 text-destructive" />
                 <AlertDescription className="text-sm text-destructive">
