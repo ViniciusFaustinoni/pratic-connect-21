@@ -6,6 +6,42 @@ export interface BoletoCsv {
   placa: string;
   vencimento: string; // dd/mm/aaaa
   linha_digitavel: string;
+  valor: number; // extraído da linha digitável (R$); 0 quando não identificável
+}
+
+/**
+ * Extrai o valor monetário de um boleto a partir da linha digitável / código de barras.
+ * - Boleto bancário Febraban (47 dígitos): valor está nas posições 38–47 (10 dígitos, 2 últimos = centavos).
+ * - Arrecadação (48 dígitos, começa com 8): valor nas posições 5–15 (11 dígitos, 2 últimos = centavos).
+ * Retorna 0 quando não consegue extrair.
+ */
+export function extrairValorBoleto(linhaDigitavel: string): number {
+  if (!linhaDigitavel) return 0;
+  const dig = linhaDigitavel.replace(/\D/g, '');
+  try {
+    if (dig.length === 47) {
+      // Linha digitável de boleto bancário: campos com DV
+      // Valor (10 dígitos) está nas posições 37..46 (zero-based)
+      const raw = dig.slice(37, 47);
+      const v = parseInt(raw, 10);
+      if (Number.isFinite(v) && v > 0) return v / 100;
+    }
+    if (dig.length === 44) {
+      // Código de barras de boleto bancário: valor nas posições 9..18
+      const raw = dig.slice(9, 19);
+      const v = parseInt(raw, 10);
+      if (Number.isFinite(v) && v > 0) return v / 100;
+    }
+    if (dig.length === 48 && dig.startsWith('8')) {
+      // Arrecadação
+      const raw = dig.slice(4, 15);
+      const v = parseInt(raw, 10);
+      if (Number.isFinite(v) && v > 0) return v / 100;
+    }
+  } catch {
+    // ignore
+  }
+  return 0;
 }
 
 export interface DestinatarioParsed {
@@ -25,6 +61,7 @@ export interface ParseResultado {
   sem_whatsapp: number;
   total_telefones: number;
   total_boletos: number;
+  valor_total: number;
   erros: string[];
 }
 
@@ -142,6 +179,7 @@ export function parseCsvInadimplentes(conteudo: string): ParseResultado {
       sem_whatsapp: 0,
       total_telefones: 0,
       total_boletos: 0,
+      valor_total: 0,
       erros: ['CSV vazio ou sem dados.'],
     };
   }
@@ -160,6 +198,7 @@ export function parseCsvInadimplentes(conteudo: string): ParseResultado {
       sem_whatsapp: 0,
       total_telefones: 0,
       total_boletos: 0,
+      valor_total: 0,
       erros: [`Colunas obrigatórias ausentes: ${faltando.join(', ')}`],
     };
   }
@@ -208,13 +247,17 @@ export function parseCsvInadimplentes(conteudo: string): ParseResultado {
       dest.telefones_invalidos = invs;
       mapa.set(chave, dest);
     }
-    dest.boletos.push({ placa, vencimento: venc, linha_digitavel: linhaDig });
+    dest.boletos.push({ placa, vencimento: venc, linha_digitavel: linhaDig, valor: extrairValorBoleto(linhaDig) });
     totalBoletos++;
   }
 
   const destinatarios = Array.from(mapa.values());
   const comWhats = destinatarios.filter((d) => d.telefones_validos.length > 0).length;
   const totalTel = destinatarios.reduce((s, d) => s + d.telefones_validos.length, 0);
+  const valorTotal = destinatarios.reduce(
+    (s, d) => s + d.boletos.reduce((bs, b) => bs + (b.valor || 0), 0),
+    0,
+  );
 
   return {
     destinatarios,
@@ -224,6 +267,7 @@ export function parseCsvInadimplentes(conteudo: string): ParseResultado {
     sem_whatsapp: destinatarios.length - comWhats,
     total_telefones: totalTel,
     total_boletos: totalBoletos,
+    valor_total: valorTotal,
     erros,
   };
 }

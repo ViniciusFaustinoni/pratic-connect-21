@@ -23,7 +23,14 @@ interface ResultadoEnvio {
   total: number;
   sucesso: number;
   erros: number;
+  recuperados_count: number;
+  recuperados_valor: number;
+  lote_id: string | null;
   detalhes: Array<{ matricula: string; nome: string; telefone: string; status: 'ok' | 'erro'; erro?: string }>;
+}
+
+function formatBRL(v: number): string {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
 export function ImportarCobrancaCsv() {
@@ -89,8 +96,15 @@ export function ImportarCobrancaCsv() {
     const detalhes: ResultadoEnvio['detalhes'] = [];
     let sucesso = 0;
     let erros = 0;
+    let loteId: string | null = null;
+    let recuperadosCount = 0;
+    let recuperadosValor = 0;
 
-    // Enviar em chunks de 50 destinatários por chamada para a edge function
+    // Snapshot completo das linhas digitáveis da remessa (para reconciliação no servidor)
+    const todasLinhasDigitaveis = resultado.destinatarios.flatMap((d) =>
+      d.boletos.map((b) => b.linha_digitavel),
+    );
+
     const CHUNK = 50;
     const total = destinatariosValidos.length;
     setProgresso({ atual: 0, total });
@@ -98,17 +112,35 @@ export function ImportarCobrancaCsv() {
     for (let i = 0; i < total; i += CHUNK) {
       if (cancelarRef.current) break;
       const slice = destinatariosValidos.slice(i, i + CHUNK);
+      const isFirst = i === 0;
+      const isLast = i + CHUNK >= total;
       try {
         const { data, error } = await supabase.functions.invoke('disparar-cobranca-csv-meta', {
-          body: { template_nome: TEMPLATE_NOME, destinatarios: slice },
+          body: {
+            template_nome: TEMPLATE_NOME,
+            destinatarios: slice,
+            is_first_chunk: isFirst,
+            is_last_chunk: isLast,
+            lote_id: loteId,
+            nome_arquivo: arquivo?.name || 'cobranca.csv',
+            ...(isFirst
+              ? {
+                  todas_linhas_digitaveis: todasLinhasDigitaveis,
+                  total_remessa: resultado.valor_total,
+                  total_associados_remessa: resultado.total_associados,
+                }
+              : {}),
+          },
         });
         if (error) throw new Error(error.message);
         if (!data?.success) throw new Error(data?.error || 'Falha no servidor');
         sucesso += data.sucesso || 0;
         erros += data.erros || 0;
+        if (data.lote_id) loteId = data.lote_id;
+        if (typeof data.recuperados_count === 'number') recuperadosCount += data.recuperados_count;
+        if (typeof data.recuperados_valor === 'number') recuperadosValor += data.recuperados_valor;
         if (Array.isArray(data.detalhes)) detalhes.push(...data.detalhes);
       } catch (e: any) {
-        // Marca todos do chunk como erro
         for (const d of slice) {
           for (const t of d.telefones_validos) {
             detalhes.push({ matricula: d.matricula, nome: d.nome, telefone: t, status: 'erro', erro: e.message });
@@ -119,11 +151,19 @@ export function ImportarCobrancaCsv() {
       setProgresso({ atual: Math.min(i + CHUNK, total), total });
     }
 
-    setResultadoEnvio({ total: detalhes.length, sucesso, erros, detalhes });
+    setResultadoEnvio({
+      total: detalhes.length,
+      sucesso,
+      erros,
+      recuperados_count: recuperadosCount,
+      recuperados_valor: recuperadosValor,
+      lote_id: loteId,
+      detalhes,
+    });
     setEtapa('concluido');
     if (erros === 0) toast.success(`Envio concluído: ${sucesso} mensagens enviadas.`);
     else toast.warning(`Envio finalizado: ${sucesso} ok, ${erros} com erro.`);
-  }, [resultado]);
+  }, [resultado, arquivo]);
 
   // ====== ETAPA 1: UPLOAD ======
   if (etapa === 'upload') {
@@ -180,13 +220,23 @@ export function ImportarCobrancaCsv() {
         </div>
 
         {/* KPIs */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           <KpiCard label="Boletos no CSV" value={resultado.total_boletos} />
           <KpiCard label="Associados únicos" value={resultado.total_associados} />
           <KpiCard label="Com WhatsApp" value={resultado.com_whatsapp} accent="success" />
           <KpiCard label="Sem WhatsApp" value={resultado.sem_whatsapp} accent="warning" />
           <KpiCard label="Telefones a receber" value={resultado.total_telefones} accent="primary" />
+          <KpiCard label="Valor total" valueText={formatBRL(resultado.valor_total)} accent="primary" />
         </div>
+
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Ao confirmar, esta lista será comparada com a anterior. Boletos que não estiverem mais presentes
+            serão marcados automaticamente como <strong>Recuperados</strong> (pagos) na aba
+            Financeiro › Cobranças › Recuperados. Apenas os boletos desta nova lista receberão WhatsApp.
+          </AlertDescription>
+        </Alert>
 
         {/* Tabela preview */}
         <Card>
@@ -311,11 +361,24 @@ export function ImportarCobrancaCsv() {
   if (etapa === 'concluido' && resultadoEnvio) {
     return (
       <div className="space-y-4">
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <KpiCard label="Total" value={resultadoEnvio.total} />
           <KpiCard label="Enviadas" value={resultadoEnvio.sucesso} accent="success" />
           <KpiCard label="Com erro" value={resultadoEnvio.erros} accent="warning" />
+          <KpiCard label="Recuperados" value={resultadoEnvio.recuperados_count} accent="primary" />
+          <KpiCard label="Valor recuperado" valueText={formatBRL(resultadoEnvio.recuperados_valor)} accent="success" />
         </div>
+
+        {resultadoEnvio.recuperados_count > 0 && (
+          <Alert>
+            <Check className="h-4 w-4" />
+            <AlertDescription>
+              <strong>{resultadoEnvio.recuperados_count} boleto(s)</strong> da lista anterior não estavam nesta nova
+              remessa e foram marcados como <strong>recuperados</strong> ({formatBRL(resultadoEnvio.recuperados_valor)}).
+              Veja em <a href="/financeiro/cobrancas/recuperados" className="underline text-primary">Financeiro › Cobranças › Recuperados</a>.
+            </AlertDescription>
+          </Alert>
+        )}
 
         <Card>
           <CardHeader className="pb-3">
@@ -364,16 +427,17 @@ export function ImportarCobrancaCsv() {
   return null;
 }
 
-function KpiCard({ label, value, accent }: { label: string; value: number; accent?: 'success' | 'warning' | 'primary' }) {
+function KpiCard({ label, value, valueText, accent }: { label: string; value?: number; valueText?: string; accent?: 'success' | 'warning' | 'primary' }) {
   const color =
     accent === 'success' ? 'text-green-600' :
     accent === 'warning' ? 'text-orange-500' :
     accent === 'primary' ? 'text-primary' : '';
+  const display = valueText ?? (typeof value === 'number' ? value.toLocaleString('pt-BR') : '0');
   return (
     <Card>
       <CardContent className="p-4">
         <p className="text-xs text-muted-foreground uppercase tracking-wide">{label}</p>
-        <p className={`text-2xl font-bold mt-1 ${color}`}>{value.toLocaleString('pt-BR')}</p>
+        <p className={`text-2xl font-bold mt-1 ${color}`}>{display}</p>
       </CardContent>
     </Card>
   );

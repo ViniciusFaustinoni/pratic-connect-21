@@ -190,6 +190,7 @@ const PrestadorDetalhe = lazy(() => import("./pages/assistencia/PrestadorDetalhe
 const FinanceiroDashboard = lazy(() => import("./pages/financeiro/FinanceiroDashboard"));
 const CobrancasLayout = lazy(() => import("./pages/financeiro/CobrancasLayout"));
 const CobrancasList = lazy(() => import("./pages/financeiro/CobrancasList"));
+const RecuperadosPage = lazy(() => import("./pages/financeiro/RecuperadosPage"));
 const CobrancaDetalhe = lazy(() => import("./pages/financeiro/CobrancaDetalhe"));
 const FaturamentoMensal = lazy(() => import("./pages/financeiro/FaturamentoMensal"));
 const ReguaPage = lazy(() => import("./pages/financeiro/ReguaPage"));
@@ -566,6 +567,7 @@ const App = () => (
               <Route path="/financeiro/cobrancas" element={<CobrancasLayout />}>
                 <Route index element={<CobrancasList />} />
                 <Route path="regua" element={<ReguaPage />} />
+                <Route path="recuperados" element={<RecuperadosPage />} />
               </Route>
               <Route path="/financeiro/cobrancas/:id" element={<CobrancaDetalhe />} />
               <Route path="/financeiro/faturamento" element={<FaturamentoMensal />} />
