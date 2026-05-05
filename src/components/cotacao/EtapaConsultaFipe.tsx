@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Switch } from '@/components/ui/switch';
 import { 
   Car, 
   Search, 
@@ -11,7 +12,8 @@ import {
   CheckCircle, 
   XCircle,
   Edit,
-  ArrowRight
+  ArrowRight,
+  FileText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFipe, FipeAlternativa } from '@/hooks/useFipe';
@@ -45,6 +47,8 @@ interface EtapaConsultaFipeProps {
   setValorFipe: (valor: number | null) => void;
   onNext: () => void;
   onManualEntry: () => void;
+  modoNotaFiscal?: boolean;
+  setModoNotaFiscal?: (v: boolean) => void;
 }
 
 const formatPlaca = (value: string): string => {
@@ -82,6 +86,8 @@ export function EtapaConsultaFipe({
   setValorFipe,
   onNext,
   onManualEntry,
+  modoNotaFiscal = false,
+  setModoNotaFiscal,
 }: EtapaConsultaFipeProps) {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -89,6 +95,20 @@ export function EtapaConsultaFipe({
   const [fipeAlternativas, setFipeAlternativas] = useState<FipeAlternativa[]>([]);
   const [fipeSelecionada, setFipeSelecionada] = useState<string>('');
   const { getByPlaca } = useFipe();
+
+  // Ao ativar modo Nota Fiscal, limpa estado da busca FIPE
+  useEffect(() => {
+    if (modoNotaFiscal) {
+      setStatus('idle');
+      setErrorMessage(null);
+      setVeiculoEncontrado(null);
+      setFipeAlternativas([]);
+      setFipeSelecionada('');
+      setCamposAutoPreenchidos([]);
+      setPlaca('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modoNotaFiscal]);
 
   const handlePlacaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formatted = formatPlaca(e.target.value);
@@ -209,57 +229,96 @@ export function EtapaConsultaFipe({
       </CardHeader>
       
       <CardContent className="space-y-6">
-        {/* Input de Placa */}
-        <div className="space-y-2">
-          <Label htmlFor="placa">
-            Placa do Veículo <span className="text-destructive">*</span>
-          </Label>
-          <div className="flex gap-3">
-            <Input
-              id="placa"
-              placeholder="ABC-1234 ou ABC1D23"
-              value={placa}
-              onChange={handlePlacaChange}
-              className="flex-1 uppercase text-lg font-mono tracking-wider"
-              maxLength={8}
-            />
-            <Button
-              onClick={handleConsultar}
-              disabled={status === 'loading' || placa.replace(/[^A-Za-z0-9]/g, '').length < 7}
-              className="min-w-[160px]"
-            >
-              {status === 'loading' ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Consultando...
-                </>
-              ) : (
-                <>
-                  <Search className="mr-2 h-4 w-4" />
-                  Consultar FIPE
-                </>
-              )}
-            </Button>
+        {/* Toggle: Veículo dentro da Agência (0km) */}
+        {setModoNotaFiscal && (
+          <div className={cn(
+            "flex items-start gap-3 rounded-lg border p-4",
+            modoNotaFiscal
+              ? "border-primary/40 bg-primary/5"
+              : "border-border bg-muted/30"
+          )}>
+            <FileText className={cn(
+              "h-5 w-5 mt-0.5 shrink-0",
+              modoNotaFiscal ? "text-primary" : "text-muted-foreground"
+            )} />
+            <div className="flex-1 space-y-1">
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="modo-nf" className="text-sm font-medium cursor-pointer">
+                  Veículo dentro da Agência (0km)
+                </Label>
+                <Switch
+                  id="modo-nf"
+                  checked={modoNotaFiscal}
+                  onCheckedChange={setModoNotaFiscal}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Ao ativar, a consulta FIPE é desabilitada e o cálculo usa o valor informado da Nota Fiscal.
+              </p>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Divider */}
-        <div className="border-t border-border" />
+        {/* Input de Placa — somente no modo FIPE */}
+        {!modoNotaFiscal && (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="placa">
+                Placa do Veículo <span className="text-destructive">*</span>
+              </Label>
+              <div className="flex gap-3">
+                <Input
+                  id="placa"
+                  placeholder="ABC-1234 ou ABC1D23"
+                  value={placa}
+                  onChange={handlePlacaChange}
+                  className="flex-1 uppercase text-lg font-mono tracking-wider"
+                  maxLength={8}
+                />
+                <Button
+                  onClick={handleConsultar}
+                  disabled={status === 'loading' || placa.replace(/[^A-Za-z0-9]/g, '').length < 7}
+                  className="min-w-[160px]"
+                >
+                  {status === 'loading' ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Consultando...
+                    </>
+                  ) : (
+                    <>
+                      <Search className="mr-2 h-4 w-4" />
+                      Consultar FIPE
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
 
-        {/* Campos do Veículo - aparecem sempre */}
+            <div className="border-t border-border" />
+          </>
+        )}
+
+        {/* Campos do Veículo */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <Label className="text-base font-medium">Dados do Veículo</Label>
-            {status === 'success' && camposAutoPreenchidos.length > 0 && (
+            {!modoNotaFiscal && status === 'success' && camposAutoPreenchidos.length > 0 && (
               <div className="flex items-center gap-2 text-green-600 text-sm">
                 <CheckCircle className="h-4 w-4" />
                 <span>Preenchido automaticamente via FIPE</span>
               </div>
             )}
+            {modoNotaFiscal && (
+              <div className="flex items-center gap-2 text-primary text-sm">
+                <FileText className="h-4 w-4" />
+                <span>Preenchimento manual (Nota Fiscal)</span>
+              </div>
+            )}
           </div>
 
-          {/* Seletor de variante FIPE — quando a API retorna múltiplas versões */}
-          {fipeAlternativas.length > 1 && (
+          {/* Seletor de variante FIPE — somente no modo FIPE */}
+          {!modoNotaFiscal && fipeAlternativas.length > 1 && (
             <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
               <AlertDescription className="space-y-2">
                 <div className="text-sm font-medium text-amber-900 dark:text-amber-200">
@@ -291,7 +350,7 @@ export function EtapaConsultaFipe({
             <div className="space-y-2">
               <Label htmlFor="marca" className="flex items-center gap-2">
                 Marca
-                {camposAutoPreenchidos.includes('marca') && (
+                {!modoNotaFiscal && camposAutoPreenchidos.includes('marca') && (
                   <CheckCircle className="h-3 w-3 text-green-500" />
                 )}
               </Label>
@@ -301,7 +360,7 @@ export function EtapaConsultaFipe({
                 onChange={(e) => handleCampoChange('marca', setMarca, e.target.value)}
                 placeholder="Ex: Toyota"
                 className={cn(
-                  camposAutoPreenchidos.includes('marca') && 
+                  !modoNotaFiscal && camposAutoPreenchidos.includes('marca') && 
                   "border-green-500 bg-green-50 dark:bg-green-950/20"
                 )}
               />
@@ -311,7 +370,7 @@ export function EtapaConsultaFipe({
             <div className="space-y-2">
               <Label htmlFor="modelo" className="flex items-center gap-2">
                 Modelo
-                {camposAutoPreenchidos.includes('modelo') && (
+                {!modoNotaFiscal && camposAutoPreenchidos.includes('modelo') && (
                   <CheckCircle className="h-3 w-3 text-green-500" />
                 )}
               </Label>
@@ -321,7 +380,7 @@ export function EtapaConsultaFipe({
                 onChange={(e) => handleCampoChange('modelo', setModelo, e.target.value)}
                 placeholder="Ex: Corolla XEi"
                 className={cn(
-                  camposAutoPreenchidos.includes('modelo') && 
+                  !modoNotaFiscal && camposAutoPreenchidos.includes('modelo') && 
                   "border-green-500 bg-green-50 dark:bg-green-950/20"
                 )}
               />
@@ -331,7 +390,7 @@ export function EtapaConsultaFipe({
             <div className="space-y-2">
               <Label htmlFor="ano" className="flex items-center gap-2">
                 Ano
-                {camposAutoPreenchidos.includes('ano') && (
+                {!modoNotaFiscal && camposAutoPreenchidos.includes('ano') && (
                   <CheckCircle className="h-3 w-3 text-green-500" />
                 )}
               </Label>
@@ -341,17 +400,18 @@ export function EtapaConsultaFipe({
                 onChange={(e) => handleCampoChange('ano', setAno, e.target.value)}
                 placeholder="Ex: 2023/2024"
                 className={cn(
-                  camposAutoPreenchidos.includes('ano') && 
+                  !modoNotaFiscal && camposAutoPreenchidos.includes('ano') && 
                   "border-green-500 bg-green-50 dark:bg-green-950/20"
                 )}
               />
             </div>
 
-            {/* Valor FIPE */}
+            {/* Valor: FIPE ou Nota Fiscal */}
             <div className="space-y-2">
               <Label htmlFor="valorFipe" className="flex items-center gap-2">
-                Valor FIPE
-                {camposAutoPreenchidos.includes('valorFipe') && (
+                {modoNotaFiscal ? 'Valor da Nota Fiscal' : 'Valor FIPE'}
+                <span className="text-destructive">*</span>
+                {!modoNotaFiscal && camposAutoPreenchidos.includes('valorFipe') && (
                   <CheckCircle className="h-3 w-3 text-green-500" />
                 )}
               </Label>
@@ -361,30 +421,36 @@ export function EtapaConsultaFipe({
                 onChange={(e) => handleValorFipeChange(e.target.value)}
                 placeholder="R$ 0,00"
                 className={cn(
-                  camposAutoPreenchidos.includes('valorFipe') && 
+                  modoNotaFiscal && "border-primary/40 focus-visible:ring-primary",
+                  !modoNotaFiscal && camposAutoPreenchidos.includes('valorFipe') && 
                   "border-green-500 bg-green-50 dark:bg-green-950/20"
                 )}
               />
+              {modoNotaFiscal && (
+                <p className="text-xs text-muted-foreground">
+                  Este valor substitui a FIPE em todos os cálculos da cotação.
+                </p>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Mensagens de Status */}
-        {status === 'idle' && !marca && !modelo && (
+        {/* Mensagens de Status — somente no modo FIPE */}
+        {!modoNotaFiscal && status === 'idle' && !marca && !modelo && (
           <div className="flex items-center gap-2 text-muted-foreground text-sm">
             <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
             <span>Consulte a placa ou preencha os dados manualmente</span>
           </div>
         )}
 
-        {status === 'loading' && (
+        {!modoNotaFiscal && status === 'loading' && (
           <div className="flex items-center gap-2 text-primary text-sm">
             <Loader2 className="h-4 w-4 animate-spin" />
             <span>Consultando base FIPE...</span>
           </div>
         )}
 
-        {status === 'error' && (
+        {!modoNotaFiscal && status === 'error' && (
           <div className="space-y-3">
             <Alert className="border-destructive/50 bg-destructive/10">
               <XCircle className="h-4 w-4 text-destructive" />

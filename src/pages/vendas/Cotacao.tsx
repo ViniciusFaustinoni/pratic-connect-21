@@ -107,6 +107,7 @@ export default function CotacaoPage() {
   const [modelo, setModelo] = useState('');
   const [ano, setAno] = useState('');
   const [valorFipe, setValorFipe] = useState<number | null>(null);
+  const [modoNotaFiscal, setModoNotaFiscal] = useState(false);
 
   // ============================================
   // ETAPA 3 - CRITÉRIOS DA COTAÇÃO
@@ -166,7 +167,10 @@ export default function CotacaoPage() {
   }, [marcarEtapaCompleta]);
 
   const handleEtapa2Next = useCallback(() => {
-    if (veiculoEncontrado) {
+    if (modoNotaFiscal) {
+      // Modo Nota Fiscal: marca/modelo/ano/valor já estão no estado, não usar veiculoEncontrado
+      setModoEntrada('manual');
+    } else if (veiculoEncontrado) {
       setMarca(veiculoEncontrado.marca);
       setModelo(veiculoEncontrado.modelo);
       setAno(veiculoEncontrado.ano);
@@ -175,7 +179,7 @@ export default function CotacaoPage() {
     }
     marcarEtapaCompleta(2);
     setEtapaAtual(3);
-  }, [veiculoEncontrado, marcarEtapaCompleta]);
+  }, [veiculoEncontrado, modoNotaFiscal, marcarEtapaCompleta]);
 
   const handleEntradaManual = useCallback(() => {
     setModoEntrada('manual');
@@ -220,6 +224,7 @@ export default function CotacaoPage() {
     setPlaca('');
     setVeiculoEncontrado(null);
     setModoEntrada('fipe');
+    setModoNotaFiscal(false);
     setMarca('');
     setModelo('');
     setAno('');
@@ -413,6 +418,8 @@ export default function CotacaoPage() {
               setValorFipe={setValorFipe}
               onNext={handleEtapa2Next}
               onManualEntry={handleEntradaManual}
+              modoNotaFiscal={modoNotaFiscal}
+              setModoNotaFiscal={setModoNotaFiscal}
             />
             {/* Botão Voltar - só mostra se não for inclusão/substituição */}
             {!skipEtapa1 && (
@@ -466,6 +473,7 @@ export default function CotacaoPage() {
             onIniciarCadastro={handleIniciarCadastro}
             isLoading={isCalculando || isLoadingPlanos}
             isCenarioIsento={isVendedorExterno}
+            origemValor={modoNotaFiscal ? 'nota' : 'fipe'}
             />
           </>
         )}
