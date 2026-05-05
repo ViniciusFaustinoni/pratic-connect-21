@@ -214,17 +214,32 @@ export default function IntegracaoSGAHinova() {
 
         {/* Queue Tab */}
         <TabsContent value="queue" className="space-y-4">
-          <div className="flex gap-2">
-            {['all', 'pendente', 'falha', 'falha_permanente'].map(f => (
-              <Button
-                key={f}
-                variant={queueFilter === f ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setQueueFilter(f)}
-              >
-                {f === 'all' ? 'Todos' : f === 'pendente' ? 'Pendentes' : f === 'falha' ? 'Falhas' : 'Permanentes'}
-              </Button>
-            ))}
+          <div className="flex flex-wrap gap-2">
+            {(['all', 'pendente', 'falha', 'falha_permanente'] as const).map(f => {
+              const count =
+                f === 'all' ? queueCounts.total :
+                f === 'pendente' ? queueCounts.pendente :
+                f === 'falha' ? queueCounts.falha :
+                queueCounts.falha_permanente;
+              const label =
+                f === 'all' ? 'Todos' :
+                f === 'pendente' ? 'Pendentes' :
+                f === 'falha' ? 'Falhas' : 'Permanentes';
+              return (
+                <Button
+                  key={f}
+                  variant={queueFilter === f ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setQueueFilter(f)}
+                  className="gap-2"
+                >
+                  {label}
+                  <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-xs">
+                    {count.toLocaleString('pt-BR')}
+                  </Badge>
+                </Button>
+              );
+            })}
           </div>
           <Card>
             <Table>
