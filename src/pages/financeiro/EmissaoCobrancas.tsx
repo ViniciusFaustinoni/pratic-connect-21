@@ -8,9 +8,11 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Send, Download, RefreshCw, AlertCircle, CheckCircle2, Clock, Search, Plus, ExternalLink, Bell } from 'lucide-react';
+import { Send, Download, RefreshCw, AlertCircle, CheckCircle2, Clock, Search, Plus, ExternalLink, Bell, FileText, Upload } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { NovaCobrancaModal } from '@/components/financeiro/NovaCobrancaModal';
+import { ImportarCobrancaCsv } from '@/components/financeiro/ImportarCobrancaCsv';
 
 type CobrancaStatus = 'pendente' | 'emitido' | 'erro';
 
