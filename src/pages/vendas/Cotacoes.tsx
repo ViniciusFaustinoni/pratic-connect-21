@@ -131,6 +131,13 @@ export default function Cotacoes() {
     viewScope: permissions.cotacao.viewScope,
     searchTerm: search,
   });
+
+  // Contadores do funil calculados no servidor — independente do array carregado
+  const { data: funilCounts } = useCotacoesFunilCounts({
+    vendedorId: permissions.userId,
+    viewScope: permissions.cotacao.viewScope,
+    searchTerm: search,
+  });
   
   const updateCotacao = useUpdateCotacao();
   const gerarContrato = useGerarContrato();
