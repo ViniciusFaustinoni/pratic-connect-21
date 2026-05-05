@@ -107,6 +107,7 @@ export default function CotacaoPage() {
   const [modelo, setModelo] = useState('');
   const [ano, setAno] = useState('');
   const [valorFipe, setValorFipe] = useState<number | null>(null);
+  const [modoNotaFiscal, setModoNotaFiscal] = useState(false);
 
   // ============================================
   // ETAPA 3 - CRITÉRIOS DA COTAÇÃO
