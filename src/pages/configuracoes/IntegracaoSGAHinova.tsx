@@ -61,7 +61,7 @@ function formatDateFull(d: string | null) {
 export default function IntegracaoSGAHinova() {
   const navigate = useNavigate();
   const {
-    healthChecks, queue, logs, pendingVehicles,
+    healthChecks, queue, queueCounts, logs, pendingVehicles,
     isLoading, testConnection, reprocess, discard, triggerSync, refetchAll,
   } = useSGAHealthCheck();
 
