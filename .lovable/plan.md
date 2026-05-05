@@ -1,47 +1,81 @@
-## Causa raiz
 
-`src/pages/cadastro/VistoriaCompletaAnalise.tsx` (linhas 225–239) busca o serviço negado **sem escopo nenhum**:
+## Caso RKL6I08 — diagnóstico
 
-```ts
-.from('servicos')
-.select('id, decisao_instalador, ressalvas_instalador, fotos_ressalva, veiculo_id, associado_id')
-.eq('tipo', 'instalacao')
-.eq('decisao_instalador', 'negado')
-.limit(1);
+Verifiquei o estado atual no banco:
+
+- `servicos.id db658f9d…` — `tipo=instalacao`, `status=em_analise`, `decisao_instalador=negado`, ressalva preenchida ("Sistema elétrico comprometido…").
+- `instalacoes.id 3cbd44ea…` — `status=em_analise` (não foi fechada).
+- `veiculos RKL6I08` — `status=instalacao_pendente`, `cobertura_suspensa=false`.
+- Não há nenhum outro `servicos` ativo para este veículo / este profissional.
+
+A RPC `buscar_tarefa_atual_profissional` já filtra apenas `em_rota|em_andamento|agendada`, então o card "Tarefa Atual" do técnico não deveria mais retornar este serviço — o que de fato acontece após refetch.
+
+O comportamento que o usuário relata como "o sistema continua forçando a instalação" vem de **dois pontos colaterais que não são tratados na negativa**:
+
+1. O registro em `instalacoes` continua aberto (`em_analise`), então:
+   - aparece em listas de instalações pendentes do monitoramento como se ainda fosse executável;
+   - o técnico ainda enxerga a placa no detalhe da instalação se acessar pelo link direto.
+2. O veículo permanece com `status=instalacao_pendente` exibindo no app do associado a mensagem "Aguardando agendamento da instalação do rastreador" — ou seja, na visão do cliente o sistema "ainda exige" a instalação.
+
+O fluxo correto: ao negar, o serviço cai em `em_analise/negado` (já implementado) e as instâncias derivadas precisam acompanhar. A reativação só pode vir do monitoramento via `/monitoramento/aprovacoes-monitoramento → Recusas do Instalador`.
+
+## Plano
+
+### 1. Atualizar `useRecusarVeiculoServico` (front)
+
+Quando o técnico nega o serviço, além de marcar `servicos.decisao_instalador='negado'`, fazer em transação:
+
+- `instalacoes` referenciada (via `instalacao_origem_id` do serviço) → `status='em_analise_recusa'` (novo valor), `observacoes` acrescidas do motivo;
+- `veiculos.status` → `em_analise` (com `cobertura_suspensa=true`, motivo "Recusa do instalador — aguardando análise"), para o app do cliente parar de pedir instalação e exibir "Documentação em análise";
+- Manter o `agendamentos_base` deduplicado (já existe trigger `trg_sync_agendamento_base_on_servico_terminal`, mas `em_analise` não é terminal — vamos chamar manualmente o fechamento da linha do agendamento ligada à instalação).
+
+### 2. Atualizar resolução do monitoramento (`useRecusasInstalador`)
+
+Quando o monitoramento decide:
+
+- **Aprovado com ressalva** → reabrir: `instalacoes.status='agendada'`, `veiculos.status='instalacao_pendente'`, limpar `cobertura_suspensa`, limpar `decisao_instalador` no serviço (já feito) e disparar reagendamento.
+- **Recusa confirmada** → encerrar: `instalacoes.status='cancelada'`, `veiculos.status='reprovado'` (ou `cancelado` conforme regra existente), manter cobertura suspensa e abrir o fluxo de cancelamento/restituição já existente.
+
+### 3. Migração SQL
+
+- Adicionar valor `em_analise_recusa` ao enum/coluna `instalacoes.status` (apenas se for enum; caso seja text, sem migração).
+- Trigger `fn_sync_veiculo_on_servico_negado` em `servicos AFTER UPDATE`: quando `decisao_instalador` muda para `negado`, faz o sync acima como salvaguarda, garantindo que mesmo chamadas legadas/edge funcs respeitem o novo estado.
+
+### 4. Reprocessar registros órfãos (script único)
+
+Para o caso atual (RKL6I08) e quaisquer outros já em produção:
+
+```sql
+UPDATE veiculos v
+   SET status='em_analise',
+       cobertura_suspensa=true,
+       cobertura_suspensa_motivo='Recusa do instalador — aguardando análise',
+       cobertura_suspensa_em=now()
+  FROM servicos s
+ WHERE s.veiculo_id=v.id
+   AND s.decisao_instalador='negado'
+   AND s.status='em_analise'
+   AND v.status='instalacao_pendente';
+
+UPDATE instalacoes i
+   SET status='em_analise',
+       observacoes = COALESCE(i.observacoes,'') || E'\n[Negada pelo instalador — aguardando monitoramento]'
+  FROM servicos s
+ WHERE s.instalacao_origem_id=i.id
+   AND s.decisao_instalador='negado'
+   AND i.status NOT IN ('cancelada','concluida','aprovada');
 ```
 
-Não filtra por `instalacao_origem_id`, nem por `associado_id`, nem por `veiculo_id`. Resultado: enquanto existir **qualquer** serviço negado no banco, ele é injetado em **toda** página `/cadastro/instalacoes/:id/ativar`.
+### 5. UX
 
-Confirmado no banco: hoje há exatamente um registro `decisao_instalador='negado'` — moto RKL6I08 (Honda CG 160, JOAO VICTOR PEREIRA, instalação `3cbd44ea-4f92-…`). Por isso, ao abrir a ativação de THAYSSA (TDC6E30) ou qualquer outra, o banner exibe placa, motivo e foto da moto do João — corpo da página continua sendo do associado aberto, gerando a confusão.
+- No app do cliente (`CardVeiculo`): para `em_analise` causado por recusa de instalador, exibir mensagem específica "Aguardando análise do monitoramento — não é necessário reagendar agora".
+- Na tela "Recusas do Instalador" (já existente em Aprovações do Monitoramento), continuar como única porta de saída para reabrir/cancelar.
 
-## Correção
+## Arquivos previstos
 
-Em `VistoriaCompletaAnalise.tsx`, escopar a query `servico-recusa-instalacao`:
+- `src/hooks/useServicos.ts` — `useRecusarVeiculoServico` passa a executar os 3 updates atômicos.
+- `src/hooks/useRecusasInstalador.ts` — fechar/reabrir `instalacoes` + `veiculos` na decisão.
+- `src/components/app/CardVeiculo.tsx` — mensagem específica.
+- `supabase/migrations/*` — trigger `fn_sync_veiculo_on_servico_negado` + script de backfill.
 
-- Filtrar por `instalacao_origem_id = id` (param da rota = id da instalação aberta).
-- Adicionar `status = 'em_analise'` para ignorar negativas já resolvidas/realocadas.
-- Trocar `.limit(1)` + `data[0]` por `.maybeSingle()`.
-
-Trecho-alvo:
-
-```ts
-const { data } = await supabase
-  .from('servicos')
-  .select('id, decisao_instalador, ressalvas_instalador, fotos_ressalva, veiculo_id, associado_id, instalacao_origem_id, status')
-  .eq('tipo', 'instalacao')
-  .eq('decisao_instalador', 'negado')
-  .eq('instalacao_origem_id', id)
-  .eq('status', 'em_analise')
-  .maybeSingle();
-return data;
-```
-
-Defensivo extra (renderização do banner): só renderizar `temRecusaPendente` quando `servicoRecusa.instalacao_origem_id === id`, garantindo que mesmo que a query mude no futuro, o card nunca extravase de contexto.
-
-## Validação
-
-1. Abrir as 3 ativações pendentes hoje (TDC6E30 / RIR1B37 / KRX9802) → nenhum banner vermelho de "NEGADO".
-2. Abrir a instalação real de RKL6I08 → banner continua aparecendo com motivo, fotos e botão "Tomar Decisão" funcionando normalmente.
-3. Cabeçalho ("Ativação de Rastreador — placa • nome") deixa de exibir o veículo errado.
-
-Sem migração de dados; o registro negado de RKL6I08 segue válido e visível apenas no contexto correto.
+Sem novos secrets. Nenhuma edge function nova. Nenhuma quebra de rota.
