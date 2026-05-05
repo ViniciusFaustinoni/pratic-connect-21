@@ -216,6 +216,7 @@ export function useSGAHealthCheck() {
   const refetchAll = () => {
     healthChecks.refetch();
     queue.refetch();
+    queueCounts.refetch();
     logs.refetch();
     pendingVehicles.refetch();
   };
@@ -223,6 +224,7 @@ export function useSGAHealthCheck() {
   return {
     healthChecks: healthChecks.data || [],
     queue: queue.data || [],
+    queueCounts: queueCounts.data || { total: 0, pendente: 0, falha: 0, falha_permanente: 0 },
     logs: logs.data || [],
     pendingVehicles: pendingVehicles.data || [],
     isLoading: healthChecks.isLoading || queue.isLoading,
