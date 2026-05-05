@@ -24,7 +24,8 @@ import { toast } from 'sonner';
 export type StatusCotacaoExtended = StatusCotacao | 'visualizada';
 
 // Re-exporta a fonte única para retrocompatibilidade de imports
-export { getEtapaVenda, etapaVendaConfig, type EtapaVenda } from '@/lib/cotacaoEtapa';
+import { getEtapaVenda, etapaVendaConfig, type EtapaVenda } from '@/lib/cotacaoEtapa';
+export { getEtapaVenda, etapaVendaConfig, type EtapaVenda };
 
 export const statusConfig: Record<StatusCotacaoExtended, { 
   label: string; 
