@@ -361,11 +361,24 @@ export function ImportarCobrancaCsv() {
   if (etapa === 'concluido' && resultadoEnvio) {
     return (
       <div className="space-y-4">
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <KpiCard label="Total" value={resultadoEnvio.total} />
           <KpiCard label="Enviadas" value={resultadoEnvio.sucesso} accent="success" />
           <KpiCard label="Com erro" value={resultadoEnvio.erros} accent="warning" />
+          <KpiCard label="Recuperados" value={resultadoEnvio.recuperados_count} accent="primary" />
+          <KpiCard label="Valor recuperado" valueText={formatBRL(resultadoEnvio.recuperados_valor)} accent="success" />
         </div>
+
+        {resultadoEnvio.recuperados_count > 0 && (
+          <Alert>
+            <Check className="h-4 w-4" />
+            <AlertDescription>
+              <strong>{resultadoEnvio.recuperados_count} boleto(s)</strong> da lista anterior não estavam nesta nova
+              remessa e foram marcados como <strong>recuperados</strong> ({formatBRL(resultadoEnvio.recuperados_valor)}).
+              Veja em <a href="/financeiro/cobrancas/recuperados" className="underline text-primary">Financeiro › Cobranças › Recuperados</a>.
+            </AlertDescription>
+          </Alert>
+        )}
 
         <Card>
           <CardHeader className="pb-3">
@@ -414,16 +427,17 @@ export function ImportarCobrancaCsv() {
   return null;
 }
 
-function KpiCard({ label, value, accent }: { label: string; value: number; accent?: 'success' | 'warning' | 'primary' }) {
+function KpiCard({ label, value, valueText, accent }: { label: string; value?: number; valueText?: string; accent?: 'success' | 'warning' | 'primary' }) {
   const color =
     accent === 'success' ? 'text-green-600' :
     accent === 'warning' ? 'text-orange-500' :
     accent === 'primary' ? 'text-primary' : '';
+  const display = valueText ?? (typeof value === 'number' ? value.toLocaleString('pt-BR') : '0');
   return (
     <Card>
       <CardContent className="p-4">
         <p className="text-xs text-muted-foreground uppercase tracking-wide">{label}</p>
-        <p className={`text-2xl font-bold mt-1 ${color}`}>{value.toLocaleString('pt-BR')}</p>
+        <p className={`text-2xl font-bold mt-1 ${color}`}>{display}</p>
       </CardContent>
     </Card>
   );
