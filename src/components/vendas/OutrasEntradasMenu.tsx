@@ -72,6 +72,7 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAssociadoId, setSelectedAssociadoId] = useState<string | null>(null);
   const [selectedAssociadoNome, setSelectedAssociadoNome] = useState('');
+  const [selectedAssociadoCpf, setSelectedAssociadoCpf] = useState<string | null>(null);
   const [veiculoAntigoId, setVeiculoAntigoId] = useState<string | null>(null);
   const [veiculoAntigoPlaca, setVeiculoAntigoPlaca] = useState('');
   const [veiculoAntigoModelo, setVeiculoAntigoModelo] = useState('');
@@ -203,6 +204,7 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
     setSearchTerm('');
     setSelectedAssociadoId(null);
     setSelectedAssociadoNome('');
+    setSelectedAssociadoCpf(null);
     setVeiculoAntigoId(null);
     setVeiculoAntigoPlaca('');
     setVeiculoAntigoModelo('');
@@ -233,6 +235,7 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   const handleSelectPlaca = (result: import('@/hooks/useBuscaPlaca').PlacaSearchResult) => {
     setSelectedAssociadoId(result.associadoId);
     setSelectedAssociadoNome(result.associadoNome);
+    setSelectedAssociadoCpf(result.associadoCpf);
     setVeiculoAntigoId(result.veiculoId);
     setVeiculoAntigoPlaca(result.placa);
     setVeiculoAntigoModelo(`${result.marca} ${result.modelo}`);
@@ -242,9 +245,11 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
     if (selectedTipo === 'substituicao' || selectedTipo === 'inclusao') {
       setSelectedAssociadoId(associado.id);
       setSelectedAssociadoNome(associado.nome);
+      setSelectedAssociadoCpf(associado.cpf);
     } else if (selectedTipo === 'troca_titularidade') {
       setSelectedAssociadoId(associado.id);
       setSelectedAssociadoNome(associado.nome);
+      setSelectedAssociadoCpf(associado.cpf);
       onOpenChange(false);
       setShowTrocaTitularidade(true);
     }
@@ -714,10 +719,12 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
             if (!v) {
               setSelectedAssociadoId(null);
               setSelectedAssociadoNome('');
+              setSelectedAssociadoCpf(null);
             }
           }}
           associadoId={selectedAssociadoId}
           associadoNome={selectedAssociadoNome}
+          associadoCpf={selectedAssociadoCpf}
         />
       )}
 
