@@ -12,6 +12,7 @@ import { useVerificarDebitosAssociado } from '@/hooks/useVerificarDebitosAssocia
 import { useInclusaoBloqueioDebito } from '@/hooks/useInclusaoBloqueioDebito';
 import { TrocaTitularidadeDialog } from '@/components/associados/TrocaTitularidadeDialog';
 import { MigracaoDiretaDialog } from '@/components/cadastro/MigracaoDiretaDialog';
+import { DebitosCard } from '@/components/cotacao/DebitosCard';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
@@ -414,20 +415,15 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
                         </Alert>
                       )}
 
-                      {migracaoStatus === 'debitos' && (
-                        <Alert variant="destructive">
-                          <AlertTriangle className="h-4 w-4" />
-                          <AlertTitle>Débitos pendentes</AlertTitle>
-                          <AlertDescription className="text-xs space-y-2">
-                            <p>Este CPF possui débitos pendentes que precisam ser quitados antes de qualquer nova filiação.</p>
-                            {migracaoDebitos?.debitosPorVeiculo.map((dv, i) => (
-                              <div key={i} className="flex justify-between items-center bg-destructive/10 px-2 py-1.5 rounded">
-                                <span>{dv.marca} {dv.modelo} — {dv.placa}</span>
-                                <span className="font-semibold">{formatCurrency(dv.total)}</span>
-                              </div>
-                            ))}
-                          </AlertDescription>
-                        </Alert>
+                      {migracaoStatus === 'debitos' && migracaoDebitos && (
+                        <DebitosCard
+                          debitos={migracaoDebitos.debitosPorVeiculo}
+                          saldoTotal={migracaoDebitos.saldoTotal}
+                          bloqueante
+                          cpf={migracaoAssociadoId}
+                          titulo="Débitos pendentes"
+                          descricao="Este CPF possui débitos que precisam ser quitados antes de qualquer nova filiação. Após pagar, clique em 'Verificar pagamento' para liberar imediatamente, sem esperar a rotina noturna."
+                        />
                       )}
 
                       {migracaoStatus === 'elegivel' && (
@@ -485,25 +481,26 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
                             <span className="text-sm text-muted-foreground ml-2">Verificando elegibilidade...</span>
                           </div>
                         ) : bloqueado ? (
-                          <Alert variant="destructive">
-                            <AlertTriangle className="h-4 w-4" />
-                            <AlertTitle>Substituição bloqueada</AlertTitle>
-                            <AlertDescription className="space-y-2">
-                              <p className="text-xs">O associado está inadimplente.</p>
-                              {temDebitos && debitosData?.debitosPorVeiculo.map((dv, i) => (
-                                <div key={i} className="flex justify-between items-center text-xs bg-destructive/10 px-2 py-1.5 rounded">
-                                  <span>{dv.marca} {dv.modelo} — {dv.placa}</span>
-                                  <span className="font-semibold">{formatCurrency(dv.total)} ({dv.quantidade}x)</span>
-                                </div>
-                              ))}
-                              {repasseConfig?.repasse_maior_percentual && (
-                                <p className="text-xs mt-2 font-medium">
-                                  Repasse maior: {repasseConfig.repasse_maior_percentual}%
-                                  {repasseConfig.repasse_maior_descricao && ` — ${repasseConfig.repasse_maior_descricao}`}
-                                </p>
-                              )}
-                            </AlertDescription>
-                          </Alert>
+                          temDebitos && debitosData ? (
+                            <DebitosCard
+                              debitos={debitosData.debitosPorVeiculo}
+                              saldoTotal={debitosData.saldoTotal}
+                              bloqueante
+                              cpf={selectedAssociadoId || undefined}
+                              titulo="Substituição bloqueada — associado inadimplente"
+                              descricao={
+                                repasseConfig?.repasse_maior_percentual
+                                  ? `Repasse maior: ${repasseConfig.repasse_maior_percentual}%${repasseConfig.repasse_maior_descricao ? ` — ${repasseConfig.repasse_maior_descricao}` : ''}. Após pagar, clique em 'Verificar pagamento' para liberar imediatamente.`
+                                  : "Após pagar, clique em 'Verificar pagamento' para liberar imediatamente, sem esperar a rotina noturna."
+                              }
+                            />
+                          ) : (
+                            <Alert variant="destructive">
+                              <AlertTriangle className="h-4 w-4" />
+                              <AlertTitle>Substituição bloqueada</AlertTitle>
+                              <AlertDescription className="text-xs">O associado está inadimplente.</AlertDescription>
+                            </Alert>
+                          )
                         ) : (
                           <div className="space-y-2">
                             <div className="flex items-center gap-2 p-3 rounded-lg bg-accent/50 border border-border">
@@ -586,27 +583,30 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
                             <span className="text-sm text-muted-foreground ml-2">Verificando elegibilidade...</span>
                           </div>
                         ) : bloqueado ? (
-                          <Alert variant="destructive">
-                            <AlertTriangle className="h-4 w-4" />
-                            <AlertTitle>Inclusão bloqueada</AlertTitle>
-                            <AlertDescription className="space-y-2">
-                              <p className="text-xs">
-                                {inclusaoStatusCheck === 'debitos'
-                                  ? 'O associado possui débitos em aberto. É necessário quitar antes de incluir um novo veículo.'
-                                  : inclusaoStatusCheck === 'status_invalido'
-                                  ? `O associado está com status "${associadoInclusaoData?.status}". Apenas associados ativos podem incluir novos veículos.`
-                                  : inclusaoStatusCheck === 'limite_atingido'
-                                  ? `O associado já possui ${associadoInclusaoData?.veiculos.length} veículo(s) ativo(s), atingindo o limite máximo de ${limiteVeiculosConfig} configurado.`
-                                  : 'O associado está inadimplente.'}
-                              </p>
-                              {temDebitos && debitosData?.debitosPorVeiculo.map((dv, i) => (
-                                <div key={i} className="flex justify-between items-center text-xs bg-destructive/10 px-2 py-1.5 rounded">
-                                  <span>{dv.marca} {dv.modelo} — {dv.placa}</span>
-                                  <span className="font-semibold">{formatCurrency(dv.total)} ({dv.quantidade}x)</span>
-                                </div>
-                              ))}
-                            </AlertDescription>
-                          </Alert>
+                          temDebitos && debitosData ? (
+                            <DebitosCard
+                              debitos={debitosData.debitosPorVeiculo}
+                              saldoTotal={debitosData.saldoTotal}
+                              bloqueante
+                              cpf={selectedAssociadoId || undefined}
+                              titulo="Inclusão bloqueada — associado inadimplente"
+                              descricao="O associado possui débitos em aberto. Após pagar, clique em 'Verificar pagamento' para liberar a inclusão imediatamente, sem esperar a rotina noturna."
+                            />
+                          ) : (
+                            <Alert variant="destructive">
+                              <AlertTriangle className="h-4 w-4" />
+                              <AlertTitle>Inclusão bloqueada</AlertTitle>
+                              <AlertDescription>
+                                <p className="text-xs">
+                                  {inclusaoStatusCheck === 'status_invalido'
+                                    ? `O associado está com status "${associadoInclusaoData?.status}". Apenas associados ativos podem incluir novos veículos.`
+                                    : inclusaoStatusCheck === 'limite_atingido'
+                                    ? `O associado já possui ${associadoInclusaoData?.veiculos.length} veículo(s) ativo(s), atingindo o limite máximo de ${limiteVeiculosConfig} configurado.`
+                                    : 'O associado está inadimplente.'}
+                                </p>
+                              </AlertDescription>
+                            </Alert>
+                          )
                         ) : inclusaoStatusCheck === 'aprovado' ? (
                           <div className="space-y-3">
                             <div className="flex items-center gap-2 p-3 rounded-lg bg-accent/50 border border-border">
