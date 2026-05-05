@@ -1952,7 +1952,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                     onChange={(e) => setValorAdesaoCustom(parseFloat(e.target.value) || 0)}
                     className={cn(
                       "text-center font-bold text-lg h-10",
-                      valorAdesaoCustom !== null && valorAdesaoCustom > 0 && valorAdesaoCustom < minimoAdesaoConfig && !(cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base')
+                      valorAdesaoCustom !== null && valorAdesaoCustom > 0 && valorAdesaoCustom < minimoAdesaoConfig && !(cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base' || cenarioExterno === 'cobra_base')
                         ? "border-destructive text-destructive"
                         : ""
                     )}
