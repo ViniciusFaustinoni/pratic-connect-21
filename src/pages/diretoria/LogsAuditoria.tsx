@@ -102,6 +102,21 @@ export default function LogsAuditoria() {
     },
   });
 
+  const { data: tabelaOptions = [] } = useQuery({
+    queryKey: ['logs-auditoria-tabelas'],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('logs_auditoria')
+        .select('tabela')
+        .not('tabela', 'is', null)
+        .order('tabela', { ascending: true })
+        .limit(1000);
+      if (error) throw error;
+      const set = new Set<string>((data || []).map((r: any) => r.tabela).filter(Boolean));
+      return Array.from(set).sort();
+    },
+  });
+
   const { data: historicoHierarquia = [], isLoading: isLoadingHierarquia } = useQuery({
     queryKey: ['logs-auditoria-hierarquia'],
     queryFn: async () => {
