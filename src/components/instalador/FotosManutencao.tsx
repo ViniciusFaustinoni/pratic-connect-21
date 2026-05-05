@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { compressImage } from '@/lib/imageCompressor';
 
 export type CategoriaFoto = 'rastreador' | 'fiacao' | 'painel' | 'geral';
 
