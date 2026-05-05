@@ -725,11 +725,11 @@ export function usePropostasPendentes() {
             instalacao_agendada: instalacaoAgendada,
             vistoria_base_info: vistoriaBaseInfo,
             tipo_vistoria: tipoVistoriaCotacao,
-            veiculo_id: null, // Não disponível na lista resumida
-            veiculo_cobertura_total: null, // Não disponível na lista resumida
+            veiculo_id: (contrato as any).veiculo_id || null,
+            veiculo_cobertura_total: veiculoContrato?.cobertura_total ?? null,
             contrato_link_token: (contrato as any).link_token || null,
-            veiculo_renavam: null, // Não disponível na lista resumida
-            veiculo_chassi: null, // Não disponível na lista resumida
+            veiculo_renavam: veiculoContrato?.renavam || null,
+            veiculo_chassi: veiculoContrato?.chassi || null,
             veiculo_blindado: veiculoBlindadoCot,
             cenario_adesao: cenarioAdesaoCot,
             plano_tem_roubo_furto: planoTemRouboFurto,
