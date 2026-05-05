@@ -33,6 +33,7 @@ function makeThrottledInvalidator(qc: QueryClient, windowMs = 1500) {
  */
 export function useCotacoesRealtime() {
   const queryClient = useQueryClient();
+  const throttledInvalidate = useRef(makeThrottledInvalidator(queryClient)).current;
 
   useEffect(() => {
     console.log('[useCotacoesRealtime] Iniciando listeners realtime');
