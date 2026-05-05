@@ -657,22 +657,26 @@ export default function Cotacoes() {
 
   const hasActiveFilters = search || statusFilter !== 'all' || mesFilter !== 'all' || dataFilter || consultorFilter !== 'all' || filtroOrfas || etapaFunilFilter !== 'all';
 
-  // Stats - 9 status do fluxo de cotação
+  // Stats - 9 status do fluxo de cotação. Quando temos contagens server-side
+  // (funilCounts), usamos elas para refletir a base inteira; senão caímos no
+  // array carregado (compatibilidade).
   const statusStats = useMemo(() => {
-    if (!cotacoes) return [];
+    const fc = funilCounts;
+    const fromArray = (predicate: (c: CotacaoWithRelations) => boolean) =>
+      (cotacoes || []).filter(predicate).length;
     const items = [
-      { label: 'Rascunho', icon: FileText, color: 'text-gray-500', bg: 'bg-gray-500/15', count: cotacoes.filter(c => c.status === 'rascunho').length },
-      { label: 'Link Enviado', icon: Link, color: 'text-blue-500', bg: 'bg-blue-500/15', count: cotacoes.filter(c => c.status === 'enviada').length },
-      { label: 'Escolhendo Plano', icon: ListChecks, color: 'text-indigo-500', bg: 'bg-indigo-500/15', count: cotacoes.filter(c => ['escolhendo_plano', 'plano_escolhido'].includes(c.status_contratacao || '')).length },
-      { label: 'Enviando Docs', icon: FileUp, color: 'text-cyan-500', bg: 'bg-cyan-500/15', count: cotacoes.filter(c => ['enviando_documentos', 'dados_preenchidos'].includes(c.status_contratacao || '')).length },
-      { label: 'Assinando Contrato', icon: PenTool, color: 'text-purple-500', bg: 'bg-purple-500/15', count: cotacoes.filter(c => c.status_contratacao === 'assinando_contrato').length },
-      { label: 'Pagando Taxa', icon: CreditCard, color: 'text-amber-500', bg: 'bg-amber-500/15', count: cotacoes.filter(c => c.status_contratacao === 'pagando_taxa').length },
-      { label: 'Agendando Vistoria', icon: MapPin, color: 'text-orange-500', bg: 'bg-orange-500/15', count: cotacoes.filter(c => c.status_contratacao === 'agendando_vistoria').length },
-      { label: 'Em Análise', icon: Clock, color: 'text-yellow-500', bg: 'bg-yellow-500/15', count: cotacoes.filter(c => c.status_contratacao === 'em_analise').length },
-      { label: 'Fechado', icon: Trophy, color: 'text-green-500', bg: 'bg-green-500/15', count: cotacoes.filter(c => c.status === 'aceita' || c.status_contratacao === 'concluido').length },
+      { label: 'Rascunho', icon: FileText, color: 'text-gray-500', bg: 'bg-gray-500/15', count: fc?.rascunho ?? fromArray(c => c.status === 'rascunho') },
+      { label: 'Link Enviado', icon: Link, color: 'text-blue-500', bg: 'bg-blue-500/15', count: fc?.enviada ?? fromArray(c => c.status === 'enviada') },
+      { label: 'Escolhendo Plano', icon: ListChecks, color: 'text-indigo-500', bg: 'bg-indigo-500/15', count: fc?.escolhendo_plano ?? fromArray(c => ['escolhendo_plano', 'plano_escolhido'].includes(c.status_contratacao || '')) },
+      { label: 'Enviando Docs', icon: FileUp, color: 'text-cyan-500', bg: 'bg-cyan-500/15', count: fc?.enviando_documentos ?? fromArray(c => ['enviando_documentos', 'dados_preenchidos'].includes(c.status_contratacao || '')) },
+      { label: 'Assinando Contrato', icon: PenTool, color: 'text-purple-500', bg: 'bg-purple-500/15', count: fc?.assinando_contrato ?? fromArray(c => c.status_contratacao === 'assinando_contrato') },
+      { label: 'Pagando Taxa', icon: CreditCard, color: 'text-amber-500', bg: 'bg-amber-500/15', count: fc?.pagando_taxa ?? fromArray(c => c.status_contratacao === 'pagando_taxa') },
+      { label: 'Agendando Vistoria', icon: MapPin, color: 'text-orange-500', bg: 'bg-orange-500/15', count: fc?.agendando_vistoria ?? fromArray(c => c.status_contratacao === 'agendando_vistoria') },
+      { label: 'Em Análise', icon: Clock, color: 'text-yellow-500', bg: 'bg-yellow-500/15', count: fc?.em_analise ?? fromArray(c => c.status_contratacao === 'em_analise') },
+      { label: 'Fechado', icon: Trophy, color: 'text-green-500', bg: 'bg-green-500/15', count: fc?.concluido ?? fromArray(c => c.status === 'aceita' || c.status_contratacao === 'concluido') },
     ];
     return items;
-  }, [cotacoes]);
+  }, [cotacoes, funilCounts]);
 
   // Função para obter permissões de cada cotação
   const getPermissions = (cotacao: CotacaoWithRelations): CotacoesTablePermissions => {
