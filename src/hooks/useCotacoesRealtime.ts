@@ -51,16 +51,16 @@ export function useCotacoesRealtime() {
         (payload) => {
           console.log('[useCotacoesRealtime] Cotação alterada:', payload.eventType, payload.new);
           
-          // Forçar refetch imediato de todas as cotações
-          queryClient.refetchQueries({ queryKey: ['cotacoes'] });
-          
+          // Throttle: apenas marca como stale; React Query refaz só queries montadas
+          throttledInvalidate([['cotacoes']]);
+
           // Se for update de uma cotação específica
           if (payload.eventType === 'UPDATE' && payload.new) {
             const newData = payload.new as { id?: string; status?: string; status_contratacao?: string; cliente_nome?: string };
             const oldData = payload.old as { status_contratacao?: string; status?: string };
-            
+
             if (newData.id) {
-              queryClient.refetchQueries({ queryKey: ['cotacoes', newData.id] });
+              throttledInvalidate([['cotacoes', newData.id]]);
             }
             
             // Labels específicos para cada etapa do status_contratacao
