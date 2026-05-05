@@ -277,6 +277,14 @@ export function useResolverRecusa() {
             .update({ status: 'cancelada', observacoes: `Nova vistoria solicitada: ${justificativa}`, updated_at: agora })
             .eq('id', servicoId);
 
+          // Encerrar instalação antiga (nova será gerada pós-vistoria)
+          if (instalacaoId) {
+            await supabase
+              .from('instalacoes')
+              .update({ status: 'cancelada', updated_at: agora })
+              .eq('id', instalacaoId);
+          }
+
           // Create new vistoria_entrada
           await supabase.from('servicos').insert({
             tipo: 'vistoria_entrada',
