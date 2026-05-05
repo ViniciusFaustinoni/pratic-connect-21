@@ -126,11 +126,31 @@ export default function Cotacoes() {
 
   const search = useDebounce(searchInput, 350);
 
-  const { data: cotacoes, isLoading, isFetching } = useCotacoes({
+  const PAGE_SIZE = 50;
+  const [pageEmAndamento, setPageEmAndamento] = useState(1);
+  const [pageFinalizadas, setPageFinalizadas] = useState(1);
+
+  // Reset de paginação ao mudar busca/filtros relevantes
+  useEffect(() => {
+    setPageEmAndamento(1);
+    setPageFinalizadas(1);
+  }, [search, permissions.cotacao.viewScope, permissions.userId]);
+
+  const isEmAndamentoTab = activeTab === 'em_andamento';
+  const currentPage = isEmAndamentoTab ? pageEmAndamento : pageFinalizadas;
+  const setCurrentPage = isEmAndamentoTab ? setPageEmAndamento : setPageFinalizadas;
+
+  const { data: paginatedResult, isLoading, isFetching } = useCotacoesPaginadas({
     vendedorId: permissions.userId,
     viewScope: permissions.cotacao.viewScope,
     searchTerm: search,
+    page: currentPage,
+    pageSize: PAGE_SIZE,
+    statusGroup: isEmAndamentoTab ? 'em_andamento' : 'finalizadas',
   });
+  const cotacoes = paginatedResult?.data;
+  const totalPaginaAtual = paginatedResult?.count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalPaginaAtual / PAGE_SIZE));
 
   // Contadores do funil calculados no servidor — independente do array carregado
   const { data: funilCounts } = useCotacoesFunilCounts({
