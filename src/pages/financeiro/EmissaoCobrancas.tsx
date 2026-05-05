@@ -60,7 +60,7 @@ function mapCobranca(c: any): CobrancaLocal {
   };
 }
 
-export default function EmissaoCobrancas() {
+function EmissaoCobrancasFechamento() {
   const queryClient = useQueryClient();
   const [filtroNome, setFiltroNome] = useState('');
   const [filtroStatus, setFiltroStatus] = useState<string>('todos');
