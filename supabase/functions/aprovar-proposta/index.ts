@@ -212,7 +212,10 @@ serve(async (req) => {
 
       // Se a instalação concluída pertence a ESTE veículo, ativa Proteção 360
       const instalacaoDesteVeiculo = jaTemInstalacaoConcluida && (instalacaoConcluida as any)?.veiculo_id === veiculoId;
-      const ativarProtecao360 = instalacaoDesteVeiculo || !veiculoPrecisaRastreador;
+      // Paridade total com ≥30k/9k: cobertura total SÓ é ativada após vistoria
+      // aprovada (que dispara ativar-associado via trigger de conclusão).
+      // Mesmo veículos sem rastreador (FIPE < limite) precisam passar pela vistoria.
+      const ativarProtecao360 = instalacaoDesteVeiculo;
       const statusVeiculo = ativarProtecao360 ? 'ativo' : 'instalacao_pendente';
 
       console.log(`[aprovar-proposta] Veículo ${veiculo.placa} (${tipoVeiculo}, FIPE R$${valorFipe}): precisaRastreador=${veiculoPrecisaRastreador}, status=${statusVeiculo}`);
@@ -221,12 +224,11 @@ serve(async (req) => {
       if (veiculoPrecisaRastreador) algumPrecisouRastreador = true;
       if (veiculoId === veiculoIdDoContrato || !veiculoPrincipal) veiculoPrincipal = veiculo;
 
-      // Cobertura R&F só é ativada se o PLANO contratado a inclui.
-      // Cobertura total continua dependendo da instalação concluída
-      // (ou da dispensa de rastreador via FIPE/categoria).
+      // Cobertura R&F e cobertura total só após aprovação manual da vistoria
+      // (paridade total com fluxo ≥30k/9k — autovistoria ativa R&F, presencial ativa total).
       await supabase.from('veiculos').update({
         status: statusVeiculo,
-        cobertura_roubo_furto: planoTemRouboFurto,
+        cobertura_roubo_furto: ativarProtecao360 ? planoTemRouboFurto : false,
         cobertura_total: ativarProtecao360,
       }).eq('id', veiculoId);
 
