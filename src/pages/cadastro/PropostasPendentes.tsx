@@ -169,7 +169,8 @@ export default function PropostasPendentes() {
       const matchSearch = !search ||
         proposta.cliente_nome?.toLowerCase().includes(searchLower) ||
         proposta.cliente_cpf?.includes(search) ||
-        proposta.veiculo_placa?.toLowerCase().includes(searchLower);
+        proposta.veiculo_placa?.toLowerCase().includes(searchLower) ||
+        proposta.veiculo_chassi?.toLowerCase().includes(searchLower);
       const matchStatus = statusFilter === 'todos' || proposta.status === statusFilter;
       return matchSearch && matchStatus;
     })
