@@ -132,8 +132,9 @@ export function useCotacoesFunilCounts(options?: UseCotacoesOptions) {
   });
 }
 
-// Status que compõem cada aba da tela de Cotações
-const STATUS_EM_ANDAMENTO_LIST = ['rascunho', 'enviada', 'visualizada'];
+// Status que compõem cada aba da tela de Cotações.
+// IMPORTANTE: enum status_cotacao só tem rascunho/enviada/aceita/recusada/expirada.
+const STATUS_EM_ANDAMENTO_LIST = ['rascunho', 'enviada'];
 const STATUS_FINALIZADAS_LIST = ['aceita', 'recusada', 'expirada'];
 
 type CotacoesStatusGroup = 'em_andamento' | 'finalizadas' | 'all';
@@ -160,7 +161,7 @@ async function fetchCotacoesCore(params: {
       `
         id, numero, status, status_contratacao, created_at, updated_at,
         vendedor_id, lead_id, plano_id, token_publico,
-        cliente_nome, nome_solicitante, telefone1_solicitante, telefone2_solicitante, email_solicitante,
+        nome_solicitante, telefone1_solicitante, telefone2_solicitante, email_solicitante,
         veiculo_placa, veiculo_marca, veiculo_modelo, veiculo_ano, valor_fipe,
         valor_mensalidade, valor_adesao, tipo_entrada, dados_extras,
         substituida_por_cotacao_id, motivo_substituicao,
