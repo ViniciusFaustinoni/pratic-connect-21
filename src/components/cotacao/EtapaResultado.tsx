@@ -178,7 +178,7 @@ export function EtapaResultado({
                 </p>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                   {placa && <span>Placa: {placa}</span>}
-                  {valorFipe && <span>FIPE: {formatCurrency(valorFipe)}</span>}
+                  {valorFipe && <span>{origemValor === 'nota' ? 'Valor da Nota' : 'FIPE'}: {formatCurrency(valorFipe)}</span>}
                 </div>
                 <div className="flex flex-wrap gap-2 mt-2">
                   <Badge variant="secondary" className="text-xs">
