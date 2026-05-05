@@ -23,7 +23,14 @@ interface ResultadoEnvio {
   total: number;
   sucesso: number;
   erros: number;
+  recuperados_count: number;
+  recuperados_valor: number;
+  lote_id: string | null;
   detalhes: Array<{ matricula: string; nome: string; telefone: string; status: 'ok' | 'erro'; erro?: string }>;
+}
+
+function formatBRL(v: number): string {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
 export function ImportarCobrancaCsv() {
@@ -89,8 +96,15 @@ export function ImportarCobrancaCsv() {
     const detalhes: ResultadoEnvio['detalhes'] = [];
     let sucesso = 0;
     let erros = 0;
+    let loteId: string | null = null;
+    let recuperadosCount = 0;
+    let recuperadosValor = 0;
 
-    // Enviar em chunks de 50 destinatários por chamada para a edge function
+    // Snapshot completo das linhas digitáveis da remessa (para reconciliação no servidor)
+    const todasLinhasDigitaveis = resultado.destinatarios.flatMap((d) =>
+      d.boletos.map((b) => b.linha_digitavel),
+    );
+
     const CHUNK = 50;
     const total = destinatariosValidos.length;
     setProgresso({ atual: 0, total });
@@ -98,17 +112,35 @@ export function ImportarCobrancaCsv() {
     for (let i = 0; i < total; i += CHUNK) {
       if (cancelarRef.current) break;
       const slice = destinatariosValidos.slice(i, i + CHUNK);
+      const isFirst = i === 0;
+      const isLast = i + CHUNK >= total;
       try {
         const { data, error } = await supabase.functions.invoke('disparar-cobranca-csv-meta', {
-          body: { template_nome: TEMPLATE_NOME, destinatarios: slice },
+          body: {
+            template_nome: TEMPLATE_NOME,
+            destinatarios: slice,
+            is_first_chunk: isFirst,
+            is_last_chunk: isLast,
+            lote_id: loteId,
+            nome_arquivo: arquivo?.name || 'cobranca.csv',
+            ...(isFirst
+              ? {
+                  todas_linhas_digitaveis: todasLinhasDigitaveis,
+                  total_remessa: resultado.valor_total,
+                  total_associados_remessa: resultado.total_associados,
+                }
+              : {}),
+          },
         });
         if (error) throw new Error(error.message);
         if (!data?.success) throw new Error(data?.error || 'Falha no servidor');
         sucesso += data.sucesso || 0;
         erros += data.erros || 0;
+        if (data.lote_id) loteId = data.lote_id;
+        if (typeof data.recuperados_count === 'number') recuperadosCount += data.recuperados_count;
+        if (typeof data.recuperados_valor === 'number') recuperadosValor += data.recuperados_valor;
         if (Array.isArray(data.detalhes)) detalhes.push(...data.detalhes);
       } catch (e: any) {
-        // Marca todos do chunk como erro
         for (const d of slice) {
           for (const t of d.telefones_validos) {
             detalhes.push({ matricula: d.matricula, nome: d.nome, telefone: t, status: 'erro', erro: e.message });
@@ -119,11 +151,19 @@ export function ImportarCobrancaCsv() {
       setProgresso({ atual: Math.min(i + CHUNK, total), total });
     }
 
-    setResultadoEnvio({ total: detalhes.length, sucesso, erros, detalhes });
+    setResultadoEnvio({
+      total: detalhes.length,
+      sucesso,
+      erros,
+      recuperados_count: recuperadosCount,
+      recuperados_valor: recuperadosValor,
+      lote_id: loteId,
+      detalhes,
+    });
     setEtapa('concluido');
     if (erros === 0) toast.success(`Envio concluído: ${sucesso} mensagens enviadas.`);
     else toast.warning(`Envio finalizado: ${sucesso} ok, ${erros} com erro.`);
-  }, [resultado]);
+  }, [resultado, arquivo]);
 
   // ====== ETAPA 1: UPLOAD ======
   if (etapa === 'upload') {
