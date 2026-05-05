@@ -688,17 +688,27 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
         </div>
         
 
-        {/* Botão finalizar */}
+        {/* Botão finalizar — sticky e destacado para não ficar travado em mobile */}
         {todasEnviadas && (
           <motion.div
+            ref={(el) => {
+              if (el && !finalizandoRef.current) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+            }}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="pt-4"
+            className="sticky bottom-2 z-20 pt-4"
           >
+            <div className="bg-success/10 border border-success/30 rounded-xl p-3 mb-2 text-center">
+              <p className="text-sm font-medium text-success-foreground/90">
+                ✅ Tudo pronto! Confirme para concluir a vistoria.
+              </p>
+            </div>
             <Button
               onClick={handleFinalizar}
               disabled={finalizarMutation.isPending}
-              className="w-full bg-success hover:bg-success/90 text-white"
+              className="w-full bg-success hover:bg-success/90 text-white shadow-lg"
               size="lg"
             >
               {finalizarMutation.isPending ? (
@@ -706,7 +716,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
               ) : (
                 <CheckCircle2 className="h-5 w-5 mr-2" />
               )}
-              Concluir Vistoria
+              Confirmar e Concluir Vistoria
             </Button>
           </motion.div>
         )}
