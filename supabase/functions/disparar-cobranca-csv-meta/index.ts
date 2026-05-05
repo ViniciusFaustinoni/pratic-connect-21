@@ -10,6 +10,7 @@ interface BoletoIn {
   placa: string;
   vencimento: string;
   linha_digitavel: string;
+  valor?: number;
 }
 interface DestinatarioIn {
   nome: string;
@@ -40,16 +41,19 @@ function validarTelefone(t: string): string | null {
   return num;
 }
 
+function normLinha(s: string): string {
+  return (s || "").replace(/\D/g, "");
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
   try {
-    // Autenticação
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ success: false, error: "Não autenticado" }), {
@@ -59,7 +63,8 @@ serve(async (req) => {
     }
     const token = authHeader.slice(7);
     const { data: claims } = await supabase.auth.getClaims(token);
-    if (!claims?.claims?.sub) {
+    const userId = claims?.claims?.sub;
+    if (!userId) {
       return new Response(JSON.stringify({ success: false, error: "Token inválido" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -69,6 +74,11 @@ serve(async (req) => {
     const body = await req.json();
     const templateNome: string = body.template_nome || "cobranca_inadimplencia_pratic";
     const destinatarios: DestinatarioIn[] = body.destinatarios || [];
+    const isFirstChunk: boolean = body.is_first_chunk === true;
+    const isLastChunk: boolean = body.is_last_chunk === true;
+    let loteId: string | null = body.lote_id || null;
+    const nomeArquivo: string = body.nome_arquivo || "cobranca.csv";
+    const totalRemessa: number | undefined = body.total_remessa;
 
     if (!Array.isArray(destinatarios) || destinatarios.length === 0) {
       return new Response(JSON.stringify({ success: false, error: "Lista vazia" }), {
@@ -83,7 +93,137 @@ serve(async (req) => {
       });
     }
 
-    // Buscar config Meta
+    // ===== 1. Criar lote no PRIMEIRO chunk e reconciliar com lote anterior =====
+    let recuperadosCount = 0;
+    let recuperadosValor = 0;
+
+    if (isFirstChunk) {
+      const totalBoletosRemessa = (body.todas_linhas_digitaveis as string[] | undefined)?.length ?? 0;
+      const valorTotalRemessa = typeof totalRemessa === "number" ? totalRemessa : 0;
+      const totalAssoc = (body.total_associados_remessa as number | undefined) ?? destinatarios.length;
+
+      const { data: novoLote, error: errLote } = await supabase
+        .from("cobranca_csv_lotes")
+        .insert({
+          nome_arquivo: nomeArquivo,
+          total_boletos: totalBoletosRemessa,
+          total_associados: totalAssoc,
+          valor_total: valorTotalRemessa,
+          status: "ativo",
+          criado_por: userId,
+        })
+        .select("id")
+        .single();
+      if (errLote || !novoLote) {
+        return new Response(JSON.stringify({ success: false, error: `Falha ao criar lote: ${errLote?.message}` }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      loteId = novoLote.id;
+
+      // Buscar lote anterior ativo (que não seja este recém-criado)
+      const { data: anteriores } = await supabase
+        .from("cobranca_csv_lotes")
+        .select("id")
+        .eq("status", "ativo")
+        .neq("id", loteId)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      const loteAnteriorId = anteriores?.[0]?.id;
+      if (loteAnteriorId && Array.isArray(body.todas_linhas_digitaveis)) {
+        const novaSet = new Set<string>(
+          (body.todas_linhas_digitaveis as string[]).map(normLinha).filter(Boolean),
+        );
+
+        // Buscar boletos do lote anterior em páginas de 1000
+        const recuperadosIds: string[] = [];
+        let valorRec = 0;
+        let from = 0;
+        while (true) {
+          const { data: pageBol } = await supabase
+            .from("cobranca_csv_boletos")
+            .select("id, linha_digitavel, valor, status")
+            .eq("lote_id", loteAnteriorId)
+            .in("status", ["pendente_envio", "enviado"])
+            .range(from, from + 999);
+          if (!pageBol || pageBol.length === 0) break;
+          for (const b of pageBol) {
+            if (!novaSet.has(normLinha(b.linha_digitavel))) {
+              recuperadosIds.push(b.id);
+              valorRec += Number(b.valor || 0);
+            }
+          }
+          if (pageBol.length < 1000) break;
+          from += 1000;
+        }
+
+        if (recuperadosIds.length > 0) {
+          // Atualiza em lotes de 500
+          for (let i = 0; i < recuperadosIds.length; i += 500) {
+            const chunkIds = recuperadosIds.slice(i, i + 500);
+            await supabase
+              .from("cobranca_csv_boletos")
+              .update({
+                status: "recuperado",
+                recuperado_em: new Date().toISOString(),
+                recuperado_no_lote_id: loteId,
+              })
+              .in("id", chunkIds);
+          }
+        }
+
+        // Marca lote anterior como substituido
+        await supabase
+          .from("cobranca_csv_lotes")
+          .update({ status: "substituido" })
+          .eq("id", loteAnteriorId);
+
+        recuperadosCount = recuperadosIds.length;
+        recuperadosValor = valorRec;
+      }
+    }
+
+    if (!loteId) {
+      return new Response(JSON.stringify({ success: false, error: "lote_id ausente" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ===== 2. Persistir os boletos deste chunk =====
+    const boletoRows: any[] = [];
+    for (const dest of destinatarios) {
+      for (const b of dest.boletos || []) {
+        boletoRows.push({
+          lote_id: loteId,
+          matricula: dest.matricula,
+          nome: dest.nome,
+          placa: b.placa || null,
+          vencimento: b.vencimento,
+          linha_digitavel: b.linha_digitavel,
+          valor: typeof b.valor === "number" ? b.valor : 0,
+          telefones: dest.telefones_validos || [],
+          status: "pendente_envio",
+        });
+      }
+    }
+    let boletosInsertedIds: Record<string, string[]> = {}; // matricula -> ids
+    if (boletoRows.length > 0) {
+      const { data: ins } = await supabase
+        .from("cobranca_csv_boletos")
+        .insert(boletoRows)
+        .select("id, matricula");
+      if (ins) {
+        for (const r of ins) {
+          if (!boletosInsertedIds[r.matricula]) boletosInsertedIds[r.matricula] = [];
+          boletosInsertedIds[r.matricula].push(r.id);
+        }
+      }
+    }
+
+    // ===== 3. Buscar config Meta =====
     const { data: config } = await supabase
       .from("whatsapp_meta_config")
       .select("*")
@@ -111,6 +251,7 @@ serve(async (req) => {
     for (const dest of destinatarios) {
       const bloco = montarBlocoBoletos(dest.boletos || []);
       const nome = dest.primeiro_nome || primeiroNome(dest.nome);
+      let envioOkParaEsteAssoc = false;
 
       for (const telRaw of dest.telefones_validos || []) {
         const tel = validarTelefone(telRaw);
@@ -149,7 +290,7 @@ serve(async (req) => {
                 "Content-Type": "application/json",
               },
               body: JSON.stringify(payload),
-            }
+            },
           );
 
           const json = await resp.json();
@@ -157,8 +298,6 @@ serve(async (req) => {
             const errMsg = json?.error?.message || `HTTP ${resp.status}`;
             detalhes.push({ matricula: dest.matricula, nome: dest.nome, telefone: tel, status: "erro", erro: errMsg });
             erros++;
-
-            // Log
             await supabase.from("whatsapp_mensagens").insert({
               direcao: "saida",
               telefone: tel,
@@ -171,8 +310,8 @@ serve(async (req) => {
             }).then(() => {}).catch(() => {});
           } else {
             sucesso++;
+            envioOkParaEsteAssoc = true;
             detalhes.push({ matricula: dest.matricula, nome: dest.nome, telefone: tel, status: "ok" });
-
             await supabase.from("whatsapp_mensagens").insert({
               direcao: "saida",
               telefone: tel,
@@ -189,20 +328,52 @@ serve(async (req) => {
           erros++;
         }
 
-        // throttle ~1 msg/s
         await new Promise((r) => setTimeout(r, 1000));
+      }
+
+      // Se ao menos um telefone deu ok, marca todos os boletos deste assoc deste chunk como enviado
+      if (envioOkParaEsteAssoc) {
+        const ids = boletosInsertedIds[dest.matricula] || [];
+        if (ids.length > 0) {
+          await supabase
+            .from("cobranca_csv_boletos")
+            .update({ status: "enviado", enviado_em: new Date().toISOString() })
+            .in("id", ids);
+        }
       }
     }
 
+    // ===== 4. Atualiza contadores do lote (incremental) =====
+    if (sucesso > 0) {
+      // Best-effort: lê o atual e soma
+      const { data: cur } = await supabase
+        .from("cobranca_csv_lotes")
+        .select("total_enviados")
+        .eq("id", loteId)
+        .single();
+      await supabase
+        .from("cobranca_csv_lotes")
+        .update({ total_enviados: (cur?.total_enviados || 0) + sucesso })
+        .eq("id", loteId);
+    }
+
     return new Response(
-      JSON.stringify({ success: true, sucesso, erros, detalhes }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({
+        success: true,
+        sucesso,
+        erros,
+        detalhes,
+        lote_id: loteId,
+        recuperados_count: recuperadosCount,
+        recuperados_valor: recuperadosValor,
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err: any) {
     console.error("[disparar-cobranca-csv-meta]", err);
     return new Response(
       JSON.stringify({ success: false, error: err.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });
