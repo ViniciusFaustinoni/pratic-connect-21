@@ -34,5 +34,6 @@ export function useImprevistosSemResposta() {
     },
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
+    staleTime: 30_000,
   });
 }

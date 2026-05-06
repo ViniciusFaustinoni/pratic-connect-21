@@ -117,6 +117,8 @@ export function useNotificacoesPreferencias() {
       return data as NotificacoesPreferencias;
     },
     enabled: !!user,
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
   });
 
   return {
