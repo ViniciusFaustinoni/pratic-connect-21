@@ -89,8 +89,13 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   // Search hooks (only for non-migracao types)
   // Substituição usa busca por placa primária; outros tipos buscam por associado
   const isSubstituicao = selectedTipo === 'substituicao';
+  // Detecta formato de placa (Mercosul AAA0A00 ou antiga AAA0000) para
+  // não disparar busca textual local com os dígitos da placa (gera ruído).
+  const PLACA_REGEX_INPUT = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
+  const termoUpperLimpo = (searchTerm || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  const termoEhPlaca = PLACA_REGEX_INPUT.test(termoUpperLimpo);
   const { data: associadoResults, isLoading: loadingAssociados } = useAssociadoSearch(
-    selectedTipo && selectedTipo !== 'migracao' && !isSubstituicao ? searchTerm : ''
+    selectedTipo && selectedTipo !== 'migracao' && !isSubstituicao && !termoEhPlaca ? searchTerm : ''
   );
   const { data: placaResults, isLoading: loadingPlacas } = useBuscaPlaca(
     selectedTipo && selectedTipo !== 'migracao' ? searchTerm : ''
