@@ -1,5 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { useConfiguracoesAll } from './useConfiguracoesAll';
 
 interface LimitesVeiculo {
   fipeLimiteAutorizacao: number;
@@ -19,37 +18,17 @@ const DEFAULTS: LimitesVeiculo = {
   blindadoPolicy: 'autorizar',
 };
 
-const CHAVES = [
-  'fipe_limite_autorizacao',
-  'fipe_limite_autorizacao_moto',
-  'perfil_veiculo_idade_limite',
-  'perfil_veiculo_fipe_minimo',
-  'perfil_veiculo_fipe_maximo',
-  'aceitar_blindado',
-] as const;
-
+/** Lê do cache global (1 fetch para a app inteira). Mantém shape `useQuery`. */
 export function useConfigLimitesVeiculo() {
-  return useQuery<LimitesVeiculo>({
-    queryKey: ['config-limites-veiculo'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('configuracoes')
-        .select('chave, valor')
-        .in('chave', [...CHAVES]);
-
-      if (!data?.length) return DEFAULTS;
-
-      const mapStr = Object.fromEntries(data.map((r) => [r.chave, r.valor]));
-
-      return {
-        fipeLimiteAutorizacao: Number(mapStr['fipe_limite_autorizacao']) || DEFAULTS.fipeLimiteAutorizacao,
-        fipeLimiteAutorizacaoMoto: Number(mapStr['fipe_limite_autorizacao_moto']) || DEFAULTS.fipeLimiteAutorizacaoMoto,
-        idadeLimite: Number(mapStr['perfil_veiculo_idade_limite']) || DEFAULTS.idadeLimite,
-        fipeMinimo: Number(mapStr['perfil_veiculo_fipe_minimo']) || DEFAULTS.fipeMinimo,
-        fipeMaximo: Number(mapStr['perfil_veiculo_fipe_maximo']) || DEFAULTS.fipeMaximo,
-        blindadoPolicy: (mapStr['aceitar_blindado'] as 'autorizar' | 'bloquear') || DEFAULTS.blindadoPolicy,
-      };
-    },
-    staleTime: 5 * 60 * 1000,
-  });
+  const q = useConfiguracoesAll();
+  const map = q.data ?? {};
+  const data: LimitesVeiculo = {
+    fipeLimiteAutorizacao: Number(map['fipe_limite_autorizacao']) || DEFAULTS.fipeLimiteAutorizacao,
+    fipeLimiteAutorizacaoMoto: Number(map['fipe_limite_autorizacao_moto']) || DEFAULTS.fipeLimiteAutorizacaoMoto,
+    idadeLimite: Number(map['perfil_veiculo_idade_limite']) || DEFAULTS.idadeLimite,
+    fipeMinimo: Number(map['perfil_veiculo_fipe_minimo']) || DEFAULTS.fipeMinimo,
+    fipeMaximo: Number(map['perfil_veiculo_fipe_maximo']) || DEFAULTS.fipeMaximo,
+    blindadoPolicy: ((map['aceitar_blindado'] as 'autorizar' | 'bloquear') || DEFAULTS.blindadoPolicy),
+  };
+  return { ...q, data } as typeof q & { data: LimitesVeiculo };
 }
