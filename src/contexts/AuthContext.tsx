@@ -100,48 +100,52 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // ============================================
 
   const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
-    try {
-      const { data, error: fetchError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .maybeSingle();
+    return memoize(PROFILE_PROMISES, userId, async () => {
+      try {
+        const { data, error: fetchError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_id', userId)
+          .maybeSingle();
 
-      if (fetchError) {
-        console.error('Erro ao buscar perfil:', fetchError);
+        if (fetchError) {
+          console.error('Erro ao buscar perfil:', fetchError);
+          return null;
+        }
+
+        // Verificar se usuário está bloqueado
+        if (data?.bloqueado) {
+          await supabase.auth.signOut();
+          throw new Error(`Usuário bloqueado: ${data.motivo_bloqueio || 'Contate o administrador'}`);
+        }
+
+        return data as Profile | null;
+      } catch (err) {
+        console.error('Erro ao buscar perfil:', err);
         return null;
       }
-
-      // Verificar se usuário está bloqueado
-      if (data?.bloqueado) {
-        await supabase.auth.signOut();
-        throw new Error(`Usuário bloqueado: ${data.motivo_bloqueio || 'Contate o administrador'}`);
-      }
-
-      return data as Profile | null;
-    } catch (err) {
-      console.error('Erro ao buscar perfil:', err);
-      return null;
-    }
+    });
   }, []);
 
   const fetchPerfis = useCallback(async (userId: string): Promise<PerfilAcesso[]> => {
-    try {
-      const { data, error: fetchError } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userId);
+    return memoize(PERFIS_PROMISES, userId, async () => {
+      try {
+        const { data, error: fetchError } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', userId);
 
-      if (fetchError) {
-        console.error('Erro ao buscar perfis:', fetchError);
+        if (fetchError) {
+          console.error('Erro ao buscar perfis:', fetchError);
+          return [];
+        }
+
+        return (data || []).map((r: { role: PerfilAcesso }) => r.role);
+      } catch (err) {
+        console.error('Erro ao buscar perfis:', err);
         return [];
       }
-
-      return (data || []).map((r: { role: PerfilAcesso }) => r.role);
-    } catch (err) {
-      console.error('Erro ao buscar perfis:', err);
-      return [];
-    }
+    });
   }, []);
 
   // ============================================
