@@ -233,6 +233,9 @@ export default function DiretoriaDashboard() {
   // Query do rateio atual
   const { data: rateioAtual, isLoading: loadingRateio } = useQuery({
     queryKey: ['rateio-atual-dashboard'],
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const hoje = new Date();
       const { data } = await supabase
