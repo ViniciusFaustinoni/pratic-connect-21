@@ -42,7 +42,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/eventos/dashboard': { label: 'Dashboard' },
   '/eventos/sinistros': { label: 'Sinistros' },
   '/eventos/sla': { label: 'SLA' },
-  '/eventos/chat-ia': { label: 'Chat', parent: 'Relacionamento' },
+  '/eventos/chat-ia': { label: 'Chat' },
   
   // Assistência 24h
   '/assistencia': { label: 'Assistência 24h' },
