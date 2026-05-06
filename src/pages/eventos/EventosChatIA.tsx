@@ -30,7 +30,7 @@ export default function EventosChatIA() {
     queryFn: async () => {
       let q = supabase
         .from('whatsapp_mensagens')
-        .select('telefone, nome_contato, mensagem, created_at, direcao, instancia_id')
+        .select('telefone, nome_contato, mensagem, created_at, direcao, instancia_id, referencia_tipo')
         .order('created_at', { ascending: false })
         .limit(1000);
       if (instanciasAtivas && instanciasAtivas.length > 0) {
