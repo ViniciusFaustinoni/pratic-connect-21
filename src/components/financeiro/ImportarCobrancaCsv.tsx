@@ -164,11 +164,14 @@ export function ImportarCobrancaCsv() {
     let loteId: string | null = null;
     let recuperadosCount = 0;
     let recuperadosValor = 0;
+    let reemitidosCount = 0;
+    let reemitidosValor = 0;
 
-    // Snapshot completo das linhas digitáveis da remessa (para reconciliação no servidor)
+    // Snapshot completo para reconciliação no servidor
     const todasLinhasDigitaveis = resultado.destinatarios.flatMap((d) =>
       d.boletos.map((b) => b.linha_digitavel),
     );
+    const todasMatriculas = resultado.destinatarios.map((d) => d.matricula);
 
     const CHUNK = 50;
     const total = destinatariosValidos.length;
@@ -191,6 +194,7 @@ export function ImportarCobrancaCsv() {
             ...(isFirst
               ? {
                   todas_linhas_digitaveis: todasLinhasDigitaveis,
+                  todas_matriculas: todasMatriculas,
                   total_remessa: resultado.valor_total,
                   total_associados_remessa: resultado.total_associados,
                 }
@@ -204,6 +208,8 @@ export function ImportarCobrancaCsv() {
         if (data.lote_id) loteId = data.lote_id;
         if (typeof data.recuperados_count === 'number') recuperadosCount += data.recuperados_count;
         if (typeof data.recuperados_valor === 'number') recuperadosValor += data.recuperados_valor;
+        if (typeof data.reemitidos_count === 'number') reemitidosCount += data.reemitidos_count;
+        if (typeof data.reemitidos_valor === 'number') reemitidosValor += data.reemitidos_valor;
         if (Array.isArray(data.detalhes)) detalhes.push(...data.detalhes);
       } catch (e: any) {
         for (const d of slice) {
@@ -222,6 +228,8 @@ export function ImportarCobrancaCsv() {
       erros,
       recuperados_count: recuperadosCount,
       recuperados_valor: recuperadosValor,
+      reemitidos_count: reemitidosCount,
+      reemitidos_valor: reemitidosValor,
       lote_id: loteId,
       detalhes,
     });
