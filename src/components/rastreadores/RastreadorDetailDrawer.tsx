@@ -164,7 +164,34 @@ export function RastreadorDetailDrawer({
     setComandoDialog({ open: false, tipo: 'bloquear' });
   };
 
+  const [reconciliando, setReconciliando] = useState(false);
+  const [reconciliarPreview, setReconciliarPreview] = useState<any>(null);
+
+  const handleReconciliarSoftruck = async (apply: boolean) => {
+    if (!rastreadorId) return;
+    setReconciliando(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('rastreador-reconciliar-softruck', {
+        body: { rastreador_id: rastreadorId, action: apply ? 'apply' : 'check' },
+      });
+      if (error) throw error;
+      const { toast } = await import('sonner');
+      if (apply) {
+        setReconciliarPreview(null);
+        toast.success('Reconciliação concluída — vínculo limpo.');
+      } else {
+        setReconciliarPreview(data);
+      }
+    } catch (e: any) {
+      const { toast } = await import('sonner');
+      toast.error(e?.message || 'Falha ao reconciliar');
+    } finally {
+      setReconciliando(false);
+    }
+  };
+
   const isInstalled = rastreador?.status === 'instalado';
+  const hasDivergencia = (rastreador as any)?.softruck_integration_status === 'DIVERGENCIA_DESVINCULO';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
