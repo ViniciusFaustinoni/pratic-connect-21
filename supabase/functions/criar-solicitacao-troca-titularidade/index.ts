@@ -132,6 +132,26 @@ Deno.serve(async (req) => {
       .single();
     if (solErr) throw solErr;
 
+    // Disparo automático do termo de cancelamento (best-effort, NÃO bloqueia criação).
+    // Reaproveita 100% a edge `enviar-termo-cancelamento-troca`. Timeout de 12s
+    // para não travar a UI caso Autentique/WhatsApp estejam lentos.
+    let termo_enviado_automaticamente = false;
+    let termo_envio_erro: string | null = null;
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 12000);
+      const resp = await admin.functions.invoke('enviar-termo-cancelamento-troca', {
+        body: { solicitacao_id: solicitacao.id },
+      });
+      clearTimeout(t);
+      if (resp.error) throw resp.error;
+      if ((resp.data as any)?.error) throw new Error((resp.data as any).error);
+      termo_enviado_automaticamente = true;
+    } catch (envErr) {
+      termo_envio_erro = envErr instanceof Error ? envErr.message : 'Falha desconhecida';
+      console.error('[criar-solicitacao-troca] envio automático do termo falhou:', termo_envio_erro);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -139,6 +159,8 @@ Deno.serve(async (req) => {
         cotacao_id: cotacao.id,
         cotacao_token: cotacao.token_publico,
         solicitacao_token: solicitacao.token_publico,
+        termo_enviado_automaticamente,
+        termo_envio_erro,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

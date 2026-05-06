@@ -102,7 +102,7 @@ export function useCriarSolicitacaoTroca() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      return data as { solicitacao_id: string; cotacao_id: string; cotacao_token: string };
+      return data as { solicitacao_id: string; cotacao_id: string; cotacao_token: string; termo_enviado_automaticamente?: boolean; termo_envio_erro?: string | null };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
