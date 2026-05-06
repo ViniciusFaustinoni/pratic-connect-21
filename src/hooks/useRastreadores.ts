@@ -532,7 +532,6 @@ export function useVeiculosSemRastreador() {
     queryFn: async () => {
       // Get vehicles that don't have an installed tracker
       // status='instalado' é a verdade primária — sempre tem veiculo_id preenchido.
-      // Não filtramos por veiculo_id IS NOT NULL para deixar a regra explícita.
       const { data: veiculosComRastreador, error: rastrError } = await supabase
         .from('rastreadores')
         .select('veiculo_id')
@@ -540,25 +539,27 @@ export function useVeiculosSemRastreador() {
 
       if (rastrError) throw rastrError;
 
-      const veiculosIds = veiculosComRastreador.map(r => r.veiculo_id).filter(Boolean) as string[];
+      const veiculosComRastreadorSet = new Set(
+        (veiculosComRastreador || [])
+          .map(r => r.veiculo_id)
+          .filter(Boolean) as string[]
+      );
 
-      let query = supabase
+      // Fix: a query antiga `id=not.in.(uuid1,uuid2,...)` quebrava com 400
+      // quando a lista passava de ~80 IDs (URL > 8KB). Agora buscamos todos
+      // os veículos ativos e filtramos no client com um Set (O(1) por item).
+      const { data, error } = await supabase
         .from('veiculos')
         .select('*, associados(*)')
         .eq('ativo', true)
         .order('placa');
 
-      if (veiculosIds.length > 0) {
-        query = query.not('id', 'in', `(${veiculosIds.join(',')})`);
-      }
-
-      const { data, error } = await query;
-
       if (error) throw error;
-      return data;
+      return (data || []).filter(v => !veiculosComRastreadorSet.has(v.id));
     },
   });
 }
+
 
 // Rastreadores disponíveis (em estoque) - fetches all stock items (no pagination)
 export function useRastreadoresDisponiveis() {
