@@ -25,6 +25,39 @@ import {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // ============================================
+// MODULE-LEVEL DEDUPE (StrictMode + recoverAndRefresh)
+// ============================================
+// Em desenvolvimento o StrictMode monta o AuthProvider duas vezes, e o
+// próprio Supabase pode emitir SIGNED_IN várias vezes (recoverAndRefresh).
+// Cada montagem cria sua própria closure e dispararia fetches duplicados de
+// profile/user_roles. Para evitar isso, mantemos um cache de Promises por
+// user_id em escopo de módulo — qualquer chamada repetida em < 30s reutiliza
+// a mesma in-flight request.
+const PROFILE_PROMISES = new Map<string, { p: Promise<any>; t: number }>();
+const PERFIS_PROMISES = new Map<string, { p: Promise<any>; t: number }>();
+const DEDUPE_TTL = 30_000;
+
+function memoize<T>(
+  cache: Map<string, { p: Promise<T>; t: number }>,
+  key: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const now = Date.now();
+  const hit = cache.get(key);
+  if (hit && now - hit.t < DEDUPE_TTL) return hit.p;
+  const p = fn().finally(() => {
+    // Mantém por TTL para servir chamadas tardias sem disparar nova req
+    setTimeout(() => {
+      const cur = cache.get(key);
+      if (cur && cur.p === p) cache.delete(key);
+    }, DEDUPE_TTL);
+  });
+  cache.set(key, { p, t: now });
+  return p;
+}
+
+
+// ============================================
 // PROVIDER PROPS
 // ============================================
 interface AuthProviderProps {
