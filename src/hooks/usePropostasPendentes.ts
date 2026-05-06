@@ -486,10 +486,11 @@ export function usePropostasPendentes() {
         const associado = contrato.associado_id ? mAssociado.get(contrato.associado_id) : null;
         const veiculoContrato = contrato.veiculo_id ? mVeiculo.get(contrato.veiculo_id) : null;
 
+        // Esconde propostas já concluídas: associado e veículo ambos 'ativo'
+        // (não há mais nada para o Cadastro fazer aqui).
         const propostaJaConcluida =
           associado?.status === 'ativo' &&
-          veiculoContrato?.status === 'ativo' &&
-          veiculoContrato?.cobertura_total === true;
+          veiculoContrato?.status === 'ativo';
         if (propostaJaConcluida) return null;
 
         const plano = contrato.plano_id ? mPlano.get(contrato.plano_id) : null;
