@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
 
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const AUTENTIQUE_TOKEN = Deno.env.get('AUTENTIQUE_API_TOKEN');
+    const AUTENTIQUE_TOKEN = Deno.env.get('AUTENTIQUE_API_KEY');
 
     if (!AUTENTIQUE_TOKEN) {
       return new Response(JSON.stringify({ error: 'Autentique não configurado' }), {
