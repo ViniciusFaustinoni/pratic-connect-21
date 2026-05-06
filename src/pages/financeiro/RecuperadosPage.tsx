@@ -32,6 +32,7 @@ interface Lote {
   total_associados: number;
   valor_total: number;
   total_enviados: number;
+  total_associados_atingidos: number;
   status: string;
   created_at: string;
 }
