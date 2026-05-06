@@ -351,7 +351,7 @@ function BeneficiosTable({ loading, items, onShowDetalhe, cached, total }: Table
           </TableBody>
         </Table>
       </div>
-    </>
+    </div>
   );
 }
 
