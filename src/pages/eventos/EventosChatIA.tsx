@@ -16,7 +16,8 @@ export default function EventosChatIA() {
       const { data, error } = await supabase
         .from('whatsapp_instancias')
         .select('id')
-        .eq('ativa', true);
+        .eq('ativa', true)
+        .in('provedor', ['evolution', 'meta']); // somente provedores WhatsApp
       if (error) throw error;
       return (data ?? []).map((d) => d.id);
     },
