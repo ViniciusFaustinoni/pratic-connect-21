@@ -114,7 +114,22 @@ export default function PropostasPendentes() {
   const { mutate: deleteAssociado, isPending: isExcluindo } = useDeleteAssociado();
 
   const { data: propostas, isLoading: propostasLoading, refetch } = usePropostasPendentes();
-  const { data: stats, isLoading: statsLoading } = usePropostaStats();
+  const { data: statsRaw, isLoading: statsLoading } = usePropostaStats();
+
+  // KPIs "Aguardando" e "Em Análise" devem refletir EXATAMENTE a lista exibida
+  // (a query de stats não aplica os mesmos filtros de sincronização Hinova / instalação concluída,
+  // então usamos os dados já filtrados pela lista para evitar divergência).
+  const stats = (() => {
+    if (!propostas) return statsRaw;
+    const aguardando = propostas.filter(p => p.status === 'assinado').length;
+    const emAnalise = propostas.filter(p => p.status === 'em_analise').length;
+    return {
+      aguardando,
+      emAnalise,
+      aprovadosHoje: statsRaw?.aprovadosHoje || 0,
+      reprovadosHoje: statsRaw?.reprovadosHoje || 0,
+    };
+  })();
 
   // Função para ativar rastreador (mantida sem alteração)
   const handleAtivarRastreador = async (proposta: PropostaPendente) => {
