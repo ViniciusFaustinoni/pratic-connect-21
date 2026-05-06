@@ -234,7 +234,7 @@ const menuConfig: {
           url: '/monitoramento/aprovacoes-monitoramento',
           icon: ShieldAlert,
         },
-        { title: 'Prestadores Parceiros', url: '/monitoramento/prestadores-parceiros', icon: Truck },
+        // Prestadores Parceiros movido para aba dentro de "Equipe"
         { title: 'Veículos', url: '/cadastro/veiculos', icon: Car },
       ],
     },

@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useMemo, lazy, Suspense, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { PlantoesCalendario } from '@/components/equipe/PlantoesCalendario';
-import { Plus, Loader2, Users, Sparkles, CalendarDays, Wrench, Headphones } from 'lucide-react';
+import { Plus, Loader2, Users, Sparkles, CalendarDays, Wrench, Headphones, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Breadcrumb,
@@ -21,7 +21,19 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
+const PrestadoresParceirosTab = lazy(() => import('./PrestadoresParceiros'));
+
 export default function Equipe() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get('tab');
+  const [mainTab, setMainTabState] = useState<string>(tabFromUrl || 'equipe');
+  const setMainTab = (v: string) => {
+    setMainTabState(v);
+    const next = new URLSearchParams(searchParams);
+    if (v === 'equipe') next.delete('tab'); else next.set('tab', v);
+    setSearchParams(next, { replace: true });
+  };
+  useEffect(() => { if (tabFromUrl && tabFromUrl !== mainTab) setMainTabState(tabFromUrl); }, [tabFromUrl]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [statusOperacionalFilter, setStatusOperacionalFilter] = useState<string>('todos');
@@ -209,8 +221,8 @@ export default function Equipe() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="equipe" className="w-full">
-        <TabsList className="w-full sm:w-auto grid grid-cols-2 sm:inline-flex">
+      <Tabs value={mainTab} onValueChange={setMainTab} className="w-full">
+        <TabsList className="w-full sm:w-auto grid grid-cols-3 sm:inline-flex">
           <TabsTrigger value="equipe" className="gap-2">
             <Users className="h-4 w-4" />
             Equipe
@@ -218,6 +230,10 @@ export default function Equipe() {
           <TabsTrigger value="plantoes" className="gap-2">
             <CalendarDays className="h-4 w-4" />
             Plantões
+          </TabsTrigger>
+          <TabsTrigger value="prestadores" className="gap-2">
+            <Truck className="h-4 w-4" />
+            Prestadores Parceiros
           </TabsTrigger>
         </TabsList>
 
@@ -305,6 +321,12 @@ export default function Equipe() {
 
         <TabsContent value="plantoes" className="mt-4">
           <PlantoesCalendario />
+        </TabsContent>
+
+        <TabsContent value="prestadores" className="mt-4">
+          <Suspense fallback={<div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
+            <PrestadoresParceirosTab />
+          </Suspense>
         </TabsContent>
       </Tabs>
 

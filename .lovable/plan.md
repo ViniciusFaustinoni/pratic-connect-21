@@ -1,25 +1,21 @@
-## Mover "Mapa" para dentro de Serviços de Campo
+## Mover "Prestadores Parceiros" para dentro de Equipe
 
-Hoje **Mapa** é um item separado no menu lateral em `Monitoramento` (`/monitoramento/mapa`). A pedido, ele passa a ser uma **aba** dentro da página `Serviços de Campo` (`/monitoramento/vistorias-instalacoes-mon`), junto de Serviços, Aprovar Fotos e Histórico.
+Hoje **Prestadores Parceiros** é item separado no menu lateral em `Monitoramento` (`/monitoramento/prestadores-parceiros`). Passa a ser uma **aba** dentro da página `Equipe` (`/monitoramento/equipe`), ao lado de "Equipe" e "Plantões".
 
 ### Alterações
 
-1. **`src/pages/monitoramento/VistoriasInstalacoesMon.tsx`**
-   - Importar `Mapa` via `lazy(() => import('./Mapa'))` e ícone `Map`.
-   - Adicionar `<TabsTrigger value="mapa">` (Mapa) na lista de abas.
-   - Adicionar `<TabsContent value="mapa">` renderizando `<Mapa />` dentro de `Suspense`.
-   - Posição da aba: logo após "Serviços".
+1. **`src/pages/monitoramento/Equipe.tsx`**
+   - Importar `lazy(() => import('./PrestadoresParceiros'))` e ícone `Truck`.
+   - Adicionar `<TabsTrigger value="prestadores">` após "Plantões".
+   - Adicionar `<TabsContent value="prestadores">` renderizando `<PrestadoresParceirosTab />` dentro de `Suspense`.
+   - Trocar `defaultValue` por `value`/`onValueChange` controlado, com leitura de `?tab=` (`useSearchParams`) — assim `/monitoramento/equipe?tab=prestadores` abre direto a aba.
 
 2. **`src/components/layout/AppSidebar.tsx`**
-   - Remover o item `Mapa` do grupo Monitoramento (linhas 220-224).
+   - Remover o item `Prestadores Parceiros` do grupo Monitoramento (linha 241).
 
 3. **`src/App.tsx`**
-   - Manter a rota `/monitoramento/mapa` como redirect para `/monitoramento/vistorias-instalacoes-mon?tab=mapa` para não quebrar links externos/breadcrumbs salvos.
-   - Atualizar `VistoriasInstalacoesMon` para ler `?tab=` e abrir a aba correspondente quando vier `tab=mapa`.
-
-4. **`src/components/layout/GlobalBreadcrumb.tsx`**
-   - Remover entrada específica de `/monitoramento/mapa` se existir (manter o redirect cuidando disso).
+   - Trocar a rota `/monitoramento/prestadores-parceiros` por `<Navigate to="/monitoramento/equipe?tab=prestadores" replace />` para preservar links salvos.
 
 ### Fora de escopo
-- Mudanças visuais/funcionais dentro do componente `Mapa` em si.
-- Permissões: a aba herda as mesmas permissões de Serviços de Campo (`canManageInstalacoes`).
+- Mudanças visuais/funcionais dentro do componente `PrestadoresParceiros` em si.
+- Permissões: a aba herda as mesmas da página Equipe.

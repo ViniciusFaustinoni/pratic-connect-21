@@ -673,7 +673,7 @@ const App = () => (
               <Route path="/monitoramento/aprovacao-associados" element={<AprovacaoAssociadosMonitoramento />} />
               <Route path="/monitoramento/aprovacao-associados/:id" element={<AprovacaoInstalacaoDetalhe />} />
               <Route path="/monitoramento/imprevistos" element={<ImprevistosPainel />} />
-              <Route path="/monitoramento/prestadores-parceiros" element={<PrestadoresParceiros />} />
+              <Route path="/monitoramento/prestadores-parceiros" element={<Navigate to="/monitoramento/equipe?tab=prestadores" replace />} />
               <Route path="/monitoramento/aprovacoes" element={<AprovacoesTroca />} />
               <Route path="/monitoramento/liberacoes-autovistoria" element={<LiberacoesAutoVistoria />} />
               <Route path="/monitoramento/aprovacoes-monitoramento" element={<AprovacoesUnificadas />} />
