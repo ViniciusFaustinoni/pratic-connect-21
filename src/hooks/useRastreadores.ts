@@ -431,7 +431,37 @@ export function useUpdateRastreadorStatus() {
           } catch (error) {
             console.error('Exceção ao desvincular Softruck:', error);
           }
+
+          // Também desvincula TODOS os usuários do veículo na Softtruck.
+          // Regra de negócio: a retirada física do rastreador é o gatilho para
+          // remover o acesso do(s) usuário(s) ao veículo. Cancelamento sem
+          // retirada NÃO dispara este caminho (status do rastreador não muda).
+          try {
+            const { data: veic } = await supabase
+              .from('veiculos')
+              .select('softruck_vehicle_id')
+              .eq('id', rastreadorAtual.veiculo_id)
+              .maybeSingle();
+
+            const softruckVehicleId = (veic as any)?.softruck_vehicle_id;
+            if (softruckVehicleId) {
+              const { error: usrError } = await supabase.functions.invoke('softruck-api', {
+                body: {
+                  operation: 'desassociar-todos-usuarios-veiculo',
+                  data: { vehicleId: softruckVehicleId },
+                },
+              });
+              if (usrError) {
+                console.error('Erro ao desvincular usuários Softruck:', usrError);
+              }
+            } else {
+              console.warn('Veículo sem softruck_vehicle_id — pulando desvínculo de usuários');
+            }
+          } catch (error) {
+            console.error('Exceção ao desvincular usuários Softruck:', error);
+          }
         }
+
       }
 
       // 3. Atualizar banco local
