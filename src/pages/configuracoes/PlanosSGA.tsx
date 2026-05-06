@@ -311,7 +311,7 @@ function BeneficiosTable({ loading, items, onShowDetalhe, cached, total }: Table
     );
   }
   return (
-    <>
+    <div>
       <MetaLine cached={cached} mostrando={items.length} total={total} />
       <div className="rounded-md border">
         <Table>
