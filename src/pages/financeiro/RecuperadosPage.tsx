@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TrendingUp, FileSpreadsheet, Search, Loader2 } from 'lucide-react';
@@ -20,6 +22,7 @@ interface Recuperado {
   recuperado_em: string;
   lote_id: string;
   recuperado_no_lote_id: string | null;
+  motivo_recuperacao: string | null;
 }
 
 interface Lote {
@@ -29,6 +32,7 @@ interface Lote {
   total_associados: number;
   valor_total: number;
   total_enviados: number;
+  total_associados_atingidos: number;
   status: string;
   created_at: string;
 }
@@ -73,6 +77,7 @@ function gerarOpcoesPeriodo(): { value: string; label: string }[] {
 export default function RecuperadosPage() {
   const [periodo, setPeriodo] = useState<string>(getDefaultPeriodo());
   const [busca, setBusca] = useState('');
+  const [incluirReemitidos, setIncluirReemitidos] = useState(false);
   const [loading, setLoading] = useState(true);
   const [recuperados, setRecuperados] = useState<Recuperado[]>([]);
   const [lotes, setLotes] = useState<Lote[]>([]);
@@ -86,7 +91,7 @@ export default function RecuperadosPage() {
       const [{ data: rec, error: e1 }, { data: lts, error: e2 }] = await Promise.all([
         supabase
           .from('cobranca_csv_boletos')
-          .select('id, matricula, nome, placa, vencimento, linha_digitavel, valor, recuperado_em, lote_id, recuperado_no_lote_id')
+          .select('id, matricula, nome, placa, vencimento, linha_digitavel, valor, recuperado_em, lote_id, recuperado_no_lote_id, motivo_recuperacao')
           .eq('status', 'recuperado')
           .gte('recuperado_em', inicio)
           .lt('recuperado_em', fim)
@@ -94,7 +99,7 @@ export default function RecuperadosPage() {
           .limit(2000),
         supabase
           .from('cobranca_csv_lotes')
-          .select('id, nome_arquivo, total_boletos, total_associados, valor_total, total_enviados, status, created_at')
+          .select('id, nome_arquivo, total_boletos, total_associados, valor_total, total_enviados, total_associados_atingidos, status, created_at')
           .order('created_at', { ascending: false })
           .limit(50),
       ]);
@@ -114,14 +119,20 @@ export default function RecuperadosPage() {
 
   const filtrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
-    if (!q) return recuperados;
-    return recuperados.filter(
+    let base = recuperados;
+    // Por padrão só conta recuperação real (associado sumiu da nova lista).
+    // Toggle inclui também os boletos reemitidos (mesma matrícula, nova linha digitável).
+    if (!incluirReemitidos) {
+      base = base.filter((r) => (r.motivo_recuperacao || 'ausente_na_nova_lista') === 'ausente_na_nova_lista');
+    }
+    if (!q) return base;
+    return base.filter(
       (r) =>
         r.nome.toLowerCase().includes(q) ||
         r.matricula.toLowerCase().includes(q) ||
         (r.placa || '').toLowerCase().includes(q),
     );
-  }, [recuperados, busca]);
+  }, [recuperados, busca, incluirReemitidos]);
 
   const kpis = useMemo(() => {
     const total = filtrados.reduce((s, r) => s + Number(r.valor || 0), 0);
@@ -176,6 +187,10 @@ export default function RecuperadosPage() {
               <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input className="pl-9" placeholder="Nome, matrícula ou placa..." value={busca} onChange={(e) => setBusca(e.target.value)} />
             </div>
+          </div>
+          <div className="flex items-center gap-2 pb-2">
+            <Switch id="incluir-reemitidos" checked={incluirReemitidos} onCheckedChange={setIncluirReemitidos} />
+            <Label htmlFor="incluir-reemitidos" className="text-xs cursor-pointer">Incluir reemitidos</Label>
           </div>
           <Button onClick={exportarCsv} variant="outline" className="gap-2">
             <FileSpreadsheet className="h-4 w-4" /> Exportar CSV
@@ -251,7 +266,8 @@ export default function RecuperadosPage() {
                   <TableHead className="text-right">Boletos</TableHead>
                   <TableHead className="text-right">Associados</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
-                  <TableHead className="text-right">Enviados</TableHead>
+                  <TableHead className="text-right">Atingidos</TableHead>
+                  <TableHead className="text-right">Mensagens</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -263,14 +279,15 @@ export default function RecuperadosPage() {
                     <TableCell className="text-right">{l.total_boletos}</TableCell>
                     <TableCell className="text-right">{l.total_associados}</TableCell>
                     <TableCell className="text-right">{fmtBRL(Number(l.valor_total || 0))}</TableCell>
+                    <TableCell className="text-right">{l.total_associados_atingidos ?? 0}</TableCell>
                     <TableCell className="text-right">{l.total_enviados}</TableCell>
                     <TableCell>
-                      <Badge variant={l.status === 'ativo' ? 'default' : 'outline'}>{l.status}</Badge>
+                      <Badge variant={l.status === 'ativo' ? 'default' : l.status === 'processando' ? 'secondary' : 'outline'}>{l.status}</Badge>
                     </TableCell>
                   </TableRow>
                 ))}
                 {lotes.length === 0 && (
-                  <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground p-6">Nenhum lote importado ainda.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground p-6">Nenhum lote importado ainda.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>

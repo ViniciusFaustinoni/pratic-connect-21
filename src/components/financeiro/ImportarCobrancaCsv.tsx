@@ -25,8 +25,20 @@ interface ResultadoEnvio {
   erros: number;
   recuperados_count: number;
   recuperados_valor: number;
+  reemitidos_count: number;
+  reemitidos_valor: number;
   lote_id: string | null;
   detalhes: Array<{ matricula: string; nome: string; telefone: string; status: 'ok' | 'erro'; erro?: string }>;
+}
+
+interface PreviewReconciliacao {
+  loading: boolean;
+  loteAnteriorId: string | null;
+  loteAnteriorNome: string | null;
+  ausentes: number;
+  ausentesValor: number;
+  reemitidos: number;
+  reemitidosValor: number;
 }
 
 function formatBRL(v: number): string {
@@ -40,7 +52,69 @@ export function ImportarCobrancaCsv() {
   const [progresso, setProgresso] = useState({ atual: 0, total: 0 });
   const [resultadoEnvio, setResultadoEnvio] = useState<ResultadoEnvio | null>(null);
   const [confirmAberto, setConfirmAberto] = useState(false);
+  const [reconciliacao, setReconciliacao] = useState<PreviewReconciliacao | null>(null);
   const cancelarRef = useRef(false);
+
+  const reiniciar = useCallback(() => {
+    setEtapa('upload');
+    setArquivo(null);
+    setResultado(null);
+    setResultadoEnvio(null);
+    setReconciliacao(null);
+    setProgresso({ atual: 0, total: 0 });
+    cancelarRef.current = false;
+  }, []);
+
+  // Preview de reconciliação client-side: mostra antes do disparo quantos
+  // boletos da lista anterior NÃO estão nesta nova → serão marcados como recuperados.
+  const carregarPreviewReconciliacao = useCallback(async (parsed: ParseResultado) => {
+    setReconciliacao({ loading: true, loteAnteriorId: null, loteAnteriorNome: null, ausentes: 0, ausentesValor: 0, reemitidos: 0, reemitidosValor: 0 });
+    try {
+      const { data: lotes } = await supabase
+        .from('cobranca_csv_lotes')
+        .select('id, nome_arquivo')
+        .eq('status', 'ativo')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      const loteAnterior = lotes?.[0];
+      if (!loteAnterior) {
+        setReconciliacao({ loading: false, loteAnteriorId: null, loteAnteriorNome: null, ausentes: 0, ausentesValor: 0, reemitidos: 0, reemitidosValor: 0 });
+        return;
+      }
+      const novaLinhas = new Set(parsed.destinatarios.flatMap((d) => d.boletos.map((b) => (b.linha_digitavel || '').replace(/\D/g, ''))).filter(Boolean));
+      const novaMatriculas = new Set(parsed.destinatarios.map((d) => (d.matricula || '').trim()).filter(Boolean));
+      let ausentes = 0, ausentesValor = 0, reemitidos = 0, reemitidosValor = 0;
+      let from = 0;
+      while (true) {
+        const { data: page } = await supabase
+          .from('cobranca_csv_boletos')
+          .select('matricula, linha_digitavel, valor')
+          .eq('lote_id', loteAnterior.id)
+          .in('status', ['pendente_envio', 'enviado'])
+          .range(from, from + 999);
+        if (!page || page.length === 0) break;
+        for (const b of page) {
+          const ld = (b.linha_digitavel || '').replace(/\D/g, '');
+          if (novaLinhas.has(ld)) continue;
+          if (novaMatriculas.has((b.matricula || '').trim())) {
+            reemitidos++; reemitidosValor += Number(b.valor || 0);
+          } else {
+            ausentes++; ausentesValor += Number(b.valor || 0);
+          }
+        }
+        if (page.length < 1000) break;
+        from += 1000;
+      }
+      setReconciliacao({
+        loading: false,
+        loteAnteriorId: loteAnterior.id,
+        loteAnteriorNome: loteAnterior.nome_arquivo,
+        ausentes, ausentesValor, reemitidos, reemitidosValor,
+      });
+    } catch {
+      setReconciliacao({ loading: false, loteAnteriorId: null, loteAnteriorNome: null, ausentes: 0, ausentesValor: 0, reemitidos: 0, reemitidosValor: 0 });
+    }
+  }, []);
 
   const onDrop = useCallback(async (files: File[]) => {
     const f = files[0];
@@ -60,27 +134,18 @@ export function ImportarCobrancaCsv() {
       }
       setResultado(r);
       setEtapa('preview');
+      void carregarPreviewReconciliacao(r);
     } catch (e: any) {
       toast.error(`Erro ao ler CSV: ${e.message}`);
       setArquivo(null);
     }
-  }, []);
+  }, [carregarPreviewReconciliacao]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: { 'text/csv': ['.csv'], 'application/vnd.ms-excel': ['.csv'] },
     maxFiles: 1,
   });
-
-  const reiniciar = () => {
-    setEtapa('upload');
-    setArquivo(null);
-    setResultado(null);
-    setResultadoEnvio(null);
-    setProgresso({ atual: 0, total: 0 });
-    cancelarRef.current = false;
-  };
-
   const dispararEnvio = useCallback(async () => {
     if (!resultado) return;
     const destinatariosValidos = resultado.destinatarios.filter((d) => d.telefones_validos.length > 0);
@@ -99,11 +164,14 @@ export function ImportarCobrancaCsv() {
     let loteId: string | null = null;
     let recuperadosCount = 0;
     let recuperadosValor = 0;
+    let reemitidosCount = 0;
+    let reemitidosValor = 0;
 
-    // Snapshot completo das linhas digitáveis da remessa (para reconciliação no servidor)
+    // Snapshot completo para reconciliação no servidor
     const todasLinhasDigitaveis = resultado.destinatarios.flatMap((d) =>
       d.boletos.map((b) => b.linha_digitavel),
     );
+    const todasMatriculas = resultado.destinatarios.map((d) => d.matricula);
 
     const CHUNK = 50;
     const total = destinatariosValidos.length;
@@ -126,6 +194,7 @@ export function ImportarCobrancaCsv() {
             ...(isFirst
               ? {
                   todas_linhas_digitaveis: todasLinhasDigitaveis,
+                  todas_matriculas: todasMatriculas,
                   total_remessa: resultado.valor_total,
                   total_associados_remessa: resultado.total_associados,
                 }
@@ -139,6 +208,8 @@ export function ImportarCobrancaCsv() {
         if (data.lote_id) loteId = data.lote_id;
         if (typeof data.recuperados_count === 'number') recuperadosCount += data.recuperados_count;
         if (typeof data.recuperados_valor === 'number') recuperadosValor += data.recuperados_valor;
+        if (typeof data.reemitidos_count === 'number') reemitidosCount += data.reemitidos_count;
+        if (typeof data.reemitidos_valor === 'number') reemitidosValor += data.reemitidos_valor;
         if (Array.isArray(data.detalhes)) detalhes.push(...data.detalhes);
       } catch (e: any) {
         for (const d of slice) {
@@ -157,6 +228,8 @@ export function ImportarCobrancaCsv() {
       erros,
       recuperados_count: recuperadosCount,
       recuperados_valor: recuperadosValor,
+      reemitidos_count: reemitidosCount,
+      reemitidos_valor: reemitidosValor,
       lote_id: loteId,
       detalhes,
     });
@@ -237,6 +310,45 @@ export function ImportarCobrancaCsv() {
             Financeiro › Cobranças › Recuperados. Apenas os boletos desta nova lista receberão WhatsApp.
           </AlertDescription>
         </Alert>
+
+        {/* Preview de reconciliação contra o lote anterior */}
+        {reconciliacao && reconciliacao.loading && (
+          <Alert>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <AlertDescription>Comparando com o lote anterior...</AlertDescription>
+          </Alert>
+        )}
+        {reconciliacao && !reconciliacao.loading && reconciliacao.loteAnteriorId && (
+          <Alert className="border-green-600/40 bg-green-600/5">
+            <Check className="h-4 w-4 text-green-600" />
+            <AlertDescription>
+              <div className="space-y-1">
+                <p>
+                  Comparado com o último lote ativo (<code className="text-xs bg-muted px-1 rounded">{reconciliacao.loteAnteriorNome}</code>):
+                </p>
+                <ul className="list-disc pl-5 text-sm">
+                  <li>
+                    <strong className="text-green-600">{reconciliacao.ausentes} boleto(s)</strong> da lista anterior
+                    NÃO estão nesta nova → serão marcados como <strong>recuperados</strong> ({formatBRL(reconciliacao.ausentesValor)}).
+                  </li>
+                  {reconciliacao.reemitidos > 0 && (
+                    <li className="text-muted-foreground">
+                      {reconciliacao.reemitidos} boleto(s) tiveram a linha digitável trocada (mesma matrícula → <em>reemitido</em>, {formatBRL(reconciliacao.reemitidosValor)}). Não contam como recuperação real.
+                    </li>
+                  )}
+                </ul>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+        {reconciliacao && !reconciliacao.loading && !reconciliacao.loteAnteriorId && (
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Nenhum lote anterior encontrado — esta é a primeira importação. As próximas comparações serão feitas a partir deste lote.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Tabela preview */}
         <Card>
