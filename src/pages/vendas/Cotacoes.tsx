@@ -212,6 +212,7 @@ export default function Cotacoes() {
       const newParams = new URLSearchParams();
       setSearchParams(newParams, { replace: true });
     } else if (novoParam === 'true') {
+      setNovaEntradaMounted(true);
       setShowNovaEntrada(true);
       searchParams.delete('novo');
       setSearchParams(searchParams, { replace: true });
