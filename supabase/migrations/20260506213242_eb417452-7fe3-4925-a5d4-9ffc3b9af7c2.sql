@@ -1,0 +1,2 @@
+ALTER TABLE public.associados ADD COLUMN IF NOT EXISTS softruck_user_id text;
+CREATE INDEX IF NOT EXISTS idx_associados_softruck_user_id ON public.associados(softruck_user_id) WHERE softruck_user_id IS NOT NULL;
