@@ -26,6 +26,7 @@ const tipos = [
 export function CampanhaFormDialog({ open, onClose, campanha }: CampanhaFormDialogProps) {
   const [nome, setNome] = useState('');
   const [tipo, setTipo] = useState('aquisicao');
+  const [canalId, setCanalId] = useState<string>('none');
   
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
@@ -36,7 +37,7 @@ export function CampanhaFormDialog({ open, onClose, campanha }: CampanhaFormDial
   const [utmCampaign, setUtmCampaign] = useState('');
   const [observacoes, setObservacoes] = useState('');
 
-  
+  const { data: canais } = useCanais({ ativo: true });
   const createMutation = useCreateCampanha();
   const updateMutation = useUpdateCampanha();
 
