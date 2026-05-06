@@ -137,6 +137,9 @@ export default function DiretoriaDashboard() {
   // Query de evolução mensal
   const { data: evolucao, isLoading: loadingEvolucao } = useQuery({
     queryKey: ['evolucao-mensal'],
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const { data } = await supabase
         .from('indicadores_atuariais')
