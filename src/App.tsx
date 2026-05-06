@@ -261,6 +261,8 @@ const JornadasProfissionais = lazy(() => import("./pages/rh/JornadasProfissionai
 // Marketing
 const MarketingDashboard = lazy(() => import("./pages/marketing/MarketingDashboard"));
 const Campanhas = lazy(() => import("./pages/marketing/Campanhas"));
+const Canais = lazy(() => import("./pages/marketing/Canais"));
+const CanalDetalhe = lazy(() => import("./pages/marketing/CanalDetalhe"));
 const CampanhaDetalhe = lazy(() => import("./pages/marketing/CampanhaDetalhe"));
 const CampanhaForm = lazy(() => import("./pages/marketing/CampanhaForm"));
 const Indicacoes = lazy(() => import("./pages/marketing/Indicacoes"));
@@ -682,6 +684,8 @@ const App = () => (
               <Route path="/marketing/campanhas/nova" element={<CampanhaForm />} />
               <Route path="/marketing/campanhas/:id" element={<CampanhaDetalhe />} />
               <Route path="/marketing/campanhas/:id/editar" element={<CampanhaForm />} />
+              <Route path="/marketing/canais" element={<Canais />} />
+              <Route path="/marketing/canais/:id" element={<CanalDetalhe />} />
               <Route path="/marketing/indicacoes" element={<Indicacoes />} />
               <Route path="/marketing/utms" element={<UTMs />} />
               <Route path="/marketing/distribuicao" element={<DistribuicaoConfig />} />

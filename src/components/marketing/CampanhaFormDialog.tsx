@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useCreateCampanha, useUpdateCampanha, Campanha } from '@/hooks/useMarketing';
+import { useCreateCampanha, useUpdateCampanha, useCanais, Campanha } from '@/hooks/useMarketing';
 
 interface CampanhaFormDialogProps {
   open: boolean;
@@ -26,6 +26,7 @@ const tipos = [
 export function CampanhaFormDialog({ open, onClose, campanha }: CampanhaFormDialogProps) {
   const [nome, setNome] = useState('');
   const [tipo, setTipo] = useState('aquisicao');
+  const [canalId, setCanalId] = useState<string>('none');
   
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
@@ -36,7 +37,7 @@ export function CampanhaFormDialog({ open, onClose, campanha }: CampanhaFormDial
   const [utmCampaign, setUtmCampaign] = useState('');
   const [observacoes, setObservacoes] = useState('');
 
-  
+  const { data: canais } = useCanais({ ativo: true });
   const createMutation = useCreateCampanha();
   const updateMutation = useUpdateCampanha();
 
@@ -46,6 +47,7 @@ export function CampanhaFormDialog({ open, onClose, campanha }: CampanhaFormDial
     if (campanha) {
       setNome(campanha.nome);
       setTipo(campanha.tipo);
+      setCanalId(campanha.canal_id || 'none');
       setDataInicio(campanha.data_inicio);
       setDataFim(campanha.data_fim || '');
       setOrcamentoTotal(campanha.orcamento_total?.toString() || '');
@@ -62,7 +64,7 @@ export function CampanhaFormDialog({ open, onClose, campanha }: CampanhaFormDial
   const resetForm = () => {
     setNome('');
     setTipo('aquisicao');
-    
+    setCanalId('none');
     setDataInicio('');
     setDataFim('');
     setOrcamentoTotal('');
@@ -77,6 +79,7 @@ export function CampanhaFormDialog({ open, onClose, campanha }: CampanhaFormDial
     const data = {
       nome,
       tipo,
+      canal_id: canalId && canalId !== 'none' ? canalId : null,
       data_inicio: dataInicio,
       data_fim: dataFim || null,
       orcamento_total: orcamentoTotal ? parseFloat(orcamentoTotal) : null,
@@ -130,6 +133,21 @@ export function CampanhaFormDialog({ open, onClose, campanha }: CampanhaFormDial
                 <SelectContent>
                   {tipos.map(t => (
                     <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="canal">Canal</Label>
+              <Select value={canalId} onValueChange={setCanalId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um canal" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sem canal</SelectItem>
+                  {canais?.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

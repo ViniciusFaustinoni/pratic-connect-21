@@ -34,7 +34,7 @@ export default function CampanhaForm() {
   const [formData, setFormData] = useState({
     nome: '',
     tipo: 'aquisicao',
-    
+    canal_id: '',
     publico_alvo: '',
     regioes: '',
     data_inicio: '',
@@ -69,6 +69,19 @@ export default function CampanhaForm() {
   });
 
 
+  // Query: Canais ativos
+  const { data: canais } = useQuery({
+    queryKey: ['canais-marketing-form', { ativo: true }],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('canais_marketing')
+        .select('id, nome, tipo')
+        .eq('ativo', true)
+        .order('nome');
+      return data || [];
+    }
+  });
+
   // Query: Usuários para responsável
   const { data: usuarios } = useQuery({
     queryKey: ['usuarios-select'],
@@ -87,7 +100,7 @@ export default function CampanhaForm() {
       setFormData({
         nome: campanha.nome || '',
         tipo: campanha.tipo || 'aquisicao',
-        
+        canal_id: (campanha as any).canal_id || '',
         publico_alvo: campanha.publico_alvo || '',
         regioes: campanha.regioes?.join(', ') || '',
         data_inicio: campanha.data_inicio || '',
@@ -130,7 +143,7 @@ export default function CampanhaForm() {
       const payload = {
         nome: formData.nome,
         tipo: formData.tipo,
-        
+        canal_id: formData.canal_id || null,
         publico_alvo: formData.publico_alvo || null,
         regioes: formData.regioes ? formData.regioes.split(',').map(r => r.trim()) : null,
         data_inicio: formData.data_inicio,
@@ -264,6 +277,23 @@ export default function CampanhaForm() {
                   <SelectContent>
                     {tipoOptions.map(opt => (
                       <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="canal">Canal</Label>
+                <Select
+                  value={formData.canal_id || 'none'}
+                  onValueChange={(v) => handleChange('canal_id', v === 'none' ? '' : v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um canal" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sem canal</SelectItem>
+                    {canais?.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

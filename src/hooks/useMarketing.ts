@@ -135,10 +135,102 @@ export interface TopIndicador {
   valorRecebido: number;
 }
 
-// ========== CANAIS — REMOVIDO ==========
-// Conceito de "canal" foi consolidado em "origem do lead" (campo leads.origem).
-// CRUD de canais_marketing foi removido. A view view_performance_canais
-// continua existindo no banco para alimentar relatórios consolidados.
+// ========== CANAIS ==========
+export function useCanais(filters?: { ativo?: boolean }) {
+  return useQuery({
+    queryKey: ['canais-marketing', filters],
+    queryFn: async () => {
+      let query = supabase
+        .from('canais_marketing')
+        .select('*')
+        .order('nome', { ascending: true });
+      if (typeof filters?.ativo === 'boolean') {
+        query = query.eq('ativo', filters.ativo);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as CanalMarketing[];
+    },
+  });
+}
+
+export function useCanal(id: string) {
+  return useQuery({
+    queryKey: ['canal-marketing', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('canais_marketing')
+        .select('*')
+        .eq('id', id)
+        .single();
+      if (error) throw error;
+      return data as CanalMarketing;
+    },
+    enabled: !!id,
+  });
+}
+
+export function useCreateCanal() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (canal: Partial<CanalMarketing> & { nome: string; tipo: string }) => {
+      const { data, error } = await supabase
+        .from('canais_marketing')
+        .insert(canal as any)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['canais-marketing'] });
+      toast.success('Canal criado com sucesso!');
+    },
+    onError: (error: any) => {
+      toast.error('Erro ao criar canal: ' + error.message);
+    },
+  });
+}
+
+export function useUpdateCanal() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...canal }: Partial<CanalMarketing> & { id: string }) => {
+      const { data, error } = await supabase
+        .from('canais_marketing')
+        .update(canal as any)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['canais-marketing'] });
+      toast.success('Canal atualizado!');
+    },
+    onError: (error: any) => {
+      toast.error('Erro ao atualizar canal: ' + error.message);
+    },
+  });
+}
+
+export function useDeleteCanal() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('canais_marketing').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['canais-marketing'] });
+      toast.success('Canal removido!');
+    },
+    onError: (error: any) => {
+      toast.error('Erro ao remover canal: ' + error.message);
+    },
+  });
+}
 
 // ========== CAMPANHAS ==========
 export function useCampanhas(filters?: { status?: string; canal_id?: string }) {
@@ -595,10 +687,7 @@ export function useMarketingStats() {
   });
 }
 
-// ========== PERFORMANCE POR ORIGEM DE LEAD ==========
-// Substitui o antigo "performance por canal" (canais_marketing foi removido).
-// Agora a performance é calculada diretamente a partir de leads.origem,
-// que é a fonte canônica de origem de leads no sistema.
+// ========== PERFORMANCE CANAIS ==========
 export interface PerformanceCanal {
   id: string;
   nome: string;
@@ -612,35 +701,14 @@ export interface PerformanceCanal {
 
 export function usePerformanceCanais() {
   return useQuery({
-    queryKey: ['performance-por-origem-lead'],
+    queryKey: ['performance-canais'],
     queryFn: async () => {
-      const { data: leads, error } = await supabase
-        .from('leads')
-        .select('origem, etapa');
+      const { data, error } = await supabase
+        .from('view_performance_canais')
+        .select('*');
       if (error) throw error;
-
-      const agg: Record<string, { total: number; conversoes: number }> = {};
-      (leads || []).forEach((l: any) => {
-        const origem = (l.origem || 'Não informado').toString();
-        if (!agg[origem]) agg[origem] = { total: 0, conversoes: 0 };
-        agg[origem].total += 1;
-        if (l.etapa === 'ganho') agg[origem].conversoes += 1;
-      });
-
-      const result: PerformanceCanal[] = Object.entries(agg).map(([origem, v]) => ({
-        id: origem,
-        nome: origem,
-        tipo: 'origem_lead',
-        total_leads: v.total,
-        conversoes: v.conversoes,
-        taxa_conversao: v.total > 0 ? (v.conversoes / v.total) * 100 : 0,
-        cpl_medio: 0,
-        investimento_total: 0,
-      }));
-
-      return result.sort((a, b) => b.total_leads - a.total_leads);
+      return data as PerformanceCanal[];
     },
-    staleTime: 1000 * 60 * 5,
   });
 }
 
