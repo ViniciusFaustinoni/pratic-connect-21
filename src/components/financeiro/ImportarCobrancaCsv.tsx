@@ -52,6 +52,7 @@ export function ImportarCobrancaCsv() {
   const [progresso, setProgresso] = useState({ atual: 0, total: 0 });
   const [resultadoEnvio, setResultadoEnvio] = useState<ResultadoEnvio | null>(null);
   const [confirmAberto, setConfirmAberto] = useState(false);
+  const [reconciliacao, setReconciliacao] = useState<PreviewReconciliacao | null>(null);
   const cancelarRef = useRef(false);
 
   const onDrop = useCallback(async (files: File[]) => {
