@@ -131,6 +131,7 @@ Deno.serve(async (req) => {
         codigo_fipe: veiculo.codigo_fipe,
         valor_fipe: veiculo.valor_fipe,
         valor_cota: 0,
+        valor_adesao: 0,
         cidade: associadoAntigo?.cidade,
         token_publico: tokenPublico,
         status: 'rascunho',
