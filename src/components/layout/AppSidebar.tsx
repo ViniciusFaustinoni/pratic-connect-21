@@ -115,6 +115,7 @@ import { UserAvatar } from '@/components/UserAvatar';
 import { useAppRoles } from '@/hooks/useAppRoles';
 import { useFipeMenorAtivo } from '@/hooks/useFipeMenorAtivo';
 import { useBiometriasPendentesCount } from '@/hooks/useBiometriasPendentes';
+import { useAprovacoesMonitoramentoCount } from '@/hooks/useAprovacoesMonitoramentoCount';
 
 // Mapeamento de cores por grupo/item
 const MENU_COLORS: Record<string, string> = {
@@ -218,19 +219,10 @@ const menuConfig: {
           permission: 'canManageRastreadores',
         },
         // Mapa movido para aba dentro de "Serviços de Campo"
+        // Ressalvas Pendentes e Imprevistos movidos para abas dentro de "Aprovações"
         // Alertas removido temporariamente
         {
-          title: 'Ressalvas Pendentes',
-          url: '/monitoramento/ressalvas-pendentes',
-          icon: AlertTriangle,
-        },
-        {
-          title: 'Imprevistos',
-          url: '/monitoramento/imprevistos',
-          icon: AlertTriangle,
-        },
-        {
-          title: 'Aprovações do Monitoramento',
+          title: 'Aprovações',
           url: '/monitoramento/aprovacoes-monitoramento',
           icon: ShieldAlert,
         },
@@ -560,6 +552,7 @@ export function AppSidebar() {
   const { isItemVisible } = useModuleItemVisibility();
   const { fipeMenorAtivo } = useFipeMenorAtivo();
   const { data: biometriasPendentesCount = 0 } = useBiometriasPendentesCount();
+  const { data: aprovacoesMonCount = 0 } = useAprovacoesMonitoramentoCount();
 
   const isDataLoading = permissions.isPermissionsLoading || isModuleVisLoading;
 
@@ -599,14 +592,18 @@ export function AppSidebar() {
 
     let baseGroups = filterGroups(menuConfig.groups);
 
-    // Injetar badge dinâmico no item de Biometrias Pendentes
+    // Injetar badges dinâmicos
     baseGroups = baseGroups.map(g => ({
       ...g,
-      items: g.items.map(item =>
-        item.url === '/cadastro/biometrias-pendentes' && biometriasPendentesCount > 0
-          ? { ...item, badge: String(biometriasPendentesCount) }
-          : item,
-      ),
+      items: g.items.map(item => {
+        if (item.url === '/cadastro/biometrias-pendentes' && biometriasPendentesCount > 0) {
+          return { ...item, badge: String(biometriasPendentesCount) };
+        }
+        if (item.url === '/monitoramento/aprovacoes-monitoramento' && aprovacoesMonCount > 0) {
+          return { ...item, badge: String(aprovacoesMonCount) };
+        }
+        return item;
+      }),
     }));
 
     // Filtrar por visibilidade de módulos do banco (se carregado)
@@ -645,7 +642,7 @@ export function AppSidebar() {
     }
     
     return baseGroups;
-  }, [permissions, visibleModules, fipeMenorAtivo, biometriasPendentesCount]);
+  }, [permissions, visibleModules, fipeMenorAtivo, biometriasPendentesCount, aprovacoesMonCount]);
 
   const visibleMainItems = useMemo(() => {
     if (permissions.isSindicanteOnly) {

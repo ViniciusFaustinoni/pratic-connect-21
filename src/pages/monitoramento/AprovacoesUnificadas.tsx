@@ -7,10 +7,11 @@ import AprovacoesTroca from './AprovacoesTroca';
 import LiberacoesAutoVistoria from './LiberacoesAutoVistoria';
 import RecusasInstalador from '../cadastro/RecusasInstalador';
 import RessalvasPendentes from './RessalvasPendentes';
+import ImprevistosPainel from './ImprevistosPainel';
 
-type Aba = 'associados' | 'troca' | 'liberacao-suspensao' | 'recusas' | 'ressalvas';
+type Aba = 'associados' | 'troca' | 'liberacao-suspensao' | 'recusas' | 'ressalvas' | 'imprevistos';
 
-const ABAS: Aba[] = ['associados', 'troca', 'liberacao-suspensao', 'recusas', 'ressalvas'];
+const ABAS: Aba[] = ['associados', 'troca', 'liberacao-suspensao', 'recusas', 'ressalvas', 'imprevistos'];
 
 export default function AprovacoesUnificadas() {
   const location = useLocation();
@@ -31,12 +32,12 @@ export default function AprovacoesUnificadas() {
           Aprovações do Monitoramento
         </h1>
         <p className="text-muted-foreground">
-          Centraliza aprovação de associados, troca de titularidade, liberação de suspensão, recusas do instalador e ressalvas pendentes.
+          Centraliza aprovação de associados, troca de titularidade, liberação de suspensão, recusas do instalador, ressalvas pendentes e imprevistos.
         </p>
       </div>
 
       <Tabs value={aba} onValueChange={handleChange}>
-        <TabsList className="grid grid-cols-2 md:grid-cols-5 w-full">
+        <TabsList className="grid grid-cols-2 md:grid-cols-6 w-full">
           <TabsTrigger value="associados" className="gap-2">
             <ShieldCheck className="h-4 w-4" />
             <span className="hidden sm:inline">Aprovação de Associados</span>
@@ -62,6 +63,11 @@ export default function AprovacoesUnificadas() {
             <span className="hidden sm:inline">Ressalvas Pendentes</span>
             <span className="sm:hidden">Ressalvas</span>
           </TabsTrigger>
+          <TabsTrigger value="imprevistos" className="gap-2">
+            <AlertTriangle className="h-4 w-4" />
+            <span className="hidden sm:inline">Imprevistos</span>
+            <span className="sm:hidden">Imprev.</span>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="associados" className="pt-2">
@@ -78,6 +84,9 @@ export default function AprovacoesUnificadas() {
         </TabsContent>
         <TabsContent value="ressalvas" className="pt-2">
           <RessalvasPendentes />
+        </TabsContent>
+        <TabsContent value="imprevistos" className="pt-2">
+          <ImprevistosPainel />
         </TabsContent>
       </Tabs>
     </div>

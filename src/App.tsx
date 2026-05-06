@@ -669,10 +669,10 @@ const App = () => (
               <Route path="/monitoramento/alertas" element={<AlertasMonitoramento />} />
               <Route path="/monitoramento/calendario" element={<CalendarioInstalacoes />} />
               <Route path="/monitoramento/vistorias-instalacoes-mon" element={<VistoriasInstalacoesMon />} />
-              <Route path="/monitoramento/ressalvas-pendentes" element={<RessalvasPendentes />} />
+              <Route path="/monitoramento/ressalvas-pendentes" element={<Navigate to="/monitoramento/aprovacoes-monitoramento#ressalvas" replace />} />
               <Route path="/monitoramento/aprovacao-associados" element={<AprovacaoAssociadosMonitoramento />} />
               <Route path="/monitoramento/aprovacao-associados/:id" element={<AprovacaoInstalacaoDetalhe />} />
-              <Route path="/monitoramento/imprevistos" element={<ImprevistosPainel />} />
+              <Route path="/monitoramento/imprevistos" element={<Navigate to="/monitoramento/aprovacoes-monitoramento#imprevistos" replace />} />
               <Route path="/monitoramento/prestadores-parceiros" element={<Navigate to="/monitoramento/equipe?tab=prestadores" replace />} />
               <Route path="/monitoramento/aprovacoes" element={<AprovacoesTroca />} />
               <Route path="/monitoramento/liberacoes-autovistoria" element={<LiberacoesAutoVistoria />} />
