@@ -120,6 +120,42 @@ export default function AprovacaoAssociadosMonitoramento() {
     }
   };
 
+  const handleReconciliarSGA = async (item: ItemUnificado) => {
+    if (item.tipo !== 'ativacao') return;
+    setReconciliandoId(item.id);
+    const tid = toast.loading(`Consultando SGA para ${item.veiculo_placa || 'veículo'}...`);
+    try {
+      const { data, error } = await supabase.functions.invoke('reconciliar-instalacao-sga', {
+        body: { instalacao_id: item.id, source: 'ui:AprovacoesMonitoramento' },
+      });
+      toast.dismiss(tid);
+      if (error) {
+        toast.error('Erro ao consultar SGA', { description: error.message });
+        return;
+      }
+      const r: any = data;
+      if (r?.ja_ativo) {
+        toast.success('Já estava ativo localmente. Atualizando lista...');
+      } else if (r?.success && r?.ativado) {
+        toast.success(`Sincronizado e ativado (cód. SGA ${r.codigo_associado_sga}).`);
+      } else if (r?.sga_encontrado === false) {
+        toast.warning('Não consta no SGA', {
+          description: r?.mensagem || 'Conclua a aprovação cadastral antes.',
+        });
+      } else {
+        toast.error(r?.mensagem || r?.error || 'Não foi possível sincronizar.');
+      }
+      queryClient.invalidateQueries({ queryKey: ['instalacoes-aguardando-ativacao'] });
+      queryClient.invalidateQueries({ queryKey: ['veiculos'] });
+      queryClient.invalidateQueries({ queryKey: ['associados'] });
+    } catch (e: any) {
+      toast.dismiss(tid);
+      toast.error('Falha de rede ao sincronizar', { description: e?.message });
+    } finally {
+      setReconciliandoId(null);
+    }
+  };
+
   return (
     <div className="space-y-5 animate-fade-in">
       {/* Header */}
