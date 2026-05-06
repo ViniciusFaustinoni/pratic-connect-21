@@ -365,7 +365,7 @@ const menuConfig: {
       items: [
         { title: 'Dashboard', url: '/marketing', icon: BarChart3 },
         { title: 'Campanhas', url: '/marketing/campanhas', icon: Target },
-        { title: 'Canais', url: '/marketing/canais', icon: Radio },
+        
         { title: 'Indicações', url: '/marketing/indicacoes', icon: Gift },
         { title: 'UTMs', url: '/marketing/utms', icon: Link },
         { title: 'Distribuição', url: '/marketing/distribuicao', icon: Users },
