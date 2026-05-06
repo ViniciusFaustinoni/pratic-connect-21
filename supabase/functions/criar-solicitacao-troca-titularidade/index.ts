@@ -62,26 +62,27 @@ Deno.serve(async (req) => {
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // Buscar veículo: prioriza UUID; fallback por placa+associado (resolve cache stale do front).
-    const colunas = 'id, marca, modelo, ano, placa, combustivel, cor, fipe_codigo, fipe_valor, categoria, associado_id';
+    const colunas = 'id, marca, modelo, ano_modelo, ano_fabricacao, placa, combustivel, cor, codigo_fipe, valor_fipe, associado_id';
     let veiculo: any = null;
+    let veiculoErr: any = null;
     if (veiculo_id) {
-      const { data } = await admin.from('veiculos').select(colunas).eq('id', veiculo_id).maybeSingle();
-      veiculo = data;
+      const r = await admin.from('veiculos').select(colunas).eq('id', veiculo_id).maybeSingle();
+      veiculo = r.data; veiculoErr = r.error;
     }
     if (!veiculo && veiculo_placa) {
       const placaUp = veiculo_placa.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-      const { data } = await admin
+      const r = await admin
         .from('veiculos')
         .select(colunas)
         .eq('associado_id', associado_antigo_id)
         .ilike('placa', placaUp)
         .maybeSingle();
-      veiculo = data;
+      veiculo = r.data; veiculoErr = r.error || veiculoErr;
     }
     if (!veiculo) {
-      console.error('[criar-solicitacao-troca] veículo não localizado', { veiculo_id, veiculo_placa, associado_antigo_id });
+      console.error('[criar-solicitacao-troca] veículo não localizado', { veiculo_id, veiculo_placa, associado_antigo_id, dbError: veiculoErr });
       return new Response(
-        JSON.stringify({ error: 'Veículo não encontrado para o titular informado. Atualize a página e tente novamente.' }),
+        JSON.stringify({ error: 'Veículo não encontrado para o titular informado. Atualize a página e tente novamente.', debug: veiculoErr?.message }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
@@ -123,13 +124,12 @@ Deno.serve(async (req) => {
         telefone1_solicitante: novo_titular.telefone || null,
         veiculo_marca: veiculo.marca,
         veiculo_modelo: veiculo.modelo,
-        veiculo_ano: veiculo.ano,
+        veiculo_ano: veiculo.ano_modelo || veiculo.ano_fabricacao,
         veiculo_placa: veiculo.placa,
         veiculo_combustivel: veiculo.combustivel,
         veiculo_cor: veiculo.cor,
-        codigo_fipe: veiculo.fipe_codigo,
-        valor_fipe: veiculo.fipe_valor,
-        categoria: veiculo.categoria,
+        codigo_fipe: veiculo.codigo_fipe,
+        valor_fipe: veiculo.valor_fipe,
         cidade: associadoAntigo?.cidade,
         token_publico: tokenPublico,
         status: 'rascunho',
