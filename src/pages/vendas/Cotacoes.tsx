@@ -112,6 +112,7 @@ export default function Cotacoes() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showCotacaoForm, setShowCotacaoForm] = useState(false);
   const [showNovaEntrada, setShowNovaEntrada] = useState(false);
+  const [novaEntradaMounted, setNovaEntradaMounted] = useState(false);
   const [showContratoWizard, setShowContratoWizard] = useState(false);
   const [selectedCotacaoId, setSelectedCotacaoId] = useState<string>('');
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -211,6 +212,7 @@ export default function Cotacoes() {
       const newParams = new URLSearchParams();
       setSearchParams(newParams, { replace: true });
     } else if (novoParam === 'true') {
+      setNovaEntradaMounted(true);
       setShowNovaEntrada(true);
       searchParams.delete('novo');
       setSearchParams(searchParams, { replace: true });
@@ -770,15 +772,16 @@ export default function Cotacoes() {
           <PermissionGate permission="cotacao.canCreate">
             <Button 
               className="gap-2 shadow-md hover:shadow-lg transition-all" 
-              onClick={() => setShowNovaEntrada(true)}
+              onClick={() => { setNovaEntradaMounted(true); setShowNovaEntrada(true); }}
             >
               <Plus className="h-4 w-4" />
               Nova Cotação
             </Button>
           </PermissionGate>
-          {showNovaEntrada && (
+          {novaEntradaMounted && (
             <Suspense fallback={null}>
               <NovaEntradaDialog
+                key="nova-entrada-dialog"
                 open={showNovaEntrada}
                 onOpenChange={setShowNovaEntrada}
                 onNovaCotacao={() => setShowCotacaoForm(true)}
