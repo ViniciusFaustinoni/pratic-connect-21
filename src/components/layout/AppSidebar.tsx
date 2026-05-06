@@ -552,6 +552,7 @@ export function AppSidebar() {
   const { isItemVisible } = useModuleItemVisibility();
   const { fipeMenorAtivo } = useFipeMenorAtivo();
   const { data: biometriasPendentesCount = 0 } = useBiometriasPendentesCount();
+  const { data: aprovacoesMonCount = 0 } = useAprovacoesMonitoramentoCount();
 
   const isDataLoading = permissions.isPermissionsLoading || isModuleVisLoading;
 
