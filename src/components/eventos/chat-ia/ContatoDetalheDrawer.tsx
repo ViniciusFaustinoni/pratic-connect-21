@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ExternalLink, PhoneCall, PowerOff, Loader2 } from 'lucide-react';
+import { AssociadoFichaCompletaDialog } from '@/components/servicos-campo/AssociadoFichaCompletaDialog';
 import {
   Sheet,
   SheetContent,
@@ -30,9 +30,9 @@ const MENSAGEM_ENCERRAMENTO_DEFAULT =
   'Foi um prazer atendê-lo(a)! 🤝 Caso precise de algo mais, é só nos chamar por aqui — estamos sempre à disposição.\n\nEquipe PRATIC';
 
 export function ContatoDetalheDrawer({ telefone, open, onOpenChange, nomeContato, avatarUrl }: Props) {
-  const navigate = useNavigate();
   const [mensagemEncerramento, setMensagemEncerramento] = useState(MENSAGEM_ENCERRAMENTO_DEFAULT);
   const [encerrando, setEncerrando] = useState(false);
+  const [fichaOpen, setFichaOpen] = useState(false);
   const { pausa, ativa, pausarPorEncerramento } = useIaPausa(telefone);
 
   const telLimpo = telefone?.replace(/\D/g, '') ?? '';
@@ -133,10 +133,10 @@ export function ContatoDetalheDrawer({ telefone, open, onOpenChange, nomeContato
                 <div className="truncate"><span className="text-muted-foreground">Email:</span> {associado.email}</div>
               )}
               <Button
-                variant="outline"
+                variant="default"
                 size="sm"
                 className="w-full mt-2"
-                onClick={() => navigate(`/cadastro/associados/${associado.id}`)}
+                onClick={() => setFichaOpen(true)}
               >
                 <ExternalLink className="h-4 w-4 mr-2" /> Abrir cadastro completo
               </Button>
@@ -174,6 +174,11 @@ export function ContatoDetalheDrawer({ telefone, open, onOpenChange, nomeContato
           </div>
         </div>
       </SheetContent>
+      <AssociadoFichaCompletaDialog
+        associadoId={associado?.id}
+        open={fichaOpen}
+        onOpenChange={setFichaOpen}
+      />
     </Sheet>
   );
 }
