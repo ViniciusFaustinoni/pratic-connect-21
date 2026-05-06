@@ -482,6 +482,114 @@ serve(async (req) => {
       console.log('[Softruck Ativar] Device associado com sucesso via POST formal');
     }
 
+    // ===== 6.1 Garantir USUÁRIO Softruck do associado =====
+    console.log('[Softruck Ativar] [6.1] Garantindo usuário Softruck do associado...');
+    let softruckUserId: string | null = null;
+    try {
+      if (!associadoId) {
+        console.log('[Softruck Ativar] Sem associadoId — pulando criação de usuário.');
+      } else {
+        const { data: assoc, error: assocErr } = await supabase
+          .from('associados')
+          .select('id, nome, email, cpf, telefone, softruck_user_id')
+          .eq('id', associadoId)
+          .maybeSingle();
+
+        if (assocErr) {
+          console.warn('[Softruck Ativar] Erro ao buscar associado:', assocErr.message);
+        } else if (!assoc) {
+          console.warn('[Softruck Ativar] Associado não encontrado:', associadoId);
+        } else {
+          softruckUserId = assoc.softruck_user_id || null;
+
+          // Tentar buscar por CPF se não tiver ID salvo
+          if (!softruckUserId && assoc.cpf) {
+            const buscaCpf = await callSoftruckApi(supabaseUrl, supabaseAnonKey, 'buscar-usuario', { cpf: assoc.cpf });
+            const lista = (buscaCpf?.data as { data?: Array<{ id: string }> })?.data || [];
+            if (lista.length > 0) softruckUserId = lista[0].id;
+          }
+          // Fallback por email
+          if (!softruckUserId && (assoc.email || associadoEmail)) {
+            const emailBusca = assoc.email || associadoEmail!;
+            const buscaEmail = await callSoftruckApi(supabaseUrl, supabaseAnonKey, 'buscar-usuario', { email: emailBusca });
+            const lista = (buscaEmail?.data as { data?: Array<{ id: string }> })?.data || [];
+            if (lista.length > 0) softruckUserId = lista[0].id;
+          }
+
+          // Criar se ainda não existe
+          if (!softruckUserId) {
+            const cpfDigits = (assoc.cpf || '').replace(/\D/g, '');
+            const emailFinal = assoc.email || associadoEmail || `assoc_${associadoId.slice(0, 8)}@praticcar.org`;
+            const usernameBase = cpfDigits || emailFinal.split('@')[0] || `assoc_${associadoId.slice(0, 8)}`;
+
+            const criarUserResult = await callSoftruckApi(
+              supabaseUrl,
+              supabaseAnonKey,
+              'criar-usuario',
+              {
+                username: usernameBase,
+                email: emailFinal,
+                nome: assoc.nome || `Associado ${associadoId.slice(0, 8)}`,
+                telefone: assoc.telefone || undefined,
+                cpf: cpfDigits || undefined,
+              }
+            );
+
+            if (criarUserResult.success) {
+              const respData = criarUserResult.data as { data?: Array<{ id: string }> | { id: string } };
+              const arr = Array.isArray(respData?.data) ? respData.data : (respData?.data ? [respData.data] : []);
+              softruckUserId = arr[0]?.id || null;
+              console.log('[Softruck Ativar] Usuário criado na Softruck:', softruckUserId);
+            } else if (criarUserResult.error?.includes('Already Exists') || criarUserResult.error?.includes('already exists')) {
+              // Re-buscar
+              const retry = await callSoftruckApi(supabaseUrl, supabaseAnonKey, 'buscar-usuario',
+                cpfDigits ? { cpf: cpfDigits } : { email: emailFinal });
+              const lista = (retry?.data as { data?: Array<{ id: string }> })?.data || [];
+              if (lista.length > 0) softruckUserId = lista[0].id;
+            } else {
+              console.warn('[Softruck Ativar] Falha ao criar usuário Softruck (não bloqueante):', criarUserResult.error);
+            }
+          }
+
+          // Persistir ID localmente
+          if (softruckUserId && softruckUserId !== assoc.softruck_user_id) {
+            await supabase
+              .from('associados')
+              .update({ softruck_user_id: softruckUserId })
+              .eq('id', associadoId);
+          }
+        }
+      }
+    } catch (userErr) {
+      console.warn('[Softruck Ativar] Erro inesperado ao garantir usuário Softruck (não bloqueante):', userErr);
+    }
+
+    // ===== 6.2 Associar usuário ao veículo na Softruck =====
+    if (softruckUserId && softruckVehicleId) {
+      console.log('[Softruck Ativar] [6.2] Associando usuário ao veículo na Softruck...');
+      try {
+        const assocUserResult = await callSoftruckApi(
+          supabaseUrl,
+          supabaseAnonKey,
+          'associar-usuario-veiculo',
+          { userId: softruckUserId, vehicleId: softruckVehicleId }
+        );
+        if (!assocUserResult.success) {
+          if (assocUserResult.error?.includes('Already Exists') || assocUserResult.error?.includes('already')) {
+            console.log('[Softruck Ativar] Usuário já associado ao veículo, ok.');
+          } else {
+            console.warn('[Softruck Ativar] Falha ao associar usuário-veículo (não bloqueante):', assocUserResult.error);
+          }
+        } else {
+          console.log('[Softruck Ativar] Usuário associado ao veículo com sucesso');
+        }
+      } catch (e) {
+        console.warn('[Softruck Ativar] Erro ao associar usuário-veículo:', e);
+      }
+    } else {
+      console.log('[Softruck Ativar] Sem softruckUserId ou softruckVehicleId — pulando associação usuário↔veículo');
+    }
+
     // ===== 7. Ativar dispositivo na Softruck =====
     console.log('[Softruck Ativar] [7/9] Ativando device na Softruck...');
     
