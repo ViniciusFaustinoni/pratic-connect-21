@@ -1,0 +1,1 @@
+UPDATE public.associados SET softruck_user_id='grADZVEvE0QyqOk' WHERE id='09278d13-a17c-4468-bc5a-80b825a872f1' AND softruck_user_id IS NULL;
