@@ -152,7 +152,7 @@ serve(async (req) => {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${supabaseServiceKey}`,
             },
-            body: JSON.stringify({ plataforma_codigo: 'rede_veiculos' })
+            body: JSON.stringify({ plataforma: 'rede_veiculos' })
           }
         );
 

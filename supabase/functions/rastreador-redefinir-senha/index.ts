@@ -117,7 +117,7 @@ serve(async (req) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
         },
-        body: JSON.stringify({ plataforma_codigo: plataforma.plataforma })
+        body: JSON.stringify({ plataforma: plataforma.plataforma })
       }
     );
     
