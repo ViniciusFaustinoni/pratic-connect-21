@@ -1,26 +1,32 @@
-## Problema
+## Objetivo
+Fechar o furo de segurança em que `criar-solicitacao-troca-titularidade` aceita qualquer combinação `associado_antigo_id` + `veiculo_id` vinda do frontend, permitindo criar troca para placa que não pertence ao associado.
 
-Na **Troca de Titularidade** o campo de busca aceita texto, mas ao digitar uma placa (ex.: `qoo5c17`) o resultado correto fica escondido. A busca por placa **já é executada via SGA**, porém em paralelo o `useAssociadoSearch` extrai os dígitos da placa (`517`) e roda `cpf.ilike.%517%` no banco local, retornando 15 associados aleatórios que aparecem **antes** do resultado real da placa no merge.
+## Mudança única — `supabase/functions/criar-solicitacao-troca-titularidade/index.ts`
 
-## Causa raiz
+Logo após o `SELECT` do veículo (que já existe nas linhas 64–69), adicionar `associado_id` ao select e validar:
 
-`src/components/vendas/OutrasEntradasMenu.tsx` chama dois hooks em paralelo (`useAssociadoSearch` + `useBuscaPlaca`) sem distinguir o tipo do termo. Quando o termo é uma placa válida, a busca textual local polui o resultado. Além disso, o merge insere `associadoResults` antes de `placaResults`.
+```ts
+if (veiculo.associado_id !== associado_antigo_id) {
+  return new Response(
+    JSON.stringify({ error: 'A placa informada não pertence ao titular antigo.' }),
+    { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+  );
+}
+```
 
-## Mudanças (todas em `src/components/vendas/OutrasEntradasMenu.tsx`)
+A validação roda **antes** do guard de placa bloqueada, do INSERT da cotação, do INSERT da solicitação e do disparo automático do termo. Se falhar: nada é criado, nada é disparado.
 
-1. **Detectar formato de placa** (regex Mercosul `AAA0A00` e antiga `AAA0000`) no termo digitado.
-2. **Quando o termo for uma placa**, desabilitar `useAssociadoSearch` (passar string vazia), evitando falsos positivos por substring de dígitos.
-3. **Inverter a ordem do merge** em `mergedAssociadoResults`: inserir primeiro os resultados do SGA por placa, depois os de associados, para que o veículo encontrado apareça no topo da lista.
-4. **Atualizar o placeholder e o texto auxiliar** do input para deixar claro que aceita CPF, placa ou nome (já está implícito, mas o usuário não percebe).
+## Por que essa abordagem
+- A coluna `veiculos.associado_id` já é a fonte da verdade do vínculo (mantida pelo trigger `veiculo-associado-sync` — ver memória "Veículo segue contrato"). Não precisa join em `contratos` nem reimplementar lógica.
+- Não existe helper reutilizável de "placa pertence ao CPF" — a validação direta pela FK é o caminho mais limpo e barato.
+- HTTP **403** porque é violação de autorização sobre o recurso, não erro de validação de input.
 
-## Detalhes técnicos
+## Fora de escopo (intocado)
+- Fluxo da IA (`efetivar-troca-titularidade` + `chat_solicitacoes_ia`).
+- UI do `TrocaTitularidadeDialog` — validação client-side fica como está.
+- Demais edges de troca (aprovar/reprovar/efetivar).
 
-- Regex: `/^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/` aplicada sobre `searchTerm.replace(/[^A-Za-z0-9]/g, '').toUpperCase()`.
-- `useBuscaPlaca` continua igual — já só dispara para placas válidas.
-- O fluxo de seleção (`handleSelectAssociado` com `origem_sga` → `importar-associado-sga` → abre `TrocaTitularidadeDialog`) não muda; só o que aparece na lista muda.
-
-## Não muda
-
-- Edge functions
-- Schema do banco
-- Outros tipos de entrada (Substituição, Migração, Inclusão) — já tratados separadamente.
+## Comportamento esperado
+- Consultor tenta criar troca via UI normal: continua funcionando (UI já filtra veículos do associado).
+- Chamada direta na edge com placa de outro dono: HTTP 403, mensagem clara, sem efeitos colaterais.
+- Solicitações antigas: não impactadas.

@@ -63,10 +63,19 @@ Deno.serve(async (req) => {
     // Buscar dados do veículo + associado antigo
     const { data: veiculo, error: veiculoErr } = await admin
       .from('veiculos')
-      .select('id, marca, modelo, ano, placa, combustivel, cor, fipe_codigo, fipe_valor, categoria')
+      .select('id, marca, modelo, ano, placa, combustivel, cor, fipe_codigo, fipe_valor, categoria, associado_id')
       .eq('id', veiculo_id)
       .maybeSingle();
     if (veiculoErr || !veiculo) throw new Error('Veículo não encontrado');
+
+    // SEGURANÇA: garante que a placa pertence ao titular antigo informado.
+    // Bloqueia bypass de UI / chamadas diretas à edge com combinação CPF + placa não-vinculada.
+    if (veiculo.associado_id !== associado_antigo_id) {
+      return new Response(
+        JSON.stringify({ error: 'A placa informada não pertence ao titular antigo.' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
 
     // Guard: bloqueia se já existe outra troca em andamento para a mesma placa
     if (veiculo.placa) {
