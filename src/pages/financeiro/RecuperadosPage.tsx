@@ -119,14 +119,20 @@ export default function RecuperadosPage() {
 
   const filtrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
-    if (!q) return recuperados;
-    return recuperados.filter(
+    let base = recuperados;
+    // Por padrão só conta recuperação real (associado sumiu da nova lista).
+    // Toggle inclui também os boletos reemitidos (mesma matrícula, nova linha digitável).
+    if (!incluirReemitidos) {
+      base = base.filter((r) => (r.motivo_recuperacao || 'ausente_na_nova_lista') === 'ausente_na_nova_lista');
+    }
+    if (!q) return base;
+    return base.filter(
       (r) =>
         r.nome.toLowerCase().includes(q) ||
         r.matricula.toLowerCase().includes(q) ||
         (r.placa || '').toLowerCase().includes(q),
     );
-  }, [recuperados, busca]);
+  }, [recuperados, busca, incluirReemitidos]);
 
   const kpis = useMemo(() => {
     const total = filtrados.reduce((s, r) => s + Number(r.valor || 0), 0);
