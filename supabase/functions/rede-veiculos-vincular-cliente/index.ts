@@ -269,36 +269,10 @@ serve(async (req) => {
     console.log('[RedeVeiculos Vincular] Payload montado:', JSON.stringify(payload, null, 2));
 
     // ===== 7. Chamar API Rede Veículos - POST /vincularClienteVeiculo =====
-    // A API espera campos flat em multipart/form-data (NÃO um único campo "json"),
-    // assim como /desvincularClienteVeiculo. Enviar como objeto aninhado retorna
-    // "O CPF/CNPJ e/ou IMEI não foram informados".
+    // A API retorna "JSON não informado" se não receber o campo "json" em
+    // multipart/form-data contendo o payload serializado completo.
     const formData = new FormData();
-    // Equipamento
-    formData.append('imei', payload.equipamento.imei);
-    formData.append('localInstalacao', payload.equipamento.localInstalacao);
-    formData.append('possuiBloqueio', payload.equipamento.possuiBloqueio ? '1' : '0');
-    // Veículo
-    formData.append('tipo', payload.veiculo.tipo);
-    formData.append('marca', payload.veiculo.marca);
-    formData.append('modelo', payload.veiculo.modelo);
-    formData.append('placa', payload.veiculo.placa);
-    formData.append('cor', payload.veiculo.cor);
-    formData.append('ano', String(payload.veiculo.ano));
-    if (payload.veiculo.chassi) formData.append('chassi', payload.veiculo.chassi);
-    if (payload.veiculo.renavam) formData.append('renavam', payload.veiculo.renavam);
-    // Cliente
-    formData.append('cpfCnpj', payload.cliente.cpfCnpj);
-    formData.append('nome', payload.cliente.nome);
-    formData.append('celular', payload.cliente.celular);
-    formData.append('email', payload.cliente.email);
-    if (payload.cliente.endereco) {
-      formData.append('cep', payload.cliente.endereco.cep);
-      formData.append('logradouro', payload.cliente.endereco.logradouro);
-      formData.append('numero', payload.cliente.endereco.numero);
-      formData.append('bairro', payload.cliente.endereco.bairro);
-      formData.append('cidade', payload.cliente.endereco.cidade);
-      formData.append('uf', payload.cliente.endereco.uf);
-    }
+    formData.append('json', JSON.stringify(payload));
 
     const apiResponse = await fetch(`${baseUrl}/vincularClienteVeiculo/`, {
       method: 'POST',
