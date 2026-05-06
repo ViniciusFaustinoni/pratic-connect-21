@@ -46,7 +46,6 @@ export function CampanhaFormDialog({ open, onClose, campanha }: CampanhaFormDial
     if (campanha) {
       setNome(campanha.nome);
       setTipo(campanha.tipo);
-      setCanalId(campanha.canal_id || '');
       setDataInicio(campanha.data_inicio);
       setDataFim(campanha.data_fim || '');
       setOrcamentoTotal(campanha.orcamento_total?.toString() || '');
