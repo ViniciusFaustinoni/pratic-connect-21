@@ -1,5 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +15,8 @@ import {
   Wrench,
   Zap,
   ArrowRight,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { useInstalacoesAguardandoAprovacao } from '@/hooks/useAprovacaoMonitoramento';
 import { useInstalacoesAguardandoAtivacao } from '@/hooks/useVistoriaCompletaAnalise';
@@ -55,7 +60,9 @@ function getWaitTextColor(date?: string | null) {
 
 export default function AprovacaoAssociadosMonitoramento() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
+  const [reconciliandoId, setReconciliandoId] = useState<string | null>(null);
 
   const { data: instalacoesAnalise, isLoading: loadingAnalise } = useInstalacoesAguardandoAprovacao();
   const { data: instalacoesAtivacao, isLoading: loadingAtivacao } = useInstalacoesAguardandoAtivacao();
@@ -110,6 +117,42 @@ export default function AprovacaoAssociadosMonitoramento() {
       navigate(`/cadastro/instalacoes/${item.id}/ativar`);
     } else {
       navigate(`/monitoramento/aprovacao-associados/${item.id}`);
+    }
+  };
+
+  const handleReconciliarSGA = async (item: ItemUnificado) => {
+    if (item.tipo !== 'ativacao') return;
+    setReconciliandoId(item.id);
+    const tid = toast.loading(`Consultando SGA para ${item.veiculo_placa || 'veículo'}...`);
+    try {
+      const { data, error } = await supabase.functions.invoke('reconciliar-instalacao-sga', {
+        body: { instalacao_id: item.id, source: 'ui:AprovacoesMonitoramento' },
+      });
+      toast.dismiss(tid);
+      if (error) {
+        toast.error('Erro ao consultar SGA', { description: error.message });
+        return;
+      }
+      const r: any = data;
+      if (r?.ja_ativo) {
+        toast.success('Já estava ativo localmente. Atualizando lista...');
+      } else if (r?.success && r?.ativado) {
+        toast.success(`Sincronizado e ativado (cód. SGA ${r.codigo_associado_sga}).`);
+      } else if (r?.sga_encontrado === false) {
+        toast.warning('Não consta no SGA', {
+          description: r?.mensagem || 'Conclua a aprovação cadastral antes.',
+        });
+      } else {
+        toast.error(r?.mensagem || r?.error || 'Não foi possível sincronizar.');
+      }
+      queryClient.invalidateQueries({ queryKey: ['instalacoes-aguardando-ativacao'] });
+      queryClient.invalidateQueries({ queryKey: ['veiculos'] });
+      queryClient.invalidateQueries({ queryKey: ['associados'] });
+    } catch (e: any) {
+      toast.dismiss(tid);
+      toast.error('Falha de rede ao sincronizar', { description: e?.message });
+    } finally {
+      setReconciliandoId(null);
     }
   };
 
@@ -225,18 +268,38 @@ export default function AprovacaoAssociadosMonitoramento() {
                 </div>
 
                 {isAtivacao ? (
-                  <Button
-                    size="sm"
-                    className="bg-purple-500 hover:bg-purple-600 text-white text-xs flex-shrink-0 h-8"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleAbrir(item);
-                    }}
-                  >
-                    <Zap className="mr-1 h-3 w-3" />
-                    Ativar
-                    <ArrowRight className="ml-1 h-3 w-3" />
-                  </Button>
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs flex-shrink-0 h-8"
+                      title="Verificar no SGA e marcar como ativo se já constar lá"
+                      disabled={reconciliandoId === item.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleReconciliarSGA(item);
+                      }}
+                    >
+                      {reconciliandoId === item.id ? (
+                        <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                      ) : (
+                        <RefreshCw className="mr-1 h-3 w-3" />
+                      )}
+                      Sincronizar SGA
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="bg-purple-500 hover:bg-purple-600 text-white text-xs flex-shrink-0 h-8"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAbrir(item);
+                      }}
+                    >
+                      <Zap className="mr-1 h-3 w-3" />
+                      Ativar
+                      <ArrowRight className="ml-1 h-3 w-3" />
+                    </Button>
+                  </>
                 ) : (
                   <Button
                     variant="ghost"
