@@ -160,6 +160,9 @@ export default function DiretoriaDashboard() {
   // Query de indicadores operacionais
   const { data: operacionais, isLoading: loadingOperacionais } = useQuery({
     queryKey: ['indicadores-operacionais', periodo],
+    staleTime: 2 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const inicioMes = getDataInicio();
 
