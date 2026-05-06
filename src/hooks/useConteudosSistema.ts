@@ -15,19 +15,16 @@ import { useConfiguracoesAll, CONFIGURACOES_ALL_KEY } from './useConfiguracoesAl
 
 function useConfiguracao<T>(chave: string, parse: (val: string) => T, fallback: T) {
   return useQuery({
-    queryKey: [...CONFIGURACOES_ALL_KEY, chave] as const,
+    // MESMA queryKey para TODOS os hooks → React Query deduplica em 1 único fetch
+    queryKey: CONFIGURACOES_ALL_KEY,
     queryFn: async () => {
-      // Reaproveita a query global; se ainda não estiver em cache,
-      // o React Query fará o fetch único uma vez via useConfiguracoesAll
-      // chamado em qualquer outro componente. Aqui caímos no fallback
-      // direto ao mapa para o caso isolado.
       const { data, error } = await supabase
         .from('configuracoes')
         .select('chave, valor');
       if (error) throw error;
       const map: Record<string, string> = {};
       for (const row of data ?? []) {
-        if (row.chave != null && row.valor != null) map[row.chave] = String(row.valor);
+        if (row.chave != null && row.valor != null) map[row.chave as string] = String(row.valor);
       }
       return map;
     },
