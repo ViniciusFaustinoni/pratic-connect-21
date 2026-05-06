@@ -98,6 +98,9 @@ export default function DiretoriaDashboard() {
   // Query principal de stats
   const { data: stats, isLoading: loadingStats } = useQuery({
     queryKey: ['diretoria-stats', periodo],
+    staleTime: 2 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const inicioMes = getDataInicio();
 
@@ -134,6 +137,9 @@ export default function DiretoriaDashboard() {
   // Query de evolução mensal
   const { data: evolucao, isLoading: loadingEvolucao } = useQuery({
     queryKey: ['evolucao-mensal'],
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const { data } = await supabase
         .from('indicadores_atuariais')
@@ -154,6 +160,9 @@ export default function DiretoriaDashboard() {
   // Query de indicadores operacionais
   const { data: operacionais, isLoading: loadingOperacionais } = useQuery({
     queryKey: ['indicadores-operacionais', periodo],
+    staleTime: 2 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const inicioMes = getDataInicio();
 
@@ -179,6 +188,9 @@ export default function DiretoriaDashboard() {
   // Query de distribuição por plano
   const { data: distribuicao, isLoading: loadingDistribuicao } = useQuery({
     queryKey: ['distribuicao-planos'],
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const { data: associados } = await supabase
         .from('associados')
@@ -203,6 +215,9 @@ export default function DiretoriaDashboard() {
   // Query do indicador atual (para fundo de reserva)
   const { data: indicadorAtual } = useQuery({
     queryKey: ['indicador-atual'],
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const mesAtual = new Date();
       const { data } = await supabase
@@ -218,6 +233,9 @@ export default function DiretoriaDashboard() {
   // Query do rateio atual
   const { data: rateioAtual, isLoading: loadingRateio } = useQuery({
     queryKey: ['rateio-atual-dashboard'],
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const hoje = new Date();
       const { data } = await supabase
