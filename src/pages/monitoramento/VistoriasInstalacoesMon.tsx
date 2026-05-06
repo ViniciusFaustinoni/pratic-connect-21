@@ -18,6 +18,14 @@ export default function VistoriasInstalacoesMon() {
   const { data: manualAtiva } = useConfigAtribuicaoManual();
   const { data: aprovacoesPendentes } = useVistoriaLinksAguardandoAprovacao();
   const totalAprovacoes = aprovacoesPendentes?.length || 0;
+  const [searchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get('tab');
+  const defaultTab = tabFromUrl || (manualAtiva ? 'atribuicao-manual' : 'servicos');
+  const [activeTab, setActiveTab] = useState(defaultTab);
+
+  useEffect(() => {
+    if (tabFromUrl) setActiveTab(tabFromUrl);
+  }, [tabFromUrl]);
 
   return (
     <div className="container mx-auto py-6 space-y-4">
