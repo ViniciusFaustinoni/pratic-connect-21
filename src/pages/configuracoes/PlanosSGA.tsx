@@ -297,7 +297,7 @@ function ProdutosTable({ loading, items, onShowDetalhe, cached, total }: TablePr
           </TableBody>
         </Table>
       </div>
-    </>
+    </div>
   );
 }
 
