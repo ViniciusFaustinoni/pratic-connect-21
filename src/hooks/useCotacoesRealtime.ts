@@ -275,5 +275,5 @@ export function useCotacoesRealtime(options?: { enabled?: boolean }) {
       console.log('[useCotacoesRealtime] Removendo listeners realtime');
       supabase.removeChannel(channel);
     };
-  }, [queryClient]);
+  }, [queryClient, enabled, throttledInvalidate]);
 }
