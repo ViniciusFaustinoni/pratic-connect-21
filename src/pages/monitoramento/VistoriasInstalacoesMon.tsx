@@ -55,15 +55,7 @@ export default function VistoriasInstalacoesMon() {
               <MapIcon className="h-4 w-4" />
               <span className="hidden sm:inline">Mapa</span>
             </TabsTrigger>
-            <TabsTrigger value="aprovacao-fotos" className="gap-2 shrink-0">
-              <Camera className="h-4 w-4" />
-              <span className="hidden sm:inline">Aprovar Fotos</span>
-              {totalAprovacoes > 0 && (
-                <Badge variant="destructive" className="h-5 min-w-5 px-1.5 text-[10px]">
-                  {totalAprovacoes}
-                </Badge>
-              )}
-            </TabsTrigger>
+            
             <TabsTrigger value="historico" className="gap-2 shrink-0">
               <History className="h-4 w-4" />
               <span className="hidden sm:inline">Histórico</span>
