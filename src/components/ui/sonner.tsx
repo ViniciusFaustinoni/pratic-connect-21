@@ -1,9 +1,13 @@
+import * as React from "react";
 import { useTheme } from "next-themes";
 import { Toaster as Sonner, toast } from "sonner";
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
-const Toaster = ({ ...props }: ToasterProps) => {
+// forwardRef silencia o warning "Function components cannot be given refs"
+// emitido em StrictMode quando providers (next-themes, Tooltip, etc.) tentam
+// encaminhar uma ref que não é usada por este componente.
+const Toaster = React.forwardRef<HTMLDivElement, ToasterProps>(({ ...props }, _ref) => {
   const { theme = "system" } = useTheme();
 
   return (
@@ -22,6 +26,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       {...props}
     />
   );
-};
+});
+Toaster.displayName = "Toaster";
 
 export { Toaster, toast };
