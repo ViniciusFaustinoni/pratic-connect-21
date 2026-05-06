@@ -24,6 +24,16 @@ import { cn } from '@/lib/utils';
 const PrestadoresParceirosTab = lazy(() => import('./PrestadoresParceiros'));
 
 export default function Equipe() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get('tab');
+  const [mainTab, setMainTabState] = useState<string>(tabFromUrl || 'equipe');
+  const setMainTab = (v: string) => {
+    setMainTabState(v);
+    const next = new URLSearchParams(searchParams);
+    if (v === 'equipe') next.delete('tab'); else next.set('tab', v);
+    setSearchParams(next, { replace: true });
+  };
+  useEffect(() => { if (tabFromUrl && tabFromUrl !== mainTab) setMainTabState(tabFromUrl); }, [tabFromUrl]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [statusOperacionalFilter, setStatusOperacionalFilter] = useState<string>('todos');
