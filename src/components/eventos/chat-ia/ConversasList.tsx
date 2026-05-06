@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Search, User, Bot, Loader2, MessageSquare } from 'lucide-react';
+import { Search, User, Bot, Loader2, MessageSquare, AlertCircle } from 'lucide-react';
+import { formatDistanceToNowStrict } from 'date-fns';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Input } from '@/components/ui/input';
