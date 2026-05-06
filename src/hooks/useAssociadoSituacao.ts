@@ -248,7 +248,7 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
       consultorPontuacao: consultorInfo?.pontuacao ?? null,
       isLoading: isLoadingPrazos || isLoadingContrato || isLoadingAssociado || isLoadingInadimplencia,
     };
-  }, [contrato, associado, inadimplenciaPorVeiculo, algumVeiculoInadimplente, beneficiosAdicionaisSuspensos, prazos, multaRastreador, consultorInfo, carenciasBeneficios, carenciasCoberturas, isLoadingPrazos, isLoadingContrato, isLoadingAssociado, isLoadingInadimplencia]);
+  }, [contrato, associado, inadimplenciaPorVeiculo, veiculosSuspensosOutroMotivo, algumVeiculoInadimplente, algumVeiculoComCoberturaSuspensa, beneficiosAdicionaisSuspensos, prazos, multaRastreador, consultorInfo, carenciasBeneficios, carenciasCoberturas, isLoadingPrazos, isLoadingContrato, isLoadingAssociado, isLoadingInadimplencia]);
 
   return situacao;
 }
