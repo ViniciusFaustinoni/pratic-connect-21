@@ -98,6 +98,9 @@ export default function DiretoriaDashboard() {
   // Query principal de stats
   const { data: stats, isLoading: loadingStats } = useQuery({
     queryKey: ['diretoria-stats', periodo],
+    staleTime: 2 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const inicioMes = getDataInicio();
 
