@@ -109,11 +109,50 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl }: ChatPanelProps) 
         if (!data?.success) throw new Error(data?.error || 'Erro ao enviar');
         setTexto('');
       }
+      // Pausa IA por 10 minutos após intervenção humana
+      try { await pausarPorIntervencao(); } catch (e) { console.warn('falha ao pausar IA', e); }
       setTimeout(() => refetch(), 1000);
     } catch (err: any) {
       toast.error(`Erro: ${err.message}`);
     } finally {
       setEnviando(false);
+    }
+  };
+
+  const handleUploadFile = async (file: File) => {
+    if (!telefone || !file) return;
+    setEnviando(true);
+    try {
+      const reader = new FileReader();
+      const base64 = await new Promise<string>((resolve) => {
+        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+        reader.readAsDataURL(file);
+      });
+      const mt = file.type || 'application/octet-stream';
+      const media_type =
+        mt.startsWith('image/') ? 'image' :
+        mt.startsWith('video/') ? 'video' :
+        mt.startsWith('audio/') ? 'audio' : 'document';
+
+      const { data, error } = await supabase.functions.invoke('whatsapp-send-media', {
+        body: {
+          telefone,
+          media_base64: base64,
+          media_type,
+          mimetype: mt,
+          filename: file.name,
+        },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Erro ao enviar arquivo');
+      toast.success('Arquivo enviado!');
+      try { await pausarPorIntervencao(); } catch {}
+      setTimeout(() => refetch(), 1000);
+    } catch (err: any) {
+      toast.error(`Erro: ${err.message}`);
+    } finally {
+      setEnviando(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
