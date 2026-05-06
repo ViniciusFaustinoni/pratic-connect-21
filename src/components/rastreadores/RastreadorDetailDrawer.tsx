@@ -816,7 +816,7 @@ export function RastreadorDetailDrawer({
                     </div>
                     <GestaoRedeVeiculos
                       veiculoId={rastreador.veiculo_id}
-                      associadoId={(rastreador as any).veiculo?.associado_id ?? null}
+                      associadoId={(rastreador as any).veiculos?.associado_id ?? null}
                       rastreadorId={rastreador.id}
                       imei={rastreador.imei}
                     />
