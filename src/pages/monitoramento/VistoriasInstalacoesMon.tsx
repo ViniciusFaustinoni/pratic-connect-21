@@ -51,6 +51,10 @@ export default function VistoriasInstalacoesMon() {
               <ListChecks className="h-4 w-4" />
               <span className="hidden sm:inline">Serviços</span>
             </TabsTrigger>
+            <TabsTrigger value="mapa" className="gap-2 shrink-0">
+              <MapIcon className="h-4 w-4" />
+              <span className="hidden sm:inline">Mapa</span>
+            </TabsTrigger>
             <TabsTrigger value="aprovacao-fotos" className="gap-2 shrink-0">
               <Camera className="h-4 w-4" />
               <span className="hidden sm:inline">Aprovar Fotos</span>
