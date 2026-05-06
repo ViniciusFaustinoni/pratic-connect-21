@@ -40,6 +40,8 @@ export interface SolicitacaoTroca {
   criado_por: string | null;
   created_at: string;
   updated_at: string;
+  analise_previa_resultado?: any;
+  analise_previa_em?: string | null;
   associado_antigo?: { id: string; nome: string; cpf: string | null; email: string | null; telefone: string | null } | null;
   veiculo?: { id: string; marca: string; modelo: string; ano: number; placa: string } | null;
   cotacao?: { id: string; numero: string | null; token_publico: string | null; status: string } | null;
