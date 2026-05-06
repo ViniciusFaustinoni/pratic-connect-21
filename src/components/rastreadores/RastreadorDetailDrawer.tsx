@@ -793,7 +793,15 @@ export function RastreadorDetailDrawer({
                 )}
               </TabsContent>
 
-              {/* Aba de Comandos (opcional - para histórico) */}
+              <TabsContent value="usuarios" className="mt-4">
+                {rastreador && (
+                  <UsuariosVeiculoSoftruck
+                    veiculoId={rastreador.veiculo_id}
+                    plataforma={rastreador.plataforma}
+                  />
+                )}
+              </TabsContent>
+
             </Tabs>
 
             {/* Dialog de Comando */}
