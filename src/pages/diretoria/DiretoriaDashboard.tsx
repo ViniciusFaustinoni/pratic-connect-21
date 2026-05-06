@@ -188,6 +188,9 @@ export default function DiretoriaDashboard() {
   // Query de distribuição por plano
   const { data: distribuicao, isLoading: loadingDistribuicao } = useQuery({
     queryKey: ['distribuicao-planos'],
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const { data: associados } = await supabase
         .from('associados')
