@@ -241,7 +241,7 @@ function ProdutosTable({ loading, items, onShowDetalhe, cached, total }: TablePr
     );
   }
   return (
-    <>
+    <div>
       <MetaLine cached={cached} mostrando={items.length} total={total} />
       <div className="rounded-md border">
         <Table>
@@ -297,7 +297,7 @@ function ProdutosTable({ loading, items, onShowDetalhe, cached, total }: TablePr
           </TableBody>
         </Table>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -311,7 +311,7 @@ function BeneficiosTable({ loading, items, onShowDetalhe, cached, total }: Table
     );
   }
   return (
-    <>
+    <div>
       <MetaLine cached={cached} mostrando={items.length} total={total} />
       <div className="rounded-md border">
         <Table>
@@ -351,7 +351,7 @@ function BeneficiosTable({ loading, items, onShowDetalhe, cached, total }: Table
           </TableBody>
         </Table>
       </div>
-    </>
+    </div>
   );
 }
 
