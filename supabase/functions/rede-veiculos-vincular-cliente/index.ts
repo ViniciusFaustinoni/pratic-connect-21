@@ -269,14 +269,41 @@ serve(async (req) => {
     console.log('[RedeVeiculos Vincular] Payload montado:', JSON.stringify(payload, null, 2));
 
     // ===== 7. Chamar API Rede Veículos - POST /vincularClienteVeiculo =====
-    const formData = new URLSearchParams();
-    formData.append('json', JSON.stringify(payload));
+    // A API espera campos flat em multipart/form-data (NÃO um único campo "json"),
+    // assim como /desvincularClienteVeiculo. Enviar como objeto aninhado retorna
+    // "O CPF/CNPJ e/ou IMEI não foram informados".
+    const formData = new FormData();
+    // Equipamento
+    formData.append('imei', payload.equipamento.imei);
+    formData.append('localInstalacao', payload.equipamento.localInstalacao);
+    formData.append('possuiBloqueio', payload.equipamento.possuiBloqueio ? '1' : '0');
+    // Veículo
+    formData.append('tipo', payload.veiculo.tipo);
+    formData.append('marca', payload.veiculo.marca);
+    formData.append('modelo', payload.veiculo.modelo);
+    formData.append('placa', payload.veiculo.placa);
+    formData.append('cor', payload.veiculo.cor);
+    formData.append('ano', String(payload.veiculo.ano));
+    if (payload.veiculo.chassi) formData.append('chassi', payload.veiculo.chassi);
+    if (payload.veiculo.renavam) formData.append('renavam', payload.veiculo.renavam);
+    // Cliente
+    formData.append('cpfCnpj', payload.cliente.cpfCnpj);
+    formData.append('nome', payload.cliente.nome);
+    formData.append('celular', payload.cliente.celular);
+    formData.append('email', payload.cliente.email);
+    if (payload.cliente.endereco) {
+      formData.append('cep', payload.cliente.endereco.cep);
+      formData.append('logradouro', payload.cliente.endereco.logradouro);
+      formData.append('numero', payload.cliente.endereco.numero);
+      formData.append('bairro', payload.cliente.endereco.bairro);
+      formData.append('cidade', payload.cliente.endereco.cidade);
+      formData.append('uf', payload.cliente.endereco.uf);
+    }
 
     const apiResponse = await fetch(`${baseUrl}/vincularClienteVeiculo/`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: formData,
     });
@@ -284,17 +311,22 @@ serve(async (req) => {
     const responseText = await apiResponse.text();
     console.log('[RedeVeiculos Vincular] Resposta API:', responseText);
 
-    let apiResult: VincularResponse;
+    let apiResult: VincularResponse & { error?: string | boolean; message?: string };
     try {
       apiResult = JSON.parse(responseText);
     } catch {
       throw new Error(`Resposta inválida da API: ${responseText}`);
     }
 
-    // Verificar código de resposta
-    // Código 1 = sucesso, outros = erro
-    if (apiResult.codigo !== 1) {
-      // Registrar log de erro
+    // A API pode responder em dois formatos:
+    //  - sucesso legado: { codigo: 1, msg, idCliente, idVeiculo, idEquipamento }
+    //  - erro novo:      { error: "true", message: "..." }
+    const apiError = apiResult.error === true || apiResult.error === 'true';
+    const sucessoCodigo = apiResult.codigo === 1;
+    if (apiError || (apiResult.codigo !== undefined && !sucessoCodigo)) {
+      const mensagem = apiResult.message || apiResult.msg || 'Erro desconhecido';
+      const codigo = apiResult.codigo ?? 'erro';
+
       await supabase.from('rastreadores_api_logs').insert({
         rastreador_id: rastreador.id,
         plataforma: 'rede_veiculos',
@@ -302,10 +334,10 @@ serve(async (req) => {
         request: payload,
         response: apiResult,
         status: 'erro',
-        erro_mensagem: apiResult.msg,
+        erro_mensagem: mensagem,
       });
 
-      throw new Error(`Erro na API Rede Veículos: ${apiResult.msg} (código: ${apiResult.codigo})`);
+      throw new Error(`Erro na API Rede Veículos: ${mensagem} (código: ${codigo})`);
     }
 
     console.log('[RedeVeiculos Vincular] Vinculação bem sucedida:', apiResult);
