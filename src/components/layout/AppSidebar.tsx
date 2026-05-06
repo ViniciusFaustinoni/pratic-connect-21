@@ -462,7 +462,7 @@ const SUPER_GROUPS: SuperGroup[] = [
     label: 'Relacionamento',
     icon: Users,
     color: '#ef4444',
-    moduleIds: ['monitoramento', 'eventos', 'assistencia', 'oficinas', 'cobranca'],
+    moduleIds: ['relacionamento', 'monitoramento', 'eventos', 'assistencia', 'oficinas', 'cobranca'],
   },
   {
     id: 'administrativo',
