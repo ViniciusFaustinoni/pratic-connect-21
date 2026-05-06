@@ -464,9 +464,11 @@ export default function Cotacoes() {
           planosComparar: planosParaPdf,
         };
 
-        await gerarPdfCotacaoComparativa(cotacaoComparativa);
+        const pdfMod = await import('@/lib/gerarPdfCotacao');
+        await pdfMod.gerarPdfCotacaoComparativa(cotacaoComparativa);
       } else {
-        await gerarPdfCotacao(cotacao);
+        const pdfMod = await import('@/lib/gerarPdfCotacao');
+        await pdfMod.gerarPdfCotacao(cotacao);
       }
       
       toast.success('PDF gerado com sucesso!');
