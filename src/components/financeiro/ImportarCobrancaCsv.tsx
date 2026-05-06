@@ -73,6 +73,7 @@ export function ImportarCobrancaCsv() {
       }
       setResultado(r);
       setEtapa('preview');
+      void carregarPreviewReconciliacao(r);
     } catch (e: any) {
       toast.error(`Erro ao ler CSV: ${e.message}`);
       setArquivo(null);
