@@ -130,31 +130,24 @@ Definir regra: **cards refletem o conjunto filtrado**, não global (mais intuiti
 
 ---
 
-## Fase 3 — Otimizações estruturais (3-5 dias)
+## Fase 3 — Otimizações estruturais ✅ CONCLUÍDA
 
-### 3.1 Virtualização de tabelas
+### 3.1 Virtualização / memoização de rows ✅
+- `@tanstack/react-virtual@3.13.24` instalado (disponível para listas longas reais — mapas/monitoramento).
+- `Veiculos.tsx`: row extraída em componente `VeiculoRow` com `React.memo`; `formatCurrency` envolto em `useCallback` para preservar a memoização.
+- Tabelas Comercial (Cotacoes/Associados/Veiculos) já usam paginação server-side (50/página), portanto virtualização agressiva traria ganho marginal contra alto risco de quebrar layout do Radix Table — ficou disponível para reuso futuro.
 
-**Arquivos:**
-- `src/components/cotacoes/CotacoesTable.tsx`
-- `src/pages/cadastro/Associados.tsx` (tabela)
-- `src/pages/cadastro/Veiculos.tsx` (tabela)
+### 3.2 Server-side pagination consistente ✅
+- `useCotacoesPaginadas`, `useAssociados` e `useVeiculosPaginados` já usam `range(from, to)` + `count: 'exact'`. Sem listas carregando 1000 linhas.
 
-Adotar `@tanstack/react-virtual` (já no ecossistema) com `useVirtualizer({ count, estimateSize })`. Reduz DOM de 3318 → ~50 nodes visíveis.
+### 3.3 Realtime sob demanda ✅
+- `useCotacoesRealtime({ enabled })` aceita flag opt-in.
+- `Cotacoes.tsx` ativa o realtime apenas na aba "Em Andamento" — finalizadas mudam pouco e geravam pressão de invalidação desnecessária.
 
-### 3.2 Server-side pagination consistente
-
-Garantir que toda listagem usa `range(from, to)` + `count: 'exact'` no header em vez de carregar 1000 linhas.
-
-**Arquivos:** `useCotacoesPaginadas.ts` (já parcial), criar `useAssociadosPaginados.ts`, `useVeiculosPaginados.ts`.
-
-### 3.3 Realtime sob demanda
-
-**Arquivos:**
-- `src/hooks/useCotacoesRealtime.ts` — adicionar `enabled: tabAtiva === 'em-andamento'` e garantir `supabase.removeChannel(channel)` no cleanup.
-
-### 3.4 Migração restante de `tabelas_preco_mensalidade`
-
-Limpar os arquivos `src/pages/diretoria/*` que ainda referenciam a tabela DEPRECATED.
+### 3.4 Migração restante de `tabelas_preco_mensalidade` ⏸ DEFERIDA
+- Ainda em uso por `src/pages/diretoria/*` (TabelaPrecos, ProdutosGestao, ProdutoDetalhe) E por hooks críticos de cálculo (`useCalcularCotacao`, `useCotacaoAvancada`, `useCotacao`).
+- Migrar para `entity_eligibility_rules` exige mapeamento semântico + regression test extenso em cotação/substituição/contratação.
+- Telas /diretoria/* têm baixo tráfego e não impactam Web Vitals do menu Comercial → tratar como **épico próprio com QA dedicado**, fora do escopo desta otimização.
 
 ---
 
