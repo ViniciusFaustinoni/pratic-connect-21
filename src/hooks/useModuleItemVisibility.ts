@@ -123,7 +123,7 @@ export const MENU_ITEM_IDS: Record<string, string> = {
   // Marketing
   '/marketing': 'dashboard',
   '/marketing/campanhas': 'campanhas',
-  
+  '/marketing/canais': 'canais',
   '/marketing/indicacoes': 'indicacoes',
   '/marketing/utms': 'utms',
   '/marketing/distribuicao': 'distribuicao',
