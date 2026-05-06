@@ -80,19 +80,23 @@ Deno.serve(async (req) => {
     // Como Autentique exige PDF, precisamos converter. Usamos uma estratégia simples: enviar como text/html via base64 e deixar o Autentique gerar.
     // Na prática, o sistema usa edge `gerar-documento-autentique`. Aqui invocamos o mutation diretamente com upload simples.
 
+    const cpfRaw = (associadoAntigo.cpf || '').replace(/\D/g, '');
+    const signerObj: any = {
+      name: associadoAntigo.nome,
+      email: associadoAntigo.email,
+      action: 'SIGN',
+      delivery_method: 'DELIVERY_METHOD_EMAIL',
+      security_verifications: [{ type: 'PF_FACIAL' }],
+    };
+    if (cpfRaw.length === 11) signerObj.configs = { cpf: cpfRaw };
+
     const operations = {
       query: `mutation CreateDocumentMutation($document: DocumentInput!, $signers: [SignerInput!]!, $file: Upload!) {
         createDocument(sandbox: false, document: $document, signers: $signers, file: $file) { id name }
       }`,
       variables: {
-        document: { name: `Termo de Cancelamento - Troca - ${veiculo?.placa || ''}` },
-        signers: [{
-          email: associadoAntigo.email,
-          action: 'SIGN',
-          delivery_method: 'DELIVERY_METHOD_EMAIL',
-          configs: { cpf: associadoAntigo.cpf, signature_appearance: 'HANDWRITING' },
-          security: ['PF_FACIAL'],
-        }],
+        document: { name: `Termo de Cancelamento - Troca - ${veiculo?.placa || ''}`, new_signature_style: true },
+        signers: [signerObj],
         file: null,
       },
     };
