@@ -978,6 +978,30 @@ serve(async (req) => {
         break;
       }
 
+      case 'desassociar-todos-usuarios-veiculo': {
+        const { vehicleId } = data as { vehicleId: string };
+        if (!vehicleId) throw new Error('vehicleId é obrigatório');
+
+        // 1) lista usuários vinculados
+        const listEndpoint = `/v2/vehicles/${vehicleId}/associations/users?includes[user][]=name&includes[user][]=username`;
+        const listResp = await softruckRequest('GET', listEndpoint, token);
+        const items = (listResp?.data as any[]) || [];
+        const ids = items.map((it: any) => it?.id).filter(Boolean);
+
+        if (ids.length === 0) {
+          result = { desvinculados: 0, ids: [] };
+          break;
+        }
+
+        const deleteData = {
+          data: ids.map((id: string) => ({ type: 'user_permission', id })),
+        };
+
+        await softruckRequest('DELETE', '/v2/vehicles/associations/users', token, deleteData);
+        result = { desvinculados: ids.length, ids };
+        break;
+      }
+
       case 'listar-usuarios-veiculo': {
         const { vehicleId } = data as { vehicleId: string };
         if (!vehicleId) throw new Error('vehicleId é obrigatório');
