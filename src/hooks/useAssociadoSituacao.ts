@@ -240,6 +240,7 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
       coberturasSuspensas,
       coberturaPorVeiculo,
       veiculosInadimplentes: inadimplenciaPorVeiculo,
+      veiculosSuspensosOutroMotivo,
       beneficiosAdicionaisSuspensos,
       pendenciaRastreador: associado?.pendencia_rastreador || false,
       valorMultaRastreador: multaRastreador || 400,
