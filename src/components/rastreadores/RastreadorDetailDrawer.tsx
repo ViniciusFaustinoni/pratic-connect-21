@@ -197,7 +197,7 @@ export function RastreadorDetailDrawer({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl w-[95vw] h-[95vh] max-h-[95vh] overflow-y-auto flex flex-col">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -284,7 +284,7 @@ export function RastreadorDetailDrawer({
                         Reconciliar dados com a Softruck (placa, vínculo).
                       </p>
                     )}
-                    {reconciliarPreview && (
+                    {reconciliarPreview && isDiretor && (
                       <pre className="mt-2 text-xs bg-background/60 p-2 rounded max-h-40 overflow-auto">
 {JSON.stringify(reconciliarPreview, null, 2)}
                       </pre>
