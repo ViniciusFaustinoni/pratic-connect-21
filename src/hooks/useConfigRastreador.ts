@@ -1,49 +1,19 @@
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { useConfiguracoesAll } from './useConfiguracoesAll';
 
 const FIPE_MINIMO_RASTREADOR_PADRAO = 30000;
 const FIPE_MINIMO_RASTREADOR_MOTO_PADRAO = 9000;
 
+/** Lê do cache global (1 fetch para a app inteira). Mantém shape `useQuery`. */
 export function useConfigFipeRastreador() {
-  return useQuery({
-    queryKey: ['config-fipe-minimo-rastreador'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('configuracoes')
-        .select('valor')
-        .eq('chave', 'operacional_fipe_minimo_rastreador')
-        .single();
-      
-      if (error) {
-        console.warn('[useConfigFipeRastreador] Erro ao buscar:', error);
-        return FIPE_MINIMO_RASTREADOR_PADRAO;
-      }
-      
-      return Number(data?.valor) || FIPE_MINIMO_RASTREADOR_PADRAO;
-    },
-    staleTime: 1000 * 60 * 10,
-  });
+  const q = useConfiguracoesAll();
+  const data = Number(q.data?.['operacional_fipe_minimo_rastreador']) || FIPE_MINIMO_RASTREADOR_PADRAO;
+  return { ...q, data } as typeof q & { data: number };
 }
 
 export function useConfigFipeRastreadorMoto() {
-  return useQuery({
-    queryKey: ['config-fipe-minimo-rastreador-moto'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('configuracoes')
-        .select('valor')
-        .eq('chave', 'operacional_fipe_minimo_rastreador_moto')
-        .single();
-      
-      if (error) {
-        console.warn('[useConfigFipeRastreadorMoto] Erro ao buscar:', error);
-        return FIPE_MINIMO_RASTREADOR_MOTO_PADRAO;
-      }
-      
-      return Number(data?.valor) || FIPE_MINIMO_RASTREADOR_MOTO_PADRAO;
-    },
-    staleTime: 1000 * 60 * 10,
-  });
+  const q = useConfiguracoesAll();
+  const data = Number(q.data?.['operacional_fipe_minimo_rastreador_moto']) || FIPE_MINIMO_RASTREADOR_MOTO_PADRAO;
+  return { ...q, data } as typeof q & { data: number };
 }
 
 /**

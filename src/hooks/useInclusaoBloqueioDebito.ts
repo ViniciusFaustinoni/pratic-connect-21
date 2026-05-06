@@ -1,24 +1,12 @@
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { useConfiguracoesAll } from './useConfiguracoesAll';
 
 /**
- * Lê a configuração `inclusao_bloquear_debito_outro_veiculo` da tabela `configuracoes`.
+ * Lê `inclusao_bloquear_debito_outro_veiculo` do cache global de configurações.
  * Default: true (bloqueio ativo).
  */
 export function useInclusaoBloqueioDebito() {
-  return useQuery({
-    queryKey: ['configuracao', 'inclusao_bloquear_debito_outro_veiculo'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('configuracoes')
-        .select('valor')
-        .eq('chave', 'inclusao_bloquear_debito_outro_veiculo')
-        .maybeSingle();
-
-      // Default true se não existir
-      if (!data?.valor) return true;
-      return data.valor === 'true';
-    },
-    staleTime: 1000 * 60 * 5,
-  });
+  const q = useConfiguracoesAll();
+  const raw = q.data?.['inclusao_bloquear_debito_outro_veiculo'];
+  const data = raw == null ? true : raw === 'true';
+  return { ...q, data } as typeof q & { data: boolean };
 }

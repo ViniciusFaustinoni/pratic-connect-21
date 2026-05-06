@@ -1,20 +1,12 @@
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { useConfiguracoesAll } from './useConfiguracoesAll';
 
+/**
+ * Lê do cache global de configuracoes (1 fetch para a app inteira).
+ * Antes este hook fazia seu próprio fetch isolado.
+ */
 export function useFipeMenorAtivo() {
-  const { data: ativo = true, isLoading } = useQuery({
-    queryKey: ['config-fipe-menor-ativo'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('configuracoes')
-        .select('valor')
-        .eq('chave', 'fipe_menor_ativo')
-        .maybeSingle();
-      if (error) throw error;
-      return data?.valor === 'true';
-    },
-    staleTime: 5 * 60 * 1000, // 5 min
-  });
-
-  return { fipeMenorAtivo: ativo, isLoading };
+  const { data, isLoading } = useConfiguracoesAll();
+  const ativo = data?.['fipe_menor_ativo'] === 'true';
+  // mantém o default histórico (true) enquanto carrega/sem registro
+  return { fipeMenorAtivo: data ? ativo : true, isLoading };
 }

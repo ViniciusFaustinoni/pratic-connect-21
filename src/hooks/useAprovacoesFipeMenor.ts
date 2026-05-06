@@ -43,6 +43,9 @@ export function useAprovacoesFipeMenor(statusFilter?: string) {
   return useQuery({
     queryKey: ['aprovacoes-fipe-menor', statusFilter],
     queryFn: async () => {
+      // NOTA: `solicitante_id` aponta para `auth.users`, não para `profiles`,
+      // então não dá para usar embed `profiles!solicitante_id` (HTTP 400).
+      // Buscamos os profiles em uma segunda chamada por `user_id` e juntamos no client.
       let query = supabase
         .from('aprovacoes_fipe_menor')
         .select(`
@@ -50,8 +53,7 @@ export function useAprovacoesFipeMenor(statusFilter?: string) {
           cotacao:cotacoes!cotacao_id(
             id, numero, valor_fipe, veiculo_marca, veiculo_modelo,
             veiculo_ano, veiculo_placa, nome_solicitante, telefone1_solicitante, status
-          ),
-          solicitante:profiles!solicitante_id(nome, email)
+          )
         `)
         .order('created_at', { ascending: false });
 
@@ -61,7 +63,24 @@ export function useAprovacoesFipeMenor(statusFilter?: string) {
 
       const { data, error } = await query;
       if (error) throw error;
-      return (data || []) as unknown as AprovacaoFipeMenor[];
+      const rows = (data || []) as any[];
+
+      const userIds = Array.from(new Set(rows.map((r) => r.solicitante_id).filter(Boolean)));
+      let profilesMap = new Map<string, { nome: string; email: string }>();
+      if (userIds.length) {
+        const { data: profs } = await supabase
+          .from('profiles')
+          .select('user_id, nome, email')
+          .in('user_id', userIds);
+        for (const p of profs || []) {
+          profilesMap.set(p.user_id, { nome: p.nome ?? '', email: p.email ?? '' });
+        }
+      }
+
+      return rows.map((r) => ({
+        ...r,
+        solicitante: profilesMap.get(r.solicitante_id) ?? null,
+      })) as AprovacaoFipeMenor[];
     },
   });
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Search, FileText, Send, Check, Loader2, CheckCircle, TrendingUp, Calendar as CalendarIcon, User, RefreshCw, CalendarDays, Link, ListChecks, FileUp, PenTool, CreditCard, MapPin, Clock, Trophy, Trash2, AlertTriangle } from 'lucide-react';
 import { formatDistanceToNow, format, isSameDay } from 'date-fns';
@@ -27,11 +27,22 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useVendedores } from '@/hooks/useVendedores';
 import { PermissionGate } from '@/components/PermissionGate';
-import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
-import { ContratoWizard } from '@/components/contratos/ContratoWizard';
+// Lazy: pesados, só montam quando o usuário abre. Evita ~50 fetches na entrada da listagem.
+const CotacaoFormDialog = lazy(() =>
+  import('@/components/cotacoes/CotacaoFormDialog').then((m) => ({ default: m.CotacaoFormDialog }))
+);
+const ContratoWizard = lazy(() =>
+  import('@/components/contratos/ContratoWizard').then((m) => ({ default: m.ContratoWizard }))
+);
+const RelatorioInteligenteCotacoesDialog = lazy(() =>
+  import('@/components/vendas/RelatorioInteligenteCotacoesDialog').then((m) => ({
+    default: m.RelatorioInteligenteCotacoesDialog,
+  }))
+);
 import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
 import { VincularLeadModal } from '@/components/cotacoes/VincularLeadModal';
-import { gerarPdfCotacao, gerarPdfCotacaoComparativa, type PlanoParaPdf, type CotacaoComparativaParaPdf } from '@/lib/gerarPdfCotacao';
+// gerarPdfCotacao* importados dinamicamente no handler (evita 54KB no bundle inicial)
+import type { PlanoParaPdf, CotacaoComparativaParaPdf } from '@/lib/gerarPdfCotacao';
 import { CotacoesTable, type CotacoesTablePermissions } from '@/components/cotacoes/CotacoesTable';
 import { CotacoesMobileList } from '@/components/cotacoes/CotacoesMobileList';
 import { CotacaoDetalhesModal } from '@/components/cotacoes/CotacaoDetalhesModal';
@@ -44,7 +55,6 @@ import { cn } from '@/lib/utils';
 import { useCotacoesRealtime } from '@/hooks/useCotacoesRealtime';
 import { NovaEntradaDialog } from '@/components/vendas/OutrasEntradasMenu';
 import { useDebounce } from '@/hooks/useDebounce';
-import { RelatorioInteligenteCotacoesDialog } from '@/components/vendas/RelatorioInteligenteCotacoesDialog';
 import { Sparkles } from 'lucide-react';
 
 // Categorização dinâmica — fallback por termos quando benefits.category não está disponível
@@ -454,9 +464,11 @@ export default function Cotacoes() {
           planosComparar: planosParaPdf,
         };
 
-        await gerarPdfCotacaoComparativa(cotacaoComparativa);
+        const pdfMod = await import('@/lib/gerarPdfCotacao');
+        await pdfMod.gerarPdfCotacaoComparativa(cotacaoComparativa);
       } else {
-        await gerarPdfCotacao(cotacao);
+        const pdfMod = await import('@/lib/gerarPdfCotacao');
+        await pdfMod.gerarPdfCotacao(cotacao);
       }
       
       toast.success('PDF gerado com sucesso!');
@@ -754,10 +766,14 @@ export default function Cotacoes() {
             onOpenChange={setShowNovaEntrada}
             onNovaCotacao={() => setShowCotacaoForm(true)}
           />
-          <RelatorioInteligenteCotacoesDialog
-            open={showRelatorioDialog}
-            onOpenChange={setShowRelatorioDialog}
-          />
+          {showRelatorioDialog && (
+            <Suspense fallback={null}>
+              <RelatorioInteligenteCotacoesDialog
+                open={showRelatorioDialog}
+                onOpenChange={setShowRelatorioDialog}
+              />
+            </Suspense>
+          )}
         </div>
       </div>
 
@@ -1151,80 +1167,87 @@ export default function Cotacoes() {
         canSend={cotacaoSelecionada ? getPermissions(cotacaoSelecionada).canSend : false}
       />
 
-      {/* Dialogs */}
-      <CotacaoFormDialog 
-        open={showCotacaoForm} 
-        onOpenChange={(open) => {
-          setShowCotacaoForm(open);
-          if (!open) {
-            setLeadIdFromUrl(null);
-            setCotacaoParaDuplicar(null);
-            setCotacaoParaContinuar(null);
-            setIgnorarPlacaIds([]);
-          }
-        }} 
-        leadId={leadIdFromUrl || undefined}
-        ignorarPlacaDuplicadaIds={ignorarPlacaIds}
-        cotacaoBase={cotacaoParaDuplicar ? {
-          valor_fipe: cotacaoParaDuplicar.valor_fipe,
-          valor_adicional: cotacaoParaDuplicar.valor_adicional,
-          valor_adesao: cotacaoParaDuplicar.valor_adesao,
-          validade_dias: cotacaoParaDuplicar.validade_dias,
-          veiculo_marca: cotacaoParaDuplicar.veiculo_marca,
-          veiculo_modelo: cotacaoParaDuplicar.veiculo_modelo,
-          veiculo_ano: cotacaoParaDuplicar.veiculo_ano,
-          veiculo_placa: cotacaoParaDuplicar.veiculo_placa,
-          codigo_fipe: cotacaoParaDuplicar.codigo_fipe,
-          categoria: cotacaoParaDuplicar.categoria,
-          regiao: cotacaoParaDuplicar.regiao,
-          nome_solicitante: cotacaoParaDuplicar.nome_solicitante || cotacaoParaDuplicar.leads?.nome || null,
-          telefone1_solicitante: cotacaoParaDuplicar.telefone1_solicitante || cotacaoParaDuplicar.leads?.telefone || null,
-          email_solicitante: cotacaoParaDuplicar.email_solicitante || cotacaoParaDuplicar.leads?.email || null,
-          lead_id: cotacaoParaDuplicar.lead_id,
-          plano_id: cotacaoParaDuplicar.plano_id,
-          dados_extras: cotacaoParaDuplicar.dados_extras as any,
-        } : null}
-        cotacaoParaEditar={cotacaoParaContinuar ? {
-          id: cotacaoParaContinuar.id,
-          valor_fipe: cotacaoParaContinuar.valor_fipe,
-          valor_adicional: cotacaoParaContinuar.valor_adicional,
-          valor_adesao: cotacaoParaContinuar.valor_adesao,
-          validade_dias: cotacaoParaContinuar.validade_dias,
-          veiculo_marca: cotacaoParaContinuar.veiculo_marca,
-          veiculo_modelo: cotacaoParaContinuar.veiculo_modelo,
-          veiculo_ano: cotacaoParaContinuar.veiculo_ano,
-          veiculo_placa: cotacaoParaContinuar.veiculo_placa,
-          codigo_fipe: cotacaoParaContinuar.codigo_fipe,
-          categoria: cotacaoParaContinuar.categoria,
-          regiao: cotacaoParaContinuar.regiao,
-          nome_solicitante: cotacaoParaContinuar.nome_solicitante || cotacaoParaContinuar.leads?.nome || null,
-          telefone1_solicitante: cotacaoParaContinuar.telefone1_solicitante || cotacaoParaContinuar.leads?.telefone || null,
-          email_solicitante: cotacaoParaContinuar.email_solicitante || cotacaoParaContinuar.leads?.email || null,
-          lead_id: cotacaoParaContinuar.lead_id,
-          plano_id: cotacaoParaContinuar.plano_id,
-          indicador_id: cotacaoParaContinuar.indicador_id,
-          indicador_nome: cotacaoParaContinuar.indicador_nome,
-          dados_extras: cotacaoParaContinuar.dados_extras as any,
-        } : null}
-        onSuccess={() => {
-          // Após criar/editar cotação, garantir que apareça: voltar para Em Andamento e limpar filtros
-          setActiveTab('em_andamento');
-          setStatusFilter('all');
-          setMesFilter('all');
-          setDataFilter(undefined);
-          setConsultorFilter('all');
-          setFiltroOrfas(false);
-          setEtapaFunilFilter('all');
-          setSearchInput('');
-          toast.success('Cotação salva! Exibindo em "Em Andamento".');
-        }}
-      />
-      <ContratoWizard 
-        open={showContratoWizard} 
-        onOpenChange={setShowContratoWizard} 
-        cotacaoId={selectedCotacaoId}
-        onContratoCreated={handleContratoCreated}
-      />
+      {/* Dialogs — lazy mount: só sobem quando o usuário abre, evitando ~50 fetches no carregamento da listagem */}
+      {showCotacaoForm && (
+        <Suspense fallback={null}>
+          <CotacaoFormDialog
+            open={showCotacaoForm}
+            onOpenChange={(open) => {
+              setShowCotacaoForm(open);
+              if (!open) {
+                setLeadIdFromUrl(null);
+                setCotacaoParaDuplicar(null);
+                setCotacaoParaContinuar(null);
+                setIgnorarPlacaIds([]);
+              }
+            }}
+            leadId={leadIdFromUrl || undefined}
+            ignorarPlacaDuplicadaIds={ignorarPlacaIds}
+            cotacaoBase={cotacaoParaDuplicar ? {
+              valor_fipe: cotacaoParaDuplicar.valor_fipe,
+              valor_adicional: cotacaoParaDuplicar.valor_adicional,
+              valor_adesao: cotacaoParaDuplicar.valor_adesao,
+              validade_dias: cotacaoParaDuplicar.validade_dias,
+              veiculo_marca: cotacaoParaDuplicar.veiculo_marca,
+              veiculo_modelo: cotacaoParaDuplicar.veiculo_modelo,
+              veiculo_ano: cotacaoParaDuplicar.veiculo_ano,
+              veiculo_placa: cotacaoParaDuplicar.veiculo_placa,
+              codigo_fipe: cotacaoParaDuplicar.codigo_fipe,
+              categoria: cotacaoParaDuplicar.categoria,
+              regiao: cotacaoParaDuplicar.regiao,
+              nome_solicitante: cotacaoParaDuplicar.nome_solicitante || cotacaoParaDuplicar.leads?.nome || null,
+              telefone1_solicitante: cotacaoParaDuplicar.telefone1_solicitante || cotacaoParaDuplicar.leads?.telefone || null,
+              email_solicitante: cotacaoParaDuplicar.email_solicitante || cotacaoParaDuplicar.leads?.email || null,
+              lead_id: cotacaoParaDuplicar.lead_id,
+              plano_id: cotacaoParaDuplicar.plano_id,
+              dados_extras: cotacaoParaDuplicar.dados_extras as any,
+            } : null}
+            cotacaoParaEditar={cotacaoParaContinuar ? {
+              id: cotacaoParaContinuar.id,
+              valor_fipe: cotacaoParaContinuar.valor_fipe,
+              valor_adicional: cotacaoParaContinuar.valor_adicional,
+              valor_adesao: cotacaoParaContinuar.valor_adesao,
+              validade_dias: cotacaoParaContinuar.validade_dias,
+              veiculo_marca: cotacaoParaContinuar.veiculo_marca,
+              veiculo_modelo: cotacaoParaContinuar.veiculo_modelo,
+              veiculo_ano: cotacaoParaContinuar.veiculo_ano,
+              veiculo_placa: cotacaoParaContinuar.veiculo_placa,
+              codigo_fipe: cotacaoParaContinuar.codigo_fipe,
+              categoria: cotacaoParaContinuar.categoria,
+              regiao: cotacaoParaContinuar.regiao,
+              nome_solicitante: cotacaoParaContinuar.nome_solicitante || cotacaoParaContinuar.leads?.nome || null,
+              telefone1_solicitante: cotacaoParaContinuar.telefone1_solicitante || cotacaoParaContinuar.leads?.telefone || null,
+              email_solicitante: cotacaoParaContinuar.email_solicitante || cotacaoParaContinuar.leads?.email || null,
+              lead_id: cotacaoParaContinuar.lead_id,
+              plano_id: cotacaoParaContinuar.plano_id,
+              indicador_id: cotacaoParaContinuar.indicador_id,
+              indicador_nome: cotacaoParaContinuar.indicador_nome,
+              dados_extras: cotacaoParaContinuar.dados_extras as any,
+            } : null}
+            onSuccess={() => {
+              setActiveTab('em_andamento');
+              setStatusFilter('all');
+              setMesFilter('all');
+              setDataFilter(undefined);
+              setConsultorFilter('all');
+              setFiltroOrfas(false);
+              setEtapaFunilFilter('all');
+              setSearchInput('');
+              toast.success('Cotação salva! Exibindo em "Em Andamento".');
+            }}
+          />
+        </Suspense>
+      )}
+      {showContratoWizard && (
+        <Suspense fallback={null}>
+          <ContratoWizard
+            open={showContratoWizard}
+            onOpenChange={setShowContratoWizard}
+            cotacaoId={selectedCotacaoId}
+            onContratoCreated={handleContratoCreated}
+          />
+        </Suspense>
+      )}
       {selectedCotacaoEmail && (
         <EnviarEmailModal
           open={showEmailModal}
