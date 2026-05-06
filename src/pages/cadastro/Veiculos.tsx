@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Search, Car, User, Smartphone, Loader2, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
@@ -96,6 +96,74 @@ const statusColors: Record<StatusVeiculo, string> = {
   sinistrado: 'bg-purple-100 text-purple-800',
 };
 
+interface VeiculoRowProps {
+  veiculo: any;
+  canDelete: boolean;
+  onSelect: (id: string) => void;
+  onDelete: (v: { id: string; placa: string }) => void;
+  formatCurrency: (v: number | null) => string;
+}
+
+const VeiculoRow = React.memo(function VeiculoRow({ veiculo, canDelete, onSelect, onDelete, formatCurrency }: VeiculoRowProps) {
+  const veiculoStatus = (veiculo.status as StatusVeiculo) || (veiculo.ativo ? 'ativo' : 'cancelado');
+  return (
+    <TableRow
+      className="cursor-pointer hover:bg-muted/50"
+      onClick={() => onSelect(veiculo.id)}
+    >
+      <TableCell>
+        <div className="flex items-center gap-3">
+          <div className="rounded-lg bg-primary/10 p-2">
+            <Car className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <p className="font-medium">{veiculo.marca}</p>
+            <p className="text-sm text-muted-foreground">{veiculo.modelo}</p>
+          </div>
+        </div>
+      </TableCell>
+      <TableCell className="font-mono">{veiculo.placa}</TableCell>
+      <TableCell>{veiculo.ano_fabricacao}/{veiculo.ano_modelo}</TableCell>
+      <TableCell>{veiculo.cor || '-'}</TableCell>
+      <TableCell>{formatCurrency(veiculo.valor_fipe)}</TableCell>
+      <TableCell>
+        {veiculo.uso_aplicativo ? (
+          <div className="flex items-center gap-1">
+            <Smartphone className="h-3 w-3 text-muted-foreground" />
+            <Badge variant="outline" className="text-xs">{veiculo.plataforma_app || 'Sim'}</Badge>
+          </div>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        )}
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-2">
+          <User className="h-3 w-3 text-muted-foreground" />
+          {veiculo.associado?.nome || 'Sem associado'}
+        </div>
+      </TableCell>
+      <TableCell>
+        <Badge className={statusColors[veiculoStatus]}>{STATUS_VEICULO_LABELS[veiculoStatus]}</Badge>
+      </TableCell>
+      {canDelete && (
+        <TableCell>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete({ id: veiculo.id, placa: veiculo.placa });
+            }}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </TableCell>
+      )}
+    </TableRow>
+  );
+});
+
 export default function Veiculos() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
@@ -172,13 +240,13 @@ export default function Veiculos() {
   // Reset de página quando muda busca/status (evita página vazia)
   useEffect(() => { setPage(1); }, [debouncedSearch, statusFilter]);
 
-  const formatCurrency = (value: number | null) => {
+  const formatCurrency = useCallback((value: number | null) => {
     if (!value) return 'N/A';
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL',
     }).format(value);
-  };
+  }, []);
 
   // Stats com filtros (RPC única — antes eram 2 HEADs + paginação completa de valor_fipe)
   const { data: statsData, isLoading: statsLoading } = useQuery({
@@ -431,72 +499,16 @@ export default function Veiculos() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredVeiculos.map((veiculo) => {
-                  const veiculoStatus = (veiculo.status as StatusVeiculo) || (veiculo.ativo ? 'ativo' : 'cancelado');
-                  return (
-                    <TableRow 
-                      key={veiculo.id} 
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => setSelectedVeiculoId(veiculo.id)}
-                    >
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="rounded-lg bg-primary/10 p-2">
-                            <Car className="h-4 w-4 text-primary" />
-                          </div>
-                          <div>
-                            <p className="font-medium">{veiculo.marca}</p>
-                            <p className="text-sm text-muted-foreground">{veiculo.modelo}</p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-mono">{veiculo.placa}</TableCell>
-                      <TableCell>
-                        {veiculo.ano_fabricacao}/{veiculo.ano_modelo}
-                      </TableCell>
-                      <TableCell>{veiculo.cor || '-'}</TableCell>
-                      <TableCell>{formatCurrency(veiculo.valor_fipe)}</TableCell>
-                      <TableCell>
-                        {veiculo.uso_aplicativo ? (
-                          <div className="flex items-center gap-1">
-                            <Smartphone className="h-3 w-3 text-muted-foreground" />
-                            <Badge variant="outline" className="text-xs">
-                              {veiculo.plataforma_app || 'Sim'}
-                            </Badge>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <User className="h-3 w-3 text-muted-foreground" />
-                          {(veiculo as any).associado?.nome || 'Sem associado'}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={statusColors[veiculoStatus]}>
-                          {STATUS_VEICULO_LABELS[veiculoStatus]}
-                        </Badge>
-                      </TableCell>
-                      {canDeleteVeiculo && (
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setVeiculoToDelete({ id: veiculo.id, placa: veiculo.placa });
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  );
-                })}
+                {filteredVeiculos.map((veiculo) => (
+                  <VeiculoRow
+                    key={veiculo.id}
+                    veiculo={veiculo}
+                    canDelete={canDeleteVeiculo}
+                    onSelect={setSelectedVeiculoId}
+                    onDelete={setVeiculoToDelete}
+                    formatCurrency={formatCurrency}
+                  />
+                ))}
               </TableBody>
             </Table>
           )}

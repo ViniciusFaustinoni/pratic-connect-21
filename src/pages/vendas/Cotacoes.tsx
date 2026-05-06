@@ -175,7 +175,8 @@ export default function Cotacoes() {
   const excluirCotacao = useExcluirCotacao();
   const queryClient = useQueryClient();
   
-  useCotacoesRealtime();
+  // Realtime só na aba "Em Andamento" — finalizadas mudam pouco e geram pressão.
+  useCotacoesRealtime({ enabled: isEmAndamentoTab });
 
   useEffect(() => {
     const leadParam = searchParams.get('lead');
