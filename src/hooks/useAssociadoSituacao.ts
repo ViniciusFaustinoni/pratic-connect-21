@@ -45,6 +45,7 @@ export interface SituacaoAssociado {
   // Per-vehicle
   coberturaPorVeiculo: CoberturaPorVeiculo[];
   veiculosInadimplentes: InadimplenciaVeiculo[];
+  veiculosSuspensosOutroMotivo: InadimplenciaVeiculo[];
   beneficiosAdicionaisSuspensos: boolean;
 
   // Multa rastreador
