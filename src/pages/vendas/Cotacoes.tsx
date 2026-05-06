@@ -1164,23 +1164,27 @@ export default function Cotacoes() {
         )}
       </Tabs>
 
-      {/* Modal de Detalhes */}
-      <CotacaoDetalhesModal 
-        open={showDetalhesModal}
-        onOpenChange={setShowDetalhesModal}
-        cotacao={cotacaoSelecionada}
-        onCopiarWhatsApp={copiarParaWhatsApp}
-        onPdf={handleBaixarPdf}
-        onEmail={handleOpenEmailModal}
-        onGerarContrato={handleOpenContratoWizard}
-        onAceitar={(id) => updateCotacao.mutate({ id, status: 'aceita' })}
-        onDuplicar={handleDuplicar}
-        onContinuar={handleContinuarCotacao}
-        isCopiandoWhatsApp={copiandoWhatsApp === cotacaoSelecionada?.id}
-        isGerandoContrato={gerarContrato.isPending}
-        canGenerateContract={cotacaoSelecionada ? getPermissions(cotacaoSelecionada).canGenerateContract : false}
-        canSend={cotacaoSelecionada ? getPermissions(cotacaoSelecionada).canSend : false}
-      />
+      {/* Modal de Detalhes — lazy + só monta quando abre */}
+      {showDetalhesModal && cotacaoSelecionada && (
+        <Suspense fallback={null}>
+          <CotacaoDetalhesModal
+            open={showDetalhesModal}
+            onOpenChange={setShowDetalhesModal}
+            cotacao={cotacaoSelecionada}
+            onCopiarWhatsApp={copiarParaWhatsApp}
+            onPdf={handleBaixarPdf}
+            onEmail={handleOpenEmailModal}
+            onGerarContrato={handleOpenContratoWizard}
+            onAceitar={(id) => updateCotacao.mutate({ id, status: 'aceita' })}
+            onDuplicar={handleDuplicar}
+            onContinuar={handleContinuarCotacao}
+            isCopiandoWhatsApp={copiandoWhatsApp === cotacaoSelecionada?.id}
+            isGerandoContrato={gerarContrato.isPending}
+            canGenerateContract={cotacaoSelecionada ? getPermissions(cotacaoSelecionada).canGenerateContract : false}
+            canSend={cotacaoSelecionada ? getPermissions(cotacaoSelecionada).canSend : false}
+          />
+        </Suspense>
+      )}
 
       {/* Dialogs — lazy mount: só sobem quando o usuário abre, evitando ~50 fetches no carregamento da listagem */}
       {showCotacaoForm && (
