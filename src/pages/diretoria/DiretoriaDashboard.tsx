@@ -215,6 +215,9 @@ export default function DiretoriaDashboard() {
   // Query do indicador atual (para fundo de reserva)
   const { data: indicadorAtual } = useQuery({
     queryKey: ['indicador-atual'],
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const mesAtual = new Date();
       const { data } = await supabase
