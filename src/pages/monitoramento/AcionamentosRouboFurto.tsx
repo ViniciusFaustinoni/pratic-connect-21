@@ -60,7 +60,9 @@ function getWaitTextColor(date?: string | null) {
 
 export default function AprovacaoAssociadosMonitoramento() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
+  const [reconciliandoId, setReconciliandoId] = useState<string | null>(null);
 
   const { data: instalacoesAnalise, isLoading: loadingAnalise } = useInstalacoesAguardandoAprovacao();
   const { data: instalacoesAtivacao, isLoading: loadingAtivacao } = useInstalacoesAguardandoAtivacao();
