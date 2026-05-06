@@ -274,7 +274,7 @@ export function usePropostasPendentes() {
           ? supabase.from('associados').select('*').in('id', associadoIds)
           : Promise.resolve({ data: [] as any[] }),
         veiculoIds.length
-          ? supabase.from('veiculos').select('id, status, cobertura_total, chassi, renavam').in('id', veiculoIds)
+          ? supabase.from('veiculos').select('id, status, cobertura_total, chassi, renavam, codigo_hinova, sincronizado_hinova').in('id', veiculoIds)
           : Promise.resolve({ data: [] as any[] }),
         planoIds.length
           ? supabase.from('planos').select('id, nome').in('id', planoIds)
@@ -502,9 +502,16 @@ export function usePropostasPendentes() {
         })();
         const instalacaoConcluida = mInstConcluida.has(contrato.id);
 
+        // Já sincronizado no SGA Hinova (associado E veículo) — saiu do Cadastro,
+        // está em fila de Instalação/Monitoramento conforme o status real no SGA.
+        const jaNoSGA =
+          !!(associado?.sincronizado_hinova && associado?.codigo_hinova) &&
+          !!(veiculoContrato?.sincronizado_hinova && veiculoContrato?.codigo_hinova);
+
         const propostaJaConcluida =
           associado?.status === 'ativo' ||
           instalacaoConcluida ||
+          jaNoSGA ||
           (associado?.status === 'aguardando_instalacao' && !docsPendentes && !vistoriaPendenteAnalise);
         if (propostaJaConcluida) return null;
 
