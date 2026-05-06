@@ -261,6 +261,8 @@ const JornadasProfissionais = lazy(() => import("./pages/rh/JornadasProfissionai
 // Marketing
 const MarketingDashboard = lazy(() => import("./pages/marketing/MarketingDashboard"));
 const Campanhas = lazy(() => import("./pages/marketing/Campanhas"));
+const Canais = lazy(() => import("./pages/marketing/Canais"));
+const CanalDetalhe = lazy(() => import("./pages/marketing/CanalDetalhe"));
 const CampanhaDetalhe = lazy(() => import("./pages/marketing/CampanhaDetalhe"));
 const CampanhaForm = lazy(() => import("./pages/marketing/CampanhaForm"));
 const Indicacoes = lazy(() => import("./pages/marketing/Indicacoes"));
