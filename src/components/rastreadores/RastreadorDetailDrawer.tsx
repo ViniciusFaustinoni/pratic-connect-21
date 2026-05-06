@@ -69,6 +69,7 @@ import { HistoricoComandos } from './HistoricoComandos';
 import { SubstituirEquipamentoDialog } from './SubstituirEquipamentoDialog';
 import { useEnviarComando } from '@/hooks/useComandosRastreador';
 import { VisualizadorFoto } from '@/components/analise/VisualizadorFoto';
+import { UsuariosVeiculoSoftruck } from './UsuariosVeiculoSoftruck';
 import { AlertTriangle } from 'lucide-react';
 
 interface RastreadorDetailDrawerProps {
