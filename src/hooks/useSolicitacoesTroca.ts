@@ -97,6 +97,7 @@ export function useCriarSolicitacaoTroca() {
     mutationFn: async (params: {
       associado_antigo_id: string;
       veiculo_id: string;
+      veiculo_placa?: string;
       novo_titular: { nome: string; cpf: string; email?: string; telefone?: string };
     }) => {
       const { data, error } = await supabase.functions.invoke('criar-solicitacao-troca-titularidade', {
