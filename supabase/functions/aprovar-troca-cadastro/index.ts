@@ -29,6 +29,26 @@ Deno.serve(async (req) => {
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    // TRAVA: aprovação só é permitida se o termo de cancelamento já foi assinado
+    // pelo titular antigo via Autentique (registro confirmado pelo webhook).
+    const { data: sol, error: solErr } = await admin
+      .from('solicitacoes_troca_titularidade')
+      .select('id, status, termo_cancelamento_assinado_em')
+      .eq('id', solicitacao_id)
+      .maybeSingle();
+    if (solErr) throw solErr;
+    if (!sol) {
+      return new Response(JSON.stringify({ error: 'Solicitação não encontrada' }), {
+        status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (!sol.termo_cancelamento_assinado_em) {
+      return new Response(
+        JSON.stringify({ error: 'Aprovação bloqueada: o titular antigo ainda não assinou o termo de cancelamento no Autentique.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     const { error } = await admin
       .from('solicitacoes_troca_titularidade')
       .update({
