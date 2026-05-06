@@ -21,6 +21,8 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
+const PrestadoresParceirosTab = lazy(() => import('./PrestadoresParceiros'));
+
 export default function Equipe() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
