@@ -27,11 +27,22 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useVendedores } from '@/hooks/useVendedores';
 import { PermissionGate } from '@/components/PermissionGate';
-import { CotacaoFormDialog } from '@/components/cotacoes/CotacaoFormDialog';
-import { ContratoWizard } from '@/components/contratos/ContratoWizard';
+// Lazy: pesados, só montam quando o usuário abre. Evita ~50 fetches na entrada da listagem.
+const CotacaoFormDialog = lazy(() =>
+  import('@/components/cotacoes/CotacaoFormDialog').then((m) => ({ default: m.CotacaoFormDialog }))
+);
+const ContratoWizard = lazy(() =>
+  import('@/components/contratos/ContratoWizard').then((m) => ({ default: m.ContratoWizard }))
+);
+const RelatorioInteligenteCotacoesDialog = lazy(() =>
+  import('@/components/vendas/RelatorioInteligenteCotacoesDialog').then((m) => ({
+    default: m.RelatorioInteligenteCotacoesDialog,
+  }))
+);
 import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
 import { VincularLeadModal } from '@/components/cotacoes/VincularLeadModal';
-import { gerarPdfCotacao, gerarPdfCotacaoComparativa, type PlanoParaPdf, type CotacaoComparativaParaPdf } from '@/lib/gerarPdfCotacao';
+// gerarPdfCotacao* importados dinamicamente no handler (evita 54KB no bundle inicial)
+import type { PlanoParaPdf, CotacaoComparativaParaPdf } from '@/lib/gerarPdfCotacao';
 import { CotacoesTable, type CotacoesTablePermissions } from '@/components/cotacoes/CotacoesTable';
 import { CotacoesMobileList } from '@/components/cotacoes/CotacoesMobileList';
 import { CotacaoDetalhesModal } from '@/components/cotacoes/CotacaoDetalhesModal';
@@ -44,7 +55,6 @@ import { cn } from '@/lib/utils';
 import { useCotacoesRealtime } from '@/hooks/useCotacoesRealtime';
 import { NovaEntradaDialog } from '@/components/vendas/OutrasEntradasMenu';
 import { useDebounce } from '@/hooks/useDebounce';
-import { RelatorioInteligenteCotacoesDialog } from '@/components/vendas/RelatorioInteligenteCotacoesDialog';
 import { Sparkles } from 'lucide-react';
 
 // Categorização dinâmica — fallback por termos quando benefits.category não está disponível
