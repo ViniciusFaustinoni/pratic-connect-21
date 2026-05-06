@@ -90,9 +90,61 @@ export function ImportarCobrancaCsv() {
     setArquivo(null);
     setResultado(null);
     setResultadoEnvio(null);
+    setReconciliacao(null);
     setProgresso({ atual: 0, total: 0 });
     cancelarRef.current = false;
   };
+
+  // Preview de reconciliação client-side: mostra antes do disparo quantos
+  // boletos da lista anterior NÃO estão nesta nova → serão marcados como recuperados.
+  const carregarPreviewReconciliacao = useCallback(async (parsed: ParseResultado) => {
+    setReconciliacao({ loading: true, loteAnteriorId: null, loteAnteriorNome: null, ausentes: 0, ausentesValor: 0, reemitidos: 0, reemitidosValor: 0 });
+    try {
+      const { data: lotes } = await supabase
+        .from('cobranca_csv_lotes')
+        .select('id, nome_arquivo')
+        .eq('status', 'ativo')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      const loteAnterior = lotes?.[0];
+      if (!loteAnterior) {
+        setReconciliacao({ loading: false, loteAnteriorId: null, loteAnteriorNome: null, ausentes: 0, ausentesValor: 0, reemitidos: 0, reemitidosValor: 0 });
+        return;
+      }
+      const novaLinhas = new Set(parsed.destinatarios.flatMap((d) => d.boletos.map((b) => (b.linha_digitavel || '').replace(/\D/g, ''))).filter(Boolean));
+      const novaMatriculas = new Set(parsed.destinatarios.map((d) => (d.matricula || '').trim()).filter(Boolean));
+      let ausentes = 0, ausentesValor = 0, reemitidos = 0, reemitidosValor = 0;
+      let from = 0;
+      while (true) {
+        const { data: page } = await supabase
+          .from('cobranca_csv_boletos')
+          .select('matricula, linha_digitavel, valor')
+          .eq('lote_id', loteAnterior.id)
+          .in('status', ['pendente_envio', 'enviado'])
+          .range(from, from + 999);
+        if (!page || page.length === 0) break;
+        for (const b of page) {
+          const ld = (b.linha_digitavel || '').replace(/\D/g, '');
+          if (novaLinhas.has(ld)) continue;
+          if (novaMatriculas.has((b.matricula || '').trim())) {
+            reemitidos++; reemitidosValor += Number(b.valor || 0);
+          } else {
+            ausentes++; ausentesValor += Number(b.valor || 0);
+          }
+        }
+        if (page.length < 1000) break;
+        from += 1000;
+      }
+      setReconciliacao({
+        loading: false,
+        loteAnteriorId: loteAnterior.id,
+        loteAnteriorNome: loteAnterior.nome_arquivo,
+        ausentes, ausentesValor, reemitidos, reemitidosValor,
+      });
+    } catch {
+      setReconciliacao({ loading: false, loteAnteriorId: null, loteAnteriorNome: null, ausentes: 0, ausentesValor: 0, reemitidos: 0, reemitidosValor: 0 });
+    }
+  }, []);
 
   const dispararEnvio = useCallback(async () => {
     if (!resultado) return;
