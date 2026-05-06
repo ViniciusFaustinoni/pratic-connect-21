@@ -130,7 +130,7 @@ export default function CampanhaForm() {
       const payload = {
         nome: formData.nome,
         tipo: formData.tipo,
-        
+        canal_id: formData.canal_id || null,
         publico_alvo: formData.publico_alvo || null,
         regioes: formData.regioes ? formData.regioes.split(',').map(r => r.trim()) : null,
         data_inicio: formData.data_inicio,
