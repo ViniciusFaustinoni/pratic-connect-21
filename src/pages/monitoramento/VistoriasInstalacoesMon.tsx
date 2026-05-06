@@ -38,7 +38,7 @@ export default function VistoriasInstalacoesMon() {
 
       <AlertaImprevistosPendentes />
 
-      <Tabs defaultValue={manualAtiva ? 'atribuicao-manual' : 'servicos'} className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="overflow-x-auto -mx-4 px-4">
           <TabsList className="w-auto inline-flex">
             {manualAtiva && (
