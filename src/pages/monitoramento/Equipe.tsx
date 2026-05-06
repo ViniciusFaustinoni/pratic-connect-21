@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useMemo, lazy, Suspense, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { PlantoesCalendario } from '@/components/equipe/PlantoesCalendario';
-import { Plus, Loader2, Users, Sparkles, CalendarDays, Wrench, Headphones } from 'lucide-react';
+import { Plus, Loader2, Users, Sparkles, CalendarDays, Wrench, Headphones, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Breadcrumb,
