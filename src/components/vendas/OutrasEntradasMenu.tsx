@@ -18,6 +18,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { maskCPF } from '@/lib/validations';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 type EntradaTipo = 'substituicao' | 'troca_titularidade' | 'migracao' | 'inclusao';
 
