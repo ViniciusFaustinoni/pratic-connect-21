@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
         dados_extras: {
           tipo_entrada: 'troca_titularidade',
           associado_antigo_id,
-          veiculo_origem_id: veiculo_id,
+          veiculo_origem_id: veiculo.id,
         },
       })
       .select('id, token_publico')
@@ -149,7 +149,7 @@ Deno.serve(async (req) => {
       .from('solicitacoes_troca_titularidade')
       .insert({
         associado_antigo_id,
-        veiculo_id,
+        veiculo_id: veiculo.id,
         cotacao_id: cotacao.id,
         novo_titular_dados: novo_titular,
         status: 'cotacao_em_andamento',
