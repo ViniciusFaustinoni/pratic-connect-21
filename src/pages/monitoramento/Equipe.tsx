@@ -211,8 +211,8 @@ export default function Equipe() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="equipe" className="w-full">
-        <TabsList className="w-full sm:w-auto grid grid-cols-2 sm:inline-flex">
+      <Tabs value={mainTab} onValueChange={setMainTab} className="w-full">
+        <TabsList className="w-full sm:w-auto grid grid-cols-3 sm:inline-flex">
           <TabsTrigger value="equipe" className="gap-2">
             <Users className="h-4 w-4" />
             Equipe
@@ -220,6 +220,10 @@ export default function Equipe() {
           <TabsTrigger value="plantoes" className="gap-2">
             <CalendarDays className="h-4 w-4" />
             Plantões
+          </TabsTrigger>
+          <TabsTrigger value="prestadores" className="gap-2">
+            <Truck className="h-4 w-4" />
+            Prestadores Parceiros
           </TabsTrigger>
         </TabsList>
 
