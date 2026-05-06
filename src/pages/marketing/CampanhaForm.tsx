@@ -87,7 +87,7 @@ export default function CampanhaForm() {
       setFormData({
         nome: campanha.nome || '',
         tipo: campanha.tipo || 'aquisicao',
-        
+        canal_id: (campanha as any).canal_id || '',
         publico_alvo: campanha.publico_alvo || '',
         regioes: campanha.regioes?.join(', ') || '',
         data_inicio: campanha.data_inicio || '',
