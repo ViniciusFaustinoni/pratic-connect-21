@@ -687,10 +687,7 @@ export function useMarketingStats() {
   });
 }
 
-// ========== PERFORMANCE POR ORIGEM DE LEAD ==========
-// Substitui o antigo "performance por canal" (canais_marketing foi removido).
-// Agora a performance é calculada diretamente a partir de leads.origem,
-// que é a fonte canônica de origem de leads no sistema.
+// ========== PERFORMANCE CANAIS ==========
 export interface PerformanceCanal {
   id: string;
   nome: string;
@@ -704,35 +701,14 @@ export interface PerformanceCanal {
 
 export function usePerformanceCanais() {
   return useQuery({
-    queryKey: ['performance-por-origem-lead'],
+    queryKey: ['performance-canais'],
     queryFn: async () => {
-      const { data: leads, error } = await supabase
-        .from('leads')
-        .select('origem, etapa');
+      const { data, error } = await supabase
+        .from('view_performance_canais')
+        .select('*');
       if (error) throw error;
-
-      const agg: Record<string, { total: number; conversoes: number }> = {};
-      (leads || []).forEach((l: any) => {
-        const origem = (l.origem || 'Não informado').toString();
-        if (!agg[origem]) agg[origem] = { total: 0, conversoes: 0 };
-        agg[origem].total += 1;
-        if (l.etapa === 'ganho') agg[origem].conversoes += 1;
-      });
-
-      const result: PerformanceCanal[] = Object.entries(agg).map(([origem, v]) => ({
-        id: origem,
-        nome: origem,
-        tipo: 'origem_lead',
-        total_leads: v.total,
-        conversoes: v.conversoes,
-        taxa_conversao: v.total > 0 ? (v.conversoes / v.total) * 100 : 0,
-        cpl_medio: 0,
-        investimento_total: 0,
-      }));
-
-      return result.sort((a, b) => b.total_leads - a.total_leads);
+      return data as PerformanceCanal[];
     },
-    staleTime: 1000 * 60 * 5,
   });
 }
 
