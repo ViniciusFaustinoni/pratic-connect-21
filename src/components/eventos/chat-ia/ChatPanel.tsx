@@ -423,13 +423,23 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'r
       </div>
 
       {/* Drawer detalhes do contato */}
-      <ContatoDetalheDrawer
-        telefone={telefone}
-        open={drawerAberto}
-        onOpenChange={setDrawerAberto}
-        nomeContato={nomeContato}
-        avatarUrl={avatarUrl}
-      />
+      {drawerVariant === 'eventos' ? (
+        <ContatoDetalheEventosDrawer
+          telefone={telefone}
+          open={drawerAberto}
+          onOpenChange={setDrawerAberto}
+          nomeContato={nomeContato}
+          avatarUrl={avatarUrl}
+        />
+      ) : (
+        <ContatoDetalheDrawer
+          telefone={telefone}
+          open={drawerAberto}
+          onOpenChange={setDrawerAberto}
+          nomeContato={nomeContato}
+          avatarUrl={avatarUrl}
+        />
+      )}
     </div>
   );
 }
