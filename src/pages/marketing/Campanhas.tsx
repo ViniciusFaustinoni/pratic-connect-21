@@ -54,7 +54,7 @@ export default function Campanhas() {
   const { data: campanhas, isLoading } = useCampanhas({ 
     status: statusFilter || undefined,
   });
-  const { data: canais } = useCanais();
+  
   const updateCampanha = useUpdateCampanha();
 
   // Filtrar por busca e tipo
