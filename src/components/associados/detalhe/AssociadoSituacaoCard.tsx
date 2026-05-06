@@ -127,21 +127,41 @@ export function AssociadoSituacaoCard({ situacao, associado, contrato, resumoFin
         </CardContent>
       </Card>
 
-      {/* Inadimplência */}
+      {/* Situação Financeira / Coberturas */}
       <Card className="border-border/60">
         <CardContent className="p-4 space-y-3">
           <div className="flex items-center gap-2 mb-1">
             <ShieldAlert className="h-4 w-4 text-primary" />
             <span className="text-sm font-semibold">Situação Financeira</span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className={cn('p-1.5 rounded-full', inadConfig.bg)}>
-              <InadIcon className={cn('h-3.5 w-3.5', inadConfig.color)} />
-            </div>
-            <span className={cn('text-sm font-medium', inadConfig.color)}>{inadConfig.label}</span>
-          </div>
 
-          {/* Per-vehicle inadimplência details */}
+          {/* Status financeiro — só mostra "Inadimplente" quando há cobrança vencida */}
+          {situacao.statusInadimplencia !== 'adimplente' ? (
+            <div className="flex items-center gap-2">
+              <div className={cn('p-1.5 rounded-full', inadConfig.bg)}>
+                <InadIcon className={cn('h-3.5 w-3.5', inadConfig.color)} />
+              </div>
+              <span className={cn('text-sm font-medium', inadConfig.color)}>{inadConfig.label}</span>
+            </div>
+          ) : situacao.veiculosSuspensosOutroMotivo.length > 0 ? (
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-full bg-orange-500/10">
+                <ShieldOff className="h-3.5 w-3.5 text-orange-600" />
+              </div>
+              <span className="text-sm font-medium text-orange-600">
+                Em dia financeiramente — Cobertura suspensa
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-full bg-emerald-500/10">
+                <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+              </div>
+              <span className="text-sm font-medium text-emerald-600">Adimplente</span>
+            </div>
+          )}
+
+          {/* Per-vehicle inadimplência financeira */}
           {situacao.veiculosInadimplentes.length > 0 && (
             <div className="space-y-1.5 pt-1">
               <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Veículos inadimplentes</p>
@@ -158,6 +178,32 @@ export function AssociadoSituacaoCard({ situacao, associado, contrato, resumoFin
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Per-vehicle suspensão por motivo NÃO financeiro */}
+          {situacao.veiculosSuspensosOutroMotivo.length > 0 && (
+            <div className="space-y-1.5 pt-1">
+              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Veículos com cobertura suspensa</p>
+              {situacao.veiculosSuspensosOutroMotivo.map(v => {
+                const motivoLabel =
+                  v.motivo === 'nao_instalacao' ? 'Instalação do rastreador não realizada no prazo'
+                  : v.motivo === 'manual' ? 'Suspensão manual'
+                  : (v.motivoDetalhe || 'Cobertura suspensa');
+                return (
+                  <div key={v.veiculoId} className="flex flex-col gap-1 text-xs bg-orange-500/5 rounded px-2 py-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Car className="h-3 w-3 text-orange-600" />
+                        <span className="font-mono font-medium">{v.placa}</span>
+                        <span className="text-muted-foreground">{v.marca} {v.modelo}</span>
+                      </div>
+                      <span className="text-orange-600 font-medium whitespace-nowrap">{v.diasAtraso}d</span>
+                    </div>
+                    <span className="text-orange-700/90 dark:text-orange-300 text-[11px]">{motivoLabel}</span>
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -229,16 +275,32 @@ export function AssociadoSituacaoCard({ situacao, associado, contrato, resumoFin
         </CardContent>
       </Card>
 
-      {/* Benefícios adicionais suspensos */}
+      {/* Benefícios adicionais suspensos (somente por inadimplência financeira) */}
       {situacao.beneficiosAdicionaisSuspensos && (
         <Card className="border-amber-400/40 sm:col-span-2">
           <CardContent className="p-4">
             <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
               <Ban className="h-4 w-4 text-amber-600" />
               <AlertDescription className="text-amber-800 dark:text-amber-300 text-xs">
-                <strong>Benefícios adicionais suspensos</strong> — Há inadimplência em um dos veículos. 
-                Benefícios como proteção de vidros, danos a terceiros e carro reserva ficam suspensos 
+                <strong>Benefícios adicionais suspensos</strong> — Há inadimplência em um dos veículos.
+                Benefícios como proteção de vidros, danos a terceiros e carro reserva ficam suspensos
                 em todos os veículos até que todos estejam em dia.
+              </AlertDescription>
+            </Alert>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Cobertura suspensa por não-instalação (sem inadimplência financeira) */}
+      {!situacao.beneficiosAdicionaisSuspensos && situacao.veiculosSuspensosOutroMotivo.some(v => v.motivo === 'nao_instalacao') && (
+        <Card className="border-orange-400/40 sm:col-span-2">
+          <CardContent className="p-4">
+            <Alert className="border-orange-200 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-800">
+              <ShieldOff className="h-4 w-4 text-orange-600" />
+              <AlertDescription className="text-orange-800 dark:text-orange-300 text-xs">
+                <strong>Cobertura suspensa — instalação do rastreador não realizada no prazo.</strong>{' '}
+                Conforme regra de roubo e furto, a proteção do veículo fica suspensa até que a instalação
+                do rastreador seja concluída. Reagende a instalação para reativar a cobertura.
               </AlertDescription>
             </Alert>
           </CardContent>

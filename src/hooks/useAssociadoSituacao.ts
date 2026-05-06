@@ -45,6 +45,7 @@ export interface SituacaoAssociado {
   // Per-vehicle
   coberturaPorVeiculo: CoberturaPorVeiculo[];
   veiculosInadimplentes: InadimplenciaVeiculo[];
+  veiculosSuspensosOutroMotivo: InadimplenciaVeiculo[];
   beneficiosAdicionaisSuspensos: boolean;
 
   // Multa rastreador
@@ -64,7 +65,7 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
   const { data: carenciaDias } = useCarenciaDiasPadrao();
   const { data: multaRastreador } = useMultaRastreador();
   const { data: migracaoConfig } = useMigracaoConfig();
-  const { inadimplenciaPorVeiculo, algumVeiculoInadimplente, beneficiosAdicionaisSuspensos, isLoading: isLoadingInadimplencia } = useInadimplenciaPorVeiculo(associadoId);
+  const { inadimplenciaPorVeiculo, veiculosSuspensosOutroMotivo, algumVeiculoInadimplente, algumVeiculoComCoberturaSuspensa, beneficiosAdicionaisSuspensos, isLoading: isLoadingInadimplencia } = useInadimplenciaPorVeiculo(associadoId);
 
   // Fetch contrato details (carência fields)
   const { data: contrato, isLoading: isLoadingContrato } = useQuery({
@@ -170,7 +171,9 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
     const carenciaFim = contrato?.data_carencia_fim || null;
     const emCarencia = !carenciaIsenta && !!carenciaFim && new Date(carenciaFim) > now;
 
-    // Inadimplência — use worst case from per-vehicle data
+    // Inadimplência financeira — usa SOMENTE veículos com cobrança vencida.
+    // Suspensão por não-instalação (e outros motivos não financeiros) NÃO entra
+    // no cálculo de statusInadimplencia.
     const diasAtraso = inadimplenciaPorVeiculo.length > 0
       ? Math.max(...inadimplenciaPorVeiculo.map(v => v.diasAtraso))
       : 0;
@@ -186,8 +189,8 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
       }
     }
 
-    // coberturasSuspensas = any vehicle is overdue (backward compat)
-    const coberturasSuspensas = algumVeiculoInadimplente;
+    // coberturasSuspensas = qualquer veículo com cobertura suspensa (qualquer motivo)
+    const coberturasSuspensas = algumVeiculoComCoberturaSuspensa;
 
     // Build per-vehicle coverage
     const coberturaPorVeiculo: CoberturaPorVeiculo[] = inadimplenciaPorVeiculo.map(v => ({
@@ -237,6 +240,7 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
       coberturasSuspensas,
       coberturaPorVeiculo,
       veiculosInadimplentes: inadimplenciaPorVeiculo,
+      veiculosSuspensosOutroMotivo,
       beneficiosAdicionaisSuspensos,
       pendenciaRastreador: associado?.pendencia_rastreador || false,
       valorMultaRastreador: multaRastreador || 400,
@@ -244,7 +248,7 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
       consultorPontuacao: consultorInfo?.pontuacao ?? null,
       isLoading: isLoadingPrazos || isLoadingContrato || isLoadingAssociado || isLoadingInadimplencia,
     };
-  }, [contrato, associado, inadimplenciaPorVeiculo, algumVeiculoInadimplente, beneficiosAdicionaisSuspensos, prazos, multaRastreador, consultorInfo, carenciasBeneficios, carenciasCoberturas, isLoadingPrazos, isLoadingContrato, isLoadingAssociado, isLoadingInadimplencia]);
+  }, [contrato, associado, inadimplenciaPorVeiculo, veiculosSuspensosOutroMotivo, algumVeiculoInadimplente, algumVeiculoComCoberturaSuspensa, beneficiosAdicionaisSuspensos, prazos, multaRastreador, consultorInfo, carenciasBeneficios, carenciasCoberturas, isLoadingPrazos, isLoadingContrato, isLoadingAssociado, isLoadingInadimplencia]);
 
   return situacao;
 }
