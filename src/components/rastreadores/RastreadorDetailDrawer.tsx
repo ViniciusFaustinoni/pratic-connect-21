@@ -340,10 +340,13 @@ export function RastreadorDetailDrawer({
                   Histórico
                 </TabsTrigger>
                 <TabsTrigger
-                  value="usuarios"
-                  disabled={rastreador?.plataforma !== 'softruck' || !rastreador?.veiculo_id}
+                  value="gestao"
+                  disabled={
+                    !rastreador?.veiculo_id ||
+                    (rastreador?.plataforma !== 'softruck' && rastreador?.plataforma !== 'rede_veiculos')
+                  }
                 >
-                  Usuários
+                  Gestão
                 </TabsTrigger>
               </TabsList>
 
