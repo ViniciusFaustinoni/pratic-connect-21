@@ -77,6 +77,7 @@ function gerarOpcoesPeriodo(): { value: string; label: string }[] {
 export default function RecuperadosPage() {
   const [periodo, setPeriodo] = useState<string>(getDefaultPeriodo());
   const [busca, setBusca] = useState('');
+  const [incluirReemitidos, setIncluirReemitidos] = useState(false);
   const [loading, setLoading] = useState(true);
   const [recuperados, setRecuperados] = useState<Recuperado[]>([]);
   const [lotes, setLotes] = useState<Lote[]>([]);
@@ -90,7 +91,7 @@ export default function RecuperadosPage() {
       const [{ data: rec, error: e1 }, { data: lts, error: e2 }] = await Promise.all([
         supabase
           .from('cobranca_csv_boletos')
-          .select('id, matricula, nome, placa, vencimento, linha_digitavel, valor, recuperado_em, lote_id, recuperado_no_lote_id')
+          .select('id, matricula, nome, placa, vencimento, linha_digitavel, valor, recuperado_em, lote_id, recuperado_no_lote_id, motivo_recuperacao')
           .eq('status', 'recuperado')
           .gte('recuperado_em', inicio)
           .lt('recuperado_em', fim)
@@ -98,7 +99,7 @@ export default function RecuperadosPage() {
           .limit(2000),
         supabase
           .from('cobranca_csv_lotes')
-          .select('id, nome_arquivo, total_boletos, total_associados, valor_total, total_enviados, status, created_at')
+          .select('id, nome_arquivo, total_boletos, total_associados, valor_total, total_enviados, total_associados_atingidos, status, created_at')
           .order('created_at', { ascending: false })
           .limit(50),
       ]);
