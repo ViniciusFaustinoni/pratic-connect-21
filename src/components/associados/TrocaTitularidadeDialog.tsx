@@ -146,9 +146,16 @@ export function TrocaTitularidadeDialog({
       return;
     }
     try {
+      // Garante que o UUID local está fresco (evita 'Veículo não encontrado' por cache stale após import SGA)
+      const fresh = await refetchLocais();
+      const veiculoSelecionado = veiculos.find(v => v.id === veiculoId);
+      const placaFallback = veiculoSelecionado?.placa
+        || (fresh.data || []).find(l => l.id === veiculoId)?.placa
+        || null;
       const result = await criar.mutateAsync({
         associado_antigo_id: associadoId,
         veiculo_id: veiculoId,
+        veiculo_placa: placaFallback || undefined,
         novo_titular: { nome: nome.trim(), cpf: cpf.trim(), email: email.trim() || undefined, telefone: telefone.trim() || undefined },
       });
       if ((result as any)?.termo_enviado_automaticamente === false) {
