@@ -266,7 +266,8 @@ export default function RecuperadosPage() {
                   <TableHead className="text-right">Boletos</TableHead>
                   <TableHead className="text-right">Associados</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
-                  <TableHead className="text-right">Enviados</TableHead>
+                  <TableHead className="text-right">Atingidos</TableHead>
+                  <TableHead className="text-right">Mensagens</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -278,14 +279,15 @@ export default function RecuperadosPage() {
                     <TableCell className="text-right">{l.total_boletos}</TableCell>
                     <TableCell className="text-right">{l.total_associados}</TableCell>
                     <TableCell className="text-right">{fmtBRL(Number(l.valor_total || 0))}</TableCell>
+                    <TableCell className="text-right">{l.total_associados_atingidos ?? 0}</TableCell>
                     <TableCell className="text-right">{l.total_enviados}</TableCell>
                     <TableCell>
-                      <Badge variant={l.status === 'ativo' ? 'default' : 'outline'}>{l.status}</Badge>
+                      <Badge variant={l.status === 'ativo' ? 'default' : l.status === 'processando' ? 'secondary' : 'outline'}>{l.status}</Badge>
                     </TableCell>
                   </TableRow>
                 ))}
                 {lotes.length === 0 && (
-                  <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground p-6">Nenhum lote importado ainda.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground p-6">Nenhum lote importado ainda.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
