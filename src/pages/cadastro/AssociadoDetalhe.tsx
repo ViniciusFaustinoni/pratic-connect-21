@@ -752,7 +752,8 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                             <DataField label="Renavam" value={v.renavam || '—'} />
                             <DataField label="Cor" value={v.cor || '—'} />
                           </div>
-                          <div className="text-sm">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                            <DataField label="Código FIPE" value={(v as any).codigo_fipe || '—'} mono />
                             <DataField label="Valor FIPE" value={formatCurrency(v.valor_fipe)} />
                           </div>
                           <Separator className="my-2" />
