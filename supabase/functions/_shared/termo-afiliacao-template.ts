@@ -408,9 +408,15 @@ const generateSecao2 = (data: TermoAfiliacaoData): string => `
     </div>
   </div>
   
-  <div class="field-full">
-    <span class="field-label">Renavam:</span> 
-    <span class="field-value">${data.veiculo.renavam || '—'}</span>
+  <div class="field-row">
+    <div class="field">
+      <span class="field-label">Renavam:</span> 
+      <span class="field-value">${data.veiculo.renavam || '—'}</span>
+    </div>
+    <div class="field">
+      <span class="field-label">Nº do Motor:</span> 
+      <span class="field-value">${data.veiculo.numero_motor || '—'}</span>
+    </div>
   </div>
   
   <div class="field-full">

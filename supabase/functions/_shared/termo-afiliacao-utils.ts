@@ -39,6 +39,7 @@ export interface VeiculoData {
   placa: string;
   chassi?: string;
   renavam?: string;
+  numero_motor?: string;
   marca: string;
   modelo: string;
   ano: number;
@@ -424,6 +425,7 @@ export function mapearDadosParaTemplate(
       placa: contrato.veiculo_placa || veiculo.veiculo_placa || "",
       chassi: contrato.veiculo_chassi || veiculo.veiculo_chassi || "",
       renavam: contrato.veiculo_renavam || veiculo.veiculo_renavam || "",
+      numero_motor: veiculoDB?.numero_motor || veiculo.veiculo_motor || contrato.veiculo_motor || "",
       marca: contrato.veiculo_marca || veiculo.veiculo_marca || "",
       modelo: contrato.veiculo_modelo || veiculo.veiculo_modelo || "",
       // Hierarquia ano modelo: contrato > veiculoDB.ano_modelo > lead/veiculo > 0
