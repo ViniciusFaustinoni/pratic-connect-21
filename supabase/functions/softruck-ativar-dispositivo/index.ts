@@ -676,6 +676,7 @@ serve(async (req) => {
       softruckVehicleId,
       softruckDeviceId,
       softruckChipId,
+      softruckUserId,
       primeiraPos,
     };
     
