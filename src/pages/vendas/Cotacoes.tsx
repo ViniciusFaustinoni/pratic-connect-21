@@ -39,21 +39,35 @@ const RelatorioInteligenteCotacoesDialog = lazy(() =>
     default: m.RelatorioInteligenteCotacoesDialog,
   }))
 );
-import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
-import { VincularLeadModal } from '@/components/cotacoes/VincularLeadModal';
 // gerarPdfCotacao* importados dinamicamente no handler (evita 54KB no bundle inicial)
 import type { PlanoParaPdf, CotacaoComparativaParaPdf } from '@/lib/gerarPdfCotacao';
 import { CotacoesTable, type CotacoesTablePermissions } from '@/components/cotacoes/CotacoesTable';
 import { CotacoesMobileList } from '@/components/cotacoes/CotacoesMobileList';
-import { CotacaoDetalhesModal } from '@/components/cotacoes/CotacaoDetalhesModal';
-import { ConfirmacaoExclusaoCotacaoDialog } from '@/components/cotacoes/ConfirmacaoExclusaoCotacaoDialog';
-import { DuplicarCotacaoDialog, type DuplicarCotacaoConfirmPayload } from '@/components/cotacoes/DuplicarCotacaoDialog';
+// Modais lazy — só baixam quando o usuário abre (reduz bundle inicial da rota)
+const CotacaoDetalhesModal = lazy(() =>
+  import('@/components/cotacoes/CotacaoDetalhesModal').then((m) => ({ default: m.CotacaoDetalhesModal }))
+);
+const EnviarEmailModal = lazy(() =>
+  import('@/components/cotacoes/EnviarEmailModal').then((m) => ({ default: m.EnviarEmailModal }))
+);
+const VincularLeadModal = lazy(() =>
+  import('@/components/cotacoes/VincularLeadModal').then((m) => ({ default: m.VincularLeadModal }))
+);
+const ConfirmacaoExclusaoCotacaoDialog = lazy(() =>
+  import('@/components/cotacoes/ConfirmacaoExclusaoCotacaoDialog').then((m) => ({ default: m.ConfirmacaoExclusaoCotacaoDialog }))
+);
+const DuplicarCotacaoDialog = lazy(() =>
+  import('@/components/cotacoes/DuplicarCotacaoDialog').then((m) => ({ default: m.DuplicarCotacaoDialog }))
+);
+const NovaEntradaDialog = lazy(() =>
+  import('@/components/vendas/OutrasEntradasMenu').then((m) => ({ default: m.NovaEntradaDialog }))
+);
+import type { DuplicarCotacaoConfirmPayload } from '@/components/cotacoes/DuplicarCotacaoDialog';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { useCotacoesRealtime } from '@/hooks/useCotacoesRealtime';
-import { NovaEntradaDialog } from '@/components/vendas/OutrasEntradasMenu';
 import { useDebounce } from '@/hooks/useDebounce';
 import { Sparkles } from 'lucide-react';
 
