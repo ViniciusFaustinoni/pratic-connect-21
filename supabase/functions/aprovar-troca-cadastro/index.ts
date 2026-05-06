@@ -1,4 +1,8 @@
 // Aprovação da etapa de Cadastro: avança status para aguardando_monitoramento
+// Antes de aprovar:
+//   1) trava se termo de cancelamento não foi assinado
+//   2) trava se há débito pendente do titular antigo (relacionamento_debitos_pendentes 'aberto')
+//   3) regrava snapshot de análise prévia do novo titular (base local + SGA) — idempotente
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 
 const corsHeaders = {
@@ -29,11 +33,10 @@ Deno.serve(async (req) => {
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // TRAVA: aprovação só é permitida se o termo de cancelamento já foi assinado
-    // pelo titular antigo via Autentique (registro confirmado pelo webhook).
+    // 1) Carregar solicitação
     const { data: sol, error: solErr } = await admin
       .from('solicitacoes_troca_titularidade')
-      .select('id, status, termo_cancelamento_assinado_em')
+      .select('id, status, termo_cancelamento_assinado_em, associado_antigo_id, novo_titular_dados')
       .eq('id', solicitacao_id)
       .maybeSingle();
     if (solErr) throw solErr;
@@ -42,11 +45,72 @@ Deno.serve(async (req) => {
         status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    // 2) Trava: assinatura do termo
     if (!sol.termo_cancelamento_assinado_em) {
       return new Response(
         JSON.stringify({ error: 'Aprovação bloqueada: o titular antigo ainda não assinou o termo de cancelamento no Autentique.' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
+    }
+
+    // 3) Trava: débito do antigo (relacionamento_debitos_pendentes em 'aberto')
+    const { data: debitoAberto } = await admin
+      .from('relacionamento_debitos_pendentes')
+      .select('id, valor_total, quantidade_boletos')
+      .eq('associado_id', sol.associado_antigo_id)
+      .eq('status', 'aberto')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (debitoAberto) {
+      return new Response(
+        JSON.stringify({
+          error: 'Aprovação bloqueada: o titular antigo possui débitos em aberto no SGA. A liberação ocorre automaticamente após a quitação.',
+          code: 'DEBITO_PENDENTE_ANTIGO',
+          valor_total: debitoAberto.valor_total,
+          quantidade_boletos: debitoAberto.quantidade_boletos,
+        }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // 4) Snapshot de análise prévia (best-effort, não bloqueia aprovação se SGA cair)
+    const novoTitular = (sol.novo_titular_dados || {}) as { nome?: string; cpf?: string };
+    const cpfNovoLimpo = (novoTitular.cpf || '').replace(/\D/g, '');
+    const analisePrevia: Record<string, unknown> = { gerado_em: new Date().toISOString() };
+    try {
+      // base local
+      if (cpfNovoLimpo.length === 11) {
+        const { data: assocLocal } = await admin
+          .from('associados')
+          .select('id, nome, cpf, email, telefone, status, created_at')
+          .eq('cpf', cpfNovoLimpo)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        analisePrevia.base_local = assocLocal
+          ? { encontrado: true, associado: assocLocal }
+          : { encontrado: false };
+
+        // SGA
+        try {
+          const { data: sgaResp, error: sgaErr } = await admin.functions.invoke(
+            'sga-buscar-associado-completo',
+            { body: { cpf: cpfNovoLimpo } },
+          );
+          if (sgaErr) throw sgaErr;
+          analisePrevia.sga = sgaResp ?? { encontrado: false };
+        } catch (sgaCatch) {
+          analisePrevia.sga = { erro: sgaCatch instanceof Error ? sgaCatch.message : 'falha SGA' };
+        }
+      } else {
+        analisePrevia.base_local = { erro: 'CPF do novo titular inválido/ausente' };
+        analisePrevia.sga = { erro: 'CPF do novo titular inválido/ausente' };
+      }
+    } catch (anaErr) {
+      console.warn('[aprovar-troca-cadastro] análise prévia falhou (não bloqueante):', anaErr);
+      analisePrevia.erro = anaErr instanceof Error ? anaErr.message : 'erro';
     }
 
     const { error } = await admin
@@ -56,13 +120,15 @@ Deno.serve(async (req) => {
         aprovado_cadastro_por: user.id,
         aprovado_cadastro_em: new Date().toISOString(),
         observacao_cadastro: observacao || null,
+        analise_previa_resultado: analisePrevia,
+        analise_previa_em: new Date().toISOString(),
       })
       .eq('id', solicitacao_id)
       .eq('status', 'aguardando_cadastro');
 
     if (error) throw error;
 
-    return new Response(JSON.stringify({ success: true }), {
+    return new Response(JSON.stringify({ success: true, analise_previa: analisePrevia }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (e) {
