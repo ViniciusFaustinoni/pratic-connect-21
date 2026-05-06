@@ -3,22 +3,20 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { formatLocalizacaoComZona, getZonaAtendimento } from '@/lib/localizacao-zonas';
 import { useRealocarInstalacao } from './useRealocarInstalacao';
+import { useConfiguracoesAll } from './useConfiguracoesAll';
 
 const PRODUCTION_BASE_URL = 'https://app.praticcar.org';
 
+/**
+ * Fase 5: consome cache global `useConfiguracoesAll` (RPC get_app_config)
+ * em vez de fetch dedicado a /configuracoes?chave=atribuicao_manual_rotas.
+ */
 export function useConfigAtribuicaoManual() {
-  return useQuery({
-    queryKey: ['config-atribuicao-manual'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('configuracoes')
-        .select('valor')
-        .eq('chave', 'atribuicao_manual_rotas')
-        .maybeSingle();
-      return data?.valor === 'true';
-    },
-    staleTime: 1000 * 60 * 2,
-  });
+  const { data: configs, isLoading } = useConfiguracoesAll();
+  return {
+    data: configs?.['atribuicao_manual_rotas'] === 'true',
+    isLoading,
+  };
 }
 
 export function useServicosParaAtribuir() {
