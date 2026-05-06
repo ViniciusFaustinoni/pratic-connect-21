@@ -1,0 +1,2 @@
+UPDATE associados SET codigo_hinova=30124, sincronizado_hinova=true, sincronizado_hinova_em=now() WHERE cpf='13444524773' AND (codigo_hinova IS NULL OR sincronizado_hinova=false);
+UPDATE veiculos SET codigo_hinova=35835, sincronizado_hinova=true, sincronizado_hinova_em=now() WHERE placa='RFB0H92' AND (codigo_hinova IS NULL OR sincronizado_hinova=false);
