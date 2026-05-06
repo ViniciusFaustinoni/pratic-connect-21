@@ -55,38 +55,7 @@ export function ImportarCobrancaCsv() {
   const [reconciliacao, setReconciliacao] = useState<PreviewReconciliacao | null>(null);
   const cancelarRef = useRef(false);
 
-  const onDrop = useCallback(async (files: File[]) => {
-    const f = files[0];
-    if (!f) return;
-    if (f.size > 5 * 1024 * 1024) {
-      toast.error('Arquivo maior que 5 MB.');
-      return;
-    }
-    setArquivo(f);
-    try {
-      const texto = await f.text();
-      const r = parseCsvInadimplentes(texto);
-      if (r.erros.length && r.destinatarios.length === 0) {
-        toast.error(r.erros.join(' '));
-        setArquivo(null);
-        return;
-      }
-      setResultado(r);
-      setEtapa('preview');
-      void carregarPreviewReconciliacao(r);
-    } catch (e: any) {
-      toast.error(`Erro ao ler CSV: ${e.message}`);
-      setArquivo(null);
-    }
-  }, []);
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: { 'text/csv': ['.csv'], 'application/vnd.ms-excel': ['.csv'] },
-    maxFiles: 1,
-  });
-
-  const reiniciar = () => {
+  const reiniciar = useCallback(() => {
     setEtapa('upload');
     setArquivo(null);
     setResultado(null);
@@ -94,7 +63,7 @@ export function ImportarCobrancaCsv() {
     setReconciliacao(null);
     setProgresso({ atual: 0, total: 0 });
     cancelarRef.current = false;
-  };
+  }, []);
 
   // Preview de reconciliação client-side: mostra antes do disparo quantos
   // boletos da lista anterior NÃO estão nesta nova → serão marcados como recuperados.
@@ -147,6 +116,36 @@ export function ImportarCobrancaCsv() {
     }
   }, []);
 
+  const onDrop = useCallback(async (files: File[]) => {
+    const f = files[0];
+    if (!f) return;
+    if (f.size > 5 * 1024 * 1024) {
+      toast.error('Arquivo maior que 5 MB.');
+      return;
+    }
+    setArquivo(f);
+    try {
+      const texto = await f.text();
+      const r = parseCsvInadimplentes(texto);
+      if (r.erros.length && r.destinatarios.length === 0) {
+        toast.error(r.erros.join(' '));
+        setArquivo(null);
+        return;
+      }
+      setResultado(r);
+      setEtapa('preview');
+      void carregarPreviewReconciliacao(r);
+    } catch (e: any) {
+      toast.error(`Erro ao ler CSV: ${e.message}`);
+      setArquivo(null);
+    }
+  }, [carregarPreviewReconciliacao]);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: { 'text/csv': ['.csv'], 'application/vnd.ms-excel': ['.csv'] },
+    maxFiles: 1,
+  });
   const dispararEnvio = useCallback(async () => {
     if (!resultado) return;
     const destinatariosValidos = resultado.destinatarios.filter((d) => d.telefones_validos.length > 0);
