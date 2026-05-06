@@ -36,9 +36,12 @@ interface Props {
   consultorIdInicial?: string;
 }
 
-function useConsultoresDisponiveis() {
+function useConsultoresDisponiveis(enabled: boolean) {
   return useQuery({
     queryKey: ['consultores-disponiveis'],
+    enabled,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
     queryFn: async () => {
       const { data: roles } = await supabase
         .from('user_roles')
@@ -56,7 +59,6 @@ function useConsultoresDisponiveis() {
       
       return profiles || [];
     },
-    staleTime: 1000 * 60 * 5,
   });
 }
 
@@ -82,7 +84,7 @@ export function MigracaoDiretaDialog({ open, onOpenChange, cpfInicial, consultor
 
   const { data: migracaoConfig, isLoading: loadingConfig } = useMigracaoConfig();
   const { data: bloqueio, isLoading: loadingBloqueio } = useVerificarBloqueiosMigracao(cpf);
-  const { data: consultores } = useConsultoresDisponiveis();
+  const { data: consultores } = useConsultoresDisponiveis(open);
   const criarSolicitacao = useCriarSolicitacaoMigracaoDireta();
 
   const comprovantesExigidos = migracaoConfig?.comprovantes ?? 3;

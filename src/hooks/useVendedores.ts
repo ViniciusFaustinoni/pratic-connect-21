@@ -24,6 +24,9 @@ export function useVendedores() {
   return useQuery({
     queryKey: ['vendedores', rolesComerciais.slice().sort().join(',')],
     enabled: !rolesLoading && rolesComerciais.length > 0,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       // Buscar profiles que têm roles de vendedor
       const { data: roles, error: rolesError } = await supabase
@@ -38,10 +41,10 @@ export function useVendedores() {
       // Pegar IDs únicos de usuários com roles de vendas
       const userIds = [...new Set(roles.map((r) => r.user_id))];
 
-      // Buscar profiles desses usuários
+      // Buscar profiles desses usuários (colunas mínimas — payload reduzido)
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, user_id, nome, email, whatsapp, full_name, ativo, avatar_url, tipo')
         .in('user_id', userIds)
         .eq('ativo', true)
         .order('nome');

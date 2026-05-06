@@ -105,6 +105,9 @@ export function useDashboardVendaExterna() {
   // Lista de vendedores com métricas
   const vendedoresQuery = useQuery({
     queryKey: ['dashboard-ve-vendedores', mesAtualInicio],
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
+    refetchOnWindowFocus: false,
     queryFn: async (): Promise<VendedorResumo[]> => {
       // Get all distinct vendors from cc_vendedor_lancamentos
       const { data: lancamentos } = await supabase
