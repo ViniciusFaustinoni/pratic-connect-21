@@ -684,6 +684,8 @@ const App = () => (
               <Route path="/marketing/campanhas/nova" element={<CampanhaForm />} />
               <Route path="/marketing/campanhas/:id" element={<CampanhaDetalhe />} />
               <Route path="/marketing/campanhas/:id/editar" element={<CampanhaForm />} />
+              <Route path="/marketing/canais" element={<Canais />} />
+              <Route path="/marketing/canais/:id" element={<CanalDetalhe />} />
               <Route path="/marketing/indicacoes" element={<Indicacoes />} />
               <Route path="/marketing/utms" element={<UTMs />} />
               <Route path="/marketing/distribuicao" element={<DistribuicaoConfig />} />
