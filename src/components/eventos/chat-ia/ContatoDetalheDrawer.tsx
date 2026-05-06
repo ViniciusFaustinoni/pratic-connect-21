@@ -47,7 +47,7 @@ export function ContatoDetalheDrawer({ telefone, open, onOpenChange, nomeContato
 
       const { data, error } = await supabase
         .from('associados')
-        .select('id, nome, telefone, whatsapp, avatar_url, status, email, matricula')
+        .select('id, nome, telefone, whatsapp, avatar_url, status, email')
         .or(
           variacoes
             .flatMap((v) => [`telefone.ilike.%${v}%`, `whatsapp.ilike.%${v}%`])
@@ -56,7 +56,15 @@ export function ContatoDetalheDrawer({ telefone, open, onOpenChange, nomeContato
         .limit(1)
         .maybeSingle();
       if (error) throw error;
-      return data;
+      return data as {
+        id: string;
+        nome: string | null;
+        telefone: string | null;
+        whatsapp: string | null;
+        avatar_url: string | null;
+        status: string | null;
+        email: string | null;
+      } | null;
     },
   });
 
