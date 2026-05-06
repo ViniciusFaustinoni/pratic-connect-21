@@ -69,6 +69,7 @@ import { HistoricoComandos } from './HistoricoComandos';
 import { SubstituirEquipamentoDialog } from './SubstituirEquipamentoDialog';
 import { useEnviarComando } from '@/hooks/useComandosRastreador';
 import { VisualizadorFoto } from '@/components/analise/VisualizadorFoto';
+import { UsuariosVeiculoSoftruck } from './UsuariosVeiculoSoftruck';
 import { AlertTriangle } from 'lucide-react';
 
 interface RastreadorDetailDrawerProps {
@@ -327,7 +328,7 @@ export function RastreadorDetailDrawer({
             )}
 
             <Tabs defaultValue="info" className="mt-6">
-              <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
+              <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5">
                 <TabsTrigger value="info">Informações</TabsTrigger>
                 <TabsTrigger value="mapa" disabled={!isInstalled}>
                   Rastreamento
@@ -337,6 +338,12 @@ export function RastreadorDetailDrawer({
                 </TabsTrigger>
                 <TabsTrigger value="movimentacoes">
                   Histórico
+                </TabsTrigger>
+                <TabsTrigger
+                  value="usuarios"
+                  disabled={rastreador?.plataforma !== 'softruck' || !rastreador?.veiculo_id}
+                >
+                  Usuários
                 </TabsTrigger>
               </TabsList>
 
@@ -786,7 +793,15 @@ export function RastreadorDetailDrawer({
                 )}
               </TabsContent>
 
-              {/* Aba de Comandos (opcional - para histórico) */}
+              <TabsContent value="usuarios" className="mt-4">
+                {rastreador && (
+                  <UsuariosVeiculoSoftruck
+                    veiculoId={rastreador.veiculo_id}
+                    plataforma={rastreador.plataforma}
+                  />
+                )}
+              </TabsContent>
+
             </Tabs>
 
             {/* Dialog de Comando */}
