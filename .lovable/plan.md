@@ -1,25 +1,25 @@
-## Causa raiz
+## Mover "Mapa" para dentro de Serviços de Campo
 
-A edge `rastreador-auth` espera o campo `plataforma` no body (`{ plataforma: 'rede_veiculos' | 'softruck' }`). Porém, **todas as edges `rede-veiculos-*`** estão enviando `plataforma_codigo` (nome antigo), o que faz a validação cair em "Plataforma inválida. Use: rede_veiculos ou softruck".
+Hoje **Mapa** é um item separado no menu lateral em `Monitoramento` (`/monitoramento/mapa`). A pedido, ele passa a ser uma **aba** dentro da página `Serviços de Campo` (`/monitoramento/vistorias-instalacoes-mon`), junto de Serviços, Aprovar Fotos e Histórico.
 
-Por isso a ativação dos associados (Erico Moraes e Rodolfo da Silva Lira) falha na etapa de vincular cliente na Rede Veículos — o token nunca é obtido.
+### Alterações
 
-## Correção
+1. **`src/pages/monitoramento/VistoriasInstalacoesMon.tsx`**
+   - Importar `Mapa` via `lazy(() => import('./Mapa'))` e ícone `Map`.
+   - Adicionar `<TabsTrigger value="mapa">` (Mapa) na lista de abas.
+   - Adicionar `<TabsContent value="mapa">` renderizando `<Mapa />` dentro de `Suspense`.
+   - Posição da aba: logo após "Serviços".
 
-1. **rastreador-auth/index.ts**: aceitar ambos os nomes (`plataforma` e `plataforma_codigo`) para retro‑compatibilidade — evita quebrar qualquer chamador legado.
-2. **Atualizar callers** que ainda usam `plataforma_codigo` para usar `plataforma`:
-   - rede-veiculos-vincular-cliente
-   - rede-veiculos-atualizar-cliente
-   - rede-veiculos-atualizar-veiculo
-   - rede-veiculos-ativar-veiculo
-   - rede-veiculos-inativar-veiculo
-   - rede-veiculos-informar-inadimplente
-   - rede-veiculos-informar-adimplente
-   - rede-veiculos-obter-status-cliente
-   - rede-veiculos-obter-status-veiculo
-   - rede-veiculos-sincronizar-status
-   - rastreador-redefinir-senha (usa `plataforma_codigo: plataforma.plataforma`)
-3. Fazer deploy das functions alteradas.
-4. Validar reativando o associado Erico (RIR1B37) pelo painel de Aprovações do Monitoramento.
+2. **`src/components/layout/AppSidebar.tsx`**
+   - Remover o item `Mapa` do grupo Monitoramento (linhas 220-224).
 
-Sem migrations, sem mudanças de UI, sem mudança de schema.
+3. **`src/App.tsx`**
+   - Manter a rota `/monitoramento/mapa` como redirect para `/monitoramento/vistorias-instalacoes-mon?tab=mapa` para não quebrar links externos/breadcrumbs salvos.
+   - Atualizar `VistoriasInstalacoesMon` para ler `?tab=` e abrir a aba correspondente quando vier `tab=mapa`.
+
+4. **`src/components/layout/GlobalBreadcrumb.tsx`**
+   - Remover entrada específica de `/monitoramento/mapa` se existir (manter o redirect cuidando disso).
+
+### Fora de escopo
+- Mudanças visuais/funcionais dentro do componente `Mapa` em si.
+- Permissões: a aba herda as mesmas permissões de Serviços de Campo (`canManageInstalacoes`).
