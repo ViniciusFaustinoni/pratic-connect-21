@@ -69,6 +69,19 @@ export default function CampanhaForm() {
   });
 
 
+  // Query: Canais ativos
+  const { data: canais } = useQuery({
+    queryKey: ['canais-marketing-form', { ativo: true }],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('canais_marketing')
+        .select('id, nome, tipo')
+        .eq('ativo', true)
+        .order('nome');
+      return data || [];
+    }
+  });
+
   // Query: Usuários para responsável
   const { data: usuarios } = useQuery({
     queryKey: ['usuarios-select'],
