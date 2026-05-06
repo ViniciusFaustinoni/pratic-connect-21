@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables } from '@/integrations/supabase/types';
+import { useAppRoles } from './useAppRoles';
 
 type Profile = Tables<'profiles'>;
 
@@ -9,20 +10,21 @@ export interface Vendedor extends Profile {
 }
 
 export function useVendedores() {
+  // Reusa o cache global de app_roles_config (staleTime 30min) — evita
+  // duplicar a query `app_roles_config?area=eq.Comercial` em todo mount.
+  const { roles: appRoles, isLoading: rolesLoading } = useAppRoles();
+
+  const rolesComerciais = appRoles
+    .filter((r) => r.area === 'Comercial')
+    .map((r) => r.role);
+  if (rolesComerciais.length && !rolesComerciais.includes('diretor')) {
+    rolesComerciais.push('diretor');
+  }
+
   return useQuery({
-    queryKey: ['vendedores'],
+    queryKey: ['vendedores', rolesComerciais.slice().sort().join(',')],
+    enabled: !rolesLoading && rolesComerciais.length > 0,
     queryFn: async () => {
-      // Buscar roles da área Comercial + diretor dinamicamente
-      const { data: configs } = await supabase
-        .from('app_roles_config')
-        .select('role')
-        .eq('area', 'Comercial')
-        .eq('is_active', true);
-
-      const rolesComerciais = (configs || []).map((c: any) => c.role);
-      // Incluir diretor que também pode estar no contexto de vendas
-      if (!rolesComerciais.includes('diretor')) rolesComerciais.push('diretor');
-
       // Buscar profiles que têm roles de vendedor
       const { data: roles, error: rolesError } = await supabase
         .from('user_roles')
