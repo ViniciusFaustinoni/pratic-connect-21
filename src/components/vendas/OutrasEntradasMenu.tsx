@@ -262,19 +262,15 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
           });
           if (error) throw error;
           if ((data as any)?.error) throw new Error((data as any).error);
-          // Após import, busca UUID local
-          const { data: local } = await supabase
-            .from('associados')
-            .select('id, nome, cpf')
-            .eq('cpf', maskCPF(cpfLimpo))
-            .maybeSingle();
-          if (!local) {
+          // Edge function retorna associado_id direto
+          const associadoLocalId = (data as any)?.associado_id;
+          if (!associadoLocalId) {
             toast.error('Falha ao localizar associado após import do SGA');
             return;
           }
-          setSelectedAssociadoId(local.id);
-          setSelectedAssociadoNome(local.nome);
-          setSelectedAssociadoCpf(local.cpf);
+          setSelectedAssociadoId(associadoLocalId);
+          setSelectedAssociadoNome(associado.nome);
+          setSelectedAssociadoCpf(cpfLimpo);
         } catch (e) {
           toast.error(e instanceof Error ? e.message : 'Erro ao importar associado do SGA');
           return;
