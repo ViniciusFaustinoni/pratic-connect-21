@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Search, User, Bot, Loader2, MessageSquare } from 'lucide-react';
+import { Search, User, Bot, Loader2, MessageSquare, AlertCircle } from 'lucide-react';
+import { formatDistanceToNowStrict } from 'date-fns';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Input } from '@/components/ui/input';
@@ -16,6 +17,8 @@ export interface ConversaAgrupada {
   ultima_mensagem: string;
   ultima_msg_texto: string | null;
   ultima_direcao: string;
+  /** Timestamp da última mensagem de cobrança (referencia_tipo IN ('cobranca','cobranca_csv')). Null = nunca recebeu cobrança. */
+  ultima_cobranca: string | null;
 }
 
 interface ConversasListProps {
@@ -99,50 +102,69 @@ export function ConversasList({ conversas, isLoading, telefoneSelecionado, onSel
           </div>
         ) : (
           <div className="divide-y divide-border">
-            {conversasFiltradas.map((conversa) => (
-              <button
-                key={conversa.telefone}
-                onClick={() => onSelectConversa(conversa)}
-                className={cn(
-                  'w-full flex items-center gap-3 px-3 py-3 text-left hover:bg-muted/50 transition-colors',
-                  telefoneSelecionado === conversa.telefone && 'bg-muted'
-                )}
-              >
-                <UserAvatar
-                  src={conversa.avatar_url}
-                  name={conversa.nome_contato}
-                  size="md"
-                />
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-sm truncate">
-                      {conversa.nome_contato || formatarTelefone(conversa.telefone)}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground flex-shrink-0">
-                      {formatarData(conversa.ultima_mensagem)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1 mt-0.5">
-                    {conversa.ultima_direcao === 'entrada' ? (
-                      <User className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                    ) : (
-                      <Bot className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                    )}
-                    <p className="text-xs text-muted-foreground truncate">
-                      {conversa.ultima_msg_texto
-                        ? conversa.ultima_msg_texto.slice(0, 50) + (conversa.ultima_msg_texto.length > 50 ? '...' : '')
-                        : '📎 Mídia'}
-                    </p>
-                  </div>
-                  {conversa.nome_contato && (
-                    <p className="text-[10px] text-muted-foreground mt-0.5">
-                      {formatarTelefone(conversa.telefone)}
-                    </p>
+            {conversasFiltradas.map((conversa) => {
+              const isCobranca = !!conversa.ultima_cobranca;
+              const tempoCobranca = isCobranca
+                ? formatDistanceToNowStrict(new Date(conversa.ultima_cobranca!), { locale: ptBR, addSuffix: false })
+                : null;
+              return (
+                <button
+                  key={conversa.telefone}
+                  onClick={() => onSelectConversa(conversa)}
+                  title={isCobranca ? `Última cobrança enviada há ${tempoCobranca}` : undefined}
+                  className={cn(
+                    'w-full flex items-center gap-3 px-3 py-3 text-left hover:bg-muted/50 transition-colors',
+                    telefoneSelecionado === conversa.telefone && 'bg-muted',
+                    isCobranca && 'bg-amber-50 dark:bg-amber-950/30 border-l-4 border-l-amber-500 hover:bg-amber-100 dark:hover:bg-amber-950/50'
                   )}
-                </div>
-              </button>
-            ))}
+                >
+                  <UserAvatar
+                    src={conversa.avatar_url}
+                    name={conversa.nome_contato}
+                    size="md"
+                  />
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-sm truncate">
+                        {conversa.nome_contato || formatarTelefone(conversa.telefone)}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground flex-shrink-0">
+                        {formatarData(conversa.ultima_mensagem)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      {conversa.ultima_direcao === 'entrada' ? (
+                        <User className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                      ) : (
+                        <Bot className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                      )}
+                      <p className="text-xs text-muted-foreground truncate">
+                        {conversa.ultima_msg_texto
+                          ? conversa.ultima_msg_texto.slice(0, 50) + (conversa.ultima_msg_texto.length > 50 ? '...' : '')
+                          : '📎 Mídia'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {conversa.nome_contato && (
+                        <p className="text-[10px] text-muted-foreground">
+                          {formatarTelefone(conversa.telefone)}
+                        </p>
+                      )}
+                      {isCobranca && (
+                        <Badge
+                          variant="outline"
+                          className="text-[9px] py-0 px-1.5 h-4 border-amber-500 text-amber-700 dark:text-amber-400 bg-amber-100/50 dark:bg-amber-950/50 gap-0.5"
+                        >
+                          <AlertCircle className="h-2.5 w-2.5" />
+                          Cobrança · {tempoCobranca}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         )}
       </ScrollArea>
