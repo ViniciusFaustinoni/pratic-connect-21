@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -6,11 +7,13 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Loader2, Car, User, FileSignature, CheckCircle2, XCircle, Send, ClipboardCheck, ShieldCheck, ExternalLink } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Loader2, Car, User, FileSignature, CheckCircle2, XCircle, Send, ClipboardCheck, ShieldCheck, ExternalLink, AlertTriangle, Search } from 'lucide-react';
 import { useSolicitacaoTroca, useAprovarTrocaCadastro, useAprovarTrocaMonitoramento, useReprovarTroca, useEnviarTermoCancelamento, type StatusTroca } from '@/hooks/useSolicitacoesTroca';
 import { TimelineAprovacao } from './TimelineAprovacao';
 import { RelatorioFinanceiroAntigo } from './RelatorioFinanceiroAntigo';
 import { Skeleton } from '@/components/ui/skeleton';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Props {
   open: boolean;
@@ -41,6 +44,25 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   const aprovarMonitoramento = useAprovarTrocaMonitoramento();
   const reprovar = useReprovarTroca();
   const enviarTermo = useEnviarTermoCancelamento();
+
+  // Débito pendente do antigo (gate da aprovação do Cadastro)
+  const { data: debitoPendente } = useQuery({
+    queryKey: ['troca-debito-antigo', solicitacao?.associado_antigo_id],
+    queryFn: async () => {
+      if (!solicitacao?.associado_antigo_id) return null;
+      const { data } = await (supabase as any)
+        .from('relacionamento_debitos_pendentes')
+        .select('id, valor_total, quantidade_boletos, status')
+        .eq('associado_id', solicitacao.associado_antigo_id)
+        .eq('status', 'aberto')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+    enabled: open && !!solicitacao?.associado_antigo_id && modo === 'cadastro',
+    refetchInterval: 30000,
+  });
 
   const handleAprovar = async () => {
     if (!solicitacao) return;
@@ -94,9 +116,20 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
               </span>
             </div>
 
+            {modo === 'cadastro' && debitoPendente && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Débito pendente do titular antigo</AlertTitle>
+                <AlertDescription>
+                  Saldo de R$ {Number(debitoPendente.valor_total || 0).toFixed(2)} em {debitoPendente.quantidade_boletos || 0} boleto(s) no SGA. A aprovação será liberada automaticamente após a quitação (verificação diária).
+                </AlertDescription>
+              </Alert>
+            )}
+
             <Tabs defaultValue="dados">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-5">
                 <TabsTrigger value="dados">Dados</TabsTrigger>
+                <TabsTrigger value="analise">Análise prévia</TabsTrigger>
                 <TabsTrigger value="financeiro">Financeiro Antigo</TabsTrigger>
                 <TabsTrigger value="termo">Termo</TabsTrigger>
                 <TabsTrigger value="timeline">Timeline</TabsTrigger>
@@ -133,6 +166,35 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                     </div>
                   </div>
                 )}
+              </TabsContent>
+
+              <TabsContent value="analise" className="pt-3 space-y-3">
+                <div className="rounded border p-3 space-y-2">
+                  <h4 className="font-semibold flex items-center gap-2"><Search className="h-4 w-4" /> Análise prévia do novo titular</h4>
+                  {!solicitacao.analise_previa_resultado ? (
+                    <p className="text-sm text-muted-foreground">
+                      A análise prévia é gerada automaticamente quando o Cadastro aprova a solicitação (consulta dupla: base local + SGA Hinova). Ainda não há snapshot.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-xs text-muted-foreground">
+                        Gerado em {solicitacao.analise_previa_em ? new Date(solicitacao.analise_previa_em).toLocaleString('pt-BR') : '-'}
+                      </p>
+                      <div className="rounded bg-muted/40 p-2">
+                        <p className="text-xs font-medium mb-1">Base local</p>
+                        <pre className="text-[11px] whitespace-pre-wrap break-all max-h-48 overflow-auto">
+                          {JSON.stringify(solicitacao.analise_previa_resultado.base_local, null, 2)}
+                        </pre>
+                      </div>
+                      <div className="rounded bg-muted/40 p-2">
+                        <p className="text-xs font-medium mb-1">SGA Hinova</p>
+                        <pre className="text-[11px] whitespace-pre-wrap break-all max-h-48 overflow-auto">
+                          {JSON.stringify(solicitacao.analise_previa_resultado.sga, null, 2)}
+                        </pre>
+                      </div>
+                    </>
+                  )}
+                </div>
               </TabsContent>
 
               <TabsContent value="financeiro" className="pt-3">
@@ -191,21 +253,28 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                   )}
                   {(() => {
                     const bloqueadoPorAssinatura = modo === 'cadastro' && !solicitacao.termo_cancelamento_assinado_em;
+                    const bloqueadoPorDebito = modo === 'cadastro' && !!debitoPendente;
+                    const bloqueado = bloqueadoPorAssinatura || bloqueadoPorDebito;
+                    const motivoBloqueio = bloqueadoPorAssinatura
+                      ? 'Aguardando assinatura do termo de cancelamento pelo titular antigo.'
+                      : bloqueadoPorDebito
+                      ? 'Titular antigo possui débitos em aberto no SGA. Aprovação liberada automaticamente após quitação.'
+                      : '';
                     const btn = (
                       <Button
                         onClick={handleAprovar}
-                        disabled={aprovarCadastro.isPending || aprovarMonitoramento.isPending || bloqueadoPorAssinatura}
+                        disabled={aprovarCadastro.isPending || aprovarMonitoramento.isPending || bloqueado}
                       >
                         {(aprovarCadastro.isPending || aprovarMonitoramento.isPending) ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : modo === 'cadastro' ? <ClipboardCheck className="h-4 w-4 mr-2" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
                         Aprovar
                       </Button>
                     );
-                    if (!bloqueadoPorAssinatura) return btn;
+                    if (!bloqueado) return btn;
                     return (
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild><span tabIndex={0}>{btn}</span></TooltipTrigger>
-                          <TooltipContent>Aguardando assinatura do termo de cancelamento pelo titular antigo.</TooltipContent>
+                          <TooltipContent>{motivoBloqueio}</TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
                     );

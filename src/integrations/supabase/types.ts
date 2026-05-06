@@ -28687,6 +28687,8 @@ export type Database = {
       }
       solicitacoes_troca_titularidade: {
         Row: {
+          analise_previa_em: string | null
+          analise_previa_resultado: Json | null
           aprovado_cadastro_em: string | null
           aprovado_cadastro_por: string | null
           aprovado_monitoramento_em: string | null
@@ -28720,6 +28722,8 @@ export type Database = {
           veiculo_id: string
         }
         Insert: {
+          analise_previa_em?: string | null
+          analise_previa_resultado?: Json | null
           aprovado_cadastro_em?: string | null
           aprovado_cadastro_por?: string | null
           aprovado_monitoramento_em?: string | null
@@ -28753,6 +28757,8 @@ export type Database = {
           veiculo_id: string
         }
         Update: {
+          analise_previa_em?: string | null
+          analise_previa_resultado?: Json | null
           aprovado_cadastro_em?: string | null
           aprovado_cadastro_por?: string | null
           aprovado_monitoramento_em?: string | null
