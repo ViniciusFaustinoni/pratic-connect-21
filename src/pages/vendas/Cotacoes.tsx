@@ -1268,50 +1268,64 @@ export default function Cotacoes() {
         </Suspense>
       )}
       {selectedCotacaoEmail && (
-        <EnviarEmailModal
-          open={showEmailModal}
-          onOpenChange={setShowEmailModal}
-          cotacao={selectedCotacaoEmail}
-          onSuccess={() => handleMarkAsEnviada(selectedCotacaoEmail.id, selectedCotacaoEmail.lead_id)}
-        />
+        <Suspense fallback={null}>
+          <EnviarEmailModal
+            open={showEmailModal}
+            onOpenChange={setShowEmailModal}
+            cotacao={selectedCotacaoEmail}
+            onSuccess={() => handleMarkAsEnviada(selectedCotacaoEmail.id, selectedCotacaoEmail.lead_id)}
+          />
+        </Suspense>
       )}
 
-      <VincularLeadModal
-        open={showVincularModal}
-        onOpenChange={setShowVincularModal}
-        cotacaoId={cotacaoParaVincular?.id || ''}
-        leadAtualId={cotacaoParaVincular?.lead_id}
-        onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
-        }}
-      />
+      {showVincularModal && (
+        <Suspense fallback={null}>
+          <VincularLeadModal
+            open={showVincularModal}
+            onOpenChange={setShowVincularModal}
+            cotacaoId={cotacaoParaVincular?.id || ''}
+            leadAtualId={cotacaoParaVincular?.lead_id}
+            onSuccess={() => {
+              queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
+            }}
+          />
+        </Suspense>
+      )}
 
-      <DuplicarCotacaoDialog
-        open={!!cotacaoConfirmarDuplicar}
-        onOpenChange={(open) => {
-          if (!open) setCotacaoConfirmarDuplicar(null);
-        }}
-        cotacao={cotacaoConfirmarDuplicar ? {
-          id: cotacaoConfirmarDuplicar.id,
-          numero: cotacaoConfirmarDuplicar.numero,
-          vendedor_id: cotacaoConfirmarDuplicar.vendedor_id,
-          status: cotacaoConfirmarDuplicar.status,
-        } : null}
-        vendedorOriginalNome={cotacaoConfirmarDuplicar?.vendedor?.nome || null}
-        currentUserId={user?.id}
-        isSubmitting={duplicarCotacao.isPending}
-        onConfirm={handleConfirmarDuplicacao}
-      />
+      {cotacaoConfirmarDuplicar && (
+        <Suspense fallback={null}>
+          <DuplicarCotacaoDialog
+            open={!!cotacaoConfirmarDuplicar}
+            onOpenChange={(open) => {
+              if (!open) setCotacaoConfirmarDuplicar(null);
+            }}
+            cotacao={cotacaoConfirmarDuplicar ? {
+              id: cotacaoConfirmarDuplicar.id,
+              numero: cotacaoConfirmarDuplicar.numero,
+              vendedor_id: cotacaoConfirmarDuplicar.vendedor_id,
+              status: cotacaoConfirmarDuplicar.status,
+            } : null}
+            vendedorOriginalNome={cotacaoConfirmarDuplicar?.vendedor?.nome || null}
+            currentUserId={user?.id}
+            isSubmitting={duplicarCotacao.isPending}
+            onConfirm={handleConfirmarDuplicacao}
+          />
+        </Suspense>
+      )}
 
-      <ConfirmacaoExclusaoCotacaoDialog
-        open={showExclusaoLoteDialog}
-        onOpenChange={(open) => {
-          setShowExclusaoLoteDialog(open);
-          if (!open) setCotacaoParaExcluir(null);
-        }}
-        quantidade={selectedIds.size}
-        onConfirm={handleExcluirEmLote}
-      />
+      {showExclusaoLoteDialog && (
+        <Suspense fallback={null}>
+          <ConfirmacaoExclusaoCotacaoDialog
+            open={showExclusaoLoteDialog}
+            onOpenChange={(open) => {
+              setShowExclusaoLoteDialog(open);
+              if (!open) setCotacaoParaExcluir(null);
+            }}
+            quantidade={selectedIds.size}
+            onConfirm={handleExcluirEmLote}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
