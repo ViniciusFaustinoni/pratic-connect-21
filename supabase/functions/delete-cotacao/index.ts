@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
     // Buscar dados da cotação para log e verificação de ownership
     const { data: cotacao, error: cotacaoError } = await adminClient
       .from('cotacoes')
-      .select('numero, lead_id, vistoria_id, vendedor_id, telefone1_solicitante')
+      .select('numero, lead_id, vistoria_id, vendedor_id, telefone1_solicitante, status')
       .eq('id', cotacaoId)
       .maybeSingle()
 
