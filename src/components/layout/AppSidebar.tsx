@@ -247,6 +247,7 @@ const menuConfig: {
       color: MENU_COLORS.eventos,
       items: [
         { title: 'Dashboard', url: '/eventos/dashboard', icon: BarChart3 },
+        { title: 'Chat', url: '/eventos/chat', icon: MessageCircle },
         { title: 'Sinistros', url: '/eventos/sinistros', icon: AlertTriangle },
         { title: 'Pré-Análise', url: '/eventos/pre-analise', icon: ClipboardCheck, permission: 'isDiretor' },
         { title: 'SLA', url: '/eventos/sla', icon: Clock },

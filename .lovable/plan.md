@@ -1,218 +1,86 @@
+## Objetivo
 
-# Otimização Menu Comercial — Plano Fásico
+Adicionar um item **"Chat"** no menu **Eventos** com as **mesmas funcionalidades** do chat de Relacionamento (lista de conversas, painel de mensagens, encerramento, pausa de IA, etc.), porém com um **painel lateral "Detalhes do contato" diferente**, contextualizado para o setor de Eventos.
 
-Objetivo: derrubar FCP/DCL de **6.7s → ~2s**, fetches por carregamento de Cotações de **66 → ~8**, e DOM de tabelas grandes de **3.3k → <500 nodes**, sem perder funcionalidade.
+A regra de memória do projeto exige: nunca duplicar funcionalidade já implementada — vamos **reaproveitar** todos os componentes existentes do chat e apenas trocar o drawer do contato.
 
 ---
 
-## Fase 1 — Quick wins (alto impacto, baixo risco)
+## O que já existe (reuso)
 
-### 1.1 Lazy-mount do `CotacaoFormDialog`, `ContratoWizard`, `RelatorioInteligenteCotacoesDialog`
+- `pages/eventos/EventosChatIA.tsx` — página do chat (Relacionamento)
+- `components/eventos/chat-ia/ChatPanel.tsx` — painel de mensagens
+- `components/eventos/chat-ia/ConversasList.tsx` — lista de conversas
+- `components/eventos/chat-ia/ContatoDetalheDrawer.tsx` — drawer atual (foco: ficha geral do associado)
+- `useRastreadorPosicao` (hook) e `MapaRastreador` (componente) — posição atual
+- `useVeiculoDetalhes` + `VeiculoDetalhesModal` — detalhes/fotos do veículo
+- `NovoSinistroModal` — abrir evento (sinistro)
+- `NovoChamadoModal` — abrir chamado de assistência 24h
+- Tabela `sinistros` (eventos) e `chamados_assistencia` para listar histórico do associado
 
-**Arquivo:** `src/pages/vendas/Cotacoes.tsx`
+---
 
-Hoje (linhas 30, 31, 47) são imports estáticos e o JSX (linhas 1155, 1222) renderiza esses dialogs **sempre**, mesmo com `open=false`. O `CotacaoFormDialog` (3094 linhas) executa ~32 `useQuery` no top-level, gerando 50+ fetches inúteis em toda visita.
+## Mudanças
 
-Mudanças:
-- Trocar imports por `React.lazy(() => import(...))` para `CotacaoFormDialog`, `ContratoWizard`, `RelatorioInteligenteCotacoesDialog`.
-- Renderizar condicionalmente: `{showCotacaoForm && <Suspense fallback={null}><CotacaoFormDialog ... /></Suspense>}` (idem para `showContratoWizard` e o relatório IA).
-- Lazy-import dinâmico de `gerarPdfCotacao` / `gerarPdfCotacaoComparativa` dentro do handler do botão (`await import('@/lib/gerarPdfCotacao')`).
+### 1. Refatorar `EventosChatIA` para aceitar variante de drawer
 
-Ganho: −50 fetches por visita; −238KB do bundle inicial.
+Tornar a página parametrizável quanto a **qual drawer** renderizar como painel de detalhes do contato, mantendo 100% do restante (lista, mensagens, ações).
 
-### 1.2 Consolidar `configuracoes` em 1 hook batch
-
-**Arquivos:**
-- Novo: `src/hooks/useConfiguracoesAll.ts`
-- Refatorar: `src/hooks/useConteudosSistema.ts` (linhas 9–24, base de todos `useConfiguracao*`)
-- Tocar (consumir o cache, sem mudar API pública): `useFipeMenorAtivo.ts`, `useConfig0800.ts`, `useConfigLimitesVeiculo.ts`, `useConfigRastreador.ts`, `useTaxa*` em `useConteudosSistema`, `useCarencia*`, `useApiLeadsConfig.ts`.
-
-Implementação:
-```ts
-// useConfiguracoesAll.ts
-export function useConfiguracoesAll() {
-  return useQuery({
-    queryKey: ['configuracoes', 'all'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('configuracoes')
-        .select('chave, valor');
-      if (error) throw error;
-      return Object.fromEntries((data ?? []).map(r => [r.chave, r.valor]));
-    },
-    staleTime: 10 * 60_000,
-    gcTime: 30 * 60_000,
-  });
-}
+```text
+EventosChatIA
+ ├─ ConversasList            (igual)
+ ├─ ChatPanel                (igual)
+ └─ <DrawerComponent />      ← injetado por prop, default = ContatoDetalheDrawer (Relacionamento)
 ```
 
-Em `useConteudosSistema.ts`, reescrever o `useConfiguracao` interno para ler do mapa carregado (selector pattern):
-```ts
-function useConfiguracao<T>(chave, parse, fallback) {
-  const { data } = useConfiguracoesAll();
-  return useMemo(() => {
-    const v = data?.[chave];
-    return v == null ? fallback : (parse(v) ?? fallback);
-  }, [data, chave]);
-}
-```
+### 2. Criar `ContatoDetalheEventosDrawer`
 
-Manter as assinaturas públicas (`useTaxaAdesaoPercentual()`, etc.) — apenas a fonte muda. Reduz **25 → 1** request.
+Novo arquivo em `src/components/eventos/chat-ia/ContatoDetalheEventosDrawer.tsx`. Mesma interface de props do drawer atual (`telefone`, `open`, `onOpenChange`, `nomeContato`, `avatarUrl`) e mesma estrutura visual (Sheet lateral, cabeçalho com avatar/nome/telefone/badge, bloco de "IA pausada", bloco "Encerrar atendimento" idêntico). O que muda é o **miolo de informações** entre o cabeçalho e o encerrar.
 
-### 1.3 Eliminar uso de `tabelas_preco_mensalidade` (DEPRECATED)
+Conteúdo do miolo (apenas se um associado for encontrado pelo telefone):
 
-**Memory core:** “Never use legacy `tabelas_preco_mensalidade`”. Aparece em 7 arquivos `src/`.
+1. **Resumo do associado** — nome, status, e-mail.
+2. **Veículos do associado** — lista com card por veículo:
+   - Foto principal do veículo (quando houver).
+   - Placa, marca/modelo, ano, cor.
+   - Status do rastreador (online/offline) + última posição (lat/long + endereço se reverso disponível) via `useRastreadorPosicao`.
+   - Botão **"Ver detalhes do veículo"** → abre o `VeiculoDetalhesModal` existente (modal sobre o drawer, na mesma tela).
+   - Botão **"Ver no mapa"** → expande mini-mapa inline usando `MapaRastreador`.
+3. **Eventos do associado** — lista resumida dos últimos sinistros (`sinistros` filtrados por `associado_id`), com data, tipo, status. Botão "Abrir" leva ao detalhe do sinistro em nova aba (mantém o chat aberto).
+4. **Ações**:
+   - Botão primário **"Abrir evento"** → abre `NovoSinistroModal` já pré-selecionando o associado e, se houver apenas 1 veículo, pré-selecionando-o.
+   - Botão **"Abrir chamado de assistência"** → abre `NovoChamadoModal` pré-preenchido.
 
-Foco da Fase 1 (apenas quem é chamado pelo fluxo Comercial):
-- `src/hooks/useCalcularCotacao.ts`
-- `src/hooks/useCotacaoAvancada.ts`
-- `src/hooks/usePlanos.ts`
-- `src/utils/precoApp.ts`, `src/utils/fipeFaixa.ts`, `src/utils/regiaoMapping.ts`
+Caso o telefone **não** corresponda a nenhum associado: mostrar mensagem "Nenhum associado vinculado" e desabilitar as ações que dependem de `associado_id`.
 
-Substituir por `entity_eligibility_rules` (já carregado por `useAllEligibilityRules`). Os arquivos `src/pages/diretoria/*` ficam para Fase 3 (telas administrativas, baixo tráfego).
+### 3. Criar página `EventosChat` (rota nova)
 
-### 1.4 Deduplicar `user_roles` / `profiles`
+Arquivo `src/pages/eventos/EventosChat.tsx` que apenas renderiza `<EventosChatIA drawerVariant="eventos" />` (ou similar). Sem lógica nova.
 
-**Arquivos:**
-- `src/contexts/AuthContext.tsx` (já busca `profiles` linha 72 e `user_roles` linha 98 — fonte única).
-- Auditar consumidores: `src/hooks/usePermissions.ts`, `src/hooks/useUsuarios.ts`, `src/hooks/useVendedores.ts`. Garantir que **leem do `useAuth()`** em vez de novo `useQuery`.
+### 4. Rota e menu
 
-Padrão:
-```ts
-const { profile, roles } = useAuth();
-// nunca: supabase.from('user_roles').select(...).eq('user_id', user.id)
-```
+- `src/App.tsx` — adicionar `<Route path="/eventos/chat" element={<EventosChat />} />` (lazy).
+- `src/components/layout/AppSidebar.tsx` — adicionar item `{ title: 'Chat', url: '/eventos/chat', icon: MessageCircle }` na seção `eventos`, logo após "Dashboard".
 
-Se algum hook precisa de roles de **outros** usuários, aí sim faz query — mas para o usuário corrente, sempre via contexto.
+### 5. Sem mudanças em banco
 
-### 1.5 Corrigir HEAD com CORS + HTTP 400 em `aprovacoes_fipe_menor`
-
-**Arquivos:**
-- Localizar com `rg -n "method:\s*'HEAD'|head\(\)" src/`. Os 4 endpoints (`contratos`, `servicos×2`, `error_reports`) provavelmente vêm de hooks de badge/contadores no sidebar.
-- Substituir HEAD por `select('id', { count: 'exact', head: true })` do supabase-js (que já manda CORS correto), **ou** remover o badge se não for usado.
-- `src/hooks/useAprovacoesFipeMenor.ts` — corrigir filtro que está produzindo HTTP 400 (provavelmente `.eq('coluna', undefined)` quando o usuário não é diretoria — adicionar guard `enabled:`).
-
-### 1.6 Code-split garantido por rota
-
-**Arquivo:** `src/App.tsx` — confirmar que **todas** as 12 rotas Comercial usam `lazy()`. Adicionar onde faltar:
-```ts
-const Cotacoes = lazy(() => import('@/pages/vendas/Cotacoes'));
-```
-
-### Entregáveis da Fase 1
-- 6 PRs lógicos (1 por item).
-- Smoke test manual: abrir cada uma das 12 rotas Comercial, verificar `network tab` < 15 fetches por rota e ausência de erros HTTP 400/CORS.
-
-### Ganho esperado pós Fase 1
-| Métrica | Hoje | Após Fase 1 |
-|---|---|---|
-| Fetches /vendas/cotacoes | 66 | ~12 |
-| FCP/DCL médios | 6.7s | ~3.5s |
-| Bundle inicial | ~5MB | ~4.5MB |
-| Pressão Supabase | base | −70% |
+Toda a informação necessária já está nas tabelas existentes (`associados`, `veiculos`, `rastreadores`, `sinistros`, `chamados_assistencia`). Nenhuma migration.
 
 ---
 
-## Fase 2 — Bugs visíveis (1 dia)
+## Arquivos tocados
 
-### 2.1 KPIs divergentes
-
-**Arquivos:**
-- `src/pages/vendas/Cotacoes.tsx` — `useCotacoesFunilCounts` (cards) vs `useCotacoesPaginadas` (tabela). Alinhar filtros de `vendedor_id`/`status`/aba ativa para ambas.
-- `src/pages/cadastro/Associados.tsx` — cards mostram “1 Total / 0 Ativos” mas tabela tem dezenas. Igualar a fonte ou adicionar respeito a filtros.
-- `src/pages/cadastro/Veiculos.tsx` — KPIs vazios. Mesma raiz.
-
-Definir regra: **cards refletem o conjunto filtrado**, não global (mais intuitivo para o usuário).
-
-### 2.2 Warnings `forwardRef` no console
-
-**Arquivos:** `src/pages/cadastro/Veiculos.tsx`, `src/components/cadastro/VeiculoDetalhesModal.tsx`, `src/components/layout/AppLayout.tsx`. Envolver o componente filho com `React.forwardRef` quando passado como `asChild` para Radix.
+- **Novo** `src/pages/eventos/EventosChat.tsx`
+- **Novo** `src/components/eventos/chat-ia/ContatoDetalheEventosDrawer.tsx`
+- **Edit** `src/pages/eventos/EventosChatIA.tsx` — aceitar prop `drawerVariant?: 'relacionamento' | 'eventos'` (default `'relacionamento'`) e escolher o drawer.
+- **Edit** `src/App.tsx` — registrar a nova rota `/eventos/chat`.
+- **Edit** `src/components/layout/AppSidebar.tsx` — adicionar item "Chat" no menu Eventos.
 
 ---
 
-## Fase 3 — Otimizações estruturais ✅ CONCLUÍDA
+## Pontos de atenção
 
-### 3.1 Virtualização / memoização de rows ✅
-- `@tanstack/react-virtual@3.13.24` instalado (disponível para listas longas reais — mapas/monitoramento).
-- `Veiculos.tsx`: row extraída em componente `VeiculoRow` com `React.memo`; `formatCurrency` envolto em `useCallback` para preservar a memoização.
-- Tabelas Comercial (Cotacoes/Associados/Veiculos) já usam paginação server-side (50/página), portanto virtualização agressiva traria ganho marginal contra alto risco de quebrar layout do Radix Table — ficou disponível para reuso futuro.
-
-### 3.2 Server-side pagination consistente ✅
-- `useCotacoesPaginadas`, `useAssociados` e `useVeiculosPaginados` já usam `range(from, to)` + `count: 'exact'`. Sem listas carregando 1000 linhas.
-
-### 3.3 Realtime sob demanda ✅
-- `useCotacoesRealtime({ enabled })` aceita flag opt-in.
-- `Cotacoes.tsx` ativa o realtime apenas na aba "Em Andamento" — finalizadas mudam pouco e geravam pressão de invalidação desnecessária.
-
-### 3.4 Migração restante de `tabelas_preco_mensalidade` ⏸ DEFERIDA
-- Ainda em uso por `src/pages/diretoria/*` (TabelaPrecos, ProdutosGestao, ProdutoDetalhe) E por hooks críticos de cálculo (`useCalcularCotacao`, `useCotacaoAvancada`, `useCotacao`).
-- Migrar para `entity_eligibility_rules` exige mapeamento semântico + regression test extenso em cotação/substituição/contratação.
-- Telas /diretoria/* têm baixo tráfego e não impactam Web Vitals do menu Comercial → tratar como **épico próprio com QA dedicado**, fora do escopo desta otimização.
-
----
-
-## Fase 4 — Infra ✅ CONCLUÍDA
-
-### 4.1 RPC `get_app_config()` ✅
-- Criada função SQL `public.get_app_config()` STABLE + SECURITY DEFINER que retorna `jsonb` com todas as configurações em uma chamada.
-- `GRANT EXECUTE` para `anon` + `authenticated`.
-- `useConfiguracoesAll()` agora consome a RPC (com fallback para SELECT direto se a RPC indisponível).
-
-### 4.2 Índices Postgres ✅
-- `idx_associados_status` — já existia.
-- `idx_veiculos_associado` — já existia.
-- `idx_cotacoes_status_vendedor` — criado nesta fase (combinado `(status, vendedor_id)`).
-
-> Observação: `Cache-Control` HTTP no PostgREST não é configurável via migração; o cache é mantido no React Query (`staleTime: 10min`, `gcTime: 30min`).
-
-
----
-
-## Métricas finais esperadas
-
-| Métrica | Hoje | Fase 1 | Fase 3 |
-|---|---|---|---|
-| Fetches `/vendas/cotacoes` | 66 | ~12 | ~8 |
-| FCP/DCL | 6.7s | ~3.5s | ~2s |
-| DOM `/cadastro/veiculos` | 3318 | 3318 | <500 |
-| Pressão Supabase | base | −70% | −85% |
-
-## Ordem de execução proposta para Fase 1
-
-1. Item 1.1 (lazy-mount) — biggest single win, 30 min.
-2. Item 1.2 (configuracoes batch) — 2-3h, requer testes em hooks dependentes.
-3. Item 1.4 (dedup auth) — 1h.
-4. Item 1.3 (remover deprecated) — 2h.
-5. Item 1.5 (HEAD/CORS/HTTP400) — 1h.
-6. Item 1.6 (code-split confirm) — 30 min.
-
-Posso começar pelo 1.1 (impacto imediato visível) e seguir na ordem. Aprovar para iniciar?
-
----
-
-## Revisão pós-Fase 4 — Cadastro (06/05/2026)
-
-Auditoria após login como diretor em todas as rotas do menu Cadastro.
-
-### Correções aplicadas
-- ✅ **Dedupe profile/user_roles em StrictMode**: `AuthContext.fetchProfile/fetchPerfis` agora usam cache de Promise em escopo de módulo (TTL 30s) — elimina os 2× fetches causados pelo duplo mount do StrictMode + `_recoverAndRefresh` do supabase-js.
-- ✅ **Dedupe app_roles_config**: `useVendedores` agora reutiliza o cache de `useAppRoles` (staleTime 30min) em vez de buscar de novo `app_roles_config?area=eq.Comercial`.
-
-### Observações
-- Os HEAD `ERR_ABORTED` para `servicos`, `contratos`, `error_reports` são **abortos benignos do StrictMode** (badges do sidebar — `useAprovacoesMonitoramentoCount`, `useMyPendingValidations`, `useAutentiqueBiometricStatus`). React Query reexecuta; sem impacto funcional.
-
-### 🚨 N+1 crítico identificado em `/cadastro/propostas` (Fase 5 — pendente)
-`usePropostasPendentes` (1864 linhas) itera sobre cada contrato `assinado` e dispara em loop:
-- `associados?id=eq.X` (1× por proposta)
-- `veiculos?associado_id=eq.X` (1× por proposta)
-- `planos?id=eq.X`, `profiles?user_id=eq.X` (1× cada por proposta)
-- `contratos_documentos`, `cotacoes`, `instalacoes`, `documentos_solicitados`, `vistorias`, `vistoria_fotos`, `cotacoes_vistoria_fotos` (1× cada por proposta)
-
-→ Resultado: **~10–12 requisições por proposta**. Com 8 propostas pendentes = ~85 fetches.
-
-**Plano para Fase 5 (refatoração de `usePropostasPendentes`)**:
-1. Trocar loop por **fetches em batch com `.in('id', [...ids])`** para `associados`, `veiculos`, `planos`, `profiles`, `instalacoes`, `vistorias`, `documentos_solicitados`.
-2. Indexar resultados em `Map<id, row>` no client e fazer o "join" em memória.
-3. Considerar criar uma RPC `get_propostas_pendentes_full()` que retorna o agregado em uma chamada.
-
-**Estimativa**: 4–6h. Impacto esperado: 85 fetches → ~10 fetches (-88%) e DCL de ~5s → <1.5s.
+- **Não alterar** o chat de Relacionamento — o drawer atual continua sendo o default.
+- **Reuso obrigatório** dos modais `NovoSinistroModal`, `NovoChamadoModal`, `VeiculoDetalhesModal` e do `MapaRastreador` — se durante a implementação descobrirmos qualquer divergência de assinatura, eu paro e pergunto antes de criar variantes.
+- Ações sensíveis (abrir evento/chamado) **não** alteram nada por trás dos panos — apenas abrem os modais existentes; a criação real continua passando pelos fluxos canônicos já validados.
+- Performance: queries de veículos/rastreadores/eventos terão `staleTime` adequado e `enabled` apenas quando o drawer estiver aberto e o associado resolvido (mesma estratégia das auditorias anteriores).
