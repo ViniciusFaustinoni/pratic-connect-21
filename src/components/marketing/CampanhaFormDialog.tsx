@@ -47,6 +47,7 @@ export function CampanhaFormDialog({ open, onClose, campanha }: CampanhaFormDial
     if (campanha) {
       setNome(campanha.nome);
       setTipo(campanha.tipo);
+      setCanalId(campanha.canal_id || 'none');
       setDataInicio(campanha.data_inicio);
       setDataFim(campanha.data_fim || '');
       setOrcamentoTotal(campanha.orcamento_total?.toString() || '');
@@ -63,7 +64,7 @@ export function CampanhaFormDialog({ open, onClose, campanha }: CampanhaFormDial
   const resetForm = () => {
     setNome('');
     setTipo('aquisicao');
-    
+    setCanalId('none');
     setDataInicio('');
     setDataFim('');
     setOrcamentoTotal('');
@@ -78,6 +79,7 @@ export function CampanhaFormDialog({ open, onClose, campanha }: CampanhaFormDial
     const data = {
       nome,
       tipo,
+      canal_id: canalId && canalId !== 'none' ? canalId : null,
       data_inicio: dataInicio,
       data_fim: dataFim || null,
       orcamento_total: orcamentoTotal ? parseFloat(orcamentoTotal) : null,
