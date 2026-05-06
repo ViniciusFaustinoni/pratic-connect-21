@@ -187,3 +187,32 @@ Definir regra: **cards refletem o conjunto filtrado**, não global (mais intuiti
 6. Item 1.6 (code-split confirm) — 30 min.
 
 Posso começar pelo 1.1 (impacto imediato visível) e seguir na ordem. Aprovar para iniciar?
+
+---
+
+## Revisão pós-Fase 4 — Cadastro (06/05/2026)
+
+Auditoria após login como diretor em todas as rotas do menu Cadastro.
+
+### Correções aplicadas
+- ✅ **Dedupe profile/user_roles em StrictMode**: `AuthContext.fetchProfile/fetchPerfis` agora usam cache de Promise em escopo de módulo (TTL 30s) — elimina os 2× fetches causados pelo duplo mount do StrictMode + `_recoverAndRefresh` do supabase-js.
+- ✅ **Dedupe app_roles_config**: `useVendedores` agora reutiliza o cache de `useAppRoles` (staleTime 30min) em vez de buscar de novo `app_roles_config?area=eq.Comercial`.
+
+### Observações
+- Os HEAD `ERR_ABORTED` para `servicos`, `contratos`, `error_reports` são **abortos benignos do StrictMode** (badges do sidebar — `useAprovacoesMonitoramentoCount`, `useMyPendingValidations`, `useAutentiqueBiometricStatus`). React Query reexecuta; sem impacto funcional.
+
+### 🚨 N+1 crítico identificado em `/cadastro/propostas` (Fase 5 — pendente)
+`usePropostasPendentes` (1864 linhas) itera sobre cada contrato `assinado` e dispara em loop:
+- `associados?id=eq.X` (1× por proposta)
+- `veiculos?associado_id=eq.X` (1× por proposta)
+- `planos?id=eq.X`, `profiles?user_id=eq.X` (1× cada por proposta)
+- `contratos_documentos`, `cotacoes`, `instalacoes`, `documentos_solicitados`, `vistorias`, `vistoria_fotos`, `cotacoes_vistoria_fotos` (1× cada por proposta)
+
+→ Resultado: **~10–12 requisições por proposta**. Com 8 propostas pendentes = ~85 fetches.
+
+**Plano para Fase 5 (refatoração de `usePropostasPendentes`)**:
+1. Trocar loop por **fetches em batch com `.in('id', [...ids])`** para `associados`, `veiculos`, `planos`, `profiles`, `instalacoes`, `vistorias`, `documentos_solicitados`.
+2. Indexar resultados em `Map<id, row>` no client e fazer o "join" em memória.
+3. Considerar criar uma RPC `get_propostas_pendentes_full()` que retorna o agregado em uma chamada.
+
+**Estimativa**: 4–6h. Impacto esperado: 85 fetches → ~10 fetches (-88%) e DCL de ~5s → <1.5s.
