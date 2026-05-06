@@ -70,6 +70,7 @@ import { SubstituirEquipamentoDialog } from './SubstituirEquipamentoDialog';
 import { useEnviarComando } from '@/hooks/useComandosRastreador';
 import { VisualizadorFoto } from '@/components/analise/VisualizadorFoto';
 import { UsuariosVeiculoSoftruck } from './UsuariosVeiculoSoftruck';
+import { GestaoRedeVeiculos } from './GestaoRedeVeiculos';
 import { AlertTriangle } from 'lucide-react';
 
 interface RastreadorDetailDrawerProps {
