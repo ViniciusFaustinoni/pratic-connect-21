@@ -137,7 +137,10 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    const { plataforma, force_refresh } = await req.json();
+    const body = await req.json();
+    // Aceita tanto `plataforma` quanto `plataforma_codigo` (legado)
+    const plataforma = body.plataforma ?? body.plataforma_codigo;
+    const force_refresh = body.force_refresh;
 
     // Validar plataforma
     if (!plataforma || !['rede_veiculos', 'softruck'].includes(plataforma)) {
