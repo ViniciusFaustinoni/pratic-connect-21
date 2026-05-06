@@ -50,9 +50,9 @@ Deno.serve(async (req) => {
     }
 
     const body: RequestBody = await req.json();
-    const { associado_antigo_id, veiculo_id, novo_titular } = body;
+    const { associado_antigo_id, veiculo_id, veiculo_placa, novo_titular } = body;
 
-    if (!associado_antigo_id || !veiculo_id || !novo_titular?.nome || !novo_titular?.cpf) {
+    if (!associado_antigo_id || (!veiculo_id && !veiculo_placa) || !novo_titular?.nome || !novo_titular?.cpf) {
       return new Response(JSON.stringify({ error: 'Dados incompletos' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -61,13 +61,30 @@ Deno.serve(async (req) => {
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Buscar dados do veículo + associado antigo
-    const { data: veiculo, error: veiculoErr } = await admin
-      .from('veiculos')
-      .select('id, marca, modelo, ano, placa, combustivel, cor, fipe_codigo, fipe_valor, categoria, associado_id')
-      .eq('id', veiculo_id)
-      .maybeSingle();
-    if (veiculoErr || !veiculo) throw new Error('Veículo não encontrado');
+    // Buscar veículo: prioriza UUID; fallback por placa+associado (resolve cache stale do front).
+    const colunas = 'id, marca, modelo, ano, placa, combustivel, cor, fipe_codigo, fipe_valor, categoria, associado_id';
+    let veiculo: any = null;
+    if (veiculo_id) {
+      const { data } = await admin.from('veiculos').select(colunas).eq('id', veiculo_id).maybeSingle();
+      veiculo = data;
+    }
+    if (!veiculo && veiculo_placa) {
+      const placaUp = veiculo_placa.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+      const { data } = await admin
+        .from('veiculos')
+        .select(colunas)
+        .eq('associado_id', associado_antigo_id)
+        .ilike('placa', placaUp)
+        .maybeSingle();
+      veiculo = data;
+    }
+    if (!veiculo) {
+      console.error('[criar-solicitacao-troca] veículo não localizado', { veiculo_id, veiculo_placa, associado_antigo_id });
+      return new Response(
+        JSON.stringify({ error: 'Veículo não encontrado para o titular informado. Atualize a página e tente novamente.' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
 
     // SEGURANÇA: garante que a placa pertence ao titular antigo informado.
     // Bloqueia bypass de UI / chamadas diretas à edge com combinação CPF + placa não-vinculada.
