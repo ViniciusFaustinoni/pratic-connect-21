@@ -180,40 +180,23 @@ export default function Veiculos() {
     }).format(value);
   };
 
-  // Stats with exact counts (bypass 1000 row limit)
+  // Stats com filtros (RPC única — antes eram 2 HEADs + paginação completa de valor_fipe)
   const { data: statsData, isLoading: statsLoading } = useQuery({
-    queryKey: ['veiculos-stats'],
+    queryKey: ['veiculos-stats', debouncedSearch, statusFilter],
     queryFn: async () => {
-      const [totalRes, ativosRes] = await Promise.all([
-        supabase.from('veiculos').select('id', { count: 'exact', head: true }),
-        supabase.from('veiculos').select('id', { count: 'exact', head: true }).eq('status', 'ativo'),
-      ]);
-
-      if (totalRes.error) throw totalRes.error;
-      if (ativosRes.error) throw ativosRes.error;
-
-      // Sum valor_fipe with pagination to bypass 1000 limit
-      let valorTotal = 0;
-      let from = 0;
-      const pageSize = 1000;
-      while (true) {
-        const { data: page, error } = await supabase
-          .from('veiculos')
-          .select('valor_fipe')
-          .eq('status', 'ativo')
-          .range(from, from + pageSize - 1);
-        if (error) throw error;
-        valorTotal += (page || []).reduce((acc, v) => acc + (Number(v.valor_fipe) || 0), 0);
-        if (!page || page.length < pageSize) break;
-        from += pageSize;
-      }
-
+      const { data, error } = await supabase.rpc('veiculos_stats_filtrados', {
+        p_search: debouncedSearch || null,
+        p_status: statusFilter && statusFilter !== 'all' ? statusFilter : null,
+      });
+      if (error) throw error;
+      const v = (data || {}) as { total?: number; ativos?: number; valor_fipe_total?: number };
       return {
-        total: totalRes.count || 0,
-        ativos: ativosRes.count || 0,
-        valorTotal,
+        total: v.total ?? 0,
+        ativos: v.ativos ?? 0,
+        valorTotal: Number(v.valor_fipe_total ?? 0),
       };
     },
+    staleTime: 30_000,
   });
 
   const stats = statsData || { total: 0, ativos: 0, valorTotal: 0 };
