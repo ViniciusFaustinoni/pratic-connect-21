@@ -58,6 +58,7 @@ type SoftruckOperation =
   // Associações Usuário-Veículo
   | 'associar-usuario-veiculo'
   | 'desassociar-usuario-veiculo'
+  | 'desassociar-todos-usuarios-veiculo'
   | 'listar-usuarios-veiculo'
   // Tracking
   | 'tracking'
