@@ -2221,6 +2221,7 @@ export type Database = {
           sexo: string | null
           sincronizado_hinova: boolean | null
           sincronizado_hinova_em: string | null
+          softruck_user_id: string | null
           status: Database["public"]["Enums"]["status_associado"]
           telefone: string
           telefone_secundario: string | null
@@ -2284,6 +2285,7 @@ export type Database = {
           sexo?: string | null
           sincronizado_hinova?: boolean | null
           sincronizado_hinova_em?: string | null
+          softruck_user_id?: string | null
           status?: Database["public"]["Enums"]["status_associado"]
           telefone: string
           telefone_secundario?: string | null
@@ -2347,6 +2349,7 @@ export type Database = {
           sexo?: string | null
           sincronizado_hinova?: boolean | null
           sincronizado_hinova_em?: string | null
+          softruck_user_id?: string | null
           status?: Database["public"]["Enums"]["status_associado"]
           telefone?: string
           telefone_secundario?: string | null
