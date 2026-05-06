@@ -217,11 +217,7 @@ const menuConfig: {
           icon: Radio,
           permission: 'canManageRastreadores',
         },
-        {
-          title: 'Mapa',
-          url: '/monitoramento/mapa',
-          icon: Map,
-        },
+        // Mapa movido para aba dentro de "Serviços de Campo"
         // Alertas removido temporariamente
         {
           title: 'Ressalvas Pendentes',

@@ -664,7 +664,7 @@ const App = () => (
               <Route path="/monitoramento/instalacoes" element={<InstalacoesList />} />
               <Route path="/monitoramento/instalacoes/:id" element={<InstalacaoDetalhe />} />
               <Route path="/diretoria/vistorias-instalacoes" element={<Rotas />} />
-              <Route path="/monitoramento/mapa" element={<Mapa />} />
+              <Route path="/monitoramento/mapa" element={<Navigate to="/monitoramento/vistorias-instalacoes-mon?tab=mapa" replace />} />
               <Route path="/monitoramento/rastreadores" element={<Rastreadores />} />
               <Route path="/monitoramento/alertas" element={<AlertasMonitoramento />} />
               <Route path="/monitoramento/calendario" element={<CalendarioInstalacoes />} />
