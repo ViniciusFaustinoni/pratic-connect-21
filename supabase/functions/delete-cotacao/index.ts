@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
     // Buscar dados da cotação para log e verificação de ownership
     const { data: cotacao, error: cotacaoError } = await adminClient
       .from('cotacoes')
-      .select('numero, lead_id, vistoria_id, vendedor_id, telefone1_solicitante')
+      .select('numero, lead_id, vistoria_id, vendedor_id, telefone1_solicitante, status')
       .eq('id', cotacaoId)
       .maybeSingle()
 
@@ -100,14 +100,21 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Se é dono (sem permissão de diretor), verificar se não há contrato ativo/assinado
+    // Se é dono (sem permissão de diretor), permitir somente rascunho e sem contrato ativo/assinado
     if (!temPermissaoDiretor && isOwner) {
+      if (cotacao.status !== 'rascunho') {
+        return new Response(
+          JSON.stringify({ success: false, error: 'O consultor só pode excluir cotações em rascunho' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
       const { data: contratosAtivos } = await adminClient
         .from('contratos')
         .select('id, status')
         .eq('cotacao_id', cotacaoId)
         .in('status', ['assinado', 'ativo'])
-      
+
       if (contratosAtivos && contratosAtivos.length > 0) {
         return new Response(
           JSON.stringify({ success: false, error: 'Não é possível excluir cotação com contrato ativo/assinado' }),

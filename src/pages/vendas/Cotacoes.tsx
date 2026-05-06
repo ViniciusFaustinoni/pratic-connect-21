@@ -720,17 +720,22 @@ export default function Cotacoes() {
   const getPermissions = (cotacao: CotacaoWithRelations): CotacoesTablePermissions => {
     const isOwner = cotacao.vendedor_id === permissions.userId;
     const contratoAtivo = ['assinado', 'ativo'].includes(cotacao.contrato?.status || '');
-    const canDelete = permissions.cotacao.canDelete || (isOwner && !contratoAtivo);
-    
+    const isRascunho = cotacao.status === 'rascunho';
+    const canDelete =
+      permissions.cotacao.canDelete ||
+      (isOwner && !contratoAtivo && isRascunho);
+
     let deleteReason: string | undefined;
     if (!canDelete) {
       if (contratoAtivo) {
         deleteReason = 'Cotações com contrato ativo não podem ser excluídas';
+      } else if (isOwner && !isRascunho) {
+        deleteReason = 'O consultor só pode excluir cotações em rascunho';
       } else {
         deleteReason = 'Apenas o vendedor responsável ou diretores podem excluir';
       }
     }
-    
+
     return {
       canEdit: (permissions.cotacao.canEdit && (!permissions.cotacao.canEditOwnOnly || isOwner)) && !contratoAtivo,
       canDelete,

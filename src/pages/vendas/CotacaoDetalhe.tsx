@@ -492,13 +492,18 @@ Ficou com alguma dúvida? Estou à disposição!
             isExcluindo={excluirMutation.isPending}
             isGerando={isGerando}
             isDuplicando={duplicarMutation.isPending}
-            canDelete={isDiretor || (cotacao?.vendedor_id === profile?.id && !contratoAssinado)}
+            canDelete={
+              isDiretor ||
+              (cotacao?.vendedor_id === profile?.id && !contratoAssinado && cotacao?.status === 'rascunho')
+            }
             deleteReason={
-              contratoAssinado 
+              contratoAssinado
                 ? 'Cotações com contrato ativo não podem ser excluídas'
                 : !(isDiretor || cotacao?.vendedor_id === profile?.id)
                   ? 'Apenas o vendedor responsável ou diretores podem excluir'
-                  : undefined
+                  : cotacao?.status !== 'rascunho' && !isDiretor
+                    ? 'O consultor só pode excluir cotações em rascunho'
+                    : undefined
             }
             contratoAssinado={contratoAssinado}
           />
