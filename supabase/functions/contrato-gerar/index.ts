@@ -1039,16 +1039,16 @@ serve(async (req) => {
             cliente_cpf: cpfFinal,
             
             // NOVOS CAMPOS: Dados de documentos pessoais (extraídos via OCR)
-            cliente_rg: cotacao.cliente_rg || null,
-            cliente_rg_orgao: cotacao.cliente_rg_orgao || null,
-            cliente_cnh: cotacao.cliente_cnh || null,
+            cliente_rg: cap(cotacao.cliente_rg, 20) || null,
+            cliente_rg_orgao: cap(cotacao.cliente_rg_orgao, 20) || null,
+            cliente_cnh: cap(cotacao.cliente_cnh, 20) || null,
             cliente_cnh_validade: cotacao.cliente_cnh_validade || null,
-            cliente_cnh_categoria: cotacao.cliente_cnh_categoria || null,
+            cliente_cnh_categoria: cap(cotacao.cliente_cnh_categoria, 10) || null,
             cliente_data_nascimento: cotacao.cliente_data_nascimento || null,
             
             // NOVOS CAMPOS: Endereço detalhado (snapshot)
             cliente_logradouro: cotacao.cliente_logradouro || null,
-            cliente_numero: cotacao.cliente_numero || null,
+            cliente_numero: cap(cotacao.cliente_numero, 20) || null,
             cliente_bairro: cap(cotacao.cliente_bairro, 150) || null,
             cliente_complemento: cap(cotacao.cliente_complemento, 255) || null,
             
