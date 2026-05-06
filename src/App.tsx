@@ -263,8 +263,6 @@ const MarketingDashboard = lazy(() => import("./pages/marketing/MarketingDashboa
 const Campanhas = lazy(() => import("./pages/marketing/Campanhas"));
 const CampanhaDetalhe = lazy(() => import("./pages/marketing/CampanhaDetalhe"));
 const CampanhaForm = lazy(() => import("./pages/marketing/CampanhaForm"));
-const Canais = lazy(() => import("./pages/marketing/Canais"));
-const CanalDetalhe = lazy(() => import("./pages/marketing/CanalDetalhe"));
 const Indicacoes = lazy(() => import("./pages/marketing/Indicacoes"));
 const UTMs = lazy(() => import("./pages/marketing/UTMs"));
 const RelatoriosMarketing = lazy(() => import("./pages/marketing/RelatoriosMarketing"));
