@@ -284,7 +284,7 @@ export function RastreadorDetailDrawer({
                         Reconciliar dados com a Softruck (placa, vínculo).
                       </p>
                     )}
-                    {reconciliarPreview && (
+                    {reconciliarPreview && isDiretor && (
                       <pre className="mt-2 text-xs bg-background/60 p-2 rounded max-h-40 overflow-auto">
 {JSON.stringify(reconciliarPreview, null, 2)}
                       </pre>
