@@ -227,13 +227,24 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl }: ChatPanelProps) 
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card">
+      <button
+        type="button"
+        onClick={() => setDrawerAberto(true)}
+        className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card hover:bg-muted/50 transition-colors text-left"
+        title="Ver detalhes do contato"
+      >
         <UserAvatar src={avatarUrl} name={nomeContato} size="md" />
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-sm truncate">{nomeContato || 'Contato'}</p>
           <p className="text-xs text-muted-foreground">{formatarTelefone(telefone)}</p>
         </div>
-      </div>
+        {iaPausada && pausa && (
+          <Badge variant="outline" className="gap-1 text-amber-600 border-amber-500/50 bg-amber-50 dark:bg-amber-950/30">
+            <BotOff className="h-3 w-3" />
+            IA pausada até {format(new Date(pausa.pausada_ate), 'HH:mm')}
+          </Badge>
+        )}
+      </button>
 
       {/* Messages */}
       <div className="flex-1 overflow-hidden relative">
