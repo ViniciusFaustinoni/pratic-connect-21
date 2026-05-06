@@ -31,7 +31,7 @@ import { toast } from 'sonner';
 import { useIaPausa } from '@/hooks/useIaPausa';
 import { useVeiculosDoAssociado } from '@/hooks/useAssociados';
 import { VeiculoDetalhesModal } from '@/components/cadastro/VeiculoDetalhesModal';
-import NovoSinistroModal from '@/components/eventos/NovoSinistroModal';
+import { NovoSinistroModal } from '@/components/eventos/NovoSinistroModal';
 import { NovoChamadoModal } from '@/components/assistencia/NovoChamadoModal';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
