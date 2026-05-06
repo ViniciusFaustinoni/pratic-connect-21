@@ -168,6 +168,35 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                 )}
               </TabsContent>
 
+              <TabsContent value="analise" className="pt-3 space-y-3">
+                <div className="rounded border p-3 space-y-2">
+                  <h4 className="font-semibold flex items-center gap-2"><Search className="h-4 w-4" /> Análise prévia do novo titular</h4>
+                  {!solicitacao.analise_previa_resultado ? (
+                    <p className="text-sm text-muted-foreground">
+                      A análise prévia é gerada automaticamente quando o Cadastro aprova a solicitação (consulta dupla: base local + SGA Hinova). Ainda não há snapshot.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-xs text-muted-foreground">
+                        Gerado em {solicitacao.analise_previa_em ? new Date(solicitacao.analise_previa_em).toLocaleString('pt-BR') : '-'}
+                      </p>
+                      <div className="rounded bg-muted/40 p-2">
+                        <p className="text-xs font-medium mb-1">Base local</p>
+                        <pre className="text-[11px] whitespace-pre-wrap break-all max-h-48 overflow-auto">
+                          {JSON.stringify(solicitacao.analise_previa_resultado.base_local, null, 2)}
+                        </pre>
+                      </div>
+                      <div className="rounded bg-muted/40 p-2">
+                        <p className="text-xs font-medium mb-1">SGA Hinova</p>
+                        <pre className="text-[11px] whitespace-pre-wrap break-all max-h-48 overflow-auto">
+                          {JSON.stringify(solicitacao.analise_previa_resultado.sga, null, 2)}
+                        </pre>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </TabsContent>
+
               <TabsContent value="financeiro" className="pt-3">
                 <RelatorioFinanceiroAntigo associadoId={solicitacao.associado_antigo_id} />
               </TabsContent>
