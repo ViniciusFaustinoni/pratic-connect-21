@@ -108,6 +108,12 @@ export function RastreadorCard({
             <Badge variant="outline" className="text-xs">
               {plataformaLabel}
             </Badge>
+
+            {(rastreador as any).softruck_integration_status === 'DIVERGENCIA_DESVINCULO' && (
+              <Badge className="text-xs bg-amber-500 hover:bg-amber-500 text-white">
+                Divergência Softruck
+              </Badge>
+            )}
           </div>
 
           {/* Informações do Veículo/Associado */}

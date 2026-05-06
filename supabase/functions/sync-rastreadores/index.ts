@@ -232,11 +232,27 @@ serve(async (req) => {
       );
 
       if (resolved) {
-        const updateData: Record<string, string> = {
+        const updateData: Record<string, unknown> = {
           plataforma_device_id: resolved.deviceHashId,
         };
         if (resolved.vehicleId) {
           updateData.plataforma_veiculo_id = resolved.vehicleId;
+          updateData.softruck_integration_status = 'OK';
+        } else {
+          // Softruck reporta device SEM veículo. Se localmente havia vínculo,
+          // marcamos divergência (não zeramos veiculo_id automaticamente —
+          // respeita mem://logic/operations/rastreador-vinculo-preservacao).
+          if (rast.veiculo_id || rast.plataforma_veiculo_id) {
+            console.warn(`[Sync] Desvínculo detectado no Softruck IMEI=${rast.imei || rast.codigo} (rastreador ${rast.id})`);
+            updateData.plataforma_veiculo_id = null;
+            updateData.softruck_integration_status = 'DIVERGENCIA_DESVINCULO';
+            updateData.softruck_response_raw = {
+              detectado_em: new Date().toISOString(),
+              motivo: 'softruck_sem_veiculo',
+              veiculo_id_local: rast.veiculo_id,
+              plataforma_veiculo_id_anterior: rast.plataforma_veiculo_id,
+            };
+          }
         }
 
         await supabase.from("rastreadores").update(updateData).eq("id", rast.id);

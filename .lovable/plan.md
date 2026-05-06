@@ -1,32 +1,51 @@
-## Objetivo
-Fechar o furo de segurança em que `criar-solicitacao-troca-titularidade` aceita qualquer combinação `associado_antigo_id` + `veiculo_id` vinda do frontend, permitindo criar troca para placa que não pertence ao associado.
+## Diagnóstico
 
-## Mudança única — `supabase/functions/criar-solicitacao-troca-titularidade/index.ts`
+**Rastreador IMEI 356430070876858** (id `690b2232…`):
 
-Logo após o `SELECT` do veículo (que já existe nas linhas 64–69), adicionar `associado_id` ao select e validar:
+- **No Softruck:** dispositivo está **sem placa / sem veículo** ("Sem tipo", PLACA = "-").
+- **No nosso banco:** está com `veiculo_id = 6b5d8c7f…` (placa **0KMB37FC** — HONDA CG 160, associado HIGOR). A tela do print mostra QPN0773/Renata por estar com cache antigo, mas o problema central é o mesmo: **temos vínculo de veículo onde o Softruck já não tem nenhum**.
+- `softruck_integration_status = PENDING` desde 06/05 13:06 — ou seja, nossa última tentativa de sincronizar com o Softruck nem completou com sucesso.
 
-```ts
-if (veiculo.associado_id !== associado_antigo_id) {
-  return new Response(
-    JSON.stringify({ error: 'A placa informada não pertence ao titular antigo.' }),
-    { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-  );
-}
-```
+### Causa raiz
 
-A validação roda **antes** do guard de placa bloqueada, do INSERT da cotação, do INSERT da solicitação e do disparo automático do termo. Se falhar: nada é criado, nada é disparado.
+Hoje **não existe rotina que reflita o desvínculo feito DIRETAMENTE no Softruck** de volta para o nosso `rastreadores.veiculo_id`:
 
-## Por que essa abordagem
-- A coluna `veiculos.associado_id` já é a fonte da verdade do vínculo (mantida pelo trigger `veiculo-associado-sync` — ver memória "Veículo segue contrato"). Não precisa join em `contratos` nem reimplementar lógica.
-- Não existe helper reutilizável de "placa pertence ao CPF" — a validação direta pela FK é o caminho mais limpo e barato.
-- HTTP **403** porque é violação de autorização sobre o recurso, não erro de validação de input.
+- `sync-rastreadores` só **resolve IMEI bruto → device hash id** e grava `plataforma_veiculo_id`. Quando a API retorna `vehicleId = null` (caso atual), o código **não zera** `plataforma_veiculo_id` nem `veiculo_id`, nem muda status. Linhas 234-248 só atualizam quando `resolved.vehicleId` existe.
+- `softruck-webhook` reage a eventos vindos do Softruck, mas não há handler para "device_unlinked" / "vehicle_removed" que limpe o `veiculo_id` local.
+- A regra existente "vínculo rastreador-veículo" (memória `mem://logic/operations/rastreador-vinculo-preservacao`) só permite zerar em retirada/substituição/cancelamento/venda/status terminal — feitos pelo nosso fluxo. Desvínculo manual no Softruck não está coberto.
 
-## Fora de escopo (intocado)
-- Fluxo da IA (`efetivar-troca-titularidade` + `chat_solicitacoes_ia`).
-- UI do `TrocaTitularidadeDialog` — validação client-side fica como está.
-- Demais edges de troca (aprovar/reprovar/efetivar).
+## Plano de correção
 
-## Comportamento esperado
-- Consultor tenta criar troca via UI normal: continua funcionando (UI já filtra veículos do associado).
-- Chamada direta na edge com placa de outro dono: HTTP 403, mensagem clara, sem efeitos colaterais.
-- Solicitações antigas: não impactadas.
+### 1. Edge `sync-rastreadores` — refletir desvínculo do Softruck
+No loop de resolução (linhas 229-257), quando o device existe no Softruck mas `vehicleId` vier `null` **e** localmente houver `veiculo_id`/`plataforma_veiculo_id`:
+- Logar divergência (`[Sync] Desvínculo detectado no Softruck IMEI=…`).
+- Limpar `plataforma_veiculo_id = null` no rastreador.
+- **Não** apagar `veiculo_id` automaticamente (respeita memória de preservação) — em vez disso marcar `softruck_integration_status = 'DIVERGENCIA_DESVINCULO'` e gravar nota em `softruck_response_raw` para análise manual.
+- Também atualizar `veiculos.softruck_vehicle_id = null` quando aplicável.
+
+### 2. Nova ação manual no Painel — "Reconciliar com Softruck"
+Botão no `RastreadorDetailDrawer` (apenas Diretor/Operação) que chama uma nova edge `rastreador-reconciliar-softruck`:
+- Consulta o device no Softruck pelo IMEI.
+- Se Softruck = sem veículo e local = com veículo: oferece **Desvincular veículo** (faz o `UPDATE veiculos.softruck_vehicle_id=null`, `rastreadores.veiculo_id=null, plataforma_veiculo_id=null, status='estoque'`) gravando log em `historico_movimentacoes_rastreador`.
+- Se houver divergência inversa (Softruck tem placa X e nós temos Y): apenas reporta e bloqueia, exigindo decisão humana.
+
+### 3. Banner de divergência
+No `RastreadorCard` / detalhe, quando `softruck_integration_status = 'DIVERGENCIA_DESVINCULO'`, exibir um aviso amarelo "Divergência com Softruck — clique para reconciliar".
+
+### 4. Correção pontual do caso atual
+Após implementar (1) e (2), reconciliar o IMEI **356430070876858** via o novo botão para limpar o vínculo herdado do Higor (que já não está mais no Softruck).
+
+## Detalhes técnicos
+- **Não** acionar API Softruck para "criar/remover" vínculo — só leitura. Quem manda no Softruck é o painel deles; nós só refletimos.
+- Rate-limit já existente (300 ms) preservado.
+- Toda mudança em `veiculo_id` registrada em `historico_movimentacoes_rastreador` com motivo = "reconciliacao_softruck".
+- Trigger de preservação (mem) **continua valendo** — a edge usa `service_role` e marca o motivo, igual aos outros fluxos canônicos.
+
+## Arquivos a alterar/criar
+- `supabase/functions/sync-rastreadores/index.ts` — detectar `vehicleId=null` e marcar divergência.
+- `supabase/functions/rastreador-reconciliar-softruck/index.ts` — **novo**.
+- `src/components/rastreadores/RastreadorDetailDrawer.tsx` — botão + modal de confirmação.
+- `src/components/rastreadores/RastreadorCard.tsx` — badge de divergência.
+- `src/hooks/useRastreadores.ts` — invalidação após reconciliação.
+
+Confirma para eu implementar?

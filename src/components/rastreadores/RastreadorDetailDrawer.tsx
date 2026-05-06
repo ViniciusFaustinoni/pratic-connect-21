@@ -164,7 +164,34 @@ export function RastreadorDetailDrawer({
     setComandoDialog({ open: false, tipo: 'bloquear' });
   };
 
+  const [reconciliando, setReconciliando] = useState(false);
+  const [reconciliarPreview, setReconciliarPreview] = useState<any>(null);
+
+  const handleReconciliarSoftruck = async (apply: boolean) => {
+    if (!rastreadorId) return;
+    setReconciliando(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('rastreador-reconciliar-softruck', {
+        body: { rastreador_id: rastreadorId, action: apply ? 'apply' : 'check' },
+      });
+      if (error) throw error;
+      const { toast } = await import('sonner');
+      if (apply) {
+        setReconciliarPreview(null);
+        toast.success('Reconciliação concluída — vínculo limpo.');
+      } else {
+        setReconciliarPreview(data);
+      }
+    } catch (e: any) {
+      const { toast } = await import('sonner');
+      toast.error(e?.message || 'Falha ao reconciliar');
+    } finally {
+      setReconciliando(false);
+    }
+  };
+
   const isInstalled = rastreador?.status === 'instalado';
+  const hasDivergencia = (rastreador as any)?.softruck_integration_status === 'DIVERGENCIA_DESVINCULO';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -240,6 +267,64 @@ export function RastreadorDetailDrawer({
                 </div>
               </div>
             </DialogHeader>
+
+            {(hasDivergencia || rastreador.plataforma === 'softruck') && (
+              <div className="mt-4 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-2">
+                <div className="flex items-start gap-2 text-sm">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 text-amber-600" />
+                  <div>
+                    {hasDivergencia ? (
+                      <p className="font-medium text-amber-900 dark:text-amber-200">
+                        Divergência com Softruck — placa vinculada localmente sem correspondência no Softruck.
+                      </p>
+                    ) : (
+                      <p className="text-amber-900 dark:text-amber-200">
+                        Reconciliar dados com a Softruck (placa, vínculo).
+                      </p>
+                    )}
+                    {reconciliarPreview && (
+                      <pre className="mt-2 text-xs bg-background/60 p-2 rounded max-h-40 overflow-auto">
+{JSON.stringify(reconciliarPreview, null, 2)}
+                      </pre>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={reconciliando}
+                    onClick={() => handleReconciliarSoftruck(false)}
+                  >
+                    {reconciliando ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Verificar'}
+                  </Button>
+                  {isDiretor && (hasDivergencia || reconciliarPreview?.divergencia_desvinculo) && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button size="sm" variant="destructive" disabled={reconciliando}>
+                          Desvincular
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Confirmar reconciliação?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            O rastreador será desvinculado do veículo localmente e voltará ao estoque.
+                            Esta ação fica registrada no histórico de vínculo.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleReconciliarSoftruck(true)}>
+                            Confirmar
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
+                </div>
+              </div>
+            )}
 
             <Tabs defaultValue="info" className="mt-6">
               <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
