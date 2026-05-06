@@ -499,72 +499,16 @@ export default function Veiculos() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredVeiculos.map((veiculo) => {
-                  const veiculoStatus = (veiculo.status as StatusVeiculo) || (veiculo.ativo ? 'ativo' : 'cancelado');
-                  return (
-                    <TableRow 
-                      key={veiculo.id} 
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => setSelectedVeiculoId(veiculo.id)}
-                    >
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="rounded-lg bg-primary/10 p-2">
-                            <Car className="h-4 w-4 text-primary" />
-                          </div>
-                          <div>
-                            <p className="font-medium">{veiculo.marca}</p>
-                            <p className="text-sm text-muted-foreground">{veiculo.modelo}</p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-mono">{veiculo.placa}</TableCell>
-                      <TableCell>
-                        {veiculo.ano_fabricacao}/{veiculo.ano_modelo}
-                      </TableCell>
-                      <TableCell>{veiculo.cor || '-'}</TableCell>
-                      <TableCell>{formatCurrency(veiculo.valor_fipe)}</TableCell>
-                      <TableCell>
-                        {veiculo.uso_aplicativo ? (
-                          <div className="flex items-center gap-1">
-                            <Smartphone className="h-3 w-3 text-muted-foreground" />
-                            <Badge variant="outline" className="text-xs">
-                              {veiculo.plataforma_app || 'Sim'}
-                            </Badge>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <User className="h-3 w-3 text-muted-foreground" />
-                          {(veiculo as any).associado?.nome || 'Sem associado'}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={statusColors[veiculoStatus]}>
-                          {STATUS_VEICULO_LABELS[veiculoStatus]}
-                        </Badge>
-                      </TableCell>
-                      {canDeleteVeiculo && (
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setVeiculoToDelete({ id: veiculo.id, placa: veiculo.placa });
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  );
-                })}
+                {filteredVeiculos.map((veiculo) => (
+                  <VeiculoRow
+                    key={veiculo.id}
+                    veiculo={veiculo}
+                    canDelete={canDeleteVeiculo}
+                    onSelect={setSelectedVeiculoId}
+                    onDelete={setVeiculoToDelete}
+                    formatCurrency={formatCurrency}
+                  />
+                ))}
               </TableBody>
             </Table>
           )}
