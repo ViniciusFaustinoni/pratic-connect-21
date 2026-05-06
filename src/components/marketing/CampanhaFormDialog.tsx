@@ -36,7 +36,7 @@ export function CampanhaFormDialog({ open, onClose, campanha }: CampanhaFormDial
   const [utmCampaign, setUtmCampaign] = useState('');
   const [observacoes, setObservacoes] = useState('');
 
-  const { data: canais } = useCanais();
+  
   const createMutation = useCreateCampanha();
   const updateMutation = useUpdateCampanha();
 
