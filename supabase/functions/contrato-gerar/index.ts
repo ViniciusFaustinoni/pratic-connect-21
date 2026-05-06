@@ -1187,6 +1187,75 @@ serve(async (req) => {
       numero: contrato.numero,
     }));
 
+    // ── EFETIVAÇÃO DE TROCA DE TITULARIDADE (gancho idempotente, best-effort) ──
+    // Quando a cotação que originou este contrato é uma Troca de Titularidade
+    // (consultor), encerra contrato anterior do antigo, marca a solicitação
+    // como efetivada e vincula o novo associado. Falha aqui NUNCA derruba o
+    // contrato — só registra warning.
+    try {
+      const dadosExtras = (cotacao as any).dados_extras || {};
+      if (tipoEntrada === 'troca_titularidade' && dadosExtras.associado_antigo_id) {
+        const { data: solTroca } = await supabase
+          .from('solicitacoes_troca_titularidade')
+          .select('id, status, efetivada_em, associado_antigo_id')
+          .eq('cotacao_id', cotacao_id)
+          .maybeSingle();
+
+        if (solTroca && !solTroca.efetivada_em) {
+          const agora = new Date().toISOString();
+
+          // 1. Encerrar contrato(s) ativos do antigo
+          const { data: contratosAntigos } = await supabase
+            .from('contratos')
+            .select('id, numero')
+            .eq('associado_id', solTroca.associado_antigo_id)
+            .in('status', ['ativo', 'pendente', 'assinado', 'aguardando_instalacao']);
+
+          for (const ca of contratosAntigos || []) {
+            if (ca.id === contrato.id) continue;
+            await supabase
+              .from('contratos')
+              .update({ status: 'cancelado', data_cancelamento: agora, motivo_cancelamento: 'Troca de titularidade' })
+              .eq('id', ca.id);
+            await supabase.from('contratos_historico').insert({
+              contrato_id: ca.id,
+              evento: 'cancelado_troca_titularidade',
+              descricao: `Contrato encerrado por troca de titularidade. Novo contrato: ${contrato.numero}`,
+              dados: { novo_contrato_id: contrato.id, solicitacao_troca_id: solTroca.id },
+            });
+          }
+
+          // 2. Marcar solicitação como efetivada
+          await supabase
+            .from('solicitacoes_troca_titularidade')
+            .update({
+              status: 'efetivada',
+              efetivada_em: agora,
+              novo_associado_id: associadoId,
+            })
+            .eq('id', solTroca.id)
+            .is('efetivada_em', null);
+
+          console.log(`[CONTRATO-GERAR] ✅ Troca de titularidade ${solTroca.id} efetivada (contrato novo ${contrato.numero})`);
+
+          // 3. Notificar novo titular (best-effort)
+          try {
+            const tel = cotacao.telefone1_solicitante;
+            if (tel) {
+              const msg = `Olá, ${nomeFinal}! Seu contrato de proteção veicular foi gerado por troca de titularidade. Contrato Nº ${contrato.numero}. Em instantes você receberá o link para assinatura.`;
+              await supabase.functions.invoke('whatsapp-send-text', { body: { telefone: tel, mensagem: msg } });
+            }
+          } catch (waErr) {
+            console.warn('[CONTRATO-GERAR][troca] notificação WhatsApp falhou:', waErr);
+          }
+        } else if (solTroca?.efetivada_em) {
+          console.log(`[CONTRATO-GERAR] Troca ${solTroca.id} já estava efetivada (idempotente)`);
+        }
+      }
+    } catch (trocaErr) {
+      console.error('[CONTRATO-GERAR] gancho efetivação troca falhou (não bloqueante):', trocaErr);
+    }
+
     return new Response(
       JSON.stringify({ 
         success: true, 
