@@ -133,10 +133,10 @@ export function ContatoDetalheDrawer({ telefone, open, onOpenChange, nomeContato
                 <div className="truncate"><span className="text-muted-foreground">Email:</span> {associado.email}</div>
               )}
               <Button
-                variant="outline"
+                variant="default"
                 size="sm"
                 className="w-full mt-2"
-                onClick={() => navigate(`/cadastro/associados/${associado.id}`)}
+                onClick={() => setFichaOpen(true)}
               >
                 <ExternalLink className="h-4 w-4 mr-2" /> Abrir cadastro completo
               </Button>
