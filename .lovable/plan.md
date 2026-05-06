@@ -1,71 +1,48 @@
-## Contexto importante (já existe)
+## Revisão item-a-item dos 9 requisitos
 
-Quase tudo que você descreveu **já está implementado** em `src/pages/eventos/EventosChatIA.tsx` (rota `/eventos/chat-ia`, atualmente dentro do menu **Eventos** como "Chat IA"):
+| # | Requisito | Status | Observação |
+|---|-----------|--------|------------|
+| Menu | "Chat" em **Relacionamento** | OK | `AppSidebar.tsx` linha 234-241, grupo `relacionamento` com item `Chat` → `/eventos/chat-ia` |
+| 1 | Layout WhatsApp Web (lista + painel) | OK (com ressalva) | `EventosChatIA.tsx`: `ConversasList` à **esquerda** (w-80) + `ChatPanel` à direita. *Seu texto inverte os lados, mas WhatsApp Web é assim mesmo — mantido o padrão WA.* |
+| 2 | Rolagem automática | OK | `ChatPanel.tsx` linhas 68-76, `useEffect` rola para o fim quando `mensagens` muda |
+| 3 | Clicar conversa abre no painel | OK | `handleSelectConversa` |
+| 4 | Continuar conversa humana (texto/áudio/arquivo) | OK | Texto via `whatsapp-send-text`; áudio gravado via MediaRecorder + `whatsapp-send-media`; arquivos (imagem/vídeo/doc) via paperclip → `whatsapp-send-media` |
+| 5 | Apenas provedor ativo (WhatsApp) | **Parcial** | Filtra por `whatsapp_instancias.ativa=true` (hoje só existe 1 instância Evolution). Não checa `provedor='evolution'/'meta'` explicitamente — se um dia houver instância "ativa" de outro canal não-WhatsApp aparecerá. **Ajuste recomendado.** |
+| 6 | Clicar nome do contato abre detalhes (associado) | OK | Header é `<button>` que abre `ContatoDetalheDrawer` (busca em `associados` por telefone/whatsapp, mostra nome, status, email, link "Abrir cadastro completo") |
+| 7 | Intervenção humana pausa IA por 10 min a partir da última mensagem | OK | `pausarPorIntervencao()` é chamado **após cada envio** (texto, áudio, arquivo) — `ChatPanel.tsx` linhas 113 e 149. Como upserta `pausada_ate = now() + 10min` a cada envio, o contador efetivamente reinicia a cada nova mensagem. Edge `processar-fila-ia` (linhas 44-62) verifica `whatsapp_ia_pausas` e marca itens como `pausado_humano` |
+| 8 | Botão "Encerrar atendimento" → mensagem amigável + IA reativa em 1 min | OK | `ContatoDetalheDrawer.handleEncerrar` envia texto via `whatsapp-send-text` e chama `pausarPorEncerramento()` (1 min) |
+| 9 | Mensagem de encerramento sem template | OK | Usa `whatsapp-send-text` (texto livre), não `whatsapp-send-template` |
 
-- Layout WhatsApp Web (lista de conversas à esquerda, painel à direita) — `ConversasList.tsx` + `ChatPanel.tsx`
-- Rolagem automática da conversa aberta
-- Clique na conversa abre o painel à direita
-- Envio humano de **texto e áudio** já funciona (`whatsapp-send-text`, `whatsapp-send-media`)
-- Realtime via `whatsapp_mensagens` já ligado
-- Avatar do associado já é casado por telefone
+## Ajustes propostos
 
-**Conforme regra do projeto, vou apenas mover/renomear e completar o que falta — não recriar do zero.**
+### A. Filtrar conversas estritamente por provedor WhatsApp (Req. 5)
+Em `EventosChatIA.tsx`, alterar a query `whatsapp-instancias-ativas` para também restringir provedores WhatsApp:
 
-## O que falta (e será implementado)
-
-1. Mover/expor o item no menu **Relacionamento** como **"Chat"** (mantendo a rota `/eventos/chat-ia` por compat — ou criando alias `/relacionamento/chat`).
-2. Filtrar conversas pelo **provedor ativo** (instância WhatsApp principal/ativa) usando a coluna `whatsapp_mensagens.provedor` + `whatsapp_instancias` (`ativa = true`).
-3. Adicionar **envio de arquivos/imagens** ao input do `ChatPanel` (hoje só texto + áudio).
-4. Tornar o nome do contato no header do chat **clicável** → abre drawer com detalhes do associado (foto, nome, telefone, planos, link "Abrir cadastro completo").
-5. **Pausa da IA por 10 minutos** após intervenção humana no chat (contados da última mensagem humana enviada).
-6. **Botão "Encerrar atendimento"** no drawer de detalhes: envia mensagem amigável de encerramento (texto livre, sem template) e reduz a pausa para **1 minuto**.
-
-## Mudanças no banco
-
-Nova tabela leve para controlar pausa por telefone:
-
-```sql
-create table public.whatsapp_ia_pausas (
-  telefone text primary key,
-  pausada_ate timestamptz not null,
-  motivo text not null check (motivo in ('intervencao_humana','encerramento_atendimento')),
-  atendente_id uuid references auth.users(id),
-  updated_at timestamptz not null default now()
-);
-alter table public.whatsapp_ia_pausas enable row level security;
--- policies: SELECT/INSERT/UPDATE para usuários internos autenticados
+```ts
+.from('whatsapp_instancias')
+.select('id')
+.eq('ativa', true)
+.in('provedor', ['evolution', 'meta']) // somente provedores WhatsApp
 ```
 
-Edge function `processar-fila-ia` passa a checar `whatsapp_ia_pausas.pausada_ate > now()` antes de responder; se pausada, ignora o item da fila (mas mantém a mensagem registrada).
+Assim, se futuramente houver instâncias de outros canais (SMS, Telegram, etc.) elas serão excluídas automaticamente.
 
-## Mudanças no frontend
+### B. Remover entrada duplicada "Chat Cobrança" do menu Financeiro (opcional — confirmar)
+Hoje existe **um segundo item** `Chat Cobrança` em `Financeiro` (`AppSidebar.tsx` linha 291) que aponta para `/cobranca/chat` e renderiza o mesmo componente `EventosChatIA`. Como o Chat agora é canônico em **Relacionamento**, mantê-lo duplicado pode confundir.
 
-**Sidebar (`src/components/layout/AppSidebar.tsx`)**
-- Remover "Chat IA" de Eventos (ou manter por compat, a confirmar — ver pergunta abaixo).
-- Adicionar item **"Chat"** em Relacionamento, ícone `MessageCircle`, url `/eventos/chat-ia`.
-- Atualizar `GlobalBreadcrumb.tsx` para refletir o caminho.
+→ **Pergunta abaixo** para você decidir.
 
-**`src/pages/eventos/EventosChatIA.tsx`**
-- Buscar `whatsapp_instancias` ativa(s) e filtrar `whatsapp_mensagens` por `provedor` correspondente (ou `instancia_id`).
+### C. Mensagem visual quando IA está pausada (já existe)
+Já implementado: badge "IA pausada até HH:mm" no header do `ChatPanel` + bloco amarelo no drawer. Sem ajuste necessário.
 
-**`src/components/eventos/chat-ia/ChatPanel.tsx`**
-- Adicionar botão de anexo (paperclip) → upload → `whatsapp-send-media` (já existe).
-- Tornar o nome do contato no header um botão → abre `ContatoDetalheDrawer`.
-- Após `handleEnviar` de texto/áudio/mídia humana: `upsert` em `whatsapp_ia_pausas` com `pausada_ate = now() + 10 min`.
-- Mostrar badge "IA pausada até HH:mm" no header quando ativa.
+### D. Verificação extra na edge function (já implementada)
+`processar-fila-ia` já consulta `whatsapp_ia_pausas` e descarta itens enquanto a pausa estiver ativa, marcando-os como `pausado_humano`. Sem ajuste necessário.
 
-**Novo `src/components/eventos/chat-ia/ContatoDetalheDrawer.tsx`**
-- Busca associado por telefone (já há lookup similar em `EventosChatIA.tsx`).
-- Mostra avatar, nome, telefone, status, link "Abrir cadastro" (`/cadastro/associados/:id`).
-- Botão **"Encerrar atendimento"**: abre dialog com textarea (mensagem padrão pré-preenchida do tipo "Foi um prazer atendê-lo! Qualquer dúvida, estamos por aqui. 🙏"), envia via `whatsapp-send-text` e faz upsert em `whatsapp_ia_pausas` com `pausada_ate = now() + 1 min` e `motivo = 'encerramento_atendimento'`.
+## Detalhes técnicos do ajuste A
 
-## Detalhes técnicos
+Arquivo: `src/pages/eventos/EventosChatIA.tsx`
+Mudança: 1 linha adicional `.in('provedor', ['evolution', 'meta'])` no `queryFn` de `whatsapp-instancias-ativas`. Sem migrações, sem edge function.
 
-- A pausa é por **telefone (E.164 com DDI 55)**, não por conversa, para casar com o webhook.
-- O cron `processar-fila-ia` checa pausa antes de responder; mensagens entrantes continuam sendo gravadas normalmente.
-- Mensagem de encerramento é texto livre — **não usa template** (conforme requisito 9).
-- Filtro de provedor ativo: como hoje só há 1 instância (`Principal`, ativa), o filtro é por `instancia_id` da instância `ativa = true AND principal = true`.
+## Pergunta de decisão
 
-## Pergunta pendente
-
-Se preferir, posso te perguntar antes de implementar: **manter "Chat IA" em Eventos** (duplicando o acesso) **ou removê-lo** dali, deixando o "Chat" só em Relacionamento? Default: **mover** (remover de Eventos).
+Antes de aplicar, preciso confirmar o item B (duplicidade do "Chat Cobrança" no Financeiro).
