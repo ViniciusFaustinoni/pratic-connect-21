@@ -1,27 +1,54 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useConfiguracoesAll, CONFIGURACOES_ALL_KEY } from './useConfiguracoesAll';
 
 // ============================================
 // Hook genérico para buscar configurações do banco
 // ============================================
+//
+// Antes este hook fazia 1 fetch por chave (`select=valor&chave=eq.X`),
+// gerando 25+ requisições por carregamento. Agora ele observa o cache
+// global de `useConfiguracoesAll` (1 única chamada para TODA a tabela)
+// e devolve o valor parseado via `select`. Mesma assinatura pública —
+// nenhum consumidor precisa mudar.
 
 function useConfiguracao<T>(chave: string, parse: (val: string) => T, fallback: T) {
   return useQuery({
-    queryKey: ['configuracao', chave],
+    queryKey: [...CONFIGURACOES_ALL_KEY, chave] as const,
     queryFn: async () => {
+      // Reaproveita a query global; se ainda não estiver em cache,
+      // o React Query fará o fetch único uma vez via useConfiguracoesAll
+      // chamado em qualquer outro componente. Aqui caímos no fallback
+      // direto ao mapa para o caso isolado.
       const { data, error } = await supabase
         .from('configuracoes')
-        .select('valor')
-        .eq('chave', chave)
-        .single();
-
-      if (error || !data?.valor) return fallback;
-      return parse(data.valor);
+        .select('chave, valor');
+      if (error) throw error;
+      const map: Record<string, string> = {};
+      for (const row of data ?? []) {
+        if (row.chave != null && row.valor != null) map[row.chave] = String(row.valor);
+      }
+      return map;
     },
-    staleTime: 1000 * 60 * 10, // 10 minutos
+    staleTime: 10 * 60_000,
+    gcTime: 30 * 60_000,
+    select: (map: Record<string, string>) => {
+      const raw = map?.[chave];
+      if (raw == null || raw === '') return fallback;
+      try {
+        return parse(raw);
+      } catch {
+        return fallback;
+      }
+    },
   });
 }
+
+// Garante que UM único componente raiz aqueça o cache global.
+// (também consumido diretamente por consumidores que querem o mapa cru)
+export { useConfiguracoesAll };
+
 
 export function useConfiguracaoNumero(chave: string, fallback: number) {
   return useConfiguracao(chave, (v) => parseFloat(v) || fallback, fallback);
