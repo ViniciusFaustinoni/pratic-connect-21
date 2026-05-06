@@ -15,14 +15,16 @@ import { cn } from '@/lib/utils';
 import type { WhatsAppMensagem } from '@/types/whatsapp';
 import { useIaPausa } from '@/hooks/useIaPausa';
 import { ContatoDetalheDrawer } from './ContatoDetalheDrawer';
+import { ContatoDetalheEventosDrawer } from './ContatoDetalheEventosDrawer';
 
 interface ChatPanelProps {
   telefone: string | null;
   nomeContato: string | null;
   avatarUrl: string | null;
+  drawerVariant?: 'relacionamento' | 'eventos';
 }
 
-export function ChatPanel({ telefone, nomeContato, avatarUrl }: ChatPanelProps) {
+export function ChatPanel({ telefone, nomeContato, avatarUrl, drawerVariant = 'relacionamento' }: ChatPanelProps) {
   const [texto, setTexto] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
