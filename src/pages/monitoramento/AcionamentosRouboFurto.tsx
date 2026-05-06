@@ -1,5 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +15,8 @@ import {
   Wrench,
   Zap,
   ArrowRight,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { useInstalacoesAguardandoAprovacao } from '@/hooks/useAprovacaoMonitoramento';
 import { useInstalacoesAguardandoAtivacao } from '@/hooks/useVistoriaCompletaAnalise';
