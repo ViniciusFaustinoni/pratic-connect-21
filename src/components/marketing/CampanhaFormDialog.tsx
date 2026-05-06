@@ -139,6 +139,21 @@ export function CampanhaFormDialog({ open, onClose, campanha }: CampanhaFormDial
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="canal">Canal</Label>
+              <Select value={canalId} onValueChange={setCanalId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um canal" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sem canal</SelectItem>
+                  {canais?.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="dataInicio">Data de Início *</Label>
               <Input
                 id="dataInicio"
