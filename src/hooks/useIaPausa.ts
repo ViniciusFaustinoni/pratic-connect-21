@@ -21,7 +21,7 @@ export function useIaPausa(telefone: string | null) {
     refetchInterval: 30000,
     queryFn: async (): Promise<IaPausa | null> => {
       if (!tel) return null;
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('whatsapp_ia_pausas')
         .select('*')
         .eq('telefone', tel)
@@ -51,7 +51,7 @@ export function useIaPausa(telefone: string | null) {
       if (!tel) throw new Error('telefone vazio');
       const { data: { user } } = await supabase.auth.getUser();
       const pausada_ate = new Date(Date.now() + minutos * 60_000).toISOString();
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('whatsapp_ia_pausas')
         .upsert(
           {
