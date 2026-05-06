@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ExternalLink, PhoneCall, PowerOff, Loader2 } from 'lucide-react';
+import { AssociadoFichaCompletaDialog } from '@/components/servicos-campo/AssociadoFichaCompletaDialog';
 import {
   Sheet,
   SheetContent,
