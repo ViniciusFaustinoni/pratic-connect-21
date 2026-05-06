@@ -16,6 +16,8 @@ export interface ConversaAgrupada {
   ultima_mensagem: string;
   ultima_msg_texto: string | null;
   ultima_direcao: string;
+  /** Timestamp da última mensagem de cobrança (referencia_tipo IN ('cobranca','cobranca_csv')). Null = nunca recebeu cobrança. */
+  ultima_cobranca: string | null;
 }
 
 interface ConversasListProps {
