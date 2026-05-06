@@ -19,7 +19,7 @@ import {
   Plus, Search, Target, MoreVertical, Play, Pause, Eye, Edit,
   Megaphone, CheckCircle, XCircle, Clock
 } from 'lucide-react';
-import { useCampanhas, useCanais, useUpdateCampanha } from '@/hooks/useMarketing';
+import { useCampanhas, useUpdateCampanha } from '@/hooks/useMarketing';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -54,7 +54,7 @@ export default function Campanhas() {
   const { data: campanhas, isLoading } = useCampanhas({ 
     status: statusFilter || undefined,
   });
-  const { data: canais } = useCanais();
+  
   const updateCampanha = useUpdateCampanha();
 
   // Filtrar por busca e tipo

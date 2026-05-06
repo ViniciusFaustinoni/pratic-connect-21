@@ -34,7 +34,7 @@ export default function CampanhaForm() {
   const [formData, setFormData] = useState({
     nome: '',
     tipo: 'aquisicao',
-    canal_id: '',
+    
     publico_alvo: '',
     regioes: '',
     data_inicio: '',
@@ -68,17 +68,6 @@ export default function CampanhaForm() {
     enabled: isEditing
   });
 
-  // Query: Canais ativos
-  const { data: canais } = useQuery({
-    queryKey: ['canais-select'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('canais_marketing')
-        .select('id, nome')
-        .eq('ativo', true);
-      return data;
-    }
-  });
 
   // Query: Usuários para responsável
   const { data: usuarios } = useQuery({
@@ -98,7 +87,7 @@ export default function CampanhaForm() {
       setFormData({
         nome: campanha.nome || '',
         tipo: campanha.tipo || 'aquisicao',
-        canal_id: campanha.canal_id || '',
+        
         publico_alvo: campanha.publico_alvo || '',
         regioes: campanha.regioes?.join(', ') || '',
         data_inicio: campanha.data_inicio || '',
@@ -141,7 +130,7 @@ export default function CampanhaForm() {
       const payload = {
         nome: formData.nome,
         tipo: formData.tipo,
-        canal_id: formData.canal_id || null,
+        
         publico_alvo: formData.publico_alvo || null,
         regioes: formData.regioes ? formData.regioes.split(',').map(r => r.trim()) : null,
         data_inicio: formData.data_inicio,
@@ -275,19 +264,6 @@ export default function CampanhaForm() {
                   <SelectContent>
                     {tipoOptions.map(opt => (
                       <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="canal">Canal</Label>
-                <Select value={formData.canal_id} onValueChange={(v) => handleChange('canal_id', v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um canal" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {canais?.map(canal => (
-                      <SelectItem key={canal.id} value={canal.id}>{canal.nome}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
