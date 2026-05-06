@@ -241,7 +241,7 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
     setVeiculoAntigoModelo(`${result.marca} ${result.modelo}`);
   };
 
-  const handleSelectAssociado = (associado: AssociadoSearchResult) => {
+  const handleSelectAssociado = async (associado: AssociadoSearchResult) => {
     if (selectedTipo === 'substituicao' || selectedTipo === 'inclusao') {
       setSelectedAssociadoId(associado.id);
       setSelectedAssociadoNome(associado.nome);
