@@ -311,6 +311,45 @@ export function ImportarCobrancaCsv() {
           </AlertDescription>
         </Alert>
 
+        {/* Preview de reconciliação contra o lote anterior */}
+        {reconciliacao && reconciliacao.loading && (
+          <Alert>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <AlertDescription>Comparando com o lote anterior...</AlertDescription>
+          </Alert>
+        )}
+        {reconciliacao && !reconciliacao.loading && reconciliacao.loteAnteriorId && (
+          <Alert className="border-green-600/40 bg-green-600/5">
+            <Check className="h-4 w-4 text-green-600" />
+            <AlertDescription>
+              <div className="space-y-1">
+                <p>
+                  Comparado com o último lote ativo (<code className="text-xs bg-muted px-1 rounded">{reconciliacao.loteAnteriorNome}</code>):
+                </p>
+                <ul className="list-disc pl-5 text-sm">
+                  <li>
+                    <strong className="text-green-600">{reconciliacao.ausentes} boleto(s)</strong> da lista anterior
+                    NÃO estão nesta nova → serão marcados como <strong>recuperados</strong> ({formatBRL(reconciliacao.ausentesValor)}).
+                  </li>
+                  {reconciliacao.reemitidos > 0 && (
+                    <li className="text-muted-foreground">
+                      {reconciliacao.reemitidos} boleto(s) tiveram a linha digitável trocada (mesma matrícula → <em>reemitido</em>, {formatBRL(reconciliacao.reemitidosValor)}). Não contam como recuperação real.
+                    </li>
+                  )}
+                </ul>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+        {reconciliacao && !reconciliacao.loading && !reconciliacao.loteAnteriorId && (
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Nenhum lote anterior encontrado — esta é a primeira importação. As próximas comparações serão feitas a partir deste lote.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Tabela preview */}
         <Card>
           <CardHeader className="pb-3">
