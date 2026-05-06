@@ -1167,80 +1167,87 @@ export default function Cotacoes() {
         canSend={cotacaoSelecionada ? getPermissions(cotacaoSelecionada).canSend : false}
       />
 
-      {/* Dialogs */}
-      <CotacaoFormDialog 
-        open={showCotacaoForm} 
-        onOpenChange={(open) => {
-          setShowCotacaoForm(open);
-          if (!open) {
-            setLeadIdFromUrl(null);
-            setCotacaoParaDuplicar(null);
-            setCotacaoParaContinuar(null);
-            setIgnorarPlacaIds([]);
-          }
-        }} 
-        leadId={leadIdFromUrl || undefined}
-        ignorarPlacaDuplicadaIds={ignorarPlacaIds}
-        cotacaoBase={cotacaoParaDuplicar ? {
-          valor_fipe: cotacaoParaDuplicar.valor_fipe,
-          valor_adicional: cotacaoParaDuplicar.valor_adicional,
-          valor_adesao: cotacaoParaDuplicar.valor_adesao,
-          validade_dias: cotacaoParaDuplicar.validade_dias,
-          veiculo_marca: cotacaoParaDuplicar.veiculo_marca,
-          veiculo_modelo: cotacaoParaDuplicar.veiculo_modelo,
-          veiculo_ano: cotacaoParaDuplicar.veiculo_ano,
-          veiculo_placa: cotacaoParaDuplicar.veiculo_placa,
-          codigo_fipe: cotacaoParaDuplicar.codigo_fipe,
-          categoria: cotacaoParaDuplicar.categoria,
-          regiao: cotacaoParaDuplicar.regiao,
-          nome_solicitante: cotacaoParaDuplicar.nome_solicitante || cotacaoParaDuplicar.leads?.nome || null,
-          telefone1_solicitante: cotacaoParaDuplicar.telefone1_solicitante || cotacaoParaDuplicar.leads?.telefone || null,
-          email_solicitante: cotacaoParaDuplicar.email_solicitante || cotacaoParaDuplicar.leads?.email || null,
-          lead_id: cotacaoParaDuplicar.lead_id,
-          plano_id: cotacaoParaDuplicar.plano_id,
-          dados_extras: cotacaoParaDuplicar.dados_extras as any,
-        } : null}
-        cotacaoParaEditar={cotacaoParaContinuar ? {
-          id: cotacaoParaContinuar.id,
-          valor_fipe: cotacaoParaContinuar.valor_fipe,
-          valor_adicional: cotacaoParaContinuar.valor_adicional,
-          valor_adesao: cotacaoParaContinuar.valor_adesao,
-          validade_dias: cotacaoParaContinuar.validade_dias,
-          veiculo_marca: cotacaoParaContinuar.veiculo_marca,
-          veiculo_modelo: cotacaoParaContinuar.veiculo_modelo,
-          veiculo_ano: cotacaoParaContinuar.veiculo_ano,
-          veiculo_placa: cotacaoParaContinuar.veiculo_placa,
-          codigo_fipe: cotacaoParaContinuar.codigo_fipe,
-          categoria: cotacaoParaContinuar.categoria,
-          regiao: cotacaoParaContinuar.regiao,
-          nome_solicitante: cotacaoParaContinuar.nome_solicitante || cotacaoParaContinuar.leads?.nome || null,
-          telefone1_solicitante: cotacaoParaContinuar.telefone1_solicitante || cotacaoParaContinuar.leads?.telefone || null,
-          email_solicitante: cotacaoParaContinuar.email_solicitante || cotacaoParaContinuar.leads?.email || null,
-          lead_id: cotacaoParaContinuar.lead_id,
-          plano_id: cotacaoParaContinuar.plano_id,
-          indicador_id: cotacaoParaContinuar.indicador_id,
-          indicador_nome: cotacaoParaContinuar.indicador_nome,
-          dados_extras: cotacaoParaContinuar.dados_extras as any,
-        } : null}
-        onSuccess={() => {
-          // Após criar/editar cotação, garantir que apareça: voltar para Em Andamento e limpar filtros
-          setActiveTab('em_andamento');
-          setStatusFilter('all');
-          setMesFilter('all');
-          setDataFilter(undefined);
-          setConsultorFilter('all');
-          setFiltroOrfas(false);
-          setEtapaFunilFilter('all');
-          setSearchInput('');
-          toast.success('Cotação salva! Exibindo em "Em Andamento".');
-        }}
-      />
-      <ContratoWizard 
-        open={showContratoWizard} 
-        onOpenChange={setShowContratoWizard} 
-        cotacaoId={selectedCotacaoId}
-        onContratoCreated={handleContratoCreated}
-      />
+      {/* Dialogs — lazy mount: só sobem quando o usuário abre, evitando ~50 fetches no carregamento da listagem */}
+      {showCotacaoForm && (
+        <Suspense fallback={null}>
+          <CotacaoFormDialog
+            open={showCotacaoForm}
+            onOpenChange={(open) => {
+              setShowCotacaoForm(open);
+              if (!open) {
+                setLeadIdFromUrl(null);
+                setCotacaoParaDuplicar(null);
+                setCotacaoParaContinuar(null);
+                setIgnorarPlacaIds([]);
+              }
+            }}
+            leadId={leadIdFromUrl || undefined}
+            ignorarPlacaDuplicadaIds={ignorarPlacaIds}
+            cotacaoBase={cotacaoParaDuplicar ? {
+              valor_fipe: cotacaoParaDuplicar.valor_fipe,
+              valor_adicional: cotacaoParaDuplicar.valor_adicional,
+              valor_adesao: cotacaoParaDuplicar.valor_adesao,
+              validade_dias: cotacaoParaDuplicar.validade_dias,
+              veiculo_marca: cotacaoParaDuplicar.veiculo_marca,
+              veiculo_modelo: cotacaoParaDuplicar.veiculo_modelo,
+              veiculo_ano: cotacaoParaDuplicar.veiculo_ano,
+              veiculo_placa: cotacaoParaDuplicar.veiculo_placa,
+              codigo_fipe: cotacaoParaDuplicar.codigo_fipe,
+              categoria: cotacaoParaDuplicar.categoria,
+              regiao: cotacaoParaDuplicar.regiao,
+              nome_solicitante: cotacaoParaDuplicar.nome_solicitante || cotacaoParaDuplicar.leads?.nome || null,
+              telefone1_solicitante: cotacaoParaDuplicar.telefone1_solicitante || cotacaoParaDuplicar.leads?.telefone || null,
+              email_solicitante: cotacaoParaDuplicar.email_solicitante || cotacaoParaDuplicar.leads?.email || null,
+              lead_id: cotacaoParaDuplicar.lead_id,
+              plano_id: cotacaoParaDuplicar.plano_id,
+              dados_extras: cotacaoParaDuplicar.dados_extras as any,
+            } : null}
+            cotacaoParaEditar={cotacaoParaContinuar ? {
+              id: cotacaoParaContinuar.id,
+              valor_fipe: cotacaoParaContinuar.valor_fipe,
+              valor_adicional: cotacaoParaContinuar.valor_adicional,
+              valor_adesao: cotacaoParaContinuar.valor_adesao,
+              validade_dias: cotacaoParaContinuar.validade_dias,
+              veiculo_marca: cotacaoParaContinuar.veiculo_marca,
+              veiculo_modelo: cotacaoParaContinuar.veiculo_modelo,
+              veiculo_ano: cotacaoParaContinuar.veiculo_ano,
+              veiculo_placa: cotacaoParaContinuar.veiculo_placa,
+              codigo_fipe: cotacaoParaContinuar.codigo_fipe,
+              categoria: cotacaoParaContinuar.categoria,
+              regiao: cotacaoParaContinuar.regiao,
+              nome_solicitante: cotacaoParaContinuar.nome_solicitante || cotacaoParaContinuar.leads?.nome || null,
+              telefone1_solicitante: cotacaoParaContinuar.telefone1_solicitante || cotacaoParaContinuar.leads?.telefone || null,
+              email_solicitante: cotacaoParaContinuar.email_solicitante || cotacaoParaContinuar.leads?.email || null,
+              lead_id: cotacaoParaContinuar.lead_id,
+              plano_id: cotacaoParaContinuar.plano_id,
+              indicador_id: cotacaoParaContinuar.indicador_id,
+              indicador_nome: cotacaoParaContinuar.indicador_nome,
+              dados_extras: cotacaoParaContinuar.dados_extras as any,
+            } : null}
+            onSuccess={() => {
+              setActiveTab('em_andamento');
+              setStatusFilter('all');
+              setMesFilter('all');
+              setDataFilter(undefined);
+              setConsultorFilter('all');
+              setFiltroOrfas(false);
+              setEtapaFunilFilter('all');
+              setSearchInput('');
+              toast.success('Cotação salva! Exibindo em "Em Andamento".');
+            }}
+          />
+        </Suspense>
+      )}
+      {showContratoWizard && (
+        <Suspense fallback={null}>
+          <ContratoWizard
+            open={showContratoWizard}
+            onOpenChange={setShowContratoWizard}
+            cotacaoId={selectedCotacaoId}
+            onContratoCreated={handleContratoCreated}
+          />
+        </Suspense>
+      )}
       {selectedCotacaoEmail && (
         <EnviarEmailModal
           open={showEmailModal}
