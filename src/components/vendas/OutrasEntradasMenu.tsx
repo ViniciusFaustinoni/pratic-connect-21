@@ -18,6 +18,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { maskCPF } from '@/lib/validations';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 type EntradaTipo = 'substituicao' | 'troca_titularidade' | 'migracao' | 'inclusao';
 
@@ -241,15 +242,44 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
     setVeiculoAntigoModelo(`${result.marca} ${result.modelo}`);
   };
 
-  const handleSelectAssociado = (associado: AssociadoSearchResult) => {
+  const handleSelectAssociado = async (associado: AssociadoSearchResult) => {
     if (selectedTipo === 'substituicao' || selectedTipo === 'inclusao') {
       setSelectedAssociadoId(associado.id);
       setSelectedAssociadoNome(associado.nome);
       setSelectedAssociadoCpf(associado.cpf);
     } else if (selectedTipo === 'troca_titularidade') {
-      setSelectedAssociadoId(associado.id);
-      setSelectedAssociadoNome(associado.nome);
-      setSelectedAssociadoCpf(associado.cpf);
+      const cpfLimpo = (associado.cpf || '').replace(/\D/g, '');
+      // Resultado vindo do SGA não tem UUID local — precisa importar primeiro
+      if (associado.origem_sga) {
+        if (cpfLimpo.length !== 11) {
+          toast.error('CPF inválido retornado pelo SGA');
+          return;
+        }
+        try {
+          toast.info('Importando associado do SGA...');
+          const { data, error } = await supabase.functions.invoke('importar-associado-sga', {
+            body: { cpf: cpfLimpo },
+          });
+          if (error) throw error;
+          if ((data as any)?.error) throw new Error((data as any).error);
+          // Edge function retorna associado_id direto
+          const associadoLocalId = (data as any)?.associado_id;
+          if (!associadoLocalId) {
+            toast.error('Falha ao localizar associado após import do SGA');
+            return;
+          }
+          setSelectedAssociadoId(associadoLocalId);
+          setSelectedAssociadoNome(associado.nome);
+          setSelectedAssociadoCpf(cpfLimpo);
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : 'Erro ao importar associado do SGA');
+          return;
+        }
+      } else {
+        setSelectedAssociadoId(associado.id);
+        setSelectedAssociadoNome(associado.nome);
+        setSelectedAssociadoCpf(associado.cpf);
+      }
       onOpenChange(false);
       setShowTrocaTitularidade(true);
     }
