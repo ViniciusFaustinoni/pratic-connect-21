@@ -15,7 +15,8 @@ interface NovoTitularDados {
 
 interface RequestBody {
   associado_antigo_id: string;
-  veiculo_id: string;
+  veiculo_id?: string;
+  veiculo_placa?: string; // fallback quando o UUID local está desatualizado
   novo_titular: NovoTitularDados;
 }
 
