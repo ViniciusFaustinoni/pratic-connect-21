@@ -247,9 +247,42 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
       setSelectedAssociadoNome(associado.nome);
       setSelectedAssociadoCpf(associado.cpf);
     } else if (selectedTipo === 'troca_titularidade') {
-      setSelectedAssociadoId(associado.id);
-      setSelectedAssociadoNome(associado.nome);
-      setSelectedAssociadoCpf(associado.cpf);
+      const cpfLimpo = (associado.cpf || '').replace(/\D/g, '');
+      // Resultado vindo do SGA não tem UUID local — precisa importar primeiro
+      if (associado.origem_sga) {
+        if (cpfLimpo.length !== 11) {
+          toast.error('CPF inválido retornado pelo SGA');
+          return;
+        }
+        try {
+          toast.info('Importando associado do SGA...');
+          const { data, error } = await supabase.functions.invoke('importar-associado-sga', {
+            body: { cpf: cpfLimpo },
+          });
+          if (error) throw error;
+          if ((data as any)?.error) throw new Error((data as any).error);
+          // Após import, busca UUID local
+          const { data: local } = await supabase
+            .from('associados')
+            .select('id, nome, cpf')
+            .eq('cpf', maskCPF(cpfLimpo))
+            .maybeSingle();
+          if (!local) {
+            toast.error('Falha ao localizar associado após import do SGA');
+            return;
+          }
+          setSelectedAssociadoId(local.id);
+          setSelectedAssociadoNome(local.nome);
+          setSelectedAssociadoCpf(local.cpf);
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : 'Erro ao importar associado do SGA');
+          return;
+        }
+      } else {
+        setSelectedAssociadoId(associado.id);
+        setSelectedAssociadoNome(associado.nome);
+        setSelectedAssociadoCpf(associado.cpf);
+      }
       onOpenChange(false);
       setShowTrocaTitularidade(true);
     }
