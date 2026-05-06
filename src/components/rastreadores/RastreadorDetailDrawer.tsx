@@ -70,6 +70,7 @@ import { SubstituirEquipamentoDialog } from './SubstituirEquipamentoDialog';
 import { useEnviarComando } from '@/hooks/useComandosRastreador';
 import { VisualizadorFoto } from '@/components/analise/VisualizadorFoto';
 import { UsuariosVeiculoSoftruck } from './UsuariosVeiculoSoftruck';
+import { GestaoRedeVeiculos } from './GestaoRedeVeiculos';
 import { AlertTriangle } from 'lucide-react';
 
 interface RastreadorDetailDrawerProps {
@@ -340,10 +341,13 @@ export function RastreadorDetailDrawer({
                   Histórico
                 </TabsTrigger>
                 <TabsTrigger
-                  value="usuarios"
-                  disabled={rastreador?.plataforma !== 'softruck' || !rastreador?.veiculo_id}
+                  value="gestao"
+                  disabled={
+                    !rastreador?.veiculo_id ||
+                    (rastreador?.plataforma !== 'softruck' && rastreador?.plataforma !== 'rede_veiculos')
+                  }
                 >
-                  Usuários
+                  Gestão
                 </TabsTrigger>
               </TabsList>
 
@@ -793,12 +797,30 @@ export function RastreadorDetailDrawer({
                 )}
               </TabsContent>
 
-              <TabsContent value="usuarios" className="mt-4">
-                {rastreador && (
-                  <UsuariosVeiculoSoftruck
-                    veiculoId={rastreador.veiculo_id}
-                    plataforma={rastreador.plataforma}
-                  />
+              <TabsContent value="gestao" className="mt-4 space-y-4">
+                {rastreador?.plataforma === 'softruck' && (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">Plataforma: Softtruck</Badge>
+                    </div>
+                    <UsuariosVeiculoSoftruck
+                      veiculoId={rastreador.veiculo_id}
+                      plataforma={rastreador.plataforma}
+                    />
+                  </>
+                )}
+                {rastreador?.plataforma === 'rede_veiculos' && rastreador.veiculo_id && (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">Plataforma: Rede Veículos</Badge>
+                    </div>
+                    <GestaoRedeVeiculos
+                      veiculoId={rastreador.veiculo_id}
+                      associadoId={(rastreador as any).veiculos?.associado_id ?? null}
+                      rastreadorId={rastreador.id}
+                      imei={rastreador.imei}
+                    />
+                  </>
                 )}
               </TabsContent>
 
