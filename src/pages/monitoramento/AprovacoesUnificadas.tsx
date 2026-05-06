@@ -7,10 +7,11 @@ import AprovacoesTroca from './AprovacoesTroca';
 import LiberacoesAutoVistoria from './LiberacoesAutoVistoria';
 import RecusasInstalador from '../cadastro/RecusasInstalador';
 import RessalvasPendentes from './RessalvasPendentes';
+import ImprevistosPainel from './ImprevistosPainel';
 
-type Aba = 'associados' | 'troca' | 'liberacao-suspensao' | 'recusas' | 'ressalvas';
+type Aba = 'associados' | 'troca' | 'liberacao-suspensao' | 'recusas' | 'ressalvas' | 'imprevistos';
 
-const ABAS: Aba[] = ['associados', 'troca', 'liberacao-suspensao', 'recusas', 'ressalvas'];
+const ABAS: Aba[] = ['associados', 'troca', 'liberacao-suspensao', 'recusas', 'ressalvas', 'imprevistos'];
 
 export default function AprovacoesUnificadas() {
   const location = useLocation();
