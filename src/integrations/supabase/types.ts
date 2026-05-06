@@ -6246,6 +6246,7 @@ export type Database = {
           linha_digitavel: string
           lote_id: string
           matricula: string
+          motivo_recuperacao: string | null
           nome: string
           placa: string | null
           recuperado_em: string | null
@@ -6262,6 +6263,7 @@ export type Database = {
           linha_digitavel: string
           lote_id: string
           matricula: string
+          motivo_recuperacao?: string | null
           nome: string
           placa?: string | null
           recuperado_em?: string | null
@@ -6278,6 +6280,7 @@ export type Database = {
           linha_digitavel?: string
           lote_id?: string
           matricula?: string
+          motivo_recuperacao?: string | null
           nome?: string
           placa?: string | null
           recuperado_em?: string | null
@@ -6313,6 +6316,7 @@ export type Database = {
           observacao: string | null
           status: string
           total_associados: number
+          total_associados_atingidos: number
           total_boletos: number
           total_enviados: number
           updated_at: string
@@ -6326,6 +6330,7 @@ export type Database = {
           observacao?: string | null
           status?: string
           total_associados?: number
+          total_associados_atingidos?: number
           total_boletos?: number
           total_enviados?: number
           updated_at?: string
@@ -6339,6 +6344,7 @@ export type Database = {
           observacao?: string | null
           status?: string
           total_associados?: number
+          total_associados_atingidos?: number
           total_boletos?: number
           total_enviados?: number
           updated_at?: string
