@@ -210,26 +210,26 @@ serve(async (req) => {
 
       const veiculoPrecisaRastreador = precisaRastreador(valorFipe, fipeMinRastreador, tipoVeiculo, fipeMinRastreadorMoto);
 
-      // Se a instalação concluída pertence a ESTE veículo, ativa Proteção 360
       const instalacaoDesteVeiculo = jaTemInstalacaoConcluida && (instalacaoConcluida as any)?.veiculo_id === veiculoId;
-      // Paridade total com ≥30k/9k: cobertura total SÓ é ativada após vistoria
-      // aprovada (que dispara ativar-associado via trigger de conclusão).
-      // Mesmo veículos sem rastreador (FIPE < limite) precisam passar pela vistoria.
-      const ativarProtecao360 = instalacaoDesteVeiculo;
-      const statusVeiculo = ativarProtecao360 ? 'ativo' : 'instalacao_pendente';
+      // REGRA CORE: ativação SEMPRE via edge `ativar-associado` (lock + CAS + log + SGA).
+      // Aqui NUNCA marcamos veiculos.status='ativo' nem ativamos coberturas — mesmo que
+      // a instalação já esteja concluída, a vistoria ainda precisa ser aprovada manualmente
+      // (paridade total com ≥30k/9k). A aprovação da vistoria é o único gatilho que dispara
+      // ativar-associado e promove veículo+associado+contrato para ativo de forma sincronizada
+      // com o SGA. Marcar ativo aqui causava estado inconsistente (veículo ativo, associado
+      // em_analise, sem código Hinova) e mantinha o caso preso na fila de Cadastro.
+      const statusVeiculo = 'instalacao_pendente';
 
-      console.log(`[aprovar-proposta] Veículo ${veiculo.placa} (${tipoVeiculo}, FIPE R$${valorFipe}): precisaRastreador=${veiculoPrecisaRastreador}, status=${statusVeiculo}`);
+      console.log(`[aprovar-proposta] Veículo ${veiculo.placa} (${tipoVeiculo}, FIPE R$${valorFipe}): precisaRastreador=${veiculoPrecisaRastreador}, instalacaoJaConcluida=${instalacaoDesteVeiculo}, status=${statusVeiculo} (ativação real virá pela aprovação da vistoria → ativar-associado)`);
 
       if (!veiculoPrecisaRastreador) algumProtecao360SemRastreador = true;
       if (veiculoPrecisaRastreador) algumPrecisouRastreador = true;
       if (veiculoId === veiculoIdDoContrato || !veiculoPrincipal) veiculoPrincipal = veiculo;
 
-      // Cobertura R&F e cobertura total só após aprovação manual da vistoria
-      // (paridade total com fluxo ≥30k/9k — autovistoria ativa R&F, presencial ativa total).
       await supabase.from('veiculos').update({
         status: statusVeiculo,
-        cobertura_roubo_furto: ativarProtecao360 ? planoTemRouboFurto : false,
-        cobertura_total: ativarProtecao360,
+        cobertura_roubo_furto: false,
+        cobertura_total: false,
       }).eq('id', veiculoId);
 
       // Verificar se já existe instalação ativa para este veículo.
