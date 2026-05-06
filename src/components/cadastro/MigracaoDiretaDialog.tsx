@@ -84,7 +84,7 @@ export function MigracaoDiretaDialog({ open, onOpenChange, cpfInicial, consultor
 
   const { data: migracaoConfig, isLoading: loadingConfig } = useMigracaoConfig();
   const { data: bloqueio, isLoading: loadingBloqueio } = useVerificarBloqueiosMigracao(cpf);
-  const { data: consultores } = useConsultoresDisponiveis();
+  const { data: consultores } = useConsultoresDisponiveis(open);
   const criarSolicitacao = useCriarSolicitacaoMigracaoDireta();
 
   const comprovantesExigidos = migracaoConfig?.comprovantes ?? 3;
