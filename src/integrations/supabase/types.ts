@@ -33243,6 +33243,19 @@ export type Database = {
       am_i_gerencia: { Args: never; Returns: boolean }
       am_i_prestador: { Args: never; Returns: boolean }
       am_i_vendedor: { Args: never; Returns: boolean }
+      associados_contagem_por_status: {
+        Args: {
+          p_cidade?: string
+          p_data_fim?: string
+          p_data_inicio?: string
+          p_plano_id?: string
+          p_search?: string
+          p_tipos_entrada?: string[]
+          p_uf?: string
+          p_vendedor_id?: string
+        }
+        Returns: Json
+      }
       atribuir_lead_automaticamente: {
         Args: { p_lead_id: string }
         Returns: string
@@ -33814,6 +33827,10 @@ export type Database = {
       }
       veiculos_base_antiga_sem_rastreador: {
         Args: { p_limit?: number; p_offset?: number; p_search?: string }
+        Returns: Json
+      }
+      veiculos_stats_filtrados: {
+        Args: { p_search?: string; p_status?: string }
         Returns: Json
       }
       verificar_acordos_quebrados: { Args: never; Returns: number }
