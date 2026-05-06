@@ -545,6 +545,7 @@ const App = () => (
               <Route path="/eventos/sla" element={<EventosSLADashboard />} />
               <Route path="/eventos/solicitacoes-ia" element={<EventosPreAnalise />} />
               <Route path="/eventos/chat-ia" element={<EventosChatIA />} />
+              <Route path="/eventos/chat" element={<EventosChat />} />
               <Route path="/cobranca/chat" element={<EventosChatIA />} />
               
               {/* Sindicante */}
