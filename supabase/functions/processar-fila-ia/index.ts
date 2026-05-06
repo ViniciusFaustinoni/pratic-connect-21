@@ -39,8 +39,29 @@ Deno.serve(async (req) => {
     let erros = 0;
 
     for (const item of itens) {
-      // Verificar se o contato foi resetado depois que o item foi enfileirado
       const telLimpoCheck = item.telefone.replace(/\D/g, "");
+
+      // Verificar se a IA está pausada para este telefone (intervenção humana)
+      const { data: pausa } = await supabase
+        .from("whatsapp_ia_pausas")
+        .select("pausada_ate, motivo")
+        .eq("telefone", telLimpoCheck)
+        .maybeSingle();
+
+      if (pausa && new Date(pausa.pausada_ate) > new Date()) {
+        await supabase
+          .from("whatsapp_fila_ia")
+          .update({
+            status: "pausado_humano",
+            erro: `IA pausada (${pausa.motivo}) até ${pausa.pausada_ate}`,
+            processed_at: new Date().toISOString(),
+          })
+          .eq("id", item.id);
+        console.log(`[processar-fila-ia] Item ${item.id} ignorado — IA pausada para ${telLimpoCheck} até ${pausa.pausada_ate}`);
+        continue;
+      }
+
+      // Verificar se o contato foi resetado depois que o item foi enfileirado
       const { data: contatoCheck } = await supabase
         .from("agente_ia_contatos")
         .select("resetado_em")
