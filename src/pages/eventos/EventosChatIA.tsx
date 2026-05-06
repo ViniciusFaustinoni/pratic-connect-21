@@ -77,8 +77,11 @@ export default function EventosChatIA() {
 
     const mapa = new Map<string, ConversaAgrupada>();
 
+    const COBRANCA_TIPOS = new Set(['cobranca', 'cobranca_csv']);
+
     for (const msg of mensagens) {
       const tel = msg.telefone;
+      const isCobranca = msg.referencia_tipo && COBRANCA_TIPOS.has(msg.referencia_tipo);
       if (!mapa.has(tel)) {
         const assoc = avatarMap.get(tel.replace(/\D/g, ''));
         mapa.set(tel, {
@@ -89,11 +92,15 @@ export default function EventosChatIA() {
           ultima_mensagem: msg.created_at,
           ultima_msg_texto: msg.mensagem,
           ultima_direcao: msg.direcao,
+          ultima_cobranca: isCobranca ? msg.created_at : null,
         });
       } else {
         const c = mapa.get(tel)!;
         c.total_mensagens++;
         if (!c.nome_contato && msg.nome_contato) c.nome_contato = msg.nome_contato;
+        if (isCobranca && (!c.ultima_cobranca || new Date(msg.created_at) > new Date(c.ultima_cobranca))) {
+          c.ultima_cobranca = msg.created_at;
+        }
       }
     }
 
