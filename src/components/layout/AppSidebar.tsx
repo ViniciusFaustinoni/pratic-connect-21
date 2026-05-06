@@ -592,14 +592,18 @@ export function AppSidebar() {
 
     let baseGroups = filterGroups(menuConfig.groups);
 
-    // Injetar badge dinâmico no item de Biometrias Pendentes
+    // Injetar badges dinâmicos
     baseGroups = baseGroups.map(g => ({
       ...g,
-      items: g.items.map(item =>
-        item.url === '/cadastro/biometrias-pendentes' && biometriasPendentesCount > 0
-          ? { ...item, badge: String(biometriasPendentesCount) }
-          : item,
-      ),
+      items: g.items.map(item => {
+        if (item.url === '/cadastro/biometrias-pendentes' && biometriasPendentesCount > 0) {
+          return { ...item, badge: String(biometriasPendentesCount) };
+        }
+        if (item.url === '/monitoramento/aprovacoes-monitoramento' && aprovacoesMonCount > 0) {
+          return { ...item, badge: String(aprovacoesMonCount) };
+        }
+        return item;
+      }),
     }));
 
     // Filtrar por visibilidade de módulos do banco (se carregado)
