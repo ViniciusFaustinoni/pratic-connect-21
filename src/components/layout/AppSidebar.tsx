@@ -231,6 +231,15 @@ const menuConfig: {
       ],
     },
     {
+      id: 'relacionamento',
+      label: 'Relacionamento',
+      icon: MessageCircle,
+      color: MENU_COLORS.eventos,
+      items: [
+        { title: 'Chat', url: '/eventos/chat-ia', icon: MessageCircle },
+      ],
+    },
+    {
       id: 'eventos',
       label: 'Eventos',
       icon: AlertTriangle,
@@ -243,8 +252,6 @@ const menuConfig: {
         { title: 'SLA', url: '/eventos/sla', icon: Clock },
         { title: 'Sindicâncias', url: '/eventos/sindicancias', icon: Search },
         { title: 'Sindicantes', url: '/eventos/sindicantes', icon: Building2 },
-        
-        { title: 'Chat IA', url: '/eventos/chat-ia', icon: MessageCircle },
       ],
     },
     {
