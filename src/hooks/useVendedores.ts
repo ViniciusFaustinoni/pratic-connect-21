@@ -44,7 +44,7 @@ export function useVendedores() {
       // Buscar profiles desses usuários (colunas mínimas — payload reduzido)
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, user_id, nome, email, whatsapp, full_name, ativo, avatar_url, codigo_sga, tipo')
+        .select('id, user_id, nome, email, whatsapp, full_name, ativo, avatar_url, tipo')
         .in('user_id', userIds)
         .eq('ativo', true)
         .order('nome');
