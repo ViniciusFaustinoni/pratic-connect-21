@@ -25,6 +25,39 @@ import {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // ============================================
+// MODULE-LEVEL DEDUPE (StrictMode + recoverAndRefresh)
+// ============================================
+// Em desenvolvimento o StrictMode monta o AuthProvider duas vezes, e o
+// próprio Supabase pode emitir SIGNED_IN várias vezes (recoverAndRefresh).
+// Cada montagem cria sua própria closure e dispararia fetches duplicados de
+// profile/user_roles. Para evitar isso, mantemos um cache de Promises por
+// user_id em escopo de módulo — qualquer chamada repetida em < 30s reutiliza
+// a mesma in-flight request.
+const PROFILE_PROMISES = new Map<string, { p: Promise<any>; t: number }>();
+const PERFIS_PROMISES = new Map<string, { p: Promise<any>; t: number }>();
+const DEDUPE_TTL = 30_000;
+
+function memoize<T>(
+  cache: Map<string, { p: Promise<T>; t: number }>,
+  key: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const now = Date.now();
+  const hit = cache.get(key);
+  if (hit && now - hit.t < DEDUPE_TTL) return hit.p;
+  const p = fn().finally(() => {
+    // Mantém por TTL para servir chamadas tardias sem disparar nova req
+    setTimeout(() => {
+      const cur = cache.get(key);
+      if (cur && cur.p === p) cache.delete(key);
+    }, DEDUPE_TTL);
+  });
+  cache.set(key, { p, t: now });
+  return p;
+}
+
+
+// ============================================
 // PROVIDER PROPS
 // ============================================
 interface AuthProviderProps {
@@ -67,48 +100,52 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // ============================================
 
   const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
-    try {
-      const { data, error: fetchError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .maybeSingle();
+    return memoize(PROFILE_PROMISES, userId, async () => {
+      try {
+        const { data, error: fetchError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_id', userId)
+          .maybeSingle();
 
-      if (fetchError) {
-        console.error('Erro ao buscar perfil:', fetchError);
+        if (fetchError) {
+          console.error('Erro ao buscar perfil:', fetchError);
+          return null;
+        }
+
+        // Verificar se usuário está bloqueado
+        if (data?.bloqueado) {
+          await supabase.auth.signOut();
+          throw new Error(`Usuário bloqueado: ${data.motivo_bloqueio || 'Contate o administrador'}`);
+        }
+
+        return data as Profile | null;
+      } catch (err) {
+        console.error('Erro ao buscar perfil:', err);
         return null;
       }
-
-      // Verificar se usuário está bloqueado
-      if (data?.bloqueado) {
-        await supabase.auth.signOut();
-        throw new Error(`Usuário bloqueado: ${data.motivo_bloqueio || 'Contate o administrador'}`);
-      }
-
-      return data as Profile | null;
-    } catch (err) {
-      console.error('Erro ao buscar perfil:', err);
-      return null;
-    }
+    });
   }, []);
 
   const fetchPerfis = useCallback(async (userId: string): Promise<PerfilAcesso[]> => {
-    try {
-      const { data, error: fetchError } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userId);
+    return memoize(PERFIS_PROMISES, userId, async () => {
+      try {
+        const { data, error: fetchError } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', userId);
 
-      if (fetchError) {
-        console.error('Erro ao buscar perfis:', fetchError);
+        if (fetchError) {
+          console.error('Erro ao buscar perfis:', fetchError);
+          return [];
+        }
+
+        return (data || []).map((r: { role: PerfilAcesso }) => r.role);
+      } catch (err) {
+        console.error('Erro ao buscar perfis:', err);
         return [];
       }
-
-      return (data || []).map((r: { role: PerfilAcesso }) => r.role);
-    } catch (err) {
-      console.error('Erro ao buscar perfis:', err);
-      return [];
-    }
+    });
   }, []);
 
   // ============================================
@@ -225,9 +262,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Defer Supabase calls with setTimeout to prevent deadlock
         if (currentSession?.user) {
           setLoading(true);
-          hasLoadedData = false;
+          // Marcar SÍNCRONAMENTE que vamos carregar — evita corrida com
+          // getSession().then() abaixo, que duplicaria os fetches de
+          // profile/user_roles. A flag interna de loadUserData é redundante
+          // mas mantida como segunda camada.
+          hasLoadedData = true;
           setTimeout(async () => {
             if (!mounted) return;
+            // Reset interno antes de loadUserData reaplicar a flag
+            hasLoadedData = false;
             await loadUserData(currentSession);
           }, 0);
         } else {
