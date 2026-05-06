@@ -218,19 +218,10 @@ const menuConfig: {
           permission: 'canManageRastreadores',
         },
         // Mapa movido para aba dentro de "Serviços de Campo"
+        // Ressalvas Pendentes e Imprevistos movidos para abas dentro de "Aprovações"
         // Alertas removido temporariamente
         {
-          title: 'Ressalvas Pendentes',
-          url: '/monitoramento/ressalvas-pendentes',
-          icon: AlertTriangle,
-        },
-        {
-          title: 'Imprevistos',
-          url: '/monitoramento/imprevistos',
-          icon: AlertTriangle,
-        },
-        {
-          title: 'Aprovações do Monitoramento',
+          title: 'Aprovações',
           url: '/monitoramento/aprovacoes-monitoramento',
           icon: ShieldAlert,
         },
