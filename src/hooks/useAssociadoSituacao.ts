@@ -65,7 +65,7 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
   const { data: carenciaDias } = useCarenciaDiasPadrao();
   const { data: multaRastreador } = useMultaRastreador();
   const { data: migracaoConfig } = useMigracaoConfig();
-  const { inadimplenciaPorVeiculo, algumVeiculoInadimplente, beneficiosAdicionaisSuspensos, isLoading: isLoadingInadimplencia } = useInadimplenciaPorVeiculo(associadoId);
+  const { inadimplenciaPorVeiculo, veiculosSuspensosOutroMotivo, algumVeiculoInadimplente, algumVeiculoComCoberturaSuspensa, beneficiosAdicionaisSuspensos, isLoading: isLoadingInadimplencia } = useInadimplenciaPorVeiculo(associadoId);
 
   // Fetch contrato details (carência fields)
   const { data: contrato, isLoading: isLoadingContrato } = useQuery({
