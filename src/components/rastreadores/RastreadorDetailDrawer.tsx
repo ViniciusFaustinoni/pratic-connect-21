@@ -328,7 +328,7 @@ export function RastreadorDetailDrawer({
             )}
 
             <Tabs defaultValue="info" className="mt-6">
-              <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
+              <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5">
                 <TabsTrigger value="info">Informações</TabsTrigger>
                 <TabsTrigger value="mapa" disabled={!isInstalled}>
                   Rastreamento
@@ -338,6 +338,12 @@ export function RastreadorDetailDrawer({
                 </TabsTrigger>
                 <TabsTrigger value="movimentacoes">
                   Histórico
+                </TabsTrigger>
+                <TabsTrigger
+                  value="usuarios"
+                  disabled={rastreador?.plataforma !== 'softruck' || !rastreador?.veiculo_id}
+                >
+                  Usuários
                 </TabsTrigger>
               </TabsList>
 
