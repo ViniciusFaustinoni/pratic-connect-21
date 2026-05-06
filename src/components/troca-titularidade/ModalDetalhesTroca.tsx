@@ -253,21 +253,28 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                   )}
                   {(() => {
                     const bloqueadoPorAssinatura = modo === 'cadastro' && !solicitacao.termo_cancelamento_assinado_em;
+                    const bloqueadoPorDebito = modo === 'cadastro' && !!debitoPendente;
+                    const bloqueado = bloqueadoPorAssinatura || bloqueadoPorDebito;
+                    const motivoBloqueio = bloqueadoPorAssinatura
+                      ? 'Aguardando assinatura do termo de cancelamento pelo titular antigo.'
+                      : bloqueadoPorDebito
+                      ? 'Titular antigo possui débitos em aberto no SGA. Aprovação liberada automaticamente após quitação.'
+                      : '';
                     const btn = (
                       <Button
                         onClick={handleAprovar}
-                        disabled={aprovarCadastro.isPending || aprovarMonitoramento.isPending || bloqueadoPorAssinatura}
+                        disabled={aprovarCadastro.isPending || aprovarMonitoramento.isPending || bloqueado}
                       >
                         {(aprovarCadastro.isPending || aprovarMonitoramento.isPending) ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : modo === 'cadastro' ? <ClipboardCheck className="h-4 w-4 mr-2" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
                         Aprovar
                       </Button>
                     );
-                    if (!bloqueadoPorAssinatura) return btn;
+                    if (!bloqueado) return btn;
                     return (
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild><span tabIndex={0}>{btn}</span></TooltipTrigger>
-                          <TooltipContent>Aguardando assinatura do termo de cancelamento pelo titular antigo.</TooltipContent>
+                          <TooltipContent>{motivoBloqueio}</TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
                     );
