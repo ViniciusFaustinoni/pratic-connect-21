@@ -241,7 +241,7 @@ function ProdutosTable({ loading, items, onShowDetalhe, cached, total }: TablePr
     );
   }
   return (
-    <>
+    <div>
       <MetaLine cached={cached} mostrando={items.length} total={total} />
       <div className="rounded-md border">
         <Table>
