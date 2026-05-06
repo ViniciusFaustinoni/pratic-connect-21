@@ -125,7 +125,8 @@ Deno.serve(async (req) => {
         termo_cancelamento_autentique_id: docId,
         termo_cancelamento_url: termoUrl,
         termo_cancelamento_enviado_em: new Date().toISOString(),
-        status: 'aguardando_cadastro',
+        // status NÃO é alterado aqui — só o webhook do Autentique promove para
+        // 'aguardando_cadastro' depois de confirmar a assinatura do antigo.
       })
       .eq('id', solicitacao_id);
 
