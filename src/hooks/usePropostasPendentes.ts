@@ -486,11 +486,26 @@ export function usePropostasPendentes() {
         const associado = contrato.associado_id ? mAssociado.get(contrato.associado_id) : null;
         const veiculoContrato = contrato.veiculo_id ? mVeiculo.get(contrato.veiculo_id) : null;
 
-        // Esconde propostas já concluídas: associado e veículo ambos 'ativo'
-        // (não há mais nada para o Cadastro fazer aqui).
+        // Esconde propostas que não pertencem mais ao Cadastro:
+        // 1) Associado já ativo (no SGA) → nada a fazer aqui
+        // 2) Instalação concluída → fila de Aprovações do Monitoramento
+        // 3) Associado em aguardando_instalacao SEM docs pendentes e SEM vistoria pendente
+        //    → já foi para a fila de Instalações/Agendas
+        const docsPendentes = contrato.associado_id
+          ? !!mTemDocPendente.get(contrato.associado_id)
+          : false;
+        const vistoriaPendenteAnalise = (() => {
+          const v = mVistoriaPorContrato.get(contrato.id) || (contrato.cotacao_id ? mVistoriaPorCotacao.get(contrato.cotacao_id) : null);
+          if (!v) return false;
+          // status que ainda demandam ação do Cadastro
+          return ['pendente', 'em_analise', 'aguardando_aprovacao', 'em_andamento'].includes(v.status);
+        })();
+        const instalacaoConcluida = mInstConcluida.has(contrato.id);
+
         const propostaJaConcluida =
-          associado?.status === 'ativo' &&
-          veiculoContrato?.status === 'ativo';
+          associado?.status === 'ativo' ||
+          instalacaoConcluida ||
+          (associado?.status === 'aguardando_instalacao' && !docsPendentes && !vistoriaPendenteAnalise);
         if (propostaJaConcluida) return null;
 
         const plano = contrato.plano_id ? mPlano.get(contrato.plano_id) : null;
