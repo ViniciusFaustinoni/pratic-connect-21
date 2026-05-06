@@ -77,7 +77,6 @@ export function CampanhaFormDialog({ open, onClose, campanha }: CampanhaFormDial
     const data = {
       nome,
       tipo,
-      canal_id: canalId || null,
       data_inicio: dataInicio,
       data_fim: dataFim || null,
       orcamento_total: orcamentoTotal ? parseFloat(orcamentoTotal) : null,
