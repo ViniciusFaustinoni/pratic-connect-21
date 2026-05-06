@@ -33630,6 +33630,7 @@ export type Database = {
           visualizados: number
         }[]
       }
+      get_app_config: { Args: never; Returns: Json }
       get_associado_id_for_user: {
         Args: { p_auth_user_id: string }
         Returns: string
