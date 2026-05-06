@@ -282,6 +282,23 @@ export default function CampanhaForm() {
                 </Select>
               </div>
               <div className="space-y-2">
+                <Label htmlFor="canal">Canal</Label>
+                <Select
+                  value={formData.canal_id || 'none'}
+                  onValueChange={(v) => handleChange('canal_id', v === 'none' ? '' : v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um canal" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sem canal</SelectItem>
+                    {canais?.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="regioes">Regiões (separadas por vírgula)</Label>
                 <Input
                   id="regioes"
