@@ -182,6 +182,21 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
                 </Button>
               )}
 
+              {isInstalacao && ['agendada', 'nao_compareceu', 'reagendada', 'cancelada'].includes(servico.status) && (
+                <Button
+                  variant={servico.status === 'cancelada' ? 'default' : 'outline'}
+                  size="sm"
+                  className="gap-1.5 h-9"
+                  onClick={() => setRealocarOpen(true)}
+                  title={servico.status === 'cancelada'
+                    ? 'Reabrir este serviço cancelado e reagendar'
+                    : 'Realocar este serviço para outra data, técnico, rota ou base'}
+                >
+                  <MapPinned className="h-4 w-4" />
+                  {servico.status === 'cancelada' ? 'Reabrir e reagendar' : 'Realocar'}
+                </Button>
+              )}
+
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="gap-1.5 h-9 ml-auto">
@@ -195,12 +210,6 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
                       <ExternalLink className="h-4 w-4 mr-2" /> Ver no mapa de campo
                     </a>
                   </DropdownMenuItem>
-                  {isInstalacao && ['agendada', 'nao_compareceu', 'reagendada', 'cancelada'].includes(servico.status) && (
-                    <DropdownMenuItem onClick={() => setRealocarOpen(true)} className="cursor-pointer">
-                      <MapPinned className="h-4 w-4 mr-2" />
-                      {servico.status === 'cancelada' ? 'Reabrir e reagendar' : 'Realocar serviço'}
-                    </DropdownMenuItem>
-                  )}
                   <DropdownMenuSeparator />
                   <div className="px-1 py-0.5 [&>*]:w-full [&_button]:w-full [&_button]:justify-start [&_button]:h-8">
                     <ConcluirPrestadorExternoButton
