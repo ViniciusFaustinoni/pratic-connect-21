@@ -39,21 +39,35 @@ const RelatorioInteligenteCotacoesDialog = lazy(() =>
     default: m.RelatorioInteligenteCotacoesDialog,
   }))
 );
-import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
-import { VincularLeadModal } from '@/components/cotacoes/VincularLeadModal';
 // gerarPdfCotacao* importados dinamicamente no handler (evita 54KB no bundle inicial)
 import type { PlanoParaPdf, CotacaoComparativaParaPdf } from '@/lib/gerarPdfCotacao';
 import { CotacoesTable, type CotacoesTablePermissions } from '@/components/cotacoes/CotacoesTable';
 import { CotacoesMobileList } from '@/components/cotacoes/CotacoesMobileList';
-import { CotacaoDetalhesModal } from '@/components/cotacoes/CotacaoDetalhesModal';
-import { ConfirmacaoExclusaoCotacaoDialog } from '@/components/cotacoes/ConfirmacaoExclusaoCotacaoDialog';
-import { DuplicarCotacaoDialog, type DuplicarCotacaoConfirmPayload } from '@/components/cotacoes/DuplicarCotacaoDialog';
+// Modais lazy — só baixam quando o usuário abre (reduz bundle inicial da rota)
+const CotacaoDetalhesModal = lazy(() =>
+  import('@/components/cotacoes/CotacaoDetalhesModal').then((m) => ({ default: m.CotacaoDetalhesModal }))
+);
+const EnviarEmailModal = lazy(() =>
+  import('@/components/cotacoes/EnviarEmailModal').then((m) => ({ default: m.EnviarEmailModal }))
+);
+const VincularLeadModal = lazy(() =>
+  import('@/components/cotacoes/VincularLeadModal').then((m) => ({ default: m.VincularLeadModal }))
+);
+const ConfirmacaoExclusaoCotacaoDialog = lazy(() =>
+  import('@/components/cotacoes/ConfirmacaoExclusaoCotacaoDialog').then((m) => ({ default: m.ConfirmacaoExclusaoCotacaoDialog }))
+);
+const DuplicarCotacaoDialog = lazy(() =>
+  import('@/components/cotacoes/DuplicarCotacaoDialog').then((m) => ({ default: m.DuplicarCotacaoDialog }))
+);
+const NovaEntradaDialog = lazy(() =>
+  import('@/components/vendas/OutrasEntradasMenu').then((m) => ({ default: m.NovaEntradaDialog }))
+);
+import type { DuplicarCotacaoConfirmPayload } from '@/components/cotacoes/DuplicarCotacaoDialog';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { useCotacoesRealtime } from '@/hooks/useCotacoesRealtime';
-import { NovaEntradaDialog } from '@/components/vendas/OutrasEntradasMenu';
 import { useDebounce } from '@/hooks/useDebounce';
 import { Sparkles } from 'lucide-react';
 
@@ -762,11 +776,15 @@ export default function Cotacoes() {
               Nova Cotação
             </Button>
           </PermissionGate>
-          <NovaEntradaDialog
-            open={showNovaEntrada}
-            onOpenChange={setShowNovaEntrada}
-            onNovaCotacao={() => setShowCotacaoForm(true)}
-          />
+          {showNovaEntrada && (
+            <Suspense fallback={null}>
+              <NovaEntradaDialog
+                open={showNovaEntrada}
+                onOpenChange={setShowNovaEntrada}
+                onNovaCotacao={() => setShowCotacaoForm(true)}
+              />
+            </Suspense>
+          )}
           {showRelatorioDialog && (
             <Suspense fallback={null}>
               <RelatorioInteligenteCotacoesDialog
@@ -1150,23 +1168,27 @@ export default function Cotacoes() {
         )}
       </Tabs>
 
-      {/* Modal de Detalhes */}
-      <CotacaoDetalhesModal 
-        open={showDetalhesModal}
-        onOpenChange={setShowDetalhesModal}
-        cotacao={cotacaoSelecionada}
-        onCopiarWhatsApp={copiarParaWhatsApp}
-        onPdf={handleBaixarPdf}
-        onEmail={handleOpenEmailModal}
-        onGerarContrato={handleOpenContratoWizard}
-        onAceitar={(id) => updateCotacao.mutate({ id, status: 'aceita' })}
-        onDuplicar={handleDuplicar}
-        onContinuar={handleContinuarCotacao}
-        isCopiandoWhatsApp={copiandoWhatsApp === cotacaoSelecionada?.id}
-        isGerandoContrato={gerarContrato.isPending}
-        canGenerateContract={cotacaoSelecionada ? getPermissions(cotacaoSelecionada).canGenerateContract : false}
-        canSend={cotacaoSelecionada ? getPermissions(cotacaoSelecionada).canSend : false}
-      />
+      {/* Modal de Detalhes — lazy + só monta quando abre */}
+      {showDetalhesModal && cotacaoSelecionada && (
+        <Suspense fallback={null}>
+          <CotacaoDetalhesModal
+            open={showDetalhesModal}
+            onOpenChange={setShowDetalhesModal}
+            cotacao={cotacaoSelecionada}
+            onCopiarWhatsApp={copiarParaWhatsApp}
+            onPdf={handleBaixarPdf}
+            onEmail={handleOpenEmailModal}
+            onGerarContrato={handleOpenContratoWizard}
+            onAceitar={(id) => updateCotacao.mutate({ id, status: 'aceita' })}
+            onDuplicar={handleDuplicar}
+            onContinuar={handleContinuarCotacao}
+            isCopiandoWhatsApp={copiandoWhatsApp === cotacaoSelecionada?.id}
+            isGerandoContrato={gerarContrato.isPending}
+            canGenerateContract={cotacaoSelecionada ? getPermissions(cotacaoSelecionada).canGenerateContract : false}
+            canSend={cotacaoSelecionada ? getPermissions(cotacaoSelecionada).canSend : false}
+          />
+        </Suspense>
+      )}
 
       {/* Dialogs — lazy mount: só sobem quando o usuário abre, evitando ~50 fetches no carregamento da listagem */}
       {showCotacaoForm && (
@@ -1250,50 +1272,64 @@ export default function Cotacoes() {
         </Suspense>
       )}
       {selectedCotacaoEmail && (
-        <EnviarEmailModal
-          open={showEmailModal}
-          onOpenChange={setShowEmailModal}
-          cotacao={selectedCotacaoEmail}
-          onSuccess={() => handleMarkAsEnviada(selectedCotacaoEmail.id, selectedCotacaoEmail.lead_id)}
-        />
+        <Suspense fallback={null}>
+          <EnviarEmailModal
+            open={showEmailModal}
+            onOpenChange={setShowEmailModal}
+            cotacao={selectedCotacaoEmail}
+            onSuccess={() => handleMarkAsEnviada(selectedCotacaoEmail.id, selectedCotacaoEmail.lead_id)}
+          />
+        </Suspense>
       )}
 
-      <VincularLeadModal
-        open={showVincularModal}
-        onOpenChange={setShowVincularModal}
-        cotacaoId={cotacaoParaVincular?.id || ''}
-        leadAtualId={cotacaoParaVincular?.lead_id}
-        onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
-        }}
-      />
+      {showVincularModal && (
+        <Suspense fallback={null}>
+          <VincularLeadModal
+            open={showVincularModal}
+            onOpenChange={setShowVincularModal}
+            cotacaoId={cotacaoParaVincular?.id || ''}
+            leadAtualId={cotacaoParaVincular?.lead_id}
+            onSuccess={() => {
+              queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
+            }}
+          />
+        </Suspense>
+      )}
 
-      <DuplicarCotacaoDialog
-        open={!!cotacaoConfirmarDuplicar}
-        onOpenChange={(open) => {
-          if (!open) setCotacaoConfirmarDuplicar(null);
-        }}
-        cotacao={cotacaoConfirmarDuplicar ? {
-          id: cotacaoConfirmarDuplicar.id,
-          numero: cotacaoConfirmarDuplicar.numero,
-          vendedor_id: cotacaoConfirmarDuplicar.vendedor_id,
-          status: cotacaoConfirmarDuplicar.status,
-        } : null}
-        vendedorOriginalNome={cotacaoConfirmarDuplicar?.vendedor?.nome || null}
-        currentUserId={user?.id}
-        isSubmitting={duplicarCotacao.isPending}
-        onConfirm={handleConfirmarDuplicacao}
-      />
+      {cotacaoConfirmarDuplicar && (
+        <Suspense fallback={null}>
+          <DuplicarCotacaoDialog
+            open={!!cotacaoConfirmarDuplicar}
+            onOpenChange={(open) => {
+              if (!open) setCotacaoConfirmarDuplicar(null);
+            }}
+            cotacao={cotacaoConfirmarDuplicar ? {
+              id: cotacaoConfirmarDuplicar.id,
+              numero: cotacaoConfirmarDuplicar.numero,
+              vendedor_id: cotacaoConfirmarDuplicar.vendedor_id,
+              status: cotacaoConfirmarDuplicar.status,
+            } : null}
+            vendedorOriginalNome={cotacaoConfirmarDuplicar?.vendedor?.nome || null}
+            currentUserId={user?.id}
+            isSubmitting={duplicarCotacao.isPending}
+            onConfirm={handleConfirmarDuplicacao}
+          />
+        </Suspense>
+      )}
 
-      <ConfirmacaoExclusaoCotacaoDialog
-        open={showExclusaoLoteDialog}
-        onOpenChange={(open) => {
-          setShowExclusaoLoteDialog(open);
-          if (!open) setCotacaoParaExcluir(null);
-        }}
-        quantidade={selectedIds.size}
-        onConfirm={handleExcluirEmLote}
-      />
+      {showExclusaoLoteDialog && (
+        <Suspense fallback={null}>
+          <ConfirmacaoExclusaoCotacaoDialog
+            open={showExclusaoLoteDialog}
+            onOpenChange={(open) => {
+              setShowExclusaoLoteDialog(open);
+              if (!open) setCotacaoParaExcluir(null);
+            }}
+            quantidade={selectedIds.size}
+            onConfirm={handleExcluirEmLote}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
