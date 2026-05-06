@@ -225,9 +225,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Defer Supabase calls with setTimeout to prevent deadlock
         if (currentSession?.user) {
           setLoading(true);
-          hasLoadedData = false;
+          // Marcar SÍNCRONAMENTE que vamos carregar — evita corrida com
+          // getSession().then() abaixo, que duplicaria os fetches de
+          // profile/user_roles. A flag interna de loadUserData é redundante
+          // mas mantida como segunda camada.
+          hasLoadedData = true;
           setTimeout(async () => {
             if (!mounted) return;
+            // Reset interno antes de loadUserData reaplicar a flag
+            hasLoadedData = false;
             await loadUserData(currentSession);
           }, 0);
         } else {
