@@ -771,13 +771,13 @@ export default function Cotacoes() {
           <PermissionGate permission="cotacao.canCreate">
             <Button 
               className="gap-2 shadow-md hover:shadow-lg transition-all" 
-              onClick={() => setShowNovaEntrada(true)}
+              onClick={() => { setNovaEntradaMounted(true); setShowNovaEntrada(true); }}
             >
               <Plus className="h-4 w-4" />
               Nova Cotação
             </Button>
           </PermissionGate>
-          {showNovaEntrada && (
+          {novaEntradaMounted && (
             <Suspense fallback={null}>
               <NovaEntradaDialog
                 key="nova-entrada-dialog"
