@@ -370,6 +370,26 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl }: ChatPanelProps) 
           </div>
         ) : (
           <div className="flex items-end gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleUploadFile(f);
+              }}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="shrink-0 h-9 w-9"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={enviando}
+              title="Anexar arquivo"
+            >
+              <Paperclip className="h-4 w-4" />
+            </Button>
             <Button
               type="button"
               variant="ghost"
@@ -399,6 +419,15 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl }: ChatPanelProps) 
           </div>
         )}
       </div>
+
+      {/* Drawer detalhes do contato */}
+      <ContatoDetalheDrawer
+        telefone={telefone}
+        open={drawerAberto}
+        onOpenChange={setDrawerAberto}
+        nomeContato={nomeContato}
+        avatarUrl={avatarUrl}
+      />
     </div>
   );
 }
