@@ -26,7 +26,7 @@ const tipos = [
 export function CampanhaFormDialog({ open, onClose, campanha }: CampanhaFormDialogProps) {
   const [nome, setNome] = useState('');
   const [tipo, setTipo] = useState('aquisicao');
-  const [canalId, setCanalId] = useState('');
+  
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [orcamentoTotal, setOrcamentoTotal] = useState('');
