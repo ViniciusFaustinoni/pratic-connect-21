@@ -4,7 +4,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { ConversasList, type ConversaAgrupada } from '@/components/eventos/chat-ia/ConversasList';
 import { ChatPanel } from '@/components/eventos/chat-ia/ChatPanel';
 
-export default function EventosChatIA() {
+interface EventosChatIAProps {
+  drawerVariant?: 'relacionamento' | 'eventos';
+}
+
+export default function EventosChatIA({ drawerVariant = 'relacionamento' }: EventosChatIAProps = {}) {
   const [telefoneSelecionado, setTelefoneSelecionado] = useState<string | null>(null);
   const [nomeContato, setNomeContato] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
