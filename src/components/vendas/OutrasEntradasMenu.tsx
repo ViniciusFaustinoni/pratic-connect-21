@@ -222,17 +222,18 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
     if (selectedTipo === 'migracao') return [];
     if (isSubstituicao) return []; // Substituição usa lista de placas diretamente
     const map = new Map<string, AssociadoSearchResult>();
-    (associadoResults || []).forEach(a => map.set(a.id, a));
+    // Prioriza resultado por placa (SGA) no topo
     (placaResults || []).forEach(p => {
-      if (!map.has(p.associadoId)) {
-        map.set(p.associadoId, {
-          id: p.associadoId,
-          nome: p.associadoNome,
-          cpf: p.associadoCpf,
-          telefone: null,
-          status: p.associadoStatus,
-        });
-      }
+      map.set(p.associadoId, {
+        id: p.associadoId,
+        nome: p.associadoNome,
+        cpf: p.associadoCpf,
+        telefone: null,
+        status: p.associadoStatus,
+      });
+    });
+    (associadoResults || []).forEach(a => {
+      if (!map.has(a.id)) map.set(a.id, a);
     });
     return Array.from(map.values());
   })();
