@@ -9,15 +9,33 @@ export default function EventosChatIA() {
   const [nomeContato, setNomeContato] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
-  // Fetch all messages grouped by phone
-  const { data: mensagens, isLoading } = useQuery({
-    queryKey: ['chat-ia-conversas'],
+  // Fetch all messages grouped by phone — apenas do provedor/instância ativa(s)
+  const { data: instanciasAtivas } = useQuery({
+    queryKey: ['whatsapp-instancias-ativas'],
     queryFn: async () => {
       const { data, error } = await supabase
+        .from('whatsapp_instancias')
+        .select('id')
+        .eq('ativa', true);
+      if (error) throw error;
+      return (data ?? []).map((d) => d.id);
+    },
+    staleTime: 60_000,
+  });
+
+  const { data: mensagens, isLoading } = useQuery({
+    queryKey: ['chat-ia-conversas', instanciasAtivas],
+    enabled: !!instanciasAtivas,
+    queryFn: async () => {
+      let q = supabase
         .from('whatsapp_mensagens')
-        .select('telefone, nome_contato, mensagem, created_at, direcao')
+        .select('telefone, nome_contato, mensagem, created_at, direcao, instancia_id')
         .order('created_at', { ascending: false })
         .limit(1000);
+      if (instanciasAtivas && instanciasAtivas.length > 0) {
+        q = q.in('instancia_id', instanciasAtivas);
+      }
+      const { data, error } = await q;
       if (error) throw error;
       return data;
     },

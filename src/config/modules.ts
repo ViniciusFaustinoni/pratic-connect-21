@@ -19,6 +19,7 @@ export const MODULES: ModuleConfig[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'vendas', label: 'Vendas' },
   { id: 'cadastro', label: 'Cadastro' },
+  { id: 'relacionamento', label: 'Relacionamento (Chat)' },
   { id: 'monitoramento', label: 'Monitoramento' },
   { id: 'eventos', label: 'Eventos/Sinistros' },
   { id: 'assistencia', label: 'Assistência 24h' },

@@ -231,6 +231,15 @@ const menuConfig: {
       ],
     },
     {
+      id: 'relacionamento',
+      label: 'Relacionamento',
+      icon: MessageCircle,
+      color: MENU_COLORS.eventos,
+      items: [
+        { title: 'Chat', url: '/eventos/chat-ia', icon: MessageCircle },
+      ],
+    },
+    {
       id: 'eventos',
       label: 'Eventos',
       icon: AlertTriangle,
@@ -243,8 +252,6 @@ const menuConfig: {
         { title: 'SLA', url: '/eventos/sla', icon: Clock },
         { title: 'Sindicâncias', url: '/eventos/sindicancias', icon: Search },
         { title: 'Sindicantes', url: '/eventos/sindicantes', icon: Building2 },
-        
-        { title: 'Chat IA', url: '/eventos/chat-ia', icon: MessageCircle },
       ],
     },
     {
@@ -455,7 +462,7 @@ const SUPER_GROUPS: SuperGroup[] = [
     label: 'Relacionamento',
     icon: Users,
     color: '#ef4444',
-    moduleIds: ['monitoramento', 'eventos', 'assistencia', 'oficinas', 'cobranca'],
+    moduleIds: ['relacionamento', 'monitoramento', 'eventos', 'assistencia', 'oficinas', 'cobranca'],
   },
   {
     id: 'administrativo',

@@ -33716,6 +33716,7 @@ export type Database = {
         Returns: boolean
       }
       is_supervisor_of: { Args: { _vendedor_id: string }; Returns: boolean }
+      is_usuario_interno: { Args: never; Returns: boolean }
       is_vendedor: { Args: { _user_id: string }; Returns: boolean }
       is_vendedor_nao_gestor: { Args: { _user_id: string }; Returns: boolean }
       liberar_servico_admin: {

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Mic, Square, RotateCcw, ArrowDown, Bot, User, Loader2, MessageSquare } from 'lucide-react';
+import { Send, Mic, Square, RotateCcw, ArrowDown, Bot, User, Loader2, MessageSquare, Paperclip, BotOff } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import ReactMarkdown from 'react-markdown';
@@ -13,6 +13,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { WhatsAppMensagem } from '@/types/whatsapp';
+import { useIaPausa } from '@/hooks/useIaPausa';
+import { ContatoDetalheDrawer } from './ContatoDetalheDrawer';
 
 interface ChatPanelProps {
   telefone: string | null;
@@ -24,8 +26,10 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl }: ChatPanelProps) 
   const [texto, setTexto] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [drawerAberto, setDrawerAberto] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Audio recording
   const [audioStatus, setAudioStatus] = useState<'idle' | 'recording' | 'recorded'>('idle');
@@ -37,6 +41,7 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl }: ChatPanelProps) 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { data: mensagens, isLoading, refetch } = useWhatsAppHistorico(telefone, 200);
+  const { pausa, ativa: iaPausada, pausarPorIntervencao } = useIaPausa(telefone);
 
   // Realtime subscription
   useEffect(() => {
@@ -104,11 +109,50 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl }: ChatPanelProps) 
         if (!data?.success) throw new Error(data?.error || 'Erro ao enviar');
         setTexto('');
       }
+      // Pausa IA por 10 minutos após intervenção humana
+      try { await pausarPorIntervencao(); } catch (e) { console.warn('falha ao pausar IA', e); }
       setTimeout(() => refetch(), 1000);
     } catch (err: any) {
       toast.error(`Erro: ${err.message}`);
     } finally {
       setEnviando(false);
+    }
+  };
+
+  const handleUploadFile = async (file: File) => {
+    if (!telefone || !file) return;
+    setEnviando(true);
+    try {
+      const reader = new FileReader();
+      const base64 = await new Promise<string>((resolve) => {
+        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+        reader.readAsDataURL(file);
+      });
+      const mt = file.type || 'application/octet-stream';
+      const media_type =
+        mt.startsWith('image/') ? 'image' :
+        mt.startsWith('video/') ? 'video' :
+        mt.startsWith('audio/') ? 'audio' : 'document';
+
+      const { data, error } = await supabase.functions.invoke('whatsapp-send-media', {
+        body: {
+          telefone,
+          media_base64: base64,
+          media_type,
+          mimetype: mt,
+          filename: file.name,
+        },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Erro ao enviar arquivo');
+      toast.success('Arquivo enviado!');
+      try { await pausarPorIntervencao(); } catch {}
+      setTimeout(() => refetch(), 1000);
+    } catch (err: any) {
+      toast.error(`Erro: ${err.message}`);
+    } finally {
+      setEnviando(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -183,13 +227,24 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl }: ChatPanelProps) 
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card">
+      <button
+        type="button"
+        onClick={() => setDrawerAberto(true)}
+        className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card hover:bg-muted/50 transition-colors text-left"
+        title="Ver detalhes do contato"
+      >
         <UserAvatar src={avatarUrl} name={nomeContato} size="md" />
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-sm truncate">{nomeContato || 'Contato'}</p>
           <p className="text-xs text-muted-foreground">{formatarTelefone(telefone)}</p>
         </div>
-      </div>
+        {iaPausada && pausa && (
+          <Badge variant="outline" className="gap-1 text-amber-600 border-amber-500/50 bg-amber-50 dark:bg-amber-950/30">
+            <BotOff className="h-3 w-3" />
+            IA pausada até {format(new Date(pausa.pausada_ate), 'HH:mm')}
+          </Badge>
+        )}
+      </button>
 
       {/* Messages */}
       <div className="flex-1 overflow-hidden relative">
@@ -315,6 +370,26 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl }: ChatPanelProps) 
           </div>
         ) : (
           <div className="flex items-end gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleUploadFile(f);
+              }}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="shrink-0 h-9 w-9"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={enviando}
+              title="Anexar arquivo"
+            >
+              <Paperclip className="h-4 w-4" />
+            </Button>
             <Button
               type="button"
               variant="ghost"
@@ -344,6 +419,15 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl }: ChatPanelProps) 
           </div>
         )}
       </div>
+
+      {/* Drawer detalhes do contato */}
+      <ContatoDetalheDrawer
+        telefone={telefone}
+        open={drawerAberto}
+        onOpenChange={setDrawerAberto}
+        nomeContato={nomeContato}
+        avatarUrl={avatarUrl}
+      />
     </div>
   );
 }
