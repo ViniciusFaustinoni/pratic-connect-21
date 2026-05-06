@@ -137,6 +137,7 @@ export default function EventosChatIA({ drawerVariant = 'relacionamento' }: Even
           telefone={telefoneSelecionado}
           nomeContato={nomeContato}
           avatarUrl={avatarUrl}
+          drawerVariant={drawerVariant}
         />
       </div>
     </div>
