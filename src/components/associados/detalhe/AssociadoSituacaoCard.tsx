@@ -275,16 +275,32 @@ export function AssociadoSituacaoCard({ situacao, associado, contrato, resumoFin
         </CardContent>
       </Card>
 
-      {/* Benefícios adicionais suspensos */}
+      {/* Benefícios adicionais suspensos (somente por inadimplência financeira) */}
       {situacao.beneficiosAdicionaisSuspensos && (
         <Card className="border-amber-400/40 sm:col-span-2">
           <CardContent className="p-4">
             <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
               <Ban className="h-4 w-4 text-amber-600" />
               <AlertDescription className="text-amber-800 dark:text-amber-300 text-xs">
-                <strong>Benefícios adicionais suspensos</strong> — Há inadimplência em um dos veículos. 
-                Benefícios como proteção de vidros, danos a terceiros e carro reserva ficam suspensos 
+                <strong>Benefícios adicionais suspensos</strong> — Há inadimplência em um dos veículos.
+                Benefícios como proteção de vidros, danos a terceiros e carro reserva ficam suspensos
                 em todos os veículos até que todos estejam em dia.
+              </AlertDescription>
+            </Alert>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Cobertura suspensa por não-instalação (sem inadimplência financeira) */}
+      {!situacao.beneficiosAdicionaisSuspensos && situacao.veiculosSuspensosOutroMotivo.some(v => v.motivo === 'nao_instalacao') && (
+        <Card className="border-orange-400/40 sm:col-span-2">
+          <CardContent className="p-4">
+            <Alert className="border-orange-200 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-800">
+              <ShieldOff className="h-4 w-4 text-orange-600" />
+              <AlertDescription className="text-orange-800 dark:text-orange-300 text-xs">
+                <strong>Cobertura suspensa — instalação do rastreador não realizada no prazo.</strong>{' '}
+                Conforme regra de roubo e furto, a proteção do veículo fica suspensa até que a instalação
+                do rastreador seja concluída. Reagende a instalação para reativar a cobertura.
               </AlertDescription>
             </Alert>
           </CardContent>
