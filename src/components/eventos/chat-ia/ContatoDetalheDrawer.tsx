@@ -129,9 +129,6 @@ export function ContatoDetalheDrawer({ telefone, open, onOpenChange, nomeContato
             </div>
           ) : associado ? (
             <div className="space-y-2 text-sm">
-              {associado.matricula && (
-                <div><span className="text-muted-foreground">Matrícula:</span> {associado.matricula}</div>
-              )}
               {associado.email && (
                 <div className="truncate"><span className="text-muted-foreground">Email:</span> {associado.email}</div>
               )}
