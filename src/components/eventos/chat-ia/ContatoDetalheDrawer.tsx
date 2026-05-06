@@ -30,9 +30,9 @@ const MENSAGEM_ENCERRAMENTO_DEFAULT =
   'Foi um prazer atendê-lo(a)! 🤝 Caso precise de algo mais, é só nos chamar por aqui — estamos sempre à disposição.\n\nEquipe PRATIC';
 
 export function ContatoDetalheDrawer({ telefone, open, onOpenChange, nomeContato, avatarUrl }: Props) {
-  const navigate = useNavigate();
   const [mensagemEncerramento, setMensagemEncerramento] = useState(MENSAGEM_ENCERRAMENTO_DEFAULT);
   const [encerrando, setEncerrando] = useState(false);
+  const [fichaOpen, setFichaOpen] = useState(false);
   const { pausa, ativa, pausarPorEncerramento } = useIaPausa(telefone);
 
   const telLimpo = telefone?.replace(/\D/g, '') ?? '';
