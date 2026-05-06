@@ -268,18 +268,38 @@ export default function AprovacaoAssociadosMonitoramento() {
                 </div>
 
                 {isAtivacao ? (
-                  <Button
-                    size="sm"
-                    className="bg-purple-500 hover:bg-purple-600 text-white text-xs flex-shrink-0 h-8"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleAbrir(item);
-                    }}
-                  >
-                    <Zap className="mr-1 h-3 w-3" />
-                    Ativar
-                    <ArrowRight className="ml-1 h-3 w-3" />
-                  </Button>
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs flex-shrink-0 h-8"
+                      title="Verificar no SGA e marcar como ativo se já constar lá"
+                      disabled={reconciliandoId === item.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleReconciliarSGA(item);
+                      }}
+                    >
+                      {reconciliandoId === item.id ? (
+                        <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                      ) : (
+                        <RefreshCw className="mr-1 h-3 w-3" />
+                      )}
+                      Sincronizar SGA
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="bg-purple-500 hover:bg-purple-600 text-white text-xs flex-shrink-0 h-8"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAbrir(item);
+                      }}
+                    >
+                      <Zap className="mr-1 h-3 w-3" />
+                      Ativar
+                      <ArrowRight className="ml-1 h-3 w-3" />
+                    </Button>
+                  </>
                 ) : (
                   <Button
                     variant="ghost"
