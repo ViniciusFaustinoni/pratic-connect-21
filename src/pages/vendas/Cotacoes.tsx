@@ -776,11 +776,15 @@ export default function Cotacoes() {
               Nova Cotação
             </Button>
           </PermissionGate>
-          <NovaEntradaDialog
-            open={showNovaEntrada}
-            onOpenChange={setShowNovaEntrada}
-            onNovaCotacao={() => setShowCotacaoForm(true)}
-          />
+          {showNovaEntrada && (
+            <Suspense fallback={null}>
+              <NovaEntradaDialog
+                open={showNovaEntrada}
+                onOpenChange={setShowNovaEntrada}
+                onNovaCotacao={() => setShowCotacaoForm(true)}
+              />
+            </Suspense>
+          )}
           {showRelatorioDialog && (
             <Suspense fallback={null}>
               <RelatorioInteligenteCotacoesDialog
