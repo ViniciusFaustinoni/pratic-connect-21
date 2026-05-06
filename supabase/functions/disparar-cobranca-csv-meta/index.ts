@@ -93,15 +93,21 @@ serve(async (req) => {
       });
     }
 
-    // ===== 1. Criar lote no PRIMEIRO chunk e reconciliar com lote anterior =====
+    // ===== 1. Criar lote no PRIMEIRO chunk e reconciliar com lote ATIVO anterior =====
     let recuperadosCount = 0;
     let recuperadosValor = 0;
+    let reemitidosCount = 0;
+    let reemitidosValor = 0;
 
     if (isFirstChunk) {
-      const totalBoletosRemessa = (body.todas_linhas_digitaveis as string[] | undefined)?.length ?? 0;
+      const todasLinhas = (body.todas_linhas_digitaveis as string[] | undefined) ?? [];
+      const todasMatriculas = (body.todas_matriculas as string[] | undefined) ?? [];
+      const totalBoletosRemessa = todasLinhas.length;
       const valorTotalRemessa = typeof totalRemessa === "number" ? totalRemessa : 0;
       const totalAssoc = (body.total_associados_remessa as number | undefined) ?? destinatarios.length;
 
+      // Cria lote em PROCESSANDO (não ativo) — só vira 'ativo' no último chunk.
+      // Isso impede que outra importação simultânea o trate como "lote anterior".
       const { data: novoLote, error: errLote } = await supabase
         .from("cobranca_csv_lotes")
         .insert({
@@ -109,7 +115,7 @@ serve(async (req) => {
           total_boletos: totalBoletosRemessa,
           total_associados: totalAssoc,
           valor_total: valorTotalRemessa,
-          status: "ativo",
+          status: "processando",
           criado_por: userId,
         })
         .select("id")
@@ -122,56 +128,78 @@ serve(async (req) => {
       }
       loteId = novoLote.id;
 
-      // Buscar lote anterior ativo (que não seja este recém-criado)
+      // Buscar lote ATIVO anterior (somente lotes finalizados)
       const { data: anteriores } = await supabase
         .from("cobranca_csv_lotes")
         .select("id")
         .eq("status", "ativo")
-        .neq("id", loteId)
         .order("created_at", { ascending: false })
         .limit(1);
 
       const loteAnteriorId = anteriores?.[0]?.id;
-      if (loteAnteriorId && Array.isArray(body.todas_linhas_digitaveis)) {
-        const novaSet = new Set<string>(
-          (body.todas_linhas_digitaveis as string[]).map(normLinha).filter(Boolean),
+      if (loteAnteriorId && todasLinhas.length > 0) {
+        const novaLinhasSet = new Set<string>(todasLinhas.map(normLinha).filter(Boolean));
+        const novaMatriculasSet = new Set<string>(
+          (todasMatriculas.length > 0 ? todasMatriculas : destinatarios.map((d) => d.matricula))
+            .map((s) => (s || "").trim())
+            .filter(Boolean),
         );
 
-        // Buscar boletos do lote anterior em páginas de 1000
-        const recuperadosIds: string[] = [];
-        let valorRec = 0;
+        // Boletos do lote anterior em páginas de 1000
+        const ausenteIds: string[] = [];
+        const reemitidoIds: string[] = [];
+        let valorAusente = 0;
+        let valorReemitido = 0;
         let from = 0;
         while (true) {
           const { data: pageBol } = await supabase
             .from("cobranca_csv_boletos")
-            .select("id, linha_digitavel, valor, status")
+            .select("id, matricula, linha_digitavel, valor")
             .eq("lote_id", loteAnteriorId)
             .in("status", ["pendente_envio", "enviado"])
             .range(from, from + 999);
           if (!pageBol || pageBol.length === 0) break;
           for (const b of pageBol) {
-            if (!novaSet.has(normLinha(b.linha_digitavel))) {
-              recuperadosIds.push(b.id);
-              valorRec += Number(b.valor || 0);
+            if (novaLinhasSet.has(normLinha(b.linha_digitavel))) continue; // ainda está na nova lista
+            const matriculaContinua = novaMatriculasSet.has((b.matricula || "").trim());
+            if (matriculaContinua) {
+              // mesma matrícula, boleto diferente => provavelmente reemitido
+              reemitidoIds.push(b.id);
+              valorReemitido += Number(b.valor || 0);
+            } else {
+              ausenteIds.push(b.id);
+              valorAusente += Number(b.valor || 0);
             }
           }
           if (pageBol.length < 1000) break;
           from += 1000;
         }
 
-        if (recuperadosIds.length > 0) {
-          // Atualiza em lotes de 500
-          for (let i = 0; i < recuperadosIds.length; i += 500) {
-            const chunkIds = recuperadosIds.slice(i, i + 500);
-            await supabase
-              .from("cobranca_csv_boletos")
-              .update({
-                status: "recuperado",
-                recuperado_em: new Date().toISOString(),
-                recuperado_no_lote_id: loteId,
-              })
-              .in("id", chunkIds);
-          }
+        // Atualiza ausentes (recuperação real)
+        for (let i = 0; i < ausenteIds.length; i += 500) {
+          const chunkIds = ausenteIds.slice(i, i + 500);
+          await supabase
+            .from("cobranca_csv_boletos")
+            .update({
+              status: "recuperado",
+              recuperado_em: new Date().toISOString(),
+              recuperado_no_lote_id: loteId,
+              motivo_recuperacao: "ausente_na_nova_lista",
+            })
+            .in("id", chunkIds);
+        }
+        // Atualiza reemitidos (não somam no KPI principal)
+        for (let i = 0; i < reemitidoIds.length; i += 500) {
+          const chunkIds = reemitidoIds.slice(i, i + 500);
+          await supabase
+            .from("cobranca_csv_boletos")
+            .update({
+              status: "recuperado",
+              recuperado_em: new Date().toISOString(),
+              recuperado_no_lote_id: loteId,
+              motivo_recuperacao: "reemitido",
+            })
+            .in("id", chunkIds);
         }
 
         // Marca lote anterior como substituido
@@ -180,8 +208,10 @@ serve(async (req) => {
           .update({ status: "substituido" })
           .eq("id", loteAnteriorId);
 
-        recuperadosCount = recuperadosIds.length;
-        recuperadosValor = valorRec;
+        recuperadosCount = ausenteIds.length;
+        recuperadosValor = valorAusente;
+        reemitidosCount = reemitidoIds.length;
+        reemitidosValor = valorReemitido;
       }
     }
 
@@ -247,6 +277,7 @@ serve(async (req) => {
     const detalhes: Array<{ matricula: string; nome: string; telefone: string; status: "ok" | "erro"; erro?: string }> = [];
     let sucesso = 0;
     let erros = 0;
+    const associadosAtingidos = new Set<string>();
 
     for (const dest of destinatarios) {
       const bloco = montarBlocoBoletos(dest.boletos || []);
@@ -333,6 +364,7 @@ serve(async (req) => {
 
       // Se ao menos um telefone deu ok, marca todos os boletos deste assoc deste chunk como enviado
       if (envioOkParaEsteAssoc) {
+        associadosAtingidos.add(dest.matricula);
         const ids = boletosInsertedIds[dest.matricula] || [];
         if (ids.length > 0) {
           await supabase
@@ -344,16 +376,26 @@ serve(async (req) => {
     }
 
     // ===== 4. Atualiza contadores do lote (incremental) =====
-    if (sucesso > 0) {
-      // Best-effort: lê o atual e soma
+    if (sucesso > 0 || associadosAtingidos.size > 0) {
       const { data: cur } = await supabase
         .from("cobranca_csv_lotes")
-        .select("total_enviados")
+        .select("total_enviados, total_associados_atingidos")
         .eq("id", loteId)
         .single();
       await supabase
         .from("cobranca_csv_lotes")
-        .update({ total_enviados: (cur?.total_enviados || 0) + sucesso })
+        .update({
+          total_enviados: (cur?.total_enviados || 0) + sucesso,
+          total_associados_atingidos: (cur?.total_associados_atingidos || 0) + associadosAtingidos.size,
+        })
+        .eq("id", loteId);
+    }
+
+    // ===== 5. Promove o lote para 'ativo' no último chunk =====
+    if (isLastChunk) {
+      await supabase
+        .from("cobranca_csv_lotes")
+        .update({ status: "ativo" })
         .eq("id", loteId);
     }
 
@@ -366,6 +408,8 @@ serve(async (req) => {
         lote_id: loteId,
         recuperados_count: recuperadosCount,
         recuperados_valor: recuperadosValor,
+        reemitidos_count: reemitidosCount,
+        reemitidos_valor: reemitidosValor,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
