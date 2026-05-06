@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TrendingUp, FileSpreadsheet, Search, Loader2 } from 'lucide-react';
@@ -20,6 +22,7 @@ interface Recuperado {
   recuperado_em: string;
   lote_id: string;
   recuperado_no_lote_id: string | null;
+  motivo_recuperacao: string | null;
 }
 
 interface Lote {
