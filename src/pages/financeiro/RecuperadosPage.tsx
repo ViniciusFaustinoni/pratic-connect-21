@@ -188,6 +188,10 @@ export default function RecuperadosPage() {
               <Input className="pl-9" placeholder="Nome, matrícula ou placa..." value={busca} onChange={(e) => setBusca(e.target.value)} />
             </div>
           </div>
+          <div className="flex items-center gap-2 pb-2">
+            <Switch id="incluir-reemitidos" checked={incluirReemitidos} onCheckedChange={setIncluirReemitidos} />
+            <Label htmlFor="incluir-reemitidos" className="text-xs cursor-pointer">Incluir reemitidos</Label>
+          </div>
           <Button onClick={exportarCsv} variant="outline" className="gap-2">
             <FileSpreadsheet className="h-4 w-4" /> Exportar CSV
           </Button>
