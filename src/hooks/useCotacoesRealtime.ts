@@ -31,11 +31,13 @@ function makeThrottledInvalidator(qc: QueryClient, windowMs = 1500) {
  * - vistorias (afeta etapa de vistoria realizada)
  * - cotacoes_historico (atualiza timeline em tempo real)
  */
-export function useCotacoesRealtime() {
+export function useCotacoesRealtime(options?: { enabled?: boolean }) {
+  const enabled = options?.enabled ?? true;
   const queryClient = useQueryClient();
   const throttledInvalidate = useRef(makeThrottledInvalidator(queryClient)).current;
 
   useEffect(() => {
+    if (!enabled) return;
     console.log('[useCotacoesRealtime] Iniciando listeners realtime');
     
     const channel = supabase
