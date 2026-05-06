@@ -171,7 +171,9 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
     const carenciaFim = contrato?.data_carencia_fim || null;
     const emCarencia = !carenciaIsenta && !!carenciaFim && new Date(carenciaFim) > now;
 
-    // Inadimplência — use worst case from per-vehicle data
+    // Inadimplência financeira — usa SOMENTE veículos com cobrança vencida.
+    // Suspensão por não-instalação (e outros motivos não financeiros) NÃO entra
+    // no cálculo de statusInadimplencia.
     const diasAtraso = inadimplenciaPorVeiculo.length > 0
       ? Math.max(...inadimplenciaPorVeiculo.map(v => v.diasAtraso))
       : 0;
@@ -187,8 +189,8 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
       }
     }
 
-    // coberturasSuspensas = any vehicle is overdue (backward compat)
-    const coberturasSuspensas = algumVeiculoInadimplente;
+    // coberturasSuspensas = qualquer veículo com cobertura suspensa (qualquer motivo)
+    const coberturasSuspensas = algumVeiculoComCoberturaSuspensa;
 
     // Build per-vehicle coverage
     const coberturaPorVeiculo: CoberturaPorVeiculo[] = inadimplenciaPorVeiculo.map(v => ({
