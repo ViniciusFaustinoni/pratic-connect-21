@@ -62,7 +62,7 @@ export function CampanhaFormDialog({ open, onClose, campanha }: CampanhaFormDial
   const resetForm = () => {
     setNome('');
     setTipo('aquisicao');
-    setCanalId('');
+    
     setDataInicio('');
     setDataFim('');
     setOrcamentoTotal('');
