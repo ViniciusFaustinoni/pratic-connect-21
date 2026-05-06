@@ -249,6 +249,9 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
       setSelectedAssociadoCpf(associado.cpf);
     } else if (selectedTipo === 'troca_titularidade') {
       const cpfLimpo = (associado.cpf || '').replace(/\D/g, '');
+      let finalId = associado.id;
+      let finalNome = associado.nome;
+      let finalCpf: string | null = associado.cpf;
       // Resultado vindo do SGA não tem UUID local — precisa importar primeiro
       if (associado.origem_sga) {
         if (cpfLimpo.length !== 11) {
@@ -262,26 +265,28 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
           });
           if (error) throw error;
           if ((data as any)?.error) throw new Error((data as any).error);
-          // Edge function retorna associado_id direto
           const associadoLocalId = (data as any)?.associado_id;
           if (!associadoLocalId) {
             toast.error('Falha ao localizar associado após import do SGA');
             return;
           }
-          setSelectedAssociadoId(associadoLocalId);
-          setSelectedAssociadoNome(associado.nome);
-          setSelectedAssociadoCpf(cpfLimpo);
+          finalId = associadoLocalId;
+          finalCpf = cpfLimpo;
         } catch (e) {
           toast.error(e instanceof Error ? e.message : 'Erro ao importar associado do SGA');
           return;
         }
-      } else {
-        setSelectedAssociadoId(associado.id);
-        setSelectedAssociadoNome(associado.nome);
-        setSelectedAssociadoCpf(associado.cpf);
       }
-      onOpenChange(false);
+      // Abrir o dialog de Troca ANTES de fechar o pai, para evitar que o
+      // useEffect de reset (disparado por open=false) zere selectedAssociadoId
+      // no caso async (sem batching automático do React).
+      setSelectedAssociadoId(finalId);
+      setSelectedAssociadoNome(finalNome);
+      setSelectedAssociadoCpf(finalCpf);
       setShowTrocaTitularidade(true);
+      // Fecha o pai no próximo tick para garantir que showTrocaTitularidade
+      // esteja `true` quando o effect de reset rodar.
+      setTimeout(() => onOpenChange(false), 0);
     }
   };
 
