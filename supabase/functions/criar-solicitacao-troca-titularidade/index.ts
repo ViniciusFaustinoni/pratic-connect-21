@@ -147,6 +147,14 @@ Deno.serve(async (req) => {
       .single();
     if (cotacaoErr) throw cotacaoErr;
 
+    // criado_por referencia profiles.id (não auth.users.id)
+    const { data: profileRow } = await admin
+      .from('profiles')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    const criadoPorProfileId = profileRow?.id ?? null;
+
     // Criar solicitação
     const { data: solicitacao, error: solErr } = await admin
       .from('solicitacoes_troca_titularidade')
@@ -156,7 +164,7 @@ Deno.serve(async (req) => {
         cotacao_id: cotacao.id,
         novo_titular_dados: novo_titular,
         status: 'cotacao_em_andamento',
-        criado_por: user.id,
+        criado_por: criadoPorProfileId,
       })
       .select('id, token_publico')
       .single();
