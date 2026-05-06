@@ -165,6 +165,8 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
     'veiculo.placa': dados.veiculo.placa || 'ZERO QUILÔMETRO',
     'veiculo.chassi': dados.veiculo.chassi || '—',
     'veiculo.renavam': dados.veiculo.renavam || '—',
+    'veiculo.numero_motor': (dados.veiculo as any).numero_motor || '—',
+    'veiculo.motor': (dados.veiculo as any).numero_motor || '—',
     'veiculo.ano': String(dados.veiculo.ano || '—'),
     'veiculo.ano_fabricacao': String(dados.veiculo.ano_fabricacao || dados.veiculo.ano || '—'),
     'veiculo.cor': dados.veiculo.cor || '—',
