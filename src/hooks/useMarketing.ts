@@ -135,65 +135,10 @@ export interface TopIndicador {
   valorRecebido: number;
 }
 
-// ========== CANAIS ==========
-export function useCanais() {
-  return useQuery({
-    queryKey: ['canais-marketing'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('canais_marketing')
-        .select('*')
-        .order('nome');
-      if (error) throw error;
-      return data as CanalMarketing[];
-    },
-  });
-}
-
-export function useCreateCanal() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (canal: { nome: string; tipo: string; descricao?: string | null; custo_por_lead?: number | null; meta_leads_mes?: number | null }) => {
-      const { data, error } = await supabase
-        .from('canais_marketing')
-        .insert(canal)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['canais-marketing'] });
-      toast.success('Canal criado com sucesso!');
-    },
-    onError: (error: any) => {
-      toast.error('Erro ao criar canal: ' + error.message);
-    },
-  });
-}
-
-export function useUpdateCanal() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, ...canal }: Partial<CanalMarketing> & { id: string }) => {
-      const { data, error } = await supabase
-        .from('canais_marketing')
-        .update({ ...canal, updated_at: new Date().toISOString() })
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['canais-marketing'] });
-      toast.success('Canal atualizado com sucesso!');
-    },
-    onError: (error: any) => {
-      toast.error('Erro ao atualizar canal: ' + error.message);
-    },
-  });
-}
+// ========== CANAIS — REMOVIDO ==========
+// Conceito de "canal" foi consolidado em "origem do lead" (campo leads.origem).
+// CRUD de canais_marketing foi removido. A view view_performance_canais
+// continua existindo no banco para alimentar relatórios consolidados.
 
 // ========== CAMPANHAS ==========
 export function useCampanhas(filters?: { status?: string; canal_id?: string }) {
