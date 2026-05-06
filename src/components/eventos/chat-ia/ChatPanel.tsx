@@ -26,8 +26,10 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl }: ChatPanelProps) 
   const [texto, setTexto] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [drawerAberto, setDrawerAberto] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Audio recording
   const [audioStatus, setAudioStatus] = useState<'idle' | 'recording' | 'recorded'>('idle');
@@ -39,6 +41,7 @@ export function ChatPanel({ telefone, nomeContato, avatarUrl }: ChatPanelProps) 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { data: mensagens, isLoading, refetch } = useWhatsAppHistorico(telefone, 200);
+  const { pausa, ativa: iaPausada, pausarPorIntervencao } = useIaPausa(telefone);
 
   // Realtime subscription
   useEffect(() => {
