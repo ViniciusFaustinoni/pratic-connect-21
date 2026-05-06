@@ -32,7 +32,7 @@ export default function AprovacoesUnificadas() {
           Aprovações do Monitoramento
         </h1>
         <p className="text-muted-foreground">
-          Centraliza aprovação de associados, troca de titularidade, liberação de suspensão, recusas do instalador e ressalvas pendentes.
+          Centraliza aprovação de associados, troca de titularidade, liberação de suspensão, recusas do instalador, ressalvas pendentes e imprevistos.
         </p>
       </div>
 
