@@ -5,6 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Loader2, Car, User, FileSignature, CheckCircle2, XCircle, Send, ClipboardCheck, ShieldCheck, ExternalLink } from 'lucide-react';
 import { useSolicitacaoTroca, useAprovarTrocaCadastro, useAprovarTrocaMonitoramento, useReprovarTroca, useEnviarTermoCancelamento, type StatusTroca } from '@/hooks/useSolicitacoesTroca';
 import { TimelineAprovacao } from './TimelineAprovacao';
@@ -188,10 +189,27 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                       Solicitar Vistoria
                     </Button>
                   )}
-                  <Button onClick={handleAprovar} disabled={aprovarCadastro.isPending || aprovarMonitoramento.isPending}>
-                    {(aprovarCadastro.isPending || aprovarMonitoramento.isPending) ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : modo === 'cadastro' ? <ClipboardCheck className="h-4 w-4 mr-2" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
-                    Aprovar
-                  </Button>
+                  {(() => {
+                    const bloqueadoPorAssinatura = modo === 'cadastro' && !solicitacao.termo_cancelamento_assinado_em;
+                    const btn = (
+                      <Button
+                        onClick={handleAprovar}
+                        disabled={aprovarCadastro.isPending || aprovarMonitoramento.isPending || bloqueadoPorAssinatura}
+                      >
+                        {(aprovarCadastro.isPending || aprovarMonitoramento.isPending) ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : modo === 'cadastro' ? <ClipboardCheck className="h-4 w-4 mr-2" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
+                        Aprovar
+                      </Button>
+                    );
+                    if (!bloqueadoPorAssinatura) return btn;
+                    return (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild><span tabIndex={0}>{btn}</span></TooltipTrigger>
+                          <TooltipContent>Aguardando assinatura do termo de cancelamento pelo titular antigo.</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    );
+                  })()}
                 </div>
               </div>
             )}
