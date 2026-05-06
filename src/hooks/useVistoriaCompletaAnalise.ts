@@ -119,20 +119,33 @@ export function useInstalacoesAguardandoAtivacao() {
           id,
           status,
           concluida_em,
-          associados (id, nome, telefone),
+          associados!inner (id, nome, telefone, status),
           veiculos!inner (
-            id, placa, marca, modelo, 
+            id, placa, marca, modelo,
             cobertura_total, cobertura_roubo_furto, status
           ),
-          rastreadores (id, imei, codigo, plataforma, status)
+          rastreadores (id, imei, codigo, plataforma, status, plataforma_device_id)
         `)
         .eq('status', 'concluida')
         .eq('veiculos.cobertura_roubo_furto', true)
         .eq('veiculos.cobertura_total', false)
+        // Esconde itens já ativados (SGA/local). Se associado já é 'ativo' OU
+        // veículo já é 'ativo' OU rastreador já tem device ativo na plataforma,
+        // não há mais o que aprovar nesta fila.
+        .neq('associados.status', 'ativo')
+        .neq('veiculos.status', 'ativo')
         .order('concluida_em', { ascending: false });
 
       if (error) throw error;
-      return data;
+
+      // Defesa extra no client: ocultar quando rastreador já ativado na plataforma
+      const filtrado = (data || []).filter((row: any) => {
+        const r = row?.rastreadores;
+        if (r && r.plataforma_device_id) return false;
+        return true;
+      });
+
+      return filtrado;
     },
   });
 }
