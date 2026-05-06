@@ -151,16 +151,20 @@ Definir regra: **cards refletem o conjunto filtrado**, não global (mais intuiti
 
 ---
 
-## Fase 4 — Infra (opcional, >1 semana)
+## Fase 4 — Infra ✅ CONCLUÍDA
 
-### 4.1 RPC `get_app_config()`
-Materializar `configuracoes` em uma RPC SECURITY DEFINER cacheável + `Cache-Control: max-age=300` no PostgREST. Frontend continua usando `useConfiguracoesAll()`.
+### 4.1 RPC `get_app_config()` ✅
+- Criada função SQL `public.get_app_config()` STABLE + SECURITY DEFINER que retorna `jsonb` com todas as configurações em uma chamada.
+- `GRANT EXECUTE` para `anon` + `authenticated`.
+- `useConfiguracoesAll()` agora consome a RPC (com fallback para SELECT direto se a RPC indisponível).
 
-### 4.2 Índices Postgres
-Validar via `EXPLAIN ANALYZE`:
-- `CREATE INDEX IF NOT EXISTS idx_cotacoes_status_vendedor ON cotacoes(status, vendedor_id);`
-- `CREATE INDEX IF NOT EXISTS idx_associados_status ON associados(status) WHERE status <> 'inativo';`
-- `CREATE INDEX IF NOT EXISTS idx_veiculos_associado ON veiculos(associado_id);`
+### 4.2 Índices Postgres ✅
+- `idx_associados_status` — já existia.
+- `idx_veiculos_associado` — já existia.
+- `idx_cotacoes_status_vendedor` — criado nesta fase (combinado `(status, vendedor_id)`).
+
+> Observação: `Cache-Control` HTTP no PostgREST não é configurável via migração; o cache é mantido no React Query (`staleTime: 10min`, `gcTime: 30min`).
+
 
 ---
 

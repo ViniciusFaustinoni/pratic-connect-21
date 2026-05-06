@@ -16,12 +16,24 @@ export function useConfiguracoesAll() {
   return useQuery({
     queryKey: CONFIGURACOES_ALL_KEY,
     queryFn: async (): Promise<Record<string, string>> => {
-      const { data, error } = await supabase
+      // Fase 4.1: usa RPC `get_app_config()` (STABLE + SECURITY DEFINER) que
+      // devolve o agregado pronto em uma única chamada — evita scan +
+      // serialização linha-a-linha do PostgREST.
+      const { data, error } = await supabase.rpc('get_app_config');
+      if (!error && data && typeof data === 'object') {
+        const map: Record<string, string> = {};
+        for (const [k, v] of Object.entries(data as Record<string, unknown>)) {
+          if (v != null) map[k] = String(v);
+        }
+        return map;
+      }
+      // Fallback: caso a RPC ainda não tenha sido aplicada, recai no SELECT
+      const { data: rows, error: err2 } = await supabase
         .from('configuracoes')
         .select('chave, valor');
-      if (error) throw error;
+      if (err2) throw err2;
       const map: Record<string, string> = {};
-      for (const row of data ?? []) {
+      for (const row of rows ?? []) {
         if (row.chave != null && row.valor != null) {
           map[row.chave as string] = String(row.valor);
         }
