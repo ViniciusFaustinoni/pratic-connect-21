@@ -25,8 +25,20 @@ interface ResultadoEnvio {
   erros: number;
   recuperados_count: number;
   recuperados_valor: number;
+  reemitidos_count: number;
+  reemitidos_valor: number;
   lote_id: string | null;
   detalhes: Array<{ matricula: string; nome: string; telefone: string; status: 'ok' | 'erro'; erro?: string }>;
+}
+
+interface PreviewReconciliacao {
+  loading: boolean;
+  loteAnteriorId: string | null;
+  loteAnteriorNome: string | null;
+  ausentes: number;
+  ausentesValor: number;
+  reemitidos: number;
+  reemitidosValor: number;
 }
 
 function formatBRL(v: number): string {
