@@ -132,7 +132,7 @@ export const MODULE_ITEMS: Record<string, ModuleItem[]> = {
   marketing: [
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'campanhas', label: 'Campanhas' },
-    { id: 'canais', label: 'Canais' },
+    
     { id: 'indicacoes', label: 'Indicações' },
     { id: 'utms', label: 'UTMs' },
     { id: 'distribuicao', label: 'Distribuição' },
