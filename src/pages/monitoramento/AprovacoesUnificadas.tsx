@@ -37,7 +37,7 @@ export default function AprovacoesUnificadas() {
       </div>
 
       <Tabs value={aba} onValueChange={handleChange}>
-        <TabsList className="grid grid-cols-2 md:grid-cols-5 w-full">
+        <TabsList className="grid grid-cols-2 md:grid-cols-6 w-full">
           <TabsTrigger value="associados" className="gap-2">
             <ShieldCheck className="h-4 w-4" />
             <span className="hidden sm:inline">Aprovação de Associados</span>
@@ -63,6 +63,11 @@ export default function AprovacoesUnificadas() {
             <span className="hidden sm:inline">Ressalvas Pendentes</span>
             <span className="sm:hidden">Ressalvas</span>
           </TabsTrigger>
+          <TabsTrigger value="imprevistos" className="gap-2">
+            <AlertTriangle className="h-4 w-4" />
+            <span className="hidden sm:inline">Imprevistos</span>
+            <span className="sm:hidden">Imprev.</span>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="associados" className="pt-2">
@@ -79,6 +84,9 @@ export default function AprovacoesUnificadas() {
         </TabsContent>
         <TabsContent value="ressalvas" className="pt-2">
           <RessalvasPendentes />
+        </TabsContent>
+        <TabsContent value="imprevistos" className="pt-2">
+          <ImprevistosPainel />
         </TabsContent>
       </Tabs>
     </div>
