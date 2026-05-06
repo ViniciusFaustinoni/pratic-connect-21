@@ -120,6 +120,7 @@ const SindicanteDashboard = lazy(() => import("./pages/sindicante/SindicanteDash
 const SindicanteCasoDetalhe = lazy(() => import("./pages/sindicante/SindicanteCasoDetalhe"));
 const SindicantesAdmin = lazy(() => import("./pages/eventos/SindicantesAdmin"));
 const EventosChatIA = lazy(() => import("./pages/eventos/EventosChatIA"));
+const EventosChat = lazy(() => import("./pages/eventos/EventosChat"));
 
 // Monitoramento
 const InstalacaoDetalhe = lazy(() => import("./pages/monitoramento/InstalacaoDetalhe"));
