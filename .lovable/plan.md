@@ -1,51 +1,84 @@
-## Diagnóstico
+# Correção: "Portas: 2" em motos no termo de afiliação
 
-**Rastreador IMEI 356430070876858** (id `690b2232…`):
+## Causa raiz
 
-- **No Softruck:** dispositivo está **sem placa / sem veículo** ("Sem tipo", PLACA = "-").
-- **No nosso banco:** está com `veiculo_id = 6b5d8c7f…` (placa **0KMB37FC** — HONDA CG 160, associado HIGOR). A tela do print mostra QPN0773/Renata por estar com cache antigo, mas o problema central é o mesmo: **temos vínculo de veículo onde o Softruck já não tem nenhum**.
-- `softruck_integration_status = PENDING` desde 06/05 13:06 — ou seja, nossa última tentativa de sincronizar com o Softruck nem completou com sucesso.
+`supabase/functions/plate-lookup/index.ts` linha **276**:
 
-### Causa raiz
+```ts
+numero_portas: veiculo.quantidade_passageiro || veiculo.qt_portas || veiculo.quantidade_passageiros || '',
+```
 
-Hoje **não existe rotina que reflita o desvínculo feito DIRETAMENTE no Softruck** de volta para o nosso `rastreadores.veiculo_id`:
+A API de placas retorna `quantidade_passageiro = 2` para motos (piloto + garupa). Como esse campo é o **primeiro** do `||`, ele vence sempre — e vai parar em `cotacoes.numero_portas` → `contratos.veiculo_numero_portas` → template do termo, gerando "Portas: 2" para CB300, Twister, Kwid (em moto), etc.
 
-- `sync-rastreadores` só **resolve IMEI bruto → device hash id** e grava `plataforma_veiculo_id`. Quando a API retorna `vehicleId = null` (caso atual), o código **não zera** `plataforma_veiculo_id` nem `veiculo_id`, nem muda status. Linhas 234-248 só atualizam quando `resolved.vehicleId` existe.
-- `softruck-webhook` reage a eventos vindos do Softruck, mas não há handler para "device_unlinked" / "vehicle_removed" que limpe o `veiculo_id` local.
-- A regra existente "vínculo rastreador-veículo" (memória `mem://logic/operations/rastreador-vinculo-preservacao`) só permite zerar em retirada/substituição/cancelamento/venda/status terminal — feitos pelo nosso fluxo. Desvínculo manual no Softruck não está coberto.
+O downstream (`_shared/termo-afiliacao-utils.ts` linhas 458-461) já está correto: lê do contrato → veiculo DB → cotação. O problema é exclusivamente na **origem** (plate-lookup).
 
-## Plano de correção
+## Correção
 
-### 1. Edge `sync-rastreadores` — refletir desvínculo do Softruck
-No loop de resolução (linhas 229-257), quando o device existe no Softruck mas `vehicleId` vier `null` **e** localmente houver `veiculo_id`/`plataforma_veiculo_id`:
-- Logar divergência (`[Sync] Desvínculo detectado no Softruck IMEI=…`).
-- Limpar `plataforma_veiculo_id = null` no rastreador.
-- **Não** apagar `veiculo_id` automaticamente (respeita memória de preservação) — em vez disso marcar `softruck_integration_status = 'DIVERGENCIA_DESVINCULO'` e gravar nota em `softruck_response_raw` para análise manual.
-- Também atualizar `veiculos.softruck_vehicle_id = null` quando aplicável.
+### 1. `supabase/functions/plate-lookup/index.ts` (linha 276)
 
-### 2. Nova ação manual no Painel — "Reconciliar com Softruck"
-Botão no `RastreadorDetailDrawer` (apenas Diretor/Operação) que chama uma nova edge `rastreador-reconciliar-softruck`:
-- Consulta o device no Softruck pelo IMEI.
-- Se Softruck = sem veículo e local = com veículo: oferece **Desvincular veículo** (faz o `UPDATE veiculos.softruck_vehicle_id=null`, `rastreadores.veiculo_id=null, plataforma_veiculo_id=null, status='estoque'`) gravando log em `historico_movimentacoes_rastreador`.
-- Se houver divergência inversa (Softruck tem placa X e nós temos Y): apenas reporta e bloqueia, exigindo decisão humana.
+Substituir o fallback por lógica que:
+- **Detecta moto** via `tipo_de_veiculo` / `tipo_veiculo` / `especie` / `categoria` (regex `MOTO|MOTOCICLETA|CICLOMOTOR|TRICICLO|QUADRICICLO`) → força `numero_portas = 0`.
+- Para demais veículos, só aceita campos que **de fato** representam portas: `qt_portas`, `numero_portas`, `quantidade_portas`. Nunca `quantidade_passageiro(s)`.
+- Retorna `''` quando ausente (sem chutar valor).
 
-### 3. Banner de divergência
-No `RastreadorCard` / detalhe, quando `softruck_integration_status = 'DIVERGENCIA_DESVINCULO'`, exibir um aviso amarelo "Divergência com Softruck — clique para reconciliar".
+### 2. Backfill dos casos já gravados
 
-### 4. Correção pontual do caso atual
-Após implementar (1) e (2), reconciliar o IMEI **356430070876858** via o novo botão para limpar o vínculo herdado do Higor (que já não está mais no Softruck).
+Reset em massa para corrigir contratos/cotações já contaminados:
 
-## Detalhes técnicos
-- **Não** acionar API Softruck para "criar/remover" vínculo — só leitura. Quem manda no Softruck é o painel deles; nós só refletimos.
-- Rate-limit já existente (300 ms) preservado.
-- Toda mudança em `veiculo_id` registrada em `historico_movimentacoes_rastreador` com motivo = "reconciliacao_softruck".
-- Trigger de preservação (mem) **continua valendo** — a edge usa `service_role` e marca o motivo, igual aos outros fluxos canônicos.
+```sql
+-- Cotações: zerar portas onde o veículo é moto
+UPDATE public.cotacoes c
+SET numero_portas = 0
+FROM public.marcas_modelos mm
+WHERE c.modelo_id = mm.id
+  AND mm.categoria ILIKE '%moto%'
+  AND c.numero_portas IS DISTINCT FROM 0;
 
-## Arquivos a alterar/criar
-- `supabase/functions/sync-rastreadores/index.ts` — detectar `vehicleId=null` e marcar divergência.
-- `supabase/functions/rastreador-reconciliar-softruck/index.ts` — **novo**.
-- `src/components/rastreadores/RastreadorDetailDrawer.tsx` — botão + modal de confirmação.
-- `src/components/rastreadores/RastreadorCard.tsx` — badge de divergência.
-- `src/hooks/useRastreadores.ts` — invalidação após reconciliação.
+-- Contratos: idem (snapshot)
+UPDATE public.contratos ct
+SET veiculo_numero_portas = 0
+WHERE LOWER(COALESCE(ct.veiculo_categoria,'')) ~ 'moto'
+  AND ct.veiculo_numero_portas IS DISTINCT FROM 0;
 
-Confirma para eu implementar?
+-- Veículos: idem
+UPDATE public.veiculos v
+SET numero_portas = 0
+FROM public.marcas_modelos mm
+WHERE v.modelo_id = mm.id  -- ajustar coluna real de vínculo
+  AND mm.categoria ILIKE '%moto%'
+  AND v.numero_portas IS DISTINCT FROM 0;
+```
+
+(Confirmo as colunas reais de vínculo modelo↔veículo antes de aplicar.)
+
+## Auditoria dos demais campos do termo
+
+Revisado `plate-lookup` (linhas 256-278) e `termo-afiliacao-utils.ts` (linhas 420-490). Status atual:
+
+| Campo termo | Origem | Status |
+|---|---|---|
+| placa, chassi, renavam, motor | direto da API | OK |
+| marca/modelo | split de `marca_modelo` por "/" | OK |
+| ano fab / ano modelo | normalização 3 cenários | OK |
+| cor, combustível | direto | OK |
+| categoria CRLV (Particular/Aluguel) | `resolverCategoriaCrlv(uso, app)` | OK |
+| tipo_veiculo (carro/moto) | `veiculo_categoria` | OK |
+| FIPE / código FIPE | ranking heurístico | OK |
+| câmbio | `inferirCambio(modelo)` por nome | **frágil** — observar |
+| **portas** | `quantidade_passageiro` || ... | **BUG (alvo deste fix)** |
+| alienado, financeira, procedência | snapshot contrato | OK |
+| blindado, flags depreciação | DB veículo | OK |
+| dia_vencimento, valores | contrato | OK |
+
+Único bug crítico identificado é o de portas. `inferirCambio` é heurístico mas fora do escopo desta correção.
+
+## Validação
+
+1. Após o fix, simular cotação com placa de moto (ex.: CB300) → conferir `numero_portas=0` retornado.
+2. Gerar termo de afiliação de teste → conferir linha "Portas: —" ou "0".
+3. Regerar/preview termo de cliente afetado para validar resultado.
+
+## Arquivos alterados
+
+- `supabase/functions/plate-lookup/index.ts` (1 bloco, ~12 linhas)
+- 1 migration SQL para backfill (cotacoes/contratos/veiculos)

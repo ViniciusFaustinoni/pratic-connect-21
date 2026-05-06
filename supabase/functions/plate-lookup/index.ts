@@ -273,7 +273,20 @@ serve(async (req) => {
       tipo_de_veiculo: veiculo.tipo_de_veiculo || veiculo.tipo_veiculo || '',
       categoria: veiculo.categoria || '',
       procedencia: veiculo.procedencia || '',
-      numero_portas: veiculo.quantidade_passageiro || veiculo.qt_portas || veiculo.quantidade_passageiros || '',
+      // Número de portas — APENAS campos que de fato representam portas. NUNCA
+      // usar `quantidade_passageiro(s)` aqui: para motos a API devolve 2 (piloto +
+      // garupa), o que estava produzindo "Portas: 2" em CB300/Twister no termo.
+      // Detecção de moto via tipo/categoria → portas=0 garantido.
+      numero_portas: (() => {
+        const tipoStr = String(
+          veiculo.tipo_de_veiculo || veiculo.tipo_veiculo || veiculo.especie || veiculo.categoria || ''
+        ).toUpperCase();
+        const ehMoto = /MOTO|MOTOCICLETA|CICLOMOTOR|TRICICLO|QUADRICICLO/.test(tipoStr);
+        if (ehMoto) return 0;
+        const portasRaw = veiculo.qt_portas ?? veiculo.numero_portas ?? veiculo.quantidade_portas;
+        const n = Number(portasRaw);
+        return Number.isFinite(n) && n > 0 ? n : '';
+      })(),
       cambio: veiculo.caixa_cambio || veiculo.cambio || '',
     };
 
