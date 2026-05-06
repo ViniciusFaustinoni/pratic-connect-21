@@ -779,6 +779,7 @@ export default function Cotacoes() {
           {showNovaEntrada && (
             <Suspense fallback={null}>
               <NovaEntradaDialog
+                key="nova-entrada-dialog"
                 open={showNovaEntrada}
                 onOpenChange={setShowNovaEntrada}
                 onNovaCotacao={() => setShowCotacaoForm(true)}
