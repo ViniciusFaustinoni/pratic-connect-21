@@ -54,6 +54,7 @@ type IntegrationStatus =
   | 'FAILED_CHIP'
   | 'FAILED_DEVICE'
   | 'FAILED_ASSOCIATION'
+  | 'FAILED_USER'
   | 'CREATED_BUT_NOT_ACTIVATED';
 
 // Chamar softruck-api edge function
