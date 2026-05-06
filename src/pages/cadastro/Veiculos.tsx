@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Search, Car, User, Smartphone, Loader2, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
@@ -240,13 +240,13 @@ export default function Veiculos() {
   // Reset de página quando muda busca/status (evita página vazia)
   useEffect(() => { setPage(1); }, [debouncedSearch, statusFilter]);
 
-  const formatCurrency = (value: number | null) => {
+  const formatCurrency = useCallback((value: number | null) => {
     if (!value) return 'N/A';
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL',
     }).format(value);
-  };
+  }, []);
 
   // Stats com filtros (RPC única — antes eram 2 HEADs + paginação completa de valor_fipe)
   const { data: statsData, isLoading: statsLoading } = useQuery({
