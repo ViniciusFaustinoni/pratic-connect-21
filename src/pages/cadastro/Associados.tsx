@@ -157,7 +157,16 @@ export default function Associados() {
   const associados = data?.associados;
   const serverTotal = data?.pagination.total ?? 0;
   const serverTotalPages = data?.pagination.totalPages ?? 1;
-  const { data: contagem } = useAssociadosContagem();
+  // Contagem reflete os MESMOS filtros server-side da listagem (KPIs coerentes com tabela)
+  const { data: contagem } = useAssociadosContagem({
+    search: search || undefined,
+    plano_id: serverPlanoId,
+    cidade: serverCidade,
+    data_adesao_inicio: sheetFilters.data_adesao_inicio,
+    data_adesao_fim: sheetFilters.data_adesao_fim,
+    vendedor_id: sheetFilters.vendedor_id,
+    tipos_entrada: sheetFilters.tipos_entrada,
+  });
   const { data: planos } = usePlanos();
   const { data: cidades } = useAssociadosCidades();
   const { data: vendedores } = useVendedores();

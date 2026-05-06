@@ -316,44 +316,53 @@ export function useAssociado(id: string | undefined) {
 }
 
 // ============================================
-// HOOK: CONTAGEM POR STATUS
+// HOOK: CONTAGEM POR STATUS (com filtros opcionais — RPC única)
 // ============================================
-export function useAssociadosContagem() {
+export interface UseAssociadosContagemFilters {
+  search?: string;
+  plano_id?: string;
+  cidade?: string;
+  uf?: string;
+  data_adesao_inicio?: string;
+  data_adesao_fim?: string;
+  vendedor_id?: string;
+  tipos_entrada?: string[];
+}
+
+export function useAssociadosContagem(filters?: UseAssociadosContagemFilters) {
   return useQuery({
-    queryKey: ['associados-contagem'],
-    refetchOnMount: 'always',
+    queryKey: ['associados-contagem', filters ?? {}],
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
     queryFn: async () => {
-      const statuses = ['em_analise', 'pendente_vistoria', 'aprovado', 'documentacao_pendente', 'aguardando_instalacao', 'ativo', 'inadimplente', 'suspenso', 'cancelado', 'bloqueado', 'recusado'] as const;
-
-      const [totalRes, ...statusRes] = await Promise.all([
-        supabase.from('associados').select('id', { count: 'exact', head: true }),
-        ...statuses.map(s =>
-          supabase.from('associados').select('id', { count: 'exact', head: true }).eq('status', s)
-        ),
-      ]);
-
-      if (totalRes.error) throw totalRes.error;
-
-      const contagem: ContagemAssociados = {
-        total: totalRes.count || 0,
-        em_analise: 0,
-        pendente_vistoria: 0,
-        aprovado: 0,
-        documentacao_pendente: 0,
-        aguardando_instalacao: 0,
-        ativo: 0,
-        inadimplente: 0,
-        suspenso: 0,
-        cancelado: 0,
-        bloqueado: 0,
-        recusado: 0,
-      };
-
-      statuses.forEach((s, i) => {
-        contagem[s] = statusRes[i].count || 0;
+      const { data, error } = await supabase.rpc('associados_contagem_por_status', {
+        p_search: filters?.search || null,
+        p_plano_id: (filters?.plano_id as any) || null,
+        p_cidade: filters?.cidade || null,
+        p_uf: filters?.uf || null,
+        p_data_inicio: filters?.data_adesao_inicio || null,
+        p_data_fim: filters?.data_adesao_fim || null,
+        p_vendedor_id: (filters?.vendedor_id as any) || null,
+        p_tipos_entrada: filters?.tipos_entrada && filters.tipos_entrada.length > 0
+          ? filters.tipos_entrada
+          : null,
       });
-
-      return contagem;
+      if (error) throw error;
+      const v = (data || {}) as Partial<ContagemAssociados>;
+      return {
+        total: v.total ?? 0,
+        em_analise: v.em_analise ?? 0,
+        pendente_vistoria: v.pendente_vistoria ?? 0,
+        aprovado: v.aprovado ?? 0,
+        documentacao_pendente: v.documentacao_pendente ?? 0,
+        aguardando_instalacao: v.aguardando_instalacao ?? 0,
+        ativo: v.ativo ?? 0,
+        inadimplente: v.inadimplente ?? 0,
+        suspenso: v.suspenso ?? 0,
+        cancelado: v.cancelado ?? 0,
+        bloqueado: v.bloqueado ?? 0,
+        recusado: v.recusado ?? 0,
+      } as ContagemAssociados;
     },
   });
 }

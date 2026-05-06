@@ -1,7 +1,10 @@
+import * as React from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Toast, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from "@/components/ui/toast";
 
-export function Toaster() {
+// forwardRef silencia warning de StrictMode quando este componente é colocado
+// dentro de providers que encaminham refs (next-themes/Tooltip).
+export const Toaster = React.forwardRef<HTMLDivElement>((_props, _ref) => {
   const { toasts } = useToast();
 
   return (
@@ -21,4 +24,5 @@ export function Toaster() {
       <ToastViewport />
     </ToastProvider>
   );
-}
+});
+Toaster.displayName = "Toaster";
