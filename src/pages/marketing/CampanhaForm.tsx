@@ -34,7 +34,7 @@ export default function CampanhaForm() {
   const [formData, setFormData] = useState({
     nome: '',
     tipo: 'aquisicao',
-    
+    canal_id: '',
     publico_alvo: '',
     regioes: '',
     data_inicio: '',
