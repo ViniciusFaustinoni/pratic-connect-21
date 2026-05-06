@@ -174,6 +174,11 @@ export function ContatoDetalheDrawer({ telefone, open, onOpenChange, nomeContato
           </div>
         </div>
       </SheetContent>
+      <AssociadoFichaCompletaDialog
+        associadoId={associado?.id}
+        open={fichaOpen}
+        onOpenChange={setFichaOpen}
+      />
     </Sheet>
   );
 }
