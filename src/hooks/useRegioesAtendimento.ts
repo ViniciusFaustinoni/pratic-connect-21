@@ -1,5 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { useMemo } from 'react';
+import { useConfiguracoesAll } from './useConfiguracoesAll';
 
 interface RegiaoAtendimento {
   value: string;
@@ -33,29 +33,22 @@ const FALLBACK_REGIOES: RegiaoAtendimento[] = [
 
 /**
  * Hook que busca regiões de atendimento da tabela configuracoes.
- * Fonte única de verdade — substitui REGIOES_ATENDIMENTO hardcoded.
+ * Fase 5: agora consome o cache global `useConfiguracoesAll` (RPC get_app_config),
+ * eliminando o fetch dedicado a `/configuracoes?chave=regioes_atendimento`.
  */
 export function useRegioesAtendimento() {
-  const { data: regioes = FALLBACK_REGIOES, isLoading } = useQuery({
-    queryKey: ['regioes-atendimento'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('configuracoes')
-        .select('valor')
-        .eq('chave', 'regioes_atendimento')
-        .maybeSingle();
+  const { data: configs, isLoading } = useConfiguracoesAll();
 
-      if (error || !data?.valor) return FALLBACK_REGIOES;
-
-      try {
-        const parsed = JSON.parse(data.valor);
-        return Array.isArray(parsed) ? parsed as RegiaoAtendimento[] : FALLBACK_REGIOES;
-      } catch {
-        return FALLBACK_REGIOES;
-      }
-    },
-    staleTime: 30 * 60 * 1000, // 30 min
-  });
+  const regioes = useMemo<RegiaoAtendimento[]>(() => {
+    const raw = configs?.['regioes_atendimento'];
+    if (!raw) return FALLBACK_REGIOES;
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as RegiaoAtendimento[]) : FALLBACK_REGIOES;
+    } catch {
+      return FALLBACK_REGIOES;
+    }
+  }, [configs]);
 
   return { regioes, isLoading };
 }

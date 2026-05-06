@@ -267,59 +267,41 @@ export function useRastreadoresMetricas() {
   return useQuery({
     queryKey: ['rastreadores-metricas'],
     queryFn: async () => {
-      // 1. Contagens por status em paralelo (sem limite de 1000)
-      const [totalRes, estoqueRes, instaladosRes, manutencaoRes, baixadosRes] = await Promise.all([
+      // Threshold de 24h para considerar "online"
+      const threshold24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+      // Todas as 7 contagens em paralelo (sem trazer dados — apenas count: exact + head)
+      // Substitui o loop client-side anterior que paginava ~todos os instalados
+      // (10+ fetches sequenciais) só para calcular online/offline.
+      const [
+        totalRes,
+        estoqueRes,
+        instaladosRes,
+        manutencaoRes,
+        baixadosRes,
+        onlineRes,
+      ] = await Promise.all([
         supabase.from('rastreadores').select('*', { count: 'exact', head: true }),
         supabase.from('rastreadores').select('*', { count: 'exact', head: true }).eq('status', 'estoque'),
         supabase.from('rastreadores').select('*', { count: 'exact', head: true }).eq('status', 'instalado'),
         supabase.from('rastreadores').select('*', { count: 'exact', head: true }).eq('status', 'manutencao'),
         supabase.from('rastreadores').select('*', { count: 'exact', head: true }).eq('status', 'baixado'),
+        supabase
+          .from('rastreadores')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'instalado')
+          .gte('ultima_comunicacao', threshold24h),
       ]);
 
-      // 2. Fetch recursivo dos instalados para calcular online/offline
-      const allInstalados: { ultima_comunicacao: string | null }[] = [];
-      const PAGE_SIZE = 1000;
-      let from = 0;
-      let hasMore = true;
-
-      while (hasMore) {
-        const { data: page, error } = await supabase
-          .from('rastreadores')
-          .select('ultima_comunicacao')
-          .eq('status', 'instalado')
-          .range(from, from + PAGE_SIZE - 1);
-
-        if (error) throw error;
-        if (!page || page.length === 0) {
-          hasMore = false;
-        } else {
-          allInstalados.push(...page);
-          if (page.length < PAGE_SIZE) {
-            hasMore = false;
-          } else {
-            from += PAGE_SIZE;
-          }
-        }
-      }
-
-      // 3. Classificar online/offline/alertas
-      let online = 0;
-      let offline = 0;
-      let alertas = 0;
-
-      allInstalados.forEach(r => {
-        if (isRastreadorOnline(r.ultima_comunicacao)) {
-          online++;
-        } else {
-          offline++;
-          alertas++;
-        }
-      });
+      const instalados = instaladosRes.count ?? 0;
+      const online = onlineRes.count ?? 0;
+      const offline = Math.max(0, instalados - online);
+      const alertas = offline; // mesma regra de antes
 
       const metricas: RastreadoresMetricas = {
         total: totalRes.count ?? 0,
         estoque: estoqueRes.count ?? 0,
-        instalados: instaladosRes.count ?? 0,
+        instalados,
         manutencao: manutencaoRes.count ?? 0,
         baixados: baixadosRes.count ?? 0,
         online,
@@ -329,8 +311,10 @@ export function useRastreadoresMetricas() {
 
       return metricas;
     },
+    staleTime: 60_000,
   });
 }
+
 
 export function useCreateRastreador() {
   const queryClient = useQueryClient();
@@ -532,7 +516,6 @@ export function useVeiculosSemRastreador() {
     queryFn: async () => {
       // Get vehicles that don't have an installed tracker
       // status='instalado' é a verdade primária — sempre tem veiculo_id preenchido.
-      // Não filtramos por veiculo_id IS NOT NULL para deixar a regra explícita.
       const { data: veiculosComRastreador, error: rastrError } = await supabase
         .from('rastreadores')
         .select('veiculo_id')
@@ -540,25 +523,27 @@ export function useVeiculosSemRastreador() {
 
       if (rastrError) throw rastrError;
 
-      const veiculosIds = veiculosComRastreador.map(r => r.veiculo_id).filter(Boolean) as string[];
+      const veiculosComRastreadorSet = new Set(
+        (veiculosComRastreador || [])
+          .map(r => r.veiculo_id)
+          .filter(Boolean) as string[]
+      );
 
-      let query = supabase
+      // Fix: a query antiga `id=not.in.(uuid1,uuid2,...)` quebrava com 400
+      // quando a lista passava de ~80 IDs (URL > 8KB). Agora buscamos todos
+      // os veículos ativos e filtramos no client com um Set (O(1) por item).
+      const { data, error } = await supabase
         .from('veiculos')
         .select('*, associados(*)')
         .eq('ativo', true)
         .order('placa');
 
-      if (veiculosIds.length > 0) {
-        query = query.not('id', 'in', `(${veiculosIds.join(',')})`);
-      }
-
-      const { data, error } = await query;
-
       if (error) throw error;
-      return data;
+      return (data || []).filter(v => !veiculosComRastreadorSet.has(v.id));
     },
   });
 }
+
 
 // Rastreadores disponíveis (em estoque) - fetches all stock items (no pagination)
 export function useRastreadoresDisponiveis() {
