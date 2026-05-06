@@ -766,10 +766,14 @@ export default function Cotacoes() {
             onOpenChange={setShowNovaEntrada}
             onNovaCotacao={() => setShowCotacaoForm(true)}
           />
-          <RelatorioInteligenteCotacoesDialog
-            open={showRelatorioDialog}
-            onOpenChange={setShowRelatorioDialog}
-          />
+          {showRelatorioDialog && (
+            <Suspense fallback={null}>
+              <RelatorioInteligenteCotacoesDialog
+                open={showRelatorioDialog}
+                onOpenChange={setShowRelatorioDialog}
+              />
+            </Suspense>
+          )}
         </div>
       </div>
 
