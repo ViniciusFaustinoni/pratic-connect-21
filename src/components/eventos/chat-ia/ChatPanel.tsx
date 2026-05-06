@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Mic, Square, RotateCcw, ArrowDown, Bot, User, Loader2, MessageSquare } from 'lucide-react';
+import { Send, Mic, Square, RotateCcw, ArrowDown, Bot, User, Loader2, MessageSquare, Paperclip, BotOff } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import ReactMarkdown from 'react-markdown';
@@ -13,6 +13,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { WhatsAppMensagem } from '@/types/whatsapp';
+import { useIaPausa } from '@/hooks/useIaPausa';
+import { ContatoDetalheDrawer } from './ContatoDetalheDrawer';
 
 interface ChatPanelProps {
   telefone: string | null;
