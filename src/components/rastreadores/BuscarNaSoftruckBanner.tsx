@@ -81,8 +81,8 @@ export function BuscarNaSoftruckBanner({ termo, onEncontrado }: BuscarNaSoftruck
     setLoading('all');
     try {
       const results = await Promise.allSettled(
-        PLATAFORMAS.map((p) =>
-          supabase.functions.invoke(p.fn, { body: { busca: termoLimpo } }).then((r) => ({ p, r })),
+        plataformasAtivas.map((p) =>
+          supabase.functions.invoke(p.fn, { body: buscaPayload }).then((r) => ({ p, r })),
         ),
       );
       let achouEm: string | null = null;
