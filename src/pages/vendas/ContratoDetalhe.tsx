@@ -700,7 +700,7 @@ export default function ContratoDetalhe() {
                     <p className="text-muted-foreground">Tipo de Vistoria</p>
                     <p className="font-medium">
                       {contrato.tipo_vistoria === 'agendada' ? 'Vistoria Agendada' 
-                        : contrato.tipo_vistoria === 'autovistoria' ? 'Autovistoria' 
+                        : contrato.tipo_vistoria === 'autovistoria' ? 'Autovistoria - Roubo & Furto' 
                         : 'Não selecionado'}
                     </p>
                   </div>
