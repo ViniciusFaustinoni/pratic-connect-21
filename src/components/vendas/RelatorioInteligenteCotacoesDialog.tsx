@@ -284,7 +284,7 @@ export function RelatorioInteligenteCotacoesDialog({ open, onOpenChange }: Props
               }}
             />
           </div>
-        </ScrollArea>
+        </div>
 
         <DialogFooter className="border-t pt-4 flex-col sm:flex-row sm:items-center gap-3">
           <div className="flex-1 text-sm text-muted-foreground">
