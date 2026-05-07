@@ -147,7 +147,12 @@ export default function Cotacoes() {
   const permissions = usePermissions();
   const { profile, user } = useAuth();
   
-  const { data: vendedores } = useVendedores();
+  // Lazy: só carrega lista de vendedores quando o filtro for usado ou
+  // quando o usuário enxerga vendas de outros (viewScope !== 'own').
+  const [vendedoresFilterOpened, setVendedoresFilterOpened] = useState(false);
+  const vendedoresEnabled =
+    vendedoresFilterOpened || permissions.cotacao.viewScope !== 'own';
+  const { data: vendedores } = useVendedores({ enabled: vendedoresEnabled });
 
   const search = useDebounce(searchInput, 350);
 
@@ -983,7 +988,7 @@ export default function Cotacoes() {
           </Popover>
 
           {permissions.cotacao.viewScope !== 'own' && (
-            <Select value={consultorFilter} onValueChange={setConsultorFilter}>
+            <Select value={consultorFilter} onValueChange={setConsultorFilter} onOpenChange={(o) => { if (o) setVendedoresFilterOpened(true); }}>
               <SelectTrigger className="w-[160px] h-9 border-0 bg-background/80 shadow-sm">
                 <User className="h-4 w-4 mr-1.5 text-muted-foreground" />
                 <SelectValue placeholder="Consultor" />

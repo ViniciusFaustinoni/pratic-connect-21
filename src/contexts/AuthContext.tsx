@@ -240,7 +240,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         // Se é o mesmo usuário já carregado, apenas atualizar session sem reload
         if (currentUserId === newUserId && hasLoadedData && currentSession?.user) {
-          console.log('[AuthContext] Mesmo usuário já carregado, atualizando session silenciosamente');
+          if (import.meta.env.DEV) console.log('[AuthContext] Mesmo usuário já carregado, atualizando session silenciosamente');
           setSession(currentSession);
           setUser(currentSession?.user ?? null);
           return;

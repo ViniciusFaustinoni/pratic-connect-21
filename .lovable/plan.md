@@ -1,51 +1,48 @@
-## Problema confirmado por auditoria
+## Contexto
 
-A regra atual em `src/hooks/usePropostasPendentes.ts` remove da lista qualquer associado em `aguardando_instalacao` sem docs/vistoria pendentes — independente de já ter ou não instalação concluída e independente do tipo de vistoria. Isso quebra a **Regra 2** ("sem autovistoria → fica em Propostas Pendentes até a conclusão da instalação").
+Diagnóstico inicial estava parcialmente desatualizado: realtime já está enxuto (só `cotacoes` + `cotacoes_historico`), throttle já em 3s, `count: 'estimated'` já em uso e logs já guardados por `isDev`. Restam 5 otimizações reais.
 
-Auditoria identificou ~22 contratos `cadastro_aprovado=true`, sem autovistoria, instalação ainda **não** concluída, que estão saindo indevidamente da lista (ex.: CTR-...V7SJQA, CTR-...R5DRBE, CTR-...UI5RRS, CTR-...EA2ZIL).
+## Mudanças
 
-## Correção
+### 1. Lazy-load `useVendedores` — `src/pages/vendas/Cotacoes.tsx`
 
-### `src/hooks/usePropostasPendentes.ts` (e bloco análogo em `usePropostaPendenteSingle`)
+Hoje (linha 150) chama `useVendedores()` sempre que a página monta, mesmo que o filtro de consultor nunca seja aberto. Adicionar opção `enabled` ao hook e disparar só quando: (a) `viewScope !== 'own'`, ou (b) o `Select` de filtro for aberto pela primeira vez (state `vendedoresFilterOpened`).
 
-Substituir o filtro `propostaJaConcluida` para considerar o tipo de vistoria:
+Arquivos: `src/pages/vendas/Cotacoes.tsx` + `src/hooks/useVendedores.ts` (adicionar `{ enabled }` repassado ao `useQuery`).
 
-```ts
-const isAutovistoria = tipoVistoriaAtual === 'autovistoria';
+### 2. Joins pesados na lista — `src/hooks/useCotacoes.ts` (`fetchCotacoesCore`)
 
-// Saída da lista por tipo:
-// - Autovistoria: sai assim que o Cadastro aprova
-// - Não-autovistoria (agendada / agendada_base / NULL): sai apenas
-//   quando a instalação for concluída (ou associado/SGA já ativo)
-const saiuPorAutovistoriaAprovada = isAutovistoria && cadastroAprovado;
-const saiuPorInstalacaoConcluida  = instalacaoConcluida;
-const saiuPorAssociadoAtivo       = associado?.status === 'ativo';
-const saiuPorSGA                  = jaNoSGA;
+A coluna `instalacoes:instalacoes!instalacoes_cotacao_id_fkey(id, status, data_agendada)` raramente é exibida na linha da lista (é detalhe). Mover para uma 2ª query batch (`.in('cotacao_id', ids)`) condicional — só quando alguma linha precisar exibir badge de instalação. Mesma estratégia que já é usada para `profiles`.
 
-const propostaJaConcluida =
-  saiuPorAssociadoAtivo ||
-  saiuPorSGA ||
-  saiuPorAutovistoriaAprovada ||
-  saiuPorInstalacaoConcluida;
+`contratos→associados` também pode virar batch separado (igual a `profiles`), reduzindo o JSON do SELECT principal.
 
-if (propostaJaConcluida) return null;
-```
+Resultado esperado: payload da query principal cai ~40%.
 
-Remover a condição `(associado.status === 'aguardando_instalacao' && !docsPendentes && !vistoriaPendenteAnalise)` que estava forçando saída prematura.
+### 3. `staleTime: Infinity` na paginada quando realtime ativo — `useCotacoes.ts:322`
 
-### Sem mudanças necessárias
+Como o realtime já invalida `['cotacoes']`, subir `staleTime` de 30s → `Infinity` na `useCotacoesPaginadas`. Eliminamos refetch automático em foco/intervalo, deixando o realtime ditar.
 
-- Migration `cadastro_aprovado`: já existe.
-- `aprovar-proposta`: já seta `cadastro_aprovado=true` e `associados.status='aguardando_instalacao'`.
-- Badge "Pendente Vistoria Inicial" em `PropostasPendentes.tsx` e `PropostaHeroHeader.tsx`: já implementado, passa a aparecer corretamente após a correção do filtro.
-- SGA Hinova: regra inalterada.
+### 4. Eliminar round-trip extra de funil quando dados já vieram — `useCotacoes.ts`
 
-### Validação pós-deploy
+Manter a RPC `cotacoes_funil_counts` mas: (a) aumentar `staleTime` para 60s; (b) `refetchOnWindowFocus: false`. Como contagens são aproximadas e o realtime invalida quando muda, não precisa refazer a cada foco.
 
-1. Os ~22 contratos listados na auditoria devem voltar a aparecer em `/cadastro/propostas-pendentes` com o badge roxo "Pendente Vistoria Inicial".
-2. Casos de autovistoria já aprovada (Wesley, Luiz Otavio, Larissa, Marcos) continuam fora da lista.
-3. Quando a instalação de um contrato sem autovistoria for concluída, o `ativar-associado` promove a `ativo` e o filtro `saiuPorAssociadoAtivo` o remove da lista.
+### 5. Silenciar log "Mesmo usuário já carregado" — `src/contexts/AuthContext.tsx`
 
-### Memória
+Trocar o `console.info` por log condicional `if (import.meta.env.DEV) ...` ou remover. Cosmético — limpa o console em produção sem alterar comportamento.
 
-Atualizar `mem://logic/operations/propostas-pendentes-saida-por-vistoria` deixando explícito que a única condição de saída para não-autovistoria é instalação concluída / associado ativo / SGA.
+## Validação
+
+1. Abrir `/vendas/cotacoes` como diretor → console limpo (sem mensagens de Auth/realtime em produção).
+2. Network: a chamada `profiles?...` que hidrata vendedores **não** deve aparecer no load inicial — só ao abrir o filtro.
+3. Payload da query `cotacoes?select=...` reduzido (sem o sub-objeto `instalacoes`).
+4. Mudar status de uma cotação em outra aba → lista atualiza via realtime em < 3s.
+5. Trocar de aba "Em andamento" ↔ "Finalizadas" → não dispara nova RPC `cotacoes_funil_counts` antes de 60s.
+
+## Arquivos
+
+- `src/hooks/useCotacoes.ts` (joins + staleTime + funil)
+- `src/hooks/useVendedores.ts` (parâmetro `enabled`)
+- `src/pages/vendas/Cotacoes.tsx` (lazy + state do filtro)
+- `src/contexts/AuthContext.tsx` (log silencioso)
+
+Sem mudanças de schema, sem migrations, sem refactor estrutural.

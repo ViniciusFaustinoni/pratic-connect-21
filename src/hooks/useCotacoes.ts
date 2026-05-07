@@ -128,7 +128,8 @@ export function useCotacoesFunilCounts(options?: UseCotacoesOptions) {
       };
     },
     placeholderData: keepPreviousData,
-    staleTime: 1000 * 30,
+    staleTime: 1000 * 60,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -319,7 +320,10 @@ export function useCotacoesPaginadas(options: UseCotacoesPaginadasOptions) {
         statusGroup,
       }),
     placeholderData: keepPreviousData,
-    staleTime: 1000 * 30,
+    // Realtime invalida `['cotacoes']` quando há mudança real;
+    // sem realtime, o user pode dar refresh manual.
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
   });
 }
 
