@@ -53,10 +53,10 @@ const TROCA_FILTROS: Record<string, StatusTroca[]> = {
   recusadas: ['reprovada_cadastro', 'reprovada_monitoramento', 'cancelada'],
 };
 
-function TrocaTitularidadeTab() {
+function TrocaTitularidadeTab({ scopeProfileId }: { scopeProfileId?: string }) {
   const [subAba, setSubAba] = useState<keyof typeof TROCA_FILTROS>('pendentes');
   const [selecionada, setSelecionada] = useState<string | null>(null);
-  const { data, isLoading } = useSolicitacoesTroca(TROCA_FILTROS[subAba]);
+  const { data, isLoading } = useSolicitacoesTroca(TROCA_FILTROS[subAba], scopeProfileId);
 
   return (
     <div className="space-y-4">
