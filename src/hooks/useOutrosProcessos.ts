@@ -186,7 +186,7 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
         const { data: assocs } = await supabase
           .from('associados')
           .select('id, nome, cpf')
-          .in('id', associadoAntigoIds);
+          .in('id', associadoAntigoIds as string[]);
         (assocs || []).forEach((a: any) => associadosMap.set(a.id, a));
       }
 
