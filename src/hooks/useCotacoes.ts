@@ -174,7 +174,7 @@ async function fetchCotacoesCore(params: {
         ),
         instalacoes:instalacoes!instalacoes_cotacao_id_fkey(id, status, data_agendada)
       `,
-      pageSize ? { count: 'exact' } : undefined
+      pageSize ? { count: 'estimated' } : undefined
     )
     .order('created_at', { ascending: false });
 
