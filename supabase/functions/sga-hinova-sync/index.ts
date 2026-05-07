@@ -371,12 +371,27 @@ serve(async (req) => {
         return;
       }
 
-      // Validações mínimas — a Hinova exige
-      const obrigatorios = [
+      // Validações mínimas — a Hinova exige placa e chassi.
+      // RENAVAM é dispensado para 0KM (placa começando com "0KM" ou
+      // aguardando_placa_definitiva=true) — o documento ainda não foi emitido.
+      // Placeholder "0000000" é tratado como vazio para evitar rejeição da Hinova.
+      const placaUpper = String(veiculo.placa || '').toUpperCase();
+      const isZeroKm = placaUpper.startsWith('0KM') || veiculo.aguardando_placa_definitiva === true;
+      const renavamLimpo = String(veiculo.renavam || '').replace(/\D/g, '');
+      const renavamValido = renavamLimpo && !/^0+$/.test(renavamLimpo);
+      if (!renavamValido && veiculo.renavam) {
+        // limpa placeholder no banco para não vazar para a Hinova
+        await supabase.from('veiculos').update({ renavam: null }).eq('id', _vid);
+        veiculo.renavam = null;
+      }
+
+      const obrigatorios: Array<{ k: string; v: any; label: string }> = [
         { k: 'placa', v: veiculo.placa, label: 'PLACA' },
-        { k: 'renavam', v: veiculo.renavam, label: 'RENAVAM' },
         { k: 'chassi', v: veiculo.chassi, label: 'CHASSI' },
       ];
+      if (!isZeroKm) {
+        obrigatorios.push({ k: 'renavam', v: veiculo.renavam, label: 'RENAVAM' });
+      }
       for (const c of obrigatorios) {
         if (!c.v || String(c.v).trim() === '') {
           const msg = `${c.label} é obrigatório para sincronização com SGA.`;
