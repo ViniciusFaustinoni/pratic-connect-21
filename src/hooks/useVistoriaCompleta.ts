@@ -162,7 +162,6 @@ export function useAprovarVeiculoVistoria() {
         await supabase
           .from('cotacoes')
           .update({ 
-            status_contratacao: 'ativo',
             vistoria_concluida_em: agora,
           })
           .eq('id', vistoriaData.cotacao_id);
@@ -172,7 +171,6 @@ export function useAprovarVeiculoVistoria() {
         await supabase
           .from('contratos')
           .update({ 
-            status: 'ativo',
             vistoria_concluida_em: agora,
           })
           .eq('id', vistoriaData.contrato_id);
