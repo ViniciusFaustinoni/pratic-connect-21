@@ -75,6 +75,11 @@ export interface UseCotacoesOptions {
   searchTerm?: string;
   /** Filtro adicional (server-side) por consultor escolhido na UI. Aplica-se quando viewScope != 'own'. */
   consultorId?: string | null;
+  /**
+   * Exclui da listagem cotações cujo `dados_extras->>tipo_entrada` esteja nesta lista.
+   * Usado para separar "cotações novas" de "outros processos" (troca, substituição, inclusão, migração).
+   */
+  excluirTiposEntrada?: string[];
 }
 
 export interface CotacoesFunilCounts {
