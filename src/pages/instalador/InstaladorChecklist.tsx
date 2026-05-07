@@ -1105,7 +1105,16 @@ export default function InstaladorChecklist() {
 
       {/* Aviso de baixa memória — só aparece quando heap > 75% */}
       <div className="mx-4 mt-2">
-        <LowMemoryBanner />
+        <LowMemoryBanner
+          onLiberarMemoria={() => {
+            // Libera o `File` em RAM das fotos de ressalva já enviadas
+            // (o preview continua acessível via URL pública remota).
+            setFotosRessalva(prev =>
+              prev.map(f => ({ ...f, file: new File([], f.file.name) }))
+            );
+            toast.success('Memória liberada');
+          }}
+        />
       </div>
 
       {/* Content */}
