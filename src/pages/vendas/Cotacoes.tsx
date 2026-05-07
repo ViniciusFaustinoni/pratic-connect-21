@@ -178,6 +178,7 @@ export default function Cotacoes() {
     page: currentPage,
     pageSize: PAGE_SIZE,
     statusGroup: isEmAndamentoTab ? 'em_andamento' : 'finalizadas',
+    excluirTiposEntrada: ['troca_titularidade', 'substituicao_placa', 'substituicao', 'inclusao_veiculo', 'inclusao', 'migracao'],
   });
   const cotacoes = paginatedResult?.data;
   const totalPaginaAtual = paginatedResult?.count ?? 0;
