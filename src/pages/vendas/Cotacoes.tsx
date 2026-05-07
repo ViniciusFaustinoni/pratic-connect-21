@@ -193,7 +193,14 @@ export default function Cotacoes() {
     viewScope: permissions.cotacao.viewScope,
     searchTerm: search,
   });
-  
+
+  // Contagem leve de "outros processos" para o badge da aba externa
+  const { data: outrosProcessosList } = useOutrosProcessos({
+    vendedorId: permissions.userId,
+    viewScope: permissions.cotacao.viewScope,
+  });
+  const outrosCount = outrosProcessosList?.length ?? 0;
+
   const updateCotacao = useUpdateCotacao();
   const gerarContrato = useGerarContrato();
   const duplicarCotacao = useDuplicarCotacao();
