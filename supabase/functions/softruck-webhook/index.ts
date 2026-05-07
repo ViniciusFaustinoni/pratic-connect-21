@@ -53,11 +53,11 @@ serve(async (req) => {
   }
 
   const startTime = Date.now();
-  
-  const ipOrigem = req.headers.get("x-forwarded-for") || 
-                   req.headers.get("cf-connecting-ip") || 
+
+  const ipOrigem = req.headers.get("x-forwarded-for") ||
+                   req.headers.get("cf-connecting-ip") ||
                    "unknown";
-  
+
   const headersObj: Record<string, string> = {};
   req.headers.forEach((value, key) => {
     if (!key.toLowerCase().includes('authorization')) {
@@ -65,7 +65,19 @@ serve(async (req) => {
     }
   });
 
-  console.log(`[softruck-webhook] Request received from IP: ${ipOrigem}`);
+  // Health-check endpoint (?ping=1) — útil para validar do painel Softtruck que a URL está acessível
+  const url = new URL(req.url);
+  if (req.method === "GET" && url.searchParams.get("ping") === "1") {
+    return new Response(
+      JSON.stringify({ ok: true, service: "softruck-webhook", time: new Date().toISOString() }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  console.log(`[softruck-webhook] Request received from IP: ${ipOrigem}, headers:`, JSON.stringify(headersObj));
+
+  // Captura raw body antes de tentar parse, para forense quando JSON falhar
+  const rawBody = await req.text();
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -74,10 +86,18 @@ serve(async (req) => {
 
     let payload: WebhookPayload;
     try {
-      payload = await req.json();
+      payload = JSON.parse(rawBody);
       console.log(`[softruck-webhook] Payload:`, JSON.stringify(payload));
     } catch (e) {
       console.error(`[softruck-webhook] Failed to parse JSON:`, e);
+      // Persiste raw para forense
+      await supabase.from("softruck_webhook_raw_log").insert({
+        ip_origem: ipOrigem,
+        headers: headersObj,
+        raw_body: rawBody.slice(0, 10000),
+        parse_error: e instanceof Error ? e.message : String(e),
+        status_resposta: 400,
+      });
       return new Response(
         JSON.stringify({ error: "Invalid JSON payload" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -372,14 +392,54 @@ async function handleDeviceDisassociated(
     }
   }
 
+  // AUTO-DESVÍNCULO: se desvincularam na Softtruck, refletir no nosso lado.
+  // Captura snapshot anterior, zera vínculos do rastreador e registra histórico.
   if (rastreadorId) {
+    const { data: rastreadorAntes } = await supabase
+      .from("rastreadores")
+      .select("id, veiculo_id, associado_id, status, plataforma_veiculo_id")
+      .eq("id", rastreadorId)
+      .maybeSingle();
+
+    let placaAntes: string | null = null;
+    if (rastreadorAntes?.veiculo_id) {
+      const { data: vAntes } = await supabase
+        .from("veiculos")
+        .select("placa")
+        .eq("id", rastreadorAntes.veiculo_id)
+        .maybeSingle();
+      placaAntes = vAntes?.placa ?? null;
+    }
+
     await supabase
       .from("rastreadores")
       .update({
+        veiculo_id: null,
+        associado_id: null,
+        associado_email: null,
         plataforma_veiculo_id: null,
+        plataforma_user_id: null,
+        local_instalacao: null,
+        descricao_instalacao: null,
+        bloqueado: false,
+        status: "estoque",
         updated_at: new Date().toISOString(),
       })
       .eq("id", rastreadorId);
+
+    await supabase.from("rastreadores_vinculo_historico").insert({
+      rastreador_id: rastreadorId,
+      veiculo_id_anterior: rastreadorAntes?.veiculo_id ?? null,
+      veiculo_id_novo: null,
+      status_anterior: rastreadorAntes?.status ?? null,
+      status_novo: "estoque",
+      placa_anterior: placaAntes,
+      placa_nova: null,
+      origem: "webhook_softtruck_disassociated",
+      contexto: { params, payload, rastreador_antes: rastreadorAntes },
+    });
+
+    console.log(`[handleDeviceDisassociated] Auto-desvinculado rastreador ${rastreadorId} (veículo anterior: ${rastreadorAntes?.veiculo_id ?? 'n/a'})`);
   }
 
   return { success: true, alertaGerado };

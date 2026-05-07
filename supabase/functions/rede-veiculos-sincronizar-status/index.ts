@@ -148,9 +148,99 @@ serve(async (req) => {
           }
         );
 
+        // ============================================================
+        // DETECÇÃO DE DESVÍNCULO NA REDE VEÍCULOS
+        // 404 ou response sem campo de dispositivo → veículo foi
+        // desvinculado/removido na plataforma. Refletimos no nosso lado.
+        // ============================================================
+        const httpStatus = veiculoResponse.status;
+        let veiculoData: any = null;
         if (veiculoResponse.ok) {
-          const veiculoData = await veiculoResponse.json();
-          
+          veiculoData = await veiculoResponse.json();
+        }
+
+        const desvinculadoNaPlataforma =
+          httpStatus === 404 ||
+          (veiculoData && veiculoData.dispositivo === null) ||
+          (veiculoData && veiculoData.equipamento === null) ||
+          (veiculoData && veiculoData.detail && /n[aã]o.*encontrad/i.test(String(veiculoData.detail)));
+
+        if (desvinculadoNaPlataforma) {
+          // Buscar rastreador local vinculado a este veículo na plataforma rede_veiculos
+          const { data: rastreadorAtual } = await supabase
+            .from('rastreadores')
+            .select('id, veiculo_id, associado_id, status')
+            .eq('veiculo_id', veiculo.id)
+            .eq('plataforma', 'rede_veiculos')
+            .maybeSingle();
+
+          if (rastreadorAtual) {
+            await supabase
+              .from('rastreadores')
+              .update({
+                veiculo_id: null,
+                associado_id: null,
+                associado_email: null,
+                plataforma_veiculo_id: null,
+                plataforma_user_id: null,
+                local_instalacao: null,
+                descricao_instalacao: null,
+                bloqueado: false,
+                status: 'estoque',
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', rastreadorAtual.id);
+
+            await supabase.from('rastreadores_vinculo_historico').insert({
+              rastreador_id: rastreadorAtual.id,
+              veiculo_id_anterior: rastreadorAtual.veiculo_id,
+              veiculo_id_novo: null,
+              status_anterior: rastreadorAtual.status,
+              status_novo: 'estoque',
+              placa_anterior: veiculo.placa,
+              placa_nova: null,
+              origem: 'sync_rede_veiculos_desvinculo',
+              contexto: { http_status: httpStatus, response: veiculoData, rede_veiculos_veiculo_id: veiculo.rede_veiculos_veiculo_id },
+            });
+
+            await supabase.from('rastreador_alertas').insert({
+              rastreador_id: rastreadorAtual.id,
+              veiculo_id: veiculo.id,
+              tipo: 'desinstalacao',
+              severidade: 'critica',
+              titulo: 'Dispositivo desvinculado na Rede Veículos',
+              mensagem: `O veículo ${veiculo.placa} foi desvinculado do dispositivo na plataforma Rede Veículos. Auto-desvínculo aplicado no sistema.`,
+              status: 'aberto',
+              dados_extras: { http_status: httpStatus, response: veiculoData, origem: 'sync_rede_veiculos' },
+            });
+
+            try {
+              await supabase.functions.invoke('disparar-notificacao', {
+                body: {
+                  tipo: 'rastreador_desassociado',
+                  titulo: '⚠️ ALERTA CRÍTICO: Dispositivo Desvinculado (Rede Veículos)',
+                  mensagem: `Veículo ${veiculo.placa} desvinculado na Rede Veículos.`,
+                  dados: { rastreador_id: rastreadorAtual.id, veiculo_id: veiculo.id, placa: veiculo.placa },
+                  canais: ['sistema', 'email'],
+                },
+              });
+            } catch (notifErr) {
+              console.error('[RedeVeiculos Sincronizar] Falha ao notificar desvínculo:', notifErr);
+            }
+
+            result.diferencasEncontradas.push({
+              tipo: 'veiculo',
+              id: veiculo.id,
+              statusLocal: rastreadorAtual.status || 'desconhecido',
+              statusPlataforma: 'desvinculado',
+              atualizado: true,
+            });
+          }
+          result.veiculosSincronizados++;
+          continue; // já tratamos este veículo
+        }
+
+        if (veiculoResponse.ok && veiculoData) {
           // Determinar status na plataforma
           let statusPlataforma = 'desconhecido';
           if (veiculoData.status) {
@@ -216,8 +306,9 @@ serve(async (req) => {
               .eq('veiculo_id', veiculo.id)
               .eq('plataforma', 'rede_veiculos');
           }
-        } else {
-          result.erros.push(`Erro ao consultar veículo ${veiculo.placa}: HTTP ${veiculoResponse.status}`);
+        } else if (httpStatus >= 500) {
+          // Falhas transitórias: NÃO disparar desvínculo (regra de salvaguarda)
+          result.erros.push(`Erro ao consultar veículo ${veiculo.placa}: HTTP ${httpStatus}`);
         }
       } catch (err) {
         result.erros.push(`Erro ao processar veículo ${veiculo.placa}: ${err instanceof Error ? err.message : 'Erro desconhecido'}`);
