@@ -175,9 +175,14 @@ export default function ReducaoCota() {
         dupla_aprovacao_fipe_diretoria_ativa: String(s.dupla_aprovacao_fipe_diretoria_ativa),
         dupla_aprovacao_fipe_minimo_votos: s.dupla_aprovacao_fipe_minimo_votos,
       };
-      for (const [chave, valor] of Object.entries(updates)) {
-        await supabase.from('configuracoes').update({ valor, updated_at: new Date().toISOString() }).eq('chave', chave);
-      }
+      const nowIso = new Date().toISOString();
+      const rows = Object.entries(updates).map(([chave, valor]) => ({
+        chave, valor, updated_at: nowIso,
+      }));
+      const { error: upErr } = await (supabase as any)
+        .from('configuracoes')
+        .upsert(rows, { onConflict: 'chave' });
+      if (upErr) throw upErr;
       qc.invalidateQueries({ queryKey: ['reducao-cota-config'] });
       qc.invalidateQueries({ queryKey: ['configuracoes-autorizacoes-excecoes'] });
       qc.invalidateQueries({ queryKey: ['config-fipe-menor-limites'] });
