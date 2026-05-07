@@ -249,7 +249,7 @@ export function EtapaVistoria({
               setOficinaIdSelecionada(oficinaId);
               setModo('agendada-base');
             }}
-            onVoltar={() => setModo(tipoInstalacao ? 'escolha' : 'escolha-local')}
+            onVoltar={() => setModo('escolha')}
           />
         </motion.div>
       )}
