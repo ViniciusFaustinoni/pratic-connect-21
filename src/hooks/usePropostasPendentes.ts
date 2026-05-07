@@ -240,7 +240,8 @@ export function usePropostasPendentes() {
           cotacao_id,
           plano_id,
           vendedor_id,
-          veiculo_id
+          veiculo_id,
+          cadastro_aprovado
         `)
         .eq('status', 'assinado')
         .order('data_assinatura', { ascending: true });
