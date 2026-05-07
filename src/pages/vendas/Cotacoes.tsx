@@ -147,7 +147,12 @@ export default function Cotacoes() {
   const permissions = usePermissions();
   const { profile, user } = useAuth();
   
-  const { data: vendedores } = useVendedores();
+  // Lazy: só carrega lista de vendedores quando o filtro for usado ou
+  // quando o usuário enxerga vendas de outros (viewScope !== 'own').
+  const [vendedoresFilterOpened, setVendedoresFilterOpened] = useState(false);
+  const vendedoresEnabled =
+    vendedoresFilterOpened || permissions.cotacao.viewScope !== 'own';
+  const { data: vendedores } = useVendedores({ enabled: vendedoresEnabled });
 
   const search = useDebounce(searchInput, 350);
 
