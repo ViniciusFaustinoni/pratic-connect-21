@@ -669,6 +669,25 @@ serve(async (req) => {
             sincronizado_hinova: true,
             sincronizado_hinova_em: new Date().toISOString(),
           }).eq('id', _aid);
+
+          // Forçar PENDENTE no SGA — Hinova aplica ATIVO por default da regional, mas
+          // a ativação completa do associado é manual no painel SGA.
+          if (Number.isFinite(codigoSituacaoPendente) && codigoSituacaoPendente > 0) {
+            try {
+              const rs = await alterarSituacaoAssociadoHinova(
+                supabase, codigoAssociadoHinova!, codigoSituacaoPendente,
+              );
+              await logSync(_vid, _aid, 'alterar_situacao_associado',
+                rs.ok ? 'success' : 'warning',
+                { codigo_associado: codigoAssociadoHinova, codigo_situacao: codigoSituacaoPendente },
+                rs.raw,
+                rs.ok ? null : (rs.mensagem || rs.errors.join('; ') || `HTTP ${rs.status}`));
+            } catch (e: any) {
+              await logSync(_vid, _aid, 'alterar_situacao_associado', 'warning',
+                { codigo_associado: codigoAssociadoHinova, codigo_situacao: codigoSituacaoPendente },
+                null, String(e?.message || e));
+            }
+          }
         } catch (e: any) {
           await logSync(_vid, _aid, 'cadastrar_associado', 'error', { cpf: '***' }, null, String(e?.message || e));
           await setStatusSga(_vid, 'erro_sincronizacao');
