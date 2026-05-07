@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Camera, Calendar, Smartphone, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { Camera, Calendar, Home, Building2, MapPin, Clock, Smartphone, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { AutovistoriaCotacao } from './AutovistoriaCotacao';
 import { AgendamentoCotacao } from './AgendamentoCotacao';
-import { EscolhaLocalVistoria } from './EscolhaLocalVistoria';
+
 import { EscolhaBase } from './EscolhaBase';
 import { AgendamentoBase } from './AgendamentoBase';
+import { useConfiguracaoBase } from '@/hooks/useAgendamentoBase';
 import type { TipoVeiculo } from '@/data/autovistoriaConfig';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -35,7 +36,7 @@ interface EtapaVistoriaProps {
   tipoVistoriaRealizada?: 'autovistoria' | 'agendada' | 'agendada_base';
 }
 
-type ModoVistoria = 'escolha' | 'escolha-local' | 'autovistoria' | 'agendada' | 'escolha-base' | 'agendada-base';
+type ModoVistoria = 'escolha' | 'autovistoria' | 'agendada' | 'escolha-base' | 'agendada-base';
 
 export function EtapaVistoria({ 
   cotacaoId, 
@@ -54,6 +55,14 @@ export function EtapaVistoria({
 }: EtapaVistoriaProps) {
   const [modo, setModo] = useState<ModoVistoria>('escolha');
   const [oficinaIdSelecionada, setOficinaIdSelecionada] = useState<string>('');
+  const { data: configBase } = useConfiguracaoBase();
+
+  const enderecoBase = configBase?.base_logradouro
+    ? `${configBase.base_logradouro}${configBase.base_numero ? `, ${configBase.base_numero}` : ''} - ${configBase.base_bairro || ''} - ${configBase.base_cidade || ''}/${configBase.base_uf || ''}`
+    : null;
+  const horarioBase = configBase?.base_horario_inicio && configBase?.base_horario_fim
+    ? `${configBase.base_horario_inicio} às ${configBase.base_horario_fim}`
+    : null;
 
   const handleVoltarEscolha = () => {
     setModo('escolha');
@@ -80,9 +89,11 @@ export function EtapaVistoria({
             <h3 className="text-xl font-bold mb-2 text-foreground">Vistoria Concluída</h3>
             <p className="text-muted-foreground mb-4">
               {tipoVistoriaRealizada === 'autovistoria' 
-                ? 'Autovistoria realizada com sucesso'
+                ? 'Autovistoria - Roubo & Furto realizada com sucesso'
                 : tipoVistoriaRealizada === 'agendada'
                 ? 'Vistoria presencial agendada'
+                : tipoVistoriaRealizada === 'agendada_base'
+                ? 'Agendamento na Base confirmado'
                 : 'Vistoria do veículo concluída'}
             </p>
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-success/10 text-success text-sm">
@@ -90,6 +101,11 @@ export function EtapaVistoria({
                 <>
                   <Camera className="h-4 w-4" />
                   Fotos enviadas
+                </>
+              ) : tipoVistoriaRealizada === 'agendada_base' ? (
+                <>
+                  <Building2 className="h-4 w-4" />
+                  Agendamento na Base
                 </>
               ) : (
                 <>
@@ -122,7 +138,7 @@ export function EtapaVistoria({
               </p>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Opção Autovistoria */}
+              {/* Card 1: Autovistoria - Roubo & Furto */}
               <button
                 onClick={() => setModo('autovistoria')}
                 className="w-full p-4 rounded-xl border border-border/50 bg-card/50 hover:bg-accent/10 hover:border-primary/50 transition-all group text-left"
@@ -133,13 +149,13 @@ export function EtapaVistoria({
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold text-foreground">Autovistoria</h3>
+                      <h3 className="font-semibold text-foreground">Autovistoria - Roubo &amp; Furto</h3>
                       <span className="text-xs px-2 py-0.5 rounded-full bg-success/10 text-success font-medium">
                         Recomendado
                       </span>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      Tire fotos do veículo agora mesmo usando seu celular
+                      Tire fotos do veículo agora pelo celular. Disponível para planos com cobertura de Roubo &amp; Furto.
                     </p>
                     <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
@@ -155,73 +171,67 @@ export function EtapaVistoria({
                 </div>
               </button>
 
-              {/* Opção Agendar */}
-              <button
-                onClick={() => {
-                  // Se tipoInstalacao definido, pular escolha-local e ir direto
-                  if (tipoInstalacao === 'rota') {
-                    setModo('agendada');
-                  } else if (tipoInstalacao === 'base') {
-                    setModo('escolha-base');
-                  } else {
-                    setModo('escolha-local');
-                  }
-                }}
-                className="w-full p-4 rounded-xl border border-border/50 bg-card/50 hover:bg-accent/10 hover:border-primary/50 transition-all group text-left"
-              >
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-muted/50 flex items-center justify-center shrink-0 group-hover:bg-muted transition-colors">
-                    <Calendar className="h-6 w-6 text-muted-foreground" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-foreground mb-1">Agendar Vistoria Presencial</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Agende uma data e horário para realizar a vistoria
-                    </p>
-                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        Horários flexíveis
-                      </span>
+              {/* Card 2: Técnico vai até o cliente */}
+              {tipoInstalacao !== 'base' && (
+                <button
+                  onClick={() => setModo('agendada')}
+                  className="w-full p-4 rounded-xl border border-border/50 bg-card/50 hover:bg-accent/10 hover:border-primary/50 transition-all group text-left"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-muted/50 flex items-center justify-center shrink-0 group-hover:bg-muted transition-colors">
+                      <Home className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-foreground mb-1">Quero que o técnico venha até mim</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Um técnico vai ao seu endereço realizar a vistoria/instalação.
+                      </p>
+                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          Agendamento em até 48h
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </button>
+                </button>
+              )}
+
+              {/* Card 3: Cliente leva à Base */}
+              {tipoInstalacao !== 'rota' && (
+                <button
+                  onClick={() => setModo('escolha-base')}
+                  className="w-full p-4 rounded-xl border border-border/50 bg-card/50 hover:bg-accent/10 hover:border-primary/50 transition-all group text-left"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center shrink-0 group-hover:bg-orange-500/20 transition-colors">
+                      <Building2 className="h-6 w-6 text-orange-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-foreground mb-1">Quero levar meu veículo à Base</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Leve o veículo a uma unidade Praticcar para realizar a vistoria/instalação.
+                      </p>
+                      <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                        {enderecoBase && (
+                          <div className="flex items-start gap-1">
+                            <MapPin className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                            <span className="truncate">{enderecoBase}</span>
+                          </div>
+                        )}
+                        {horarioBase && (
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-3 w-3 flex-shrink-0" />
+                            <span>Horário: {horarioBase}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              )}
             </CardContent>
           </Card>
-        </motion.div>
-      )}
-
-      {/* NOVA TELA: Escolha do local da vistoria */}
-      {modo === 'escolha-local' && (
-        <motion.div
-          key="escolha-local"
-          initial={{ opacity: 0, x: 50 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -50 }}
-          transition={{ duration: 0.3 }}
-        >
-          <div className="mb-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setModo('escolha')}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Voltar
-            </Button>
-          </div>
-          <EscolhaLocalVistoria 
-            onEscolher={(local) => {
-              if (local === 'cliente') {
-                setModo('agendada');
-              } else {
-                setModo('escolha-base');
-              }
-            }}
-            tipoInstalacao={tipoInstalacao}
-          />
         </motion.div>
       )}
 
@@ -239,7 +249,7 @@ export function EtapaVistoria({
               setOficinaIdSelecionada(oficinaId);
               setModo('agendada-base');
             }}
-            onVoltar={() => setModo(tipoInstalacao ? 'escolha' : 'escolha-local')}
+            onVoltar={() => setModo('escolha')}
           />
         </motion.div>
       )}
