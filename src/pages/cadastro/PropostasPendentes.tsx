@@ -59,11 +59,22 @@ function getStatusBadge(
   temDocPendente?: boolean,
   instalacaoInfo?: any,
   tipoEtapa?: string | null,
-  proposta?: { plano_tem_roubo_furto?: boolean; vistoria?: { status?: string } | null } | null,
+  proposta?: { plano_tem_roubo_furto?: boolean; vistoria?: { status?: string } | null; cadastro_aprovado?: boolean; tipo_vistoria?: string | null } | null,
 ) {
   // Aguard. Doc só quando realmente há documento pendente do cliente
   if (temDocPendente && status === 'assinado') {
     return <Badge className="bg-orange-500/15 text-orange-500 border-orange-500/30 text-[10px] px-1.5">Aguard. Doc</Badge>;
+  }
+
+  // Cadastro já aprovou + cenário SEM autovistoria + instalação ainda não concluída
+  // → "Pendente Vistoria Inicial" (vistoria presencial / vistoria-base)
+  if (
+    status === 'assinado' &&
+    proposta?.cadastro_aprovado &&
+    proposta?.tipo_vistoria !== 'autovistoria' &&
+    (!instalacaoInfo || instalacaoInfo?.status !== 'concluida')
+  ) {
+    return <Badge className="bg-purple-500/15 text-purple-500 border-purple-500/30 text-[10px] px-1.5">Pendente Vistoria Inicial</Badge>;
   }
 
   // NOVO: badge "Agendado" para propostas em fase de pré-execução
