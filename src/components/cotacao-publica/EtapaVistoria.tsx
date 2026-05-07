@@ -230,35 +230,8 @@ export function EtapaVistoria({
                   </div>
                 </button>
               )}
-      {modo === 'escolha-local' && (
-        <motion.div
-          key="escolha-local"
-          initial={{ opacity: 0, x: 50 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -50 }}
-          transition={{ duration: 0.3 }}
-        >
-          <div className="mb-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setModo('escolha')}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Voltar
-            </Button>
-          </div>
-          <EscolhaLocalVistoria 
-            onEscolher={(local) => {
-              if (local === 'cliente') {
-                setModo('agendada');
-              } else {
-                setModo('escolha-base');
-              }
-            }}
-            tipoInstalacao={tipoInstalacao}
-          />
+            </CardContent>
+          </Card>
         </motion.div>
       )}
 
