@@ -332,7 +332,7 @@ export default function PropostasPendentes() {
                 className={cn(
                   "group p-3 sm:p-3.5 rounded-xl bg-card border border-border transition-all cursor-pointer border-l-4",
                   "hover:bg-accent/30 hover:shadow-sm sm:hover:translate-x-1",
-                  getWaitColor(proposta.data_assinatura),
+                  getWaitColor(proposta.tempo_referencia || proposta.data_assinatura),
                   hasReanalise && "ring-1 ring-amber-500/30 bg-amber-500/5"
                 )}
                 onClick={() => navigate(`/cadastro/propostas/${proposta.id}`)}
@@ -418,9 +418,9 @@ export default function PropostasPendentes() {
                       {proposta.plano?.nome || proposta.plano_nome}
                     </Badge>
                   )}
-                  <span className={cn("ml-auto text-[10px] font-semibold tabular-nums", getWaitTextColor(proposta.data_assinatura))}>
-                    {proposta.data_assinatura
-                      ? formatDistanceToNow(new Date(proposta.data_assinatura), { locale: ptBR, addSuffix: false })
+                  <span className={cn("ml-auto text-[10px] font-semibold tabular-nums", getWaitTextColor(proposta.tempo_referencia || proposta.data_assinatura))}>
+                    {(proposta.tempo_referencia || proposta.data_assinatura)
+                      ? formatDistanceToNow(new Date(proposta.tempo_referencia || proposta.data_assinatura!), { locale: ptBR, addSuffix: false })
                       : '---'}
                   </span>
                 </div>

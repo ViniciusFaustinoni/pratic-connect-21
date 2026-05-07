@@ -109,6 +109,13 @@ export interface PropostaPendente {
   id: string;
   numero: string | null;
   data_assinatura: string | null;
+  /**
+   * Timestamp usado para o "tempo de espera" exibido na lista.
+   * É o mais recente entre: assinatura, última atualização do contrato,
+   * criação da vistoria, conclusão da instalação e criação do agendamento.
+   * Reflete o tempo na fila atual (não o tempo desde a assinatura).
+   */
+  tempo_referencia: string | null;
   valor_mensal: number | null;
   status: string | null;
   tipo_etapa_analise: TipoEtapaAnalise | null;
@@ -241,7 +248,8 @@ export function usePropostasPendentes() {
           plano_id,
           vendedor_id,
           veiculo_id,
-          cadastro_aprovado
+          cadastro_aprovado,
+          updated_at
         `)
         .eq('status', 'assinado')
         .order('data_assinatura', { ascending: true });
@@ -683,10 +691,27 @@ export function usePropostasPendentes() {
 
         const planoTemRouboFurto = contrato.plano_id ? !!mPlanoRouboFurto.get(contrato.plano_id) : false;
 
+        // Tempo de referência = mais recente entre marcos relevantes.
+        // Garante que ações posteriores (cliente concluiu link, agendou, vistoria, etc.)
+        // "zerem" o tempo de espera exibido — não usar só data_assinatura.
+        const candidatosTempo: (string | null | undefined)[] = [
+          contrato.data_assinatura,
+          (contrato as any).updated_at,
+          vistoriaData?.created_at,
+          instConc?.concluida_em,
+          instAtiva?.created_at,
+          agend?.data_agendada,
+        ];
+        const tempoReferencia = candidatosTempo
+          .filter((d): d is string => !!d)
+          .map(d => new Date(d).getTime())
+          .reduce<number | null>((max, t) => (max === null || t > max ? t : max), null);
+
         return {
           ...contrato,
           cadastro_aprovado: (contrato as any).cadastro_aprovado ?? false,
           tipo_etapa_analise: tipoEtapaAnalise,
+          tempo_referencia: tempoReferencia ? new Date(tempoReferencia).toISOString() : contrato.data_assinatura,
           associado,
           plano,
           plano_nome: planoNome,
@@ -1352,6 +1377,7 @@ export function useProposta(contratoId: string | undefined) {
         ...contrato,
         cadastro_aprovado: (contrato as any).cadastro_aprovado ?? false,
         tipo_etapa_analise: tipoEtapaAnaliseSingle,
+        tempo_referencia: (contrato as any).updated_at || (contrato as any).data_assinatura || null,
         associado,
         plano,
         plano_nome: planoNome,
