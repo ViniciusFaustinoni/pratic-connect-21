@@ -401,7 +401,7 @@ export default function PropostasPendentes() {
                       NOVO
                     </Badge>
                   )}
-                  {getStatusBadge(proposta.status, proposta.associado_status, proposta.tem_documento_pendente, proposta.instalacao_info, proposta.tipo_etapa_analise)}
+                  {getStatusBadge(proposta.status, proposta.associado_status, proposta.tem_documento_pendente, proposta.instalacao_info, proposta.tipo_etapa_analise, proposta)}
                   {(proposta.plano?.nome || proposta.plano_nome) && (
                     <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-5 max-w-[60%] truncate">
                       {proposta.plano?.nome || proposta.plano_nome}
