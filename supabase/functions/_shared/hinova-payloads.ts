@@ -175,6 +175,15 @@ export function buildVeiculoPayload(
   ctx: VeiculoCtx,
 ): Record<string, unknown> {
   const placaSga = placaParaSga(veiculo.placa);
+  // RENAVAM: tratamos placeholders ("00000000000", string vazia) como ausentes.
+  // Para 0KM (placa placeholder ou aguardando_placa_definitiva) o documento ainda
+  // não foi emitido — OMITIMOS a chave para a Hinova não rejeitar como obrigatório.
+  const renavamRaw = cleanDigits(veiculo.renavam);
+  const renavamValido = !!renavamRaw && !/^0+$/.test(renavamRaw);
+  const isZeroKm = !placaSga || veiculo.aguardando_placa_definitiva === true;
+  const incluirRenavam = renavamValido && !isZeroKm
+    ? { renavam: renavamRaw }
+    : (renavamValido ? { renavam: renavamRaw } : {});
   const payload: Record<string, unknown> = {
     codigo_associado: ctx.codigo_associado,
     // Hinova doc: "Caso o veículo seja ZERO KM não necessário enviar ou enviar vazio".
@@ -182,7 +191,7 @@ export function buildVeiculoPayload(
     // Por isso OMITIMOS a chave inteira quando 0KM/placeholder.
     ...(placaSga ? { placa: placaSga } : {}),
     chassi: cleanAlphaNum(veiculo.chassi),
-    renavam: cleanDigits(veiculo.renavam),
+    ...incluirRenavam,
     ano_fabricacao: veiculo.ano_fabricacao || veiculo.ano_modelo,
     ano_modelo: veiculo.ano_modelo,
     codigo_fipe,
