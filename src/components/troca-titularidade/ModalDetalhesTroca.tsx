@@ -225,7 +225,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                 </div>
               </TabsContent>
 
-              <TabsContent value="timeline" className="pt-3">
+              <TabsContent value="timeline" className="pt-3 space-y-3">
                 <TimelineAprovacao
                   status={solicitacao.status}
                   termoAssinadoEm={solicitacao.termo_cancelamento_assinado_em}
@@ -233,6 +233,9 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                   aprovadoMonitoramentoEm={solicitacao.aprovado_monitoramento_em}
                   efetivadaEm={solicitacao.efetivada_em}
                 />
+                {solicitacao.servico_vistoria_id && (
+                  <MiniCardVistoriaTroca servicoId={solicitacao.servico_vistoria_id} />
+                )}
               </TabsContent>
             </Tabs>
 
