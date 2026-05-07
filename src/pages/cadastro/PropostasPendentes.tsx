@@ -418,9 +418,9 @@ export default function PropostasPendentes() {
                       {proposta.plano?.nome || proposta.plano_nome}
                     </Badge>
                   )}
-                  <span className={cn("ml-auto text-[10px] font-semibold tabular-nums", getWaitTextColor(proposta.data_assinatura))}>
-                    {proposta.data_assinatura
-                      ? formatDistanceToNow(new Date(proposta.data_assinatura), { locale: ptBR, addSuffix: false })
+                  <span className={cn("ml-auto text-[10px] font-semibold tabular-nums", getWaitTextColor(proposta.tempo_referencia || proposta.data_assinatura))}>
+                    {(proposta.tempo_referencia || proposta.data_assinatura)
+                      ? formatDistanceToNow(new Date(proposta.tempo_referencia || proposta.data_assinatura!), { locale: ptBR, addSuffix: false })
                       : '---'}
                   </span>
                 </div>
