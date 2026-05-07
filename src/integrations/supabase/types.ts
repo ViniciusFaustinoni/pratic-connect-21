@@ -33812,6 +33812,10 @@ export type Database = {
         }
         Returns: Json
       }
+      recompute_cotacao_status_contratacao: {
+        Args: { p_cotacao_id: string }
+        Returns: undefined
+      }
       reservar_encaixe_urgente: {
         Args: { p_encaixe_id: string; p_profissional_id: string }
         Returns: boolean
