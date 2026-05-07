@@ -69,6 +69,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { useCotacoesRealtime } from '@/hooks/useCotacoesRealtime';
 import { useDebounce } from '@/hooks/useDebounce';
+import { OutrosProcessosPanel } from '@/components/cotacoes/OutrosProcessosPanel';
+import { useOutrosProcessos } from '@/hooks/useOutrosProcessos';
 import { Sparkles, Package } from 'lucide-react';
 
 // Categorização dinâmica — fallback por termos quando benefits.category não está disponível
