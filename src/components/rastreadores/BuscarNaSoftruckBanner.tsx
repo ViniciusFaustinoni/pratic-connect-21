@@ -148,7 +148,7 @@ export function BuscarNaSoftruckBanner({ termo, onEncontrado }: BuscarNaSoftruck
               {loading === 'all' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
               Buscar em todas
             </Button>
-            {PLATAFORMAS.map((p) => (
+            {plataformasAtivas.map((p) => (
               <Button
                 key={p.key}
                 size="sm"
