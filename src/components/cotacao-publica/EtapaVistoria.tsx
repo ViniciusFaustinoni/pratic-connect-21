@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Camera, Calendar, Smartphone, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { Camera, Calendar, Home, Building2, MapPin, Clock, Smartphone, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { AutovistoriaCotacao } from './AutovistoriaCotacao';
 import { AgendamentoCotacao } from './AgendamentoCotacao';
 import { EscolhaLocalVistoria } from './EscolhaLocalVistoria';
 import { EscolhaBase } from './EscolhaBase';
 import { AgendamentoBase } from './AgendamentoBase';
+import { useConfiguracaoBase } from '@/hooks/useAgendamentoBase';
 import type { TipoVeiculo } from '@/data/autovistoriaConfig';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
