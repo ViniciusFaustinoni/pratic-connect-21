@@ -1,99 +1,61 @@
 ## Causa-raiz
 
-A fila **Monitoramento › Aprovações › Aprovação de Associados** usa o filtro `veiculos.cobertura_total !== true` (`src/hooks/useAprovacaoMonitoramento.ts` linhas 39–42 e 69–70). Hoje, dois triggers de banco já promovem o veículo automaticamente ao concluir a instalação, fazendo com que o item nunca apareça na fila e o ciclo "pule" o monitoramento.
+`supabase/functions/sga-hinova-sync/index.ts` (linha 374-388) trata RENAVAM como obrigatório para qualquer veículo. Para 0KM o documento ainda não foi emitido pelo Detran e o campo fica vazio, marcando o registro como `falha_permanente` na fila SGA.
 
-Triggers culpados (confirmados via `pg_trigger`):
+Casos pendentes em `sga_sync_queue` (todos 0KM, sem renavam):
 
-1. `trg_reativar_cobertura_pos_instalacao_inst` em `instalacoes` → `fn_reativar_cobertura_pos_instalacao_v2`
-   - Caso B: ao concluir qualquer instalação, faz `cobertura_total=true, cobertura_roubo_furto=true` no veículo, mesmo sem decisão do monitoramento.
-   - Também promove `veiculos.status` para `ativo` em pré-ativação.
-2. `trg_reativar_cobertura_pos_instalacao` em `servicos` → `fn_reativar_cobertura_pos_instalacao`
-   - Mesma lógica para `servicos.status='concluida'` do tipo `instalacao`.
-3. `fn_reconciliar_status_pos_instalacao` (cron de reconciliação) faz a mesma coisa em lote.
+| Placa     | Chassi              | Tentativas | Erro |
+|-----------|---------------------|------------|------|
+| 0KMD915D  | 9C2KC2210TR077722   | 11         | RENAVAM obrigatório |
+| 0KM3D5B4  | 9C2KF5200TR010154   | 10         | RENAVAM obrigatório |
+| 0KM522E8  | 9C2KC2200TR469045   | 10         | RENAVAM obrigatório |
+| 0KM91CD6  | 9C2KF5210TR007705   | 10         | RENAVAM=`0000000` (placeholder) — outro erro Hinova "Página não encontrada" |
 
-Confirmado em produção: instalação `local_vistoria='base'` placa `QXV0H02` concluída em 20/04 ficou direto com `cobertura_total=true` e `status=ativo`, sem passar por aprovação. Mesma situação em todas as últimas instalações da semana — a fila do monitoramento sempre fica vazia para esses casos.
+Outros 2 casos da fila são por placa duplicada (associado já existe no Hinova) — fora do escopo deste fix.
 
-Isso viola a regra de negócio (memória `mem://architecture/activation/single-source-activation`): a ativação do veículo/cobertura deve passar **exclusivamente** pela edge function `ativar-associado`, que é chamada pelo hook `useAprovarInstalacaoMonitoramento` quando o operador clica "Aprovar" na tela de Aprovações.
+## O que faremos
 
-## O que faremos (raiz, não cosmética)
+### 1. `sga-hinova-sync/index.ts` — RENAVAM opcional para 0KM
 
-### 1. Migration — corrigir os 3 pontos que contornam o monitoramento
+Substituir o bloco de validação:
 
-- **`fn_reativar_cobertura_pos_instalacao_v2`** (trigger em `instalacoes`):
-  - Manter o **Caso A** (cobertura_suspensa por timeout 48h → religa, pois é reativação operacional, não ativação inicial).
-  - **Remover o Caso B** (que ativava `cobertura_total=true` na conclusão normal).
-  - **Remover** a promoção de `veiculos.status` para `'ativo'`. Em pré-ativação ela passa a ir para um estado neutro `aguardando_aprovacao_monitoramento` (ou mantém `instalacao_pendente`/`em_analise` — a aprovação do monitoramento via `ativar-associado` é quem promove para `ativo`).
+```ts
+const isZeroKm = String(veiculo.placa || '').toUpperCase().startsWith('0KM')
+  || veiculo.aguardando_placa_definitiva === true;
 
-- **`fn_reativar_cobertura_pos_instalacao`** (trigger em `servicos`): mesma poda. Mantém só o caso de reativação após `cobertura_suspensa=true`.
-
-- **`fn_reconciliar_status_pos_instalacao`** (cron): remove o `cobertura_total=true / cobertura_roubo_furto=true / status='ativo'`. O cron continua existindo, mas só corrige inconsistências reais de status quando o monitoramento já aprovou (ex.: ficou em `instalacao_pendente` apesar de `associados.status='ativo'`).
-
-### 2. Garantir que a fila pegue tudo
-
-Hoje `useInstalacoesAguardandoAprovacao` filtra `servicos.tipo='instalacao' AND status='concluida' AND veiculo.cobertura_total != true`. Após a poda dos triggers, **toda** instalação concluída (Base, Rota, Autovistoria, Prestador) cai automaticamente na fila — incluindo `aplicar-conclusao-vistoria`, `concluir-vistoria-prestador`, `concluir-instalacao-prestador` e o checklist do instalador na Base, que já marcam `servicos.status='concluida'` e `instalacoes.status='concluida'` mas NÃO devem mais ativar cobertura.
-
-Adicionar duas defesas extras:
-- No filtro do hook: aceitar também itens cujo `associado.status` ainda não esteja em `ativo` (defesa para fluxos legados).
-- Na fila, mostrar badge da origem (`Base`, `Rota`, `Autovistoria`, `Prestador`) lendo `instalacoes.local_vistoria` + presença de fotos de autovistoria — só visual.
-
-### 3. Backfill controlado (opcional, recomendo executar)
-
-Reverter automaticamente itens concluídos nas últimas 7 dias que **ainda não foram aprovados manualmente**. Critério seguro:
-
-```sql
-UPDATE veiculos v
-   SET cobertura_total = false, status = 'em_analise'
-  FROM servicos s
- WHERE s.veiculo_id = v.id
-   AND s.tipo='instalacao' AND s.status='concluida'
-   AND s.concluida_em > now() - interval '7 days'
-   AND NOT EXISTS (
-     SELECT 1 FROM associados_historico h
-      WHERE h.associado_id = v.associado_id
-        AND h.tipo='protecao_360_aprovada_monitoramento'
-        AND h.created_at >= s.concluida_em
-   )
-   AND v.cobertura_total = true;
+const obrigatorios = [
+  { k: 'placa',  v: veiculo.placa,  label: 'PLACA' },
+  { k: 'chassi', v: veiculo.chassi, label: 'CHASSI' },
+];
+if (!isZeroKm) {
+  obrigatorios.push({ k: 'renavam', v: veiculo.renavam, label: 'RENAVAM' });
+}
 ```
 
-Resultado esperado: as instalações da Base que "passaram batido" voltam para a fila e o monitoramento decide. Isso é destrutivo — vou pedir confirmação antes de aplicar.
+Critério "veículo 0KM" = placa começa com `0KM` (padrão usado pelo sistema, confirmado via dados) **OU** flag `veiculos.aguardando_placa_definitiva = true`.
 
-### 4. Validação em ambiente real
+### 2. Limpar placeholder "0000000"
 
-- Logar como `admin@teste.com` e abrir `/monitoramento/aprovacoes-monitoramento`.
-- Snapshot antes/depois de uma instalação Base de teste:
-  - Conclusão pelo instalador na Base → `servicos.status=concluida`, `instalacoes.status=concluida`, `veiculo.cobertura_total=false`, item aparece na fila.
-  - Aprovar pelo monitoramento → `ativar-associado` roda, vira `ativo`, sai da fila, entra na fila do SGA (`enqueue_integration sga/hinova_sync`).
-- Testar reprovação (já existente) continua funcionando.
-- Testar fluxo Autovistoria + Rota + Prestador, checando que todos passam pela fila.
+Edge function passa a tratar `'0000000'` (e variantes só de zero) como vazio antes de mandar para a Hinova, evitando rejeição.
 
-## Diagrama do fluxo após a correção
+### 3. Reprocessar a fila
 
-```text
-Instalação concluída (Base | Rota | Autovistoria | Prestador)
-        │
-        ▼
-servicos.status=concluida + instalacoes.status=concluida
-veiculo.status=em_analise  (cobertura_total continua false)
-        │
-        ▼
-Fila Monitoramento › Aprovações › Aprovação de Associados
-        │
-        ├── Aprovar → ativar-associado → cobertura_total=true, status=ativo → enfileira SGA
-        └── Reprovar → veiculo/associado=recusado, contrato cancelado, fila SGA recebe 'cancelado'
-```
+Migration que:
+- Atualiza os 3 veículos 0KM presos com `status='pendente'`, `tentativas=0`, `erro_ultimo=null` em `sga_sync_queue`.
+- Limpa `veiculos.renavam='0000000'` para `NULL` no caso `0KM91CD6`.
+- Reenfileira via `enqueue_integration` (`sga` / `hinova_sync`) os 4 veículos para nova tentativa.
 
-## Riscos & mitigação
+### 4. Validação
 
-- **Risco:** veículos cujo SGA já foi sincronizado por outro caminho podem ficar dessincronizados. Mitigação: o cron `cron-sga-retry` já reenfileira; e o backfill exclui casos já aprovados manualmente.
-- **Risco:** triggers de cobertura suspensa. Preservados (caso A).
-- **Risco:** memória `mem://logic/operations/sincronizacao-status-pos-instalacao` afirma que esses triggers garantem que o veículo nunca fique preso em `instalacao_pendente`. Atualizarei a memória para refletir que a promoção para `ativo` agora é responsabilidade exclusiva da aprovação do monitoramento.
+- Conferir `sga_sync_logs` após reprocesso — espera-se que o passo `validar_veiculo` passe e a sync siga até `cadastrar_veiculo` no Hinova.
+- Os 2 casos de "placa já cadastrada" continuam exigindo decisão manual (não tocar agora).
 
-## Arquivos / objetos alterados
+## Riscos
 
-- `supabase/migrations/<nova>.sql` — redefine `fn_reativar_cobertura_pos_instalacao`, `fn_reativar_cobertura_pos_instalacao_v2`, `fn_reconciliar_status_pos_instalacao`.
-- `src/hooks/useAprovacaoMonitoramento.ts` — filtro mais permissivo + label de origem.
-- `src/pages/monitoramento/AcionamentosRouboFurto.tsx` — coluna/badge de origem.
-- `mem://logic/operations/sincronizacao-status-pos-instalacao` e `mem://core` — atualizar regras.
+- Nenhum: a Hinova aceita cadastro sem RENAVAM para 0KM (já confirmado por casos antigos resolvidos manualmente). Se a API Hinova rejeitar mesmo assim, o erro retornará na queue e ficaremos sabendo — sem perda de dados.
 
-Aprovação para seguir? Quer que eu já inclua o backfill da etapa 3 ou prefere rodá-lo separadamente após validar?
+## Memória
+
+Adicionar entrada `mem://logic/operations/sga-renavam-opcional-zero-km` e core: "RENAVAM não é obrigatório para 0KM (placa `0KM*` ou `aguardando_placa_definitiva=true`) na sincronização SGA Hinova."
+
+Aprovar para implementar?
