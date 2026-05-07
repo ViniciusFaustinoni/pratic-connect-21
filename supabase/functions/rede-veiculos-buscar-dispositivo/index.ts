@@ -259,30 +259,16 @@ Deno.serve(async (req) => {
 });
 
 /** Tenta normalizar a resposta da API para o formato esperado. */
-function extrairVeiculo(payload: any, alvo: { placa: string | null; imei: string | null }): any | null {
+function extrairVeiculo(payload: any, _alvo: { placa: string | null; imei: string | null }): any | null {
   if (!payload) return null;
-  // Erro explícito
   if (payload.error === true || payload.error === 'true') return null;
-  if (payload.codigo !== undefined && payload.codigo !== 1 && payload.codigo !== 0) return null;
 
-  // Se for uma lista, encontrar o que bate placa/imei
-  const candidatos: any[] = Array.isArray(payload)
-    ? payload
-    : Array.isArray(payload?.veiculos)
-      ? payload.veiculos
-      : Array.isArray(payload?.data)
-        ? payload.data
-        : (payload?.veiculo ? [payload.veiculo] : (payload?.placa || payload?.imei || payload?.idVeiculo) ? [payload] : []);
-
-  if (!candidatos.length) return null;
-
-  const norm = (s: any) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const match = candidatos.find((c: any) => {
-    if (alvo.placa && norm(c.placa) === alvo.placa) return true;
-    if (alvo.imei && String(c.imei || '') === alvo.imei) return true;
-    return false;
-  }) || candidatos[0];
-  return match || null;
+  // Se a API retornou objeto com veiculo/equipamento/cliente, é um hit.
+  if (payload.veiculo || payload.equipamento || payload.cliente) return payload;
+  if (Array.isArray(payload) && payload.length) return payload[0];
+  if (Array.isArray(payload?.data) && payload.data.length) return payload.data[0];
+  if (payload?.placa || payload?.imei || payload?.idVeiculo) return payload;
+  return null;
 }
 
 function json(body: unknown, status = 200): Response {
