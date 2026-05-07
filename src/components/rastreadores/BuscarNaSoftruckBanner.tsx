@@ -118,7 +118,7 @@ export function BuscarNaSoftruckBanner({ termo, onEncontrado }: BuscarNaSoftruck
           icon: <CheckCircle2 className="h-4 w-4" />,
         });
         if (rastreadorId) onEncontrado?.(rastreadorId);
-      } else if (naoAchadas.length === PLATAFORMAS.length) {
+      } else if (naoAchadas.length === plataformasAtivas.length) {
         toast.warning(`Não encontrado em nenhuma plataforma (${tipoBusca}: ${termoLimpo}).`);
       } else {
         toast.error(`Falha ao consultar: ${errosFalhas.join(' | ')}`);
