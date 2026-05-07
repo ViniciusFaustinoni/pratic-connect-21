@@ -1230,6 +1230,8 @@ export default function Cotacoes() {
           </div>
         )}
       </Tabs>
+        </TabsContent>
+      </Tabs>
 
       {/* Modal de Detalhes — lazy + só monta quando abre */}
       {showDetalhesModal && cotacaoSelecionada && (
