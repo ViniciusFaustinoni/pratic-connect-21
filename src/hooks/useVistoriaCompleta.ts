@@ -47,9 +47,9 @@ export function useAprovarVeiculoVistoria() {
         if (rastError) throw rastError;
       }
 
-      // 1. Atualizar veículo como ativo (com rastreador, se houver)
+      // 1. Atualizar veículo (cobertura/ativação só na aprovação do monitoramento)
       const veiculoUpdate: Record<string, any> = {
-        status: 'ativo',
+        status: 'em_analise',
         updated_at: agora,
       };
       if (data.rastreadorId) veiculoUpdate.rastreador_id = data.rastreadorId;
