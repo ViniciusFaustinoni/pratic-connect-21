@@ -62,6 +62,16 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
   const [observacaoConclusao, setObservacaoConclusao] = useState('');
   const [fotosPreview, setFotosPreview] = useState<{ file: File; preview: string }[]>([]);
 
+  // Cleanup garantido no unmount: revoga blob URLs vivos.
+  useEffect(() => {
+    return () => {
+      fotosPreview.forEach(({ preview }) => {
+        try { URL.revokeObjectURL(preview); } catch { /* ignore */ }
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Fotos do reboquista
   const { data: fotosReboque } = useFotosReboquista(chamadoId);
   const addFotoMutation = useAddFotoReboquista();
