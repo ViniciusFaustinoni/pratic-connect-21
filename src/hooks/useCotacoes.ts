@@ -73,6 +73,8 @@ export interface UseCotacoesOptions {
   vendedorId?: string;
   viewScope?: 'own' | 'team' | 'all';
   searchTerm?: string;
+  /** Filtro adicional (server-side) por consultor escolhido na UI. Aplica-se quando viewScope != 'own'. */
+  consultorId?: string | null;
 }
 
 export interface CotacoesFunilCounts {
