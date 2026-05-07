@@ -136,7 +136,7 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
         .select(`
           id, numero, status, created_at, updated_at,
           vendedor_id, token_publico,
-          nome_solicitante, cpf_solicitante,
+          nome_solicitante, cliente_cpf,
           veiculo_placa, veiculo_marca, veiculo_modelo, veiculo_ano,
           tipo_entrada, dados_extras
         `)
@@ -159,7 +159,7 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
           `veiculo_marca.ilike.${like}`,
           `veiculo_modelo.ilike.${like}`,
           `nome_solicitante.ilike.${like}`,
-          `cpf_solicitante.ilike.${like}`,
+          `cliente_cpf.ilike.${like}`,
         ].join(','));
       }
 
@@ -239,11 +239,11 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
           origemNome = associadoAntigo?.nome ?? null;
           origemCpf = associadoAntigo?.cpf ?? null;
           destinoNome = novoTitular?.nome ?? c.nome_solicitante ?? null;
-          destinoCpf = novoTitular?.cpf ?? c.cpf_solicitante ?? null;
+          destinoCpf = novoTitular?.cpf ?? c.cliente_cpf ?? null;
         } else {
           // substituição/inclusão/migração: titular é o solicitante da cotação
           origemNome = c.nome_solicitante ?? null;
-          origemCpf = c.cpf_solicitante ?? null;
+          origemCpf = c.cliente_cpf ?? null;
         }
 
         const etapa = deriveEtapa(tipo, c.status, troca?.status ?? null);
