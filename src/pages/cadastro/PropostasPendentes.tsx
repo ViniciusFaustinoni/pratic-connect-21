@@ -369,6 +369,7 @@ export default function PropostasPendentes() {
                           </DropdownMenuItem>
                         </>
                       )}
+                    </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
                 </div>
