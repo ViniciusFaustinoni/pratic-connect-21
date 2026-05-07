@@ -191,7 +191,12 @@ export default function Cotacoes() {
   const queryClient = useQueryClient();
   
   // Realtime só na aba "Em Andamento" — finalizadas mudam pouco e geram pressão.
-  useCotacoesRealtime({ enabled: isEmAndamentoTab });
+  // Filtra eventos por vendedor quando o escopo é "own" (reduz drasticamente o volume).
+  useCotacoesRealtime({
+    enabled: isEmAndamentoTab,
+    vendedorId: permissions.userId,
+    viewScope: permissions.cotacao.viewScope,
+  });
 
   useEffect(() => {
     const leadParam = searchParams.get('lead');
