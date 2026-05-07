@@ -206,6 +206,13 @@ export function PropostaHeroHeader({
                 <Clock className="h-3.5 w-3.5" />
                 Aguardando docs do cliente
               </Badge>
+            ) : (proposta as any).cadastro_aprovado &&
+              (proposta as any).tipo_vistoria !== 'autovistoria' &&
+              (!proposta.instalacao_info || proposta.instalacao_info?.status !== 'concluida') ? (
+              <Badge className="bg-purple-500/15 text-purple-500 border-purple-500/30 gap-1.5 px-3 py-1.5">
+                <Clock className="h-3.5 w-3.5" />
+                Pendente Vistoria Inicial
+              </Badge>
             ) : proposta.status === 'ativo' ? (
               <Badge className="bg-success/15 text-success border-success/30 gap-1.5 px-3 py-1.5">
                 <CheckCircle className="h-3.5 w-3.5" />
