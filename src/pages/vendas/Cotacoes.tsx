@@ -69,6 +69,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { useCotacoesRealtime } from '@/hooks/useCotacoesRealtime';
 import { useDebounce } from '@/hooks/useDebounce';
+import { OutrosProcessosPanel } from '@/components/cotacoes/OutrosProcessosPanel';
+import { useOutrosProcessos } from '@/hooks/useOutrosProcessos';
 import { Sparkles, Package } from 'lucide-react';
 
 // Categorização dinâmica — fallback por termos quando benefits.category não está disponível
@@ -128,6 +130,7 @@ export default function Cotacoes() {
   const [ignorarPlacaIds, setIgnorarPlacaIds] = useState<string[]>([]);
   const [copiandoWhatsApp, setCopiandoWhatsApp] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>('em_andamento');
+  const [outerTab, setOuterTab] = useState<'cotacoes' | 'outros'>('cotacoes');
   
   // Filtros
   const [dataFilter, setDataFilter] = useState<Date | undefined>(undefined);
@@ -178,6 +181,7 @@ export default function Cotacoes() {
     page: currentPage,
     pageSize: PAGE_SIZE,
     statusGroup: isEmAndamentoTab ? 'em_andamento' : 'finalizadas',
+    excluirTiposEntrada: ['troca_titularidade', 'substituicao_placa', 'substituicao', 'inclusao_veiculo', 'inclusao', 'migracao'],
   });
   const cotacoes = paginatedResult?.data;
   const totalPaginaAtual = paginatedResult?.count ?? 0;
@@ -189,7 +193,14 @@ export default function Cotacoes() {
     viewScope: permissions.cotacao.viewScope,
     searchTerm: search,
   });
-  
+
+  // Contagem leve de "outros processos" para o badge da aba externa
+  const { data: outrosProcessosList } = useOutrosProcessos({
+    vendedorId: permissions.userId,
+    viewScope: permissions.cotacao.viewScope,
+  });
+  const outrosCount = outrosProcessosList?.length ?? 0;
+
   const updateCotacao = useUpdateCotacao();
   const gerarContrato = useGerarContrato();
   const duplicarCotacao = useDuplicarCotacao();
@@ -823,6 +834,31 @@ export default function Cotacoes() {
         </div>
       </div>
 
+      {/* Switcher externo: Cotações vs Outros Processos */}
+      <Tabs value={outerTab} onValueChange={(v) => setOuterTab(v as 'cotacoes' | 'outros')}>
+        <TabsList className="grid w-full max-w-lg grid-cols-2">
+          <TabsTrigger value="cotacoes" className="gap-2">
+            Cotações
+            {funilCounts && funilCounts.total > 0 && (
+              <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+                {funilCounts.total}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="outros" className="gap-2">
+            Outros Processos
+            <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+              {outrosCount}
+            </Badge>
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="outros" className="mt-4">
+          <OutrosProcessosPanel />
+        </TabsContent>
+
+        <TabsContent value="cotacoes" className="mt-4 space-y-6">
+
       {/* Stats Bar - Pills flutuantes */}
       <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 -mx-1 px-1">
         {statusStats.map((item) => {
@@ -1193,6 +1229,8 @@ export default function Cotacoes() {
             </div>
           </div>
         )}
+      </Tabs>
+        </TabsContent>
       </Tabs>
 
       {/* Modal de Detalhes — lazy + só monta quando abre */}

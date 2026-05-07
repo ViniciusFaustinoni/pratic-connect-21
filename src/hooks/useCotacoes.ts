@@ -75,6 +75,11 @@ export interface UseCotacoesOptions {
   searchTerm?: string;
   /** Filtro adicional (server-side) por consultor escolhido na UI. Aplica-se quando viewScope != 'own'. */
   consultorId?: string | null;
+  /**
+   * Exclui da listagem cotações cujo `dados_extras->>tipo_entrada` esteja nesta lista.
+   * Usado para separar "cotações novas" de "outros processos" (troca, substituição, inclusão, migração).
+   */
+  excluirTiposEntrada?: string[];
 }
 
 export interface CotacoesFunilCounts {
@@ -156,8 +161,9 @@ async function fetchCotacoesCore(params: {
   pageSize?: number;
   statusGroup?: CotacoesStatusGroup;
   consultorId?: string | null;
+  excluirTiposEntrada?: string[];
 }) {
-  const { effectiveScope, effectiveVendedorId, search, page, pageSize, statusGroup, consultorId } = params;
+  const { effectiveScope, effectiveVendedorId, search, page, pageSize, statusGroup, consultorId, excluirTiposEntrada } = params;
 
   let query = supabase
     .from('cotacoes')
@@ -203,9 +209,16 @@ async function fetchCotacoesCore(params: {
     );
   }
 
+  // Excluir tipos de entrada de "Outros Processos" (troca/substituição/inclusão/migração)
+  if (excluirTiposEntrada && excluirTiposEntrada.length > 0) {
+    const list = excluirTiposEntrada.map((t) => `"${t}"`).join(',');
+    query = query.or(`tipo_entrada.is.null,tipo_entrada.not.in.(${list})`);
+  }
+
   if (search) {
     const safe = search.replace(/[,()]/g, '');
     const like = `%${safe}%`;
+
 
     const { data: leadsMatch } = await supabase
       .from('leads')
@@ -305,6 +318,7 @@ export function useCotacoesPaginadas(options: UseCotacoesPaginadasOptions) {
   const page = Math.max(1, options.page ?? 1);
   const pageSize = options.pageSize ?? 50;
   const statusGroup = options.statusGroup ?? 'all';
+  const excluirTiposEntrada = options.excluirTiposEntrada;
 
   return useQuery({
     queryKey: [
@@ -317,6 +331,7 @@ export function useCotacoesPaginadas(options: UseCotacoesPaginadasOptions) {
       statusGroup,
       page,
       pageSize,
+      excluirTiposEntrada?.join(',') || null,
     ],
     queryFn: () =>
       fetchCotacoesCore({
@@ -327,6 +342,7 @@ export function useCotacoesPaginadas(options: UseCotacoesPaginadasOptions) {
         pageSize,
         statusGroup,
         consultorId,
+        excluirTiposEntrada,
       }),
     placeholderData: keepPreviousData,
     staleTime: Infinity,

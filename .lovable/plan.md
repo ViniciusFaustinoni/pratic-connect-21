@@ -1,71 +1,112 @@
-## Diagnóstico atual
 
-**Tabela `softruck_eventos`** tem só 2 registros (29/01/2026): 1 `DEVICES.ASSOCIATED` + 1 `DEVICES.DISASSOCIATED`. Nada chegou desde então. Isso significa que **o webhook nem está sendo disparado pela Softtruck** — não é o handler que está travando, é a entrega que não vem.
+## Objetivo
 
-**Webhook não tem validação de assinatura** (só registra IP/headers). Então qualquer requisição válida seria gravada — confirma que o problema é upstream (config do painel Softtruck, IP bloqueado, ou URL antiga).
-
-**Rede Veículos** não tem webhook. A função `rede-veiculos-sincronizar-status` hoje só compara `ativo/inativo` e nunca olha se o vínculo dispositivo↔veículo ainda existe na plataforma.
-
-**Histórico**: tabela `rastreadores_vinculo_historico` já existe (campos `veiculo_id_anterior/novo`, `status_anterior/novo`, `origem`, `contexto`). Vamos usá-la.
+Dar ao consultor uma visão visual e dedicada para acompanhar processos que **não são cotação nova**: troca de titularidade, substituição de placa, inclusão de veículo e migração. Hoje essas solicitações já existem em `cotacoes` (com `dados_extras.tipo_entrada`), mas ficam misturadas e com sinalização fraca na aba principal.
 
 ---
 
-## Mudanças
+## O que será feito
 
-### 1. `softruck-webhook` — handler `handleDeviceDisassociated` (auto-desvincular)
+### 1. Nova aba "Outros Processos" ao lado de "Cotações"
 
-Mantém alerta crítico + notificação. Adiciona, quando o rastreador está vinculado a um veículo no nosso sistema:
+Em `src/pages/vendas/Cotacoes.tsx`, envolver a listagem em um `Tabs` com duas abas:
 
-- Captura `veiculo_id_anterior`, `placa_anterior`, `status_anterior` do rastreador
-- Atualiza `rastreadores`: `veiculo_id=null`, `associado_id=null`, `plataforma_veiculo_id=null`, `status='estoque'`, `bloqueado=false`, `local_instalacao=null`, `descricao_instalacao=null`
-- Insere em `rastreadores_vinculo_historico` com `origem='webhook_softtruck_disassociated'`, contexto com payload original
-- Atualiza alerta gerado com flag `auto_desvinculado=true` no `dados_extras`
+- **Cotações** (default) — comportamento atual, mas filtrando OUT registros cujo `dados_extras.tipo_entrada` esteja em `['troca_titularidade','substituicao_placa','inclusao_veiculo','migracao']`. Cotação nova continua exatamente como está.
+- **Outros Processos** — nova visão com tabela própria adaptada por tipo.
 
-### 2. `rede-veiculos-sincronizar-status` — detectar divergência de vínculo
+Contagem de cada aba aparece em badge no `TabsTrigger` (ex: "Outros Processos · 12"), usando o mesmo padrão de `useCotacoesFunilCounts`.
 
-Hoje só compara status. Vai passar a verificar se o veículo ainda está associado ao dispositivo na Rede:
+### 2. Hook `useOutrosProcessos`
 
-- Para cada veículo com `rede_veiculos_veiculo_id`, consultar endpoint da Rede que retorna o dispositivo vinculado (já usamos `/veiculos/{id}/posicao/`; se o response não retornar `dispositivo`/`equipamento` ou retornar 404, considerar desvinculado)
-- Se desvinculado na plataforma E ainda vinculado no nosso lado:
-  - Mesmo tratamento da Softtruck: zera vínculos no `rastreadores`, status `estoque`
-  - Cria alerta crítico (`tipo='desinstalacao'`, `severidade='critica'`, `titulo='Dispositivo desvinculado na Rede Veículos'`)
-  - Histórico em `rastreadores_vinculo_historico` com `origem='sync_rede_veiculos_desvinculo'`
-  - Dispara `disparar-notificacao`
-- Comportamento controlado por flag `forcarAtualizacao` apenas para a parte de status; **desvínculo de vínculo dispara sempre** (é evento de auditoria, não opcional)
+Novo hook em `src/hooks/useOutrosProcessos.ts` que faz **uma query unificada** retornando registros normalizados:
 
-### 3. Cron de sincronização Rede Veículos
+```text
+{
+  id, tipo: 'troca'|'substituicao'|'inclusao'|'migracao',
+  cotacao_id, criado_em, vendedor,
+  titular_origem: { nome, cpf },
+  titular_destino: { nome, cpf } | null,   // só troca
+  veiculo: { placa, marca, modelo },
+  etapa_atual: string,                      // legível: "Termo pendente", "Aguardando cadastro"...
+  status_termo: 'nao_aplicavel'|'pendente'|'enviado'|'assinado'|'recusado',
+  status_assinatura_contrato: ...,           // quando aplicável
+  pendencia_financeira?: { qtd, total },
+  acao_disponivel: string                    // CTA contextual
+}
+```
 
-A `rede-veiculos-sincronizar-status` hoje precisa ser chamada por associado. Para cobrir o caso "desvinculou na Rede e ninguém abriu o associado", vamos adicionar um cron 30 min que itera nos associados ativos com rastreador Rede e dispara a sync. Já existe padrão de cron 15min (`fn_reconciliar_status_pos_instalacao`). Cria o cron via migration usando `pg_cron` + edge function wrapper `rede-veiculos-sync-cron` (lê associados ativos com `rede_veiculos_veiculo_id`, invoca a sync para cada um em lote de 50).
+Fontes:
+- **Troca** → `solicitacoes_troca_titularidade` + `cotacoes` + `relacionamento_debitos_pendentes` (já consumidos por `useSolicitacoesTroca` e `TrocaTitularidadeBadge`).
+- **Substituição** / **Inclusão** / **Migração** → `cotacoes` filtradas por `dados_extras.tipo_entrada` + join com `contratos`/`veiculos` para resolver etapa.
 
-### 4. Investigação webhook Softtruck (paralelo, mas concreto)
+Reaproveita o motor de status do `TrocaTitularidadeBadge` (mapa `STATUS_LABELS`) e expande para os outros tipos.
 
-Não dá pra "perguntar à Softtruck" daqui. Os passos concretos:
+### 3. Componente `OutrosProcessosTable`
 
-a) **Adicionar logging mais robusto** no `softruck-webhook`: logar todo header recebido, IP, e gravar até requisições inválidas em uma tabela `softruck_webhook_raw_log` (rotativa, últimos 7 dias). Hoje, se a Softtruck mandar payload com formato diferente, o `req.json()` falha e a gente perde rastro.
+Novo componente `src/components/cotacoes/OutrosProcessosTable.tsx` (irmão de `CotacoesTable.tsx`), com colunas dedicadas:
 
-b) **Endpoint de health check** `GET /softruck-webhook?ping=1` que retorna `200 ok` para validar do lado deles que a URL está acessível.
+- Tipo (chip colorido por tipo: troca = âmbar, substituição = azul, inclusão = verde, migração = roxo)
+- Origem → Destino (ex: "João Silva → Maria Souza" para troca; "ABC1D23 → DEF4G56" para substituição)
+- Veículo
+- Vendedor (sem truncamento — segue correção já aplicada no `CotacoesTable`)
+- Etapa atual (badge igual ao `TrocaTitularidadeBadge`, expandido)
+- Termo / Assinatura (ícone de status)
+- Última atualização
+- Ações (Ver detalhes, Reenviar termo, Abrir cotação relacionada, Cancelar)
 
-c) **Comparar com a config esperada**: a URL pública é `https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/softruck-webhook`. Confirmar com o time/painel Softtruck se essa URL está cadastrada e os eventos `DEVICES.*` estão habilitados — isso é ação no painel deles (te aviso para fazer/confirmar lá).
+Versão mobile em `OutrosProcessosMobileList.tsx` (mesmo padrão de `CotacoesMobileList`).
 
-### 5. Atualizar memórias
+### 4. Filtros locais da aba
 
-- `mem://logic/operations/rastreador-vinculo-preservacao`: adicionar exceção "desassociação confirmada via webhook DEVICES.DISASSOCIATED da Softtruck OU divergência detectada na sync da Rede Veículos também zera vínculo automaticamente, registrando origem em `rastreadores_vinculo_historico`"
-- `mem://logic/operations/softruck-desvinculo-usuario-veiculo`: refletir que agora o webhook auto-desvincula (não fica só em alerta)
-- Nova memória `mem://logic/operations/rede-veiculos-desvinculo-via-sync`: regra do desvínculo via sincronização
+Linha de filtros acima da tabela:
+- **Tipo**: Todos / Troca / Substituição / Inclusão / Migração
+- **Etapa**: Em andamento / Aguardando cliente / Aguardando interno / Concluídos / Reprovados
+- **Vendedor** (respeitando regra `funil-cotacao-vendor-scoping` — vendedor não-gestor só vê os próprios)
+- **Busca**: nome, CPF, placa
+
+### 5. Drawer de detalhe unificado
+
+`OutrosProcessosDetailDrawer.tsx` reutilizando `TelaAnaliseTrocaTitularidade` para troca; para os demais tipos abre o `CotacaoDetalhesModal` existente. Sem reescrever telas — só roteia.
+
+### 6. Limpeza visual da aba "Cotações" original
+
+- Como trocas saem da listagem principal, o `TrocaTitularidadeBadge` deixa de aparecer ali (continua usado dentro da nova aba).
+- Mantém o filtro server-side; a contagem do funil já existente passa a refletir só cotações novas.
 
 ---
 
-## Salvaguardas
+## Detalhes técnicos
 
-- Auto-desvínculo SEMPRE acompanha alerta crítico aberto + notificação (auditoria preservada)
-- Histórico em `rastreadores_vinculo_historico` permite reverter manualmente se for desvínculo indevido
-- Webhook Softtruck continua sem validação de assinatura (não temos secret), mas logging amplo permite forense
-- Sync da Rede só desvincula quando a API responder com confiança (404 ou ausência explícita do campo dispositivo); falhas de rede/HTTP 5xx **não** disparam desvínculo
+- **Sem migração de schema**. Tudo é leitura sobre tabelas existentes.
+- `useCotacoes`/`useCotacoesPaginadas` ganham um parâmetro opcional `excluirTiposEntrada?: string[]` para filtrar `dados_extras->>tipo_entrada NOT IN (...)`. A aba "Cotações" passa a lista padrão; a aba "Outros Processos" usa o novo hook.
+- O hook novo agrega por `cotacao_id` para evitar duplicação quando uma troca tem cotação espelho.
+- Permissões: respeita `usePermissions` (`vendas.cotacoes.view`) — não introduz nova permissão.
+- Realtime: assina canais de `cotacoes` e `solicitacoes_troca_titularidade` (já há padrão em `useCotacoesRealtime`).
+- Performance: query única paginada (limit 50, infinite scroll opcional), `staleTime` 30s.
 
-## Arquivos afetados
+---
 
-- `supabase/functions/softruck-webhook/index.ts` — auto-desvincular + logging ampliado + endpoint ping
-- `supabase/functions/rede-veiculos-sincronizar-status/index.ts` — detecção de desvínculo
-- `supabase/functions/rede-veiculos-sync-cron/index.ts` — novo (cron wrapper)
-- Migration: `pg_cron` schedule 30min para o wrapper acima; tabela opcional `softruck_webhook_raw_log` (rotativa)
-- 3 memórias atualizadas/criadas
+## Fluxo final do consultor (depois)
+
+```text
+/vendas/cotacoes
+ ├── [Cotações]            → só cotações novas, limpas
+ └── [Outros Processos N]  → trocas, substituições, inclusões, migrações
+       └─ linha clicável → drawer com etapa, status do termo, ações
+```
+
+Exemplo da linha de uma troca em curso:
+
+```text
+[Troca]  João Silva → Maria Souza   ABC1D23 Civic 2020   Ana (vendedora)
+        ▸ Termo enviado · aguardando assinatura do antigo titular
+        ▸ Pendência R$ 380 (2 boletos)                 [Ver]  [Reenviar termo]
+```
+
+---
+
+## Não está no escopo
+
+- Cancelamento e Eventos em andamento (você pediu só troca/substituição/inclusão/migração).
+- Mudanças no fluxo de criação/aprovação dos processos — só visualização e acompanhamento.
+- Alteração nos hooks/edge functions de troca já existentes.
