@@ -548,7 +548,15 @@ const TAB_KEYS = ['titularidade', 'substituicoes', 'migracoes', 'inclusoes'] as 
 type TabKey = typeof TAB_KEYS[number];
 
 export default function ProcessosOperacionais() {
-  const { data: counts } = useProcessosCounts();
+  const { user, profile } = useAuth();
+  const permissions = usePermissions();
+  const scopeToSelf = permissions.isVendedorOnly;
+  const scopeProfileId = scopeToSelf ? profile?.id : undefined;
+  const scopeAuthUserId = scopeToSelf ? user?.id : undefined;
+
+  const { data: counts } = useProcessosCounts(
+    scopeToSelf ? { profileId: scopeProfileId, authUserId: scopeAuthUserId } : undefined
+  );
   const [searchParams, setSearchParams] = useSearchParams();
   const initialTab = (searchParams.get('tab') as TabKey) || 'titularidade';
   const [activeTab, setActiveTab] = useState<TabKey>(
@@ -577,6 +585,15 @@ export default function ProcessosOperacionais() {
           Central única de solicitações: trocas de titularidade, substituições, migrações e inclusões de veículo.
         </p>
       </div>
+
+      {scopeToSelf && (
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            Mostrando apenas as solicitações originadas por você.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
