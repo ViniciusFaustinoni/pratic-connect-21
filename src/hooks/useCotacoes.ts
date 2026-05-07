@@ -209,7 +209,13 @@ async function fetchCotacoesCore(params: {
     );
   }
 
-  if (search) {
+  // Excluir tipos de entrada de "Outros Processos" (troca/substituição/inclusão/migração)
+  if (excluirTiposEntrada && excluirTiposEntrada.length > 0) {
+    const list = excluirTiposEntrada.map((t) => `"${t}"`).join(',');
+    query = query.or(`tipo_entrada.is.null,tipo_entrada.not.in.(${list})`);
+  }
+
+
     const safe = search.replace(/[,()]/g, '');
     const like = `%${safe}%`;
 
