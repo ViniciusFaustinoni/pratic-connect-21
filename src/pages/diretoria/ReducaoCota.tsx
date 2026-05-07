@@ -20,7 +20,9 @@ import { formatarMoeda } from '@/utils/format';
 const CHAVES = [
   // Ativação + limites para a Regra do 1% (FIPE menor)
   'fipe_menor_ativo',
-  'fipe_menor_limite_minimo',
+  'fipe_menor_limite_minimo',        // legado (= mínimo carro)
+  'fipe_menor_limite_minimo_carro',
+  'fipe_menor_limite_minimo_moto',
   'fipe_menor_limite_carro',
   'fipe_menor_limite_moto',
   // Cotas/exceções por desempenho do consultor
