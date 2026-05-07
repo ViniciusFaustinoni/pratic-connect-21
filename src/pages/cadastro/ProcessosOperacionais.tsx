@@ -731,7 +731,7 @@ export default function ProcessosOperacionais() {
         </TabsList>
 
         <TabsContent value="titularidade">
-          <TrocaTitularidadeTab scopeProfileId={scopeProfileId} />
+          <TrocaTitularidadeTab scopeProfileId={scopeProfileId} modoUsuario={modoUsuario} podeVerSaudeSga={podeVerSaudeSga} />
         </TabsContent>
         <TabsContent value="substituicoes">
           <SubstituicoesTab scopeAuthUserId={scopeAuthUserId} />
