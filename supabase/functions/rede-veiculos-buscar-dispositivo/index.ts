@@ -81,15 +81,22 @@ Deno.serve(async (req) => {
     const token = authJson.token as string;
 
     // Endpoint oficial da API Rede Veículos (postman doc TzRLmr9r).
-    // POST application/x-www-form-urlencoded com campo `json={...}`
-    // contendo (chassi | placa | imei) — qualquer um identifica o veículo.
+    // - Busca por placa/imei (com ou sem CPF) → /obterDadosVeiculo/
+    // - Busca apenas por CPF/CNPJ → /obterDadosCliente/ (retorna o cliente +
+    //   eventualmente lista de veículos vinculados, que processamos a seguir).
+    const apenasCpfCnpj = !!cpfCnpj && !placa && !isImei;
     const filtro: Record<string, unknown> = {};
-    if (placa) filtro.placa = placa;
-    if (isImei) filtro.imei = buscaRaw;
-    if (cpfCnpj) filtro.cpfCnpjCliente = cpfCnpj;
+    if (apenasCpfCnpj) {
+      filtro.cpfCnpjCliente = cpfCnpj;
+    } else {
+      if (placa) filtro.placa = placa;
+      if (isImei) filtro.imei = buscaRaw;
+      if (cpfCnpj) filtro.cpfCnpjCliente = cpfCnpj;
+    }
 
-    const endpointUsado = '/obterDadosVeiculo/';
+    const endpointUsado = apenasCpfCnpj ? '/obterDadosCliente/' : '/obterDadosVeiculo/';
     let achado: any = null;
+    let achadosLista: any[] = [];
     let ultimoErro: string | null = null;
 
     try {
@@ -110,12 +117,30 @@ Deno.serve(async (req) => {
         let parsed: any = null;
         try { parsed = JSON.parse(txt); } catch { ultimoErro = `resposta não-JSON: ${txt.slice(0, 200)}`; }
         if (parsed) {
-          // Erro explícito da API: { error: "true", message: "..." }
           if (parsed.error === true || parsed.error === 'true') {
             ultimoErro = parsed.message || 'erro na API';
+          } else if (apenasCpfCnpj) {
+            // obterDadosCliente: pode retornar { cliente, veiculos:[...] } ou
+            // { cliente, veiculo } único. Normalizamos para lista.
+            const lista =
+              parsed.veiculos ||
+              parsed.cliente?.veiculos ||
+              (parsed.veiculo ? [parsed.veiculo] : null);
+            if (Array.isArray(lista) && lista.length) {
+              achadosLista = lista.map((v) => ({
+                veiculo: v,
+                equipamento: v.equipamento || parsed.equipamento,
+                cliente: parsed.cliente,
+                idCliente: parsed.idCliente || parsed.cliente?.idCliente,
+              }));
+              achado = achadosLista[0];
+            } else {
+              ultimoErro = 'cliente sem veículos vinculados';
+            }
           } else {
             achado = extrairVeiculo(parsed, { placa, imei: isImei ? buscaRaw : null });
             if (!achado) ultimoErro = 'resposta sem veículo correspondente';
+            else achadosLista = [achado];
           }
         }
       }
@@ -127,16 +152,17 @@ Deno.serve(async (req) => {
     await supabase.from('rastreadores_api_logs').insert({
       plataforma: 'rede_veiculos',
       operacao: 'buscarDispositivo',
-      request: { busca: buscaRaw, isImei, placa },
-      response: { found: !!achado, endpointUsado, ultimoErro: achado ? null : ultimoErro },
+      request: { busca: buscaRaw, isImei, placa, cpfCnpj: cpfCnpj || null },
+      response: { found: !!achado, total: achadosLista.length, endpointUsado, ultimoErro: achado ? null : ultimoErro },
       status: achado ? 'sucesso' : 'sem_resultado',
     });
 
     if (!achado) {
+      const tipo = apenasCpfCnpj ? 'CPF/CNPJ' : (isImei ? 'IMEI' : 'placa');
       return json({
         success: true,
         found: false,
-        message: `Não encontrado na Rede Veículos (${isImei ? 'IMEI' : 'placa'}: ${buscaRaw}).`,
+        message: `Não encontrado na Rede Veículos (${tipo}: ${buscaRaw || cpfCnpj}).`,
         debug: ultimoErro || undefined,
       });
     }
