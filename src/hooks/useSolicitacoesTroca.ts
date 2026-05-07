@@ -56,7 +56,7 @@ export function useSolicitacoesTroca(filtroStatus?: StatusTroca[]) {
         .select(`
           *,
           associado_antigo:associados!associado_antigo_id(id, nome, cpf, email, telefone),
-          veiculo:veiculos!veiculo_id(id, marca, modelo, ano, placa),
+          veiculo:veiculos!veiculo_id(id, marca, modelo, ano_modelo, ano_fabricacao, placa),
           cotacao:cotacoes!cotacao_id(id, numero, token_publico, status)
         `)
         .order('created_at', { ascending: false });
