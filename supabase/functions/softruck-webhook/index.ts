@@ -53,11 +53,11 @@ serve(async (req) => {
   }
 
   const startTime = Date.now();
-  
-  const ipOrigem = req.headers.get("x-forwarded-for") || 
-                   req.headers.get("cf-connecting-ip") || 
+
+  const ipOrigem = req.headers.get("x-forwarded-for") ||
+                   req.headers.get("cf-connecting-ip") ||
                    "unknown";
-  
+
   const headersObj: Record<string, string> = {};
   req.headers.forEach((value, key) => {
     if (!key.toLowerCase().includes('authorization')) {
@@ -65,7 +65,19 @@ serve(async (req) => {
     }
   });
 
-  console.log(`[softruck-webhook] Request received from IP: ${ipOrigem}`);
+  // Health-check endpoint (?ping=1) — útil para validar do painel Softtruck que a URL está acessível
+  const url = new URL(req.url);
+  if (req.method === "GET" && url.searchParams.get("ping") === "1") {
+    return new Response(
+      JSON.stringify({ ok: true, service: "softruck-webhook", time: new Date().toISOString() }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  console.log(`[softruck-webhook] Request received from IP: ${ipOrigem}, headers:`, JSON.stringify(headersObj));
+
+  // Captura raw body antes de tentar parse, para forense quando JSON falhar
+  const rawBody = await req.text();
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -74,10 +86,18 @@ serve(async (req) => {
 
     let payload: WebhookPayload;
     try {
-      payload = await req.json();
+      payload = JSON.parse(rawBody);
       console.log(`[softruck-webhook] Payload:`, JSON.stringify(payload));
     } catch (e) {
       console.error(`[softruck-webhook] Failed to parse JSON:`, e);
+      // Persiste raw para forense
+      await supabase.from("softruck_webhook_raw_log").insert({
+        ip_origem: ipOrigem,
+        headers: headersObj,
+        raw_body: rawBody.slice(0, 10000),
+        parse_error: e instanceof Error ? e.message : String(e),
+        status_resposta: 400,
+      });
       return new Response(
         JSON.stringify({ error: "Invalid JSON payload" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
