@@ -1,23 +1,30 @@
-## Problema
+## Objetivo
 
-A aba **Titularidade** do `/cadastro/processos` mostra contador `1` (correto), mas a lista vem vazia ("Nenhuma solicitação nesta aba").
+Substituir o HTML do termo de cancelamento enviado na **troca de titularidade** pelo layout idêntico ao PDF oficial (`TERMO_DE_CANCELAMENTO_PRATICCAR.pdf`).
 
-Causa: `useSolicitacoesTroca` faz `select` em `veiculos!veiculo_id(id, marca, modelo, ano, placa)`, mas a tabela `veiculos` **não tem** coluna `ano` — apenas `ano_modelo` e `ano_fabricacao`. O PostgREST retorna `42703 column veiculos_1.ano does not exist` e o React Query joga o erro fora silenciosamente. O contador funciona porque é uma query separada com `count: 'exact', head: true` (sem joins).
+## Arquivo
 
-Confirmado via curl direto no PostgREST: a query do hook retorna erro 42703; sem o campo `ano` ela retorna a solicitação `b4c8b25d…` (KREITON ← MARCOS, placa KOU6D37) normalmente.
+`supabase/functions/enviar-termo-cancelamento-troca/index.ts` (linhas 51–78).
 
-## Correção
+## Conteúdo do termo (texto fixo, igual ao PDF)
 
-Em `src/hooks/useSolicitacoesTroca.ts`:
+1. Logo Praticcar centralizada no topo.
+2. Título: **TERMO DE CANCELAMENTO**.
+3. Parágrafo de qualificação: "Eu, **{nome}**, portador da identidade de n° **{rg}** inscrito no CPF sob o n° **{cpf}**, residente ao endereço **{endereco_completo}**."
+4. "Solicito o cancelamento de todos os benefícios oferecidos pela Praticcar, inclusive o benefício da proteção veicular do veículo **{marca modelo ano}**, placa **{placa}**;"
+5. Cláusula do rastreador (texto literal do PDF, com R$ 400,00 / fiel depositário / regulamento).
+6. Caixa "motivo:" preenchida automaticamente com `Troca de titularidade para {novo_titular.nome} (CPF {novo_titular.cpf}).`
+7. "Data: dd/mm/aaaa" e linha de "ASSINATURA DO ASSOCIADO".
+8. Rodapé: site, telefone, redes sociais e endereço (Av. das Américas, 19005, Recreio – RJ).
 
-1. Trocar `ano` por `ano_modelo, ano_fabricacao` nos dois `select` (`useSolicitacoesTroca` linha 59 e `useSolicitacaoTroca` linha 82).
-2. Atualizar o tipo `SolicitacaoTroca.veiculo` (linha 46) para `ano_modelo: number | null; ano_fabricacao: number | null` (remover `ano`).
+## Mudanças no código
 
-Em `src/pages/cadastro/ProcessosOperacionais.tsx` linha 105:
-- Trocar `s.veiculo?.ano` por `s.veiculo?.ano_modelo ?? s.veiculo?.ano_fabricacao ?? ''`.
-
-Verificar se `ModalDetalhesTroca.tsx` referencia `veiculo.ano` — se sim, aplicar mesma normalização (já confirmei via grep que não referencia).
+1. Buscar campos extras do associado antigo: `rg, logradouro, numero, complemento, bairro, cidade, uf, cep` (já existem na tabela `associados`).
+2. Montar `endereco_completo` concatenando esses campos (ignora vazios).
+3. Trocar a string `html` (linhas 67–78) pelo template novo com CSS A4, fontes Arial, caixa do motivo, footer e logo via `https://app.praticcar.org/logos/logo-full-light.png`.
+4. Manter todo o restante do fluxo intacto: criação no Autentique, `PF_FACIAL`, salvamento de `termo_cancelamento_autentique_id/url/enviado_em`, disparo do WhatsApp.
 
 ## Validação
 
-Após o fix, a aba "Aguardando Cadastro" deve listar a solicitação do KREITON (associado antigo: MARCOS VINICIUS DATIVO MACHADO, placa KOU6D37).
+- Re-disparar o termo da solicitação `b4c8b25d…` (KREITON ← MARCOS, placa KOU6D37) e conferir o preview no Autentique antes de assinar.
+- Garantir que campos faltantes apareçam como `___` (não como `null/undefined`).

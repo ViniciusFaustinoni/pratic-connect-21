@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
 
     const { data: associadoAntigo } = await admin
       .from('associados')
-      .select('id, nome, cpf, email, telefone')
+      .select('id, nome, cpf, rg, email, telefone, logradouro, numero, complemento, bairro, cidade, uf, cep')
       .eq('id', solicitacao.associado_antigo_id)
       .maybeSingle();
     if (!associadoAntigo?.email) throw new Error('Associado antigo sem email cadastrado');
@@ -63,18 +63,60 @@ Deno.serve(async (req) => {
 
     const novoTitular = solicitacao.novo_titular_dados as { nome: string; cpf: string };
 
-    // Gerar PDF simples via HTML (placeholder; o sistema já tem outras edge functions com geração de PDF mais sofisticada)
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Termo de Cancelamento</title>
-      <style>body{font-family:Arial;padding:40px;line-height:1.6}h1{text-align:center}</style></head>
+    const enderecoCompleto = [
+      associadoAntigo.logradouro,
+      associadoAntigo.numero,
+      associadoAntigo.complemento,
+      associadoAntigo.bairro,
+      associadoAntigo.cidade && associadoAntigo.uf ? `${associadoAntigo.cidade}/${associadoAntigo.uf}` : (associadoAntigo.cidade || associadoAntigo.uf),
+      associadoAntigo.cep ? `CEP ${associadoAntigo.cep}` : null,
+    ].filter(Boolean).join(', ') || '___';
+
+    const hoje = new Date();
+    const dd = String(hoje.getDate()).padStart(2, '0');
+    const mm = String(hoje.getMonth() + 1).padStart(2, '0');
+    const yyyy = hoje.getFullYear();
+    const veiculoTxt = `${veiculo?.marca || ''} ${veiculo?.modelo || ''} ${veiculo?.ano_modelo || ''}`.trim();
+    const motivoTxt = `Troca de titularidade para ${novoTitular?.nome || ''} (CPF ${novoTitular?.cpf || ''}).`;
+
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Termo de Cancelamento</title>
+      <style>
+        @page { size: A4; margin: 24mm 22mm; }
+        body { font-family: Arial, Helvetica, sans-serif; color: #1a1a1a; font-size: 11pt; line-height: 1.55; }
+        .logo { text-align: center; margin-bottom: 18pt; }
+        .logo img { max-height: 70px; }
+        h1 { text-align: center; font-size: 16pt; letter-spacing: 1pt; margin: 8pt 0 22pt 0; }
+        p { margin: 0 0 12pt 0; text-align: justify; }
+        .motivo-box { border: 1px solid #333; padding: 10pt; min-height: 60pt; margin: 14pt 0; }
+        .motivo-label { font-weight: bold; }
+        .data { margin: 28pt 0 60pt 0; }
+        .assinatura { border-top: 1px solid #000; width: 70%; margin: 0 auto; padding-top: 6pt; text-align: center; font-size: 10pt; letter-spacing: 1pt; }
+        .footer { margin-top: 50pt; border-top: 1px solid #ccc; padding-top: 10pt; text-align: center; font-size: 9pt; color: #555; line-height: 1.4; }
+      </style></head>
       <body>
-      <h1>TERMO DE CANCELAMENTO POR TROCA DE TITULARIDADE</h1>
-      <p>Eu, <strong>${associadoAntigo.nome}</strong>, CPF ${associadoAntigo.cpf || '___'}, declaro estar ciente e de acordo com o cancelamento do meu vínculo de proteção veicular referente ao veículo:</p>
-      <p><strong>${veiculo?.marca} ${veiculo?.modelo} ${veiculo?.ano_modelo} - Placa ${veiculo?.placa}</strong></p>
-      <p>Tendo em vista a transferência da titularidade para:</p>
-      <p><strong>${novoTitular.nome}</strong>, CPF ${novoTitular.cpf}</p>
-      <p>Esta assinatura confirma o encerramento da minha cobertura sobre este veículo.</p>
-      <br/><br/>
-      <p>Data: ${new Date().toLocaleDateString('pt-BR')}</p>
+        <div class="logo"><img src="https://app.praticcar.org/logos/logo-full-light.png" alt="Praticcar" /></div>
+        <h1>TERMO DE CANCELAMENTO</h1>
+
+        <p>Eu, <strong>${associadoAntigo.nome || '___'}</strong>, portador da identidade de n° <strong>${associadoAntigo.rg || '___'}</strong> inscrito no CPF sob o n° <strong>${associadoAntigo.cpf || '___'}</strong>, residente ao endereço <strong>${enderecoCompleto}</strong>.</p>
+
+        <p>Solicito o cancelamento de todos os benefícios oferecidos pela Praticcar, inclusive o benefício da proteção veicular do veículo <strong>${veiculoTxt || '___'}</strong>, placa <strong>${veiculo?.placa || '___'}</strong>;</p>
+
+        <p>Declaro estar ciente que na instalação do equipamento rastreador, em regime de comodato, o associado se tornará fiel depositário do aparelho, e na hipótese de não fazer mais parte do quadro associativo da Praticcar, o associado deverá devolver o rastreador a Praticcar. Em caso de não devolução do equipamento rastreador será devido para a associação o valor de <strong>R$400,00 (quatrocentos reais)</strong> conforme prevê o regulamento de benefícios da associação.</p>
+
+        <div class="motivo-box">
+          <span class="motivo-label">motivo:</span><br/>
+          ${motivoTxt}
+        </div>
+
+        <p class="data">Data: ${dd}/${mm}/${yyyy}</p>
+
+        <div class="assinatura">ASSINATURA DO ASSOCIADO</div>
+
+        <div class="footer">
+          www.praticcar.org &nbsp;•&nbsp; 21 97019-4372<br/>
+          @praticcar_oficial &nbsp;•&nbsp; @protecaopraticcar<br/>
+          Avenida das Américas, 19005, Recreio dos Bandeirantes - RJ
+        </div>
       </body></html>`;
 
     // Como Autentique exige PDF, precisamos converter. Usamos uma estratégia simples: enviar como text/html via base64 e deixar o Autentique gerar.
