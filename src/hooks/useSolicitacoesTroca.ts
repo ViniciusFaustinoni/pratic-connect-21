@@ -47,9 +47,9 @@ export interface SolicitacaoTroca {
   cotacao?: { id: string; numero: string | null; token_publico: string | null; status: string } | null;
 }
 
-export function useSolicitacoesTroca(filtroStatus?: StatusTroca[]) {
+export function useSolicitacoesTroca(filtroStatus?: StatusTroca[], criadoPorProfileId?: string) {
   return useQuery({
-    queryKey: ['solicitacoes-troca', filtroStatus],
+    queryKey: ['solicitacoes-troca', filtroStatus, criadoPorProfileId],
     queryFn: async () => {
       let q = (supabase as any)
         .from('solicitacoes_troca_titularidade')
@@ -61,6 +61,7 @@ export function useSolicitacoesTroca(filtroStatus?: StatusTroca[]) {
         `)
         .order('created_at', { ascending: false });
       if (filtroStatus && filtroStatus.length) q = q.in('status', filtroStatus);
+      if (criadoPorProfileId) q = q.eq('criado_por', criadoPorProfileId);
       const { data, error } = await q;
       if (error) throw error;
       return (data || []) as SolicitacaoTroca[];

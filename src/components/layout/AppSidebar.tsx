@@ -647,6 +647,19 @@ export function AppSidebar() {
         }
         return group;
       });
+
+      // Consultores podem acompanhar suas próprias solicitações em Cadastro › Processos
+      if (!baseGroups.some(g => g.id === 'cadastro')) {
+        baseGroups.push({
+          id: 'cadastro',
+          label: 'Cadastro',
+          icon: FileText,
+          color: MENU_COLORS.cadastro,
+          items: [
+            { title: 'Processos', url: '/cadastro/processos', icon: ClipboardList },
+          ],
+        });
+      }
     }
     
     return baseGroups;

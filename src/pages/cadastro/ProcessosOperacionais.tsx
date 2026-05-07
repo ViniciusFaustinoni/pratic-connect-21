@@ -24,6 +24,10 @@ import { STATUS_SUBSTITUICAO_LABELS, STATUS_SUBSTITUICAO_CORES } from '@/types/s
 import type { StatusSubstituicao } from '@/types/substituicao';
 import { useSolicitacoesTroca, type StatusTroca } from '@/hooks/useSolicitacoesTroca';
 import { ModalDetalhesTroca } from '@/components/troca-titularidade/ModalDetalhesTroca';
+import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Info } from 'lucide-react';
 
 // ============================================
 // TROCA DE TITULARIDADE TAB (nova fonte)
@@ -49,10 +53,10 @@ const TROCA_FILTROS: Record<string, StatusTroca[]> = {
   recusadas: ['reprovada_cadastro', 'reprovada_monitoramento', 'cancelada'],
 };
 
-function TrocaTitularidadeTab() {
+function TrocaTitularidadeTab({ scopeProfileId }: { scopeProfileId?: string }) {
   const [subAba, setSubAba] = useState<keyof typeof TROCA_FILTROS>('pendentes');
   const [selecionada, setSelecionada] = useState<string | null>(null);
-  const { data, isLoading } = useSolicitacoesTroca(TROCA_FILTROS[subAba]);
+  const { data, isLoading } = useSolicitacoesTroca(TROCA_FILTROS[subAba], scopeProfileId);
 
   return (
     <div className="space-y-4">
@@ -143,7 +147,7 @@ const SUB_TAB_FILTERS: Record<string, StatusSubstituicao[] | null> = {
   todas: null,
 };
 
-function SubstituicoesTab() {
+function SubstituicoesTab({ scopeAuthUserId }: { scopeAuthUserId?: string }) {
   const navigate = useNavigate();
   const { data: substituicoes, isLoading, refetch } = useSubstituicoes();
   const { data: limites } = useConfigLimitesVeiculo();
@@ -153,6 +157,9 @@ function SubstituicoesTab() {
   const filtered = useMemo(() => {
     if (!substituicoes) return [];
     let items = substituicoes;
+    if (scopeAuthUserId) {
+      items = items.filter((s: any) => s.criado_por === scopeAuthUserId);
+    }
     const statusFilter = SUB_TAB_FILTERS[subTab];
     if (statusFilter) {
       items = items.filter((s) => statusFilter.includes(s.status as StatusSubstituicao));
@@ -167,7 +174,7 @@ function SubstituicoesTab() {
       );
     }
     return items;
-  }, [substituicoes, subTab, busca]);
+  }, [substituicoes, subTab, busca, scopeAuthUserId]);
 
   const pendentesCount = useMemo(
     () => substituicoes?.filter((s) => s.status === 'aguardando_aprovacao').length ?? 0,
@@ -311,18 +318,20 @@ const INCLUSAO_STATUS_LABEL: Record<string, string> = {
   recusada: 'Recusada',
 };
 
-function InclusoesTab() {
+function InclusoesTab({ scopeAuthUserId }: { scopeAuthUserId?: string }) {
   const navigate = useNavigate();
   const [busca, setBusca] = useState('');
 
   const { data: cotacoes, isLoading, refetch } = useQuery({
-    queryKey: ['processos-inclusoes'],
+    queryKey: ['processos-inclusoes', scopeAuthUserId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('cotacoes')
         .select('id, numero, status, valor_fipe, valor_total_mensal, veiculo_marca, veiculo_modelo, veiculo_ano, veiculo_placa, token_publico, created_at, dados_extras, contrato_gerado_id')
         .filter('dados_extras->>tipo_entrada', 'eq', 'inclusao')
         .order('created_at', { ascending: false });
+      if (scopeAuthUserId) query = query.eq('vendedor_id', scopeAuthUserId);
+      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
@@ -488,29 +497,38 @@ function InclusoesTab() {
 // CONTADORES (novas fontes)
 // ============================================
 
-function useProcessosCounts() {
+function useProcessosCounts(scope?: { profileId?: string; authUserId?: string }) {
+  const profileId = scope?.profileId;
+  const authUserId = scope?.authUserId;
   return useQuery({
-    queryKey: ['processos-counts'],
+    queryKey: ['processos-counts', profileId, authUserId],
     queryFn: async () => {
-      const [titularidade, substituicoes, migracoes, inclusoes] = await Promise.all([
-        (supabase as any)
-          .from('solicitacoes_troca_titularidade')
-          .select('id', { count: 'exact', head: true })
-          .in('status', ['aguardando_cadastro', 'cotacao_em_andamento']),
-        supabase
-          .from('substituicoes_veiculo')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'aguardando_aprovacao'),
-        supabase
-          .from('solicitacoes_migracao')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'pendente'),
-        supabase
-          .from('cotacoes')
-          .select('id', { count: 'exact', head: true })
-          .filter('dados_extras->>tipo_entrada', 'eq', 'inclusao')
-          .in('status', ['rascunho', 'enviada']),
-      ]);
+      let q1 = (supabase as any)
+        .from('solicitacoes_troca_titularidade')
+        .select('id', { count: 'exact', head: true })
+        .in('status', ['aguardando_cadastro', 'cotacao_em_andamento']);
+      if (profileId) q1 = q1.eq('criado_por', profileId);
+
+      let q2 = supabase
+        .from('substituicoes_veiculo')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'aguardando_aprovacao');
+      if (authUserId) q2 = q2.eq('criado_por', authUserId);
+
+      let q3 = supabase
+        .from('solicitacoes_migracao')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'pendente');
+      if (profileId) q3 = q3.eq('consultor_id', profileId);
+
+      let q4 = supabase
+        .from('cotacoes')
+        .select('id', { count: 'exact', head: true })
+        .filter('dados_extras->>tipo_entrada', 'eq', 'inclusao')
+        .in('status', ['rascunho', 'enviada']);
+      if (authUserId) q4 = q4.eq('vendedor_id', authUserId);
+
+      const [titularidade, substituicoes, migracoes, inclusoes] = await Promise.all([q1, q2, q3, q4]);
 
       return {
         titularidade: titularidade.count || 0,
@@ -530,7 +548,15 @@ const TAB_KEYS = ['titularidade', 'substituicoes', 'migracoes', 'inclusoes'] as 
 type TabKey = typeof TAB_KEYS[number];
 
 export default function ProcessosOperacionais() {
-  const { data: counts } = useProcessosCounts();
+  const { user, profile } = useAuth();
+  const permissions = usePermissions();
+  const scopeToSelf = permissions.isVendedorOnly;
+  const scopeProfileId = scopeToSelf ? profile?.id : undefined;
+  const scopeAuthUserId = scopeToSelf ? user?.id : undefined;
+
+  const { data: counts } = useProcessosCounts(
+    scopeToSelf ? { profileId: scopeProfileId, authUserId: scopeAuthUserId } : undefined
+  );
   const [searchParams, setSearchParams] = useSearchParams();
   const initialTab = (searchParams.get('tab') as TabKey) || 'titularidade';
   const [activeTab, setActiveTab] = useState<TabKey>(
@@ -559,6 +585,15 @@ export default function ProcessosOperacionais() {
           Central única de solicitações: trocas de titularidade, substituições, migrações e inclusões de veículo.
         </p>
       </div>
+
+      {scopeToSelf && (
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            Mostrando apenas as solicitações originadas por você.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -642,16 +677,16 @@ export default function ProcessosOperacionais() {
         </TabsList>
 
         <TabsContent value="titularidade">
-          <TrocaTitularidadeTab />
+          <TrocaTitularidadeTab scopeProfileId={scopeProfileId} />
         </TabsContent>
         <TabsContent value="substituicoes">
-          <SubstituicoesTab />
+          <SubstituicoesTab scopeAuthUserId={scopeAuthUserId} />
         </TabsContent>
         <TabsContent value="migracoes">
-          <MigracoesTab />
+          <MigracoesTab scopeProfileId={scopeProfileId} hideAdminActions={scopeToSelf} />
         </TabsContent>
         <TabsContent value="inclusoes">
-          <InclusoesTab />
+          <InclusoesTab scopeAuthUserId={scopeAuthUserId} />
         </TabsContent>
       </Tabs>
     </div>

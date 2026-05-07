@@ -5,9 +5,9 @@ import { supabase } from '@/integrations/supabase/client';
 // Listar solicitações de migração (admin)
 // ============================================
 
-export function useSolicitacoesMigracaoList(filtroStatus: string) {
+export function useSolicitacoesMigracaoList(filtroStatus: string, consultorProfileId?: string) {
   return useQuery({
-    queryKey: ['solicitacoes-migracao-admin', filtroStatus],
+    queryKey: ['solicitacoes-migracao-admin', filtroStatus, consultorProfileId],
     queryFn: async () => {
       let query = supabase
         .from('solicitacoes_migracao')
@@ -20,6 +20,9 @@ export function useSolicitacoesMigracaoList(filtroStatus: string) {
 
       if (filtroStatus && filtroStatus !== 'todos') {
         query = query.eq('status', filtroStatus);
+      }
+      if (consultorProfileId) {
+        query = query.eq('consultor_id', consultorProfileId);
       }
 
       const { data, error } = await query;

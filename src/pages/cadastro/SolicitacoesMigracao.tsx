@@ -35,9 +35,11 @@ const statusConfig = {
   reprovada: { label: 'Reprovada', icon: XCircle, className: 'bg-destructive/10 text-destructive border-destructive/30' },
 };
 
-export function MigracoesTab() {
+export function MigracoesTab({ scopeProfileId, hideAdminActions = false }: { scopeProfileId?: string; hideAdminActions?: boolean } = {}) {
   const permissions = usePermissions();
-  const canAccess = permissions.isGerencia || permissions.isDiretor || permissions.isAdminMaster || permissions.isDesenvolvedor;
+  const canAccessAdmin = permissions.isGerencia || permissions.isDiretor || permissions.isAdminMaster || permissions.isDesenvolvedor;
+  const consultorReadOnly = !!scopeProfileId || hideAdminActions;
+  const canAccess = canAccessAdmin || consultorReadOnly;
 
   const [filtroStatus, setFiltroStatus] = useState('pendente');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -46,7 +48,7 @@ export function MigracoesTab() {
   const [motivoReprovacao, setMotivoReprovacao] = useState('');
   const [showNovaDialog, setShowNovaDialog] = useState(false);
 
-  const { data: solicitacoes, isLoading } = useSolicitacoesMigracaoList(filtroStatus);
+  const { data: solicitacoes, isLoading } = useSolicitacoesMigracaoList(filtroStatus, scopeProfileId);
   const aprovarMutation = useAprovarMigracao();
   const reprovarMutation = useReprovarMigracao();
 
@@ -112,10 +114,12 @@ export function MigracoesTab() {
     return (
     <div className="space-y-6">
       <div className="flex items-center justify-end gap-3">
-        <Button onClick={() => setShowNovaDialog(true)} size="sm">
-          <Plus className="h-4 w-4 mr-1" />
-          Nova Solicitação
-        </Button>
+        {!consultorReadOnly && (
+          <Button onClick={() => setShowNovaDialog(true)} size="sm">
+            <Plus className="h-4 w-4 mr-1" />
+            Nova Solicitação
+          </Button>
+        )}
         <Select value={filtroStatus} onValueChange={setFiltroStatus}>
           <SelectTrigger className="w-48">
             <SelectValue />
@@ -312,7 +316,7 @@ export function MigracoesTab() {
               </Tabs>
 
               {/* Action buttons */}
-              {selected.status === 'pendente' && (
+              {selected.status === 'pendente' && !consultorReadOnly && (
                 <div className="flex gap-3 pt-4 border-t">
                   <Button
                     className="flex-1"
