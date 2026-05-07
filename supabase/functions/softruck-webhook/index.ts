@@ -392,14 +392,54 @@ async function handleDeviceDisassociated(
     }
   }
 
+  // AUTO-DESVÍNCULO: se desvincularam na Softtruck, refletir no nosso lado.
+  // Captura snapshot anterior, zera vínculos do rastreador e registra histórico.
   if (rastreadorId) {
+    const { data: rastreadorAntes } = await supabase
+      .from("rastreadores")
+      .select("id, veiculo_id, associado_id, status, plataforma_veiculo_id")
+      .eq("id", rastreadorId)
+      .maybeSingle();
+
+    let placaAntes: string | null = null;
+    if (rastreadorAntes?.veiculo_id) {
+      const { data: vAntes } = await supabase
+        .from("veiculos")
+        .select("placa")
+        .eq("id", rastreadorAntes.veiculo_id)
+        .maybeSingle();
+      placaAntes = vAntes?.placa ?? null;
+    }
+
     await supabase
       .from("rastreadores")
       .update({
+        veiculo_id: null,
+        associado_id: null,
+        associado_email: null,
         plataforma_veiculo_id: null,
+        plataforma_user_id: null,
+        local_instalacao: null,
+        descricao_instalacao: null,
+        bloqueado: false,
+        status: "estoque",
         updated_at: new Date().toISOString(),
       })
       .eq("id", rastreadorId);
+
+    await supabase.from("rastreadores_vinculo_historico").insert({
+      rastreador_id: rastreadorId,
+      veiculo_id_anterior: rastreadorAntes?.veiculo_id ?? null,
+      veiculo_id_novo: null,
+      status_anterior: rastreadorAntes?.status ?? null,
+      status_novo: "estoque",
+      placa_anterior: placaAntes,
+      placa_nova: null,
+      origem: "webhook_softtruck_disassociated",
+      contexto: { params, payload, rastreador_antes: rastreadorAntes },
+    });
+
+    console.log(`[handleDeviceDisassociated] Auto-desvinculado rastreador ${rastreadorId} (veículo anterior: ${rastreadorAntes?.veiculo_id ?? 'n/a'})`);
   }
 
   return { success: true, alertaGerado };
