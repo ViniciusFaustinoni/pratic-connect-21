@@ -889,6 +889,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                         <TableHead className="text-xs">Documento</TableHead>
                         <TableHead className="text-xs">Veículo</TableHead>
                         <TableHead className="text-xs">Enviado</TableHead>
+                        <TableHead className="text-xs">Horário</TableHead>
                         <TableHead className="text-xs">Status</TableHead>
                         <TableHead className="text-xs">Ação</TableHead>
                       </TableRow>
