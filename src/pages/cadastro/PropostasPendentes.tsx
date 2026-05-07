@@ -300,79 +300,41 @@ export default function PropostasPendentes() {
               <div
                 key={proposta.id}
                 className={cn(
-                  "group flex items-center gap-3 p-3.5 rounded-xl bg-card border border-border transition-all cursor-pointer border-l-4",
-                  "hover:bg-accent/30 hover:shadow-sm hover:translate-x-1",
+                  "group p-3 sm:p-3.5 rounded-xl bg-card border border-border transition-all cursor-pointer border-l-4",
+                  "hover:bg-accent/30 hover:shadow-sm sm:hover:translate-x-1",
                   getWaitColor(proposta.data_assinatura),
                   hasReanalise && "ring-1 ring-amber-500/30 bg-amber-500/5"
                 )}
                 onClick={() => navigate(`/cadastro/propostas/${proposta.id}`)}
               >
-                {/* Avatar com iniciais */}
-                <UserAvatar
-                  name={proposta.cliente_nome || proposta.associado?.nome}
-                  size="sm"
-                  className="flex-shrink-0"
-                />
+                {/* Linha 1 — Identificação */}
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  <UserAvatar
+                    name={proposta.cliente_nome || proposta.associado?.nome}
+                    size="sm"
+                    className="flex-shrink-0"
+                  />
 
-                {/* Reanálise indicator */}
-                {hasReanalise && (
-                  <div className="flex-shrink-0 relative">
-                    <Badge className="bg-amber-500 text-white text-[9px] px-1.5 py-0 animate-pulse">
-                      <RefreshCw className="h-2.5 w-2.5 mr-0.5" />
-                      NOVO
-                    </Badge>
+                  <div className="flex-shrink-0">
+                    <span className="font-mono text-[11px] sm:text-xs font-bold text-foreground bg-muted px-1.5 sm:px-2 py-1 rounded-md">
+                      {proposta.veiculo_placa || '---'}
+                    </span>
                   </div>
-                )}
 
-                {/* Placa destaque */}
-                <div className="flex-shrink-0">
-                  <span className="font-mono text-xs font-bold text-foreground bg-muted px-2 py-1 rounded-md">
-                    {proposta.veiculo_placa || '---'}
-                  </span>
-                </div>
-
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">
-                    {proposta.cliente_nome || proposta.associado?.nome || '---'}
-                  </p>
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <span className="truncate">{proposta.veiculo_modelo || '---'}</span>
-                    {(proposta.plano?.nome || proposta.plano_nome) && (
-                      <>
-                        <span className="text-border">•</span>
-                        <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4">
-                          {proposta.plano?.nome || proposta.plano_nome}
-                        </Badge>
-                      </>
-                    )}
-                  </div>
-                  {proposta.instalacao_agendada?.endereco_logradouro && (
-                    <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-                      📍 Instalação: {proposta.instalacao_agendada.endereco_logradouro}
-                      {proposta.instalacao_agendada.endereco_numero && `, ${proposta.instalacao_agendada.endereco_numero}`}
-                      {proposta.instalacao_agendada.endereco_bairro && ` — ${proposta.instalacao_agendada.endereco_bairro}`}
-                      {proposta.instalacao_agendada.data && ` · ${proposta.instalacao_agendada.data.split('-').reverse().join('/')}`}
-                      {proposta.instalacao_agendada.horario && ` ${proposta.instalacao_agendada.horario}`}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {proposta.cliente_nome || proposta.associado?.nome || '---'}
                     </p>
-                  )}
-                </div>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {proposta.veiculo_modelo || '---'}
+                    </p>
+                  </div>
 
-                {/* Status + Tempo */}
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {getStatusBadge(proposta.status, proposta.associado_status, proposta.tem_documento_pendente, proposta.instalacao_info, proposta.tipo_etapa_analise)}
-                  <span className={cn("text-[10px] font-semibold tabular-nums", getWaitTextColor(proposta.data_assinatura))}>
-                    {proposta.data_assinatura
-                      ? formatDistanceToNow(new Date(proposta.data_assinatura), { locale: ptBR, addSuffix: false })
-                      : '---'}
-                  </span>
-                </div>
-
-                {/* Ações */}
-                <div className="flex-shrink-0">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                  {/* Ações (sempre visíveis no mobile) */}
+                  <div className="flex-shrink-0">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
                         {ativandoRastreadorId === proposta.id ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : (
