@@ -497,29 +497,38 @@ function InclusoesTab({ scopeAuthUserId }: { scopeAuthUserId?: string }) {
 // CONTADORES (novas fontes)
 // ============================================
 
-function useProcessosCounts() {
+function useProcessosCounts(scope?: { profileId?: string; authUserId?: string }) {
+  const profileId = scope?.profileId;
+  const authUserId = scope?.authUserId;
   return useQuery({
-    queryKey: ['processos-counts'],
+    queryKey: ['processos-counts', profileId, authUserId],
     queryFn: async () => {
-      const [titularidade, substituicoes, migracoes, inclusoes] = await Promise.all([
-        (supabase as any)
-          .from('solicitacoes_troca_titularidade')
-          .select('id', { count: 'exact', head: true })
-          .in('status', ['aguardando_cadastro', 'cotacao_em_andamento']),
-        supabase
-          .from('substituicoes_veiculo')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'aguardando_aprovacao'),
-        supabase
-          .from('solicitacoes_migracao')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'pendente'),
-        supabase
-          .from('cotacoes')
-          .select('id', { count: 'exact', head: true })
-          .filter('dados_extras->>tipo_entrada', 'eq', 'inclusao')
-          .in('status', ['rascunho', 'enviada']),
-      ]);
+      let q1 = (supabase as any)
+        .from('solicitacoes_troca_titularidade')
+        .select('id', { count: 'exact', head: true })
+        .in('status', ['aguardando_cadastro', 'cotacao_em_andamento']);
+      if (profileId) q1 = q1.eq('criado_por', profileId);
+
+      let q2 = supabase
+        .from('substituicoes_veiculo')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'aguardando_aprovacao');
+      if (authUserId) q2 = q2.eq('criado_por', authUserId);
+
+      let q3 = supabase
+        .from('solicitacoes_migracao')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'pendente');
+      if (profileId) q3 = q3.eq('consultor_id', profileId);
+
+      let q4 = supabase
+        .from('cotacoes')
+        .select('id', { count: 'exact', head: true })
+        .filter('dados_extras->>tipo_entrada', 'eq', 'inclusao')
+        .in('status', ['rascunho', 'enviada']);
+      if (authUserId) q4 = q4.eq('vendedor_id', authUserId);
+
+      const [titularidade, substituicoes, migracoes, inclusoes] = await Promise.all([q1, q2, q3, q4]);
 
       return {
         titularidade: titularidade.count || 0,
