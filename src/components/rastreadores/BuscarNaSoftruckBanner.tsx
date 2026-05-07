@@ -42,6 +42,13 @@ export function BuscarNaSoftruckBanner({ termo, onEncontrado }: BuscarNaSoftruck
 
   if (!termoLimpo || termoLimpo.length < 3) return null;
 
+  // Softruck só aceita placa/IMEI; Rede Veículos aceita também CPF/CNPJ.
+  const ehDocumento = isCpf || isCnpj;
+  const plataformasAtivas = ehDocumento
+    ? PLATAFORMAS.filter((p) => p.key === 'rede_veiculos')
+    : PLATAFORMAS;
+  const buscaPayload = ehDocumento ? { cpfCnpj: digitos } : { busca: termoLimpo };
+
   const handleBuscar = async (plat: Plataforma) => {
     setLoading(plat.key);
     try {
