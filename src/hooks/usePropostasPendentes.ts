@@ -1340,6 +1340,7 @@ export function useProposta(contratoId: string | undefined) {
 
       const result: PropostaPendente = {
         ...contrato,
+        cadastro_aprovado: (contrato as any).cadastro_aprovado ?? false,
         tipo_etapa_analise: tipoEtapaAnaliseSingle,
         associado,
         plano,
