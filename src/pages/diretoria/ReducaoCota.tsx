@@ -164,7 +164,9 @@ export default function ReducaoCota() {
     try {
       const updates: Record<string, string> = {
         fipe_menor_ativo: String(s.fipe_menor_ativo),
-        fipe_menor_limite_minimo: s.fipe_menor_limite_minimo,
+        fipe_menor_limite_minimo: s.fipe_menor_limite_minimo_carro, // mantém legado em sincronia
+        fipe_menor_limite_minimo_carro: s.fipe_menor_limite_minimo_carro,
+        fipe_menor_limite_minimo_moto: s.fipe_menor_limite_minimo_moto,
         fipe_menor_limite_carro: s.fipe_menor_limite_carro,
         fipe_menor_limite_moto: s.fipe_menor_limite_moto,
 
