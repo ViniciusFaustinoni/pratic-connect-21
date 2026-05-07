@@ -81,6 +81,7 @@ import {
   Coins,
   Wallet,
   Bug,
+  Percent,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
