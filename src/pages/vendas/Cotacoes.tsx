@@ -69,7 +69,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { useCotacoesRealtime } from '@/hooks/useCotacoesRealtime';
 import { useDebounce } from '@/hooks/useDebounce';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Package } from 'lucide-react';
 
 // Categorização dinâmica — fallback por termos quando benefits.category não está disponível
 const categorizarPorTermo = (cobLower: string): 'cobertura' | 'assistencia' | 'extra' => {
@@ -779,6 +779,14 @@ export default function Cotacoes() {
               Relatório Inteligente
             </Button>
           )}
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => navigate('/vendas/planos-beneficios')}
+          >
+            <Package className="h-4 w-4" />
+            Planos e Benefícios
+          </Button>
           <PermissionGate permission="cotacao.canCreate">
             <Button 
               className="gap-2 shadow-md hover:shadow-lg transition-all" 
