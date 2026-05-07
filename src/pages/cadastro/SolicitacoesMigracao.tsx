@@ -114,10 +114,12 @@ export function MigracoesTab({ scopeProfileId, hideAdminActions = false }: { sco
     return (
     <div className="space-y-6">
       <div className="flex items-center justify-end gap-3">
-        <Button onClick={() => setShowNovaDialog(true)} size="sm">
-          <Plus className="h-4 w-4 mr-1" />
-          Nova Solicitação
-        </Button>
+        {!consultorReadOnly && (
+          <Button onClick={() => setShowNovaDialog(true)} size="sm">
+            <Plus className="h-4 w-4 mr-1" />
+            Nova Solicitação
+          </Button>
+        )}
         <Select value={filtroStatus} onValueChange={setFiltroStatus}>
           <SelectTrigger className="w-48">
             <SelectValue />
