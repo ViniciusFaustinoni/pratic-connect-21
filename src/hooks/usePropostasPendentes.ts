@@ -690,10 +690,27 @@ export function usePropostasPendentes() {
 
         const planoTemRouboFurto = contrato.plano_id ? !!mPlanoRouboFurto.get(contrato.plano_id) : false;
 
+        // Tempo de referência = mais recente entre marcos relevantes.
+        // Garante que ações posteriores (cliente concluiu link, agendou, vistoria, etc.)
+        // "zerem" o tempo de espera exibido — não usar só data_assinatura.
+        const candidatosTempo: (string | null | undefined)[] = [
+          contrato.data_assinatura,
+          (contrato as any).updated_at,
+          vistoriaData?.created_at,
+          instConc?.concluida_em,
+          instAtiva?.created_at,
+          agend?.data_agendada,
+        ];
+        const tempoReferencia = candidatosTempo
+          .filter((d): d is string => !!d)
+          .map(d => new Date(d).getTime())
+          .reduce<number | null>((max, t) => (max === null || t > max ? t : max), null);
+
         return {
           ...contrato,
           cadastro_aprovado: (contrato as any).cadastro_aprovado ?? false,
           tipo_etapa_analise: tipoEtapaAnalise,
+          tempo_referencia: tempoReferencia ? new Date(tempoReferencia).toISOString() : contrato.data_assinatura,
           associado,
           plano,
           plano_nome: planoNome,
