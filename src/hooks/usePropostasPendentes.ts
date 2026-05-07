@@ -511,19 +511,21 @@ export function usePropostasPendentes() {
           !!(associado?.sincronizado_hinova && associado?.codigo_hinova) &&
           !!(veiculoContrato?.sincronizado_hinova && veiculoContrato?.codigo_hinova);
 
-        // Autovistoria já aprovada pelo Cadastro: tarefa do campo (instalação),
-        // não deve mais aparecer em Propostas Pendentes. Vai para /cadastro/associados.
+        // Saída de Propostas Pendentes por tipo de vistoria:
+        // - Autovistoria: sai assim que o Cadastro aprova (vai p/ /cadastro/associados)
+        // - Não-autovistoria (agendada / agendada_base / null): permanece com badge
+        //   "Pendente Vistoria Inicial" até a INSTALAÇÃO ser concluída
+        // Independentemente do tipo, também sai se associado já 'ativo' ou já no SGA.
         const cadastroAprovado = (contrato as any).cadastro_aprovado === true;
         const tipoVistoriaAtual = (contrato.cotacao_id ? mCotacao.get(contrato.cotacao_id)?.tipo_vistoria : null) || null;
-        const autovistoriaJaAprovadaPeloCadastro =
-          cadastroAprovado && tipoVistoriaAtual === 'autovistoria';
+        const isAutovistoria = tipoVistoriaAtual === 'autovistoria';
+        const autovistoriaJaAprovadaPeloCadastro = cadastroAprovado && isAutovistoria;
 
         const propostaJaConcluida =
           associado?.status === 'ativo' ||
           instalacaoConcluida ||
           jaNoSGA ||
-          autovistoriaJaAprovadaPeloCadastro ||
-          (associado?.status === 'aguardando_instalacao' && !docsPendentes && !vistoriaPendenteAnalise);
+          autovistoriaJaAprovadaPeloCadastro;
         if (propostaJaConcluida) return null;
 
         const plano = contrato.plano_id ? mPlano.get(contrato.plano_id) : null;
