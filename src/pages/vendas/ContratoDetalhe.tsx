@@ -148,7 +148,7 @@ const gerarTimeline = (contrato: any): TimelineEvento[] => {
     eventos.push({
       id: eventId++,
       tipo: 'vistoria_tipo',
-      descricao: `Tipo selecionado: ${contrato.tipo_vistoria === 'agendada' ? 'Vistoria Agendada' : 'Autovistoria'}`,
+      descricao: `Tipo selecionado: ${contrato.tipo_vistoria === 'agendada' ? 'Vistoria Agendada' : 'Autovistoria - Roubo & Furto'}`,
       data: null,
       icone: contrato.tipo_vistoria === 'agendada' ? Calendar : Camera,
       cor: 'text-purple-500',
