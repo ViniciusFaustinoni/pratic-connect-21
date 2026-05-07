@@ -54,6 +54,8 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
   const [search, setSearch] = useState('');
   const [tipoFilter, setTipoFilter] = useState<'all' | TipoOutroProcesso>('all');
   const [consultorFilter, setConsultorFilter] = useState<string>('all');
+  const [drawerItem, setDrawerItem] = useState<OutroProcessoItem | null>(null);
+  const [resendItem, setResendItem] = useState<OutroProcessoItem | null>(null);
 
   const enviarTermo = useEnviarTermoCancelamento();
 
@@ -73,30 +75,27 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: items.length };
-    items.forEach((i) => {
-      c[i.tipo] = (c[i.tipo] || 0) + 1;
-    });
+    items.forEach((i) => { c[i.tipo] = (c[i.tipo] || 0) + 1; });
     return c;
   }, [items]);
 
   const handleAbrirCotacao = (item: OutroProcessoItem) => {
-    if (item.cotacao_token) {
-      window.open(`/cotacao/${item.cotacao_token}`, '_blank');
-    }
+    if (item.cotacao_token) window.open(`/cotacao/${item.cotacao_token}`, '_blank');
   };
 
   const handleVerDetalhe = (item: OutroProcessoItem) => {
-    if (item.tipo === 'troca_titularidade' && item.solicitacao_troca_id) {
-      navigate(`/cadastro/processos?tab=titularidade&solicitacao=${item.solicitacao_troca_id}`);
+    if (item.tipo === 'troca_titularidade') {
+      setDrawerItem(item);
     } else {
-      // Substituição/Inclusão/Migração: levam à própria cotação
       navigate(`/vendas/cotacoes?cotacao=${item.cotacao_id}`);
     }
   };
 
-  const handleReenviarTermo = async (item: OutroProcessoItem) => {
-    if (!item.solicitacao_troca_id) return;
-    await enviarTermo.mutateAsync(item.solicitacao_troca_id);
+  const handleConfirmReenvio = async () => {
+    if (!resendItem?.solicitacao_troca_id) return;
+    const isResend = !!resendItem.termo_enviado_em;
+    await enviarTermo.mutateAsync({ solicitacao_id: resendItem.solicitacao_troca_id, force_resend: isResend });
+    setResendItem(null);
     refetch();
   };
 
