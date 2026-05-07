@@ -20,7 +20,7 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   solicitacaoId: string | null;
-  modo: 'cadastro' | 'monitoramento';
+  modo: 'cadastro' | 'monitoramento' | 'readonly';
 }
 
 const STATUS_LABELS: Record<StatusTroca, { label: string; variant: 'default'|'secondary'|'destructive'|'outline' }> = {
