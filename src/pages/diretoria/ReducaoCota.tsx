@@ -45,7 +45,8 @@ interface FaixaVenda { min: number; max: number | null; permitidas: number; }
 
 interface State {
   fipe_menor_ativo: boolean;
-  fipe_menor_limite_minimo: string;
+  fipe_menor_limite_minimo_carro: string;
+  fipe_menor_limite_minimo_moto: string;
   fipe_menor_limite_carro: string;
   fipe_menor_limite_moto: string;
 
@@ -66,7 +67,8 @@ interface State {
 
 const DEFAULTS: State = {
   fipe_menor_ativo: false,
-  fipe_menor_limite_minimo: '30000',
+  fipe_menor_limite_minimo_carro: '30000',
+  fipe_menor_limite_minimo_moto: '9000',
   fipe_menor_limite_carro: '120000',
   fipe_menor_limite_moto: '27000',
 
