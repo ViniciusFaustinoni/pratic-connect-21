@@ -179,7 +179,7 @@ export default function ReducaoCota() {
       const rows = Object.entries(updates).map(([chave, valor]) => ({
         chave, valor, updated_at: nowIso,
       }));
-      const { error: upErr } = await supabase
+      const { error: upErr } = await (supabase as any)
         .from('configuracoes')
         .upsert(rows, { onConflict: 'chave' });
       if (upErr) throw upErr;
