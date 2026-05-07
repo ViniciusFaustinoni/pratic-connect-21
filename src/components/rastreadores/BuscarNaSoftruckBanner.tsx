@@ -1,30 +1,37 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Search, Loader2, ExternalLink, CheckCircle2, Info } from 'lucide-react';
+import { Search, Loader2, ExternalLink, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
-import { usePlataformasOptions } from '@/hooks/usePlataformasCRUD';
 
 interface BuscarNaSoftruckBannerProps {
   termo: string;
   onEncontrado?: (rastreadorId: string) => void;
 }
 
+type Plataforma = {
+  key: 'softruck' | 'rede_veiculos';
+  label: string;
+  fn: string;
+};
+
+const PLATAFORMAS: Plataforma[] = [
+  { key: 'softruck', label: 'Softruck', fn: 'softruck-buscar-dispositivo' },
+  { key: 'rede_veiculos', label: 'Rede Veículos', fn: 'rede-veiculos-buscar-dispositivo' },
+];
+
 /**
  * Aparece quando o filtro local não encontra resultados.
- * Permite fazer um lookup direto na API Softruck por placa OU IMEI.
- * Se encontrado, faz upsert local (via edge function) e atualiza a listagem.
- *
- * Outras plataformas (Rede Veículos, Pratic Master, etc.) ainda não têm
- * endpoint público de busca por IMEI — para elas, o banner orienta o
- * operador a usar a entrada de estoque manual.
+ * Permite fazer um lookup direto na API da Softruck e/ou da Rede Veículos por
+ * placa OU IMEI. Quando encontrado, o backend faz upsert local e a listagem
+ * é recarregada — o operador não precisa saber em qual plataforma o
+ * dispositivo estava cadastrado.
  */
 export function BuscarNaSoftruckBanner({ termo, onEncontrado }: BuscarNaSoftruckBannerProps) {
   const queryClient = useQueryClient();
-  const [loading, setLoading] = useState(false);
-  const { data: plataformas } = usePlataformasOptions();
+  const [loading, setLoading] = useState<string | null>(null);
 
   const termoLimpo = termo.trim().toUpperCase();
   const isImei = /^\d{14,16}$/.test(termoLimpo);
@@ -32,37 +39,82 @@ export function BuscarNaSoftruckBanner({ termo, onEncontrado }: BuscarNaSoftruck
 
   if (!termoLimpo || termoLimpo.length < 3) return null;
 
-  // Outras plataformas ativas além da Softruck (apenas para informar o operador)
-  const outrasPlataformas = (plataformas || []).filter(
-    (p) => p.codigo !== 'softruck'
-  );
-
-  const handleBuscar = async () => {
-    setLoading(true);
+  const handleBuscar = async (plat: Plataforma) => {
+    setLoading(plat.key);
     try {
-      const { data, error } = await supabase.functions.invoke('softruck-buscar-dispositivo', {
+      const { data, error } = await supabase.functions.invoke(plat.fn, {
         body: { busca: termoLimpo },
       });
       if (error) throw error;
       if (!data?.success) {
-        toast.error(data?.error || 'Falha ao consultar Softruck');
+        toast.error(data?.error || `Falha ao consultar ${plat.label}`);
         return;
       }
       if (!data.found) {
-        toast.warning(data.message || 'Não encontrado na Softruck.');
+        toast.warning(data.message || `Não encontrado na ${plat.label}.`);
         return;
       }
-      toast.success(data.message || 'Dispositivo encontrado na Softruck.', {
+      toast.success(data.message || `Dispositivo encontrado na ${plat.label}.`, {
         icon: <CheckCircle2 className="h-4 w-4" />,
       });
-      // Recarregar listagem
       await queryClient.invalidateQueries({ queryKey: ['rastreadores'] });
       await queryClient.invalidateQueries({ queryKey: ['rastreadores-metricas'] });
       if (data.rastreador_id) onEncontrado?.(data.rastreador_id);
     } catch (err: any) {
-      toast.error(`Erro: ${err?.message || 'desconhecido'}`);
+      toast.error(`Erro ${plat.label}: ${err?.message || 'desconhecido'}`);
     } finally {
-      setLoading(false);
+      setLoading(null);
+    }
+  };
+
+  const handleBuscarTodas = async () => {
+    setLoading('all');
+    try {
+      const results = await Promise.allSettled(
+        PLATAFORMAS.map((p) =>
+          supabase.functions.invoke(p.fn, { body: { busca: termoLimpo } }).then((r) => ({ p, r })),
+        ),
+      );
+      let achouEm: string | null = null;
+      let rastreadorId: string | null = null;
+      const naoAchadas: string[] = [];
+      const errosFalhas: string[] = [];
+
+      for (const res of results) {
+        if (res.status !== 'fulfilled') {
+          errosFalhas.push('exception');
+          continue;
+        }
+        const { p, r } = res.value;
+        if (r.error || !r.data?.success) {
+          errosFalhas.push(`${p.label}: ${r.error?.message || r.data?.error || 'erro'}`);
+          continue;
+        }
+        if (r.data.found) {
+          if (!achouEm) {
+            achouEm = p.label;
+            rastreadorId = r.data.rastreador_id;
+          }
+        } else {
+          naoAchadas.push(p.label);
+        }
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ['rastreadores'] });
+      await queryClient.invalidateQueries({ queryKey: ['rastreadores-metricas'] });
+
+      if (achouEm) {
+        toast.success(`Dispositivo importado da ${achouEm}.`, {
+          icon: <CheckCircle2 className="h-4 w-4" />,
+        });
+        if (rastreadorId) onEncontrado?.(rastreadorId);
+      } else if (naoAchadas.length === PLATAFORMAS.length) {
+        toast.warning(`Não encontrado em nenhuma plataforma (${tipoBusca}: ${termoLimpo}).`);
+      } else {
+        toast.error(`Falha ao consultar: ${errosFalhas.join(' | ')}`);
+      }
+    } finally {
+      setLoading(null);
     }
   };
 
@@ -72,24 +124,39 @@ export function BuscarNaSoftruckBanner({ termo, onEncontrado }: BuscarNaSoftruck
       <AlertDescription className="space-y-2">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="text-sm">
-            <strong className="font-mono">{termoLimpo}</strong> não está cadastrado no estoque do
-            Praticcar. Quer verificar na <strong>Softruck</strong> por {tipoBusca}?
+            <strong className="font-mono">{termoLimpo}</strong> não está cadastrado localmente.
+            Consultar nas integrações por {tipoBusca}?
           </div>
-          <Button size="sm" variant="outline" onClick={handleBuscar} disabled={loading} className="gap-2">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-            Buscar na Softruck
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              size="sm"
+              variant="default"
+              onClick={handleBuscarTodas}
+              disabled={!!loading}
+              className="gap-2"
+            >
+              {loading === 'all' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              Buscar em todas
+            </Button>
+            {PLATAFORMAS.map((p) => (
+              <Button
+                key={p.key}
+                size="sm"
+                variant="outline"
+                onClick={() => handleBuscar(p)}
+                disabled={!!loading}
+                className="gap-2"
+              >
+                {loading === p.key ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ExternalLink className="h-4 w-4" />
+                )}
+                {p.label}
+              </Button>
+            ))}
+          </div>
         </div>
-        {isImei && outrasPlataformas.length > 0 && (
-          <div className="flex items-start gap-2 text-xs text-muted-foreground border-t border-blue-200/50 pt-2">
-            <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-            <span>
-              Se o IMEI for de outra plataforma (
-              {outrasPlataformas.map((p) => p.nome).join(', ')}
-              ), use <strong>Estoque → Entrada de Estoque</strong> para cadastrá-lo manualmente.
-            </span>
-          </div>
-        )}
       </AlertDescription>
     </Alert>
   );
