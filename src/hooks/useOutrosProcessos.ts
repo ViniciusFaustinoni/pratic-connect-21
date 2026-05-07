@@ -54,7 +54,17 @@ export interface OutroProcessoItem {
   termo_url: string | null;
   termo_enviado_em: string | null;
   termo_assinado_em: string | null;
-
+  termo_whatsapp_status: 'enviado' | 'falhou' | 'sem_telefone' | null;
+  termo_reenvios_count: number;
+  termo_ultimo_reenvio_em: string | null;
+  associado_antigo_email: string | null;
+  associado_antigo_telefone: string | null;
+  // Datas das etapas (timeline)
+  aprovado_cadastro_em: string | null;
+  aprovado_monitoramento_em: string | null;
+  efetivada_em: string | null;
+  reprovado_em: string | null;
+  motivo_reprovacao: string | null;
   // Pendência financeira (relacionamento_debitos_pendentes)
   pendencia_qtd: number;
   pendencia_total: number;
