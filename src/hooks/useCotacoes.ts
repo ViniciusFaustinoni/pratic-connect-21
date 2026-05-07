@@ -73,6 +73,8 @@ export interface UseCotacoesOptions {
   vendedorId?: string;
   viewScope?: 'own' | 'team' | 'all';
   searchTerm?: string;
+  /** Filtro adicional (server-side) por consultor escolhido na UI. Aplica-se quando viewScope != 'own'. */
+  consultorId?: string | null;
 }
 
 export interface CotacoesFunilCounts {
@@ -153,8 +155,9 @@ async function fetchCotacoesCore(params: {
   page?: number;
   pageSize?: number;
   statusGroup?: CotacoesStatusGroup;
+  consultorId?: string | null;
 }) {
-  const { effectiveScope, effectiveVendedorId, search, page, pageSize, statusGroup } = params;
+  const { effectiveScope, effectiveVendedorId, search, page, pageSize, statusGroup, consultorId } = params;
 
   let query = supabase
     .from('cotacoes')
@@ -182,6 +185,9 @@ async function fetchCotacoesCore(params: {
   // Escopo "own": filtra explicitamente por vendedor logado.
   if (effectiveScope === 'own' && effectiveVendedorId) {
     query = query.eq('vendedor_id', effectiveVendedorId);
+  } else if (consultorId) {
+    // Filtro server-side por consultor escolhido (apenas para escopos team/all).
+    query = query.eq('vendedor_id', consultorId);
   }
 
   // Filtro server-side por aba (Em Andamento / Finalizadas).
@@ -295,6 +301,7 @@ export function useCotacoesPaginadas(options: UseCotacoesPaginadasOptions) {
   const effectiveScope: 'own' | 'team' | 'all' =
     options.viewScope === 'all' || options.viewScope === 'team' ? options.viewScope : 'own';
   const effectiveVendedorId = effectiveScope === 'own' ? options.vendedorId : undefined;
+  const consultorId = effectiveScope !== 'own' ? (options.consultorId || null) : null;
   const page = Math.max(1, options.page ?? 1);
   const pageSize = options.pageSize ?? 50;
   const statusGroup = options.statusGroup ?? 'all';
@@ -305,6 +312,7 @@ export function useCotacoesPaginadas(options: UseCotacoesPaginadasOptions) {
       'paginadas',
       effectiveScope,
       effectiveVendedorId,
+      consultorId,
       search,
       statusGroup,
       page,
@@ -318,10 +326,9 @@ export function useCotacoesPaginadas(options: UseCotacoesPaginadasOptions) {
         page,
         pageSize,
         statusGroup,
+        consultorId,
       }),
     placeholderData: keepPreviousData,
-    // Realtime invalida `['cotacoes']` quando há mudança real;
-    // sem realtime, o user pode dar refresh manual.
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });

@@ -164,7 +164,7 @@ export default function Cotacoes() {
   useEffect(() => {
     setPageEmAndamento(1);
     setPageFinalizadas(1);
-  }, [search, permissions.cotacao.viewScope, permissions.userId]);
+  }, [search, permissions.cotacao.viewScope, permissions.userId, consultorFilter]);
 
   const isEmAndamentoTab = activeTab === 'em_andamento';
   const currentPage = isEmAndamentoTab ? pageEmAndamento : pageFinalizadas;
@@ -174,6 +174,7 @@ export default function Cotacoes() {
     vendedorId: permissions.userId,
     viewScope: permissions.cotacao.viewScope,
     searchTerm: search,
+    consultorId: consultorFilter !== 'all' ? consultorFilter : null,
     page: currentPage,
     pageSize: PAGE_SIZE,
     statusGroup: isEmAndamentoTab ? 'em_andamento' : 'finalizadas',
