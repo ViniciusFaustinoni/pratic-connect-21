@@ -826,7 +826,8 @@ serve(async (req) => {
           return;
         }
 
-        const codSituacao = statusDestino === 'ativo' ? codigoSituacaoAtivo : codigoSituacaoPendente;
+        // Veículo entra SEMPRE como PENDENTE — promoção para ATIVO é manual no painel SGA.
+        const codSituacao = codigoSituacaoPendente;
 
         // Categoria do veículo (Táxi/Leilão/Placa Vermelha/Ex-Táxi) — opcional, vai se houver mapeamento.
         let categoriaLocal: string | null = null;
