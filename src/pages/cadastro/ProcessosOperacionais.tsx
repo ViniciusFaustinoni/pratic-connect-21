@@ -147,7 +147,7 @@ const SUB_TAB_FILTERS: Record<string, StatusSubstituicao[] | null> = {
   todas: null,
 };
 
-function SubstituicoesTab() {
+function SubstituicoesTab({ scopeAuthUserId }: { scopeAuthUserId?: string }) {
   const navigate = useNavigate();
   const { data: substituicoes, isLoading, refetch } = useSubstituicoes();
   const { data: limites } = useConfigLimitesVeiculo();
@@ -157,6 +157,9 @@ function SubstituicoesTab() {
   const filtered = useMemo(() => {
     if (!substituicoes) return [];
     let items = substituicoes;
+    if (scopeAuthUserId) {
+      items = items.filter((s: any) => s.criado_por === scopeAuthUserId);
+    }
     const statusFilter = SUB_TAB_FILTERS[subTab];
     if (statusFilter) {
       items = items.filter((s) => statusFilter.includes(s.status as StatusSubstituicao));
@@ -171,7 +174,7 @@ function SubstituicoesTab() {
       );
     }
     return items;
-  }, [substituicoes, subTab, busca]);
+  }, [substituicoes, subTab, busca, scopeAuthUserId]);
 
   const pendentesCount = useMemo(
     () => substituicoes?.filter((s) => s.status === 'aguardando_aprovacao').length ?? 0,
