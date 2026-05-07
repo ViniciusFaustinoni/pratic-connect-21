@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, ArrowRightLeft, RefreshCw, AlertTriangle, ExternalLink, FileText, CheckCircle2, Clock, Ban, Send, Eye, ChevronRight, User } from 'lucide-react';
+import { Search, ArrowRightLeft, RefreshCw, AlertTriangle, ExternalLink, FileText, CheckCircle2, Clock, Ban, Send, Eye, ChevronRight, User, MessageCircle, MailWarning } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Card, CardContent } from '@/components/ui/card';
@@ -9,11 +9,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useOutrosProcessos, TIPO_LABELS, TONE_CLASS, type TipoOutroProcesso, type OutroProcessoItem, TIPOS_OUTROS_PROCESSOS } from '@/hooks/useOutrosProcessos';
 import { useEnviarTermoCancelamento } from '@/hooks/useSolicitacoesTroca';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useVendedores } from '@/hooks/useVendedores';
+import { TrocaTimelineDrawer } from '@/components/cotacoes/TrocaTimelineDrawer';
 import { cn } from '@/lib/utils';
 
 function formatCurrency(value: number) {
