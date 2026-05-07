@@ -328,9 +328,9 @@ export function CotacoesTable({
                   {/* Consultor */}
                   <TableCell className="hidden lg:table-cell py-3">
                     {cotacao.vendedor?.nome && (
-                      <div className="flex items-center gap-1.5">
-                        <UserAvatar name={cotacao.vendedor.nome} size="sm" className="h-5 w-5 text-[9px]" />
-                        <span className="text-xs truncate max-w-[80px] text-muted-foreground">{cotacao.vendedor.nome}</span>
+                      <div className="flex items-center gap-1.5 min-w-0" title={cotacao.vendedor.nome}>
+                        <UserAvatar name={cotacao.vendedor.nome} size="sm" className="h-5 w-5 text-[9px] shrink-0" />
+                        <span className="text-xs truncate text-muted-foreground">{cotacao.vendedor.nome}</span>
                       </div>
                     )}
                   </TableCell>
