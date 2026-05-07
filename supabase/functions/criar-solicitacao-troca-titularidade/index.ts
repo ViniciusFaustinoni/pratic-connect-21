@@ -96,12 +96,35 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Guard: bloqueia se já existe outra troca em andamento para a mesma placa
+    // Guard: bloqueia se já existe outra troca em andamento para a mesma placa.
+    // Retorna detalhes da solicitação bloqueante para o operador poder cancelá-la
+    // pela UI sem precisar consultar o banco.
     if (veiculo.placa) {
-      const { data: blocked } = await admin.rpc('placa_bloqueada_por_troca', { p_placa: veiculo.placa });
-      if (blocked === true) {
+      const placaNorm = String(veiculo.placa).toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const { data: bloqueantes } = await admin
+        .from('solicitacoes_troca_titularidade')
+        .select('id, status, created_at, novo_titular_dados, veiculo_id')
+        .in('status', ['cotacao_em_andamento','aguardando_cadastro','aguardando_monitoramento','aguardando_vistoria','liberada_para_assinatura'])
+        .order('created_at', { ascending: false });
+
+      const conflito = (bloqueantes || []).find((s: any) => {
+        // checa via veículo (mesmo id) — placa pode ter normalização diferente
+        return s.veiculo_id === veiculo.id;
+      });
+
+      if (conflito) {
+        const nomeBloq = (conflito.novo_titular_dados as any)?.nome || 'titular não informado';
         return new Response(
-          JSON.stringify({ error: 'Já existe uma solicitação de troca de titularidade em andamento para esta placa.' }),
+          JSON.stringify({
+            error: `Já existe uma solicitação de troca em andamento para a placa ${veiculo.placa} (status: ${conflito.status}, novo titular: ${nomeBloq}, criada em ${new Date(conflito.created_at).toLocaleString('pt-BR')}). Cancele a solicitação anterior antes de criar uma nova.`,
+            code: 'TROCA_EM_ANDAMENTO',
+            solicitacao_bloqueante: {
+              id: conflito.id,
+              status: conflito.status,
+              created_at: conflito.created_at,
+              nome_novo_titular: nomeBloq,
+            },
+          }),
           { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
       }
