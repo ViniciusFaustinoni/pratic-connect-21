@@ -68,51 +68,46 @@ Deno.serve(async (req) => {
     }
     const token = authJson.token as string;
 
-    // Tentar endpoints de busca conhecidos. Seguimos o padrão da API:
-    // POST multipart/form-data com campo `json` contendo o filtro.
-    // Ordem: consulta por placa → por imei → listar geral.
+    // Endpoint oficial da API Rede Veículos (postman doc TzRLmr9r).
+    // POST application/x-www-form-urlencoded com campo `json={...}`
+    // contendo (chassi | placa | imei) — qualquer um identifica o veículo.
     const filtro: Record<string, unknown> = {};
     if (placa) filtro.placa = placa;
     if (isImei) filtro.imei = buscaRaw;
 
-    const endpointsParaTentar = [
-      '/consultarVeiculo/',
-      '/buscarVeiculo/',
-      '/listarVeiculos/',
-      '/obterVeiculo/',
-    ];
-
+    const endpointUsado = '/obterDadosVeiculo/';
     let achado: any = null;
-    let endpointUsado: string | null = null;
     let ultimoErro: string | null = null;
 
-    for (const ep of endpointsParaTentar) {
-      try {
-        const fd = new FormData();
-        fd.append('json', JSON.stringify(filtro));
-        const r = await fetch(`${baseUrl}${ep}`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-          body: fd,
-        });
-        const txt = await r.text();
-        if (!r.ok) {
-          ultimoErro = `${ep} → HTTP ${r.status}: ${txt.slice(0, 200)}`;
-          continue;
-        }
+    try {
+      const params = new URLSearchParams();
+      params.append('json', JSON.stringify(filtro));
+      const r = await fetch(`${baseUrl}${endpointUsado}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: params.toString(),
+      });
+      const txt = await r.text();
+      if (!r.ok) {
+        ultimoErro = `HTTP ${r.status}: ${txt.slice(0, 300)}`;
+      } else {
         let parsed: any = null;
-        try { parsed = JSON.parse(txt); } catch { ultimoErro = `${ep} → resposta não-JSON`; continue; }
-
-        // Identificar se a API retornou um veículo
-        const candidato = extrairVeiculo(parsed, { placa, imei: isImei ? buscaRaw : null });
-        if (candidato) {
-          achado = candidato;
-          endpointUsado = ep;
-          break;
+        try { parsed = JSON.parse(txt); } catch { ultimoErro = `resposta não-JSON: ${txt.slice(0, 200)}`; }
+        if (parsed) {
+          // Erro explícito da API: { error: "true", message: "..." }
+          if (parsed.error === true || parsed.error === 'true') {
+            ultimoErro = parsed.message || 'erro na API';
+          } else {
+            achado = extrairVeiculo(parsed, { placa, imei: isImei ? buscaRaw : null });
+            if (!achado) ultimoErro = 'resposta sem veículo correspondente';
+          }
         }
-      } catch (e: any) {
-        ultimoErro = `${ep} → ${e?.message || e}`;
       }
+    } catch (e: any) {
+      ultimoErro = e?.message || String(e);
     }
 
     // Log da operação
