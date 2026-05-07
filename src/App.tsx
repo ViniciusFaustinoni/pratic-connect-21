@@ -728,6 +728,7 @@ const App = () => (
               <Route path="/diretoria/logs" element={<LogsAuditoria />} />
               <Route path="/diretoria/relatorios" element={<RelatoriosGerenciais />} />
               <Route path="/diretoria/faixas-cotas" element={<FaixasCotas />} />
+              <Route path="/diretoria/reducao-cota" element={<ReducaoCota />} />
               <Route path="/diretoria/solicitacoes-ia" element={<SolicitacoesIA />} />
               <Route path="/diretoria/campanhas" element={<CampanhasDesconto />} />
               <Route path="/diretoria/fechamento" element={<FechamentoMensal />} />
