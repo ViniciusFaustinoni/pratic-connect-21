@@ -1,48 +1,56 @@
-## Contexto
+## Diagnóstico
 
-Diagnóstico inicial estava parcialmente desatualizado: realtime já está enxuto (só `cotacoes` + `cotacoes_historico`), throttle já em 3s, `count: 'estimated'` já em uso e logs já guardados por `isDev`. Restam 5 otimizações reais.
+O app já tem `lib/imageCompressor.ts` com perfis adaptativos por `deviceMemory` (low: 960px/q0.6, mid: 1280px/q0.7, high: 1600px/q0.72) e usa `createImageBitmap` para baixar o peak RAM. Funciona bem na autovistoria pública e no `InstaladorChecklist`. Mas restam 5 brechas que causam o erro de "memória insuficiente" em celulares antigos do instalador:
+
+| # | Ponto | Problema |
+|---|---|---|
+| 1 | `CapturaFoto.tsx` | Sem compressão, sem `revokeObjectURL` — usado em toda vistoria |
+| 2 | `InstaladorChecklist.tsx:613` | Branch de upload sem chamar `compressImage` |
+| 3 | Vários `useState<{file, preview}[]>` | Blob URLs nunca revogadas ao remover/desmontar |
+| 4 | `imageCompressor` | Sem fallback ao detectar OOM (retorna o arquivo original — pior caso) |
+| 5 | Seleção múltipla | Compressões em paralelo competem pelo mesmo heap |
 
 ## Mudanças
 
-### 1. Lazy-load `useVendedores` — `src/pages/vendas/Cotacoes.tsx`
+### 1. `CapturaFoto.tsx` — comprimir + revogar
 
-Hoje (linha 150) chama `useVendedores()` sempre que a página monta, mesmo que o filtro de consultor nunca seja aberto. Adicionar opção `enabled` ao hook e disparar só quando: (a) `viewScope !== 'own'`, ou (b) o `Select` de filtro for aberto pela primeira vez (state `vendedoresFilterOpened`).
+Substituir `URL.createObjectURL(file)` direto por:
+- `compressImage(file)` antes de gerar preview
+- `useEffect` cleanup que chama `revokePreview(value)` no unmount
+- Aviso visual "Otimizando…" durante compressão
 
-Arquivos: `src/pages/vendas/Cotacoes.tsx` + `src/hooks/useVendedores.ts` (adicionar `{ enabled }` repassado ao `useQuery`).
+### 2. `InstaladorChecklist.tsx` — comprimir branch faltante
 
-### 2. Joins pesados na lista — `src/hooks/useCotacoes.ts` (`fetchCotacoesCore`)
+No bloco da linha ~611–617 (upload direto de ressalva), aplicar `compressImage` igual aos demais blocos (455, 642). É só replicar o padrão já existente no arquivo.
 
-A coluna `instalacoes:instalacoes!instalacoes_cotacao_id_fkey(id, status, data_agendada)` raramente é exibida na linha da lista (é detalhe). Mover para uma 2ª query batch (`.in('cotacao_id', ids)`) condicional — só quando alguma linha precisar exibir badge de instalação. Mesma estratégia que já é usada para `profiles`.
+### 3. `imageCompressor.ts` — retry em escala menor
 
-`contratos→associados` também pode virar batch separado (igual a `profiles`), reduzindo o JSON do SELECT principal.
+Quando `compressViaImageBitmap` falhar (OOM no Android), antes de cair para o caminho legado pesado, tentar de novo no mesmo bitmap path com perfil **um nível abaixo** (high→mid→low). Hoje só temos uma tentativa.
 
-Resultado esperado: payload da query principal cai ~40%.
+Adicionar também um **mutex global** (semáforo de 1 compressão simultânea) para evitar 4–6 imagens sendo decodificadas em paralelo quando o usuário seleciona várias de uma vez.
 
-### 3. `staleTime: Infinity` na paginada quando realtime ativo — `useCotacoes.ts:322`
+### 4. `imageCompressor.ts` — modo "memória crítica"
 
-Como o realtime já invalida `['cotacoes']`, subir `staleTime` de 30s → `Infinity` na `useCotacoesPaginadas`. Eliminamos refetch automático em foco/intervalo, deixando o realtime ditar.
+Antes de cada compressão, ler `(performance as any).memory?.usedJSHeapSize / jsHeapSizeLimit`. Se > 0.75, **forçar perfil `low`** independentemente do device, e (após upload) sugerir `gc()` indireto soltando referências (`bitmap = null` já é feito).
 
-### 4. Eliminar round-trip extra de funil quando dados já vieram — `useCotacoes.ts`
+### 5. Hook `usePhotoList` (novo, opcional)
 
-Manter a RPC `cotacoes_funil_counts` mas: (a) aumentar `staleTime` para 60s; (b) `refetchOnWindowFocus: false`. Como contagens são aproximadas e o realtime invalida quando muda, não precisa refazer a cada foco.
+Pequeno utilitário `useObjectUrl(file)` que cria a Object URL no `useEffect` e revoga no cleanup automaticamente. Migrar `CapturaFoto`, `VideoCapture` e onde houver `{file, preview}[]` para usar — elimina vazamentos por esquecimento.
 
-### 5. Silenciar log "Mesmo usuário já carregado" — `src/contexts/AuthContext.tsx`
+Escopo desta entrega: criar o hook e migrar `CapturaFoto` e `InstaladorChecklist` (`fotosRessalva`). Outros consumidores ficam para uma 2ª passada.
 
-Trocar o `console.info` por log condicional `if (import.meta.env.DEV) ...` ou remover. Cosmético — limpa o console em produção sem alterar comportamento.
+## Validação manual
 
-## Validação
-
-1. Abrir `/vendas/cotacoes` como diretor → console limpo (sem mensagens de Auth/realtime em produção).
-2. Network: a chamada `profiles?...` que hidrata vendedores **não** deve aparecer no load inicial — só ao abrir o filtro.
-3. Payload da query `cotacoes?select=...` reduzido (sem o sub-objeto `instalacoes`).
-4. Mudar status de uma cotação em outra aba → lista atualiza via realtime em < 3s.
-5. Trocar de aba "Em andamento" ↔ "Finalizadas" → não dispara nova RPC `cotacoes_funil_counts` antes de 60s.
+1. No celular antigo (ou DevTools → Performance → CPU 4×, Memory throttling): abrir uma vistoria, tirar 8 fotos seguidas.
+2. Verificar console: cada `[compressImage]` deve mostrar peso final ≤ 500 KB no perfil low.
+3. Memory tab: heap não pode crescer linearmente — deve estabilizar (= revoke funcionando).
+4. Selecionar 5 fotos da galeria de uma vez: devem comprimir **uma de cada vez**, sem travar.
 
 ## Arquivos
 
-- `src/hooks/useCotacoes.ts` (joins + staleTime + funil)
-- `src/hooks/useVendedores.ts` (parâmetro `enabled`)
-- `src/pages/vendas/Cotacoes.tsx` (lazy + state do filtro)
-- `src/contexts/AuthContext.tsx` (log silencioso)
+- `src/components/vistoriador/CapturaFoto.tsx` (compressão + cleanup)
+- `src/pages/instalador/InstaladorChecklist.tsx` (branch ~613)
+- `src/lib/imageCompressor.ts` (retry escalonado + mutex + modo crítico)
+- `src/hooks/useObjectUrl.ts` (novo)
 
-Sem mudanças de schema, sem migrations, sem refactor estrutural.
+Sem mudanças de schema, edge function ou backend.

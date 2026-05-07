@@ -17,6 +17,32 @@
 
 import { getDeviceCapabilitySnapshot } from '@/hooks/useDeviceCapability';
 
+// ----- Mutex global: serializa compressões para não competir pelo heap -----
+let compressionChain: Promise<unknown> = Promise.resolve();
+function runSerialized<T>(task: () => Promise<T>): Promise<T> {
+  const next = compressionChain.then(task, task);
+  // Não propagar rejeição para a próxima entrada da fila
+  compressionChain = next.catch(() => undefined);
+  return next;
+}
+
+// ----- Detecção de pressão de memória -----
+function isMemoryCritical(): boolean {
+  try {
+    const mem = (performance as unknown as { memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
+    if (!mem || !mem.jsHeapSizeLimit) return false;
+    return mem.usedJSHeapSize / mem.jsHeapSizeLimit > 0.75;
+  } catch {
+    return false;
+  }
+}
+
+function downgradeProfile(p: 'low' | 'mid' | 'high'): 'low' | 'mid' | null {
+  if (p === 'high') return 'mid';
+  if (p === 'mid') return 'low';
+  return null;
+}
+
 export interface CompressOptions {
   maxWidth?: number;
   maxHeight?: number;
@@ -64,8 +90,13 @@ const PROFILES = {
 
 function resolveOptions(options: CompressOptions): ResolvedOptions {
   const cap = getDeviceCapabilitySnapshot();
-  const profileKey =
+  let profileKey: 'low' | 'mid' | 'high' =
     options.profile ?? (cap.lowEnd ? 'low' : cap.midEnd ? 'mid' : 'high');
+  // Modo memória crítica: força low independentemente do device
+  if (!options.profile && isMemoryCritical()) {
+    console.warn('[compressImage] Heap > 75% — forçando perfil low');
+    profileKey = 'low';
+  }
   const base = PROFILES[profileKey];
   // Cap explícito: nunca permite override acima do perfil.
   // Isso evita que chamadores antigos com `maxWidth: 1920` derrubem
@@ -297,6 +328,15 @@ export async function compressImage(
   file: File,
   options: CompressOptions = {},
 ): Promise<File> {
+  // Serializa: 1 compressão por vez para evitar pico de heap
+  return runSerialized(() => compressImageInternal(file, options));
+}
+
+async function compressImageInternal(
+  file: File,
+  options: CompressOptions,
+  attempt = 0,
+): Promise<File> {
   const opts = resolveOptions(options);
   const cap = getDeviceCapabilitySnapshot();
 
@@ -314,6 +354,15 @@ export async function compressImage(
   // 1) Caminho moderno (peak RAM baixo)
   const fast = await compressViaImageBitmap(file, opts);
   if (fast) return fast;
+
+  // 1b) Retry com perfil reduzido (high→mid→low) antes do fallback caro
+  const currentProfile = (options.profile ??
+    (cap.lowEnd ? 'low' : cap.midEnd ? 'mid' : 'high')) as 'low' | 'mid' | 'high';
+  const downgraded = downgradeProfile(currentProfile);
+  if (downgraded && attempt < 2) {
+    console.warn(`[compressImage] Retry com perfil ${downgraded} (attempt ${attempt + 1})`);
+    return compressImageInternal(file, { ...options, profile: downgraded }, attempt + 1);
+  }
 
   // 2) Fallback compatível
   try {
