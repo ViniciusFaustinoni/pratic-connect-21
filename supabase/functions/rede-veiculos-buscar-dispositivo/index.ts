@@ -32,10 +32,22 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const buscaRaw = String(body?.busca ?? '').trim().toUpperCase();
-    if (!buscaRaw) return json({ success: false, error: 'Parâmetro "busca" obrigatório' }, 400);
+    const cpfCnpjExplicito = String(body?.cpfCnpj ?? '').replace(/\D/g, '');
+    if (!buscaRaw && !cpfCnpjExplicito) {
+      return json({ success: false, error: 'Informe "busca" (placa/IMEI/CPF) ou "cpfCnpj"' }, 400);
+    }
 
-    const isImei = /^\d{10,}$/.test(buscaRaw);
-    const placa = !isImei ? buscaRaw.replace(/[^A-Z0-9]/g, '') : null;
+    const digitos = buscaRaw.replace(/\D/g, '');
+    // CPF = 11 dígitos | CNPJ = 14 dígitos sem letras | IMEI = 14-16 dígitos (geralmente >=14)
+    // Heurística: 11 dígitos puros = CPF; 14 dígitos puros = ambíguo (CNPJ ou IMEI),
+    // tratamos como CNPJ se vier no campo cpfCnpj, senão IMEI por padrão.
+    let cpfCnpj = cpfCnpjExplicito;
+    if (!cpfCnpj && digitos.length === 11 && digitos === buscaRaw) cpfCnpj = digitos;
+
+    const isImei = !cpfCnpj && /^\d{10,}$/.test(buscaRaw) && digitos.length >= 14;
+    const placa = !isImei && !cpfCnpj && buscaRaw
+      ? buscaRaw.replace(/[^A-Z0-9]/g, '')
+      : null;
 
     // Config plataforma + auth
     const { data: plataforma, error: pErr } = await supabase
