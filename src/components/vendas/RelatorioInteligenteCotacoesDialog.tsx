@@ -166,7 +166,7 @@ export function RelatorioInteligenteCotacoesDialog({ open, onOpenChange }: Props
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 pr-4">
+        <div className="flex-1 overflow-y-auto pr-4 min-h-0">
           <div className="space-y-6">
             {/* Período */}
             <section className="space-y-3">
