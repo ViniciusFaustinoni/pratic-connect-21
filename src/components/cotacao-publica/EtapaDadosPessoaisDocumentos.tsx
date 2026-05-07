@@ -424,13 +424,44 @@ export function EtapaDadosPessoaisDocumentos({
     }
   }, [cepManual, dadosExtraidos.cep]);
 
+  const [confirmacaoAberta, setConfirmacaoAberta] = useState(false);
+
+  const buildDadosPayload = (): DadosPessoaisForm => ({
+    nome: dadosExtraidos.nome || '',
+    cpf: cpfEfetivo,
+    email,
+    telefone,
+    data_nascimento: dadosExtraidos.data_nascimento || '',
+    cep: dadosExtraidos.cep || '',
+    logradouro: dadosExtraidos.logradouro || '',
+    numero: dadosExtraidos.numero || '',
+    complemento: dadosExtraidos.complemento || '',
+    bairro: dadosExtraidos.bairro || '',
+    cidade: dadosExtraidos.cidade || '',
+    uf: dadosExtraidos.uf || '',
+    rg: dadosExtraidos.rg || undefined,
+    rg_orgao: dadosExtraidos.rg_orgao || undefined,
+    cnh: dadosExtraidos.cnh || undefined,
+    cnh_validade: dadosExtraidos.cnh_validade || undefined,
+    cnh_categoria: dadosExtraidos.cnh_categoria || undefined,
+    veiculo_placa: dadosExtraidos.veiculo_placa || undefined,
+    veiculo_chassi: dadosExtraidos.veiculo_chassi || undefined,
+    veiculo_renavam: dadosExtraidos.veiculo_renavam || undefined,
+    veiculo_cor: dadosExtraidos.veiculo_cor || undefined,
+    veiculo_combustivel: dadosExtraidos.veiculo_combustivel || undefined,
+    veiculo_ano_fabricacao: dadosExtraidos.veiculo_ano_fabricacao || undefined,
+    veiculo_ano_modelo: dadosExtraidos.veiculo_ano_modelo || undefined,
+    veiculo_numero_motor: dadosExtraidos.numero_motor || dadosExtraidos.veiculo_motor || undefined,
+    veiculo_zero_km: isZeroKm || undefined,
+    veiculo_procedencia: procedenciaVeiculo || (isZeroKm ? 'Novo (zero km)' : undefined),
+  });
+
   const handleSubmit = () => {
     if (!podeAvancar) {
       toast.error('Envie todos os documentos necessários e preencha email e telefone.');
       return;
     }
 
-    // Validar CPF efetivo (CPF manual tem prioridade sobre o do OCR)
     if (!cpfLimpoEfetivo || !validateCPF(cpfLimpoEfetivo)) {
       toast.error(
         cpfManual
@@ -439,41 +470,13 @@ export function EtapaDadosPessoaisDocumentos({
       );
       return;
     }
-    
-    // Usar CPF corrigido manualmente se disponível
-    const dados: DadosPessoaisForm = {
-      nome: dadosExtraidos.nome || '',
-      cpf: cpfEfetivo,
-      email,
-      telefone,
-      data_nascimento: dadosExtraidos.data_nascimento || '',
-      cep: dadosExtraidos.cep || '',
-      logradouro: dadosExtraidos.logradouro || '',
-      numero: dadosExtraidos.numero || '',
-      complemento: dadosExtraidos.complemento || '',
-      bairro: dadosExtraidos.bairro || '',
-      cidade: dadosExtraidos.cidade || '',
-      uf: dadosExtraidos.uf || '',
-      // Dados de documentos pessoais (CNH/RG) - NOVOS
-      rg: dadosExtraidos.rg || undefined,
-      rg_orgao: dadosExtraidos.rg_orgao || undefined,
-      cnh: dadosExtraidos.cnh || undefined,
-      cnh_validade: dadosExtraidos.cnh_validade || undefined,
-      cnh_categoria: dadosExtraidos.cnh_categoria || undefined,
-      // Dados do veículo extraídos do CRLV ou preenchidos manualmente
-      veiculo_placa: dadosExtraidos.veiculo_placa || undefined,
-      veiculo_chassi: dadosExtraidos.veiculo_chassi || undefined,
-      veiculo_renavam: dadosExtraidos.veiculo_renavam || undefined,
-      veiculo_cor: dadosExtraidos.veiculo_cor || undefined,
-      veiculo_combustivel: dadosExtraidos.veiculo_combustivel || undefined,
-      veiculo_ano_fabricacao: dadosExtraidos.veiculo_ano_fabricacao || undefined,
-      veiculo_ano_modelo: dadosExtraidos.veiculo_ano_modelo || undefined,
-      veiculo_numero_motor: dadosExtraidos.numero_motor || dadosExtraidos.veiculo_motor || undefined,
-      // Fallback manual: 0KM e procedência
-      veiculo_zero_km: isZeroKm || undefined,
-      veiculo_procedencia: procedenciaVeiculo || (isZeroKm ? 'Novo (zero km)' : undefined),
-    };
-    onSubmit(dados);
+
+    setConfirmacaoAberta(true);
+  };
+
+  const handleConfirmarEnvio = () => {
+    setConfirmacaoAberta(false);
+    onSubmit(buildDadosPayload());
   };
 
   // Modo read-only: mostrar resumo dos dados salvos
