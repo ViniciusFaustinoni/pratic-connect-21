@@ -675,6 +675,7 @@ export function usePropostasPendentes() {
 
         return {
           ...contrato,
+          cadastro_aprovado: (contrato as any).cadastro_aprovado ?? false,
           tipo_etapa_analise: tipoEtapaAnalise,
           associado,
           plano,
