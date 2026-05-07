@@ -248,7 +248,8 @@ export function usePropostasPendentes() {
           plano_id,
           vendedor_id,
           veiculo_id,
-          cadastro_aprovado
+          cadastro_aprovado,
+          updated_at
         `)
         .eq('status', 'assinado')
         .order('data_assinatura', { ascending: true });
