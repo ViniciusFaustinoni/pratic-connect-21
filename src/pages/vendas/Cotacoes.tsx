@@ -69,7 +69,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { useCotacoesRealtime } from '@/hooks/useCotacoesRealtime';
 import { useDebounce } from '@/hooks/useDebounce';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Package } from 'lucide-react';
 
 // Categorização dinâmica — fallback por termos quando benefits.category não está disponível
 const categorizarPorTermo = (cobLower: string): 'cobertura' | 'assistencia' | 'extra' => {
