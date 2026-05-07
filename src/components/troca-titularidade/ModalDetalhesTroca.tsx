@@ -12,6 +12,7 @@ import { Loader2, Car, User, FileSignature, CheckCircle2, XCircle, Send, Clipboa
 import { useSolicitacaoTroca, useAprovarTrocaCadastro, useAprovarTrocaMonitoramento, useReprovarTroca, useEnviarTermoCancelamento, type StatusTroca } from '@/hooks/useSolicitacoesTroca';
 import { TimelineAprovacao } from './TimelineAprovacao';
 import { RelatorioFinanceiroAntigo } from './RelatorioFinanceiroAntigo';
+import { MiniCardVistoriaTroca } from './MiniCardVistoriaTroca';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/integrations/supabase/client';
 
