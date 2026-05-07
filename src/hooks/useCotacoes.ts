@@ -155,8 +155,9 @@ async function fetchCotacoesCore(params: {
   page?: number;
   pageSize?: number;
   statusGroup?: CotacoesStatusGroup;
+  consultorId?: string | null;
 }) {
-  const { effectiveScope, effectiveVendedorId, search, page, pageSize, statusGroup } = params;
+  const { effectiveScope, effectiveVendedorId, search, page, pageSize, statusGroup, consultorId } = params;
 
   let query = supabase
     .from('cotacoes')
@@ -184,6 +185,9 @@ async function fetchCotacoesCore(params: {
   // Escopo "own": filtra explicitamente por vendedor logado.
   if (effectiveScope === 'own' && effectiveVendedorId) {
     query = query.eq('vendedor_id', effectiveVendedorId);
+  } else if (consultorId) {
+    // Filtro server-side por consultor escolhido (apenas para escopos team/all).
+    query = query.eq('vendedor_id', consultorId);
   }
 
   // Filtro server-side por aba (Em Andamento / Finalizadas).
