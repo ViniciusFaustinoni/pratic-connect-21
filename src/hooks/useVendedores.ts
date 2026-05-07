@@ -9,7 +9,8 @@ export interface Vendedor extends Profile {
   roles?: string[];
 }
 
-export function useVendedores() {
+export function useVendedores(options?: { enabled?: boolean }) {
+  const enabledOpt = options?.enabled ?? true;
   // Reusa o cache global de app_roles_config (staleTime 30min) — evita
   // duplicar a query `app_roles_config?area=eq.Comercial` em todo mount.
   const { roles: appRoles, isLoading: rolesLoading } = useAppRoles();
@@ -23,7 +24,7 @@ export function useVendedores() {
 
   return useQuery({
     queryKey: ['vendedores', rolesComerciais.slice().sort().join(',')],
-    enabled: !rolesLoading && rolesComerciais.length > 0,
+    enabled: enabledOpt && !rolesLoading && rolesComerciais.length > 0,
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
     refetchOnWindowFocus: false,
