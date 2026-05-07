@@ -90,8 +90,13 @@ const PROFILES = {
 
 function resolveOptions(options: CompressOptions): ResolvedOptions {
   const cap = getDeviceCapabilitySnapshot();
-  const profileKey =
+  let profileKey: 'low' | 'mid' | 'high' =
     options.profile ?? (cap.lowEnd ? 'low' : cap.midEnd ? 'mid' : 'high');
+  // Modo memória crítica: força low independentemente do device
+  if (!options.profile && isMemoryCritical()) {
+    console.warn('[compressImage] Heap > 75% — forçando perfil low');
+    profileKey = 'low';
+  }
   const base = PROFILES[profileKey];
   // Cap explícito: nunca permite override acima do perfil.
   // Isso evita que chamadores antigos com `maxWidth: 1920` derrubem
