@@ -569,10 +569,6 @@ export function RegrasVendaContent() {
           <DollarSign className="h-4 w-4" />
           Taxas
         </TabsTrigger>
-        <TabsTrigger value="autorizacoes" className="gap-2">
-          <ShieldCheck className="h-4 w-4" />
-          Autorizações
-        </TabsTrigger>
         <TabsTrigger value="indicacao" className="gap-2">
           <UserPlus className="h-4 w-4" />
           Indicação
