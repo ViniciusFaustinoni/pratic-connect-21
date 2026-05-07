@@ -1,35 +1,76 @@
-## Problema
+## Regra firmada
 
-O termo de cancelamento enviado em troca de titularidade / substituição é gerado pela edge function `autentique-cancelamento-create`. Ela tenta buscar um template em `documento_templates` ligado ao `document_types.code = 'termo_cancelamento'`, mas como **não existe nenhum registro** para esse tipo, o código cai no `else` e usa um HTML **hardcoded** dentro da função.
+O sistema **nunca** envia situação ATIVO para o SGA — nem no cadastro, nem na ativação completa do contrato. Toda promoção para ATIVO é feita manualmente no painel SGA pela operação.
 
-Confirmado no banco:
-- `document_types` tem `termo_cancelamento` ativo
-- `documento_templates` **não tem nenhuma linha** vinculada a esse `document_type_id`
+## Estado atual (problema)
 
-Por isso a página `/documentos/templates` (que lista a partir de `documento_templates`) não mostra o termo, e não há como editá-lo pela UI.
+1. `cadastrar_associado`: payload omite `codigo_situacao` → Hinova aplica default da regional, que é **ATIVO (1)**. Confirmado pelos logs do último associado (ERICO MORAES, 06/05).
+2. `cadastrar_veiculo`: também omite (correto), mas:
+3. `promover_situacao_veiculo`: quando `statusDestino === 'ativo'` e o veículo já existia, a função chama `/veiculo/alterar-situacao` com **código ATIVO**. Isso viola a nova regra.
 
-## Solução
+Códigos confirmados: `1=ATIVO`, `3=PENDENTE`, `11=EXCLUÍDO`, `12=CANCELAMENTO`.
 
-Criar uma migração que insere o template padrão de Termo de Cancelamento em `documento_templates`, marcado como `is_default=true`, vinculado:
-- `document_type_id` → id do `termo_cancelamento`
-- `categoria_id` → categoria "Termos"
+## Mudanças
 
-O `conteudo` será o texto/markdown equivalente ao HTML hardcoded hoje em `supabase/functions/autentique-cancelamento-create/index.ts` (linhas 154–202), usando as variáveis já suportadas pela função:
-- `{{associado.nome}}`, `{{associado.cpf}}`, `{{associado.telefone}}`, `{{associado.email}}`, `{{associado.endereco_completo}}`
-- `{{veiculo.marca}}`, `{{veiculo.modelo}}`, `{{veiculo.placa}}`, `{{veiculo.ano}}`, `{{veiculo.cor}}`, `{{veiculo.chassi}}`, `{{veiculo.renavam}}`
-- `{{contrato.numero}}`, `{{contrato.data_inicio}}`, `{{contrato.valor_mensal}}`
-- `{{cancelamento.motivo}}`, `{{cancelamento.data}}`
-- `{{empresa.nome}}`, `{{empresa.cnpj}}`, `{{empresa.endereco}}`, `{{sistema.data_extenso}}`
+### 1. `supabase/functions/_shared/hinova-client.ts`
+Adicionar helper `alterarSituacaoAssociadoHinova(supabase, codigo_associado, codigo_situacao)`:
+- Usa `hinovaFetch` (com retry de auth) para `GET /associado/alterar-situacao-para/:codigo_situacao/:codigo_associado`.
+- Resolve `apiUrl` via `getHinovaSession(supabase)` (mesmo padrão de `buscarVeiculoPorPlaca`).
+- Retorna `{ ok, status, raw, mensagem, errors }` no formato dos demais helpers.
 
-A função já tem o caminho que usa o template do banco (linhas 86–96 e 134–152) — basta haver a linha. Nenhum código JS/TS precisa mudar.
+### 2. `supabase/functions/sga-hinova-sync/index.ts`
 
-## Arquivos
+**a) Após `cadastrar_associado` ok (linha ~665), forçar PENDENTE:**
+```ts
+// Forçar situação PENDENTE (Hinova entrega ATIVO por default — ativação é manual no SGA).
+if (Number.isFinite(codigoSituacaoPendente) && codigoSituacaoPendente > 0) {
+  try {
+    const rs = await alterarSituacaoAssociadoHinova(
+      supabase, codigoAssociadoHinova, codigoSituacaoPendente,
+    );
+    await logSync(_vid, _aid, 'alterar_situacao_associado',
+      rs.ok ? 'success' : 'warning',
+      { codigo_associado: codigoAssociadoHinova, codigo_situacao: codigoSituacaoPendente },
+      rs.raw,
+      rs.ok ? null : (rs.mensagem || rs.errors.join('; ') || `HTTP ${rs.status}`));
+  } catch (e: any) {
+    await logSync(_vid, _aid, 'alterar_situacao_associado', 'warning',
+      { codigo_associado: codigoAssociadoHinova, codigo_situacao: codigoSituacaoPendente },
+      null, String(e?.message || e));
+  }
+}
+```
+Usa warning (não error) para não bloquear o sync se a API rejeitar — associado já foi cadastrado.
 
-- **Nova migração SQL** `supabase/migrations/<timestamp>_seed_termo_cancelamento_template.sql`
-  - `INSERT INTO documento_templates (...)` idempotente (`ON CONFLICT (codigo) DO NOTHING` ou guard via `WHERE NOT EXISTS`).
+**b) Veículo: fixar `codSituacao` SEMPRE em PENDENTE (linha 809):**
+```ts
+// Veículo entra SEMPRE como pendente — promoção é manual no SGA.
+const codSituacao = codigoSituacaoPendente;
+```
+
+**c) Remover bloco "promoção pendente → ativo" (linhas 893–943):**
+Substituir todo o bloco por um único log informativo quando o veículo já existia e o destino seria ativo:
+```ts
+if (statusDestino === 'ativo' && veiculoJaExistiaNoHinova && codigoVeiculoHinova) {
+  await logSync(_vid, _aid, 'promover_situacao_veiculo', 'info',
+    { codigo_veiculo: codigoVeiculoHinova },
+    null,
+    'Promoção para ATIVO não é feita automaticamente — operação deve ativar manualmente no painel SGA.');
+}
+```
+Remover variável `promocaoOk` e o `if (!promocaoOk) return;` subsequente.
+
+**d) `status_sga` local:** manter `'ativado_sga'` quando `statusDestino==='ativo'` (refere-se à efetivação local, não ao SGA — apenas indica que o sync local terminou).
 
 ## Validação após approve
 
-1. Abrir `/documentos/templates` → confirmar card "Termo de Cancelamento" na categoria Termos.
-2. Editar conteúdo, salvar e confirmar persistência.
-3. Disparar termo numa troca/substituição e validar que o PDF usa o conteúdo editado (log: `[autentique-cancelamento-create] Usando template do banco`).
+1. Disparar nova sincronização de associado → verificar logs:
+   - `cadastrar_associado` success
+   - `alterar_situacao_associado` success com `codigo_situacao: 3`
+2. Verificar no painel SGA que o associado aparece como **PENDENTE**.
+3. Para veículos novos: `cadastrar_veiculo` success, sem chamada de `promover_situacao_veiculo`.
+4. Para contratos ativados na Pratic: log `info` "Promoção para ATIVO não é feita automaticamente".
+
+## Memória a atualizar
+
+`mem://features/integrations/sga-hinova-sync-and-pre-check-v3` — adicionar regra: "Ativação no SGA é exclusivamente manual. Sistema só envia/força situação PENDENTE (código 3) — nunca ATIVO."
