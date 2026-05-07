@@ -270,7 +270,7 @@ export function ConfirmacaoVistoria({
             <div className="bg-muted/50 p-4 rounded-lg space-y-3">
               <h4 className="font-medium flex items-center gap-2">
                 <Camera className="h-4 w-4 text-primary" />
-                Autovistoria Enviada
+                Autovistoria - Roubo &amp; Furto Enviada
               </h4>
               <p className="text-sm text-muted-foreground">
                 Suas fotos foram recebidas e estão em análise pela nossa equipe técnica.
