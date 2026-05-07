@@ -34,8 +34,11 @@ export function BuscarNaSoftruckBanner({ termo, onEncontrado }: BuscarNaSoftruck
   const [loading, setLoading] = useState<string | null>(null);
 
   const termoLimpo = termo.trim().toUpperCase();
-  const isImei = /^\d{14,16}$/.test(termoLimpo);
-  const tipoBusca = isImei ? 'IMEI' : 'placa';
+  const digitos = termoLimpo.replace(/\D/g, '');
+  const isCpf = digitos.length === 11 && digitos === termoLimpo.replace(/[.\-\s]/g, '');
+  const isCnpj = digitos.length === 14 && /[./-]/.test(termoLimpo);
+  const isImei = !isCpf && !isCnpj && /^\d{14,16}$/.test(termoLimpo);
+  const tipoBusca = isCpf ? 'CPF' : isCnpj ? 'CNPJ' : isImei ? 'IMEI' : 'placa';
 
   if (!termoLimpo || termoLimpo.length < 3) return null;
 
