@@ -849,7 +849,7 @@ export default function ReguaCobranca() {
         </CardHeader>
         <CardContent>
           <div className="relative">
-            <div className="flex items-center overflow-x-auto pb-4 gap-2">
+            <div className="flex items-center overflow-x-auto scrollbar-hide pb-4 gap-2">
               {etapasOrdenadas.map((etapa, idx) => {
                 const acaoInfo = getAcaoInfo(etapa.acao);
                 const Icon = acaoInfo.icon;

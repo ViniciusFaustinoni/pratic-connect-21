@@ -805,7 +805,7 @@ export default function Cotacoes() {
       </div>
 
       {/* Stats Bar - Pills flutuantes */}
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+      <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 -mx-1 px-1">
         {statusStats.map((item) => {
           const isInactive = item.count === 0;
           return (
