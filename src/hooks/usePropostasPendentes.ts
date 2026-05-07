@@ -166,6 +166,8 @@ export interface PropostaPendente {
    * Detectado inspecionando os nomes das coberturas do plano via regex /roubo|furto/i.
    */
   plano_tem_roubo_furto: boolean;
+  /** True quando o Cadastro já aprovou a proposta (flag em contratos.cadastro_aprovado). */
+  cadastro_aprovado: boolean;
 }
 
 /**
@@ -238,7 +240,8 @@ export function usePropostasPendentes() {
           cotacao_id,
           plano_id,
           vendedor_id,
-          veiculo_id
+          veiculo_id,
+          cadastro_aprovado
         `)
         .eq('status', 'assinado')
         .order('data_assinatura', { ascending: true });
@@ -508,10 +511,18 @@ export function usePropostasPendentes() {
           !!(associado?.sincronizado_hinova && associado?.codigo_hinova) &&
           !!(veiculoContrato?.sincronizado_hinova && veiculoContrato?.codigo_hinova);
 
+        // Autovistoria já aprovada pelo Cadastro: tarefa do campo (instalação),
+        // não deve mais aparecer em Propostas Pendentes. Vai para /cadastro/associados.
+        const cadastroAprovado = (contrato as any).cadastro_aprovado === true;
+        const tipoVistoriaAtual = (contrato.cotacao_id ? mCotacao.get(contrato.cotacao_id)?.tipo_vistoria : null) || null;
+        const autovistoriaJaAprovadaPeloCadastro =
+          cadastroAprovado && tipoVistoriaAtual === 'autovistoria';
+
         const propostaJaConcluida =
           associado?.status === 'ativo' ||
           instalacaoConcluida ||
           jaNoSGA ||
+          autovistoriaJaAprovadaPeloCadastro ||
           (associado?.status === 'aguardando_instalacao' && !docsPendentes && !vistoriaPendenteAnalise);
         if (propostaJaConcluida) return null;
 
@@ -672,6 +683,7 @@ export function usePropostasPendentes() {
 
         return {
           ...contrato,
+          cadastro_aprovado: (contrato as any).cadastro_aprovado ?? false,
           tipo_etapa_analise: tipoEtapaAnalise,
           associado,
           plano,
@@ -750,7 +762,8 @@ export function useProposta(contratoId: string | undefined) {
           plano_id,
           vendedor_id,
           pdf_assinado_url,
-          updated_at
+          updated_at,
+          cadastro_aprovado
         `)
         .eq('id', contratoId)
         .single();
@@ -1335,6 +1348,7 @@ export function useProposta(contratoId: string | undefined) {
 
       const result: PropostaPendente = {
         ...contrato,
+        cadastro_aprovado: (contrato as any).cadastro_aprovado ?? false,
         tipo_etapa_analise: tipoEtapaAnaliseSingle,
         associado,
         plano,

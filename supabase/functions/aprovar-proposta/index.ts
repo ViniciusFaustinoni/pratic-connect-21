@@ -117,7 +117,7 @@ serve(async (req) => {
     // A ativação definitiva acontece somente após instalação + aprovação do Monitoramento.
     const { data: contratoAtualizado, error: contratoError } = await supabase
       .from('contratos')
-      .update({ aprovado_por, aprovado_em: agora })
+      .update({ aprovado_por, aprovado_em: agora, cadastro_aprovado: true })
       .eq('id', contrato_id)
       .eq('status', 'assinado')
       .select('id, status')
