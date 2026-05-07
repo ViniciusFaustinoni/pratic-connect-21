@@ -393,6 +393,7 @@ const menuConfig: {
         
         { title: 'Fechamento & Rateio', url: '/diretoria/fechamento', icon: PieChart },
         { title: 'Faixas & Cotas', url: '/diretoria/faixas-cotas', icon: Calculator },
+        { title: 'Redução de Cota (Regra 1%)', url: '/diretoria/reducao-cota', icon: Percent },
         { title: 'Atuarial', url: '/diretoria/indicadores', icon: TrendingUp },
         { title: 'Aprovações', url: '/diretoria/aprovacoes', icon: CheckCircle2 },
         { title: 'Blacklist', url: '/diretoria/blacklist', icon: Ban },
