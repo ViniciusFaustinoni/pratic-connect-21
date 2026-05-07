@@ -677,16 +677,16 @@ export default function ProcessosOperacionais() {
         </TabsList>
 
         <TabsContent value="titularidade">
-          <TrocaTitularidadeTab />
+          <TrocaTitularidadeTab scopeProfileId={scopeProfileId} />
         </TabsContent>
         <TabsContent value="substituicoes">
-          <SubstituicoesTab />
+          <SubstituicoesTab scopeAuthUserId={scopeAuthUserId} />
         </TabsContent>
         <TabsContent value="migracoes">
-          <MigracoesTab />
+          <MigracoesTab scopeProfileId={scopeProfileId} hideAdminActions={scopeToSelf} />
         </TabsContent>
         <TabsContent value="inclusoes">
-          <InclusoesTab />
+          <InclusoesTab scopeAuthUserId={scopeAuthUserId} />
         </TabsContent>
       </Tabs>
     </div>
