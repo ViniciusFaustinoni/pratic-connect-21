@@ -215,8 +215,8 @@ async function fetchCotacoesCore(params: {
     query = query.or(`tipo_entrada.is.null,tipo_entrada.not.in.(${list})`);
   }
 
+  if (search) {
 
-    const safe = search.replace(/[,()]/g, '');
     const like = `%${safe}%`;
 
     const { data: leadsMatch } = await supabase
