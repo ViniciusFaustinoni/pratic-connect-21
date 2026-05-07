@@ -34,16 +34,26 @@ export function BuscarNaSoftruckBanner({ termo, onEncontrado }: BuscarNaSoftruck
   const [loading, setLoading] = useState<string | null>(null);
 
   const termoLimpo = termo.trim().toUpperCase();
-  const isImei = /^\d{14,16}$/.test(termoLimpo);
-  const tipoBusca = isImei ? 'IMEI' : 'placa';
+  const digitos = termoLimpo.replace(/\D/g, '');
+  const isCpf = digitos.length === 11 && digitos === termoLimpo.replace(/[.\-\s]/g, '');
+  const isCnpj = digitos.length === 14 && /[./-]/.test(termoLimpo);
+  const isImei = !isCpf && !isCnpj && /^\d{14,16}$/.test(termoLimpo);
+  const tipoBusca = isCpf ? 'CPF' : isCnpj ? 'CNPJ' : isImei ? 'IMEI' : 'placa';
 
   if (!termoLimpo || termoLimpo.length < 3) return null;
+
+  // Softruck só aceita placa/IMEI; Rede Veículos aceita também CPF/CNPJ.
+  const ehDocumento = isCpf || isCnpj;
+  const plataformasAtivas = ehDocumento
+    ? PLATAFORMAS.filter((p) => p.key === 'rede_veiculos')
+    : PLATAFORMAS;
+  const buscaPayload = ehDocumento ? { cpfCnpj: digitos } : { busca: termoLimpo };
 
   const handleBuscar = async (plat: Plataforma) => {
     setLoading(plat.key);
     try {
       const { data, error } = await supabase.functions.invoke(plat.fn, {
-        body: { busca: termoLimpo },
+        body: buscaPayload,
       });
       if (error) throw error;
       if (!data?.success) {
@@ -71,8 +81,8 @@ export function BuscarNaSoftruckBanner({ termo, onEncontrado }: BuscarNaSoftruck
     setLoading('all');
     try {
       const results = await Promise.allSettled(
-        PLATAFORMAS.map((p) =>
-          supabase.functions.invoke(p.fn, { body: { busca: termoLimpo } }).then((r) => ({ p, r })),
+        plataformasAtivas.map((p) =>
+          supabase.functions.invoke(p.fn, { body: buscaPayload }).then((r) => ({ p, r })),
         ),
       );
       let achouEm: string | null = null;
@@ -108,7 +118,7 @@ export function BuscarNaSoftruckBanner({ termo, onEncontrado }: BuscarNaSoftruck
           icon: <CheckCircle2 className="h-4 w-4" />,
         });
         if (rastreadorId) onEncontrado?.(rastreadorId);
-      } else if (naoAchadas.length === PLATAFORMAS.length) {
+      } else if (naoAchadas.length === plataformasAtivas.length) {
         toast.warning(`Não encontrado em nenhuma plataforma (${tipoBusca}: ${termoLimpo}).`);
       } else {
         toast.error(`Falha ao consultar: ${errosFalhas.join(' | ')}`);
@@ -138,7 +148,7 @@ export function BuscarNaSoftruckBanner({ termo, onEncontrado }: BuscarNaSoftruck
               {loading === 'all' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
               Buscar em todas
             </Button>
-            {PLATAFORMAS.map((p) => (
+            {plataformasAtivas.map((p) => (
               <Button
                 key={p.key}
                 size="sm"

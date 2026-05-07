@@ -32,10 +32,22 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const buscaRaw = String(body?.busca ?? '').trim().toUpperCase();
-    if (!buscaRaw) return json({ success: false, error: 'Parâmetro "busca" obrigatório' }, 400);
+    const cpfCnpjExplicito = String(body?.cpfCnpj ?? '').replace(/\D/g, '');
+    if (!buscaRaw && !cpfCnpjExplicito) {
+      return json({ success: false, error: 'Informe "busca" (placa/IMEI/CPF) ou "cpfCnpj"' }, 400);
+    }
 
-    const isImei = /^\d{10,}$/.test(buscaRaw);
-    const placa = !isImei ? buscaRaw.replace(/[^A-Z0-9]/g, '') : null;
+    const digitos = buscaRaw.replace(/\D/g, '');
+    // CPF = 11 dígitos | CNPJ = 14 dígitos sem letras | IMEI = 14-16 dígitos (geralmente >=14)
+    // Heurística: 11 dígitos puros = CPF; 14 dígitos puros = ambíguo (CNPJ ou IMEI),
+    // tratamos como CNPJ se vier no campo cpfCnpj, senão IMEI por padrão.
+    let cpfCnpj = cpfCnpjExplicito;
+    if (!cpfCnpj && digitos.length === 11 && digitos === buscaRaw) cpfCnpj = digitos;
+
+    const isImei = !cpfCnpj && /^\d{10,}$/.test(buscaRaw) && digitos.length >= 14;
+    const placa = !isImei && !cpfCnpj && buscaRaw
+      ? buscaRaw.replace(/[^A-Z0-9]/g, '')
+      : null;
 
     // Config plataforma + auth
     const { data: plataforma, error: pErr } = await supabase
@@ -69,14 +81,22 @@ Deno.serve(async (req) => {
     const token = authJson.token as string;
 
     // Endpoint oficial da API Rede Veículos (postman doc TzRLmr9r).
-    // POST application/x-www-form-urlencoded com campo `json={...}`
-    // contendo (chassi | placa | imei) — qualquer um identifica o veículo.
+    // - Busca por placa/imei (com ou sem CPF) → /obterDadosVeiculo/
+    // - Busca apenas por CPF/CNPJ → /obterDadosCliente/ (retorna o cliente +
+    //   eventualmente lista de veículos vinculados, que processamos a seguir).
+    const apenasCpfCnpj = !!cpfCnpj && !placa && !isImei;
     const filtro: Record<string, unknown> = {};
-    if (placa) filtro.placa = placa;
-    if (isImei) filtro.imei = buscaRaw;
+    if (apenasCpfCnpj) {
+      filtro.cpfCnpjCliente = cpfCnpj;
+    } else {
+      if (placa) filtro.placa = placa;
+      if (isImei) filtro.imei = buscaRaw;
+      if (cpfCnpj) filtro.cpfCnpjCliente = cpfCnpj;
+    }
 
-    const endpointUsado = '/obterDadosVeiculo/';
+    const endpointUsado = apenasCpfCnpj ? '/obterDadosCliente/' : '/obterDadosVeiculo/';
     let achado: any = null;
+    let achadosLista: any[] = [];
     let ultimoErro: string | null = null;
 
     try {
@@ -97,12 +117,30 @@ Deno.serve(async (req) => {
         let parsed: any = null;
         try { parsed = JSON.parse(txt); } catch { ultimoErro = `resposta não-JSON: ${txt.slice(0, 200)}`; }
         if (parsed) {
-          // Erro explícito da API: { error: "true", message: "..." }
           if (parsed.error === true || parsed.error === 'true') {
             ultimoErro = parsed.message || 'erro na API';
+          } else if (apenasCpfCnpj) {
+            // obterDadosCliente: pode retornar { cliente, veiculos:[...] } ou
+            // { cliente, veiculo } único. Normalizamos para lista.
+            const lista =
+              parsed.veiculos ||
+              parsed.cliente?.veiculos ||
+              (parsed.veiculo ? [parsed.veiculo] : null);
+            if (Array.isArray(lista) && lista.length) {
+              achadosLista = lista.map((v) => ({
+                veiculo: v,
+                equipamento: v.equipamento || parsed.equipamento,
+                cliente: parsed.cliente,
+                idCliente: parsed.idCliente || parsed.cliente?.idCliente,
+              }));
+              achado = achadosLista[0];
+            } else {
+              ultimoErro = 'cliente sem veículos vinculados';
+            }
           } else {
             achado = extrairVeiculo(parsed, { placa, imei: isImei ? buscaRaw : null });
             if (!achado) ultimoErro = 'resposta sem veículo correspondente';
+            else achadosLista = [achado];
           }
         }
       }
@@ -114,143 +152,171 @@ Deno.serve(async (req) => {
     await supabase.from('rastreadores_api_logs').insert({
       plataforma: 'rede_veiculos',
       operacao: 'buscarDispositivo',
-      request: { busca: buscaRaw, isImei, placa },
-      response: { found: !!achado, endpointUsado, ultimoErro: achado ? null : ultimoErro },
+      request: { busca: buscaRaw, isImei, placa, cpfCnpj: cpfCnpj || null },
+      response: { found: !!achado, total: achadosLista.length, endpointUsado, ultimoErro: achado ? null : ultimoErro },
       status: achado ? 'sucesso' : 'sem_resultado',
     });
 
     if (!achado) {
+      const tipo = apenasCpfCnpj ? 'CPF/CNPJ' : (isImei ? 'IMEI' : 'placa');
       return json({
         success: true,
         found: false,
-        message: `Não encontrado na Rede Veículos (${isImei ? 'IMEI' : 'placa'}: ${buscaRaw}).`,
+        message: `Não encontrado na Rede Veículos (${tipo}: ${buscaRaw || cpfCnpj}).`,
         debug: ultimoErro || undefined,
       });
     }
 
-    // Normalizar campos: API retorna estruturas aninhadas
-    // (veiculo.dados, equipamento.dados, cliente.dados) ou às vezes flat.
-    const veiculoNode = achado.veiculo?.dados || achado.veiculo || achado;
-    const equipamentoNode = achado.equipamento?.dados || achado.equipamento || achado;
-    const clienteNode = achado.cliente?.dados || achado.cliente || {};
+    // Quando vier por CPF, podemos ter vários veículos. Processamos todos.
+    const itensParaProcessar = achadosLista.length ? achadosLista : [achado];
+    const resultados: any[] = [];
 
-    const imeiAchado: string | null =
-      equipamentoNode.imei || achado.imei || (isImei ? buscaRaw : null);
-    const placaAchada: string | null =
-      ((veiculoNode.placa || achado.placa || placa || '') + '')
-        .toUpperCase()
-        .replace(/[^A-Z0-9]/g, '') || null;
-    const idVeiculoExterno: string | null =
-      achado.idVeiculo || veiculoNode.idVeiculo
-        ? String(achado.idVeiculo || veiculoNode.idVeiculo)
-        : null;
-    const idClienteExterno: string | null =
-      achado.idCliente || clienteNode.idCliente
-        ? String(achado.idCliente || clienteNode.idCliente)
-        : null;
-    const idEquipamentoExterno: string | null =
-      achado.idEquipamento || equipamentoNode.idEquipamento
-        ? String(achado.idEquipamento || equipamentoNode.idEquipamento)
-        : null;
+    for (const item of itensParaProcessar) {
+      const veiculoNode = item.veiculo?.dados || item.veiculo || item;
+      const equipamentoNode = item.equipamento?.dados || item.equipamento || item;
+      const clienteNode = item.cliente?.dados || item.cliente || {};
 
-    // Procurar rastreador local existente (por imei ou plataforma_device_id)
-    let existing: any = null;
-    if (imeiAchado) {
-      const r = await supabase
-        .from('rastreadores')
-        .select('id, imei, status, veiculo_id, plataforma_device_id, plataforma_veiculo_id')
-        .eq('plataforma', 'rede_veiculos')
-        .eq('imei', imeiAchado)
-        .maybeSingle();
-      existing = r.data;
-    }
-    if (!existing && idEquipamentoExterno) {
-      const r = await supabase
-        .from('rastreadores')
-        .select('id, imei, status, veiculo_id, plataforma_device_id, plataforma_veiculo_id')
-        .eq('plataforma', 'rede_veiculos')
-        .eq('plataforma_device_id', idEquipamentoExterno)
-        .maybeSingle();
-      existing = r.data;
-    }
+      const imeiAchado: string | null =
+        equipamentoNode.imei || item.imei || (isImei ? buscaRaw : null);
+      const placaAchada: string | null =
+        ((veiculoNode.placa || item.placa || placa || '') + '')
+          .toUpperCase()
+          .replace(/[^A-Z0-9]/g, '') || null;
+      const idVeiculoExterno: string | null =
+        item.idVeiculo || veiculoNode.idVeiculo
+          ? String(item.idVeiculo || veiculoNode.idVeiculo)
+          : null;
+      const idClienteExterno: string | null =
+        item.idCliente || clienteNode.idCliente
+          ? String(item.idCliente || clienteNode.idCliente)
+          : null;
+      const idEquipamentoExterno: string | null =
+        item.idEquipamento || equipamentoNode.idEquipamento
+          ? String(item.idEquipamento || equipamentoNode.idEquipamento)
+          : null;
 
-    let rastreadorId = existing?.id ?? null;
-    let acao: 'criado' | 'atualizado' | 'inalterado' = 'inalterado';
+      // Procurar rastreador local existente
+      let existing: any = null;
+      if (imeiAchado) {
+        const r = await supabase
+          .from('rastreadores')
+          .select('id, imei, status, veiculo_id, plataforma_device_id, plataforma_veiculo_id')
+          .eq('plataforma', 'rede_veiculos')
+          .eq('imei', imeiAchado)
+          .maybeSingle();
+        existing = r.data;
+      }
+      if (!existing && idEquipamentoExterno) {
+        const r = await supabase
+          .from('rastreadores')
+          .select('id, imei, status, veiculo_id, plataforma_device_id, plataforma_veiculo_id')
+          .eq('plataforma', 'rede_veiculos')
+          .eq('plataforma_device_id', idEquipamentoExterno)
+          .maybeSingle();
+        existing = r.data;
+      }
 
-    // Tentar achar veículo local pela placa
-    let veiculoLocalId: string | null = null;
-    if (placaAchada) {
-      const { data: vLocal } = await supabase
-        .from('veiculos')
-        .select('id')
-        .ilike('placa', placaAchada)
-        .limit(1)
-        .maybeSingle();
-      if (vLocal?.id) veiculoLocalId = vLocal.id;
-    }
+      let rastreadorId = existing?.id ?? null;
+      let acao: 'criado' | 'atualizado' | 'inalterado' | 'sem_equipamento' = 'inalterado';
 
-    if (!existing) {
-      const insertPayload: Record<string, unknown> = {
-        codigo: imeiAchado || `RV-${idEquipamentoExterno || placaAchada}`,
+      // Achar veículo local pela placa
+      let veiculoLocalId: string | null = null;
+      if (placaAchada) {
+        const { data: vLocal } = await supabase
+          .from('veiculos')
+          .select('id')
+          .ilike('placa', placaAchada)
+          .limit(1)
+          .maybeSingle();
+        if (vLocal?.id) veiculoLocalId = vLocal.id;
+      }
+
+      // Sem IMEI nem idEquipamento não dá pra criar rastreador (ex.: cliente sem equipamento ainda)
+      if (!existing && !imeiAchado && !idEquipamentoExterno) {
+        acao = 'sem_equipamento';
+      } else if (!existing) {
+        const insertPayload: Record<string, unknown> = {
+          codigo: imeiAchado || `RV-${idEquipamentoExterno || placaAchada}`,
+          imei: imeiAchado,
+          plataforma: 'rede_veiculos',
+          plataforma_device_id: idEquipamentoExterno,
+          plataforma_veiculo_id: idVeiculoExterno,
+          status: veiculoLocalId ? 'instalado' : 'estoque',
+        };
+        if (veiculoLocalId) insertPayload.veiculo_id = veiculoLocalId;
+
+        const { data: novo, error: insErr } = await supabase
+          .from('rastreadores')
+          .insert(insertPayload as any)
+          .select('id')
+          .single();
+        if (insErr) {
+          resultados.push({ placa: placaAchada, imei: imeiAchado, error: insErr.message });
+          continue;
+        }
+        rastreadorId = novo.id;
+        acao = 'criado';
+      } else {
+        const patch: Record<string, unknown> = {};
+        if (idEquipamentoExterno && existing.plataforma_device_id !== idEquipamentoExterno) {
+          patch.plataforma_device_id = idEquipamentoExterno;
+        }
+        if (idVeiculoExterno && existing.plataforma_veiculo_id !== idVeiculoExterno) {
+          patch.plataforma_veiculo_id = idVeiculoExterno;
+        }
+        if (imeiAchado && existing.imei !== imeiAchado) patch.imei = imeiAchado;
+        if (!existing.veiculo_id && veiculoLocalId) {
+          patch.veiculo_id = veiculoLocalId;
+          if (existing.status === 'estoque') patch.status = 'instalado';
+        }
+        if (Object.keys(patch).length > 0) {
+          await supabase.from('rastreadores').update(patch).eq('id', existing.id);
+          acao = 'atualizado';
+        }
+      }
+
+      if (veiculoLocalId && (idVeiculoExterno || idClienteExterno)) {
+        const upd: Record<string, unknown> = {};
+        if (idVeiculoExterno) upd.rede_veiculos_veiculo_id = idVeiculoExterno;
+        if (idClienteExterno) upd.rede_veiculos_cliente_id = idClienteExterno;
+        if (Object.keys(upd).length) {
+          await supabase.from('veiculos').update(upd).eq('id', veiculoLocalId);
+        }
+      }
+
+      resultados.push({
+        rastreador_id: rastreadorId,
         imei: imeiAchado,
-        plataforma: 'rede_veiculos',
-        plataforma_device_id: idEquipamentoExterno,
-        plataforma_veiculo_id: idVeiculoExterno,
-        status: veiculoLocalId ? 'instalado' : 'estoque',
-      };
-      if (veiculoLocalId) insertPayload.veiculo_id = veiculoLocalId;
-
-      const { data: novo, error: insErr } = await supabase
-        .from('rastreadores')
-        .insert(insertPayload as any)
-        .select('id')
-        .single();
-      if (insErr) return json({ success: false, error: `Falha ao criar registro local: ${insErr.message}` }, 500);
-      rastreadorId = novo.id;
-      acao = 'criado';
-    } else {
-      const patch: Record<string, unknown> = {};
-      if (idEquipamentoExterno && existing.plataforma_device_id !== idEquipamentoExterno) {
-        patch.plataforma_device_id = idEquipamentoExterno;
-      }
-      if (idVeiculoExterno && existing.plataforma_veiculo_id !== idVeiculoExterno) {
-        patch.plataforma_veiculo_id = idVeiculoExterno;
-      }
-      if (imeiAchado && existing.imei !== imeiAchado) patch.imei = imeiAchado;
-      if (!existing.veiculo_id && veiculoLocalId) {
-        patch.veiculo_id = veiculoLocalId;
-        if (existing.status === 'estoque') patch.status = 'instalado';
-      }
-      if (Object.keys(patch).length > 0) {
-        await supabase.from('rastreadores').update(patch).eq('id', existing.id);
-        acao = 'atualizado';
-      }
+        placa: placaAchada,
+        vehicle_id: idVeiculoExterno,
+        device_id: idEquipamentoExterno,
+        acao,
+      });
     }
 
-    // Atualizar rede_veiculos_*_id no veículo local quando aplicável
-    if (veiculoLocalId && (idVeiculoExterno || idClienteExterno)) {
-      const upd: Record<string, unknown> = {};
-      if (idVeiculoExterno) upd.rede_veiculos_veiculo_id = idVeiculoExterno;
-      if (idClienteExterno) upd.rede_veiculos_cliente_id = idClienteExterno;
-      if (Object.keys(upd).length) {
-        await supabase.from('veiculos').update(upd).eq('id', veiculoLocalId);
-      }
-    }
+    const principal = resultados[0] || {};
+    const totalCriados = resultados.filter((r) => r.acao === 'criado').length;
+    const totalAtualizados = resultados.filter((r) => r.acao === 'atualizado').length;
 
     return json({
       success: true,
       found: true,
-      acao,
-      rastreador_id: rastreadorId,
-      imei: imeiAchado,
-      placa: placaAchada,
-      vehicle_id: idVeiculoExterno,
-      device_id: idEquipamentoExterno,
-      message: acao === 'criado'
-        ? 'Dispositivo encontrado na Rede Veículos e cadastrado localmente.'
-        : acao === 'atualizado'
-          ? 'Dispositivo já existia localmente — IDs Rede Veículos atualizados.'
-          : 'Dispositivo já estava sincronizado localmente.',
+      total: resultados.length,
+      resultados,
+      // Compat com chamadas atuais (1 dispositivo)
+      acao: principal.acao,
+      rastreador_id: principal.rastreador_id,
+      imei: principal.imei,
+      placa: principal.placa,
+      vehicle_id: principal.vehicle_id,
+      device_id: principal.device_id,
+      message: apenasCpfCnpj
+        ? `Cliente encontrado: ${resultados.length} veículo(s) — ${totalCriados} novo(s), ${totalAtualizados} atualizado(s).`
+        : principal.acao === 'criado'
+          ? 'Dispositivo encontrado na Rede Veículos e cadastrado localmente.'
+          : principal.acao === 'atualizado'
+            ? 'Dispositivo já existia localmente — IDs Rede Veículos atualizados.'
+            : 'Dispositivo já estava sincronizado localmente.',
     });
   } catch (err: any) {
     console.error('[rede-veiculos-buscar-dispositivo] erro:', err);
