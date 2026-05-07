@@ -53,7 +53,7 @@ export function BuscarNaSoftruckBanner({ termo, onEncontrado }: BuscarNaSoftruck
     setLoading(plat.key);
     try {
       const { data, error } = await supabase.functions.invoke(plat.fn, {
-        body: { busca: termoLimpo },
+        body: buscaPayload,
       });
       if (error) throw error;
       if (!data?.success) {
