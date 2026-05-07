@@ -1,21 +1,13 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { toast } from 'sonner';
 import { offlineDB, enfileirarMidia, removerMidia, type MidiaPendente } from '@/lib/offline/db';
 
 /**
  * Camada offline-first para a rota pública de vistoria (link público).
- *
- * Diferente do app do instalador, aqui a "chave" da fila é o TOKEN do link
- * — não há sessão autenticada para usar. O `useSyncQueuePublica` cuida do
- * upload via cliente público + bucket do storage com policy de upload aberto
- * para o caminho `${token}/...`.
- *
- * Mantém a mesma semântica do hook autenticado: enfileira blob, exibe
- * preview local até o upload completar, dedupe por slot.
+ * Ver useUploadVistoriaOffline para detalhes do gerenciamento de URLs.
  */
 export function useUploadVistoriaPublicaOffline(token: string | undefined) {
-  // Mídias pendentes desta vistoria pública (chave = token)
   const pendentes = useLiveQuery(
     () => {
       if (!token) return Promise.resolve([] as MidiaPendente[]);
@@ -30,7 +22,6 @@ export function useUploadVistoriaPublicaOffline(token: string | undefined) {
   const enfileirarFoto = useCallback(
     async (tipo: string, file: File | Blob) => {
       if (!token) return;
-      // Remove qualquer foto anterior do mesmo slot que ainda esteja na fila
       const anteriores = await offlineDB.midias_pendentes
         .where('vistoria_id')
         .equals(token)
@@ -86,17 +77,49 @@ export function useUploadVistoriaPublicaOffline(token: string | undefined) {
     [token]
   );
 
-  // Previews locais (URL.createObjectURL) — mostrados na UI até o upload completar
-  const previewsFotos: Record<string, string> = {};
-  let previewVideo: string | null = null;
+  // ---- Object URLs gerenciados (sem vazamento) ----
+  const urlCacheRef = useRef<Map<string, string>>(new Map());
+  const [previewsFotos, setPreviewsFotos] = useState<Record<string, string>>({});
+  const [previewVideo, setPreviewVideo] = useState<string | null>(null);
 
-  pendentes?.forEach((m) => {
-    if (m.tipo === 'foto') {
-      previewsFotos[String(m.slot)] = URL.createObjectURL(m.blob);
-    } else if (m.tipo === 'video') {
-      previewVideo = URL.createObjectURL(m.blob);
+  useEffect(() => {
+    const cache = urlCacheRef.current;
+    const idsAtuais = new Set<string>();
+    const fotos: Record<string, string> = {};
+    let video: string | null = null;
+
+    pendentes?.forEach((m) => {
+      const key = String(m.id);
+      idsAtuais.add(key);
+      let url = cache.get(key);
+      if (!url) {
+        url = URL.createObjectURL(m.blob);
+        cache.set(key, url);
+      }
+      if (m.tipo === 'foto') fotos[String(m.slot)] = url;
+      else if (m.tipo === 'video') video = url;
+    });
+
+    for (const [key, url] of cache.entries()) {
+      if (!idsAtuais.has(key)) {
+        try { URL.revokeObjectURL(url); } catch { /* ignore */ }
+        cache.delete(key);
+      }
     }
-  });
+
+    setPreviewsFotos(fotos);
+    setPreviewVideo(video);
+  }, [pendentes]);
+
+  useEffect(() => {
+    const cache = urlCacheRef.current;
+    return () => {
+      for (const url of cache.values()) {
+        try { URL.revokeObjectURL(url); } catch { /* ignore */ }
+      }
+      cache.clear();
+    };
+  }, []);
 
   const totalPendentes = pendentes?.length ?? 0;
 
