@@ -172,12 +172,14 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
             <div className="text-right">Ações</div>
           </div>
           <div className="divide-y divide-border/40">
-            {items.map((item) => (
+            {items.map((item) => {
+              const semEmail = item.tipo === 'troca_titularidade' && !item.associado_antigo_email && !!item.solicitacao_troca_id;
+              const isResend = !!item.termo_enviado_em;
+              return (
               <div
                 key={item.id}
-                className="grid grid-cols-[1fr_2fr_1.5fr_1fr_1.5fr_auto] gap-3 px-4 py-3 items-center hover:bg-muted/20 transition-colors"
+                className={cn('grid grid-cols-[1fr_2fr_1.5fr_1fr_1.5fr_auto] gap-3 px-4 py-3 items-center hover:bg-muted/20 transition-colors', semEmail && 'bg-red-500/5')}
               >
-                {/* Tipo */}
                 <div className="flex flex-col gap-1 min-w-0">
                   <Badge className={cn(TIPO_LABELS[item.tipo].chip, 'border-0 text-[10px] px-2 py-0.5 rounded-full w-fit')}>
                     {TIPO_LABELS[item.tipo].label}
@@ -187,115 +189,125 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
                   </span>
                 </div>
 
-                {/* Origem -> destino */}
                 <div className="text-sm min-w-0">
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="font-medium truncate" title={item.titular_origem_nome ?? ''}>
-                      {item.titular_origem_nome || '—'}
-                    </span>
-                    {item.titular_destino_nome && (
-                      <>
-                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span className="font-medium truncate" title={item.titular_destino_nome}>
-                          {item.titular_destino_nome}
-                        </span>
-                      </>
-                    )}
+                    <span className="font-medium truncate" title={item.titular_origem_nome ?? ''}>{item.titular_origem_nome || '—'}</span>
+                    {item.titular_destino_nome && (<>
+                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <span className="font-medium truncate" title={item.titular_destino_nome}>{item.titular_destino_nome}</span>
+                    </>)}
                   </div>
-                  {item.pendencia_qtd > 0 && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Badge className="bg-red-500/15 text-red-700 dark:text-red-300 border-0 text-[10px] px-2 py-0.5 rounded-full mt-1 cursor-help">
-                          <AlertTriangle className="h-2.5 w-2.5 mr-1" />
-                          Pendência financeira
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {item.pendencia_qtd > 0 && (
+                      <Tooltip><TooltipTrigger asChild>
+                        <Badge className="bg-red-500/15 text-red-700 dark:text-red-300 border-0 text-[10px] px-2 py-0.5 rounded-full cursor-help">
+                          <AlertTriangle className="h-2.5 w-2.5 mr-1" /> Pendência financeira
                         </Badge>
                       </TooltipTrigger>
-                      <TooltipContent>
-                        {item.pendencia_qtd} boleto(s) em aberto · {formatCurrency(item.pendencia_total)}
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-                </div>
-
-                {/* Veículo */}
-                <div className="text-sm min-w-0">
-                  <div className="font-mono font-medium">{item.veiculo_placa || '—'}</div>
-                  <div className="text-xs text-muted-foreground truncate">
-                    {item.veiculo_marca} {item.veiculo_modelo} {item.veiculo_ano ?? ''}
+                      <TooltipContent>{item.pendencia_qtd} boleto(s) · {formatCurrency(item.pendencia_total)}</TooltipContent></Tooltip>
+                    )}
+                    {semEmail && (
+                      <Tooltip><TooltipTrigger asChild>
+                        <Badge className="bg-red-500/15 text-red-700 dark:text-red-300 border-0 text-[10px] px-2 py-0.5 rounded-full cursor-help">
+                          <MailWarning className="h-2.5 w-2.5 mr-1" /> Sem e-mail
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>Titular antigo sem e-mail — termo não pode ser enviado</TooltipContent></Tooltip>
+                    )}
                   </div>
                 </div>
 
-                {/* Consultor */}
-                <div className="text-xs text-muted-foreground truncate" title={item.vendedor_nome ?? ''}>
-                  {item.vendedor_nome || '—'}
+                <div className="text-sm min-w-0">
+                  <div className="font-mono font-medium">{item.veiculo_placa || '—'}</div>
+                  <div className="text-xs text-muted-foreground truncate">{item.veiculo_marca} {item.veiculo_modelo} {item.veiculo_ano ?? ''}</div>
                 </div>
 
-                {/* Etapa */}
-                <div className="flex items-center gap-2 min-w-0">
-                  <Badge className={cn(TONE_CLASS[item.etapa_tone], 'border-0 text-[10px] px-2 py-0.5 rounded-full')}>
-                    {item.etapa_label}
-                  </Badge>
-                  <TermoIcon status={item.termo_status} />
-                </div>
+                <div className="text-xs text-muted-foreground truncate" title={item.vendedor_nome ?? ''}>{item.vendedor_nome || '—'}</div>
 
-                {/* Ações */}
-                <div className="flex items-center gap-1 justify-end shrink-0">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleVerDetalhe(item)}>
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Ver detalhes</TooltipContent>
-                  </Tooltip>
-
-                  {item.cotacao_token && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleAbrirCotacao(item)}>
-                          <ExternalLink className="h-4 w-4" />
-                        </Button>
+                <div className="flex flex-col gap-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Badge className={cn(TONE_CLASS[item.etapa_tone], 'border-0 text-[10px] px-2 py-0.5 rounded-full')}>{item.etapa_label}</Badge>
+                    <TermoIcon status={item.termo_status} />
+                    {item.termo_whatsapp_status && item.tipo === 'troca_titularidade' && (
+                      <Tooltip><TooltipTrigger asChild>
+                        <MessageCircle className={cn('h-3.5 w-3.5',
+                          item.termo_whatsapp_status === 'enviado' ? 'text-emerald-600' :
+                          item.termo_whatsapp_status === 'falhou' ? 'text-red-600' : 'text-muted-foreground/50')} />
                       </TooltipTrigger>
-                      <TooltipContent>Abrir página da cotação</TooltipContent>
-                    </Tooltip>
-                  )}
-
-                  {item.tipo === 'troca_titularidade' && item.solicitacao_troca_id &&
-                    (item.termo_status === 'pendente' || item.termo_status === 'enviado') && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8"
-                            disabled={enviarTermo.isPending}
-                            onClick={() => handleReenviarTermo(item)}
-                          >
-                            <Send className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {item.termo_status === 'enviado' ? 'Reenviar termo de cancelamento' : 'Enviar termo de cancelamento'}
-                        </TooltipContent>
-                      </Tooltip>
+                      <TooltipContent>WhatsApp: {item.termo_whatsapp_status === 'enviado' ? 'enviado' : item.termo_whatsapp_status === 'falhou' ? 'falhou' : 'sem telefone'}</TooltipContent></Tooltip>
                     )}
+                  </div>
+                  {item.termo_enviado_em && (
+                    <span className="text-[10px] text-muted-foreground">
+                      Termo {formatDistanceToNow(new Date(item.termo_enviado_em), { addSuffix: true, locale: ptBR })}
+                      {item.termo_reenvios_count > 0 && ` · ${item.termo_reenvios_count} reenvio(s)`}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-1 justify-end shrink-0">
+                  <Tooltip><TooltipTrigger asChild>
+                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleVerDetalhe(item)}>
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger><TooltipContent>Ver detalhes / timeline</TooltipContent></Tooltip>
 
                   {item.termo_url && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => window.open(item.termo_url!, '_blank')}>
-                          <FileText className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Ver termo de cancelamento</TooltipContent>
-                    </Tooltip>
+                    <Tooltip><TooltipTrigger asChild>
+                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => window.open(item.termo_url!, '_blank')}>
+                        <FileText className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger><TooltipContent>Abrir no Autentique</TooltipContent></Tooltip>
+                  )}
+
+                  {item.tipo === 'troca_titularidade' && item.solicitacao_troca_id && !item.termo_assinado_em && !semEmail && (
+                    <Tooltip><TooltipTrigger asChild>
+                      <Button size="icon" variant="ghost" className="h-8 w-8" disabled={enviarTermo.isPending} onClick={() => setResendItem(item)}>
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger><TooltipContent>{isResend ? 'Reenviar termo' : 'Enviar termo'}</TooltipContent></Tooltip>
+                  )}
+
+                  {item.cotacao_token && (
+                    <Tooltip><TooltipTrigger asChild>
+                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleAbrirCotacao(item)}>
+                        <ExternalLink className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger><TooltipContent>Abrir página da cotação</TooltipContent></Tooltip>
                   )}
                 </div>
               </div>
-            ))}
+            );})}
           </div>
         </div>
       )}
+
+      <TrocaTimelineDrawer
+        item={drawerItem}
+        open={!!drawerItem}
+        onOpenChange={(v) => !v && setDrawerItem(null)}
+        onResend={(it) => setResendItem(it)}
+        isResending={enviarTermo.isPending}
+      />
+
+      <AlertDialog open={!!resendItem} onOpenChange={(v) => !v && setResendItem(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{resendItem?.termo_enviado_em ? 'Reenviar termo de cancelamento?' : 'Enviar termo de cancelamento?'}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {resendItem?.termo_enviado_em
+                ? `O termo anterior será cancelado no Autentique e um novo será enviado por e-mail (reconhecimento facial) e WhatsApp para ${resendItem?.titular_origem_nome}. Será o ${(resendItem?.termo_reenvios_count || 0) + 1}º reenvio.`
+                : `Será enviado por e-mail (com reconhecimento facial) e WhatsApp para ${resendItem?.titular_origem_nome}.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmReenvio} disabled={enviarTermo.isPending}>
+              {enviarTermo.isPending ? 'Enviando...' : 'Confirmar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
