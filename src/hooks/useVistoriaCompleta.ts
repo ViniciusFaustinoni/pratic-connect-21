@@ -47,9 +47,9 @@ export function useAprovarVeiculoVistoria() {
         if (rastError) throw rastError;
       }
 
-      // 1. Atualizar veículo como ativo (com rastreador, se houver)
+      // 1. Atualizar veículo (cobertura/ativação só na aprovação do monitoramento)
       const veiculoUpdate: Record<string, any> = {
-        status: 'ativo',
+        status: 'em_analise',
         updated_at: agora,
       };
       if (data.rastreadorId) veiculoUpdate.rastreador_id = data.rastreadorId;
@@ -162,7 +162,6 @@ export function useAprovarVeiculoVistoria() {
         await supabase
           .from('cotacoes')
           .update({ 
-            status_contratacao: 'ativo',
             vistoria_concluida_em: agora,
           })
           .eq('id', vistoriaData.cotacao_id);
@@ -172,7 +171,6 @@ export function useAprovarVeiculoVistoria() {
         await supabase
           .from('contratos')
           .update({ 
-            status: 'ativo',
             vistoria_concluida_em: agora,
           })
           .eq('id', vistoriaData.contrato_id);

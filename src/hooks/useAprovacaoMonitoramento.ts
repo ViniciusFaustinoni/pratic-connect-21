@@ -27,7 +27,8 @@ export function useInstalacoesAguardandoAprovacao() {
           decisao_instalador,
           profissional:profissional_id(nome),
           veiculo:veiculo_id(placa, marca, modelo, ano_modelo, cobertura_roubo_furto, cobertura_total),
-          associado:associado_id(nome, telefone, email, cpf, status)
+          associado:associado_id(nome, telefone, email, cpf, status),
+          instalacao:instalacao_origem_id(local_vistoria, tipo_deslocamento)
         `)
         .eq('tipo', 'instalacao')
         .eq('status', 'concluida')
@@ -35,10 +36,12 @@ export function useInstalacoesAguardandoAprovacao() {
 
       if (error) throw error;
 
-      // Filtrar: veículo sem cobertura_total (inclui com e sem autovistoria)
+      // Filtrar: veículo sem cobertura_total E associado ainda não ativo
+      // (após a poda dos triggers, TODA instalação concluída cai aqui até o monitoramento aprovar)
       const pendentes = (servicos || []).filter((s: any) => {
         const v = s.veiculo;
-        return v && v.cobertura_total !== true;
+        const a = s.associado;
+        return v && v.cobertura_total !== true && a?.status !== 'ativo';
       });
 
       return pendentes;
