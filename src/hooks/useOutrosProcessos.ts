@@ -182,12 +182,12 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
       const cotacaoIds = cotList.map((c) => c.id);
       const { data: trocas } = await (supabase as any)
         .from('solicitacoes_troca_titularidade')
-        .select('id, cotacao_id, status, termo_cancelamento_url, termo_cancelamento_enviado_em, termo_cancelamento_assinado_em, novo_titular_dados, associado_antigo_id')
+        .select('id, cotacao_id, status, termo_cancelamento_url, termo_cancelamento_enviado_em, termo_cancelamento_assinado_em, termo_whatsapp_status, termo_reenvios_count, termo_ultimo_reenvio_em, novo_titular_dados, associado_antigo_id, aprovado_cadastro_em, aprovado_monitoramento_em, efetivada_em, reprovado_em, motivo_reprovacao')
         .in('cotacao_id', cotacaoIds);
       const trocasMap = new Map<string, any>();
       (trocas || []).forEach((t: any) => trocasMap.set(t.cotacao_id, t));
 
-      // 2b) Nome do titular antigo via associados
+      // 2b) Nome/contato do titular antigo via associados
       const associadoAntigoIds = Array.from(
         new Set((trocas || []).map((t: any) => t.associado_antigo_id).filter(Boolean)),
       );
@@ -195,7 +195,7 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
       if (associadoAntigoIds.length > 0) {
         const { data: assocs } = await supabase
           .from('associados')
-          .select('id, nome, cpf')
+          .select('id, nome, cpf, email, telefone')
           .in('id', associadoAntigoIds as string[]);
         (assocs || []).forEach((a: any) => associadosMap.set(a.id, a));
       }
