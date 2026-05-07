@@ -513,26 +513,26 @@ export function usePropostasPendentes() {
         })();
         const instalacaoConcluida = mInstConcluida.has(contrato.id);
 
-        // Já sincronizado no SGA Hinova (associado E veículo) — saiu do Cadastro,
-        // está em fila de Instalação/Monitoramento conforme o status real no SGA.
-        const jaNoSGA =
-          !!(associado?.sincronizado_hinova && associado?.codigo_hinova) &&
+        // Já sincronizado no SGA Hinova — avaliado por VEÍCULO do contrato
+        // (não pelo associado), porque inclusões de veículo herdam um associado
+        // que já pode estar 'ativo' por contratos anteriores. Usar o status do
+        // associado aqui jogava toda inclusão no limbo (não aparecia em lugar
+        // nenhum). A verdade da proposta é o veículo + instalação dela.
+        const veiculoJaNoSGA =
           !!(veiculoContrato?.sincronizado_hinova && veiculoContrato?.codigo_hinova);
 
         // Saída de Propostas Pendentes por tipo de vistoria:
         // - Autovistoria: sai assim que o Cadastro aprova (vai p/ /cadastro/associados)
         // - Não-autovistoria (agendada / agendada_base / null): permanece com badge
         //   "Pendente Vistoria Inicial" até a INSTALAÇÃO ser concluída
-        // Independentemente do tipo, também sai se associado já 'ativo' ou já no SGA.
         const cadastroAprovado = (contrato as any).cadastro_aprovado === true;
         const tipoVistoriaAtual = (contrato.cotacao_id ? mCotacao.get(contrato.cotacao_id)?.tipo_vistoria : null) || null;
         const isAutovistoria = tipoVistoriaAtual === 'autovistoria';
         const autovistoriaJaAprovadaPeloCadastro = cadastroAprovado && isAutovistoria;
 
         const propostaJaConcluida =
-          associado?.status === 'ativo' ||
           instalacaoConcluida ||
-          jaNoSGA ||
+          veiculoJaNoSGA ||
           autovistoriaJaAprovadaPeloCadastro;
         if (propostaJaConcluida) return null;
 
