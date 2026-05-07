@@ -318,6 +318,7 @@ export function useCotacoesPaginadas(options: UseCotacoesPaginadasOptions) {
   const page = Math.max(1, options.page ?? 1);
   const pageSize = options.pageSize ?? 50;
   const statusGroup = options.statusGroup ?? 'all';
+  const excluirTiposEntrada = options.excluirTiposEntrada;
 
   return useQuery({
     queryKey: [
@@ -330,6 +331,7 @@ export function useCotacoesPaginadas(options: UseCotacoesPaginadasOptions) {
       statusGroup,
       page,
       pageSize,
+      excluirTiposEntrada?.join(',') || null,
     ],
     queryFn: () =>
       fetchCotacoesCore({
@@ -340,6 +342,7 @@ export function useCotacoesPaginadas(options: UseCotacoesPaginadasOptions) {
         pageSize,
         statusGroup,
         consultorId,
+        excluirTiposEntrada,
       }),
     placeholderData: keepPreviousData,
     staleTime: Infinity,
