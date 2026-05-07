@@ -779,6 +779,14 @@ export default function Cotacoes() {
               Relatório Inteligente
             </Button>
           )}
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => navigate('/vendas/planos-beneficios')}
+          >
+            <Package className="h-4 w-4" />
+            Planos e Benefícios
+          </Button>
           <PermissionGate permission="cotacao.canCreate">
             <Button 
               className="gap-2 shadow-md hover:shadow-lg transition-all" 
