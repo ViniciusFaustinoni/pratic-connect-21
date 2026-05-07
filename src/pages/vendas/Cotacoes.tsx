@@ -128,6 +128,7 @@ export default function Cotacoes() {
   const [ignorarPlacaIds, setIgnorarPlacaIds] = useState<string[]>([]);
   const [copiandoWhatsApp, setCopiandoWhatsApp] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>('em_andamento');
+  const [outerTab, setOuterTab] = useState<'cotacoes' | 'outros'>('cotacoes');
   
   // Filtros
   const [dataFilter, setDataFilter] = useState<Date | undefined>(undefined);
