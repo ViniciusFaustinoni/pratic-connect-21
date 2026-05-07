@@ -318,18 +318,20 @@ const INCLUSAO_STATUS_LABEL: Record<string, string> = {
   recusada: 'Recusada',
 };
 
-function InclusoesTab() {
+function InclusoesTab({ scopeAuthUserId }: { scopeAuthUserId?: string }) {
   const navigate = useNavigate();
   const [busca, setBusca] = useState('');
 
   const { data: cotacoes, isLoading, refetch } = useQuery({
-    queryKey: ['processos-inclusoes'],
+    queryKey: ['processos-inclusoes', scopeAuthUserId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('cotacoes')
         .select('id, numero, status, valor_fipe, valor_total_mensal, veiculo_marca, veiculo_modelo, veiculo_ano, veiculo_placa, token_publico, created_at, dados_extras, contrato_gerado_id')
         .filter('dados_extras->>tipo_entrada', 'eq', 'inclusao')
         .order('created_at', { ascending: false });
+      if (scopeAuthUserId) query = query.eq('vendedor_id', scopeAuthUserId);
+      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
