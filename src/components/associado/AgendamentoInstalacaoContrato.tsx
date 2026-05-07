@@ -235,7 +235,7 @@ export function AgendamentoInstalacaoContrato({ contratoId, enderecoInicial, onC
             </div>
             <div>
               <Badge className="bg-success/20 text-success border-success/30 mb-1">
-                Autovistoria Aprovada
+                Autovistoria - Roubo &amp; Furto Aprovada
               </Badge>
               <h3 className="text-lg font-semibold text-foreground">
                 Pagamento Confirmado!
