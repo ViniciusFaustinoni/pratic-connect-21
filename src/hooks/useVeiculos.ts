@@ -77,7 +77,7 @@ export function useVeiculosPaginados(opts: UseVeiculosPaginadosOptions = {}) {
       let q = supabase
         .from('veiculos')
         .select(
-          'id, placa, chassi, marca, modelo, ano_fabricacao, ano_modelo, cor, valor_fipe, status, ativo, uso_aplicativo, plataforma_app, associado_id, created_at, associado:associados(id, nome, cpf)',
+          'id, placa, chassi, marca, modelo, ano_fabricacao, ano_modelo, cor, valor_fipe, status, ativo, uso_aplicativo, plataforma_app, associado_id, created_at, associado:associados(id, nome, cpf), instalacoes:instalacoes(id, status)',
           { count: 'exact' }
         )
         .order('created_at', { ascending: false });
