@@ -68,51 +68,46 @@ Deno.serve(async (req) => {
     }
     const token = authJson.token as string;
 
-    // Tentar endpoints de busca conhecidos. Seguimos o padrão da API:
-    // POST multipart/form-data com campo `json` contendo o filtro.
-    // Ordem: consulta por placa → por imei → listar geral.
+    // Endpoint oficial da API Rede Veículos (postman doc TzRLmr9r).
+    // POST application/x-www-form-urlencoded com campo `json={...}`
+    // contendo (chassi | placa | imei) — qualquer um identifica o veículo.
     const filtro: Record<string, unknown> = {};
     if (placa) filtro.placa = placa;
     if (isImei) filtro.imei = buscaRaw;
 
-    const endpointsParaTentar = [
-      '/consultarVeiculo/',
-      '/buscarVeiculo/',
-      '/listarVeiculos/',
-      '/obterVeiculo/',
-    ];
-
+    const endpointUsado = '/obterDadosVeiculo/';
     let achado: any = null;
-    let endpointUsado: string | null = null;
     let ultimoErro: string | null = null;
 
-    for (const ep of endpointsParaTentar) {
-      try {
-        const fd = new FormData();
-        fd.append('json', JSON.stringify(filtro));
-        const r = await fetch(`${baseUrl}${ep}`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-          body: fd,
-        });
-        const txt = await r.text();
-        if (!r.ok) {
-          ultimoErro = `${ep} → HTTP ${r.status}: ${txt.slice(0, 200)}`;
-          continue;
-        }
+    try {
+      const params = new URLSearchParams();
+      params.append('json', JSON.stringify(filtro));
+      const r = await fetch(`${baseUrl}${endpointUsado}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: params.toString(),
+      });
+      const txt = await r.text();
+      if (!r.ok) {
+        ultimoErro = `HTTP ${r.status}: ${txt.slice(0, 300)}`;
+      } else {
         let parsed: any = null;
-        try { parsed = JSON.parse(txt); } catch { ultimoErro = `${ep} → resposta não-JSON`; continue; }
-
-        // Identificar se a API retornou um veículo
-        const candidato = extrairVeiculo(parsed, { placa, imei: isImei ? buscaRaw : null });
-        if (candidato) {
-          achado = candidato;
-          endpointUsado = ep;
-          break;
+        try { parsed = JSON.parse(txt); } catch { ultimoErro = `resposta não-JSON: ${txt.slice(0, 200)}`; }
+        if (parsed) {
+          // Erro explícito da API: { error: "true", message: "..." }
+          if (parsed.error === true || parsed.error === 'true') {
+            ultimoErro = parsed.message || 'erro na API';
+          } else {
+            achado = extrairVeiculo(parsed, { placa, imei: isImei ? buscaRaw : null });
+            if (!achado) ultimoErro = 'resposta sem veículo correspondente';
+          }
         }
-      } catch (e: any) {
-        ultimoErro = `${ep} → ${e?.message || e}`;
       }
+    } catch (e: any) {
+      ultimoErro = e?.message || String(e);
     }
 
     // Log da operação
@@ -133,11 +128,30 @@ Deno.serve(async (req) => {
       });
     }
 
-    const imeiAchado: string | null = achado.imei || (isImei ? buscaRaw : null);
-    const placaAchada: string | null = (achado.placa || placa || '').toString().toUpperCase().replace(/[^A-Z0-9]/g, '') || null;
-    const idVeiculoExterno: string | null = achado.idVeiculo ? String(achado.idVeiculo) : null;
-    const idClienteExterno: string | null = achado.idCliente ? String(achado.idCliente) : null;
-    const idEquipamentoExterno: string | null = achado.idEquipamento ? String(achado.idEquipamento) : null;
+    // Normalizar campos: API retorna estruturas aninhadas
+    // (veiculo.dados, equipamento.dados, cliente.dados) ou às vezes flat.
+    const veiculoNode = achado.veiculo?.dados || achado.veiculo || achado;
+    const equipamentoNode = achado.equipamento?.dados || achado.equipamento || achado;
+    const clienteNode = achado.cliente?.dados || achado.cliente || {};
+
+    const imeiAchado: string | null =
+      equipamentoNode.imei || achado.imei || (isImei ? buscaRaw : null);
+    const placaAchada: string | null =
+      ((veiculoNode.placa || achado.placa || placa || '') + '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '') || null;
+    const idVeiculoExterno: string | null =
+      achado.idVeiculo || veiculoNode.idVeiculo
+        ? String(achado.idVeiculo || veiculoNode.idVeiculo)
+        : null;
+    const idClienteExterno: string | null =
+      achado.idCliente || clienteNode.idCliente
+        ? String(achado.idCliente || clienteNode.idCliente)
+        : null;
+    const idEquipamentoExterno: string | null =
+      achado.idEquipamento || equipamentoNode.idEquipamento
+        ? String(achado.idEquipamento || equipamentoNode.idEquipamento)
+        : null;
 
     // Procurar rastreador local existente (por imei ou plataforma_device_id)
     let existing: any = null;
@@ -245,30 +259,16 @@ Deno.serve(async (req) => {
 });
 
 /** Tenta normalizar a resposta da API para o formato esperado. */
-function extrairVeiculo(payload: any, alvo: { placa: string | null; imei: string | null }): any | null {
+function extrairVeiculo(payload: any, _alvo: { placa: string | null; imei: string | null }): any | null {
   if (!payload) return null;
-  // Erro explícito
   if (payload.error === true || payload.error === 'true') return null;
-  if (payload.codigo !== undefined && payload.codigo !== 1 && payload.codigo !== 0) return null;
 
-  // Se for uma lista, encontrar o que bate placa/imei
-  const candidatos: any[] = Array.isArray(payload)
-    ? payload
-    : Array.isArray(payload?.veiculos)
-      ? payload.veiculos
-      : Array.isArray(payload?.data)
-        ? payload.data
-        : (payload?.veiculo ? [payload.veiculo] : (payload?.placa || payload?.imei || payload?.idVeiculo) ? [payload] : []);
-
-  if (!candidatos.length) return null;
-
-  const norm = (s: any) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const match = candidatos.find((c: any) => {
-    if (alvo.placa && norm(c.placa) === alvo.placa) return true;
-    if (alvo.imei && String(c.imei || '') === alvo.imei) return true;
-    return false;
-  }) || candidatos[0];
-  return match || null;
+  // Se a API retornou objeto com veiculo/equipamento/cliente, é um hit.
+  if (payload.veiculo || payload.equipamento || payload.cliente) return payload;
+  if (Array.isArray(payload) && payload.length) return payload[0];
+  if (Array.isArray(payload?.data) && payload.data.length) return payload.data[0];
+  if (payload?.placa || payload?.imei || payload?.idVeiculo) return payload;
+  return null;
 }
 
 function json(body: unknown, status = 200): Response {
