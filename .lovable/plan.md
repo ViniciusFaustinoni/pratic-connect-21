@@ -1,48 +1,71 @@
-## Objetivo
+## Centralizar "Redução de Cota (Regra de 1%)" num único caminho
 
-Permitir que **consultores (vendedor / vendedor externo / agência)** acessem `/cadastro/processos` para acompanhar **somente as próprias solicitações** (titularidade, substituições, migrações e inclusões que eles originaram).
+### Diagnóstico — hoje está duplicado em 3 lugares
 
-## 1. Sidebar — adicionar item para consultor
+1. **Diretoria → Configurações** (`/diretoria/configuracoes`)
+   - Toggle `fipe_menor_ativo` + chaves `fipe_menor_limite_minimo`, `fipe_menor_limite_carro`, `fipe_menor_limite_moto`.
+   - Descrição já fala em "desconto de 1% na FIPE".
 
-`src/components/layout/AppSidebar.tsx`, dentro do `useMemo` `visibleGroups` (após o bloco `isVendedorOnly` em ~640):
+2. **Diretoria → Gestão Comercial → Regras de Venda → aba "Autorizações e Exceções"**
+   (`RegrasVendaContent.tsx` linhas 1330–1612)
+   - Faixas de "vendas mês anterior → solicitações permitidas".
+   - Limites FIPE máximo (carro/moto) para exceções.
+   - Condições especiais (0 km, histórico de boletos).
+   - Restrições absolutas (blindado, mudança de linha, depreciação 100%).
+   - Dupla aprovação da diretoria (FIPE alto valor).
 
-- Quando `permissions.isVendedorOnly` (ou seja, vendedor sem outros papéis privilegiados), e o grupo `cadastro` foi removido pelo filtro de `canManageCadastro`, **injetar um grupo `cadastro` reduzido** contendo apenas `{ title: 'Processos', url: '/cadastro/processos', icon: ClipboardList }`.
-- Se o grupo `cadastro` já existe (analista de cadastro etc.), apenas garantir que o item Processos está presente — nenhuma mudança necessária.
+3. **Diretoria → Faixas & Cotas** (`/diretoria/faixas-cotas`) e chaves atuariais (`valor_por_cota`, `fipe_minimo`, `fipe_maximo`).
 
-Isto evita conceder `canManageCadastro` para vendedores (que abriria o módulo inteiro).
+O usuário entra por dois caminhos diferentes para configurar a mesma regra — daí o erro/confusão. Como a regra é única, vamos consolidar.
 
-## 2. Página — escopo por usuário
+---
 
-`src/pages/cadastro/ProcessosOperacionais.tsx`:
+### O que vai mudar
 
-Adicionar `useAuth()` + `usePermissions()`. Calcular `scopeToSelf = permissions.isVendedorOnly` (e variantes externo/agência). Quando true:
+#### 1) Nova página única
+- Rota: `/diretoria/reducao-cota`
+- Título: **"Redução de Cota (Regra de 1%)"**
+- Item no menu lateral em **Diretoria** (mesma seção atual de Gestão Comercial).
+- A página agrupa em **abas internas** todos os blocos de configuração que hoje estão espalhados:
 
-- Banner discreto no topo: "Mostrando apenas suas solicitações."
-- Aplicar filtros por usuário em **todas** as 4 fontes:
+  ```text
+  ┌─ Redução de Cota (Regra de 1%) ──────────────────────┐
+  │  [Ativação]  [Limites FIPE]  [Cotas por desempenho]  │
+  │  [Exceções & restrições]  [Dupla aprovação]          │
+  └──────────────────────────────────────────────────────┘
+  ```
 
-| Tabela | Coluna | Tipo de FK |
-|---|---|---|
-| `solicitacoes_troca_titularidade` | `criado_por` | profiles.id |
-| `substituicoes_veiculo` | `criado_por` | auth.users.id |
-| `solicitacoes_migracao` | `consultor_id` | profiles.id |
-| `cotacoes` (inclusões) | `vendedor_id` | auth.users.id |
+  - **Ativação**: toggle `fipe_menor_ativo` (mesma chave de hoje).
+  - **Limites FIPE**: `fipe_menor_limite_minimo`, `fipe_menor_limite_carro`, `fipe_menor_limite_moto` + `fipe_max_carro`/`fipe_max_moto` (unifica a duplicação carro/moto).
+  - **Cotas por desempenho**: tabela de faixas (vendas mês anterior → solicitações permitidas).
+  - **Exceções & restrições**: 0 km, histórico de boletos, blindado, mudança de linha, depreciação em 100%.
+  - **Dupla aprovação**: toggle + nº mínimo de aprovadores.
 
-Como `criado_por`/`consultor_id` referenciam `profiles.id`, e `vendedor_id`/`substituicoes.criado_por` referenciam `auth.users.id`, precisamos de:
-- `authUserId = user.id`
-- `profileId = profile?.id` (já vem do `useAuth`)
+#### 2) Limpeza dos pontos antigos (sem quebrar links existentes)
+- **Diretoria → Configurações**: remove o card "FIPE Menor" e troca por um link "Configurar em Redução de Cota (Regra de 1%)" apontando para a nova página.
+- **Gestão Comercial → Regras de Venda**: remove a aba "Autorizações e Exceções" e adiciona um banner único "Estas regras foram movidas para *Redução de Cota (Regra de 1%)*" com botão de atalho.
+- Menu lateral: remove o item duplicado e mantém **um único** item: "Redução de Cota (Regra de 1%)".
+- Rota antiga (`/vendas/aprovacoes-fipe` e `/aprovacoes-elegibilidade`) **permanecem** funcionando — são telas de fila de aprovação, não de configuração; só a *configuração* fica centralizada.
 
-Aplicar nos 5 pontos:
-1. `useProcessosCounts()` (linha 491–522): adicionar `.eq('criado_por', profileId)` em titularidade; `.eq('criado_por', authUserId)` em substituições; `.eq('consultor_id', profileId)` em migrações; `.eq('vendedor_id', authUserId)` em inclusões — **somente quando `scopeToSelf`**.
-2. `useSolicitacoesTroca` (em `src/hooks/useSolicitacoesTroca.ts`): adicionar parâmetro opcional `criadoPorProfileId` que aplica `.eq('criado_por', criadoPorProfileId)` quando informado. Passar do componente `TrocaTitularidadeTab`.
-3. `SubstituicoesTab`: filtrar `substituicoes` em memória por `criado_por === authUserId` (o hook `useSubstituicoes()` já traz tudo; filtramos client-side para evitar nova assinatura).
-4. `MigracoesTab` (em `src/pages/cadastro/SolicitacoesMigracao.tsx`): adicionar prop `consultorIdScope?: string` ou filtrar via contexto. Mais simples: passar via `useAuth` dentro do próprio componente quando `scopeToSelf` (vamos checar a estrutura).
-5. `InclusoesTab` (linhas 314–484): adicionar `.eq('vendedor_id', authUserId)` na query `cotacoes` quando `scopeToSelf`.
+#### 3) Fonte única de verdade
+Todas as chaves continuam em `configuracoes` (mesmas chaves já usadas pelos hooks `useFipeMenorAtivo`, `useConfigLimitesVeiculo`, `useValorPorCota`, etc.) — **nenhuma migração de dados** é necessária. Só consolidamos a UI.
 
-## 3. Sem ajuste de RLS
+---
 
-As tabelas já permitem SELECT autenticado (RLS atuais retornam `true` para `authenticated`), e o filtro client-side é apenas UX. Não há vazamento porque a UI não expõe ações destrutivas — só leitura. Mantemos o comportamento existente para perfis com `canManageCadastro` (veem tudo).
+### Resumo técnico (referência rápida)
 
-## 4. Validação
+- Novo arquivo: `src/pages/diretoria/ReducaoCota.tsx` (composto por subcomponentes reaproveitando blocos existentes de `RegrasVendaContent.tsx` e `Configuracoes.tsx`).
+- Nova rota em `src/App.tsx`: `/diretoria/reducao-cota`.
+- Item no `AppSidebar.tsx` (seção Diretoria) — apenas para perfis com permissão de regras comerciais (Diretor, Admin, Admin Master, Desenvolvedor).
+- `RegrasVendaContent.tsx`: remove o `<TabsContent value="autorizacoes">` (linhas 1330–1620) e o trigger correspondente.
+- `Configuracoes.tsx`: remove o bloco `fipeMenorConfig` (linhas ~469–540) e substitui por banner com link.
+- Hooks **não mudam** — continuam lendo as mesmas chaves de `configuracoes`.
 
-- Logar como diretor: vê tudo (sem alterações).
-- Logar como consultor (vendedor sem privilégios): vê item "Processos" no menu Cadastro (apenas esse), abre `/cadastro/processos` com banner "Mostrando apenas suas solicitações", contadores e listas filtradas pelas 4 fontes.
+---
+
+### O que NÃO muda
+- Funcionamento da regra durante a cotação (`CotacaoFormDialog.tsx`, `useCalcularCotacao.ts`) permanece igual.
+- Filas de aprovação (FIPE menor / FIPE limite / Elegibilidade) continuam onde estão.
+- Cálculo atuarial (`valor_por_cota`, faixas) continua onde está — fica só o link a partir da nova página.
+
+Aprovando, eu implemento.
