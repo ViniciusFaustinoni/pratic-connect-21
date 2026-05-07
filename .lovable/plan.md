@@ -1,56 +1,64 @@
-## Diagnóstico
+## Situação atual
 
-O app já tem `lib/imageCompressor.ts` com perfis adaptativos por `deviceMemory` (low: 960px/q0.6, mid: 1280px/q0.7, high: 1600px/q0.72) e usa `createImageBitmap` para baixar o peak RAM. Funciona bem na autovistoria pública e no `InstaladorChecklist`. Mas restam 5 brechas que causam o erro de "memória insuficiente" em celulares antigos do instalador:
+Na cotação pública (`src/components/cotacao-publica/EtapaVistoria.tsx`) o primeiro nível mostra **2 cards**:
 
-| # | Ponto | Problema |
-|---|---|---|
-| 1 | `CapturaFoto.tsx` | Sem compressão, sem `revokeObjectURL` — usado em toda vistoria |
-| 2 | `InstaladorChecklist.tsx:613` | Branch de upload sem chamar `compressImage` |
-| 3 | Vários `useState<{file, preview}[]>` | Blob URLs nunca revogadas ao remover/desmontar |
-| 4 | `imageCompressor` | Sem fallback ao detectar OOM (retorna o arquivo original — pior caso) |
-| 5 | Seleção múltipla | Compressões em paralelo competem pelo mesmo heap |
+1. Autovistoria
+2. Agendar Vistoria Presencial → abre tela intermediária `EscolhaLocalVistoria` com:
+   - Quero que o técnico venha até mim (rota) → `AgendamentoCotacao`
+   - Quero levar meu veículo à Base (base) → `EscolhaBase` → `AgendamentoBase`
+
+A 3ª opção (Base) **já está implementada e funcional** — só está aninhada dentro de "Agendar". O ajuste é UX/nomenclatura: promover para o primeiro nível e renomear Autovistoria.
 
 ## Mudanças
 
-### 1. `CapturaFoto.tsx` — comprimir + revogar
+### 1. `EtapaVistoria.tsx` — 3 cards no primeiro nível
 
-Substituir `URL.createObjectURL(file)` direto por:
-- `compressImage(file)` antes de gerar preview
-- `useEffect` cleanup que chama `revokePreview(value)` no unmount
-- Aviso visual "Otimizando…" durante compressão
+Substituir os 2 botões atuais por 3 cards diretos, respeitando o filtro `tipoInstalacao` (definido pelo consultor na cotação):
 
-### 2. `InstaladorChecklist.tsx` — comprimir branch faltante
+- **Card 1 — "Autovistoria - Roubo & Furto"** (badge "Recomendado", ícone Camera)
+  - Ação: `setModo('autovistoria')`
+  - Texto: "Tire fotos do veículo agora pelo celular. Disponível para planos com cobertura de Roubo & Furto."
+- **Card 2 — "Quero que o técnico venha até mim"** (ícone Home)
+  - Ação direta: `setModo('agendada')` (sem passar pela tela intermediária)
+  - Texto: "Um técnico vai até seu endereço realizar a vistoria/instalação."
+  - Oculto se `tipoInstalacao === 'base'`.
+- **Card 3 — "Quero levar meu veículo à Base"** (ícone Building2) — NOVO no nível 1
+  - Ação direta: `setModo('escolha-base')`
+  - Mostra mini-resumo (endereço/horário) reutilizando `useConfiguracaoBase` (mesma fonte usada hoje em `EscolhaLocalVistoria`).
+  - Oculto se `tipoInstalacao === 'rota'`.
 
-No bloco da linha ~611–617 (upload direto de ressalva), aplicar `compressImage` igual aos demais blocos (455, 642). É só replicar o padrão já existente no arquivo.
+A tela intermediária `EscolhaLocalVistoria` deixa de ser acionada (modo `escolha-local` vira código morto; pode ser removido com segurança, ou mantido caso queiramos reaproveitar). Plano: **remover** o branch `escolha-local` de `EtapaVistoria.tsx` e excluir o componente `EscolhaLocalVistoria.tsx` se não houver outro consumidor (validar com `rg`).
 
-### 3. `imageCompressor.ts` — retry em escala menor
+### 2. Nomenclatura (apenas labels — sem alterar enum no banco)
 
-Quando `compressViaImageBitmap` falhar (OOM no Android), antes de cair para o caminho legado pesado, tentar de novo no mesmo bitmap path com perfil **um nível abaixo** (high→mid→low). Hoje só temos uma tentativa.
+`tipo_vistoria` continua salvo como `autovistoria | agendada | agendada_base`. Atualizar somente os textos exibidos:
 
-Adicionar também um **mutex global** (semáforo de 1 compressão simultânea) para evitar 4–6 imagens sendo decodificadas em paralelo quando o usuário seleciona várias de uma vez.
+- `EtapaVistoria.tsx` (resumo read-only): "Autovistoria realizada" → "Autovistoria - Roubo & Furto realizada".
+- `src/components/associado/EscolhaVistoria.tsx` (linha 94): "Autovistoria" → "Autovistoria - Roubo & Furto".
+- `src/components/associado/ConfirmacaoVistoria.tsx` (linha 273): "Autovistoria Enviada" → "Autovistoria - Roubo & Furto Enviada".
+- `src/components/associado/AgendamentoInstalacaoContrato.tsx` (linha 238): "Autovistoria Aprovada" → "Autovistoria - Roubo & Furto Aprovada".
+- `src/pages/vendas/ContratoDetalhe.tsx` (linhas 151 e 703): "Autovistoria" → "Autovistoria - Roubo & Furto".
 
-### 4. `imageCompressor.ts` — modo "memória crítica"
+### 3. Validação funcional (após implementar)
 
-Antes de cada compressão, ler `(performance as any).memory?.usedJSHeapSize / jsHeapSizeLimit`. Se > 0.75, **forçar perfil `low`** independentemente do device, e (após upload) sugerir `gc()` indireto soltando referências (`bitmap = null` já é feito).
+Login como diretor (`admin@teste.com`) e percorrer no preview:
 
-### 5. Hook `usePhotoList` (novo, opcional)
+1. Cotação com plano com Roubo & Furto, sem `tipo_instalacao` definido → 3 cards aparecem.
+2. Clicar **Card 1** → fluxo `AutovistoriaCotacao` conclui, `cotacoes.tipo_vistoria = 'autovistoria'`.
+3. Clicar **Card 2** → `AgendamentoCotacao` agenda, `tipo_vistoria = 'agendada'`, instalação criada via edge `agendar-vistoria-presencial`.
+4. Clicar **Card 3** → `EscolhaBase` lista bases, `AgendamentoBase` confirma, `tipo_vistoria = 'agendada_base'`.
+5. Cotação com `tipo_instalacao = 'rota'` → Card 3 some.
+6. Cotação com `tipo_instalacao = 'base'` → Card 2 some.
+7. Reabrir a cotação após concluída → resumo read-only correto para os 3 tipos.
+8. Conferir telas de proposta (`PropostaApprovalStepper`, `ContratoDetalhe`) exibindo a nova nomenclatura.
 
-Pequeno utilitário `useObjectUrl(file)` que cria a Object URL no `useEffect` e revoga no cleanup automaticamente. Migrar `CapturaFoto`, `VideoCapture` e onde houver `{file, preview}[]` para usar — elimina vazamentos por esquecimento.
+Sem migração de banco. Sem alterações em edge functions, hooks de mutation ou triggers.
 
-Escopo desta entrega: criar o hook e migrar `CapturaFoto` e `InstaladorChecklist` (`fotosRessalva`). Outros consumidores ficam para uma 2ª passada.
+## Arquivos afetados
 
-## Validação manual
-
-1. No celular antigo (ou DevTools → Performance → CPU 4×, Memory throttling): abrir uma vistoria, tirar 8 fotos seguidas.
-2. Verificar console: cada `[compressImage]` deve mostrar peso final ≤ 500 KB no perfil low.
-3. Memory tab: heap não pode crescer linearmente — deve estabilizar (= revoke funcionando).
-4. Selecionar 5 fotos da galeria de uma vez: devem comprimir **uma de cada vez**, sem travar.
-
-## Arquivos
-
-- `src/components/vistoriador/CapturaFoto.tsx` (compressão + cleanup)
-- `src/pages/instalador/InstaladorChecklist.tsx` (branch ~613)
-- `src/lib/imageCompressor.ts` (retry escalonado + mutex + modo crítico)
-- `src/hooks/useObjectUrl.ts` (novo)
-
-Sem mudanças de schema, edge function ou backend.
+- `src/components/cotacao-publica/EtapaVistoria.tsx` (principal — 3 cards + remoção do branch `escolha-local`)
+- `src/components/cotacao-publica/EscolhaLocalVistoria.tsx` (remover se sem outros consumidores)
+- `src/components/associado/EscolhaVistoria.tsx` (label)
+- `src/components/associado/ConfirmacaoVistoria.tsx` (label)
+- `src/components/associado/AgendamentoInstalacaoContrato.tsx` (label)
+- `src/pages/vendas/ContratoDetalhe.tsx` (label)
