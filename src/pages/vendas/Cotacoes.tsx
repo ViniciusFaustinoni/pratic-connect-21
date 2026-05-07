@@ -174,6 +174,7 @@ export default function Cotacoes() {
     vendedorId: permissions.userId,
     viewScope: permissions.cotacao.viewScope,
     searchTerm: search,
+    consultorId: consultorFilter !== 'all' ? consultorFilter : null,
     page: currentPage,
     pageSize: PAGE_SIZE,
     statusGroup: isEmAndamentoTab ? 'em_andamento' : 'finalizadas',
