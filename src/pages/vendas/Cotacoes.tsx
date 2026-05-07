@@ -988,7 +988,7 @@ export default function Cotacoes() {
           </Popover>
 
           {permissions.cotacao.viewScope !== 'own' && (
-            <Select value={consultorFilter} onValueChange={setConsultorFilter}>
+            <Select value={consultorFilter} onValueChange={setConsultorFilter} onOpenChange={(o) => { if (o) setVendedoresFilterOpened(true); }}>
               <SelectTrigger className="w-[160px] h-9 border-0 bg-background/80 shadow-sm">
                 <User className="h-4 w-4 mr-1.5 text-muted-foreground" />
                 <SelectValue placeholder="Consultor" />
