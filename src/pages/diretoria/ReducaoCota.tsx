@@ -108,7 +108,10 @@ function useReducaoCotaConfig() {
 
       const out: State = {
         fipe_menor_ativo: map.fipe_menor_ativo === 'true',
-        fipe_menor_limite_minimo: map.fipe_menor_limite_minimo ?? DEFAULTS.fipe_menor_limite_minimo,
+        fipe_menor_limite_minimo_carro:
+          map.fipe_menor_limite_minimo_carro ?? map.fipe_menor_limite_minimo ?? DEFAULTS.fipe_menor_limite_minimo_carro,
+        fipe_menor_limite_minimo_moto:
+          map.fipe_menor_limite_minimo_moto ?? DEFAULTS.fipe_menor_limite_minimo_moto,
         fipe_menor_limite_carro: map.fipe_menor_limite_carro ?? DEFAULTS.fipe_menor_limite_carro,
         fipe_menor_limite_moto: map.fipe_menor_limite_moto ?? DEFAULTS.fipe_menor_limite_moto,
 
