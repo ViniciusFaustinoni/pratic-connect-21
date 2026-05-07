@@ -128,11 +128,30 @@ Deno.serve(async (req) => {
       });
     }
 
-    const imeiAchado: string | null = achado.imei || (isImei ? buscaRaw : null);
-    const placaAchada: string | null = (achado.placa || placa || '').toString().toUpperCase().replace(/[^A-Z0-9]/g, '') || null;
-    const idVeiculoExterno: string | null = achado.idVeiculo ? String(achado.idVeiculo) : null;
-    const idClienteExterno: string | null = achado.idCliente ? String(achado.idCliente) : null;
-    const idEquipamentoExterno: string | null = achado.idEquipamento ? String(achado.idEquipamento) : null;
+    // Normalizar campos: API retorna estruturas aninhadas
+    // (veiculo.dados, equipamento.dados, cliente.dados) ou às vezes flat.
+    const veiculoNode = achado.veiculo?.dados || achado.veiculo || achado;
+    const equipamentoNode = achado.equipamento?.dados || achado.equipamento || achado;
+    const clienteNode = achado.cliente?.dados || achado.cliente || {};
+
+    const imeiAchado: string | null =
+      equipamentoNode.imei || achado.imei || (isImei ? buscaRaw : null);
+    const placaAchada: string | null =
+      ((veiculoNode.placa || achado.placa || placa || '') + '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '') || null;
+    const idVeiculoExterno: string | null =
+      achado.idVeiculo || veiculoNode.idVeiculo
+        ? String(achado.idVeiculo || veiculoNode.idVeiculo)
+        : null;
+    const idClienteExterno: string | null =
+      achado.idCliente || clienteNode.idCliente
+        ? String(achado.idCliente || clienteNode.idCliente)
+        : null;
+    const idEquipamentoExterno: string | null =
+      achado.idEquipamento || equipamentoNode.idEquipamento
+        ? String(achado.idEquipamento || equipamentoNode.idEquipamento)
+        : null;
 
     // Procurar rastreador local existente (por imei ou plataforma_device_id)
     let existing: any = null;
