@@ -1319,6 +1319,100 @@ export function EtapaDadosPessoaisDocumentos({
           )}
         </>
       )}
+
+      {/* Modal de confirmação dos dados antes de prosseguir */}
+      <Dialog open={confirmacaoAberta} onOpenChange={setConfirmacaoAberta}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Confirme seus dados</DialogTitle>
+            <DialogDescription>
+              Revise as informações abaixo antes de prosseguir. Após a confirmação, elas serão usadas no seu contrato.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 text-sm">
+            <section className="rounded-lg border border-border/50 p-4 space-y-2">
+              <h4 className="font-semibold flex items-center gap-2 text-foreground">
+                <User className="h-4 w-4 text-primary" /> Dados Pessoais
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div><span className="text-muted-foreground">Nome:</span> <span className="font-medium">{dadosExtraidos.nome || '—'}</span></div>
+                <div><span className="text-muted-foreground">CPF:</span> <span className="font-medium">{cpfEfetivo || '—'}</span></div>
+                <div><span className="text-muted-foreground">Nascimento:</span> <span className="font-medium">{dadosExtraidos.data_nascimento || '—'}</span></div>
+                <div><span className="text-muted-foreground">RG:</span> <span className="font-medium">{dadosExtraidos.rg || '—'}{dadosExtraidos.rg_orgao ? ` / ${dadosExtraidos.rg_orgao}` : ''}</span></div>
+                {dadosExtraidos.cnh && (
+                  <div className="sm:col-span-2"><span className="text-muted-foreground">CNH:</span> <span className="font-medium">{dadosExtraidos.cnh}{dadosExtraidos.cnh_categoria ? ` (${dadosExtraidos.cnh_categoria})` : ''}{dadosExtraidos.cnh_validade ? ` • Val.: ${dadosExtraidos.cnh_validade}` : ''}</span></div>
+                )}
+              </div>
+            </section>
+
+            <section className="rounded-lg border border-border/50 p-4 space-y-2">
+              <h4 className="font-semibold flex items-center gap-2 text-foreground">
+                <Mail className="h-4 w-4 text-primary" /> Contato
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div><span className="text-muted-foreground">E-mail:</span> <span className="font-medium break-all">{email || '—'}</span></div>
+                <div><span className="text-muted-foreground">Telefone:</span> <span className="font-medium">{telefone || '—'}</span></div>
+              </div>
+            </section>
+
+            <section className="rounded-lg border border-border/50 p-4 space-y-2">
+              <h4 className="font-semibold flex items-center gap-2 text-foreground">
+                <MapPin className="h-4 w-4 text-primary" /> Endereço
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="sm:col-span-2"><span className="text-muted-foreground">Logradouro:</span> <span className="font-medium">{dadosExtraidos.logradouro || '—'}{dadosExtraidos.numero ? `, ${dadosExtraidos.numero}` : ''}{dadosExtraidos.complemento ? ` — ${dadosExtraidos.complemento}` : ''}</span></div>
+                <div><span className="text-muted-foreground">Bairro:</span> <span className="font-medium">{dadosExtraidos.bairro || '—'}</span></div>
+                <div><span className="text-muted-foreground">CEP:</span> <span className="font-medium">{dadosExtraidos.cep || '—'}</span></div>
+                <div><span className="text-muted-foreground">Cidade/UF:</span> <span className="font-medium">{[dadosExtraidos.cidade, dadosExtraidos.uf].filter(Boolean).join(' / ') || '—'}</span></div>
+              </div>
+            </section>
+
+            <section className="rounded-lg border border-border/50 p-4 space-y-2">
+              <h4 className="font-semibold flex items-center gap-2 text-foreground">
+                <Car className="h-4 w-4 text-primary" /> Veículo
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div><span className="text-muted-foreground">Placa:</span> <span className="font-medium">{dadosExtraidos.veiculo_placa || (isZeroKm ? '0KM (sem placa)' : '—')}</span></div>
+                <div><span className="text-muted-foreground">Chassi:</span> <span className="font-medium">{dadosExtraidos.veiculo_chassi || '—'}</span></div>
+                <div><span className="text-muted-foreground">Renavam:</span> <span className="font-medium">{dadosExtraidos.veiculo_renavam || '—'}</span></div>
+                <div><span className="text-muted-foreground">Cor:</span> <span className="font-medium">{dadosExtraidos.veiculo_cor || '—'}</span></div>
+                <div><span className="text-muted-foreground">Combustível:</span> <span className="font-medium">{dadosExtraidos.veiculo_combustivel || '—'}</span></div>
+                <div><span className="text-muted-foreground">Ano (Fab/Mod):</span> <span className="font-medium">{[dadosExtraidos.veiculo_ano_fabricacao, dadosExtraidos.veiculo_ano_modelo].filter(Boolean).join('/') || '—'}</span></div>
+                <div className="sm:col-span-2"><span className="text-muted-foreground">Nº Motor:</span> <span className="font-medium">{dadosExtraidos.numero_motor || dadosExtraidos.veiculo_motor || '—'}</span></div>
+                {procedenciaVeiculo && (
+                  <div className="sm:col-span-2"><span className="text-muted-foreground">Procedência:</span> <span className="font-medium">{procedenciaVeiculo}</span></div>
+                )}
+              </div>
+            </section>
+
+            <p className="text-xs text-muted-foreground text-center">
+              Conferiu tudo? Se algo estiver incorreto, clique em "Revisar" e ajuste antes de continuar.
+            </p>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setConfirmacaoAberta(false)}
+              disabled={isLoading}
+            >
+              Revisar
+            </Button>
+            <Button
+              onClick={handleConfirmarEnvio}
+              disabled={isLoading}
+              className="bg-accent hover:bg-accent-hover text-accent-foreground"
+            >
+              {isLoading ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Enviando...</>
+              ) : (
+                <>Confirmar e prosseguir <ArrowRight className="h-4 w-4 ml-2" /></>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
