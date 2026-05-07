@@ -376,7 +376,7 @@ serve(async (req) => {
       // aguardando_placa_definitiva=true) — o documento ainda não foi emitido.
       // Placeholder "0000000" é tratado como vazio para evitar rejeição da Hinova.
       const placaUpper = String(veiculo.placa || '').toUpperCase();
-      const isZeroKm = placaUpper.startsWith('0KM') || veiculo.aguardando_placa_definitiveiculo === true || veiculo.aguardando_placa_definitiva === true;
+      const isZeroKm = placaUpper.startsWith('0KM') || veiculo.aguardando_placa_definitiva === true;
       const renavamLimpo = String(veiculo.renavam || '').replace(/\D/g, '');
       const renavamValido = renavamLimpo && !/^0+$/.test(renavamLimpo);
       if (!renavamValido && veiculo.renavam) {
