@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Camera, Upload, X } from 'lucide-react';
 import {
   Dialog,
@@ -36,6 +36,16 @@ export function OSFotoUpload({ osId, defaultTipo = 'entrada', open, onOpenChange
   const [previews, setPreviews] = useState<{ file: File; preview: string }[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const addFoto = useAddOSFoto();
+
+  // Cleanup garantido no unmount: revoga qualquer Object URL ainda vivo.
+  useEffect(() => {
+    return () => {
+      previews.forEach(({ preview }) => {
+        try { URL.revokeObjectURL(preview); } catch { /* ignore */ }
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
