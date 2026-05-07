@@ -328,6 +328,15 @@ export async function compressImage(
   file: File,
   options: CompressOptions = {},
 ): Promise<File> {
+  // Serializa: 1 compressão por vez para evitar pico de heap
+  return runSerialized(() => compressImageInternal(file, options));
+}
+
+async function compressImageInternal(
+  file: File,
+  options: CompressOptions,
+  attempt = 0,
+): Promise<File> {
   const opts = resolveOptions(options);
   const cap = getDeviceCapabilitySnapshot();
 
@@ -345,6 +354,15 @@ export async function compressImage(
   // 1) Caminho moderno (peak RAM baixo)
   const fast = await compressViaImageBitmap(file, opts);
   if (fast) return fast;
+
+  // 1b) Retry com perfil reduzido (high→mid→low) antes do fallback caro
+  const currentProfile = (options.profile ??
+    (cap.lowEnd ? 'low' : cap.midEnd ? 'mid' : 'high')) as 'low' | 'mid' | 'high';
+  const downgraded = downgradeProfile(currentProfile);
+  if (downgraded && attempt < 2) {
+    console.warn(`[compressImage] Retry com perfil ${downgraded} (attempt ${attempt + 1})`);
+    return compressImageInternal(file, { ...options, profile: downgraded }, attempt + 1);
+  }
 
   // 2) Fallback compatível
   try {
