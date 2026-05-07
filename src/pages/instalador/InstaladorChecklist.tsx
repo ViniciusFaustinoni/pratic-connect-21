@@ -610,16 +610,27 @@ export default function InstaladorChecklist() {
     if (!id) return;
     setUploadingFotoLocal(true);
     try {
-      const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+      // Comprime para evitar OOM em celulares antigos (HEIC do iOS vira JPEG)
+      let arquivoFinal: File = file;
+      try {
+        arquivoFinal = await compressImage(file);
+      } catch (compressErr) {
+        console.warn('[handleFotoLocalInstalacao] Falha ao comprimir, enviando original:', compressErr);
+      }
+      const ext =
+        arquivoFinal.type === 'image/png' ? 'png'
+        : arquivoFinal.type === 'image/webp' ? 'webp'
+        : 'jpg';
+      const contentType = arquivoFinal.type || 'image/jpeg';
       const fileName = `local-instalacao/${id}/${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage
         .from('instalacoes')
-        .upload(fileName, file, { contentType: file.type || 'image/jpeg', upsert: true });
+        .upload(fileName, arquivoFinal, { contentType, upsert: true });
       if (uploadError) {
         console.error('[handleFotoLocalInstalacao] Upload error:', uploadError.message);
         throw uploadError;
       }
-      
+
       const { data: urlData } = supabase.storage.from('instalacoes').getPublicUrl(fileName);
       setFotoLocalInstalacao(urlData.publicUrl);
       toast.success('Foto do local salva!');
