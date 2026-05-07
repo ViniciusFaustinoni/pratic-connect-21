@@ -466,7 +466,7 @@ export default function ConfiguracoesSistema() {
     );
   }
 
-  const fipeMenorConfig = configuracoes?.find(c => c.chave === 'fipe_menor_ativo');
+  
 
   return (
     <div className="p-6 space-y-6">
