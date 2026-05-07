@@ -889,6 +889,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                         <TableHead className="text-xs">Documento</TableHead>
                         <TableHead className="text-xs">Veículo</TableHead>
                         <TableHead className="text-xs">Enviado</TableHead>
+                        <TableHead className="text-xs">Horário</TableHead>
                         <TableHead className="text-xs">Status</TableHead>
                         <TableHead className="text-xs">Ação</TableHead>
                       </TableRow>
@@ -903,6 +904,9 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                             {'veiculo' in d && d.veiculo ? <Badge variant="outline" className="text-[10px]">{d.veiculo.placa}</Badge> : '—'}
                           </TableCell>
                           <TableCell className="text-xs">{formatDate(d.created_at)}</TableCell>
+                          <TableCell className="text-xs tabular-nums text-muted-foreground">
+                            {d.created_at ? new Date(d.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                          </TableCell>
                           <TableCell>
                             <Badge className={cn('text-[10px]',
                               d.status === 'aprovado' && 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
