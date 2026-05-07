@@ -109,6 +109,13 @@ export interface PropostaPendente {
   id: string;
   numero: string | null;
   data_assinatura: string | null;
+  /**
+   * Timestamp usado para o "tempo de espera" exibido na lista.
+   * É o mais recente entre: assinatura, última atualização do contrato,
+   * criação da vistoria, conclusão da instalação e criação do agendamento.
+   * Reflete o tempo na fila atual (não o tempo desde a assinatura).
+   */
+  tempo_referencia: string | null;
   valor_mensal: number | null;
   status: string | null;
   tipo_etapa_analise: TipoEtapaAnalise | null;
