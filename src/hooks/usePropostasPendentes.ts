@@ -511,10 +511,18 @@ export function usePropostasPendentes() {
           !!(associado?.sincronizado_hinova && associado?.codigo_hinova) &&
           !!(veiculoContrato?.sincronizado_hinova && veiculoContrato?.codigo_hinova);
 
+        // Autovistoria já aprovada pelo Cadastro: tarefa do campo (instalação),
+        // não deve mais aparecer em Propostas Pendentes. Vai para /cadastro/associados.
+        const cadastroAprovado = (contrato as any).cadastro_aprovado === true;
+        const tipoVistoriaAtual = (contrato.cotacao_id ? mCotacao.get(contrato.cotacao_id)?.tipo_vistoria : null) || null;
+        const autovistoriaJaAprovadaPeloCadastro =
+          cadastroAprovado && tipoVistoriaAtual === 'autovistoria';
+
         const propostaJaConcluida =
           associado?.status === 'ativo' ||
           instalacaoConcluida ||
           jaNoSGA ||
+          autovistoriaJaAprovadaPeloCadastro ||
           (associado?.status === 'aguardando_instalacao' && !docsPendentes && !vistoriaPendenteAnalise);
         if (propostaJaConcluida) return null;
 
