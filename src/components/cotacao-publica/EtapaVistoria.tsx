@@ -55,6 +55,14 @@ export function EtapaVistoria({
 }: EtapaVistoriaProps) {
   const [modo, setModo] = useState<ModoVistoria>('escolha');
   const [oficinaIdSelecionada, setOficinaIdSelecionada] = useState<string>('');
+  const { data: configBase } = useConfiguracaoBase();
+
+  const enderecoBase = configBase?.base_logradouro
+    ? `${configBase.base_logradouro}${configBase.base_numero ? `, ${configBase.base_numero}` : ''} - ${configBase.base_bairro || ''} - ${configBase.base_cidade || ''}/${configBase.base_uf || ''}`
+    : null;
+  const horarioBase = configBase?.base_horario_inicio && configBase?.base_horario_fim
+    ? `${configBase.base_horario_inicio} às ${configBase.base_horario_fim}`
+    : null;
 
   const handleVoltarEscolha = () => {
     setModo('escolha');
@@ -81,9 +89,11 @@ export function EtapaVistoria({
             <h3 className="text-xl font-bold mb-2 text-foreground">Vistoria Concluída</h3>
             <p className="text-muted-foreground mb-4">
               {tipoVistoriaRealizada === 'autovistoria' 
-                ? 'Autovistoria realizada com sucesso'
+                ? 'Autovistoria - Roubo & Furto realizada com sucesso'
                 : tipoVistoriaRealizada === 'agendada'
                 ? 'Vistoria presencial agendada'
+                : tipoVistoriaRealizada === 'agendada_base'
+                ? 'Agendamento na Base confirmado'
                 : 'Vistoria do veículo concluída'}
             </p>
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-success/10 text-success text-sm">
@@ -91,6 +101,11 @@ export function EtapaVistoria({
                 <>
                   <Camera className="h-4 w-4" />
                   Fotos enviadas
+                </>
+              ) : tipoVistoriaRealizada === 'agendada_base' ? (
+                <>
+                  <Building2 className="h-4 w-4" />
+                  Agendamento na Base
                 </>
               ) : (
                 <>
