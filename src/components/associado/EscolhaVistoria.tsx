@@ -91,7 +91,7 @@ export function EscolhaVistoria({ contratoId, onEscolher, disabled, tipoSelecion
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <h3 className="font-semibold text-lg mb-1">Autovistoria</h3>
+                <h3 className="font-semibold text-lg mb-1">Autovistoria - Roubo &amp; Furto</h3>
                 {tipoSelecionado === 'autovistoria' && (
                   <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
                     <CheckCircle className="h-3 w-3 mr-1" /> Selecionado
