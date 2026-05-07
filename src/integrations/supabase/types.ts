@@ -28479,6 +28479,36 @@ export type Database = {
           },
         ]
       }
+      softruck_webhook_raw_log: {
+        Row: {
+          created_at: string
+          headers: Json | null
+          id: string
+          ip_origem: string | null
+          parse_error: string | null
+          raw_body: string | null
+          status_resposta: number | null
+        }
+        Insert: {
+          created_at?: string
+          headers?: Json | null
+          id?: string
+          ip_origem?: string | null
+          parse_error?: string | null
+          raw_body?: string | null
+          status_resposta?: number | null
+        }
+        Update: {
+          created_at?: string
+          headers?: Json | null
+          id?: string
+          ip_origem?: string | null
+          parse_error?: string | null
+          raw_body?: string | null
+          status_resposta?: number | null
+        }
+        Relationships: []
+      }
       solicitacoes_migracao: {
         Row: {
           aprovado_em: string | null
