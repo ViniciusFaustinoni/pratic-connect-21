@@ -1082,26 +1082,18 @@ export function useAprovarVeiculoServico() {
         .eq('id', data.veiculoId)
         .single();
 
-      // 5. Atualizar veículo — status depende de ter autovistoria prévia
+      // 5. Atualizar veículo SEMPRE para em_analise — ativação só após aprovação do monitoramento
       {
-        const temAutovistoria = veiculoAtual?.cobertura_roubo_furto === true;
-        const novoStatusVeiculo = temAutovistoria ? 'ativo' : 'em_analise';
-
         const { error: veiculoError } = await supabase
           .from('veiculos')
           .update({
-            status: novoStatusVeiculo,
+            status: 'em_analise',
             updated_at: agora,
           })
           .eq('id', data.veiculoId);
 
         if (veiculoError) throw veiculoError;
-        
-        if (temAutovistoria) {
-          console.log('[useAprovarVeiculoServico] Autovistoria prévia detectada — veículo ativo, aguarda monitoramento para cobertura_total');
-        } else {
-          console.log('[useAprovarVeiculoServico] Sem autovistoria — veículo em_analise, aguarda aprovação do monitoramento');
-        }
+        console.log('[useAprovarVeiculoServico] Veículo em_analise — aguarda aprovação do monitoramento (cobertura só é ativada lá)');
       }
 
       // 6. SEMPRE tentar ativar rastreador na plataforma (independente de cobertura)
