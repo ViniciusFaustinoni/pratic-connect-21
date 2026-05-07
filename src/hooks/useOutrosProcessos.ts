@@ -54,7 +54,17 @@ export interface OutroProcessoItem {
   termo_url: string | null;
   termo_enviado_em: string | null;
   termo_assinado_em: string | null;
-
+  termo_whatsapp_status: 'enviado' | 'falhou' | 'sem_telefone' | null;
+  termo_reenvios_count: number;
+  termo_ultimo_reenvio_em: string | null;
+  associado_antigo_email: string | null;
+  associado_antigo_telefone: string | null;
+  // Datas das etapas (timeline)
+  aprovado_cadastro_em: string | null;
+  aprovado_monitoramento_em: string | null;
+  efetivada_em: string | null;
+  reprovado_em: string | null;
+  motivo_reprovacao: string | null;
   // Pendência financeira (relacionamento_debitos_pendentes)
   pendencia_qtd: number;
   pendencia_total: number;
@@ -172,12 +182,12 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
       const cotacaoIds = cotList.map((c) => c.id);
       const { data: trocas } = await (supabase as any)
         .from('solicitacoes_troca_titularidade')
-        .select('id, cotacao_id, status, termo_cancelamento_url, termo_cancelamento_enviado_em, termo_cancelamento_assinado_em, novo_titular_dados, associado_antigo_id')
+        .select('id, cotacao_id, status, termo_cancelamento_url, termo_cancelamento_enviado_em, termo_cancelamento_assinado_em, termo_whatsapp_status, termo_reenvios_count, termo_ultimo_reenvio_em, novo_titular_dados, associado_antigo_id, aprovado_cadastro_em, aprovado_monitoramento_em, efetivada_em, reprovado_em, motivo_reprovacao')
         .in('cotacao_id', cotacaoIds);
       const trocasMap = new Map<string, any>();
       (trocas || []).forEach((t: any) => trocasMap.set(t.cotacao_id, t));
 
-      // 2b) Nome do titular antigo via associados
+      // 2b) Nome/contato do titular antigo via associados
       const associadoAntigoIds = Array.from(
         new Set((trocas || []).map((t: any) => t.associado_antigo_id).filter(Boolean)),
       );
@@ -185,7 +195,7 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
       if (associadoAntigoIds.length > 0) {
         const { data: assocs } = await supabase
           .from('associados')
-          .select('id, nome, cpf')
+          .select('id, nome, cpf, email, telefone')
           .in('id', associadoAntigoIds as string[]);
         (assocs || []).forEach((a: any) => associadosMap.set(a.id, a));
       }
@@ -273,6 +283,16 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
           termo_url: troca?.termo_cancelamento_url ?? null,
           termo_enviado_em: troca?.termo_cancelamento_enviado_em ?? null,
           termo_assinado_em: troca?.termo_cancelamento_assinado_em ?? null,
+          termo_whatsapp_status: troca?.termo_whatsapp_status ?? null,
+          termo_reenvios_count: troca?.termo_reenvios_count ?? 0,
+          termo_ultimo_reenvio_em: troca?.termo_ultimo_reenvio_em ?? null,
+          associado_antigo_email: associadoAntigo?.email ?? null,
+          associado_antigo_telefone: associadoAntigo?.telefone ?? null,
+          aprovado_cadastro_em: troca?.aprovado_cadastro_em ?? null,
+          aprovado_monitoramento_em: troca?.aprovado_monitoramento_em ?? null,
+          efetivada_em: troca?.efetivada_em ?? null,
+          reprovado_em: troca?.reprovado_em ?? null,
+          motivo_reprovacao: troca?.motivo_reprovacao ?? null,
           pendencia_qtd: debito.qtd,
           pendencia_total: debito.total,
           etapa_label: etapa.label,

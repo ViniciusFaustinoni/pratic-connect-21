@@ -28753,6 +28753,9 @@ export type Database = {
           termo_cancelamento_autentique_id: string | null
           termo_cancelamento_enviado_em: string | null
           termo_cancelamento_url: string | null
+          termo_reenvios_count: number
+          termo_ultimo_reenvio_em: string | null
+          termo_whatsapp_status: string | null
           token_publico: string
           updated_at: string
           veiculo_id: string
@@ -28788,6 +28791,9 @@ export type Database = {
           termo_cancelamento_autentique_id?: string | null
           termo_cancelamento_enviado_em?: string | null
           termo_cancelamento_url?: string | null
+          termo_reenvios_count?: number
+          termo_ultimo_reenvio_em?: string | null
+          termo_whatsapp_status?: string | null
           token_publico?: string
           updated_at?: string
           veiculo_id: string
@@ -28823,6 +28829,9 @@ export type Database = {
           termo_cancelamento_autentique_id?: string | null
           termo_cancelamento_enviado_em?: string | null
           termo_cancelamento_url?: string | null
+          termo_reenvios_count?: number
+          termo_ultimo_reenvio_em?: string | null
+          termo_whatsapp_status?: string | null
           token_publico?: string
           updated_at?: string
           veiculo_id?: string

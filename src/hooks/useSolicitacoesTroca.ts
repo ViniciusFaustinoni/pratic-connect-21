@@ -171,17 +171,20 @@ export function useReprovarTroca() {
 export function useEnviarTermoCancelamento() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (solicitacao_id: string) => {
-      const { data, error } = await supabase.functions.invoke('enviar-termo-cancelamento-troca', {
-        body: { solicitacao_id },
-      });
+    mutationFn: async (params: string | { solicitacao_id: string; force_resend?: boolean }) => {
+      const body = typeof params === 'string'
+        ? { solicitacao_id: params }
+        : { solicitacao_id: params.solicitacao_id, force_resend: !!params.force_resend };
+      const { data, error } = await supabase.functions.invoke('enviar-termo-cancelamento-troca', { body });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      return data;
+      return data as { success: boolean; reenvio?: boolean; whatsapp_status?: string };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['solicitacao-troca'] });
-      toast.success('Termo de cancelamento enviado ao titular antigo');
+      qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
+      qc.invalidateQueries({ queryKey: ['outros-processos'] });
+      toast.success(data?.reenvio ? 'Termo reenviado ao titular antigo' : 'Termo de cancelamento enviado ao titular antigo');
     },
     onError: (e: Error) => toast.error(e.message),
   });
