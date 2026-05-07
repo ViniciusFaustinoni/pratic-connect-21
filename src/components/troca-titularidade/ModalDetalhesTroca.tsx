@@ -82,12 +82,12 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   };
 
   const handleReprovar = async () => {
-    if (!solicitacao || !motivoReprovar.trim()) return;
+    if (!solicitacao || !motivoReprovar.trim() || modo === 'readonly') return;
     await reprovar.mutateAsync({ solicitacao_id: solicitacao.id, motivo: motivoReprovar, etapa: modo });
     onOpenChange(false);
   };
 
-  const podeAgir = solicitacao && (
+  const podeAgir = solicitacao && modo !== 'readonly' && (
     (modo === 'cadastro' && solicitacao.status === 'aguardando_cadastro') ||
     (modo === 'monitoramento' && solicitacao.status === 'aguardando_monitoramento')
   );
