@@ -33560,6 +33560,14 @@ export type Database = {
         Args: { p_vendedor_id: string }
         Returns: undefined
       }
+      fn_reconciliar_status_pos_instalacao: {
+        Args: never
+        Returns: {
+          acao: string
+          placa: string
+          veiculo_id: string
+        }[]
+      }
       fn_resolver_cadeia: {
         Args: { p_data_referencia?: string; p_vendedor_id: string }
         Returns: {
