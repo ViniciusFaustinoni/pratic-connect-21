@@ -17,6 +17,32 @@
 
 import { getDeviceCapabilitySnapshot } from '@/hooks/useDeviceCapability';
 
+// ----- Mutex global: serializa compressões para não competir pelo heap -----
+let compressionChain: Promise<unknown> = Promise.resolve();
+function runSerialized<T>(task: () => Promise<T>): Promise<T> {
+  const next = compressionChain.then(task, task);
+  // Não propagar rejeição para a próxima entrada da fila
+  compressionChain = next.catch(() => undefined);
+  return next;
+}
+
+// ----- Detecção de pressão de memória -----
+function isMemoryCritical(): boolean {
+  try {
+    const mem = (performance as unknown as { memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
+    if (!mem || !mem.jsHeapSizeLimit) return false;
+    return mem.usedJSHeapSize / mem.jsHeapSizeLimit > 0.75;
+  } catch {
+    return false;
+  }
+}
+
+function downgradeProfile(p: 'low' | 'mid' | 'high'): 'low' | 'mid' | null {
+  if (p === 'high') return 'mid';
+  if (p === 'mid') return 'low';
+  return null;
+}
+
 export interface CompressOptions {
   maxWidth?: number;
   maxHeight?: number;
