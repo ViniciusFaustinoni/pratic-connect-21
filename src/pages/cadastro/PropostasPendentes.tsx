@@ -369,9 +369,41 @@ export default function PropostasPendentes() {
                           </DropdownMenuItem>
                         </>
                       )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                    </DropdownMenu>
+                  </div>
                 </div>
+
+                {/* Linha 2 — Badges e tempo */}
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-0 sm:pl-11">
+                  {hasReanalise && (
+                    <Badge className="bg-amber-500 text-white text-[9px] px-1.5 py-0 h-5 animate-pulse">
+                      <RefreshCw className="h-2.5 w-2.5 mr-0.5" />
+                      NOVO
+                    </Badge>
+                  )}
+                  {getStatusBadge(proposta.status, proposta.associado_status, proposta.tem_documento_pendente, proposta.instalacao_info, proposta.tipo_etapa_analise)}
+                  {(proposta.plano?.nome || proposta.plano_nome) && (
+                    <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-5 max-w-[60%] truncate">
+                      {proposta.plano?.nome || proposta.plano_nome}
+                    </Badge>
+                  )}
+                  <span className={cn("ml-auto text-[10px] font-semibold tabular-nums", getWaitTextColor(proposta.data_assinatura))}>
+                    {proposta.data_assinatura
+                      ? formatDistanceToNow(new Date(proposta.data_assinatura), { locale: ptBR, addSuffix: false })
+                      : '---'}
+                  </span>
+                </div>
+
+                {/* Linha 3 — Endereço de instalação (opcional) */}
+                {proposta.instalacao_agendada?.endereco_logradouro && (
+                  <p className="mt-1 text-[11px] text-muted-foreground truncate pl-0 sm:pl-11">
+                    📍 {proposta.instalacao_agendada.endereco_logradouro}
+                    {proposta.instalacao_agendada.endereco_numero && `, ${proposta.instalacao_agendada.endereco_numero}`}
+                    {proposta.instalacao_agendada.endereco_bairro && ` — ${proposta.instalacao_agendada.endereco_bairro}`}
+                    {proposta.instalacao_agendada.data && ` · ${proposta.instalacao_agendada.data.split('-').reverse().join('/')}`}
+                    {proposta.instalacao_agendada.horario && ` ${proposta.instalacao_agendada.horario}`}
+                  </p>
+                )}
               </div>
             );
           })}
