@@ -37,13 +37,130 @@ serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
-    const { solicitacao_id, cenario_override } = await req.json();
+    const body = await req.json();
+    const { solicitacao_id, cenario_override, retry_sga } = body;
 
     if (!solicitacao_id) {
       return new Response(JSON.stringify({ success: false, error: "solicitacao_id obrigatório" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // ============================================
+    // RETRY SGA — reexecuta só a etapa Hinova quando a troca já está efetivada/liberada
+    // ============================================
+    if (retry_sga) {
+      console.log(`[efetivar-troca][retry-sga] Iniciando retry para ${solicitacao_id}`);
+      const { data: troca, error: trocaErr } = await supabase
+        .from("solicitacoes_troca_titularidade")
+        .select("id, status, novo_associado_id, veiculo_id, associado_antigo_id, novo_titular_dados")
+        .eq("id", solicitacao_id)
+        .maybeSingle();
+
+      if (trocaErr || !troca) {
+        return new Response(JSON.stringify({ success: false, error: "Solicitação de troca não encontrada" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!troca.novo_associado_id || !troca.veiculo_id) {
+        return new Response(JSON.stringify({ success: false, error: "Troca ainda não foi efetivada — não há novo associado/veículo para sincronizar" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const dadosNovo = (troca.novo_titular_dados || {}) as Record<string, string>;
+      const cpfLimpo = (dadosNovo.cpf || "").replace(/\D/g, "");
+      const { data: vehicleData } = await supabase
+        .from("veiculos").select("placa, chassi, renavam, marca, modelo, ano, cor, valor_fipe").eq("id", troca.veiculo_id).maybeSingle();
+
+      let sgaCodAss: number | null = null;
+      let sgaCodVeic: number | null = null;
+      try {
+        // Garantir associado SGA
+        try {
+          const busca = await buscarAssociadoComVeiculosPorCpf(await getHinovaSession(supabase), cpfLimpo);
+          sgaCodAss = busca.codigo_associado;
+        } catch (e) {
+          if (!(e instanceof HinovaNotFoundError)) throw e;
+        }
+        if (!sgaCodAss) {
+          const cad = await cadastrarAssociadoHinova(supabase, {
+            nome: dadosNovo.nome,
+            cpf: cpfLimpo,
+            email: dadosNovo.email || undefined,
+            telefone_celular: (dadosNovo.telefone || "").replace(/\D/g, "") || undefined,
+          });
+          if (!cad.ok || !cad.codigo) throw new Error(`SGA cadastrarAssociado: ${cad.errors.join("; ") || cad.mensagem}`);
+          sgaCodAss = cad.codigo;
+        }
+        await supabase.from("associados").update({
+          codigo_hinova: sgaCodAss, sincronizado_hinova: true, sincronizado_hinova_em: new Date().toISOString(),
+        }).eq("id", troca.novo_associado_id);
+
+        // Veículo
+        let codVeicAtual: number | null = null;
+        let codAssVeic: number | null = null;
+        if (vehicleData?.chassi) {
+          try {
+            const found = await buscarVeiculoPorChassi(supabase, vehicleData.chassi);
+            if (found.found) {
+              codVeicAtual = Number(found.found.codigo_veiculo) || null;
+              codAssVeic = Number(found.found.codigo_associado) || null;
+            }
+          } catch (e) { console.warn("[retry-sga] buscaVeic:", (e as Error).message); }
+        }
+
+        if (!(codVeicAtual && codAssVeic === sgaCodAss)) {
+          if (codVeicAtual) {
+            const codCanc = await getConfiguracaoNumero(supabase, "sga_codigo_situacao_veiculo_cancelado", 3);
+            await alterarSituacaoVeiculoHinova(supabase, codVeicAtual, codCanc).catch(e => console.warn("[retry-sga] cancelar veic antigo:", e?.message || e));
+          }
+          const codGrupo = await getConfiguracaoNumero(supabase, "sga_codigo_grupo_produto_padrao", 0);
+          const cadVeic = await cadastrarVeiculoHinova(supabase, {
+            codigo_associado: sgaCodAss,
+            placa: vehicleData?.placa,
+            chassi: vehicleData?.chassi,
+            renavam: vehicleData?.renavam || undefined,
+            marca: vehicleData?.marca || undefined,
+            modelo: vehicleData?.modelo || undefined,
+            ano_fabricacao: vehicleData?.ano || undefined,
+            ano_modelo: vehicleData?.ano || undefined,
+            cor: vehicleData?.cor || undefined,
+            valor_fipe: vehicleData?.valor_fipe || undefined,
+            codigo_grupo_produto: codGrupo || undefined,
+          });
+          if (!cadVeic.ok || !cadVeic.codigo) throw new Error(`SGA cadastrarVeiculo: ${cadVeic.errors.join("; ") || cadVeic.mensagem}`);
+          sgaCodVeic = cadVeic.codigo;
+        } else {
+          sgaCodVeic = codVeicAtual;
+        }
+
+        await supabase.from("veiculos").update({
+          codigo_hinova: sgaCodVeic, sincronizado_hinova: true, sincronizado_hinova_em: new Date().toISOString(),
+        }).eq("id", troca.veiculo_id);
+
+        await supabase.from("solicitacoes_troca_titularidade").update({
+          sga_status: "sincronizado",
+          sga_erro: null,
+          sga_codigo_associado_novo: sgaCodAss,
+          sga_codigo_veiculo_novo: sgaCodVeic,
+          sga_sincronizado_em: new Date().toISOString(),
+        }).eq("id", solicitacao_id);
+
+        return new Response(JSON.stringify({ success: true, retry: true, sga_status: "sincronizado", sga_codigo_associado_novo: sgaCodAss, sga_codigo_veiculo_novo: sgaCodVeic }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (sgaErr) {
+        const msg = (sgaErr as Error)?.message || String(sgaErr);
+        console.error("[retry-sga] Falha:", msg);
+        await supabase.from("solicitacoes_troca_titularidade").update({
+          sga_status: "falha", sga_erro: msg,
+        }).eq("id", solicitacao_id);
+        return new Response(JSON.stringify({ success: false, error: msg, sga_status: "falha" }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     console.log(`[efetivar-troca] Iniciando efetivação para solicitação ${solicitacao_id}`);

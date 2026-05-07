@@ -1,112 +1,83 @@
+## Pacote 2: Escopo por papel + Saúde SGA + Mini-card de Vistoria
 
-## Objetivo
+### 1. Escopo por papel em `ProcessosOperacionais` (Cadastro › Processos)
 
-Dar ao consultor uma visão visual e dedicada para acompanhar processos que **não são cotação nova**: troca de titularidade, substituição de placa, inclusão de veículo e migração. Hoje essas solicitações já existem em `cotacoes` (com `dados_extras.tipo_entrada`), mas ficam misturadas e com sinalização fraca na aba principal.
+**Hoje**: `scopeToSelf = permissions.isVendedorOnly`. Funciona para vendedor, mas:
+- Vendedores CLT (`isVendedorClt`) e externos (`isVendedorExterno`) que também tenham outro papel não privilegiado escapam do filtro.
+- Não há restrição por setor: qualquer pessoa com acesso à página vê todas as abas/sub-abas, e o `modo` do `ModalDetalhesTroca` é fixo em `cadastro` mesmo para Monitoramento.
 
----
+**Mudança**:
 
-## O que será feito
+a) **Regra de visibilidade total** (ver tudo):
+   - `isDiretor || isAdminMaster || isDesenvolvedor || isSupervisorVendas || isGerente || isAnalistaCadastro` → vê todos os processos.
+   - Caso contrário (vendedor, agência, vendedor CLT/externo sem cargo de gestão) → escopo = só os próprios (filtro por `criado_por`/`vendedor_id`/`consultor_id`).
+   - Substituir `permissions.isVendedorOnly` por uma variável local `canSeeAll` derivada das flags acima. Mantém os parâmetros `scopeProfileId` / `scopeAuthUserId` já implementados.
 
-### 1. Nova aba "Outros Processos" ao lado de "Cotações"
+b) **Aviso visual**: manter o `<Alert>` "Mostrando apenas as solicitações originadas por você" quando `!canSeeAll`.
 
-Em `src/pages/vendas/Cotacoes.tsx`, envolver a listagem em um `Tabs` com duas abas:
+### 2. Modal de detalhes da troca: `modo` por papel
 
-- **Cotações** (default) — comportamento atual, mas filtrando OUT registros cujo `dados_extras.tipo_entrada` esteja em `['troca_titularidade','substituicao_placa','inclusao_veiculo','migracao']`. Cotação nova continua exatamente como está.
-- **Outros Processos** — nova visão com tabela própria adaptada por tipo.
+**Hoje**: a aba Titularidade abre `ModalDetalhesTroca` sempre com `modo="cadastro"`. As ações de aprovar/reprovar Cadastro aparecem para qualquer um.
 
-Contagem de cada aba aparece em badge no `TabsTrigger` (ex: "Outros Processos · 12"), usando o mesmo padrão de `useCotacoesFunilCounts`.
+**Mudança em `TrocaTitularidadeTab`**:
+- Determinar o `modo` dinamicamente:
+  - `isAnalistaCadastro` (e não Monitoramento) → `modo="cadastro"`.
+  - `isCoordenadorMonitoramento || isAnalistaMonitoramento` (e não Cadastro) → `modo="monitoramento"`.
+  - Diretor/Supervisor/Gerente/SuperAdmin → modo derivado do `status` da solicitação: `aguardando_monitoramento`/`aguardando_vistoria`/`liberada_para_assinatura` → `monitoramento`; demais → `cadastro`.
+  - Vendedor/agência sem papel de back-office → modo `readonly` (novo): apenas visualização, sem botões de aprovar/reprovar/etapa.
+- Adicionar suporte a `modo="readonly"` em `ModalDetalhesTroca`:
+  - Esconder bloco de ações (aprovar, reprovar, solicitar vistoria, reenviar termo).
+  - Manter visíveis: dados do veículo, partes, timeline de aprovação, status do termo, status do contrato, link para a cotação, mini-card de vistoria (item 4).
+- Esconder ou desabilitar sub-abas que não façam sentido para o setor:
+  - Analista de Cadastro: pode ver todas, mas só aprova "Aguardando Cadastro".
+  - Analista/Coordenador de Monitoramento: pode ver todas, mas só aprova "Aguardando Monit." e "Em Vistoria".
+  - Não vamos esconder abas — manter visibilidade plena, e quem decide a ação é o `modo` repassado ao modal (mais simples e menos confuso).
 
-### 2. Hook `useOutrosProcessos`
+### 3. Card de Saúde SGA em Cadastro › Processos › Titularidade › "Aprovadas"
 
-Novo hook em `src/hooks/useOutrosProcessos.ts` que faz **uma query unificada** retornando registros normalizados:
+Adicionar logo acima da lista, na sub-aba `aprovadas`:
 
-```text
-{
-  id, tipo: 'troca'|'substituicao'|'inclusao'|'migracao',
-  cotacao_id, criado_em, vendedor,
-  titular_origem: { nome, cpf },
-  titular_destino: { nome, cpf } | null,   // só troca
-  veiculo: { placa, marca, modelo },
-  etapa_atual: string,                      // legível: "Termo pendente", "Aguardando cadastro"...
-  status_termo: 'nao_aplicavel'|'pendente'|'enviado'|'assinado'|'recusado',
-  status_assinatura_contrato: ...,           // quando aplicável
-  pendencia_financeira?: { qtd, total },
-  acao_disponivel: string                    // CTA contextual
-}
-```
+- **Cards agregados** (3 mini-cards lado a lado):
+  - Trocas efetivadas com `sga_status = 'sucesso'` (verde).
+  - Pendentes de SGA (`sga_status` null/`processando` ou ainda em `liberada_para_assinatura` aguardando contrato) — amarelo.
+  - Erros (`sga_status = 'erro'`) — vermelho. Clicar expande lista filtrada.
+- Em cada item da lista (quando `sga_status = 'erro'`): badge vermelho "Erro SGA" + botão "Tentar novamente" que chama `efetivar-troca-titularidade` em modo retry; tooltip exibe `sga_erro`.
+- Acesso restrito: só renderiza para `isAnalistaCadastro || canSeeAll` (esconde para vendedores).
 
-Fontes:
-- **Troca** → `solicitacoes_troca_titularidade` + `cotacoes` + `relacionamento_debitos_pendentes` (já consumidos por `useSolicitacoesTroca` e `TrocaTitularidadeBadge`).
-- **Substituição** / **Inclusão** / **Migração** → `cotacoes` filtradas por `dados_extras.tipo_entrada` + join com `contratos`/`veiculos` para resolver etapa.
+> Observação: a fila SGA já existe em outro lugar (Cadastro › Fila do SGA). Aqui só replicamos o status restrito a trocas — link "Ver fila completa do SGA" no rodapé do card aponta pra essa página existente.
 
-Reaproveita o motor de status do `TrocaTitularidadeBadge` (mapa `STATUS_LABELS`) e expande para os outros tipos.
+### 4. Mini-card de Vistoria dentro do `ModalDetalhesTroca`
 
-### 3. Componente `OutrosProcessosTable`
+Quando `solicitacao.servico_vistoria_id` existir, renderizar um bloco entre Timeline e Termo:
 
-Novo componente `src/components/cotacoes/OutrosProcessosTable.tsx` (irmão de `CotacoesTable.tsx`), com colunas dedicadas:
-
-- Tipo (chip colorido por tipo: troca = âmbar, substituição = azul, inclusão = verde, migração = roxo)
-- Origem → Destino (ex: "João Silva → Maria Souza" para troca; "ABC1D23 → DEF4G56" para substituição)
-- Veículo
-- Vendedor (sem truncamento — segue correção já aplicada no `CotacoesTable`)
-- Etapa atual (badge igual ao `TrocaTitularidadeBadge`, expandido)
-- Termo / Assinatura (ícone de status)
-- Última atualização
-- Ações (Ver detalhes, Reenviar termo, Abrir cotação relacionada, Cancelar)
-
-Versão mobile em `OutrosProcessosMobileList.tsx` (mesmo padrão de `CotacoesMobileList`).
-
-### 4. Filtros locais da aba
-
-Linha de filtros acima da tabela:
-- **Tipo**: Todos / Troca / Substituição / Inclusão / Migração
-- **Etapa**: Em andamento / Aguardando cliente / Aguardando interno / Concluídos / Reprovados
-- **Vendedor** (respeitando regra `funil-cotacao-vendor-scoping` — vendedor não-gestor só vê os próprios)
-- **Busca**: nome, CPF, placa
-
-### 5. Drawer de detalhe unificado
-
-`OutrosProcessosDetailDrawer.tsx` reutilizando `TelaAnaliseTrocaTitularidade` para troca; para os demais tipos abre o `CotacaoDetalhesModal` existente. Sem reescrever telas — só roteia.
-
-### 6. Limpeza visual da aba "Cotações" original
-
-- Como trocas saem da listagem principal, o `TrocaTitularidadeBadge` deixa de aparecer ali (continua usado dentro da nova aba).
-- Mantém o filtro server-side; a contagem do funil já existente passa a refletir só cotações novas.
+- Título "Vistoria do veículo".
+- Buscar `servicos` pelo id (`status`, `tipo_servico`, `agendamento_data`, `instalador_id`, `concluido_em`) + última vistoria associada (fotos, status final).
+- Mostrar status do serviço com badge colorido + datas + nome do instalador.
+- Botão "Abrir vistoria" → navega para `/monitoramento/vistorias/{id}` (rota existente) em nova aba.
+- Visível em todos os modos (cadastro, monitoramento, readonly).
 
 ---
 
 ## Detalhes técnicos
 
-- **Sem migração de schema**. Tudo é leitura sobre tabelas existentes.
-- `useCotacoes`/`useCotacoesPaginadas` ganham um parâmetro opcional `excluirTiposEntrada?: string[]` para filtrar `dados_extras->>tipo_entrada NOT IN (...)`. A aba "Cotações" passa a lista padrão; a aba "Outros Processos" usa o novo hook.
-- O hook novo agrega por `cotacao_id` para evitar duplicação quando uma troca tem cotação espelho.
-- Permissões: respeita `usePermissions` (`vendas.cotacoes.view`) — não introduz nova permissão.
-- Realtime: assina canais de `cotacoes` e `solicitacoes_troca_titularidade` (já há padrão em `useCotacoesRealtime`).
-- Performance: query única paginada (limit 50, infinite scroll opcional), `staleTime` 30s.
+**Arquivos editados**:
+- `src/pages/cadastro/ProcessosOperacionais.tsx`:
+  - Substituir `scopeToSelf = permissions.isVendedorOnly` pela regra `canSeeAll`.
+  - Repassar `modo` calculado para `TrocaTitularidadeTab`.
+  - `TrocaTitularidadeTab`: aceitar `modoFixo?: 'cadastro' | 'monitoramento' | 'readonly'`; quando ausente, derivar por status no momento de abrir o modal.
+  - Adicionar `<SaudeSgaTrocas>` no topo da sub-aba `aprovadas` (componente novo, ver abaixo).
 
----
+- `src/components/troca-titularidade/ModalDetalhesTroca.tsx`:
+  - Estender prop `modo` para incluir `'readonly'`.
+  - Esconder painel de ações quando `modo === 'readonly'`.
+  - Sempre renderizar `<MiniCardVistoriaTroca>` quando `servico_vistoria_id`.
 
-## Fluxo final do consultor (depois)
+- `src/components/troca-titularidade/MiniCardVistoriaTroca.tsx` (novo): hook próprio com `useQuery` em `servicos` + `vistorias`.
 
-```text
-/vendas/cotacoes
- ├── [Cotações]            → só cotações novas, limpas
- └── [Outros Processos N]  → trocas, substituições, inclusões, migrações
-       └─ linha clicável → drawer com etapa, status do termo, ações
-```
+- `src/components/troca-titularidade/SaudeSgaTrocas.tsx` (novo): consulta `solicitacoes_troca_titularidade` filtrando `status in (liberada_para_assinatura, efetivada)`, agrega por `sga_status`, expõe botão de retry chamando `supabase.functions.invoke('efetivar-troca-titularidade', { body: { solicitacao_id, retry: true } })`.
 
-Exemplo da linha de uma troca em curso:
+- `supabase/functions/efetivar-troca-titularidade/index.ts`: aceitar payload `{ solicitacao_id, retry: true }` que reexecuta apenas a etapa SGA quando a troca já está `efetivada` mas `sga_status='erro'`. Idempotente.
 
-```text
-[Troca]  João Silva → Maria Souza   ABC1D23 Civic 2020   Ana (vendedora)
-        ▸ Termo enviado · aguardando assinatura do antigo titular
-        ▸ Pendência R$ 380 (2 boletos)                 [Ver]  [Reenviar termo]
-```
+**Sem migração de banco** — `sga_status` e `sga_erro` já existem em `solicitacoes_troca_titularidade` (vide referência no resumo da etapa anterior). Confirmar com `supabase--read_query` no momento da implementação.
 
----
-
-## Não está no escopo
-
-- Cancelamento e Eventos em andamento (você pediu só troca/substituição/inclusão/migração).
-- Mudanças no fluxo de criação/aprovação dos processos — só visualização e acompanhamento.
-- Alteração nos hooks/edge functions de troca já existentes.
+**Nada de alteração de RLS** — o filtro `criado_por` é do lado da query.

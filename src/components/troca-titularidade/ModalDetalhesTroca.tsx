@@ -12,6 +12,7 @@ import { Loader2, Car, User, FileSignature, CheckCircle2, XCircle, Send, Clipboa
 import { useSolicitacaoTroca, useAprovarTrocaCadastro, useAprovarTrocaMonitoramento, useReprovarTroca, useEnviarTermoCancelamento, type StatusTroca } from '@/hooks/useSolicitacoesTroca';
 import { TimelineAprovacao } from './TimelineAprovacao';
 import { RelatorioFinanceiroAntigo } from './RelatorioFinanceiroAntigo';
+import { MiniCardVistoriaTroca } from './MiniCardVistoriaTroca';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -19,7 +20,7 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   solicitacaoId: string | null;
-  modo: 'cadastro' | 'monitoramento';
+  modo: 'cadastro' | 'monitoramento' | 'readonly';
 }
 
 const STATUS_LABELS: Record<StatusTroca, { label: string; variant: 'default'|'secondary'|'destructive'|'outline' }> = {
@@ -81,12 +82,12 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   };
 
   const handleReprovar = async () => {
-    if (!solicitacao || !motivoReprovar.trim()) return;
+    if (!solicitacao || !motivoReprovar.trim() || modo === 'readonly') return;
     await reprovar.mutateAsync({ solicitacao_id: solicitacao.id, motivo: motivoReprovar, etapa: modo });
     onOpenChange(false);
   };
 
-  const podeAgir = solicitacao && (
+  const podeAgir = solicitacao && modo !== 'readonly' && (
     (modo === 'cadastro' && solicitacao.status === 'aguardando_cadastro') ||
     (modo === 'monitoramento' && solicitacao.status === 'aguardando_monitoramento')
   );
@@ -97,7 +98,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
         <DialogHeader>
           <DialogTitle>Solicitação de Troca de Titularidade</DialogTitle>
           <DialogDescription>
-            {modo === 'cadastro' ? 'Análise pelo Cadastro' : 'Análise pelo Monitoramento'}
+            {modo === 'cadastro' ? 'Análise pelo Cadastro' : modo === 'monitoramento' ? 'Análise pelo Monitoramento' : 'Acompanhamento da solicitação'}
           </DialogDescription>
         </DialogHeader>
 
@@ -224,7 +225,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                 </div>
               </TabsContent>
 
-              <TabsContent value="timeline" className="pt-3">
+              <TabsContent value="timeline" className="pt-3 space-y-3">
                 <TimelineAprovacao
                   status={solicitacao.status}
                   termoAssinadoEm={solicitacao.termo_cancelamento_assinado_em}
@@ -232,6 +233,9 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                   aprovadoMonitoramentoEm={solicitacao.aprovado_monitoramento_em}
                   efetivadaEm={solicitacao.efetivada_em}
                 />
+                {solicitacao.servico_vistoria_id && (
+                  <MiniCardVistoriaTroca servicoId={solicitacao.servico_vistoria_id} />
+                )}
               </TabsContent>
             </Tabs>
 

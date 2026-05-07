@@ -24,6 +24,7 @@ import { STATUS_SUBSTITUICAO_LABELS, STATUS_SUBSTITUICAO_CORES } from '@/types/s
 import type { StatusSubstituicao } from '@/types/substituicao';
 import { useSolicitacoesTroca, type StatusTroca } from '@/hooks/useSolicitacoesTroca';
 import { ModalDetalhesTroca } from '@/components/troca-titularidade/ModalDetalhesTroca';
+import { SaudeSgaTrocas } from '@/components/troca-titularidade/SaudeSgaTrocas';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -53,10 +54,30 @@ const TROCA_FILTROS: Record<string, StatusTroca[]> = {
   recusadas: ['reprovada_cadastro', 'reprovada_monitoramento', 'cancelada'],
 };
 
-function TrocaTitularidadeTab({ scopeProfileId }: { scopeProfileId?: string }) {
+function TrocaTitularidadeTab({
+  scopeProfileId,
+  modoUsuario,
+  podeVerSaudeSga,
+}: {
+  scopeProfileId?: string;
+  modoUsuario: 'cadastro' | 'monitoramento' | 'readonly' | 'auto';
+  podeVerSaudeSga: boolean;
+}) {
   const [subAba, setSubAba] = useState<keyof typeof TROCA_FILTROS>('pendentes');
   const [selecionada, setSelecionada] = useState<string | null>(null);
   const { data, isLoading } = useSolicitacoesTroca(TROCA_FILTROS[subAba], scopeProfileId);
+
+  // Resolve modo do modal
+  const solicitacaoSelecionada = data?.find(s => s.id === selecionada);
+  const modoModal: 'cadastro' | 'monitoramento' | 'readonly' = (() => {
+    if (modoUsuario !== 'auto') return modoUsuario;
+    if (!solicitacaoSelecionada) return 'cadastro';
+    const st = solicitacaoSelecionada.status;
+    if (st === 'aguardando_monitoramento' || st === 'aguardando_vistoria' || st === 'liberada_para_assinatura') {
+      return 'monitoramento';
+    }
+    return 'cadastro';
+  })();
 
   return (
     <div className="space-y-4">
@@ -69,7 +90,8 @@ function TrocaTitularidadeTab({ scopeProfileId }: { scopeProfileId?: string }) {
           <TabsTrigger value="recusadas">Recusadas</TabsTrigger>
         </TabsList>
 
-        <TabsContent value={subAba} className="pt-4">
+        <TabsContent value={subAba} className="pt-4 space-y-4">
+          {subAba === 'aprovadas' && podeVerSaudeSga && <SaudeSgaTrocas />}
           {isLoading ? (
             <div className="space-y-3">
               {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}
@@ -97,6 +119,9 @@ function TrocaTitularidadeTab({ scopeProfileId }: { scopeProfileId?: string }) {
                             <Badge variant="outline" className="text-green-600 border-green-600">
                               <FileSignature className="h-3 w-3 mr-1" /> Termo assinado
                             </Badge>
+                          )}
+                          {(s as any).sga_status === 'falha' && (
+                            <Badge variant="destructive">Erro SGA</Badge>
                           )}
                         </div>
                         <div className="flex items-center gap-2 text-sm flex-wrap">
@@ -129,7 +154,7 @@ function TrocaTitularidadeTab({ scopeProfileId }: { scopeProfileId?: string }) {
         open={!!selecionada}
         onOpenChange={(o) => !o && setSelecionada(null)}
         solicitacaoId={selecionada}
-        modo="cadastro"
+        modo={modoModal}
       />
     </div>
   );
@@ -550,9 +575,38 @@ type TabKey = typeof TAB_KEYS[number];
 export default function ProcessosOperacionais() {
   const { user, profile } = useAuth();
   const permissions = usePermissions();
-  const scopeToSelf = permissions.isVendedorOnly;
+
+  // Quem vê tudo: diretoria, gestão comercial, super admin e Cadastro
+  const canSeeAll =
+    permissions.isDiretor ||
+    permissions.isAdminMaster ||
+    permissions.isDesenvolvedor ||
+    permissions.isGerente ||
+    permissions.isSupervisorVendas ||
+    !!permissions.isAnalistaCadastro ||
+    !!permissions.isCoordenadorMonitoramento ||
+    !!permissions.isAnalistaMonitoramento;
+
+  const scopeToSelf = !canSeeAll;
   const scopeProfileId = scopeToSelf ? profile?.id : undefined;
   const scopeAuthUserId = scopeToSelf ? user?.id : undefined;
+
+  // Modo do modal de troca por papel
+  const isCadastro = !!permissions.isAnalistaCadastro;
+  const isMonitoramento = !!permissions.isCoordenadorMonitoramento || !!permissions.isAnalistaMonitoramento;
+  const modoUsuario: 'cadastro' | 'monitoramento' | 'readonly' | 'auto' =
+    permissions.isDiretor || permissions.isAdminMaster || permissions.isDesenvolvedor ||
+    permissions.isGerente || permissions.isSupervisorVendas
+      ? 'auto'
+      : isCadastro && !isMonitoramento
+        ? 'cadastro'
+        : isMonitoramento && !isCadastro
+          ? 'monitoramento'
+          : isCadastro && isMonitoramento
+            ? 'auto'
+            : 'readonly';
+
+  const podeVerSaudeSga = isCadastro || canSeeAll;
 
   const { data: counts } = useProcessosCounts(
     scopeToSelf ? { profileId: scopeProfileId, authUserId: scopeAuthUserId } : undefined
@@ -677,7 +731,7 @@ export default function ProcessosOperacionais() {
         </TabsList>
 
         <TabsContent value="titularidade">
-          <TrocaTitularidadeTab scopeProfileId={scopeProfileId} />
+          <TrocaTitularidadeTab scopeProfileId={scopeProfileId} modoUsuario={modoUsuario} podeVerSaudeSga={podeVerSaudeSga} />
         </TabsContent>
         <TabsContent value="substituicoes">
           <SubstituicoesTab scopeAuthUserId={scopeAuthUserId} />
