@@ -3,10 +3,13 @@ import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+const isDev = import.meta.env.DEV;
+const dlog = (...args: unknown[]) => {
+  if (isDev) console.log(...args);
+};
+
 // Throttle por chave para reduzir tempestade de invalidações via realtime.
-// Em vez de refetch imediato a cada payload, agrupamos invalidações numa janela
-// curta. O React Query refaz só o que está montado/em uso.
-function makeThrottledInvalidator(qc: QueryClient, windowMs = 1500) {
+function makeThrottledInvalidator(qc: QueryClient, windowMs = 3000) {
   const pending = new Map<string, ReturnType<typeof setTimeout>>();
   return (keys: (string | string[])[]) => {
     for (const k of keys) {
@@ -22,258 +25,126 @@ function makeThrottledInvalidator(qc: QueryClient, windowMs = 1500) {
   };
 }
 
+export interface UseCotacoesRealtimeOptions {
+  enabled?: boolean;
+  /** Quando informado, filtra eventos de `cotacoes` por este vendedor (reduz volume). */
+  vendedorId?: string;
+  /** Escopo de visão; 'all'/'team' não aplicam filtro server-side. */
+  viewScope?: 'own' | 'team' | 'all';
+}
+
 /**
  * Hook para escutar atualizações em tempo real relacionadas a cotações.
- * Invalida queries automaticamente quando há mudanças em:
- * - cotacoes
- * - contratos (afeta status_contratacao/etapa da venda)
- * - instalacoes (afeta etapa vistoria_agendada/instalacao_agendada)
- * - vistorias (afeta etapa de vistoria realizada)
- * - cotacoes_historico (atualiza timeline em tempo real)
+ * - Subscribe principal em `cotacoes` (com filtro por vendedor quando aplicável).
+ * - Subscribe leve em `cotacoes_historico` para timeline.
+ * Demais entidades (contratos, instalacoes, vistorias, associados) são
+ * atualizadas via seus próprios hooks dedicados ou no detalhe da cotação.
  */
-export function useCotacoesRealtime(options?: { enabled?: boolean }) {
+export function useCotacoesRealtime(options?: UseCotacoesRealtimeOptions) {
   const enabled = options?.enabled ?? true;
+  const vendedorId = options?.vendedorId;
+  const viewScope = options?.viewScope ?? 'own';
   const queryClient = useQueryClient();
   const throttledInvalidate = useRef(makeThrottledInvalidator(queryClient)).current;
 
   useEffect(() => {
     if (!enabled) return;
-    console.log('[useCotacoesRealtime] Iniciando listeners realtime');
-    
-    const channel = supabase
-      .channel('cotacoes-realtime-all')
-      // Escutar mudanças em cotações
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'cotacoes',
-        },
-        (payload) => {
-          console.log('[useCotacoesRealtime] Cotação alterada:', payload.eventType, payload.new);
-          
-          // Throttle: apenas marca como stale; React Query refaz só queries montadas
-          throttledInvalidate([['cotacoes']]);
+    dlog('[useCotacoesRealtime] Iniciando listeners realtime');
 
-          // Se for update de uma cotação específica
-          if (payload.eventType === 'UPDATE' && payload.new) {
-            const newData = payload.new as { id?: string; status?: string; status_contratacao?: string; cliente_nome?: string };
-            const oldData = payload.old as { status_contratacao?: string; status?: string };
+    const useVendorFilter = viewScope === 'own' && !!vendedorId;
+    const channelName = useVendorFilter
+      ? `cotacoes-realtime-v-${vendedorId}`
+      : 'cotacoes-realtime-all';
 
-            if (newData.id) {
-              throttledInvalidate([['cotacoes', newData.id]]);
-            }
-            
-            // Labels específicos para cada etapa do status_contratacao
-            const STATUS_CONTRATACAO_LABELS: Record<string, { emoji: string; label: string; type: 'success' | 'info' }> = {
-              'plano_escolhido': { emoji: '📋', label: 'Cliente escolheu o plano', type: 'info' },
-              'dados_preenchidos': { emoji: '📝', label: 'Cliente preencheu os dados', type: 'info' },
-              'documentos_ok': { emoji: '📎', label: 'Documentos enviados', type: 'info' },
-              'autovistoria_ok': { emoji: '📷', label: 'Autovistoria enviada', type: 'info' },
-              'vistoria_agendada': { emoji: '🗓️', label: 'Vistoria agendada', type: 'info' },
-              'vistoria_ok': { emoji: '✅', label: 'Vistoria concluída', type: 'success' },
-              'instalacao_agendada': { emoji: '🔧', label: 'Instalação agendada', type: 'info' },
-              'instalacao_ok': { emoji: '✅', label: 'Instalação concluída', type: 'success' },
-              'pagamento_ok': { emoji: '💰', label: 'Pagamento confirmado', type: 'success' },
-              'contrato_assinado': { emoji: '✍️', label: 'Contrato assinado', type: 'success' },
-              'ativo': { emoji: '🎉', label: 'Associado ativado', type: 'success' },
-            };
-            
-            // Toast para mudança de status_contratacao (cliente avançou no fluxo)
-            if (newData.status_contratacao && 
-                newData.status_contratacao !== 'aguardando' && 
-                newData.status_contratacao !== oldData?.status_contratacao) {
-              const statusInfo = STATUS_CONTRATACAO_LABELS[newData.status_contratacao];
-              const clienteNome = newData.cliente_nome ? ` - ${newData.cliente_nome}` : '';
-              
-              if (statusInfo) {
-                if (statusInfo.type === 'success') {
-                  toast.success(`${statusInfo.emoji} ${statusInfo.label}${clienteNome}`, { duration: 6000 });
-                } else {
-                  toast.info(`${statusInfo.emoji} ${statusInfo.label}${clienteNome}`, { duration: 5000 });
-                }
+    let channel = supabase.channel(channelName);
+
+    // Cotações (filtro por vendedor quando possível)
+    channel = channel.on(
+      'postgres_changes',
+      useVendorFilter
+        ? { event: '*', schema: 'public', table: 'cotacoes', filter: `vendedor_id=eq.${vendedorId}` }
+        : { event: '*', schema: 'public', table: 'cotacoes' },
+      (payload) => {
+        dlog('[useCotacoesRealtime] Cotação alterada:', payload.eventType);
+        throttledInvalidate([['cotacoes']]);
+
+        if (payload.eventType === 'UPDATE' && payload.new) {
+          const newData = payload.new as { id?: string; status?: string; status_contratacao?: string; cliente_nome?: string };
+          const oldData = payload.old as { status_contratacao?: string; status?: string };
+
+          if (newData.id) {
+            throttledInvalidate([['cotacoes', newData.id]]);
+          }
+
+          const STATUS_CONTRATACAO_LABELS: Record<string, { emoji: string; label: string; type: 'success' | 'info' }> = {
+            'plano_escolhido': { emoji: '📋', label: 'Cliente escolheu o plano', type: 'info' },
+            'dados_preenchidos': { emoji: '📝', label: 'Cliente preencheu os dados', type: 'info' },
+            'documentos_ok': { emoji: '📎', label: 'Documentos enviados', type: 'info' },
+            'autovistoria_ok': { emoji: '📷', label: 'Autovistoria enviada', type: 'info' },
+            'vistoria_agendada': { emoji: '🗓️', label: 'Vistoria agendada', type: 'info' },
+            'vistoria_ok': { emoji: '✅', label: 'Vistoria concluída', type: 'success' },
+            'instalacao_agendada': { emoji: '🔧', label: 'Instalação agendada', type: 'info' },
+            'instalacao_ok': { emoji: '✅', label: 'Instalação concluída', type: 'success' },
+            'pagamento_ok': { emoji: '💰', label: 'Pagamento confirmado', type: 'success' },
+            'contrato_assinado': { emoji: '✍️', label: 'Contrato assinado', type: 'success' },
+            'ativo': { emoji: '🎉', label: 'Associado ativado', type: 'success' },
+          };
+
+          if (newData.status_contratacao &&
+              newData.status_contratacao !== 'aguardando' &&
+              newData.status_contratacao !== oldData?.status_contratacao) {
+            const statusInfo = STATUS_CONTRATACAO_LABELS[newData.status_contratacao];
+            const clienteNome = newData.cliente_nome ? ` - ${newData.cliente_nome}` : '';
+            if (statusInfo) {
+              if (statusInfo.type === 'success') {
+                toast.success(`${statusInfo.emoji} ${statusInfo.label}${clienteNome}`, { duration: 6000 });
               } else {
-                toast.info(`📋 Cliente avançou na contratação${clienteNome}`, { duration: 4000 });
+                toast.info(`${statusInfo.emoji} ${statusInfo.label}${clienteNome}`, { duration: 5000 });
               }
-            }
-            
-            // Toast para mudança de status importante
-            if (newData.status === 'aceita' && oldData?.status !== 'aceita') {
-              const clienteNome = newData.cliente_nome ? ` - ${newData.cliente_nome}` : '';
-              toast.success(`🎉 Cotação aceita pelo cliente${clienteNome}!`, { duration: 5000 });
+            } else {
+              toast.info(`📋 Cliente avançou na contratação${clienteNome}`, { duration: 4000 });
             }
           }
-        }
-      )
-      // Escutar mudanças em contratos (afeta etapa da venda na cotação)
-      // NOTA: Toasts de contrato são gerenciados pelo useContratosRealtime (apenas para vendedor responsável)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'contratos',
-        },
-        (payload) => {
-          console.log('[useCotacoesRealtime] Contrato alterado:', payload.eventType);
 
-          // Invalidar cotações porque a etapa de venda depende do contrato
-          throttledInvalidate([['cotacoes']]);
-          throttledInvalidate([['contratos']]);
-          throttledInvalidate([['ativacoes']]);
+          if (newData.status === 'aceita' && oldData?.status !== 'aceita') {
+            const clienteNome = newData.cliente_nome ? ` - ${newData.cliente_nome}` : '';
+            toast.success(`🎉 Cotação aceita pelo cliente${clienteNome}!`, { duration: 5000 });
+          }
+        }
+      }
+    );
 
-          // Toast quando o pagamento da adesão é confirmado
-          if (payload.eventType === 'UPDATE') {
-            const newData = payload.new as { adesao_paga?: boolean; cliente_nome?: string };
-            const oldData = payload.old as { adesao_paga?: boolean };
-            if (newData.adesao_paga === true && oldData?.adesao_paga !== true) {
-              const nome = newData.cliente_nome ? ` - ${newData.cliente_nome}` : '';
-              toast.success(`💰 Pagamento confirmado${nome}`, { duration: 5000 });
-            }
-          }
+    // Histórico de cotações: leve, para atualizar timeline em tempo real
+    channel = channel.on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'cotacoes_historico' },
+      (payload) => {
+        const evento = payload.new as { cotacao_id?: string; acao?: string };
+        if (evento.cotacao_id) {
+          throttledInvalidate([['cotacao-historico', evento.cotacao_id]]);
         }
-      )
-      // Escutar mudanças em instalações (afeta etapa instalacao_agendada/vistoria_agendada)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'instalacoes',
-        },
-        (payload) => {
-          console.log('[useCotacoesRealtime] Instalação alterada:', payload.eventType);
-          
-          // Invalidar cotações e instalações
-          throttledInvalidate([['cotacoes']]);
-          throttledInvalidate([['instalacoes']]);
-          throttledInvalidate([['instalacoes-disponiveis']]);
-          
-          // Toast para instalação concluída
-          if (payload.eventType === 'UPDATE') {
-            const newData = payload.new as { status?: string };
-            const oldData = payload.old as { status?: string };
-            
-            if (newData.status === 'concluida' && oldData?.status !== 'concluida') {
-              toast.success('✅ Instalação concluída!', { duration: 5000 });
-            }
-          }
+        if (evento.acao === 'visualizada_cliente') {
+          toast.info('👀 Cliente visualizou a cotação!', {
+            description: 'O link público foi acessado agora',
+            duration: 6000,
+          });
         }
-      )
-      // Escutar mudanças em vistorias (afeta etapa vistoria_realizada)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'vistorias',
-        },
-        (payload) => {
-          console.log('[useCotacoesRealtime] Vistoria alterada:', payload.eventType);
-          
-          // Invalidar cotações e vistorias
-          throttledInvalidate([['cotacoes']]);
-          throttledInvalidate([['vistorias']]);
-          throttledInvalidate([['vistorias-mapa']]);
-          throttledInvalidate([['ativacoes']]);
-          
-          // Toast para vistoria concluída
-          if (payload.eventType === 'UPDATE') {
-            const newData = payload.new as { status?: string };
-            const oldData = payload.old as { status?: string };
-            
-            if (newData.status === 'concluida' && oldData?.status !== 'concluida') {
-              toast.success('✅ Vistoria concluída!', { duration: 5000 });
-            }
-          }
+        if (evento.acao === 'plano_escolhido') {
+          toast.info('📋 Cliente escolheu um plano!', {
+            description: 'O cliente selecionou um plano na cotação pública',
+            duration: 5000,
+          });
         }
-      )
-      // Escutar mudanças no histórico de cotações (atualiza timeline em tempo real)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'cotacoes_historico',
-        },
-        (payload) => {
-          console.log('[useCotacoesRealtime] Novo evento no histórico:', payload.new);
-          
-          const evento = payload.new as { cotacao_id?: string; acao?: string; autor_nome?: string };
-          
-          // Invalidar histórico da cotação específica
-          if (evento.cotacao_id) {
-            throttledInvalidate([['cotacao-historico', evento.cotacao_id]]);
-          }
-          
-          // Notificação especial para visualização do cliente
-          if (evento.acao === 'visualizada_cliente') {
-            toast.info('👀 Cliente visualizou a cotação!', {
-              description: 'O link público foi acessado agora',
-              duration: 6000,
-            });
-          }
-          
-          // Notificação para plano escolhido pelo cliente
-          if (evento.acao === 'plano_escolhido') {
-            toast.info('📋 Cliente escolheu um plano!', {
-              description: 'O cliente selecionou um plano na cotação pública',
-              duration: 5000,
-            });
-          }
-        }
-      )
-      // Escutar mudanças em associados (afeta etapa de análise e ativação)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'associados',
-        },
-        (payload) => {
-          console.log('[useCotacoesRealtime] Associado alterado:', payload.eventType);
-          
-          // Invalidar cotações pois a etapa de venda depende do status do associado
-          throttledInvalidate([['cotacoes']]);
-          throttledInvalidate([['ativacoes']]);
-          throttledInvalidate([['propostas-pendentes']]);
-          
-          // Toast para associado ativado
-          const newData = payload.new as { status?: string; nome?: string };
-          const oldData = payload.old as { status?: string };
-          
-          if (newData.status === 'ativo' && oldData?.status !== 'ativo') {
-            const nomeAssociado = newData.nome ? ` - ${newData.nome}` : '';
-            toast.success(`🎉 Associado ativado${nomeAssociado}!`, { duration: 5000 });
-          }
-        }
-      )
-      // Escutar mudanças no histórico de associados (atualiza timeline em tempo real)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'associados_historico',
-        },
-        (payload) => {
-          console.log('[useCotacoesRealtime] Novo evento no histórico do associado:', payload.new);
-          const evento = payload.new as { associado_id?: string };
-          if (evento.associado_id) {
-            throttledInvalidate([['associado-historico-completo', evento.associado_id]]);
-          }
-          throttledInvalidate([['associado-historico-completo']]);
-        }
-      )
-      .subscribe((status) => {
-        console.log('[useCotacoesRealtime] Status da subscription:', status);
-      });
+      }
+    );
+
+    channel.subscribe((status) => {
+      dlog('[useCotacoesRealtime] Status da subscription:', status);
+    });
 
     return () => {
-      console.log('[useCotacoesRealtime] Removendo listeners realtime');
+      dlog('[useCotacoesRealtime] Removendo listeners realtime');
       supabase.removeChannel(channel);
     };
-  }, [queryClient, enabled, throttledInvalidate]);
+  }, [queryClient, enabled, vendedorId, viewScope, throttledInvalidate]);
 }
