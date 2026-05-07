@@ -338,14 +338,8 @@ export function useCotacoesPaginadas(options: UseCotacoesPaginadasOptions) {
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });
-  }
+}
 
-  // Excluir tipos de entrada que pertencem a "Outros Processos"
-  if (excluirTiposEntrada && excluirTiposEntrada.length > 0) {
-    // Inclui linhas onde tipo_entrada é null OU não está na lista
-    const list = excluirTiposEntrada.map((t) => `"${t}"`).join(',');
-    query = query.or(`tipo_entrada.is.null,tipo_entrada.not.in.(${list})`);
-  }
 
 export function useCotacao(id: string | undefined) {
   return useQuery({
