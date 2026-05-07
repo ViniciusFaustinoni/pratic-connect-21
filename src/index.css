@@ -226,6 +226,15 @@
     scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
   }
 
+  /* Hide scrollbar but keep scroll functionality */
+  .scrollbar-hide {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
   .scrollbar-thin::-webkit-scrollbar {
     width: 6px;
     height: 6px;
