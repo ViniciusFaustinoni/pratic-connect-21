@@ -32,6 +32,14 @@ import {
   type UnifiedDocumentUploaderHandle,
 } from '@/components/contratos/UnifiedDocumentUploader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
 const COMBUSTIVEIS = ['Gasolina','Etanol','Flex','Diesel','GNV','Híbrido','Elétrico'];
