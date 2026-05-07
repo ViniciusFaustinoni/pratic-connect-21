@@ -106,6 +106,14 @@ interface VeiculoRowProps {
 
 const VeiculoRow = React.memo(function VeiculoRow({ veiculo, canDelete, onSelect, onDelete, formatCurrency }: VeiculoRowProps) {
   const veiculoStatus = (veiculo.status as StatusVeiculo) || (veiculo.ativo ? 'ativo' : 'cancelado');
+  // Derivação: se está 'instalacao_pendente' mas NÃO há nenhuma instalação criada/agendada,
+  // o veículo na verdade aguarda vistoria/aprovação manual (fluxo sem rastreador) — mostrar label honesto.
+  const instalacoes = (veiculo.instalacoes as Array<{ status: string }> | undefined) || [];
+  const temInstalacaoAtiva = instalacoes.some((i) =>
+    ['pendente', 'agendada', 'em_execucao', 'concluida'].includes(i.status)
+  );
+  const labelOverride =
+    veiculoStatus === 'instalacao_pendente' && !temInstalacaoAtiva ? 'Aguardando Vistoria/Aprovação' : null;
   return (
     <TableRow
       className="cursor-pointer hover:bg-muted/50"
@@ -143,7 +151,7 @@ const VeiculoRow = React.memo(function VeiculoRow({ veiculo, canDelete, onSelect
         </div>
       </TableCell>
       <TableCell>
-        <Badge className={statusColors[veiculoStatus]}>{STATUS_VEICULO_LABELS[veiculoStatus]}</Badge>
+        <Badge className={statusColors[veiculoStatus]}>{labelOverride ?? STATUS_VEICULO_LABELS[veiculoStatus]}</Badge>
       </TableCell>
       {canDelete && (
         <TableCell>
