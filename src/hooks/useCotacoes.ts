@@ -301,6 +301,7 @@ export function useCotacoesPaginadas(options: UseCotacoesPaginadasOptions) {
   const effectiveScope: 'own' | 'team' | 'all' =
     options.viewScope === 'all' || options.viewScope === 'team' ? options.viewScope : 'own';
   const effectiveVendedorId = effectiveScope === 'own' ? options.vendedorId : undefined;
+  const consultorId = effectiveScope !== 'own' ? (options.consultorId || null) : null;
   const page = Math.max(1, options.page ?? 1);
   const pageSize = options.pageSize ?? 50;
   const statusGroup = options.statusGroup ?? 'all';
@@ -311,6 +312,7 @@ export function useCotacoesPaginadas(options: UseCotacoesPaginadasOptions) {
       'paginadas',
       effectiveScope,
       effectiveVendedorId,
+      consultorId,
       search,
       statusGroup,
       page,
@@ -324,10 +326,9 @@ export function useCotacoesPaginadas(options: UseCotacoesPaginadasOptions) {
         page,
         pageSize,
         statusGroup,
+        consultorId,
       }),
     placeholderData: keepPreviousData,
-    // Realtime invalida `['cotacoes']` quando há mudança real;
-    // sem realtime, o user pode dar refresh manual.
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });
