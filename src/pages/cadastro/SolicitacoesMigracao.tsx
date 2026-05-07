@@ -35,9 +35,11 @@ const statusConfig = {
   reprovada: { label: 'Reprovada', icon: XCircle, className: 'bg-destructive/10 text-destructive border-destructive/30' },
 };
 
-export function MigracoesTab() {
+export function MigracoesTab({ scopeProfileId, hideAdminActions = false }: { scopeProfileId?: string; hideAdminActions?: boolean } = {}) {
   const permissions = usePermissions();
-  const canAccess = permissions.isGerencia || permissions.isDiretor || permissions.isAdminMaster || permissions.isDesenvolvedor;
+  const canAccessAdmin = permissions.isGerencia || permissions.isDiretor || permissions.isAdminMaster || permissions.isDesenvolvedor;
+  const consultorReadOnly = !!scopeProfileId || hideAdminActions;
+  const canAccess = canAccessAdmin || consultorReadOnly;
 
   const [filtroStatus, setFiltroStatus] = useState('pendente');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -46,7 +48,7 @@ export function MigracoesTab() {
   const [motivoReprovacao, setMotivoReprovacao] = useState('');
   const [showNovaDialog, setShowNovaDialog] = useState(false);
 
-  const { data: solicitacoes, isLoading } = useSolicitacoesMigracaoList(filtroStatus);
+  const { data: solicitacoes, isLoading } = useSolicitacoesMigracaoList(filtroStatus, scopeProfileId);
   const aprovarMutation = useAprovarMigracao();
   const reprovarMutation = useReprovarMigracao();
 
