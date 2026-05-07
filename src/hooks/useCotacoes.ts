@@ -161,8 +161,9 @@ async function fetchCotacoesCore(params: {
   pageSize?: number;
   statusGroup?: CotacoesStatusGroup;
   consultorId?: string | null;
+  excluirTiposEntrada?: string[];
 }) {
-  const { effectiveScope, effectiveVendedorId, search, page, pageSize, statusGroup, consultorId } = params;
+  const { effectiveScope, effectiveVendedorId, search, page, pageSize, statusGroup, consultorId, excluirTiposEntrada } = params;
 
   let query = supabase
     .from('cotacoes')
