@@ -24,6 +24,10 @@ import { STATUS_SUBSTITUICAO_LABELS, STATUS_SUBSTITUICAO_CORES } from '@/types/s
 import type { StatusSubstituicao } from '@/types/substituicao';
 import { useSolicitacoesTroca, type StatusTroca } from '@/hooks/useSolicitacoesTroca';
 import { ModalDetalhesTroca } from '@/components/troca-titularidade/ModalDetalhesTroca';
+import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Info } from 'lucide-react';
 
 // ============================================
 // TROCA DE TITULARIDADE TAB (nova fonte)
