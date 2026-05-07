@@ -36,7 +36,7 @@ interface EtapaVistoriaProps {
   tipoVistoriaRealizada?: 'autovistoria' | 'agendada' | 'agendada_base';
 }
 
-type ModoVistoria = 'escolha' | 'escolha-local' | 'autovistoria' | 'agendada' | 'escolha-base' | 'agendada-base';
+type ModoVistoria = 'escolha' | 'autovistoria' | 'agendada' | 'escolha-base' | 'agendada-base';
 
 export function EtapaVistoria({ 
   cotacaoId, 
