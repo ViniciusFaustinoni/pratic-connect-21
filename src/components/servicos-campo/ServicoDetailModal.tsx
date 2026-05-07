@@ -225,7 +225,7 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
             </div>
           </DialogHeader>
 
-          <ScrollArea className="flex-1">
+          <div className="flex-1 min-h-0 overflow-y-auto">
             <Tabs defaultValue="resumo" className="w-full">
               <div className="px-6 pt-3 pb-0 sticky top-0 bg-background/95 backdrop-blur z-20 border-b">
                 <TabsList className="h-10 w-full justify-start gap-1 bg-transparent p-0 overflow-x-auto">
@@ -390,7 +390,7 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
                 )}
               </TabsContent>
             </Tabs>
-          </ScrollArea>
+          </div>
         </DialogContent>
       </Dialog>
 
