@@ -575,9 +575,38 @@ type TabKey = typeof TAB_KEYS[number];
 export default function ProcessosOperacionais() {
   const { user, profile } = useAuth();
   const permissions = usePermissions();
-  const scopeToSelf = permissions.isVendedorOnly;
+
+  // Quem vê tudo: diretoria, gestão comercial, super admin e Cadastro
+  const canSeeAll =
+    permissions.isDiretor ||
+    permissions.isAdminMaster ||
+    permissions.isDesenvolvedor ||
+    permissions.isGerente ||
+    permissions.isSupervisorVendas ||
+    !!permissions.isAnalistaCadastro ||
+    !!permissions.isCoordenadorMonitoramento ||
+    !!permissions.isAnalistaMonitoramento;
+
+  const scopeToSelf = !canSeeAll;
   const scopeProfileId = scopeToSelf ? profile?.id : undefined;
   const scopeAuthUserId = scopeToSelf ? user?.id : undefined;
+
+  // Modo do modal de troca por papel
+  const isCadastro = !!permissions.isAnalistaCadastro;
+  const isMonitoramento = !!permissions.isCoordenadorMonitoramento || !!permissions.isAnalistaMonitoramento;
+  const modoUsuario: 'cadastro' | 'monitoramento' | 'readonly' | 'auto' =
+    permissions.isDiretor || permissions.isAdminMaster || permissions.isDesenvolvedor ||
+    permissions.isGerente || permissions.isSupervisorVendas
+      ? 'auto'
+      : isCadastro && !isMonitoramento
+        ? 'cadastro'
+        : isMonitoramento && !isCadastro
+          ? 'monitoramento'
+          : isCadastro && isMonitoramento
+            ? 'auto'
+            : 'readonly';
+
+  const podeVerSaudeSga = isCadastro || canSeeAll;
 
   const { data: counts } = useProcessosCounts(
     scopeToSelf ? { profileId: scopeProfileId, authUserId: scopeAuthUserId } : undefined
