@@ -485,116 +485,25 @@ export default function ConfiguracoesSistema() {
         </AlertDescription>
       </Alert>
 
-      {/* Card destacado: FIPE Menor */}
-      {fipeMenorConfig && (() => {
-        const limiteCarro = configuracoes?.find(c => c.chave === 'fipe_menor_limite_carro');
-        const limiteMoto = configuracoes?.find(c => c.chave === 'fipe_menor_limite_moto');
-        const limiteMinimo = configuracoes?.find(c => c.chave === 'fipe_menor_limite_minimo');
-        return (
-          <Card className="border-2 border-primary/30 bg-primary/5">
-            <CardContent className="py-5 px-6 space-y-5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                    <TrendingDown className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-foreground">Regra FIPE Menor 1%</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {fipeMenorConfig.descricao || 'Permite enquadrar veículos em faixa de preço inferior com desconto de 1% na FIPE'}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <Badge variant={fipeMenorConfig.valor === 'true' ? 'default' : 'secondary'}>
-                    {fipeMenorConfig.valor === 'true' ? 'Ativa' : 'Desativada'}
-                  </Badge>
-                  <Switch
-                    checked={fipeMenorConfig.valor === 'true'}
-                    onCheckedChange={(checked) => {
-                      updateConfig.mutate({ chave: 'fipe_menor_ativo', valor: String(checked) });
-                    }}
-                  />
-                </div>
-              </div>
-
-              {fipeMenorConfig.valor === 'true' && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-primary/20">
-                  {limiteMinimo && (
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium">FIPE mínimo (geral)</Label>
-                      <div className="flex items-center gap-2">
-                        <div className="relative flex-1">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">R$</span>
-                          <Input
-                            type="number"
-                            step="100"
-                            value={editedValues['fipe_menor_limite_minimo'] ?? limiteMinimo.valor ?? ''}
-                            onChange={(e) => handleValueChange('fipe_menor_limite_minimo', e.target.value)}
-                            className="pl-10 h-9"
-                          />
-                        </div>
-                        {editedValues['fipe_menor_limite_minimo'] !== undefined && editedValues['fipe_menor_limite_minimo'] !== limiteMinimo.valor && (
-                          <Button size="sm" onClick={() => handleSave('fipe_menor_limite_minimo', limiteMinimo.valor)} disabled={updateConfig.isPending}>
-                            <Save className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-muted-foreground">Abaixo desse valor a regra não aparece.</p>
-                    </div>
-                  )}
-                  {limiteCarro && (
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium">Limite máximo — Carros</Label>
-                      <div className="flex items-center gap-2">
-                        <div className="relative flex-1">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">R$</span>
-                          <Input
-                            type="number"
-                            step="1000"
-                            value={editedValues['fipe_menor_limite_carro'] ?? limiteCarro.valor ?? ''}
-                            onChange={(e) => handleValueChange('fipe_menor_limite_carro', e.target.value)}
-                            className="pl-10 h-9"
-                          />
-                        </div>
-                        {editedValues['fipe_menor_limite_carro'] !== undefined && editedValues['fipe_menor_limite_carro'] !== limiteCarro.valor && (
-                          <Button size="sm" onClick={() => handleSave('fipe_menor_limite_carro', limiteCarro.valor)} disabled={updateConfig.isPending}>
-                            <Save className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-muted-foreground">Carros acima desse valor não podem solicitar.</p>
-                    </div>
-                  )}
-                  {limiteMoto && (
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium">Limite máximo — Motos</Label>
-                      <div className="flex items-center gap-2">
-                        <div className="relative flex-1">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">R$</span>
-                          <Input
-                            type="number"
-                            step="500"
-                            value={editedValues['fipe_menor_limite_moto'] ?? limiteMoto.valor ?? ''}
-                            onChange={(e) => handleValueChange('fipe_menor_limite_moto', e.target.value)}
-                            className="pl-10 h-9"
-                          />
-                        </div>
-                        {editedValues['fipe_menor_limite_moto'] !== undefined && editedValues['fipe_menor_limite_moto'] !== limiteMoto.valor && (
-                          <Button size="sm" onClick={() => handleSave('fipe_menor_limite_moto', limiteMoto.valor)} disabled={updateConfig.isPending}>
-                            <Save className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-muted-foreground">Motos acima desse valor não podem solicitar.</p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        );
-      })()}
+      {/* Card destacado: Redução de Cota (Regra de 1%) — agora centralizada */}
+      <Card className="border-2 border-primary/30 bg-primary/5">
+        <CardContent className="py-5 px-6 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+              <TrendingDown className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-foreground">Redução de Cota (Regra de 1%)</h3>
+              <p className="text-sm text-muted-foreground">
+                Ativação, limites FIPE, exceções e dupla aprovação foram unificados em uma única página.
+              </p>
+            </div>
+          </div>
+          <Button asChild size="sm">
+            <a href="/diretoria/reducao-cota">Abrir configuração</a>
+          </Button>
+        </CardContent>
+      </Card>
 
       {availableCategories.length === 0 ? (
         <Card>
