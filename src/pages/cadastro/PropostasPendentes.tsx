@@ -59,16 +59,35 @@ function getStatusBadge(
   temDocPendente?: boolean,
   instalacaoInfo?: any,
   tipoEtapa?: string | null,
+  proposta?: { plano_tem_roubo_furto?: boolean; vistoria?: { status?: string } | null } | null,
 ) {
-  const aguardandoDoc = (associadoStatus === 'documentacao_pendente' || temDocPendente) && status === 'assinado';
-  
-  if (aguardandoDoc) {
+  // Aguard. Doc só quando realmente há documento pendente do cliente
+  if (temDocPendente && status === 'assinado') {
     return <Badge className="bg-orange-500/15 text-orange-500 border-orange-500/30 text-[10px] px-1.5">Aguard. Doc</Badge>;
   }
 
   // NOVO: badge "Agendado" para propostas em fase de pré-execução
   if (status === 'assinado' && tipoEtapa === 'agendamento_confirmado') {
     return <Badge className="bg-blue-500/15 text-blue-500 border-blue-500/30 text-[10px] px-1.5">Agendado</Badge>;
+  }
+
+  // Plano com R&F: docs aprovados mas vistoria ainda não concluída/aprovada
+  if (
+    status === 'assinado' &&
+    proposta?.plano_tem_roubo_furto &&
+    (!proposta?.vistoria || !['concluida', 'aprovada', 'aprovada_ressalvas'].includes(proposta.vistoria?.status || ''))
+  ) {
+    return <Badge className="bg-purple-500/15 text-purple-500 border-purple-500/30 text-[10px] px-1.5">Aguard. Vistoria</Badge>;
+  }
+
+  // Vistoria aprovada mas instalação ainda não concluída
+  if (
+    status === 'assinado' &&
+    proposta?.plano_tem_roubo_furto &&
+    proposta?.vistoria && ['concluida', 'aprovada', 'aprovada_ressalvas'].includes(proposta.vistoria.status || '') &&
+    (!instalacaoInfo || instalacaoInfo?.status !== 'concluida')
+  ) {
+    return <Badge className="bg-blue-500/15 text-blue-500 border-blue-500/30 text-[10px] px-1.5">Aguard. Instalação</Badge>;
   }
 
   const configs: Record<string, { label: string; className: string }> = {
@@ -382,7 +401,7 @@ export default function PropostasPendentes() {
                       NOVO
                     </Badge>
                   )}
-                  {getStatusBadge(proposta.status, proposta.associado_status, proposta.tem_documento_pendente, proposta.instalacao_info, proposta.tipo_etapa_analise)}
+                  {getStatusBadge(proposta.status, proposta.associado_status, proposta.tem_documento_pendente, proposta.instalacao_info, proposta.tipo_etapa_analise, proposta)}
                   {(proposta.plano?.nome || proposta.plano_nome) && (
                     <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-5 max-w-[60%] truncate">
                       {proposta.plano?.nome || proposta.plano_nome}
