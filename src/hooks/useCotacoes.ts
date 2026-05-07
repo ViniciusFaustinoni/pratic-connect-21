@@ -216,8 +216,9 @@ async function fetchCotacoesCore(params: {
   }
 
   if (search) {
-
+    const safe = search.replace(/[,()]/g, '');
     const like = `%${safe}%`;
+
 
     const { data: leadsMatch } = await supabase
       .from('leads')
