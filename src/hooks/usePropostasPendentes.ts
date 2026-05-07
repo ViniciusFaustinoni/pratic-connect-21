@@ -166,6 +166,8 @@ export interface PropostaPendente {
    * Detectado inspecionando os nomes das coberturas do plano via regex /roubo|furto/i.
    */
   plano_tem_roubo_furto: boolean;
+  /** True quando o Cadastro já aprovou a proposta (flag em contratos.cadastro_aprovado). */
+  cadastro_aprovado: boolean;
 }
 
 /**
