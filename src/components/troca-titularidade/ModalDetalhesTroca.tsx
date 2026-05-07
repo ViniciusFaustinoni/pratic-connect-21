@@ -98,7 +98,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
         <DialogHeader>
           <DialogTitle>Solicitação de Troca de Titularidade</DialogTitle>
           <DialogDescription>
-            {modo === 'cadastro' ? 'Análise pelo Cadastro' : 'Análise pelo Monitoramento'}
+            {modo === 'cadastro' ? 'Análise pelo Cadastro' : modo === 'monitoramento' ? 'Análise pelo Monitoramento' : 'Acompanhamento da solicitação'}
           </DialogDescription>
         </DialogHeader>
 
