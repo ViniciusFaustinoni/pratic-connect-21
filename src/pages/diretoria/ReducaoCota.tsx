@@ -20,7 +20,9 @@ import { formatarMoeda } from '@/utils/format';
 const CHAVES = [
   // Ativação + limites para a Regra do 1% (FIPE menor)
   'fipe_menor_ativo',
-  'fipe_menor_limite_minimo',
+  'fipe_menor_limite_minimo',        // legado (= mínimo carro)
+  'fipe_menor_limite_minimo_carro',
+  'fipe_menor_limite_minimo_moto',
   'fipe_menor_limite_carro',
   'fipe_menor_limite_moto',
   // Cotas/exceções por desempenho do consultor
@@ -43,7 +45,8 @@ interface FaixaVenda { min: number; max: number | null; permitidas: number; }
 
 interface State {
   fipe_menor_ativo: boolean;
-  fipe_menor_limite_minimo: string;
+  fipe_menor_limite_minimo_carro: string;
+  fipe_menor_limite_minimo_moto: string;
   fipe_menor_limite_carro: string;
   fipe_menor_limite_moto: string;
 
@@ -64,7 +67,8 @@ interface State {
 
 const DEFAULTS: State = {
   fipe_menor_ativo: false,
-  fipe_menor_limite_minimo: '30000',
+  fipe_menor_limite_minimo_carro: '30000',
+  fipe_menor_limite_minimo_moto: '9000',
   fipe_menor_limite_carro: '120000',
   fipe_menor_limite_moto: '27000',
 
@@ -104,7 +108,10 @@ function useReducaoCotaConfig() {
 
       const out: State = {
         fipe_menor_ativo: map.fipe_menor_ativo === 'true',
-        fipe_menor_limite_minimo: map.fipe_menor_limite_minimo ?? DEFAULTS.fipe_menor_limite_minimo,
+        fipe_menor_limite_minimo_carro:
+          map.fipe_menor_limite_minimo_carro ?? map.fipe_menor_limite_minimo ?? DEFAULTS.fipe_menor_limite_minimo_carro,
+        fipe_menor_limite_minimo_moto:
+          map.fipe_menor_limite_minimo_moto ?? DEFAULTS.fipe_menor_limite_minimo_moto,
         fipe_menor_limite_carro: map.fipe_menor_limite_carro ?? DEFAULTS.fipe_menor_limite_carro,
         fipe_menor_limite_moto: map.fipe_menor_limite_moto ?? DEFAULTS.fipe_menor_limite_moto,
 
@@ -157,7 +164,9 @@ export default function ReducaoCota() {
     try {
       const updates: Record<string, string> = {
         fipe_menor_ativo: String(s.fipe_menor_ativo),
-        fipe_menor_limite_minimo: s.fipe_menor_limite_minimo,
+        fipe_menor_limite_minimo: s.fipe_menor_limite_minimo_carro, // mantém legado em sincronia
+        fipe_menor_limite_minimo_carro: s.fipe_menor_limite_minimo_carro,
+        fipe_menor_limite_minimo_moto: s.fipe_menor_limite_minimo_moto,
         fipe_menor_limite_carro: s.fipe_menor_limite_carro,
         fipe_menor_limite_moto: s.fipe_menor_limite_moto,
 
@@ -244,19 +253,32 @@ export default function ReducaoCota() {
           </div>
 
           {s.fipe_menor_ativo && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t border-primary/20">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-primary/20">
               <div className="space-y-1.5">
-                <Label className="text-xs">FIPE mínimo (geral)</Label>
+                <Label className="text-xs">FIPE mínimo — Carros</Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">R$</span>
                   <Input
                     type="number" step="100"
                     className="pl-10 h-9"
-                    value={s.fipe_menor_limite_minimo}
-                    onChange={(e) => setS(p => ({ ...p, fipe_menor_limite_minimo: e.target.value }))}
+                    value={s.fipe_menor_limite_minimo_carro}
+                    onChange={(e) => setS(p => ({ ...p, fipe_menor_limite_minimo_carro: e.target.value }))}
                   />
                 </div>
-                <p className="text-[11px] text-muted-foreground">Abaixo desse valor a regra não aparece.</p>
+                <p className="text-[11px] text-muted-foreground">Carros abaixo desse valor não veem a regra.</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">FIPE mínimo — Motos</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">R$</span>
+                  <Input
+                    type="number" step="100"
+                    className="pl-10 h-9"
+                    value={s.fipe_menor_limite_minimo_moto}
+                    onChange={(e) => setS(p => ({ ...p, fipe_menor_limite_minimo_moto: e.target.value }))}
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground">Motos abaixo desse valor não veem a regra.</p>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Limite máximo — Carros</Label>
