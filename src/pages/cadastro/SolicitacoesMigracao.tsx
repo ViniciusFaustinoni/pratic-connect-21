@@ -314,7 +314,7 @@ export function MigracoesTab({ scopeProfileId, hideAdminActions = false }: { sco
               </Tabs>
 
               {/* Action buttons */}
-              {selected.status === 'pendente' && (
+              {selected.status === 'pendente' && !consultorReadOnly && (
                 <div className="flex gap-3 pt-4 border-t">
                   <Button
                     className="flex-1"
