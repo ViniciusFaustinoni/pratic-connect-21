@@ -834,29 +834,8 @@ export default function Cotacoes() {
         </div>
       </div>
 
-      {/* Switcher externo: Cotações vs Outros Processos */}
-      <Tabs value={outerTab} onValueChange={(v) => setOuterTab(v as 'cotacoes' | 'outros')}>
-        <TabsList className="grid w-full max-w-lg grid-cols-2">
-          <TabsTrigger value="cotacoes" className="gap-2">
-            Cotações
-            {funilCounts && funilCounts.total > 0 && (
-              <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
-                {funilCounts.total}
-              </Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="outros" className="gap-2">
-            Outros Processos
-            <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
-              {outrosCount}
-            </Badge>
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="outros" className="mt-4">
-          <OutrosProcessosPanel />
-        </TabsContent>
-
+      {/* Aba "Outros Processos" removida — trocas/substituições/migrações/inclusões agora vivem em Cadastro › Processos */}
+      <Tabs value="cotacoes">
         <TabsContent value="cotacoes" className="mt-4 space-y-6">
 
       {/* Stats Bar - Pills flutuantes */}
