@@ -1376,6 +1376,7 @@ export function useProposta(contratoId: string | undefined) {
         ...contrato,
         cadastro_aprovado: (contrato as any).cadastro_aprovado ?? false,
         tipo_etapa_analise: tipoEtapaAnaliseSingle,
+        tempo_referencia: (contrato as any).updated_at || (contrato as any).data_assinatura || null,
         associado,
         plano,
         plano_nome: planoNome,
