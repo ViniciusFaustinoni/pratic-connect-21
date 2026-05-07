@@ -102,7 +102,7 @@ function TrocaTitularidadeTab() {
                         </div>
                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
                           <Car className="h-3 w-3" />
-                          {s.veiculo?.marca} {s.veiculo?.modelo} {s.veiculo?.ano} • Placa {s.veiculo?.placa}
+                          {s.veiculo?.marca} {s.veiculo?.modelo} {s.veiculo?.ano_modelo ?? s.veiculo?.ano_fabricacao ?? ''} • Placa {s.veiculo?.placa}
                         </div>
                         <p className="text-xs text-muted-foreground">
                           Criada em {new Date(s.created_at).toLocaleString('pt-BR')}

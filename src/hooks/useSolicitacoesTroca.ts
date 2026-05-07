@@ -43,7 +43,7 @@ export interface SolicitacaoTroca {
   analise_previa_resultado?: any;
   analise_previa_em?: string | null;
   associado_antigo?: { id: string; nome: string; cpf: string | null; email: string | null; telefone: string | null } | null;
-  veiculo?: { id: string; marca: string; modelo: string; ano: number; placa: string } | null;
+  veiculo?: { id: string; marca: string; modelo: string; ano_modelo: number | null; ano_fabricacao: number | null; placa: string } | null;
   cotacao?: { id: string; numero: string | null; token_publico: string | null; status: string } | null;
 }
 
@@ -56,7 +56,7 @@ export function useSolicitacoesTroca(filtroStatus?: StatusTroca[]) {
         .select(`
           *,
           associado_antigo:associados!associado_antigo_id(id, nome, cpf, email, telefone),
-          veiculo:veiculos!veiculo_id(id, marca, modelo, ano, placa),
+          veiculo:veiculos!veiculo_id(id, marca, modelo, ano_modelo, ano_fabricacao, placa),
           cotacao:cotacoes!cotacao_id(id, numero, token_publico, status)
         `)
         .order('created_at', { ascending: false });
@@ -79,7 +79,7 @@ export function useSolicitacaoTroca(id: string | undefined) {
         .select(`
           *,
           associado_antigo:associados!associado_antigo_id(id, nome, cpf, email, telefone, status),
-          veiculo:veiculos!veiculo_id(id, marca, modelo, ano, placa),
+          veiculo:veiculos!veiculo_id(id, marca, modelo, ano_modelo, ano_fabricacao, placa),
           cotacao:cotacoes!cotacao_id(id, numero, token_publico, status, valor_total_mensal)
         `)
         .eq('id', id)
