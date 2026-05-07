@@ -419,6 +419,33 @@ serve(async (req) => {
             console.warn('[aprovar-proposta] Exceção não-bloqueante ao gerar link de vistoria:', e);
           }
         }
+
+        // Fallback: se nenhuma instalação foi criada acima (ex.: tipo_vistoria='agendada' sem
+        // vistoria_completa_*), delegar para criar-instalacao-pos-pagamento que já lê os campos
+        // vistoria_* corretos. É idempotente (checa instalação existente) e respeita aprovação.
+        if (!instalacaoCriadaId && contrato.cotacao_id) {
+          try {
+            const { data: instResp, error: instErr } = await supabase.functions.invoke('criar-instalacao-pos-pagamento', {
+              body: { cotacaoId: contrato.cotacao_id, skipPaymentCheck: true },
+            });
+            if (instErr) {
+              console.warn('[aprovar-proposta] Fallback criar-instalacao-pos-pagamento falhou:', instErr);
+            } else if (instResp?.instalacaoId) {
+              instalacaoCriadaId = instResp.instalacaoId;
+              console.log(`[aprovar-proposta] Instalação criada via fallback: ${instalacaoCriadaId}`);
+              // gerar link público
+              try {
+                await supabase.functions.invoke('gerar-link-vistoria-publica', {
+                  body: { instalacao_id: instalacaoCriadaId, cotacao_id: contrato.cotacao_id, criado_por: aprovado_por || null },
+                });
+              } catch (e) {
+                console.warn('[aprovar-proposta] Falha não-bloqueante ao gerar link (fallback):', e);
+              }
+            }
+          } catch (e) {
+            console.warn('[aprovar-proposta] Exceção no fallback criar-instalacao-pos-pagamento:', e);
+          }
+        }
       } else if (!veiculoPrecisaRastreador) {
         supabase.functions.invoke('notificar-cliente', {
           body: { tipo: 'cobertura_total_ativada', associado_id: associadoId, dados: { placa: veiculo.placa || '', marca: (veiculo as any).marca || '', modelo: veiculo.modelo || '' } },
