@@ -86,6 +86,7 @@ Deno.serve(async (req) => {
     const filtro: Record<string, unknown> = {};
     if (placa) filtro.placa = placa;
     if (isImei) filtro.imei = buscaRaw;
+    if (cpfCnpj) filtro.cpfCnpjCliente = cpfCnpj;
 
     const endpointUsado = '/obterDadosVeiculo/';
     let achado: any = null;
