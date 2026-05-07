@@ -1,30 +1,48 @@
 ## Objetivo
 
-Substituir o HTML do termo de cancelamento enviado na **troca de titularidade** pelo layout idêntico ao PDF oficial (`TERMO_DE_CANCELAMENTO_PRATICCAR.pdf`).
+Permitir que **consultores (vendedor / vendedor externo / agência)** acessem `/cadastro/processos` para acompanhar **somente as próprias solicitações** (titularidade, substituições, migrações e inclusões que eles originaram).
 
-## Arquivo
+## 1. Sidebar — adicionar item para consultor
 
-`supabase/functions/enviar-termo-cancelamento-troca/index.ts` (linhas 51–78).
+`src/components/layout/AppSidebar.tsx`, dentro do `useMemo` `visibleGroups` (após o bloco `isVendedorOnly` em ~640):
 
-## Conteúdo do termo (texto fixo, igual ao PDF)
+- Quando `permissions.isVendedorOnly` (ou seja, vendedor sem outros papéis privilegiados), e o grupo `cadastro` foi removido pelo filtro de `canManageCadastro`, **injetar um grupo `cadastro` reduzido** contendo apenas `{ title: 'Processos', url: '/cadastro/processos', icon: ClipboardList }`.
+- Se o grupo `cadastro` já existe (analista de cadastro etc.), apenas garantir que o item Processos está presente — nenhuma mudança necessária.
 
-1. Logo Praticcar centralizada no topo.
-2. Título: **TERMO DE CANCELAMENTO**.
-3. Parágrafo de qualificação: "Eu, **{nome}**, portador da identidade de n° **{rg}** inscrito no CPF sob o n° **{cpf}**, residente ao endereço **{endereco_completo}**."
-4. "Solicito o cancelamento de todos os benefícios oferecidos pela Praticcar, inclusive o benefício da proteção veicular do veículo **{marca modelo ano}**, placa **{placa}**;"
-5. Cláusula do rastreador (texto literal do PDF, com R$ 400,00 / fiel depositário / regulamento).
-6. Caixa "motivo:" preenchida automaticamente com `Troca de titularidade para {novo_titular.nome} (CPF {novo_titular.cpf}).`
-7. "Data: dd/mm/aaaa" e linha de "ASSINATURA DO ASSOCIADO".
-8. Rodapé: site, telefone, redes sociais e endereço (Av. das Américas, 19005, Recreio – RJ).
+Isto evita conceder `canManageCadastro` para vendedores (que abriria o módulo inteiro).
 
-## Mudanças no código
+## 2. Página — escopo por usuário
 
-1. Buscar campos extras do associado antigo: `rg, logradouro, numero, complemento, bairro, cidade, uf, cep` (já existem na tabela `associados`).
-2. Montar `endereco_completo` concatenando esses campos (ignora vazios).
-3. Trocar a string `html` (linhas 67–78) pelo template novo com CSS A4, fontes Arial, caixa do motivo, footer e logo via `https://app.praticcar.org/logos/logo-full-light.png`.
-4. Manter todo o restante do fluxo intacto: criação no Autentique, `PF_FACIAL`, salvamento de `termo_cancelamento_autentique_id/url/enviado_em`, disparo do WhatsApp.
+`src/pages/cadastro/ProcessosOperacionais.tsx`:
 
-## Validação
+Adicionar `useAuth()` + `usePermissions()`. Calcular `scopeToSelf = permissions.isVendedorOnly` (e variantes externo/agência). Quando true:
 
-- Re-disparar o termo da solicitação `b4c8b25d…` (KREITON ← MARCOS, placa KOU6D37) e conferir o preview no Autentique antes de assinar.
-- Garantir que campos faltantes apareçam como `___` (não como `null/undefined`).
+- Banner discreto no topo: "Mostrando apenas suas solicitações."
+- Aplicar filtros por usuário em **todas** as 4 fontes:
+
+| Tabela | Coluna | Tipo de FK |
+|---|---|---|
+| `solicitacoes_troca_titularidade` | `criado_por` | profiles.id |
+| `substituicoes_veiculo` | `criado_por` | auth.users.id |
+| `solicitacoes_migracao` | `consultor_id` | profiles.id |
+| `cotacoes` (inclusões) | `vendedor_id` | auth.users.id |
+
+Como `criado_por`/`consultor_id` referenciam `profiles.id`, e `vendedor_id`/`substituicoes.criado_por` referenciam `auth.users.id`, precisamos de:
+- `authUserId = user.id`
+- `profileId = profile?.id` (já vem do `useAuth`)
+
+Aplicar nos 5 pontos:
+1. `useProcessosCounts()` (linha 491–522): adicionar `.eq('criado_por', profileId)` em titularidade; `.eq('criado_por', authUserId)` em substituições; `.eq('consultor_id', profileId)` em migrações; `.eq('vendedor_id', authUserId)` em inclusões — **somente quando `scopeToSelf`**.
+2. `useSolicitacoesTroca` (em `src/hooks/useSolicitacoesTroca.ts`): adicionar parâmetro opcional `criadoPorProfileId` que aplica `.eq('criado_por', criadoPorProfileId)` quando informado. Passar do componente `TrocaTitularidadeTab`.
+3. `SubstituicoesTab`: filtrar `substituicoes` em memória por `criado_por === authUserId` (o hook `useSubstituicoes()` já traz tudo; filtramos client-side para evitar nova assinatura).
+4. `MigracoesTab` (em `src/pages/cadastro/SolicitacoesMigracao.tsx`): adicionar prop `consultorIdScope?: string` ou filtrar via contexto. Mais simples: passar via `useAuth` dentro do próprio componente quando `scopeToSelf` (vamos checar a estrutura).
+5. `InclusoesTab` (linhas 314–484): adicionar `.eq('vendedor_id', authUserId)` na query `cotacoes` quando `scopeToSelf`.
+
+## 3. Sem ajuste de RLS
+
+As tabelas já permitem SELECT autenticado (RLS atuais retornam `true` para `authenticated`), e o filtro client-side é apenas UX. Não há vazamento porque a UI não expõe ações destrutivas — só leitura. Mantemos o comportamento existente para perfis com `canManageCadastro` (veem tudo).
+
+## 4. Validação
+
+- Logar como diretor: vê tudo (sem alterações).
+- Logar como consultor (vendedor sem privilégios): vê item "Processos" no menu Cadastro (apenas esse), abre `/cadastro/processos` com banner "Mostrando apenas suas solicitações", contadores e listas filtradas pelas 4 fontes.
