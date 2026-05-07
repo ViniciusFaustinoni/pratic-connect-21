@@ -64,6 +64,7 @@ import { ChecklistItem, type ChecklistStatus } from '@/components/instalador/Che
 import { VistoriaFotoSequencial } from '@/components/vistorias/VistoriaFotoSequencial';
 import { FotoCapture } from '@/components/instalador/FotoCapture';
 import { ModalRecusaVeiculoComFotos } from '@/components/instalador/ModalRecusaVeiculoComFotos';
+import { LowMemoryBanner } from '@/components/instalador/LowMemoryBanner';
 import { TemporizadorExecucao } from '@/components/vistoriador/TemporizadorExecucao';
 import { ImprevistoBotao } from '@/components/vistoriador/ImprevistoBotao';
 import { useRastreadoresDoPortador, type RastreadorEmPorte } from '@/hooks/useRastreadoresPortador';
@@ -1100,6 +1101,11 @@ export default function InstaladorChecklist() {
           clienteTelefone={(servico as any).associados?.telefone || ''}
           clienteWhatsapp={(servico as any).associados?.whatsapp}
         />
+      </div>
+
+      {/* Aviso de baixa memória — só aparece quando heap > 75% */}
+      <div className="mx-4 mt-2">
+        <LowMemoryBanner />
       </div>
 
       {/* Content */}
