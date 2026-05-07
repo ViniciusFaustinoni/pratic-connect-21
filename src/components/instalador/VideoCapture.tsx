@@ -145,10 +145,19 @@ export function VideoCapture({
       const ext = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
       const baseType = mimeType.startsWith('video/mp4') ? 'video/mp4' : 'video/webm';
       
-      // Cap de bitrate para evitar arquivos gigantes em gravações longas (~12 MB/min).
+      // Cap de bitrate adaptativo: em modo memória crítica usa 1 Mbps
+      // (vídeo de 2 min ~15 MB) para reduzir blob no heap antes do upload.
+      let bitrate = 1_500_000;
+      try {
+        const memInfo = (performance as unknown as { memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
+        if (memInfo && memInfo.jsHeapSizeLimit && memInfo.usedJSHeapSize / memInfo.jsHeapSizeLimit > 0.75) {
+          bitrate = 1_000_000;
+          console.warn('[VideoCapture] heap > 75% — bitrate reduzido para 1 Mbps');
+        }
+      } catch { /* ignore */ }
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType,
-        videoBitsPerSecond: 1_500_000,
+        videoBitsPerSecond: bitrate,
       });
       mediaRecorderRef.current = mediaRecorder;
       
