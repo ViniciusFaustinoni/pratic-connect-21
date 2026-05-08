@@ -483,6 +483,48 @@ export function useUpdateRastreadorStatus() {
         .single();
 
       if (error) throw error;
+
+      // 4. Se virou 'instalado' com veiculo_id e a plataforma é Softruck,
+      // dispara ativação automática (cria veículo + vincula device + cria/vincula usuário).
+      // Cobre TODOS os fluxos de vinculação (não só useAtivarRastreador).
+      const veiculoFinal = (updateData.veiculo_id ?? rastreadorAtual?.veiculo_id) || null;
+      if (
+        status === 'instalado' &&
+        veiculoFinal &&
+        rastreadorAtual?.plataforma === 'softruck' &&
+        rastreadorAtual?.imei
+      ) {
+        try {
+          const { data: veicAssoc } = await supabase
+            .from('veiculos')
+            .select('associado_id, associados:associado_id(email)')
+            .eq('id', veiculoFinal)
+            .maybeSingle();
+
+          const associadoId = (veicAssoc as any)?.associado_id || null;
+          const associadoEmail = (veicAssoc as any)?.associados?.email || undefined;
+
+          console.log('[useUpdateRastreadorStatus] Disparando ativação Softruck pós-vínculo', {
+            imei: rastreadorAtual.imei, veiculoId: veiculoFinal, associadoId,
+          });
+
+          const { error: ativErr } = await supabase.functions.invoke('softruck-ativar-dispositivo', {
+            body: {
+              imei: rastreadorAtual.imei,
+              veiculoId: veiculoFinal,
+              associadoId,
+              associadoEmail,
+            },
+          });
+          if (ativErr) {
+            console.error('[useUpdateRastreadorStatus] Falha ativação Softruck (não bloqueia):', ativErr);
+            toast.warning('Vínculo local OK, mas ativação na Softruck falhou. Reprocesse no drawer do rastreador.');
+          }
+        } catch (e) {
+          console.error('[useUpdateRastreadorStatus] Exceção ativação Softruck:', e);
+        }
+      }
+
       return result;
     },
     onSuccess: (_, variables) => {
