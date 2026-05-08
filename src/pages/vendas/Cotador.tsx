@@ -352,6 +352,11 @@ export default function CotadorPage() {
   const [showSGAModal, setShowSGAModal] = useState(false);
   const verificarVeiculoSGA = useVerificarVeiculoSGA();
 
+  // Estado para modal de placa pertencente a outro associado (base local)
+  const [placaOutroAssocInfo, setPlacaOutroAssocInfo] = useState<PlacaOutroAssociadoInfo | null>(null);
+  const [showPlacaOutroAssocModal, setShowPlacaOutroAssocModal] = useState(false);
+  const verificarPlacaOutroAssoc = useVerificarPlacaOutroAssociado();
+
   // Município de atendimento
   const [municipioBusca, setMunicipioBusca] = useState('');
   const [municipioSelecionado, setMunicipioSelecionado] = useState<{
