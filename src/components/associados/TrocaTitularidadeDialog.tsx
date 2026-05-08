@@ -281,7 +281,7 @@ export function TrocaTitularidadeDialog({
 
         <div className="flex justify-end gap-2 pt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={criar.isPending}>Cancelar</Button>
-          <Button onClick={handleSubmit} disabled={criar.isPending || !veiculoId}>
+          <Button onClick={handleSubmit} disabled={criar.isPending || !veiculoId || sgaTransitorioVisivel}>
             {criar.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Users className="h-4 w-4 mr-2" />}
             Criar Solicitação
           </Button>
