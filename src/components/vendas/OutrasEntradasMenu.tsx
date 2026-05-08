@@ -13,6 +13,7 @@ import { useInclusaoBloqueioDebito } from '@/hooks/useInclusaoBloqueioDebito';
 import { TrocaTitularidadeDialog } from '@/components/associados/TrocaTitularidadeDialog';
 import { MigracaoDiretaDialog } from '@/components/cadastro/MigracaoDiretaDialog';
 import { DebitosCard } from '@/components/cotacao/DebitosCard';
+import { SgaTransientAlert } from '@/components/cotacao/SgaTransientAlert';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
