@@ -64,7 +64,9 @@ type SoftruckOperation =
   | 'tracking'
   | 'trajectories'
   | 'trajectories-geom'
-  | 'trajectories-by-keys';
+  | 'trajectories-by-keys'
+  // Roles
+  | 'listar-roles';
 
 // ========== AUTENTICAÇÃO COM RETRY ==========
 
