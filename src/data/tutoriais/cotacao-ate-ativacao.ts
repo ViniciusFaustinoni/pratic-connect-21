@@ -11,6 +11,7 @@ import associadoDocumentos from '@/assets/tutoriais/associado-documentos.png';
 import associadoVistoriaBaseData from '@/assets/tutoriais/associado-vistoria-base-data.png';
 import associadoAssinaturaEmail from '@/assets/tutoriais/associado-assinatura-email.png';
 import associadoAgendamentoTecnico from '@/assets/tutoriais/associado-agendamento-tecnico.png';
+import associadoPagamentoPix from '@/assets/tutoriais/associado-pagamento-pix.png';
 
 export const cotacaoAteAtivacao: Tutorial = {
   id: 'cotacao-ate-ativacao',
@@ -225,6 +226,19 @@ export const cotacaoAteAtivacao: Tutorial = {
     },
     {
       numero: 17,
+      titulo: '👤 [Ação do Associado] Pagamento da Taxa de Adesão',
+      descricao:
+        'Após escolher a modalidade de vistoria, o associado vai para a etapa "Pagamento" (último passo da jornada pública). A tela exibe o valor da Taxa de Adesão e duas formas de pagamento: PIX (QR Code + Copia e Cola) ou Cartão de crédito. No PIX, basta escanear o QR pelo app do banco ou copiar o código "PIX Copia e Cola" e colar no banco. Concluído o pagamento, o sistema reconhece automaticamente — não precisa enviar comprovante.',
+      imagem: associadoPagamentoPix,
+      dicas: [
+        'Reconhecimento PIX é automático via webhook do Asaas — o cliente vê a confirmação na hora.',
+        'Cartão de crédito é cobrado e confirmado na mesma tela; também é automático.',
+        'Sem o pagamento da Taxa de Adesão a proposta não avança para Aprovação de Cadastro.',
+        'O valor da Taxa de Adesão é calculado como percentual da FIPE conforme a regra do plano contratado.',
+      ],
+    },
+    {
+      numero: 18,
       titulo: 'Aprovação de Cadastro',
       descricao:
         'A equipe de Cadastro confere documentos (CNH, CRLV/CRV/NF) e libera a proposta. Documentos validados por OCR ainda passam por revisão manual obrigatória. Acompanhe em Cadastro › Propostas Pendentes.',
@@ -236,7 +250,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 18,
+      numero: 19,
       titulo: 'Agendamento de instalação ou autovistoria',
       descricao:
         'Após o cadastro aprovado, o cliente agenda a instalação do rastreador (obrigatória para Diesel, carros FIPE ≥ R$ 30k e motos ≥ R$ 9k). Para FIPE menores, pode ser autovistoria ou vistoria presencial sem rastreador.',
@@ -246,7 +260,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 19,
+      numero: 20,
       titulo: 'Conclusão da instalação / vistoria',
       descricao:
         'O técnico (Base, Rota, Prestador externo ou Autovistoria) registra fotos e finaliza o serviço no app. O contrato fica aguardando a aprovação final do Monitoramento.',
@@ -255,7 +269,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 20,
+      numero: 21,
       titulo: 'Aprovação de Monitoramento',
       descricao:
         'O time de Monitoramento confere fotos, posição do rastreador e laudo, e aprova ou solicita ajuste. Sem essa aprovação, o veículo não fica ativo e a cobertura permanece suspensa.',
@@ -264,7 +278,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 21,
+      numero: 22,
       titulo: 'Ativação do associado e sync com SGA',
       descricao:
         'Aprovado o monitoramento, o sistema chama a rotina central de ativação que promove associado, contrato e veículo para "ativo", libera as coberturas e sincroniza o cadastro com o SGA Hinova (situação Pendente — promoção para Ativo é feita manualmente no SGA pela equipe interna).',
