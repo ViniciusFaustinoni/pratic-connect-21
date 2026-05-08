@@ -681,7 +681,7 @@ export function useServicosHistorico(dias: number = 7) {
       const dataLimite = new Date();
       dataLimite.setDate(dataLimite.getDate() - dias);
 
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('servicos')
         .select(`
           id, tipo, status, data_agendada, concluida_em,
