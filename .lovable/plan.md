@@ -1,77 +1,102 @@
-## Objetivo
+## Diagnóstico
 
-Replicar a experiência da página **Cadastro › Fila SGA** (`/configuracoes/integracoes/sga-hinova`), mas voltada para **vínculos de rastreadores nas plataformas Softruck e Rede Veículos**, dentro de **Monitoramento › Rastreadores**.
+Analisando o código existente identifiquei **um bug que impede a Fila Plataformas de funcionar para Rede Veículos** e mapeei o estado real dos fluxos de desvínculo.
 
-A nova área terá os mesmos blocos: status de conexão, fila com retry, logs, pendentes (rastreadores que deveriam estar vinculados mas não estão), e health check — só que olhando o ecossistema Softruck + Rede, não a Hinova.
+### Bug crítico — plataforma normalizada errada
 
-## Escopo da UI
+Na implementação que acabamos de fazer, usei `'rede'` como rótulo, mas no banco e em **todas** as edge functions o valor canônico é `'rede_veiculos'` (4.242 rastreadores na base).
 
-Criar nova aba **"Plataformas"** (ou **"Fila Plataformas"**) na página `src/pages/monitoramento/Rastreadores.tsx`, ao lado de Visão Geral / Estoque / Histórico.
+Impacto direto:
+- `rastreadores_sync_queue.plataforma` tem CHECK constraint `IN ('softruck','rede')` → **vai recusar** qualquer item Rede.
+- A view `rastreadores_pendentes_vinculo` filtra `IN ('softruck','rede')` → **não lista nenhum dos 4.242 rastreadores** Rede.
+- A aba "Rede Veículos" do painel mostra zero.
 
-A aba terá sub-tabs internos por plataforma (`Softruck` | `Rede Veículos`), cada um com a estrutura:
+Além disso, o worker chama `rede-veiculos-ativar-cliente-completo` com payload `{imei, veiculoId, associadoId, associadoEmail}`, mas essa edge espera **só `{associadoId, motivo, revincular}`** e processa todos os veículos do associado de uma vez. Para vincular um rastreador específico a função correta é `rede-veiculos-vincular-cliente` (que aceita `{imei, veiculoId, associadoId}`).
 
-```text
-[ Conexão API ] [ Fila Pendente ] [ Falhas na Fila ] [ Rastreadores Pendentes ]
+### Estado dos fluxos de desvínculo (já existentes no projeto)
 
-Tabs internas:
-  - Fila            (itens com retry — pendente / falha / falha_permanente)
-  - Logs            (rastreadores_api_logs filtrado por plataforma)
-  - Pendentes       (rastreadores instalado sem plataforma_veiculo_id, ou sem user vinculado)
-  - Health Check    (conexão + tempo de resposta)
-```
+| Direção | Softruck | Rede Veículos |
+|---|---|---|
+| Plataforma → Sistema | Webhook `DEVICES.DISASSOCIATED` zera vínculos + grava histórico (`softruck-webhook` linhas 395–443) | Cron `rede-veiculos-sync-cron-30min` chama `rede-veiculos-sincronizar-status`, que detecta 404/dispositivo nulo e zera vínculos (linhas 140–240) |
+| Sistema → Plataforma | `concluir-retirada` chama `softruck-api operation=deactivate_device` | `concluir-retirada` chama `rede-veiculos-desvincular-cliente` |
 
-Ações por linha (igual à Fila SGA): **Reprocessar** e **Descartar (falha permanente)**. Modal de detalhe ao clicar na linha mostrando request/response do último envio.
+Os caminhos existem, mas **nunca foram validados ponta-a-ponta** após o nosso refactor recente. Também não há validação de que outros fluxos (cancelamento, substituição, venda, status terminal) chamam o desvínculo da plataforma — hoje só `concluir-retirada` faz.
 
-## Backend / dados
+## Plano de correção raiz
 
-Hoje só temos `rastreadores_api_logs` (logs históricos), sem fila persistente com retry. Para ter paridade com Fila SGA, criar:
+### Etapa 1 — Corrigir o painel Fila Plataformas para Rede
 
-1. **Tabela `rastreadores_sync_queue`** (espelha `sga_sync_queue`):
-   - `id, rastreador_id, veiculo_id, associado_id, plataforma ('softruck'|'rede'), operacao ('ativar_dispositivo'|'criar_usuario'|'vincular_user_veiculo'|...)`
-   - `status ('pendente'|'processando'|'falha'|'falha_permanente'|'concluido')`
-   - `tentativas, max_tentativas (default 5), etapa_parou, erro_ultimo, payload jsonb, response_ultimo jsonb`
-   - `created_at, ultima_tentativa_em, proximo_reenvio_em, concluido_em`
-   - RLS: leitura/escrita só para roles internas (Diretor, Coordenador Monitoramento, T.I.).
-   - Índices em `(plataforma, status, proximo_reenvio_em)`.
+Migração:
+- Alterar CHECK de `rastreadores_sync_queue.plataforma` e `rastreadores_sync_health_checks.plataforma` para aceitar `'softruck'` e `'rede_veiculos'`.
+- Recriar a view `rastreadores_pendentes_vinculo` filtrando `plataforma IN ('softruck','rede_veiculos')`.
 
-2. **Tabela `rastreadores_sync_health_checks`** (espelha `sga_health_checks`):
-   - `id, plataforma, conexao_ok, tempo_resposta_ms, fila_pendentes, fila_falhas, rastreadores_nao_vinculados, erro_mensagem, created_at`.
+Frontend:
+- `useRastreadoresSyncQueue` e `PlataformasSyncPanel`: trocar tipo `'rede'` por `'rede_veiculos'` em todas as queries/labels (mantendo rótulo "Rede Veículos" na UI).
 
-3. **Trigger / hooks de enfileiramento**: quando `useUpdateRastreadorStatus` cair em `instalado` para Softruck/Rede e a chamada direta à edge falhar, criar item em `rastreadores_sync_queue` em vez de só logar warn. Edge `softruck-ativar-dispositivo` / `rede-veiculos-ativar-cliente-completo` passam a sempre registrar resultado (sucesso → `concluido`, falha → `pendente` com `proximo_reenvio_em = now()+backoff`).
+Edge `rastreadores-sync-worker`:
+- No `reprocess` para `rede_veiculos`, em vez de `rede-veiculos-ativar-cliente-completo`, chamar **`rede-veiculos-vincular-cliente`** com `{imei, veiculoId: rast.veiculo_id, associadoId: rast.associado_id}`. Esta é a função correta para vincular **um** rastreador.
+- No `health_check` para `rede_veiculos`, usar um endpoint leve real da API Rede (ex.: `rede-veiculos-obter-status-cliente` com um `clienteId` de teste, ou um ping seguindo o padrão Softruck `?ping=1`). Hoje passei `{ ping: true }` que a função não trata.
 
-4. **Edge function nova `rastreadores-sync-worker`**:
-   - `action: 'reprocess'` (id) → reexecuta o item da fila via edge da plataforma correta.
-   - `action: 'enqueue'` (rastreador_id) → cria item idempotente.
-   - `action: 'health_check'` (plataforma) → ping na API, grava em `rastreadores_sync_health_checks`.
-   - Cron opcional (não habilitar agora, fora do escopo) para drenar `pendente`/`falha` com backoff.
+### Etapa 2 — Validar vínculo Rede ponta-a-ponta
 
-5. **View `rastreadores_pendentes_vinculo`** para a aba Pendentes:
-   - `rastreadores` com `status='instalado'`, `plataforma in ('softruck','rede')`, e (`plataforma_veiculo_id is null` OU `plataforma_user_id is null`).
+1. Identificar um IMEI Rede que aparece em `rastreadores_pendentes_vinculo` (instalado, sem `plataforma_veiculo_id` ou `plataforma_user_id`).
+2. Pelo painel, clicar **Sincronizar**, depois **Reprocessar**.
+3. Validar que `rastreadores.plataforma_veiculo_id` e `plataforma_user_id` ficaram preenchidos e que a fila marcou `concluido`.
+4. Conferir o registro em `rastreadores_api_logs` e `rastreadores_vinculo_historico`.
 
-## Frontend
+### Etapa 3 — Validar desvínculo Plataforma → Sistema
 
-- Novo hook `src/hooks/useRastreadoresSyncQueue.ts` espelhando `useSGAHealthCheck` (uma instância por plataforma via parâmetro).
-- Novo componente `src/components/rastreadores/PlataformasSyncPanel.tsx` com sub-tabs Softruck/Rede e a UI descrita acima — reaproveita `IntegracaoHealthPanel` para o health check.
-- Novo modal `RastreadorSyncQueueDetailModal.tsx` (espelho de `SGAQueueItemDetailModal`) mostrando `payload` e `response_ultimo`.
-- Adicionar a aba em `Rastreadores.tsx` (visível para `canManagePlataformas`).
+**Softruck (webhook):**
+- Pegar um IMEI Softruck **de teste** com vínculo completo.
+- Chamar `softruck-webhook` simulando payload `DEVICES.DISASSOCIATED` para esse rastreador.
+- Validar que `rastreadores` ficou com `veiculo_id`, `associado_id`, `plataforma_veiculo_id`, `plataforma_user_id` zerados, status `'estoque'`, com entrada em `rastreadores_vinculo_historico` (`origem='webhook_softtruck_disassociated'`).
+- Após validar, **religar** manualmente via Fila Plataformas ▸ Reprocessar.
 
-## Permissões
+**Rede Veículos (cron):**
+- Identificar um veículo Rede vinculado e forçar uma resposta 404 (ou aguardar o cron das 30min).
+- Disparar manualmente `rede-veiculos-sync-cron` e validar `rastreadores_vinculo_historico` com `origem='sync_rede_veiculos_desvinculo'`.
+- Confirmar que o cron de 30min está agendado (já está: job `rede-veiculos-sync-cron-30min`).
 
-- Acesso à aba: mesma checagem `canManagePlataformas` já usada para Plataformas/Locais.
-- RLS nas duas tabelas novas: somente roles internos com `canManagePlataformas`.
+### Etapa 4 — Validar desvínculo Sistema → Plataforma
 
-## Não-escopo (para evitar replicar o que já existe)
+**Softruck:**
+- Em ambiente de teste, abrir uma retirada de rastreador concluída pelo `concluir-retirada` e verificar log `Resposta Softruck: success=true`.
+- Confirmar pela API Softruck que o device foi desativado.
 
-- Não duplicar logs: a aba **Logs** lê de `rastreadores_api_logs` (já existe), só filtrando por plataforma.
-- Não duplicar conexão/credenciais: usa `IntegracaoHealthPanel` e `ConfigurarIntegracaoSheet` existentes.
-- Não criar cron de drenagem agora — só infra de fila + reprocessar manual (igual à Fila SGA hoje).
+**Rede:**
+- Mesmo teste com rastreador Rede → validar que `rede-veiculos-desvincular-cliente` retornou sucesso.
+
+### Etapa 5 — Cobertura: garantir que TODO desvínculo local chama plataforma
+
+Hoje só `concluir-retirada` dispara o desvínculo externo. Auditar e padronizar os demais caminhos que zeram `rastreadores.veiculo_id`:
+
+- `useRetiradaRastreador` ✅ (vai por `concluir-retirada`).
+- `useSubstituirEquipamento` — verificar.
+- `useTransferirVeiculo` — verificar.
+- `useVenderVeiculo` — verificar.
+- Cancelamento de contrato (status terminal do veículo).
+- Trigger SQL que zera `veiculo_id` quando veículo entra em status terminal.
+
+Para cada caminho que **não** chama desvínculo da plataforma, criar item `falha` na `rastreadores_sync_queue` (operação `desvincular`) ou chamar diretamente a edge correta. Adicionar uma operação `desvincular` ao worker:
+- Softruck: `softruck-api operation=deactivate_device`.
+- Rede: `rede-veiculos-desvincular-cliente`.
+
+### Etapa 6 — Observabilidade no painel
+
+Na aba "Logs" da Fila Plataformas, separar por operação (`vincular` vs `desvincular`) para que o operador veja os dois sentidos. Os dados já existem em `rastreadores_api_logs.operacao` — só ajustar a coluna na UI.
 
 ## Entregáveis
 
-1. Migração: tabelas `rastreadores_sync_queue`, `rastreadores_sync_health_checks`, view `rastreadores_pendentes_vinculo`, RLS, índices.
-2. Edge `rastreadores-sync-worker` (reprocess / enqueue / health_check).
-3. Ajuste em `softruck-ativar-dispositivo` e `rede-veiculos-ativar-cliente-completo` para gravar resultado na fila (idempotente).
-4. Hook + componentes React + nova aba em `Rastreadores.tsx`.
-5. Validação como Diretor (`admin@teste.com`) abrindo a aba e reprocessando o IMEI `863829079716880` para confirmar fluxo.
+1. Migração ajustando CHECK + view para `'rede_veiculos'`.
+2. Patch em `useRastreadoresSyncQueue.ts` e `PlataformasSyncPanel.tsx` (rótulo da plataforma).
+3. Patch em `rastreadores-sync-worker/index.ts` (rota Rede correta + health check Rede + nova operação `desvincular`).
+4. Roteiro de testes executado (5 cenários acima) com prints/registros de evidência.
+5. Auditoria + correção dos hooks/triggers que zeram `veiculo_id` sem chamar plataforma.
+6. Atualizar memória `mem://logic/operations/softtruck-desvinculo-bidirecional` se algum gap for descoberto.
 
-Confirma que posso prosseguir com este plano? Se quiser, posso reduzir o escopo (ex.: só Softruck primeiro, ou só a aba Pendentes + Reprocessar sem criar tabela de fila).
+## Fora de escopo (a confirmar)
+
+- Implementar cron de drenagem automática da fila (hoje só reprocessamento manual). Pergunto antes de incluir.
+- Criar webhook do lado da Rede Veículos (a Rede não envia webhook hoje — confiamos no cron 30min).
+
+Posso seguir com este plano? Se quiser, separo em duas entregas: **(A)** corrigir Rede + validações de vínculo/desvínculo; **(B)** auditoria de cobertura (Etapa 5).
