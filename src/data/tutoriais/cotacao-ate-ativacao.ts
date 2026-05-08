@@ -222,7 +222,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 13,
+      numero: 17,
       titulo: 'Aprovação de Cadastro',
       descricao:
         'A equipe de Cadastro confere documentos (CNH, CRLV/CRV/NF) e libera a proposta. Documentos validados por OCR ainda passam por revisão manual obrigatória. Acompanhe em Cadastro › Propostas Pendentes.',
@@ -234,7 +234,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 14,
+      numero: 18,
       titulo: 'Agendamento de instalação ou autovistoria',
       descricao:
         'Após o cadastro aprovado, o cliente agenda a instalação do rastreador (obrigatória para Diesel, carros FIPE ≥ R$ 30k e motos ≥ R$ 9k). Para FIPE menores, pode ser autovistoria ou vistoria presencial sem rastreador.',
@@ -244,7 +244,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 15,
+      numero: 19,
       titulo: 'Conclusão da instalação / vistoria',
       descricao:
         'O técnico (Base, Rota, Prestador externo ou Autovistoria) registra fotos e finaliza o serviço no app. O contrato fica aguardando a aprovação final do Monitoramento.',
@@ -253,7 +253,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 16,
+      numero: 20,
       titulo: 'Aprovação de Monitoramento',
       descricao:
         'O time de Monitoramento confere fotos, posição do rastreador e laudo, e aprova ou solicita ajuste. Sem essa aprovação, o veículo não fica ativo e a cobertura permanece suspensa.',
@@ -262,7 +262,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 17,
+      numero: 21,
       titulo: 'Ativação do associado e sync com SGA',
       descricao:
         'Aprovado o monitoramento, o sistema chama a rotina central de ativação que promove associado, contrato e veículo para "ativo", libera as coberturas e sincroniza o cadastro com o SGA Hinova (situação Pendente — promoção para Ativo é feita manualmente no SGA pela equipe interna).',
