@@ -32,7 +32,6 @@ export function EscolhaLocalVistoria({ onEscolher, tipoInstalacao }: EscolhaLoca
       <div className="grid gap-4">
         {/* Sempre mostrar as 2 opções; tipo_instalacao apenas marca como "Sugerido" */}
         {/* Opção 1: Técnico vai até o cliente */}
-        {(
         <Card 
           className="cursor-pointer hover:border-primary/50 hover:shadow-md transition-all group"
           onClick={() => onEscolher('cliente')}
