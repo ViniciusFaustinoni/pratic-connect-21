@@ -72,7 +72,7 @@ export default function CampanhaDetalhe() {
   const { data: leads } = useQuery({
     queryKey: ['campanha-leads', id],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from('leads')
         .select('id, nome, telefone, etapa, created_at, vendedor:profiles(nome)')
         .eq('campanha_id', id)

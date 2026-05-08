@@ -121,7 +121,7 @@ export function useRota(id: string | undefined) {
       if (riError) console.error('Error fetching rota_instaladores:', riError);
 
       // Fase 3: leitura unificada de `servicos` (substitui instalacoes + vistorias)
-      const { data: servicos, error: servError } = await supabase
+      const { data: servicos, error: servError } = await (supabase as any)
         .from('servicos')
         .select(`
           *,
