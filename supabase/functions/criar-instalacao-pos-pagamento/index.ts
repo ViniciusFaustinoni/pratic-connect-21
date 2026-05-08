@@ -524,6 +524,15 @@ serve(async (req) => {
         novaInstalacaoId = novaInstalacao.id;
         console.log('[CriarInstalacaoPosPagamento] Instalação criada com sucesso:', novaInstalacaoId);
       }
+
+      // Back-link agendamentos_base.instalacao_id
+      if (agendamentoBaseId && novaInstalacaoId) {
+        await supabase
+          .from('agendamentos_base')
+          .update({ instalacao_id: novaInstalacaoId, updated_at: new Date().toISOString() })
+          .eq('id', agendamentoBaseId);
+        console.log('[CriarInstalacaoPosPagamento] agendamentos_base back-linked:', agendamentoBaseId);
+      }
     } else if (dataAgendada && !cadastroAprovado) {
       console.log('[CriarInstalacaoPosPagamento] Agendamento encontrado, mas Cadastro ainda não aprovou — instalação não criada.');
     }
