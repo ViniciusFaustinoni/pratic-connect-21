@@ -29,35 +29,41 @@ serve(async (req) => {
   });
 
   try {
-    // Validar JWT (admin/diretor)
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(JSON.stringify({ success: false, error: 'Não autorizado' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    // Auth: aceita (a) JWT admin/diretor; (b) header x-cron-secret == CRON_SECRET (cron interno)
+    const cronSecretHeader = req.headers.get('x-cron-secret');
+    const CRON_SECRET = Deno.env.get('CRON_SECRET');
+    const isCron = !!CRON_SECRET && cronSecretHeader === CRON_SECRET;
 
-    const token = authHeader.replace('Bearer ', '');
-    const { data: userData, error: userErr } = await supabase.auth.getUser(token);
-    if (userErr || !userData.user) {
-      return new Response(JSON.stringify({ success: false, error: 'Token inválido' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    if (!isCron) {
+      const authHeader = req.headers.get('Authorization');
+      if (!authHeader) {
+        return new Response(JSON.stringify({ success: false, error: 'Não autorizado' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
 
-    const { data: roles } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userData.user.id);
-    const roleSet = new Set((roles || []).map((r: any) => r.role));
-    const allowed = roleSet.has('admin') || roleSet.has('diretor');
-    if (!allowed) {
-      return new Response(JSON.stringify({ success: false, error: 'Sem permissão' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      const token = authHeader.replace('Bearer ', '');
+      const { data: userData, error: userErr } = await supabase.auth.getUser(token);
+      if (userErr || !userData.user) {
+        return new Response(JSON.stringify({ success: false, error: 'Token inválido' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: roles } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userData.user.id);
+      const roleSet = new Set((roles || []).map((r: any) => r.role));
+      const allowed = roleSet.has('admin') || roleSet.has('diretor');
+      if (!allowed) {
+        return new Response(JSON.stringify({ success: false, error: 'Sem permissão' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     const body = (await req.json().catch(() => ({}))) as BackfillRequest;
@@ -65,19 +71,22 @@ serve(async (req) => {
     const incluirFalhas = body.incluirFalhas ?? false;
     const dryRun = body.dryRun ?? false;
 
-    console.log(`[softruck-backfill] Iniciando backfill — limit=${limit}, incluirFalhas=${incluirFalhas}, dryRun=${dryRun}`);
+    console.log(`[softruck-backfill] Iniciando backfill — limit=${limit}, incluirFalhas=${incluirFalhas}, dryRun=${dryRun}, cron=${isCron}`);
 
-    // Buscar rastreadores Softruck instalados, com veículo, sem device_id na plataforma
+    // Status considerados pendentes/incompletos
     const statusFiltro = incluirFalhas
       ? ['PENDING', 'FAILED_DEVICE', 'FAILED_VEHICLE', 'FAILED_AUTH', 'FAILED_CHIP', 'FAILED_ASSOCIATION', 'CREATED_BUT_NOT_ACTIVATED']
-      : ['PENDING'];
+      : ['PENDING', 'CREATED_BUT_NOT_ACTIVATED'];
 
+    // Captura DOIS cenários incompletos:
+    //  (1) device_id ausente (nunca chegou na Softruck)
+    //  (2) device_id presente, mas veiculo_id ausente (vínculo não concluído — bug histórico do early-return)
     const { data: rastreadores, error: rError } = await supabase
       .from('rastreadores')
-      .select('id, imei, veiculo_id, associado_id, associado_email, plataforma, status, plataforma_device_id, softruck_integration_status')
+      .select('id, imei, veiculo_id, associado_id, associado_email, plataforma, status, plataforma_device_id, plataforma_veiculo_id, softruck_integration_status')
       .eq('plataforma', 'softruck')
       .eq('status', 'instalado')
-      .is('plataforma_device_id', null)
+      .or('plataforma_device_id.is.null,plataforma_veiculo_id.is.null')
       .in('softruck_integration_status', statusFiltro)
       .not('veiculo_id', 'is', null)
       .not('imei', 'is', null)
