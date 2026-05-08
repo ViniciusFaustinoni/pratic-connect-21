@@ -56,13 +56,29 @@ Deno.serve(async (req) => {
       }, 502);
     }
 
+    // Helper: fetch que renova o token automaticamente em caso de 401
+    const softFetch = async (url: string): Promise<Response> => {
+      let resp = await fetch(url, { headers: authHeaders(token, publicKey) });
+      if (resp.status === 401) {
+        console.warn('[softruck-buscar-dispositivo] 401 recebido, renovando token...');
+        try {
+          const refreshed = await getSoftruckAuthToken(supabaseUrl, supabaseKey, true);
+          token = refreshed.token;
+          publicKey = refreshed.publicKey;
+          resp = await fetch(url, { headers: authHeaders(token, publicKey) });
+        } catch (e) {
+          console.error('[softruck-buscar-dispositivo] falha ao renovar token:', e);
+        }
+      }
+      return resp;
+    };
+
     let device: any = null;
     let vehicle: any = null;
 
     if (isImei) {
-      const resp = await fetch(
+      const resp = await softFetch(
         `${BASE_URL}/v2/devices?filters[devices.imei][eq]=${encodeURIComponent(buscaRaw)}&includes[vehicle][]=plate`,
-        { headers: authHeaders(token, publicKey) },
       );
       if (!resp.ok) {
         const t = await resp.text();
@@ -75,9 +91,8 @@ Deno.serve(async (req) => {
         vehicle = await fetchVehicle(token, publicKey, relVehicleId);
       }
     } else if (placa) {
-      const resp = await fetch(
+      const resp = await softFetch(
         `${BASE_URL}/v2/vehicles?filters[vehicles.plate][eq]=${encodeURIComponent(placa)}&includes[device][]=imei`,
-        { headers: authHeaders(token, publicKey) },
       );
       if (!resp.ok) {
         const t = await resp.text();
@@ -87,9 +102,7 @@ Deno.serve(async (req) => {
       vehicle = j?.data?.[0] ?? null;
       const relDeviceId = vehicle?.relationships?.device?.id || vehicle?.relationships?.device?.data?.id;
       if (relDeviceId) {
-        const dResp = await fetch(`${BASE_URL}/v2/devices/${relDeviceId}`, {
-          headers: authHeaders(token, publicKey),
-        });
+        const dResp = await softFetch(`${BASE_URL}/v2/devices/${relDeviceId}`);
         if (dResp.ok) {
           const dj = await dResp.json();
           device = Array.isArray(dj?.data) ? dj.data[0] : dj?.data;
