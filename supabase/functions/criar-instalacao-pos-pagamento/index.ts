@@ -212,7 +212,78 @@ serve(async (req) => {
     // Log detalhado para debug
     console.log(`[CriarInstalacaoPosPagamento] tipo_vistoria: ${tipoVistoria}`);
 
-    if (tipoVistoria === 'agendada') {
+    let agendamentoBaseId: string | null = null;
+    let localVistoriaForce: 'cliente' | 'base' = 'cliente';
+
+    if (tipoVistoria === 'agendada_base') {
+      // VISTORIA AGENDADA NA BASE / OFICINA: ler dados de agendamentos_base
+      console.log('[CriarInstalacaoPosPagamento] Modo: agendada_base (oficina/base)');
+      localVistoriaForce = 'base';
+
+      const { data: agBase } = await supabase
+        .from('agendamentos_base')
+        .select('id, data_agendada, horario, oficina_id, cliente_nome, cliente_telefone')
+        .eq('cotacao_id', cotacaoId)
+        .in('status', ['agendado', 'confirmado'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (agBase) {
+        agendamentoBaseId = agBase.id;
+        dataAgendada = agBase.data_agendada;
+        const hStr = String(agBase.horario || '').trim().toLowerCase();
+        if (hStr === 'manha' || hStr === 'tarde') {
+          periodoAgendado = hStr;
+        } else {
+          const m = /^(\d{1,2}):/.exec(hStr);
+          const h = m ? parseInt(m[1], 10) : 8;
+          periodoAgendado = h < 12 ? 'manha' : 'tarde';
+        }
+
+        // Endereço: oficina vinculada ou base padrão das configurações
+        if (agBase.oficina_id) {
+          const { data: oficina } = await supabase
+            .from('oficinas')
+            .select('cep, logradouro, numero, bairro, cidade, estado, latitude, longitude')
+            .eq('id', agBase.oficina_id)
+            .maybeSingle();
+          if (oficina) {
+            endereco = {
+              cep: oficina.cep || '',
+              logradouro: oficina.logradouro || '',
+              numero: oficina.numero || '',
+              bairro: oficina.bairro || '',
+              cidade: oficina.cidade || '',
+              estado: oficina.estado || '',
+              latitude: oficina.latitude ?? null,
+              longitude: oficina.longitude ?? null,
+            };
+          }
+        }
+        if (!endereco.logradouro) {
+          const { data: cfgs } = await supabase
+            .from('configuracoes')
+            .select('chave, valor')
+            .in('chave', ['base_cep', 'base_logradouro', 'base_numero', 'base_bairro', 'base_cidade', 'base_uf']);
+          const cfgMap: Record<string, string> = {};
+          (cfgs || []).forEach((c: any) => { cfgMap[c.chave] = c.valor || ''; });
+          endereco = {
+            cep: cfgMap.base_cep || '',
+            logradouro: cfgMap.base_logradouro || '',
+            numero: cfgMap.base_numero || '',
+            bairro: cfgMap.base_bairro || '',
+            cidade: cfgMap.base_cidade || '',
+            estado: cfgMap.base_uf || '',
+            latitude: null,
+            longitude: null,
+          };
+        }
+        obsResponsavel = `Atendimento na base/oficina — ${agBase.cliente_nome || cotacao.nome_solicitante} - ${agBase.cliente_telefone || cotacao.telefone1_solicitante || ''}`;
+      } else {
+        console.warn('[CriarInstalacaoPosPagamento] tipo_vistoria=agendada_base mas sem registro em agendamentos_base');
+      }
+    } else if (tipoVistoria === 'agendada') {
       // VISTORIA PRESENCIAL SIMPLES: Usar campos vistoria_*
       console.log('[CriarInstalacaoPosPagamento] Modo: vistoria agendada (presencial simples)');
       dataAgendada = cotacao.vistoria_data_agendada;
@@ -418,9 +489,9 @@ serve(async (req) => {
         endereco_longitude: endereco.longitude || null,
         observacoes: obsResponsavel,
         permite_encaixe: permiteEncaixe,
-        local_vistoria: 'cliente',
+        local_vistoria: localVistoriaForce,
         instalador_responsavel_id: null,
-        tipo_deslocamento: tipoDeslocamento,
+        tipo_deslocamento: localVistoriaForce === 'base' ? 'base' : tipoDeslocamento,
       };
       
       console.log('[CriarInstalacaoPosPagamento] Criando instalação:', JSON.stringify(instalacaoData));
@@ -452,6 +523,15 @@ serve(async (req) => {
 
         novaInstalacaoId = novaInstalacao.id;
         console.log('[CriarInstalacaoPosPagamento] Instalação criada com sucesso:', novaInstalacaoId);
+      }
+
+      // Back-link agendamentos_base.instalacao_id
+      if (agendamentoBaseId && novaInstalacaoId) {
+        await supabase
+          .from('agendamentos_base')
+          .update({ instalacao_id: novaInstalacaoId, updated_at: new Date().toISOString() })
+          .eq('id', agendamentoBaseId);
+        console.log('[CriarInstalacaoPosPagamento] agendamentos_base back-linked:', agendamentoBaseId);
       }
     } else if (dataAgendada && !cadastroAprovado) {
       console.log('[CriarInstalacaoPosPagamento] Agendamento encontrado, mas Cadastro ainda não aprovou — instalação não criada.');
