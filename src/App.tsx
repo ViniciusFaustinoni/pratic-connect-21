@@ -821,6 +821,8 @@ const App = () => (
             <Route element={<AgenciaLayout />}>
               <Route path="/agencia" element={<AgenciaDashboard />} />
               <Route path="/agencia/dados-pagamento" element={<DadosPagamento />} />
+              <Route path="/agencia/tutoriais" element={<TutoriaisLista />} />
+              <Route path="/agencia/tutoriais/:slug" element={<TutorialDetalhe />} />
             </Route>
             
             {/* Installer App Routes */}

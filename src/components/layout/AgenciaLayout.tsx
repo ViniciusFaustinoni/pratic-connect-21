@@ -18,7 +18,7 @@ export function AgenciaLayout() {
 
   const navItems = [
     { path: '/agencia', label: 'Painel', icon: LayoutDashboard },
-    { path: '/tutoriais', label: 'Tutoriais', icon: GraduationCap },
+    { path: '/agencia/tutoriais', label: 'Tutoriais', icon: GraduationCap },
     { path: '/agencia/dados-pagamento', label: 'Dados de Pagamento', icon: CreditCard },
   ];
 
