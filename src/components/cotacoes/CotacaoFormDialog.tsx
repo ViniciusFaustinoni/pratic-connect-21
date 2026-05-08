@@ -3112,6 +3112,14 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         onOpenChange={setShowSGAModal}
         placa={placa}
       />
+
+      {/* Modal Placa pertence a outro associado (base local) */}
+      <PlacaOutroAssociadoModal
+        open={showPlacaOutroAssocModal}
+        onOpenChange={setShowPlacaOutroAssocModal}
+        placa={placa}
+        info={placaOutroAssocInfo}
+      />
     </>
   );
 }
