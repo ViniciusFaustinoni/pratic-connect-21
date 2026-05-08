@@ -107,7 +107,6 @@ export function EscolhaLocalVistoria({ onEscolher, tipoInstalacao }: EscolhaLoca
             </div>
           </CardContent>
         </Card>
-        )}
       </div>
 
       <p className="text-xs text-center text-muted-foreground">
