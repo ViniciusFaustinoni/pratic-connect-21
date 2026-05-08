@@ -196,6 +196,15 @@ export function EtapaDadosAssociado({
             {verificandoCpf && (
               <p className="text-xs text-muted-foreground">Verificando CPF...</p>
             )}
+            {!verificandoCpf && cpfErroTransitorio && cpfDigits.length === 11 && (
+              <SgaTransientAlert
+                motivo={cpfMotivoTransitorio}
+                onRetry={() => refetchVeiculoCpf()}
+                loading={refazendoCpf}
+                compact
+                titulo="SGA instável — não confirmamos se este CPF já é associado"
+              />
+            )}
             {veiculoAtivoCpf && !showDialogTipo && (
               <div className="flex items-center gap-2 p-2 rounded-lg bg-primary/5 border border-primary/20 text-sm">
                 <User className="h-4 w-4 text-primary flex-shrink-0" />
