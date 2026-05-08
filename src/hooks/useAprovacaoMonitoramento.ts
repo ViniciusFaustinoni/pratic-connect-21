@@ -11,7 +11,7 @@ export function useInstalacoesAguardandoAprovacao() {
     queryKey: ['instalacoes-aguardando-aprovacao-monitoramento'],
     queryFn: async () => {
       // Buscar serviços de instalação concluídos
-      const { data: servicos, error } = await supabase
+      const { data: servicos, error } = await (supabase as any)
         .from('servicos')
         .select(`
           id,

@@ -287,7 +287,7 @@ export function useRetiradas(filters?: RetiradaFilters) {
   return useQuery({
     queryKey: ['retiradas', filters],
     queryFn: async () => {
-      let query = supabase
+      let query = (supabase as any)
         .from('servicos')
         .select(`
           *,

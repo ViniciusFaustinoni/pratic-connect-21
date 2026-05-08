@@ -270,7 +270,7 @@ export function useServicos(filters?: ServicoFilters) {
   return useQuery({
     queryKey: ['servicos', filters],
     queryFn: async () => {
-      let query = supabase
+      let query = (supabase as any)
         .from('servicos')
         .select(`
           *,
