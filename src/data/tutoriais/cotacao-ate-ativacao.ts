@@ -25,19 +25,6 @@ export const cotacaoAteAtivacao: Tutorial = {
   steps: [
     {
       numero: 1,
-      titulo: 'Identifique o cliente (Lead)',
-      descricao:
-        'Antes de cotar, registre o cliente como lead. Se ele já existe na base, abra o cadastro existente — nunca duplique. O lead garante rastreabilidade da venda e o vínculo correto com a comissão.',
-      dicas: [
-        'Pesquise pelo telefone ou CPF antes de criar um novo lead.',
-        'Confirme que você é o vendedor responsável (o lead vai amarrar a comissão a você).',
-      ],
-      links: [
-        { label: 'Abrir Leads', url: '/vendas/leads' },
-      ],
-    },
-    {
-      numero: 2,
       titulo: 'Inicie uma nova cotação',
       descricao:
         'Em Vendas › Cotação, clique em "Nova Cotação". Informe a placa (ou marque 0KM), o ano e a versão FIPE do veículo. O sistema busca a tabela FIPE automaticamente e detecta a categoria do veículo (carro, moto, diesel, blindado etc.).',
