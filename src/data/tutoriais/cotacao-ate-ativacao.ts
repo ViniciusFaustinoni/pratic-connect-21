@@ -38,7 +38,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 3,
+      numero: 2,
       titulo: 'Selecione o tipo de venda',
       descricao:
         'No modal "O que você deseja fazer?" escolha o tipo de entrada correto: Nova Cotação (cliente novo ou lead), Substituição de Placa, Troca de Titularidade, Migração ou Inclusão de Veículo. Cada opção dispara um fluxo específico (carências, documentos e validações mudam conforme o tipo).',
@@ -52,7 +52,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 4,
+      numero: 3,
       titulo: 'Cotação Comum — preencha dados e veículo',
       descricao:
         'Ao escolher "Nova Cotação", abre o formulário de Cotação Rápida. Preencha os dados de contato do novo associado (nome, telefone/WhatsApp e e-mail opcional) e a placa do veículo — a FIPE é calculada automaticamente. Se preferir, use "ou selecione manualmente" (Tipo, Marca, Modelo, Ano) para conferir o valor FIPE antes de seguir.',
@@ -64,7 +64,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 5,
+      numero: 4,
       titulo: 'Selecione Região, Uso do Veículo e Tipo de Placa',
       descricao:
         'Ainda na Cotação Rápida, escolha a Região (define a tabela de preços aplicada), o Uso do Veículo (Particular, App, Táxi etc.) e o Tipo de Placa. Esses três campos são obrigatórios para que o sistema mostre apenas os planos corretos para o perfil do veículo.',
@@ -76,7 +76,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 6,
+      numero: 5,
       titulo: 'Escolha o plano',
       descricao:
         'O sistema mostra apenas os planos elegíveis para a categoria/FIPE do veículo. Selecione o plano com a mensalidade que melhor atende o cliente — a Regra do 1% é validada automaticamente.',
@@ -86,7 +86,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 7,
+      numero: 6,
       titulo: 'Defina Valor Adicional e Cenário de Adesão',
       descricao:
         'Depois de escolher o plano, informe o Valor Adicional (somado à mensalidade, opcional) e selecione o Cenário de Adesão e Instalação: Cobra Adesão + Rota, Cobra Adesão + Base, Isenta Adesão + Rota ou Isenta Adesão + Base. Sem cenário selecionado, a cotação não avança.',
@@ -98,7 +98,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 8,
+      numero: 7,
       titulo: 'Defina a Data de Vencimento e crie a cotação',
       descricao:
         'Selecione o dia de vencimento das mensalidades (dia 10 ou dia 15), confira o resumo final (associado, veículo, FIPE e plano selecionado com a mensalidade) e clique em "Criar Cotação" para gerar a proposta.',
@@ -109,7 +109,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 9,
+      numero: 8,
       titulo: 'Abra a cotação criada e envie o link ao associado',
       descricao:
         'Após "Criar Cotação", abra a cotação gerada (status Rascunho) e use os botões do topo: "Copiar para WhatsApp" envia o texto pronto com o link da proposta, "PDF" baixa a proposta, "Acessar Link" abre a página pública e "Copiar Link" copia só a URL para colar onde precisar. "Duplicar" cria uma cópia para simular outro cenário.',
@@ -124,7 +124,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 10,
+      numero: 9,
       titulo: '👤 [Ação do Associado] Escolher o plano na página pública',
       descricao:
         'ATENÇÃO: esta etapa é executada pelo PRÓPRIO ASSOCIADO, não pelo vendedor. Ao abrir o link enviado, o cliente vê a jornada pública (Escolha do Plano › Documentos › Contrato › Vistoria › Pagamento). Na primeira tela ele compara os planos elegíveis, clica em "Selecionar" no plano desejado (o card fica marcado como "Selecionado ✓") e confirma em "Continuar com este plano" para avançar para a etapa de Documentos.',
@@ -137,7 +137,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 11,
+      numero: 10,
       titulo: '👤 [Ação do Associado] Enviar documentos (leitura por IA)',
       descricao:
         'ATENÇÃO: esta etapa também é executada pelo PRÓPRIO ASSOCIADO. Após escolher o plano, ele cai na tela de Documentos e envia tudo de uma só vez (CNH/RG/CiN, CRLV/Nota Fiscal/ATPV-e e Comprovante de Residência) — pode arrastar todos os arquivos juntos. A IA identifica automaticamente cada tipo de documento e pré-preenche os dados. O cliente confere os dados extraídos, completa Contato (e-mail e WhatsApp) e clica em "Continuar" para seguir para a assinatura.',
@@ -151,7 +151,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 12,
+      numero: 11,
       titulo: '👤 [Ação do Associado] Assinar a proposta pelo e-mail (Autentique)',
       descricao:
         'ATENÇÃO: esta etapa também é executada pelo PRÓPRIO ASSOCIADO. Ao avançar de Documentos, a etapa "Contrato" mostra o aviso "SUA PROPOSTA DE FILIAÇÃO ESTÁ NO SEU E-MAIL PARA ASSINATURA!" e o passo a passo "Como assinar via Email": (1) acessar o e-mail cadastrado, (2) abrir o e-mail da Autentique e clicar em "Assinar documento", (3) seguir o fluxo da Autentique com reconhecimento facial (PF_FACIAL), (4) voltar à página da proposta — a confirmação é automática e o fluxo libera Vistoria.',
@@ -164,7 +164,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 13,
+      numero: 12,
       titulo: '👤 [Ação do Associado] Escolher modalidade de vistoria',
       descricao:
         'ATENÇÃO: esta etapa também é executada pelo PRÓPRIO ASSOCIADO. Após a assinatura, o sistema avança automaticamente para "Vistoria do Veículo" e mostra até 3 opções: (a) Autovistoria — Roubo & Furto (Recomendado, disponível para planos com cobertura de R&F), (b) Quero que o técnico venha até mim (Sugerido, agendamento em até 48h) e (c) Quero levar meu veículo à Base (endereço da unidade Praticcar). O associado escolhe a modalidade que preferir; o vendedor só orienta caso o cliente tenha dúvida.',
@@ -175,7 +175,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 14,
+      numero: 13,
       titulo: '👤 [Ação do Associado] Opção A — Autovistoria (Vídeo 360°)',
       descricao:
         'Se o associado escolher Autovistoria, a tela abre o passo a passo "Grave o Vídeo 360°" (Etapa 1 de 2). O cliente grava um único vídeo, pelo celular, seguindo as Instruções de Gravação: (1) frente do veículo com a placa visível, (2) lateral direita caminhando lentamente, (3) traseira com a placa visível, (4) lateral esquerda até voltar à frente, (5) interior (bancos, forração e teto), (6) painel ligado mostrando hodômetro e indicadores, (7) compartimento do motor com o capô aberto. Duração mínima 30 segundos / máxima 2 minutos. Depois, segue para a Etapa 2 (foto do chassi/documentos) e envia.',
@@ -187,7 +187,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 15,
+      numero: 14,
       titulo: '👤 [Ação do Associado] Opção B — Vistoria presencial (técnico vai até você)',
       descricao:
         'Se o associado escolher "Quero que o técnico venha até mim", abre a tela "Agendar Vistoria Presencial". O cliente seleciona a data nos cards (segunda/terça/quarta…), escolhe o período (Manhã 08:00–12:00 / Tarde 14:00–18:00 — com a quantidade de vagas disponíveis exibida em verde), define quem vai receber o técnico (Eu mesmo ou Outra pessoa — neste caso preenche nome/telefone) e, se quiser, ativa "Permitir encaixe de horário". Ao final, clica em "Revisar agendamento" para confirmar. O técnico vai até o endereço cadastrado em até 48h.',
@@ -200,7 +200,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 16,
+      numero: 15,
       titulo: '👤 [Ação do Associado] Opção C — Levar veículo à Base Praticcar',
       descricao:
         'Se o associado escolher "Quero levar meu veículo à Base", a tela mostra o endereço fixo da Oficina Praticcar (Av. Perimetral Brigadeiro Lima e Silva, 592 — Parque Duque, Duque de Caxias/RJ) com os horários de funcionamento (Manhã 08:00–12:00 / Tarde 13:00–18:00). O cliente seleciona uma data nos cards (Segunda 11/Terça 12/Quarta 13/…) e clica em "Confirmar Agendamento" — receberá a notificação com os detalhes do agendamento.',
@@ -212,7 +212,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 17,
+      numero: 16,
       titulo: '👤 [Ação do Associado] Pagamento da Taxa de Adesão',
       descricao:
         'Após escolher a modalidade de vistoria, o associado vai para a etapa "Pagamento" (último passo da jornada pública). A tela exibe o valor da Taxa de Adesão e duas formas de pagamento: PIX (QR Code + Copia e Cola) ou Cartão de crédito. No PIX, basta escanear o QR pelo app do banco ou copiar o código "PIX Copia e Cola" e colar no banco. Concluído o pagamento, o sistema reconhece automaticamente — não precisa enviar comprovante.',
@@ -225,7 +225,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 18,
+      numero: 17,
       titulo: '🏢 Análise interna: Cadastro → Vistoria/Instalação → Monitoramento → Ativação',
       descricao:
         'A partir daqui o consultor não precisa fazer mais nada — entra em ação a equipe interna (Cadastro + Operação + Monitoramento) que conduz toda a análise documental, vistoria, instalação do rastreador (quando aplicável) e a aprovação final que ativa o associado. O fluxo é totalmente rastreável e o cliente é avisado por WhatsApp em cada mudança de status.',
