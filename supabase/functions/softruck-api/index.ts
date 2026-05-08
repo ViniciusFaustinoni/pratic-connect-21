@@ -1065,6 +1065,12 @@ serve(async (req) => {
         break;
       }
 
+      case 'listar-roles': {
+        const endpoint = `/v2/roles?attributes[]=name&attributes[]=description`;
+        result = await softruckRequest('GET', endpoint, token);
+        break;
+      }
+
       default:
         throw new Error(`Operação não suportada: ${operation}`);
     }
