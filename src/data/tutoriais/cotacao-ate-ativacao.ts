@@ -7,6 +7,7 @@ import cotacaoValorCenario from '@/assets/tutoriais/cotacao-valor-cenario.png';
 import cotacaoVencimentoCriar from '@/assets/tutoriais/cotacao-vencimento-criar.png';
 import cotacaoCopiarLink from '@/assets/tutoriais/cotacao-copiar-link.png';
 import associadoEscolhaPlano from '@/assets/tutoriais/associado-escolha-plano.png';
+import associadoDocumentos from '@/assets/tutoriais/associado-documentos.png';
 
 export const cotacaoAteAtivacao: Tutorial = {
   id: 'cotacao-ate-ativacao',
@@ -146,6 +147,20 @@ export const cotacaoAteAtivacao: Tutorial = {
     },
     {
       numero: 11,
+      titulo: '👤 [Ação do Associado] Enviar documentos (leitura por IA)',
+      descricao:
+        'ATENÇÃO: esta etapa também é executada pelo PRÓPRIO ASSOCIADO. Após escolher o plano, ele cai na tela de Documentos e envia tudo de uma só vez (CNH/RG/CiN, CRLV/Nota Fiscal/ATPV-e e Comprovante de Residência) — pode arrastar todos os arquivos juntos. A IA identifica automaticamente cada tipo de documento e pré-preenche os dados. O cliente confere os dados extraídos, completa Contato (e-mail e WhatsApp) e clica em "Continuar" para seguir para a assinatura.',
+      imagem: associadoDocumentos,
+      dicas: [
+        'O vendedor NÃO sobe documentos pelo cliente — o aceite e os dados precisam vir do próprio associado.',
+        'Aceita JPG, PNG e PDF (máx. 10MB por arquivo). Como comprovante de residência, vale também declaração de residência (modelo livre, com CPF e assinatura).',
+        'Mesmo com OCR/IA aprovando, todo documento ainda passa por revisão manual no Cadastro.',
+        'Chassi (VIN) é sempre digitado manualmente — a IA nunca preenche esse campo.',
+        'Se a IA não ler algum dado do veículo, use "A IA não leu tudo? Preencher dados do veículo manualmente".',
+      ],
+    },
+    {
+      numero: 12,
       titulo: 'Cliente assina com biometria facial',
       descricao:
         'A assinatura é feita pelo Autentique exclusivamente por e-mail com reconhecimento facial (PF_FACIAL). Após assinar, o sistema atualiza o status do contrato para "Assinado" e move o associado para a fila de Cadastro.',
@@ -155,7 +170,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 12,
+      numero: 13,
       titulo: 'Aprovação de Cadastro',
       descricao:
         'A equipe de Cadastro confere documentos (CNH, CRLV/CRV/NF) e libera a proposta. Documentos validados por OCR ainda passam por revisão manual obrigatória. Acompanhe em Cadastro › Propostas Pendentes.',
@@ -167,7 +182,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 13,
+      numero: 14,
       titulo: 'Agendamento de instalação ou autovistoria',
       descricao:
         'Após o cadastro aprovado, o cliente agenda a instalação do rastreador (obrigatória para Diesel, carros FIPE ≥ R$ 30k e motos ≥ R$ 9k). Para FIPE menores, pode ser autovistoria ou vistoria presencial sem rastreador.',
@@ -177,7 +192,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 14,
+      numero: 15,
       titulo: 'Conclusão da instalação / vistoria',
       descricao:
         'O técnico (Base, Rota, Prestador externo ou Autovistoria) registra fotos e finaliza o serviço no app. O contrato fica aguardando a aprovação final do Monitoramento.',
@@ -186,7 +201,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 15,
+      numero: 16,
       titulo: 'Aprovação de Monitoramento',
       descricao:
         'O time de Monitoramento confere fotos, posição do rastreador e laudo, e aprova ou solicita ajuste. Sem essa aprovação, o veículo não fica ativo e a cobertura permanece suspensa.',
@@ -195,7 +210,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 16,
+      numero: 17,
       titulo: 'Ativação do associado e sync com SGA',
       descricao:
         'Aprovado o monitoramento, o sistema chama a rotina central de ativação que promove associado, contrato e veículo para "ativo", libera as coberturas e sincroniza o cadastro com o SGA Hinova (situação Pendente — promoção para Ativo é feita manualmente no SGA pela equipe interna).',
