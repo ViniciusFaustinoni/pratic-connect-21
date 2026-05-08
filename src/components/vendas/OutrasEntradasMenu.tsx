@@ -97,9 +97,12 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   const { data: associadoResults, isLoading: loadingAssociados } = useAssociadoSearch(
     selectedTipo && selectedTipo !== 'migracao' && !isSubstituicao && !termoEhPlaca ? searchTerm : ''
   );
-  const { data: placaResults, isLoading: loadingPlacas } = useBuscaPlaca(
+  const buscaPlaca = useBuscaPlaca(
     selectedTipo && selectedTipo !== 'migracao' ? searchTerm : ''
   );
+  const { data: placaResults, isLoading: loadingPlacas, refetch: refetchPlaca } = buscaPlaca;
+  const placaErroTransitorio = buscaPlaca.erroTransitorio;
+  const placaMotivoTransitorio = buscaPlaca.motivoTransitorio;
 
   // Debt check for selected associado (substituicao/inclusao)
   const { data: debitosData, isLoading: loadingDebitos } = useVerificarDebitosAssociado(selectedAssociadoId || undefined);
