@@ -65,8 +65,10 @@ export function TrocaTitularidadeDialog({
   const sgaMotivo = sgaPayload?.motivo ?? transientPayload?.motivo ?? null;
 
   // 3) Para cada veículo SGA, mapeia para o UUID local pela placa.
-  //    Se não houver espelho local, dispara import automático do SGA (cria associado + veículos).
-  const placas = (sgaPayload?.veiculos || []).map((v) => v.placa).filter(Boolean);
+  //    Normaliza placa (remove tudo que não é alfanumérico, uppercase) para evitar
+  //    falso-negativo por hífen/maiúscula entre SGA e base local.
+  const normPlaca = (p?: string | null) => (p || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  const placas = (sgaPayload?.veiculos || []).map((v) => normPlaca(v.placa)).filter(Boolean);
 
   const { data: veiculosLocais, refetch: refetchLocais } = useQuery({
     queryKey: ['troca-tit-veiculos-local-by-placa', placas.join(',')],
@@ -81,12 +83,11 @@ export function TrocaTitularidadeDialog({
     enabled: open && placas.length > 0,
   });
 
-  // Monta opções: para cada veículo SGA, busca o par local pela placa
+  // Monta opções: para cada veículo SGA, busca o par local pela placa (normalizada)
   const veiculos: VeiculoOpcao[] = (sgaPayload?.veiculos || [])
     .map((v) => {
-      const local = (veiculosLocais || []).find(
-        (l) => (l.placa || '').toUpperCase() === (v.placa || '').toUpperCase(),
-      );
+      const placaNorm = normPlaca(v.placa);
+      const local = (veiculosLocais || []).find((l) => normPlaca(l.placa) === placaNorm);
       if (!local) return null;
       return {
         id: local.id,
@@ -97,19 +98,23 @@ export function TrocaTitularidadeDialog({
     .filter((x): x is VeiculoOpcao => !!x);
 
   // Auto-import: quando SGA tem veículos mas nenhum espelho local existe ainda.
-  // NUNCA disparar quando a resposta foi transitória — evita criar associado duplicado por engano.
+  // Guarda por CPF para garantir EXATAMENTE 1 tentativa por abertura do diálogo,
+  // evitando loop quando o import não consegue criar espelho com placa que case.
   const [importando, setImportando] = useState(false);
   const [importErro, setImportErro] = useState<string | null>(null);
+  const tentativasImport = useRef<Set<string>>(new Set());
+
   useEffect(() => {
-    const semEspelho =
+    const podeTentar =
       open &&
       !sga.isLoading &&
       !sgaTransitorio &&
       (sgaPayload?.veiculos || []).length > 0 &&
       veiculos.length === 0 &&
-      !importando &&
-      cpfAntigo.length === 11;
-    if (!semEspelho) return;
+      cpfAntigo.length === 11 &&
+      !tentativasImport.current.has(cpfAntigo);
+    if (!podeTentar) return;
+    tentativasImport.current.add(cpfAntigo);
     (async () => {
       try {
         setImportando(true);
@@ -127,7 +132,9 @@ export function TrocaTitularidadeDialog({
         setImportando(false);
       }
     })();
-  }, [open, sga.isLoading, sgaTransitorio, sgaPayload, veiculos.length, importando, cpfAntigo, refetchLocais]);
+    // Dependências mínimas — `tentativasImport` (ref) é o único gate de re-execução.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, sga.isLoading, sgaTransitorio, sgaPayload?.veiculos?.length, cpfAntigo]);
 
   // Auto-seleciona se só houver 1
   useEffect(() => {
@@ -141,6 +148,8 @@ export function TrocaTitularidadeDialog({
     if (!open) {
       setVeiculoId(null);
       setNome(''); setCpf(''); setEmail(''); setTelefone('');
+      setImportErro(null);
+      tentativasImport.current.clear();
     }
   }, [open]);
 
@@ -158,6 +167,8 @@ export function TrocaTitularidadeDialog({
     veiculos.length === 0;
 
   const handleRetrySga = async () => {
+    tentativasImport.current.clear();
+    setImportErro(null);
     await sga.refetch();
     await refetchLocais();
   };
