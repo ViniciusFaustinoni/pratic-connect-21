@@ -222,6 +222,14 @@ export function TrocaTitularidadeDialog({
                 <Loader2 className="h-4 w-4 animate-spin" />
                 {importando ? 'Importando dados do SGA…' : 'Buscando veículos no SGA…'}
               </div>
+            ) : sgaTransitorioVisivel ? (
+              <SgaTransientAlert
+                motivo={sgaMotivo}
+                onRetry={handleRetrySga}
+                loading={sga.isFetching}
+                titulo="Não foi possível consultar o SGA agora"
+                descricao="A API do Hinova respondeu com erro temporário. Não significa que o CPF não tenha veículos — tente novamente em instantes."
+              />
             ) : semVeiculosSGA ? (
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
@@ -235,7 +243,7 @@ export function TrocaTitularidadeDialog({
                 <AlertDescription className="text-sm">
                   {importErro
                     ? `Falha ao importar do SGA: ${importErro}`
-                    : `O SGA tem ${sga.data?.veiculos.length} veículo(s) para este associado, mas o import automático ainda não concluiu. Tente novamente em instantes.`}
+                    : `O SGA tem ${sgaPayload?.veiculos.length} veículo(s) para este associado, mas o import automático ainda não concluiu. Tente novamente em instantes.`}
                 </AlertDescription>
               </Alert>
             ) : (
