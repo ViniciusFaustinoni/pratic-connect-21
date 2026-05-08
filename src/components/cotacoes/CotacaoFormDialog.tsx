@@ -229,6 +229,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const [showSGAModal, setShowSGAModal] = useState(false);
   const verificarVeiculoSGA = useVerificarVeiculoSGA();
 
+  // Modal: placa pertencente a outro associado (base local)
+  const [placaOutroAssocInfo, setPlacaOutroAssocInfo] = useState<PlacaOutroAssociadoInfo | null>(null);
+  const [showPlacaOutroAssocModal, setShowPlacaOutroAssocModal] = useState(false);
+  const verificarPlacaOutroAssoc = useVerificarPlacaOutroAssociado();
+
   // Estados para seleção FIPE manual
   type FipeMarcaComTipo = FipeMarca & { tipoFipe: 'carros' | 'motos' };
   const [marcas, setMarcas] = useState<FipeMarcaComTipo[]>([]);
