@@ -3,6 +3,7 @@ import novaCotacaoBotao from '@/assets/tutoriais/nova-cotacao-botao.png';
 import tipoVendaModal from '@/assets/tutoriais/tipo-venda-modal.png';
 import cotacaoComumDados from '@/assets/tutoriais/cotacao-comum-dados.png';
 import cotacaoRegiaoUsoPlaca from '@/assets/tutoriais/cotacao-regiao-uso-placa.png';
+import cotacaoValorCenario from '@/assets/tutoriais/cotacao-valor-cenario.png';
 
 export const cotacaoAteAtivacao: Tutorial = {
   id: 'cotacao-ate-ativacao',
@@ -81,16 +82,28 @@ export const cotacaoAteAtivacao: Tutorial = {
     },
     {
       numero: 6,
-      titulo: 'Escolha o plano e ajuste os valores',
+      titulo: 'Escolha o plano',
       descricao:
-        'O sistema mostra apenas os planos elegíveis para a categoria/FIPE do veículo. Selecione o plano, confira a mensalidade e a taxa de adesão. Se aplicável, escolha o cenário de instalação (Base ou Rota) e aplique deságios/descontos comerciais permitidos.',
+        'O sistema mostra apenas os planos elegíveis para a categoria/FIPE do veículo. Selecione o plano com a mensalidade que melhor atende o cliente — a Regra do 1% é validada automaticamente.',
       dicas: [
-        'A Regra do 1% é validada automaticamente — se bloquear, ajuste o plano ou solicite aprovação.',
+        'Se a Regra do 1% bloquear, ajuste o plano ou solicite aprovação.',
         'Cotações acima do limite de FIPE precisam de aprovação da Diretoria antes de virar contrato.',
       ],
     },
     {
       numero: 7,
+      titulo: 'Defina Valor Adicional e Cenário de Adesão',
+      descricao:
+        'Depois de escolher o plano, informe o Valor Adicional (somado à mensalidade, opcional) e selecione o Cenário de Adesão e Instalação: Cobra Adesão + Rota, Cobra Adesão + Base, Isenta Adesão + Rota ou Isenta Adesão + Base. Sem cenário selecionado, a cotação não avança.',
+      imagem: cotacaoValorCenario,
+      dicas: [
+        'Rota = técnico vai até o cliente. Base = cliente leva o veículo na base.',
+        'Use "Isenta Adesão" só quando estiver dentro da política comercial — adesão isenta sem alçada exige aprovação.',
+        'O Valor Adicional é somado à mensalidade do plano (não substitui).',
+      ],
+    },
+    {
+      numero: 8,
       titulo: 'Envie a proposta ao cliente',
       descricao:
         'Conclua a cotação para gerar a proposta. O sistema cria automaticamente o documento Autentique e envia o link de assinatura por WhatsApp/e-mail. Acompanhe o status na tela do contrato.',
@@ -103,7 +116,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 8,
+      numero: 9,
       titulo: 'Cliente assina com biometria facial',
       descricao:
         'A assinatura é feita pelo Autentique exclusivamente por e-mail com reconhecimento facial (PF_FACIAL). Após assinar, o sistema atualiza o status do contrato para "Assinado" e move o associado para a fila de Cadastro.',
@@ -113,7 +126,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 9,
+      numero: 10,
       titulo: 'Aprovação de Cadastro',
       descricao:
         'A equipe de Cadastro confere documentos (CNH, CRLV/CRV/NF) e libera a proposta. Documentos validados por OCR ainda passam por revisão manual obrigatória. Acompanhe em Cadastro › Propostas Pendentes.',
@@ -125,7 +138,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 10,
+      numero: 11,
       titulo: 'Agendamento de instalação ou autovistoria',
       descricao:
         'Após o cadastro aprovado, o cliente agenda a instalação do rastreador (obrigatória para Diesel, carros FIPE ≥ R$ 30k e motos ≥ R$ 9k). Para FIPE menores, pode ser autovistoria ou vistoria presencial sem rastreador.',
@@ -135,7 +148,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 11,
+      numero: 12,
       titulo: 'Conclusão da instalação / vistoria',
       descricao:
         'O técnico (Base, Rota, Prestador externo ou Autovistoria) registra fotos e finaliza o serviço no app. O contrato fica aguardando a aprovação final do Monitoramento.',
@@ -144,7 +157,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 12,
+      numero: 13,
       titulo: 'Aprovação de Monitoramento',
       descricao:
         'O time de Monitoramento confere fotos, posição do rastreador e laudo, e aprova ou solicita ajuste. Sem essa aprovação, o veículo não fica ativo e a cobertura permanece suspensa.',
@@ -153,7 +166,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 13,
+      numero: 14,
       titulo: 'Ativação do associado e sync com SGA',
       descricao:
         'Aprovado o monitoramento, o sistema chama a rotina central de ativação que promove associado, contrato e veículo para "ativo", libera as coberturas e sincroniza o cadastro com o SGA Hinova (situação Pendente — promoção para Ativo é feita manualmente no SGA pela equipe interna).',
