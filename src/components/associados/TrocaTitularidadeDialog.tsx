@@ -82,7 +82,7 @@ export function TrocaTitularidadeDialog({
   });
 
   // Monta opções: para cada veículo SGA, busca o par local pela placa
-  const veiculos: VeiculoOpcao[] = (sga.data?.veiculos || [])
+  const veiculos: VeiculoOpcao[] = (sgaPayload?.veiculos || [])
     .map((v) => {
       const local = (veiculosLocais || []).find(
         (l) => (l.placa || '').toUpperCase() === (v.placa || '').toUpperCase(),
@@ -96,14 +96,16 @@ export function TrocaTitularidadeDialog({
     })
     .filter((x): x is VeiculoOpcao => !!x);
 
-  // Auto-import: quando SGA tem veículos mas nenhum espelho local existe ainda
+  // Auto-import: quando SGA tem veículos mas nenhum espelho local existe ainda.
+  // NUNCA disparar quando a resposta foi transitória — evita criar associado duplicado por engano.
   const [importando, setImportando] = useState(false);
   const [importErro, setImportErro] = useState<string | null>(null);
   useEffect(() => {
     const semEspelho =
       open &&
       !sga.isLoading &&
-      (sga.data?.veiculos || []).length > 0 &&
+      !sgaTransitorio &&
+      (sgaPayload?.veiculos || []).length > 0 &&
       veiculos.length === 0 &&
       !importando &&
       cpfAntigo.length === 11;
@@ -125,7 +127,7 @@ export function TrocaTitularidadeDialog({
         setImportando(false);
       }
     })();
-  }, [open, sga.isLoading, sga.data, veiculos.length, importando, cpfAntigo, refetchLocais]);
+  }, [open, sga.isLoading, sgaTransitorio, sgaPayload, veiculos.length, importando, cpfAntigo, refetchLocais]);
 
   // Auto-seleciona se só houver 1
   useEffect(() => {
@@ -142,10 +144,23 @@ export function TrocaTitularidadeDialog({
     }
   }, [open]);
 
-  const carregando = sga.isLoading || importando;
-  const semVeiculosSGA = !sga.isLoading && (!sga.data?.encontrado || (sga.data?.veiculos || []).length === 0);
+  const carregando = sga.isLoading || sga.isFetching || importando;
+  // Distingue 3 estados: transitório (retry), realmente vazio, espelho local pendente.
+  const sgaTransitorioVisivel = !sga.isLoading && sgaTransitorio;
+  const semVeiculosSGA =
+    !sga.isLoading &&
+    !sgaTransitorio &&
+    (!sgaPayload?.encontrado || (sgaPayload?.veiculos || []).length === 0);
   const semEspelhoLocal =
-    !carregando && (sga.data?.veiculos || []).length > 0 && veiculos.length === 0;
+    !carregando &&
+    !sgaTransitorio &&
+    (sgaPayload?.veiculos || []).length > 0 &&
+    veiculos.length === 0;
+
+  const handleRetrySga = async () => {
+    await sga.refetch();
+    await refetchLocais();
+  };
 
   const handleSubmit = async () => {
     if (!nome.trim() || !cpf.trim() || !veiculoId) {
