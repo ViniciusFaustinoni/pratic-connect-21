@@ -68,20 +68,27 @@ async function reprocessItem(id: string) {
     return { ok: false, error: 'Rastreador não existe mais' };
   }
 
+  // Carrega associado para email
+  const { data: assoc } = await supabase
+    .from('associados')
+    .select('email')
+    .eq('id', rast.associado_id)
+    .maybeSingle();
+
   let result;
   if (item.plataforma === 'softruck') {
     result = await callEdge('softruck-ativar-dispositivo', {
-      rastreador_id: rast.id,
-      veiculo_id: rast.veiculo_id,
-      associado_id: rast.associado_id,
       imei: rast.imei,
+      veiculoId: rast.veiculo_id,
+      associadoId: rast.associado_id,
+      associadoEmail: assoc?.email,
     });
   } else if (item.plataforma === 'rede') {
     result = await callEdge('rede-veiculos-ativar-cliente-completo', {
-      rastreador_id: rast.id,
-      veiculo_id: rast.veiculo_id,
-      associado_id: rast.associado_id,
       imei: rast.imei,
+      veiculoId: rast.veiculo_id,
+      associadoId: rast.associado_id,
+      associadoEmail: assoc?.email,
     });
   } else {
     throw new Error(`Plataforma desconhecida: ${item.plataforma}`);
