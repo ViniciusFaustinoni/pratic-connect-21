@@ -161,7 +161,6 @@ export default function Cotacoes() {
   const { data: vendedores } = useVendedores({ enabled: vendedoresEnabled });
 
   const search = useDebounce(searchInput, 350);
-  const isMobile = useIsMobile();
 
   const PAGE_SIZE = 50;
   const [pageEmAndamento, setPageEmAndamento] = useState(1);
