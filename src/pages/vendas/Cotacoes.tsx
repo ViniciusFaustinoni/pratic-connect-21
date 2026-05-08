@@ -43,6 +43,8 @@ const RelatorioInteligenteCotacoesDialog = lazy(() =>
 import type { PlanoParaPdf, CotacaoComparativaParaPdf } from '@/lib/gerarPdfCotacao';
 import { CotacoesTable, type CotacoesTablePermissions } from '@/components/cotacoes/CotacoesTable';
 import { CotacoesMobileList } from '@/components/cotacoes/CotacoesMobileList';
+import { CotacoesFiltrosSheet } from '@/components/cotacoes/CotacoesFiltrosSheet';
+import { CotacoesActiveFiltersChips } from '@/components/cotacoes/CotacoesActiveFiltersChips';
 // Modais lazy — só baixam quando o usuário abre (reduz bundle inicial da rota)
 const CotacaoDetalhesModal = lazy(() =>
   import('@/components/cotacoes/CotacaoDetalhesModal').then((m) => ({ default: m.CotacaoDetalhesModal }))
@@ -826,14 +828,18 @@ export default function Cotacoes() {
       {/* Card mobile: total de cotações (visível mesmo com filtros aplicados) */}
       {funilCounts && funilCounts.total > 0 && (
         <div className="md:hidden">
-          <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 flex items-center justify-between">
-            <div className="text-sm">
-              <span className="text-muted-foreground">Você tem </span>
-              <span className="font-bold text-primary">{funilCounts.total}</span>
-              <span className="text-muted-foreground"> cotação(ões) no total</span>
+          <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 flex items-center justify-between gap-2">
+            <div className="text-sm leading-tight">
+              <div>
+                <span className="text-muted-foreground">Total: </span>
+                <span className="font-bold text-primary">{funilCounts.total}</span>
+              </div>
+              <div className="text-[11px] text-muted-foreground mt-0.5">
+                {cotacoesEmAndamentoTotal} em andamento · {cotacoesFinalizadasTotal} finalizadas
+              </div>
             </div>
             {hasActiveFilters && (
-              <Button size="sm" variant="ghost" onClick={clearFilters} className="h-7 px-2 text-xs">
+              <Button size="sm" variant="ghost" onClick={clearFilters} className="h-7 px-2 text-xs shrink-0">
                 Limpar filtros
               </Button>
             )}
@@ -862,9 +868,66 @@ export default function Cotacoes() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Filtros - Barra unificada */}
+        {/* Filtros - Mobile: busca + botão único "Filtros" */}
+        <div className="md:hidden flex items-center gap-2 px-3 py-2 rounded-xl bg-muted/30 border border-border/40">
+          <div className="relative flex-1 min-w-0">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
+            <Input
+              placeholder="Buscar..."
+              className="pl-9 h-9 border-0 bg-background/80 shadow-sm focus-visible:ring-1"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+            />
+          </div>
+          <CotacoesFiltrosSheet
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            mesFilter={mesFilter}
+            setMesFilter={setMesFilter}
+            dataFilter={dataFilter}
+            setDataFilter={setDataFilter}
+            consultorFilter={consultorFilter}
+            setConsultorFilter={setConsultorFilter}
+            etapaFunilFilter={etapaFunilFilter}
+            setEtapaFunilFilter={setEtapaFunilFilter}
+            filtroOrfas={filtroOrfas}
+            setFiltroOrfas={(v) => { setFiltroOrfas(v); setSelectedIds(new Set()); }}
+            mesesDisponiveis={mesesDisponiveis}
+            formatMesLabel={formatMesLabel}
+            vendedores={vendedores}
+            showStatusEPeriodo={activeTab === 'em_andamento'}
+            showConsultor={permissions.cotacao.viewScope !== 'own'}
+            showOrfas={activeTab === 'em_andamento' && (permissions.cotacao.canDelete || !!permissions.userId)}
+            activeCount={[search, statusFilter !== 'all', mesFilter !== 'all', dataFilter, consultorFilter !== 'all', filtroOrfas, etapaFunilFilter !== 'all'].filter(Boolean).length}
+            onClear={clearFilters}
+          />
+        </div>
+
+        {/* Chips de filtros ativos — só mobile */}
+        <div className="md:hidden">
+          <CotacoesActiveFiltersChips
+            search={search}
+            statusFilter={statusFilter}
+            mesFilter={mesFilter}
+            dataFilter={dataFilter}
+            consultorFilter={consultorFilter}
+            etapaFunilFilter={etapaFunilFilter}
+            filtroOrfas={filtroOrfas}
+            vendedores={vendedores}
+            formatMesLabel={formatMesLabel}
+            onClearSearch={() => setSearchInput('')}
+            onClearStatus={() => setStatusFilter('all')}
+            onClearMes={() => setMesFilter('all')}
+            onClearData={() => setDataFilter(undefined)}
+            onClearConsultor={() => setConsultorFilter('all')}
+            onClearEtapa={() => setEtapaFunilFilter('all')}
+            onClearOrfas={() => setFiltroOrfas(false)}
+          />
+        </div>
+
+        {/* Filtros - Desktop: barra unificada */}
         <div className={cn(
-          "flex flex-wrap items-center gap-2 px-4 py-3 rounded-xl",
+          "hidden md:flex flex-wrap items-center gap-2 px-4 py-3 rounded-xl",
           "bg-muted/30 border border-border/40"
         )}>
           <div className="relative flex-1 min-w-[200px] max-w-md">
@@ -1010,6 +1073,7 @@ export default function Cotacoes() {
           )}
         </div>
 
+
         {/* Barra de seleção em lote */}
         {selectedIds.size > 0 && (
           <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-destructive/10 border border-destructive/20 animate-in fade-in-0 slide-in-from-top-2 duration-200">
@@ -1098,6 +1162,14 @@ export default function Cotacoes() {
               <Button size="sm" variant="outline" onClick={clearFilters} className="shrink-0">
                 Limpar filtros
               </Button>
+            </div>
+          )}
+          {cotacoesFinalizadasTotal === 0 && !hasActiveFilters && (
+            <div className="mb-3 rounded-xl border border-border/50 bg-muted/30 px-4 py-6 text-center">
+              <p className="text-sm font-medium text-foreground">Ainda não há cotações finalizadas</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Aqui aparecerão as cotações <strong>aceitas</strong>, <strong>recusadas</strong> ou <strong>expiradas</strong>.
+              </p>
             </div>
           )}
           <div className="hidden md:block">
