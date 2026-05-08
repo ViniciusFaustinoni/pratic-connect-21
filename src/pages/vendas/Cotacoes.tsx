@@ -43,6 +43,9 @@ const RelatorioInteligenteCotacoesDialog = lazy(() =>
 import type { PlanoParaPdf, CotacaoComparativaParaPdf } from '@/lib/gerarPdfCotacao';
 import { CotacoesTable, type CotacoesTablePermissions } from '@/components/cotacoes/CotacoesTable';
 import { CotacoesMobileList } from '@/components/cotacoes/CotacoesMobileList';
+import { CotacoesFiltrosSheet } from '@/components/cotacoes/CotacoesFiltrosSheet';
+import { CotacoesActiveFiltersChips } from '@/components/cotacoes/CotacoesActiveFiltersChips';
+import { useIsMobile } from '@/hooks/use-mobile';
 // Modais lazy — só baixam quando o usuário abre (reduz bundle inicial da rota)
 const CotacaoDetalhesModal = lazy(() =>
   import('@/components/cotacoes/CotacaoDetalhesModal').then((m) => ({ default: m.CotacaoDetalhesModal }))
