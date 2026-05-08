@@ -968,7 +968,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
       // Verificar se a placa já está vinculada a OUTRO associado na base local
       try {
-        const localResult = await verificarPlacaOutroAssoc.mutateAsync({ placa, cpfSolicitante: cpf });
+        const localResult = await verificarPlacaOutroAssoc.mutateAsync({ placa });
         if (localResult?.conflito) {
           setPlacaOutroAssocInfo(localResult);
           setShowPlacaOutroAssocModal(true);
