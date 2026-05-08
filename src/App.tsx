@@ -59,6 +59,8 @@ const ResetPassword = lazy(() => import("./pages/auth/ResetPassword"));
 
 // Internal System Pages
 const Dashboard = lazy(() => import("./pages/Dashboard"));
+const TutoriaisLista = lazy(() => import("./pages/tutoriais/TutoriaisLista"));
+const TutorialDetalhe = lazy(() => import("./pages/tutoriais/TutorialDetalhe"));
 const Perfil = lazy(() => import("./pages/Perfil"));
 const Notificacoes = lazy(() => import("./pages/Notificacoes"));
 
@@ -489,6 +491,8 @@ const App = () => (
             {/* Protected routes with internal layout */}
             <Route element={<AppLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/tutoriais" element={<TutoriaisLista />} />
+              <Route path="/tutoriais/:slug" element={<TutorialDetalhe />} />
               <Route path="/perfil" element={<Perfil />} />
               <Route path="/notificacoes" element={<Notificacoes />} />
               

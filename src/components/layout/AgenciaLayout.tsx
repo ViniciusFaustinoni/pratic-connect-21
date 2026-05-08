@@ -4,7 +4,7 @@ import { ProtectedRoute } from '@/components/ProtectedRoute';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { LogOut, Building2, CreditCard, LayoutDashboard, Bug } from 'lucide-react';
+import { LogOut, Building2, CreditCard, LayoutDashboard, Bug, GraduationCap } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { RelatarErroModal } from '@/components/suporte/RelatarErroModal';
@@ -18,6 +18,7 @@ export function AgenciaLayout() {
 
   const navItems = [
     { path: '/agencia', label: 'Painel', icon: LayoutDashboard },
+    { path: '/tutoriais', label: 'Tutoriais', icon: GraduationCap },
     { path: '/agencia/dados-pagamento', label: 'Dados de Pagamento', icon: CreditCard },
   ];
 

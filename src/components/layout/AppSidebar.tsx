@@ -169,6 +169,12 @@ const menuConfig: {
       permission: 'canViewDashboard',
       color: MENU_COLORS.dashboard,
     },
+    {
+      title: 'Tutoriais',
+      url: '/tutoriais',
+      icon: GraduationCap,
+      color: MENU_COLORS.dashboard,
+    },
   ],
   groups: [
     {
