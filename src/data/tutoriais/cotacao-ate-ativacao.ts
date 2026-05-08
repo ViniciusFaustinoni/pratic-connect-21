@@ -10,6 +10,7 @@ import associadoEscolhaPlano from '@/assets/tutoriais/associado-escolha-plano.pn
 import associadoDocumentos from '@/assets/tutoriais/associado-documentos.png';
 import associadoVistoriaBaseData from '@/assets/tutoriais/associado-vistoria-base-data.png';
 import associadoAssinaturaEmail from '@/assets/tutoriais/associado-assinatura-email.png';
+import associadoAgendamentoTecnico from '@/assets/tutoriais/associado-agendamento-tecnico.png';
 
 export const cotacaoAteAtivacao: Tutorial = {
   id: 'cotacao-ate-ativacao',
@@ -201,11 +202,12 @@ export const cotacaoAteAtivacao: Tutorial = {
       numero: 15,
       titulo: '👤 [Ação do Associado] Opção B — Vistoria presencial (técnico vai até você)',
       descricao:
-        'Se o associado escolher "Quero que o técnico venha até mim", abre a tela "Agendar Vistoria Presencial". O cliente seleciona a data nos cards (segunda/terça/quarta…), define quem vai receber o técnico (Eu mesmo ou Outra pessoa — neste caso preenche nome/telefone), opcionalmente ativa "Permitir encaixe de horário" (antecipa a visita se houver técnico próximo) e clica em "Revisar agendamento" para confirmar. O técnico vai até o endereço cadastrado em até 48h.',
+        'Se o associado escolher "Quero que o técnico venha até mim", abre a tela "Agendar Vistoria Presencial". O cliente seleciona a data nos cards (segunda/terça/quarta…), escolhe o período (Manhã 08:00–12:00 / Tarde 14:00–18:00 — com a quantidade de vagas disponíveis exibida em verde), define quem vai receber o técnico (Eu mesmo ou Outra pessoa — neste caso preenche nome/telefone) e, se quiser, ativa "Permitir encaixe de horário". Ao final, clica em "Revisar agendamento" para confirmar. O técnico vai até o endereço cadastrado em até 48h.',
+      imagem: associadoAgendamentoTecnico,
       dicas: [
-        'Período é Manhã (08:00–12:00) ou Tarde (13:00–18:00) — não horário fechado.',
+        'Período é Manhã (08:00–12:00) ou Tarde (14:00–18:00) — não horário fechado. As vagas disponíveis aparecem abaixo de cada período.',
         '"Outra pessoa" exige telefone válido com WhatsApp — é por ele que o técnico avisa o ETA.',
-        'Encaixe de horário é opcional; se ativo, o cliente recebe aviso quando o técnico estiver a caminho antes do período agendado.',
+        'Encaixe de horário (opcional): se ativado, e houver um técnico próximo finalizando outro atendimento antes do período agendado, ele pode antecipar a visita. O associado é avisado com antecedência via WhatsApp — agiliza muito a instalação.',
         'Diesel / FIPE ≥ 30k carro / ≥ 9k moto: o técnico instala rastreador junto com a vistoria.',
       ],
     },
