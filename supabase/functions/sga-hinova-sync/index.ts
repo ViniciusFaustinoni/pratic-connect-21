@@ -981,12 +981,13 @@ serve(async (req) => {
       }
 
       // Fotos da vistoria do veículo (chassi, motor, frente, traseira, laterais, painel etc.)
-      // Só vistorias concluídas/aprovadas. Tipos sem mapeamento caem em descartadasSemTipo
-      // (comportamento existente — não quebra fluxo atual).
+      // Inclui 'em_analise' porque o monitoramento aprova a INSTALAÇÃO (que dispara este sync)
+      // ANTES de a vistoria mudar para 'aprovada' — sem isso, fotos seriam sempre descartadas.
+      // Estados explicitamente proibidos: 'reprovada' / 'cancelada'.
       const { data: vistoriasVeic } = await supabase.from('vistorias')
         .select('id')
         .eq('veiculo_id', _vid)
-        .in('status', ['concluida', 'aprovada', 'aprovado']);
+        .in('status', ['concluida', 'aprovada', 'aprovado', 'em_analise', 'aprovada_ressalvas']);
 
       if (vistoriasVeic && vistoriasVeic.length > 0) {
         const vistoriaIds = vistoriasVeic.map((v: any) => v.id);
