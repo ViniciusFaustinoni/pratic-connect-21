@@ -282,6 +282,10 @@ serve(async (req) => {
     // multipart/form-data contendo o payload serializado completo.
     const formData = new FormData();
     formData.append('json', JSON.stringify(payload));
+    // A API Rede Veículos exige cpfCnpj e imei como campos separados no
+    // multipart/form-data (não basta estarem dentro do "json").
+    formData.append('cpfCnpj', cpfCnpjLimpo);
+    formData.append('imei', imeiLimpo);
 
     const apiResponse = await fetch(`${baseUrl}/vincularClienteVeiculo/`, {
       method: 'POST',
