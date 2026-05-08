@@ -2088,6 +2088,14 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
         onOpenChange={setShowSGAModal}
         placa={placaBusca}
       />
+
+      {/* Modal Placa pertence a outro associado (base local) */}
+      <PlacaOutroAssociadoModal
+        open={showPlacaOutroAssocModal}
+        onOpenChange={setShowPlacaOutroAssocModal}
+        placa={placaBusca}
+        info={placaOutroAssocInfo}
+      />
     </div>
   );
 }
