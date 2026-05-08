@@ -266,7 +266,24 @@ export function EtapaAssinaturaContrato({
           body: { cotacao_id: cotacaoId },
         });
 
-        if (error) throw error;
+        if (error) {
+          // Tentar extrair mensagem de erro do corpo da resposta (FunctionsHttpError)
+          let mensagemDetalhada = error.message || 'Erro ao gerar contrato';
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const ctx = (error as any)?.context;
+            if (ctx && typeof ctx.json === 'function') {
+              const body = await ctx.json();
+              if (body?.error) mensagemDetalhada = body.error;
+              if (body?.code === 'PLACA_DE_OUTRO_ASSOCIADO') {
+                mensagemDetalhada = body.error || 'Esta placa já pertence a outro associado. Cancele esta cotação e abra uma Troca de Titularidade.';
+              }
+            }
+          } catch (parseErr) {
+            console.warn('[EtapaAssinatura] Falha ao ler corpo de erro:', parseErr);
+          }
+          throw new Error(mensagemDetalhada);
+        }
         if (!data?.success) throw new Error(data?.error || 'Erro ao gerar contrato');
 
         cId = data.contrato.id;
