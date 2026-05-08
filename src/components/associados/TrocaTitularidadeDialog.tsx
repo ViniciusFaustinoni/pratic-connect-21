@@ -10,8 +10,9 @@ import { Loader2, Users, Info, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useCriarSolicitacaoTroca } from '@/hooks/useSolicitacoesTroca';
-import { useBuscaSGA } from '@/hooks/useBuscaSGA';
+import { useBuscaSGA, extractTransientPayload } from '@/hooks/useBuscaSGA';
 import { useQuery } from '@tanstack/react-query';
+import { SgaTransientAlert } from '@/components/cotacao/SgaTransientAlert';
 
 interface TrocaTitularidadeDialogProps {
   open: boolean;
