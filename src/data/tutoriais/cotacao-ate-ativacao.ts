@@ -6,6 +6,7 @@ import cotacaoRegiaoUsoPlaca from '@/assets/tutoriais/cotacao-regiao-uso-placa.p
 import cotacaoValorCenario from '@/assets/tutoriais/cotacao-valor-cenario.png';
 import cotacaoVencimentoCriar from '@/assets/tutoriais/cotacao-vencimento-criar.png';
 import cotacaoCopiarLink from '@/assets/tutoriais/cotacao-copiar-link.png';
+import associadoEscolhaPlano from '@/assets/tutoriais/associado-escolha-plano.png';
 
 export const cotacaoAteAtivacao: Tutorial = {
   id: 'cotacao-ate-ativacao',
@@ -132,6 +133,19 @@ export const cotacaoAteAtivacao: Tutorial = {
     },
     {
       numero: 10,
+      titulo: '👤 [Ação do Associado] Escolher o plano na página pública',
+      descricao:
+        'ATENÇÃO: esta etapa é executada pelo PRÓPRIO ASSOCIADO, não pelo vendedor. Ao abrir o link enviado, o cliente vê a jornada pública (Escolha do Plano › Documentos › Contrato › Vistoria › Pagamento). Na primeira tela ele compara os planos elegíveis, clica em "Selecionar" no plano desejado (o card fica marcado como "Selecionado ✓") e confirma em "Continuar com este plano" para avançar para a etapa de Documentos.',
+      imagem: associadoEscolhaPlano,
+      dicas: [
+        'O vendedor NÃO deve concluir essa etapa pelo cliente — a escolha precisa partir do associado para validar o aceite.',
+        'Os planos exibidos são exatamente os elegíveis para o veículo cotado (mesma regra da cotação interna).',
+        'Se o cliente tiver dúvida entre planos, oriente por WhatsApp/ligação, mas deixe ele clicar em "Continuar com este plano".',
+        'Só depois desse aceite o fluxo libera Documentos › Contrato (assinatura facial Autentique).',
+      ],
+    },
+    {
+      numero: 11,
       titulo: 'Cliente assina com biometria facial',
       descricao:
         'A assinatura é feita pelo Autentique exclusivamente por e-mail com reconhecimento facial (PF_FACIAL). Após assinar, o sistema atualiza o status do contrato para "Assinado" e move o associado para a fila de Cadastro.',
@@ -141,7 +155,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 11,
+      numero: 12,
       titulo: 'Aprovação de Cadastro',
       descricao:
         'A equipe de Cadastro confere documentos (CNH, CRLV/CRV/NF) e libera a proposta. Documentos validados por OCR ainda passam por revisão manual obrigatória. Acompanhe em Cadastro › Propostas Pendentes.',
@@ -153,7 +167,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 12,
+      numero: 13,
       titulo: 'Agendamento de instalação ou autovistoria',
       descricao:
         'Após o cadastro aprovado, o cliente agenda a instalação do rastreador (obrigatória para Diesel, carros FIPE ≥ R$ 30k e motos ≥ R$ 9k). Para FIPE menores, pode ser autovistoria ou vistoria presencial sem rastreador.',
@@ -163,7 +177,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 13,
+      numero: 14,
       titulo: 'Conclusão da instalação / vistoria',
       descricao:
         'O técnico (Base, Rota, Prestador externo ou Autovistoria) registra fotos e finaliza o serviço no app. O contrato fica aguardando a aprovação final do Monitoramento.',
@@ -172,7 +186,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 14,
+      numero: 15,
       titulo: 'Aprovação de Monitoramento',
       descricao:
         'O time de Monitoramento confere fotos, posição do rastreador e laudo, e aprova ou solicita ajuste. Sem essa aprovação, o veículo não fica ativo e a cobertura permanece suspensa.',
@@ -181,7 +195,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       ],
     },
     {
-      numero: 15,
+      numero: 16,
       titulo: 'Ativação do associado e sync com SGA',
       descricao:
         'Aprovado o monitoramento, o sistema chama a rotina central de ativação que promove associado, contrato e veículo para "ativo", libera as coberturas e sincroniza o cadastro com o SGA Hinova (situação Pendente — promoção para Ativo é feita manualmente no SGA pela equipe interna).',
