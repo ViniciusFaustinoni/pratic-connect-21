@@ -1,4 +1,5 @@
 import { Tutorial } from './types';
+import novaCotacaoBotao from '@/assets/tutoriais/nova-cotacao-botao.png';
 
 export const cotacaoAteAtivacao: Tutorial = {
   id: 'cotacao-ate-ativacao',
@@ -28,6 +29,7 @@ export const cotacaoAteAtivacao: Tutorial = {
       titulo: 'Inicie uma nova cotação',
       descricao:
         'Em Vendas › Cotação, clique em "Nova Cotação". Informe a placa (ou marque 0KM), o ano e a versão FIPE do veículo. O sistema busca a tabela FIPE automaticamente e detecta a categoria do veículo (carro, moto, diesel, blindado etc.).',
+      imagem: novaCotacaoBotao,
       dicas: [
         'Para veículo 0KM use a opção 0KM e anexe CRLV/CRV/NF (chassi sempre digitado manualmente).',
         'Confira a categoria detectada — ela define quais planos aparecem.',
