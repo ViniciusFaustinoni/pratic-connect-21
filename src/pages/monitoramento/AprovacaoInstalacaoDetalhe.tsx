@@ -46,7 +46,7 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
       if (!servicoId) throw new Error('ID não fornecido');
 
       // Buscar serviço com joins
-      const { data: servico, error } = await supabase
+      const { data: servico, error } = await (supabase as any)
         .from('servicos')
         .select(`
           *,
