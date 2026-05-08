@@ -191,21 +191,7 @@ export const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null 
     }
   }
 
-  // 6. Contrato assinado MAS pagamento ainda não confirmado → pagamento
-  //    (vale ANTES de qualquer etapa pós-pagamento)
-  if (
-    (contratoStatus === 'assinado' || contratoStatus === 'ativo') &&
-    adesaoPaga === false
-  ) {
-    return 'realizando_pagamento';
-  }
-
-  // Autovistoria escolhida + pagamento pendente
-  if (tipoVistoria === 'autovistoria' && adesaoPaga === false) {
-    return 'realizando_autovistoria';
-  }
-
-  // 7. Pagamento OK + instalação já agendada
+  // 6. Pagamento OK + instalação já agendada
   if (
     adesaoPaga === true &&
     instalacao &&
@@ -214,30 +200,49 @@ export const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null 
     return tipoVistoria === 'autovistoria' ? 'instalacao_agendada' : 'vistoria_agendada';
   }
 
-  // 8. Pagamento OK MAS sem instalação ainda criada → aguardando vistoria
-  //    (NOVA ETAPA — preenche o vácuo entre "Realizando Pagamento" e "Vistoria Agendada")
-  if (adesaoPaga === true) {
-    if (
-      statusContratacao === 'pagamento_ok' ||
-      statusContratacao === 'contrato_assinado' ||
-      statusContratacao === 'documentos_ok' ||
-      contratoStatus === 'assinado' ||
-      contratoStatus === 'ativo' ||
-      associadoStatus === 'pendente_vistoria' ||
-      associadoStatus === 'aguardando_instalacao'
-    ) {
+  // 7. Contrato assinado — IMPORTANTE: no link público a ordem é
+  //    Plano → Documentos → Contrato → Vistoria → Pagamento.
+  //    Logo, "assinado + adesao_paga=false" pode ser ETAPA VISTORIA, NÃO pagamento.
+  //    A etapa Pagamento só é a real depois que a vistoria/agendamento foi resolvido.
+  if (contratoStatus === 'assinado' || contratoStatus === 'ativo') {
+    // 7.a Vistoria já materializada como instalação agendada (pago ou não)
+    if (instalacao && (instalacao.status === 'agendada' || instalacao.status === 'reagendada')) {
+      return tipoVistoria === 'autovistoria' ? 'instalacao_agendada' : 'vistoria_agendada';
+    }
+
+    // 7.b Vistoria escolhida e em andamento
+    if (tipoVistoria === 'autovistoria') {
+      // autovistoria_ok significa fotos enviadas → cai pra pagamento
+      if (statusContratacao === 'autovistoria_ok' || statusContratacao === 'vistoria_ok') {
+        return adesaoPaga === false ? 'realizando_pagamento' : 'aguardando_vistoria';
+      }
+      return 'realizando_autovistoria';
+    }
+    if (tipoVistoria === 'agendada' || tipoVistoria === 'agendada_base') {
+      // Vistoria agendada — pode ainda não ter virado instalação (agendamento_base órfão)
+      // mas o cliente JÁ definiu a vistoria; etapa real é "vistoria_agendada".
+      if (statusContratacao === 'vistoria_ok') {
+        return adesaoPaga === false ? 'realizando_pagamento' : 'aguardando_vistoria';
+      }
+      return 'vistoria_agendada';
+    }
+
+    // 7.c Sem tipo_vistoria definido: cliente ainda não chegou na Step 4.
+    //     Se status_contratacao já marca pagamento_ok → aguarda vistoria;
+    //     se ainda não pagou e contrato apenas assinado → escolha de vistoria.
+    if (statusContratacao === 'pagamento_ok' || adesaoPaga === true) {
       return 'aguardando_vistoria';
     }
+    return 'escolha_vistoria';
   }
 
-  // 9. Contrato em fase de assinatura
+  // 8. Contrato em fase de assinatura
   if (contratoStatus && ['pendente_assinatura', 'enviado', 'visualizado'].includes(contratoStatus)) {
     return 'assinando_contrato';
   }
 
-  // 10. Etapas pré-contrato derivadas de status_contratacao
+  // 9. Etapas pré-contrato derivadas de status_contratacao
   if (statusContratacao === 'vistoria_ok') {
-    // vistoria pré-contrato concluída, agora paga
     if (tipoVistoria === 'agendada' && cotacao.vistoria_data_agendada) {
       return 'vistoria_agendada';
     }
@@ -257,7 +262,7 @@ export const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null 
     statusContratacao && statusContratacao !== 'aguardando' && statusContratacao !== null;
   if (cotacao.status === 'rascunho' && !temContratacaoAtiva && !cotacao.contrato) return null;
 
-  // 11. Fallbacks
+  // 10. Fallbacks
   if (cotacao.status === 'enviada' || cotacao.status === 'aceita') return 'cotacao_realizada';
   if (temContratacaoAtiva) return 'cotacao_realizada';
   return null;
