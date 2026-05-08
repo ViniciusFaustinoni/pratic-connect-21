@@ -5,6 +5,7 @@ import cotacaoComumDados from '@/assets/tutoriais/cotacao-comum-dados.png';
 import cotacaoRegiaoUsoPlaca from '@/assets/tutoriais/cotacao-regiao-uso-placa.png';
 import cotacaoValorCenario from '@/assets/tutoriais/cotacao-valor-cenario.png';
 import cotacaoVencimentoCriar from '@/assets/tutoriais/cotacao-vencimento-criar.png';
+import cotacaoCopiarLink from '@/assets/tutoriais/cotacao-copiar-link.png';
 
 export const cotacaoAteAtivacao: Tutorial = {
   id: 'cotacao-ate-ativacao',
@@ -116,12 +117,14 @@ export const cotacaoAteAtivacao: Tutorial = {
     },
     {
       numero: 9,
-      titulo: 'Envie a proposta ao cliente',
+      titulo: 'Abra a cotação criada e envie o link ao associado',
       descricao:
-        'Conclua a cotação para gerar a proposta. O sistema cria automaticamente o documento Autentique e envia o link de assinatura por WhatsApp/e-mail. Acompanhe o status na tela do contrato.',
+        'Após "Criar Cotação", abra a cotação gerada (status Rascunho) e use os botões do topo: "Copiar para WhatsApp" envia o texto pronto com o link da proposta, "PDF" baixa a proposta, "Acessar Link" abre a página pública e "Copiar Link" copia só a URL para colar onde precisar. "Duplicar" cria uma cópia para simular outro cenário.',
+      imagem: cotacaoCopiarLink,
       dicas: [
-        'O link público da proposta também pode ser compartilhado manualmente, se necessário.',
-        'Se o cliente pedir alterações, edite a cotação e gere uma nova proposta — não force assinatura de proposta antiga.',
+        'Prefira "Copiar para WhatsApp" — o texto já vai formatado com saudação, valores e link.',
+        'O link público é o mesmo que o cliente recebe por WhatsApp/e-mail — pode reenviar quantas vezes precisar.',
+        'Se o cliente pedir alterações, edite a cotação ou duplique para um novo cenário; não force assinatura de proposta antiga.',
       ],
       links: [
         { label: 'Contratos', url: '/vendas/contratos' },
