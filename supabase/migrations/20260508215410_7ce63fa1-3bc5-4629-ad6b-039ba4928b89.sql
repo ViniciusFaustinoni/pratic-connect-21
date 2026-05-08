@@ -1,0 +1,1 @@
+DELETE FROM veiculos WHERE id = 'e78954fa-79a3-42ca-8c88-0a79a4f40e6a';
