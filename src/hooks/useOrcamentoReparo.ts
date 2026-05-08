@@ -113,7 +113,7 @@ export function useOrcamentoHistorico(orcamentoId: string | undefined) {
     queryKey: ['orcamento-reparo-historico', orcamentoId],
     queryFn: async () => {
       if (!orcamentoId) return [];
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('orcamento_reparo_historico')
         .select('*, profiles:usuario_id(nome)')
         .eq('orcamento_id', orcamentoId)

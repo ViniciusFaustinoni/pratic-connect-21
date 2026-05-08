@@ -153,7 +153,7 @@ export function useTokensCache() {
   return useQuery({
     queryKey: ['rastreadores-tokens'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('rastreadores_tokens_cache')
         .select(`
           *,

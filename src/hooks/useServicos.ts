@@ -270,7 +270,7 @@ export function useServicos(filters?: ServicoFilters) {
   return useQuery({
     queryKey: ['servicos', filters],
     queryFn: async () => {
-      let query = supabase
+      let query = (supabase as any)
         .from('servicos')
         .select(`
           *,
@@ -346,7 +346,7 @@ export function useServico(id: string | undefined) {
     queryFn: async () => {
       if (!id) return null;
 
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('servicos')
         .select(`
           *,
@@ -681,7 +681,7 @@ export function useServicosHistorico(dias: number = 7) {
       const dataLimite = new Date();
       dataLimite.setDate(dataLimite.getDate() - dias);
 
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('servicos')
         .select(`
           id, tipo, status, data_agendada, concluida_em,
@@ -766,7 +766,7 @@ export function useServicoDetalhes(id: string | undefined) {
       if (!id) throw new Error('ID não fornecido');
 
       // Buscar primeiro em servicos
-      const { data: servico, error: servicoError } = await supabase
+      const { data: servico, error: servicoError } = await (supabase as any)
         .from('servicos')
         .select(`
           *,

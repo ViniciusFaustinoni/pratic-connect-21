@@ -11,7 +11,7 @@ export function useInstalacoesAguardandoAprovacao() {
     queryKey: ['instalacoes-aguardando-aprovacao-monitoramento'],
     queryFn: async () => {
       // Buscar serviços de instalação concluídos
-      const { data: servicos, error } = await supabase
+      const { data: servicos, error } = await (supabase as any)
         .from('servicos')
         .select(`
           id,
@@ -63,7 +63,7 @@ export function useAprovacaoMonitoramentoStats() {
       const hojeISO = hoje.toISOString();
 
       // Aguardando = servicos concluidos com veículo sem cobertura_total
-      const { data: pendentes } = await supabase
+      const { data: pendentes } = await (supabase as any)
         .from('servicos')
         .select('id, veiculo:veiculo_id(cobertura_roubo_furto, cobertura_total)')
         .eq('tipo', 'instalacao')

@@ -19,7 +19,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Radio, Server, Package, Clock, Plus, Upload, MapPin, Settings } from 'lucide-react';
+import { Radio, Server, Package, Clock, Plus, Upload, MapPin, Settings, Send } from 'lucide-react';
+import { PlataformasSyncPanel } from '@/components/rastreadores/PlataformasSyncPanel';
 import { Loader2 } from 'lucide-react';
 
 const MapaRastreadores = lazy(() => import('./Mapa'));
@@ -130,6 +131,7 @@ export default function Rastreadores() {
     { value: 'visao-geral', label: 'Visão Geral', icon: Radio },
     { value: 'estoque', label: 'Estoque', icon: Package },
     { value: 'historico', label: 'Histórico', icon: Clock },
+    ...(canManagePlataformas ? [{ value: 'fila-plataformas', label: 'Fila Plataformas', icon: Send }] : []),
     ...(canManagePlataformas ? [{ value: 'plataformas', label: 'Plataformas', icon: Server }] : []),
     ...(canManagePlataformas ? [{ value: 'locais', label: 'Locais Instalação', icon: Settings }] : []),
   ];
@@ -213,6 +215,13 @@ export default function Rastreadores() {
         <TabsContent value="historico" className="mt-6">
           <HistoricoMovimentacoes />
         </TabsContent>
+
+        {/* Aba Fila Plataformas (condicional) */}
+        {canManagePlataformas && (
+          <TabsContent value="fila-plataformas" className="mt-6">
+            <PlataformasSyncPanel />
+          </TabsContent>
+        )}
 
         {/* Aba Plataformas (condicional) */}
         {canManagePlataformas && (
