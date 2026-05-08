@@ -36,7 +36,7 @@ interface CotacaoClienteVeiculoProps {
     veiculo_ano?: number | null;
     veiculo_placa?: string | null;
     valor_fipe?: number | null;
-    dados_extras?: { tipo_entrada?: string | null } | null;
+    dados_extras?: ({ tipo_entrada?: string | null } & Record<string, unknown>) | null;
   };
   onVincularLead: () => void;
   onTrocarLead: () => void;
