@@ -61,7 +61,7 @@ export function useVeiculosOficina(filters?: OficinaFilters) {
       
       let prestadoresMap: Record<string, { nome: string; especialidades: string[] }[]> = {};
       if (sinistroIds.length > 0) {
-        const { data: prestData } = await supabase
+        const { data: prestData } = await (supabase as any)
           .from('sinistro_prestadores')
           .select('sinistro_id, prestador:prestadores(nome, especialidades)')
           .in('sinistro_id', sinistroIds);
