@@ -830,14 +830,18 @@ export default function Cotacoes() {
       {/* Card mobile: total de cotações (visível mesmo com filtros aplicados) */}
       {funilCounts && funilCounts.total > 0 && (
         <div className="md:hidden">
-          <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 flex items-center justify-between">
-            <div className="text-sm">
-              <span className="text-muted-foreground">Você tem </span>
-              <span className="font-bold text-primary">{funilCounts.total}</span>
-              <span className="text-muted-foreground"> cotação(ões) no total</span>
+          <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 flex items-center justify-between gap-2">
+            <div className="text-sm leading-tight">
+              <div>
+                <span className="text-muted-foreground">Total: </span>
+                <span className="font-bold text-primary">{funilCounts.total}</span>
+              </div>
+              <div className="text-[11px] text-muted-foreground mt-0.5">
+                {cotacoesEmAndamentoTotal} em andamento · {cotacoesFinalizadasTotal} finalizadas
+              </div>
             </div>
             {hasActiveFilters && (
-              <Button size="sm" variant="ghost" onClick={clearFilters} className="h-7 px-2 text-xs">
+              <Button size="sm" variant="ghost" onClick={clearFilters} className="h-7 px-2 text-xs shrink-0">
                 Limpar filtros
               </Button>
             )}
