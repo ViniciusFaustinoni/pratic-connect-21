@@ -251,10 +251,16 @@ export function TrocaTitularidadeDialog({
             ) : semEspelhoLocal ? (
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
-                <AlertDescription className="text-sm">
-                  {importErro
-                    ? `Falha ao importar do SGA: ${importErro}`
-                    : `O SGA tem ${sgaPayload?.veiculos.length} veículo(s) para este associado, mas o import automático ainda não concluiu. Tente novamente em instantes.`}
+                <AlertDescription className="text-sm space-y-2">
+                  <div>
+                    {importErro
+                      ? `Falha ao importar do SGA: ${importErro}`
+                      : `O SGA tem ${sgaPayload?.veiculos.length} veículo(s) para este associado, mas o espelho local ainda não foi criado.`}
+                  </div>
+                  <Button size="sm" variant="outline" onClick={handleRetrySga} disabled={carregando}>
+                    {carregando && <Loader2 className="h-3 w-3 mr-2 animate-spin" />}
+                    Tentar novamente
+                  </Button>
                 </AlertDescription>
               </Alert>
             ) : (
