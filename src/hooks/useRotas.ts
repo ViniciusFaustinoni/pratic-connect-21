@@ -339,7 +339,7 @@ export function useInstalacoesDisponiveis(data?: Date) {
     queryKey: ['instalacoes-disponiveis', data ? format(data, 'yyyy-MM-dd') : 'todas'],
     queryFn: async () => {
       // Fase 3: lê de `servicos` filtrando por tipo='vistoria_instalacao'
-      let query = supabase
+      let query = (supabase as any)
         .from('servicos')
         .select(`
           *,
