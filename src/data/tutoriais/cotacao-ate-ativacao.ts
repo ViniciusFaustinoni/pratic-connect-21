@@ -7,6 +7,7 @@ import cotacaoValorCenario from '@/assets/tutoriais/cotacao-valor-cenario.png';
 import cotacaoVencimentoCriar from '@/assets/tutoriais/cotacao-vencimento-criar.png';
 import cotacaoCopiarLink from '@/assets/tutoriais/cotacao-copiar-link.png';
 import associadoEscolhaPlano from '@/assets/tutoriais/associado-escolha-plano.png';
+import associadoDocumentos from '@/assets/tutoriais/associado-documentos.png';
 
 export const cotacaoAteAtivacao: Tutorial = {
   id: 'cotacao-ate-ativacao',
