@@ -1,6 +1,6 @@
 // Edge function: rastreadores-sync-worker
 // Actions:
-//   - enqueue:      cria/atualiza item na fila para um rastreador
+//   - enqueue:      cria/atualiza item na fila (operacao: 'vincular' | 'desvincular')
 //   - reprocess:    reexecuta um item da fila chamando edge da plataforma correta
 //   - discard:      marca item como falha_permanente
 //   - health_check: testa conexão com a plataforma e grava em rastreadores_sync_health_checks
@@ -14,6 +14,8 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+const PLATAFORMAS_VALIDAS = ['softruck', 'rede_veiculos'] as const;
 
 function svc() {
   return createClient(SUPABASE_URL, SERVICE_ROLE);
@@ -53,7 +55,6 @@ async function reprocessItem(id: string) {
     })
     .eq('id', id);
 
-  // Carrega rastreador
   const { data: rast } = await supabase
     .from('rastreadores')
     .select('id, imei, plataforma, veiculo_id, associado_id, plataforma_device_id, plataforma_user_id, plataforma_veiculo_id')
@@ -68,33 +69,58 @@ async function reprocessItem(id: string) {
     return { ok: false, error: 'Rastreador não existe mais' };
   }
 
-  // Carrega associado para email
-  const { data: assoc } = await supabase
-    .from('associados')
-    .select('email')
-    .eq('id', rast.associado_id)
-    .maybeSingle();
+  const operacao = item.operacao || 'vincular';
+  const veiculoId = rast.veiculo_id ?? item.veiculo_id;
+  const associadoId = rast.associado_id ?? item.associado_id;
 
   let result;
-  if (item.plataforma === 'softruck') {
-    result = await callEdge('softruck-ativar-dispositivo', {
-      imei: rast.imei,
-      veiculoId: rast.veiculo_id,
-      associadoId: rast.associado_id,
-      associadoEmail: assoc?.email,
-    });
-  } else if (item.plataforma === 'rede') {
-    result = await callEdge('rede-veiculos-ativar-cliente-completo', {
-      imei: rast.imei,
-      veiculoId: rast.veiculo_id,
-      associadoId: rast.associado_id,
-      associadoEmail: assoc?.email,
-    });
+
+  if (operacao === 'desvincular') {
+    if (item.plataforma === 'softruck') {
+      result = await callEdge('softruck-api', {
+        operation: 'deactivate_device',
+        deviceId: rast.plataforma_device_id || rast.imei,
+      });
+    } else if (item.plataforma === 'rede_veiculos') {
+      result = await callEdge('rede-veiculos-desvincular-cliente', {
+        rastreadorId: rast.id,
+        motivo: 'fila_desvinculo_manual',
+        atualizarBancoLocal: false,
+      });
+    } else {
+      throw new Error(`Plataforma desconhecida: ${item.plataforma}`);
+    }
   } else {
-    throw new Error(`Plataforma desconhecida: ${item.plataforma}`);
+    // vincular / ativar_completo (legado)
+    const { data: assoc } = await supabase
+      .from('associados')
+      .select('email')
+      .eq('id', associadoId)
+      .maybeSingle();
+
+    if (item.plataforma === 'softruck') {
+      result = await callEdge('softruck-ativar-dispositivo', {
+        imei: rast.imei,
+        veiculoId,
+        associadoId,
+        associadoEmail: assoc?.email,
+      });
+    } else if (item.plataforma === 'rede_veiculos') {
+      // Vincula APENAS este rastreador (não o associado inteiro)
+      result = await callEdge('rede-veiculos-vincular-cliente', {
+        imei: rast.imei,
+        veiculoId,
+        associadoId,
+      });
+    } else {
+      throw new Error(`Plataforma desconhecida: ${item.plataforma}`);
+    }
   }
 
-  const novoStatus = result.ok ? 'concluido' : (item.tentativas + 1 >= (item.max_tentativas ?? 5) ? 'falha_permanente' : 'falha');
+  const novoStatus = result.ok
+    ? 'concluido'
+    : (item.tentativas + 1 >= (item.max_tentativas ?? 5) ? 'falha_permanente' : 'falha');
+
   await supabase
     .from('rastreadores_sync_queue')
     .update({
@@ -109,7 +135,7 @@ async function reprocessItem(id: string) {
   return { ok: result.ok, status: result.status, body: result.body };
 }
 
-async function enqueueItem(rastreador_id: string, plataforma?: string) {
+async function enqueueItem(rastreador_id: string, plataforma?: string, operacao: string = 'vincular') {
   const supabase = svc();
   const { data: rast, error } = await supabase
     .from('rastreadores')
@@ -119,15 +145,16 @@ async function enqueueItem(rastreador_id: string, plataforma?: string) {
   if (error || !rast) throw new Error('Rastreador não encontrado');
 
   const plat = plataforma || rast.plataforma;
-  if (!['softruck', 'rede'].includes(plat)) {
+  if (!PLATAFORMAS_VALIDAS.includes(plat as any)) {
     throw new Error(`Plataforma inválida: ${plat}`);
   }
 
-  // Idempotente: se já existe pendente/falha para este rastreador, atualiza
+  // Idempotente: se já existe item ativo para este rastreador+operação, atualiza
   const { data: existente } = await supabase
     .from('rastreadores_sync_queue')
     .select('id')
     .eq('rastreador_id', rastreador_id)
+    .eq('operacao', operacao)
     .in('status', ['pendente', 'falha', 'processando'])
     .maybeSingle();
 
@@ -150,7 +177,7 @@ async function enqueueItem(rastreador_id: string, plataforma?: string) {
       veiculo_id: rast.veiculo_id,
       associado_id: rast.associado_id,
       plataforma: plat,
-      operacao: 'ativar_completo',
+      operacao,
       status: 'pendente',
       payload: { imei: rast.imei },
     })
@@ -165,17 +192,27 @@ async function healthCheck(plataforma: string) {
   const t0 = Date.now();
   let ok = false;
   let err: string | null = null;
+
   try {
-    const fnName = plataforma === 'softruck' ? 'softruck-api' : 'rede-veiculos-obter-status-cliente';
-    const r = await callEdge(fnName, plataforma === 'softruck' ? { operacao: 'listar-roles' } : { ping: true });
-    ok = r.ok;
-    if (!ok) err = r.body?.error || `HTTP ${r.status}`;
+    if (plataforma === 'softruck') {
+      const r = await callEdge('softruck-api', { operation: 'listar-roles' });
+      ok = r.ok;
+      if (!ok) err = r.body?.error || `HTTP ${r.status}`;
+    } else if (plataforma === 'rede_veiculos') {
+      // Sondagem leve: tenta autenticar via edge de busca de dispositivo (sem ID, falha previsível mas valida credenciais)
+      const r = await callEdge('rede-veiculos-buscar-dispositivo', { ping: true });
+      // Considera OK se respondeu (mesmo com 400/404 controlado), KO só em 5xx ou crash
+      ok = r.status < 500;
+      if (!ok) err = r.body?.error || `HTTP ${r.status}`;
+    } else {
+      err = 'Plataforma inválida';
+    }
   } catch (e: any) {
     err = e?.message || String(e);
   }
+
   const ms = Date.now() - t0;
 
-  // contagens
   const { count: pendentes } = await supabase
     .from('rastreadores_sync_queue')
     .select('id', { count: 'exact', head: true })
@@ -215,7 +252,7 @@ Deno.serve(async (req) => {
         result = await reprocessItem(body.id);
         break;
       case 'enqueue':
-        result = await enqueueItem(body.rastreador_id, body.plataforma);
+        result = await enqueueItem(body.rastreador_id, body.plataforma, body.operacao);
         break;
       case 'discard': {
         const supabase = svc();

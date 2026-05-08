@@ -232,10 +232,10 @@ export function PlataformasSyncPanel() {
     <Tabs defaultValue="softruck" className="space-y-4">
       <TabsList>
         <TabsTrigger value="softruck">Softruck</TabsTrigger>
-        <TabsTrigger value="rede">Rede Veículos</TabsTrigger>
+        <TabsTrigger value="rede_veiculos">Rede Veículos</TabsTrigger>
       </TabsList>
       <TabsContent value="softruck"><PlataformaSection plataforma="softruck" /></TabsContent>
-      <TabsContent value="rede"><PlataformaSection plataforma="rede" /></TabsContent>
+      <TabsContent value="rede_veiculos"><PlataformaSection plataforma="rede_veiculos" /></TabsContent>
     </Tabs>
   );
 }

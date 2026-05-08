@@ -32311,18 +32311,20 @@ export type Database = {
     Views: {
       rastreadores_pendentes_vinculo: {
         Row: {
+          associado_email: string | null
           associado_id: string | null
           associado_nome: string | null
+          codigo: string | null
           imei: string | null
-          motivo: string | null
+          placa: string | null
           plataforma: string | null
           plataforma_device_id: string | null
           plataforma_user_id: string | null
           plataforma_veiculo_id: string | null
           rastreador_id: string | null
           status: Database["public"]["Enums"]["status_rastreador"] | null
+          updated_at: string | null
           veiculo_id: string | null
-          veiculo_placa: string | null
         }
         Relationships: [
           {

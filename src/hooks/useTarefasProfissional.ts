@@ -35,7 +35,7 @@ export function useTarefasProfissional(profissionalId: string | null, diasFiltro
         : null;
 
       // Buscar serviços do profissional
-      let query = supabase
+      let query = (supabase as any)
         .from('servicos')
         .select(`
           id,
