@@ -25,6 +25,7 @@ import { CotacaoClienteVeiculo } from '@/components/cotacoes/CotacaoClienteVeicu
 import { CotacaoVendedor } from '@/components/cotacoes/CotacaoVendedor';
 import { PlanoCardComparativo, type PlanoComparativo } from '@/components/cotacoes/PlanoCardComparativo';
 import { PlanoDetalhesModal } from '@/components/cotacoes/PlanoDetalhesModal';
+import { TrocaTitularidadeBadge } from '@/components/cotacoes/TrocaTitularidadeBadge';
 
 // Componentes existentes
 import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
