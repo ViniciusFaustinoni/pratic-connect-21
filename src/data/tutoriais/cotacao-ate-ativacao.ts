@@ -1,4 +1,5 @@
 import { Tutorial } from './types';
+import novaCotacaoBotao from '@/assets/tutoriais/nova-cotacao-botao.png';
 
 export const cotacaoAteAtivacao: Tutorial = {
   id: 'cotacao-ate-ativacao',
