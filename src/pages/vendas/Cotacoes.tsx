@@ -361,7 +361,7 @@ export default function Cotacoes() {
 
   const handleRowClick = (cotacao: CotacaoWithRelations) => {
     setCotacaoSelecionada(cotacao);
-    setShowDetalhesModal(true);
+    navigate(`/vendas/cotacoes/${cotacao.id}`);
   };
 
   const handleDuplicar = (cotacao: CotacaoWithRelations) => {
@@ -371,7 +371,6 @@ export default function Cotacoes() {
 
   const handleContinuarCotacao = (cotacao: CotacaoWithRelations) => {
     setCotacaoParaContinuar(cotacao);
-    setShowDetalhesModal(false);
     setShowCotacaoForm(true);
   };
 
