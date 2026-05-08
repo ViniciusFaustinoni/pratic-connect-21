@@ -89,7 +89,7 @@ export function EtapaDadosAssociado({
   // CPF para verificação de veículo ativo + débitos no SGA
   const [cpfBusca, setCpfBusca] = useState('');
   const cpfDigits = cpfBusca.replace(/\D/g, '');
-  const { data: veiculoAtivoCpf, isLoading: verificandoCpf } = useVerificarVeiculoAtivoCpf(cpfBusca);
+  const { data: veiculoAtivoCpf, isLoading: verificandoCpf, isFetching: refazendoCpf, refetch: refetchVeiculoCpf, erroTransitorio: cpfErroTransitorio, motivoTransitorio: cpfMotivoTransitorio } = useVerificarVeiculoAtivoCpf(cpfBusca);
   const { data: debitosSGA } = useVerificarDebitosAssociado(cpfDigits.length === 11 ? cpfDigits : undefined);
   const [showDialogTipo, setShowDialogTipo] = useState(false);
 
