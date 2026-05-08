@@ -294,6 +294,9 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
       setSelectedAssociadoId(finalId);
       setSelectedAssociadoNome(finalNome);
       setSelectedAssociadoCpf(finalCpf);
+      setSelectedCodigoHinova(
+        (associado.codigo_hinova ?? associado.codigo_associado ?? null) as number | null,
+      );
       setShowTrocaTitularidade(true);
       // Fecha o pai no próximo tick para garantir que showTrocaTitularidade
       // esteja `true` quando o effect de reset rodar.
