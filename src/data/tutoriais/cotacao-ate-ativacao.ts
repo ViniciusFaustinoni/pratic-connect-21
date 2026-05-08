@@ -239,52 +239,21 @@ export const cotacaoAteAtivacao: Tutorial = {
     },
     {
       numero: 18,
-      titulo: 'Aprovação de Cadastro',
+      titulo: '🏢 Análise interna: Cadastro → Vistoria/Instalação → Monitoramento → Ativação',
       descricao:
-        'A equipe de Cadastro confere documentos (CNH, CRLV/CRV/NF) e libera a proposta. Documentos validados por OCR ainda passam por revisão manual obrigatória. Acompanhe em Cadastro › Propostas Pendentes.',
+        'A partir daqui o consultor não precisa fazer mais nada — entra em ação a equipe interna (Cadastro + Operação + Monitoramento) que conduz toda a análise documental, vistoria, instalação do rastreador (quando aplicável) e a aprovação final que ativa o associado. O fluxo é totalmente rastreável e o cliente é avisado por WhatsApp em cada mudança de status.',
       dicas: [
-        'Se algo for recusado, oriente o cliente a reenviar pelo link e mantenha o lead atualizado.',
+        '1️⃣ **Cadastro** confere CNH e CRLV/CRV/NF (mesmo OCR aprovado passa por revisão manual). Se houver pendência, o cliente recebe link por WhatsApp para reenviar.',
+        '2️⃣ **Operação** executa a vistoria escolhida pelo associado (Autovistoria 360°, Técnico no endereço ou Base Praticcar). Para Diesel / Carro FIPE ≥ R$ 30k / Moto ≥ R$ 9k, o rastreador é instalado nessa mesma visita.',
+        '3️⃣ **Monitoramento** recebe automaticamente a fila com fotos, posição do rastreador e laudo. Aprova, reprova ou pede ajustes.',
+        '4️⃣ **Ativação automática**: aprovada a vistoria/instalação, a edge function `ativar-associado` promove associado, contrato e veículo para "ativo", libera as coberturas e sincroniza com o SGA Hinova (situação Pendente — promoção para Ativo é manual no painel SGA).',
+        '📩 **O que o associado recebe por WhatsApp:** confirmação de cada etapa (cadastro aprovado, técnico a caminho com ETA, vistoria concluída, contrato ativado) e, ao ser ativado, **um link exclusivo para criar a senha de acesso ao app do associado** (`/app/criar-senha?token=…`).',
+        '🔐 **Criação de senha no app:** o link tem validade limitada e uso único. O associado define senha (mín. 6 caracteres com pelo menos 1 número), confirma e já entra direto no App do Associado — onde acompanha boletos, aciona assistência, abre sinistros e gerencia o veículo.',
+        '💰 **Comissões** da venda são liberadas conforme a grade do vendedor que originou a cotação (a cadeia supervisor/gerente/agência também é paga).',
       ],
       links: [
-        { label: 'Propostas Pendentes', url: '/cadastro/propostas' },
-      ],
-    },
-    {
-      numero: 19,
-      titulo: 'Agendamento de instalação ou autovistoria',
-      descricao:
-        'Após o cadastro aprovado, o cliente agenda a instalação do rastreador (obrigatória para Diesel, carros FIPE ≥ R$ 30k e motos ≥ R$ 9k). Para FIPE menores, pode ser autovistoria ou vistoria presencial sem rastreador.',
-      dicas: [
-        'A data de instalação é a escolhida pelo cliente — o sistema NUNCA agenda para "hoje" automaticamente.',
-        'Vistoria Base é por período (Manhã/Tarde).',
-      ],
-    },
-    {
-      numero: 20,
-      titulo: 'Conclusão da instalação / vistoria',
-      descricao:
-        'O técnico (Base, Rota, Prestador externo ou Autovistoria) registra fotos e finaliza o serviço no app. O contrato fica aguardando a aprovação final do Monitoramento.',
-      dicas: [
-        'Toda instalação concluída cai automaticamente na fila de Aprovação de Associados.',
-      ],
-    },
-    {
-      numero: 21,
-      titulo: 'Aprovação de Monitoramento',
-      descricao:
-        'O time de Monitoramento confere fotos, posição do rastreador e laudo, e aprova ou solicita ajuste. Sem essa aprovação, o veículo não fica ativo e a cobertura permanece suspensa.',
-      links: [
-        { label: 'Aprovações de Associados', url: '/monitoramento/aprovacoes-unificadas' },
-      ],
-    },
-    {
-      numero: 22,
-      titulo: 'Ativação do associado e sync com SGA',
-      descricao:
-        'Aprovado o monitoramento, o sistema chama a rotina central de ativação que promove associado, contrato e veículo para "ativo", libera as coberturas e sincroniza o cadastro com o SGA Hinova (situação Pendente — promoção para Ativo é feita manualmente no SGA pela equipe interna).',
-      dicas: [
-        'A partir desse ponto, o cliente passa a aparecer como Associado Ativo no app e pode ser cobrado normalmente.',
-        'Comissões da venda são liberadas conforme a grade do vendedor que originou a venda.',
+        { label: 'Propostas Pendentes (Cadastro)', url: '/cadastro/propostas' },
+        { label: 'Aprovações de Associados (Monitoramento)', url: '/monitoramento/aprovacoes-unificadas' },
       ],
     },
   ],
