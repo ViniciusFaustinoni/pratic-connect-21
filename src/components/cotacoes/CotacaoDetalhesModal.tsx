@@ -174,12 +174,7 @@ export function CotacaoDetalhesModal({
           <div className="px-4 sm:px-6 pb-4 sm:pb-6 space-y-5 sm:space-y-6">
             {/* Ações principais */}
             <div className="flex flex-wrap gap-2">
-              {cotacao.status === 'rascunho' && onContinuar && (
-                <Button onClick={() => onContinuar(cotacao)}>
-                  <ArrowRight className="h-4 w-4 mr-2" />
-                  Continuar cotação
-                </Button>
-              )}
+              {/* Botão "Continuar cotação" removido: cotação já criada não deve ser reaberta pelo modal de detalhes. */}
 
               <Button
                 className="bg-green-600 hover:bg-green-700 text-white"
