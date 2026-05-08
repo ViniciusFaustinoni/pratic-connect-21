@@ -1068,8 +1068,23 @@ serve(async (req) => {
       }
 
       case 'listar-roles': {
-        const endpoint = `/v2/roles?attributes[]=name&attributes[]=description`;
-        result = await softruckRequest('GET', endpoint, token);
+        // Tenta múltiplos endpoints — Softruck v2 não documenta /roles publicamente
+        const candidates = [
+          `/v2/users/roles`,
+          `/v2/enterprise/${getEnterpriseId()}/roles`,
+          `/v2/users?include=roles&page[limit]=1`,
+          `/v2/roles`,
+        ];
+        let lastErr: unknown = null;
+        for (const ep of candidates) {
+          try {
+            result = await softruckRequest('GET', ep, token);
+            (result as Record<string, unknown>).__endpoint = ep;
+            lastErr = null;
+            break;
+          } catch (e) { lastErr = e; }
+        }
+        if (lastErr) throw lastErr;
         break;
       }
 
