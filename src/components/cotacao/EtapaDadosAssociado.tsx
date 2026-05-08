@@ -15,6 +15,7 @@ import { useVerificarVeiculoAtivoCpf } from '@/hooks/useVerificarVeiculoAtivoCpf
 import { useVerificarDebitosAssociado } from '@/hooks/useVerificarDebitosAssociado';
 import { DialogTipoOperacao } from '@/components/cotacao/DialogTipoOperacao';
 import { DebitosCard } from '@/components/cotacao/DebitosCard';
+import { SgaTransientAlert } from '@/components/cotacao/SgaTransientAlert';
 
 interface EtapaDadosAssociadoProps {
   // Dados do associado/solicitante
