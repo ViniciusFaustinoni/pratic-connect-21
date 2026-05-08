@@ -1,89 +1,70 @@
-## Objetivo
+## Problema
 
-Na entrada do fluxo de **Troca de Titularidade** (botão "Outras Entradas → Troca de Titularidade"), inverter a prioridade da busca por CPF:
+A cotação `COT-20260508-181403289-174` foi criada como **adesão normal** (não é troca de titularidade) com a placa **LTB4J74**. Porém essa placa já pertence ao associado **RODOLFO MARCOS DA SILVA** (CPF 123.143.117-28, status ativo), e o solicitante atual é outro CPF (124.936.497-37 / MARCUS VINICIUS).
 
-1. **Buscar primeiro na base local** (`associados`) — fonte de verdade do nosso sistema.
-2. **Usar o `codigo_hinova` do registro local** para consultar o SGA via endpoint `/listar/boleto-associado-veiculo`, listando boletos/faturas e fazendo as verificações financeiras.
-3. SGA só é consultado por CPF como **fallback** se o associado não existir na base local (preserva o caminho atual de "importar associado do SGA").
+Hoje o sistema só descobre essa colisão lá no fim do funil, dentro de `contrato-gerar`, onde dispara `[BLOQUEIO-DONO]` e devolve HTTP 409 com a mensagem "Edge Function returned a non-2xx status code" — uma falha opaca, exibida só na Etapa 3 (Contrato → Autentique), depois do cliente já ter percorrido todo o fluxo.
 
-Hoje o fluxo faz o oposto: bate primeiro no SGA por CPF (`sga-buscar-associado-completo`), depois tenta espelhar localmente. Isso causa loops e dependência da disponibilidade do Hinova.
+## Causa
 
-## Onde vive a busca hoje
+A verificação de "placa pertence a outro associado" existe apenas na edge `contrato-gerar`. Os pontos de criação de cotação (`Cotador.tsx` e `CotacaoFormDialog.tsx`) verificam:
 
-- **Entry-point:** `src/components/vendas/OutrasEntradasMenu.tsx` (linhas 90–280) usa `useAssociadoSearch(searchTerm)`.
-- **Hook de busca:** `src/hooks/useAssociadoSearch.ts` — quando o termo é CPF (11 dígitos) chama SGA primeiro e só cai no local se SGA não achar.
-- **Dialog seguinte:** `src/components/associados/TrocaTitularidadeDialog.tsx` — recebe `associadoId` (já local) e usa `useBuscaSGA({ cpf })` para listar veículos + boletos do SGA. Se o local não tem espelho, dispara `importar-associado-sga`.
-- **Coluna disponível:** `public.associados.codigo_hinova` (integer) — já populada no espelho.
-- **Endpoint SGA já implementado em shared:** `supabase/functions/_shared/hinova-client.ts` → `listarBoletosVeiculoJanela` e `listarBoletosVeiculo` chamam `POST /listar/boleto-associado-veiculo` com `codigo_associado` + `codigo_veiculo` + janela de datas (≤90d).
+1. Blacklist
+2. Cotação duplicada (mesma placa em outro vendedor)
+3. SGA Hinova (`useVerificarVeiculoSGA`) — checa se a placa existe no SGA externo
 
-## Mudanças propostas
+Mas **não** checam a tabela local `veiculos` para detectar que a placa já tem um `associado_id` diferente do CPF da cotação atual.
 
-### 1. `useAssociadoSearch` — local-first para CPF (mantém fallback SGA)
+## Mudança
 
-Inverter a ordem em `src/hooks/useAssociadoSearch.ts`:
+### 1. Novo hook `useVerificarPlacaOutroAssociado`
 
-- Quando termo é CPF de 11 dígitos:
-  1. Consulta `associados` por CPF (com e sem máscara) **primeiro**.
-  2. Se achou, retorna o registro local com `codigo_hinova` incluído no payload (`AssociadoSearchResult`).
-  3. Se NÃO achou local, então chama `sga-buscar-associado-completo` (caminho atual marcado `origem_sga`).
-- Para nome/telefone parcial: comportamento atual (local).
+Arquivo: `src/hooks/useVerificarPlacaOutroAssociado.ts` (novo)
 
-Adicionar `codigo_hinova?: number | null` em `AssociadoSearchResult`.
+- Recebe `{ placa, cpfSolicitante }`.
+- `SELECT v.id, v.associado_id, a.nome, a.cpf, a.status FROM veiculos v JOIN associados a ON a.id=v.associado_id WHERE v.placa = :placa`.
+- Se existe e `a.cpf` (limpo) ≠ `cpfSolicitante` (limpo), retorna `{ conflito: true, associadoNome, cpfMascarado, status }`.
+- Se mesmo CPF, retorna `{ conflito: false, mesmoTitular: true }` (sinaliza para sugerir Inclusão de Veículo).
+- Senão, `null`.
 
-### 2. Novo hook `useBoletosSgaPorAssociado(codigoHinova)`
+### 2. Bloqueio pré-criação no Cotador (`src/pages/vendas/Cotador.tsx`)
 
-Cria `src/hooks/useBoletosSgaPorAssociado.ts` que:
+No `handleBuscarPlaca` (após o passo 3 do SGA, antes do passo 4 "Continuar com a busca"):
 
-- Recebe `codigo_hinova` (number).
-- Chama uma nova edge function `sga-listar-boletos-associado` (ver item 3) que internamente:
-  - Lista veículos do associado no SGA (já existe `buscarAssociadoComVeiculosPorCpf` — adaptar para variante por código) e
-  - Para cada veículo chama `listarBoletosVeiculo(codigoAssociado, codigoVeiculo, janela)`.
-- Devolve mesmo shape do `SgaAssociadoCompleto` que a UI já consome (`veiculos[]`, `saldo_devedor_total`, `tem_debito`, `boletos_abertos`).
-- Reaproveita `extractTransientPayload` para tratamento de erro transitório.
+- Se o CPF do solicitante já estiver preenchido, chamar o novo hook.
+- Se `conflito === true`, abrir um modal de erro claro (novo componente `PlacaOutroAssociadoModal`) com:
+  - Título: **"Placa já pertence a outro associado"**
+  - Texto: *"A placa LTB4J74 está vinculada a {NOME} (CPF ***.143.***-28, status: ativo). Não é possível criar uma cotação de adesão para essa placa."*
+  - Dois botões de ação:
+    - **"Iniciar Troca de Titularidade"** → leva para `/cobranca/troca-titularidade` ou abre o `TrocaTitularidadeDialog` daquele associado.
+    - **"Cancelar"** → fecha o modal e limpa o campo de placa.
+- Se `mesmoTitular === true`, exibir toast informativo: "Esta placa já está cadastrada para este CPF. Use Inclusão de Veículo no perfil do associado."
+- Quando o CPF ainda não estiver preenchido, repetir a checagem no `handleSalvarCotacao` (gate final antes de gravar).
 
-### 3. Nova edge function `sga-listar-boletos-associado`
+### 3. Mesmo bloqueio no `CotacaoFormDialog.tsx`
 
-`supabase/functions/sga-listar-boletos-associado/index.ts`
+Aplicar a mesma verificação no fluxo do dialog (após `verificarVeiculoSGA`, antes de prosseguir para os planos).
 
-- Input: `{ codigo_associado: number, dias?: number }` (default 1095 = 3 anos, igual ao usado hoje).
-- Usa `getHinovaSession`, busca veículos via novo helper `buscarVeiculosPorCodigoAssociado(s, codigo_associado)` no `_shared/hinova-client.ts` (POST `/listar/veiculo-associado` ou similar — verificar existência; senão usar payload já mapeado em `buscarAssociadoComVeiculosPorCpf` extraindo só por código).
-- Para cada veículo, chama `listarBoletosVeiculo(s, codigo_associado, codigo_veiculo, dias)` (já implementado).
-- Devolve estrutura igual à `sga-buscar-associado-completo` (mantém UI compatível).
-- Tratamento idêntico de `HinovaTransientError` → HTTP 503 com `erro_transitorio: true`.
+### 4. Mensagem clara em `contrato-gerar` (defesa em profundidade)
 
-### 4. `TrocaTitularidadeDialog` — usar `codigo_hinova` em vez de CPF
+Manter o bloqueio (não remover — segue como guardrail), mas trocar a string de erro pelas variáveis disponíveis para que, se ainda escapar, o front mostre algo útil:
 
-Em `src/components/associados/TrocaTitularidadeDialog.tsx`:
+```
+"A placa {PLACA} pertence a outro associado ({NOME_OU_ID_MASCARADO}). 
+Esta cotação foi criada como adesão, mas o veículo já existe no sistema. 
+Cancele a cotação e use Troca de Titularidade."
+```
 
-- Substituir `useBuscaSGA({ cpf: cpfAntigo })` por `useBoletosSgaPorAssociado(codigoHinova)`, onde `codigoHinova` vem de:
-  ```ts
-  const { data: assoc } = useQuery(['troca-tit-associado', associadoId], …
-    select id, cpf, codigo_hinova from associados where id = associadoId)
-  ```
-- Se `codigo_hinova` for null (associado local nunca sincronizado), exibir aviso curto "Associado ainda não sincronizado com SGA" + botão para disparar `sga-hinova-sync` (ou `importar-associado-sga` por CPF) e refetch.
-- Remover o auto-import por CPF (loop atual) — agora o caminho é sempre via `codigo_hinova`. A guarda `tentativasImport` deixa de ser necessária.
-- Mapeamento de placa SGA → veículo local continua igual (com `normPlaca`).
+E no `EtapaAssinaturaContrato.tsx`, ler o `error.message` / `code='PLACA_DE_OUTRO_ASSOCIADO'` retornado pela edge e exibir essa mensagem específica em vez de "Edge Function returned a non-2xx status code".
 
-### 5. `OutrasEntradasMenu` — propagar `codigo_hinova`
+## Validação
 
-No `handleSelectAssociado` (linha 255), quando o associado vier do local com `codigo_hinova`, salvar em estado e passar para o `TrocaTitularidadeDialog` como prop opcional `codigoHinova` (evita um round-trip extra ao Supabase).
+1. Criar nova cotação no Cotador com placa **LTB4J74** + CPF qualquer ≠ 12314311728 → deve abrir o modal "Placa já pertence a outro associado" antes de qualquer outra etapa.
+2. Repetir com o CPF correto (12314311728) → deve aparecer o toast "Inclusão de Veículo".
+3. Repetir com placa nova qualquer → fluxo normal segue funcionando.
+4. Cotação atual (`684660e4-...`): excluí-la / cancelá-la manualmente, já que foi criada de forma incorreta.
 
-### 6. Compatibilidade
+## Não escopo
 
-- `useVerificarDebitosAssociado` continua usando `useBuscaSGA` por CPF (outros fluxos: substituição/inclusão/migração). Não muda agora — escopo é **só** a Troca de Titularidade. Pode ser migrado depois em um segundo passo se desejado.
-
-## Critérios de aceite
-
-- Digitar CPF de associado existente em "Outras Entradas → Troca de Titularidade":
-  - Resultado vem da base local (não há chamada SGA na busca inicial).
-  - Ao clicar no associado, o dialog abre e os veículos/boletos vêm via `sga-listar-boletos-associado` usando `codigo_hinova`.
-- CPF de associado **inexistente** localmente: mantém o fluxo atual de "importar do SGA" (fallback).
-- Associado local sem `codigo_hinova`: dialog mostra aviso e botão "Sincronizar com SGA".
-- Sem loop de import (a guarda atual em `TrocaTitularidadeDialog` deixa de ser necessária).
-- Erros transitórios do SGA continuam exibindo `SgaTransientAlert` com retry.
-
-## Fora de escopo
-
-- Mudar `useAssociadoSearch` para outros fluxos além da Troca de Titularidade (substituição/inclusão continuam SGA-first).
-- Refatorar `useVerificarDebitosAssociado` (pode entrar em um próximo passo).
-- Mudanças na aprovação de Cadastro/Monitoramento da troca.
+- Não alterar a lógica de Troca de Titularidade existente.
+- Não alterar o sync de veículo↔contrato (trigger).
+- Não relaxar o bloqueio em `contrato-gerar` — só melhorar a mensagem.
