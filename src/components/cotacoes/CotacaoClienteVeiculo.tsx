@@ -12,6 +12,7 @@ import {
   RefreshCw,
   AlertCircle,
   MessageSquare,
+  IdCard,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -25,11 +26,17 @@ interface CotacaoClienteVeiculoProps {
       telefone?: string | null;
       email?: string | null;
     } | null;
+    /** Dados do solicitante salvos diretamente na cotação (avulsa / troca de titularidade) */
+    nome_solicitante?: string | null;
+    cliente_cpf?: string | null;
+    email_solicitante?: string | null;
+    telefone1_solicitante?: string | null;
     veiculo_marca?: string | null;
     veiculo_modelo?: string | null;
     veiculo_ano?: number | null;
     veiculo_placa?: string | null;
     valor_fipe?: number | null;
+    dados_extras?: { tipo_entrada?: string | null } | null;
   };
   onVincularLead: () => void;
   onTrocarLead: () => void;
@@ -49,7 +56,17 @@ const formatPhone = (phone: string | null | undefined) => {
   if (digits.length === 11) {
     return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
   }
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
   return phone;
+};
+
+const formatCpf = (cpf: string | null | undefined) => {
+  if (!cpf) return null;
+  const d = cpf.replace(/\D/g, '');
+  if (d.length !== 11) return cpf;
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
 };
 
 export function CotacaoClienteVeiculo({
@@ -58,18 +75,25 @@ export function CotacaoClienteVeiculo({
   onTrocarLead,
 }: CotacaoClienteVeiculoProps) {
   const temLead = !!cotacao.lead_id;
-  const telefoneDigits = cotacao.leads?.telefone?.replace(/\D/g, '') || '';
+
+  // Dados unificados: lead tem prioridade; senão, usa solicitante da própria cotação
+  const nome = temLead ? cotacao.leads?.nome : cotacao.nome_solicitante;
+  const telefone = temLead ? cotacao.leads?.telefone : cotacao.telefone1_solicitante;
+  const email = temLead ? cotacao.leads?.email : cotacao.email_solicitante;
+  const cpfFormatado = !temLead ? formatCpf(cotacao.cliente_cpf) : null;
+
+  const temSolicitante = !temLead && !!cotacao.nome_solicitante;
+  const isTroca = cotacao.dados_extras?.tipo_entrada === 'troca_titularidade';
+  const semNada = !temLead && !temSolicitante;
+
+  const telefoneDigits = (telefone || '').replace(/\D/g, '');
 
   const handleLigar = () => {
-    if (telefoneDigits) {
-      window.location.href = `tel:+55${telefoneDigits}`;
-    }
+    if (telefoneDigits) window.location.href = `tel:+55${telefoneDigits}`;
   };
 
   const handleWhatsApp = () => {
-    if (telefoneDigits) {
-      window.open(`https://wa.me/55${telefoneDigits}`, '_blank');
-    }
+    if (telefoneDigits) window.open(`https://wa.me/55${telefoneDigits}`, '_blank');
   };
 
   return (
@@ -92,20 +116,38 @@ export function CotacaoClienteVeiculo({
             </div>
           </CardHeader>
           <CardContent>
-            {temLead ? (
+            {semNada ? (
+              <div className="text-center py-4 text-muted-foreground">
+                <User className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm font-medium">Cotação avulsa</p>
+                <p className="text-xs">Vincule a um lead para enviar</p>
+              </div>
+            ) : (
               <div className="space-y-3">
-                <p className="font-semibold text-lg">
-                  {cotacao.leads?.nome || 'Sem nome'}
-                </p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-semibold text-lg">{nome || 'Sem nome'}</p>
+                  {!temLead && (
+                    <Badge variant="secondary" className="text-[10px]">
+                      {isTroca ? 'Novo titular' : 'Solicitante (avulsa)'}
+                    </Badge>
+                  )}
+                </div>
+
+                {cpfFormatado && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <IdCard className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-mono">{cpfFormatado}</span>
+                  </div>
+                )}
 
                 <div className="flex items-center gap-2 text-sm">
                   <Phone className="h-4 w-4 text-muted-foreground" />
-                  <span>{formatPhone(cotacao.leads?.telefone)}</span>
+                  <span>{formatPhone(telefone)}</span>
                 </div>
 
                 <div className="flex items-center gap-2 text-sm">
                   <Mail className="h-4 w-4 text-muted-foreground" />
-                  <span>{cotacao.leads?.email || '—'}</span>
+                  <span>{email || '—'}</span>
                 </div>
 
                 <div className="flex flex-wrap gap-2 pt-2">
@@ -129,7 +171,7 @@ export function CotacaoClienteVeiculo({
                   </Button>
                 </div>
 
-                {cotacao.leads?.id && (
+                {temLead && cotacao.leads?.id && (
                   <Button variant="link" size="sm" className="p-0" asChild>
                     <Link to={`/vendas/leads/${cotacao.leads.id}`}>
                       Ver Lead
@@ -137,12 +179,18 @@ export function CotacaoClienteVeiculo({
                     </Link>
                   </Button>
                 )}
-              </div>
-            ) : (
-              <div className="text-center py-4 text-muted-foreground">
-                <User className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm font-medium">Cotação avulsa</p>
-                <p className="text-xs">Vincule a um lead para enviar</p>
+
+                {!temLead && (
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="p-0 text-xs"
+                    onClick={onVincularLead}
+                  >
+                    <Link2 className="mr-1 h-3 w-3" />
+                    Vincular a um lead
+                  </Button>
+                )}
               </div>
             )}
           </CardContent>
@@ -185,8 +233,8 @@ export function CotacaoClienteVeiculo({
         </Card>
       </div>
 
-      {/* Alerta cotação avulsa */}
-      {!temLead && (
+      {/* Alerta só quando NÃO há lead nem solicitante */}
+      {semNada && (
         <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
           <AlertCircle className="h-4 w-4 text-amber-600" />
           <AlertDescription className="flex items-center justify-between">
