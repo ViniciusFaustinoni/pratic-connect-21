@@ -58,9 +58,15 @@ export function TrocaTitularidadeDialog({
   // 2) Lista veículos do associado antigo NO SGA
   const sga = useBuscaSGA({ cpf: cpfAntigo, enabled: open && cpfAntigo.length === 11 });
 
+  // Quando o RQ esgota retries, o erro carrega o payload "soft" com erro_transitorio.
+  const transientPayload = sga.error ? extractTransientPayload(sga.error) : null;
+  const sgaPayload = sga.data ?? transientPayload;
+  const sgaTransitorio = !!sgaPayload?.erro_transitorio || !!transientPayload;
+  const sgaMotivo = sgaPayload?.motivo ?? transientPayload?.motivo ?? null;
+
   // 3) Para cada veículo SGA, mapeia para o UUID local pela placa.
   //    Se não houver espelho local, dispara import automático do SGA (cria associado + veículos).
-  const placas = (sga.data?.veiculos || []).map((v) => v.placa).filter(Boolean);
+  const placas = (sgaPayload?.veiculos || []).map((v) => v.placa).filter(Boolean);
 
   const { data: veiculosLocais, refetch: refetchLocais } = useQuery({
     queryKey: ['troca-tit-veiculos-local-by-placa', placas.join(',')],
