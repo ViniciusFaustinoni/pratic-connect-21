@@ -796,11 +796,13 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
               setSelectedAssociadoId(null);
               setSelectedAssociadoNome('');
               setSelectedAssociadoCpf(null);
+              setSelectedCodigoHinova(null);
             }
           }}
           associadoId={selectedAssociadoId}
           associadoNome={selectedAssociadoNome}
           associadoCpf={selectedAssociadoCpf}
+          codigoHinova={selectedCodigoHinova}
         />
       )}
 
