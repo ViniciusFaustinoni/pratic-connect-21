@@ -75,6 +75,7 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   const [selectedAssociadoId, setSelectedAssociadoId] = useState<string | null>(null);
   const [selectedAssociadoNome, setSelectedAssociadoNome] = useState('');
   const [selectedAssociadoCpf, setSelectedAssociadoCpf] = useState<string | null>(null);
+  const [selectedCodigoHinova, setSelectedCodigoHinova] = useState<number | null>(null);
   const [veiculoAntigoId, setVeiculoAntigoId] = useState<string | null>(null);
   const [veiculoAntigoPlaca, setVeiculoAntigoPlaca] = useState('');
   const [veiculoAntigoModelo, setVeiculoAntigoModelo] = useState('');
