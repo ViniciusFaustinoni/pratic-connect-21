@@ -1,32 +1,89 @@
-## Problema
+## Objetivo
 
-`TrocaTitularidadeDialog` entra em loop eterno mostrando "Buscando veículos no SGA…" / "Importando dados do SGA…" quando o SGA retorna veículos mas o import automático **não consegue criar um espelho local com placa que case** com as placas vindas do SGA (diferença de formatação, falha silenciosa do edge, ou veículo já pertencente a outro associado).
+Na entrada do fluxo de **Troca de Titularidade** (botão "Outras Entradas → Troca de Titularidade"), inverter a prioridade da busca por CPF:
 
-Sequência atual:
-1. `useBuscaSGA` retorna `veiculos[]` para o CPF antigo.
-2. Query local por placa não acha espelho → `veiculos.length === 0`.
-3. `useEffect` chama `importar-associado-sga`.
-4. `refetchLocais()` ainda não acha espelho com placa correspondente.
-5. Como a única trava é `!importando` (e ela cai para `false` no `finally`), o efeito **re-dispara** o import → loop.
+1. **Buscar primeiro na base local** (`associados`) — fonte de verdade do nosso sistema.
+2. **Usar o `codigo_hinova` do registro local** para consultar o SGA via endpoint `/listar/boleto-associado-veiculo`, listando boletos/faturas e fazendo as verificações financeiras.
+3. SGA só é consultado por CPF como **fallback** se o associado não existir na base local (preserva o caminho atual de "importar associado do SGA").
 
-## Correção
+Hoje o fluxo faz o oposto: bate primeiro no SGA por CPF (`sga-buscar-associado-completo`), depois tenta espelhar localmente. Isso causa loops e dependência da disponibilidade do Hinova.
 
-Arquivo: `src/components/associados/TrocaTitularidadeDialog.tsx`
+## Onde vive a busca hoje
 
-1. **Guarda de tentativa única por CPF** — substituir o gate `!importando` por um `useRef<Set<string>>` que registra os CPFs já tentados nesta sessão do diálogo. Reset no `onOpenChange(false)`.
-2. **Tratamento determinístico do pós-import**: depois do `await refetchLocais()`, se ainda não houver espelho casando, **não tentar de novo** — manter o estado `semEspelhoLocal` que já existe e exibir o `Alert` com mensagem clara ("Veículos do SGA não puderam ser espelhados localmente. Acione o suporte ou tente novamente.") + botão "Tentar novamente" que limpa o `Set` e re-dispara manualmente.
-3. **Normalizar placa** na comparação: `placa.replace(/[^A-Z0-9]/gi,'').toUpperCase()` tanto no `placas` enviado para `.in('placa', ...)` quanto no `find` da linha 88, para eliminar falso-negativo por hífen/maiúscula.
-4. **Limitar dependências do useEffect** removendo `importando` e `veiculos.length` do array — o gate passa a ser o ref, evitando re-execuções espúrias quando o React reidrata derivados.
-5. **Timeout visual**: se `carregando` ficar `true` por > 20s, exibir botão "Cancelar busca" que fecha o spinner e mostra o `SgaTransientAlert` para retry manual (defensivo contra qualquer outro caso de fetch travado).
+- **Entry-point:** `src/components/vendas/OutrasEntradasMenu.tsx` (linhas 90–280) usa `useAssociadoSearch(searchTerm)`.
+- **Hook de busca:** `src/hooks/useAssociadoSearch.ts` — quando o termo é CPF (11 dígitos) chama SGA primeiro e só cai no local se SGA não achar.
+- **Dialog seguinte:** `src/components/associados/TrocaTitularidadeDialog.tsx` — recebe `associadoId` (já local) e usa `useBuscaSGA({ cpf })` para listar veículos + boletos do SGA. Se o local não tem espelho, dispara `importar-associado-sga`.
+- **Coluna disponível:** `public.associados.codigo_hinova` (integer) — já populada no espelho.
+- **Endpoint SGA já implementado em shared:** `supabase/functions/_shared/hinova-client.ts` → `listarBoletosVeiculoJanela` e `listarBoletosVeiculo` chamam `POST /listar/boleto-associado-veiculo` com `codigo_associado` + `codigo_veiculo` + janela de datas (≤90d).
+
+## Mudanças propostas
+
+### 1. `useAssociadoSearch` — local-first para CPF (mantém fallback SGA)
+
+Inverter a ordem em `src/hooks/useAssociadoSearch.ts`:
+
+- Quando termo é CPF de 11 dígitos:
+  1. Consulta `associados` por CPF (com e sem máscara) **primeiro**.
+  2. Se achou, retorna o registro local com `codigo_hinova` incluído no payload (`AssociadoSearchResult`).
+  3. Se NÃO achou local, então chama `sga-buscar-associado-completo` (caminho atual marcado `origem_sga`).
+- Para nome/telefone parcial: comportamento atual (local).
+
+Adicionar `codigo_hinova?: number | null` em `AssociadoSearchResult`.
+
+### 2. Novo hook `useBoletosSgaPorAssociado(codigoHinova)`
+
+Cria `src/hooks/useBoletosSgaPorAssociado.ts` que:
+
+- Recebe `codigo_hinova` (number).
+- Chama uma nova edge function `sga-listar-boletos-associado` (ver item 3) que internamente:
+  - Lista veículos do associado no SGA (já existe `buscarAssociadoComVeiculosPorCpf` — adaptar para variante por código) e
+  - Para cada veículo chama `listarBoletosVeiculo(codigoAssociado, codigoVeiculo, janela)`.
+- Devolve mesmo shape do `SgaAssociadoCompleto` que a UI já consome (`veiculos[]`, `saldo_devedor_total`, `tem_debito`, `boletos_abertos`).
+- Reaproveita `extractTransientPayload` para tratamento de erro transitório.
+
+### 3. Nova edge function `sga-listar-boletos-associado`
+
+`supabase/functions/sga-listar-boletos-associado/index.ts`
+
+- Input: `{ codigo_associado: number, dias?: number }` (default 1095 = 3 anos, igual ao usado hoje).
+- Usa `getHinovaSession`, busca veículos via novo helper `buscarVeiculosPorCodigoAssociado(s, codigo_associado)` no `_shared/hinova-client.ts` (POST `/listar/veiculo-associado` ou similar — verificar existência; senão usar payload já mapeado em `buscarAssociadoComVeiculosPorCpf` extraindo só por código).
+- Para cada veículo, chama `listarBoletosVeiculo(s, codigo_associado, codigo_veiculo, dias)` (já implementado).
+- Devolve estrutura igual à `sga-buscar-associado-completo` (mantém UI compatível).
+- Tratamento idêntico de `HinovaTransientError` → HTTP 503 com `erro_transitorio: true`.
+
+### 4. `TrocaTitularidadeDialog` — usar `codigo_hinova` em vez de CPF
+
+Em `src/components/associados/TrocaTitularidadeDialog.tsx`:
+
+- Substituir `useBuscaSGA({ cpf: cpfAntigo })` por `useBoletosSgaPorAssociado(codigoHinova)`, onde `codigoHinova` vem de:
+  ```ts
+  const { data: assoc } = useQuery(['troca-tit-associado', associadoId], …
+    select id, cpf, codigo_hinova from associados where id = associadoId)
+  ```
+- Se `codigo_hinova` for null (associado local nunca sincronizado), exibir aviso curto "Associado ainda não sincronizado com SGA" + botão para disparar `sga-hinova-sync` (ou `importar-associado-sga` por CPF) e refetch.
+- Remover o auto-import por CPF (loop atual) — agora o caminho é sempre via `codigo_hinova`. A guarda `tentativasImport` deixa de ser necessária.
+- Mapeamento de placa SGA → veículo local continua igual (com `normPlaca`).
+
+### 5. `OutrasEntradasMenu` — propagar `codigo_hinova`
+
+No `handleSelectAssociado` (linha 255), quando o associado vier do local com `codigo_hinova`, salvar em estado e passar para o `TrocaTitularidadeDialog` como prop opcional `codigoHinova` (evita um round-trip extra ao Supabase).
+
+### 6. Compatibilidade
+
+- `useVerificarDebitosAssociado` continua usando `useBuscaSGA` por CPF (outros fluxos: substituição/inclusão/migração). Não muda agora — escopo é **só** a Troca de Titularidade. Pode ser migrado depois em um segundo passo se desejado.
 
 ## Critérios de aceite
 
-- Abrir Troca de Titularidade para `MARCOS VINICIUS DATIVO MACHADO` não fica em spinner indefinido.
-- Quando o SGA tem veículos e o espelho local falha de criar, o usuário vê mensagem de erro com botão "Tentar novamente" (sem loop de chamadas no Network).
-- Após corrigir o espelho (ex.: placa ajustada), reabrir o diálogo lista os veículos normalmente.
-- Nenhuma chamada a `importar-associado-sga` é feita mais de 1× por abertura do diálogo, salvo clique manual em "Tentar novamente".
+- Digitar CPF de associado existente em "Outras Entradas → Troca de Titularidade":
+  - Resultado vem da base local (não há chamada SGA na busca inicial).
+  - Ao clicar no associado, o dialog abre e os veículos/boletos vêm via `sga-listar-boletos-associado` usando `codigo_hinova`.
+- CPF de associado **inexistente** localmente: mantém o fluxo atual de "importar do SGA" (fallback).
+- Associado local sem `codigo_hinova`: dialog mostra aviso e botão "Sincronizar com SGA".
+- Sem loop de import (a guarda atual em `TrocaTitularidadeDialog` deixa de ser necessária).
+- Erros transitórios do SGA continuam exibindo `SgaTransientAlert` com retry.
 
 ## Fora de escopo
 
-- Refatorar `importar-associado-sga` (edge function) ou a busca SGA em si.
-- Mudar o fluxo de aprovação Cadastro/Monitoramento da troca.
+- Mudar `useAssociadoSearch` para outros fluxos além da Troca de Titularidade (substituição/inclusão continuam SGA-first).
+- Refatorar `useVerificarDebitosAssociado` (pode entrar em um próximo passo).
+- Mudanças na aprovação de Cadastro/Monitoramento da troca.
