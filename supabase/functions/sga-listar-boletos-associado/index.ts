@@ -175,25 +175,37 @@ serve(async (req) => {
       return json(200, empty(codigoAssociado));
     }
 
-    // 2) Metadados do associado + boletos por veículo (paralelo).
-    //    Envolto em withHinovaAuthRetry: se a sessão cacheada tiver sido
-    //    invalidada por outra função (Hinova invalida tokens antigos a cada
-    //    novo /usuario/autenticar), re-autentica 1x e tenta de novo.
-    const [metaAssociado, ...resBoletos] = await withHinovaAuthRetry(supabase, async (session) => {
-      return await Promise.all([
-        fetchAssociadoMeta(session, cpf),
-        ...veiculosSGA.map((v) =>
+    // 2) Metadados do associado + boletos por veículo (SEQUENCIAL).
+    //    Hinova invalida tokens antigos a cada /usuario/autenticar — múltiplas
+    //    reautenticações concorrentes provocam 401 cruzados. Por isso processamos
+    //    um veículo por vez e fechamos cada chamada com `withHinovaAuthRetry`,
+    //    que reautentica 1x se a sessão cacheada estiver fria.
+    const metaAssociado = await withHinovaAuthRetry(supabase, async (session) =>
+      fetchAssociadoMeta(session, cpf),
+    );
+
+    const resBoletos: any[][] = [];
+    for (const v of veiculosSGA) {
+      try {
+        const boletos = await withHinovaAuthRetry(supabase, async (session) =>
           listarBoletosVeiculo(session, codigoAssociado!, v.codigo_veiculo, {
             anosTras: 3,
             linkBoleto: true,
-          }).catch((err) => {
-            console.warn('[sga-listar-boletos-associado] boletos falharam veiculo', v.codigo_veiculo, err?.message);
-            if (err instanceof HinovaTransientError) throw err;
-            return [] as any[];
+            paralelismoJanelas: 1, // serializa janelas para reduzir contenção de auth
           }),
-        ),
-      ]);
-    });
+        );
+        resBoletos.push(boletos);
+      } catch (err: any) {
+        console.warn(
+          '[sga-listar-boletos-associado] boletos falharam veiculo',
+          v.codigo_veiculo,
+          err?.message,
+        );
+        if (err instanceof HinovaTransientError) throw err;
+        resBoletos.push([]);
+      }
+    }
+
 
     // 3) Filtrar boletos em aberto e agregar saldo
     const veiculos: VeiculoSGA[] = veiculosSGA.map((v, i) => {
