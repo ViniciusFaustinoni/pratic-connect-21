@@ -179,10 +179,14 @@ serve(async (req) => {
       throw new Error(`Rastreador ${imei} não está disponível (status: ${rastreador.status})`);
     }
     
-    // CORREÇÃO: Verificar se já foi ativado na Softruck para evitar duplicidade
-    if (rastreador.plataforma_device_id) {
-      console.log('[Softruck Ativar] Rastreador já possui device na Softruck:', rastreador.plataforma_device_id);
-      // Retornar sucesso - já está ativado
+    // CORREÇÃO: Só considerar "já ativado" se device E veículo estiverem vinculados na Softruck.
+    // Caso contrário, prosseguir para criar veículo / associar (evita travamento quando o
+    // device foi descoberto via softruck-buscar-dispositivo mas a ativação não terminou).
+    if (rastreador.plataforma_device_id && rastreador.plataforma_veiculo_id) {
+      console.log('[Softruck Ativar] Rastreador já totalmente ativado na Softruck:', {
+        device: rastreador.plataforma_device_id,
+        veiculo: rastreador.plataforma_veiculo_id,
+      });
       return new Response(
         JSON.stringify({
           success: true,
@@ -193,6 +197,9 @@ serve(async (req) => {
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+    if (rastreador.plataforma_device_id) {
+      console.log('[Softruck Ativar] Device já existe na Softruck mas falta vincular ao veículo. Continuando ativação...', rastreador.plataforma_device_id);
     }
     
     const jaInstalado = rastreador.status === 'instalado';
