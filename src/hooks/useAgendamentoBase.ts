@@ -236,6 +236,26 @@ export function useCriarAgendamentoBase() {
         })
         .eq('id', dados.cotacaoId);
 
+      // FIX SISTÊMICO: se ainda não existe instalação para essa cotação, materializar
+      // chamando criar-instalacao-pos-pagamento. A função é idempotente, faz back-link
+      // em agendamentos_base.instalacao_id e materializa o serviço (via trigger),
+      // fazendo o card aparecer em Monitoramento › Serviços de Campo.
+      if (!instalacaoIdVinculada) {
+        try {
+          const { data: invokeData, error: invokeErr } = await publicSupabase.functions.invoke(
+            'criar-instalacao-pos-pagamento',
+            { body: { cotacaoId: dados.cotacaoId, skipPaymentCheck: true } }
+          );
+          if (invokeErr) {
+            console.warn('[useCriarAgendamentoBase] Falha ao materializar instalação (não bloqueia agendamento):', invokeErr);
+          } else {
+            console.log('[useCriarAgendamentoBase] Instalação materializada:', invokeData);
+          }
+        } catch (e) {
+          console.warn('[useCriarAgendamentoBase] Erro ao invocar criar-instalacao-pos-pagamento:', e);
+        }
+      }
+
       return agendamento;
     },
     onSuccess: () => {
