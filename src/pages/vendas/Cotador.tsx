@@ -645,7 +645,23 @@ export default function CotadorPage() {
       } catch (sgaError) {
         console.warn('[SGA] Erro na verificação, continuando:', sgaError);
       }
-      
+
+      // 3.1 Verificar se a placa já está vinculada a OUTRO associado na base local
+      try {
+        const localResult = await verificarPlacaOutroAssoc.mutateAsync({ placa: placaBusca });
+        if (localResult?.conflito) {
+          setPlacaOutroAssocInfo(localResult);
+          setShowPlacaOutroAssocModal(true);
+          setBuscandoPlaca(false);
+          return;
+        }
+        if (localResult?.mesmoTitular) {
+          toast.info('Esta placa já está cadastrada para este CPF. Use Inclusão de Veículo no perfil do associado.');
+        }
+      } catch (localErr) {
+        console.warn('[Local] Erro ao verificar veículo na base local:', localErr);
+      }
+
       // 4. Continuar com a busca do veículo
       const result = await getByPlaca(placaBusca.replace(/[^A-Za-z0-9]/g, ''));
       
