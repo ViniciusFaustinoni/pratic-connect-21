@@ -66,6 +66,8 @@ import { PlacaDuplicadaModal } from '@/components/cotacoes/PlacaDuplicadaModal';
 import { PlacaBlacklistModal } from '@/components/cotacoes/PlacaBlacklistModal';
 import { VeiculoSGAModal } from '@/components/cotacoes/VeiculoSGAModal';
 import { useVerificarVeiculoSGA } from '@/hooks/useVerificarVeiculoSGA';
+import { useVerificarPlacaOutroAssociado, type PlacaOutroAssociadoInfo } from '@/hooks/useVerificarPlacaOutroAssociado';
+import { PlacaOutroAssociadoModal } from '@/components/cotacoes/PlacaOutroAssociadoModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Switch } from '@/components/ui/switch';
@@ -349,6 +351,11 @@ export default function CotadorPage() {
   // Estado para modal SGA
   const [showSGAModal, setShowSGAModal] = useState(false);
   const verificarVeiculoSGA = useVerificarVeiculoSGA();
+
+  // Estado para modal de placa pertencente a outro associado (base local)
+  const [placaOutroAssocInfo, setPlacaOutroAssocInfo] = useState<PlacaOutroAssociadoInfo | null>(null);
+  const [showPlacaOutroAssocModal, setShowPlacaOutroAssocModal] = useState(false);
+  const verificarPlacaOutroAssoc = useVerificarPlacaOutroAssociado();
 
   // Município de atendimento
   const [municipioBusca, setMunicipioBusca] = useState('');
@@ -638,7 +645,23 @@ export default function CotadorPage() {
       } catch (sgaError) {
         console.warn('[SGA] Erro na verificação, continuando:', sgaError);
       }
-      
+
+      // 3.1 Verificar se a placa já está vinculada a OUTRO associado na base local
+      try {
+        const localResult = await verificarPlacaOutroAssoc.mutateAsync({ placa: placaBusca });
+        if (localResult?.conflito) {
+          setPlacaOutroAssocInfo(localResult);
+          setShowPlacaOutroAssocModal(true);
+          setBuscandoPlaca(false);
+          return;
+        }
+        if (localResult?.mesmoTitular) {
+          toast.info('Esta placa já está cadastrada para este CPF. Use Inclusão de Veículo no perfil do associado.');
+        }
+      } catch (localErr) {
+        console.warn('[Local] Erro ao verificar veículo na base local:', localErr);
+      }
+
       // 4. Continuar com a busca do veículo
       const result = await getByPlaca(placaBusca.replace(/[^A-Za-z0-9]/g, ''));
       
@@ -2064,6 +2087,14 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
         open={showSGAModal}
         onOpenChange={setShowSGAModal}
         placa={placaBusca}
+      />
+
+      {/* Modal Placa pertence a outro associado (base local) */}
+      <PlacaOutroAssociadoModal
+        open={showPlacaOutroAssocModal}
+        onOpenChange={setShowPlacaOutroAssocModal}
+        placa={placaBusca}
+        info={placaOutroAssocInfo}
       />
     </div>
   );

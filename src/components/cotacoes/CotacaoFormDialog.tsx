@@ -86,6 +86,8 @@ import { useVerificarPlacaDuplicada, type PlacaDuplicadaInfo } from '@/hooks/use
 import { PlacaDuplicadaModal } from '@/components/cotacoes/PlacaDuplicadaModal';
 import { VeiculoSGAModal } from '@/components/cotacoes/VeiculoSGAModal';
 import { useVerificarVeiculoSGA } from '@/hooks/useVerificarVeiculoSGA';
+import { useVerificarPlacaOutroAssociado, type PlacaOutroAssociadoInfo } from '@/hooks/useVerificarPlacaOutroAssociado';
+import { PlacaOutroAssociadoModal } from '@/components/cotacoes/PlacaOutroAssociadoModal';
 import { useCotacaoDraft, type DraftPayload } from '@/hooks/useCotacaoDraft';
 import { DraftRestoreBanner } from '@/components/cotacao/DraftRestoreBanner';
 
@@ -226,6 +228,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // Estado para modal SGA
   const [showSGAModal, setShowSGAModal] = useState(false);
   const verificarVeiculoSGA = useVerificarVeiculoSGA();
+
+  // Modal: placa pertencente a outro associado (base local)
+  const [placaOutroAssocInfo, setPlacaOutroAssocInfo] = useState<PlacaOutroAssociadoInfo | null>(null);
+  const [showPlacaOutroAssocModal, setShowPlacaOutroAssocModal] = useState(false);
+  const verificarPlacaOutroAssoc = useVerificarPlacaOutroAssociado();
 
   // Estados para seleção FIPE manual
   type FipeMarcaComTipo = FipeMarca & { tipoFipe: 'carros' | 'motos' };
@@ -958,7 +965,23 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       } catch (sgaError) {
         console.warn('[SGA] Erro na verificação, continuando:', sgaError);
       }
-      
+
+      // Verificar se a placa já está vinculada a OUTRO associado na base local
+      try {
+        const localResult = await verificarPlacaOutroAssoc.mutateAsync({ placa });
+        if (localResult?.conflito) {
+          setPlacaOutroAssocInfo(localResult);
+          setShowPlacaOutroAssocModal(true);
+          setBuscandoPlaca(false);
+          return;
+        }
+        if (localResult?.mesmoTitular) {
+          toast.info('Esta placa já está cadastrada para este CPF. Use Inclusão de Veículo no perfil do associado.');
+        }
+      } catch (localErr) {
+        console.warn('[Local] Erro ao verificar veículo na base local:', localErr);
+      }
+
       const resultado = await getByPlaca(placa);
       
       if (resultado.success && resultado.vehicleData) {
@@ -3088,6 +3111,14 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         open={showSGAModal}
         onOpenChange={setShowSGAModal}
         placa={placa}
+      />
+
+      {/* Modal Placa pertence a outro associado (base local) */}
+      <PlacaOutroAssociadoModal
+        open={showPlacaOutroAssocModal}
+        onOpenChange={setShowPlacaOutroAssocModal}
+        placa={placa}
+        info={placaOutroAssocInfo}
       />
     </>
   );
