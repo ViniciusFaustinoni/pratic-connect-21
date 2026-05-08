@@ -529,6 +529,22 @@ serve(async (req) => {
             const emailFinal = assoc.email || associadoEmail || `assoc_${associadoId.slice(0, 8)}@praticcar.org`;
             const usernameBase = cpfDigits || emailFinal.split('@')[0] || `assoc_${associadoId.slice(0, 8)}`;
 
+            // Resolver roleId padrão (REGULAR) — Softruck exige relationships.roles
+            let defaultRoleId = Deno.env.get('SOFTRUCK_DEFAULT_USER_ROLE_ID') || '';
+            if (!defaultRoleId) {
+              try {
+                const rolesRes = await callSoftruckApi(supabaseUrl, supabaseAnonKey, 'listar-roles', {});
+                const rolesArr = (rolesRes?.data as { data?: Array<{ id: string; attributes?: { name?: string } }> })?.data || [];
+                const regular = rolesArr.find(r => r.attributes?.name === 'REGULAR') || rolesArr.find(r => r.attributes?.name === 'PROVIDER');
+                defaultRoleId = regular?.id || '';
+                console.log('[Softruck Ativar] roleId resolvido:', defaultRoleId);
+              } catch (e) {
+                console.warn('[Softruck Ativar] Falha ao listar roles, usando fallback hardcoded:', e);
+              }
+            }
+            // Fallback final hardcoded — id de REGULAR no enterprise atual
+            if (!defaultRoleId) defaultRoleId = 'rkov8pZ58Q93KgV';
+
             const criarUserResult = await callSoftruckApi(
               supabaseUrl,
               supabaseAnonKey,
@@ -539,6 +555,7 @@ serve(async (req) => {
                 nome: assoc.nome || `Associado ${associadoId.slice(0, 8)}`,
                 telefone: assoc.telefone || undefined,
                 cpf: cpfDigits || undefined,
+                roleId: defaultRoleId,
               }
             );
 
