@@ -30,7 +30,7 @@ export function AlertAguardandoAprovacaoMonitoramento({ associadoId, associadoSt
     queryFn: async () => {
       // Procura serviço de instalação concluído (mas não aprovado/reprovado)
       // — esse é exatamente o estado que joga o card na fila do monitoramento.
-      const { data: servico } = await supabase
+      const { data: servico } = await (supabase as any)
         .from('servicos')
         .select('id, concluida_em, profissional:profissional_id(nome), veiculo:veiculo_id(placa)')
         .eq('associado_id', associadoId)
