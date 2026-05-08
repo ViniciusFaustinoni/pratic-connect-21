@@ -216,6 +216,13 @@ export default function Rastreadores() {
           <HistoricoMovimentacoes />
         </TabsContent>
 
+        {/* Aba Fila Plataformas (condicional) */}
+        {canManagePlataformas && (
+          <TabsContent value="fila-plataformas" className="mt-6">
+            <PlataformasSyncPanel />
+          </TabsContent>
+        )}
+
         {/* Aba Plataformas (condicional) */}
         {canManagePlataformas && (
           <TabsContent value="plataformas" className="mt-6">
