@@ -13,6 +13,7 @@ import { useInclusaoBloqueioDebito } from '@/hooks/useInclusaoBloqueioDebito';
 import { TrocaTitularidadeDialog } from '@/components/associados/TrocaTitularidadeDialog';
 import { MigracaoDiretaDialog } from '@/components/cadastro/MigracaoDiretaDialog';
 import { DebitosCard } from '@/components/cotacao/DebitosCard';
+import { SgaTransientAlert } from '@/components/cotacao/SgaTransientAlert';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
@@ -97,9 +98,12 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   const { data: associadoResults, isLoading: loadingAssociados } = useAssociadoSearch(
     selectedTipo && selectedTipo !== 'migracao' && !isSubstituicao && !termoEhPlaca ? searchTerm : ''
   );
-  const { data: placaResults, isLoading: loadingPlacas } = useBuscaPlaca(
+  const buscaPlaca = useBuscaPlaca(
     selectedTipo && selectedTipo !== 'migracao' ? searchTerm : ''
   );
+  const { data: placaResults, isLoading: loadingPlacas, refetch: refetchPlaca } = buscaPlaca;
+  const placaErroTransitorio = buscaPlaca.erroTransitorio;
+  const placaMotivoTransitorio = buscaPlaca.motivoTransitorio;
 
   // Debt check for selected associado (substituicao/inclusao)
   const { data: debitosData, isLoading: loadingDebitos } = useVerificarDebitosAssociado(selectedAssociadoId || undefined);
@@ -568,7 +572,18 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
                         )}
 
                         {!loadingPlacas && searchTerm.length >= 3 && (!placaResults || placaResults.length === 0) && (
-                          <p className="text-sm text-muted-foreground text-center py-6">Nenhum veículo ativo encontrado com esta placa</p>
+                          placaErroTransitorio ? (
+                            <div className="px-3 py-3">
+                              <SgaTransientAlert
+                                motivo={placaMotivoTransitorio}
+                                onRetry={() => refetchPlaca()}
+                                loading={loadingPlacas}
+                                descricao="Não foi possível confirmar agora se esta placa está cadastrada no SGA. Tente novamente em instantes."
+                              />
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground text-center py-6">Nenhum veículo ativo encontrado com esta placa</p>
+                          )
                         )}
 
                         {searchTerm.length < 3 && (
@@ -703,23 +718,34 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
                               )}
 
                               {!isSearching && searchTerm.length >= 2 && mergedAssociadoResults.length === 0 && (
-                                <div className="px-3 py-5 space-y-3">
-                                  <p className="text-sm text-muted-foreground text-center">
-                                    Nenhum associado encontrado.
-                                  </p>
-                                  <Alert>
-                                    <Info className="h-4 w-4" />
-                                    <AlertTitle className="text-xs">Use CPF ou placa para buscar no SGA</AlertTitle>
-                                    <AlertDescription className="text-xs leading-relaxed space-y-1">
-                                      <p>
-                                        A integração do SGA (Hinova) <strong>não permite busca por nome</strong> — só por <strong>CPF exato</strong> (11 dígitos) ou <strong>placa</strong> (7 caracteres).
-                                      </p>
-                                      <p>
-                                        A busca por nome consulta <strong>apenas a base local</strong>. Se o associado ainda não tiver sido importado, ele não aparece aqui — digite o CPF completo ou a placa para localizá-lo no SGA em tempo real.
-                                      </p>
-                                    </AlertDescription>
-                                  </Alert>
-                                </div>
+                                placaErroTransitorio && (isCpfCompleto || isPlacaCompleta) ? (
+                                  <div className="px-3 py-4">
+                                    <SgaTransientAlert
+                                      motivo={placaMotivoTransitorio}
+                                      onRetry={() => refetchPlaca()}
+                                      loading={loadingPlacas}
+                                      descricao="A consulta ao SGA falhou agora. Não significa que o cadastro não exista — tente novamente em instantes."
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="px-3 py-5 space-y-3">
+                                    <p className="text-sm text-muted-foreground text-center">
+                                      Nenhum associado encontrado.
+                                    </p>
+                                    <Alert>
+                                      <Info className="h-4 w-4" />
+                                      <AlertTitle className="text-xs">Use CPF ou placa para buscar no SGA</AlertTitle>
+                                      <AlertDescription className="text-xs leading-relaxed space-y-1">
+                                        <p>
+                                          A integração do SGA (Hinova) <strong>não permite busca por nome</strong> — só por <strong>CPF exato</strong> (11 dígitos) ou <strong>placa</strong> (7 caracteres).
+                                        </p>
+                                        <p>
+                                          A busca por nome consulta <strong>apenas a base local</strong>. Se o associado ainda não tiver sido importado, ele não aparece aqui — digite o CPF completo ou a placa para localizá-lo no SGA em tempo real.
+                                        </p>
+                                      </AlertDescription>
+                                    </Alert>
+                                  </div>
+                                )
                               )}
 
                               {searchTerm.length < 2 && (
