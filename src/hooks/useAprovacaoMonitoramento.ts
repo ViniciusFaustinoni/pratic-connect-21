@@ -217,6 +217,9 @@ export function useAprovarInstalacaoMonitoramento() {
       }
 
       // 4. Garantir ativação no SGA via fila com retry (idempotente)
+      // force_resync_media=true: o sync inicial roda na aprovação cadastral, ANTES das fotos
+      // de vistoria existirem. Sem essa flag, o guard de idempotência pula o reenvio aqui e
+      // as fotos NUNCA chegam à Hinova. Reaproveita códigos existentes (busca por CPF/placa).
       await supabase.rpc('enqueue_integration', {
         _integration: 'sga',
         _operation: 'hinova_sync',
@@ -224,8 +227,11 @@ export function useAprovarInstalacaoMonitoramento() {
           veiculo_id: data.veiculoId,
           associado_id: data.associadoId,
           status_sga_destino: 'ativo',
+          force_resync_media: true,
+          etapa_origem: 'aprovacao_monitoramento',
+          motivo_decisao: 'Reenvio de fotos pós-vistoria após aprovação do monitoramento',
         },
-        _correlation_id: `sga:hinova:${data.veiculoId}:ativo`,
+        _correlation_id: `sga:hinova:${data.veiculoId}:aprovacao_monitoramento:${Date.now()}`,
         _max_attempts: 5,
         _delay_seconds: 0,
         _created_by: profile?.id ?? null,
