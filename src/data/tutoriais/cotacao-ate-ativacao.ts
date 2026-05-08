@@ -8,6 +8,7 @@ import cotacaoVencimentoCriar from '@/assets/tutoriais/cotacao-vencimento-criar.
 import cotacaoCopiarLink from '@/assets/tutoriais/cotacao-copiar-link.png';
 import associadoEscolhaPlano from '@/assets/tutoriais/associado-escolha-plano.png';
 import associadoDocumentos from '@/assets/tutoriais/associado-documentos.png';
+import associadoVistoriaBaseData from '@/assets/tutoriais/associado-vistoria-base-data.png';
 import associadoAssinaturaEmail from '@/assets/tutoriais/associado-assinatura-email.png';
 
 export const cotacaoAteAtivacao: Tutorial = {
@@ -171,6 +172,53 @@ export const cotacaoAteAtivacao: Tutorial = {
         'O vendedor NUNCA assina pelo cliente. Se o cliente não receber o e-mail, peça para checar Spam/Promoções antes de reenviar.',
         'Se faltar crédito Autentique, o sistema avisa; nesse caso, acione o suporte interno.',
         'Após assinar, o associado não precisa atualizar a página — a confirmação é automática e o status do contrato vai para "Assinado".',
+      ],
+    },
+    {
+      numero: 13,
+      titulo: '👤 [Ação do Associado] Escolher modalidade de vistoria',
+      descricao:
+        'ATENÇÃO: esta etapa também é executada pelo PRÓPRIO ASSOCIADO. Após a assinatura, o sistema avança automaticamente para "Vistoria do Veículo" e mostra até 3 opções: (a) Autovistoria — Roubo & Furto (Recomendado, disponível para planos com cobertura de R&F), (b) Quero que o técnico venha até mim (Sugerido, agendamento em até 48h) e (c) Quero levar meu veículo à Base (endereço da unidade Praticcar). O associado escolhe a modalidade que preferir; o vendedor só orienta caso o cliente tenha dúvida.',
+      dicas: [
+        'Autovistoria só aparece quando o plano contratado tem cobertura de Roubo & Furto.',
+        'Diesel, carros FIPE ≥ R$ 30k e motos ≥ R$ 9k exigem instalação de rastreador (técnico ou base) — autovistoria não substitui a instalação.',
+        'A escolha aqui define para qual fila o serviço cai (Autovistoria automática, Rota do técnico ou Agenda da Base).',
+      ],
+    },
+    {
+      numero: 14,
+      titulo: '👤 [Ação do Associado] Opção A — Autovistoria (Vídeo 360°)',
+      descricao:
+        'Se o associado escolher Autovistoria, a tela abre o passo a passo "Grave o Vídeo 360°" (Etapa 1 de 2). O cliente grava um único vídeo, pelo celular, seguindo as Instruções de Gravação: (1) frente do veículo com a placa visível, (2) lateral direita caminhando lentamente, (3) traseira com a placa visível, (4) lateral esquerda até voltar à frente, (5) interior (bancos, forração e teto), (6) painel ligado mostrando hodômetro e indicadores, (7) compartimento do motor com o capô aberto. Duração mínima 30 segundos / máxima 2 minutos. Depois, segue para a Etapa 2 (foto do chassi/documentos) e envia.',
+      dicas: [
+        'Filmar em local bem iluminado, sem cortes — um único vídeo contínuo cobrindo os 7 pontos.',
+        'Placa precisa estar legível na frente E na traseira; chassi sempre digitado manualmente (nunca lido por OCR).',
+        'Se o vídeo não atender (pontos faltando, escuro, curto demais), a aprovação manual reprova e o cliente refaz pelo mesmo link.',
+        'Mesmo aprovada por IA, a autovistoria SEMPRE passa por revisão manual no Monitoramento.',
+      ],
+    },
+    {
+      numero: 15,
+      titulo: '👤 [Ação do Associado] Opção B — Vistoria presencial (técnico vai até você)',
+      descricao:
+        'Se o associado escolher "Quero que o técnico venha até mim", abre a tela "Agendar Vistoria Presencial". O cliente seleciona a data nos cards (segunda/terça/quarta…), define quem vai receber o técnico (Eu mesmo ou Outra pessoa — neste caso preenche nome/telefone), opcionalmente ativa "Permitir encaixe de horário" (antecipa a visita se houver técnico próximo) e clica em "Revisar agendamento" para confirmar. O técnico vai até o endereço cadastrado em até 48h.',
+      dicas: [
+        'Período é Manhã (08:00–12:00) ou Tarde (13:00–18:00) — não horário fechado.',
+        '"Outra pessoa" exige telefone válido com WhatsApp — é por ele que o técnico avisa o ETA.',
+        'Encaixe de horário é opcional; se ativo, o cliente recebe aviso quando o técnico estiver a caminho antes do período agendado.',
+        'Diesel / FIPE ≥ 30k carro / ≥ 9k moto: o técnico instala rastreador junto com a vistoria.',
+      ],
+    },
+    {
+      numero: 16,
+      titulo: '👤 [Ação do Associado] Opção C — Levar veículo à Base Praticcar',
+      descricao:
+        'Se o associado escolher "Quero levar meu veículo à Base", a tela mostra o endereço fixo da Oficina Praticcar (Av. Perimetral Brigadeiro Lima e Silva, 592 — Parque Duque, Duque de Caxias/RJ) com os horários de funcionamento (Manhã 08:00–12:00 / Tarde 13:00–18:00). O cliente seleciona uma data nos cards (Segunda 11/Terça 12/Quarta 13/…) e clica em "Confirmar Agendamento" — receberá a notificação com os detalhes do agendamento.',
+      imagem: associadoVistoriaBaseData,
+      dicas: [
+        'A Base só aceita o veículo dentro dos horários informados — chegar fora do horário invalida o agendamento do dia.',
+        'O período (Manhã/Tarde) é definido na chegada — basta respeitar o intervalo do horário escolhido.',
+        'Vale para vistoria pura (FIPE menor) e também para instalação de rastreador na Base, conforme o plano contratado.',
       ],
     },
     {
