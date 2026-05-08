@@ -22,6 +22,7 @@ import {
   HinovaTransientError,
   HinovaNotFoundError,
   calcularProximoRetry,
+  withHinovaAuthRetry,
   type HinovaSession,
 } from '../_shared/hinova-client.ts';
 
