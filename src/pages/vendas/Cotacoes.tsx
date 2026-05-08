@@ -46,9 +46,6 @@ import { CotacoesMobileList } from '@/components/cotacoes/CotacoesMobileList';
 import { CotacoesFiltrosSheet } from '@/components/cotacoes/CotacoesFiltrosSheet';
 import { CotacoesActiveFiltersChips } from '@/components/cotacoes/CotacoesActiveFiltersChips';
 // Modais lazy — só baixam quando o usuário abre (reduz bundle inicial da rota)
-const CotacaoDetalhesModal = lazy(() =>
-  import('@/components/cotacoes/CotacaoDetalhesModal').then((m) => ({ default: m.CotacaoDetalhesModal }))
-);
 const EnviarEmailModal = lazy(() =>
   import('@/components/cotacoes/EnviarEmailModal').then((m) => ({ default: m.EnviarEmailModal }))
 );
@@ -144,8 +141,7 @@ export default function Cotacoes() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showExclusaoLoteDialog, setShowExclusaoLoteDialog] = useState(false);
   
-  // Modal de detalhes
-  const [showDetalhesModal, setShowDetalhesModal] = useState(false);
+  // Cotação selecionada (usada por handlers como duplicar/contrato/email)
   const [cotacaoSelecionada, setCotacaoSelecionada] = useState<CotacaoWithRelations | null>(null);
   const [showRelatorioDialog, setShowRelatorioDialog] = useState(false);
 
@@ -365,7 +361,7 @@ export default function Cotacoes() {
 
   const handleRowClick = (cotacao: CotacaoWithRelations) => {
     setCotacaoSelecionada(cotacao);
-    setShowDetalhesModal(true);
+    navigate(`/vendas/cotacoes/${cotacao.id}`);
   };
 
   const handleDuplicar = (cotacao: CotacaoWithRelations) => {
@@ -375,7 +371,6 @@ export default function Cotacoes() {
 
   const handleContinuarCotacao = (cotacao: CotacaoWithRelations) => {
     setCotacaoParaContinuar(cotacao);
-    setShowDetalhesModal(false);
     setShowCotacaoForm(true);
   };
 
@@ -522,7 +517,6 @@ export default function Cotacoes() {
   const handleOpenContratoWizard = (cotacaoId: string) => {
     setSelectedCotacaoId(cotacaoId);
     setShowContratoWizard(true);
-    setShowDetalhesModal(false);
   };
 
   const handleContratoCreated = (contratoId: string) => {
@@ -1242,27 +1236,7 @@ export default function Cotacoes() {
         </TabsContent>
       </Tabs>
 
-      {/* Modal de Detalhes — lazy + só monta quando abre */}
-      {showDetalhesModal && cotacaoSelecionada && (
-        <Suspense fallback={null}>
-          <CotacaoDetalhesModal
-            open={showDetalhesModal}
-            onOpenChange={setShowDetalhesModal}
-            cotacao={cotacaoSelecionada}
-            onCopiarWhatsApp={copiarParaWhatsApp}
-            onPdf={handleBaixarPdf}
-            onEmail={handleOpenEmailModal}
-            onGerarContrato={handleOpenContratoWizard}
-            onAceitar={(id) => updateCotacao.mutate({ id, status: 'aceita' })}
-            onDuplicar={handleDuplicar}
-            onContinuar={handleContinuarCotacao}
-            isCopiandoWhatsApp={copiandoWhatsApp === cotacaoSelecionada?.id}
-            isGerandoContrato={gerarContrato.isPending}
-            canGenerateContract={cotacaoSelecionada ? getPermissions(cotacaoSelecionada).canGenerateContract : false}
-            canSend={cotacaoSelecionada ? getPermissions(cotacaoSelecionada).canSend : false}
-          />
-        </Suspense>
-      )}
+      {/* Detalhes agora ficam na rota /vendas/cotacoes/:id — sem modal duplicado */}
 
       {/* Dialogs — lazy mount: só sobem quando o usuário abre, evitando ~50 fetches no carregamento da listagem */}
       {showCotacaoForm && (

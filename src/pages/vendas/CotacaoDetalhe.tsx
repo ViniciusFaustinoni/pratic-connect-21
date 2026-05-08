@@ -25,6 +25,7 @@ import { CotacaoClienteVeiculo } from '@/components/cotacoes/CotacaoClienteVeicu
 import { CotacaoVendedor } from '@/components/cotacoes/CotacaoVendedor';
 import { PlanoCardComparativo, type PlanoComparativo } from '@/components/cotacoes/PlanoCardComparativo';
 import { PlanoDetalhesModal } from '@/components/cotacoes/PlanoDetalhesModal';
+import { TrocaTitularidadeBadge } from '@/components/cotacoes/TrocaTitularidadeBadge';
 
 // Componentes existentes
 import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
@@ -414,6 +415,12 @@ Ficou com alguma dúvida? Estou à disposição!
 
       {/* HEADER COM RESUMO EXECUTIVO */}
       <CotacaoHeader cotacao={cotacao} />
+
+      {/* Badge de Troca de Titularidade (quando aplicável) */}
+      <TrocaTitularidadeBadge
+        cotacaoId={cotacao.id}
+        tipoEntrada={(cotacao.dados_extras as { tipo_entrada?: string } | null)?.tipo_entrada}
+      />
 
       {/* LAYOUT 2 COLUNAS */}
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
