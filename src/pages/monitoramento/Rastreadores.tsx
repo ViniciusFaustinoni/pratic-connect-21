@@ -131,6 +131,7 @@ export default function Rastreadores() {
     { value: 'visao-geral', label: 'Visão Geral', icon: Radio },
     { value: 'estoque', label: 'Estoque', icon: Package },
     { value: 'historico', label: 'Histórico', icon: Clock },
+    ...(canManagePlataformas ? [{ value: 'fila-plataformas', label: 'Fila Plataformas', icon: Send }] : []),
     ...(canManagePlataformas ? [{ value: 'plataformas', label: 'Plataformas', icon: Server }] : []),
     ...(canManagePlataformas ? [{ value: 'locais', label: 'Locais Instalação', icon: Settings }] : []),
   ];
