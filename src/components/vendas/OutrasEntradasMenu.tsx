@@ -718,23 +718,34 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
                               )}
 
                               {!isSearching && searchTerm.length >= 2 && mergedAssociadoResults.length === 0 && (
-                                <div className="px-3 py-5 space-y-3">
-                                  <p className="text-sm text-muted-foreground text-center">
-                                    Nenhum associado encontrado.
-                                  </p>
-                                  <Alert>
-                                    <Info className="h-4 w-4" />
-                                    <AlertTitle className="text-xs">Use CPF ou placa para buscar no SGA</AlertTitle>
-                                    <AlertDescription className="text-xs leading-relaxed space-y-1">
-                                      <p>
-                                        A integração do SGA (Hinova) <strong>não permite busca por nome</strong> — só por <strong>CPF exato</strong> (11 dígitos) ou <strong>placa</strong> (7 caracteres).
-                                      </p>
-                                      <p>
-                                        A busca por nome consulta <strong>apenas a base local</strong>. Se o associado ainda não tiver sido importado, ele não aparece aqui — digite o CPF completo ou a placa para localizá-lo no SGA em tempo real.
-                                      </p>
-                                    </AlertDescription>
-                                  </Alert>
-                                </div>
+                                placaErroTransitorio && (isCpfCompleto || isPlacaCompleta) ? (
+                                  <div className="px-3 py-4">
+                                    <SgaTransientAlert
+                                      motivo={placaMotivoTransitorio}
+                                      onRetry={() => refetchPlaca()}
+                                      loading={loadingPlacas}
+                                      descricao="A consulta ao SGA falhou agora. Não significa que o cadastro não exista — tente novamente em instantes."
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="px-3 py-5 space-y-3">
+                                    <p className="text-sm text-muted-foreground text-center">
+                                      Nenhum associado encontrado.
+                                    </p>
+                                    <Alert>
+                                      <Info className="h-4 w-4" />
+                                      <AlertTitle className="text-xs">Use CPF ou placa para buscar no SGA</AlertTitle>
+                                      <AlertDescription className="text-xs leading-relaxed space-y-1">
+                                        <p>
+                                          A integração do SGA (Hinova) <strong>não permite busca por nome</strong> — só por <strong>CPF exato</strong> (11 dígitos) ou <strong>placa</strong> (7 caracteres).
+                                        </p>
+                                        <p>
+                                          A busca por nome consulta <strong>apenas a base local</strong>. Se o associado ainda não tiver sido importado, ele não aparece aqui — digite o CPF completo ou a placa para localizá-lo no SGA em tempo real.
+                                        </p>
+                                      </AlertDescription>
+                                    </Alert>
+                                  </div>
+                                )
                               )}
 
                               {searchTerm.length < 2 && (
