@@ -987,7 +987,7 @@ serve(async (req) => {
       const { data: vistoriasVeic } = await supabase.from('vistorias')
         .select('id')
         .eq('veiculo_id', _vid)
-        .in('status', ['concluida', 'aprovada', 'aprovado', 'em_analise', 'aprovada_ressalvas']);
+        .in('status', ['concluida', 'aprovada', 'em_analise', 'aprovada_ressalvas']);
 
       if (vistoriasVeic && vistoriasVeic.length > 0) {
         const vistoriaIds = vistoriasVeic.map((v: any) => v.id);
