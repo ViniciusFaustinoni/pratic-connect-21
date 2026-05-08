@@ -572,7 +572,18 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
                         )}
 
                         {!loadingPlacas && searchTerm.length >= 3 && (!placaResults || placaResults.length === 0) && (
-                          <p className="text-sm text-muted-foreground text-center py-6">Nenhum veículo ativo encontrado com esta placa</p>
+                          placaErroTransitorio ? (
+                            <div className="px-3 py-3">
+                              <SgaTransientAlert
+                                motivo={placaMotivoTransitorio}
+                                onRetry={() => refetchPlaca()}
+                                loading={loadingPlacas}
+                                descricao="Não foi possível confirmar agora se esta placa está cadastrada no SGA. Tente novamente em instantes."
+                              />
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground text-center py-6">Nenhum veículo ativo encontrado com esta placa</p>
+                          )
                         )}
 
                         {searchTerm.length < 3 && (
