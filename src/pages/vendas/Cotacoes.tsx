@@ -517,7 +517,6 @@ export default function Cotacoes() {
   const handleOpenContratoWizard = (cotacaoId: string) => {
     setSelectedCotacaoId(cotacaoId);
     setShowContratoWizard(true);
-    setShowDetalhesModal(false);
   };
 
   const handleContratoCreated = (contratoId: string) => {
