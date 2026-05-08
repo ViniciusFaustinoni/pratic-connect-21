@@ -1,70 +1,64 @@
-## Problema
+## Contexto
 
-A cotação `COT-20260508-181403289-174` foi criada como **adesão normal** (não é troca de titularidade) com a placa **LTB4J74**. Porém essa placa já pertence ao associado **RODOLFO MARCOS DA SILVA** (CPF 123.143.117-28, status ativo), e o solicitante atual é outro CPF (124.936.497-37 / MARCUS VINICIUS).
+Hoje uma Troca de Titularidade gera corretamente uma cotação avulsa, com **todos os campos do cliente já preenchidos** no banco (`nome_solicitante`, `cliente_cpf`, `email_solicitante`, `telefone1_solicitante`) e do veículo (placa, marca, modelo, ano, cor, FIPE). Mesmo assim, a tela de detalhe (1ª screenshot) mostra "Cotação avulsa — Vincule a um lead para enviar" porque o card só lê de `cotacao.leads.*`.
 
-Hoje o sistema só descobre essa colisão lá no fim do funil, dentro de `contrato-gerar`, onde dispara `[BLOQUEIO-DONO]` e devolve HTTP 409 com a mensagem "Edge Function returned a non-2xx status code" — uma falha opaca, exibida só na Etapa 3 (Contrato → Autentique), depois do cliente já ter percorrido todo o fluxo.
+Além disso, a mesma cotação pode ser exibida de duas maneiras diferentes:
 
-## Causa
+- `CotacaoDetalhesModal` (drawer aberto ao clicar na linha — 3ª screenshot)
+- `CotacaoDetalhe` (rota `/vendas/cotacoes/:id` — 1ª screenshot)
 
-A verificação de "placa pertence a outro associado" existe apenas na edge `contrato-gerar`. Os pontos de criação de cotação (`Cotador.tsx` e `CotacaoFormDialog.tsx`) verificam:
+Ambos mostram cabeçalho, cliente, veículo, valores, ações; o modal é uma versão reduzida e desatualizada da página. Isso é a "duplicidade de áreas".
 
-1. Blacklist
-2. Cotação duplicada (mesma placa em outro vendedor)
-3. SGA Hinova (`useVerificarVeiculoSGA`) — checa se a placa existe no SGA externo
+## Objetivos
 
-Mas **não** checam a tabela local `veiculos` para detectar que a placa já tem um `associado_id` diferente do CPF da cotação atual.
+1. Toda cotação (avulsa, lead, troca de titularidade) é vista pela mesma tela: a página `/vendas/cotacoes/:id`.
+2. Quando não há lead, o card Cliente exibe os dados do solicitante salvos na própria cotação (nome, CPF, telefone, e-mail), com botões Ligar/WhatsApp já habilitados.
+3. Cotações de Troca de Titularidade ganham um badge claro no header e a mensagem "Cotação avulsa - Vincule a um lead para enviar" deixa de aparecer quando os dados do solicitante já existem.
 
-## Mudança
+## Mudanças
 
-### 1. Novo hook `useVerificarPlacaOutroAssociado`
+### 1. Remover o modal duplicado (`CotacaoDetalhesModal`)
 
-Arquivo: `src/hooks/useVerificarPlacaOutroAssociado.ts` (novo)
+- `src/pages/vendas/Cotacoes.tsx`
+  - `handleRowClick` passa a `navigate(`/vendas/cotacoes/${cotacao.id}`)` em vez de abrir modal.
+  - Remover estado `showDetalhesModal`, `setShowDetalhesModal`, o bloco JSX `<CotacaoDetalhesModal …>` e o lazy import.
+  - `handleContinuarCotacao` deixa de fechar o modal (não existe mais) e segue abrindo `CotacaoFormDialog`.
+- `src/components/cotacoes/CotacaoDetalhesModal.tsx`: arquivo é deletado (nenhum outro consumer — `rg` confirma).
+- `CotacaoCard` / `CotacoesMobileList` / `CotacoesTable`: garantir que o clique e o item "Ver detalhes" do menu também navegam para a página.
 
-- Recebe `{ placa, cpfSolicitante }`.
-- `SELECT v.id, v.associado_id, a.nome, a.cpf, a.status FROM veiculos v JOIN associados a ON a.id=v.associado_id WHERE v.placa = :placa`.
-- Se existe e `a.cpf` (limpo) ≠ `cpfSolicitante` (limpo), retorna `{ conflito: true, associadoNome, cpfMascarado, status }`.
-- Se mesmo CPF, retorna `{ conflito: false, mesmoTitular: true }` (sinaliza para sugerir Inclusão de Veículo).
-- Senão, `null`.
+### 2. Card Cliente: usar dados do solicitante quando não há lead
 
-### 2. Bloqueio pré-criação no Cotador (`src/pages/vendas/Cotador.tsx`)
+`src/components/cotacoes/CotacaoClienteVeiculo.tsx`
 
-No `handleBuscarPlaca` (após o passo 3 do SGA, antes do passo 4 "Continuar com a busca"):
+- Adicionar nas props os campos opcionais `nome_solicitante`, `cliente_cpf`, `email_solicitante`, `telefone1_solicitante`, e `tipo_entrada` (de `dados_extras.tipo_entrada`).
+- Lógica de renderização:
+  - Se `lead_id` existir → mantém comportamento atual.
+  - Senão, se `nome_solicitante` existir → renderiza o mesmo layout (Nome, telefone, e-mail, botões Ligar/WhatsApp), com um badge "Solicitante (cotação avulsa)" e ação secundária `Vincular Lead` permanece disponível como link discreto.
+  - Senão (sem lead e sem solicitante) → mantém o estado vazio atual.
+- O `Alert` "Cotação avulsa — Vincule a um lead para habilitar envio" só aparece quando NÃO há nem lead nem solicitante.
 
-- Se o CPF do solicitante já estiver preenchido, chamar o novo hook.
-- Se `conflito === true`, abrir um modal de erro claro (novo componente `PlacaOutroAssociadoModal`) com:
-  - Título: **"Placa já pertence a outro associado"**
-  - Texto: *"A placa LTB4J74 está vinculada a {NOME} (CPF ***.143.***-28, status: ativo). Não é possível criar uma cotação de adesão para essa placa."*
-  - Dois botões de ação:
-    - **"Iniciar Troca de Titularidade"** → leva para `/cobranca/troca-titularidade` ou abre o `TrocaTitularidadeDialog` daquele associado.
-    - **"Cancelar"** → fecha o modal e limpa o campo de placa.
-- Se `mesmoTitular === true`, exibir toast informativo: "Esta placa já está cadastrada para este CPF. Use Inclusão de Veículo no perfil do associado."
-- Quando o CPF ainda não estiver preenchido, repetir a checagem no `handleSalvarCotacao` (gate final antes de gravar).
+`src/pages/vendas/CotacaoDetalhe.tsx`
 
-### 3. Mesmo bloqueio no `CotacaoFormDialog.tsx`
+- Passar os novos campos para `<CotacaoClienteVeiculo … />`.
 
-Aplicar a mesma verificação no fluxo do dialog (após `verificarVeiculoSGA`, antes de prosseguir para os planos).
+### 3. Indicar Troca de Titularidade no header
 
-### 4. Mensagem clara em `contrato-gerar` (defesa em profundidade)
+`src/pages/vendas/CotacaoDetalhe.tsx`
 
-Manter o bloqueio (não remover — segue como guardrail), mas trocar a string de erro pelas variáveis disponíveis para que, se ainda escapar, o front mostre algo útil:
+- Quando `cotacao.dados_extras?.tipo_entrada === 'troca_titularidade'`, renderizar o `<TrocaTitularidadeBadge />` (componente já existe) ao lado do título dentro de `CotacaoHeader` (ou logo abaixo).
 
-```
-"A placa {PLACA} pertence a outro associado ({NOME_OU_ID_MASCARADO}). 
-Esta cotação foi criada como adesão, mas o veículo já existe no sistema. 
-Cancele a cotação e use Troca de Titularidade."
-```
+### 4. Não-mudanças (fora de escopo)
 
-E no `EtapaAssinaturaContrato.tsx`, ler o `error.message` / `code='PLACA_DE_OUTRO_ASSOCIADO'` retornado pela edge e exibir essa mensagem específica em vez de "Edge Function returned a non-2xx status code".
+- Sem alteração no edge `criar-solicitacao-troca-titularidade` — a cotação já é criada com os campos certos.
+- Sem alteração em `CotacaoFormDialog` / fluxo de criação rápida.
+- Sem alteração em RLS, schema ou no fluxo de aprovação da troca.
 
-## Validação
+## Critérios de aceite
 
-1. Criar nova cotação no Cotador com placa **LTB4J74** + CPF qualquer ≠ 12314311728 → deve abrir o modal "Placa já pertence a outro associado" antes de qualquer outra etapa.
-2. Repetir com o CPF correto (12314311728) → deve aparecer o toast "Inclusão de Veículo".
-3. Repetir com placa nova qualquer → fluxo normal segue funcionando.
-4. Cotação atual (`684660e4-...`): excluí-la / cancelá-la manualmente, já que foi criada de forma incorreta.
-
-## Não escopo
-
-- Não alterar a lógica de Troca de Titularidade existente.
-- Não alterar o sync de veículo↔contrato (trigger).
-- Não relaxar o bloqueio em `contrato-gerar` — só melhorar a mensagem.
+1. Ao clicar em qualquer linha de `/vendas/cotacoes`, o usuário cai em `/vendas/cotacoes/:id` (sem drawer).
+2. Em uma cotação criada por Troca de Titularidade:
+   - Card Cliente exibe nome do novo titular, CPF, telefone e e-mail (com botões Ligar e WhatsApp ativos).
+   - Header mostra o badge "Troca de Titularidade".
+   - Mensagem "Vincule a um lead" desaparece.
+3. Cotações realmente avulsas (sem nome do solicitante e sem lead) continuam mostrando o estado vazio + CTA "Vincular Lead".
+4. Nenhum import quebrado: `CotacaoDetalhesModal` é removido por completo.
