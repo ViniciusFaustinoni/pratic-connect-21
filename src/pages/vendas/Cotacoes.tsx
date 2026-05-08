@@ -141,8 +141,7 @@ export default function Cotacoes() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showExclusaoLoteDialog, setShowExclusaoLoteDialog] = useState(false);
   
-  // Modal de detalhes
-  const [showDetalhesModal, setShowDetalhesModal] = useState(false);
+  // Cotação selecionada (usada por handlers como duplicar/contrato/email)
   const [cotacaoSelecionada, setCotacaoSelecionada] = useState<CotacaoWithRelations | null>(null);
   const [showRelatorioDialog, setShowRelatorioDialog] = useState(false);
 
