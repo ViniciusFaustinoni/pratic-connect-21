@@ -223,10 +223,19 @@ serve(async (req) => {
     console.log('[RedeVeiculos Vincular] Autenticado, ambiente:', plataforma.ambiente_atual);
 
     // ===== 6. Montar payload para API Rede Veículos =====
+    const cpfCnpjLimpo = formatarCpfCnpj(associado.cpf);
+    const imeiLimpo = (rastreador.imei || '').replace(/\D/g, '');
+
+    if (!cpfCnpjLimpo) throw new Error(`Associado ${associado.nome} sem CPF/CNPJ válido`);
+    if (!imeiLimpo) throw new Error(`Rastreador sem IMEI válido`);
+
     const payload = {
+      // Campos no nível raiz exigidos pela API Rede Veículos
+      cpfCnpj: cpfCnpjLimpo,
+      imei: imeiLimpo,
       // Dados do Equipamento
       equipamento: {
-        imei: rastreador.imei,
+        imei: imeiLimpo,
         localInstalacao: localInstalacao,
         possuiBloqueio: possuiBloqueio,
       },
@@ -243,7 +252,7 @@ serve(async (req) => {
       },
       // Dados do Cliente
       cliente: {
-        cpfCnpj: formatarCpfCnpj(associado.cpf),
+        cpfCnpj: cpfCnpjLimpo,
         nome: associado.nome,
         celular: formatarTelefone(associado.telefone),
         email: associado.email,
