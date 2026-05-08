@@ -8,6 +8,7 @@ import cotacaoVencimentoCriar from '@/assets/tutoriais/cotacao-vencimento-criar.
 import cotacaoCopiarLink from '@/assets/tutoriais/cotacao-copiar-link.png';
 import associadoEscolhaPlano from '@/assets/tutoriais/associado-escolha-plano.png';
 import associadoDocumentos from '@/assets/tutoriais/associado-documentos.png';
+import associadoAssinaturaEmail from '@/assets/tutoriais/associado-assinatura-email.png';
 
 export const cotacaoAteAtivacao: Tutorial = {
   id: 'cotacao-ate-ativacao',
@@ -161,12 +162,15 @@ export const cotacaoAteAtivacao: Tutorial = {
     },
     {
       numero: 12,
-      titulo: 'Cliente assina com biometria facial',
+      titulo: '👤 [Ação do Associado] Assinar a proposta pelo e-mail (Autentique)',
       descricao:
-        'A assinatura é feita pelo Autentique exclusivamente por e-mail com reconhecimento facial (PF_FACIAL). Após assinar, o sistema atualiza o status do contrato para "Assinado" e move o associado para a fila de Cadastro.',
+        'ATENÇÃO: esta etapa também é executada pelo PRÓPRIO ASSOCIADO. Ao avançar de Documentos, a etapa "Contrato" mostra o aviso "SUA PROPOSTA DE FILIAÇÃO ESTÁ NO SEU E-MAIL PARA ASSINATURA!" e o passo a passo "Como assinar via Email": (1) acessar o e-mail cadastrado, (2) abrir o e-mail da Autentique e clicar em "Assinar documento", (3) seguir o fluxo da Autentique com reconhecimento facial (PF_FACIAL), (4) voltar à página da proposta — a confirmação é automática e o fluxo libera Vistoria.',
+      imagem: associadoAssinaturaEmail,
       dicas: [
-        'Não há assinatura manual/desenhada — somente facial.',
+        'A assinatura é exclusivamente por e-mail com biometria facial — não existe assinatura desenhada/manual.',
+        'O vendedor NUNCA assina pelo cliente. Se o cliente não receber o e-mail, peça para checar Spam/Promoções antes de reenviar.',
         'Se faltar crédito Autentique, o sistema avisa; nesse caso, acione o suporte interno.',
+        'Após assinar, o associado não precisa atualizar a página — a confirmação é automática e o status do contrato vai para "Assinado".',
       ],
     },
     {
