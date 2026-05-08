@@ -965,7 +965,23 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       } catch (sgaError) {
         console.warn('[SGA] Erro na verificação, continuando:', sgaError);
       }
-      
+
+      // Verificar se a placa já está vinculada a OUTRO associado na base local
+      try {
+        const localResult = await verificarPlacaOutroAssoc.mutateAsync({ placa, cpfSolicitante: cpf });
+        if (localResult?.conflito) {
+          setPlacaOutroAssocInfo(localResult);
+          setShowPlacaOutroAssocModal(true);
+          setBuscandoPlaca(false);
+          return;
+        }
+        if (localResult?.mesmoTitular) {
+          toast.info('Esta placa já está cadastrada para este CPF. Use Inclusão de Veículo no perfil do associado.');
+        }
+      } catch (localErr) {
+        console.warn('[Local] Erro ao verificar veículo na base local:', localErr);
+      }
+
       const resultado = await getByPlaca(placa);
       
       if (resultado.success && resultado.vehicleData) {
