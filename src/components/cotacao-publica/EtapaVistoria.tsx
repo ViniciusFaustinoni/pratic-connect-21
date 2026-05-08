@@ -172,64 +172,80 @@ export function EtapaVistoria({
               </button>
 
               {/* Card 2: Técnico vai até o cliente */}
-              {tipoInstalacao !== 'base' && (
-                <button
-                  onClick={() => setModo('agendada')}
-                  className="w-full p-4 rounded-xl border border-border/50 bg-card/50 hover:bg-accent/10 hover:border-primary/50 transition-all group text-left"
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-muted/50 flex items-center justify-center shrink-0 group-hover:bg-muted transition-colors">
-                      <Home className="h-6 w-6 text-muted-foreground" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-foreground mb-1">Quero que o técnico venha até mim</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Um técnico vai ao seu endereço realizar a vistoria/instalação.
-                      </p>
-                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          Agendamento em até 48h
+              <button
+                onClick={() => setModo('agendada')}
+                className={cn(
+                  "w-full p-4 rounded-xl border bg-card/50 hover:bg-accent/10 hover:border-primary/50 transition-all group text-left",
+                  tipoInstalacao === 'rota' ? "border-primary/40" : "border-border/50"
+                )}
+              >
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-muted/50 flex items-center justify-center shrink-0 group-hover:bg-muted transition-colors">
+                    <Home className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold text-foreground">Quero que o técnico venha até mim</h3>
+                      {tipoInstalacao === 'rota' && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                          Sugerido
                         </span>
-                      </div>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Um técnico vai ao seu endereço realizar a vistoria/instalação.
+                    </p>
+                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        Agendamento em até 48h
+                      </span>
                     </div>
                   </div>
-                </button>
-              )}
+                </div>
+              </button>
 
               {/* Card 3: Cliente leva à Base */}
-              {tipoInstalacao !== 'rota' && (
-                <button
-                  onClick={() => setModo('escolha-base')}
-                  className="w-full p-4 rounded-xl border border-border/50 bg-card/50 hover:bg-accent/10 hover:border-primary/50 transition-all group text-left"
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center shrink-0 group-hover:bg-orange-500/20 transition-colors">
-                      <Building2 className="h-6 w-6 text-orange-600" />
+              <button
+                onClick={() => setModo('escolha-base')}
+                className={cn(
+                  "w-full p-4 rounded-xl border bg-card/50 hover:bg-accent/10 hover:border-primary/50 transition-all group text-left",
+                  tipoInstalacao === 'base' ? "border-primary/40" : "border-border/50"
+                )}
+              >
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center shrink-0 group-hover:bg-orange-500/20 transition-colors">
+                    <Building2 className="h-6 w-6 text-orange-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold text-foreground">Quero levar meu veículo à Base</h3>
+                      {tipoInstalacao === 'base' && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                          Sugerido
+                        </span>
+                      )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-foreground mb-1">Quero levar meu veículo à Base</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Leve o veículo a uma unidade Praticcar para realizar a vistoria/instalação.
-                      </p>
-                      <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-                        {enderecoBase && (
-                          <div className="flex items-start gap-1">
-                            <MapPin className="h-3 w-3 mt-0.5 flex-shrink-0" />
-                            <span className="truncate">{enderecoBase}</span>
-                          </div>
-                        )}
-                        {horarioBase && (
-                          <div className="flex items-center gap-1">
-                            <Clock className="h-3 w-3 flex-shrink-0" />
-                            <span>Horário: {horarioBase}</span>
-                          </div>
-                        )}
-                      </div>
+                    <p className="text-sm text-muted-foreground">
+                      Leve o veículo a uma unidade Praticcar para realizar a vistoria/instalação.
+                    </p>
+                    <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                      {enderecoBase && (
+                        <div className="flex items-start gap-1">
+                          <MapPin className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                          <span className="truncate">{enderecoBase}</span>
+                        </div>
+                      )}
+                      {horarioBase && (
+                        <div className="flex items-center gap-1">
+                          <Clock className="h-3 w-3 flex-shrink-0" />
+                          <span>Horário: {horarioBase}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
-                </button>
-              )}
+                </div>
+              </button>
             </CardContent>
           </Card>
         </motion.div>

@@ -1,53 +1,72 @@
-## Objetivo
+# Plano — Etapa da Venda errada e opções de Vistoria sumindo
 
-Resolver a percepção de “nenhuma cotação aparece no mobile” na tela `/vendas/cotacoes`. A causa real é a barra de filtros do desktop sendo reaproveitada no mobile: ocupa toda a primeira dobra, embaralha estados ativos e esconde a lista, dando impressão de tela vazia.
+Dois bugs independentes na jornada pública de contratação.
 
-## O que muda (somente UI mobile, < 768px)
+---
 
-1. **Barra de filtros condensada num único botão "Filtros"**
-   - No mobile, esconder os selects soltos (Status, Período, Etapa do funil, Data, Consultor, Sem Lead).
-   - Mostrar apenas: campo de busca + botão `Filtros` com badge mostrando a contagem de filtros ativos.
-   - O botão abre um `Sheet` lateral (já usado no projeto) contendo todos os filtros atuais, um botão "Aplicar" e um "Limpar tudo".
-   - Desktop (≥ 768px) permanece exatamente como está hoje.
+## Bug 1 — Badge "Realizando Pagamento" durante a etapa Vistoria
 
-2. **Banner de filtros ativos sempre visível no topo da lista mobile**
-   - Quando `hasActiveFilters` for verdadeiro, mostrar uma faixa fina acima da lista listando os filtros ativos como chips removíveis (ex.: `Etapa: Escolhendo plano ✕`, `Consultor: Maria ✕`).
-   - Clicar no `✕` de cada chip remove só aquele filtro.
-   - Mantém o aviso atual “Você tem N cotações ocultadas pelos filtros” + botão Limpar.
+### Causa raiz
+`src/lib/cotacaoEtapa.ts` (regra 6, linhas 196-201) decide a etapa apenas pela combinação `contrato.status='assinado' + adesao_paga=false`. No link público, porém, a ordem é:
 
-3. **Card de total no topo (mobile) reforçado**
-   - O card já existente (`funilCounts.total`) passa a mostrar também a contagem da aba ativa: “339 em andamento · 0 finalizadas”.
-   - Assim o usuário entende rapidamente onde estão as cotações antes mesmo de mexer em filtro.
+```
+Plano → Documentos → Contrato → Vistoria → Pagamento
+```
 
-4. **Aba Finalizadas com empty-state explicativo**
-   - Quando `cotacoesFinalizadasTotal === 0` (sem filtros), trocar o texto genérico “Nenhuma cotação encontrada” por: “Ainda não há cotações finalizadas (aceitas, recusadas ou expiradas).”
-   - Evita o usuário pensar que é bug.
+Logo, durante a Step 4 (Vistoria), o contrato JÁ está assinado mas o pagamento AINDA não foi feito — o que casa com a regra 6 e força o badge "Realizando Pagamento", mesmo que o cliente esteja escolhendo/agendando vistoria.
 
-5. **Reset defensivo de filtros ao montar a página**
-   - Garantir que `statusFilter`, `mesFilter`, `dataFilter`, `consultorFilter`, `etapaFunilFilter`, `filtroOrfas` partam sempre de `'all' / undefined / false` no mount (já é o caso, mas vamos blindar contra qualquer persistência futura via state global).
+Caso real: cotação `f68f63d3` (Vinicius) — `contrato.status='assinado'`, `tipo_vistoria='agendada_base'`, `tipo_instalacao='base'`, `agendamentos_base` criado hoje 12:28, `adesao_paga` ainda `false` no momento da captura → badge "Realizando Pagamento" embora a etapa real seja agendamento de vistoria.
 
-## O que NÃO muda
+### Correção
+Reordenar a lógica em `getEtapaVenda` para que, quando contrato esteja assinado e pagamento ainda não confirmado, a etapa de vistoria tenha prioridade sobre "Realizando Pagamento":
 
-- Hook `useCotacoesPaginadas`, RPC `useCotacoesFunilCounts`, scopes RLS, lógica de permissões — **nada de backend ou query**.
-- `CotacoesMobileList` segue igual; só recebe a mesma lista filtrada.
-- Desktop: zero mudança visual ou de comportamento.
+1. Se `tipo_vistoria='autovistoria'` e a autovistoria ainda não foi concluída → `realizando_autovistoria`.
+2. Se `tipo_vistoria` ∈ {`agendada`, `agendada_base`} → `vistoria_agendada` (com `instalacao_agendada` quando houver instalação concreta).
+3. Se já existe `agendamentos_base` ativo para a cotação (mesmo sem `instalacoes` materializada) → `vistoria_agendada`.
+4. Se contrato assinado, sem `tipo_vistoria` definido e sem agendamento → `escolha_vistoria`.
+5. Só cair em `realizando_pagamento` quando `status_contratacao='vistoria_ok'` / `autovistoria_ok` ou quando o link público tiver passado para a Step 5 explicitamente.
+
+Isso elimina o falso "Realizando Pagamento" e dá visibilidade real do funil.
+
+---
+
+## Bug 2 — Faltando o card "Quero que o técnico venha até mim"
+
+### Causa raiz
+`src/components/cotacao-publica/EtapaVistoria.tsx`:
+- Linha 175: `{tipoInstalacao !== 'base' && (...)}` esconde "Técnico vem até mim" sempre que a cotação foi marcada como `base`.
+- Linha 201: `{tipoInstalacao !== 'rota' && (...)}` esconde "Levar à Base" quando marcada como `rota`.
+
+A cotação do Vinicius tem `tipo_instalacao='base'` (escolha do vendedor no Cotador) → só sobram 2 cards (Autovistoria + Base), faltando o terceiro.
+
+O mesmo gate existe em `EscolhaLocalVistoria.tsx` (linhas 35 e 63) — corrigir nos dois lugares.
+
+### Correção
+Sempre renderizar os 3 cards no link público:
+1. Autovistoria — Roubo & Furto (já condicionado por elegibilidade do plano, manter).
+2. Quero que o técnico venha até mim.
+3. Quero levar meu veículo à Base.
+
+`tipo_instalacao` da cotação deixa de ser um filtro restritivo e passa a ser apenas uma sugestão/pré-seleção visual (badge "Sugerido" no card correspondente, sem esconder os outros).
+
+Aplicar a mesma mudança em `EscolhaLocalVistoria.tsx` para manter paridade.
+
+---
+
+## Hotfix de dados (Vinicius / SIO3C68)
+
+A cotação `f68f63d3-f5c2-48c5-9155-f7f035f436ee` está num limbo separado (sem `instalacoes` nem `servicos` mesmo com `agendamentos_base` criado). Esse é o bug do agendamento órfão já identificado na conversa anterior — fora do escopo destes dois bugs, mas precisa do hotfix para o card aparecer em "Serviços de Campo".
+
+Invocar `criar-instalacao-pos-pagamento` com `cotacaoId=f68f63d3…` e `skipPaymentCheck=true`, depois fazer back-link `agendamentos_base.instalacao_id`.
+
+---
+
+## Pergunta antes de implementar
+
+**Bug 2** — confirma que a regra desejada é "sempre 3 opções, sem importar `tipo_instalacao`"? Ou prefere manter a restrição mas adicionar uma opção "trocar tipo de instalação" para o cliente?
 
 ## Arquivos afetados
-
-- `src/pages/vendas/Cotacoes.tsx` — substituir o bloco de filtros (linhas ~866‑1011) por: render desktop atual + render mobile com botão `Filtros` + Sheet.
-- Novo componente: `src/components/cotacoes/CotacoesFiltrosSheet.tsx` — encapsula os controles dentro de um `Sheet` para reuso e legibilidade.
-- Novo componente: `src/components/cotacoes/CotacoesActiveFiltersChips.tsx` — chips removíveis acima da lista.
-
-## Detalhes técnicos
-
-- Usar `useIsMobile()` (já existe em `src/hooks/use-mobile.tsx`) para alternar entre os dois layouts da barra.
-- `Sheet` do shadcn (`src/components/ui/sheet.tsx`) com `side="bottom"` em mobile (mais natural num thumbzone de 411px).
-- A contagem de ativos reusa o cálculo já existente em `Cotacoes.tsx` linha 1007.
-- Nenhuma alteração em `permissions`, `viewScope` ou estado de `vendedores`.
-
-## Critério de aceite
-
-- Em viewport ≤ 411px, a primeira dobra mostra: header + busca + botão `Filtros` + card de totais + primeira cotação da lista.
-- Filtros ativos ficam sempre evidentes via chips, mesmo com o sheet fechado.
-- Aba Finalizadas vazia explica o motivo.
-- Desktop idêntico ao atual.
+- `src/lib/cotacaoEtapa.ts` (Bug 1).
+- `src/components/cotacao-publica/EtapaVistoria.tsx` (Bug 2).
+- `src/components/cotacao-publica/EscolhaLocalVistoria.tsx` (Bug 2 — paridade).
+- Hotfix Vinicius via edge function `criar-instalacao-pos-pagamento` (operacional, sem código).
