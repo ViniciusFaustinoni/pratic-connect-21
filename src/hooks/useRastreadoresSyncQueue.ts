@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
-export type Plataforma = 'softruck' | 'rede';
+export type Plataforma = 'softruck' | 'rede_veiculos';
 
 export interface RastSyncQueueItem {
   id: string;
