@@ -75,6 +75,7 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   const [selectedAssociadoId, setSelectedAssociadoId] = useState<string | null>(null);
   const [selectedAssociadoNome, setSelectedAssociadoNome] = useState('');
   const [selectedAssociadoCpf, setSelectedAssociadoCpf] = useState<string | null>(null);
+  const [selectedCodigoHinova, setSelectedCodigoHinova] = useState<number | null>(null);
   const [veiculoAntigoId, setVeiculoAntigoId] = useState<string | null>(null);
   const [veiculoAntigoPlaca, setVeiculoAntigoPlaca] = useState('');
   const [veiculoAntigoModelo, setVeiculoAntigoModelo] = useState('');
@@ -293,6 +294,9 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
       setSelectedAssociadoId(finalId);
       setSelectedAssociadoNome(finalNome);
       setSelectedAssociadoCpf(finalCpf);
+      setSelectedCodigoHinova(
+        (associado.codigo_hinova ?? associado.codigo_associado ?? null) as number | null,
+      );
       setShowTrocaTitularidade(true);
       // Fecha o pai no próximo tick para garantir que showTrocaTitularidade
       // esteja `true` quando o effect de reset rodar.
@@ -792,11 +796,13 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
               setSelectedAssociadoId(null);
               setSelectedAssociadoNome('');
               setSelectedAssociadoCpf(null);
+              setSelectedCodigoHinova(null);
             }
           }}
           associadoId={selectedAssociadoId}
           associadoNome={selectedAssociadoNome}
           associadoCpf={selectedAssociadoCpf}
+          codigoHinova={selectedCodigoHinova}
         />
       )}
 

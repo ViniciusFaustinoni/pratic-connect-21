@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import { Loader2, Users, Info, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useCriarSolicitacaoTroca } from '@/hooks/useSolicitacoesTroca';
-import { useBuscaSGA, extractTransientPayload } from '@/hooks/useBuscaSGA';
+import { useBoletosSgaPorAssociado } from '@/hooks/useBoletosSgaPorAssociado';
 import { useQuery } from '@tanstack/react-query';
 import { SgaTransientAlert } from '@/components/cotacao/SgaTransientAlert';
 
@@ -20,16 +20,18 @@ interface TrocaTitularidadeDialogProps {
   associadoId: string;
   associadoNome: string;
   associadoCpf?: string | null;
+  /** codigo_hinova do mirror local — quando disponível, evita round-trip extra */
+  codigoHinova?: number | null;
 }
 
 interface VeiculoOpcao {
-  id: string;            // UUID local (necessário para o backend)
+  id: string;
   descricao: string;
   placa: string;
 }
 
 export function TrocaTitularidadeDialog({
-  open, onOpenChange, associadoId, associadoNome, associadoCpf,
+  open, onOpenChange, associadoId, associadoNome, associadoCpf, codigoHinova,
 }: TrocaTitularidadeDialogProps) {
   const navigate = useNavigate();
   const [nome, setNome] = useState('');
@@ -37,36 +39,39 @@ export function TrocaTitularidadeDialog({
   const [email, setEmail] = useState('');
   const [telefone, setTelefone] = useState('');
   const [veiculoId, setVeiculoId] = useState<string | null>(null);
+  const [sincronizando, setSincronizando] = useState(false);
+  const [syncErro, setSyncErro] = useState<string | null>(null);
   const criar = useCriarSolicitacaoTroca();
 
-  // 1) Busca o CPF do associado antigo na base local (apenas para localizar no SGA)
-  const { data: associadoLocal } = useQuery({
-    queryKey: ['troca-tit-associado-cpf', associadoId],
+  // 1) Busca o registro local para obter codigo_hinova + cpf canônicos
+  const { data: assocLocal, refetch: refetchLocal } = useQuery({
+    queryKey: ['troca-tit-associado-local', associadoId],
     queryFn: async () => {
       const { data } = await supabase
         .from('associados')
-        .select('cpf')
+        .select('id, cpf, codigo_hinova')
         .eq('id', associadoId)
         .maybeSingle();
-      return data?.cpf || null;
+      return data;
     },
-    enabled: open && !!associadoId && !associadoCpf,
+    enabled: open && !!associadoId,
   });
 
-  const cpfAntigo = (associadoCpf || associadoLocal || '').replace(/\D/g, '');
+  const codigoHinovaFinal = codigoHinova ?? (assocLocal as any)?.codigo_hinova ?? null;
+  const cpfAntigo = (associadoCpf || (assocLocal as any)?.cpf || '').replace(/\D/g, '');
 
-  // 2) Lista veículos do associado antigo NO SGA
-  const sga = useBuscaSGA({ cpf: cpfAntigo, enabled: open && cpfAntigo.length === 11 });
+  // 2) Lista veículos + boletos via codigo_hinova (com cpf como apoio para enumerar veículos)
+  const sga = useBoletosSgaPorAssociado(
+    codigoHinovaFinal,
+    cpfAntigo,
+    open && !!codigoHinovaFinal,
+  );
 
-  // Quando o RQ esgota retries, o erro carrega o payload "soft" com erro_transitorio.
-  const transientPayload = sga.error ? extractTransientPayload(sga.error) : null;
-  const sgaPayload = sga.data ?? transientPayload;
-  const sgaTransitorio = !!sgaPayload?.erro_transitorio || !!transientPayload;
-  const sgaMotivo = sgaPayload?.motivo ?? transientPayload?.motivo ?? null;
+  const sgaPayload = sga.data;
+  const sgaTransitorio = !!sgaPayload?.erro_transitorio;
+  const sgaMotivo = sgaPayload?.motivo ?? null;
 
-  // 3) Para cada veículo SGA, mapeia para o UUID local pela placa.
-  //    Normaliza placa (remove tudo que não é alfanumérico, uppercase) para evitar
-  //    falso-negativo por hífen/maiúscula entre SGA e base local.
+  // 3) Mapeia placas SGA → UUID local (necessário para o backend de criação)
   const normPlaca = (p?: string | null) => (p || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
   const placas = (sgaPayload?.veiculos || []).map((v) => normPlaca(v.placa)).filter(Boolean);
 
@@ -83,7 +88,6 @@ export function TrocaTitularidadeDialog({
     enabled: open && placas.length > 0,
   });
 
-  // Monta opções: para cada veículo SGA, busca o par local pela placa (normalizada)
   const veiculos: VeiculoOpcao[] = (sgaPayload?.veiculos || [])
     .map((v) => {
       const placaNorm = normPlaca(v.placa);
@@ -97,45 +101,6 @@ export function TrocaTitularidadeDialog({
     })
     .filter((x): x is VeiculoOpcao => !!x);
 
-  // Auto-import: quando SGA tem veículos mas nenhum espelho local existe ainda.
-  // Guarda por CPF para garantir EXATAMENTE 1 tentativa por abertura do diálogo,
-  // evitando loop quando o import não consegue criar espelho com placa que case.
-  const [importando, setImportando] = useState(false);
-  const [importErro, setImportErro] = useState<string | null>(null);
-  const tentativasImport = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    const podeTentar =
-      open &&
-      !sga.isLoading &&
-      !sgaTransitorio &&
-      (sgaPayload?.veiculos || []).length > 0 &&
-      veiculos.length === 0 &&
-      cpfAntigo.length === 11 &&
-      !tentativasImport.current.has(cpfAntigo);
-    if (!podeTentar) return;
-    tentativasImport.current.add(cpfAntigo);
-    (async () => {
-      try {
-        setImportando(true);
-        setImportErro(null);
-        const { data, error } = await supabase.functions.invoke('importar-associado-sga', {
-          body: { cpf: cpfAntigo },
-        });
-        if (error) throw error;
-        if ((data as any)?.error) throw new Error((data as any).error);
-        await refetchLocais();
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Falha ao importar do SGA';
-        setImportErro(msg);
-      } finally {
-        setImportando(false);
-      }
-    })();
-    // Dependências mínimas — `tentativasImport` (ref) é o único gate de re-execução.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, sga.isLoading, sgaTransitorio, sgaPayload?.veiculos?.length, cpfAntigo]);
-
   // Auto-seleciona se só houver 1
   useEffect(() => {
     if (open && veiculos.length === 1 && !veiculoId) {
@@ -148,29 +113,51 @@ export function TrocaTitularidadeDialog({
     if (!open) {
       setVeiculoId(null);
       setNome(''); setCpf(''); setEmail(''); setTelefone('');
-      setImportErro(null);
-      tentativasImport.current.clear();
+      setSyncErro(null);
+      setSincronizando(false);
     }
   }, [open]);
 
-  const carregando = sga.isLoading || sga.isFetching || importando;
-  // Distingue 3 estados: transitório (retry), realmente vazio, espelho local pendente.
+  const carregando = sga.isLoading || sga.isFetching;
+  const semCodigoHinova = !!assocLocal && !codigoHinovaFinal;
   const sgaTransitorioVisivel = !sga.isLoading && sgaTransitorio;
   const semVeiculosSGA =
-    !sga.isLoading &&
-    !sgaTransitorio &&
-    (!sgaPayload?.encontrado || (sgaPayload?.veiculos || []).length === 0);
+    !sga.isLoading && !sgaTransitorio && !semCodigoHinova &&
+    !!sgaPayload && (!sgaPayload.encontrado || (sgaPayload?.veiculos || []).length === 0);
   const semEspelhoLocal =
-    !carregando &&
-    !sgaTransitorio &&
-    (sgaPayload?.veiculos || []).length > 0 &&
-    veiculos.length === 0;
+    !carregando && !sgaTransitorio &&
+    (sgaPayload?.veiculos || []).length > 0 && veiculos.length === 0;
 
   const handleRetrySga = async () => {
-    tentativasImport.current.clear();
-    setImportErro(null);
+    setSyncErro(null);
     await sga.refetch();
     await refetchLocais();
+  };
+
+  const handleSincronizarHinova = async () => {
+    if (!cpfAntigo || cpfAntigo.length !== 11) {
+      toast.error('CPF do associado indisponível para sincronizar com o SGA');
+      return;
+    }
+    try {
+      setSincronizando(true);
+      setSyncErro(null);
+      const { data, error } = await supabase.functions.invoke('importar-associado-sga', {
+        body: { cpf: cpfAntigo },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      await refetchLocal();
+      await sga.refetch();
+      await refetchLocais();
+      toast.success('Associado sincronizado com o SGA');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Falha ao sincronizar com o SGA';
+      setSyncErro(msg);
+      toast.error(msg);
+    } finally {
+      setSincronizando(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -179,7 +166,6 @@ export function TrocaTitularidadeDialog({
       return;
     }
     try {
-      // Garante que o UUID local está fresco (evita 'Veículo não encontrado' por cache stale após import SGA)
       const fresh = await refetchLocais();
       const veiculoSelecionado = veiculos.find(v => v.id === veiculoId);
       const placaFallback = veiculoSelecionado?.placa
@@ -221,17 +207,32 @@ export function TrocaTitularidadeDialog({
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription className="text-sm">
-            Veículos buscados em tempo real na base SGA. Será criada uma cotação para o novo titular — após preenchida, gere o link público; a solicitação passará por aprovação do Cadastro e do Monitoramento antes da assinatura.
+            Veículos buscados no SGA usando o código Hinova do associado local. Será criada uma cotação para o novo titular — após preenchida, gere o link público; a solicitação passará por aprovação do Cadastro e do Monitoramento antes da assinatura.
           </AlertDescription>
         </Alert>
 
         <div className="space-y-4 pt-2">
           <div className="space-y-2">
             <Label>Veículo a transferir *</Label>
-            {carregando ? (
+            {semCodigoHinova ? (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription className="text-sm space-y-2">
+                  <div>
+                    {syncErro
+                      ? `Falha ao sincronizar: ${syncErro}`
+                      : 'Associado ainda não está sincronizado com o SGA (sem código Hinova). Sincronize para listar os veículos.'}
+                  </div>
+                  <Button size="sm" variant="outline" onClick={handleSincronizarHinova} disabled={sincronizando}>
+                    {sincronizando && <Loader2 className="h-3 w-3 mr-2 animate-spin" />}
+                    Sincronizar com SGA
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            ) : carregando ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                {importando ? 'Importando dados do SGA…' : 'Buscando veículos no SGA…'}
+                Buscando veículos no SGA…
               </div>
             ) : sgaTransitorioVisivel ? (
               <SgaTransientAlert
@@ -239,13 +240,13 @@ export function TrocaTitularidadeDialog({
                 onRetry={handleRetrySga}
                 loading={sga.isFetching}
                 titulo="Não foi possível consultar o SGA agora"
-                descricao="A API do Hinova respondeu com erro temporário. Não significa que o CPF não tenha veículos — tente novamente em instantes."
+                descricao="A API do Hinova respondeu com erro temporário. Tente novamente em instantes."
               />
             ) : semVeiculosSGA ? (
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription className="text-sm">
-                  Nenhum veículo encontrado no SGA para este CPF.
+                  Nenhum veículo encontrado no SGA para este associado.
                 </AlertDescription>
               </Alert>
             ) : semEspelhoLocal ? (
@@ -253,13 +254,11 @@ export function TrocaTitularidadeDialog({
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription className="text-sm space-y-2">
                   <div>
-                    {importErro
-                      ? `Falha ao importar do SGA: ${importErro}`
-                      : `O SGA tem ${sgaPayload?.veiculos.length} veículo(s) para este associado, mas o espelho local ainda não foi criado.`}
+                    O SGA tem {sgaPayload?.veiculos.length} veículo(s) para este associado, mas o espelho local ainda não foi criado.
                   </div>
-                  <Button size="sm" variant="outline" onClick={handleRetrySga} disabled={carregando}>
-                    {carregando && <Loader2 className="h-3 w-3 mr-2 animate-spin" />}
-                    Tentar novamente
+                  <Button size="sm" variant="outline" onClick={handleSincronizarHinova} disabled={sincronizando}>
+                    {sincronizando && <Loader2 className="h-3 w-3 mr-2 animate-spin" />}
+                    Sincronizar com SGA
                   </Button>
                 </AlertDescription>
               </Alert>

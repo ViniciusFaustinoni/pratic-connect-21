@@ -9,16 +9,20 @@ export interface AssociadoSearchResult {
   status: string | null;
   /** Marcado quando o resultado veio do SGA (não da base local) */
   origem_sga?: boolean;
-  /** codigo_associado SGA quando origem_sga=true */
+  /** codigo_associado SGA — vindo do mirror local (preferencial) ou do SGA */
   codigo_associado?: number;
+  /** Mesmo valor de codigo_associado quando origem é local (campo associados.codigo_hinova) */
+  codigo_hinova?: number | null;
 }
 
 /**
- * Busca associados — comportamento híbrido:
- *  - CPF completo (11 dígitos): consulta SGA primeiro; cai pro local se SGA não achar.
- *  - Nome/telefone parcial: usa busca local (SGA não suporta busca textual).
+ * Busca associados — Local-First:
+ *  - CPF completo (11 dígitos): consulta a base LOCAL primeiro (fonte de verdade
+ *    do nosso sistema). Se não encontrar, faz fallback no SGA (Hinova).
+ *  - Nome/telefone parcial: busca local (SGA não suporta busca textual).
  *
  * Esse hook é usado para autocompletes (indicador, troca, migração).
+ * A inversão de prioridade evita loops e dependência da disponibilidade do SGA.
  */
 export function useAssociadoSearch(termo: string) {
   return useQuery({
@@ -28,8 +32,30 @@ export function useAssociadoSearch(termo: string) {
 
       const cleaned = termo.replace(/\D/g, '');
 
-      // ── Caso 1: CPF completo → tenta SGA primeiro ───────────────────────────
+      // ── Caso 1: CPF completo → tenta LOCAL primeiro ─────────────────────────
       if (cleaned.length === 11) {
+        // Consulta local com e sem máscara (campo `cpf` pode vir em qualquer formato)
+        const cpfFormatado = `${cleaned.slice(0, 3)}.${cleaned.slice(3, 6)}.${cleaned.slice(6, 9)}-${cleaned.slice(9, 11)}`;
+        const { data: locais } = await supabase
+          .from('associados')
+          .select('id, nome, telefone, cpf, status, codigo_hinova')
+          .or(`cpf.eq.${cleaned},cpf.eq.${cpfFormatado}`)
+          .limit(5);
+
+        if (locais && locais.length > 0) {
+          return locais.map((a: any) => ({
+            id: a.id,
+            nome: a.nome,
+            telefone: a.telefone,
+            cpf: a.cpf,
+            status: a.status,
+            codigo_hinova: a.codigo_hinova ?? null,
+            codigo_associado: a.codigo_hinova ?? undefined,
+            origem_sga: false,
+          }));
+        }
+
+        // Fallback: SGA (associado ainda não importado para a base local)
         try {
           const { data, error } = await supabase.functions.invoke(
             'sga-buscar-associado-completo',
@@ -44,17 +70,19 @@ export function useAssociadoSearch(termo: string) {
               status: 'ativo',
               origem_sga: true,
               codigo_associado: data.codigo_associado,
+              codigo_hinova: data.codigo_associado,
             }];
           }
         } catch (e) {
-          console.warn('[useAssociadoSearch] SGA falhou, fallback local:', e);
+          console.warn('[useAssociadoSearch] SGA fallback falhou:', e);
         }
+        return [];
       }
 
-      // ── Caso 2: busca textual (nome/telefone parcial) ou fallback de CPF ────
+      // ── Caso 2: busca textual (nome/telefone parcial) ───────────────────────
       let query = supabase
         .from('associados')
-        .select('id, nome, telefone, cpf, status')
+        .select('id, nome, telefone, cpf, status, codigo_hinova')
         .in('status', ['ativo', 'inadimplente', 'suspenso']);
 
       if (cleaned.length >= 3) {
@@ -65,7 +93,15 @@ export function useAssociadoSearch(termo: string) {
 
       const { data, error } = await query.limit(15).order('nome');
       if (error) throw error;
-      return (data || []) as AssociadoSearchResult[];
+      return (data || []).map((a: any) => ({
+        id: a.id,
+        nome: a.nome,
+        telefone: a.telefone,
+        cpf: a.cpf,
+        status: a.status,
+        codigo_hinova: a.codigo_hinova ?? null,
+        codigo_associado: a.codigo_hinova ?? undefined,
+      })) as AssociadoSearchResult[];
     },
     enabled: termo.length >= 2,
   });
