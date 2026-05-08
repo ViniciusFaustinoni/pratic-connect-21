@@ -870,9 +870,66 @@ export default function Cotacoes() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Filtros - Barra unificada */}
+        {/* Filtros - Mobile: busca + botão único "Filtros" */}
+        <div className="md:hidden flex items-center gap-2 px-3 py-2 rounded-xl bg-muted/30 border border-border/40">
+          <div className="relative flex-1 min-w-0">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
+            <Input
+              placeholder="Buscar..."
+              className="pl-9 h-9 border-0 bg-background/80 shadow-sm focus-visible:ring-1"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+            />
+          </div>
+          <CotacoesFiltrosSheet
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            mesFilter={mesFilter}
+            setMesFilter={setMesFilter}
+            dataFilter={dataFilter}
+            setDataFilter={setDataFilter}
+            consultorFilter={consultorFilter}
+            setConsultorFilter={setConsultorFilter}
+            etapaFunilFilter={etapaFunilFilter}
+            setEtapaFunilFilter={setEtapaFunilFilter}
+            filtroOrfas={filtroOrfas}
+            setFiltroOrfas={(v) => { setFiltroOrfas(v); setSelectedIds(new Set()); }}
+            mesesDisponiveis={mesesDisponiveis}
+            formatMesLabel={formatMesLabel}
+            vendedores={vendedores}
+            showStatusEPeriodo={activeTab === 'em_andamento'}
+            showConsultor={permissions.cotacao.viewScope !== 'own'}
+            showOrfas={activeTab === 'em_andamento' && (permissions.cotacao.canDelete || !!permissions.userId)}
+            activeCount={[search, statusFilter !== 'all', mesFilter !== 'all', dataFilter, consultorFilter !== 'all', filtroOrfas, etapaFunilFilter !== 'all'].filter(Boolean).length}
+            onClear={clearFilters}
+          />
+        </div>
+
+        {/* Chips de filtros ativos — só mobile */}
+        <div className="md:hidden">
+          <CotacoesActiveFiltersChips
+            search={search}
+            statusFilter={statusFilter}
+            mesFilter={mesFilter}
+            dataFilter={dataFilter}
+            consultorFilter={consultorFilter}
+            etapaFunilFilter={etapaFunilFilter}
+            filtroOrfas={filtroOrfas}
+            vendedores={vendedores}
+            formatMesLabel={formatMesLabel}
+            onClearSearch={() => setSearchInput('')}
+            onClearStatus={() => setStatusFilter('all')}
+            onClearMes={() => setMesFilter('all')}
+            onClearData={() => setDataFilter(undefined)}
+            onClearConsultor={() => setConsultorFilter('all')}
+            onClearEtapa={() => setEtapaFunilFilter('all')}
+            onClearOrfas={() => setFiltroOrfas(false)}
+          />
+        </div>
+
+        {/* Filtros - Desktop: barra unificada */}
         <div className={cn(
-          "flex flex-wrap items-center gap-2 px-4 py-3 rounded-xl",
+          "hidden md:flex flex-wrap items-center gap-2 px-4 py-3 rounded-xl",
           "bg-muted/30 border border-border/40"
         )}>
           <div className="relative flex-1 min-w-[200px] max-w-md">
@@ -1017,6 +1074,7 @@ export default function Cotacoes() {
             </Button>
           )}
         </div>
+
 
         {/* Barra de seleção em lote */}
         {selectedIds.size > 0 && (
