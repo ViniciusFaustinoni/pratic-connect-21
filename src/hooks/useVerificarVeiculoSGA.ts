@@ -6,6 +6,10 @@ interface SGAVerificacaoResult {
   existe: boolean;
   mensagem?: string;
   aviso?: string;
+  /** True quando a falha foi transitória (auth/janela/5xx). UI deve oferecer retry,
+   *  não afirmar "veículo não cadastrado". */
+  erroTransitorio?: boolean;
+  motivoTransitorio?: string | null;
   /** Payload completo do SGA quando existe — usado para mostrar débitos */
   sga?: SgaAssociadoCompleto;
 }
@@ -25,8 +29,13 @@ export function useVerificarVeiculoSGA() {
       });
 
       if (error) {
-        console.error('[Verificar Veículo SGA] erro:', error);
-        return { existe: false, aviso: 'Erro ao verificar veículo no SGA' };
+        console.warn('[Verificar Veículo SGA] invoke error → transitório:', error.message);
+        return {
+          existe: false,
+          erroTransitorio: true,
+          motivoTransitorio: 'invoke_error',
+          aviso: 'API SGA temporariamente indisponível. Tente novamente em instantes.',
+        };
       }
 
       const payload = data as SgaAssociadoCompleto;
@@ -34,7 +43,9 @@ export function useVerificarVeiculoSGA() {
       if (payload?.erro_transitorio) {
         return {
           existe: false,
-          aviso: 'API SGA temporariamente indisponível. Tente novamente em alguns minutos.',
+          erroTransitorio: true,
+          motivoTransitorio: payload.motivo || null,
+          aviso: 'API SGA temporariamente indisponível. Tente novamente em instantes.',
         };
       }
 

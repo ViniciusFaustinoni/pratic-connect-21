@@ -15,6 +15,7 @@ import { useVerificarVeiculoAtivoCpf } from '@/hooks/useVerificarVeiculoAtivoCpf
 import { useVerificarDebitosAssociado } from '@/hooks/useVerificarDebitosAssociado';
 import { DialogTipoOperacao } from '@/components/cotacao/DialogTipoOperacao';
 import { DebitosCard } from '@/components/cotacao/DebitosCard';
+import { SgaTransientAlert } from '@/components/cotacao/SgaTransientAlert';
 
 interface EtapaDadosAssociadoProps {
   // Dados do associado/solicitante
@@ -89,7 +90,7 @@ export function EtapaDadosAssociado({
   // CPF para verificação de veículo ativo + débitos no SGA
   const [cpfBusca, setCpfBusca] = useState('');
   const cpfDigits = cpfBusca.replace(/\D/g, '');
-  const { data: veiculoAtivoCpf, isLoading: verificandoCpf } = useVerificarVeiculoAtivoCpf(cpfBusca);
+  const { data: veiculoAtivoCpf, isLoading: verificandoCpf, isFetching: refazendoCpf, refetch: refetchVeiculoCpf, erroTransitorio: cpfErroTransitorio, motivoTransitorio: cpfMotivoTransitorio } = useVerificarVeiculoAtivoCpf(cpfBusca);
   const { data: debitosSGA } = useVerificarDebitosAssociado(cpfDigits.length === 11 ? cpfDigits : undefined);
   const [showDialogTipo, setShowDialogTipo] = useState(false);
 
@@ -194,6 +195,15 @@ export function EtapaDadosAssociado({
             />
             {verificandoCpf && (
               <p className="text-xs text-muted-foreground">Verificando CPF...</p>
+            )}
+            {!verificandoCpf && cpfErroTransitorio && cpfDigits.length === 11 && (
+              <SgaTransientAlert
+                motivo={cpfMotivoTransitorio}
+                onRetry={() => refetchVeiculoCpf()}
+                loading={refazendoCpf}
+                compact
+                titulo="SGA instável — não confirmamos se este CPF já é associado"
+              />
             )}
             {veiculoAtivoCpf && !showDialogTipo && (
               <div className="flex items-center gap-2 p-2 rounded-lg bg-primary/5 border border-primary/20 text-sm">

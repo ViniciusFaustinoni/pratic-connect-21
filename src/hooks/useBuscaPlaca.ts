@@ -1,4 +1,4 @@
-import { useBuscaSGA } from './useBuscaSGA';
+import { useBuscaSGA, extractTransientPayload, type SgaAssociadoCompleto } from './useBuscaSGA';
 
 export interface PlacaSearchResult {
   veiculoId: string; // codigo_veiculo SGA
@@ -16,6 +16,10 @@ export interface PlacaSearchResult {
  * Busca veículos pela placa via API SGA (não mais base local).
  * Retorna no máximo um veículo (a placa é única no SGA), mas mantém
  * a interface de array para compat com consumidores.
+ *
+ * Adicionalmente expõe `erroTransitorio` e `motivoTransitorio` para que a UI
+ * mostre um banner "Tentar novamente" em vez de afirmar "nenhum encontrado"
+ * quando a API SGA estiver instável.
  */
 export function useBuscaPlaca(termo: string) {
   const placaLimpa = (termo || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
@@ -26,9 +30,14 @@ export function useBuscaPlaca(termo: string) {
 
   const sga = useBuscaSGA({ placa: placaLimpa, enabled });
 
+  // Extrai payload soft mesmo quando o RQ falhou todos os retries (transitório).
+  const transientPayload = sga.error ? extractTransientPayload(sga.error) : null;
+  const sgaPayload: SgaAssociadoCompleto | null = sga.data ?? transientPayload;
+
   let results: PlacaSearchResult[] = [];
-  if (sga.data?.encontrado) {
-    const veiculo = sga.data.veiculos.find((v) => v.placa === placaLimpa) || sga.data.veiculos[0];
+  if (sgaPayload?.encontrado) {
+    const veiculo =
+      sgaPayload.veiculos.find((v) => v.placa === placaLimpa) || sgaPayload.veiculos[0];
     if (veiculo) {
       results = [
         {
@@ -36,9 +45,9 @@ export function useBuscaPlaca(termo: string) {
           placa: veiculo.placa || '',
           modelo: veiculo.modelo || '',
           marca: veiculo.marca || '',
-          associadoId: String(sga.data.codigo_associado),
-          associadoNome: sga.data.associado?.nome || '',
-          associadoCpf: sga.data.associado?.cpf || '',
+          associadoId: String(sgaPayload.codigo_associado),
+          associadoNome: sgaPayload.associado?.nome || '',
+          associadoCpf: sgaPayload.associado?.cpf || '',
           associadoStatus: 'ativo',
           origem_sga: true,
         },
@@ -46,5 +55,11 @@ export function useBuscaPlaca(termo: string) {
     }
   }
 
-  return { ...sga, data: results, sga: sga.data };
+  return {
+    ...sga,
+    data: results,
+    sga: sgaPayload,
+    erroTransitorio: !!sgaPayload?.erro_transitorio || !!transientPayload,
+    motivoTransitorio: sgaPayload?.motivo || transientPayload?.motivo || null,
+  };
 }

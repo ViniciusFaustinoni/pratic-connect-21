@@ -1,4 +1,4 @@
-import { useBuscaSGA } from './useBuscaSGA';
+import { useBuscaSGA, extractTransientPayload, type SgaAssociadoCompleto } from './useBuscaSGA';
 
 export interface VeiculoAtivoCpfResult {
   /** codigo_associado SGA (numérico). Mantido como string para compat. */
@@ -16,17 +16,23 @@ export interface VeiculoAtivoCpfResult {
 /**
  * Verifica via API SGA (Hinova) se um CPF já possui veículo na base.
  * Usado pela etapa de cotação para detectar inclusão/substituição/troca.
+ *
+ * Expõe `erroTransitorio`/`motivoTransitorio` para a UI distinguir
+ * "realmente sem veículo" de "API SGA instável" (e mostrar retry).
  */
 export function useVerificarVeiculoAtivoCpf(cpf: string | undefined) {
   const cpfLimpo = (cpf || '').replace(/\D/g, '');
   const sga = useBuscaSGA({ cpf: cpfLimpo, enabled: cpfLimpo.length === 11 });
 
+  const transientPayload = sga.error ? extractTransientPayload(sga.error) : null;
+  const sgaPayload: SgaAssociadoCompleto | null = sga.data ?? transientPayload;
+
   let result: VeiculoAtivoCpfResult | null = null;
-  if (sga.data?.encontrado && sga.data.veiculos.length > 0) {
-    const v = sga.data.veiculos[0];
+  if (sgaPayload?.encontrado && sgaPayload.veiculos.length > 0) {
+    const v = sgaPayload.veiculos[0];
     result = {
-      associado_id: String(sga.data.codigo_associado),
-      associado_nome: sga.data.associado?.nome || '',
+      associado_id: String(sgaPayload.codigo_associado),
+      associado_nome: sgaPayload.associado?.nome || '',
       veiculo_id: String(v.codigo_veiculo),
       veiculo_placa: v.placa || '',
       veiculo_modelo: v.modelo || '',
@@ -39,6 +45,8 @@ export function useVerificarVeiculoAtivoCpf(cpf: string | undefined) {
     ...sga,
     data: result,
     /** Acesso ao payload completo (boletos, saldo) */
-    sga: sga.data,
+    sga: sgaPayload,
+    erroTransitorio: !!sgaPayload?.erro_transitorio || !!transientPayload,
+    motivoTransitorio: sgaPayload?.motivo || transientPayload?.motivo || null,
   };
 }

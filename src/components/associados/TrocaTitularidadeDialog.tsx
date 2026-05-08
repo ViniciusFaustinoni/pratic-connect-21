@@ -10,8 +10,9 @@ import { Loader2, Users, Info, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useCriarSolicitacaoTroca } from '@/hooks/useSolicitacoesTroca';
-import { useBuscaSGA } from '@/hooks/useBuscaSGA';
+import { useBuscaSGA, extractTransientPayload } from '@/hooks/useBuscaSGA';
 import { useQuery } from '@tanstack/react-query';
+import { SgaTransientAlert } from '@/components/cotacao/SgaTransientAlert';
 
 interface TrocaTitularidadeDialogProps {
   open: boolean;
@@ -57,9 +58,15 @@ export function TrocaTitularidadeDialog({
   // 2) Lista veículos do associado antigo NO SGA
   const sga = useBuscaSGA({ cpf: cpfAntigo, enabled: open && cpfAntigo.length === 11 });
 
+  // Quando o RQ esgota retries, o erro carrega o payload "soft" com erro_transitorio.
+  const transientPayload = sga.error ? extractTransientPayload(sga.error) : null;
+  const sgaPayload = sga.data ?? transientPayload;
+  const sgaTransitorio = !!sgaPayload?.erro_transitorio || !!transientPayload;
+  const sgaMotivo = sgaPayload?.motivo ?? transientPayload?.motivo ?? null;
+
   // 3) Para cada veículo SGA, mapeia para o UUID local pela placa.
   //    Se não houver espelho local, dispara import automático do SGA (cria associado + veículos).
-  const placas = (sga.data?.veiculos || []).map((v) => v.placa).filter(Boolean);
+  const placas = (sgaPayload?.veiculos || []).map((v) => v.placa).filter(Boolean);
 
   const { data: veiculosLocais, refetch: refetchLocais } = useQuery({
     queryKey: ['troca-tit-veiculos-local-by-placa', placas.join(',')],
@@ -75,7 +82,7 @@ export function TrocaTitularidadeDialog({
   });
 
   // Monta opções: para cada veículo SGA, busca o par local pela placa
-  const veiculos: VeiculoOpcao[] = (sga.data?.veiculos || [])
+  const veiculos: VeiculoOpcao[] = (sgaPayload?.veiculos || [])
     .map((v) => {
       const local = (veiculosLocais || []).find(
         (l) => (l.placa || '').toUpperCase() === (v.placa || '').toUpperCase(),
@@ -89,14 +96,16 @@ export function TrocaTitularidadeDialog({
     })
     .filter((x): x is VeiculoOpcao => !!x);
 
-  // Auto-import: quando SGA tem veículos mas nenhum espelho local existe ainda
+  // Auto-import: quando SGA tem veículos mas nenhum espelho local existe ainda.
+  // NUNCA disparar quando a resposta foi transitória — evita criar associado duplicado por engano.
   const [importando, setImportando] = useState(false);
   const [importErro, setImportErro] = useState<string | null>(null);
   useEffect(() => {
     const semEspelho =
       open &&
       !sga.isLoading &&
-      (sga.data?.veiculos || []).length > 0 &&
+      !sgaTransitorio &&
+      (sgaPayload?.veiculos || []).length > 0 &&
       veiculos.length === 0 &&
       !importando &&
       cpfAntigo.length === 11;
@@ -118,7 +127,7 @@ export function TrocaTitularidadeDialog({
         setImportando(false);
       }
     })();
-  }, [open, sga.isLoading, sga.data, veiculos.length, importando, cpfAntigo, refetchLocais]);
+  }, [open, sga.isLoading, sgaTransitorio, sgaPayload, veiculos.length, importando, cpfAntigo, refetchLocais]);
 
   // Auto-seleciona se só houver 1
   useEffect(() => {
@@ -135,10 +144,23 @@ export function TrocaTitularidadeDialog({
     }
   }, [open]);
 
-  const carregando = sga.isLoading || importando;
-  const semVeiculosSGA = !sga.isLoading && (!sga.data?.encontrado || (sga.data?.veiculos || []).length === 0);
+  const carregando = sga.isLoading || sga.isFetching || importando;
+  // Distingue 3 estados: transitório (retry), realmente vazio, espelho local pendente.
+  const sgaTransitorioVisivel = !sga.isLoading && sgaTransitorio;
+  const semVeiculosSGA =
+    !sga.isLoading &&
+    !sgaTransitorio &&
+    (!sgaPayload?.encontrado || (sgaPayload?.veiculos || []).length === 0);
   const semEspelhoLocal =
-    !carregando && (sga.data?.veiculos || []).length > 0 && veiculos.length === 0;
+    !carregando &&
+    !sgaTransitorio &&
+    (sgaPayload?.veiculos || []).length > 0 &&
+    veiculos.length === 0;
+
+  const handleRetrySga = async () => {
+    await sga.refetch();
+    await refetchLocais();
+  };
 
   const handleSubmit = async () => {
     if (!nome.trim() || !cpf.trim() || !veiculoId) {
@@ -200,6 +222,14 @@ export function TrocaTitularidadeDialog({
                 <Loader2 className="h-4 w-4 animate-spin" />
                 {importando ? 'Importando dados do SGA…' : 'Buscando veículos no SGA…'}
               </div>
+            ) : sgaTransitorioVisivel ? (
+              <SgaTransientAlert
+                motivo={sgaMotivo}
+                onRetry={handleRetrySga}
+                loading={sga.isFetching}
+                titulo="Não foi possível consultar o SGA agora"
+                descricao="A API do Hinova respondeu com erro temporário. Não significa que o CPF não tenha veículos — tente novamente em instantes."
+              />
             ) : semVeiculosSGA ? (
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
@@ -213,7 +243,7 @@ export function TrocaTitularidadeDialog({
                 <AlertDescription className="text-sm">
                   {importErro
                     ? `Falha ao importar do SGA: ${importErro}`
-                    : `O SGA tem ${sga.data?.veiculos.length} veículo(s) para este associado, mas o import automático ainda não concluiu. Tente novamente em instantes.`}
+                    : `O SGA tem ${sgaPayload?.veiculos.length} veículo(s) para este associado, mas o import automático ainda não concluiu. Tente novamente em instantes.`}
                 </AlertDescription>
               </Alert>
             ) : (
@@ -251,7 +281,7 @@ export function TrocaTitularidadeDialog({
 
         <div className="flex justify-end gap-2 pt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={criar.isPending}>Cancelar</Button>
-          <Button onClick={handleSubmit} disabled={criar.isPending || !veiculoId}>
+          <Button onClick={handleSubmit} disabled={criar.isPending || !veiculoId || sgaTransitorioVisivel}>
             {criar.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Users className="h-4 w-4 mr-2" />}
             Criar Solicitação
           </Button>

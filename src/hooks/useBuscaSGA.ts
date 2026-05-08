@@ -51,11 +51,31 @@ const empty = (origem: 'cpf' | 'placa'): SgaAssociadoCompleto => ({
 });
 
 /**
+ * Erro interno usado para forçar o React Query a aplicar a política de retry
+ * quando o edge devolve `erro_transitorio: true` (HTTP 200 com payload vazio).
+ * Sem isso, o RQ não retentaria — o backend devolve 200 propositalmente para
+ * não quebrar `supabase.functions.invoke()`.
+ */
+class SgaTransientFetchError extends Error {
+  payload: SgaAssociadoCompleto;
+  constructor(payload: SgaAssociadoCompleto) {
+    super(payload.motivo || 'sga_transitorio');
+    this.payload = payload;
+    this.name = 'SgaTransientFetchError';
+  }
+}
+
+/**
  * Hook central que consulta o SGA (Hinova) durante o fluxo de cotação.
  * Substitui as queries diretas em `associados`/`veiculos`/`cobrancas` locais.
  *
  * Retorna {encontrado, codigo_associado, associado, veiculos[], saldo_devedor_total,
- *          tem_debito, boletos_abertos por veículo}.
+ *          tem_debito, boletos_abertos por veículo, erro_transitorio?, motivo?}.
+ *
+ * Quando o edge retorna `erro_transitorio: true`, o hook lança internamente um
+ * erro controlado para retentar (3x, backoff exponencial). Se persistir, devolve
+ * `{...empty, erro_transitorio: true, motivo}` para a UI mostrar banner de retry
+ * em vez de afirmar "nenhum resultado".
  */
 export function useBuscaSGA({ cpf, placa, enabled = true }: BuscaInput) {
   const cpfLimpo = (cpf || '').replace(/\D/g, '');
@@ -64,6 +84,7 @@ export function useBuscaSGA({ cpf, placa, enabled = true }: BuscaInput) {
   const cpfValido = cpfLimpo.length === 11;
   const placaValida = placaLimpa.length >= 7;
   const podeBuscar = enabled && (cpfValido || placaValida);
+  const origem: 'cpf' | 'placa' = cpfValido ? 'cpf' : 'placa';
 
   return useQuery<SgaAssociadoCompleto>({
     queryKey: ['sga-busca', cpfValido ? cpfLimpo : '', placaValida ? placaLimpa : ''],
@@ -72,14 +93,41 @@ export function useBuscaSGA({ cpf, placa, enabled = true }: BuscaInput) {
         body: cpfValido ? { cpf: cpfLimpo } : { placa: placaLimpa },
       });
       if (error) {
-        console.error('[useBuscaSGA] erro:', error);
-        return empty(cpfValido ? 'cpf' : 'placa');
+        console.warn('[useBuscaSGA] invoke error → tratando como transitório:', error.message);
+        throw new SgaTransientFetchError({
+          ...empty(origem),
+          erro_transitorio: true,
+          motivo: 'invoke_error',
+        });
       }
-      return (data as SgaAssociadoCompleto) ?? empty(cpfValido ? 'cpf' : 'placa');
+      const payload = (data as SgaAssociadoCompleto) ?? empty(origem);
+      if (payload.erro_transitorio) {
+        // Lança para acionar retry policy do React Query.
+        throw new SgaTransientFetchError(payload);
+      }
+      return payload;
     },
     enabled: podeBuscar,
     staleTime: 30_000,
     gcTime: 2 * 60_000,
-    retry: 1,
+    // Retry só faz sentido para erros transitórios; nosso erro carrega o payload.
+    retry: (failureCount, err) => err instanceof SgaTransientFetchError && failureCount < 3,
+    retryDelay: (attempt) => Math.min(2000 * 2 ** attempt, 10_000),
+    // Quando estoura o retry, o React Query expõe o último erro. Convertemos ele
+    // em `data` "soft" via `select` no consumidor — aqui só fornecemos um helper:
+    // o hook `useBuscaSGA` consumido normalmente lê `data` ou, em erro persistente,
+    // o consumidor pode ler o payload via `error`.
   });
+}
+
+/**
+ * Helper para extrair o payload "soft" (com erro_transitorio) mesmo quando o
+ * React Query falhou todas as tentativas. Os wrappers (`useBuscaPlaca`,
+ * `useVerificarVeiculoAtivoCpf`, `useVerificarVeiculoSGA`) usam isso para nunca
+ * devolver "data: null" quando a falha for transitória — o consumidor recebe
+ * `{...empty, erro_transitorio: true}` e pode renderizar o banner âmbar.
+ */
+export function extractTransientPayload(error: unknown): SgaAssociadoCompleto | null {
+  if (error instanceof SgaTransientFetchError) return error.payload;
+  return null;
 }
