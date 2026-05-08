@@ -156,6 +156,7 @@ export const cotacaoAteAtivacao: Tutorial = {
     },
     {
       numero: 12,
+      titulo: 'Aprovação de Cadastro',
       descricao:
         'A equipe de Cadastro confere documentos (CNH, CRLV/CRV/NF) e libera a proposta. Documentos validados por OCR ainda passam por revisão manual obrigatória. Acompanhe em Cadastro › Propostas Pendentes.',
       dicas: [
