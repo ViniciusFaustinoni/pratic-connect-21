@@ -1,72 +1,60 @@
-# Plano — Etapa da Venda errada e opções de Vistoria sumindo
+## Objetivo
 
-Dois bugs independentes na jornada pública de contratação.
+Eliminar o falso negativo "Nenhum veículo encontrado no SGA" no fluxo de Troca de Titularidade (e em todo o restante do fluxo de cotação que consome o SGA), distinguindo claramente entre **resposta vazia legítima** e **erro transitório do Hinova**, com retry automático e ação manual de "Tentar novamente" para o usuário.
 
----
+## Parte A — UX imediata no `TrocaTitularidadeDialog`
 
-## Bug 1 — Badge "Realizando Pagamento" durante a etapa Vistoria
+**Arquivo:** `src/components/associados/TrocaTitularidadeDialog.tsx`
 
-### Causa raiz
-`src/lib/cotacaoEtapa.ts` (regra 6, linhas 196-201) decide a etapa apenas pela combinação `contrato.status='assinado' + adesao_paga=false`. No link público, porém, a ordem é:
+1. Ler `sga.data?.erro_transitorio` e `sga.data?.motivo` da resposta do hook.
+2. Substituir o booleano único `semVeiculosSGA` por três estados:
+   - `transitorio` — mostra Alert âmbar: "A consulta ao SGA falhou temporariamente (motivo). Tente novamente."  + botão **Tentar novamente** que chama `sga.refetch()` + `refetchLocais()`.
+   - `semVeiculos` — mostra o Alert vermelho atual ("Nenhum veículo encontrado no SGA para este CPF").
+   - `semEspelhoLocal` — mantém o comportamento atual (auto-import).
+3. Bloquear o auto-import do `useEffect` quando `erro_transitorio === true` (evita chamar `importar-associado-sga` com base em resposta inválida).
+4. Desabilitar o botão "Criar Solicitação" também quando `transitorio === true`.
+5. Adicionar `aria-describedby` aos `DialogContent` (corrige warning recorrente do console).
 
-```
-Plano → Documentos → Contrato → Vistoria → Pagamento
-```
+## Parte B — Robustez sistêmica no consumo do SGA
 
-Logo, durante a Step 4 (Vistoria), o contrato JÁ está assinado mas o pagamento AINDA não foi feito — o que casa com a regra 6 e força o badge "Realizando Pagamento", mesmo que o cliente esteja escolhendo/agendando vistoria.
+### B1. Hook central `useBuscaSGA`
+**Arquivo:** `src/hooks/useBuscaSGA.ts`
 
-Caso real: cotação `f68f63d3` (Vinicius) — `contrato.status='assinado'`, `tipo_vistoria='agendada_base'`, `tipo_instalacao='base'`, `agendamentos_base` criado hoje 12:28, `adesao_paga` ainda `false` no momento da captura → badge "Realizando Pagamento" embora a etapa real seja agendamento de vistoria.
+- Detectar `data.erro_transitorio === true` e tratar como retry: usar `retry: 3` com `retryDelay` exponencial (2s, 4s, 8s, max 10s) **apenas quando** a resposta vier com `erro_transitorio`. Para isso, lançar um erro controlado dentro do `queryFn` quando o payload for transitório, em vez de retornar o objeto vazio.
+- Manter o objeto vazio (`empty(...)`) somente quando a falha persistir após os retries — anexar `erro_transitorio: true` ao retorno final para a UI poder reagir.
+- Reduzir `staleTime` para `10_000` em respostas transitórias (sem cachear erro por 30s).
 
-### Correção
-Reordenar a lógica em `getEtapaVenda` para que, quando contrato esteja assinado e pagamento ainda não confirmado, a etapa de vistoria tenha prioridade sobre "Realizando Pagamento":
+### B2. Wrappers derivados
+**Arquivos:** `src/hooks/useBuscaPlaca.ts`, `src/hooks/useVerificarVeiculoAtivoCpf.ts`, `src/hooks/useVerificarVeiculoSGA.ts`
 
-1. Se `tipo_vistoria='autovistoria'` e a autovistoria ainda não foi concluída → `realizando_autovistoria`.
-2. Se `tipo_vistoria` ∈ {`agendada`, `agendada_base`} → `vistoria_agendada` (com `instalacao_agendada` quando houver instalação concreta).
-3. Se já existe `agendamentos_base` ativo para a cotação (mesmo sem `instalacoes` materializada) → `vistoria_agendada`.
-4. Se contrato assinado, sem `tipo_vistoria` definido e sem agendamento → `escolha_vistoria`.
-5. Só cair em `realizando_pagamento` quando `status_contratacao='vistoria_ok'` / `autovistoria_ok` ou quando o link público tiver passado para a Step 5 explicitamente.
+- Propagar `erro_transitorio` e `motivo` no objeto retornado, além do `data` mapeado, para que qualquer consumidor possa exibir banner de retry.
 
-Isso elimina o falso "Realizando Pagamento" e dá visibilidade real do funil.
+### B3. Consumidores do fluxo de cotação
+**Arquivos:** `src/components/cotacao/EtapaDadosAssociado.tsx`, `src/components/cotacao/DebitosCard.tsx`, `src/components/vendas/OutrasEntradasMenu.tsx`
 
----
+- Quando o hook devolver `erro_transitorio`, **não** afirmar "sem veículos" / "sem débitos". Mostrar Alert âmbar curto: "SGA temporariamente indisponível. Reconsultando…" + botão manual de retry.
+- No `OutrasEntradasMenu` (busca de associado para troca), exibir o mesmo banner inline na lista de resultados quando a busca SGA por placa/CPF retornar transitório.
 
-## Bug 2 — Faltando o card "Quero que o técnico venha até mim"
+### B4. Componente reutilizável
+Criar `src/components/cotacao/SgaTransientAlert.tsx`:
+- Props: `motivo?: string`, `onRetry: () => void`, `loading?: boolean`.
+- Encapsula o Alert âmbar com botão **Tentar novamente** para reuso em todos os pontos acima.
 
-### Causa raiz
-`src/components/cotacao-publica/EtapaVistoria.tsx`:
-- Linha 175: `{tipoInstalacao !== 'base' && (...)}` esconde "Técnico vem até mim" sempre que a cotação foi marcada como `base`.
-- Linha 201: `{tipoInstalacao !== 'rota' && (...)}` esconde "Levar à Base" quando marcada como `rota`.
+### B5. Telemetria mínima
+Adicionar `console.warn` estruturado (`[sga-transient]`) nos hooks B1/B2 quando o retry final falhar, para facilitar o diagnóstico no painel de logs do navegador (sem nova tabela).
 
-A cotação do Vinicius tem `tipo_instalacao='base'` (escolha do vendedor no Cotador) → só sobram 2 cards (Autovistoria + Base), faltando o terceiro.
+## Fora de escopo (registrado, mas não nesta entrega)
 
-O mesmo gate existe em `EscolhaLocalVistoria.tsx` (linhas 35 e 63) — corrigir nos dois lugares.
+- Correção do health-check `sga_health_checks` que reporta "Credenciais Hinova não configuradas" (cron usa caminho de credenciais distinto do edge `sga-buscar-associado-completo`). Será tratado em ticket separado de infraestrutura.
 
-### Correção
-Sempre renderizar os 3 cards no link público:
-1. Autovistoria — Roubo & Furto (já condicionado por elegibilidade do plano, manter).
-2. Quero que o técnico venha até mim.
-3. Quero levar meu veículo à Base.
+## Critérios de aceite
 
-`tipo_instalacao` da cotação deixa de ser um filtro restritivo e passa a ser apenas uma sugestão/pré-seleção visual (badge "Sugerido" no card correspondente, sem esconder os outros).
+1. Repetir o cenário do relato (CPF `141.948.967-42`) com o Hinova em janela válida → o dialog lista os 3 veículos (Voyage `QOO5C17`, Toro `RKO4F90`, Fiesta `KOU6D37`).
+2. Simular erro transitório (forçando `erro_transitorio: true` via DevTools/network throttling do edge) → dialog mostra banner âmbar com botão "Tentar novamente", **nunca** o vermelho de "Nenhum veículo encontrado".
+3. Após 3 retries automáticos sem sucesso, banner permanece com retry manual disponível; "Criar Solicitação" continua bloqueado.
+4. Mesmo banner aparece em `EtapaDadosAssociado` e `DebitosCard` quando o SGA estiver instável durante a cotação.
+5. Nenhuma regressão no caminho feliz (3 carros aparecem em <2s no fluxo normal).
 
-Aplicar a mesma mudança em `EscolhaLocalVistoria.tsx` para manter paridade.
+## Observação técnica
 
----
-
-## Hotfix de dados (Vinicius / SIO3C68)
-
-A cotação `f68f63d3-f5c2-48c5-9155-f7f035f436ee` está num limbo separado (sem `instalacoes` nem `servicos` mesmo com `agendamentos_base` criado). Esse é o bug do agendamento órfão já identificado na conversa anterior — fora do escopo destes dois bugs, mas precisa do hotfix para o card aparecer em "Serviços de Campo".
-
-Invocar `criar-instalacao-pos-pagamento` com `cotacaoId=f68f63d3…` e `skipPaymentCheck=true`, depois fazer back-link `agendamentos_base.instalacao_id`.
-
----
-
-## Pergunta antes de implementar
-
-**Bug 2** — confirma que a regra desejada é "sempre 3 opções, sem importar `tipo_instalacao`"? Ou prefere manter a restrição mas adicionar uma opção "trocar tipo de instalação" para o cliente?
-
-## Arquivos afetados
-- `src/lib/cotacaoEtapa.ts` (Bug 1).
-- `src/components/cotacao-publica/EtapaVistoria.tsx` (Bug 2).
-- `src/components/cotacao-publica/EscolhaLocalVistoria.tsx` (Bug 2 — paridade).
-- Hotfix Vinicius via edge function `criar-instalacao-pos-pagamento` (operacional, sem código).
+Apenas frontend + 1 hook compartilhado. Sem migração de banco, sem alteração no edge `sga-buscar-associado-completo` (o contrato `erro_transitorio` já existe e está correto). Mudança 100% reversível.
