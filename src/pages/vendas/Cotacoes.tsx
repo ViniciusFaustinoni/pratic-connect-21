@@ -1166,6 +1166,14 @@ export default function Cotacoes() {
               </Button>
             </div>
           )}
+          {cotacoesFinalizadasTotal === 0 && !hasActiveFilters && (
+            <div className="mb-3 rounded-xl border border-border/50 bg-muted/30 px-4 py-6 text-center">
+              <p className="text-sm font-medium text-foreground">Ainda não há cotações finalizadas</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Aqui aparecerão as cotações <strong>aceitas</strong>, <strong>recusadas</strong> ou <strong>expiradas</strong>.
+              </p>
+            </div>
+          )}
           <div className="hidden md:block">
             <CotacoesTable 
               cotacoes={cotacoesFinalizadas}
