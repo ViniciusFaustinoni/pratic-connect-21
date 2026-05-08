@@ -6,6 +6,7 @@ import cotacaoRegiaoUsoPlaca from '@/assets/tutoriais/cotacao-regiao-uso-placa.p
 import cotacaoValorCenario from '@/assets/tutoriais/cotacao-valor-cenario.png';
 import cotacaoVencimentoCriar from '@/assets/tutoriais/cotacao-vencimento-criar.png';
 import cotacaoCopiarLink from '@/assets/tutoriais/cotacao-copiar-link.png';
+import associadoEscolhaPlano from '@/assets/tutoriais/associado-escolha-plano.png';
 
 export const cotacaoAteAtivacao: Tutorial = {
   id: 'cotacao-ate-ativacao',
@@ -132,6 +133,19 @@ export const cotacaoAteAtivacao: Tutorial = {
     },
     {
       numero: 10,
+      titulo: '👤 [Ação do Associado] Escolher o plano na página pública',
+      descricao:
+        'ATENÇÃO: esta etapa é executada pelo PRÓPRIO ASSOCIADO, não pelo vendedor. Ao abrir o link enviado, o cliente vê a jornada pública (Escolha do Plano › Documentos › Contrato › Vistoria › Pagamento). Na primeira tela ele compara os planos elegíveis, clica em "Selecionar" no plano desejado (o card fica marcado como "Selecionado ✓") e confirma em "Continuar com este plano" para avançar para a etapa de Documentos.',
+      imagem: associadoEscolhaPlano,
+      dicas: [
+        'O vendedor NÃO deve concluir essa etapa pelo cliente — a escolha precisa partir do associado para validar o aceite.',
+        'Os planos exibidos são exatamente os elegíveis para o veículo cotado (mesma regra da cotação interna).',
+        'Se o cliente tiver dúvida entre planos, oriente por WhatsApp/ligação, mas deixe ele clicar em "Continuar com este plano".',
+        'Só depois desse aceite o fluxo libera Documentos › Contrato (assinatura facial Autentique).',
+      ],
+    },
+    {
+      numero: 11,
       titulo: 'Cliente assina com biometria facial',
       descricao:
         'A assinatura é feita pelo Autentique exclusivamente por e-mail com reconhecimento facial (PF_FACIAL). Após assinar, o sistema atualiza o status do contrato para "Assinado" e move o associado para a fila de Cadastro.',
