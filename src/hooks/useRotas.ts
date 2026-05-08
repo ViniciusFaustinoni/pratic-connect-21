@@ -121,7 +121,7 @@ export function useRota(id: string | undefined) {
       if (riError) console.error('Error fetching rota_instaladores:', riError);
 
       // Fase 3: leitura unificada de `servicos` (substitui instalacoes + vistorias)
-      const { data: servicos, error: servError } = await supabase
+      const { data: servicos, error: servError } = await (supabase as any)
         .from('servicos')
         .select(`
           *,
@@ -339,7 +339,7 @@ export function useInstalacoesDisponiveis(data?: Date) {
     queryKey: ['instalacoes-disponiveis', data ? format(data, 'yyyy-MM-dd') : 'todas'],
     queryFn: async () => {
       // Fase 3: lê de `servicos` filtrando por tipo='vistoria_instalacao'
-      let query = supabase
+      let query = (supabase as any)
         .from('servicos')
         .select(`
           *,
