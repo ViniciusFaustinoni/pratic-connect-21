@@ -189,7 +189,7 @@ export function CalendarioDiaModal({ open, onClose, data, abaInicial }: Calendar
     queryKey: ['calendario-dia-vistorias-campo', data],
     enabled: open,
     queryFn: async () => {
-      const { data: rows, error } = await supabase
+      const { data: rows, error } = await (supabase as any)
         .from('vistorias')
         .select('id, status, data_agendada, local_vistoria, modalidade, iniciada_em, concluida_em, associado:associados(nome), veiculo:veiculos(placa), tecnico:profiles!vistorias_tecnico_id_fkey(nome)')
         .gte('data_agendada', data)
