@@ -489,9 +489,9 @@ serve(async (req) => {
         endereco_longitude: endereco.longitude || null,
         observacoes: obsResponsavel,
         permite_encaixe: permiteEncaixe,
-        local_vistoria: 'cliente',
+        local_vistoria: localVistoriaForce,
         instalador_responsavel_id: null,
-        tipo_deslocamento: tipoDeslocamento,
+        tipo_deslocamento: localVistoriaForce === 'base' ? 'base' : tipoDeslocamento,
       };
       
       console.log('[CriarInstalacaoPosPagamento] Criando instalação:', JSON.stringify(instalacaoData));
