@@ -766,7 +766,7 @@ export function useServicoDetalhes(id: string | undefined) {
       if (!id) throw new Error('ID não fornecido');
 
       // Buscar primeiro em servicos
-      const { data: servico, error: servicoError } = await supabase
+      const { data: servico, error: servicoError } = await (supabase as any)
         .from('servicos')
         .select(`
           *,
