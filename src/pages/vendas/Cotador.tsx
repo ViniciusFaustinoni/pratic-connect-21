@@ -66,6 +66,8 @@ import { PlacaDuplicadaModal } from '@/components/cotacoes/PlacaDuplicadaModal';
 import { PlacaBlacklistModal } from '@/components/cotacoes/PlacaBlacklistModal';
 import { VeiculoSGAModal } from '@/components/cotacoes/VeiculoSGAModal';
 import { useVerificarVeiculoSGA } from '@/hooks/useVerificarVeiculoSGA';
+import { useVerificarPlacaOutroAssociado, type PlacaOutroAssociadoInfo } from '@/hooks/useVerificarPlacaOutroAssociado';
+import { PlacaOutroAssociadoModal } from '@/components/cotacoes/PlacaOutroAssociadoModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Switch } from '@/components/ui/switch';
