@@ -22,6 +22,7 @@ import {
   HinovaTransientError,
   HinovaNotFoundError,
   calcularProximoRetry,
+  withHinovaAuthRetry,
   type HinovaSession,
 } from '../_shared/hinova-client.ts';
 
@@ -139,9 +140,9 @@ serve(async (req) => {
     return json(200, { ...empty(codigoAssociadoIn), erro_transitorio: false, motivo: 'cpf_invalido' });
   }
 
-  let session: HinovaSession;
+  // Pré-aquece a sessão (early-fail amigável se Hinova estiver fora)
   try {
-    session = await getHinovaSession(supabase);
+    await getHinovaSession(supabase);
   } catch (e: any) {
     console.error('[sga-listar-boletos-associado] auth falhou:', e?.message);
     if (e instanceof HinovaTransientError) {
@@ -152,14 +153,12 @@ serve(async (req) => {
   }
 
   try {
-    // 1) Enumerar veículos do associado via CPF (não há endpoint público
-    //    listar-veiculos-por-codigo-associado no Hinova).
+    // 1) Enumerar veículos do associado via CPF — usa supabase (hinovaFetch
+    //    com auto-reauth em 401/403) ao invés de session direto.
     let codigoAssociado: number | null = codigoAssociadoIn;
     let veiculosSGA: Array<{ placa: string; codigo_veiculo: number }> = [];
     try {
-      const r = await buscarAssociadoComVeiculosPorCpf(session, cpf);
-      // Preferimos sempre o codigo do mirror local (canônico) — caso difira do SGA,
-      // logamos e seguimos com o do local (origem do request).
+      const r = await buscarAssociadoComVeiculosPorCpf(supabase, cpf);
       if (r.codigo_associado && codigoAssociadoIn && r.codigo_associado !== codigoAssociadoIn) {
         console.warn('[sga-listar-boletos-associado] codigo_associado divergente', {
           local: codigoAssociadoIn, sga: r.codigo_associado, cpf,
@@ -176,20 +175,25 @@ serve(async (req) => {
       return json(200, empty(codigoAssociado));
     }
 
-    // 2) Metadados do associado + boletos por veículo (paralelo)
-    const [metaAssociado, ...resBoletos] = await Promise.all([
-      fetchAssociadoMeta(session, cpf),
-      ...veiculosSGA.map((v) =>
-        listarBoletosVeiculo(session, codigoAssociado!, v.codigo_veiculo, {
-          anosTras: 3,
-          linkBoleto: true,
-        }).catch((err) => {
-          console.warn('[sga-listar-boletos-associado] boletos falharam veiculo', v.codigo_veiculo, err?.message);
-          if (err instanceof HinovaTransientError) throw err;
-          return [] as any[];
-        }),
-      ),
-    ]);
+    // 2) Metadados do associado + boletos por veículo (paralelo).
+    //    Envolto em withHinovaAuthRetry: se a sessão cacheada tiver sido
+    //    invalidada por outra função (Hinova invalida tokens antigos a cada
+    //    novo /usuario/autenticar), re-autentica 1x e tenta de novo.
+    const [metaAssociado, ...resBoletos] = await withHinovaAuthRetry(supabase, async (session) => {
+      return await Promise.all([
+        fetchAssociadoMeta(session, cpf),
+        ...veiculosSGA.map((v) =>
+          listarBoletosVeiculo(session, codigoAssociado!, v.codigo_veiculo, {
+            anosTras: 3,
+            linkBoleto: true,
+          }).catch((err) => {
+            console.warn('[sga-listar-boletos-associado] boletos falharam veiculo', v.codigo_veiculo, err?.message);
+            if (err instanceof HinovaTransientError) throw err;
+            return [] as any[];
+          }),
+        ),
+      ]);
+    });
 
     // 3) Filtrar boletos em aberto e agregar saldo
     const veiculos: VeiculoSGA[] = veiculosSGA.map((v, i) => {
