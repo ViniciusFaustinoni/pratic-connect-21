@@ -838,32 +838,7 @@ export default function Cotacoes() {
       <Tabs value="cotacoes">
         <TabsContent value="cotacoes" className="mt-4 space-y-6">
 
-      {/* Stats Bar - Pills flutuantes */}
-      <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 -mx-1 px-1">
-        {statusStats.map((item) => {
-          const isInactive = item.count === 0;
-          return (
-            <div 
-              key={item.label} 
-              className={cn(
-                "flex items-center gap-2 px-3 py-2 rounded-xl border min-w-fit cursor-default select-none",
-                "transition-all duration-200 hover:scale-[1.03] hover:shadow-sm",
-                isInactive 
-                  ? "opacity-50 bg-muted/20 border-transparent" 
-                  : "bg-card border-border/60 shadow-sm"
-              )}
-            >
-              <div className={cn("h-7 w-7 rounded-lg flex items-center justify-center shrink-0", item.bg)}>
-                <item.icon className={cn("h-3.5 w-3.5", item.color)} />
-              </div>
-              <div className="flex items-baseline gap-1.5">
-                <span className={cn("text-base font-bold leading-none", item.color)}>{item.count}</span>
-                <span className="text-[10px] text-muted-foreground whitespace-nowrap leading-none">{item.label}</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      {/* Stats Bar removida — filtros por etapa agora vivem no dropdown "Etapa do funil" abaixo */}
 
       {/* Card mobile: total de cotações (visível mesmo com filtros aplicados) */}
       {funilCounts && funilCounts.total > 0 && (
