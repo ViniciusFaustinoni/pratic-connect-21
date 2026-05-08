@@ -147,6 +147,20 @@ export const cotacaoAteAtivacao: Tutorial = {
     },
     {
       numero: 11,
+      titulo: '👤 [Ação do Associado] Enviar documentos (leitura por IA)',
+      descricao:
+        'ATENÇÃO: esta etapa também é executada pelo PRÓPRIO ASSOCIADO. Após escolher o plano, ele cai na tela de Documentos e envia tudo de uma só vez (CNH/RG/CiN, CRLV/Nota Fiscal/ATPV-e e Comprovante de Residência) — pode arrastar todos os arquivos juntos. A IA identifica automaticamente cada tipo de documento e pré-preenche os dados. O cliente confere os dados extraídos, completa Contato (e-mail e WhatsApp) e clica em "Continuar" para seguir para a assinatura.',
+      imagem: associadoDocumentos,
+      dicas: [
+        'O vendedor NÃO sobe documentos pelo cliente — o aceite e os dados precisam vir do próprio associado.',
+        'Aceita JPG, PNG e PDF (máx. 10MB por arquivo). Como comprovante de residência, vale também declaração de residência (modelo livre, com CPF e assinatura).',
+        'Mesmo com OCR/IA aprovando, todo documento ainda passa por revisão manual no Cadastro.',
+        'Chassi (VIN) é sempre digitado manualmente — a IA nunca preenche esse campo.',
+        'Se a IA não ler algum dado do veículo, use "A IA não leu tudo? Preencher dados do veículo manualmente".',
+      ],
+    },
+    {
+      numero: 12,
       titulo: 'Cliente assina com biometria facial',
       descricao:
         'A assinatura é feita pelo Autentique exclusivamente por e-mail com reconhecimento facial (PF_FACIAL). Após assinar, o sistema atualiza o status do contrato para "Assinado" e move o associado para a fila de Cadastro.',
