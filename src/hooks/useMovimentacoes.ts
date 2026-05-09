@@ -18,7 +18,7 @@ export function useMovimentacoes() {
     queryFn: async (): Promise<Movimentacao[]> => {
       const hoje = startOfDay(new Date()).toISOString();
 
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('servicos')
         .select(`
           id,
