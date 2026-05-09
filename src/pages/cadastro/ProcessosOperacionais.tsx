@@ -82,12 +82,12 @@ function TrocaTitularidadeTab({
   return (
     <div className="space-y-4">
       <Tabs value={subAba} onValueChange={(v) => setSubAba(v as keyof typeof TROCA_FILTROS)}>
-        <TabsList className="grid grid-cols-2 md:grid-cols-5 w-full">
-          <TabsTrigger value="pendentes">Aguardando Cadastro</TabsTrigger>
-          <TabsTrigger value="aguardando_monit">Aguardando Monit.</TabsTrigger>
-          <TabsTrigger value="em_vistoria">Em Vistoria</TabsTrigger>
-          <TabsTrigger value="aprovadas">Aprovadas</TabsTrigger>
-          <TabsTrigger value="recusadas">Recusadas</TabsTrigger>
+        <TabsList className="w-full flex md:grid md:grid-cols-5 overflow-x-auto justify-start md:justify-center">
+          <TabsTrigger value="pendentes" className="flex-shrink-0 text-xs md:text-sm">Aguardando Cadastro</TabsTrigger>
+          <TabsTrigger value="aguardando_monit" className="flex-shrink-0 text-xs md:text-sm">Aguardando Monit.</TabsTrigger>
+          <TabsTrigger value="em_vistoria" className="flex-shrink-0 text-xs md:text-sm">Em Vistoria</TabsTrigger>
+          <TabsTrigger value="aprovadas" className="flex-shrink-0 text-xs md:text-sm">Aprovadas</TabsTrigger>
+          <TabsTrigger value="recusadas" className="flex-shrink-0 text-xs md:text-sm">Recusadas</TabsTrigger>
         </TabsList>
 
         <TabsContent value={subAba} className="pt-4 space-y-4">
@@ -213,16 +213,16 @@ function SubstituicoesTab({ scopeAuthUserId }: { scopeAuthUserId?: string }) {
     <div className="space-y-4">
       <Tabs value={subTab} onValueChange={setSubTab}>
         <div className="flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between">
-          <TabsList>
-            <TabsTrigger value="pendentes">
+          <TabsList className="w-full sm:w-auto overflow-x-auto justify-start">
+            <TabsTrigger value="pendentes" className="flex-shrink-0">
               Pendentes {pendentesCount > 0 && (
                 <Badge variant="destructive" className="ml-1.5 text-xs px-1.5 py-0">{pendentesCount}</Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="aprovadas">Aprovadas</TabsTrigger>
-            <TabsTrigger value="rejeitadas">Rejeitadas</TabsTrigger>
-            <TabsTrigger value="efetivadas">Efetivadas</TabsTrigger>
-            <TabsTrigger value="todas">Todas</TabsTrigger>
+            <TabsTrigger value="aprovadas" className="flex-shrink-0">Aprovadas</TabsTrigger>
+            <TabsTrigger value="rejeitadas" className="flex-shrink-0">Rejeitadas</TabsTrigger>
+            <TabsTrigger value="efetivadas" className="flex-shrink-0">Efetivadas</TabsTrigger>
+            <TabsTrigger value="todas" className="flex-shrink-0">Todas</TabsTrigger>
           </TabsList>
 
           <div className="flex gap-2">
