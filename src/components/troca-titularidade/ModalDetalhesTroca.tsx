@@ -15,6 +15,7 @@ import { RelatorioFinanceiroAntigo } from './RelatorioFinanceiroAntigo';
 import { MiniCardVistoriaTroca } from './MiniCardVistoriaTroca';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/integrations/supabase/client';
+import { formatCPF, formatPhone } from '@/types/termo-filiacao';
 
 interface Props {
   open: boolean;
@@ -140,12 +141,12 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                 <div className="rounded border p-3 space-y-2">
                   <h4 className="font-semibold flex items-center gap-2"><User className="h-4 w-4" /> Titular Antigo</h4>
                   <p className="text-sm">{solicitacao.associado_antigo?.nome}</p>
-                  <p className="text-xs text-muted-foreground">CPF: {solicitacao.associado_antigo?.cpf || '-'} • {solicitacao.associado_antigo?.email || '-'} • {solicitacao.associado_antigo?.telefone || '-'}</p>
+                  <p className="text-xs text-muted-foreground">CPF: {formatCPF(solicitacao.associado_antigo?.cpf)} • {solicitacao.associado_antigo?.email || '-'} • {formatPhone(solicitacao.associado_antigo?.telefone)}</p>
                 </div>
                 <div className="rounded border p-3 space-y-2">
                   <h4 className="font-semibold flex items-center gap-2"><User className="h-4 w-4" /> Novo Titular</h4>
                   <p className="text-sm">{solicitacao.novo_titular_dados?.nome}</p>
-                  <p className="text-xs text-muted-foreground">CPF: {solicitacao.novo_titular_dados?.cpf} • {solicitacao.novo_titular_dados?.email || '-'} • {solicitacao.novo_titular_dados?.telefone || '-'}</p>
+                  <p className="text-xs text-muted-foreground">CPF: {formatCPF(solicitacao.novo_titular_dados?.cpf)} • {solicitacao.novo_titular_dados?.email || '-'} • {formatPhone(solicitacao.novo_titular_dados?.telefone)}</p>
                 </div>
                 <div className="rounded border p-3 space-y-2">
                   <h4 className="font-semibold flex items-center gap-2"><Car className="h-4 w-4" /> Veículo</h4>
