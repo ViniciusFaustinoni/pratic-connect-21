@@ -215,8 +215,10 @@ export default function PlanosBeneficios() {
             Consulte planos, coberturas e benefícios disponíveis
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <BuscaPlanos onSearch={handleSearch} />
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+          <div className="flex-1 min-w-[200px] md:flex-initial">
+            <BuscaPlanos onSearch={handleSearch} />
+          </div>
           <CalculadoraPreco onIrParaCotacao={handleIrParaCotacao} />
           <SeFecharHojeButton />
         </div>
