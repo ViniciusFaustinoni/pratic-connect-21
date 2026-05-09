@@ -215,8 +215,10 @@ export default function PlanosBeneficios() {
             Consulte planos, coberturas e benefícios disponíveis
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <BuscaPlanos onSearch={handleSearch} />
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+          <div className="flex-1 min-w-[200px] md:flex-initial">
+            <BuscaPlanos onSearch={handleSearch} />
+          </div>
           <CalculadoraPreco onIrParaCotacao={handleIrParaCotacao} />
           <SeFecharHojeButton />
         </div>
@@ -237,37 +239,39 @@ export default function PlanosBeneficios() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className={cn(
-          "grid w-full lg:w-auto",
-          podeVerConfigAvancada ? "grid-cols-4 lg:grid-cols-7" : "grid-cols-4 lg:grid-cols-5"
-        )}>
-          <TabsTrigger value="carros" className="gap-1.5">
-            <Car className="h-3.5 w-3.5" />
-            Carros
-          </TabsTrigger>
-          <TabsTrigger value="motos" className="gap-1.5">
-            <Bike className="h-3.5 w-3.5" />
-            Motos
-          </TabsTrigger>
-          <TabsTrigger value="comparador" className="gap-1.5">
-            <GitCompare className="h-3.5 w-3.5" />
-            Comparador
-          </TabsTrigger>
-          {podeVerConfigAvancada && (
-            <TabsTrigger value="adicionais" className="gap-1.5">
-              Adicionais
-              <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 hover:bg-amber-500/20 text-[10px] px-1.5 py-0">Dev</Badge>
+        <div className="overflow-x-auto -mx-2 px-2 lg:mx-0 lg:px-0 lg:overflow-visible">
+          <TabsList className={cn(
+            "inline-flex w-max gap-1 lg:grid lg:w-auto",
+            podeVerConfigAvancada ? "lg:grid-cols-7" : "lg:grid-cols-5"
+          )}>
+            <TabsTrigger value="carros" className="gap-1.5 flex-shrink-0">
+              <Car className="h-3.5 w-3.5" />
+              Carros
             </TabsTrigger>
-          )}
-          <TabsTrigger value="ranking">Ranking</TabsTrigger>
-          {podeVerConfigAvancada && (
-            <TabsTrigger value="regioes" className="gap-1.5">
-              <MapPin className="h-3.5 w-3.5" />
-              Regiões
+            <TabsTrigger value="motos" className="gap-1.5 flex-shrink-0">
+              <Bike className="h-3.5 w-3.5" />
+              Motos
             </TabsTrigger>
-          )}
-          <TabsTrigger value="glossario">Glossário</TabsTrigger>
-        </TabsList>
+            <TabsTrigger value="comparador" className="gap-1.5 flex-shrink-0">
+              <GitCompare className="h-3.5 w-3.5" />
+              Comparador
+            </TabsTrigger>
+            {podeVerConfigAvancada && (
+              <TabsTrigger value="adicionais" className="gap-1.5 flex-shrink-0">
+                Adicionais
+                <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 hover:bg-amber-500/20 text-[10px] px-1.5 py-0">Dev</Badge>
+              </TabsTrigger>
+            )}
+            <TabsTrigger value="ranking" className="flex-shrink-0">Ranking</TabsTrigger>
+            {podeVerConfigAvancada && (
+              <TabsTrigger value="regioes" className="gap-1.5 flex-shrink-0">
+                <MapPin className="h-3.5 w-3.5" />
+                Regiões
+              </TabsTrigger>
+            )}
+            <TabsTrigger value="glossario" className="flex-shrink-0">Glossário</TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Tab Carros (default) */}
         <TabsContent value="carros" className="space-y-6">
