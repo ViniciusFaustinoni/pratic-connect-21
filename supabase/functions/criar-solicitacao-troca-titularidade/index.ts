@@ -87,64 +87,107 @@ Deno.serve(async (req) => {
       );
     }
 
-    // FIPE atualizada: mesma busca da cotação. Se o veículo antigo não tem
-    // valor_fipe / codigo_fipe (cadastros legados), consulta a edge `fipe-lookup`
-    // para que o card em /cadastro/veiculos e a cotação do novo titular já
-    // exibam o valor correto. Falhas não bloqueiam a criação da troca.
-    const precisaLookupFipe = !veiculo.valor_fipe || Number(veiculo.valor_fipe) <= 0 || !veiculo.codigo_fipe;
-    if (precisaLookupFipe && veiculo.marca && veiculo.modelo) {
+    // Enriquecimento de dados do veículo: cor, combustível, FIPE, ano, etc.
+    // Roda em paralelo plate-lookup (dados oficiais por placa) + fipe-lookup
+    // (valor FIPE atualizado). Nunca sobrescreve campos já preenchidos.
+    // Falhas não bloqueiam a criação.
+    const faltaAlgo =
+      !veiculo.cor || !veiculo.combustivel ||
+      !veiculo.valor_fipe || Number(veiculo.valor_fipe) <= 0 || !veiculo.codigo_fipe ||
+      !veiculo.ano_modelo || !veiculo.ano_fabricacao;
+
+    if (faltaAlgo) {
       try {
-        // Deduz o tipo (carros/motos/caminhoes) a partir de marcas_modelos
+        // Deduz tipo (carros/motos/caminhoes) a partir de marcas_modelos
         let tipo = 'carros';
-        try {
-          const { data: mm } = await admin
-            .from('marcas_modelos')
-            .select('tipo_veiculo')
-            .ilike('marca', String(veiculo.marca))
-            .ilike('modelo', String(veiculo.modelo))
-            .limit(1)
-            .maybeSingle();
-          const tv = String((mm as any)?.tipo_veiculo || '').toLowerCase();
-          if (tv.includes('moto')) tipo = 'motos';
-          else if (tv.includes('caminh')) tipo = 'caminhoes';
-        } catch (_) { /* default carros */ }
+        if (veiculo.marca && veiculo.modelo) {
+          try {
+            const { data: mm } = await admin
+              .from('marcas_modelos')
+              .select('tipo_veiculo')
+              .ilike('marca', String(veiculo.marca))
+              .ilike('modelo', String(veiculo.modelo))
+              .limit(1)
+              .maybeSingle();
+            const tv = String((mm as any)?.tipo_veiculo || '').toLowerCase();
+            if (tv.includes('moto')) tipo = 'motos';
+            else if (tv.includes('caminh')) tipo = 'caminhoes';
+          } catch (_) { /* default carros */ }
+        }
 
         const ano = String(veiculo.ano_modelo || veiculo.ano_fabricacao || '');
-        const params = new URLSearchParams({
-          action: 'buscar-por-nome',
-          tipo,
-          marca: String(veiculo.marca),
-          modelo: String(veiculo.modelo),
-        });
+        const placaUp = String(veiculo.placa || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+
+        // 1) plate-lookup (em paralelo com fipe-lookup)
+        const ctrlA = new AbortController();
+        const tA = setTimeout(() => ctrlA.abort(), 8000);
+        const platePromise = placaUp
+          ? fetch(`${SUPABASE_URL}/functions/v1/plate-lookup`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ placa: placaUp }),
+              signal: ctrlA.signal,
+            }).finally(() => clearTimeout(tA)).catch((e) => { console.warn('[criar-solicitacao-troca] plate-lookup err:', (e as Error).message); return null; })
+          : Promise.resolve(null);
+
+        const ctrlB = new AbortController();
+        const tB = setTimeout(() => ctrlB.abort(), 8000);
+        const params = new URLSearchParams({ action: 'buscar-por-nome', tipo });
+        if (veiculo.marca) params.set('marca', String(veiculo.marca));
+        if (veiculo.modelo) params.set('modelo', String(veiculo.modelo));
         if (ano) params.set('ano', ano);
+        const fipePromise = (veiculo.marca && veiculo.modelo)
+          ? fetch(`${SUPABASE_URL}/functions/v1/fipe-lookup?${params}`, {
+              headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, apikey: SUPABASE_ANON_KEY },
+              signal: ctrlB.signal,
+            }).finally(() => clearTimeout(tB)).catch((e) => { console.warn('[criar-solicitacao-troca] fipe-lookup err:', (e as Error).message); return null; })
+          : Promise.resolve(null);
 
-        const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 8000);
-        const resp = await fetch(`${SUPABASE_URL}/functions/v1/fipe-lookup?${params}`, {
-          headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, apikey: SUPABASE_ANON_KEY },
-          signal: ctrl.signal,
-        }).finally(() => clearTimeout(t));
+        const [plateResp, fipeResp] = await Promise.all([platePromise, fipePromise]);
 
-        if (resp.ok) {
-          const json: any = await resp.json();
-          const valor = Number(json?.data?.valorNumerico) || 0;
-          const codigo = json?.data?.codigoFipe || null;
-          if (valor > 0) {
-            await admin.from('veiculos').update({
-              valor_fipe: valor,
-              codigo_fipe: codigo || veiculo.codigo_fipe || null,
-            }).eq('id', veiculo.id);
-            veiculo.valor_fipe = valor;
-            if (codigo) veiculo.codigo_fipe = codigo;
-            console.log(`[criar-solicitacao-troca] FIPE atualizada via lookup: R$ ${valor} (${codigo})`);
-          } else {
-            console.warn('[criar-solicitacao-troca] FIPE lookup retornou sem valor', json);
-          }
-        } else {
-          console.warn('[criar-solicitacao-troca] FIPE lookup falhou', resp.status);
+        const updates: Record<string, any> = {};
+
+        // plate-lookup: cor, combustível, ano, FIPE secundária
+        if (plateResp && plateResp.ok) {
+          try {
+            const j: any = await plateResp.json();
+            const vd = j?.vehicleData || {};
+            const fd = j?.fipeData || null;
+            if (!veiculo.cor && vd.cor) updates.cor = String(vd.cor).trim();
+            if (!veiculo.combustivel && vd.combustivel) updates.combustivel = String(vd.combustivel).trim();
+            if (!veiculo.ano_modelo && vd.ano_modelo) updates.ano_modelo = Number(vd.ano_modelo) || null;
+            if (!veiculo.ano_fabricacao && vd.ano_fabricacao) updates.ano_fabricacao = Number(vd.ano_fabricacao) || null;
+            if (fd && (!veiculo.valor_fipe || Number(veiculo.valor_fipe) <= 0)) {
+              const valorNum = Number(String(fd.valor || '').replace(/[^\d,]/g, '').replace(',', '.'));
+              if (valorNum > 0) updates.valor_fipe = valorNum;
+              if (!veiculo.codigo_fipe && fd.codigo) updates.codigo_fipe = fd.codigo;
+            }
+          } catch (e) { console.warn('[criar-solicitacao-troca] parse plate-lookup falhou:', (e as Error).message); }
+        }
+
+        // fipe-lookup: valor FIPE primário (se ainda em falta)
+        if (fipeResp && fipeResp.ok) {
+          try {
+            const j: any = await fipeResp.json();
+            const valor = Number(j?.data?.valorNumerico) || 0;
+            const codigo = j?.data?.codigoFipe || null;
+            const valorFipeAtual = updates.valor_fipe ?? veiculo.valor_fipe;
+            if (valor > 0 && (!valorFipeAtual || Number(valorFipeAtual) <= 0)) {
+              updates.valor_fipe = valor;
+            }
+            if (codigo && !(updates.codigo_fipe || veiculo.codigo_fipe)) {
+              updates.codigo_fipe = codigo;
+            }
+          } catch (e) { console.warn('[criar-solicitacao-troca] parse fipe-lookup falhou:', (e as Error).message); }
+        }
+
+        if (Object.keys(updates).length > 0) {
+          await admin.from('veiculos').update(updates).eq('id', veiculo.id);
+          Object.assign(veiculo, updates);
+          console.log('[criar-solicitacao-troca] veículo enriquecido:', updates);
         }
       } catch (e) {
-        console.warn('[criar-solicitacao-troca] erro no FIPE lookup (ignorado):', (e as Error).message);
+        console.warn('[criar-solicitacao-troca] erro no enriquecimento (ignorado):', (e as Error).message);
       }
     }
 
