@@ -118,6 +118,21 @@ Deno.serve(async (req) => {
         dataFimCarencia.setDate(dataFimCarencia.getDate() + carenciaDias)
         const numeroContrato = `SUB-${Date.now()}`
 
+        // Preserva dia_vencimento original do associado ativo
+        const { data: contratoAnterior } = await supabase
+          .from('contratos')
+          .select('dia_vencimento')
+          .eq('associado_id', substituicao.associado_id)
+          .eq('veiculo_id', substituicao.veiculo_antigo_id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        const diaVencimentoOriginal =
+          contratoAnterior?.dia_vencimento ??
+          associado?.dia_vencimento ??
+          10
+
         const { data: novoContrato, error: contratoErr } = await supabase
           .from('contratos')
           .insert({
@@ -130,6 +145,7 @@ Deno.serve(async (req) => {
             cota_participacao: substituicao.cota_participacao_nova || 0,
             valor_adesao: substituicao.taxa_substituicao || 0,
             vendedor_id: substituicao.consultor_id || null,
+            dia_vencimento: diaVencimentoOriginal,
             data_inicio: dataInicio.toISOString(),
             data_carencia_inicio: dataInicio.toISOString(),
             data_carencia_fim: dataFimCarencia.toISOString(),

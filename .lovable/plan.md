@@ -1,64 +1,64 @@
-## Contexto
+## Problema
 
-Hoje uma Troca de Titularidade gera corretamente uma cotação avulsa, com **todos os campos do cliente já preenchidos** no banco (`nome_solicitante`, `cliente_cpf`, `email_solicitante`, `telefone1_solicitante`) e do veículo (placa, marca, modelo, ano, cor, FIPE). Mesmo assim, a tela de detalhe (1ª screenshot) mostra "Cotação avulsa — Vincule a um lead para enviar" porque o card só lê de `cotacao.leads.*`.
+Ao efetivar uma substituição de veículo de um associado **ativo**, o novo contrato é criado **sem `dia_vencimento`** (campo fica `NULL`). Como a tela de "vencimento" do associado e a régua de cobranças mensais leem o `dia_vencimento` do contrato/associado ativo, o associado passa a aparecer com vencimento diferente (ou cai no fallback `10`) — o vencimento original "muda".
 
-Além disso, a mesma cotação pode ser exibida de duas maneiras diferentes:
+## Causa raiz
 
-- `CotacaoDetalhesModal` (drawer aberto ao clicar na linha — 3ª screenshot)
-- `CotacaoDetalhe` (rota `/vendas/cotacoes/:id` — 1ª screenshot)
+Em `supabase/functions/efetivar-substituicao/index.ts` (Step 2.5, linhas ~112-146), o `INSERT` em `contratos` para o novo veículo **não copia** `dia_vencimento` do contrato anterior nem do `associados.dia_vencimento`. Não há trigger que preencha esse campo automaticamente.
 
-Ambos mostram cabeçalho, cliente, veículo, valores, ações; o modal é uma versão reduzida e desatualizada da página. Isso é a "duplicidade de áreas".
+Os demais pontos foram verificados e estão corretos:
+- `associados.dia_vencimento` **não** é alterado em nenhuma etapa da efetivação.
+- `gerar-cobrancas-mensais` usa `associado.dia_vencimento || 10` — então o problema não é no associado, é no novo contrato.
 
-## Objetivos
+## Correção
 
-1. Toda cotação (avulsa, lead, troca de titularidade) é vista pela mesma tela: a página `/vendas/cotacoes/:id`.
-2. Quando não há lead, o card Cliente exibe os dados do solicitante salvos na própria cotação (nome, CPF, telefone, e-mail), com botões Ligar/WhatsApp já habilitados.
-3. Cotações de Troca de Titularidade ganham um badge claro no header e a mensagem "Cotação avulsa - Vincule a um lead para enviar" deixa de aparecer quando os dados do solicitante já existem.
+Em `efetivar-substituicao` (Step 2.5), ao criar o novo contrato:
 
-## Mudanças
+1. Buscar o contrato anterior do mesmo associado/veículo antigo (`contratos` filtrado por `associado_id` + `veiculo_id = veiculo_antigo_id`, mais recente).
+2. Resolver `diaVencimentoOriginal` em ordem de prioridade:
+   - `contratoAnterior.dia_vencimento`
+   - `associado.dia_vencimento`
+   - fallback `10`
+3. Incluir `dia_vencimento: diaVencimentoOriginal` no `INSERT` do novo contrato.
 
-### 1. Remover o modal duplicado (`CotacaoDetalhesModal`)
+Não mexer em `associados.dia_vencimento` (continua intocado).
 
-- `src/pages/vendas/Cotacoes.tsx`
-  - `handleRowClick` passa a `navigate(`/vendas/cotacoes/${cotacao.id}`)` em vez de abrir modal.
-  - Remover estado `showDetalhesModal`, `setShowDetalhesModal`, o bloco JSX `<CotacaoDetalhesModal …>` e o lazy import.
-  - `handleContinuarCotacao` deixa de fechar o modal (não existe mais) e segue abrindo `CotacaoFormDialog`.
-- `src/components/cotacoes/CotacaoDetalhesModal.tsx`: arquivo é deletado (nenhum outro consumer — `rg` confirma).
-- `CotacaoCard` / `CotacoesMobileList` / `CotacoesTable`: garantir que o clique e o item "Ver detalhes" do menu também navegam para a página.
+## Detalhes técnicos
 
-### 2. Card Cliente: usar dados do solicitante quando não há lead
+Arquivo: `supabase/functions/efetivar-substituicao/index.ts`
 
-`src/components/cotacoes/CotacaoClienteVeiculo.tsx`
+```ts
+// Antes do INSERT do novo contrato
+const { data: contratoAnterior } = await supabase
+  .from('contratos')
+  .select('dia_vencimento')
+  .eq('associado_id', substituicao.associado_id)
+  .eq('veiculo_id', substituicao.veiculo_antigo_id)
+  .order('created_at', { ascending: false })
+  .limit(1)
+  .maybeSingle();
 
-- Adicionar nas props os campos opcionais `nome_solicitante`, `cliente_cpf`, `email_solicitante`, `telefone1_solicitante`, e `tipo_entrada` (de `dados_extras.tipo_entrada`).
-- Lógica de renderização:
-  - Se `lead_id` existir → mantém comportamento atual.
-  - Senão, se `nome_solicitante` existir → renderiza o mesmo layout (Nome, telefone, e-mail, botões Ligar/WhatsApp), com um badge "Solicitante (cotação avulsa)" e ação secundária `Vincular Lead` permanece disponível como link discreto.
-  - Senão (sem lead e sem solicitante) → mantém o estado vazio atual.
-- O `Alert` "Cotação avulsa — Vincule a um lead para habilitar envio" só aparece quando NÃO há nem lead nem solicitante.
+const diaVencimentoOriginal =
+  contratoAnterior?.dia_vencimento ??
+  associado?.dia_vencimento ??
+  10;
 
-`src/pages/vendas/CotacaoDetalhe.tsx`
+// adicionar no insert:
+dia_vencimento: diaVencimentoOriginal,
+```
 
-- Passar os novos campos para `<CotacaoClienteVeiculo … />`.
+## Validação
 
-### 3. Indicar Troca de Titularidade no header
+1. Login como diretor (admin@teste.com).
+2. Selecionar associado **ativo** com `dia_vencimento = 15` (por exemplo).
+3. Realizar substituição completa até efetivação.
+4. Conferir:
+   - `associados.dia_vencimento` permanece `15`.
+   - Novo `contratos.dia_vencimento` = `15`.
+   - Próximo boleto gerado em `gerar-cobrancas-mensais` usa dia `15`.
 
-`src/pages/vendas/CotacaoDetalhe.tsx`
+## Fora de escopo
 
-- Quando `cotacao.dados_extras?.tipo_entrada === 'troca_titularidade'`, renderizar o `<TrocaTitularidadeBadge />` (componente já existe) ao lado do título dentro de `CotacaoHeader` (ou logo abaixo).
-
-### 4. Não-mudanças (fora de escopo)
-
-- Sem alteração no edge `criar-solicitacao-troca-titularidade` — a cotação já é criada com os campos certos.
-- Sem alteração em `CotacaoFormDialog` / fluxo de criação rápida.
-- Sem alteração em RLS, schema ou no fluxo de aprovação da troca.
-
-## Critérios de aceite
-
-1. Ao clicar em qualquer linha de `/vendas/cotacoes`, o usuário cai em `/vendas/cotacoes/:id` (sem drawer).
-2. Em uma cotação criada por Troca de Titularidade:
-   - Card Cliente exibe nome do novo titular, CPF, telefone e e-mail (com botões Ligar e WhatsApp ativos).
-   - Header mostra o badge "Troca de Titularidade".
-   - Mensagem "Vincule a um lead" desaparece.
-3. Cotações realmente avulsas (sem nome do solicitante e sem lead) continuam mostrando o estado vazio + CTA "Vincular Lead".
-4. Nenhum import quebrado: `CotacaoDetalhesModal` é removido por completo.
+- Nenhuma mudança de UI.
+- Nenhuma migration.
+- Erro TS pré-existente em `src/hooks/useManutencaoInterna.ts:184` (TS2589) — herdado de turno anterior; aplicar mesmo padrão `(supabase as any)` se desejar resolver junto.

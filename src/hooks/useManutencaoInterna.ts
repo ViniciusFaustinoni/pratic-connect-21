@@ -181,7 +181,7 @@ export function useManutencaoInternaDetalhe(id: string | undefined) {
     queryFn: async () => {
       if (!id) return null;
 
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('rastreador_manutencao_interna')
         .select(`
           *,
