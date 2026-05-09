@@ -15,6 +15,7 @@ import { RelatorioFinanceiroAntigo } from './RelatorioFinanceiroAntigo';
 import { MiniCardVistoriaTroca } from './MiniCardVistoriaTroca';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/integrations/supabase/client';
+import { formatCPF, formatPhone } from '@/types/termo-filiacao';
 
 interface Props {
   open: boolean;
