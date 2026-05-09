@@ -1,0 +1,1 @@
+update public.veiculos set valor_fipe=48080, codigo_fipe='005493-3', updated_at=now() where id='04e3979f-69ab-4bc0-b8f6-df4f20512a4e';
