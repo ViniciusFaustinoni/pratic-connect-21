@@ -223,7 +223,7 @@ export function useVistoriaManutencaoDetalhe(id: string | undefined) {
     queryFn: async () => {
       if (!id) return null;
 
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('servicos')
         .select(`
           *,
