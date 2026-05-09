@@ -234,7 +234,7 @@ export default function BaseAntiga() {
             </Button>
           </div>
 
-          <Card>
+          <Card className="hidden md:block">
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
@@ -291,6 +291,49 @@ export default function BaseAntiga() {
               </Table>
             </CardContent>
           </Card>
+
+          {/* Mobile cards */}
+          <div className="md:hidden space-y-3">
+            {vLoading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <Card key={i}><CardContent className="p-4"><Skeleton className="h-20 w-full" /></CardContent></Card>
+              ))
+            ) : !vData?.veiculos.length ? (
+              <Card><CardContent className="p-8 text-center text-muted-foreground text-sm">Nenhum veículo encontrado</CardContent></Card>
+            ) : (
+              vData.veiculos.map((v: any) => (
+                <Card key={v.id} className="cursor-pointer active:scale-[0.99] transition-transform" onClick={() => setSelectedVeiculoId(v.id)}>
+                  <CardContent className="p-4 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-mono font-bold text-base">{v.placa || '—'}</p>
+                        <p className="text-sm truncate">{[v.marca, v.modelo].filter(Boolean).join(' ') || '—'}</p>
+                      </div>
+                      <Badge className={`${STATUS_COLORS[v.status] || 'bg-gray-100 text-gray-800'} text-xs shrink-0`}>{v.status?.replace(/_/g, ' ') || '—'}</Badge>
+                    </div>
+                    <div className="text-xs text-muted-foreground space-y-0.5">
+                      {(v.ano_fabricacao || v.ano_modelo) && <p>Ano: {v.ano_fabricacao && v.ano_modelo ? `${v.ano_fabricacao}/${v.ano_modelo}` : v.ano_modelo}</p>}
+                      {v.cor && <p>Cor: {v.cor}</p>}
+                      {v.associado?.nome && <p className="truncate">👤 {v.associado.nome}</p>}
+                      {v.rastreador && (
+                        <p className="flex items-center gap-1">
+                          <Radio className={`h-3 w-3 ${v.rastreador.status === 'ativo' ? 'text-green-600' : 'text-gray-400'}`} />
+                          {v.rastreador.codigo}
+                        </p>
+                      )}
+                    </div>
+                    {canDelete && (
+                      <div className="flex justify-end">
+                        <Button variant="ghost" size="sm" className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={(e) => handleDelete(e, v.id, v.placa || 'Veículo', 'veiculo')}>
+                          <Trash2 className="h-4 w-4 mr-1" /> Excluir
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
 
           {vData && vData.pagination.totalPages > 1 && (
             <div className="flex items-center justify-between">
