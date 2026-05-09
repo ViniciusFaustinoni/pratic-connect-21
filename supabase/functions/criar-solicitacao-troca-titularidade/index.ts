@@ -87,6 +87,67 @@ Deno.serve(async (req) => {
       );
     }
 
+    // FIPE atualizada: mesma busca da cotação. Se o veículo antigo não tem
+    // valor_fipe / codigo_fipe (cadastros legados), consulta a edge `fipe-lookup`
+    // para que o card em /cadastro/veiculos e a cotação do novo titular já
+    // exibam o valor correto. Falhas não bloqueiam a criação da troca.
+    const precisaLookupFipe = !veiculo.valor_fipe || Number(veiculo.valor_fipe) <= 0 || !veiculo.codigo_fipe;
+    if (precisaLookupFipe && veiculo.marca && veiculo.modelo) {
+      try {
+        // Deduz o tipo (carros/motos/caminhoes) a partir de marcas_modelos
+        let tipo = 'carros';
+        try {
+          const { data: mm } = await admin
+            .from('marcas_modelos')
+            .select('tipo_veiculo')
+            .ilike('marca', String(veiculo.marca))
+            .ilike('modelo', String(veiculo.modelo))
+            .limit(1)
+            .maybeSingle();
+          const tv = String((mm as any)?.tipo_veiculo || '').toLowerCase();
+          if (tv.includes('moto')) tipo = 'motos';
+          else if (tv.includes('caminh')) tipo = 'caminhoes';
+        } catch (_) { /* default carros */ }
+
+        const ano = String(veiculo.ano_modelo || veiculo.ano_fabricacao || '');
+        const params = new URLSearchParams({
+          action: 'buscar-por-nome',
+          tipo,
+          marca: String(veiculo.marca),
+          modelo: String(veiculo.modelo),
+        });
+        if (ano) params.set('ano', ano);
+
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 8000);
+        const resp = await fetch(`${SUPABASE_URL}/functions/v1/fipe-lookup?${params}`, {
+          headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, apikey: SUPABASE_ANON_KEY },
+          signal: ctrl.signal,
+        }).finally(() => clearTimeout(t));
+
+        if (resp.ok) {
+          const json: any = await resp.json();
+          const valor = Number(json?.data?.valorNumerico) || 0;
+          const codigo = json?.data?.codigoFipe || null;
+          if (valor > 0) {
+            await admin.from('veiculos').update({
+              valor_fipe: valor,
+              codigo_fipe: codigo || veiculo.codigo_fipe || null,
+            }).eq('id', veiculo.id);
+            veiculo.valor_fipe = valor;
+            if (codigo) veiculo.codigo_fipe = codigo;
+            console.log(`[criar-solicitacao-troca] FIPE atualizada via lookup: R$ ${valor} (${codigo})`);
+          } else {
+            console.warn('[criar-solicitacao-troca] FIPE lookup retornou sem valor', json);
+          }
+        } else {
+          console.warn('[criar-solicitacao-troca] FIPE lookup falhou', resp.status);
+        }
+      } catch (e) {
+        console.warn('[criar-solicitacao-troca] erro no FIPE lookup (ignorado):', (e as Error).message);
+      }
+    }
+
     // SEGURANÇA: garante que a placa pertence ao titular antigo informado.
     // Bloqueia bypass de UI / chamadas diretas à edge com combinação CPF + placa não-vinculada.
     if (veiculo.associado_id !== associado_antigo_id) {
