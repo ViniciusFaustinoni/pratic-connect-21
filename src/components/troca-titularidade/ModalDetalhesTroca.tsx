@@ -13,6 +13,7 @@ import { useSolicitacaoTroca, useAprovarTrocaCadastro, useAprovarTrocaMonitorame
 import { TimelineAprovacao } from './TimelineAprovacao';
 import { RelatorioFinanceiroAntigo } from './RelatorioFinanceiroAntigo';
 import { MiniCardVistoriaTroca } from './MiniCardVistoriaTroca';
+import { VeiculoCompletoCard } from './VeiculoCompletoCard';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCPF, formatPhone } from '@/types/termo-filiacao';
