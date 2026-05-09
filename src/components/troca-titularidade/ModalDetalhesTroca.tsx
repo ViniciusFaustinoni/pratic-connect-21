@@ -118,6 +118,29 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
               </span>
             </div>
 
+            {/* Próximo passo — só faz sentido enquanto a solicitação ainda está abrindo */}
+            {solicitacao.status === 'cotacao_em_andamento' && (() => {
+              const termoEnviado = !!solicitacao.termo_cancelamento_enviado_em;
+              const termoAssinado = !!solicitacao.termo_cancelamento_assinado_em;
+              const titulo = !termoEnviado
+                ? 'Próximo passo: enviar Termo de Cancelamento'
+                : !termoAssinado
+                ? 'Aguardando assinatura do termo pelo titular antigo'
+                : 'Aguardando processamento';
+              const descricao = !termoEnviado
+                ? `O Cadastro precisa abrir a aba "Termo" e enviar o Termo de Cancelamento via Autentique para ${solicitacao.associado_antigo?.nome || 'o titular antigo'}. Assim que ele assinar (biometria facial), a solicitação cai automaticamente em "Aguardando Cadastro" e o botão Aprovar libera neste mesmo drawer.`
+                : !termoAssinado
+                ? `Termo enviado em ${solicitacao.termo_cancelamento_enviado_em ? new Date(solicitacao.termo_cancelamento_enviado_em).toLocaleString('pt-BR') : '-'}. Após a assinatura por biometria facial, a solicitação migra para "Aguardando Cadastro" e o botão Aprovar libera automaticamente.`
+                : 'Aguardando o webhook do Autentique migrar a solicitação para Aguardando Cadastro.';
+              return (
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>{titulo}</AlertTitle>
+                  <AlertDescription>{descricao}</AlertDescription>
+                </Alert>
+              );
+            })()}
+
             {modo === 'cadastro' && debitoPendente && (
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
