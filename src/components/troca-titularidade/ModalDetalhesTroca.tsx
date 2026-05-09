@@ -154,9 +154,9 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
             <Tabs defaultValue="dados">
               <TabsList className="grid w-full grid-cols-5">
                 <TabsTrigger value="dados">Dados</TabsTrigger>
+                <TabsTrigger value="termo">Termo</TabsTrigger>
                 <TabsTrigger value="analise">Análise prévia</TabsTrigger>
                 <TabsTrigger value="financeiro">Financeiro Antigo</TabsTrigger>
-                <TabsTrigger value="termo">Termo</TabsTrigger>
                 <TabsTrigger value="timeline">Timeline</TabsTrigger>
               </TabsList>
 
