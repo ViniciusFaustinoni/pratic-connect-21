@@ -139,8 +139,8 @@ Deno.serve(async (req) => {
       'associado.endereco_completo': enderecoCompleto,
       'associado.cidade': associadoAntigo.cidade || '___',
       'associado.estado': associadoAntigo.uf || '___',
-      'associado.data_adesao': associadoAntigo.data_associacao
-        ? new Date(associadoAntigo.data_associacao).toLocaleDateString('pt-BR')
+      'associado.data_adesao': associadoAntigo.data_adesao
+        ? new Date(associadoAntigo.data_adesao).toLocaleDateString('pt-BR')
         : (associadoAntigo.created_at ? new Date(associadoAntigo.created_at).toLocaleDateString('pt-BR') : '—'),
       'veiculo.marca': veiculo?.marca || '___',
       'veiculo.modelo': veiculo?.modelo || '___',
