@@ -2,6 +2,7 @@ import { Tutorial } from './types';
 import novaCotacaoBotao from '@/assets/tutoriais/nova-cotacao-botao.png';
 import tipoVendaModal from '@/assets/tutoriais/tipo-venda-modal.png';
 import trocaTitularidadeBusca from '@/assets/tutoriais/troca-titularidade-busca.png';
+import trocaTitularidadeNovoTitular from '@/assets/tutoriais/troca-titularidade-novo-titular.png';
 
 export const trocaTitularidade: Tutorial = {
   id: 'troca-titularidade',
