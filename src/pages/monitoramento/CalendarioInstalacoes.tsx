@@ -428,6 +428,7 @@ export default function CalendarioInstalacoesPage() {
               );
             })}
           </div>
+         </div>
         </CardContent>
       </Card>
 
