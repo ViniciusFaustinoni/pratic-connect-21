@@ -595,8 +595,8 @@ export default function Associados() {
           </div>
         </div>
 
-        {/* Table */}
-        <Card className="overflow-hidden">
+        {/* Table — desktop/tablet */}
+        <Card className="overflow-hidden hidden md:block">
           <CardContent className="p-0">
             <Table>
               <TableHeader>
