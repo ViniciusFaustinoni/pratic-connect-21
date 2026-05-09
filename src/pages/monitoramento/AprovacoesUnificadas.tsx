@@ -37,7 +37,7 @@ export default function AprovacoesUnificadas() {
       </div>
 
       <Tabs value={aba} onValueChange={handleChange}>
-        <TabsList className="grid grid-cols-2 md:grid-cols-6 w-full">
+        <TabsList className="grid grid-cols-3 md:grid-cols-6 w-full h-auto gap-1 p-1">
           <TabsTrigger value="associados" className="gap-2">
             <ShieldCheck className="h-4 w-4" />
             <span className="hidden sm:inline">Aprovação de Associados</span>
