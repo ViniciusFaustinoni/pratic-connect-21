@@ -868,6 +868,104 @@ export default function Associados() {
           </CardContent>
         </Card>
 
+        {/* Mobile cards */}
+        <div className="md:hidden space-y-2">
+          {paginatedAssociados.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 flex flex-col items-center gap-3 text-center">
+                <div className="rounded-full bg-muted p-4">
+                  <Users className="h-8 w-8 text-muted-foreground/40" />
+                </div>
+                <div>
+                  <p className="font-medium text-foreground">Nenhum associado encontrado</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {hasFilters ? 'Ajuste os filtros' : 'Nenhum cadastro disponível'}
+                  </p>
+                </div>
+                {hasFilters && (
+                  <Button variant="outline" size="sm" onClick={clearFilters}>
+                    <X className="mr-2 h-4 w-4" /> Limpar filtros
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            paginatedAssociados.map((associado) => {
+              const v = associado.veiculos?.[0];
+              return (
+                <Card
+                  key={associado.id}
+                  className="cursor-pointer active:scale-[0.99] transition-transform"
+                  onClick={() => handleAssociadoClick(associado)}
+                >
+                  <CardContent className="p-3">
+                    <div className="flex items-start gap-2.5">
+                      <div className="flex items-center justify-center h-9 w-9 rounded-full bg-primary/10 text-primary text-xs font-semibold shrink-0">
+                        {getInitials(associado.nome)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm truncate">{associado.nome}</p>
+                            <p className="text-[11px] text-muted-foreground truncate">
+                              {formatCpf(associado.cpf)}{associado.telefone ? ` • ${formatTelefone(associado.telefone)}` : ''}
+                            </p>
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 -mr-1 -mt-1">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                              <DropdownMenuItem onClick={() => navigate(`/cadastro/associados/${associado.id}`)}>
+                                <Eye className="mr-2 h-4 w-4" /> Ver detalhes
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => openWhatsApp(associado.telefone, e as any)}>
+                                <MessageCircle className="mr-2 h-4 w-4" /> WhatsApp
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                          <Badge className={`${statusColors[associado.status]} border-0 gap-1.5 text-[10px] px-1.5 py-0.5`}>
+                            <span className={`h-1.5 w-1.5 rounded-full ${statusDotColors[associado.status]}`} />
+                            {STATUS_ASSOCIADO_LABELS[associado.status]}
+                          </Badge>
+                          {associado.planos?.nome && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 truncate max-w-[140px]">
+                              {associado.planos.nome}
+                            </Badge>
+                          )}
+                        </div>
+
+                        {v && (
+                          <div className="flex items-center gap-1.5 mt-2 text-[11px]">
+                            <span className="font-mono bg-muted px-1.5 py-0.5 rounded border border-border">
+                              {v.placa}
+                            </span>
+                            <span className="text-muted-foreground truncate">{v.modelo}</span>
+                            {associado.veiculos!.length > 1 && (
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                                +{associado.veiculos!.length - 1}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+
+                        <p className="text-[10px] text-muted-foreground mt-2">
+                          Adesão: {formatDate(associado.data_adesao)}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })
+          )}
+        </div>
+
         {/* Pagination */}
         {filteredAssociados.length > 0 && (
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
