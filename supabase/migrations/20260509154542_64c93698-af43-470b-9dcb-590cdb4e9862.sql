@@ -1,0 +1,1 @@
+DELETE FROM solicitacoes_troca_titularidade WHERE id = 'b6f7659c-9268-47c1-87fa-c4d17387c551';
