@@ -95,7 +95,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Solicitação de Troca de Titularidade</DialogTitle>
           <DialogDescription>
