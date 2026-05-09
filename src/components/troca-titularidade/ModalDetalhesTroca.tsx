@@ -171,11 +171,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                   <p className="text-sm">{solicitacao.novo_titular_dados?.nome}</p>
                   <p className="text-xs text-muted-foreground">CPF: {formatCPF(solicitacao.novo_titular_dados?.cpf)} • {solicitacao.novo_titular_dados?.email || '-'} • {formatPhone(solicitacao.novo_titular_dados?.telefone)}</p>
                 </div>
-                <div className="rounded border p-3 space-y-2">
-                  <h4 className="font-semibold flex items-center gap-2"><Car className="h-4 w-4" /> Veículo</h4>
-                  <p className="text-sm">{solicitacao.veiculo?.marca} {solicitacao.veiculo?.modelo} {solicitacao.veiculo?.ano_modelo ?? solicitacao.veiculo?.ano_fabricacao ?? ''}</p>
-                  <p className="text-xs text-muted-foreground">Placa: {solicitacao.veiculo?.placa}</p>
-                </div>
+                <VeiculoCompletoCard veiculoId={solicitacao.veiculo_id} />
                 {solicitacao.cotacao && (
                   <div className="rounded border p-3 space-y-2">
                     <h4 className="font-semibold">Cotação vinculada</h4>
