@@ -118,6 +118,29 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
               </span>
             </div>
 
+            {/* Próximo passo — só faz sentido enquanto a solicitação ainda está abrindo */}
+            {solicitacao.status === 'cotacao_em_andamento' && (() => {
+              const termoEnviado = !!solicitacao.termo_cancelamento_enviado_em;
+              const termoAssinado = !!solicitacao.termo_cancelamento_assinado_em;
+              const titulo = !termoEnviado
+                ? 'Próximo passo: enviar Termo de Cancelamento'
+                : !termoAssinado
+                ? 'Aguardando assinatura do termo pelo titular antigo'
+                : 'Aguardando processamento';
+              const descricao = !termoEnviado
+                ? `O Cadastro precisa abrir a aba "Termo" e enviar o Termo de Cancelamento via Autentique para ${solicitacao.associado_antigo?.nome || 'o titular antigo'}. Assim que ele assinar (biometria facial), a solicitação cai automaticamente em "Aguardando Cadastro" e o botão Aprovar libera neste mesmo drawer.`
+                : !termoAssinado
+                ? `Termo enviado em ${solicitacao.termo_cancelamento_enviado_em ? new Date(solicitacao.termo_cancelamento_enviado_em).toLocaleString('pt-BR') : '-'}. Após a assinatura por biometria facial, a solicitação migra para "Aguardando Cadastro" e o botão Aprovar libera automaticamente.`
+                : 'Aguardando o webhook do Autentique migrar a solicitação para Aguardando Cadastro.';
+              return (
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>{titulo}</AlertTitle>
+                  <AlertDescription>{descricao}</AlertDescription>
+                </Alert>
+              );
+            })()}
+
             {modo === 'cadastro' && debitoPendente && (
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
@@ -285,6 +308,27 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                     );
                   })()}
                 </div>
+              </div>
+            )}
+
+            {/* Footer explicativo quando não há ação disponível (botão Aprovar oculto) */}
+            {!podeAgir && !confirmandoReprovar && modo !== 'readonly' && (
+              <div className="border-t pt-4">
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Aprovação ainda não disponível</AlertTitle>
+                  <AlertDescription>
+                    {modo === 'cadastro' && solicitacao.status === 'cotacao_em_andamento' && (
+                      <>O botão <strong>Aprovar</strong> aparece aqui assim que o titular antigo assinar o Termo de Cancelamento (a solicitação muda para <em>Aguardando Cadastro</em>). Use a aba <strong>Termo</strong> para enviar.</>
+                    )}
+                    {modo === 'cadastro' && solicitacao.status !== 'cotacao_em_andamento' && solicitacao.status !== 'aguardando_cadastro' && (
+                      <>Esta solicitação não está mais sob análise do Cadastro (status atual: <strong>{STATUS_LABELS[solicitacao.status].label}</strong>). Acompanhe pela Timeline.</>
+                    )}
+                    {modo === 'monitoramento' && solicitacao.status !== 'aguardando_monitoramento' && (
+                      <>O botão <strong>Aprovar</strong> só aparece quando a solicitação está em <em>Aguardando Monitoramento</em>. Status atual: <strong>{STATUS_LABELS[solicitacao.status].label}</strong>.</>
+                    )}
+                  </AlertDescription>
+                </Alert>
               </div>
             )}
 
