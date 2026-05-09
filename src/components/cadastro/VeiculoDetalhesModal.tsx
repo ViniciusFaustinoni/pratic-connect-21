@@ -41,6 +41,7 @@ import { VincularRastreadorForm } from '@/components/cadastro/VincularRastreador
 import { VeiculoFinanceiroSGA } from '@/components/cadastro/VeiculoFinanceiroSGA';
 import { cn } from '@/lib/utils';
 import { formatPlacaExibicao } from '@/lib/placa-utils';
+import { EnriquecerVeiculoButton } from '@/components/cadastro/EnriquecerVeiculoButton';
 
 // ============================================
 // TYPES
