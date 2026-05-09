@@ -288,7 +288,7 @@ export default function Veiculos() {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -368,8 +368,8 @@ export default function Veiculos() {
         </Select>
       </div>
 
-      {/* Table */}
-      <Card>
+      {/* Table — desktop/tablet */}
+      <Card className="hidden md:block">
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-6 space-y-4">
@@ -416,6 +416,104 @@ export default function Veiculos() {
           )}
         </CardContent>
       </Card>
+
+      {/* Mobile cards */}
+      <div className="md:hidden space-y-2">
+        {isLoading ? (
+          [1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-24 w-full" />)
+        ) : filteredVeiculos.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Car className="h-10 w-10 text-muted-foreground/50" />
+              <h3 className="mt-3 font-semibold text-foreground">Nenhum veículo encontrado</h3>
+              <p className="mt-1 text-xs text-muted-foreground text-center">
+                {search || statusFilter !== 'all' ? 'Tente ajustar os filtros' : 'Nenhum veículo cadastrado ainda'}
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          filteredVeiculos.map((veiculo: any) => {
+            const veiculoStatus = (veiculo.status as StatusVeiculo) || (veiculo.ativo ? 'ativo' : 'cancelado');
+            const instalacoes = (veiculo.instalacoes as Array<{ status: string }> | undefined) || [];
+            const temInstalacaoAtiva = instalacoes.some((i) =>
+              ['pendente', 'agendada', 'em_execucao', 'concluida'].includes(i.status)
+            );
+            const labelOverride =
+              veiculoStatus === 'instalacao_pendente' && !temInstalacaoAtiva ? 'Aguardando Vistoria/Aprovação' : null;
+            return (
+              <Card
+                key={veiculo.id}
+                className="cursor-pointer active:scale-[0.99] transition-transform"
+                onClick={() => setSelectedVeiculoId(veiculo.id)}
+              >
+                <CardContent className="p-3">
+                  <div className="flex items-start gap-2.5">
+                    <div className="rounded-lg bg-primary/10 p-2 shrink-0">
+                      <Car className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm truncate">{veiculo.marca}</p>
+                          <p className="text-xs text-muted-foreground truncate">{veiculo.modelo}</p>
+                        </div>
+                        {canDeleteVeiculo && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 -mt-1 -mr-1 text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setVeiculoToDelete({ id: veiculo.id, placa: veiculo.placa });
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                        <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded border border-border">
+                          {veiculo.placa}
+                        </span>
+                        <Badge className={`${statusColors[veiculoStatus]} text-[10px] px-1.5 py-0.5`}>
+                          {labelOverride ?? STATUS_VEICULO_LABELS[veiculoStatus]}
+                        </Badge>
+                        {veiculo.uso_aplicativo && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 gap-1">
+                            <Smartphone className="h-2.5 w-2.5" />
+                            {veiculo.plataforma_app || 'App'}
+                          </Badge>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2 text-[11px]">
+                        <div>
+                          <span className="text-muted-foreground">Ano: </span>
+                          <span className="text-foreground">{veiculo.ano_fabricacao}/{veiculo.ano_modelo}</span>
+                        </div>
+                        <div className="truncate">
+                          <span className="text-muted-foreground">Cor: </span>
+                          <span className="text-foreground">{veiculo.cor || '-'}</span>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="text-muted-foreground">FIPE: </span>
+                          <span className="text-foreground font-medium">{formatCurrency(veiculo.valor_fipe)}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 mt-2 text-[11px] text-muted-foreground truncate">
+                        <User className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{veiculo.associado?.nome || 'Sem associado'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })
+        )}
+      </div>
 
       {/* Paginação server-side */}
       {totalRows > pageSize && (
