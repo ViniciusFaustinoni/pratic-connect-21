@@ -1,8 +1,10 @@
 import { Tutorial } from './types';
 import { cotacaoAteAtivacao } from './cotacao-ate-ativacao';
+import { trocaTitularidade } from './troca-titularidade';
 
 export const tutoriais: Tutorial[] = [
   cotacaoAteAtivacao,
+  trocaTitularidade,
 ];
 
 export function getTutorialBySlug(slug: string): Tutorial | undefined {
