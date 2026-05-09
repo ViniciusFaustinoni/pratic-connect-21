@@ -213,16 +213,16 @@ function SubstituicoesTab({ scopeAuthUserId }: { scopeAuthUserId?: string }) {
     <div className="space-y-4">
       <Tabs value={subTab} onValueChange={setSubTab}>
         <div className="flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between">
-          <TabsList>
-            <TabsTrigger value="pendentes">
+          <TabsList className="w-full sm:w-auto overflow-x-auto justify-start">
+            <TabsTrigger value="pendentes" className="flex-shrink-0">
               Pendentes {pendentesCount > 0 && (
                 <Badge variant="destructive" className="ml-1.5 text-xs px-1.5 py-0">{pendentesCount}</Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="aprovadas">Aprovadas</TabsTrigger>
-            <TabsTrigger value="rejeitadas">Rejeitadas</TabsTrigger>
-            <TabsTrigger value="efetivadas">Efetivadas</TabsTrigger>
-            <TabsTrigger value="todas">Todas</TabsTrigger>
+            <TabsTrigger value="aprovadas" className="flex-shrink-0">Aprovadas</TabsTrigger>
+            <TabsTrigger value="rejeitadas" className="flex-shrink-0">Rejeitadas</TabsTrigger>
+            <TabsTrigger value="efetivadas" className="flex-shrink-0">Efetivadas</TabsTrigger>
+            <TabsTrigger value="todas" className="flex-shrink-0">Todas</TabsTrigger>
           </TabsList>
 
           <div className="flex gap-2">
