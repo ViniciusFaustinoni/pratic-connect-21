@@ -549,7 +549,7 @@ export default function Associados() {
             )}
           </div>
           
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="hidden md:flex flex-wrap items-center gap-2">
             <Select value={statusFilter} onValueChange={(v) => handleFilterChange(setStatusFilter, v)}>
               <SelectTrigger className="w-[150px] h-9 text-xs bg-card">
                 <SelectValue placeholder="Status" />
