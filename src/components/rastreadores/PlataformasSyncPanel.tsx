@@ -180,9 +180,9 @@ function PlataformaSection({ plataforma }: { plataforma: Plataforma }) {
                 ) : pendentes.map((p: any) => (
                   <TableRow key={p.rastreador_id}>
                     <TableCell className="font-mono text-xs">{p.imei || '—'}</TableCell>
-                    <TableCell className="font-mono text-xs">{p.veiculo_placa || '—'}</TableCell>
+                    <TableCell className="font-mono text-xs">{p.placa || p.veiculo_placa || '—'}</TableCell>
                     <TableCell className="text-sm">{p.associado_nome || '—'}</TableCell>
-                    <TableCell><Badge variant="outline" className="text-xs">{p.motivo}</Badge></TableCell>
+                    <TableCell><Badge variant="outline" className="text-xs">{p.motivo || (p.veiculo_id && p.associado_id ? 'Aguardando sincronização' : !p.veiculo_id ? 'Sem veículo vinculado' : 'Sem associado vinculado')}</Badge></TableCell>
                     <TableCell className="text-right">
                       <Button size="sm" variant="outline" onClick={() => enqueue.mutate(p.rastreador_id)} disabled={enqueue.isPending}>
                         <Play className="h-3.5 w-3.5 mr-1.5" />Sincronizar
