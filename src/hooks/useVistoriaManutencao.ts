@@ -33,7 +33,7 @@ export function useVistoriasManutencao(filtros?: ManutencaoFiltros) {
   return useQuery({
     queryKey: ['vistorias-manutencao', filtros],
     queryFn: async () => {
-      let query = supabase
+      let query: any = (supabase as any)
         .from('servicos')
         .select(`
           id,

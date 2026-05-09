@@ -70,7 +70,7 @@ export function TimelineUnificada({ associadoId }: TimelineUnificadaProps) {
   const { data: contatos, isLoading: loadingContatos } = useQuery({
     queryKey: ['cobranca-contatos-timeline', associadoId],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from('cobranca_contatos')
         .select(`
           *,
