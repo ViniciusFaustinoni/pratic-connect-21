@@ -174,7 +174,7 @@ export function useConsultarMultas(filtros?: FiltrosMulta) {
   return useQuery({
     queryKey: ['multas-retirada', filtros],
     queryFn: async () => {
-      let query = supabase
+      let query = (supabase as any)
         .from('servicos')
         .select(`
           id,
