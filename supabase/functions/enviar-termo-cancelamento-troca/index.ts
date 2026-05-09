@@ -78,11 +78,15 @@ Deno.serve(async (req) => {
       await cancelarDocAutentique(AUTENTIQUE_TOKEN, solicitacao.termo_cancelamento_autentique_id);
     }
 
-    const { data: associadoAntigo } = await admin
+    const { data: associadoAntigo, error: assocErr } = await admin
       .from('associados')
-      .select('id, nome, cpf, rg, email, telefone, logradouro, numero, complemento, bairro, cidade, uf, cep, data_associacao, created_at')
+      .select('id, nome, cpf, rg, email, telefone, logradouro, numero, complemento, bairro, cidade, uf, cep, data_adesao, created_at')
       .eq('id', solicitacao.associado_antigo_id)
       .maybeSingle();
+    if (assocErr) {
+      console.error('[enviar-termo-cancelamento-troca] erro ao buscar associado:', assocErr);
+      throw new Error('Erro ao buscar associado antigo: ' + assocErr.message);
+    }
     if (!associadoAntigo) throw new Error('Associado antigo não encontrado');
     if (!associadoAntigo.email) throw new Error('Associado antigo sem email cadastrado');
 
