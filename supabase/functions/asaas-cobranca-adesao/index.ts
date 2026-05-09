@@ -389,6 +389,9 @@ serve(async (req) => {
               pix_qrcode: cobrancaExistenteDup.pix_qrcode,
               boleto_url: cobrancaExistenteDup.boleto_url,
               linha_digitavel: cobrancaExistenteDup.linha_digitavel,
+              link_pagamento: cobrancaExistenteDup.asaas_id
+                ? `https://www.asaas.com/c/${cobrancaExistenteDup.asaas_id}`
+                : undefined,
               valor: cobrancaExistenteDup.valor,
               vencimento: cobrancaExistenteDup.data_vencimento,
               message: 'Cobrança existente retornada (race condition tratada)',

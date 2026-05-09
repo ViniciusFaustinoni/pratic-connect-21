@@ -194,13 +194,17 @@ export function EtapaPagamentoCotacao({
       if (!data?.success) throw new Error(data?.error || 'Erro ao criar cobrança');
 
       console.log('[EtapaPagamento] Cobrança criada:', data.cobranca_id);
+      const linkPagamentoFinal =
+        data.link_pagamento ||
+        data.invoice_url ||
+        (data.asaas_id ? `https://www.asaas.com/c/${data.asaas_id}` : undefined);
       setCobranca({
         id: data.cobranca_id,
         pixCopiaECola: data.pix_copia_cola,
         pixQrCode: data.pix_qrcode,
         boletoUrl: data.boleto_url,
         linhaDigitavel: data.linha_digitavel,
-        linkPagamento: data.link_pagamento || data.invoice_url,
+        linkPagamento: linkPagamentoFinal,
         invoiceUrl: data.invoice_url,
         status: 'PENDING',
       });
