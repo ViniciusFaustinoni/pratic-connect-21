@@ -36,21 +36,25 @@ export function useRastreadoresSyncQueue(plataforma: Plataforma) {
     queryFn: async (): Promise<RastSyncQueueItem[]> => {
       const { data, error } = await (supabase as any)
         .from('rastreadores_sync_queue')
-        .select(`
-          *,
-          rastreador:rastreadores(imei),
-          veiculo:veiculos(placa),
-          associado:associados(nome)
-        `)
+        .select('*, rastreador:rastreadores!rastreadores_sync_queue_rastreador_id_fkey(imei)')
         .eq('plataforma', plataforma)
         .order('created_at', { ascending: false })
         .limit(200);
       if (error) throw error;
-      return (data || []).map((r: any) => ({
+      const rows = data || [];
+      const veicIds = Array.from(new Set(rows.map((r: any) => r.veiculo_id).filter(Boolean)));
+      const assocIds = Array.from(new Set(rows.map((r: any) => r.associado_id).filter(Boolean)));
+      const [veicRes, assocRes] = await Promise.all([
+        veicIds.length ? (supabase as any).from('veiculos').select('id, placa').in('id', veicIds) : Promise.resolve({ data: [] }),
+        assocIds.length ? (supabase as any).from('associados').select('id, nome').in('id', assocIds) : Promise.resolve({ data: [] }),
+      ]);
+      const veicMap = new Map((veicRes.data || []).map((v: any) => [v.id, v.placa]));
+      const assocMap = new Map((assocRes.data || []).map((a: any) => [a.id, a.nome]));
+      return rows.map((r: any) => ({
         ...r,
         imei: r.rastreador?.imei,
-        veiculo_placa: r.veiculo?.placa,
-        associado_nome: r.associado?.nome,
+        veiculo_placa: veicMap.get(r.veiculo_id) || null,
+        associado_nome: assocMap.get(r.associado_id) || null,
       }));
     },
   });
