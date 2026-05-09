@@ -368,8 +368,8 @@ export default function Veiculos() {
         </Select>
       </div>
 
-      {/* Table */}
-      <Card>
+      {/* Table — desktop/tablet */}
+      <Card className="hidden md:block">
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-6 space-y-4">
