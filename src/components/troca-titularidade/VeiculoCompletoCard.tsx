@@ -187,7 +187,7 @@ export function VeiculoCompletoCard({ veiculoId }: Props) {
       {mediaIdx !== null && (
         <MediaViewerModal
           open={mediaIdx !== null}
-          onClose={() => setMediaIdx(null)}
+          onOpenChange={(o) => { if (!o) setMediaIdx(null); }}
           items={mediaItems}
           initialIndex={mediaIdx}
         />
