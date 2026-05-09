@@ -311,6 +311,27 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
               </div>
             )}
 
+            {/* Footer explicativo quando não há ação disponível (botão Aprovar oculto) */}
+            {!podeAgir && !confirmandoReprovar && modo !== 'readonly' && (
+              <div className="border-t pt-4">
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Aprovação ainda não disponível</AlertTitle>
+                  <AlertDescription>
+                    {modo === 'cadastro' && solicitacao.status === 'cotacao_em_andamento' && (
+                      <>O botão <strong>Aprovar</strong> aparece aqui assim que o titular antigo assinar o Termo de Cancelamento (a solicitação muda para <em>Aguardando Cadastro</em>). Use a aba <strong>Termo</strong> para enviar.</>
+                    )}
+                    {modo === 'cadastro' && solicitacao.status !== 'cotacao_em_andamento' && solicitacao.status !== 'aguardando_cadastro' && (
+                      <>Esta solicitação não está mais sob análise do Cadastro (status atual: <strong>{STATUS_LABELS[solicitacao.status].label}</strong>). Acompanhe pela Timeline.</>
+                    )}
+                    {modo === 'monitoramento' && solicitacao.status !== 'aguardando_monitoramento' && (
+                      <>O botão <strong>Aprovar</strong> só aparece quando a solicitação está em <em>Aguardando Monitoramento</em>. Status atual: <strong>{STATUS_LABELS[solicitacao.status].label}</strong>.</>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              </div>
+            )}
+
             {confirmandoReprovar && (
               <div className="border-t pt-4 space-y-3">
                 <Label htmlFor="motivo">Motivo da reprovação *</Label>
