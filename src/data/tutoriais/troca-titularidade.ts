@@ -2,6 +2,7 @@ import { Tutorial } from './types';
 import novaCotacaoBotao from '@/assets/tutoriais/nova-cotacao-botao.png';
 import tipoVendaModal from '@/assets/tutoriais/tipo-venda-modal.png';
 import trocaTitularidadeBusca from '@/assets/tutoriais/troca-titularidade-busca.png';
+import trocaTitularidadeNovoTitular from '@/assets/tutoriais/troca-titularidade-novo-titular.png';
 
 export const trocaTitularidade: Tutorial = {
   id: 'troca-titularidade',
@@ -50,5 +51,18 @@ export const trocaTitularidade: Tutorial = {
         'O badge "ativo" ao lado do nome confirma que o associado pode ceder a titularidade.',
       ],
     },
+    {
+      numero: 4,
+      titulo: 'Selecione o veículo e cadastre o novo titular',
+      descricao:
+        'Selecionado o associado anterior, abre o painel "Troca de Titularidade" com a lista de veículos vinculados a ele (locais e os trazidos do SGA Hinova). Escolha o veículo a transferir e preencha os dados do novo titular: nome completo, CPF, e-mail e telefone/WhatsApp. Esses dados criam a cotação que será enviada para assinatura do novo dono.',
+      imagem: trocaTitularidadeNovoTitular,
+      dicas: [
+        'A lista mostra todos os veículos do associado anterior — confira marca/modelo/placa antes de seguir.',
+        'CPF e nome do novo titular são obrigatórios; telefone/WhatsApp é por onde o link da proposta será enviado.',
+        'Após preencher, o sistema gera o link público; a solicitação passa por aprovação do Cadastro e do Monitoramento antes da assinatura.',
+      ],
+    },
   ],
 };
+
