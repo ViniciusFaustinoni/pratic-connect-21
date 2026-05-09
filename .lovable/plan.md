@@ -1,48 +1,62 @@
-## Problema
+## Diagnóstico
 
-No card "Veículos em Análise" (/cadastro/veiculos) o veículo da troca de titularidade aparece com **Valor FIPE: N/A**.
+O problema da FIPE faltante é só a ponta visível. A causa de fundo é que a troca de titularidade **herda passivamente** o que estiver gravado em `veiculos`. Para o caso da screenshot:
 
-A causa: `criar-solicitacao-troca-titularidade` apenas **copia** `valor_fipe` / `codigo_fipe` do registro original em `veiculos` (linhas 65, 154-155). Se o veículo antigo nunca teve FIPE preenchida (cadastro antigo, importação, etc.), a troca herda o vazio — diferente da cotação normal, que **sempre** consulta a FIPE atualizada via `fipe-lookup` (hook `useFipe.getByPlaca` + busca por marca/modelo/ano).
-
-## Decisão de "momento correto"
-
-A FIPE precisa estar disponível em três pontos:
-
-1. **Card do veículo em análise** (tela atual da screenshot)
-2. **Cotação do novo titular** (cálculo de mensalidade e regra do rastreador)
-3. **Snapshot do contrato** ao efetivar
-
-Todos esses pontos lêem de `veiculos.valor_fipe` ou da cópia em `cotacoes.valor_fipe`. Logo, o **único momento que resolve os três** é a **criação da solicitação** (edge `criar-solicitacao-troca-titularidade`), antes de inserir a cotação. É também o momento em que a equipe de Cadastro abre o registro pela primeira vez — então o valor já chega calculado.
+- Cor, combustível, FIPE, etc. estão `NULL` no registro do veículo (cadastros legados / importações antigas).
+- O modal de troca em `/cadastro/processos` mostra apenas 1 linha de veículo (marca/modelo/ano/placa). Não traz rastreador, fotos, documentos, contrato — embora todas essas informações estejam disponíveis via hooks já existentes (`useVeiculoCompleto`, `useFotosVistoriaPorVeiculo`, `useDocumentosAssociadoCompleto`, `useEventosVeiculo`).
+- O modal de Cadastro › Veículos já é completo, mas hoje só consegue exibir o que tem no banco — não tem botão para enriquecer dados em falta.
 
 ## Mudanças
 
-### 1. `supabase/functions/criar-solicitacao-troca-titularidade/index.ts`
+### 1. Enriquecimento automático na criação da troca
+**Arquivo:** `supabase/functions/criar-solicitacao-troca-titularidade/index.ts`
 
-Logo após carregar `veiculo` e antes do `insert` em `cotacoes`:
+Hoje só consulta `fipe-lookup` quando FIPE/código FIPE faltam. Vamos generalizar:
 
-- Se `veiculo.valor_fipe` ausente/zero **ou** `veiculo.codigo_fipe` ausente, chamar a edge `fipe-lookup` (mesmo backend usado pela cotação):
-  - Tentativa 1: `action=buscar-por-nome` com `marca` + `modelo` + `ano`. Tipo é deduzido da categoria (`carros` para automóvel, `motos` para moto) — usar `marcas_modelos.tipo_veiculo` se houver, senão default `carros`.
-  - Tentativa 2 (fallback se a primeira falhar): consulta por placa (a edge `fipe-lookup` já tem essa rota interna usada pelo `useFipe.getByPlaca`).
-- Se obtiver resultado:
-  - **Atualiza `veiculos`** (`valor_fipe`, `codigo_fipe`, e `marca`/`modelo`/`ano` se vierem normalizados) — assim o card de Cadastro › Veículos passa a mostrar a FIPE.
-  - Usa o valor encontrado nas chaves `valor_fipe` / `codigo_fipe` do insert em `cotacoes`.
-- Se a consulta falhar (timeout, sem retorno), segue o fluxo atual (insere com `null`) e loga aviso — não bloqueia a criação da troca.
-- Toda a chamada é envelopada em `try/catch` e usa `Promise.race` com timeout de ~6s para não atrasar a resposta da edge.
+- Sempre que o veículo tiver **qualquer um** dos campos `cor`, `combustivel`, `valor_fipe`, `codigo_fipe`, `ano_modelo`, `ano_fabricacao` ausentes, a edge dispara também a edge `plate-lookup` (mesma usada pela cotação para puxar dados oficiais por placa) — em paralelo com `fipe-lookup`.
+- Resultados são mesclados com prioridade: dado já existente no banco > `plate-lookup` > `fipe-lookup`. Nunca sobrescreve dado preenchido (não destrói cor digitada manualmente, p.ex.).
+- Atualiza `veiculos` com tudo que veio: `cor`, `combustivel`, `valor_fipe`, `codigo_fipe`, `ano_modelo`, `ano_fabricacao`. A cotação criada já carrega `valor_fipe` e `codigo_fipe` enriquecidos.
+- Tudo em `try/catch` com timeout — falhas não bloqueiam a criação.
 
-### 2. UI — sem alteração obrigatória
+### 2. Botão "Atualizar dados via placa" no modal Cadastro › Veículos
+**Arquivo:** `src/components/cadastro/VeiculoDetalhesModal.tsx`
 
-Como o card e o modal já leem `valor_fipe` da tabela `veiculos`, nenhum componente precisa mudar. O card que hoje exibe "N/A" passará a exibir o valor automaticamente.
+Na aba **Resumo**, ao lado do título "Veículo", adicionar um botão pequeno (ícone refresh + label) visível apenas quando algum campo (cor / combustível / FIPE) estiver vazio:
 
-(Opcional — não incluído no escopo deste plano: botão manual "Recalcular FIPE" no `ModalDetalhesTroca` para casos em que o valor precisa ser refrescado depois.)
+- Chama as edges `plate-lookup` e `fipe-lookup` direto do cliente (mesmas que a cotação usa).
+- Faz `update` na tabela `veiculos` (apenas campos hoje vazios).
+- Invalida o react-query do veículo para refletir na hora.
+- Toast de sucesso/falha.
 
-### Detalhes técnicos
+Isso resolve casos legados sem precisar refazer a troca.
 
-- Reuso de infraestrutura: a edge `fipe-lookup` já existe (`supabase/functions/fipe-lookup/index.ts`) e é usada pela `Cotador.tsx`, `EtapaConsultaFipe.tsx`, `StepNovoVeiculo.tsx` (fluxo de substituição de veículo). Mesmo padrão.
-- Chamada server-to-server via `fetch` direto para `${SUPABASE_URL}/functions/v1/fipe-lookup?...` (a função `fipe-lookup` é pública/`verify_jwt=false`, conforme uso no front).
-- Categoria: ler `marcas_modelos.tipo_veiculo` pelo `veiculo.marca`+`veiculo.modelo`; default `carros`.
-- Não tocar em `efetivar-troca-titularidade` — ele já lê `valor_fipe` de `veiculos` no momento da efetivação, então herdará o valor atualizado.
+### 3. Modal de Troca de Titularidade — passar a mostrar TUDO
+**Arquivo:** `src/components/troca-titularidade/ModalDetalhesTroca.tsx`
 
-### Fora de escopo
+Substituir o card mínimo "Veículo" (3 linhas) por um **bloco rico** dentro da aba **Dados**, dividido em sub-seções colapsáveis (default abertas as 2 primeiras):
 
-- Não cria UI de "recalcular FIPE manualmente" (posso adicionar em seguida se quiser).
-- Não altera o fluxo de cotação normal nem de substituição (já fazem o lookup).
+1. **Veículo** (full): Marca, Modelo, Ano (Fab/Mod), Cor, Placa, Chassi, Renavam, Combustível, **Valor FIPE**, Status atual, Uso App.
+2. **Rastreador**: código, IMEI, plataforma (Softruck/Rede), status, último sinal — ou aviso "Sem rastreador instalado".
+3. **Contrato vigente do antigo**: nº, plano, valor mensal, status, data início.
+4. **Fotos da última vistoria** (thumbs 80×80, click amplia em lightbox já existente). Reaproveita `useFotosVistoriaPorVeiculo` + `MediaViewerModal`.
+5. **Documentos do associado antigo** (CNH, CRLV, etc.) — lista vinda de `useDocumentosAssociadoCompleto`, com link para abrir o doc.
+6. **Eventos do veículo** (resumo: nº de sinistros + assistências) com link "Ver todos" que abre o `VeiculoDetalhesModal` completo.
+
+Reaproveita os hooks `useVeiculoCompleto`, `useFotosVistoriaPorVeiculo`, `useDocumentosAssociadoCompleto`, `useEventosVeiculo` — nenhum hook novo.
+
+Adiciona também o mesmo botão **"Atualizar dados via placa"** (item 2) no topo do bloco "Veículo" — útil para o operador que abriu a troca antes do enriquecimento automático.
+
+### 4. (Bônus baixo custo) Largura do modal de troca
+O `DialogContent` atual é `max-w-3xl`. Com as novas seções, sobe para `max-w-4xl` + `max-h-[92vh]` com `ScrollArea` interno (mesmo padrão do `VeiculoDetalhesModal`).
+
+## Fora de escopo
+
+- Não cria UI separada para "histórico de auditoria de enriquecimento" — só log no console da edge.
+- Não altera o fluxo do novo titular na cotação pública (esse já refaz a consulta naturalmente quando ele abre o link).
+- Não toca em `efetivar-troca-titularidade` — ele já lê de `veiculos` no momento certo.
+
+## Resultado esperado para o caso da screenshot
+
+Após o enriquecimento (e o operador clicando "Atualizar dados via placa" uma vez no caso retroativo):
+- Cor, combustível e FIPE preenchidos no card de Cadastro › Veículos.
+- Modal da troca em /cadastro/processos passa a mostrar veículo completo + rastreador + fotos + documentos do associado, tudo em uma só tela.

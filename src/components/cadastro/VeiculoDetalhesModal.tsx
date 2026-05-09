@@ -41,6 +41,7 @@ import { VincularRastreadorForm } from '@/components/cadastro/VincularRastreador
 import { VeiculoFinanceiroSGA } from '@/components/cadastro/VeiculoFinanceiroSGA';
 import { cn } from '@/lib/utils';
 import { formatPlacaExibicao } from '@/lib/placa-utils';
+import { EnriquecerVeiculoButton } from '@/components/cadastro/EnriquecerVeiculoButton';
 
 // ============================================
 // TYPES
@@ -182,7 +183,10 @@ export function VeiculoDetalhesModal({ open, onClose, veiculoId }: VeiculoDetalh
                 <TabsContent value="resumo" className="p-6 m-0 space-y-6">
                   {/* Veículo */}
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Veículo</h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Veículo</h3>
+                      <EnriquecerVeiculoButton veiculo={veiculo} />
+                    </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <InfoItem label="Marca" value={veiculo.marca} />
                       <InfoItem label="Modelo" value={veiculo.modelo} />
