@@ -25,7 +25,7 @@ export const aprovacaoTrocaTitularidadeCadastro: Tutorial = {
       numero: 2,
       titulo: 'Abra os Detalhes e revise as abas',
       descricao:
-        'Clique em "Detalhes" para abrir o drawer da solicitação. Confira na ordem: Dados (titular antigo, novo titular, veículo, cotação vinculada), Análise prévia (snapshot só é gerado após você aprovar), Financeiro Antigo (precisa estar adimplente) e Termo (status do Termo de Cancelamento).',
+        'Clique em "Detalhes" para abrir o drawer da solicitação. Confira na ordem: Dados (titular antigo, novo titular, veículo, cotação vinculada), Termo (status do Termo de Cancelamento — sua próxima ação), Análise prévia (snapshot só é gerado após você aprovar) e Financeiro Antigo (precisa estar adimplente).',
       dicas: [
         'Se houver débito em aberto no SGA, um alerta vermelho aparece no topo — a aprovação fica bloqueada até a quitação.',
         'Use o botão "Abrir cotação" na aba Dados para revisar o que o novo titular preencheu.',
