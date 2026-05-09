@@ -264,7 +264,8 @@ export default function CalendarioInstalacoesPage() {
 
       {/* CALENDÁRIO */}
       <Card>
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-x-auto">
+         <div className="min-w-[720px]">
           {/* Header dias da semana */}
           <div className="grid grid-cols-7 border-b">
             {DIAS_SEMANA.map((dia) => (
