@@ -61,8 +61,8 @@ const DuplicarCotacaoDialog = lazy(() =>
 const NovaEntradaDialog = lazy(() =>
   import('@/components/vendas/OutrasEntradasMenu').then((m) => ({ default: m.NovaEntradaDialog }))
 );
-const CotacaoDetalheDrawer = lazy(() =>
-  import('@/components/cotacoes/CotacaoDetalheDrawer').then((m) => ({ default: m.CotacaoDetalheDrawer }))
+const CotacaoDetalheModal = lazy(() =>
+  import('@/components/cotacoes/CotacaoDetalheModal').then((m) => ({ default: m.CotacaoDetalheModal }))
 );
 import type { DuplicarCotacaoConfirmPayload } from '@/components/cotacoes/DuplicarCotacaoDialog';
 import { toast } from 'sonner';
@@ -1394,7 +1394,7 @@ export default function Cotacoes() {
 
       {cotacaoDetalheId && (
         <Suspense fallback={null}>
-          <CotacaoDetalheDrawer
+          <CotacaoDetalheModal
             cotacaoId={cotacaoDetalheId}
             open={!!cotacaoDetalheId}
             onOpenChange={(open) => {

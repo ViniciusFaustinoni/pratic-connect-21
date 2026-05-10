@@ -9,7 +9,8 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertCircle, Shield, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -40,13 +41,13 @@ const formatCurrency = (value: number | null | undefined) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 };
 
-interface CotacaoDetalheDrawerProps {
+interface CotacaoDetalheModalProps {
   cotacaoId: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export function CotacaoDetalheDrawer({ cotacaoId, open, onOpenChange }: CotacaoDetalheDrawerProps) {
+export function CotacaoDetalheModal({ cotacaoId, open, onOpenChange }: CotacaoDetalheModalProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { profile } = useAuth();
@@ -59,6 +60,7 @@ export function CotacaoDetalheDrawer({ cotacaoId, open, onOpenChange }: CotacaoD
   const { data: cotaMinDefault = 1200 } = useCotaMinimaDefault();
   const cotaFallbackStr = `${cotaPercDefault}% (mín R$ ${cotaMinDefault.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`;
 
+  const [tab, setTab] = useState('resumo');
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showVincularModal, setShowVincularModal] = useState(false);
   const [showContratoWizard, setShowContratoWizard] = useState(false);
@@ -87,8 +89,6 @@ Olá ${cotacao.leads?.nome?.split(' ')[0] || 'Cliente'}!
 *Plano:* ${cotacao.planos?.nome || 'Plano Selecionado'}
 *Adesão:* ${formatCurrency(cotacao.valor_adesao)}
 *Mensalidade:* ${formatCurrency(cotacao.valor_total_mensal)}
-
-_Cotação válida por 7 dias_
 
 Ficou com alguma dúvida? Estou à disposição!
     `.trim();
@@ -169,7 +169,6 @@ Ficou com alguma dúvida? Estou à disposição!
       }
 
       setShowDuplicarDialog(false);
-      // Reabrir drawer com a nova cotação
       onOpenChange(false);
       setTimeout(() => {
         navigate(`/vendas/cotacoes?abrir=${novaCotacao.id}`);
@@ -252,8 +251,8 @@ Ficou com alguma dúvida? Estou à disposição!
       });
 
       toast.success('PDF gerado com sucesso!');
-    } catch (error) {
-      console.error('Erro ao gerar PDF:', error);
+    } catch (err) {
+      console.error('Erro ao gerar PDF:', err);
       toast.error('Erro ao gerar PDF');
     } finally {
       setIsGerando(false);
@@ -295,224 +294,235 @@ Ficou com alguma dúvida? Estou à disposição!
   };
   const planoRecomendadoId = getPlanoRecomendado();
 
+  const renderPlanos = () => (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5" />
+            {planosExibir.length > 1 ? 'Planos para Comparação' : 'Plano Selecionado'}
+          </CardTitle>
+          {planosExibir.length < 3 && (
+            <Button variant="outline" size="sm" disabled>
+              <Plus className="h-4 w-4 mr-1" />
+              Adicionar
+            </Button>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {planosExibir.length > 0 ? (
+          <div className={cn(
+            "grid gap-4",
+            planosExibir.length === 1 && "md:grid-cols-1 max-w-md mx-auto",
+            planosExibir.length === 2 && "md:grid-cols-2",
+            planosExibir.length >= 3 && "md:grid-cols-2 lg:grid-cols-3"
+          )}>
+            {planosExibir.map((plano, idx) => (
+              <PlanoCardComparativo
+                key={plano.id}
+                plano={plano}
+                valorAdesao={cotacao?.valor_adesao || 0}
+                isRecomendado={plano.id === planoRecomendadoId}
+                isSelecionado={false}
+                indice={planosExibir.length > 1 ? idx : undefined}
+                categoriaVeiculo={categoriaVeiculo}
+                onVerDetalhes={setPlanoDetalhesModal}
+                isCoberturaRemovida={isCoberturaRemovida}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-muted-foreground">
+            <Shield className="h-12 w-12 mx-auto mb-3 opacity-30" />
+            <p>Nenhum plano selecionado</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        className="w-full sm:max-w-5xl overflow-y-auto p-0"
-      >
-        <div className="p-6 space-y-6">
-          {isLoading && (
-            <div className="space-y-6">
-              <Skeleton className="h-8 w-48" />
-              <Skeleton className="h-40 w-full" />
-              <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-                <div className="space-y-4">
-                  <Skeleton className="h-48" />
-                  <Skeleton className="h-64" />
-                </div>
-                <div className="space-y-4">
-                  <Skeleton className="h-64" />
-                  <Skeleton className="h-48" />
-                </div>
-              </div>
-            </div>
-          )}
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] flex flex-col p-0 gap-0">
+        {isLoading && (
+          <div className="p-6 space-y-6">
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-40 w-full" />
+            <Skeleton className="h-10 w-80" />
+            <Skeleton className="h-64 w-full" />
+          </div>
+        )}
 
-          {!isLoading && (error || !cotacao) && (
-            <div className="flex min-h-[40vh] items-center justify-center">
-              <Card className="max-w-md text-center">
-                <CardContent className="pt-6">
-                  <AlertCircle className="mx-auto h-12 w-12 text-destructive" />
-                  <h2 className="mt-4 text-xl font-semibold">Cotação não encontrada</h2>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    A cotação solicitada não existe ou foi removida.
-                  </p>
-                  <Button className="mt-4" variant="outline" onClick={() => onOpenChange(false)}>
-                    Fechar
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-          )}
+        {!isLoading && (error || !cotacao) && (
+          <div className="flex min-h-[40vh] items-center justify-center p-6">
+            <Card className="max-w-md text-center">
+              <CardContent className="pt-6">
+                <AlertCircle className="mx-auto h-12 w-12 text-destructive" />
+                <h2 className="mt-4 text-xl font-semibold">Cotação não encontrada</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  A cotação solicitada não existe ou foi removida.
+                </p>
+                <Button className="mt-4" variant="outline" onClick={() => onOpenChange(false)}>
+                  Fechar
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
-          {!isLoading && cotacao && (
-            <>
+        {!isLoading && cotacao && (
+          <Tabs value={tab} onValueChange={setTab} className="flex flex-col flex-1 min-h-0">
+            {/* Header fixo */}
+            <div className="border-b px-6 pt-6 pb-4 space-y-4">
               <CotacaoHeader cotacao={cotacao} />
-
               <TrocaTitularidadeBadge
                 cotacaoId={cotacao.id}
                 tipoEntrada={(cotacao.dados_extras as { tipo_entrada?: string } | null)?.tipo_entrada}
               />
+              <TabsList className="grid grid-cols-4 w-full">
+                <TabsTrigger value="resumo">Resumo</TabsTrigger>
+                <TabsTrigger value="planos">Planos</TabsTrigger>
+                <TabsTrigger value="cliente">Cliente & Veículo</TabsTrigger>
+                <TabsTrigger value="historico">Histórico</TabsTrigger>
+              </TabsList>
+            </div>
 
-              <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-                <div className="space-y-6">
-                  <Card>
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="flex items-center gap-2">
-                          <Shield className="h-5 w-5" />
-                          {planosExibir.length > 1 ? 'Planos para Comparação' : 'Plano Selecionado'}
-                        </CardTitle>
-                        {planosExibir.length < 3 && (
-                          <Button variant="outline" size="sm" disabled>
-                            <Plus className="h-4 w-4 mr-1" />
-                            Adicionar
-                          </Button>
-                        )}
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      {planosExibir.length > 0 ? (
-                        <div className={cn(
-                          "grid gap-4",
-                          planosExibir.length === 1 && "md:grid-cols-1 max-w-md mx-auto",
-                          planosExibir.length === 2 && "md:grid-cols-2",
-                          planosExibir.length >= 3 && "md:grid-cols-2 lg:grid-cols-3"
-                        )}>
-                          {planosExibir.map((plano, idx) => (
-                            <PlanoCardComparativo
-                              key={plano.id}
-                              plano={plano}
-                              valorAdesao={cotacao.valor_adesao || 0}
-                              isRecomendado={plano.id === planoRecomendadoId}
-                              isSelecionado={false}
-                              indice={planosExibir.length > 1 ? idx : undefined}
-                              categoriaVeiculo={categoriaVeiculo}
-                              onVerDetalhes={setPlanoDetalhesModal}
-                              isCoberturaRemovida={isCoberturaRemovida}
-                            />
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <Shield className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                          <p>Nenhum plano selecionado</p>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  <CotacaoClienteVeiculo
-                    cotacao={cotacao}
-                    onVincularLead={() => setShowVincularModal(true)}
-                    onTrocarLead={() => setShowVincularModal(true)}
-                  />
+            {/* Conteúdo rolável */}
+            <div className="flex-1 overflow-y-auto px-6 py-6">
+              <TabsContent value="resumo" className="mt-0 space-y-6">
+                <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+                  <div className="space-y-6">
+                    {renderPlanos()}
+                  </div>
+                  <div className="space-y-4">
+                    <CotacaoAcoes
+                      cotacao={cotacao}
+                      onBaixarPDF={handleBaixarPDF}
+                      onEnviarWhatsApp={handleWhatsApp}
+                      onEnviarEmail={() => setShowEmailModal(true)}
+                      onDuplicar={handleDuplicar}
+                      onEditar={handleEditar}
+                      onMudarStatus={handleMudarStatus}
+                      onExcluir={handleExcluir}
+                      onAceitarEContrato={handleAceitarEContrato}
+                      onCopiarLink={handleCopiarLink}
+                      isAtualizando={isAtualizando || atualizarStatusMutation.isPending}
+                      isExcluindo={excluirMutation.isPending}
+                      isGerando={isGerando}
+                      isDuplicando={duplicarMutation.isPending}
+                      canDelete={
+                        isDiretor ||
+                        (cotacao?.vendedor_id === profile?.id && !contratoAssinado && cotacao?.status === 'rascunho')
+                      }
+                      deleteReason={
+                        contratoAssinado
+                          ? 'Cotações com contrato ativo não podem ser excluídas'
+                          : !(isDiretor || cotacao?.vendedor_id === profile?.id)
+                            ? 'Apenas o vendedor responsável ou diretores podem excluir'
+                            : cotacao?.status !== 'rascunho' && !isDiretor
+                              ? 'O consultor só pode excluir cotações em rascunho'
+                              : undefined
+                      }
+                      contratoAssinado={contratoAssinado}
+                    />
+                    <CotacaoVendedor vendedor={cotacao.vendedor} />
+                  </div>
                 </div>
+              </TabsContent>
 
-                <div className="space-y-4">
-                  <CotacaoAcoes
-                    cotacao={cotacao}
-                    onBaixarPDF={handleBaixarPDF}
-                    onEnviarWhatsApp={handleWhatsApp}
-                    onEnviarEmail={() => setShowEmailModal(true)}
-                    onDuplicar={handleDuplicar}
-                    onEditar={handleEditar}
-                    onMudarStatus={handleMudarStatus}
-                    onExcluir={handleExcluir}
-                    onAceitarEContrato={handleAceitarEContrato}
-                    onCopiarLink={handleCopiarLink}
-                    isAtualizando={isAtualizando || atualizarStatusMutation.isPending}
-                    isExcluindo={excluirMutation.isPending}
-                    isGerando={isGerando}
-                    isDuplicando={duplicarMutation.isPending}
-                    canDelete={
-                      isDiretor ||
-                      (cotacao?.vendedor_id === profile?.id && !contratoAssinado && cotacao?.status === 'rascunho')
-                    }
-                    deleteReason={
-                      contratoAssinado
-                        ? 'Cotações com contrato ativo não podem ser excluídas'
-                        : !(isDiretor || cotacao?.vendedor_id === profile?.id)
-                          ? 'Apenas o vendedor responsável ou diretores podem excluir'
-                          : cotacao?.status !== 'rascunho' && !isDiretor
-                            ? 'O consultor só pode excluir cotações em rascunho'
-                            : undefined
-                    }
-                    contratoAssinado={contratoAssinado}
-                  />
+              <TabsContent value="planos" className="mt-0">
+                {renderPlanos()}
+              </TabsContent>
 
-                  <CotacaoTimeline cotacao={cotacao} />
+              <TabsContent value="cliente" className="mt-0">
+                <CotacaoClienteVeiculo
+                  cotacao={cotacao}
+                  onVincularLead={() => setShowVincularModal(true)}
+                  onTrocarLead={() => setShowVincularModal(true)}
+                />
+              </TabsContent>
 
-                  <CotacaoVendedor vendedor={cotacao.vendedor} />
-                </div>
-              </div>
+              <TabsContent value="historico" className="mt-0">
+                <CotacaoTimeline cotacao={cotacao} />
+              </TabsContent>
+            </div>
 
-              <PlanoDetalhesModal
-                open={!!planoDetalhesModal}
-                onOpenChange={(o) => !o && setPlanoDetalhesModal(null)}
-                plano={planoDetalhesModal}
-                valorAdesao={cotacao.valor_adesao || 0}
-                categoriaVeiculo={categoriaVeiculo}
-                isCoberturaRemovida={isCoberturaRemovida}
-              />
+            {/* Modais filhos */}
+            <PlanoDetalhesModal
+              open={!!planoDetalhesModal}
+              onOpenChange={(o) => !o && setPlanoDetalhesModal(null)}
+              plano={planoDetalhesModal}
+              valorAdesao={cotacao.valor_adesao || 0}
+              categoriaVeiculo={categoriaVeiculo}
+              isCoberturaRemovida={isCoberturaRemovida}
+            />
 
-              <EnviarEmailModal
-                open={showEmailModal}
-                onOpenChange={setShowEmailModal}
-                cotacao={cotacao}
-              />
+            <EnviarEmailModal
+              open={showEmailModal}
+              onOpenChange={setShowEmailModal}
+              cotacao={cotacao}
+            />
 
-              <VincularLeadModal
-                open={showVincularModal}
-                onOpenChange={setShowVincularModal}
+            <VincularLeadModal
+              open={showVincularModal}
+              onOpenChange={setShowVincularModal}
+              cotacaoId={cotacao.id}
+              leadAtualId={cotacao.lead_id}
+              onSuccess={() => {
+                queryClient.invalidateQueries({ queryKey: ['cotacoes', cotacaoId] });
+              }}
+            />
+
+            {cotacao.lead_id && (
+              <ContratoWizard
+                open={showContratoWizard}
+                onOpenChange={setShowContratoWizard}
                 cotacaoId={cotacao.id}
-                leadAtualId={cotacao.lead_id}
-                onSuccess={() => {
-                  queryClient.invalidateQueries({ queryKey: ['cotacoes', cotacaoId] });
+                onContratoCreated={(contratoId) => {
+                  setShowContratoWizard(false);
+                  onOpenChange(false);
+                  navigate(`/vendas/contratos/${contratoId}`);
                 }}
               />
+            )}
 
-              {cotacao.lead_id && (
-                <ContratoWizard
-                  open={showContratoWizard}
-                  onOpenChange={setShowContratoWizard}
-                  cotacaoId={cotacao.id}
-                  onContratoCreated={(contratoId) => {
-                    setShowContratoWizard(false);
-                    onOpenChange(false);
-                    navigate(`/vendas/contratos/${contratoId}`);
-                  }}
-                />
-              )}
-
-              {!contratoAssinado && (
-                <CotacaoFormDialog
-                  open={showEditarModal}
-                  onOpenChange={setShowEditarModal}
-                  cotacaoParaEditar={cotacao}
-                  onSuccess={() => {
-                    setShowEditarModal(false);
-                    queryClient.invalidateQueries({ queryKey: ['cotacoes', cotacaoId] });
-                    registrarEventoCotacao({
-                      cotacaoId: cotacao.id,
-                      acao: 'editada',
-                      autorId: profile?.id,
-                      autorNome: profile?.nome,
-                    });
-                    toast.success('Cotação atualizada com sucesso!');
-                  }}
-                />
-              )}
-
-              <DuplicarCotacaoDialog
-                open={showDuplicarDialog}
-                onOpenChange={setShowDuplicarDialog}
-                cotacao={cotacao ? {
-                  id: cotacao.id,
-                  numero: cotacao.numero,
-                  vendedor_id: cotacao.vendedor_id,
-                  status: cotacao.status,
-                } : null}
-                vendedorOriginalNome={cotacao?.vendedor?.nome || null}
-                currentUserId={profile?.id}
-                isSubmitting={duplicarMutation.isPending}
-                onConfirm={handleConfirmarDuplicacao}
+            {!contratoAssinado && (
+              <CotacaoFormDialog
+                open={showEditarModal}
+                onOpenChange={setShowEditarModal}
+                cotacaoParaEditar={cotacao}
+                onSuccess={() => {
+                  setShowEditarModal(false);
+                  queryClient.invalidateQueries({ queryKey: ['cotacoes', cotacaoId] });
+                  registrarEventoCotacao({
+                    cotacaoId: cotacao.id,
+                    acao: 'editada',
+                    autorId: profile?.id,
+                    autorNome: profile?.nome,
+                  });
+                  toast.success('Cotação atualizada com sucesso!');
+                }}
               />
-            </>
-          )}
-        </div>
-      </SheetContent>
-    </Sheet>
+            )}
+
+            <DuplicarCotacaoDialog
+              open={showDuplicarDialog}
+              onOpenChange={setShowDuplicarDialog}
+              cotacao={cotacao ? {
+                id: cotacao.id,
+                numero: cotacao.numero,
+                vendedor_id: cotacao.vendedor_id,
+                status: cotacao.status,
+              } : null}
+              vendedorOriginalNome={cotacao?.vendedor?.nome || null}
+              currentUserId={profile?.id}
+              isSubmitting={duplicarMutation.isPending}
+              onConfirm={handleConfirmarDuplicacao}
+            />
+          </Tabs>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
