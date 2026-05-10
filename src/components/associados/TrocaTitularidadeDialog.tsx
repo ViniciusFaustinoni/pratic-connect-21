@@ -255,81 +255,67 @@ export function TrocaTitularidadeDialog({
         <div className="space-y-4 pt-2">
           <div className="space-y-2">
             <Label>Veículo a transferir *</Label>
-            {usandoFallback ? (
-              <div className="space-y-2">
-                <select
-                  className="w-full border rounded h-10 px-3 bg-background"
-                  value={veiculoId || ''}
-                  onChange={(e) => setVeiculoId(e.target.value)}
-                >
-                  <option value="">Selecione…</option>
-                  {veiculos.map(v => <option key={v.id} value={v.id}>{v.descricao}</option>)}
-                </select>
-              </div>
-            ) : semCodigoHinova ? (
-              syncErro ? (
+            {(() => {
+              // Se já temos veículos para escolher (de qualquer fonte: SGA mapeado ou fallback local),
+              // renderiza UM ÚNICO select. Caso contrário, mostra o estado correspondente.
+              if (veiculos.length > 0) {
+                return (
+                  <select
+                    className="w-full border rounded h-10 px-3 bg-background"
+                    value={veiculoId || ''}
+                    onChange={(e) => setVeiculoId(e.target.value)}
+                  >
+                    <option value="">Selecione…</option>
+                    {veiculos.map(v => <option key={v.id} value={v.id}>{v.descricao}</option>)}
+                  </select>
+                );
+              }
+              if (semCodigoHinova) {
+                return syncErro ? (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription className="text-sm space-y-2">
+                      <div>Falha ao sincronizar com o SGA: {syncErro}</div>
+                      <Button size="sm" variant="outline" onClick={() => handleSincronizarHinova()}>
+                        Tentar novamente
+                      </Button>
+                    </AlertDescription>
+                  </Alert>
+                ) : (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Sincronizando associado com o SGA…
+                  </div>
+                );
+              }
+              if (carregando || fallback.isLoading) {
+                return (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Buscando veículos…
+                  </div>
+                );
+              }
+              if (sgaTransitorioVisivel) {
+                return (
+                  <SgaTransientAlert
+                    motivo={sgaMotivo}
+                    onRetry={handleRetrySga}
+                    loading={sga.isFetching}
+                    titulo="Não foi possível consultar o SGA agora"
+                    descricao="A API do Hinova respondeu com erro temporário. Tente novamente em instantes."
+                  />
+                );
+              }
+              return (
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription className="text-sm space-y-2">
-                    <div>Falha ao sincronizar com o SGA: {syncErro}</div>
-                    <Button size="sm" variant="outline" onClick={() => handleSincronizarHinova()}>
-                      Tentar novamente
-                    </Button>
+                  <AlertDescription className="text-sm">
+                    Nenhum veículo encontrado para este associado.
                   </AlertDescription>
                 </Alert>
-              ) : (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Sincronizando associado com o SGA…
-                </div>
-              )
-            ) : carregando ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Buscando veículos no SGA…
-              </div>
-            ) : sgaTransitorioVisivel ? (
-              <SgaTransientAlert
-                motivo={sgaMotivo}
-                onRetry={handleRetrySga}
-                loading={sga.isFetching}
-                titulo="Não foi possível consultar o SGA agora"
-                descricao="A API do Hinova respondeu com erro temporário. Tente novamente em instantes."
-              />
-            ) : semVeiculosSGA ? (
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription className="text-sm">
-                  Nenhum veículo encontrado no SGA nem na base local para este associado.
-                </AlertDescription>
-              </Alert>
-            ) : semEspelhoLocal ? (
-              syncErro ? (
-                <Alert variant="destructive">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription className="text-sm space-y-2">
-                    <div>Falha ao importar veículos do SGA: {syncErro}</div>
-                    <Button size="sm" variant="outline" onClick={() => handleSincronizarHinova()}>
-                      Tentar novamente
-                    </Button>
-                  </AlertDescription>
-                </Alert>
-              ) : (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Importando veículos do SGA…
-                </div>
-              )
-            ) : (
-              <select
-                className="w-full border rounded h-10 px-3 bg-background"
-                value={veiculoId || ''}
-                onChange={(e) => setVeiculoId(e.target.value)}
-              >
-                <option value="">Selecione…</option>
-                {veiculos.map(v => <option key={v.id} value={v.id}>{v.descricao}</option>)}
-              </select>
-            )}
+              );
+            })()}
           </div>
 
           <div className="space-y-2">
