@@ -145,8 +145,10 @@ export function TrocaTitularidadeDialog({
       const { data, error } = await supabase.functions.invoke('importar-associado-sga', {
         body: { cpf: cpfAntigo },
       });
+      // Mensagem amigável tem prioridade sobre o erro genérico do SDK
+      const msgAmigavel = (data as any)?.error;
+      if (msgAmigavel) throw new Error(msgAmigavel);
       if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
       await refetchLocal();
       await sga.refetch();
       await refetchLocais();
