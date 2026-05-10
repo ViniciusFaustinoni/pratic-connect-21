@@ -22,7 +22,7 @@ interface PdfConfig {
   logo_url: string | null;
   nome_empresa: string;
   mensagem_encerramento: string;
-  mostrar_validade: boolean;
+  
   mostrar_dados_solicitante: boolean;
   mostrar_dados_veiculo: boolean;
   mostrar_mensagem_encerramento: boolean;
@@ -35,7 +35,6 @@ const DEFAULTS: PdfConfig = {
   logo_url: null,
   nome_empresa: 'PRATICCAR Proteção Veicular',
   mensagem_encerramento: 'Será um prazer ter você como nosso associado. Estaremos aqui para o que precisar.',
-  mostrar_validade: true,
   mostrar_dados_solicitante: true,
   mostrar_dados_veiculo: true,
   mostrar_mensagem_encerramento: true,
@@ -69,7 +68,6 @@ export default function CotacaoPdfConfig() {
           logo_url: data.logo_url,
           nome_empresa: data.nome_empresa,
           mensagem_encerramento: data.mensagem_encerramento,
-          mostrar_validade: data.mostrar_validade,
           mostrar_dados_solicitante: data.mostrar_dados_solicitante,
           mostrar_dados_veiculo: data.mostrar_dados_veiculo,
           mostrar_mensagem_encerramento: data.mostrar_mensagem_encerramento,
@@ -94,7 +92,6 @@ export default function CotacaoPdfConfig() {
         logo_url: config.logo_url,
         nome_empresa: config.nome_empresa,
         mensagem_encerramento: config.mensagem_encerramento,
-        mostrar_validade: config.mostrar_validade,
         mostrar_dados_solicitante: config.mostrar_dados_solicitante,
         mostrar_dados_veiculo: config.mostrar_dados_veiculo,
         mostrar_mensagem_encerramento: config.mostrar_mensagem_encerramento,
@@ -141,7 +138,6 @@ export default function CotacaoPdfConfig() {
         logo_url: config.logo_url,
         nome_empresa: config.nome_empresa,
         mensagem_encerramento: config.mensagem_encerramento,
-        mostrar_validade: config.mostrar_validade,
         mostrar_dados_solicitante: config.mostrar_dados_solicitante,
         mostrar_dados_veiculo: config.mostrar_dados_veiculo,
         mostrar_mensagem_encerramento: config.mostrar_mensagem_encerramento,
@@ -330,7 +326,6 @@ export default function CotacaoPdfConfig() {
         </CardHeader>
         <CardContent className="space-y-4">
           {[
-            { key: 'mostrar_validade' as const, label: 'Barra de validade da cotação', desc: 'Exibe a data de validade no topo do PDF' },
             { key: 'mostrar_dados_solicitante' as const, label: 'Bloco de dados do solicitante', desc: 'Nome, telefone e e-mail do cliente' },
             { key: 'mostrar_dados_veiculo' as const, label: 'Bloco de dados do veículo', desc: 'Marca, modelo, ano e placa' },
             { key: 'mostrar_mensagem_encerramento' as const, label: 'Mensagem institucional de encerramento', desc: 'Texto antes do rodapé' },

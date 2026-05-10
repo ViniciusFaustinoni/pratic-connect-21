@@ -1,6 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { DollarSign, Layers, Clock, Calendar } from 'lucide-react';
+import { DollarSign, Layers, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { STATUS_COTACAO_LABELS, STATUS_COTACAO_COLORS } from '@/types/vendas';
 import type { StatusCotacao } from '@/types/vendas';
@@ -29,12 +29,6 @@ const formatCurrency = (value: number | null | undefined) => {
   }).format(value);
 };
 
-const formatDate = (date: string) => {
-  return new Date(date).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-  });
-};
 
 const formatDateTime = (date: string) => {
   return new Date(date).toLocaleString('pt-BR', {
@@ -46,15 +40,6 @@ const formatDateTime = (date: string) => {
   });
 };
 
-const calcularValidade = (createdAt: string) => {
-  const created = new Date(createdAt);
-  return new Date(created.getTime() + 7 * 24 * 60 * 60 * 1000);
-};
-
-const isExpirada = (createdAt: string) => {
-  const validade = calcularValidade(createdAt);
-  return new Date() > validade;
-};
 
 interface MetricCardProps {
   icon: React.ReactNode;
@@ -90,8 +75,6 @@ function MetricCard({ icon, label, value, highlight, warning }: MetricCardProps)
 }
 
 export function CotacaoHeader({ cotacao }: CotacaoHeaderProps) {
-  const validade = calcularValidade(cotacao.created_at);
-  const expirada = isExpirada(cotacao.created_at);
   const planosComparacao = (cotacao.dados_extras as { planos_comparacao?: unknown[] } | null)?.planos_comparacao;
   const numPlanos = planosComparacao?.length || 1;
 
@@ -126,7 +109,7 @@ export function CotacaoHeader({ cotacao }: CotacaoHeaderProps) {
           </p>
 
           {/* Métricas em destaque */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <MetricCard
               icon={<DollarSign className="h-5 w-5" />}
               label="Valor FIPE"
@@ -137,12 +120,6 @@ export function CotacaoHeader({ cotacao }: CotacaoHeaderProps) {
               icon={<Layers className="h-5 w-5" />}
               label="Planos Cotados"
               value={`${numPlanos} ${numPlanos === 1 ? 'opção' : 'opções'}`}
-            />
-            <MetricCard
-              icon={<Clock className="h-5 w-5" />}
-              label={expirada ? 'Expirada em' : 'Válida até'}
-              value={formatDate(validade.toISOString())}
-              warning={expirada}
             />
           </div>
 

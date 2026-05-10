@@ -9,7 +9,6 @@ export interface PdfConfig {
   logo_url: string | null;
   nome_empresa: string;
   mensagem_encerramento: string;
-  mostrar_validade: boolean;
   mostrar_dados_solicitante: boolean;
   mostrar_dados_veiculo: boolean;
   mostrar_mensagem_encerramento: boolean;
@@ -21,7 +20,7 @@ async function carregarConfigPdf(): Promise<PdfConfig | null> {
   try {
     const { data } = await supabase
       .from('cotacao_pdf_config')
-      .select('cor_primaria, cor_secundaria, logo_url, nome_empresa, mensagem_encerramento, mostrar_validade, mostrar_dados_solicitante, mostrar_dados_veiculo, mostrar_mensagem_encerramento, mostrar_whatsapp_rodape')
+      .select('cor_primaria, cor_secundaria, logo_url, nome_empresa, mensagem_encerramento, mostrar_dados_solicitante, mostrar_dados_veiculo, mostrar_mensagem_encerramento, mostrar_whatsapp_rodape')
       .limit(1)
       .maybeSingle();
     return data as PdfConfig | null;
@@ -390,25 +389,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
 
   y = headerHeight + SECTION_GAP;
 
-  // ============= BARRA DE VALIDADE =============
-  if (config?.mostrar_validade !== false) {
-    doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
-    doc.roundedRect(margin, y, contentWidth, 14, 3, 3, 'F');
-
-    const dataValidade = new Date(cotacao.created_at);
-    dataValidade.setDate(dataValidade.getDate() + (cotacao.validade_dias || 7));
-    
-    doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Emitido em: ${formatDate(cotacao.created_at)}`, margin + 8, y + 9);
-    
-    doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Válida até: ${formatDate(dataValidade.toISOString())}`, pageWidth - margin - 8, y + 9, { align: 'right' });
-
-    y += 14 + SECTION_GAP;
-  }
+  // Validade removida do PDF
 
   // ============= DADOS DO SOLICITANTE =============
   if (config?.mostrar_dados_solicitante !== false) {
@@ -795,7 +776,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   doc.text(empresaSubtitulo, footerTextX, footerY + 14);
 
   doc.setFontSize(7);
-  const footerDate = `Gerado em: ${formatDate(new Date().toISOString())} | Validade: ${cotacao.validade_dias || 7} dias`;
+  const footerDate = `Gerado em: ${formatDate(new Date().toISOString())}`;
   doc.text(footerDate, footerTextX, footerY + 20);
 
   doc.setTextColor(textDarkMuted.r, textDarkMuted.g, textDarkMuted.b);
@@ -1130,26 +1111,7 @@ const desenharPaginaCapa = (
 
   y = headerHeight + 5;
 
-  // Barra de validade
-  if (config?.mostrar_validade !== false) {
-    const brandBlue = config ? hexToRgb(config.cor_primaria) : brandBlueDefault;
-    doc.setFillColor(brandBlue.r, brandBlue.g, brandBlue.b);
-    doc.roundedRect(margin, y, contentWidth, 12, 2, 2, 'F');
-
-    const dataValidade = new Date(cotacao.created_at);
-    dataValidade.setDate(dataValidade.getDate() + (cotacao.validade_dias || 7));
-
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Emitido em: ${formatDate(cotacao.created_at)}`, margin + 4, y + 8);
-    
-    doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Válida até: ${formatDate(dataValidade.toISOString())}`, pageWidth - margin - 4, y + 8, { align: 'right' });
-
-    y += 16;
-  }
+  // Validade removida do PDF
 
   // Dados do solicitante, veículo e consultor
   if (config?.mostrar_dados_solicitante !== false || config?.mostrar_dados_veiculo !== false) {
