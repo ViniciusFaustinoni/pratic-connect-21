@@ -127,9 +127,14 @@ export function VeiculoCompletoCard({ veiculoId }: Props) {
               </button>
             ))}
             {fotosArr.length > 12 && (
-              <div className="aspect-square rounded border flex items-center justify-center text-xs text-muted-foreground">
+              <button
+                type="button"
+                onClick={() => setMediaIdx(12)}
+                className="aspect-square rounded border flex items-center justify-center text-xs text-muted-foreground hover:ring-2 hover:ring-primary transition"
+                aria-label={`Ver mais ${fotosArr.length - 12} fotos`}
+              >
                 +{fotosArr.length - 12}
-              </div>
+              </button>
             )}
           </div>
         )}
