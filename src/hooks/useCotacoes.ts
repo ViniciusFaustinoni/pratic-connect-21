@@ -171,6 +171,7 @@ async function fetchCotacoesCore(params: {
       `
         id, numero, status, status_contratacao, created_at, updated_at,
         vendedor_id, lead_id, plano_id, token_publico,
+        prioridade, origem_troca_titularidade,
         nome_solicitante, telefone1_solicitante, telefone2_solicitante, email_solicitante,
         veiculo_placa, veiculo_marca, veiculo_modelo, veiculo_ano, valor_fipe,
         valor_adesao, tipo_entrada, dados_extras,
@@ -186,6 +187,7 @@ async function fetchCotacoesCore(params: {
       `,
       pageSize ? { count: 'estimated' } : undefined
     )
+    .order('prioridade', { ascending: false })
     .order('created_at', { ascending: false });
 
   // Escopo "own": filtra explicitamente por vendedor logado.
