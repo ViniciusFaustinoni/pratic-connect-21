@@ -145,12 +145,18 @@ function getDraggableIcon(color: string): L.DivIcon {
 
 // Technician icon with task count badge
 const vistoriadorBadgeIconCache = new Map<string, L.DivIcon>();
-function getVistoriadorIconWithBadge(color: string = COR_VISTORIADOR, count: number): L.DivIcon {
-  const cacheKey = `vistoriador-badge-${color}-${count}`;
+function getVistoriadorIconWithBadge(color: string = COR_VISTORIADOR, count: number, sobrepostos: number = 0): L.DivIcon {
+  const cacheKey = `vistoriador-badge-${color}-${count}-${sobrepostos}`;
   if (vistoriadorBadgeIconCache.has(cacheKey)) return vistoriadorBadgeIconCache.get(cacheKey)!;
   const badgeHtml = count > 0
     ? `<div style="position:absolute;top:-5px;right:-5px;background:#EF4444;border-radius:50%;min-width:18px;height:18px;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.3);padding:0 3px;">
         <span style="color:white;font-size:10px;font-weight:700;line-height:1;">${count}</span>
+      </div>`
+    : '';
+  // Badge de sobreposição: outros técnicos a < 50m
+  const overlapHtml = sobrepostos > 0
+    ? `<div title="Há ${sobrepostos} outro(s) técnico(s) muito próximo(s)" style="position:absolute;bottom:-5px;left:-5px;background:#F59E0B;color:#fff;border-radius:9px;height:16px;min-width:24px;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.3);padding:0 4px;font-size:9px;font-weight:700;line-height:1;">
+        +${sobrepostos}
       </div>`
     : '';
   const icon = L.divIcon({
@@ -158,6 +164,7 @@ function getVistoriadorIconWithBadge(color: string = COR_VISTORIADOR, count: num
       <div style="position:relative;">
         <img src="${svgToDataUrl(createVistoriadorMarkerSvg(color))}" width="36" height="36" />
         ${badgeHtml}
+        ${overlapHtml}
       </div>
     `,
     className: 'vistoriador-badge-icon',
