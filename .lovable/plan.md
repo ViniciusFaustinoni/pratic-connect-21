@@ -1,14 +1,34 @@
 ## Objetivo
 
-Deixar explícito, no tutorial **"Da cotação à ativação"** (passo 17 — Análise interna), que o setor de Cadastro pode **pendenciar** a solicitação pedindo documentos/fotos faltantes, e que o cadastro **fica travado até o reenvio**.
+Remover o botão "Sincronizar com SGA" do `TrocaTitularidadeDialog` e fazer a sincronização automaticamente quando o modal abre.
 
-## Alteração
+## Alteração — `src/components/associados/TrocaTitularidadeDialog.tsx`
 
-Arquivo: `src/data/tutoriais/cotacao-ate-ativacao.ts` — passo 17 (`titulo: '🏢 Análise interna…'`).
+1. **Auto-sync ao abrir**: adicionar um `useEffect` que dispara `handleSincronizarHinova()` automaticamente quando:
+   - `open === true`
+   - `cpfAntigo` válido (11 dígitos)
+   - e ocorrer um dos gatilhos: `semCodigoHinova` (associado sem `codigo_hinova`) **ou** `semEspelhoLocal` (SGA tem veículos mas espelho local não existe)
+   - guard com `useRef` para rodar 1× por abertura (evita loop), resetado quando `open` vira `false`.
 
-Substituir a dica `1️⃣` atual por uma versão expandida e adicionar uma nova dica logo abaixo deixando claro o bloqueio:
+2. **UI dos alerts** (linhas 219–266): substituir os dois botões "Sincronizar com SGA" por um indicador de carregamento ("Sincronizando com o SGA…" com `Loader2`) enquanto `sincronizando === true`. Em caso de falha (`syncErro`), mostrar a mensagem de erro + botão discreto "Tentar novamente" (mesmo handler) — necessário porque sem fallback manual o usuário fica preso se a primeira tentativa falhar.
 
-- **1️⃣ (atualizada)** — Cadastro confere CNH e CRLV/CRV/NF (mesmo OCR aprovado passa por revisão manual). **Se faltar foto, documento ou algum dado estiver ilegível/divergente, o analista pendencia a solicitação** e o cliente recebe um link por WhatsApp para reenviar exatamente o que foi pedido.
-- **⛔ (nova)** — **Enquanto a pendência não for resolvida pelo cliente, o cadastro NÃO avança** — vistoria, instalação e ativação ficam bloqueadas. Assim que o reenvio chega, a solicitação volta automaticamente para a fila do Cadastro para nova análise.
+3. **Manter** `handleSincronizarHinova` intacto (lógica de invoke + refetch). Apenas trocar o gatilho de clique por automático.
 
-Sem outras alterações: numeração dos demais passos (2️⃣/3️⃣/4️⃣) e links continuam iguais; nenhum código de fluxo é tocado, é puramente conteúdo do tutorial.
+4. **Sem mudanças** no edge function `importar-associado-sga`, no schema, ou em outros pontos do fluxo.
+
+## Detalhe técnico
+
+```text
+useEffect(() => {
+  if (!open) { autoSyncRanRef.current = false; return; }
+  if (autoSyncRanRef.current) return;
+  if (sincronizando || carregando) return;
+  if (!cpfAntigo || cpfAntigo.length !== 11) return;
+  if (semCodigoHinova || semEspelhoLocal) {
+    autoSyncRanRef.current = true;
+    handleSincronizarHinova();
+  }
+}, [open, cpfAntigo, semCodigoHinova, semEspelhoLocal, carregando, sincronizando]);
+```
+
+O botão de "Tentar novamente" no estado de erro NÃO marca `autoSyncRanRef` — chama o handler diretamente para permitir nova tentativa manual sem reabrir o modal.

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -162,6 +162,20 @@ export function TrocaTitularidadeDialog({
     }
   };
 
+  // Auto-sincronização com SGA ao abrir o modal (sem botão manual)
+  const autoSyncRanRef = useRef(false);
+  useEffect(() => {
+    if (!open) { autoSyncRanRef.current = false; return; }
+    if (autoSyncRanRef.current) return;
+    if (sincronizando || sga.isLoading) return;
+    if (!cpfAntigo || cpfAntigo.length !== 11) return;
+    if (semCodigoHinova || semEspelhoLocal) {
+      autoSyncRanRef.current = true;
+      handleSincronizarHinova();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, cpfAntigo, semCodigoHinova, semEspelhoLocal, sga.isLoading, sincronizando]);
+
   const handleSubmit = async () => {
     if (!nome.trim() || !cpf.trim() || !veiculoId) {
       toast.error('Preencha nome, CPF e selecione o veículo');
@@ -217,20 +231,22 @@ export function TrocaTitularidadeDialog({
           <div className="space-y-2">
             <Label>Veículo a transferir *</Label>
             {semCodigoHinova ? (
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription className="text-sm space-y-2">
-                  <div>
-                    {syncErro
-                      ? `Falha ao sincronizar: ${syncErro}`
-                      : 'Associado ainda não está sincronizado com o SGA (sem código Hinova). Sincronize para listar os veículos.'}
-                  </div>
-                  <Button size="sm" variant="outline" onClick={handleSincronizarHinova} disabled={sincronizando}>
-                    {sincronizando && <Loader2 className="h-3 w-3 mr-2 animate-spin" />}
-                    Sincronizar com SGA
-                  </Button>
-                </AlertDescription>
-              </Alert>
+              syncErro ? (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription className="text-sm space-y-2">
+                    <div>Falha ao sincronizar com o SGA: {syncErro}</div>
+                    <Button size="sm" variant="outline" onClick={handleSincronizarHinova}>
+                      Tentar novamente
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Sincronizando associado com o SGA…
+                </div>
+              )
             ) : carregando ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -252,18 +268,22 @@ export function TrocaTitularidadeDialog({
                 </AlertDescription>
               </Alert>
             ) : semEspelhoLocal ? (
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription className="text-sm space-y-2">
-                  <div>
-                    O SGA tem {sgaPayload?.veiculos.length} veículo(s) para este associado, mas o espelho local ainda não foi criado.
-                  </div>
-                  <Button size="sm" variant="outline" onClick={handleSincronizarHinova} disabled={sincronizando}>
-                    {sincronizando && <Loader2 className="h-3 w-3 mr-2 animate-spin" />}
-                    Sincronizar com SGA
-                  </Button>
-                </AlertDescription>
-              </Alert>
+              syncErro ? (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription className="text-sm space-y-2">
+                    <div>Falha ao importar veículos do SGA: {syncErro}</div>
+                    <Button size="sm" variant="outline" onClick={handleSincronizarHinova}>
+                      Tentar novamente
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Importando veículos do SGA…
+                </div>
+              )
             ) : (
               <select
                 className="w-full border rounded h-10 px-3 bg-background"
