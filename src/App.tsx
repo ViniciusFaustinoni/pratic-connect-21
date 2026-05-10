@@ -76,7 +76,7 @@ const LeadDetalhe = lazy(() => import("./pages/vendas/LeadDetalhe"));
 const LeadEditar = lazy(() => import("./pages/vendas/LeadEditar"));
 const AtivacoesList = lazy(() => import("./pages/vendas/AtivacoesList"));
 const Cotacoes = lazy(() => import("./pages/vendas/Cotacoes"));
-const CotacaoDetalhe = lazy(() => import("./pages/vendas/CotacaoDetalhe"));
+// CotacaoDetalhe foi convertido em drawer (CotacaoDetalheDrawer) — rota legacy redireciona para a lista com ?abrir=
 const Contratos = lazy(() => import("./pages/vendas/Contratos"));
 const Propostas = lazy(() => import("./pages/vendas/Propostas"));
 const Consultores = lazy(() => import("./pages/vendas/Consultores"));
