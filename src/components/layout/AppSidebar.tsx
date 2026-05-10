@@ -571,6 +571,7 @@ export function AppSidebar() {
   const { fipeMenorAtivo } = useFipeMenorAtivo();
   const { data: biometriasPendentesCount = 0 } = useBiometriasPendentesCount();
   const { data: aprovacoesMonCount = 0 } = useAprovacoesMonitoramentoCount();
+  const { data: processosOpCount = 0 } = useProcessosOperacionaisCount();
 
   const isDataLoading = permissions.isPermissionsLoading || isModuleVisLoading;
 
