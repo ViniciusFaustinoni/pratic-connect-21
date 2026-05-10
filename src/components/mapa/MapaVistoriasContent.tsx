@@ -295,6 +295,12 @@ export function MapaVistoriasContent() {
     profissional: VistoriadorLocalizacao;
   } | null>(null);
 
+  // Selection dialog when multiple technicians overlap at drop point
+  const [tecnicoSelecao, setTecnicoSelecao] = useState<{
+    servico: VistoriaMapa;
+    candidatos: Array<{ profissional: VistoriadorLocalizacao; distanciaMetros: number }>;
+  } | null>(null);
+
   // Cancel confirmation state
   const [cancelConfirmation, setCancelConfirmation] = useState<{
     servicoId: string;
