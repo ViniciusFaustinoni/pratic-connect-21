@@ -89,7 +89,7 @@ export function TrocaTitularidadeDialog({
     enabled: open && placas.length > 0,
   });
 
-  const veiculos: VeiculoOpcao[] = (sgaPayload?.veiculos || [])
+  const veiculosSgaMapeados: VeiculoOpcao[] = (sgaPayload?.veiculos || [])
     .map((v) => {
       const placaNorm = normPlaca(v.placa);
       const local = (veiculosLocais || []).find((l) => normPlaca(l.placa) === placaNorm);
@@ -102,12 +102,20 @@ export function TrocaTitularidadeDialog({
     })
     .filter((x): x is VeiculoOpcao => !!x);
 
-  // Auto-seleciona se só houver 1
-  useEffect(() => {
-    if (open && veiculos.length === 1 && !veiculoId) {
-      setVeiculoId(veiculos[0].id);
-    }
-  }, [open, veiculos, veiculoId]);
+  // Fallback local: usado quando SGA falha ou não retorna veículos
+  const fallback = useTrocaTitularidadeFallbackLocal(associadoId, open);
+  const fallbackPayload = fallback.data?.payload;
+  const veiculosFallback: VeiculoOpcao[] = (fallbackPayload?.veiculos || [])
+    .map((v) => {
+      const id = fallback.data?.placaParaId.get(normPlaca(v.placa));
+      if (!id) return null;
+      return {
+        id,
+        placa: v.placa,
+        descricao: `${v.marca || ''} ${v.modelo || ''} ${v.ano || ''} - ${v.placa}`.trim(),
+      };
+    })
+    .filter((x): x is VeiculoOpcao => !!x);
 
   // Reset on close
   useEffect(() => {
@@ -127,7 +135,22 @@ export function TrocaTitularidadeDialog({
     !!sgaPayload && (!sgaPayload.encontrado || (sgaPayload?.veiculos || []).length === 0);
   const semEspelhoLocal =
     !carregando && !sgaTransitorio &&
-    (sgaPayload?.veiculos || []).length > 0 && veiculos.length === 0;
+    (sgaPayload?.veiculos || []).length > 0 && veiculosSgaMapeados.length === 0;
+
+  // Decide se devemos cair no fallback local (mostra dados nossos quando SGA falha)
+  const sgaIndisponivel =
+    sgaTransitorioVisivel || semCodigoHinova || semVeiculosSGA || semEspelhoLocal;
+  const usandoFallback = sgaIndisponivel && veiculosFallback.length > 0;
+
+  // Fonte final dos veículos exibidos no select
+  const veiculos: VeiculoOpcao[] = usandoFallback ? veiculosFallback : veiculosSgaMapeados;
+
+  // Auto-seleciona se só houver 1
+  useEffect(() => {
+    if (open && veiculos.length === 1 && !veiculoId) {
+      setVeiculoId(veiculos[0].id);
+    }
+  }, [open, veiculos, veiculoId]);
 
   const handleRetrySga = async () => {
     setSyncErro(null);
