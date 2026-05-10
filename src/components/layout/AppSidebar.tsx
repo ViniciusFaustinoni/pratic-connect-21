@@ -117,6 +117,7 @@ import { useAppRoles } from '@/hooks/useAppRoles';
 import { useFipeMenorAtivo } from '@/hooks/useFipeMenorAtivo';
 import { useBiometriasPendentesCount } from '@/hooks/useBiometriasPendentes';
 import { useAprovacoesMonitoramentoCount } from '@/hooks/useAprovacoesMonitoramentoCount';
+import { useProcessosOperacionaisCount } from '@/hooks/useProcessosOperacionaisCount';
 
 // Mapeamento de cores por grupo/item
 const MENU_COLORS: Record<string, string> = {
@@ -570,6 +571,7 @@ export function AppSidebar() {
   const { fipeMenorAtivo } = useFipeMenorAtivo();
   const { data: biometriasPendentesCount = 0 } = useBiometriasPendentesCount();
   const { data: aprovacoesMonCount = 0 } = useAprovacoesMonitoramentoCount();
+  const { data: processosOpCount = 0 } = useProcessosOperacionaisCount();
 
   const isDataLoading = permissions.isPermissionsLoading || isModuleVisLoading;
 
@@ -618,6 +620,9 @@ export function AppSidebar() {
         }
         if (item.url === '/monitoramento/aprovacoes-monitoramento' && aprovacoesMonCount > 0) {
           return { ...item, badge: String(aprovacoesMonCount) };
+        }
+        if (item.url === '/cadastro/processos' && processosOpCount > 0) {
+          return { ...item, badge: String(processosOpCount) };
         }
         return item;
       }),
@@ -672,7 +677,7 @@ export function AppSidebar() {
     }
     
     return baseGroups;
-  }, [permissions, visibleModules, fipeMenorAtivo, biometriasPendentesCount, aprovacoesMonCount]);
+  }, [permissions, visibleModules, fipeMenorAtivo, biometriasPendentesCount, aprovacoesMonCount, processosOpCount]);
 
   const visibleMainItems = useMemo(() => {
     if (permissions.isSindicanteOnly) {

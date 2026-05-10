@@ -1,49 +1,36 @@
-## Objetivo
+# Badge de pendentes em "Processos" (Cadastro)
 
-No modal da cotação gerada por troca de titularidade:
-1. Exibir o **plano atual do associado antigo** (do contrato em vigor) como referência, antes da lista de planos cotados.
-2. Ativar o botão **+ Adicionar** para que o vendedor inclua mais opções de plano no comparativo.
+Hoje a sidebar já exibe badge dinâmico para **Biometrias Pendentes** e **Aprovações** (Monitoramento), via hooks dedicados injetados em `AppSidebar.tsx`. O item **Processos** (`/cadastro/processos`) ainda não tem badge, embora a página interna (`ProcessosOperacionais`) já calcule contadores por aba (Titularidade, Substituições, Migrações, Inclusões).
 
-## Mudanças (apenas frontend)
+## O que será feito
 
-### 1. Novo card "Plano atual do titular antigo"
+1. **Novo hook `useProcessosOperacionaisCount`** (`src/hooks/useProcessosOperacionaisCount.ts`)
+   - Reaproveita exatamente as mesmas 4 queries `count: 'exact', head: true` já usadas em `useProcessosCounts` dentro de `ProcessosOperacionais.tsx`:
+     - `solicitacoes_troca_titularidade` em `aguardando_cadastro` ou `cotacao_em_andamento`
+     - `substituicoes_veiculo` em `aguardando_aprovacao`
+     - `solicitacoes_migracao` em `pendente`
+     - `cotacoes` com `tipo_entrada=inclusao` e status `rascunho`/`enviada`
+   - Retorna o **somatório** (total pendente global, sem filtro de escopo de vendedor — igual a `useBiometriasPendentesCount` e `useAprovacoesMonitoramentoCount`).
+   - `staleTime: 30s`, `refetchOnWindowFocus: true` (mesmo padrão dos outros).
 
-Em `src/components/cotacoes/CotacaoDetalheModal.tsx`, dentro de `renderPlanos()`, acima do card "Plano Selecionado / Planos para Comparação", incluir um bloco **somente quando** `cotacao.dados_extras.tipo_entrada === 'troca_titularidade'`.
+2. **Injetar o badge no `AppSidebar.tsx`**
+   - Importar e chamar o novo hook ao lado de `useBiometriasPendentesCount` / `useAprovacoesMonitoramentoCount`.
+   - No bloco "Injetar badges dinâmicos", adicionar:
+     ```ts
+     if (item.url === '/cadastro/processos' && processosCount > 0) {
+       return { ...item, badge: String(processosCount) };
+     }
+     ```
+   - Incluir `processosCount` no array de dependências do `useMemo`.
 
-Para alimentar o bloco, criar um hook leve `useTrocaPlanoAtual(cotacaoId)`:
+## Detalhes técnicos
 
-```ts
-// src/hooks/useTrocaPlanoAtual.ts
-// 1. SELECT id, associado_antigo_id, veiculo_id FROM solicitacoes_troca_titularidade WHERE cotacao_id = X
-// 2. SELECT plano_id, valor_mensalidade, data_inicio, status
-//    FROM contratos
-//    WHERE veiculo_id = sol.veiculo_id AND associado_id = sol.associado_antigo_id
-//    ORDER BY created_at DESC LIMIT 1
-// 3. SELECT id, nome, codigo FROM planos WHERE id = contrato.plano_id
-```
-
-O card mostra: nome do plano, código, valor mensal vigente, data de adesão e um badge "Plano atual do titular anterior". Layout compacto, fundo neutro (`bg-muted/40`), borda esquerda em `primary` para destacar referência sem competir com o card principal.
-
-### 2. Botão Adicionar funcional
-
-O botão hoje está `disabled` e o modal de edição (`CotacaoFormDialog`) já existe e cobre adição de planos via `planos_comparacao` em `dados_extras`. A solução mais segura é reaproveitar:
-
-- Remover `disabled` do botão.
-- `onClick` → `setShowEditarModal(true)` (state já existe no arquivo).
-- Manter o limite atual `planosExibir.length < 3` para esconder o botão quando 3 planos já foram cotados.
-
-Após salvar, o `useCotacao` invalida e o modal já re-renderiza com o novo plano no comparativo. Nenhuma nova lógica de mutation é necessária.
-
-### 3. Sem migração / sem edge function
-
-Toda a informação já existe em `solicitacoes_troca_titularidade`, `contratos` e `planos`. Não há mudança de backend.
-
-## Arquivos afetados
-
-- `src/components/cotacoes/CotacaoDetalheModal.tsx` (badge troca: já existe; adicionar render do novo card + ativar botão)
-- `src/hooks/useTrocaPlanoAtual.ts` (novo)
+- **Sem mudança de schema** — apenas leitura.
+- **Sem mudança visual no item** — o badge já é renderizado pelo bloco existente que lê `item.badge` (linhas 887, 1031, 1095 de `AppSidebar.tsx`), portanto herdará o mesmo estilo dos demais.
+- **Permissões** — o hook não filtra por papel; a renderização do item de menu já é gated pelas permissões existentes, então só usuários que enxergam "Processos" verão o badge.
+- **Performance** — 4 HEAD queries paralelas, idêntico ao que a própria página já dispara ao abrir.
 
 ## Fora do escopo
 
-- Atribuição automática do mesmo plano (apenas referência visual; o vendedor decide).
-- Reescrever o fluxo de adição inline (continua via modal de edição existente).
+- Não vamos refatorar o `useProcessosCounts` interno da página para reusar o novo hook (mantém escopo por vendedor, comportamento diferente).
+- Não vamos adicionar badge ao `/juridico/processos` (item separado, contexto distinto). Se quiser depois, é pedir.
