@@ -220,7 +220,15 @@ export default function Cotacoes() {
     const novoParam = searchParams.get('novo');
     const tipoEntrada = searchParams.get('tipo_entrada');
     const associadoId = searchParams.get('associado_id');
-    
+    const abrirParam = searchParams.get('abrir');
+
+    if (abrirParam) {
+      setCotacaoDetalheId(abrirParam);
+      searchParams.delete('abrir');
+      setSearchParams(searchParams, { replace: true });
+      return;
+    }
+
     if (leadParam) {
       setLeadIdFromUrl(leadParam);
       setShowCotacaoForm(true);
