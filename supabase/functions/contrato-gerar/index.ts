@@ -697,21 +697,27 @@ serve(async (req) => {
             .eq('placa', placaLimpaEmail)
             .maybeSingle();
 
-          // BLOQUEIO ANTI-SEQUESTRO (branch email)
+          // BLOQUEIO ANTI-SEQUESTRO (branch email) — exceção para troca de titularidade
           if (data && data.associado_id && data.associado_id !== associadoId) {
-            console.error(
-              `[BLOQUEIO-DONO] Placa ${placaLimpaEmail} já está vinculada ao associado ${data.associado_id}, ` +
-              `mas o solicitante atual é ${associadoId} (cotação ${cotacao_id}).`
+            const liberadoPorTroca = await placaLiberadaPorTrocaTitularidade(
+              supabase, placaLimpaEmail, (cotacao as any).dados_extras,
             );
-            return new Response(
-              JSON.stringify({
-                success: false,
-                error: `A placa ${placaLimpaEmail} já está vinculada a outro associado no sistema. ` +
-                       `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
-                code: 'PLACA_DE_OUTRO_ASSOCIADO',
-              }),
-              { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-            );
+            if (!liberadoPorTroca) {
+              console.error(
+                `[BLOQUEIO-DONO] Placa ${placaLimpaEmail} já está vinculada ao associado ${data.associado_id}, ` +
+                `mas o solicitante atual é ${associadoId} (cotação ${cotacao_id}).`
+              );
+              return new Response(
+                JSON.stringify({
+                  success: false,
+                  error: `A placa ${placaLimpaEmail} já está vinculada a outro associado no sistema. ` +
+                         `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
+                  code: 'PLACA_DE_OUTRO_ASSOCIADO',
+                }),
+                { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+              );
+            }
+            console.log(`[BLOQUEIO-DONO] Liberado por troca de titularidade legítima: placa=${placaLimpaEmail}`);
           }
 
           veiculoExistenteEmail = data ? { id: data.id } : null;
