@@ -11,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useCriarSolicitacaoTroca } from '@/hooks/useSolicitacoesTroca';
 import { useBoletosSgaPorAssociado } from '@/hooks/useBoletosSgaPorAssociado';
+import { useTrocaTitularidadeFallbackLocal } from '@/hooks/useTrocaTitularidadeFallbackLocal';
 import { useQuery } from '@tanstack/react-query';
 import { SgaTransientAlert } from '@/components/cotacao/SgaTransientAlert';
 
@@ -88,7 +89,7 @@ export function TrocaTitularidadeDialog({
     enabled: open && placas.length > 0,
   });
 
-  const veiculos: VeiculoOpcao[] = (sgaPayload?.veiculos || [])
+  const veiculosSgaMapeados: VeiculoOpcao[] = (sgaPayload?.veiculos || [])
     .map((v) => {
       const placaNorm = normPlaca(v.placa);
       const local = (veiculosLocais || []).find((l) => normPlaca(l.placa) === placaNorm);
@@ -101,12 +102,20 @@ export function TrocaTitularidadeDialog({
     })
     .filter((x): x is VeiculoOpcao => !!x);
 
-  // Auto-seleciona se só houver 1
-  useEffect(() => {
-    if (open && veiculos.length === 1 && !veiculoId) {
-      setVeiculoId(veiculos[0].id);
-    }
-  }, [open, veiculos, veiculoId]);
+  // Fallback local: usado quando SGA falha ou não retorna veículos
+  const fallback = useTrocaTitularidadeFallbackLocal(associadoId, open);
+  const fallbackPayload = fallback.data?.payload;
+  const veiculosFallback: VeiculoOpcao[] = (fallbackPayload?.veiculos || [])
+    .map((v) => {
+      const id = fallback.data?.placaParaId.get(normPlaca(v.placa));
+      if (!id) return null;
+      return {
+        id,
+        placa: v.placa,
+        descricao: `${v.marca || ''} ${v.modelo || ''} ${v.ano || ''} - ${v.placa}`.trim(),
+      };
+    })
+    .filter((x): x is VeiculoOpcao => !!x);
 
   // Reset on close
   useEffect(() => {
@@ -126,7 +135,22 @@ export function TrocaTitularidadeDialog({
     !!sgaPayload && (!sgaPayload.encontrado || (sgaPayload?.veiculos || []).length === 0);
   const semEspelhoLocal =
     !carregando && !sgaTransitorio &&
-    (sgaPayload?.veiculos || []).length > 0 && veiculos.length === 0;
+    (sgaPayload?.veiculos || []).length > 0 && veiculosSgaMapeados.length === 0;
+
+  // Decide se devemos cair no fallback local (mostra dados nossos quando SGA falha)
+  const sgaIndisponivel =
+    sgaTransitorioVisivel || semCodigoHinova || semVeiculosSGA || semEspelhoLocal;
+  const usandoFallback = sgaIndisponivel && veiculosFallback.length > 0;
+
+  // Fonte final dos veículos exibidos no select
+  const veiculos: VeiculoOpcao[] = usandoFallback ? veiculosFallback : veiculosSgaMapeados;
+
+  // Auto-seleciona se só houver 1
+  useEffect(() => {
+    if (open && veiculos.length === 1 && !veiculoId) {
+      setVeiculoId(veiculos[0].id);
+    }
+  }, [open, veiculos, veiculoId]);
 
   const handleRetrySga = async () => {
     setSyncErro(null);
@@ -230,7 +254,29 @@ export function TrocaTitularidadeDialog({
         <div className="space-y-4 pt-2">
           <div className="space-y-2">
             <Label>Veículo a transferir *</Label>
-            {semCodigoHinova ? (
+            {usandoFallback ? (
+              <div className="space-y-2">
+                <Alert>
+                  <Info className="h-4 w-4" />
+                  <AlertDescription className="text-sm">
+                    SGA indisponível — exibindo dados da nossa base local. O status de pagamento pode estar defasado.
+                    {fallbackPayload?.tem_debito && (
+                      <div className="mt-1 font-medium">
+                        Débito local: R$ {(fallbackPayload.saldo_devedor_total || 0).toFixed(2)}
+                      </div>
+                    )}
+                  </AlertDescription>
+                </Alert>
+                <select
+                  className="w-full border rounded h-10 px-3 bg-background"
+                  value={veiculoId || ''}
+                  onChange={(e) => setVeiculoId(e.target.value)}
+                >
+                  <option value="">Selecione…</option>
+                  {veiculos.map(v => <option key={v.id} value={v.id}>{v.descricao}</option>)}
+                </select>
+              </div>
+            ) : semCodigoHinova ? (
               syncErro ? (
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
@@ -264,7 +310,7 @@ export function TrocaTitularidadeDialog({
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription className="text-sm">
-                  Nenhum veículo encontrado no SGA para este associado.
+                  Nenhum veículo encontrado no SGA nem na base local para este associado.
                 </AlertDescription>
               </Alert>
             ) : semEspelhoLocal ? (
