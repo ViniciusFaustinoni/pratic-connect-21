@@ -123,7 +123,7 @@ export function VeiculoCompletoCard({ veiculoId }: Props) {
                 onClick={() => setMediaIdx(idx)}
                 className="aspect-square rounded overflow-hidden border hover:ring-2 hover:ring-primary transition"
               >
-                <img src={f.url} alt={f.tipo_foto || 'foto'} className="w-full h-full object-cover" />
+                <img src={f.arquivo_url} alt={f.tipo || 'foto'} className="w-full h-full object-cover" />
               </button>
             ))}
             {fotosArr.length > 12 && (
