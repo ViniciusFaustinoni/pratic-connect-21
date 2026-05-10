@@ -102,6 +102,7 @@ interface CotacaoCardProps {
   onCopiarWhatsApp?: (cotacao: CotacaoWithRelations) => void;
   permissions?: CotacaoCardPermissions;
   isCopiandoWhatsApp?: boolean;
+  onOpenDetalhe?: (cotacao: CotacaoWithRelations) => void;
 }
 
 export function CotacaoCard({
