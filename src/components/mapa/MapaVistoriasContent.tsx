@@ -1550,7 +1550,60 @@ export function MapaVistoriasContent() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Cancelamento de rota */}
+      {/* Seleção entre técnicos sobrepostos no mapa */}
+      <AlertDialog open={!!tecnicoSelecao} onOpenChange={(open) => !open && setTecnicoSelecao(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-amber-600" />
+              Vários técnicos no mesmo ponto
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p className="text-sm">
+                  Existem <strong>{tecnicoSelecao?.candidatos.length}</strong> técnicos próximos do ponto onde você soltou a tarefa{' '}
+                  <strong className="font-mono">{formatPlacaExibicao(tecnicoSelecao?.servico.veiculo_placa, '')}</strong>.
+                  Escolha manualmente para evitar atribuir ao técnico errado:
+                </p>
+                <div className="space-y-2">
+                  {tecnicoSelecao?.candidatos.map(({ profissional, distanciaMetros }) => {
+                    const tarefas = tarefasPorTecnico.get(profissional.vistoriador_id) || [];
+                    return (
+                      <button
+                        key={profissional.vistoriador_id}
+                        type="button"
+                        onClick={() => {
+                          setAssignConfirmation({
+                            servicos: [tecnicoSelecao.servico],
+                            profissional,
+                          });
+                          setTecnicoSelecao(null);
+                        }}
+                        className="w-full flex items-center gap-3 p-3 rounded-md border-2 border-border hover:border-primary hover:bg-primary/5 transition-colors text-left"
+                      >
+                        <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm flex-shrink-0">
+                          {(profissional.vistoriador_nome || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-sm text-foreground leading-tight truncate">{profissional.vistoriador_nome}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {distanciaMetros < 1 ? '<1' : Math.round(distanciaMetros)} m do ponto · {tarefas.length} tarefa{tarefas.length !== 1 ? 's' : ''}
+                          </p>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={!!cancelConfirmation} onOpenChange={(open) => !open && setCancelConfirmation(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
