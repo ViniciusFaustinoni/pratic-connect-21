@@ -118,6 +118,20 @@ export function TrocaTitularidadeDialog({
     }
   }, [open]);
 
+  // Auto-sincronização com SGA ao abrir o modal (sem botão manual)
+  const autoSyncRanRef = useRef(false);
+  useEffect(() => {
+    if (!open) { autoSyncRanRef.current = false; return; }
+    if (autoSyncRanRef.current) return;
+    if (sincronizando || sga.isLoading) return;
+    if (!cpfAntigo || cpfAntigo.length !== 11) return;
+    if (semCodigoHinova || semEspelhoLocal) {
+      autoSyncRanRef.current = true;
+      handleSincronizarHinova();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, cpfAntigo, semCodigoHinova, semEspelhoLocal, sga.isLoading, sincronizando]);
+
   const carregando = sga.isLoading || sga.isFetching;
   const semCodigoHinova = !!assocLocal && !codigoHinovaFinal;
   const sgaTransitorioVisivel = !sga.isLoading && sgaTransitorio;
