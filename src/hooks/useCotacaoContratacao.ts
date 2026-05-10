@@ -413,17 +413,32 @@ export function useCotacaoContratacao(token: string | undefined) {
     }
   }, []);
 
-  // Atualizar plano escolhido
+  // Atualizar plano escolhido (recebe o objeto inteiro p/ persistir valores)
   const selecionarPlano = useMutation({
-    mutationFn: async (planoId: string) => {
+    mutationFn: async (plano: PlanoOpcao) => {
       if (!cotacao) throw new Error('Cotação não encontrada');
+
+      const valorMensal = Number(plano.valorMensal) || 0;
+      const valorAdesao = Number(plano.valorAdesao) || Number(cotacao.valor_adesao) || 0;
+
+      const update: Record<string, unknown> = {
+        plano_escolhido_id: plano.id,
+        status_contratacao: 'plano_escolhido',
+      };
+      // Espelha plano_id para compatibilidade com leitores legados
+      if (!cotacao.plano_id) update.plano_id = plano.id;
+      // Persiste valor mensal/adesão se a cotação ainda não tem (ex.: troca de titularidade sem plano definido pelo vendedor)
+      if (!cotacao.valor_total_mensal || Number(cotacao.valor_total_mensal) === 0) {
+        update.valor_total_mensal = valorMensal;
+        update.valor_cota = valorMensal;
+      }
+      if (!cotacao.valor_adesao || Number(cotacao.valor_adesao) === 0) {
+        update.valor_adesao = valorAdesao;
+      }
 
       const { error } = await publicSupabase
         .from('cotacoes')
-        .update({
-          plano_escolhido_id: planoId,
-          status_contratacao: 'plano_escolhido',
-        })
+        .update(update)
         .eq('id', cotacao.id);
 
       if (error) throw error;
