@@ -113,11 +113,19 @@ Deno.serve(async (req) => {
       analisePrevia.erro = anaErr instanceof Error ? anaErr.message : 'erro';
     }
 
+    // Resolver profile.id do aprovador (FK aprovado_cadastro_por → profiles.id)
+    const { data: prof } = await admin
+      .from('profiles')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    const aprovadorId = prof?.id ?? null;
+
     const { error } = await admin
       .from('solicitacoes_troca_titularidade')
       .update({
         status: 'aguardando_monitoramento',
-        aprovado_cadastro_por: user.id,
+        aprovado_cadastro_por: aprovadorId,
         aprovado_cadastro_em: new Date().toISOString(),
         observacao_cadastro: observacao || null,
         analise_previa_resultado: analisePrevia,
@@ -126,7 +134,10 @@ Deno.serve(async (req) => {
       .eq('id', solicitacao_id)
       .eq('status', 'aguardando_cadastro');
 
-    if (error) throw error;
+    if (error) {
+      console.error('[aprovar-troca-cadastro] update error:', error);
+      throw new Error(error.message || 'Falha ao atualizar solicitação');
+    }
 
     return new Response(JSON.stringify({ success: true, analise_previa: analisePrevia }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
