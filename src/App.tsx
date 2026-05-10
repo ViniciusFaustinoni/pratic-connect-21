@@ -504,7 +504,7 @@ const App = () => (
               <Route path="/vendas/leads/:id/editar" element={<LeadEditar />} />
               <Route path="/vendas/ativacoes" element={<><VendasNotificationListener /><AtivacoesList /></>} />
               <Route path="/vendas/cotacoes" element={<><VendasNotificationListener /><Cotacoes /></>} />
-              <Route path="/vendas/cotacoes/:id" element={<CotacaoDetalhe />} />
+              <Route path="/vendas/cotacoes/:id" element={<CotacaoDetalheRedirect />} />
               <Route path="/vendas/contratos" element={<><VendasNotificationListener /><Contratos /></>} />
               <Route path="/vendas/equipe-comercial" element={<Propostas />} />
               <Route path="/vendas/consultores" element={<Consultores />} />
