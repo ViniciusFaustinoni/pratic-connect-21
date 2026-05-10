@@ -1,53 +1,59 @@
-## Converter Detalhe de Cotação de Drawer → Modal com Abas
+## Diagnóstico
 
-Pesquisei o histórico: a versão "anterior" carregada no chat era uma página (`CotacaoDetalhe.tsx`), não um modal com abas — qualquer versão modal com abas anterior está fora da janela de histórico disponível. Vou então **reconstruir o modal com abas reaproveitando o conteúdo já existente no drawer** (mesmas seções, mesmas ações).
+Investiguei o serviço `LTB4J74` (instalação com encaixe, ID `0edf10a4-...`) e encontrei o problema.
 
-### 1. Novo componente `src/components/cotacoes/CotacaoDetalheModal.tsx`
+A atribuição no mapa **funcionou** — só que foi para o técnico **errado**:
 
-- Baseado em `Dialog` (shadcn) com `DialogContent` largo: `max-w-5xl w-[95vw] max-h-[90vh] flex flex-col p-0`.
-- Estrutura interna:
-  - **Header fixo** (não rolável): `CotacaoHeader` + botão fechar.
-  - **Tabs** (shadcn `Tabs`) logo abaixo do header, sticky.
-  - **Conteúdo das abas** rolável (`overflow-y-auto flex-1`).
-- Reaproveita exatamente os mesmos hooks/states/handlers já implementados em `CotacaoDetalheDrawer.tsx` (sem duplicar lógica de negócio: `useCotacao`, `useCotacaoActions`, mutations, handlers de WhatsApp/PDF/Email/Duplicar/Editar/Vincular/Wizard).
+- `servicos.profissional_id` = **WALLACE NUNES** (`f6313b28-...`)
+- `instalacoes.instalador_id` = **WALLACE NUNES**
+- Log `servicos_atribuicoes_log`: "Atribuição manual pelo painel" às 16:35:13 UTC
+- O `[TESTE] VISTORIADOR` (`46477310-...`) **não tem nenhum serviço atribuído** — por isso o app dele não recebeu nada.
 
-### 2. Abas (4)
+### Por que caiu no técnico errado
 
-```
-┌──────────────────────────────────────────────────────┐
-│ [Resumo] [Planos] [Cliente & Veículo] [Histórico]    │
-└──────────────────────────────────────────────────────┘
-```
+Os dois vistoriadores estão com posição GPS praticamente idêntica:
 
-- **Resumo** — Bloco "Plano Selecionado" (resumo) + `CotacaoAcoes` (Baixar PDF, WhatsApp, Email, Duplicar, Editar, Link Público, Gerar Contrato) + `CotacaoVendedor`.
-- **Planos** — Lista/grid de `PlanoCardComparativo` (todos os planos da cotação) com `PlanoDetalhesModal` aninhado.
-- **Cliente & Veículo** — `CotacaoClienteVeiculo` + `VincularLeadModal` trigger + `TrocaTitularidadeBadge`.
-- **Histórico** — `CotacaoTimeline`.
+| Técnico | Lat | Lng | em_servico |
+|---|---|---|---|
+| WALLACE NUNES | -22.9193252 | -43.4167186 | true |
+| [TESTE] VISTORIADOR | -22.9193766 | -43.4168007 | true |
 
-Os modais filhos (`EnviarEmailModal`, `VincularLeadModal`, `ContratoWizard`, `CotacaoFormDialog`, `DuplicarCotacaoDialog`, `PlanoDetalhesModal`) continuam montados no nível do modal principal (mesma estratégia do drawer atual).
+Distância entre eles: **~10 metros**.
 
-### 3. Substituir uso do drawer
+A função `handleTaskDragEnd` em `src/components/mapa/MapaVistoriasContent.tsx` (linhas 501–524) pega o técnico **mais próximo** do ponto onde a tarefa foi solta, dentro de um raio de 5 km. Com dois marcadores praticamente colados, qualquer pequeno desvio do mouse faz cair no Wallace em vez do TESTE.
 
-- **`src/pages/vendas/Cotacoes.tsx`**: trocar `<CotacaoDetalheDrawer …>` por `<CotacaoDetalheModal …>` (mesma assinatura `cotacaoId / open / onOpenChange`).
-- **`src/pages/vendas/VendedorHistorico.tsx`**: idem (se já usa o drawer; senão, chamar via `?abrir=`).
-- **`src/components/cotacoes/CotacaoCard.tsx`**: nenhuma mudança — continua chamando `onOpenDetalhe(cotacao)` / fallback `?abrir=`.
-- **`src/App.tsx`**: o `CotacaoDetalheRedirect` continua redirecionando `/vendas/cotacoes/:id` → `?abrir=:id` (modal abre automaticamente). Sem mudança.
+O `AlertDialog` de confirmação mostra o nome do técnico antes de aplicar (linha 1454), mas é fácil clicar "Confirmar" sem notar quando há sobreposição.
 
-### 4. Limpeza
+## Plano de correção
 
-- Arquivar/deletar `src/components/cotacoes/CotacaoDetalheDrawer.tsx` após confirmar que o modal cobre o mesmo conteúdo.
-- Manter `CotacaoHeader`, `CotacaoAcoes`, `CotacaoTimeline`, `CotacaoClienteVeiculo`, `CotacaoVendedor`, `PlanoCardComparativo`, `PlanoDetalhesModal` — todos compartilhados.
+### 1. Detectar sobreposição e forçar escolha explícita
 
-### Validação
+Em `handleTaskDragEnd` (e no equivalente `handleTecnicoDragEnd`):
 
-- Clicar em uma cotação na lista → abre **Dialog modal centralizado** com header fixo, 4 abas e conteúdo rolável.
-- Aba ativa default: **Resumo**.
-- Trocar de aba não fecha o modal nem perde estado.
-- ESC / overlay click / botão "X" fecham o modal e limpam `?abrir=` da URL.
-- `/vendas/cotacoes/:id` direto → redireciona e abre o modal na aba Resumo.
-- Todos os botões (PDF, WhatsApp, Email, Duplicar, Editar, Link Público, Gerar Contrato, Vincular Lead) funcionam dentro do modal.
+- Após encontrar o técnico mais próximo, verificar se existem **outros técnicos a menos de ~150 m** dele.
+- Se houver, em vez de abrir direto o dialog de confirmação, abrir um novo **dialog de seleção** listando todos os técnicos sobrepostos (nome, distância, nº de tarefas no dia) para o coordenador escolher manualmente.
+- Se não houver sobreposição, mantém o fluxo atual.
 
-### Fora de escopo
+### 2. Reforçar o dialog de confirmação atual
 
-- Não alterar o conteúdo dos componentes filhos (apenas o invólucro).
-- Não mexer em fluxos de Troca de Titularidade nem em `App.tsx` (redirect já está correto).
+No `AlertDialog` de `assignConfirmation` (linhas 1447+):
+
+- Destacar o nome do técnico em fonte maior / badge colorido.
+- Mostrar também a foto/iniciais e o telefone, para o coordenador conferir antes de confirmar.
+
+### 3. Ajustar o ícone arrastável
+
+Quando dois ou mais marcadores de técnico estão a < 50 m um do outro, aplicar um leve offset visual (spider) ou badge "+N" para deixar claro que há sobreposição — evita a ambiguidade na origem.
+
+### 4. (Opcional, fora deste escopo) Reatribuir o serviço atual
+
+Se o coordenador quiser, posso já mover o serviço `LTB4J74` do Wallace para o `[TESTE] VISTORIADOR` agora, para o teste continuar.
+
+## Arquivos afetados
+
+- `src/components/mapa/MapaVistoriasContent.tsx` — lógica drag-end, novo dialog de seleção, reforço do dialog de confirmação, offset visual de marcadores sobrepostos.
+
+## Perguntas
+
+1. Quer que eu também reatribua o serviço `LTB4J74` para o `[TESTE] VISTORIADOR` agora (item 4)?
+2. Para o item 3 (offset de marcadores sobrepostos), prefere "spider" (abre em leque ao clicar) ou apenas badge "+N" no marcador?

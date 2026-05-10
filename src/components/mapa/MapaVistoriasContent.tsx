@@ -53,6 +53,7 @@ import {
   Loader2,
   Pencil,
   MapPinned,
+  Users,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -144,12 +145,18 @@ function getDraggableIcon(color: string): L.DivIcon {
 
 // Technician icon with task count badge
 const vistoriadorBadgeIconCache = new Map<string, L.DivIcon>();
-function getVistoriadorIconWithBadge(color: string = COR_VISTORIADOR, count: number): L.DivIcon {
-  const cacheKey = `vistoriador-badge-${color}-${count}`;
+function getVistoriadorIconWithBadge(color: string = COR_VISTORIADOR, count: number, sobrepostos: number = 0): L.DivIcon {
+  const cacheKey = `vistoriador-badge-${color}-${count}-${sobrepostos}`;
   if (vistoriadorBadgeIconCache.has(cacheKey)) return vistoriadorBadgeIconCache.get(cacheKey)!;
   const badgeHtml = count > 0
     ? `<div style="position:absolute;top:-5px;right:-5px;background:#EF4444;border-radius:50%;min-width:18px;height:18px;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.3);padding:0 3px;">
         <span style="color:white;font-size:10px;font-weight:700;line-height:1;">${count}</span>
+      </div>`
+    : '';
+  // Badge de sobreposição: outros técnicos a < 50m
+  const overlapHtml = sobrepostos > 0
+    ? `<div title="Há ${sobrepostos} outro(s) técnico(s) muito próximo(s)" style="position:absolute;bottom:-5px;left:-5px;background:#F59E0B;color:#fff;border-radius:9px;height:16px;min-width:24px;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.3);padding:0 4px;font-size:9px;font-weight:700;line-height:1;">
+        +${sobrepostos}
       </div>`
     : '';
   const icon = L.divIcon({
@@ -157,6 +164,7 @@ function getVistoriadorIconWithBadge(color: string = COR_VISTORIADOR, count: num
       <div style="position:relative;">
         <img src="${svgToDataUrl(createVistoriadorMarkerSvg(color))}" width="36" height="36" />
         ${badgeHtml}
+        ${overlapHtml}
       </div>
     `,
     className: 'vistoriador-badge-icon',
@@ -292,6 +300,12 @@ export function MapaVistoriasContent() {
   const [assignConfirmation, setAssignConfirmation] = useState<{
     servicos: VistoriaMapa[];
     profissional: VistoriadorLocalizacao;
+  } | null>(null);
+
+  // Selection dialog when multiple technicians overlap at drop point
+  const [tecnicoSelecao, setTecnicoSelecao] = useState<{
+    servico: VistoriaMapa;
+    candidatos: Array<{ profissional: VistoriadorLocalizacao; distanciaMetros: number }>;
   } | null>(null);
 
   // Cancel confirmation state
@@ -441,6 +455,23 @@ export function MapaVistoriasContent() {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }, []);
 
+  // Para cada técnico, conta quantos OUTROS técnicos estão a < 50m dele.
+  // Usado no marcador para sinalizar sobreposição com badge "+N".
+  const sobreposicaoTecnicosMap = useMemo(() => {
+    const map = new Map<string, number>();
+    const lista = vistoriadoresEmServico;
+    for (const a of lista) {
+      let count = 0;
+      for (const b of lista) {
+        if (a.vistoriador_id === b.vistoriador_id) continue;
+        const distMetros = distanciaKm(a.latitude, a.longitude, b.latitude, b.longitude) * 1000;
+        if (distMetros < 50) count++;
+      }
+      map.set(a.vistoriador_id, count);
+    }
+    return map;
+  }, [vistoriadoresEmServico, distanciaKm]);
+
   const abrirAlterarEndereco = useCallback((vistoria: VistoriaMapa) => {
     setAlterarState({
       servicoId: vistoria.servico_id_unificado || vistoria.id,
@@ -499,28 +530,37 @@ export function MapaVistoriasContent() {
   };
 
   // Handle task drag-end: find nearest technician
+  // Se houver técnicos sobrepostos (< 150m do mais próximo), abre dialog de seleção em vez de atribuir direto.
   const handleTaskDragEnd = useCallback((vistoria: VistoriaMapa, newLatLng: L.LatLng) => {
-    let melhorTecnico: VistoriadorLocalizacao | null = null;
-    let melhorDist = Infinity;
+    const candidatos = vistoriadoresEmServico.map((tec) => ({
+      profissional: tec,
+      distanciaMetros: distanciaKm(newLatLng.lat, newLatLng.lng, tec.latitude, tec.longitude) * 1000,
+    })).sort((a, b) => a.distanciaMetros - b.distanciaMetros);
 
-    for (const tec of vistoriadoresEmServico) {
-      const d = distanciaKm(newLatLng.lat, newLatLng.lng, tec.latitude, tec.longitude);
-      if (d < melhorDist) {
-        melhorDist = d;
-        melhorTecnico = tec;
-      }
-    }
-
-    if (melhorTecnico && melhorDist <= 5) {
-      setAssignConfirmation({
-        servicos: [vistoria],
-        profissional: melhorTecnico,
-      });
-    } else if (melhorTecnico) {
-      toast.error(`Técnico mais próximo está a ${melhorDist.toFixed(1)} km. Solte mais perto do ícone do técnico.`);
-    } else {
+    if (candidatos.length === 0) {
       toast.error('Nenhum técnico em campo encontrado.');
+      return;
     }
+
+    const melhor = candidatos[0];
+    if (melhor.distanciaMetros > 5000) {
+      toast.error(`Técnico mais próximo está a ${(melhor.distanciaMetros / 1000).toFixed(1)} km. Solte mais perto do ícone do técnico.`);
+      return;
+    }
+
+    // Detecta sobreposição: técnicos a < 150m do mais próximo
+    const sobrepostos = candidatos.filter((c) => c.distanciaMetros - melhor.distanciaMetros < 150);
+
+    if (sobrepostos.length > 1) {
+      // Abre seleção manual entre técnicos sobrepostos
+      setTecnicoSelecao({ servico: vistoria, candidatos: sobrepostos });
+      return;
+    }
+
+    setAssignConfirmation({
+      servicos: [vistoria],
+      profissional: melhor.profissional,
+    });
   }, [vistoriadoresEmServico, distanciaKm]);
 
   // Handle technician drag-end: find nearest unassigned task
@@ -1087,11 +1127,12 @@ export function MapaVistoriasContent() {
           vistoriador.status_operacional === 'em_contato' ? '#FCD34D' :
           '#22C55E';
         const isTecnicoDraggable = !!atribuicaoManualAtiva;
+        const sobrepostos = sobreposicaoTecnicosMap.get(vistoriador.vistoriador_id) || 0;
         return (
           <Marker
-            key={`vistoriador-${vistoriador.vistoriador_id}-${taskCount}-${vistoriador.status_operacional}-${isTecnicoDraggable}`}
+            key={`vistoriador-${vistoriador.vistoriador_id}-${taskCount}-${vistoriador.status_operacional}-${isTecnicoDraggable}-${sobrepostos}`}
             position={[vistoriador.latitude, vistoriador.longitude]}
-            icon={getVistoriadorIconWithBadge(corStatus, taskCount)}
+            icon={getVistoriadorIconWithBadge(corStatus, taskCount, sobrepostos)}
             draggable={isTecnicoDraggable}
             eventHandlers={isTecnicoDraggable ? {
               dragend: (e) => {
@@ -1450,10 +1491,24 @@ export function MapaVistoriasContent() {
             <AlertDialogTitle>Confirmar Atribuição</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3">
-                <p>
-                  Deseja atribuir <strong>{formatPlacaExibicao(assignConfirmation?.servicos[0]?.veiculo_placa, 'tarefa')}</strong> ao técnico{' '}
-                  <strong>{assignConfirmation?.profissional.vistoriador_nome}</strong>?
+                <p className="text-sm">
+                  Atribuir tarefa{' '}
+                  <strong className="font-mono">{formatPlacaExibicao(assignConfirmation?.servicos[0]?.veiculo_placa, 'tarefa')}</strong>
+                  {' '}ao técnico:
                 </p>
+                {assignConfirmation && (
+                  <div className="flex items-center gap-3 p-3 rounded-md border-2 border-primary bg-primary/5">
+                    <div className="h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm flex-shrink-0">
+                      {(assignConfirmation.profissional.vistoriador_nome || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-base text-foreground leading-tight">{assignConfirmation.profissional.vistoriador_nome}</p>
+                      {assignConfirmation.profissional.telefone && (
+                        <p className="text-xs text-muted-foreground">{assignConfirmation.profissional.telefone}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
                 {assignConfirmation && (
                   <div className="bg-muted/50 rounded-md p-2 space-y-1">
                     {assignConfirmation.servicos.map((s) => (
@@ -1503,7 +1558,60 @@ export function MapaVistoriasContent() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Cancelamento de rota */}
+      {/* Seleção entre técnicos sobrepostos no mapa */}
+      <AlertDialog open={!!tecnicoSelecao} onOpenChange={(open) => !open && setTecnicoSelecao(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-amber-600" />
+              Vários técnicos no mesmo ponto
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p className="text-sm">
+                  Existem <strong>{tecnicoSelecao?.candidatos.length}</strong> técnicos próximos do ponto onde você soltou a tarefa{' '}
+                  <strong className="font-mono">{formatPlacaExibicao(tecnicoSelecao?.servico.veiculo_placa, '')}</strong>.
+                  Escolha manualmente para evitar atribuir ao técnico errado:
+                </p>
+                <div className="space-y-2">
+                  {tecnicoSelecao?.candidatos.map(({ profissional, distanciaMetros }) => {
+                    const tarefas = tarefasPorTecnico.get(profissional.vistoriador_id) || [];
+                    return (
+                      <button
+                        key={profissional.vistoriador_id}
+                        type="button"
+                        onClick={() => {
+                          setAssignConfirmation({
+                            servicos: [tecnicoSelecao.servico],
+                            profissional,
+                          });
+                          setTecnicoSelecao(null);
+                        }}
+                        className="w-full flex items-center gap-3 p-3 rounded-md border-2 border-border hover:border-primary hover:bg-primary/5 transition-colors text-left"
+                      >
+                        <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm flex-shrink-0">
+                          {(profissional.vistoriador_nome || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-sm text-foreground leading-tight truncate">{profissional.vistoriador_nome}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {distanciaMetros < 1 ? '<1' : Math.round(distanciaMetros)} m do ponto · {tarefas.length} tarefa{tarefas.length !== 1 ? 's' : ''}
+                          </p>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={!!cancelConfirmation} onOpenChange={(open) => !open && setCancelConfirmation(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
