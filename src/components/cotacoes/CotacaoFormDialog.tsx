@@ -3005,28 +3005,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                           </p>
                         )}
                       </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-muted-foreground">Validade:</span>
-                        <FormField
-                          control={form.control}
-                          name="validade_dias"
-                          render={({ field }) => (
-                            <FormItem className="flex items-center gap-1 space-y-0">
-                              <FormControl>
-                                <Input 
-                                  type="number" 
-                                  min={1} 
-                                  max={30}
-                                  {...field}
-                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 7)}
-                                  className="w-14 h-7 text-center font-medium"
-                                />
-                              </FormControl>
-                              <span className="text-muted-foreground">dias</span>
-                            </FormItem>
-                          )}
-                        />
-                      </div>
+                    </div>
+
                     </div>
                   </CardContent>
                 </Card>
