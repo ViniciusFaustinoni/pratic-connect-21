@@ -29,12 +29,6 @@ const formatCurrency = (value: number | null | undefined) => {
   }).format(value);
 };
 
-const formatDate = (date: string) => {
-  return new Date(date).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-  });
-};
 
 const formatDateTime = (date: string) => {
   return new Date(date).toLocaleString('pt-BR', {
