@@ -77,14 +77,20 @@ export default function AppLogin() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<LoginError | string | null>(null);
 
-  // Carregar email salvo ao montar
+  // Carregar email salvo ao montar (ou via query string ?email=)
   useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const emailFromQuery = params.get('email');
+    if (emailFromQuery) {
+      setEmail(emailFromQuery);
+      return;
+    }
     const savedEmail = localStorage.getItem(STORAGE_KEY_REMEMBER_EMAIL);
     if (savedEmail) {
       setEmail(savedEmail);
       setRememberMe(true);
     }
-  }, []);
+  }, [location.search]);
 
   // Redirect if already logged in as associado or test mode
   useEffect(() => {
