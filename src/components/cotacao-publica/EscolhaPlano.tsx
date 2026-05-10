@@ -19,6 +19,7 @@ export interface PlanoOpcao {
   destaque?: boolean;
   nivel?: string;
   categoriaVeiculo?: string;
+  origem?: 'plano_vigente_antigo';
 }
 
 interface EscolhaPlanoProps {
