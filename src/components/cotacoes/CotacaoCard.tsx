@@ -347,7 +347,7 @@ export function CotacaoCard({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => navigate(`/vendas/cotacoes/${cotacao.id}`)}>
+              <DropdownMenuItem onClick={() => onOpenDetalhe ? onOpenDetalhe(cotacao) : navigate(`/vendas/cotacoes?abrir=${cotacao.id}`)}>
                 <FileText className="h-4 w-4 mr-2" />
                 Ver Detalhes
               </DropdownMenuItem>
