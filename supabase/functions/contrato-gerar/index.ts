@@ -981,6 +981,31 @@ serve(async (req) => {
         // Gerar link_token para permitir acesso público ao contrato (satisfaz RLS)
         const linkToken = crypto.randomUUID();
 
+        // Resolver valor mensal: cotação > plano vigente do antigo titular (troca de titularidade)
+        let valorMensalFinal: number = Number(cotacao.valor_total_mensal) || 0;
+        if (!valorMensalFinal || valorMensalFinal === 0) {
+          // Fallback 1: troca de titularidade — buscar contrato ativo do antigo titular
+          const dadosExtrasCot = (cotacao as any).dados_extras || {};
+          const antigoId = dadosExtrasCot.associado_antigo_id;
+          if (tipoEntrada === 'troca_titularidade' && antigoId) {
+            const { data: contratoAntigo } = await supabase
+              .from('contratos')
+              .select('valor_mensal, valor_adesao')
+              .eq('associado_id', antigoId)
+              .in('status', ['ativo', 'em_analise', 'assinado'])
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (contratoAntigo?.valor_mensal) {
+              valorMensalFinal = Number(contratoAntigo.valor_mensal);
+              console.log(`[CONTRATO-GERAR] valor_mensal recuperado do contrato antigo: ${valorMensalFinal}`);
+            }
+          }
+        }
+        if (!valorMensalFinal || valorMensalFinal === 0) {
+          throw new Error('valor_mensal não pôde ser determinado para o contrato. O associado precisa selecionar um plano antes de gerar o contrato.');
+        }
+
         const { data: contrato, error: contratoError } = await supabase
           .from('contratos')
           .insert({
@@ -991,7 +1016,7 @@ serve(async (req) => {
             veiculo_id: veiculoId,
             plano_id: cotacao.plano_escolhido_id || cotacao.plano_id,
             valor_adesao: cotacao.valor_adesao || 0,
-            valor_mensal: cotacao.valor_total_mensal || cotacao.valor_mensal,
+            valor_mensal: valorMensalFinal,
             valor_adicional: cotacao.valor_adicional || 0,
             vendedor_id: vendedorIdFinal,
             status: 'rascunho',
