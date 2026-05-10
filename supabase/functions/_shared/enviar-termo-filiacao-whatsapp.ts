@@ -19,6 +19,9 @@ interface EnviarTermoFiliacaoParams {
   veiculoLabel?: string | null;   // ex: "HB20 - ABC1234"
   numeroContrato?: string | null; // ex: "PRT-2026-001234"
   autentiqueUrl: string;          // ex: https://assina.ae/abcd123
+  vendedorTelefone?: string | null;
+  vendedorNome?: string | null;
+  tipoEntrada?: string | null;    // ex: 'troca_titularidade', 'adesao'
 }
 
 interface ResultadoEnvio {
