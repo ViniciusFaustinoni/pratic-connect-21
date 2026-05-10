@@ -20,7 +20,7 @@ async function carregarConfigPdf(): Promise<PdfConfig | null> {
   try {
     const { data } = await supabase
       .from('cotacao_pdf_config')
-      .select('cor_primaria, cor_secundaria, logo_url, nome_empresa, mensagem_encerramento, mostrar_validade, mostrar_dados_solicitante, mostrar_dados_veiculo, mostrar_mensagem_encerramento, mostrar_whatsapp_rodape')
+      .select('cor_primaria, cor_secundaria, logo_url, nome_empresa, mensagem_encerramento, mostrar_dados_solicitante, mostrar_dados_veiculo, mostrar_mensagem_encerramento, mostrar_whatsapp_rodape')
       .limit(1)
       .maybeSingle();
     return data as PdfConfig | null;
