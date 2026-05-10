@@ -406,6 +406,11 @@ const RedirectGradeComissao = () => {
   return <Navigate to={`/comissoes/grades/${id}`} replace />;
 };
 
+const CotacaoDetalheRedirect = () => {
+  const { id } = useParams();
+  return <Navigate to={`/vendas/cotacoes?abrir=${id}`} replace />;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
