@@ -276,6 +276,10 @@ Ficou com alguma dúvida? Estou à disposição!
   const planosComparacao = (cotacao?.dados_extras as { planos_comparacao?: PlanoComparativo[] } | null)?.planos_comparacao || [];
   const categoriaVeiculo = (cotacao as { categoria_veiculo?: string } | undefined)?.categoria_veiculo;
 
+  const isTrocaTitularidade =
+    (cotacao?.dados_extras as { tipo_entrada?: string } | null)?.tipo_entrada === 'troca_titularidade';
+  const { data: planoAtualTroca } = useTrocaPlanoAtual(cotacao?.id, isTrocaTitularidade);
+
   const planosExibir: PlanoComparativo[] = planosComparacao.length > 0
     ? planosComparacao
     : cotacao?.planos
