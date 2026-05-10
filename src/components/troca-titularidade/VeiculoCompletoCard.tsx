@@ -91,23 +91,7 @@ export function VeiculoCompletoCard({ veiculoId }: Props) {
       </div>
 
       {/* RASTREADOR */}
-      <div className="rounded border p-3 space-y-2">
-        <h4 className="font-semibold flex items-center gap-2">
-          {rastreador ? <Wifi className="h-4 w-4 text-green-500" /> : <WifiOff className="h-4 w-4 text-muted-foreground" />}
-          Rastreador
-        </h4>
-        {rastreador ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Field label="Código" value={rastreador.codigo} mono />
-            <Field label="IMEI" value={rastreador.imei} mono />
-            <Field label="Plataforma" value={rastreador.plataforma} />
-            <Field label="Status" value={rastreador.status} />
-            <Field label="Última comunicação" value={formatDateTime(rastreador.ultima_comunicacao)} />
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">Sem rastreador instalado.</p>
-        )}
-      </div>
+      <RastreadorBlock rastreador={rastreador} />
 
       {/* CONTRATO ATIVO */}
       {contrato && (
