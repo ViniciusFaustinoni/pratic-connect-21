@@ -58,20 +58,6 @@ export function TutorialStepView({ step, total }: TutorialStepViewProps) {
         </Card>
       )}
 
-      {step.links && step.links.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {step.links.map((link) => (
-            <Link
-              key={link.url}
-              to={link.url}
-              className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              {link.label}
-            </Link>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
