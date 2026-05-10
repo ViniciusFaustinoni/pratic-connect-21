@@ -564,21 +564,29 @@ serve(async (req) => {
           .maybeSingle();
 
         // BLOQUEIO ANTI-SEQUESTRO: a placa já existe sob OUTRO associado.
-        // Nunca reaproveitar — o fluxo correto seria Substituição/Troca de Titularidade.
+        // Exceção: troca de titularidade legítima (termo de cancelamento já assinado).
         if (data && data.associado_id && data.associado_id !== associadoId) {
-          console.error(
-            `[BLOQUEIO-DONO] Placa ${placaLimpa} já está vinculada ao associado ${data.associado_id}, ` +
-            `mas o solicitante atual é ${associadoId} (cotação ${cotacao_id}).`
+          const liberadoPorTroca = await placaLiberadaPorTrocaTitularidade(
+            supabase, placaLimpa, (cotacao as any).dados_extras,
           );
-          return new Response(
-            JSON.stringify({
-              success: false,
-              error: `A placa ${placaLimpa} já está vinculada a outro associado no sistema. ` +
-                     `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
-              code: 'PLACA_DE_OUTRO_ASSOCIADO',
-            }),
-            { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-          );
+          if (!liberadoPorTroca) {
+            console.error(
+              `[BLOQUEIO-DONO] Placa ${placaLimpa} já está vinculada ao associado ${data.associado_id}, ` +
+              `mas o solicitante atual é ${associadoId} (cotação ${cotacao_id}).`
+            );
+            return new Response(
+              JSON.stringify({
+                success: false,
+                error: `A placa ${placaLimpa} já está vinculada a outro associado no sistema. ` +
+                       `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
+                code: 'PLACA_DE_OUTRO_ASSOCIADO',
+              }),
+              { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+          console.log(`[BLOQUEIO-DONO] Liberado por troca de titularidade legítima: placa=${placaLimpa}`);
+          // Não reaproveita o veículo do antigo (transferência ocorrerá em efetivar-troca-titularidade)
+          data.associado_id = null as any;
         }
 
         veiculoExistente = data ? { id: data.id } : null;
