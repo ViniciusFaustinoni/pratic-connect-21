@@ -289,9 +289,10 @@ export default function CotacaoContratacao() {
   }, [cotacao?.plano_escolhido_id]);
 
   const handleSelecionarPlano = () => {
-    if (planoSelecionadoId) {
-      selecionarPlano(planoSelecionadoId);
-    }
+    if (!planoSelecionadoId) return;
+    const plano = planosDisponiveis.find((p) => p.id === planoSelecionadoId);
+    if (!plano) return;
+    selecionarPlano(plano);
   };
 
   const handleSalvarDados = (dados: DadosPessoaisForm) => {

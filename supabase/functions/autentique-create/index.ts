@@ -234,16 +234,18 @@ serve(async (req) => {
 
     console.log(`[autentique-create] Nenhum documento existente, criando novo para contrato ${contratoId}`);
 
-    // ============= BUSCAR NOME DO CONSULTOR/VENDEDOR =============
+    // ============= BUSCAR NOME E TELEFONE DO CONSULTOR/VENDEDOR =============
     let vendedorNome: string | null = null;
+    let vendedorTelefone: string | null = null;
     if (contrato.vendedor_id) {
       const { data: vendedorProfile } = await supabase
         .from('profiles')
-        .select('nome')
+        .select('nome, telefone, whatsapp')
         .eq('id', contrato.vendedor_id)
         .maybeSingle();
       vendedorNome = vendedorProfile?.nome || null;
-      console.log(`[autentique-create] Consultor: ${vendedorNome || 'não encontrado'}`);
+      vendedorTelefone = (vendedorProfile as any)?.whatsapp || (vendedorProfile as any)?.telefone || null;
+      console.log(`[autentique-create] Consultor: ${vendedorNome || 'não encontrado'} (tel: ${vendedorTelefone || 'sem telefone'})`);
     }
 
     // ============= BUSCAR TEMPLATE DO BANCO DE DADOS =============
@@ -848,6 +850,9 @@ serve(async (req) => {
           veiculoLabel,
           numeroContrato: (contrato as any).numero,
           autentiqueUrl: signatureLink,
+          vendedorTelefone,
+          vendedorNome,
+          tipoEntrada: (contrato as any).tipo_entrada || null,
         });
       } catch (waErr) {
         console.warn('[autentique-create] envio WhatsApp falhou (não bloqueante):', waErr);
