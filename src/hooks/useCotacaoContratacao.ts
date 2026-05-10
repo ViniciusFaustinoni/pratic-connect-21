@@ -377,6 +377,7 @@ export function useCotacaoContratacao(token: string | undefined) {
         return 4; // Pagamento (movido)
       case 'pagamento_ok':
       case 'contrato_gerado':
+      case 'ativo':
         return 5; // Conclusão
       default:
         return 0;
