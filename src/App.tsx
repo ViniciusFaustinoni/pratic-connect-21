@@ -76,7 +76,7 @@ const LeadDetalhe = lazy(() => import("./pages/vendas/LeadDetalhe"));
 const LeadEditar = lazy(() => import("./pages/vendas/LeadEditar"));
 const AtivacoesList = lazy(() => import("./pages/vendas/AtivacoesList"));
 const Cotacoes = lazy(() => import("./pages/vendas/Cotacoes"));
-const CotacaoDetalhe = lazy(() => import("./pages/vendas/CotacaoDetalhe"));
+// CotacaoDetalhe foi convertido em drawer (CotacaoDetalheDrawer) — rota legacy redireciona para a lista com ?abrir=
 const Contratos = lazy(() => import("./pages/vendas/Contratos"));
 const Propostas = lazy(() => import("./pages/vendas/Propostas"));
 const Consultores = lazy(() => import("./pages/vendas/Consultores"));
@@ -406,6 +406,11 @@ const RedirectGradeComissao = () => {
   return <Navigate to={`/comissoes/grades/${id}`} replace />;
 };
 
+const CotacaoDetalheRedirect = () => {
+  const { id } = useParams();
+  return <Navigate to={`/vendas/cotacoes?abrir=${id}`} replace />;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
@@ -504,7 +509,7 @@ const App = () => (
               <Route path="/vendas/leads/:id/editar" element={<LeadEditar />} />
               <Route path="/vendas/ativacoes" element={<><VendasNotificationListener /><AtivacoesList /></>} />
               <Route path="/vendas/cotacoes" element={<><VendasNotificationListener /><Cotacoes /></>} />
-              <Route path="/vendas/cotacoes/:id" element={<CotacaoDetalhe />} />
+              <Route path="/vendas/cotacoes/:id" element={<CotacaoDetalheRedirect />} />
               <Route path="/vendas/contratos" element={<><VendasNotificationListener /><Contratos /></>} />
               <Route path="/vendas/equipe-comercial" element={<Propostas />} />
               <Route path="/vendas/consultores" element={<Consultores />} />

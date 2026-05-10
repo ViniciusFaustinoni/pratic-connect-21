@@ -61,6 +61,9 @@ const DuplicarCotacaoDialog = lazy(() =>
 const NovaEntradaDialog = lazy(() =>
   import('@/components/vendas/OutrasEntradasMenu').then((m) => ({ default: m.NovaEntradaDialog }))
 );
+const CotacaoDetalheDrawer = lazy(() =>
+  import('@/components/cotacoes/CotacaoDetalheDrawer').then((m) => ({ default: m.CotacaoDetalheDrawer }))
+);
 import type { DuplicarCotacaoConfirmPayload } from '@/components/cotacoes/DuplicarCotacaoDialog';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -143,6 +146,8 @@ export default function Cotacoes() {
   
   // Cotação selecionada (usada por handlers como duplicar/contrato/email)
   const [cotacaoSelecionada, setCotacaoSelecionada] = useState<CotacaoWithRelations | null>(null);
+  // Drawer de detalhe da cotação
+  const [cotacaoDetalheId, setCotacaoDetalheId] = useState<string | null>(null);
   const [showRelatorioDialog, setShowRelatorioDialog] = useState(false);
 
   const permissions = usePermissions();
@@ -218,7 +223,15 @@ export default function Cotacoes() {
     const novoParam = searchParams.get('novo');
     const tipoEntrada = searchParams.get('tipo_entrada');
     const associadoId = searchParams.get('associado_id');
-    
+    const abrirParam = searchParams.get('abrir');
+
+    if (abrirParam) {
+      setCotacaoDetalheId(abrirParam);
+      searchParams.delete('abrir');
+      setSearchParams(searchParams, { replace: true });
+      return;
+    }
+
     if (leadParam) {
       setLeadIdFromUrl(leadParam);
       setShowCotacaoForm(true);
@@ -361,7 +374,7 @@ export default function Cotacoes() {
 
   const handleRowClick = (cotacao: CotacaoWithRelations) => {
     setCotacaoSelecionada(cotacao);
-    navigate(`/vendas/cotacoes/${cotacao.id}`);
+    setCotacaoDetalheId(cotacao.id);
   };
 
   const handleDuplicar = (cotacao: CotacaoWithRelations) => {
@@ -1375,6 +1388,18 @@ export default function Cotacoes() {
             }}
             quantidade={selectedIds.size}
             onConfirm={handleExcluirEmLote}
+          />
+        </Suspense>
+      )}
+
+      {cotacaoDetalheId && (
+        <Suspense fallback={null}>
+          <CotacaoDetalheDrawer
+            cotacaoId={cotacaoDetalheId}
+            open={!!cotacaoDetalheId}
+            onOpenChange={(open) => {
+              if (!open) setCotacaoDetalheId(null);
+            }}
           />
         </Suspense>
       )}

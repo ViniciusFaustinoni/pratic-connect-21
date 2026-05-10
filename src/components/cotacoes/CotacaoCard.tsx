@@ -102,6 +102,7 @@ interface CotacaoCardProps {
   onCopiarWhatsApp?: (cotacao: CotacaoWithRelations) => void;
   permissions?: CotacaoCardPermissions;
   isCopiandoWhatsApp?: boolean;
+  onOpenDetalhe?: (cotacao: CotacaoWithRelations) => void;
 }
 
 export function CotacaoCard({
@@ -123,6 +124,7 @@ export function CotacaoCard({
   onCopiarWhatsApp,
   permissions,
   isCopiandoWhatsApp = false,
+  onOpenDetalhe,
 }: CotacaoCardProps) {
   const status = statusConfig[cotacao.status as StatusCotacaoExtended] || statusConfig.rascunho;
   const hasLead = !!cotacao.lead_id;
@@ -146,7 +148,7 @@ export function CotacaoCard({
         "overflow-hidden border-l-4 transition-all hover:shadow-md cursor-pointer",
         getBgClass()
       )}
-      onClick={() => navigate(`/vendas/cotacoes/${cotacao.id}`)}
+      onClick={() => onOpenDetalhe ? onOpenDetalhe(cotacao) : navigate(`/vendas/cotacoes?abrir=${cotacao.id}`)}
     >
       {/* Header do Card: Status + Etapa da Venda + Vendedor + Tempo */}
       <div className="flex items-center justify-between px-4 py-2 bg-muted/30 gap-2 flex-wrap">
@@ -345,7 +347,7 @@ export function CotacaoCard({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => navigate(`/vendas/cotacoes/${cotacao.id}`)}>
+              <DropdownMenuItem onClick={() => onOpenDetalhe ? onOpenDetalhe(cotacao) : navigate(`/vendas/cotacoes?abrir=${cotacao.id}`)}>
                 <FileText className="h-4 w-4 mr-2" />
                 Ver Detalhes
               </DropdownMenuItem>
