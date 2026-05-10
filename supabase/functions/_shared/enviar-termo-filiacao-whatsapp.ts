@@ -128,6 +128,40 @@ export async function enviarTermoFiliacaoWhatsApp(
     }
 
     console.log(`${tag} enviado com sucesso`, { contratoId: params.contratoId, template: templateName });
+
+    // Notificação interna ao vendedor (best-effort, sem template Meta — texto livre)
+    if (params.vendedorTelefone) {
+      try {
+        const tipoLabel = params.tipoEntrada === 'troca_titularidade'
+          ? 'troca de titularidade'
+          : params.tipoEntrada === 'inclusao'
+            ? 'inclusão de veículo'
+            : params.tipoEntrada === 'substituicao_placa' || params.tipoEntrada === 'substituicao'
+              ? 'substituição de veículo'
+              : 'adesão';
+        const veiculoTxt = params.veiculoLabel ? ` (${params.veiculoLabel})` : '';
+        const numeroTxt = params.numeroContrato ? ` ${params.numeroContrato}` : '';
+        const clienteTxt = params.nomeCompleto || 'o cliente';
+        const msgVendedor =
+          `Olá, ${primeiroNome(params.vendedorNome)}! ✅\n\n` +
+          `O Termo de Filiação${numeroTxt}${veiculoTxt} foi enviado para ${clienteTxt} ` +
+          `assinar via Autentique (${tipoLabel}).\n\n` +
+          `Acompanhe a assinatura pelo painel.`;
+
+        await supabase.functions.invoke('whatsapp-send-text', {
+          body: {
+            telefone: params.vendedorTelefone,
+            mensagem: msgVendedor,
+            referencia_tipo: 'termo_filiacao_vendedor',
+            referencia_id: params.contratoId,
+          },
+        });
+        console.log(`${tag} notificação enviada ao vendedor`, { telefone: params.vendedorTelefone });
+      } catch (vendErr: any) {
+        console.warn(`${tag} falha ao notificar vendedor (não bloqueante):`, vendErr?.message || vendErr);
+      }
+    }
+
     return {
       success: true,
       template_usado: templateName,
