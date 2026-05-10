@@ -26,6 +26,8 @@ import { CotacaoVendedor } from '@/components/cotacoes/CotacaoVendedor';
 import { PlanoCardComparativo, type PlanoComparativo } from '@/components/cotacoes/PlanoCardComparativo';
 import { PlanoDetalhesModal } from '@/components/cotacoes/PlanoDetalhesModal';
 import { TrocaTitularidadeBadge } from '@/components/cotacoes/TrocaTitularidadeBadge';
+import { useTrocaPlanoAtual } from '@/hooks/useTrocaPlanoAtual';
+import { History } from 'lucide-react';
 
 import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
 import { VincularLeadModal } from '@/components/cotacoes/VincularLeadModal';
