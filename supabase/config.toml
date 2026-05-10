@@ -210,3 +210,6 @@ verify_jwt = false
 
 [functions.disparar-cobranca-csv-meta]
 verify_jwt = true
+
+[functions.cotacao-criar-senha]
+verify_jwt = false
