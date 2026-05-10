@@ -1,6 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { DollarSign, Layers, Clock, Calendar } from 'lucide-react';
+import { DollarSign, Layers, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { STATUS_COTACAO_LABELS, STATUS_COTACAO_COLORS } from '@/types/vendas';
 import type { StatusCotacao } from '@/types/vendas';
