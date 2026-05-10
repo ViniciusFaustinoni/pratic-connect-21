@@ -400,6 +400,62 @@ export default function CotacaoContratacao() {
     );
   }
 
+  // Contrato já ativado — associado ativo, jornada concluída
+  if (cotacao.status_contratacao === 'ativo') {
+    return (
+      <div className="dark min-h-screen public-premium-bg flex items-center justify-center p-4">
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-1/4 left-1/3 w-96 h-96 rounded-full bg-success/10 blur-[120px]" />
+          <div className="absolute bottom-1/3 right-1/4 w-72 h-72 rounded-full bg-primary/10 blur-[100px]" />
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5, type: 'spring' }}
+          className="relative z-10 w-full max-w-md"
+        >
+          <Card className="border-success/30 bg-card/80 backdrop-blur-xl">
+            <CardContent className="pt-8 pb-8 text-center space-y-5">
+              <motion.div
+                className="w-20 h-20 mx-auto rounded-full bg-success/10 flex items-center justify-center"
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+              >
+                <PartyPopper className="h-10 w-10 text-success" />
+              </motion.div>
+
+              <div className="space-y-2">
+                <h1 className="text-2xl font-bold text-foreground">Proteção ativada!</h1>
+                <p className="text-muted-foreground">
+                  Seu contrato já está <strong className="text-success">ativo</strong>. Você agora faz parte da PRATIC e está protegido.
+                </p>
+              </div>
+
+              <Badge variant="outline" className="text-base px-5 py-2 border-success/30 text-success">
+                {cotacao.numero}
+              </Badge>
+
+              <div className="pt-2 space-y-2">
+                <a
+                  href="https://app.praticcar.org/app/login"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+                >
+                  <Shield className="h-4 w-4" />
+                  Acessar meu app de associado
+                </a>
+                <p className="text-xs text-muted-foreground">
+                  Faça login com seu e-mail e a senha que você definiu na contratação.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+    );
+  }
+
   // Contrato já gerado
   if (cotacao.status_contratacao === 'contrato_gerado' && cotacao.contrato_gerado_id) {
     return (
