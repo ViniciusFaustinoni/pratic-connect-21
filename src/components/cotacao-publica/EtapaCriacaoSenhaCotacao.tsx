@@ -179,7 +179,7 @@ export function EtapaCriacaoSenhaCotacao({ token, numeroCotacao, cpf, email }: P
 
             <div className="rounded-md border border-border/50 bg-muted/20 p-3 text-xs">
               <p className="text-muted-foreground">Seu login será:</p>
-              <p className="font-mono mt-1 break-all">{mascararCpfEmail(cpf)}</p>
+              <p className="font-mono mt-1 break-all">{loginPreview(email, cpf)}</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
