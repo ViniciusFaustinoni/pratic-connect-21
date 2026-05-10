@@ -274,8 +274,11 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
           const { data, error } = await supabase.functions.invoke('importar-associado-sga', {
             body: { cpf: cpfLimpo },
           });
+          // Mensagem amigável (404 "Associado não encontrado no SGA" etc.) tem
+          // prioridade sobre o erro genérico do SDK ("Edge function returned 404: Error")
+          const msgAmigavel = (data as any)?.error;
+          if (msgAmigavel) throw new Error(msgAmigavel);
           if (error) throw error;
-          if ((data as any)?.error) throw new Error((data as any).error);
           const associadoLocalId = (data as any)?.associado_id;
           if (!associadoLocalId) {
             toast.error('Falha ao localizar associado após import do SGA');
