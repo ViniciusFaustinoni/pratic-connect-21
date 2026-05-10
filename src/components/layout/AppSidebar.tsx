@@ -117,6 +117,7 @@ import { useAppRoles } from '@/hooks/useAppRoles';
 import { useFipeMenorAtivo } from '@/hooks/useFipeMenorAtivo';
 import { useBiometriasPendentesCount } from '@/hooks/useBiometriasPendentes';
 import { useAprovacoesMonitoramentoCount } from '@/hooks/useAprovacoesMonitoramentoCount';
+import { useProcessosOperacionaisCount } from '@/hooks/useProcessosOperacionaisCount';
 
 // Mapeamento de cores por grupo/item
 const MENU_COLORS: Record<string, string> = {
