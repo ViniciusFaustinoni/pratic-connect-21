@@ -363,7 +363,7 @@ export default function Cotacoes() {
 
   const handleRowClick = (cotacao: CotacaoWithRelations) => {
     setCotacaoSelecionada(cotacao);
-    navigate(`/vendas/cotacoes/${cotacao.id}`);
+    setCotacaoDetalheId(cotacao.id);
   };
 
   const handleDuplicar = (cotacao: CotacaoWithRelations) => {
