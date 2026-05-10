@@ -143,6 +143,8 @@ export default function Cotacoes() {
   
   // Cotação selecionada (usada por handlers como duplicar/contrato/email)
   const [cotacaoSelecionada, setCotacaoSelecionada] = useState<CotacaoWithRelations | null>(null);
+  // Drawer de detalhe da cotação
+  const [cotacaoDetalheId, setCotacaoDetalheId] = useState<string | null>(null);
   const [showRelatorioDialog, setShowRelatorioDialog] = useState(false);
 
   const permissions = usePermissions();
