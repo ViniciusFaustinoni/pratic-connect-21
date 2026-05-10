@@ -283,12 +283,19 @@ export function EscolhaPlano({
                   {/* Header: Nome + Badge */}
                   <div className="mb-4 text-center">
                     <h3 className="text-xl font-bold text-foreground mb-2">{plano.nome}</h3>
-                    <Badge 
-                      variant="outline" 
-                      className={cn('text-xs', getNivelBadgeClass(plano.nivel))}
-                    >
-                      {getNivelLabel(plano.nivel)}
-                    </Badge>
+                    <div className="flex items-center justify-center gap-2 flex-wrap">
+                      <Badge
+                        variant="outline"
+                        className={cn('text-xs', getNivelBadgeClass(plano.nivel))}
+                      >
+                        {getNivelLabel(plano.nivel)}
+                      </Badge>
+                      {plano.origem === 'plano_vigente_antigo' && (
+                        <Badge variant="outline" className="text-xs border-primary/40 text-primary bg-primary/10">
+                          Plano atual do veículo
+                        </Badge>
+                      )}
+                    </div>
                   </div>
 
                   {/* Preço - Valor mensal */}
