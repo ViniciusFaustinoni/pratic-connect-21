@@ -115,7 +115,7 @@ export function CotacaoHeader({ cotacao }: CotacaoHeaderProps) {
           </p>
 
           {/* Métricas em destaque */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <MetricCard
               icon={<DollarSign className="h-5 w-5" />}
               label="Valor FIPE"
@@ -126,12 +126,6 @@ export function CotacaoHeader({ cotacao }: CotacaoHeaderProps) {
               icon={<Layers className="h-5 w-5" />}
               label="Planos Cotados"
               value={`${numPlanos} ${numPlanos === 1 ? 'opção' : 'opções'}`}
-            />
-            <MetricCard
-              icon={<Clock className="h-5 w-5" />}
-              label={expirada ? 'Expirada em' : 'Válida até'}
-              value={formatDate(validade.toISOString())}
-              warning={expirada}
             />
           </div>
 
