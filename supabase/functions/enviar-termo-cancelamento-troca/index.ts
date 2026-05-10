@@ -211,7 +211,10 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
 
     const operations = {
       query: `mutation CreateDocumentMutation($document: DocumentInput!, $signers: [SignerInput!]!, $file: Upload!) {
-        createDocument(sandbox: false, document: $document, signers: $signers, file: $file) { id name }
+        createDocument(sandbox: false, document: $document, signers: $signers, file: $file) {
+          id name
+          signatures { public_id link { short_link } }
+        }
       }`,
       variables: {
         document: { name: `Termo de Cancelamento - Troca - ${veiculo?.placa || ''}`, new_signature_style: true },
@@ -238,19 +241,119 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
     if (!docId) throw new Error('Documento sem ID retornado');
     const termoUrl = `https://app.autentique.com.br/documentos/${docId}`;
 
+    // Slug curto (assina.ae/XYZ) — necessário para o botão URL do template Meta
+    const sigs = json.data?.createDocument?.signatures || [];
+    const shortLinkRaw: string | null =
+      sigs.map((s: any) => s?.link?.short_link).find((u: any) => typeof u === 'string' && u.includes('assina.ae')) || null;
+    const slugAutentique: string | null = shortLinkRaw
+      ? shortLinkRaw.replace(/^https?:\/\/assina\.ae\//i, '').replace(/\/+$/, '')
+      : null;
+
     // Disparo WhatsApp + persistência do status
     let waStatus: 'enviado' | 'falhou' | 'sem_telefone' = 'sem_telefone';
     if (associadoAntigo.telefone) {
+      const primeiroNome = (associadoAntigo.nome || '').trim().split(/\s+/)[0] || associadoAntigo.nome || 'Cliente';
+      const descricaoDoc = `Termo de Cancelamento - Troca de Titularidade${veiculo?.placa ? ` (${veiculo.placa})` : ''}`;
+
+      // 1) Tenta via Meta (template aprovado) — obrigatório quando provedor é Meta oficial
+      let metaSent = false;
       try {
-        const msg = `Olá, ${associadoAntigo.nome}!\n\nRecebemos uma solicitação de troca de titularidade do veículo *${veiculo?.marca || ''} ${veiculo?.modelo || ''} - ${veiculo?.placa || ''}*.\n\nPara liberar a transferência, é necessário assinar o termo de cancelamento abaixo (assinatura por reconhecimento facial):\n\n${termoUrl}\n\nApós sua assinatura, o processo segue automaticamente.`;
-        const { error: waErr } = await admin.functions.invoke('whatsapp-send-text', {
-          body: { telefone: associadoAntigo.telefone, mensagem: msg },
-        });
-        waStatus = waErr ? 'falhou' : 'enviado';
-        if (waErr) console.warn('[enviar-termo-cancelamento-troca] WhatsApp falhou:', waErr);
+        const { data: metaConfig } = await admin
+          .from('whatsapp_meta_config')
+          .select('phone_number_id, access_token')
+          .limit(1)
+          .maybeSingle();
+        const accessToken = metaConfig?.access_token || Deno.env.get('META_WHATSAPP_ACCESS_TOKEN');
+        const phoneId = metaConfig?.phone_number_id;
+
+        if (accessToken && phoneId && slugAutentique) {
+          const telDigits = (associadoAntigo.telefone || '').replace(/\D/g, '');
+          const telTo = telDigits.startsWith('55') ? telDigits : `55${telDigits}`;
+
+          const payload = {
+            messaging_product: 'whatsapp',
+            to: telTo,
+            type: 'template',
+            template: {
+              name: 'assinatura_documento_v2',
+              language: { code: 'pt_BR' },
+              components: [
+                {
+                  type: 'body',
+                  parameters: [
+                    { type: 'text', text: primeiroNome },
+                    { type: 'text', text: descricaoDoc },
+                  ],
+                },
+                {
+                  type: 'button',
+                  sub_type: 'url',
+                  index: '0',
+                  parameters: [{ type: 'text', text: slugAutentique }],
+                },
+              ],
+            },
+          };
+
+          const metaResp = await fetch(
+            `https://graph.facebook.com/v21.0/${phoneId}/messages`,
+            {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            },
+          );
+          const metaJson = await metaResp.json();
+          if (metaResp.ok) {
+            metaSent = true;
+            waStatus = 'enviado';
+            await admin.from('whatsapp_mensagens').insert({
+              direcao: 'saida',
+              telefone: telTo,
+              mensagem: `[template assinatura_documento_v2] ${primeiroNome} — ${descricaoDoc}`,
+              status: 'enviada',
+              template_id: 'assinatura_documento_v2',
+              referencia_tipo: 'troca_titularidade',
+              referencia_id: solicitacao_id,
+              mensagem_id_externo: metaJson?.messages?.[0]?.id || null,
+            }).then(() => {}).catch(() => {});
+          } else {
+            const errMsg = metaJson?.error?.message || `HTTP ${metaResp.status}`;
+            console.warn('[enviar-termo-cancelamento-troca] Meta template falhou:', errMsg);
+            await admin.from('whatsapp_mensagens').insert({
+              direcao: 'saida',
+              telefone: telTo,
+              mensagem: `[template assinatura_documento_v2] ${primeiroNome} — ${descricaoDoc}`,
+              status: 'erro',
+              template_id: 'assinatura_documento_v2',
+              referencia_tipo: 'troca_titularidade',
+              referencia_id: solicitacao_id,
+              erro_mensagem: errMsg,
+            }).then(() => {}).catch(() => {});
+          }
+        } else if (!slugAutentique) {
+          console.warn('[enviar-termo-cancelamento-troca] short_link Autentique não retornado — pulando Meta');
+        }
       } catch (e) {
-        waStatus = 'falhou';
-        console.warn('[enviar-termo-cancelamento-troca] WhatsApp exceção:', e);
+        console.warn('[enviar-termo-cancelamento-troca] Meta exceção:', e);
+      }
+
+      // 2) Fallback: provedor Evolution (texto livre) — só roda se Meta não enviou
+      if (!metaSent) {
+        try {
+          const msg = `Olá, ${associadoAntigo.nome}!\n\nRecebemos uma solicitação de troca de titularidade do veículo *${veiculo?.marca || ''} ${veiculo?.modelo || ''} - ${veiculo?.placa || ''}*.\n\nPara liberar a transferência, é necessário assinar o termo de cancelamento abaixo (assinatura por reconhecimento facial):\n\n${termoUrl}\n\nApós sua assinatura, o processo segue automaticamente.`;
+          const { error: waErr } = await admin.functions.invoke('whatsapp-send-text', {
+            body: { telefone: associadoAntigo.telefone, mensagem: msg },
+          });
+          if (!waErr) waStatus = 'enviado';
+          else {
+            waStatus = 'falhou';
+            console.warn('[enviar-termo-cancelamento-troca] WhatsApp Evolution falhou:', waErr);
+          }
+        } catch (e) {
+          waStatus = 'falhou';
+          console.warn('[enviar-termo-cancelamento-troca] WhatsApp Evolution exceção:', e);
+        }
       }
     }
 
