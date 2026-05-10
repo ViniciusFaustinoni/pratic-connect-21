@@ -39,6 +39,49 @@ interface GerarContratoPayload {
 }
 
 /**
+ * BLOQUEIO ANTI-SEQUESTRO — exceção para troca de titularidade legítima.
+ * Quando o antigo titular já assinou o termo de cancelamento, o veículo é
+ * marcado com `em_troca_titularidade=true` e `troca_titularidade_id` aponta
+ * para a solicitação. Se a cotação atual pertence a essa mesma solicitação,
+ * permitimos prosseguir (o vínculo será efetivamente transferido depois,
+ * em `efetivar-troca-titularidade`).
+ */
+async function placaLiberadaPorTrocaTitularidade(
+  supabase: any,
+  placa: string,
+  cotacaoDadosExtras: any,
+): Promise<boolean> {
+  try {
+    const { data: v } = await supabase
+      .from('veiculos')
+      .select('em_troca_titularidade, troca_titularidade_id, associado_id')
+      .eq('placa', placa)
+      .maybeSingle();
+    if (!v?.em_troca_titularidade || !v?.troca_titularidade_id) return false;
+
+    // 1) Match por solicitacao_id explícito em dados_extras (preferido)
+    const solIdCot = cotacaoDadosExtras?.solicitacao_troca_id || cotacaoDadosExtras?.troca_titularidade_id;
+    if (solIdCot && solIdCot === v.troca_titularidade_id) return true;
+
+    // 2) Match por associado_antigo_id da cotação == associado_id atual do veículo
+    const antigoId = cotacaoDadosExtras?.associado_antigo_id;
+    if (antigoId && antigoId === v.associado_id) {
+      const { data: sol } = await supabase
+        .from('solicitacoes_troca_titularidade')
+        .select('id, associado_antigo_id, status, termo_cancelamento_assinado_em')
+        .eq('id', v.troca_titularidade_id)
+        .maybeSingle();
+      if (sol?.associado_antigo_id === antigoId && sol?.termo_cancelamento_assinado_em) {
+        return true;
+      }
+    }
+  } catch (e) {
+    console.warn('[placaLiberadaPorTrocaTitularidade] erro:', e);
+  }
+  return false;
+}
+
+/**
  * Normaliza nomes para comparação: remove acentos, pontuação, espaços extras,
  * e padroniza para minúsculas. Usado para detectar colisões de identidade
  * (ex.: associado existente vs solicitante da cotação).
@@ -521,21 +564,27 @@ serve(async (req) => {
           .maybeSingle();
 
         // BLOQUEIO ANTI-SEQUESTRO: a placa já existe sob OUTRO associado.
-        // Nunca reaproveitar — o fluxo correto seria Substituição/Troca de Titularidade.
+        // Exceção: troca de titularidade legítima (termo de cancelamento já assinado).
         if (data && data.associado_id && data.associado_id !== associadoId) {
-          console.error(
-            `[BLOQUEIO-DONO] Placa ${placaLimpa} já está vinculada ao associado ${data.associado_id}, ` +
-            `mas o solicitante atual é ${associadoId} (cotação ${cotacao_id}).`
+          const liberadoPorTroca = await placaLiberadaPorTrocaTitularidade(
+            supabase, placaLimpa, (cotacao as any).dados_extras,
           );
-          return new Response(
-            JSON.stringify({
-              success: false,
-              error: `A placa ${placaLimpa} já está vinculada a outro associado no sistema. ` +
-                     `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
-              code: 'PLACA_DE_OUTRO_ASSOCIADO',
-            }),
-            { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-          );
+          if (!liberadoPorTroca) {
+            console.error(
+              `[BLOQUEIO-DONO] Placa ${placaLimpa} já está vinculada ao associado ${data.associado_id}, ` +
+              `mas o solicitante atual é ${associadoId} (cotação ${cotacao_id}).`
+            );
+            return new Response(
+              JSON.stringify({
+                success: false,
+                error: `A placa ${placaLimpa} já está vinculada a outro associado no sistema. ` +
+                       `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
+                code: 'PLACA_DE_OUTRO_ASSOCIADO',
+              }),
+              { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+          console.log(`[BLOQUEIO-DONO] Liberado por troca de titularidade legítima: placa=${placaLimpa} (veículo será reaproveitado e transferido em efetivar-troca-titularidade)`);
         }
 
         veiculoExistente = data ? { id: data.id } : null;
@@ -648,21 +697,27 @@ serve(async (req) => {
             .eq('placa', placaLimpaEmail)
             .maybeSingle();
 
-          // BLOQUEIO ANTI-SEQUESTRO (branch email)
+          // BLOQUEIO ANTI-SEQUESTRO (branch email) — exceção para troca de titularidade
           if (data && data.associado_id && data.associado_id !== associadoId) {
-            console.error(
-              `[BLOQUEIO-DONO] Placa ${placaLimpaEmail} já está vinculada ao associado ${data.associado_id}, ` +
-              `mas o solicitante atual é ${associadoId} (cotação ${cotacao_id}).`
+            const liberadoPorTroca = await placaLiberadaPorTrocaTitularidade(
+              supabase, placaLimpaEmail, (cotacao as any).dados_extras,
             );
-            return new Response(
-              JSON.stringify({
-                success: false,
-                error: `A placa ${placaLimpaEmail} já está vinculada a outro associado no sistema. ` +
-                       `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
-                code: 'PLACA_DE_OUTRO_ASSOCIADO',
-              }),
-              { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-            );
+            if (!liberadoPorTroca) {
+              console.error(
+                `[BLOQUEIO-DONO] Placa ${placaLimpaEmail} já está vinculada ao associado ${data.associado_id}, ` +
+                `mas o solicitante atual é ${associadoId} (cotação ${cotacao_id}).`
+              );
+              return new Response(
+                JSON.stringify({
+                  success: false,
+                  error: `A placa ${placaLimpaEmail} já está vinculada a outro associado no sistema. ` +
+                         `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
+                  code: 'PLACA_DE_OUTRO_ASSOCIADO',
+                }),
+                { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+              );
+            }
+            console.log(`[BLOQUEIO-DONO] Liberado por troca de titularidade legítima: placa=${placaLimpaEmail}`);
           }
 
           veiculoExistenteEmail = data ? { id: data.id } : null;
@@ -777,6 +832,8 @@ serve(async (req) => {
       const placaParaInsertNovo = placaLimpaNovo || ('0KM' + crypto.randomUUID().replace(/-/g, '').slice(0, 5).toUpperCase());
 
       // BLOQUEIO ANTI-SEQUESTRO: se a placa real já existe sob outro associado, abortar.
+      // Exceção: troca de titularidade legítima — reaproveita o veículo existente.
+      let reaproveitarVeiculoExistenteId: string | null = null;
       if (placaLimpaNovo) {
         const { data: placaJaExiste } = await supabase
           .from('veiculos')
@@ -784,61 +841,75 @@ serve(async (req) => {
           .eq('placa', placaLimpaNovo)
           .maybeSingle();
         if (placaJaExiste && placaJaExiste.associado_id && placaJaExiste.associado_id !== associadoId) {
-          console.error(
-            `[BLOQUEIO-DONO] Placa ${placaLimpaNovo} já está vinculada ao associado ${placaJaExiste.associado_id}, ` +
-            `mas o solicitante novo é ${associadoId} (cotação ${cotacao_id}).`
+          const liberadoPorTroca = await placaLiberadaPorTrocaTitularidade(
+            supabase, placaLimpaNovo, (cotacao as any).dados_extras,
           );
-          return new Response(
-            JSON.stringify({
-              success: false,
-              error: `A placa ${placaLimpaNovo} já está vinculada a outro associado no sistema. ` +
-                     `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
-              code: 'PLACA_DE_OUTRO_ASSOCIADO',
-            }),
-            { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-          );
+          if (!liberadoPorTroca) {
+            console.error(
+              `[BLOQUEIO-DONO] Placa ${placaLimpaNovo} já está vinculada ao associado ${placaJaExiste.associado_id}, ` +
+              `mas o solicitante novo é ${associadoId} (cotação ${cotacao_id}).`
+            );
+            return new Response(
+              JSON.stringify({
+                success: false,
+                error: `A placa ${placaLimpaNovo} já está vinculada a outro associado no sistema. ` +
+                       `Use o fluxo de Substituição/Troca de Titularidade ou verifique se a placa foi digitada corretamente.`,
+                code: 'PLACA_DE_OUTRO_ASSOCIADO',
+              }),
+              { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+          console.log(`[BLOQUEIO-DONO] Liberado por troca de titularidade legítima: placa=${placaLimpaNovo} (reaproveitando veículo ${placaJaExiste.id})`);
+          reaproveitarVeiculoExistenteId = placaJaExiste.id;
+        } else if (placaJaExiste?.id && placaJaExiste.associado_id === associadoId) {
+          reaproveitarVeiculoExistenteId = placaJaExiste.id;
         }
       }
 
-      const categoriaFlagsNovo = {
-        flag_placa_vermelha: cotacao.categoria === 'placa_vermelha',
-        flag_ex_taxi: cotacao.categoria === 'ex_taxi',
-        flag_taxi_ativo: cotacao.categoria === 'taxi',
-        flag_chassi_remarcado: cotacao.categoria === 'chassi_remarcado',
-        flag_leilao: cotacao.categoria === 'leilao',
-        flag_ex_ressarcido: cotacao.categoria === 'ressarcimento_integral',
-      };
-      const { data: novoVeiculo, error: veiculoError } = await supabase
-        .from('veiculos')
-        .insert({
-          associado_id: associadoId,
-          placa: placaParaInsertNovo,
-          marca: cotacao.veiculo_marca,
-          modelo: cotacao.veiculo_modelo,
-          ano_fabricacao: cotacao.veiculo_ano_fabricacao || cotacao.veiculo_ano,
-          ano_modelo: cotacao.veiculo_ano,
-          cor: cotacao.veiculo_cor || null,
-          combustivel: cotacao.veiculo_combustivel || null,
-          valor_fipe: cotacao.valor_fipe || null,
-          codigo_fipe: cotacao.codigo_fipe || null,
-          chassi: cotacao.veiculo_chassi || null,
-          renavam: cotacao.veiculo_renavam || null,
-          numero_motor: cotacao.veiculo_motor || null,
-          status: 'em_analise',
-          cobertura_roubo_furto: false,
-          cobertura_total: false,
-          ...categoriaFlagsNovo,
-        })
-        .select('id')
-        .single();
+      if (reaproveitarVeiculoExistenteId) {
+        veiculoId = reaproveitarVeiculoExistenteId;
+        console.log('Veículo existente reaproveitado (troca de titularidade):', veiculoId);
+      } else {
+        const categoriaFlagsNovo = {
+          flag_placa_vermelha: cotacao.categoria === 'placa_vermelha',
+          flag_ex_taxi: cotacao.categoria === 'ex_taxi',
+          flag_taxi_ativo: cotacao.categoria === 'taxi',
+          flag_chassi_remarcado: cotacao.categoria === 'chassi_remarcado',
+          flag_leilao: cotacao.categoria === 'leilao',
+          flag_ex_ressarcido: cotacao.categoria === 'ressarcimento_integral',
+        };
+        const { data: novoVeiculo, error: veiculoError } = await supabase
+          .from('veiculos')
+          .insert({
+            associado_id: associadoId,
+            placa: placaParaInsertNovo,
+            marca: cotacao.veiculo_marca,
+            modelo: cotacao.veiculo_modelo,
+            ano_fabricacao: cotacao.veiculo_ano_fabricacao || cotacao.veiculo_ano,
+            ano_modelo: cotacao.veiculo_ano,
+            cor: cotacao.veiculo_cor || null,
+            combustivel: cotacao.veiculo_combustivel || null,
+            valor_fipe: cotacao.valor_fipe || null,
+            codigo_fipe: cotacao.codigo_fipe || null,
+            chassi: cotacao.veiculo_chassi || null,
+            renavam: cotacao.veiculo_renavam || null,
+            numero_motor: cotacao.veiculo_motor || null,
+            status: 'em_analise',
+            cobertura_roubo_furto: false,
+            cobertura_total: false,
+            ...categoriaFlagsNovo,
+          })
+          .select('id')
+          .single();
 
-      if (veiculoError) {
-        console.error('Erro CRÍTICO ao criar veículo:', veiculoError);
-        throw new Error(`Falha ao criar veículo: ${veiculoError.message}`);
+        if (veiculoError) {
+          console.error('Erro CRÍTICO ao criar veículo:', veiculoError);
+          throw new Error(`Falha ao criar veículo: ${veiculoError.message}`);
+        }
+
+        veiculoId = novoVeiculo.id;
+        console.log('Novo veículo criado:', veiculoId);
       }
-      
-      veiculoId = novoVeiculo.id;
-      console.log('Novo veículo criado:', veiculoId);
     }
 
     // 8. Calcular carência dinamicamente — baseada no catálogo de coberturas do plano

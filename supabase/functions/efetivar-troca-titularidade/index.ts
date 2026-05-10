@@ -309,6 +309,9 @@ serve(async (req) => {
       .from("veiculos")
       .update({
         associado_id: novoAssociadoId,
+        em_troca_titularidade: false,
+        troca_titularidade_id: null,
+        troca_titularidade_iniciada_em: null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", veiculoId);

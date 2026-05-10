@@ -30548,6 +30548,7 @@ export type Database = {
           cor: string | null
           created_at: string
           data_inativacao: string | null
+          em_troca_titularidade: boolean
           faixa_cota_id: string | null
           flag_avarias_vistoria: boolean | null
           flag_chassi_remarcado: boolean | null
@@ -30584,6 +30585,8 @@ export type Database = {
           substituido_por: string | null
           total_aberto_sga: number | null
           total_vencido_sga: number | null
+          troca_titularidade_id: string | null
+          troca_titularidade_iniciada_em: string | null
           updated_at: string
           uso_aplicativo: boolean | null
           valor_fipe: number | null
@@ -30615,6 +30618,7 @@ export type Database = {
           cor?: string | null
           created_at?: string
           data_inativacao?: string | null
+          em_troca_titularidade?: boolean
           faixa_cota_id?: string | null
           flag_avarias_vistoria?: boolean | null
           flag_chassi_remarcado?: boolean | null
@@ -30651,6 +30655,8 @@ export type Database = {
           substituido_por?: string | null
           total_aberto_sga?: number | null
           total_vencido_sga?: number | null
+          troca_titularidade_id?: string | null
+          troca_titularidade_iniciada_em?: string | null
           updated_at?: string
           uso_aplicativo?: boolean | null
           valor_fipe?: number | null
@@ -30682,6 +30688,7 @@ export type Database = {
           cor?: string | null
           created_at?: string
           data_inativacao?: string | null
+          em_troca_titularidade?: boolean
           faixa_cota_id?: string | null
           flag_avarias_vistoria?: boolean | null
           flag_chassi_remarcado?: boolean | null
@@ -30718,6 +30725,8 @@ export type Database = {
           substituido_por?: string | null
           total_aberto_sga?: number | null
           total_vencido_sga?: number | null
+          troca_titularidade_id?: string | null
+          troca_titularidade_iniciada_em?: string | null
           updated_at?: string
           uso_aplicativo?: boolean | null
           valor_fipe?: number | null
@@ -30822,6 +30831,13 @@ export type Database = {
             columns: ["substituido_por"]
             isOneToOne: false
             referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "veiculos_troca_titularidade_id_fkey"
+            columns: ["troca_titularidade_id"]
+            isOneToOne: false
+            referencedRelation: "solicitacoes_troca_titularidade"
             referencedColumns: ["id"]
           },
         ]
