@@ -145,21 +145,22 @@ Deno.serve(async (req) => {
     try {
       if (sol.cotacao_id) {
         // Resolver vendedor: 1) criado_por (se for vendedor), 2) vendedor do contrato antigo
-        let vendedorProfileId: string | null = null;
+        // Importante: cotacoes.vendedor_id → auth.users(id), enquanto contratos.vendedor_id → profiles(id)
+        let vendedorAuthUserId: string | null = null;
 
         if (sol.criado_por) {
           const { data: profCriador } = await admin
             .from('profiles')
-            .select('id, tipo, nome, telefone')
+            .select('id, user_id, tipo, nome, telefone')
             .eq('user_id', sol.criado_por)
             .maybeSingle();
           if (profCriador && ['vendedor', 'agencia', 'consultor_externo'].includes(profCriador.tipo || '')) {
-            vendedorProfileId = profCriador.id;
+            vendedorAuthUserId = profCriador.user_id;
             vendedorAtribuido = { profile_id: profCriador.id, nome: profCriador.nome, telefone: profCriador.telefone };
           }
         }
 
-        if (!vendedorProfileId && sol.veiculo_id) {
+        if (!vendedorAuthUserId && sol.veiculo_id) {
           const { data: contratoAntigo } = await admin
             .from('contratos')
             .select('vendedor_id')
@@ -169,13 +170,13 @@ Deno.serve(async (req) => {
             .limit(1)
             .maybeSingle();
           if (contratoAntigo?.vendedor_id) {
-            vendedorProfileId = contratoAntigo.vendedor_id;
             const { data: profVend } = await admin
               .from('profiles')
-              .select('id, nome, telefone')
-              .eq('id', vendedorProfileId)
+              .select('id, user_id, nome, telefone')
+              .eq('id', contratoAntigo.vendedor_id)
               .maybeSingle();
-            if (profVend) {
+            if (profVend?.user_id) {
+              vendedorAuthUserId = profVend.user_id;
               vendedorAtribuido = { profile_id: profVend.id, nome: profVend.nome, telefone: profVend.telefone };
             }
           }
@@ -192,8 +193,8 @@ Deno.serve(async (req) => {
           prioridade: 'alta',
           origem_troca_titularidade: true,
         };
-        if (vendedorProfileId && !cotAtual?.vendedor_id) {
-          updateCot.vendedor_id = vendedorProfileId;
+        if (vendedorAuthUserId && !cotAtual?.vendedor_id) {
+          updateCot.vendedor_id = vendedorAuthUserId;
         }
         await admin.from('cotacoes').update(updateCot).eq('id', sol.cotacao_id);
 
