@@ -197,31 +197,6 @@ export function ServicoDetailModal({ servico, open, onOpenChange }: ServicoDetai
                 </Button>
               )}
 
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-1.5 h-9 ml-auto">
-                    <MoreHorizontal className="h-4 w-4" /> Mais ações
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-60 bg-popover z-[60]">
-                  <DropdownMenuLabel className="text-xs">Ações do serviço</DropdownMenuLabel>
-                  <DropdownMenuItem asChild>
-                    <a href="/monitoramento/mapa" target="_blank" rel="noreferrer" className="cursor-pointer">
-                      <ExternalLink className="h-4 w-4 mr-2" /> Ver no mapa de campo
-                    </a>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <div className="px-1 py-0.5 [&>*]:w-full [&_button]:w-full [&_button]:justify-start [&_button]:h-8">
-                    <ConcluirPrestadorExternoButton
-                      servicoId={servico.id}
-                      servicoStatus={servico.status}
-                      veiculoId={(servico as any).veiculo_id}
-                      associadoId={(servico as any).associado_id}
-                    />
-                    <LiberarServicoButton servicoId={servico.id} servicoStatus={servico.status} />
-                  </div>
-                </DropdownMenuContent>
-              </DropdownMenu>
             </div>
           </DialogHeader>
 
