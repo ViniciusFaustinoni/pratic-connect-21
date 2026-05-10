@@ -158,9 +158,10 @@ export function TrocaTitularidadeDialog({
     await refetchLocais();
   };
 
-  const handleSincronizarHinova = async () => {
+  const handleSincronizarHinova = async (opts?: { silent?: boolean }) => {
+    const silent = !!opts?.silent;
     if (!cpfAntigo || cpfAntigo.length !== 11) {
-      toast.error('CPF do associado indisponível para sincronizar com o SGA');
+      if (!silent) toast.error('CPF do associado indisponível para sincronizar com o SGA');
       return;
     }
     try {
@@ -169,24 +170,24 @@ export function TrocaTitularidadeDialog({
       const { data, error } = await supabase.functions.invoke('importar-associado-sga', {
         body: { cpf: cpfAntigo },
       });
-      // Mensagem amigável tem prioridade sobre o erro genérico do SDK
       const msgAmigavel = (data as any)?.error;
       if (msgAmigavel) throw new Error(msgAmigavel);
       if (error) throw error;
       await refetchLocal();
       await sga.refetch();
       await refetchLocais();
-      toast.success('Associado sincronizado com o SGA');
+      if (!silent) toast.success('Associado sincronizado com o SGA');
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Falha ao sincronizar com o SGA';
       setSyncErro(msg);
-      toast.error(msg);
+      // Em modo silencioso (auto-sync), não mostra toast — vamos cair no fallback local
+      if (!silent) toast.error(msg);
     } finally {
       setSincronizando(false);
     }
   };
 
-  // Auto-sincronização com SGA ao abrir o modal (sem botão manual)
+  // Auto-sincronização com SGA ao abrir o modal (sem botão manual, silenciosa)
   const autoSyncRanRef = useRef(false);
   useEffect(() => {
     if (!open) { autoSyncRanRef.current = false; return; }
@@ -195,7 +196,7 @@ export function TrocaTitularidadeDialog({
     if (!cpfAntigo || cpfAntigo.length !== 11) return;
     if (semCodigoHinova || semEspelhoLocal) {
       autoSyncRanRef.current = true;
-      handleSincronizarHinova();
+      handleSincronizarHinova({ silent: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, cpfAntigo, semCodigoHinova, semEspelhoLocal, sga.isLoading, sincronizando]);
