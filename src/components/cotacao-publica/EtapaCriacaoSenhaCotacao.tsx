@@ -85,7 +85,11 @@ export function EtapaCriacaoSenhaCotacao({ token, numeroCotacao, cpf, email }: P
       toast.success(
         data.already_existed ? "Senha atualizada!" : "Senha criada com sucesso!",
       );
-      setSucesso({ email: data.email, alreadyExisted: !!data.already_existed });
+      setSucesso({
+        email: data.email,
+        alreadyExisted: !!data.already_existed,
+        emailOrigem: data.email_origem,
+      });
     } catch (err: any) {
       console.error(err);
       toast.error(err?.message || "Erro ao criar senha");
