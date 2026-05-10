@@ -523,28 +523,37 @@ export function MapaVistoriasContent() {
   };
 
   // Handle task drag-end: find nearest technician
+  // Se houver técnicos sobrepostos (< 150m do mais próximo), abre dialog de seleção em vez de atribuir direto.
   const handleTaskDragEnd = useCallback((vistoria: VistoriaMapa, newLatLng: L.LatLng) => {
-    let melhorTecnico: VistoriadorLocalizacao | null = null;
-    let melhorDist = Infinity;
+    const candidatos = vistoriadoresEmServico.map((tec) => ({
+      profissional: tec,
+      distanciaMetros: distanciaKm(newLatLng.lat, newLatLng.lng, tec.latitude, tec.longitude) * 1000,
+    })).sort((a, b) => a.distanciaMetros - b.distanciaMetros);
 
-    for (const tec of vistoriadoresEmServico) {
-      const d = distanciaKm(newLatLng.lat, newLatLng.lng, tec.latitude, tec.longitude);
-      if (d < melhorDist) {
-        melhorDist = d;
-        melhorTecnico = tec;
-      }
-    }
-
-    if (melhorTecnico && melhorDist <= 5) {
-      setAssignConfirmation({
-        servicos: [vistoria],
-        profissional: melhorTecnico,
-      });
-    } else if (melhorTecnico) {
-      toast.error(`Técnico mais próximo está a ${melhorDist.toFixed(1)} km. Solte mais perto do ícone do técnico.`);
-    } else {
+    if (candidatos.length === 0) {
       toast.error('Nenhum técnico em campo encontrado.');
+      return;
     }
+
+    const melhor = candidatos[0];
+    if (melhor.distanciaMetros > 5000) {
+      toast.error(`Técnico mais próximo está a ${(melhor.distanciaMetros / 1000).toFixed(1)} km. Solte mais perto do ícone do técnico.`);
+      return;
+    }
+
+    // Detecta sobreposição: técnicos a < 150m do mais próximo
+    const sobrepostos = candidatos.filter((c) => c.distanciaMetros - melhor.distanciaMetros < 150);
+
+    if (sobrepostos.length > 1) {
+      // Abre seleção manual entre técnicos sobrepostos
+      setTecnicoSelecao({ servico: vistoria, candidatos: sobrepostos });
+      return;
+    }
+
+    setAssignConfirmation({
+      servicos: [vistoria],
+      profissional: melhor.profissional,
+    });
   }, [vistoriadoresEmServico, distanciaKm]);
 
   // Handle technician drag-end: find nearest unassigned task
