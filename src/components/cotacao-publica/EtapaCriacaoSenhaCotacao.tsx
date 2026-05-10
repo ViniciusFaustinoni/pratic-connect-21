@@ -20,14 +20,23 @@ interface Props {
   token: string;
   numeroCotacao: string;
   cpf?: string | null;
+  email?: string | null;
 }
 
 function mascararCpfEmail(cpf?: string | null) {
   const digits = String(cpf || "").replace(/\D/g, "");
   if (!digits) return "—";
-  if (digits.length < 6) return `${digits}@associado.pratic.com.br`;
+  if (digits.length < 6) return `${digits}@n.com.br`;
   const masked = `${digits.slice(0, 3)}***${digits.slice(-2)}`;
-  return `${masked}@associado.pratic.com.br`;
+  return `${masked}@n.com.br`;
+}
+
+function loginPreview(email?: string | null, cpf?: string | null) {
+  const e = (email || "").trim().toLowerCase();
+  if (e && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) && !e.endsWith("@n.com.br")) {
+    return e;
+  }
+  return mascararCpfEmail(cpf);
 }
 
 function Req({ ok, texto }: { ok: boolean; texto: string }) {
@@ -43,13 +52,13 @@ function Req({ ok, texto }: { ok: boolean; texto: string }) {
   );
 }
 
-export function EtapaCriacaoSenhaCotacao({ token, numeroCotacao, cpf }: Props) {
+export function EtapaCriacaoSenhaCotacao({ token, numeroCotacao, cpf, email }: Props) {
   const [senha, setSenha] = useState("");
   const [confirmar, setConfirmar] = useState("");
   const [showSenha, setShowSenha] = useState(false);
   const [showConf, setShowConf] = useState(false);
   const [salvando, setSalvando] = useState(false);
-  const [sucesso, setSucesso] = useState<{ email: string; alreadyExisted: boolean } | null>(
+  const [sucesso, setSucesso] = useState<{ email: string; alreadyExisted: boolean; emailOrigem?: string } | null>(
     null,
   );
 
