@@ -22,7 +22,7 @@ interface PdfConfig {
   logo_url: string | null;
   nome_empresa: string;
   mensagem_encerramento: string;
-  mostrar_validade: boolean;
+  
   mostrar_dados_solicitante: boolean;
   mostrar_dados_veiculo: boolean;
   mostrar_mensagem_encerramento: boolean;
