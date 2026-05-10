@@ -198,6 +198,7 @@ const menuConfig: {
       permission: 'canManageCadastro',
       color: MENU_COLORS.cadastro,
       items: [
+        { title: 'Chat', url: '/eventos/chat-ia', icon: MessageCircle },
         { title: 'Propostas Pendentes', url: '/cadastro/propostas', icon: ClipboardCheck },
         { title: 'Associados', url: '/cadastro/associados', icon: Users },
         { title: 'Veículos', url: '/cadastro/veiculos', icon: Car },
