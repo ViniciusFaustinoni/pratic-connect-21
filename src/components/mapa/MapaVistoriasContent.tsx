@@ -448,6 +448,23 @@ export function MapaVistoriasContent() {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }, []);
 
+  // Para cada técnico, conta quantos OUTROS técnicos estão a < 50m dele.
+  // Usado no marcador para sinalizar sobreposição com badge "+N".
+  const sobreposicaoTecnicosMap = useMemo(() => {
+    const map = new Map<string, number>();
+    const lista = vistoriadoresEmServico;
+    for (const a of lista) {
+      let count = 0;
+      for (const b of lista) {
+        if (a.vistoriador_id === b.vistoriador_id) continue;
+        const distMetros = distanciaKm(a.latitude, a.longitude, b.latitude, b.longitude) * 1000;
+        if (distMetros < 50) count++;
+      }
+      map.set(a.vistoriador_id, count);
+    }
+    return map;
+  }, [vistoriadoresEmServico, distanciaKm]);
+
   const abrirAlterarEndereco = useCallback((vistoria: VistoriaMapa) => {
     setAlterarState({
       servicoId: vistoria.servico_id_unificado || vistoria.id,
