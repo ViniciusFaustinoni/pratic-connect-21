@@ -389,25 +389,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
 
   y = headerHeight + SECTION_GAP;
 
-  // ============= BARRA DE VALIDADE =============
-  if (config?.mostrar_validade !== false) {
-    doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
-    doc.roundedRect(margin, y, contentWidth, 14, 3, 3, 'F');
-
-    const dataValidade = new Date(cotacao.created_at);
-    dataValidade.setDate(dataValidade.getDate() + (cotacao.validade_dias || 7));
-    
-    doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Emitido em: ${formatDate(cotacao.created_at)}`, margin + 8, y + 9);
-    
-    doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Válida até: ${formatDate(dataValidade.toISOString())}`, pageWidth - margin - 8, y + 9, { align: 'right' });
-
-    y += 14 + SECTION_GAP;
-  }
+  // Validade removida do PDF
 
   // ============= DADOS DO SOLICITANTE =============
   if (config?.mostrar_dados_solicitante !== false) {
