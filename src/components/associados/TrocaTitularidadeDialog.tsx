@@ -283,7 +283,7 @@ export function TrocaTitularidadeDialog({
                   <AlertTriangle className="h-4 w-4" />
                   <AlertDescription className="text-sm space-y-2">
                     <div>Falha ao sincronizar com o SGA: {syncErro}</div>
-                    <Button size="sm" variant="outline" onClick={handleSincronizarHinova}>
+                    <Button size="sm" variant="outline" onClick={() => handleSincronizarHinova()}>
                       Tentar novamente
                     </Button>
                   </AlertDescription>
@@ -320,7 +320,7 @@ export function TrocaTitularidadeDialog({
                   <AlertTriangle className="h-4 w-4" />
                   <AlertDescription className="text-sm space-y-2">
                     <div>Falha ao importar veículos do SGA: {syncErro}</div>
-                    <Button size="sm" variant="outline" onClick={handleSincronizarHinova}>
+                    <Button size="sm" variant="outline" onClick={() => handleSincronizarHinova()}>
                       Tentar novamente
                     </Button>
                   </AlertDescription>
