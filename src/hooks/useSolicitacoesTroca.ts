@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -71,6 +72,27 @@ export function useSolicitacoesTroca(filtroStatus?: StatusTroca[], criadoPorProf
 }
 
 export function useSolicitacaoTroca(id: string | undefined) {
+  const qc = useQueryClient();
+
+  // Realtime: invalida o cache assim que o webhook Autentique gravar a assinatura
+  useEffect(() => {
+    if (!id) return;
+    const channel = supabase
+      .channel(`troca-${id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'solicitacoes_troca_titularidade', filter: `id=eq.${id}` },
+        () => {
+          qc.invalidateQueries({ queryKey: ['solicitacao-troca', id] });
+          qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id, qc]);
+
   return useQuery({
     queryKey: ['solicitacao-troca', id],
     queryFn: async () => {
@@ -89,6 +111,7 @@ export function useSolicitacaoTroca(id: string | undefined) {
       return data as SolicitacaoTroca | null;
     },
     enabled: !!id,
+    refetchOnWindowFocus: true,
   });
 }
 

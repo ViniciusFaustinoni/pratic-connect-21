@@ -1,47 +1,28 @@
 ## Problema
 
-Na troca de titularidade, o termo de cancelamento é enviado por e-mail (Autentique), mas a notificação WhatsApp para o titular antigo **falha silenciosamente**.
+O webhook do Autentique já atualiza o banco corretamente (`status='aguardando_cadastro'` + `termo_cancelamento_assinado_em`). Mas o **modal de Detalhes da Troca** continua mostrando "Cotação em andamento" / "Aguardando assinatura" porque o hook `useSolicitacaoTroca` não escuta mudanças — fica preso no cache do React Query até o usuário fechar/reabrir.
 
-Causa: a edge function `enviar-termo-cancelamento-troca` dispara texto livre via `whatsapp-send-text`. Como a integração está usando a **API Oficial da Meta**, fora da janela de 24h o envio de texto livre é bloqueado — só passam **templates aprovados**.
+## Mudança (sem polling)
 
-Evidência: `whatsapp_mensagens` registra erro `"Bloqueado: Meta API ativa requer template_name. Texto livre não é entregue fora da janela 24h."` no momento exato do envio do termo (10/05 17:08:43).
+### `src/hooks/useSolicitacoesTroca.ts` — `useSolicitacaoTroca`
 
-## Solução
+Adicionar **subscrição Supabase Realtime** ao registro aberto (e remover qualquer polling):
 
-Trocar o envio de texto livre pelo template Meta já aprovado **`assinatura_documento_v2`**, que é exatamente para este caso (documento pendente de assinatura com botão "Assinar Agora").
+1. Em um `useEffect` dentro do hook, quando `id` está definido, criar um channel:
+   - `supabase.channel('troca-' + id)`
+   - `.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'solicitacoes_troca_titularidade', filter: 'id=eq.' + id }, () => qc.invalidateQueries({ queryKey: ['solicitacao-troca', id] }))`
+   - `.subscribe()`
+2. No cleanup, `supabase.removeChannel(channel)`.
+3. Manter `refetchOnWindowFocus: true` apenas como fallback (não é polling) para o caso raro de o canal cair.
+4. **Não** adicionar `refetchInterval`.
 
-Estrutura do template:
-- Variáveis do corpo: `{{1}}` = primeiro nome do associado, `{{2}}` = descrição do documento
-- Botão URL: `https://assina.ae/{{1}}` (recebe o **slug curto** do Autentique, não a URL completa)
+Resultado: o webhook Autentique → UPDATE no Postgres → Realtime emite o evento → React Query invalida → modal re-renderiza com "Termo assinado" e libera o botão Aprovar, sem polling.
 
-## Mudanças
+### Verificação prévia (1 query, sem mudanças)
 
-### 1. `supabase/functions/enviar-termo-cancelamento-troca/index.ts`
-
-Substituir o bloco "Disparo WhatsApp" (linhas ~241-255) para:
-
-1. Capturar também o **short_link** do Autentique no momento da criação do documento (ajuste na mutation GraphQL: incluir `signatures { link { short_link } }` no retorno do `createDocument`).
-2. Extrair o slug (`short_link` chega como `https://assina.ae/XYZ123` — pegar só `XYZ123`).
-3. Chamar a função `whatsapp-meta-send-template` (existente, usada pelos outros templates do sistema) em vez de `whatsapp-send-text`, com:
-   - `template_name: 'assinatura_documento_v2'`
-   - `idioma: 'pt_BR'`
-   - `variaveis_corpo: [primeiroNome, 'Termo de Cancelamento - Troca de Titularidade']`
-   - `variaveis_botao_url: [slugAutentique]`
-   - `telefone: associadoAntigo.telefone`
-   - `referencia_tipo: 'troca_titularidade'`, `referencia_id: solicitacao_id`
-4. Manter persistência de `termo_whatsapp_status` (`enviado` | `falhou` | `sem_telefone`).
-5. Fallback: se `whatsapp-meta-send-template` falhar **e** o provedor configurado for Evolution (não Meta), tentar `whatsapp-send-text` como antes — para não regredir contas que ainda usam Evolution.
-
-### 2. Verificar nome real da edge function de envio Meta
-
-Antes de codar, confirmar o nome (`whatsapp-meta-send` / `whatsapp-meta-send-template` / outro) listando `supabase/functions/whatsapp-meta-*` e o payload aceito (alguns projetos aceitam `componentes` Meta direto, outros aceitam apenas `variaveis`).
-
-### 3. Reenviar/Reaplicar para a solicitação atual
-
-Após o fix, usar o botão "Reenviar" (já existente no card "Termo de Cancelamento") na solicitação `31330683…` do Marcus Vinicius para validar que o WhatsApp chega.
+Confirmar que `solicitacoes_troca_titularidade` está na publicação `supabase_realtime`. Se não estiver, criar uma migration única para adicioná-la (`alter publication supabase_realtime add table public.solicitacoes_troca_titularidade;` + `alter table … replica identity full`). Sem esse passo, a subscription não recebe eventos.
 
 ## Não escopo
 
-- Não criar template novo no Meta (o `assinatura_documento_v2` já existe e foi aprovado).
-- Não alterar o conteúdo do e-mail Autentique nem o fluxo de assinatura facial.
-- Não mexer no provedor configurado (Meta vs Evolution) — apenas adaptar a função para respeitar a Meta.
+- Não alterar webhook Autentique nem regras de transição de status.
+- Sem polling em nenhum hook desta feature.
