@@ -124,6 +124,7 @@ export function CotacaoCard({
   onCopiarWhatsApp,
   permissions,
   isCopiandoWhatsApp = false,
+  onOpenDetalhe,
 }: CotacaoCardProps) {
   const status = statusConfig[cotacao.status as StatusCotacaoExtended] || statusConfig.rascunho;
   const hasLead = !!cotacao.lead_id;
