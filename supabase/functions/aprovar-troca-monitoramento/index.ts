@@ -30,6 +30,14 @@ Deno.serve(async (req) => {
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    // FK aprovado_monitoramento_por aponta para profiles.id (não auth.users.id)
+    const { data: profile } = await admin
+      .from('profiles')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    const profileId = profile?.id || null;
+
     const { data: solicitacao, error: getErr } = await admin
       .from('solicitacoes_troca_titularidade')
       .select('id, veiculo_id, associado_antigo_id, status')
@@ -41,7 +49,7 @@ Deno.serve(async (req) => {
     }
 
     const baseUpdate = {
-      aprovado_monitoramento_por: user.id,
+      aprovado_monitoramento_por: profileId,
       aprovado_monitoramento_em: new Date().toISOString(),
       observacao_monitoramento: observacao || null,
     };
