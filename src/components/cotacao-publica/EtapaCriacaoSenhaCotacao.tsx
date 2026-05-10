@@ -20,14 +20,23 @@ interface Props {
   token: string;
   numeroCotacao: string;
   cpf?: string | null;
+  email?: string | null;
 }
 
 function mascararCpfEmail(cpf?: string | null) {
   const digits = String(cpf || "").replace(/\D/g, "");
   if (!digits) return "—";
-  if (digits.length < 6) return `${digits}@associado.pratic.com.br`;
+  if (digits.length < 6) return `${digits}@n.com.br`;
   const masked = `${digits.slice(0, 3)}***${digits.slice(-2)}`;
-  return `${masked}@associado.pratic.com.br`;
+  return `${masked}@n.com.br`;
+}
+
+function loginPreview(email?: string | null, cpf?: string | null) {
+  const e = (email || "").trim().toLowerCase();
+  if (e && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) && !e.endsWith("@n.com.br")) {
+    return e;
+  }
+  return mascararCpfEmail(cpf);
 }
 
 function Req({ ok, texto }: { ok: boolean; texto: string }) {
@@ -43,13 +52,13 @@ function Req({ ok, texto }: { ok: boolean; texto: string }) {
   );
 }
 
-export function EtapaCriacaoSenhaCotacao({ token, numeroCotacao, cpf }: Props) {
+export function EtapaCriacaoSenhaCotacao({ token, numeroCotacao, cpf, email }: Props) {
   const [senha, setSenha] = useState("");
   const [confirmar, setConfirmar] = useState("");
   const [showSenha, setShowSenha] = useState(false);
   const [showConf, setShowConf] = useState(false);
   const [salvando, setSalvando] = useState(false);
-  const [sucesso, setSucesso] = useState<{ email: string; alreadyExisted: boolean } | null>(
+  const [sucesso, setSucesso] = useState<{ email: string; alreadyExisted: boolean; emailOrigem?: string } | null>(
     null,
   );
 
@@ -76,7 +85,11 @@ export function EtapaCriacaoSenhaCotacao({ token, numeroCotacao, cpf }: Props) {
       toast.success(
         data.already_existed ? "Senha atualizada!" : "Senha criada com sucesso!",
       );
-      setSucesso({ email: data.email, alreadyExisted: !!data.already_existed });
+      setSucesso({
+        email: data.email,
+        alreadyExisted: !!data.already_existed,
+        emailOrigem: data.email_origem,
+      });
     } catch (err: any) {
       console.error(err);
       toast.error(err?.message || "Erro ao criar senha");
@@ -114,6 +127,11 @@ export function EtapaCriacaoSenhaCotacao({ token, numeroCotacao, cpf }: Props) {
               <div className="rounded-md border border-border/50 bg-muted/30 p-3 text-sm font-mono break-all">
                 {sucesso.email}
               </div>
+              {sucesso.emailOrigem === "fallback_cpf" && (
+                <p className="text-xs text-muted-foreground">
+                  Não foi possível usar seu e-mail como login. Usamos seu CPF.
+                </p>
+              )}
               <a
                 href={loginUrl}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
@@ -161,7 +179,7 @@ export function EtapaCriacaoSenhaCotacao({ token, numeroCotacao, cpf }: Props) {
 
             <div className="rounded-md border border-border/50 bg-muted/20 p-3 text-xs">
               <p className="text-muted-foreground">Seu login será:</p>
-              <p className="font-mono mt-1 break-all">{mascararCpfEmail(cpf)}</p>
+              <p className="font-mono mt-1 break-all">{loginPreview(email, cpf)}</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">

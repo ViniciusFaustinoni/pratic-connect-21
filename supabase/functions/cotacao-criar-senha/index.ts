@@ -23,6 +23,35 @@ function validarSenha(senha: unknown): string | null {
   return null;
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function normalizeEmail(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const v = raw.trim().toLowerCase();
+  if (!v || !EMAIL_RE.test(v)) return null;
+  // Não aceitar como "real" se já for o sintético
+  if (v.endsWith("@n.com.br")) return null;
+  return v;
+}
+
+async function findUserByEmail(
+  supabase: any,
+  email: string,
+): Promise<{ id: string } | null> {
+  // listUsers suporta filtro por email em algumas versões; fazemos paginado por segurança
+  try {
+    const { data } = await supabase.auth.admin.listUsers({
+      page: 1,
+      perPage: 200,
+    });
+    const u = (data?.users || []).find(
+      (x: any) => (x.email || "").toLowerCase() === email,
+    );
+    return u ? { id: u.id } : null;
+  } catch (_e) {
+    return null;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -48,7 +77,7 @@ serve(async (req) => {
     const { data: cotacao, error: errCot } = await supabase
       .from("cotacoes")
       .select(
-        "id, numero, status_contratacao, contrato_gerado_id, token_publico",
+        "id, numero, status_contratacao, contrato_gerado_id, token_publico, email_solicitante, lead_id",
       )
       .eq("token_publico", token)
       .maybeSingle();
@@ -59,10 +88,7 @@ serve(async (req) => {
 
     if (cotacao.status_contratacao !== "ativo" || !cotacao.contrato_gerado_id) {
       return json(
-        {
-          success: false,
-          error: "Esta cotação ainda não foi ativada",
-        },
+        { success: false, error: "Esta cotação ainda não foi ativada" },
         409,
       );
     }
@@ -94,50 +120,119 @@ serve(async (req) => {
 
     const cpfDigits = String(associado.cpf || "").replace(/\D/g, "");
     if (!cpfDigits) {
-      return json(
-        { success: false, error: "CPF do associado ausente" },
-        500,
-      );
+      return json({ success: false, error: "CPF do associado ausente" }, 500);
     }
-    const loginEmail = `${cpfDigits}@associado.pratic.com.br`;
+    const fallbackEmail = `${cpfDigits}@n.com.br`;
 
-    // 3. Caso já tenha user_id: apenas atualizar senha
+    // 3. Resolver e-mail real (associado → cotacao → lead)
+    let emailReal =
+      normalizeEmail(associado.email) ||
+      normalizeEmail(cotacao.email_solicitante);
+
+    if (!emailReal && cotacao.lead_id) {
+      const { data: lead } = await supabase
+        .from("leads")
+        .select("email")
+        .eq("id", cotacao.lead_id)
+        .maybeSingle();
+      emailReal = normalizeEmail(lead?.email);
+    }
+
+    // 4. Decidir login final: real (se livre/próprio) ou fallback
+    let loginEmail = fallbackEmail;
+    let emailOrigem: "real" | "fallback_cpf" = "fallback_cpf";
+
+    if (emailReal) {
+      const existente = await findUserByEmail(supabase, emailReal);
+      if (
+        !existente ||
+        (associado.user_id && existente.id === associado.user_id)
+      ) {
+        loginEmail = emailReal;
+        emailOrigem = "real";
+      } else {
+        // E-mail está em uso por outra conta → cair para fallback CPF
+        emailOrigem = "fallback_cpf";
+      }
+    }
+
+    // Persistir e-mail real no associado se ainda não tiver
+    if (emailReal && !associado.email) {
+      await supabase
+        .from("associados")
+        .update({ email: emailReal })
+        .eq("id", associado.id);
+    }
+
+    // 5. Caso já tenha user_id: atualizar senha (e migrar e-mail se aplicável)
     if (associado.user_id) {
+      const updates: Record<string, unknown> = { password: senha as string };
+      // Se decidimos usar o real e o auth atual tem outro e-mail, migrar
+      if (emailOrigem === "real") {
+        updates.email = loginEmail;
+        updates.email_confirm = true;
+      }
+
       const { error: updErr } = await supabase.auth.admin.updateUserById(
         associado.user_id,
-        { password: senha as string },
+        updates,
       );
       if (updErr) {
         console.error("updateUserById error:", updErr);
-        return json(
-          { success: false, error: "Erro ao atualizar senha" },
-          500,
-        );
+        // Conflito de e-mail → tenta de novo só com a senha
+        if (
+          emailOrigem === "real" &&
+          /email|already|registered|duplicate/i.test(updErr.message || "")
+        ) {
+          loginEmail = fallbackEmail;
+          emailOrigem = "fallback_cpf";
+          const { error: retryErr } = await supabase.auth.admin.updateUserById(
+            associado.user_id,
+            { password: senha as string },
+          );
+          if (retryErr) {
+            return json(
+              { success: false, error: "Erro ao atualizar senha" },
+              500,
+            );
+          }
+        } else {
+          return json(
+            { success: false, error: "Erro ao atualizar senha" },
+            500,
+          );
+        }
       }
 
       await supabase
         .from("profiles")
-        .update({ primeiro_acesso: false })
+        .update({
+          primeiro_acesso: false,
+          ...(emailOrigem === "real" ? { email: loginEmail } : {}),
+        })
         .eq("user_id", associado.user_id);
 
       await supabase.from("associados_historico").insert({
         associado_id: associado.id,
         tipo: "senha_redefinida",
-        descricao: "Senha redefinida pelo associado via link da cotação",
+        descricao: `Senha redefinida via link da cotação (login: ${loginEmail})`,
       });
 
       return json({
         success: true,
         message: "Senha atualizada com sucesso",
         email: loginEmail,
+        email_origem: emailOrigem,
         cpf: associado.cpf,
         already_existed: true,
       });
     }
 
-    // 4. Criar usuário no Auth
-    const { data: authData, error: authError } =
-      await supabase.auth.admin.createUser({
+    // 6. Criar usuário no Auth
+    let createdUser: any = null;
+    let createErr: any = null;
+    {
+      const { data, error } = await supabase.auth.admin.createUser({
         email: loginEmail,
         password: senha as string,
         email_confirm: true,
@@ -147,10 +242,38 @@ serve(async (req) => {
           cpf: associado.cpf,
         },
       });
+      createdUser = data?.user;
+      createErr = error;
+    }
 
-    if (authError || !authData?.user) {
-      const msg = authError?.message || "";
-      if (msg.includes("already been registered") || msg.includes("already registered")) {
+    // Se falhou usando real, tenta fallback CPF
+    if ((createErr || !createdUser) && emailOrigem === "real") {
+      console.warn(
+        "createUser real falhou, tentando fallback CPF:",
+        createErr?.message,
+      );
+      loginEmail = fallbackEmail;
+      emailOrigem = "fallback_cpf";
+      const { data, error } = await supabase.auth.admin.createUser({
+        email: loginEmail,
+        password: senha as string,
+        email_confirm: true,
+        user_metadata: {
+          nome: associado.nome,
+          tipo: "associado",
+          cpf: associado.cpf,
+        },
+      });
+      createdUser = data?.user;
+      createErr = error;
+    }
+
+    if (createErr || !createdUser) {
+      const msg = createErr?.message || "";
+      if (
+        msg.includes("already been registered") ||
+        msg.includes("already registered")
+      ) {
         return json(
           {
             success: false,
@@ -160,19 +283,19 @@ serve(async (req) => {
           409,
         );
       }
-      console.error("createUser error:", authError);
+      console.error("createUser error:", createErr);
       return json({ success: false, error: "Erro ao criar conta" }, 500);
     }
 
-    const userId = authData.user.id;
+    const userId = createdUser.id;
 
-    // 5. Vincular user_id no associado
+    // 7. Vincular user_id no associado
     await supabase
       .from("associados")
       .update({ user_id: userId })
       .eq("id", associado.id);
 
-    // 6. Garantir profile
+    // 8. Garantir profile
     const { data: existingProfile } = await supabase
       .from("profiles")
       .select("id")
@@ -183,7 +306,7 @@ serve(async (req) => {
       await supabase.from("profiles").insert({
         user_id: userId,
         nome: associado.nome,
-        email: associado.email || loginEmail,
+        email: loginEmail,
         telefone: associado.telefone,
         cpf: associado.cpf,
         tipo: "associado",
@@ -194,11 +317,11 @@ serve(async (req) => {
     } else {
       await supabase
         .from("profiles")
-        .update({ primeiro_acesso: false })
+        .update({ primeiro_acesso: false, email: loginEmail })
         .eq("user_id", userId);
     }
 
-    // 7. Garantir role
+    // 9. Garantir role
     await supabase
       .from("user_roles")
       .upsert(
@@ -206,26 +329,28 @@ serve(async (req) => {
         { onConflict: "user_id,role" },
       );
 
-    // 8. Logs
+    // 10. Logs
     await supabase.from("auth_logs").insert({
-      email: associado.email || loginEmail,
+      email: loginEmail,
       acao: "primeiro_acesso_via_cotacao",
       metadata: {
         associado_id: associado.id,
         cotacao_id: cotacao.id,
+        email_origem: emailOrigem,
       },
     });
 
     await supabase.from("associados_historico").insert({
       associado_id: associado.id,
       tipo: "acesso_criado",
-      descricao: "Conta de acesso criada na ativação via link da cotação",
+      descricao: `Conta de acesso criada via link da cotação (login: ${loginEmail})`,
     });
 
     return json({
       success: true,
       message: "Senha criada com sucesso",
       email: loginEmail,
+      email_origem: emailOrigem,
       cpf: associado.cpf,
       already_existed: false,
     });
