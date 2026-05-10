@@ -42,6 +42,7 @@ interface PlanoComparacao {
 
 interface DadosExtrasCotacao {
   planos_comparacao?: PlanoComparacao[];
+  tipo_entrada?: string;
   [key: string]: unknown;
 }
 
@@ -321,15 +322,14 @@ export function useCotacaoContratacao(token: string | undefined) {
     };
   }, [token, associadoId, cotacao?.id, refetchDocs, refetch, queryClient]);
 
-  // Extrair planos disponíveis para escolha
-  const planosDisponiveis: PlanoOpcao[] = (() => {
+  // Extrair planos disponíveis para escolha (sem fallback de troca)
+  const planosBase: PlanoOpcao[] = (() => {
     if (!cotacao) return [];
 
     const dadosExtras = cotacao.dados_extras as DadosExtrasCotacao | null;
     const planosComparacao = dadosExtras?.planos_comparacao;
 
     if (planosComparacao && planosComparacao.length > 0) {
-      // Sempre usar cotacao.valor_adesao como fonte de verdade (definido pelo consultor)
       const adesaoCotacao = cotacao.valor_adesao;
       return planosComparacao.map((p) => ({
         id: p.id,
@@ -343,7 +343,6 @@ export function useCotacaoContratacao(token: string | undefined) {
       }));
     }
 
-    // Se não tiver planos de comparação, usa o plano principal
     if (cotacao.planos) {
       return [{
         id: cotacao.planos.id,
@@ -357,6 +356,36 @@ export function useCotacaoContratacao(token: string | undefined) {
 
     return [];
   })();
+
+  // Troca de titularidade: se nenhum plano foi incluído pelo vendedor,
+  // buscar o plano vigente do antigo titular como única opção.
+  const isTrocaTitularidade =
+    (cotacao?.dados_extras as DadosExtrasCotacao | null)?.tipo_entrada === 'troca_titularidade';
+  const precisaPlanoVigente = !!cotacao && isTrocaTitularidade && planosBase.length === 0;
+
+  const { data: planoVigenteAntigo } = useQuery({
+    queryKey: ['troca-plano-vigente-publico', cotacao?.id],
+    enabled: precisaPlanoVigente,
+    staleTime: 60_000,
+    queryFn: async (): Promise<PlanoOpcao | null> => {
+      if (!cotacao?.id) return null;
+      const { data, error } = await publicSupabase.functions.invoke('troca-plano-vigente', {
+        body: { cotacao_id: cotacao.id },
+      });
+      if (error) {
+        console.warn('[CotacaoContratacao] troca-plano-vigente falhou:', error);
+        return null;
+      }
+      return (data?.plano as PlanoOpcao | null) ?? null;
+    },
+  });
+
+  const planosDisponiveis: PlanoOpcao[] =
+    planosBase.length > 0
+      ? planosBase
+      : planoVigenteAntigo
+        ? [planoVigenteAntigo]
+        : [];
 
   // Determinar etapa atual baseado no status
   // NOVO FLUXO: 0=Plano, 1=Documentos+Dados, 2=Contrato (Autentique), 3=Vistoria, 4=Pagamento
