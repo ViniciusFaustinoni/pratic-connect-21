@@ -776,7 +776,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   doc.text(empresaSubtitulo, footerTextX, footerY + 14);
 
   doc.setFontSize(7);
-  const footerDate = `Gerado em: ${formatDate(new Date().toISOString())} | Validade: ${cotacao.validade_dias || 7} dias`;
+  const footerDate = `Gerado em: ${formatDate(new Date().toISOString())}`;
   doc.text(footerDate, footerTextX, footerY + 20);
 
   doc.setTextColor(textDarkMuted.r, textDarkMuted.g, textDarkMuted.b);
