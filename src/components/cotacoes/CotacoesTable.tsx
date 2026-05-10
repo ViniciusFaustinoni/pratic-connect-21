@@ -253,6 +253,25 @@ export function CotacoesTable({
                   {/* Status / Etapa */}
                   <TableCell className="py-3">
                     <div className="flex flex-col gap-1.5">
+                      {(() => {
+                        const prio = (cotacao as any).prioridade as string | undefined;
+                        if (prio && prio !== 'normal') {
+                          const isUrg = prio === 'urgente';
+                          return (
+                            <Badge
+                              className={cn(
+                                'font-bold border-0 text-[10px] px-2 py-0.5 w-fit rounded-full animate-pulse',
+                                isUrg
+                                  ? 'bg-red-500/20 text-red-700 dark:text-red-300'
+                                  : 'bg-orange-500/20 text-orange-700 dark:text-orange-300',
+                              )}
+                            >
+                              ⚡ Prioridade {isUrg ? 'URGENTE' : 'ALTA'}
+                            </Badge>
+                          );
+                        }
+                        return null;
+                      })()}
                       <Badge className={cn(
                         status.bgColor, status.color, 
                         "font-semibold border-0 text-[11px] px-2.5 py-0.5 w-fit rounded-full"
