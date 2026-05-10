@@ -257,17 +257,6 @@ export function TrocaTitularidadeDialog({
             <Label>Veículo a transferir *</Label>
             {usandoFallback ? (
               <div className="space-y-2">
-                <Alert>
-                  <Info className="h-4 w-4" />
-                  <AlertDescription className="text-sm">
-                    SGA indisponível — exibindo dados da nossa base local. O status de pagamento pode estar defasado.
-                    {fallbackPayload?.tem_debito && (
-                      <div className="mt-1 font-medium">
-                        Débito local: R$ {(fallbackPayload.saldo_devedor_total || 0).toFixed(2)}
-                      </div>
-                    )}
-                  </AlertDescription>
-                </Alert>
                 <select
                   className="w-full border rounded h-10 px-3 bg-background"
                   value={veiculoId || ''}
