@@ -127,6 +127,11 @@ export function EtapaCriacaoSenhaCotacao({ token, numeroCotacao, cpf, email }: P
               <div className="rounded-md border border-border/50 bg-muted/30 p-3 text-sm font-mono break-all">
                 {sucesso.email}
               </div>
+              {sucesso.emailOrigem === "fallback_cpf" && (
+                <p className="text-xs text-muted-foreground">
+                  Não foi possível usar seu e-mail como login. Usamos seu CPF.
+                </p>
+              )}
               <a
                 href={loginUrl}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
