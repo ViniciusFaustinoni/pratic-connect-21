@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Car, Wifi, WifiOff, Shield, Camera, FileText, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Car, Wifi, WifiOff, Shield, Camera, FileText, AlertTriangle, ExternalLink, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
@@ -9,6 +9,7 @@ import {
   useDocumentosAssociadoCompleto,
   useEventosVeiculo,
 } from '@/hooks/useVeiculoDetalhes';
+import { useRastreadorTempoReal } from '@/hooks/useRastreadorPosicao';
 import { EnriquecerVeiculoButton } from '@/components/cadastro/EnriquecerVeiculoButton';
 import { MediaViewerModal } from '@/components/cadastro/MediaViewerModal';
 import { formatPlacaExibicao } from '@/lib/placa-utils';
