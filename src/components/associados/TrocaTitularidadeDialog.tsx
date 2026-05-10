@@ -268,18 +268,22 @@ export function TrocaTitularidadeDialog({
                 </AlertDescription>
               </Alert>
             ) : semEspelhoLocal ? (
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription className="text-sm space-y-2">
-                  <div>
-                    O SGA tem {sgaPayload?.veiculos.length} veículo(s) para este associado, mas o espelho local ainda não foi criado.
-                  </div>
-                  <Button size="sm" variant="outline" onClick={handleSincronizarHinova} disabled={sincronizando}>
-                    {sincronizando && <Loader2 className="h-3 w-3 mr-2 animate-spin" />}
-                    Sincronizar com SGA
-                  </Button>
-                </AlertDescription>
-              </Alert>
+              syncErro ? (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription className="text-sm space-y-2">
+                    <div>Falha ao importar veículos do SGA: {syncErro}</div>
+                    <Button size="sm" variant="outline" onClick={handleSincronizarHinova}>
+                      Tentar novamente
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Importando veículos do SGA…
+                </div>
+              )
             ) : (
               <select
                 className="w-full border rounded h-10 px-3 bg-background"
