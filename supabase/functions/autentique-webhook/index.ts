@@ -318,6 +318,36 @@ serve(async (req) => {
             })
             .eq('id', solTroca.id);
 
+          // ── DESVÍNCULO LÓGICO DA PLACA (anti-sequestro de placa) ──
+          // Marca o veículo como em troca de titularidade. O bloqueio anti-sequestro
+          // em contrato-gerar e o trigger fn_sync_veiculo_associado_from_contrato
+          // respeitam essa marca, permitindo que o NOVO titular gere/assine o contrato
+          // com a mesma placa antes da efetivação final (que transfere de fato o veículo).
+          try {
+            const { data: solVeic } = await supabase
+              .from('solicitacoes_troca_titularidade')
+              .select('veiculo_id, associado_antigo_id')
+              .eq('id', solTroca.id)
+              .maybeSingle();
+            if (solVeic?.veiculo_id) {
+              await supabase
+                .from('veiculos')
+                .update({
+                  em_troca_titularidade: true,
+                  troca_titularidade_id: solTroca.id,
+                  troca_titularidade_iniciada_em: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', solVeic.veiculo_id);
+              console.log(
+                `[autentique-webhook] ✓ Veículo ${solVeic.veiculo_id} marcado como em_troca_titularidade ` +
+                `(antigo titular ${solVeic.associado_antigo_id}, solicitação ${solTroca.id})`
+              );
+            }
+          } catch (vErr) {
+            console.warn('[autentique-webhook] marcar veículo em_troca falhou:', vErr);
+          }
+
           // Enfileira débitos do associado antigo na fila de Relacionamento (best-effort)
           try {
             const { data: solFull } = await supabase
