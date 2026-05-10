@@ -42,6 +42,7 @@ interface PlanoComparacao {
 
 interface DadosExtrasCotacao {
   planos_comparacao?: PlanoComparacao[];
+  tipo_entrada?: string;
   [key: string]: unknown;
 }
 
