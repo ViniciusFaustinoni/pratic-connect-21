@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
     // 1) Carregar solicitação
     const { data: sol, error: solErr } = await admin
       .from('solicitacoes_troca_titularidade')
-      .select('id, status, termo_cancelamento_assinado_em, associado_antigo_id, novo_titular_dados')
+      .select('id, status, termo_cancelamento_assinado_em, associado_antigo_id, novo_titular_dados, cotacao_id, veiculo_id, criado_por')
       .eq('id', solicitacao_id)
       .maybeSingle();
     if (solErr) throw solErr;
