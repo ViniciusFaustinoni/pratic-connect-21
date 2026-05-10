@@ -190,12 +190,14 @@ export function VeiculoCompletoCard({ veiculoId }: Props) {
 
 function RastreadorBlock({ rastreador }: { rastreador: any }) {
   const enabled = !!rastreador?.id;
-  const { posicao, isLoading, error, refetch, isRefetching } = useRastreadorTempoReal(
+  const { posicao, isLoading, error, serviceError, mensagem, refetch, isRefetching } = useRastreadorTempoReal(
     enabled ? rastreador.id : undefined,
     false,
   );
 
   const ultimaComunicacao = posicao?.data_posicao || rastreador?.ultima_comunicacao || null;
+  const hardError = !posicao && (!!error || serviceError);
+  const softWarning = !!posicao && serviceError;
 
   return (
     <div className="rounded border p-3 space-y-2">
@@ -230,12 +232,17 @@ function RastreadorBlock({ rastreador }: { rastreador: any }) {
               value={ultimaComunicacao ? formatDateTime(ultimaComunicacao) : (isLoading ? 'Consultando...' : '—')}
             />
           </div>
-          {error && (
+          {softWarning && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              {mensagem || 'Tempo real indisponível — exibindo última posição conhecida.'}
+            </p>
+          )}
+          {hardError && (
             <div className="flex items-start gap-2 text-xs text-destructive bg-destructive/10 border border-destructive/30 rounded p-2">
               <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
               <div>
                 <p className="font-medium">Erro de comunicação com o rastreador</p>
-                <p className="opacity-80">{(error as Error)?.message || 'Falha ao consultar a plataforma.'}</p>
+                <p className="opacity-80">{(error as Error)?.message || mensagem || 'Falha ao consultar a plataforma.'}</p>
               </div>
             </div>
           )}

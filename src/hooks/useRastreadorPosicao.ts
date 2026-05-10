@@ -88,16 +88,20 @@ export function useRastreadorTempoReal(rastreadorId?: string, autoRefresh = true
 
   const query = useQuery({
     queryKey: ['rastreador-tempo-real', rastreadorId],
-    queryFn: async (): Promise<PosicaoTempoRealResponse> => {
+    queryFn: async (): Promise<PosicaoTempoRealResponse & { error?: string }> => {
       if (!rastreadorId) throw new Error('ID não fornecido');
 
       const { data, error } = await supabase.functions.invoke('rastreador-posicao', {
         body: { rastreador_id: rastreadorId },
       });
 
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error);
-
+      // Erro de rede/edge sem body — propaga
+      if (error && !data) throw error;
+      // Body sem success e sem fallback de posição — propaga como erro real
+      if (!data?.success && !data?.posicao) {
+        throw new Error(data?.error || data?.mensagem || 'Falha ao consultar rastreador');
+      }
+      // success:false com fallback de posição → degradação aceitável, retorna data
       return data;
     },
     enabled: !!rastreadorId,
@@ -112,9 +116,10 @@ export function useRastreadorTempoReal(rastreadorId?: string, autoRefresh = true
         body: { rastreador_id: id },
       });
 
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error);
-
+      if (error && !data) throw error;
+      if (!data?.success && !data?.posicao) {
+        throw new Error(data?.error || data?.mensagem || 'Falha ao consultar rastreador');
+      }
       return data as PosicaoTempoRealResponse;
     },
     onSuccess: (data) => {
@@ -131,11 +136,14 @@ export function useRastreadorTempoReal(rastreadorId?: string, autoRefresh = true
     },
   });
 
+  const serviceError = query.data ? query.data.success === false : false;
+
   return {
     posicao: query.data?.posicao ?? null,
     veiculo: query.data?.veiculo ?? null,
     tempoReal: query.data?.tempo_real,
     mensagem: query.data?.mensagem,
+    serviceError,
     isLoading: query.isLoading,
     isRefetching: query.isRefetching,
     error: query.error,
