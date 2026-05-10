@@ -142,9 +142,10 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ success: true, analise_previa: analisePrevia }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : 'erro';
-    return new Response(JSON.stringify({ error: msg }), {
+  } catch (e: any) {
+    console.error('[aprovar-troca-cadastro] FATAL:', e, JSON.stringify(e));
+    const msg = (e && (e.message || e.error_description || e.hint || e.details)) || (typeof e === 'string' ? e : 'erro');
+    return new Response(JSON.stringify({ error: msg, raw: typeof e === 'object' ? e : null }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
