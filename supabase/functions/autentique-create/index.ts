@@ -850,6 +850,9 @@ serve(async (req) => {
           veiculoLabel,
           numeroContrato: (contrato as any).numero,
           autentiqueUrl: signatureLink,
+          vendedorTelefone,
+          vendedorNome,
+          tipoEntrada: (contrato as any).tipo_entrada || null,
         });
       } catch (waErr) {
         console.warn('[autentique-create] envio WhatsApp falhou (não bloqueante):', waErr);
