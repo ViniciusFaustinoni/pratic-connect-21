@@ -1111,26 +1111,7 @@ const desenharPaginaCapa = (
 
   y = headerHeight + 5;
 
-  // Barra de validade
-  if (config?.mostrar_validade !== false) {
-    const brandBlue = config ? hexToRgb(config.cor_primaria) : brandBlueDefault;
-    doc.setFillColor(brandBlue.r, brandBlue.g, brandBlue.b);
-    doc.roundedRect(margin, y, contentWidth, 12, 2, 2, 'F');
-
-    const dataValidade = new Date(cotacao.created_at);
-    dataValidade.setDate(dataValidade.getDate() + (cotacao.validade_dias || 7));
-
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Emitido em: ${formatDate(cotacao.created_at)}`, margin + 4, y + 8);
-    
-    doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Válida até: ${formatDate(dataValidade.toISOString())}`, pageWidth - margin - 4, y + 8, { align: 'right' });
-
-    y += 16;
-  }
+  // Validade removida do PDF
 
   // Dados do solicitante, veículo e consultor
   if (config?.mostrar_dados_solicitante !== false || config?.mostrar_dados_veiculo !== false) {
