@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Car, Wifi, WifiOff, Shield, Camera, FileText, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Car, Wifi, WifiOff, Shield, Camera, FileText, AlertTriangle, ExternalLink, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
@@ -9,6 +9,7 @@ import {
   useDocumentosAssociadoCompleto,
   useEventosVeiculo,
 } from '@/hooks/useVeiculoDetalhes';
+import { useRastreadorTempoReal } from '@/hooks/useRastreadorPosicao';
 import { EnriquecerVeiculoButton } from '@/components/cadastro/EnriquecerVeiculoButton';
 import { MediaViewerModal } from '@/components/cadastro/MediaViewerModal';
 import { formatPlacaExibicao } from '@/lib/placa-utils';
@@ -59,8 +60,8 @@ export function VeiculoCompletoCard({ veiculoId }: Props) {
   const fotosArr = fotos || [];
 
   const mediaItems = fotosArr.map((f: any) => ({
-    url: f.url,
-    tipo: f.tipo_foto || 'foto',
+    url: f.arquivo_url,
+    tipo: f.tipo || 'foto',
     mediaType: 'image' as const,
   }));
 
@@ -90,23 +91,7 @@ export function VeiculoCompletoCard({ veiculoId }: Props) {
       </div>
 
       {/* RASTREADOR */}
-      <div className="rounded border p-3 space-y-2">
-        <h4 className="font-semibold flex items-center gap-2">
-          {rastreador ? <Wifi className="h-4 w-4 text-green-500" /> : <WifiOff className="h-4 w-4 text-muted-foreground" />}
-          Rastreador
-        </h4>
-        {rastreador ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Field label="Código" value={rastreador.codigo} mono />
-            <Field label="IMEI" value={rastreador.imei} mono />
-            <Field label="Plataforma" value={rastreador.plataforma} />
-            <Field label="Status" value={rastreador.status} />
-            <Field label="Última comunicação" value={formatDateTime(rastreador.ultima_comunicacao)} />
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">Sem rastreador instalado.</p>
-        )}
-      </div>
+      <RastreadorBlock rastreador={rastreador} />
 
       {/* CONTRATO ATIVO */}
       {contrato && (
@@ -138,7 +123,7 @@ export function VeiculoCompletoCard({ veiculoId }: Props) {
                 onClick={() => setMediaIdx(idx)}
                 className="aspect-square rounded overflow-hidden border hover:ring-2 hover:ring-primary transition"
               >
-                <img src={f.url} alt={f.tipo_foto || 'foto'} className="w-full h-full object-cover" />
+                <img src={f.arquivo_url} alt={f.tipo || 'foto'} className="w-full h-full object-cover" />
               </button>
             ))}
             {fotosArr.length > 12 && (
@@ -194,6 +179,65 @@ export function VeiculoCompletoCard({ veiculoId }: Props) {
       )}
 
       <Separator className="opacity-0" />
+    </div>
+  );
+}
+
+function RastreadorBlock({ rastreador }: { rastreador: any }) {
+  const enabled = !!rastreador?.id;
+  const { posicao, isLoading, error, refetch, isRefetching } = useRastreadorTempoReal(
+    enabled ? rastreador.id : undefined,
+    false,
+  );
+
+  const ultimaComunicacao = posicao?.data_posicao || rastreador?.ultima_comunicacao || null;
+
+  return (
+    <div className="rounded border p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <h4 className="font-semibold flex items-center gap-2">
+          {rastreador ? <Wifi className="h-4 w-4 text-green-500" /> : <WifiOff className="h-4 w-4 text-muted-foreground" />}
+          Rastreador
+          {enabled && (isLoading || isRefetching) && (
+            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+          )}
+        </h4>
+        {enabled && (
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="text-xs text-primary hover:underline disabled:opacity-50"
+            disabled={isLoading || isRefetching}
+          >
+            Atualizar
+          </button>
+        )}
+      </div>
+      {rastreador ? (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Field label="Código" value={rastreador.codigo} mono />
+            <Field label="IMEI" value={rastreador.imei} mono />
+            <Field label="Plataforma" value={rastreador.plataforma} />
+            <Field label="Status" value={rastreador.status} />
+            <Field
+              label="Última comunicação"
+              value={ultimaComunicacao ? formatDateTime(ultimaComunicacao) : (isLoading ? 'Consultando...' : '—')}
+            />
+          </div>
+          {error && (
+            <div className="flex items-start gap-2 text-xs text-destructive bg-destructive/10 border border-destructive/30 rounded p-2">
+              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <div>
+                <p className="font-medium">Erro de comunicação com o rastreador</p>
+                <p className="opacity-80">{(error as Error)?.message || 'Falha ao consultar a plataforma.'}</p>
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <p className="text-sm text-muted-foreground">Sem rastreador instalado.</p>
+      )}
     </div>
   );
 }

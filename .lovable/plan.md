@@ -1,28 +1,19 @@
-## Problema
+## Correções no Modal de Troca de Titularidade — `VeiculoCompletoCard.tsx`
 
-O webhook do Autentique já atualiza o banco corretamente (`status='aguardando_cadastro'` + `termo_cancelamento_assinado_em`). Mas o **modal de Detalhes da Troca** continua mostrando "Cotação em andamento" / "Aguardando assinatura" porque o hook `useSolicitacaoTroca` não escuta mudanças — fica preso no cache do React Query até o usuário fechar/reabrir.
+### 1. Fotos da vistoria não aparecem (thumbnails quebrados)
+O hook `useFotosVistoriaPorVeiculo` retorna `arquivo_url` e `tipo`, mas o card lê `f.url` e `f.tipo_foto` (que não existem) → `<img src={undefined}>` mostra "foto" quebrado.
 
-## Mudança (sem polling)
+**Fix:** trocar `f.url` → `f.arquivo_url` e `f.tipo_foto` → `f.tipo` na grid e no `mediaItems` passado ao `MediaViewerModal`.
 
-### `src/hooks/useSolicitacoesTroca.ts` — `useSolicitacaoTroca`
+### 2. GET da posição do rastreador ao abrir o modal
+Hoje o card só mostra `rastreador.ultima_comunicacao` do banco (estática, vazia no print). Já existe a edge function `rastreador-posicao` e o hook `useRastreadorTempoReal` (usado no MapaRastreador).
 
-Adicionar **subscrição Supabase Realtime** ao registro aberto (e remover qualquer polling):
+**Fix:** no bloco "Rastreador" do `VeiculoCompletoCard`, chamar `useRastreadorTempoReal(rastreador.id, false)` (sem auto-refresh, dispara 1 GET ao montar). Usar `posicao?.data_posicao` como "Última comunicação" quando disponível, com fallback para `rastreador.ultima_comunicacao`. Mostrar um pequeno spinner enquanto `isLoading`.
 
-1. Em um `useEffect` dentro do hook, quando `id` está definido, criar um channel:
-   - `supabase.channel('troca-' + id)`
-   - `.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'solicitacoes_troca_titularidade', filter: 'id=eq.' + id }, () => qc.invalidateQueries({ queryKey: ['solicitacao-troca', id] }))`
-   - `.subscribe()`
-2. No cleanup, `supabase.removeChannel(channel)`.
-3. Manter `refetchOnWindowFocus: true` apenas como fallback (não é polling) para o caso raro de o canal cair.
-4. **Não** adicionar `refetchInterval`.
+### 3. Erro de comunicação com o rastreador
+Se a edge function falhar (`error` truthy ou `data.success=false`), mostrar inline no bloco do rastreador um aviso vermelho discreto: ícone `AlertTriangle` + texto "Erro de comunicação com o rastreador" e a mensagem do erro em texto pequeno. Manter os demais campos visíveis.
 
-Resultado: o webhook Autentique → UPDATE no Postgres → Realtime emite o evento → React Query invalida → modal re-renderiza com "Termo assinado" e libera o botão Aprovar, sem polling.
-
-### Verificação prévia (1 query, sem mudanças)
-
-Confirmar que `solicitacoes_troca_titularidade` está na publicação `supabase_realtime`. Se não estiver, criar uma migration única para adicioná-la (`alter publication supabase_realtime add table public.solicitacoes_troca_titularidade;` + `alter table … replica identity full`). Sem esse passo, a subscription não recebe eventos.
-
-## Não escopo
-
-- Não alterar webhook Autentique nem regras de transição de status.
-- Sem polling em nenhum hook desta feature.
+### Escopo
+- Apenas `src/components/troca-titularidade/VeiculoCompletoCard.tsx`.
+- Sem mudanças em hooks, edge functions, schema ou no fluxo de aprovação.
+- Sem polling — apenas 1 GET por abertura do modal (re-monta dispara nova chamada).
