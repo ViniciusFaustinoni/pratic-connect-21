@@ -81,8 +81,6 @@ function MetricCard({ icon, label, value, highlight, warning }: MetricCardProps)
 }
 
 export function CotacaoHeader({ cotacao }: CotacaoHeaderProps) {
-  const validade = calcularValidade(cotacao.created_at);
-  const expirada = isExpirada(cotacao.created_at);
   const planosComparacao = (cotacao.dados_extras as { planos_comparacao?: unknown[] } | null)?.planos_comparacao;
   const numPlanos = planosComparacao?.length || 1;
 
