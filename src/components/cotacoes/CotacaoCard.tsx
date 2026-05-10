@@ -148,7 +148,7 @@ export function CotacaoCard({
         "overflow-hidden border-l-4 transition-all hover:shadow-md cursor-pointer",
         getBgClass()
       )}
-      onClick={() => navigate(`/vendas/cotacoes/${cotacao.id}`)}
+      onClick={() => onOpenDetalhe ? onOpenDetalhe(cotacao) : navigate(`/vendas/cotacoes?abrir=${cotacao.id}`)}
     >
       {/* Header do Card: Status + Etapa da Venda + Vendedor + Tempo */}
       <div className="flex items-center justify-between px-4 py-2 bg-muted/30 gap-2 flex-wrap">
