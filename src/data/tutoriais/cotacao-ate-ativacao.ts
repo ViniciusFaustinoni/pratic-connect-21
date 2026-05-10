@@ -230,13 +230,13 @@ export const cotacaoAteAtivacao: Tutorial = {
       descricao:
         'A partir daqui o consultor não precisa fazer mais nada — entra em ação a equipe interna (Cadastro + Operação + Monitoramento) que conduz toda a análise documental, vistoria, instalação do rastreador (quando aplicável) e a aprovação final que ativa o associado. O fluxo é totalmente rastreável e o cliente é avisado por WhatsApp em cada mudança de status.',
       dicas: [
-        '1️⃣ **Cadastro** confere CNH e CRLV/CRV/NF (mesmo OCR aprovado passa por revisão manual). Se houver pendência, o cliente recebe link por WhatsApp para reenviar.',
-        '2️⃣ **Operação** executa a vistoria escolhida pelo associado (Autovistoria 360°, Técnico no endereço ou Base Praticcar). Para Diesel / Carro FIPE ≥ R$ 30k / Moto ≥ R$ 9k, o rastreador é instalado nessa mesma visita.',
-        '3️⃣ **Monitoramento** recebe automaticamente a fila com fotos, posição do rastreador e laudo. Aprova, reprova ou pede ajustes.',
-        '4️⃣ **Ativação automática**: aprovada a vistoria/instalação, a edge function `ativar-associado` promove associado, contrato e veículo para "ativo", libera as coberturas e sincroniza com o SGA Hinova (situação Pendente — promoção para Ativo é manual no painel SGA).',
-        '📩 **O que o associado recebe por WhatsApp:** confirmação de cada etapa (cadastro aprovado, técnico a caminho com ETA, vistoria concluída, contrato ativado) e, ao ser ativado, **um link exclusivo para criar a senha de acesso ao app do associado** (`/app/criar-senha?token=…`).',
-        '🔐 **Criação de senha no app:** o link tem validade limitada e uso único. O associado define senha (mín. 6 caracteres com pelo menos 1 número), confirma e já entra direto no App do Associado — onde acompanha boletos, aciona assistência, abre sinistros e gerencia o veículo.',
-        '💰 **Comissões** da venda são liberadas conforme a grade do vendedor que originou a cotação (a cadeia supervisor/gerente/agência também é paga).',
+        '1️⃣ Cadastro confere CNH e CRLV/CRV/NF (mesmo OCR aprovado passa por revisão manual). Se houver pendência, o cliente recebe link por WhatsApp para reenviar.',
+        '2️⃣ Operação executa a vistoria escolhida pelo associado (Autovistoria 360°, Técnico no endereço ou Base Praticcar). Para Diesel / Carro FIPE ≥ R$ 30k / Moto ≥ R$ 9k, o rastreador é instalado nessa mesma visita.',
+        '3️⃣ Monitoramento recebe automaticamente a fila com fotos, posição do rastreador e laudo. Aprova, reprova ou pede ajustes.',
+        '4️⃣ Ativação automática: aprovada a vistoria/instalação, a edge function `ativar-associado` promove associado, contrato e veículo para "ativo", libera as coberturas e sincroniza com o SGA Hinova (situação Pendente — promoção para Ativo é manual no painel SGA).',
+        '📩 O que o associado recebe por WhatsApp: confirmação de cada etapa (cadastro aprovado, técnico a caminho com ETA, vistoria concluída, contrato ativado) e, ao ser ativado, um link exclusivo para criar a senha de acesso ao app do associado (`/app/criar-senha?token=…`).',
+        '🔐 Criação de senha no app: o link tem validade limitada e uso único. O associado define senha (mín. 6 caracteres com pelo menos 1 número), confirma e já entra direto no App do Associado — onde acompanha boletos, aciona assistência, abre sinistros e gerencia o veículo.',
+        '💰 Comissões da venda são liberadas conforme a grade do vendedor que originou a cotação (a cadeia supervisor/gerente/agência também é paga).',
       ],
       links: [
         { label: 'Propostas Pendentes (Cadastro)', url: '/cadastro/propostas' },
