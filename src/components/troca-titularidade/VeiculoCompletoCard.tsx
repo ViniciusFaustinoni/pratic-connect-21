@@ -182,3 +182,62 @@ export function VeiculoCompletoCard({ veiculoId }: Props) {
     </div>
   );
 }
+
+function RastreadorBlock({ rastreador }: { rastreador: any }) {
+  const enabled = !!rastreador?.id;
+  const { posicao, isLoading, error, refetch, isRefetching } = useRastreadorTempoReal(
+    enabled ? rastreador.id : undefined,
+    false,
+  );
+
+  const ultimaComunicacao = posicao?.data_posicao || rastreador?.ultima_comunicacao || null;
+
+  return (
+    <div className="rounded border p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <h4 className="font-semibold flex items-center gap-2">
+          {rastreador ? <Wifi className="h-4 w-4 text-green-500" /> : <WifiOff className="h-4 w-4 text-muted-foreground" />}
+          Rastreador
+          {enabled && (isLoading || isRefetching) && (
+            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+          )}
+        </h4>
+        {enabled && (
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="text-xs text-primary hover:underline disabled:opacity-50"
+            disabled={isLoading || isRefetching}
+          >
+            Atualizar
+          </button>
+        )}
+      </div>
+      {rastreador ? (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Field label="Código" value={rastreador.codigo} mono />
+            <Field label="IMEI" value={rastreador.imei} mono />
+            <Field label="Plataforma" value={rastreador.plataforma} />
+            <Field label="Status" value={rastreador.status} />
+            <Field
+              label="Última comunicação"
+              value={ultimaComunicacao ? formatDateTime(ultimaComunicacao) : (isLoading ? 'Consultando...' : '—')}
+            />
+          </div>
+          {error && (
+            <div className="flex items-start gap-2 text-xs text-destructive bg-destructive/10 border border-destructive/30 rounded p-2">
+              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <div>
+                <p className="font-medium">Erro de comunicação com o rastreador</p>
+                <p className="opacity-80">{(error as Error)?.message || 'Falha ao consultar a plataforma.'}</p>
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <p className="text-sm text-muted-foreground">Sem rastreador instalado.</p>
+      )}
+    </div>
+  );
+}
