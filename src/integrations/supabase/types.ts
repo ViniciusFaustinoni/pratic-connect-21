@@ -9768,8 +9768,10 @@ export type Database = {
           nome_solicitante: string | null
           numero: string
           numero_portas: number | null
+          origem_troca_titularidade: boolean
           plano_escolhido_id: string | null
           plano_id: string | null
+          prioridade: string
           regiao: string | null
           solicitar_fipe_menor: boolean
           status: Database["public"]["Enums"]["status_cotacao"]
@@ -9902,8 +9904,10 @@ export type Database = {
           nome_solicitante?: string | null
           numero: string
           numero_portas?: number | null
+          origem_troca_titularidade?: boolean
           plano_escolhido_id?: string | null
           plano_id?: string | null
+          prioridade?: string
           regiao?: string | null
           solicitar_fipe_menor?: boolean
           status?: Database["public"]["Enums"]["status_cotacao"]
@@ -10036,8 +10040,10 @@ export type Database = {
           nome_solicitante?: string | null
           numero?: string
           numero_portas?: number | null
+          origem_troca_titularidade?: boolean
           plano_escolhido_id?: string | null
           plano_id?: string | null
+          prioridade?: string
           regiao?: string | null
           solicitar_fipe_menor?: boolean
           status?: Database["public"]["Enums"]["status_cotacao"]
