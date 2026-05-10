@@ -53,7 +53,7 @@ export default function AprovacoesTroca() {
                       <div className="flex-1 space-y-2">
                         <div className="flex items-center gap-2 flex-wrap">
                           <Badge variant={s.status === 'liberada_para_assinatura' || s.status === 'efetivada' ? 'default' : 'secondary'}>
-                            {s.status.replace(/_/g, ' ')}
+                            {s.status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
                           </Badge>
                           {s.termo_cancelamento_assinado_em && (
                             <Badge variant="outline" className="text-green-600 border-green-600">
