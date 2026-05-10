@@ -1127,11 +1127,12 @@ export function MapaVistoriasContent() {
           vistoriador.status_operacional === 'em_contato' ? '#FCD34D' :
           '#22C55E';
         const isTecnicoDraggable = !!atribuicaoManualAtiva;
+        const sobrepostos = sobreposicaoTecnicosMap.get(vistoriador.vistoriador_id) || 0;
         return (
           <Marker
-            key={`vistoriador-${vistoriador.vistoriador_id}-${taskCount}-${vistoriador.status_operacional}-${isTecnicoDraggable}`}
+            key={`vistoriador-${vistoriador.vistoriador_id}-${taskCount}-${vistoriador.status_operacional}-${isTecnicoDraggable}-${sobrepostos}`}
             position={[vistoriador.latitude, vistoriador.longitude]}
-            icon={getVistoriadorIconWithBadge(corStatus, taskCount)}
+            icon={getVistoriadorIconWithBadge(corStatus, taskCount, sobrepostos)}
             draggable={isTecnicoDraggable}
             eventHandlers={isTecnicoDraggable ? {
               dragend: (e) => {
