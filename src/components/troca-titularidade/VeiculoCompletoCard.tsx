@@ -60,8 +60,8 @@ export function VeiculoCompletoCard({ veiculoId }: Props) {
   const fotosArr = fotos || [];
 
   const mediaItems = fotosArr.map((f: any) => ({
-    url: f.url,
-    tipo: f.tipo_foto || 'foto',
+    url: f.arquivo_url,
+    tipo: f.tipo || 'foto',
     mediaType: 'image' as const,
   }));
 
