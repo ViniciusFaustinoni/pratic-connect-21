@@ -1,62 +1,58 @@
+## Objetivo
+
+Substituir a lógica do alerta de categoria (Placa Vermelha, Táxi, Aplicativo, etc.) para mostrar apenas o que **de fato** é vetado para aquela categoria — não itens que pertencem a outras linhas de produto.
+
 ## Diagnóstico
 
-O problema da FIPE faltante é só a ponta visível. A causa de fundo é que a troca de titularidade **herda passivamente** o que estiver gravado em `veiculos`. Para o caso da screenshot:
+Hoje `gerarAlertaCategoriaElegibilidade` faz:
 
-- Cor, combustível, FIPE, etc. estão `NULL` no registro do veículo (cadastros legados / importações antigas).
-- O modal de troca em `/cadastro/processos` mostra apenas 1 linha de veículo (marca/modelo/ano/placa). Não traz rastreador, fotos, documentos, contrato — embora todas essas informações estejam disponíveis via hooks já existentes (`useVeiculoCompleto`, `useFotosVistoriaPorVeiculo`, `useDocumentosAssociadoCompleto`, `useEventosVeiculo`).
-- O modal de Cadastro › Veículos já é completo, mas hoje só consegue exibir o que tem no banco — não tem botão para enriquecer dados em falta.
+> "Para cada regra `tipo_placa`, se a categoria não estiver no `include`, adicione o item à lista de exclusões."
 
-## Mudanças
+Isso traz lixo porque o catálogo tem dezenas de variantes do mesmo conceito (`70% FIPE`, `75% FIPE`, `Carro Reserva R$1.500`, `Carro Reserva R$2.200`, variantes -SP/-Lagos/-Diesel/-Aplicativo). Cada variante pertence a uma linha de produto distinta. Placa Vermelha não perde nada quando "70% FIPE" é vetado — ela usa "75% FIPE".
 
-### 1. Enriquecimento automático na criação da troca
-**Arquivo:** `supabase/functions/criar-solicitacao-troca-titularidade/index.ts`
+## Nova lógica (frontend, sem mexer no banco)
 
-Hoje só consulta `fipe-lookup` quando FIPE/código FIPE faltam. Vamos generalizar:
+Em `src/utils/alertaCategoriaElegibilidade.ts`, substituir a função por uma versão que:
 
-- Sempre que o veículo tiver **qualquer um** dos campos `cor`, `combustivel`, `valor_fipe`, `codigo_fipe`, `ano_modelo`, `ano_fabricacao` ausentes, a edge dispara também a edge `plate-lookup` (mesma usada pela cotação para puxar dados oficiais por placa) — em paralelo com `fipe-lookup`.
-- Resultados são mesclados com prioridade: dado já existente no banco > `plate-lookup` > `fipe-lookup`. Nunca sobrescreve dado preenchido (não destrói cor digitada manualmente, p.ex.).
-- Atualiza `veiculos` com tudo que veio: `cor`, `combustivel`, `valor_fipe`, `codigo_fipe`, `ano_modelo`, `ano_fabricacao`. A cotação criada já carrega `valor_fipe` e `codigo_fipe` enriquecidos.
-- Tudo em `try/catch` com timeout — falhas não bloqueiam a criação.
+1. **Agrupa por nome-base** (sem sufixos `-Lagos`, `-SP`, `-Aplicativo`, `-Diesel`, deságios, regiões etc.) e também extrai o "conceito" (ex: `Carro Reserva`, `70% FIPE` → `% FIPE`, `Danos a Terceiros`, `Assistência 24h`, `Kit Gás`).
 
-### 2. Botão "Atualizar dados via placa" no modal Cadastro › Veículos
-**Arquivo:** `src/components/cadastro/VeiculoDetalhesModal.tsx`
+2. **Para cada conceito**, calcula:
+   - `categoriasComAcesso` = conjunto de categorias (`placa_vermelha`, `taxi`, `leilao`, `aplicativo`, `nenhuma`, etc.) que têm **ao menos uma variante** desse conceito habilitada.
+   - Se a categoria atual está em `categoriasComAcesso` → o conceito **NÃO** entra no alerta (ela tem alguma variante).
+   - Se a categoria atual **não** está em `categoriasComAcesso`, mas a categoria `nenhuma` (perfil padrão) está → o conceito É uma exclusão real e entra no alerta.
+   - Se nem `nenhuma` tem acesso → conceito experimental/restrito a casos específicos, ignora.
 
-Na aba **Resumo**, ao lado do título "Veículo", adicionar um botão pequeno (ícone refresh + label) visível apenas quando algum campo (cor / combustível / FIPE) estiver vazio:
+3. **Normalização de nome-base** mais robusta:
+   - Remove tudo após primeiro ` - `, ` -`, ou `–`.
+   - Colapsa whitespace.
+   - Mapeia variantes "% FIPE" / "% Fipe" para o rótulo único `Cobertura FIPE`.
+   - Mapeia "Taxa Administrativa..." → ignora (já filtrado).
+   - Agrupa "Carro Reserva R$X" sob `Carro Reserva`, "Danos a Terceiros R$X" sob `Danos a Terceiros`, "Kit Gás R$X" sob `Kit Gás`, "Assistência 24h XXXkm" sob `Assistência 24h`.
 
-- Chama as edges `plate-lookup` e `fipe-lookup` direto do cliente (mesmas que a cotação usa).
-- Faz `update` na tabela `veiculos` (apenas campos hoje vazios).
-- Invalida o react-query do veículo para refletir na hora.
-- Toast de sucesso/falha.
+4. Mantém o filtro de `Taxa Administrativa` e ignora itens cujo conceito agrupado já foi considerado.
 
-Isso resolve casos legados sem precisar refazer a troca.
+## Exemplo do resultado esperado
 
-### 3. Modal de Troca de Titularidade — passar a mostrar TUDO
-**Arquivo:** `src/components/troca-titularidade/ModalDetalhesTroca.tsx`
+Antes (Placa Vermelha): lista de 18 itens incluindo `70% FIPE`, várias `Assistência 24h 1000km`, `Carro Reserva 30 dias R$1.500`, `Carro Reserva 30 dias R$2.200`, `Danos a Terceiros R$10.000/40.000/100.000`, `Kit Gás R$1.500/2.200`, `Clube Gás`, `Chuva de Granizo`, `Colisão`, `Alagamento`, `Rastreador/Monitoramento`.
 
-Substituir o card mínimo "Veículo" (3 linhas) por um **bloco rico** dentro da aba **Dados**, dividido em sub-seções colapsáveis (default abertas as 2 primeiras):
+Depois (Placa Vermelha): vazio ou pequeno (provavelmente vazio, já que ela tem acesso à linha 75% completa). Se aparecer algo, será só o que **realmente** falta vs. um perfil sem categoria.
 
-1. **Veículo** (full): Marca, Modelo, Ano (Fab/Mod), Cor, Placa, Chassi, Renavam, Combustível, **Valor FIPE**, Status atual, Uso App.
-2. **Rastreador**: código, IMEI, plataforma (Softruck/Rede), status, último sinal — ou aviso "Sem rastreador instalado".
-3. **Contrato vigente do antigo**: nº, plano, valor mensal, status, data início.
-4. **Fotos da última vistoria** (thumbs 80×80, click amplia em lightbox já existente). Reaproveita `useFotosVistoriaPorVeiculo` + `MediaViewerModal`.
-5. **Documentos do associado antigo** (CNH, CRLV, etc.) — lista vinda de `useDocumentosAssociadoCompleto`, com link para abrir o doc.
-6. **Eventos do veículo** (resumo: nº de sinistros + assistências) com link "Ver todos" que abre o `VeiculoDetalhesModal` completo.
+## Arquivos afetados
 
-Reaproveita os hooks `useVeiculoCompleto`, `useFotosVistoriaPorVeiculo`, `useDocumentosAssociadoCompleto`, `useEventosVeiculo` — nenhum hook novo.
+- `src/utils/alertaCategoriaElegibilidade.ts` — única alteração.
 
-Adiciona também o mesmo botão **"Atualizar dados via placa"** (item 2) no topo do bloco "Veículo" — útil para o operador que abriu a troca antes do enriquecimento automático.
+Os 2 callers (`CotacaoFormDialog.tsx` e `EtapaResultado.tsx` e `EtapaCategoriaVeiculo.tsx`) continuam chamando a mesma assinatura — só a implementação interna muda.
 
-### 4. (Bônus baixo custo) Largura do modal de troca
-O `DialogContent` atual é `max-w-3xl`. Com as novas seções, sobe para `max-w-4xl` + `max-h-[92vh]` com `ScrollArea` interno (mesmo padrão do `VeiculoDetalhesModal`).
+## Validação
+
+1. Cotação Rápida → Placa Vermelha → alerta deve sumir (ou conter apenas exclusões reais que afetam todas as linhas).
+2. Selecionar Leilão → alerta deve mostrar exclusões reais (provavelmente "Roubo", "Furto", coberturas que linhas 70%/75% normais bloqueiam para leilão).
+3. Selecionar Táxi / Ex-Táxi → idem, validar que aparecem apenas itens que nenhuma linha aceita para essa categoria.
+4. Selecionar Aplicativo → validar.
+5. Conferir tela de Cotação completa (`/cotacao` etapa categoria) com mesmas categorias.
 
 ## Fora de escopo
 
-- Não cria UI separada para "histórico de auditoria de enriquecimento" — só log no console da edge.
-- Não altera o fluxo do novo titular na cotação pública (esse já refaz a consulta naturalmente quando ele abre o link).
-- Não toca em `efetivar-troca-titularidade` — ele já lê de `veiculos` no momento certo.
-
-## Resultado esperado para o caso da screenshot
-
-Após o enriquecimento (e o operador clicando "Atualizar dados via placa" uma vez no caso retroativo):
-- Cor, combustível e FIPE preenchidos no card de Cadastro › Veículos.
-- Modal da troca em /cadastro/processos passa a mostrar veículo completo + rastreador + fotos + documentos do associado, tudo em uma só tela.
+- Não mexer em `entity_eligibility_rules` no banco.
+- Não renomear coberturas no catálogo.
+- Não ajustar lógica de filtragem de planos (continua igual — só o texto do alerta muda).
