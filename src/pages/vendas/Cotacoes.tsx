@@ -1391,6 +1391,18 @@ export default function Cotacoes() {
           />
         </Suspense>
       )}
+
+      {cotacaoDetalheId && (
+        <Suspense fallback={null}>
+          <CotacaoDetalheDrawer
+            cotacaoId={cotacaoDetalheId}
+            open={!!cotacaoDetalheId}
+            onOpenChange={(open) => {
+              if (!open) setCotacaoDetalheId(null);
+            }}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
