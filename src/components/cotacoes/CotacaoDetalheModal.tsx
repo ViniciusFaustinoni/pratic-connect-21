@@ -26,6 +26,8 @@ import { CotacaoVendedor } from '@/components/cotacoes/CotacaoVendedor';
 import { PlanoCardComparativo, type PlanoComparativo } from '@/components/cotacoes/PlanoCardComparativo';
 import { PlanoDetalhesModal } from '@/components/cotacoes/PlanoDetalhesModal';
 import { TrocaTitularidadeBadge } from '@/components/cotacoes/TrocaTitularidadeBadge';
+import { useTrocaPlanoAtual } from '@/hooks/useTrocaPlanoAtual';
+import { History } from 'lucide-react';
 
 import { EnviarEmailModal } from '@/components/cotacoes/EnviarEmailModal';
 import { VincularLeadModal } from '@/components/cotacoes/VincularLeadModal';
@@ -274,6 +276,10 @@ Ficou com alguma dúvida? Estou à disposição!
   const planosComparacao = (cotacao?.dados_extras as { planos_comparacao?: PlanoComparativo[] } | null)?.planos_comparacao || [];
   const categoriaVeiculo = (cotacao as { categoria_veiculo?: string } | undefined)?.categoria_veiculo;
 
+  const isTrocaTitularidade =
+    (cotacao?.dados_extras as { tipo_entrada?: string } | null)?.tipo_entrada === 'troca_titularidade';
+  const { data: planoAtualTroca } = useTrocaPlanoAtual(cotacao?.id, isTrocaTitularidade);
+
   const planosExibir: PlanoComparativo[] = planosComparacao.length > 0
     ? planosComparacao
     : cotacao?.planos
@@ -295,51 +301,111 @@ Ficou com alguma dúvida? Estou à disposição!
   const planoRecomendadoId = getPlanoRecomendado();
 
   const renderPlanos = () => (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
-            {planosExibir.length > 1 ? 'Planos para Comparação' : 'Plano Selecionado'}
-          </CardTitle>
-          {planosExibir.length < 3 && (
-            <Button variant="outline" size="sm" disabled>
-              <Plus className="h-4 w-4 mr-1" />
-              Adicionar
-            </Button>
+    <div className="space-y-4">
+      {planoAtualTroca && (
+        <Card className="bg-muted/40 border-l-4 border-l-primary">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <History className="h-4 w-4 text-primary" />
+                Plano atual do titular anterior
+              </CardTitle>
+              <span className="text-[10px] uppercase tracking-wide font-semibold bg-primary/15 text-primary px-2 py-0.5 rounded-full">
+                Referência
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <p className="text-xs text-muted-foreground">Plano</p>
+                <p className="font-semibold leading-tight">{planoAtualTroca.plano.nome}</p>
+                {planoAtualTroca.plano.codigo && (
+                  <p className="text-[11px] text-muted-foreground">#{planoAtualTroca.plano.codigo}</p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Mensalidade</p>
+                <p className="font-semibold">{formatCurrency(planoAtualTroca.valorMensal)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Adesão original</p>
+                <p className="font-semibold">
+                  {planoAtualTroca.dataInicio
+                    ? new Date(planoAtualTroca.dataInicio).toLocaleDateString('pt-BR')
+                    : '—'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Titular anterior</p>
+                <p className="font-semibold truncate" title={planoAtualTroca.associadoAntigoNome || ''}>
+                  {planoAtualTroca.associadoAntigoNome || '—'}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              {planosExibir.length > 1 ? 'Planos para Comparação' : 'Plano Selecionado'}
+            </CardTitle>
+            {planosExibir.length < 3 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowEditarModal(true)}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Adicionar
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {planosExibir.length > 0 ? (
+            <div className={cn(
+              "grid gap-4",
+              planosExibir.length === 1 && "md:grid-cols-1 max-w-md mx-auto",
+              planosExibir.length === 2 && "md:grid-cols-2",
+              planosExibir.length >= 3 && "md:grid-cols-2 lg:grid-cols-3"
+            )}>
+              {planosExibir.map((plano, idx) => (
+                <PlanoCardComparativo
+                  key={plano.id}
+                  plano={plano}
+                  valorAdesao={cotacao?.valor_adesao || 0}
+                  isRecomendado={plano.id === planoRecomendadoId}
+                  isSelecionado={false}
+                  indice={planosExibir.length > 1 ? idx : undefined}
+                  categoriaVeiculo={categoriaVeiculo}
+                  onVerDetalhes={setPlanoDetalhesModal}
+                  isCoberturaRemovida={isCoberturaRemovida}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <Shield className="h-12 w-12 mx-auto mb-3 opacity-30" />
+              <p>Nenhum plano selecionado</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-4"
+                onClick={() => setShowEditarModal(true)}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Adicionar planos
+              </Button>
+            </div>
           )}
-        </div>
-      </CardHeader>
-      <CardContent>
-        {planosExibir.length > 0 ? (
-          <div className={cn(
-            "grid gap-4",
-            planosExibir.length === 1 && "md:grid-cols-1 max-w-md mx-auto",
-            planosExibir.length === 2 && "md:grid-cols-2",
-            planosExibir.length >= 3 && "md:grid-cols-2 lg:grid-cols-3"
-          )}>
-            {planosExibir.map((plano, idx) => (
-              <PlanoCardComparativo
-                key={plano.id}
-                plano={plano}
-                valorAdesao={cotacao?.valor_adesao || 0}
-                isRecomendado={plano.id === planoRecomendadoId}
-                isSelecionado={false}
-                indice={planosExibir.length > 1 ? idx : undefined}
-                categoriaVeiculo={categoriaVeiculo}
-                onVerDetalhes={setPlanoDetalhesModal}
-                isCoberturaRemovida={isCoberturaRemovida}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-8 text-muted-foreground">
-            <Shield className="h-12 w-12 mx-auto mb-3 opacity-30" />
-            <p>Nenhum plano selecionado</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </div>
   );
 
   return (

@@ -1,51 +1,49 @@
-## Problema
+## Objetivo
 
-No modal de Troca de Titularidade aparece "Erro de comunicação com o rastreador / Serviço de rastreamento temporariamente indisponível" e "Última comunicação" fica em branco — embora o rastreador esteja funcionando e o mapa em outras telas mostre a posição.
+No modal da cotação gerada por troca de titularidade:
+1. Exibir o **plano atual do associado antigo** (do contrato em vigor) como referência, antes da lista de planos cotados.
+2. Ativar o botão **+ Adicionar** para que o vendedor inclua mais opções de plano no comparativo.
 
-## Causa raiz
+## Mudanças (apenas frontend)
 
-A edge `rastreador-posicao` foi desenhada para *degradar bem*: quando a API da plataforma (Softruck/Rede) falha, ela responde **HTTP 200** com `success: false` + `fallback: true` + a **última posição conhecida do banco** em `data.posicao` e uma `mensagem` explicativa.
+### 1. Novo card "Plano atual do titular antigo"
 
-Mas o hook `useRastreadorTempoReal` (`src/hooks/useRastreadorPosicao.ts`) faz:
+Em `src/components/cotacoes/CotacaoDetalheModal.tsx`, dentro de `renderPlanos()`, acima do card "Plano Selecionado / Planos para Comparação", incluir um bloco **somente quando** `cotacao.dados_extras.tipo_entrada === 'troca_titularidade'`.
+
+Para alimentar o bloco, criar um hook leve `useTrocaPlanoAtual(cotacaoId)`:
 
 ```ts
-if (!data.success) throw new Error(data.error);
+// src/hooks/useTrocaPlanoAtual.ts
+// 1. SELECT id, associado_antigo_id, veiculo_id FROM solicitacoes_troca_titularidade WHERE cotacao_id = X
+// 2. SELECT plano_id, valor_mensalidade, data_inicio, status
+//    FROM contratos
+//    WHERE veiculo_id = sol.veiculo_id AND associado_id = sol.associado_antigo_id
+//    ORDER BY created_at DESC LIMIT 1
+// 3. SELECT id, nome, codigo FROM planos WHERE id = contrato.plano_id
 ```
 
-Isso **descarta o fallback** e força a UI a renderizar estado de erro mesmo quando há posição conhecida. Como o `RastreadorBlock` da troca lê `posicao?.data_posicao` (que vira `null` por causa do throw) e depois mostra o bloco vermelho de erro, o usuário vê "Erro" + "Última comunicação: —".
+O card mostra: nome do plano, código, valor mensal vigente, data de adesão e um badge "Plano atual do titular anterior". Layout compacto, fundo neutro (`bg-muted/40`), borda esquerda em `primary` para destacar referência sem competir com o card principal.
 
-O `MapaRastreador` "parece funcionar" porque, para os rastreadores testados naquela tela, a edge retorna `success: true`. Mas o mesmo problema afetaria o mapa quando a plataforma tivesse uma falha transitória.
+### 2. Botão Adicionar funcional
 
-## Solução
+O botão hoje está `disabled` e o modal de edição (`CotacaoFormDialog`) já existe e cobre adição de planos via `planos_comparacao` em `dados_extras`. A solução mais segura é reaproveitar:
 
-Alinhar a UI à intenção do backend: tratar `success: false` **com fallback** como degradação aceitável (mostrar última posição conhecida + aviso suave), não como erro fatal.
+- Remover `disabled` do botão.
+- `onClick` → `setShowEditarModal(true)` (state já existe no arquivo).
+- Manter o limite atual `planosExibir.length < 3` para esconder o botão quando 3 planos já foram cotados.
 
-### 1. `src/hooks/useRastreadorPosicao.ts` — `useRastreadorTempoReal`
+Após salvar, o `useCotacao` invalida e o modal já re-renderiza com o novo plano no comparativo. Nenhuma nova lógica de mutation é necessária.
 
-- Não jogar exceção quando o body retornar `success: false` + `posicao` (fallback).
-- Expor um novo flag `serviceError: boolean` (true só quando a plataforma falhou) junto com `mensagem`.
-- Manter `error` apenas para falhas reais de rede/edge (sem body).
-- Ajustar o `atualizarManual` para usar a mesma lógica e informar via `toast.info` quando for fallback.
+### 3. Sem migração / sem edge function
 
-Resultado: `posicao`, `tempoReal`, `mensagem` continuam disponíveis; a UI passa a renderizar a última posição conhecida sempre que existir — exatamente o comportamento que o usuário descreve como "lógica do mapa".
+Toda a informação já existe em `solicitacoes_troca_titularidade`, `contratos` e `planos`. Não há mudança de backend.
 
-### 2. `src/components/troca-titularidade/VeiculoCompletoCard.tsx` — `RastreadorBlock`
+## Arquivos afetados
 
-- Usar `posicao?.data_posicao` como "Última comunicação" (já feito, mas agora vai vir preenchido pelo fallback).
-- Mostrar o bloco vermelho **apenas** quando não há posição alguma (`!posicao && (error || serviceError)`).
-- Quando `serviceError && posicao` existir, mostrar um aviso suave (texto âmbar pequeno) tipo: *"Tempo real indisponível — exibindo última posição conhecida"* — mantém transparência sem alarmar.
+- `src/components/cotacoes/CotacaoDetalheModal.tsx` (badge troca: já existe; adicionar render do novo card + ativar botão)
+- `src/hooks/useTrocaPlanoAtual.ts` (novo)
 
-### 3. (Opcional, sem mudança visual) `MapaRastreador.tsx`
+## Fora do escopo
 
-Mesma melhoria de mensagem suave já encaixa porque o hook agora entrega `posicao` + `mensagem` em vez de `error`. Não é necessário tocar no JSX a menos que queira; deixo de fora desta entrega.
-
-## Arquivos alterados
-
-- `src/hooks/useRastreadorPosicao.ts` — não-throw em fallback, novo `serviceError`.
-- `src/components/troca-titularidade/VeiculoCompletoCard.tsx` — render condicional do bloco de erro / aviso suave.
-
-## Fora de escopo
-
-- Edge function `rastreador-posicao` (já se comporta corretamente).
-- Schema, cron, lógica de plataforma.
-- Outros consumidores do hook continuarão recebendo `posicao` quando antes recebiam `null` — comportamento mais correto em todos os casos.
+- Atribuição automática do mesmo plano (apenas referência visual; o vendedor decide).
+- Reescrever o fluxo de adição inline (continua via modal de edição existente).
