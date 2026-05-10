@@ -408,6 +408,7 @@ export default function CotacaoContratacao() {
         token={token}
         numeroCotacao={cotacao.numero}
         cpf={(cotacao as any).cpf || (cotacao as any).solicitante_cpf}
+        email={cotacao.email_solicitante}
       />
     );
   }
