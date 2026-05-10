@@ -621,6 +621,9 @@ export function AppSidebar() {
         if (item.url === '/monitoramento/aprovacoes-monitoramento' && aprovacoesMonCount > 0) {
           return { ...item, badge: String(aprovacoesMonCount) };
         }
+        if (item.url === '/cadastro/processos' && processosOpCount > 0) {
+          return { ...item, badge: String(processosOpCount) };
+        }
         return item;
       }),
     }));
