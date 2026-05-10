@@ -187,7 +187,7 @@ async function fetchCotacoesCore(params: {
       `,
       pageSize ? { count: 'estimated' } : undefined
     )
-    .order('prioridade', { ascending: false })
+    .order('origem_troca_titularidade', { ascending: false })
     .order('created_at', { ascending: false });
 
   // Escopo "own": filtra explicitamente por vendedor logado.
