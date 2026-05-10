@@ -584,9 +584,7 @@ serve(async (req) => {
               { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
             );
           }
-          console.log(`[BLOQUEIO-DONO] Liberado por troca de titularidade legítima: placa=${placaLimpa}`);
-          // Não reaproveita o veículo do antigo (transferência ocorrerá em efetivar-troca-titularidade)
-          data.associado_id = null as any;
+          console.log(`[BLOQUEIO-DONO] Liberado por troca de titularidade legítima: placa=${placaLimpa} (veículo será reaproveitado e transferido em efetivar-troca-titularidade)`);
         }
 
         veiculoExistente = data ? { id: data.id } : null;
