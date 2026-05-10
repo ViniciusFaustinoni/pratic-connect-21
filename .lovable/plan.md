@@ -1,59 +1,76 @@
-## Diagnóstico
+## Contexto
 
-Investiguei o serviço `LTB4J74` (instalação com encaixe, ID `0edf10a4-...`) e encontrei o problema.
+Hoje a tela pública `Proteção ativada!` (mostrada após o contrato ser ativado) só exibe um botão "Acessar meu app de associado". Mas para o associado que acabou de ser ativado **não existe usuário em `auth.users`**, então ele não tem senha para logar. Existe um fluxo `/app/criar-senha` + edge function `app-criar-senha`, mas ele depende de um token separado (`auth_tokens_primeiro_acesso`) que precisaria ter sido enviado por e-mail — e neste caso não foi gerado.
 
-A atribuição no mapa **funcionou** — só que foi para o técnico **errado**:
+A solução é permitir que o associado **crie a senha direto na tela de ativação**, autorizado pelo próprio token público da cotação.
 
-- `servicos.profissional_id` = **WALLACE NUNES** (`f6313b28-...`)
-- `instalacoes.instalador_id` = **WALLACE NUNES**
-- Log `servicos_atribuicoes_log`: "Atribuição manual pelo painel" às 16:35:13 UTC
-- O `[TESTE] VISTORIADOR` (`46477310-...`) **não tem nenhum serviço atribuído** — por isso o app dele não recebeu nada.
+## O que será feito
 
-### Por que caiu no técnico errado
+### 1. Edge function nova: `cotacao-criar-senha`
+Recebe `{ token_cotacao, senha }`. Valida:
+- Cotação existe e `status_contratacao = 'ativo'`
+- Tem `contrato_gerado_id` apontando para contrato `status = 'ativo'`
+- Resolve o associado pelo contrato
 
-Os dois vistoriadores estão com posição GPS praticamente idêntica:
+Cria a conta de acesso seguindo o mesmo padrão do `app-criar-senha` existente:
+- Se `associados.user_id` for nulo: cria usuário em `auth.users` com e-mail `<cpf>@associado.pratic.com.br` (mesma convenção já usada), confirma e-mail, gera profile (`tipo='associado'`, `primeiro_acesso=false`), insere em `user_roles` com role `associado`, vincula `user_id` no associado.
+- Se já tiver `user_id`: apenas atualiza a senha via `auth.admin.updateUserById` e marca `primeiro_acesso=false`.
 
-| Técnico | Lat | Lng | em_servico |
-|---|---|---|---|
-| WALLACE NUNES | -22.9193252 | -43.4167186 | true |
-| [TESTE] VISTORIADOR | -22.9193766 | -43.4168007 | true |
+Registra log em `auth_logs` e histórico em `associados_historico`. Retorna `{ success, email, cpf }` para o front exibir no próximo passo.
 
-Distância entre eles: **~10 metros**.
+Critérios de segurança:
+- O token público é o único fator de autorização — funciona porque já é o mesmo token que o associado usou para contratar e está vinculado a um contrato ativo dele.
+- Senha mínima: 8 caracteres, com regras iguais às do `DefinirSenha` interno (maiúscula, minúscula, número).
+- Idempotência: se a senha já foi criada antes (existe user_id e o associado já fez login), retornar mensagem "Conta já existe, vá para o login".
 
-A função `handleTaskDragEnd` em `src/components/mapa/MapaVistoriasContent.tsx` (linhas 501–524) pega o técnico **mais próximo** do ponto onde a tarefa foi solta, dentro de um raio de 5 km. Com dois marcadores praticamente colados, qualquer pequeno desvio do mouse faz cair no Wallace em vez do TESTE.
+### 2. Front — `src/pages/public/CotacaoContratacao.tsx`
+Substituir o conteúdo do early-return atual (`status_contratacao === 'ativo'`) por um componente novo `EtapaCriacaoSenha` com 3 estados:
 
-O `AlertDialog` de confirmação mostra o nome do técnico antes de aplicar (linha 1454), mas é fácil clicar "Confirmar" sem notar quando há sobreposição.
+- **Estado inicial — formulário de senha**:
+  - Card mantém o cabeçalho "Proteção ativada!" + número da cotação.
+  - Adiciona dois campos: "Crie sua senha" e "Confirmar senha", com toggle de mostrar/ocultar.
+  - Indicador visual de força + checklist (mín 8, maiúscula, minúscula, número) — reaproveitando o padrão visual do `DefinirSenha.tsx`.
+  - Mostra dica do e-mail que será usado: "Seu login será: `<cpf-mascarado>@associado.pratic.com.br`".
+  - Botão "Criar senha e ativar acesso" — desabilitado até validações passarem.
 
-## Plano de correção
+- **Estado de sucesso**:
+  - Mensagem de confirmação + botão "Acessar meu app de associado" → redireciona para `/app/login` com `?email=<email>` para pré-preencher.
 
-### 1. Detectar sobreposição e forçar escolha explícita
+- **Estado "conta já criada"** (idempotente):
+  - Card avisa que a senha já foi definida e oferece o link de login + "Esqueci minha senha".
 
-Em `handleTaskDragEnd` (e no equivalente `handleTecnicoDragEnd`):
+A submissão chama a edge function via `publicSupabase.functions.invoke('cotacao-criar-senha', { body: { token, senha } })`.
 
-- Após encontrar o técnico mais próximo, verificar se existem **outros técnicos a menos de ~150 m** dele.
-- Se houver, em vez de abrir direto o dialog de confirmação, abrir um novo **dialog de seleção** listando todos os técnicos sobrepostos (nome, distância, nº de tarefas no dia) para o coordenador escolher manualmente.
-- Se não houver sobreposição, mantém o fluxo atual.
+### 3. Página `/app/login`
+Aceitar query param `?email=` e pré-preencher o campo de e-mail. (Verificação rápida no componente — provavelmente já existe um login simples; se não, adicionar essa leitura é trivial.)
 
-### 2. Reforçar o dialog de confirmação atual
+### 4. Correção retroativa do associado atual
+O associado MARCUS (`a4e62fa5-c217-48c3-acd7-9390f13985eb`) está sem `user_id`. Não é necessária migração de banco — assim que abrir o link público da cotação após o deploy, ele cai no formulário e cria a senha pelo fluxo novo.
 
-No `AlertDialog` de `assignConfirmation` (linhas 1447+):
+## Detalhes técnicos
 
-- Destacar o nome do técnico em fonte maior / badge colorido.
-- Mostrar também a foto/iniciais e o telefone, para o coordenador conferir antes de confirmar.
+```text
+[Tela pública /cotacao/:token]
+        │  status_contratacao = 'ativo'
+        ▼
+[Form de senha]  ──► publicSupabase.functions.invoke('cotacao-criar-senha')
+                            │
+                            ▼
+                  ┌───────────────────────────────┐
+                  │  Edge function (service role) │
+                  │  1. Valida token + contrato   │
+                  │  2. Cria/atualiza auth.user   │
+                  │  3. Cria profile + role       │
+                  │  4. Vincula user_id           │
+                  └───────────────────────────────┘
+                            │ success
+                            ▼
+                  [Tela de sucesso → /app/login?email=...]
+```
 
-### 3. Ajustar o ícone arrastável
+Tabelas tocadas pelo edge: `cotacoes` (read), `contratos` (read), `associados` (read + update user_id), `profiles` (insert/update), `user_roles` (upsert), `auth_logs` (insert), `associados_historico` (insert), `auth.users` (admin). Nenhuma migração necessária.
 
-Quando dois ou mais marcadores de técnico estão a < 50 m um do outro, aplicar um leve offset visual (spider) ou badge "+N" para deixar claro que há sobreposição — evita a ambiguidade na origem.
+## Fora de escopo
 
-### 4. (Opcional, fora deste escopo) Reatribuir o serviço atual
-
-Se o coordenador quiser, posso já mover o serviço `LTB4J74` do Wallace para o `[TESTE] VISTORIADOR` agora, para o teste continuar.
-
-## Arquivos afetados
-
-- `src/components/mapa/MapaVistoriasContent.tsx` — lógica drag-end, novo dialog de seleção, reforço do dialog de confirmação, offset visual de marcadores sobrepostos.
-
-## Perguntas
-
-1. Quer que eu também reatribua o serviço `LTB4J74` para o `[TESTE] VISTORIADOR` agora (item 4)?
-2. Para o item 3 (offset de marcadores sobrepostos), prefere "spider" (abre em leque ao clicar) ou apenas badge "+N" no marcador?
+- Reenvio do e-mail "primeiro acesso" via WhatsApp/Email automático após ativação (pode ser uma evolução futura, mas a tela inline já cobre o caso comum em que o associado fica na própria página após ativar).
+- Mexer no `/app/criar-senha` antigo — continua funcionando para os casos em que o token de e-mail for usado.
