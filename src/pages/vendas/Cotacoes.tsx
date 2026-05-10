@@ -1394,7 +1394,7 @@ export default function Cotacoes() {
 
       {cotacaoDetalheId && (
         <Suspense fallback={null}>
-          <CotacaoDetalheDrawer
+          <CotacaoDetalheModal
             cotacaoId={cotacaoDetalheId}
             open={!!cotacaoDetalheId}
             onOpenChange={(open) => {
