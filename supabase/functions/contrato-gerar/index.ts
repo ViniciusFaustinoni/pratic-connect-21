@@ -39,6 +39,49 @@ interface GerarContratoPayload {
 }
 
 /**
+ * BLOQUEIO ANTI-SEQUESTRO — exceção para troca de titularidade legítima.
+ * Quando o antigo titular já assinou o termo de cancelamento, o veículo é
+ * marcado com `em_troca_titularidade=true` e `troca_titularidade_id` aponta
+ * para a solicitação. Se a cotação atual pertence a essa mesma solicitação,
+ * permitimos prosseguir (o vínculo será efetivamente transferido depois,
+ * em `efetivar-troca-titularidade`).
+ */
+async function placaLiberadaPorTrocaTitularidade(
+  supabase: any,
+  placa: string,
+  cotacaoDadosExtras: any,
+): Promise<boolean> {
+  try {
+    const { data: v } = await supabase
+      .from('veiculos')
+      .select('em_troca_titularidade, troca_titularidade_id, associado_id')
+      .eq('placa', placa)
+      .maybeSingle();
+    if (!v?.em_troca_titularidade || !v?.troca_titularidade_id) return false;
+
+    // 1) Match por solicitacao_id explícito em dados_extras (preferido)
+    const solIdCot = cotacaoDadosExtras?.solicitacao_troca_id || cotacaoDadosExtras?.troca_titularidade_id;
+    if (solIdCot && solIdCot === v.troca_titularidade_id) return true;
+
+    // 2) Match por associado_antigo_id da cotação == associado_id atual do veículo
+    const antigoId = cotacaoDadosExtras?.associado_antigo_id;
+    if (antigoId && antigoId === v.associado_id) {
+      const { data: sol } = await supabase
+        .from('solicitacoes_troca_titularidade')
+        .select('id, associado_antigo_id, status, termo_cancelamento_assinado_em')
+        .eq('id', v.troca_titularidade_id)
+        .maybeSingle();
+      if (sol?.associado_antigo_id === antigoId && sol?.termo_cancelamento_assinado_em) {
+        return true;
+      }
+    }
+  } catch (e) {
+    console.warn('[placaLiberadaPorTrocaTitularidade] erro:', e);
+  }
+  return false;
+}
+
+/**
  * Normaliza nomes para comparação: remove acentos, pontuação, espaços extras,
  * e padroniza para minúsculas. Usado para detectar colisões de identidade
  * (ex.: associado existente vs solicitante da cotação).
