@@ -1483,10 +1483,24 @@ export function MapaVistoriasContent() {
             <AlertDialogTitle>Confirmar Atribuição</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3">
-                <p>
-                  Deseja atribuir <strong>{formatPlacaExibicao(assignConfirmation?.servicos[0]?.veiculo_placa, 'tarefa')}</strong> ao técnico{' '}
-                  <strong>{assignConfirmation?.profissional.vistoriador_nome}</strong>?
+                <p className="text-sm">
+                  Atribuir tarefa{' '}
+                  <strong className="font-mono">{formatPlacaExibicao(assignConfirmation?.servicos[0]?.veiculo_placa, 'tarefa')}</strong>
+                  {' '}ao técnico:
                 </p>
+                {assignConfirmation && (
+                  <div className="flex items-center gap-3 p-3 rounded-md border-2 border-primary bg-primary/5">
+                    <div className="h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm flex-shrink-0">
+                      {(assignConfirmation.profissional.vistoriador_nome || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-base text-foreground leading-tight">{assignConfirmation.profissional.vistoriador_nome}</p>
+                      {assignConfirmation.profissional.telefone && (
+                        <p className="text-xs text-muted-foreground">{assignConfirmation.profissional.telefone}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
                 {assignConfirmation && (
                   <div className="bg-muted/50 rounded-md p-2 space-y-1">
                     {assignConfirmation.servicos.map((s) => (
