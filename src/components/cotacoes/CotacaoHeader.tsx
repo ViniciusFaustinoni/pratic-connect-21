@@ -46,15 +46,6 @@ const formatDateTime = (date: string) => {
   });
 };
 
-const calcularValidade = (createdAt: string) => {
-  const created = new Date(createdAt);
-  return new Date(created.getTime() + 7 * 24 * 60 * 60 * 1000);
-};
-
-const isExpirada = (createdAt: string) => {
-  const validade = calcularValidade(createdAt);
-  return new Date() > validade;
-};
 
 interface MetricCardProps {
   icon: React.ReactNode;
