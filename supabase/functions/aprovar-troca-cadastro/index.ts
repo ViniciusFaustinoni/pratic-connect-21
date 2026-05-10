@@ -139,9 +139,106 @@ Deno.serve(async (req) => {
       throw new Error(error.message || 'Falha ao atualizar solicitação');
     }
 
-    return new Response(JSON.stringify({ success: true, analise_previa: analisePrevia }), {
-      status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    // 5) Marcar cotação como prioritária + atribuir vendedor + notificar (best-effort)
+    let vendedorAtribuido: { profile_id: string; nome: string; telefone: string | null } | null = null;
+    let whatsappStatus: 'enviado' | 'sem_telefone' | 'erro' | 'sem_vendedor' | 'sem_cotacao' = 'sem_cotacao';
+    try {
+      if (sol.cotacao_id) {
+        // Resolver vendedor: 1) criado_por (se for vendedor), 2) vendedor do contrato antigo
+        let vendedorProfileId: string | null = null;
+
+        if (sol.criado_por) {
+          const { data: profCriador } = await admin
+            .from('profiles')
+            .select('id, tipo, nome, telefone')
+            .eq('user_id', sol.criado_por)
+            .maybeSingle();
+          if (profCriador && ['vendedor', 'agencia', 'consultor_externo'].includes(profCriador.tipo || '')) {
+            vendedorProfileId = profCriador.id;
+            vendedorAtribuido = { profile_id: profCriador.id, nome: profCriador.nome, telefone: profCriador.telefone };
+          }
+        }
+
+        if (!vendedorProfileId && sol.veiculo_id) {
+          const { data: contratoAntigo } = await admin
+            .from('contratos')
+            .select('vendedor_id')
+            .eq('veiculo_id', sol.veiculo_id)
+            .not('vendedor_id', 'is', null)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (contratoAntigo?.vendedor_id) {
+            vendedorProfileId = contratoAntigo.vendedor_id;
+            const { data: profVend } = await admin
+              .from('profiles')
+              .select('id, nome, telefone')
+              .eq('id', vendedorProfileId)
+              .maybeSingle();
+            if (profVend) {
+              vendedorAtribuido = { profile_id: profVend.id, nome: profVend.nome, telefone: profVend.telefone };
+            }
+          }
+        }
+
+        // Atualizar a cotação: prioridade alta + flag origem + vendedor (se ainda não tiver)
+        const { data: cotAtual } = await admin
+          .from('cotacoes')
+          .select('id, numero, vendedor_id')
+          .eq('id', sol.cotacao_id)
+          .maybeSingle();
+
+        const updateCot: Record<string, unknown> = {
+          prioridade: 'alta',
+          origem_troca_titularidade: true,
+        };
+        if (vendedorProfileId && !cotAtual?.vendedor_id) {
+          updateCot.vendedor_id = vendedorProfileId;
+        }
+        await admin.from('cotacoes').update(updateCot).eq('id', sol.cotacao_id);
+
+        // Notificar vendedor via WhatsApp (Evolution — texto livre interno)
+        if (!vendedorAtribuido) {
+          whatsappStatus = 'sem_vendedor';
+        } else if (!vendedorAtribuido.telefone) {
+          whatsappStatus = 'sem_telefone';
+        } else {
+          const numero = (cotAtual?.numero || sol.cotacao_id.slice(0, 8)).toString();
+          const novoNome = ((sol.novo_titular_dados || {}) as { nome?: string }).nome || 'novo titular';
+          const mensagem =
+            `🔁 *Troca de titularidade — cadastro aprovado*\n\n` +
+            `Cotação *${numero}* foi liberada e marcada como *PRIORIDADE ALTA*.\n` +
+            `Novo titular: ${novoNome}\n\n` +
+            `A placa já está liberada para fechamento. Acesse o sistema para dar continuidade.`;
+          try {
+            const { error: waErr } = await admin.functions.invoke('whatsapp-send-text', {
+              body: {
+                telefone: vendedorAtribuido.telefone,
+                mensagem,
+                force_provider: 'evolution',
+              },
+            });
+            whatsappStatus = waErr ? 'erro' : 'enviado';
+            if (waErr) console.warn('[aprovar-troca-cadastro] whatsapp erro:', waErr);
+          } catch (waCatch) {
+            whatsappStatus = 'erro';
+            console.warn('[aprovar-troca-cadastro] whatsapp catch:', waCatch);
+          }
+        }
+      }
+    } catch (notifErr) {
+      console.warn('[aprovar-troca-cadastro] notificação vendedor falhou (não bloqueante):', notifErr);
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        analise_previa: analisePrevia,
+        vendedor_notificado: vendedorAtribuido,
+        whatsapp_status: whatsappStatus,
+      }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
   } catch (e: any) {
     console.error('[aprovar-troca-cadastro] FATAL:', e, JSON.stringify(e));
     const msg = (e && (e.message || e.error_description || e.hint || e.details)) || (typeof e === 'string' ? e : 'erro');
