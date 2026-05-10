@@ -231,20 +231,22 @@ export function TrocaTitularidadeDialog({
           <div className="space-y-2">
             <Label>Veículo a transferir *</Label>
             {semCodigoHinova ? (
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription className="text-sm space-y-2">
-                  <div>
-                    {syncErro
-                      ? `Falha ao sincronizar: ${syncErro}`
-                      : 'Associado ainda não está sincronizado com o SGA (sem código Hinova). Sincronize para listar os veículos.'}
-                  </div>
-                  <Button size="sm" variant="outline" onClick={handleSincronizarHinova} disabled={sincronizando}>
-                    {sincronizando && <Loader2 className="h-3 w-3 mr-2 animate-spin" />}
-                    Sincronizar com SGA
-                  </Button>
-                </AlertDescription>
-              </Alert>
+              syncErro ? (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription className="text-sm space-y-2">
+                    <div>Falha ao sincronizar com o SGA: {syncErro}</div>
+                    <Button size="sm" variant="outline" onClick={handleSincronizarHinova}>
+                      Tentar novamente
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Sincronizando associado com o SGA…
+                </div>
+              )
             ) : carregando ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
