@@ -61,6 +61,9 @@ const DuplicarCotacaoDialog = lazy(() =>
 const NovaEntradaDialog = lazy(() =>
   import('@/components/vendas/OutrasEntradasMenu').then((m) => ({ default: m.NovaEntradaDialog }))
 );
+const CotacaoDetalheDrawer = lazy(() =>
+  import('@/components/cotacoes/CotacaoDetalheDrawer').then((m) => ({ default: m.CotacaoDetalheDrawer }))
+);
 import type { DuplicarCotacaoConfirmPayload } from '@/components/cotacoes/DuplicarCotacaoDialog';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
