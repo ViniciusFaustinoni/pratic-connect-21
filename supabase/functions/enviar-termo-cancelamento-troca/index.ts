@@ -211,7 +211,10 @@ ${template.rodape_html || `<div class="footer">PRATICCAR · www.praticcar.org ·
 
     const operations = {
       query: `mutation CreateDocumentMutation($document: DocumentInput!, $signers: [SignerInput!]!, $file: Upload!) {
-        createDocument(sandbox: false, document: $document, signers: $signers, file: $file) { id name }
+        createDocument(sandbox: false, document: $document, signers: $signers, file: $file) {
+          id name
+          signatures { public_id link { short_link } }
+        }
       }`,
       variables: {
         document: { name: `Termo de Cancelamento - Troca - ${veiculo?.placa || ''}`, new_signature_style: true },
