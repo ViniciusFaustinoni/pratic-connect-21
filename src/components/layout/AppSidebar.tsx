@@ -473,14 +473,21 @@ const SUPER_GROUPS: SuperGroup[] = [
     label: 'Relacionamento',
     icon: Users,
     color: '#ef4444',
-    moduleIds: ['relacionamento', 'monitoramento', 'eventos', 'assistencia', 'oficinas', 'cobranca'],
+    moduleIds: ['relacionamento', 'monitoramento', 'cobranca'],
   },
   {
     id: 'administrativo',
     label: 'Administrativo',
     icon: Building2,
     color: '#fbbf24',
-    moduleIds: ['financeiro', 'comissoes', 'contabilidade', 'juridico', 'rh', 'marketing', 'diretoria', 'documentos', 'relatorios'],
+    moduleIds: ['diretoria', 'documentos'],
+  },
+  {
+    id: 'em_breve',
+    label: 'Em Breve',
+    icon: Clock,
+    color: '#94a3b8',
+    moduleIds: ['eventos', 'assistencia', 'oficinas', 'financeiro', 'comissoes', 'contabilidade', 'juridico', 'rh', 'marketing', 'relatorios'],
   },
 ];
 

@@ -1,36 +1,36 @@
-# Badge de pendentes em "Processos" (Cadastro)
+# Super-grupo "Em Breve" na sidebar (apenas diretores)
 
-Hoje a sidebar já exibe badge dinâmico para **Biometrias Pendentes** e **Aprovações** (Monitoramento), via hooks dedicados injetados em `AppSidebar.tsx`. O item **Processos** (`/cadastro/processos`) ainda não tem badge, embora a página interna (`ProcessosOperacionais`) já calcule contadores por aba (Titularidade, Substituições, Migrações, Inclusões).
+## Contexto
+
+Diretores hoje veem 3 super-grupos colapsáveis na sidebar (`SUPER_GROUPS` em `AppSidebar.tsx`): **Comercial**, **Relacionamento** e **Administrativo**, cada um agregando módulos por `moduleIds`.
+
+Vamos adicionar um quarto super-grupo, **Em Breve**, contendo módulos que ainda estão em desenvolvimento, mantendo a navegação funcionando normalmente (apenas reorganização visual).
 
 ## O que será feito
 
-1. **Novo hook `useProcessosOperacionaisCount`** (`src/hooks/useProcessosOperacionaisCount.ts`)
-   - Reaproveita exatamente as mesmas 4 queries `count: 'exact', head: true` já usadas em `useProcessosCounts` dentro de `ProcessosOperacionais.tsx`:
-     - `solicitacoes_troca_titularidade` em `aguardando_cadastro` ou `cotacao_em_andamento`
-     - `substituicoes_veiculo` em `aguardando_aprovacao`
-     - `solicitacoes_migracao` em `pendente`
-     - `cotacoes` com `tipo_entrada=inclusao` e status `rascunho`/`enviada`
-   - Retorna o **somatório** (total pendente global, sem filtro de escopo de vendedor — igual a `useBiometriasPendentesCount` e `useAprovacoesMonitoramentoCount`).
-   - `staleTime: 30s`, `refetchOnWindowFocus: true` (mesmo padrão dos outros).
+1. **Novo super-grupo `em_breve`** em `SUPER_GROUPS` (`src/components/layout/AppSidebar.tsx`):
+   - `label`: "Em Breve"
+   - `icon`: `Clock` (já importado) ou `Rocket`
+   - `color`: tom neutro/cinza para indicar status "em construção" (ex.: `#94a3b8`)
+   - `moduleIds`: `['eventos', 'assistencia', 'oficinas', 'financeiro', 'comissoes', 'contabilidade', 'juridico', 'rh', 'marketing', 'relatorios']`
 
-2. **Injetar o badge no `AppSidebar.tsx`**
-   - Importar e chamar o novo hook ao lado de `useBiometriasPendentesCount` / `useAprovacoesMonitoramentoCount`.
-   - No bloco "Injetar badges dinâmicos", adicionar:
-     ```ts
-     if (item.url === '/cadastro/processos' && processosCount > 0) {
-       return { ...item, badge: String(processosCount) };
-     }
-     ```
-   - Incluir `processosCount` no array de dependências do `useMemo`.
+2. **Remover esses 10 IDs** dos super-grupos existentes:
+   - `relacionamento` perde: `eventos`, `assistencia`, `oficinas` → fica com `relacionamento`, `monitoramento`, `cobranca`
+   - `administrativo` perde: `financeiro`, `comissoes`, `contabilidade`, `juridico`, `rh`, `marketing`, `relatorios` → fica com `diretoria`, `documentos`
+
+3. **Sem alterações** em:
+   - `menuConfig.groups` (definições e permissões dos módulos permanecem intactas)
+   - Lógica de renderização (o sistema de super-grupos já existe e renderiza qualquer entrada nova automaticamente)
+   - Comportamento para perfis não-diretores (super-grupos só se aplicam a diretores)
+   - Navegação dos itens (links continuam clicáveis, sem desabilitar)
 
 ## Detalhes técnicos
 
-- **Sem mudança de schema** — apenas leitura.
-- **Sem mudança visual no item** — o badge já é renderizado pelo bloco existente que lê `item.badge` (linhas 887, 1031, 1095 de `AppSidebar.tsx`), portanto herdará o mesmo estilo dos demais.
-- **Permissões** — o hook não filtra por papel; a renderização do item de menu já é gated pelas permissões existentes, então só usuários que enxergam "Processos" verão o badge.
-- **Performance** — 4 HEAD queries paralelas, idêntico ao que a própria página já dispara ao abrir.
+- Arquivo único alterado: `src/components/layout/AppSidebar.tsx` (constante `SUPER_GROUPS`, ~linhas 463–485).
+- Cor sugerida `#94a3b8` (slate-400) para diferenciar visualmente do conteúdo "ativo".
+- O grupo herda automaticamente o comportamento colapsável dos demais super-grupos.
 
 ## Fora do escopo
 
-- Não vamos refatorar o `useProcessosCounts` interno da página para reusar o novo hook (mantém escopo por vendedor, comportamento diferente).
-- Não vamos adicionar badge ao `/juridico/processos` (item separado, contexto distinto). Se quiser depois, é pedir.
+- Não vamos criar um sistema de flag `comingSoon` por módulo nem desabilitar links.
+- Não vamos mexer em permissões (`canManageX`) — quem já não enxergava o módulo continua sem enxergar.
