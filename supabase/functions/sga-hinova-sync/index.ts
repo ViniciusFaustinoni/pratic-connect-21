@@ -607,7 +607,13 @@ serve(async (req) => {
             codigo_hinova: codigoAssociadoHinova,
             sincronizado_hinova: true,
             sincronizado_hinova_em: new Date().toISOString(),
+            // Preserva data original em re-syncs (COALESCE-like via filtro is null abaixo)
           }).eq('id', _aid);
+          // Set data_cadastro_sga apenas se ainda estiver NULL
+          await supabase.from('associados')
+            .update({ data_cadastro_sga: new Date().toISOString().slice(0, 10) })
+            .eq('id', _aid)
+            .is('data_cadastro_sga', null);
         }
       } catch (e: any) {
         if (e instanceof HinovaNotFoundError) {
