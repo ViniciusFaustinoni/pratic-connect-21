@@ -192,7 +192,7 @@ function RastreadorBlock({ rastreador }: { rastreador: any }) {
   const enabled = !!rastreador?.id;
   const { posicao, isLoading, error, serviceError, mensagem, refetch, isRefetching } = useRastreadorTempoReal(
     enabled ? rastreador.id : undefined,
-    false,
+    true,
   );
 
   const ultimaComunicacao = posicao?.data_posicao || rastreador?.ultima_comunicacao || null;
