@@ -40,16 +40,16 @@ export const aprovacaoTrocaTitularidadeMonitoramento: Tutorial = {
         'Você tem duas opções: (a) aprovar direto, transferindo o veículo para o novo titular; ou (b) solicitar uma vistoria do veículo antes de decidir. A vistoria é opcional e fica a critério do Monitoramento — use quando o veículo precisa ser revalidado fisicamente (foto, hodômetro, condições gerais).',
       dicas: [
         'Sem vistoria: o veículo já passa para "Aprovadas" e a troca pode ser efetivada.',
-        'Com vistoria: a solicitação muda para "Em Vistoria" e nossa equipe entra em contato com o novo titular para agendar.',
+        'Com vistoria: a solicitação muda para "Em Vistoria" e a etapa "Vistoria" é destravada automaticamente no link público de contratação para o NOVO titular escolher (autovistoria, técnico em casa ou levar à base). Nenhum serviço de campo é criado nesta etapa — a vistoria roda 100% dentro do fluxo do cliente.',
       ],
     },
     {
       numero: 4,
       titulo: 'Acompanhe o resultado da vistoria (se solicitada)',
       descricao:
-        'Quando você pede vistoria, a solicitação fica visível na sub-aba "Em Vistoria" até o laudo ser concluído. Após a vistoria aprovada, a troca volta automaticamente para sua fila para a decisão final (Aprovar ou Reprovar).',
+        'Enquanto o novo titular não conclui a vistoria pelo link público, o botão "Aprovar" fica oculto neste drawer (somente "Reprovar" disponível). Assim que a vistoria for finalizada, o botão "Aprovar" reaparece automaticamente para você liberar a troca.',
       dicas: [
-        'Vistoria reprovada bloqueia a troca — registre o motivo claro na reprovação para o novo titular entender.',
+        'Não há serviço em "Serviços de Campo" para esta vistoria — ela é executada pelo próprio cliente no link público.',
         'Você pode reabrir o drawer a qualquer momento pela aba "Em Vistoria" para acompanhar o andamento.',
       ],
     },
