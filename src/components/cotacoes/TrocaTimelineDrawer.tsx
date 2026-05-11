@@ -1,4 +1,4 @@
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -67,11 +67,11 @@ export function TrocaTimelineDrawer({ item, open, onOpenChange, onResend, isRese
     !item.termo_assinado_em && !!item.termo_enviado_em && !semEmail;
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle className="text-base">Detalhes da Troca</SheetTitle>
-        </SheetHeader>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-base">Detalhes da Troca</DialogTitle>
+        </DialogHeader>
 
         <div className="mt-4 space-y-4">
           <div className="rounded-lg border bg-muted/30 p-3 text-sm">
@@ -174,7 +174,7 @@ export function TrocaTimelineDrawer({ item, open, onOpenChange, onResend, isRese
             </>
           )}
         </div>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
