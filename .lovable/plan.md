@@ -1,56 +1,69 @@
-## Problema
+## Diagnóstico
 
-No link público do novo titular, a etapa **"Vistoria"** está sempre visível, mesmo quando o Monitoramento já aprovou a troca **sem solicitar vistoria** (status `liberada_para_assinatura` direto). Adicionalmente, hoje, ao clicar "Solicitar vistoria" no modal de monitoramento, a edge function `aprovar-troca-monitoramento` cria um registro em `servicos` (vistoria_entrada) — o usuário pediu que isso NÃO aconteça: a vistoria deve ser executada pelo próprio novo titular dentro do link público.
+### 1) Documentos / laudo no modal de aprovação (Monitoramento → Aprovações de Troca)
 
-## Comportamento desejado
+O `ModalDetalhesTroca` já renderiza `VeiculoCompletoCard`, que **já exibe**:
+- Dados completos do veículo + rastreador
+- Fotos da vistoria (com viewer)
+- Documentos do associado (`useDocumentosAssociadoCompleto` une `documentos_associados` + `documentos_cotacao` — inclui `laudo_vistoria`, `cnh`, `crlv`, `comprovante_residencia`)
+- Resumo de eventos (sinistros + assistências)
 
-| Ação do Monitoramento | Status da solicitação | Etapa "Vistoria" no link público | Botão "Aprovar" no modal |
-|---|---|---|---|
-| Aprova direto (sem vistoria) | `liberada_para_assinatura` | **Oculta** — pula direto para Pagamento | n/a (já aprovado) |
-| Clica "Solicitar vistoria" | `aguardando_vistoria` | **Visível** — novo titular escolhe autovistoria/agendada/base | **Sumido** até vistoria ser concluída |
-| Vistoria concluída pelo novo titular | continua `aguardando_vistoria` | Marcada como concluída (read-only) | **Reaparece** para liberar assinatura |
-| Monitoramento aprova após vistoria | `liberada_para_assinatura` | Concluída | n/a |
+O screenshot anexado confirma que esses blocos estão aparecendo. **Nenhuma alteração necessária aqui** — caso queira ajustes específicos (ex.: separar laudo em destaque, adicionar coluna “última vistoria aprovada”), me avise.
 
-Nenhum registro em `servicos` é criado pela solicitação de vistoria de troca — a execução acontece 100% dentro do fluxo público existente (`EtapaVistoria`).
+### 2) Posição do rastreador não retorna (Mapa Monitoramento, Detalhes do Veículo, Modal Troca)
 
-## Mudanças
+**Investigação:**
 
-### 1. Edge `supabase/functions/aprovar-troca-monitoramento/index.ts`
-- No ramo `solicitar_vistoria`: **remover** o `INSERT` em `servicos` e a gravação de `servico_vistoria_id`.
-- Apenas atualiza `status='aguardando_vistoria'` + `aprovado_monitoramento_*` (auditoria de que a etapa foi solicitada). O sinal "vistoria foi pedida" passa a ser o próprio status `aguardando_vistoria`.
+Os 3 locais usam o hook `useRastreadorTempoReal` → edge `rastreador-posicao` (Mapa do app/assistência usa `posicao-veiculo`, mesma família).
 
-### 2. Hook `src/hooks/useSolicitacaoTrocaPublicaPorCotacao.ts`
-- Já expõe `status`. Manter `servico_vistoria_id` no select para retrocompatibilidade visual mas a lógica de UI passa a olhar apenas o `status`.
+Logs reais da `rastreador-posicao`:
+```
+[Softruck] Buscando posição (tentativa 1/3) → 404 {"error":{"message":"Internal Service Error"}}
+[Softruck] Buscando posição (tentativa 2/3) → 404
+[Softruck] Buscando posição (tentativa 3/3) → 404
+Erro posição: API Softruck temporariamente indisponível (404)
+```
 
-### 3. `src/pages/public/CotacaoContratacao.tsx`
-- Calcular `vistoriaTrocaSolicitada = isTrocaTitularidade && (solicitacaoTroca?.status === 'aguardando_vistoria' || !!cotacao?.tipo_vistoria)`.
-- Ajustar `STEPS` (memo): se `isTrocaTitularidade && !vistoriaTrocaSolicitada`, **remover** o item `{ id: 'vistoria' }` do array. Os índices de Pagamento/Instalação se ajustam pelo `STEPS.length`.
-- Ajustar `etapaDoStatus` e `isEtapaConcluida` para considerar o STEPS dinâmico (mapear por `id`, não por índice fixo). Quando vistoria está oculta e status='liberada_para_assinatura', cair direto em "Pagamento".
-- A renderização condicional dos blocos por `etapaAtual === 3 / 4` passa a usar o índice do step (`STEPS.findIndex(s => s.id === 'vistoria' | 'pagamento')`) para não quebrar quando vistoria é removida.
+Testei a mesma URL via `softruck-api` (operation `tracking`):
+- Rastreador A (`89cb309d-…`, IMEI 867689063760369, IDs Softruck `BelkQWv4KqLjERo / ekgzQoWoylQdAr8`): **200 OK** com lat/lng atuais.
+- Rastreador B (`41accc39-…`, IMEI 869412077334305, IDs `7yN6L82l7AZKgM5 / 7yN6L84a0OLKgM5`): **404 “Internal Service Error”** em todos os endpoints.
 
-### 4. `src/components/troca-titularidade/ModalDetalhesTroca.tsx`
-- Quando `modo='monitoramento'` e `status='aguardando_vistoria'`:
-  - Buscar `cotacao.tipo_vistoria` / `vistoria_concluida_em` da cotação vinculada (via novo select no `useSolicitacaoTroca` ou query auxiliar) para saber se o novo titular já fez a vistoria.
-  - **Ocultar** o botão "Aprovar" enquanto vistoria não estiver concluída; manter "Reprovar" disponível.
-  - Mostrar bloco informativo: "Aguardando o novo titular concluir a vistoria pelo link público".
-  - Reabrir botão "Aprovar" assim que `tipo_vistoria` estiver preenchido (autovistoria com fotos aprovadas pelo monitoramento na aba de aprovação de vistorias, OU agendamento presencial concluído).
-- `podeAgir` passa a aceitar também `status === 'aguardando_vistoria'` somente quando vistoria foi concluída.
+Conclusão: **a função em si funciona**. O 404 acontece em rastreadores cujos `plataforma_veiculo_id` / `plataforma_device_id` ficaram **stale** na Softruck (provavelmente por reativação/recriação no enterprise correto via `softruck-recriar-veiculos-enterprise-correta`). O código atual só re-resolve IDs quando eles parecem IMEI bruto (`isRawImei`); para hashes inválidos ele desiste e cai no fallback “sem última posição registrada”.
 
-### 5. `src/hooks/useSolicitacoesTroca.ts`
-- Estender `useSolicitacaoTroca` para retornar também `cotacao:cotacao_id(tipo_vistoria, vistoria_concluida_em)` para alimentar a regra do modal.
+Por isso:
+- Rastreadores cujos IDs Softruck ainda batem → posição volta normal.
+- Rastreadores recriados / migrados → 404 permanente até alguém rodar reconciliação manual.
 
-### 6. (Opcional / cleanup) `MiniCardVistoriaTroca`
-- Hoje recebe `servico_vistoria_id`. Como deixaremos de criar o serviço, este componente passa a renderizar nada quando `servico_vistoria_id` é nulo (o status da vistoria virá do `VistoriaLinkBlock` / `cotacao.tipo_vistoria`). Sem alteração de assinatura.
+## Plano
 
-## Detalhes técnicos
+### A) `supabase/functions/rastreador-posicao/index.ts` — auto-recuperação de IDs stale
 
-- Nenhum migration necessário: o campo `servico_vistoria_id` continua existindo (nullable) — apenas deixa de ser populado em novas solicitações. Solicitações antigas com serviço criado seguem funcionando.
-- Não mexer na lógica de instalação/serviços de campo de outros fluxos (substituição, inclusão).
-- Tutorial `aprovacao-troca-titularidade-monitoramento.ts` precisa de uma pequena nota: ao clicar "Solicitar vistoria", a vistoria é executada pelo cliente no link público — não vai para a fila de Serviços de Campo.
+1. Quando `getPosicaoSoftruckComRetry` lançar erro com `404` + `Internal Service Error` (ou regex `Internal Service Error|invalid vehicle|invalid device|not found`), **chamar `resolverSoftruckDeviceId(IMEI)`** uma única vez (mesma rotina já existente no arquivo) e tentar de novo com os IDs frescos.
+2. Se a re-resolução resolver IDs diferentes dos atuais, eles já são persistidos em `rastreadores` (a função já faz isso). Logar `re_resolvido=true` em `rastreadores_logs`.
+3. Se mesmo após re-resolver continuar 404, manter o fallback atual (última posição conhecida + mensagem clara).
+4. Pequena melhoria de mensagem: distinguir “IDs Softruck inválidos — re-resolução falhou” de “API Softruck indisponível (5xx)” no campo `mensagem`.
 
-## Arquivos afetados
-- `supabase/functions/aprovar-troca-monitoramento/index.ts`
-- `src/pages/public/CotacaoContratacao.tsx`
-- `src/components/troca-titularidade/ModalDetalhesTroca.tsx`
-- `src/hooks/useSolicitacoesTroca.ts`
-- `src/data/tutoriais/aprovacao-troca-titularidade-monitoramento.ts` (nota)
+### B) `supabase/functions/posicao-veiculo/index.ts` — mesma lógica
+
+Replicar o passo de re-resolução por IMEI (porta o helper `resolverSoftruckDeviceId` da `rastreador-posicao` para um arquivo compartilhado em `_shared/softruck-resolver.ts` para evitar duplicação) e usar dentro do `catch` do bloco Softruck antes de cair no `ultimaPosicaoConhecida`.
+
+### C) Frontend — sem mudança
+
+`useRastreadorTempoReal` e `useChamadoPosicaoTempoReal` já lidam corretamente com:
+- `success:true, tempo_real:true` → posição atual
+- `success:true, tempo_real:false, posicao:{...}` → fallback (banner amarelo)
+- `success:false` sem fallback → erro vermelho “Erro de comunicação”
+
+Após (A) e (B) os 3 locais (Monitoramento → Mapa, Detalhes do Veículo, Modal Troca de Titularidade) voltam a exibir lat/lng atuais nos rastreadores cujos IDs ficaram stale, sem precisar de reconciliação manual.
+
+### D) Reconciliação em massa (opcional / executável já)
+
+Para destravar imediatamente todos os trackers afetados (sem esperar usuários abrirem cada veículo), posso disparar `rastreador-reconciliar-softruck` em background — mas isto fica como passo separado depois que (A)/(B) estiverem no ar.
+
+## Arquivos a editar
+
+- `supabase/functions/rastreador-posicao/index.ts`
+- `supabase/functions/posicao-veiculo/index.ts`
+- `supabase/functions/_shared/softruck-resolver.ts` (novo, extraído da função existente)
+
+Sem migração de banco. Sem mudança de UI/hooks.
