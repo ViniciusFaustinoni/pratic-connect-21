@@ -42,7 +42,7 @@ export function TimelineAprovacao({
   return (
     <ol className="relative border-l border-border ml-2 space-y-4">
       {ETAPAS.map((etapa, idx) => {
-        const completed = idx < currentStep || (idx === currentStep && currentStep === 6);
+        const completed = idx < currentStep || (idx === currentStep && currentStep === 7);
         const active = idx === currentStep;
         const failed = isReprovada && idx === currentStep + 1;
 
