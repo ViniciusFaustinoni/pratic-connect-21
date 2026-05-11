@@ -175,6 +175,29 @@ export function TrocaTitularidadeDialog({
     situacaoPorId[v.id] = { status, loading: !!q?.isLoading };
   });
 
+  // Boletos do veículo selecionado — só dispara DEPOIS que a situação financeira resolver
+  // como INADIMPLENTE. A edge `sga-sync-financeiro-veiculo` (chamada pela query de situação)
+  // já fez upsert em `cobrancas`, então aqui apenas lemos a tabela já atualizada.
+  const situacaoSelecionada = veiculoId ? situacaoPorId[veiculoId] : undefined;
+  const cobrancasHabilitada =
+    open && !!veiculoId && !!situacaoSelecionada && !situacaoSelecionada.loading && situacaoSelecionada.status === 'INADIMPLENTE';
+  const cobrancasQuery = useQuery({
+    queryKey: ['troca-tit-cobrancas', veiculoId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('cobrancas')
+        .select('id, valor, data_vencimento, status, linha_digitavel, boleto_url, nosso_numero')
+        .eq('veiculo_id', veiculoId!)
+        .in('status', ['vencido', 'aguardando_pagamento'])
+        .order('data_vencimento', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: cobrancasHabilitada,
+    staleTime: 60_000,
+  });
+
+
 
   // Auto-seleciona se só houver 1
   useEffect(() => {
