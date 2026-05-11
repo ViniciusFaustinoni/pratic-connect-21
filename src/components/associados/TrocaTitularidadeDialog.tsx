@@ -90,8 +90,6 @@ export function TrocaTitularidadeDialog({
   });
 
   const veiculosSgaMapeados: VeiculoOpcao[] = [];
-  const boletosPorIdLocal: Record<string, BoletoAbertoSGA[]> = {};
-  const saldoPorIdLocal: Record<string, number> = {};
   for (const v of (sgaPayload?.veiculos || [])) {
     const placaNorm = normPlaca(v.placa);
     const local = (veiculosLocais || []).find((l) => normPlaca(l.placa) === placaNorm);
@@ -101,8 +99,6 @@ export function TrocaTitularidadeDialog({
       placa: v.placa,
       descricao: `${v.marca || local.marca || ''} ${v.modelo || local.modelo || ''} ${v.ano || local.ano_modelo || ''} - ${v.placa}`.trim(),
     });
-    boletosPorIdLocal[local.id] = v.boletos_abertos || [];
-    saldoPorIdLocal[local.id] = v.saldo_devedor || 0;
   }
 
   // Fallback local: usado quando SGA falha ou não retorna veículos
