@@ -252,6 +252,11 @@ export default function CotadorPage() {
   const veiculoAntigoPlaca = searchParams.get('veiculo_antigo_placa') || '';
   const veiculoAntigoModelo = searchParams.get('veiculo_antigo_modelo') || '';
 
+  // Edição de cotação de TROCA DE TITULARIDADE (consultor edita antes do termo de filiação)
+  const edicaoTrocaCotacaoId = searchParams.get('cotacao_id');
+  const edicaoTrocaSolicitacaoId = searchParams.get('solicitacao_id');
+  const isEdicaoTroca = inclusaoTipoEntrada === 'troca_titularidade' && !!edicaoTrocaCotacaoId;
+
   const { data: templateWhatsapp } = useTemplateWhatsappCotacao();
   const { data: percentualAdesaoConfig = 1 } = useTaxaAdesaoPercentual();
   const { data: minimoAdesaoBase = 100 } = useTaxaAdesaoMinimoBase();
