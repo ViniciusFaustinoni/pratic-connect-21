@@ -71,6 +71,9 @@ export interface OutroProcessoItem {
 
   etapa_label: string;
   etapa_tone: 'info' | 'warn' | 'ok' | 'danger';
+
+  // Edição da cotação (consultor)
+  pode_editar: boolean;            // troca: true até o contrato ser gerado/enviado ao novo titular
 }
 
 interface UseOutrosProcessosOptions {
@@ -217,6 +220,22 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
         });
       }
 
+      // 3b) Contratos vinculados às solicitações de troca (gating de edição)
+      const contratoPorTroca = new Map<string, any>();
+      if (trocaIds.length > 0) {
+        const { data: contratos } = await (supabase as any)
+          .from('contratos')
+          .select('id, status, assinatura_url, origem_troca_titularidade_id')
+          .in('origem_troca_titularidade_id', trocaIds);
+        (contratos || []).forEach((ct: any) => {
+          // Mantém o contrato "mais avançado" caso haja múltiplos
+          const cur = contratoPorTroca.get(ct.origem_troca_titularidade_id);
+          if (!cur || ct.assinatura_url || ct.status !== 'rascunho') {
+            contratoPorTroca.set(ct.origem_troca_titularidade_id, ct);
+          }
+        });
+      }
+
       // 4) Vendedores
       const vendedorIds = Array.from(
         new Set(cotList.map((c) => c.vendedor_id).filter(Boolean)),
@@ -297,6 +316,15 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
           pendencia_total: debito.total,
           etapa_label: etapa.label,
           etapa_tone: etapa.tone,
+          pode_editar: (() => {
+            if (tipo !== 'troca_titularidade' || !troca) return false;
+            // Bloqueia se solicitação já está em status terminal
+            if (['efetivada','reprovada_cadastro','reprovada_monitoramento','cancelada'].includes(troca.status)) return false;
+            // Bloqueia se contrato (termo de filiação) já foi gerado/enviado ao novo titular
+            const ct = contratoPorTroca.get(troca.id);
+            if (ct && (ct.assinatura_url || (ct.status && ct.status !== 'rascunho' && ct.status !== 'cancelado'))) return false;
+            return true;
+          })(),
         };
       });
     },

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, ArrowRightLeft, RefreshCw, AlertTriangle, ExternalLink, FileText, CheckCircle2, Clock, Ban, Send, Eye, ChevronRight, User, MessageCircle, MailWarning } from 'lucide-react';
+import { Search, ArrowRightLeft, RefreshCw, AlertTriangle, ExternalLink, FileText, CheckCircle2, Clock, Ban, Send, Eye, Pencil, ChevronRight, User, MessageCircle, MailWarning } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Card, CardContent } from '@/components/ui/card';
@@ -178,7 +178,11 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
               return (
               <div
                 key={item.id}
-                className={cn('grid grid-cols-[1fr_2fr_1.5fr_1fr_1.5fr_auto] gap-3 px-4 py-3 items-center hover:bg-muted/20 transition-colors', semEmail && 'bg-red-500/5')}
+                role="button"
+                tabIndex={0}
+                onClick={() => handleVerDetalhe(item)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleVerDetalhe(item); } }}
+                className={cn('grid grid-cols-[1fr_2fr_1.5fr_1fr_1.5fr_auto] gap-3 px-4 py-3 items-center hover:bg-muted/20 transition-colors cursor-pointer', semEmail && 'bg-red-500/5')}
               >
                 <div className="flex flex-col gap-1 min-w-0">
                   <Badge className={cn(TIPO_LABELS[item.tipo].chip, 'border-0 text-[10px] px-2 py-0.5 rounded-full w-fit')}>
@@ -245,16 +249,32 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
                   )}
                 </div>
 
-                <div className="flex items-center gap-1 justify-end shrink-0">
-                  <Tooltip><TooltipTrigger asChild>
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleVerDetalhe(item)}>
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger><TooltipContent>Ver detalhes / timeline</TooltipContent></Tooltip>
-
-                  {item.termo_url && (
+                <div className="flex items-center gap-1 justify-end shrink-0" onClick={(e) => e.stopPropagation()}>
+                  {item.tipo === 'troca_titularidade' && item.pode_editar ? (
                     <Tooltip><TooltipTrigger asChild>
-                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => window.open(item.termo_url!, '_blank')}>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/vendas/cotador?tipo_entrada=troca_titularidade&cotacao_id=${item.cotacao_id}&solicitacao_id=${item.solicitacao_troca_id ?? ''}`);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger><TooltipContent>Editar cotação (planos, região, cenário, uso)</TooltipContent></Tooltip>
+                  ) : (
+                    <Tooltip><TooltipTrigger asChild>
+                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); handleVerDetalhe(item); }}>
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger><TooltipContent>Ver detalhes / timeline</TooltipContent></Tooltip>
+                  )}
+
+                  {item.termo_url && item.termo_status !== 'assinado' && (
+                    <Tooltip><TooltipTrigger asChild>
+                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); window.open(item.termo_url!, '_blank'); }}>
                         <FileText className="h-4 w-4" />
                       </Button>
                     </TooltipTrigger><TooltipContent>Abrir no Autentique</TooltipContent></Tooltip>
@@ -262,7 +282,7 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
 
                   {item.tipo === 'troca_titularidade' && item.solicitacao_troca_id && !item.termo_assinado_em && !semEmail && (
                     <Tooltip><TooltipTrigger asChild>
-                      <Button size="icon" variant="ghost" className="h-8 w-8" disabled={enviarTermo.isPending} onClick={() => setResendItem(item)}>
+                      <Button size="icon" variant="ghost" className="h-8 w-8" disabled={enviarTermo.isPending} onClick={(e) => { e.stopPropagation(); setResendItem(item); }}>
                         <Send className="h-4 w-4" />
                       </Button>
                     </TooltipTrigger><TooltipContent>{isResend ? 'Reenviar termo' : 'Enviar termo'}</TooltipContent></Tooltip>
@@ -270,7 +290,7 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
 
                   {item.cotacao_token && (
                     <Tooltip><TooltipTrigger asChild>
-                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleAbrirCotacao(item)}>
+                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); handleAbrirCotacao(item); }}>
                         <ExternalLink className="h-4 w-4" />
                       </Button>
                     </TooltipTrigger><TooltipContent>Abrir página da cotação</TooltipContent></Tooltip>

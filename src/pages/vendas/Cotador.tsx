@@ -252,6 +252,11 @@ export default function CotadorPage() {
   const veiculoAntigoPlaca = searchParams.get('veiculo_antigo_placa') || '';
   const veiculoAntigoModelo = searchParams.get('veiculo_antigo_modelo') || '';
 
+  // Edição de cotação de TROCA DE TITULARIDADE (consultor edita antes do termo de filiação)
+  const edicaoTrocaCotacaoId = searchParams.get('cotacao_id');
+  const edicaoTrocaSolicitacaoId = searchParams.get('solicitacao_id');
+  const isEdicaoTroca = inclusaoTipoEntrada === 'troca_titularidade' && !!edicaoTrocaCotacaoId;
+
   const { data: templateWhatsapp } = useTemplateWhatsappCotacao();
   const { data: percentualAdesaoConfig = 1 } = useTaxaAdesaoPercentual();
   const { data: minimoAdesaoBase = 100 } = useTaxaAdesaoMinimoBase();
@@ -417,6 +422,83 @@ export default function CotadorPage() {
   const criarCotacao = useCriarCotacao();
   const atualizarLead = useUpdateLead();
   const { data: resultadosBuscaIndicador = [], isLoading: isSearchingIndicador } = useAssociadoSearch(buscaIndicador);
+
+  // ============================================
+  // EDIÇÃO DE COTAÇÃO DE TROCA DE TITULARIDADE
+  // ============================================
+  const [edicaoTrocaCarregada, setEdicaoTrocaCarregada] = useState(false);
+  const [edicaoTrocaBloqueada, setEdicaoTrocaBloqueada] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isEdicaoTroca || edicaoTrocaCarregada) return;
+    let cancelado = false;
+    (async () => {
+      try {
+        // Valida se solicitação ainda permite edição (sem contrato gerado)
+        if (edicaoTrocaSolicitacaoId) {
+          const { data: ctList } = await (supabase as any)
+            .from('contratos')
+            .select('id, status, assinatura_url')
+            .eq('origem_troca_titularidade_id', edicaoTrocaSolicitacaoId);
+          const bloqueia = (ctList || []).some(
+            (ct: any) => ct.assinatura_url || (ct.status && ct.status !== 'rascunho' && ct.status !== 'cancelado')
+          );
+          if (bloqueia) {
+            if (!cancelado) {
+              setEdicaoTrocaBloqueada('O termo de filiação já foi gerado para o novo titular — esta cotação não pode mais ser editada.');
+              toast.error('Edição bloqueada: termo de filiação já enviado ao novo titular.');
+              setTimeout(() => navigate('/vendas/cotacoes'), 1800);
+            }
+            return;
+          }
+        }
+
+        const { data: cot, error } = await supabase
+          .from('cotacoes')
+          .select('*')
+          .eq('id', edicaoTrocaCotacaoId!)
+          .single();
+        if (error || !cot) throw error || new Error('Cotação não encontrada');
+        if (cancelado) return;
+
+        // Pré-preenche veículo (somente leitura via card "Veículo encontrado")
+        setModo('busca_placa');
+        setPlacaBusca(cot.veiculo_placa || '');
+        setMarca(cot.veiculo_marca || '');
+        setModelo(cot.veiculo_modelo || '');
+        setAno(cot.veiculo_ano ? String(cot.veiculo_ano) : '');
+        setCor((cot as any).veiculo_cor || '');
+        setValorFipe(Number((cot as any).valor_fipe) || null);
+        setCategoriaVeiculo((cot as any).categoria_veiculo || 'carro');
+        setVeiculoEncontrado({
+          placa: cot.veiculo_placa || '',
+          marca: cot.veiculo_marca || '',
+          modelo: cot.veiculo_modelo || '',
+          ano: cot.veiculo_ano ? String(cot.veiculo_ano) : '',
+          cor: (cot as any).veiculo_cor || undefined,
+          combustivel: (cot as any).veiculo_combustivel || undefined,
+          codigoFipe: (cot as any).codigo_fipe || undefined,
+          valorFipe: Number((cot as any).valor_fipe) || undefined,
+        } as any);
+
+        // Campos editáveis pré-preenchidos
+        if ((cot as any).regiao) setRegiao((cot as any).regiao);
+        if (typeof (cot as any).uso_aplicativo === 'boolean') setUsoApp((cot as any).uso_aplicativo);
+        if ((cot as any).cenario_adesao) setCenarioExterno((cot as any).cenario_adesao);
+        if ((cot as any).tipo_instalacao) setTipoInstalacao((cot as any).tipo_instalacao);
+        if ((cot as any).valor_adesao != null) setValorAdesaoCustom(Number((cot as any).valor_adesao));
+        if (cot.nome_solicitante) setNomeAssociado(cot.nome_solicitante);
+
+        setEdicaoTrocaCarregada(true);
+      } catch (e: any) {
+        console.error('[edicao-troca] erro ao carregar cotação:', e);
+        toast.error('Não foi possível carregar a cotação para edição.');
+        setTimeout(() => navigate('/vendas/cotacoes'), 1500);
+      }
+    })();
+    return () => { cancelado = true; };
+  }, [isEdicaoTroca, edicaoTrocaCarregada, edicaoTrocaCotacaoId, edicaoTrocaSolicitacaoId, navigate]);
+
 
   // Lista de leads
   const leads = leadsData || [];
@@ -845,6 +927,29 @@ export default function CotadorPage() {
     setSalvandoCotacao(true);
     
     try {
+      // Modo edição de troca de titularidade: UPDATE da cotação existente
+      if (isEdicaoTroca && edicaoTrocaCotacaoId) {
+        const { error: upErr } = await (supabase as any)
+          .from('cotacoes')
+          .update({
+            plano_id: planoFinalSelecionado.id,
+            uso_aplicativo: usoApp,
+            regiao,
+            categoria_veiculo: categoriaVeiculo || undefined,
+            valor_adesao: valorAdesaoCustom ?? planoFinalSelecionado.valorAdesao,
+            valor_total_mensal: planoFinalSelecionado.valorMensal,
+            tipo_instalacao: tipoInstalacao || undefined,
+            cenario_adesao: (cenarioExterno as any) || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', edicaoTrocaCotacaoId);
+        if (upErr) throw upErr;
+        toast.success('Cotação da troca atualizada com sucesso!');
+        setSalvandoCotacao(false);
+        navigate('/vendas/cotacoes');
+        return;
+      }
+
       // Salvar cotação no banco
       const cotacaoData = await criarCotacao.mutateAsync({
         lead_id: leadSelecionado?.id || null,
@@ -1044,7 +1149,22 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
         </div>
       </div>
 
-      {/* SELETOR DE MODO */}
+      {/* AVISO MODO EDIÇÃO TROCA */}
+      {isEdicaoTroca && (
+        <Alert className="bg-amber-500/10 border-amber-500/30">
+          <AlertCircle className="h-4 w-4 text-amber-600" />
+          <AlertTitle>Editando cotação de Troca de Titularidade</AlertTitle>
+          <AlertDescription className="text-sm">
+            Os dados do veículo já estão na base e <strong>não podem ser alterados</strong>.
+            Você pode ajustar tipo de uso, região, cenário de adesão e o plano selecionado.
+            A edição é permitida até o novo titular receber o termo de filiação.
+            {edicaoTrocaBloqueada && <p className="mt-2 text-red-600">{edicaoTrocaBloqueada}</p>}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* SELETOR DE MODO — oculto na edição de troca */}
+      {!isEdicaoTroca && (
       <Card className="bg-muted/30">
         <CardContent className="py-4">
           <p className="font-medium text-foreground mb-4">
@@ -1070,7 +1190,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                 Consulta automática FIPE + dados do veículo
               </p>
             </div>
-            
+
             {/* Card Manual */}
             <div
               onClick={() => handleModoChange('manual')}
@@ -1093,7 +1213,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
           </div>
         </CardContent>
       </Card>
-
+      )}
       {/* GRID PRINCIPAL */}
       <div className="grid gap-6 lg:grid-cols-2">
         
@@ -1131,7 +1251,8 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
             {/* CONTEÚDO CONDICIONAL POR MODO */}
             {modo === 'busca_placa' ? (
               <>
-                {/* Input de Placa + Botão Buscar */}
+                {/* Input de Placa + Botão Buscar — oculto na edição de troca (placa imutável) */}
+                {!isEdicaoTroca && (
                 <div className="flex gap-2">
                   <Input
                     placeholder="Digite a placa: ABC-1234"
@@ -1158,6 +1279,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                     )}
                   </Button>
                 </div>
+                )}
 
                 {/* Estado: Buscando */}
                 {buscandoPlaca && (
