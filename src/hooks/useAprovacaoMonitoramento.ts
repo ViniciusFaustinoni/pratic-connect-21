@@ -27,8 +27,7 @@ export function useInstalacoesAguardandoAprovacao() {
           decisao_instalador,
           profissional:profissional_id(nome),
           veiculo:veiculo_id(placa, marca, modelo, ano_modelo, cobertura_roubo_furto, cobertura_total),
-          associado:associado_id(nome, telefone, email, cpf, status),
-          instalacao:instalacao_origem_id(local_vistoria, tipo_deslocamento)
+          associado:associado_id(nome, telefone, email, cpf, status)
         `)
         .eq('tipo', 'instalacao')
         .eq('status', 'concluida')
