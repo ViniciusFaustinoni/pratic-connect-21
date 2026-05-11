@@ -316,6 +316,17 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
           pendencia_total: debito.total,
           etapa_label: etapa.label,
           etapa_tone: etapa.tone,
+          pode_editar: (() => {
+            if (tipo !== 'troca_titularidade' || !troca) return false;
+            // Bloqueia edição quando termo do antigo já foi assinado
+            if (troca.termo_cancelamento_assinado_em) return false;
+            // Bloqueia se solicitação já está em status terminal/avançado
+            if (['efetivada','reprovada_cadastro','reprovada_monitoramento','cancelada'].includes(troca.status)) return false;
+            // Bloqueia se contrato (termo de filiação) já foi gerado/enviado ao novo titular
+            const ct = contratoPorTroca.get(troca.id);
+            if (ct && (ct.assinatura_url || (ct.status && ct.status !== 'rascunho' && ct.status !== 'cancelado'))) return false;
+            return true;
+          })(),
         };
       });
     },
