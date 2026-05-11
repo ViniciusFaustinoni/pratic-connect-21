@@ -159,20 +159,32 @@ export function TrocaTitularidadeDialog({
           body: { veiculo_id: v.id },
         });
         if (error) throw error;
-        return data as { success?: boolean; situacao_financeira?: string | null };
+        return data as {
+          success?: boolean;
+          situacao_financeira?: string | null;
+          not_found?: boolean;
+          retry?: boolean;
+          motivo?: string;
+          error?: string;
+        };
       },
       enabled: open && !!v.id,
       staleTime: 5 * 60 * 1000,
       retry: 0,
     })),
   });
-  const situacaoPorId: Record<string, { status: 'ADIMPLENTE' | 'INADIMPLENTE' | 'desconhecido'; loading: boolean }> = {};
+  type SitStatus = 'ADIMPLENTE' | 'INADIMPLENTE' | 'nao_reconciliado' | 'transitorio' | 'desconhecido';
+  const situacaoPorId: Record<string, { status: SitStatus; loading: boolean; motivo?: string }> = {};
   veiculos.forEach((v, i) => {
     const q = situacaoQueries[i];
-    const raw = (q?.data?.situacao_financeira || '').toString().toUpperCase();
-    const status: 'ADIMPLENTE' | 'INADIMPLENTE' | 'desconhecido' =
-      raw === 'ADIMPLENTE' ? 'ADIMPLENTE' : raw === 'INADIMPLENTE' ? 'INADIMPLENTE' : 'desconhecido';
-    situacaoPorId[v.id] = { status, loading: !!q?.isLoading };
+    const d = q?.data;
+    const raw = (d?.situacao_financeira || '').toString().toUpperCase();
+    let status: SitStatus = 'desconhecido';
+    if (raw === 'ADIMPLENTE') status = 'ADIMPLENTE';
+    else if (raw === 'INADIMPLENTE') status = 'INADIMPLENTE';
+    else if (d?.not_found) status = 'nao_reconciliado';
+    else if (d?.retry) status = 'transitorio';
+    situacaoPorId[v.id] = { status, loading: !!q?.isLoading, motivo: d?.motivo };
   });
 
   // Boletos do veículo selecionado — só dispara DEPOIS que a situação financeira resolver
