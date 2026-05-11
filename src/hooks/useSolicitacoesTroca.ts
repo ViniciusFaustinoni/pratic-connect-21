@@ -43,7 +43,7 @@ export interface SolicitacaoTroca {
   updated_at: string;
   analise_previa_resultado?: any;
   analise_previa_em?: string | null;
-  associado_antigo?: { id: string; nome: string; cpf: string | null; email: string | null; telefone: string | null } | null;
+  associado_antigo?: { id: string; nome: string; cpf: string | null; email: string | null; telefone: string | null; codigo_hinova?: number | null } | null;
   veiculo?: { id: string; marca: string; modelo: string; ano_modelo: number | null; ano_fabricacao: number | null; placa: string } | null;
   cotacao?: { id: string; numero: string | null; token_publico: string | null; status: string } | null;
 }
@@ -101,7 +101,7 @@ export function useSolicitacaoTroca(id: string | undefined) {
         .from('solicitacoes_troca_titularidade')
         .select(`
           *,
-          associado_antigo:associados!associado_antigo_id(id, nome, cpf, email, telefone, status),
+          associado_antigo:associados!associado_antigo_id(id, nome, cpf, email, telefone, status, codigo_hinova),
           veiculo:veiculos!veiculo_id(id, marca, modelo, ano_modelo, ano_fabricacao, placa),
           cotacao:cotacoes!cotacao_id(id, numero, token_publico, status, valor_total_mensal)
         `)
