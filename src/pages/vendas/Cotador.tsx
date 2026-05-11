@@ -423,6 +423,83 @@ export default function CotadorPage() {
   const atualizarLead = useUpdateLead();
   const { data: resultadosBuscaIndicador = [], isLoading: isSearchingIndicador } = useAssociadoSearch(buscaIndicador);
 
+  // ============================================
+  // EDIÇÃO DE COTAÇÃO DE TROCA DE TITULARIDADE
+  // ============================================
+  const [edicaoTrocaCarregada, setEdicaoTrocaCarregada] = useState(false);
+  const [edicaoTrocaBloqueada, setEdicaoTrocaBloqueada] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isEdicaoTroca || edicaoTrocaCarregada) return;
+    let cancelado = false;
+    (async () => {
+      try {
+        // Valida se solicitação ainda permite edição (sem contrato gerado)
+        if (edicaoTrocaSolicitacaoId) {
+          const { data: ctList } = await (supabase as any)
+            .from('contratos')
+            .select('id, status, assinatura_url')
+            .eq('origem_troca_titularidade_id', edicaoTrocaSolicitacaoId);
+          const bloqueia = (ctList || []).some(
+            (ct: any) => ct.assinatura_url || (ct.status && ct.status !== 'rascunho' && ct.status !== 'cancelado')
+          );
+          if (bloqueia) {
+            if (!cancelado) {
+              setEdicaoTrocaBloqueada('O termo de filiação já foi gerado para o novo titular — esta cotação não pode mais ser editada.');
+              toast.error('Edição bloqueada: termo de filiação já enviado ao novo titular.');
+              setTimeout(() => navigate('/vendas/cotacoes'), 1800);
+            }
+            return;
+          }
+        }
+
+        const { data: cot, error } = await supabase
+          .from('cotacoes')
+          .select('*')
+          .eq('id', edicaoTrocaCotacaoId!)
+          .single();
+        if (error || !cot) throw error || new Error('Cotação não encontrada');
+        if (cancelado) return;
+
+        // Pré-preenche veículo (somente leitura via card "Veículo encontrado")
+        setModo('busca_placa');
+        setPlacaBusca(cot.veiculo_placa || '');
+        setMarca(cot.veiculo_marca || '');
+        setModelo(cot.veiculo_modelo || '');
+        setAno(cot.veiculo_ano ? String(cot.veiculo_ano) : '');
+        setCor((cot as any).veiculo_cor || '');
+        setValorFipe(Number((cot as any).valor_fipe) || null);
+        setCategoriaVeiculo((cot as any).categoria_veiculo || 'carro');
+        setVeiculoEncontrado({
+          placa: cot.veiculo_placa || '',
+          marca: cot.veiculo_marca || '',
+          modelo: cot.veiculo_modelo || '',
+          ano: cot.veiculo_ano ? String(cot.veiculo_ano) : '',
+          cor: (cot as any).veiculo_cor || undefined,
+          combustivel: (cot as any).veiculo_combustivel || undefined,
+          codigoFipe: (cot as any).codigo_fipe || undefined,
+          valorFipe: Number((cot as any).valor_fipe) || undefined,
+        } as any);
+
+        // Campos editáveis pré-preenchidos
+        if ((cot as any).regiao) setRegiao((cot as any).regiao);
+        if (typeof (cot as any).uso_aplicativo === 'boolean') setUsoApp((cot as any).uso_aplicativo);
+        if ((cot as any).cenario_adesao) setCenarioExterno((cot as any).cenario_adesao);
+        if ((cot as any).tipo_instalacao) setTipoInstalacao((cot as any).tipo_instalacao);
+        if ((cot as any).valor_adesao != null) setValorAdesaoCustom(Number((cot as any).valor_adesao));
+        if (cot.nome_solicitante) setNomeAssociado(cot.nome_solicitante);
+
+        setEdicaoTrocaCarregada(true);
+      } catch (e: any) {
+        console.error('[edicao-troca] erro ao carregar cotação:', e);
+        toast.error('Não foi possível carregar a cotação para edição.');
+        setTimeout(() => navigate('/vendas/cotacoes'), 1500);
+      }
+    })();
+    return () => { cancelado = true; };
+  }, [isEdicaoTroca, edicaoTrocaCarregada, edicaoTrocaCotacaoId, edicaoTrocaSolicitacaoId, navigate]);
+
+
   // Lista de leads
   const leads = leadsData || [];
 
