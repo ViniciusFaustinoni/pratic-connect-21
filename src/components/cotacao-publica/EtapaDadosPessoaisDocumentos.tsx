@@ -452,6 +452,7 @@ export function EtapaDadosPessoaisDocumentos({
     cnh: dadosExtraidos.cnh || undefined,
     cnh_validade: dadosExtraidos.cnh_validade || undefined,
     cnh_categoria: dadosExtraidos.cnh_categoria || undefined,
+    sexo: dadosExtraidos.sexo || undefined,
     veiculo_placa: dadosExtraidos.veiculo_placa || undefined,
     veiculo_chassi: dadosExtraidos.veiculo_chassi || undefined,
     veiculo_renavam: dadosExtraidos.veiculo_renavam || undefined,
