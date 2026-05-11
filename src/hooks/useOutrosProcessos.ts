@@ -71,6 +71,9 @@ export interface OutroProcessoItem {
 
   etapa_label: string;
   etapa_tone: 'info' | 'warn' | 'ok' | 'danger';
+
+  // Edição da cotação (consultor)
+  pode_editar: boolean;            // troca: true até o contrato ser gerado/enviado ao novo titular
 }
 
 interface UseOutrosProcessosOptions {
