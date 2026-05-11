@@ -1251,7 +1251,8 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
             {/* CONTEÚDO CONDICIONAL POR MODO */}
             {modo === 'busca_placa' ? (
               <>
-                {/* Input de Placa + Botão Buscar */}
+                {/* Input de Placa + Botão Buscar — oculto na edição de troca (placa imutável) */}
+                {!isEdicaoTroca && (
                 <div className="flex gap-2">
                   <Input
                     placeholder="Digite a placa: ABC-1234"
@@ -1278,6 +1279,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                     )}
                   </Button>
                 </div>
+                )}
 
                 {/* Estado: Buscando */}
                 {buscandoPlaca && (
