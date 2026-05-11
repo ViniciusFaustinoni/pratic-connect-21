@@ -298,6 +298,34 @@ export default function CotacaoContratacao() {
     }
   }, [pularEtapaVistoria, pularEtapaPagamento, etapaAtual, setEtapaAtual]);
 
+  // Handler unificado pós-assinatura do contrato (etapa 2 → próxima)
+  // Em troca de titularidade isenta, dispara ativação imediata para que o card
+  // de criação de senha do app apareça (early return por status='ativo').
+  const handleContratoAssinado = useCallback(async (proximaEtapaPadrao: number) => {
+    if (pularEtapaPagamento && isTrocaTitularidade && associadoId) {
+      try {
+        setAtivandoTroca(true);
+        await (publicSupabase as any).functions.invoke('ativar-associado', {
+          body: {
+            associado_id: associadoId,
+            cotacao_id: cotacao?.id,
+            contrato_id: contratoFallback?.id ?? null,
+            source: 'public:troca-titularidade-isenta',
+            allowed_from: ['assinado', 'aguardando_instalacao', 'pendente'],
+          },
+        });
+      } catch (e) {
+        console.warn('[CotacaoContratacao] ativar-associado (troca isenta) falhou:', e);
+      } finally {
+        await refetch();
+        setAtivandoTroca(false);
+        setEtapaAtual(5);
+      }
+      return;
+    }
+    setEtapaAtual(proximaEtapaPadrao);
+  }, [pularEtapaPagamento, isTrocaTitularidade, associadoId, cotacao?.id, contratoFallback?.id, refetch, setEtapaAtual]);
+
   // Handler para navegação no Stepper
   const handleStepClick = useCallback((step: number) => {
     if (step <= etapaDoStatus) {
