@@ -246,7 +246,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                   <Button variant="destructive" onClick={() => setConfirmandoReprovar(true)}>
                     <XCircle className="h-4 w-4 mr-2" /> Reprovar
                   </Button>
-                  {modo === 'monitoramento' && (
+                  {modo === 'monitoramento' && solicitacao.status === 'aguardando_monitoramento' && (
                     <Button variant="outline" onClick={handleSolicitarVistoria} disabled={aprovarMonitoramento.isPending}>
                       {aprovarMonitoramento.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ClipboardCheck className="h-4 w-4 mr-2" />}
                       Solicitar Vistoria
