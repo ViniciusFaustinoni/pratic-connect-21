@@ -72,6 +72,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Switch } from '@/components/ui/switch';
 import { useAssociadoSearch, type AssociadoSearchResult } from '@/hooks/useAssociadoSearch';
+import { resolverAssociadoLocalId } from '@/hooks/useResolverAssociadoLocal';
 
 // ============================================
 // INTERFACES
