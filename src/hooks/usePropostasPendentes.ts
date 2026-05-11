@@ -1205,8 +1205,9 @@ export function useProposta(contratoId: string | undefined) {
           if (servicoData?.assinatura_cliente_url) {
             assinaturaUrl = servicoData.assinatura_cliente_url;
           }
+          }
         }
-        
+
 
         instalacaoInfo = {
           id: instalacaoData.id,
