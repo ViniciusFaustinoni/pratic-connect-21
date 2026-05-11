@@ -528,7 +528,11 @@ serve(async (req) => {
           })
           .eq('id', jobId);
       }
-      return json(200, { success: false, not_found: true, error: err.message });
+      const msg = String(err.message || '');
+      const motivo = msg.includes('Associado') ? 'associado_nao_reconciliado'
+        : msg.includes('Veículo') ? 'veiculo_nao_reconciliado'
+        : 'nao_encontrado';
+      return json(200, { success: false, not_found: true, motivo, error: err.message });
     }
 
     // Outros erros → erro permanente
