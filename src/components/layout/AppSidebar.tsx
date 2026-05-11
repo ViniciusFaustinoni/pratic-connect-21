@@ -118,6 +118,7 @@ import { useFipeMenorAtivo } from '@/hooks/useFipeMenorAtivo';
 import { useBiometriasPendentesCount } from '@/hooks/useBiometriasPendentes';
 import { useAprovacoesMonitoramentoCount } from '@/hooks/useAprovacoesMonitoramentoCount';
 import { useProcessosOperacionaisCount } from '@/hooks/useProcessosOperacionaisCount';
+import { usePropostasPendentesCount } from '@/hooks/usePropostasPendentesCount';
 
 // Mapeamento de cores por grupo/item
 const MENU_COLORS: Record<string, string> = {
@@ -579,6 +580,7 @@ export function AppSidebar() {
   const { data: biometriasPendentesCount = 0 } = useBiometriasPendentesCount();
   const { data: aprovacoesMonCount = 0 } = useAprovacoesMonitoramentoCount();
   const { data: processosOpCount = 0 } = useProcessosOperacionaisCount();
+  const { data: propostasPendentesCount = 0 } = usePropostasPendentesCount();
 
   const isDataLoading = permissions.isPermissionsLoading || isModuleVisLoading;
 
@@ -630,6 +632,9 @@ export function AppSidebar() {
         }
         if (item.url === '/cadastro/processos' && processosOpCount > 0) {
           return { ...item, badge: String(processosOpCount) };
+        }
+        if (item.url === '/cadastro/propostas' && propostasPendentesCount > 0) {
+          return { ...item, badge: String(propostasPendentesCount) };
         }
         return item;
       }),
@@ -684,7 +689,7 @@ export function AppSidebar() {
     }
     
     return baseGroups;
-  }, [permissions, visibleModules, fipeMenorAtivo, biometriasPendentesCount, aprovacoesMonCount, processosOpCount]);
+  }, [permissions, visibleModules, fipeMenorAtivo, biometriasPendentesCount, aprovacoesMonCount, processosOpCount, propostasPendentesCount]);
 
   const visibleMainItems = useMemo(() => {
     if (permissions.isSindicanteOnly) {
