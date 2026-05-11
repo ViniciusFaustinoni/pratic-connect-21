@@ -30,8 +30,9 @@ export function EscolhaLocalVistoria({ onEscolher, tipoInstalacao }: EscolhaLoca
       </div>
 
       <div className="grid gap-4">
-        {/* Sempre mostrar as 2 opções; tipo_instalacao apenas marca como "Sugerido" */}
-        {/* Opção 1: Técnico vai até o cliente */}
+        {/* Opções respeitam o cenário de adesão escolhido na cotação */}
+        {/* Opção 1: Técnico vai até o cliente (oculta quando cenário é Base) */}
+        {tipoInstalacao !== 'base' && (
         <Card 
           className="cursor-pointer hover:border-primary/50 hover:shadow-md transition-all group"
           onClick={() => onEscolher('cliente')}
@@ -56,9 +57,10 @@ export function EscolhaLocalVistoria({ onEscolher, tipoInstalacao }: EscolhaLoca
             </div>
           </CardContent>
         </Card>
+        )}
 
-
-        {/* Opção 2: Cliente vai até a base */}
+        {/* Opção 2: Cliente vai até a base (oculta quando cenário é Rota) */}
+        {tipoInstalacao !== 'rota' && (
         <Card 
           className="cursor-pointer hover:border-primary/50 hover:shadow-md transition-all group"
           onClick={() => onEscolher('base')}
@@ -107,6 +109,7 @@ export function EscolhaLocalVistoria({ onEscolher, tipoInstalacao }: EscolhaLoca
             </div>
           </CardContent>
         </Card>
+        )}
       </div>
 
       <p className="text-xs text-center text-muted-foreground">
