@@ -14,6 +14,7 @@ import {
   parseDataHinova,
   toNumber,
   buscarVeiculoPorPlaca,
+  buscarAssociadoComVeiculosPorCpf,
   HinovaTransientError,
   HinovaNotFoundError,
   calcularProximoRetry,
@@ -210,7 +211,8 @@ serve(async (req) => {
 
     if (!temCodigosReconciliados && veiculo.placa) {
       try {
-        const { found, debug } = await withReauthRetry(supabase, session!, (s) => buscarVeiculoPorPlaca(s, veiculo.placa!), (s) => { session = s; });
+        // Usa caminho `supabase` (auto-reauth em 401/403 via hinovaFetch).
+        const { found, debug } = await buscarVeiculoPorPlaca(supabase, veiculo.placa!);
         const codigoVeiculoEncontrado = Number(found?.codigo_veiculo) || null;
         const codigoAssociadoEncontrado = extractCodigoAssociado(found);
 
@@ -255,12 +257,20 @@ serve(async (req) => {
       }
     }
 
-    // Fallback CPF SEMPRE: tenta CPF se faltar codigoAssociado OU se já temos um mas pode estar desatualizado.
-    // Se já temos codigoAssociado, só fazemos a chamada se a primeira tentativa de boletos falhar (ver abaixo).
+    // Fallback CPF: usa o helper compartilhado com auto-reauth (caminho supabase).
+    // Trata HinovaNotFoundError silenciosamente (associado realmente fora do SGA / 406 indisponível).
     if (!codigoAssociado && associado.cpf) {
       try {
-        const associadoPorCpf = await withReauthRetry(supabase, session!, (s) => buscarAssociadoPorCpf(s, associado.cpf), (s) => { session = s; });
-        const codigoAssociadoPorCpf = extractCodigoAssociado(associadoPorCpf);
+        const r = await buscarAssociadoComVeiculosPorCpf(supabase, associado.cpf);
+        const codigoAssociadoPorCpf = r.codigo_associado;
+
+        // Tenta achar o codigo_veiculo correto pela placa também (fonte mais confiável que o lookup por placa).
+        let codigoVeiculoPorCpf: number | null = null;
+        if (veiculo.placa) {
+          const placaNorm = String(veiculo.placa).replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+          const match = (r.veiculos || []).find((v) => v.placa.toUpperCase() === placaNorm);
+          if (match) codigoVeiculoPorCpf = Number(match.codigo_veiculo) || null;
+        }
 
         await supabase.from('sga_sync_logs').insert({
           veiculo_id: veiculo.id,
@@ -268,18 +278,28 @@ serve(async (req) => {
           action: 'reconciliar_codigos_cpf',
           status: codigoAssociadoPorCpf ? 'success' : 'info',
           request_payload: { cpf: '***' },
-          response_payload: codigoAssociadoPorCpf
-            ? { codigo_associado: codigoAssociadoPorCpf, descricao_situacao: associadoPorCpf?.descricao_situacao ?? null }
-            : { descricao_situacao: associadoPorCpf?.descricao_situacao ?? null },
+          response_payload: { codigo_associado: codigoAssociadoPorCpf, codigo_veiculo: codigoVeiculoPorCpf },
         });
 
         if (codigoAssociadoPorCpf) {
           codigoAssociado = codigoAssociadoPorCpf;
           await supabase.from('associados').update({ codigo_hinova: codigoAssociadoPorCpf }).eq('id', associado.id);
         }
+        if (codigoVeiculoPorCpf && codigoVeiculoPorCpf !== codigoVeiculo) {
+          codigoVeiculo = codigoVeiculoPorCpf;
+          await supabase.from('veiculos').update({ codigo_hinova: codigoVeiculoPorCpf }).eq('id', veiculo.id);
+        }
       } catch (e) {
         if (e instanceof HinovaTransientError) throw e;
-        // outros: ignora e segue
+        if (e instanceof HinovaNotFoundError) {
+          await supabase.from('sga_sync_logs').insert({
+            veiculo_id: veiculo.id,
+            associado_id: associado.id,
+            action: 'reconciliar_codigos_cpf',
+            status: 'info',
+            response_payload: { not_found: true, body: e.bodySample?.slice(0, 200) || null },
+          });
+        }
       }
     }
 
@@ -508,7 +528,11 @@ serve(async (req) => {
           })
           .eq('id', jobId);
       }
-      return json(200, { success: false, not_found: true, error: err.message });
+      const msg = String(err.message || '');
+      const motivo = msg.includes('Associado') ? 'associado_nao_reconciliado'
+        : msg.includes('Veículo') ? 'veiculo_nao_reconciliado'
+        : 'nao_encontrado';
+      return json(200, { success: false, not_found: true, motivo, error: err.message });
     }
 
     // Outros erros → erro permanente

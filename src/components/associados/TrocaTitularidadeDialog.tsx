@@ -159,20 +159,32 @@ export function TrocaTitularidadeDialog({
           body: { veiculo_id: v.id },
         });
         if (error) throw error;
-        return data as { success?: boolean; situacao_financeira?: string | null };
+        return data as {
+          success?: boolean;
+          situacao_financeira?: string | null;
+          not_found?: boolean;
+          retry?: boolean;
+          motivo?: string;
+          error?: string;
+        };
       },
       enabled: open && !!v.id,
       staleTime: 5 * 60 * 1000,
       retry: 0,
     })),
   });
-  const situacaoPorId: Record<string, { status: 'ADIMPLENTE' | 'INADIMPLENTE' | 'desconhecido'; loading: boolean }> = {};
+  type SitStatus = 'ADIMPLENTE' | 'INADIMPLENTE' | 'nao_reconciliado' | 'transitorio' | 'desconhecido';
+  const situacaoPorId: Record<string, { status: SitStatus; loading: boolean; motivo?: string }> = {};
   veiculos.forEach((v, i) => {
     const q = situacaoQueries[i];
-    const raw = (q?.data?.situacao_financeira || '').toString().toUpperCase();
-    const status: 'ADIMPLENTE' | 'INADIMPLENTE' | 'desconhecido' =
-      raw === 'ADIMPLENTE' ? 'ADIMPLENTE' : raw === 'INADIMPLENTE' ? 'INADIMPLENTE' : 'desconhecido';
-    situacaoPorId[v.id] = { status, loading: !!q?.isLoading };
+    const d = q?.data;
+    const raw = (d?.situacao_financeira || '').toString().toUpperCase();
+    let status: SitStatus = 'desconhecido';
+    if (raw === 'ADIMPLENTE') status = 'ADIMPLENTE';
+    else if (raw === 'INADIMPLENTE') status = 'INADIMPLENTE';
+    else if (d?.not_found) status = 'nao_reconciliado';
+    else if (d?.retry) status = 'transitorio';
+    situacaoPorId[v.id] = { status, loading: !!q?.isLoading, motivo: d?.motivo };
   });
 
   // Boletos do veículo selecionado — só dispara DEPOIS que a situação financeira resolver
@@ -407,16 +419,40 @@ export function TrocaTitularidadeDialog({
                 ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
                 : s.status === 'INADIMPLENTE'
                   ? 'bg-destructive/15 text-destructive border-destructive/30'
-                  : 'bg-muted text-muted-foreground border-border';
+                  : s.status === 'transitorio'
+                    ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
+                    : 'bg-muted text-muted-foreground border-border';
             const label =
               s.status === 'ADIMPLENTE'
                 ? 'Situação financeira: ADIMPLENTE'
                 : s.status === 'INADIMPLENTE'
                   ? 'Situação financeira: INADIMPLENTE'
-                  : 'Situação financeira: indisponível no SGA';
+                  : s.status === 'transitorio'
+                    ? 'Situação financeira: SGA temporariamente indisponível — tente em alguns instantes'
+                    : s.status === 'nao_reconciliado'
+                      ? (s.motivo === 'associado_nao_reconciliado'
+                          ? 'Associado não reconciliado no SGA — situação financeira indisponível'
+                          : s.motivo === 'veiculo_nao_reconciliado'
+                            ? 'Veículo não reconciliado no SGA — situação financeira indisponível'
+                            : 'Veículo/associado não encontrados no SGA')
+                      : 'Situação financeira: indisponível no SGA';
             return (
-              <div className={`text-xs font-medium inline-flex items-center rounded border px-2 py-1 ${cls}`}>
-                {label}
+              <div className="space-y-2">
+                <div className={`text-xs font-medium inline-flex items-center rounded border px-2 py-1 ${cls}`}>
+                  {label}
+                </div>
+                {(s.status === 'nao_reconciliado' || s.status === 'transitorio') && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7"
+                    disabled={sincronizando}
+                    onClick={() => handleSincronizarHinova()}
+                  >
+                    {sincronizando ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
+                    Sincronizar com SGA agora
+                  </Button>
+                )}
               </div>
             );
           })()}
