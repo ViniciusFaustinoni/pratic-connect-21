@@ -70,9 +70,15 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
     onOpenChange(false);
   };
 
+  // Vistoria foi concluída pelo novo titular no link público?
+  // (autovistoria com fotos OU presencial agendada/concluída)
+  const vistoriaClienteConcluida = !!solicitacao?.cotacao?.tipo_vistoria || !!solicitacao?.cotacao?.vistoria_concluida_em;
+
   const podeAgir = solicitacao && modo !== 'readonly' && (
     (modo === 'cadastro' && solicitacao.status === 'aguardando_cadastro') ||
-    (modo === 'monitoramento' && solicitacao.status === 'aguardando_monitoramento')
+    (modo === 'monitoramento' && solicitacao.status === 'aguardando_monitoramento') ||
+    // Após a vistoria ser concluída pelo cliente, monitoramento pode aprovar
+    (modo === 'monitoramento' && solicitacao.status === 'aguardando_vistoria' && vistoriaClienteConcluida)
   );
 
   return (
