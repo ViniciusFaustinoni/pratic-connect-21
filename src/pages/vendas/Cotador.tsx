@@ -927,6 +927,29 @@ export default function CotadorPage() {
     setSalvandoCotacao(true);
     
     try {
+      // Modo edição de troca de titularidade: UPDATE da cotação existente
+      if (isEdicaoTroca && edicaoTrocaCotacaoId) {
+        const { error: upErr } = await (supabase as any)
+          .from('cotacoes')
+          .update({
+            plano_id: planoFinalSelecionado.id,
+            uso_aplicativo: usoApp,
+            regiao,
+            categoria_veiculo: categoriaVeiculo || undefined,
+            valor_adesao: valorAdesaoCustom ?? planoFinalSelecionado.valorAdesao,
+            valor_total_mensal: planoFinalSelecionado.valorMensal,
+            tipo_instalacao: tipoInstalacao || undefined,
+            cenario_adesao: (cenarioExterno as any) || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', edicaoTrocaCotacaoId);
+        if (upErr) throw upErr;
+        toast.success('Cotação da troca atualizada com sucesso!');
+        setSalvandoCotacao(false);
+        navigate('/vendas/cotacoes');
+        return;
+      }
+
       // Salvar cotação no banco
       const cotacaoData = await criarCotacao.mutateAsync({
         lead_id: leadSelecionado?.id || null,
