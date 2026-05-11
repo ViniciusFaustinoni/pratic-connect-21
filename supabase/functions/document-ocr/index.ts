@@ -638,7 +638,7 @@ function tryRepairTruncatedJSON(raw: string): object | null {
         // veículo
         'placa', 'renavam', 'chassi', 'marca', 'modelo', 'cor', 'combustivel', 'motor', 'numero_motor', 'nome_proprietario',
         // comprovante de residência
-        'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'cep', 'nome_titular', 'cpf_titular', 'tipo_comprovante', 'data_emissao',
+        'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'cep', 'nome_titular', 'tipo_comprovante', 'data_emissao',
         // ATPV-e / NF veículo
         'nome_comprador', 'cpf_comprador', 'cpf_cnpj_comprador', 'valor_nota_fiscal',
       ];
