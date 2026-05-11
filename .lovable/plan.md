@@ -1,63 +1,31 @@
-## Objetivo
+## Diagnóstico
 
-Na **Troca de Titularidade**, parar de consultar/exibir/bloquear pelo financeiro do antigo titular. O antigo associado **não precisa mais estar adimplente** — basta existir no sistema (espelho local + SGA) para que o veículo seja transferido.
+Caso real (Marcus Vinicius / LTB4J74, solicitação `6c62b7c0…`):
 
-## Comportamento atual (a remover)
+1. `enviar-termo-cancelamento-troca` cria o documento no Autentique → OK.
+2. Tenta extrair o `slugAutentique` (a partir de `signatures[].link.short_link` contendo `assina.ae`) → **vem `null`** no momento da criação (a Autentique nem sempre devolve o short link no mesmo response). Log esperado: *"short_link Autentique não retornado — pulando Meta"*.
+3. Como Meta foi pulada, cai no fallback Evolution (`whatsapp-send-text` com texto livre) → bloqueado pelo gateway: `"Bloqueado: Meta API ativa requer template_name. Texto livre não é entregue fora da janela 24h."` (registrado em `whatsapp_mensagens` → status `erro`).
+4. `waStatus` vai pra `'falhou'` e o modal mostra "WhatsApp: falhou".
 
-- **Modal "Nova troca de titularidade"** consulta `sga-sync-financeiro-veiculo` por veículo, mostra badge ADIMPLENTE/INADIMPLENTE e lista boletos abertos.
-- **Modal de detalhes da solicitação** mostra o card `RelatorioFinanceiroAntigo` (saldo SGA do antigo) e exibe alerta "bloqueado por débito" no aprovador.
-- **Edge `aprovar-troca-cadastro`** trava a aprovação com `409 DEBITO_PENDENTE_ANTIGO` quando há linha em `relacionamento_debitos_pendentes` (status='aberto').
-- **Edge `autentique-webhook`** insere registros em `relacionamento_debitos_pendentes` ao detectar termo assinado com saldo no SGA.
-- **Cron `cron-recheck-debitos-troca`** revarre essa tabela diariamente para liberar quando quitam.
+A configuração Meta (`whatsapp_meta_config`) está OK (token + phone_id presentes), o problema é só a ausência do slug no momento do envio.
 
-## Comportamento desejado
+## Correção
 
-- Modal de criação **só usa o SGA para listar veículos do antigo titular** (existência). Sem badge de situação financeira, sem boletos.
-- Modal de detalhes **não exibe mais** card de financeiro nem alerta de débito.
-- `aprovar-troca-cadastro` **não trava por débito** — só continua exigindo termo assinado.
-- Webhook do Autentique **deixa de inserir** em `relacionamento_debitos_pendentes` no fluxo de troca.
-- Cron `cron-recheck-debitos-troca` deixa de ter efeito sobre a troca (pode ficar dormente; tabela permanece para auditoria de registros legados).
+**Arquivo:** `supabase/functions/enviar-termo-cancelamento-troca/index.ts`
 
-## Mudanças
+1. **Resolver o slug com robustez** (antes de pular Meta):
+   - Se `shortLinkRaw` não veio no response inicial, fazer uma query GraphQL de follow-up `query { document(id: $id) { signatures { public_id link { short_link } } } }` (com 1–2 retries de ~1.5s). Reextrair `short_link` contendo `assina.ae`.
+   - Se ainda assim não vier, usar **`public_id` da signature como slug** (template `assinatura_documento_v2` URL é `https://assina.ae/{{1}}` — `assina.ae/{public_id}` resolve para o mesmo destino).
+   - Só se nem `public_id` existir, marcar como falha.
 
-### Frontend
+2. **Remover o fallback Evolution texto livre** (linhas ~341-357): com Meta como provedor oficial, esse caminho está garantido a falhar fora da janela 24h e ainda polui `whatsapp_mensagens`. Substituir por: se Meta não pôde enviar (sem slug/sem config), marcar `waStatus = 'falhou'` com erro descritivo no `whatsapp_mensagens` e seguir (Autentique já mandou e-mail).
 
-1. **`src/components/associados/TrocaTitularidadeDialog.tsx`**
-   - Remover `useQueries` de `sga-sync-financeiro-veiculo` e o mapa `situacaoPorId`.
-   - Remover sufixo "— ADIMPLENTE/INADIMPLENTE" no `<select>` de veículos.
-   - Remover bloco de badge de situação financeira, `cobrancasQuery` e a lista de boletos pendentes.
-   - Manter `useBoletosSgaPorAssociado` apenas para enumerar veículos (a UI já usa `v.placa/marca/modelo`; ignoramos `boletos_abertos`/`saldo_devedor`).
-   - Manter o fallback local `useTrocaTitularidadeFallbackLocal`.
+3. **Logging**: incluir motivo específico no `console.warn` e no campo `erro_mensagem` da `whatsapp_mensagens` (`autentique_short_link_indisponivel`, `meta_config_ausente`, ou erro retornado pela Graph API) para facilitar debugging futuro.
 
-2. **`src/components/troca-titularidade/ModalDetalhesTroca.tsx`**
-   - Remover query `troca-debito-antigo` (`relacionamento_debitos_pendentes`) e variável `debitoPendente`.
-   - Remover o `<Alert>` "Saldo de R$ … no SGA. A aprovação será liberada após quitação".
-   - Remover o render de `<RelatorioFinanceiroAntigo />`.
-   - Remover `bloqueadoPorDebito` do botão "Aprovar Cadastro" (passa a depender só do termo assinado).
-
-3. **`src/components/troca-titularidade/RelatorioFinanceiroAntigo.tsx`**
-   - Deletar arquivo (sem outros consumidores depois do passo 2).
-
-### Backend (edge functions)
-
-4. **`supabase/functions/aprovar-troca-cadastro/index.ts`**
-   - Remover o passo 3 (consulta a `relacionamento_debitos_pendentes` e o early-return 409 `DEBITO_PENDENTE_ANTIGO`).
-   - Atualizar o cabeçalho de comentários do arquivo.
-
-5. **`supabase/functions/autentique-webhook/index.ts`** (linhas ~370-404)
-   - Remover o bloco que consulta `sga-buscar-associado-completo` e insere em `relacionamento_debitos_pendentes` quando o termo de troca é assinado.
-
-### Banco / cron
-
-6. **`cron-recheck-debitos-troca`** — manter o código (idempotente), mas como nenhuma nova linha será criada, o efeito prático cessa. Sem migration; tabela `relacionamento_debitos_pendentes` é preservada para auditoria histórica e para a página de cobrança `/cobranca/relacionamento-trocas` continuar exibindo os legados.
-
-### Memória
-
-7. Atualizar `mem://logic/operations/troca-titularidade-desvinculo-logico` adicionando 1 linha:
-   "Antigo titular não precisa estar adimplente — checagem financeira removida do fluxo de troca (criação, detalhes e aprovação Cadastro)."
+4. **Reenvio retroativo**: após o deploy, o usuário pode clicar em "Reenviar termo" no modal — a função vai recriar o doc e disparar a Meta corretamente. Não precisa de backfill manual.
 
 ## Fora de escopo
 
-- `RelacionamentoTrocas.tsx` (cobrança) e `TrocaTitularidadeBadge` continuam lendo a tabela apenas para mostrar registros legados; sem alteração.
-- Nenhum DROP/migration na tabela `relacionamento_debitos_pendentes`.
-- Demais checagens financeiras de outros fluxos (substituição, cancelamento, etc.) permanecem inalteradas.
+- Mudar provedor padrão / janela 24h.
+- Mexer em outros fluxos que usam `whatsapp-send-text`.
+- UI do modal (a label "falhou" passa a refletir corretamente quando Meta também falhar).
