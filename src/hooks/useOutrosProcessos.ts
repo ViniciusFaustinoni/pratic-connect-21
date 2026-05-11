@@ -51,6 +51,7 @@ export interface OutroProcessoItem {
   solicitacao_troca_id: string | null;
   troca_status: string | null;            // STATUS_TROCA
   termo_status: 'nao_aplicavel' | 'pendente' | 'enviado' | 'assinado' | 'recusado';
+  termo_filiacao_status: 'nao_aplicavel' | 'pendente' | 'enviado' | 'assinado';
   termo_url: string | null;
   termo_enviado_em: string | null;
   termo_assinado_em: string | null;
@@ -89,7 +90,7 @@ const TROCA_STATUS_LABELS: Record<string, { label: string; tone: 'info' | 'warn'
   aguardando_cadastro: { label: 'Aguardando cadastro', tone: 'info' },
   aguardando_monitoramento: { label: 'Aguardando monitoramento', tone: 'info' },
   aguardando_vistoria: { label: 'Aguardando vistoria', tone: 'info' },
-  liberada_para_assinatura: { label: 'Liberada p/ assinatura', tone: 'ok' },
+  liberada_para_assinatura: { label: 'Aguardando termo de filiação', tone: 'warn' },
   efetivada: { label: 'Efetivada', tone: 'ok' },
   reprovada_cadastro: { label: 'Reprovada (cadastro)', tone: 'danger' },
   reprovada_monitoramento: { label: 'Reprovada (monitoramento)', tone: 'danger' },
@@ -299,6 +300,15 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
           solicitacao_troca_id: troca?.id ?? null,
           troca_status: troca?.status ?? null,
           termo_status: deriveTermoStatus(troca),
+          termo_filiacao_status: (() => {
+            if (tipo !== 'troca_titularidade' || !troca) return 'nao_aplicavel' as const;
+            const ct = contratoPorTroca.get(troca.id);
+            if (ct?.assinatura_url) return 'assinado' as const;
+            if (ct) return 'enviado' as const;
+            // Sem contrato ainda: só faz sentido depois do cancelamento assinado
+            if (troca.termo_cancelamento_assinado_em) return 'pendente' as const;
+            return 'nao_aplicavel' as const;
+          })(),
           termo_url: troca?.termo_cancelamento_url ?? null,
           termo_enviado_em: troca?.termo_cancelamento_enviado_em ?? null,
           termo_assinado_em: troca?.termo_cancelamento_assinado_em ?? null,

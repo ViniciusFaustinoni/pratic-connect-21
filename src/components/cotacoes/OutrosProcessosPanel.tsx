@@ -25,10 +25,30 @@ function formatCurrency(value: number) {
 function TermoIcon({ status }: { status: OutroProcessoItem['termo_status'] }) {
   const map = {
     nao_aplicavel: { icon: null as any, label: '', cls: '' },
-    pendente: { icon: Clock, label: 'Termo pendente', cls: 'text-amber-600' },
-    enviado: { icon: Send, label: 'Termo enviado', cls: 'text-blue-600' },
-    assinado: { icon: CheckCircle2, label: 'Termo assinado', cls: 'text-emerald-600' },
-    recusado: { icon: Ban, label: 'Termo recusado / cancelado', cls: 'text-red-600' },
+    pendente: { icon: Clock, label: 'Termo de cancelamento pendente (titular antigo)', cls: 'text-amber-600' },
+    enviado: { icon: Send, label: 'Termo de cancelamento enviado ao titular antigo', cls: 'text-blue-600' },
+    assinado: { icon: CheckCircle2, label: 'Termo de cancelamento assinado pelo titular antigo', cls: 'text-emerald-600' },
+    recusado: { icon: Ban, label: 'Termo de cancelamento recusado / cancelado', cls: 'text-red-600' },
+  } as const;
+  const cfg = map[status];
+  if (!cfg.icon) return null;
+  const Icon = cfg.icon;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Icon className={cn('h-4 w-4', cfg.cls)} aria-label={cfg.label} />
+      </TooltipTrigger>
+      <TooltipContent>{cfg.label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function TermoFiliacaoIcon({ status }: { status: OutroProcessoItem['termo_filiacao_status'] }) {
+  const map = {
+    nao_aplicavel: { icon: null as any, label: '', cls: '' },
+    pendente: { icon: Clock, label: 'Aguardando termo de filiação (novo associado)', cls: 'text-amber-600' },
+    enviado: { icon: Send, label: 'Termo de filiação enviado ao novo associado', cls: 'text-blue-600' },
+    assinado: { icon: CheckCircle2, label: 'Termo de filiação assinado pelo novo associado', cls: 'text-emerald-600' },
   } as const;
   const cfg = map[status];
   if (!cfg.icon) return null;
@@ -232,6 +252,7 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
                   <div className="flex items-center gap-2">
                     <Badge className={cn(TONE_CLASS[item.etapa_tone], 'border-0 text-[10px] px-2 py-0.5 rounded-full')}>{item.etapa_label}</Badge>
                     <TermoIcon status={item.termo_status} />
+                    <TermoFiliacaoIcon status={item.termo_filiacao_status} />
                     {item.termo_whatsapp_status && item.tipo === 'troca_titularidade' && (
                       <Tooltip><TooltipTrigger asChild>
                         <MessageCircle className={cn('h-3.5 w-3.5',
