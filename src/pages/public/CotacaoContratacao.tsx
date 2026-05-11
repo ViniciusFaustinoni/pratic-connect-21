@@ -288,22 +288,25 @@ export default function CotacaoContratacao() {
 
   // Handler para avançar para próxima etapa
   const handleAvancar = useCallback(() => {
+    // Quando vistoria está pulada, salta de 2 → 4
+    const proximo = pularEtapaVistoria && etapaAtual === 2 ? 4 : etapaAtual + 1;
     if (etapaAtual < etapaDoStatus) {
-      setEtapaAtual(etapaAtual + 1);
+      setEtapaAtual(proximo);
     }
-    // Se chegou na etapa atual do status, desativa navegação manual
-    if (etapaAtual + 1 >= etapaDoStatus) {
+    if (proximo >= etapaDoStatus) {
       setNavegacaoManual(false);
     }
-  }, [etapaAtual, etapaDoStatus, setEtapaAtual]);
+  }, [etapaAtual, etapaDoStatus, setEtapaAtual, pularEtapaVistoria]);
 
   // Handler para voltar para etapa anterior
   const handleVoltar = useCallback(() => {
     if (etapaAtual > 0) {
       setNavegacaoManual(true);
-      setEtapaAtual(etapaAtual - 1);
+      // Quando vistoria está pulada, voltar de 4 → 2
+      const anterior = pularEtapaVistoria && etapaAtual === 4 ? 2 : etapaAtual - 1;
+      setEtapaAtual(anterior);
     }
-  }, [etapaAtual, setEtapaAtual]);
+  }, [etapaAtual, setEtapaAtual, pularEtapaVistoria]);
 
   // Pré-selecionar plano se já escolhido
   useEffect(() => {
