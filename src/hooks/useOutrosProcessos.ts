@@ -90,7 +90,7 @@ const TROCA_STATUS_LABELS: Record<string, { label: string; tone: 'info' | 'warn'
   aguardando_cadastro: { label: 'Aguardando cadastro', tone: 'info' },
   aguardando_monitoramento: { label: 'Aguardando monitoramento', tone: 'info' },
   aguardando_vistoria: { label: 'Aguardando vistoria', tone: 'info' },
-  liberada_para_assinatura: { label: 'Liberada p/ assinatura', tone: 'ok' },
+  liberada_para_assinatura: { label: 'Aguardando termo de filiação', tone: 'warn' },
   efetivada: { label: 'Efetivada', tone: 'ok' },
   reprovada_cadastro: { label: 'Reprovada (cadastro)', tone: 'danger' },
   reprovada_monitoramento: { label: 'Reprovada (monitoramento)', tone: 'danger' },
