@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { calcularOpcoesVencimento } from '@/utils/vencimento';
 import { useAssociadoSearch } from '@/hooks/useAssociadoSearch';
+import { resolverAssociadoLocalId, isUuid } from '@/hooks/useResolverAssociadoLocal';
 
 import { ChevronDown, ChevronUp, Fuel } from 'lucide-react';
 import { mapearRegiaoParaPricing } from '@/utils/regiaoMapping';
