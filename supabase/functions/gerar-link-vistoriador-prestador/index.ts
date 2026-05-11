@@ -213,15 +213,14 @@ _Dúvidas? Entre em contato com o coordenador._`
         const { error: wppErr } = await supabase.functions.invoke('whatsapp-send-text', {
           body: {
             telefone: telefoneFormatado,
-            template_nome: 'prestador_nova_tarefa_v1',
-            variaveis: {
-              '1': prestador.nome,
-              '2': `${veiculoDesc} (${placaVeiculo})`,
-              '3': instalacao.cidade || 'município',
-              '4': url,
-            },
-            mensagem_fallback: mensagem,
-            allow_text: true,
+            mensagem,
+            template_name: 'tarefa_vistoriador_v2',
+            template_params: [
+              prestador.nome,
+              `${nomeAssociado} - ${veiculoDesc} (${placaVeiculo})`.substring(0, 280),
+              (instalacao.cidade || endereco || 'município').substring(0, 200),
+              dataHora,
+            ],
           },
         })
 
