@@ -248,12 +248,9 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                   )}
                   {(() => {
                     const bloqueadoPorAssinatura = modo === 'cadastro' && !solicitacao.termo_cancelamento_assinado_em;
-                    const bloqueadoPorDebito = modo === 'cadastro' && !!debitoPendente;
-                    const bloqueado = bloqueadoPorAssinatura || bloqueadoPorDebito;
+                    const bloqueado = bloqueadoPorAssinatura;
                     const motivoBloqueio = bloqueadoPorAssinatura
                       ? 'Aguardando assinatura do termo de cancelamento pelo titular antigo.'
-                      : bloqueadoPorDebito
-                      ? 'Titular antigo possui débitos em aberto no SGA. Aprovação liberada automaticamente após quitação.'
                       : '';
                     const btn = (
                       <Button
