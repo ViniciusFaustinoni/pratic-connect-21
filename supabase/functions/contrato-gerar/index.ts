@@ -1345,7 +1345,6 @@ serve(async (req) => {
                   veiculo_id: solTroca.veiculo_id || veiculoId,
                   contrato_id: contrato.id,
                   cotacao_id: cotacao_id,
-                  solicitacao_id: solTroca.id,
                   data_agendada: dataAg,
                   periodo: periodoAg,
                   hora_agendada: horaAg,
