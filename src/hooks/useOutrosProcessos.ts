@@ -220,6 +220,22 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
         });
       }
 
+      // 3b) Contratos vinculados às solicitações de troca (gating de edição)
+      const contratoPorTroca = new Map<string, any>();
+      if (trocaIds.length > 0) {
+        const { data: contratos } = await (supabase as any)
+          .from('contratos')
+          .select('id, status, assinatura_url, origem_troca_titularidade_id')
+          .in('origem_troca_titularidade_id', trocaIds);
+        (contratos || []).forEach((ct: any) => {
+          // Mantém o contrato "mais avançado" caso haja múltiplos
+          const cur = contratoPorTroca.get(ct.origem_troca_titularidade_id);
+          if (!cur || ct.assinatura_url || ct.status !== 'rascunho') {
+            contratoPorTroca.set(ct.origem_troca_titularidade_id, ct);
+          }
+        });
+      }
+
       // 4) Vendedores
       const vendedorIds = Array.from(
         new Set(cotList.map((c) => c.vendedor_id).filter(Boolean)),
