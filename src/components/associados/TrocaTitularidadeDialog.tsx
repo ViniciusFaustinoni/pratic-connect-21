@@ -144,65 +144,9 @@ export function TrocaTitularidadeDialog({
   // Fonte final dos veículos exibidos no select
   const veiculos: VeiculoOpcao[] = usandoFallback ? veiculosFallback : veiculosSgaMapeados;
 
-  // Situação financeira por veículo (chama edge sga-sync-financeiro-veiculo em paralelo)
-  const situacaoQueries = useQueries({
-    queries: veiculos.map((v) => ({
-      queryKey: ['troca-tit-sit-fin', v.id],
-      queryFn: async () => {
-        const { data, error } = await supabase.functions.invoke('sga-sync-financeiro-veiculo', {
-          body: { veiculo_id: v.id },
-        });
-        if (error) throw error;
-        return data as {
-          success?: boolean;
-          situacao_financeira?: string | null;
-          not_found?: boolean;
-          retry?: boolean;
-          motivo?: string;
-          error?: string;
-        };
-      },
-      enabled: open && !!v.id,
-      staleTime: 5 * 60 * 1000,
-      retry: 0,
-    })),
-  });
-  type SitStatus = 'ADIMPLENTE' | 'INADIMPLENTE' | 'nao_reconciliado' | 'transitorio' | 'desconhecido';
-  const situacaoPorId: Record<string, { status: SitStatus; loading: boolean; motivo?: string }> = {};
-  veiculos.forEach((v, i) => {
-    const q = situacaoQueries[i];
-    const d = q?.data;
-    const raw = (d?.situacao_financeira || '').toString().toUpperCase();
-    let status: SitStatus = 'desconhecido';
-    if (raw === 'ADIMPLENTE') status = 'ADIMPLENTE';
-    else if (raw === 'INADIMPLENTE') status = 'INADIMPLENTE';
-    else if (d?.not_found) status = 'nao_reconciliado';
-    else if (d?.retry) status = 'transitorio';
-    situacaoPorId[v.id] = { status, loading: !!q?.isLoading, motivo: d?.motivo };
-  });
-
-  // Boletos do veículo selecionado — só dispara DEPOIS que a situação financeira resolver
-  // como INADIMPLENTE. A edge `sga-sync-financeiro-veiculo` (chamada pela query de situação)
-  // já fez upsert em `cobrancas`, então aqui apenas lemos a tabela já atualizada.
-  const situacaoSelecionada = veiculoId ? situacaoPorId[veiculoId] : undefined;
-  const cobrancasHabilitada =
-    open && !!veiculoId && !!situacaoSelecionada && !situacaoSelecionada.loading && situacaoSelecionada.status === 'INADIMPLENTE';
-  const cobrancasQuery = useQuery({
-    queryKey: ['troca-tit-cobrancas', veiculoId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('cobrancas')
-        .select('id, valor, data_vencimento, status, linha_digitavel, boleto_url, nosso_numero')
-        .eq('veiculo_id', veiculoId!)
-        .in('status', ['vencido', 'aguardando_pagamento'])
-        .order('data_vencimento', { ascending: true });
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: cobrancasHabilitada,
-    staleTime: 60_000,
-  });
-
+  // (Removido) Consulta de situação financeira por veículo e listagem de boletos.
+  // O fluxo de troca não exige mais que o antigo titular esteja adimplente — basta
+  // que o associado exista (espelho local + SGA) para listar os veículos.
 
 
   // Auto-seleciona se só houver 1
