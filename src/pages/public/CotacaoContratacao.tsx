@@ -171,6 +171,15 @@ export default function CotacaoContratacao() {
   );
   const trocaLiberada = solicitacaoTroca?.status === 'liberada_para_assinatura' || solicitacaoTroca?.status === 'efetivada';
   const trocaReprovada = solicitacaoTroca?.status === 'reprovada_cadastro' || solicitacaoTroca?.status === 'reprovada_monitoramento';
+  // Para troca, vistoria só faz parte do fluxo público se o monitoramento clicou
+  // em "Solicitar Vistoria" (status aguardando_vistoria) OU se o cliente já
+  // escolheu/concluiu uma vistoria (tipo_vistoria preenchido).
+  const vistoriaTrocaSolicitada = isTrocaTitularidade && (
+    solicitacaoTroca?.status === 'aguardando_vistoria' || !!cotacao?.tipo_vistoria
+  );
+  // Quando é troca, foi liberada e o monitoramento NÃO pediu vistoria,
+  // pulamos completamente a etapa "Vistoria" no fluxo público.
+  const pularEtapaVistoria = isTrocaTitularidade && trocaLiberada && !vistoriaTrocaSolicitada;
   const [substituicaoMesmoLocal, setSubstituicaoMesmoLocal] = useState<boolean | null>(null);
 
   // Determinar etapa baseada no status para saber o que está concluído
@@ -182,20 +191,25 @@ export default function CotacaoContratacao() {
     
     // Se vistoria já foi escolhida/agendada (tipo_vistoria preenchido) e ainda está na etapa 3,
     // avança para a etapa 4 (pagamento) para não pedir agendamento novamente
-    if (etapaBase === 3 && cotacao.tipo_vistoria) {
+    if (etapaBase === 3 && (cotacao.tipo_vistoria || pularEtapaVistoria)) {
       return 4;
     }
     
     return etapaBase;
-  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa]);
+  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, pularEtapaVistoria]);
 
-  // STEPS dinâmico: adiciona "Instalação" como 6ª etapa apenas quando autovistoria
+  // STEPS dinâmico:
+  //  - autovistoria => adiciona "Instalação" como 6ª etapa
+  //  - troca de titularidade sem vistoria solicitada => oculta "Vistoria"
   const STEPS = useMemo<Step[]>(() => {
+    const base = pularEtapaVistoria
+      ? STEPS_BASE.filter((s) => s.id !== 'vistoria')
+      : STEPS_BASE;
     if (cotacao?.tipo_vistoria === 'autovistoria') {
-      return [...STEPS_BASE, STEP_INSTALACAO];
+      return [...base, STEP_INSTALACAO];
     }
-    return STEPS_BASE;
-  }, [cotacao?.tipo_vistoria]);
+    return base;
+  }, [cotacao?.tipo_vistoria, pularEtapaVistoria]);
 
   // Função para verificar se uma etapa específica já foi concluída
   // Isso garante o modo somente leitura mesmo quando o cliente volta para etapas anteriores
