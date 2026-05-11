@@ -1,51 +1,64 @@
-## Diagnóstico — Tarefa some após refresh do técnico
 
-### Linha do tempo (placa LTB4J74, serviço `c8f90bda…`, vistoria `fe628306…`)
+## Diagnóstico (caso real: COT-20260509-184816784-883 / RIQUELME / Marcio Brasil)
 
-| Hora (UTC) | Evento |
-|---|---|
-| 18:13:58 | Técnico Kleytonn iniciou rota → `servicos.status = em_rota` |
-| 18:14:04 | Iniciou tarefa → `servicos.status = em_andamento` |
-| 18:14:08 | Vistoria criada **já com `status='em_analise'`** (padrão do hook) |
-| 18:14:10–20 | Avançou checklist (etapa 1→3, todos os itens "ok") |
-| **18:15:26** | **Upload do `video_360_url` na vistoria** → trigger pushou `em_analise` para `servicos.status` |
-| 18:19:29 | Refresh — `useTarefaAtual` filtra fora `em_analise` → tarefa some |
+Estado atual no banco:
+- `cotacoes.status = 'aceita'`, `status_contratacao = 'pagamento_ok'`, `tipo_vistoria='agendada'`, `tipo_instalacao='rota'`, `cenario_adesao='isenta_rota'`.
+- **Todos os campos `vistoria_*` (data, horário, endereço, responsável) estão NULL.**
+- `contratos.status='assinado'`, `cadastro_aprovado=true`, autentique `signed`, adesão paga.
+- `vistorias`, `instalacoes`, `agendamentos_base` e `servicos` para esta cotação: **0 registros**.
 
-### Causa raiz
+Por que sumiu da fila de monitoramento:
+1. A tela pública (`src/pages/public/CotacaoContratacao.tsx`, linhas ~1186–1204) tem um **fallback silencioso**: quando `tipo_vistoria='agendada'` mas `vistoria_data_agendada` é nulo, exibe um card genérico "Agendamento Confirmado! Aguarde o contato do vistoriador" — **sem nunca abrir o formulário de agendamento e sem criar nada em `vistorias`/`instalacoes`/`agendamentos_base`**.
+2. `aprovar-proposta` chama `criar-instalacao-pos-pagamento` como fallback, mas essa função (linhas 286–304) lê `vistoria_data_agendada` da cotação — como está nulo, **não cria instalação** (log "tipo_vistoria=agendada sem data").
+3. Com `cadastro_aprovado=true`, a regra "Propostas Pendentes saída por vistoria" remove o contrato da fila de Propostas Pendentes; e como não existe instalação/vistoria/agendamento, ele também **não entra** em Monitoramento › Aprovações › Aprovação de Associados (que só lista quando há instalação/vistoria concluída).
+4. Resultado: contrato em limbo. O cliente vê sucesso, o vendedor vê sucesso, e o monitoramento não tem nada para atribuir.
 
-A trigger `public.sync_vistoria_update_to_servicos` roda em **todo `UPDATE` de `vistorias`** (sem `WHEN status changed`) e sobrescreve cegamente:
+Por que afeta mais vendedores externos: o consultor externo costuma rodar a cotação pelo painel interno (marcando dados básicos), gerar contrato e aprovar adesão, **pulando a etapa "Vistoria/Agendamento" do link público**. Em fluxos onde o próprio cliente acessa o link, ele preenche a vistoria normalmente. No fluxo externo, ele cai direto na tela-fantasma.
 
-```sql
-UPDATE servicos
-   SET status = map_to_status_servico(NEW.status), ...
- WHERE vistoria_origem_id = NEW.id;
+## Correções
+
+### 1. Frontend — eliminar tela-fantasma (`src/pages/public/CotacaoContratacao.tsx`)
+- Remover o bloco de fallback "Agendamento Confirmado" genérico (linhas ~1186–1204).
+- Quando `tipo_vistoria='agendada'` e `vistoria_data_agendada` é nulo **e** não há vistoria/instalação/agendamento_base existentes, renderizar o componente real de agendamento (`AgendamentoVistoria` / `AgendamentoCotacao` com `contexto='presencial-direto'`), passando `tipoInstalacao` da cotação para já filtrar Base × Rota corretamente (memória de fluxo de adesão isenta).
+- Só exibir o card "Vistoria Agendada com Sucesso" quando `vistoria_data_agendada` estiver preenchido **ou** `hasVistoriaAgendada/hasInstalacaoAgendada/hasAgendamentoBase` for true.
+
+### 2. Backend — barrar aprovação sem agendamento (`supabase/functions/aprovar-proposta`)
+- Após o fallback `criar-instalacao-pos-pagamento`, se ainda não existir `instalacaoCriadaId` **nem** `agendamentos_base` ativo **nem** `vistorias` para a cotação, **não** marcar `cadastro_aprovado=true` no contrato. Em vez disso:
+  - Manter o contrato visível em "Propostas Pendentes" com badge "Aguardando agendamento de vistoria".
+  - Disparar notificação ao vendedor (WhatsApp/notificação interna) com o link público para o cliente concluir a etapa Vistoria.
+- Logar `aprovar-proposta_no_schedule` em `logs_auditoria` para visibilidade.
+
+### 3. Migration de recuperação (one-shot)
+Para todos os contratos com `cadastro_aprovado=true`, `status='assinado'`, sem `instalacoes`/`vistorias`/`agendamentos_base` ativos e cotação com `tipo_vistoria='agendada'` e `vistoria_data_agendada IS NULL`:
+- Reverter `cadastro_aprovado=false` para reentrar em Propostas Pendentes.
+- Inserir tarefa em `logs_auditoria` (ação=`recuperacao_limbo_agendamento`).
+- Para o caso específico do RIQUELME (cotação `994f6018…` / contrato `3d4ce412…`), aplicar o mesmo tratamento — vendedor receberá link para concluir agendamento.
+
+### 4. Painel de monitoramento (sentinela)
+Adicionar à aba "Aprovação de Associados" (ou criar bloco "Contratos sem agendamento") um indicador automático para casos novos:
+- Query: contratos `assinado` há mais de 2h sem instalação/vistoria/agendamento.
+- Botão "Forçar agendamento" que abre modal interno (mesmo formulário) e chama `criar-instalacao-pos-pagamento` com os dados informados.
+
+## Arquivos afetados (estimativa)
+
+```text
+src/pages/public/CotacaoContratacao.tsx          [editar — remover fallback, plugar form]
+supabase/functions/aprovar-proposta/index.ts     [editar — guard de cadastro_aprovado]
+supabase/migrations/<novo>.sql                   [criar — recovery + log]
+src/pages/monitoramento/AprovacoesUnificadas.tsx [editar — add bloco sentinela]
+src/components/monitoramento/<novo>.tsx          [criar — ContratosSemAgendamento]
 ```
 
-Como o hook de criação grava a vistoria já com `status='em_analise'` (semântica "aguardando finalização"), qualquer salvamento parcial — vídeo 360, dados parciais, etapa, fotos — re-aplica `em_analise` ao serviço. O hook `useTarefaAtual` (e seu fallback) excluem `em_analise` do conjunto de status válidos para "tarefa atual", então a tarefa desaparece do app do instalador.
+## Detalhes técnicos
 
-A propagação correta de status terminal já existe em outra trigger dedicada (`trg_sync_servico_on_vistoria_decisao`), que cobre `aprovada / aprovada_ressalvas / reprovada / cancelada`. Ou seja, a linha de `status` em `sync_vistoria_update_to_servicos` é redundante e tóxica.
+- O `useAgendamentoExistente` já retorna `hasVistoriaAgendada/hasInstalacaoAgendada/hasAgendamentoBase`; basta usar para decidir entre formulário e card de sucesso.
+- `tipo_instalacao` da cotação (`'rota'` para isenta_rota, `'base'` para isenta_base) precisa ser propagado ao `AgendamentoVistoria` para já esconder a opção contraditória (já implementado em outros pontos pela memória `EscolhaLocalVistoria`).
+- A guarda em `aprovar-proposta` usa exatamente as três tabelas listadas no `useAgendamentoExistente` para consistência.
+- A migration de recovery não toca `autentique_status`, `adesao_paga` nem `data_assinatura` — apenas `cadastro_aprovado`.
 
-### Correção (migration única)
+## Resultado esperado
 
-1. Recriar `sync_vistoria_update_to_servicos` **removendo o campo `status`** do `UPDATE`. Continua sincronizando dados logísticos (vistoriador, endereço, data/hora, lat/lng).
-2. Como blindagem extra, adicionar `WHEN (NEW.* IS DISTINCT FROM OLD.*)` na trigger e ignorar quando só `updated_at` mudou.
-3. **Recuperação de dados** (one-shot no mesmo migration): para todo `servicos` que esteja em `em_analise` mas cuja vistoria/instalação ainda não foi decidida (vistoria sem `concluida_em` e instalacao sem `concluida_em`), e cuja `vistoria_origem_id` tem `status='em_analise'` apenas por efeito da trigger, voltar `servicos.status` ao último estado real (`em_andamento` se `iniciada_em` preenchido, senão `em_rota` se `em_rota_em` preenchido, senão `agendada`). Restritivo: só onde `decisao_instalador IS NULL` e `imprevisto_registrado_em IS NULL`.
-
-Em particular, resgata o serviço `c8f90bda…` para `em_andamento` (tem `iniciada_em`).
-
-### Pós-correção esperada
-
-- Técnico pode salvar parciais quantas vezes quiser; serviço só sai da fila quando: (a) decisão final na vistoria, (b) imprevisto, (c) atribuição mudada.
-- Filtro de `useTarefaAtual` continua igual — não muda código frontend.
-- Conclusão real continua via `useAprovarVeiculoVistoria` / `useRecusarVeiculoVistoria` que mudam `vistorias.status` para terminal e disparam `sync_servico_on_vistoria_decisao`.
-
-### Arquivos
-
-- **Nova migration SQL** (única): redefine `sync_vistoria_update_to_servicos` + roda recovery direcionado.
-- Nenhuma mudança de frontend/edge function.
-
-### Riscos / observações
-
-- `sync_servico_on_vistoria_decisao` já cobre todos os estados terminais → seguro remover o `status` da outra trigger.
-- Recovery é idempotente e filtra estritamente para não tocar em casos legítimos de `em_analise` (ex.: recusa do técnico que define `decisao_instalador='negado'`).
-- Sugiro também (separado, não nesta migration) revisitar por que o hook cria a vistoria já como `em_analise` em vez de `em_andamento` — semanticamente errado — mas isso pode ficar para uma próxima rodada para não inflar o escopo desta correção.
+- Vendedor externo não consegue mais "fechar" a venda sem capturar data/horário/endereço da vistoria.
+- Cliente que cair em fluxo público sem agendamento vê o formulário, não o card-fantasma.
+- Contratos órfãos são detectados e voltam à fila operacional.
+- O caso do RIQUELME volta a ser visível e processável.
