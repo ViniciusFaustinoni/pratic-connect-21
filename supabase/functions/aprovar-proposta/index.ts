@@ -453,6 +453,49 @@ serve(async (req) => {
       }
     }
 
+    // GUARD ANTI-LIMBO: contratos que precisam de rastreador devem ter pelo menos
+    // um registro operacional (instalação/vistoria/agendamento_base) ao final do
+    // aprovar-proposta. Caso contrário (típico em vendas externas onde a cotação
+    // foi marcada como tipo_vistoria='agendada' sem coleta de data/endereço), o
+    // associado fica fora de Propostas Pendentes e nunca aparece em Aprovações
+    // do Monitoramento. Reverte cadastro_aprovado e devolve erro claro.
+    if (algumPrecisouRastreador && !jaTemInstalacaoConcluida && contrato.cotacao_id) {
+      const [{ count: instCount }, { count: vistCount }, { count: agbCount }] = await Promise.all([
+        supabase.from('instalacoes').select('id', { count: 'exact', head: true })
+          .eq('cotacao_id', contrato.cotacao_id)
+          .in('status', ['agendada', 'em_andamento', 'em_analise', 'em_rota', 'concluida']),
+        supabase.from('vistorias').select('id', { count: 'exact', head: true })
+          .eq('cotacao_id', contrato.cotacao_id)
+          .in('status', ['agendada', 'pendente', 'aprovada', 'em_analise', 'em_rota', 'em_andamento']),
+        supabase.from('agendamentos_base').select('id', { count: 'exact', head: true })
+          .eq('cotacao_id', contrato.cotacao_id)
+          .in('status', ['agendado', 'confirmado', 'realizado']),
+      ]);
+
+      const totalRegistros = (instCount || 0) + (vistCount || 0) + (agbCount || 0);
+      if (totalRegistros === 0) {
+        console.warn('[aprovar-proposta] LIMBO detectado — sem instalação/vistoria/agendamento. Revertendo cadastro_aprovado.');
+        await supabase.from('contratos')
+          .update({ cadastro_aprovado: false, aprovado_por: null, aprovado_em: null })
+          .eq('id', contrato_id);
+        await supabase.from('logs_auditoria').insert({
+          acao: 'aprovar_proposta_bloqueado_sem_agendamento',
+          modulo: 'contratos',
+          tabela: 'contratos',
+          registro_id: contrato_id,
+          descricao: `Aprovação bloqueada: cotação ${contrato.cotacao_id} sem agendamento real (vendedor externo / fluxo público sem etapa Vistoria).`,
+          usuario_id: aprovado_por || null,
+        }).catch(() => {});
+        return jsonResponse({
+          success: false,
+          codigo: 'sem_agendamento',
+          mensagem: 'Não é possível aprovar: a cotação ainda não possui agendamento de vistoria/instalação. Oriente o cliente a concluir a etapa Vistoria no link público.',
+          contratoId: contrato_id,
+          associadoId,
+        }, 409);
+      }
+    }
+
     const deveAguardarInstalacao = algumPrecisouRastreador && !jaTemInstalacaoConcluida;
     // POLÍTICA: o primeiro envio ao SGA é SEMPRE 'pendente', independente de R/F,
     // auto-vistoria ou instalação já concluída. A promoção para 'ativo' acontece
