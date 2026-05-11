@@ -72,6 +72,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Switch } from '@/components/ui/switch';
 import { useAssociadoSearch, type AssociadoSearchResult } from '@/hooks/useAssociadoSearch';
+import { resolverAssociadoLocalId } from '@/hooks/useResolverAssociadoLocal';
 
 // ============================================
 // INTERFACES
@@ -1443,10 +1444,18 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                               <button
                                 key={assoc.id}
                                 type="button"
-                                onClick={() => {
-                                  setIndicadorId(assoc.id);
-                                  setIndicadorNome(assoc.nome);
-                                  setBuscaIndicador('');
+                                onClick={async () => {
+                                  try {
+                                    if (assoc.origem_sga) {
+                                      toast.info('Importando indicador do SGA...');
+                                    }
+                                    const localId = await resolverAssociadoLocalId(assoc);
+                                    setIndicadorId(localId);
+                                    setIndicadorNome(assoc.nome);
+                                    setBuscaIndicador('');
+                                  } catch (e) {
+                                    toast.error(e instanceof Error ? e.message : 'Não foi possível selecionar este indicador');
+                                  }
                                 }}
                                 className="w-full text-left px-3 py-2 hover:bg-accent transition-colors flex items-center gap-3"
                               >

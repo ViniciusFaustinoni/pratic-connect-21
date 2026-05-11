@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { calcularOpcoesVencimento } from '@/utils/vencimento';
 import { useAssociadoSearch } from '@/hooks/useAssociadoSearch';
+import { resolverAssociadoLocalId, isUuid } from '@/hooks/useResolverAssociadoLocal';
 
 import { ChevronDown, ChevronUp, Fuel } from 'lucide-react';
 import { mapearRegiaoParaPricing } from '@/utils/regiaoMapping';
@@ -1606,6 +1607,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
         const novaCotacao = await createCotacao.mutateAsync({
           ...cotacaoData,
+          // Guard: indicador_id é UUID; nunca enviar matrícula/string vazia
+          indicador_id: isUuid(cotacaoData.indicador_id) ? cotacaoData.indicador_id : null,
           solicitar_fipe_menor: solicitarFipeMenor,
           status: 'rascunho',
           vendedor_id: vendedorIdFinal,
@@ -1882,10 +1885,18 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                                   key={a.id}
                                   type="button"
                                   className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors"
-                                  onClick={() => {
-                                    setIndicadorId(a.id);
-                                    setIndicadorNome(a.nome);
-                                    setBuscaIndicador('');
+                                  onClick={async () => {
+                                    try {
+                                      if (a.origem_sga) {
+                                        toast.info('Importando indicador do SGA...');
+                                      }
+                                      const localId = await resolverAssociadoLocalId(a);
+                                      setIndicadorId(localId);
+                                      setIndicadorNome(a.nome);
+                                      setBuscaIndicador('');
+                                    } catch (e) {
+                                      toast.error(e instanceof Error ? e.message : 'Não foi possível selecionar este indicador');
+                                    }
                                   }}
                                 >
                                   <span className="font-medium">{a.nome}</span>

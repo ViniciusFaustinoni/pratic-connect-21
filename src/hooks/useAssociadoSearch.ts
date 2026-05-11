@@ -63,7 +63,10 @@ export function useAssociadoSearch(termo: string) {
           );
           if (!error && data?.encontrado && data?.codigo_associado) {
             return [{
-              id: String(data.codigo_associado),
+              // SGA-only: ainda não há UUID local. Use string vazia como
+              // sentinela — o consumidor deve resolver via
+              // `resolverAssociadoLocalId` antes de gravar em colunas UUID.
+              id: '',
               nome: data.associado?.nome || '',
               telefone: data.associado?.telefone || null,
               cpf: data.associado?.cpf || cleaned,
