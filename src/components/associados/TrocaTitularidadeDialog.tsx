@@ -280,17 +280,9 @@ export function TrocaTitularidadeDialog({
                     onChange={(e) => setVeiculoId(e.target.value)}
                   >
                     <option value="">Selecione…</option>
-                    {veiculos.map(v => {
-                      const s = situacaoPorId[v.id];
-                      const sufixo = s?.loading
-                        ? ' — verificando…'
-                        : s?.status === 'ADIMPLENTE'
-                          ? ' — ADIMPLENTE'
-                          : s?.status === 'INADIMPLENTE'
-                            ? ' — INADIMPLENTE'
-                            : '';
-                      return <option key={v.id} value={v.id}>{v.descricao}{sufixo}</option>;
-                    })}
+                    {veiculos.map(v => (
+                      <option key={v.id} value={v.id}>{v.descricao}</option>
+                    ))}
                   </select>
                 );
               }
