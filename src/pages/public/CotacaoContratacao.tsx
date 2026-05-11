@@ -180,6 +180,14 @@ export default function CotacaoContratacao() {
   // Quando é troca, foi liberada e o monitoramento NÃO pediu vistoria,
   // pulamos completamente a etapa "Vistoria" no fluxo público.
   const pularEtapaVistoria = isTrocaTitularidade && trocaLiberada && !vistoriaTrocaSolicitada;
+  // Troca de titularidade isenta (cenário sem cobrança de adesão) → pular etapa de Pagamento
+  const isCenarioIsento = (() => {
+    const cen = (cotacao as any)?.cenario_adesao as string | null | undefined;
+    if (cen?.startsWith('isenta_')) return true;
+    return Number((cotacao as any)?.valor_adesao ?? 0) === 0;
+  })();
+  const pularEtapaPagamento = isTrocaTitularidade && trocaLiberada && isCenarioIsento;
+  const [ativandoTroca, setAtivandoTroca] = useState(false);
   const [substituicaoMesmoLocal, setSubstituicaoMesmoLocal] = useState<boolean | null>(null);
 
   // Determinar etapa baseada no status para saber o que está concluído
