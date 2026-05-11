@@ -1,8 +1,9 @@
 // Aprovação da etapa de Cadastro: avança status para aguardando_monitoramento
 // Antes de aprovar:
 //   1) trava se termo de cancelamento não foi assinado
-//   2) trava se há débito pendente do titular antigo (relacionamento_debitos_pendentes 'aberto')
-//   3) regrava snapshot de análise prévia do novo titular (base local + SGA) — idempotente
+//   2) regrava snapshot de análise prévia do novo titular (base local + SGA) — idempotente
+// Obs: a checagem financeira do antigo titular foi removida — não é mais
+// requisito que o antigo esteja adimplente para aprovar a troca.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 
 const corsHeaders = {
@@ -54,26 +55,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 3) Trava: débito do antigo (relacionamento_debitos_pendentes em 'aberto')
-    const { data: debitoAberto } = await admin
-      .from('relacionamento_debitos_pendentes')
-      .select('id, valor_total, quantidade_boletos')
-      .eq('associado_id', sol.associado_antigo_id)
-      .eq('status', 'aberto')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (debitoAberto) {
-      return new Response(
-        JSON.stringify({
-          error: 'Aprovação bloqueada: o titular antigo possui débitos em aberto no SGA. A liberação ocorre automaticamente após a quitação.',
-          code: 'DEBITO_PENDENTE_ANTIGO',
-          valor_total: debitoAberto.valor_total,
-          quantidade_boletos: debitoAberto.quantidade_boletos,
-        }),
-        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
-    }
+    // (Removido) Trava por débito do antigo: a troca não exige mais adimplência.
 
     // 4) Resolver profile.id do aprovador
     const { data: prof } = await admin

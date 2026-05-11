@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,11 +10,9 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, Car, User, FileSignature, CheckCircle2, XCircle, Send, ClipboardCheck, ShieldCheck, ExternalLink, AlertTriangle, Search } from 'lucide-react';
 import { useSolicitacaoTroca, useAprovarTrocaCadastro, useAprovarTrocaMonitoramento, useReprovarTroca, useEnviarTermoCancelamento, type StatusTroca } from '@/hooks/useSolicitacoesTroca';
 import { TimelineAprovacao } from './TimelineAprovacao';
-import { RelatorioFinanceiroAntigo } from './RelatorioFinanceiroAntigo';
 import { MiniCardVistoriaTroca } from './MiniCardVistoriaTroca';
 import { VeiculoCompletoCard } from './VeiculoCompletoCard';
 import { Skeleton } from '@/components/ui/skeleton';
-import { supabase } from '@/integrations/supabase/client';
 import { formatCPF, formatPhone } from '@/types/termo-filiacao';
 
 interface Props {
@@ -48,24 +45,8 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   const reprovar = useReprovarTroca();
   const enviarTermo = useEnviarTermoCancelamento();
 
-  // Débito pendente do antigo (gate da aprovação do Cadastro)
-  const { data: debitoPendente } = useQuery({
-    queryKey: ['troca-debito-antigo', solicitacao?.associado_antigo_id],
-    queryFn: async () => {
-      if (!solicitacao?.associado_antigo_id) return null;
-      const { data } = await (supabase as any)
-        .from('relacionamento_debitos_pendentes')
-        .select('id, valor_total, quantidade_boletos, status')
-        .eq('associado_id', solicitacao.associado_antigo_id)
-        .eq('status', 'aberto')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      return data;
-    },
-    enabled: open && !!solicitacao?.associado_antigo_id && modo === 'cadastro',
-    refetchInterval: 30000,
-  });
+  // (Removido) Checagem de débito do antigo titular: a troca não exige mais
+  // adimplência. A aprovação do Cadastro depende apenas do termo assinado.
 
   const handleAprovar = async () => {
     if (!solicitacao) return;
@@ -142,22 +123,13 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
               );
             })()}
 
-            {modo === 'cadastro' && debitoPendente && (
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Débito pendente do titular antigo</AlertTitle>
-                <AlertDescription>
-                  Saldo de R$ {Number(debitoPendente.valor_total || 0).toFixed(2)} em {debitoPendente.quantidade_boletos || 0} boleto(s) no SGA. A aprovação será liberada automaticamente após a quitação (verificação diária).
-                </AlertDescription>
-              </Alert>
-            )}
+            {/* (Removido) Alerta de débito pendente do antigo titular */}
 
             <Tabs defaultValue="dados">
-              <TabsList className="grid w-full grid-cols-5">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="dados">Dados</TabsTrigger>
                 <TabsTrigger value="termo">Termo</TabsTrigger>
                 <TabsTrigger value="analise">Análise prévia</TabsTrigger>
-                <TabsTrigger value="financeiro">Financeiro Antigo</TabsTrigger>
                 <TabsTrigger value="timeline">Timeline</TabsTrigger>
               </TabsList>
 
@@ -219,13 +191,7 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                 </div>
               </TabsContent>
 
-              <TabsContent value="financeiro" className="pt-3">
-                <RelatorioFinanceiroAntigo
-                  associadoId={solicitacao.associado_antigo_id}
-                  codigoHinova={(solicitacao.associado_antigo as any)?.codigo_hinova ?? null}
-                  cpf={solicitacao.associado_antigo?.cpf ?? null}
-                />
-              </TabsContent>
+              {/* (Removida) Aba "Financeiro Antigo" — checagem financeira não se aplica mais */}
 
               <TabsContent value="termo" className="pt-3 space-y-3">
                 <div className="rounded border p-3 space-y-2">
@@ -282,12 +248,9 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                   )}
                   {(() => {
                     const bloqueadoPorAssinatura = modo === 'cadastro' && !solicitacao.termo_cancelamento_assinado_em;
-                    const bloqueadoPorDebito = modo === 'cadastro' && !!debitoPendente;
-                    const bloqueado = bloqueadoPorAssinatura || bloqueadoPorDebito;
+                    const bloqueado = bloqueadoPorAssinatura;
                     const motivoBloqueio = bloqueadoPorAssinatura
                       ? 'Aguardando assinatura do termo de cancelamento pelo titular antigo.'
-                      : bloqueadoPorDebito
-                      ? 'Titular antigo possui débitos em aberto no SGA. Aprovação liberada automaticamente após quitação.'
                       : '';
                     const btn = (
                       <Button
