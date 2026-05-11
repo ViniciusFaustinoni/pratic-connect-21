@@ -45,7 +45,7 @@ export interface SolicitacaoTroca {
   analise_previa_em?: string | null;
   associado_antigo?: { id: string; nome: string; cpf: string | null; email: string | null; telefone: string | null; codigo_hinova?: number | null } | null;
   veiculo?: { id: string; marca: string; modelo: string; ano_modelo: number | null; ano_fabricacao: number | null; placa: string } | null;
-  cotacao?: { id: string; numero: string | null; token_publico: string | null; status: string } | null;
+  cotacao?: { id: string; numero: string | null; token_publico: string | null; status: string; tipo_vistoria?: string | null; vistoria_concluida_em?: string | null } | null;
 }
 
 export function useSolicitacoesTroca(filtroStatus?: StatusTroca[], criadoPorProfileId?: string) {
