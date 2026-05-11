@@ -1,36 +1,40 @@
 ## Problema
 
-Na aba **Outros Processos**, quando o titular antigo assina o **termo de cancelamento**, o ícone verde mostra tooltip "Termo assinado" e o badge da etapa fica "Liberada p/ assinatura". Isso confunde, pois ainda falta o **termo de filiação** ser assinado pelo novo associado.
+Na troca de titularidade, quando o monitoramento solicita vistoria, o novo titular executa pelo link público. As fotos/vídeo são salvos em `vistoria_fotos`, ligadas a uma `vistoria` cujo `veiculo_id` é o **mesmo veículo sendo transferido** (NOT NULL na tabela). Porém o histórico de mídias do veículo (`useFotosVistoriaPorVeiculo`, exibido em `VeiculoDetalhesModal` → aba "Fotos/Docs") busca por **caminho indireto**:
 
-A troca de titularidade tem **dois termos** distintos:
-1. Termo de cancelamento — assinado pelo **titular antigo** (campos `termo_cancelamento_*` em `solicitacoes_troca_titularidade`)
-2. Termo de filiação — assinado pelo **novo associado** (rastreado via `contratos.assinatura_url` com `origem_troca_titularidade_id`)
+```
+veiculos → contratos.veiculo_id → vistorias.contrato_id → vistoria_fotos
+```
 
-Hoje `deriveTermoStatus` e o `TermoIcon` só consideram o cancelamento.
+Esse caminho perde fotos quando:
+- A vistoria foi criada **antes** do contrato do novo titular existir/ser vinculado.
+- A vistoria está vinculada apenas via `instalacao_id`/`cotacao_id` e `contrato_id` ainda nulo.
+- Em geral, qualquer vistoria sem `contrato_id` populado.
 
-## Mudanças (somente UI/derivação)
+Resultado: as fotos da vistoria de troca de titularidade não aparecem no histórico do veículo.
 
-### 1. `src/hooks/useOutrosProcessos.ts`
-- Adicionar campos no tipo `OutroProcessoItem`:
-  - `termo_cancelamento_status` (rebatizar o atual `termo_status`)
-  - `termo_filiacao_status: 'nao_aplicavel' | 'pendente' | 'enviado' | 'assinado'`
-  - `termo_filiacao_assinado_em: string | null`
-- Derivar `termo_filiacao_status` a partir do contrato vinculado (`contratoPorTroca`):
-  - sem contrato → `pendente` (após cancelamento assinado) ou `nao_aplicavel` (antes)
-  - contrato com `assinatura_url` → `assinado`
-  - contrato sem `assinatura_url` mas existe → `enviado`
-- Manter compatibilidade: `termo_status` continua representando o cancelamento (alias) para não quebrar `TrocaTimelineDrawer` e ações existentes.
+## Mudança (1 arquivo, sem schema)
 
-### 2. `src/components/cotacoes/OutrosProcessosPanel.tsx`
-- `TermoIcon` passa a renderizar **dois ícones** lado a lado quando aplicável:
-  - Cancelamento: tooltip "Termo de cancelamento — assinado/enviado/pendente"
-  - Filiação: tooltip "Termo de filiação (novo associado) — pendente/enviado/assinado"
-- Quando o cancelamento já está assinado mas a filiação ainda não, o ícone verde de cancelamento mantém-se, e um novo ícone (Clock/Send âmbar) aparece para a filiação com tooltip claro.
+### `src/hooks/useVeiculoDetalhes.ts` — `useFotosVistoriaPorVeiculo`
 
-### 3. Badge da etapa (`TROCA_STATUS_LABELS` em `useOutrosProcessos.ts`)
-- `liberada_para_assinatura` passa a label **"Aguardando termo de filiação"** (tone `info`/`warn`), deixando explícito que falta a assinatura do novo associado.
-- Demais labels inalterados.
+Trocar o caminho indireto por consulta direta à tabela `vistorias` por `veiculo_id` (campo NOT NULL e canônico):
+
+```
+1) vistorias.select('id, status, modalidade, tipo, created_at').eq('veiculo_id', veiculoId)
+2) vistoria_fotos.select(...).in('vistoria_id', vistoriaIds).order('created_at')
+3) Enriquecer cada foto com vistoria_status / vistoria_modalidade (já feito) +
+   vistoria_tipo (entrada / saida / sinistro) e vistoria_created_at — útil para o agrupamento
+```
+
+Isso pega automaticamente:
+- Vistorias originais do contrato vigente.
+- Vistorias da troca de titularidade (executadas pelo novo titular pelo link público).
+- Qualquer vistoria futura (saída, sinistro, periódica) ligada ao veículo.
+
+Manter a interface `FotoVistoriaVeiculo` retro-compatível (apenas adicionar campos opcionais; nada é removido). `VeiculoDetalhesModal` continua funcionando sem alteração — o `agruparFotosVeiculo` agrupa por `tipo` da foto, não da vistoria.
 
 ## Fora de escopo
-- Nenhuma mudança em edge functions, schema, lógica de negócio, fluxo de assinatura ou no `TrocaTimelineDrawer` (timeline interna já detalha as etapas corretamente).
-- Outros tipos de processo (substituição, inclusão, migração) não são afetados.
+
+- Nenhuma mudança em edge functions, RLS, schema ou no fluxo de criação da vistoria.
+- Nenhuma alteração visual no `VeiculoDetalhesModal` (a aba "Fotos/Docs" passa a mostrar mais itens automaticamente).
+- Histórico de **vídeos** (`vistorias.video_360_url`) — atual modal só lista fotos; se desejado posteriormente, podemos expor o vídeo da vistoria como item separado.
