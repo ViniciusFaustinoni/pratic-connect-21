@@ -239,12 +239,30 @@ ${servico.observacoes ? `📝 *Obs:* ${servico.observacoes}` : ''}
 
 _Confirme sua chegada com o cliente!_`;
 
+        // Resumo curto para caber no template `servico_atribuido_v1` (3 vars).
+        const primeiroNomeProf = (profissional?.nome || 'Profissional').trim().split(/\s+/)[0];
+        const veiculoCurto = veiculo
+          ? `${veiculo.placa} - ${veiculo.marca || ''} ${veiculo.modelo || ''}`.trim()
+          : 'veículo não informado';
+        const dataLabel = servico.data_agendada
+          ? new Date(servico.data_agendada + 'T12:00:00').toLocaleDateString('pt-BR')
+          : 'hoje';
+        const enderecoCurto = enderecoParts.slice(0, 3).join(', ') || 'endereço não informado';
+        const detalhesCurto = `Cliente ${associado.nome} - ${enderecoCurto} - ${dataLabel} ${periodoLabel}`.substring(0, 280);
+
         const { error: whatsappError } = await supabase.functions.invoke('whatsapp-send-text', {
           body: {
             telefone: profissionalTelefone,
-            mensagem: mensagem,
+            mensagem,
+            template_name: 'servico_atribuido_v1',
+            template_params: [
+              primeiroNomeProf,
+              `${tipoServico} - ${veiculoCurto}`.substring(0, 280),
+              detalhesCurto,
+            ],
           }
         });
+
 
         if (whatsappError) {
           console.error("[notificar-inicio-rota] Erro ao enviar WhatsApp para profissional:", whatsappError);
