@@ -118,6 +118,7 @@ import { useFipeMenorAtivo } from '@/hooks/useFipeMenorAtivo';
 import { useBiometriasPendentesCount } from '@/hooks/useBiometriasPendentes';
 import { useAprovacoesMonitoramentoCount } from '@/hooks/useAprovacoesMonitoramentoCount';
 import { useProcessosOperacionaisCount } from '@/hooks/useProcessosOperacionaisCount';
+import { usePropostasPendentesCount } from '@/hooks/usePropostasPendentesCount';
 
 // Mapeamento de cores por grupo/item
 const MENU_COLORS: Record<string, string> = {
