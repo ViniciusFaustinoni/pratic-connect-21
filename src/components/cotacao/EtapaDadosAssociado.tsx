@@ -11,6 +11,8 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAssociadoSearch, type AssociadoSearchResult } from '@/hooks/useAssociadoSearch';
+import { resolverAssociadoLocalId } from '@/hooks/useResolverAssociadoLocal';
+import { toast } from 'sonner';
 import { useVerificarVeiculoAtivoCpf } from '@/hooks/useVerificarVeiculoAtivoCpf';
 import { useVerificarDebitosAssociado } from '@/hooks/useVerificarDebitosAssociado';
 import { DialogTipoOperacao } from '@/components/cotacao/DialogTipoOperacao';
