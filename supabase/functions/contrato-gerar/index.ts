@@ -1406,7 +1406,7 @@ serve(async (req) => {
             const tel = cotacao.telefone1_solicitante;
             if (tel) {
               const msg = `Olá, ${nomeFinal}! Seu contrato de troca de titularidade (Nº ${contrato.numero}) foi gerado e o termo de filiação foi enviado para o seu e-mail para assinatura. Após assinar e finalizar o pagamento da adesão, agendaremos a vistoria do veículo para concluir a troca.`;
-              await supabase.functions.invoke('whatsapp-send-text', { body: { telefone: tel, mensagem: msg } });
+              await supabase.functions.invoke('whatsapp-send-text', { body: { telefone: tel, mensagem: msg, force_provider: 'evolution' } });
             }
           } catch (waErr) {
             console.warn('[CONTRATO-GERAR][troca] notificação WhatsApp falhou:', waErr);
