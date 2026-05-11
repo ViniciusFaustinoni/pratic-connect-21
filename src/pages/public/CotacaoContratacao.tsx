@@ -249,6 +249,7 @@ export default function CotacaoContratacao() {
         if (pularEtapaVistoria) return true;
         return !!cotacao.tipo_vistoria || statusConcluidos.vistoria.includes(cotacao.status_contratacao);
       case 4: // Pagamento - concluído se status >= pagamento_ok
+        if (pularEtapaPagamento) return true;
         return statusConcluidos.pagamento.includes(cotacao.status_contratacao);
       case 5: // Instalação (apenas autovistoria) - concluída quando instalação agendada ou status final
         if (cotacao.tipo_vistoria !== 'autovistoria') return false;
