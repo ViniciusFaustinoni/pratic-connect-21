@@ -12,6 +12,7 @@ import { useSolicitacaoTroca, useAprovarTrocaCadastro, useAprovarTrocaMonitorame
 import { TimelineAprovacao } from './TimelineAprovacao';
 import { MiniCardVistoriaTroca } from './MiniCardVistoriaTroca';
 import { VeiculoCompletoCard } from './VeiculoCompletoCard';
+import { AnalisePreviaNovoTitularCard } from './AnalisePreviaNovoTitularCard';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCPF, formatPhone } from '@/types/termo-filiacao';
 
