@@ -180,6 +180,14 @@ export default function CotacaoContratacao() {
   // Quando é troca, foi liberada e o monitoramento NÃO pediu vistoria,
   // pulamos completamente a etapa "Vistoria" no fluxo público.
   const pularEtapaVistoria = isTrocaTitularidade && trocaLiberada && !vistoriaTrocaSolicitada;
+  // Troca de titularidade isenta (cenário sem cobrança de adesão) → pular etapa de Pagamento
+  const isCenarioIsento = (() => {
+    const cen = (cotacao as any)?.cenario_adesao as string | null | undefined;
+    if (cen?.startsWith('isenta_')) return true;
+    return Number((cotacao as any)?.valor_adesao ?? 0) === 0;
+  })();
+  const pularEtapaPagamento = isTrocaTitularidade && trocaLiberada && isCenarioIsento;
+  const [ativandoTroca, setAtivandoTroca] = useState(false);
   const [substituicaoMesmoLocal, setSubstituicaoMesmoLocal] = useState<boolean | null>(null);
 
   // Determinar etapa baseada no status para saber o que está concluído
@@ -192,24 +200,29 @@ export default function CotacaoContratacao() {
     // Se vistoria já foi escolhida/agendada (tipo_vistoria preenchido) e ainda está na etapa 3,
     // avança para a etapa 4 (pagamento) para não pedir agendamento novamente
     if (etapaBase === 3 && (cotacao.tipo_vistoria || pularEtapaVistoria)) {
-      return 4;
+      // Se também pulamos pagamento (troca isenta), saltar direto para conclusão
+      return pularEtapaPagamento ? 5 : 4;
+    }
+    if (etapaBase === 4 && pularEtapaPagamento) {
+      return 5;
     }
     
     return etapaBase;
-  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, pularEtapaVistoria]);
+  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, pularEtapaVistoria, pularEtapaPagamento]);
 
   // STEPS dinâmico:
   //  - autovistoria => adiciona "Instalação" como 6ª etapa
   //  - troca de titularidade sem vistoria solicitada => oculta "Vistoria"
+  //  - troca de titularidade isenta => oculta "Pagamento"
   const STEPS = useMemo<Step[]>(() => {
-    const base = pularEtapaVistoria
-      ? STEPS_BASE.filter((s) => s.id !== 'vistoria')
-      : STEPS_BASE;
+    let base = STEPS_BASE;
+    if (pularEtapaVistoria) base = base.filter((s) => s.id !== 'vistoria');
+    if (pularEtapaPagamento) base = base.filter((s) => s.id !== 'pagamento');
     if (cotacao?.tipo_vistoria === 'autovistoria') {
       return [...base, STEP_INSTALACAO];
     }
     return base;
-  }, [cotacao?.tipo_vistoria, pularEtapaVistoria]);
+  }, [cotacao?.tipo_vistoria, pularEtapaVistoria, pularEtapaPagamento]);
 
   // Função para verificar se uma etapa específica já foi concluída
   // Isso garante o modo somente leitura mesmo quando o cliente volta para etapas anteriores
@@ -236,6 +249,7 @@ export default function CotacaoContratacao() {
         if (pularEtapaVistoria) return true;
         return !!cotacao.tipo_vistoria || statusConcluidos.vistoria.includes(cotacao.status_contratacao);
       case 4: // Pagamento - concluído se status >= pagamento_ok
+        if (pularEtapaPagamento) return true;
         return statusConcluidos.pagamento.includes(cotacao.status_contratacao);
       case 5: // Instalação (apenas autovistoria) - concluída quando instalação agendada ou status final
         if (cotacao.tipo_vistoria !== 'autovistoria') return false;
@@ -248,7 +262,7 @@ export default function CotacaoContratacao() {
       default:
         return false;
     }
-  }, [cotacao?.status_contratacao, cotacao?.plano_escolhido_id, cotacao?.tipo_vistoria, cotacao?.vistoria_completa_data_agendada, hasInstalacaoAgendada, agendamentoConcluido, pularEtapaVistoria]);
+  }, [cotacao?.status_contratacao, cotacao?.plano_escolhido_id, cotacao?.tipo_vistoria, cotacao?.vistoria_completa_data_agendada, hasInstalacaoAgendada, agendamentoConcluido, pularEtapaVistoria, pularEtapaPagamento]);
 
   // NÃO redirecionar automaticamente — manter o associado na página da cotação
   // mesmo quando já está ativo, para que ele possa continuar o fluxo de contratação
@@ -266,17 +280,51 @@ export default function CotacaoContratacao() {
       if (etapa === 3 && (cotacao.tipo_vistoria || pularEtapaVistoria)) {
         etapa = 4;
       }
+      // Se etapa de pagamento está pulada (troca isenta), salta para conclusão
+      if (etapa === 4 && pularEtapaPagamento) {
+        etapa = 5;
+      }
       
       setEtapaAtual(etapa);
     }
-  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, setEtapaAtual, navegacaoManual, pularEtapaVistoria]);
+  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, setEtapaAtual, navegacaoManual, pularEtapaVistoria, pularEtapaPagamento]);
 
-  // Em navegação manual, se o usuário cair na etapa 3 mas ela está pulada, salta automaticamente.
+  // Em navegação manual, se o usuário cair em uma etapa pulada, salta automaticamente.
   useEffect(() => {
     if (pularEtapaVistoria && etapaAtual === 3) {
-      setEtapaAtual(4);
+      setEtapaAtual(pularEtapaPagamento ? 5 : 4);
+    } else if (pularEtapaPagamento && etapaAtual === 4) {
+      setEtapaAtual(5);
     }
-  }, [pularEtapaVistoria, etapaAtual, setEtapaAtual]);
+  }, [pularEtapaVistoria, pularEtapaPagamento, etapaAtual, setEtapaAtual]);
+
+  // Handler unificado pós-assinatura do contrato (etapa 2 → próxima)
+  // Em troca de titularidade isenta, dispara ativação imediata para que o card
+  // de criação de senha do app apareça (early return por status='ativo').
+  const handleContratoAssinado = useCallback(async (proximaEtapaPadrao: number) => {
+    if (pularEtapaPagamento && isTrocaTitularidade && associadoId) {
+      try {
+        setAtivandoTroca(true);
+        await (publicSupabase as any).functions.invoke('ativar-associado', {
+          body: {
+            associado_id: associadoId,
+            cotacao_id: cotacao?.id,
+            contrato_id: contratoFallback?.id ?? null,
+            source: 'public:troca-titularidade-isenta',
+            allowed_from: ['assinado', 'aguardando_instalacao', 'pendente'],
+          },
+        });
+      } catch (e) {
+        console.warn('[CotacaoContratacao] ativar-associado (troca isenta) falhou:', e);
+      } finally {
+        await refetch();
+        setAtivandoTroca(false);
+        setEtapaAtual(5);
+      }
+      return;
+    }
+    setEtapaAtual(proximaEtapaPadrao);
+  }, [pularEtapaPagamento, isTrocaTitularidade, associadoId, cotacao?.id, contratoFallback?.id, refetch, setEtapaAtual]);
 
   // Handler para navegação no Stepper
   const handleStepClick = useCallback((step: number) => {
@@ -288,25 +336,27 @@ export default function CotacaoContratacao() {
 
   // Handler para avançar para próxima etapa
   const handleAvancar = useCallback(() => {
-    // Quando vistoria está pulada, salta de 2 → 4
-    const proximo = pularEtapaVistoria && etapaAtual === 2 ? 4 : etapaAtual + 1;
+    let proximo = etapaAtual + 1;
+    if (pularEtapaVistoria && etapaAtual === 2) proximo = pularEtapaPagamento ? 5 : 4;
+    else if (pularEtapaPagamento && etapaAtual === 3) proximo = 5;
     if (etapaAtual < etapaDoStatus) {
       setEtapaAtual(proximo);
     }
     if (proximo >= etapaDoStatus) {
       setNavegacaoManual(false);
     }
-  }, [etapaAtual, etapaDoStatus, setEtapaAtual, pularEtapaVistoria]);
+  }, [etapaAtual, etapaDoStatus, setEtapaAtual, pularEtapaVistoria, pularEtapaPagamento]);
 
   // Handler para voltar para etapa anterior
   const handleVoltar = useCallback(() => {
     if (etapaAtual > 0) {
       setNavegacaoManual(true);
-      // Quando vistoria está pulada, voltar de 4 → 2
-      const anterior = pularEtapaVistoria && etapaAtual === 4 ? 2 : etapaAtual - 1;
+      let anterior = etapaAtual - 1;
+      if (pularEtapaPagamento && etapaAtual === 5) anterior = pularEtapaVistoria ? 2 : 3;
+      else if (pularEtapaVistoria && etapaAtual === 4) anterior = 2;
       setEtapaAtual(anterior);
     }
-  }, [etapaAtual, setEtapaAtual, pularEtapaVistoria]);
+  }, [etapaAtual, setEtapaAtual, pularEtapaVistoria, pularEtapaPagamento]);
 
   // Pré-selecionar plano se já escolhido
   useEffect(() => {
@@ -679,7 +729,7 @@ export default function CotacaoContratacao() {
                     tokenPublico={token || cotacao.token_publico || ''}
                     clienteNome={cotacao.nome_solicitante || ''}
                     clienteEmail={cotacao.email_solicitante || ''}
-                    onContratoAssinado={() => setEtapaAtual(3)}
+                    onContratoAssinado={() => handleContratoAssinado(3)}
                     readOnly={isEtapaConcluida(2)}
                     contratoInicial={contratoFallback ? {
                       id: contratoFallback.id,
@@ -697,7 +747,7 @@ export default function CotacaoContratacao() {
                     tokenPublico={token || cotacao.token_publico || ''}
                     clienteNome={cotacao.nome_solicitante || ''}
                     clienteEmail={cotacao.email_solicitante || ''}
-                    onContratoAssinado={() => setEtapaAtual(3)}
+                    onContratoAssinado={() => handleContratoAssinado(3)}
                     readOnly={isEtapaConcluida(2)}
                     contratoInicial={contratoFallback ? {
                       id: contratoFallback.id,
