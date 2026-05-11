@@ -1,33 +1,44 @@
-## Problema
+## Objetivo
 
-A vistoria criada pelo fluxo de troca de titularidade (`servicos.origem = 'troca_titularidade'`, tipo `vistoria_entrada`, placa LTB4J74, agendada 12/05) aparece na aba **Serviços** e dentro de **Mapa › Atribuições (Manual)**, mas NÃO aparece na aba principal **Atribuição Manual** — mesmo marcada como encaixe.
+Reorganizar os passos finais do tutorial **Troca de Titularidade** (`src/data/tutoriais/troca-titularidade.ts`) para refletir com mais granularidade o fluxo real, separando responsabilidades de cada área e do novo associado.
 
-Causa raiz: o hook `useServicosParaAtribuir` (`src/hooks/useAtribuicaoManual.ts`) filtra qualquer serviço cujo `contrato.aprovado_em` esteja nulo. O contrato do novo titular fica com `aprovado_em = null` até a etapa final (`efetivar-troca-titularidade`). Esse gate foi pensado para vendas novas e bloqueia indevidamente vistorias de troca, que têm aprovação independente (assinatura do termo de cancelamento pelo titular antigo + aprovação do Cadastro).
+## Mudanças nos passos
 
-## Mudança proposta
+Mantém os passos **1 a 6** intactos. Substitui os atuais 7, 8 e 9 por **6 passos novos (7 a 12)**:
 
-Ajustar APENAS o filtro do hook `useServicosParaAtribuir` para tratar `origem = 'troca_titularidade'` como exceção ao gate de `contrato.aprovado_em`. Vistoria de troca não passa pelo fluxo de aprovação de proposta de venda.
+### 7 — Cadastro envia o Termo de Cancelamento
+Cadastro abre Cadastro › Processos › Titularidade e dispara o Termo de Cancelamento (e-mail + biometria facial via Autentique) para o titular **antigo**. A solicitação fica "aguardando assinatura do termo".
+- Dica: enquanto o termo não chega assinado, nada avança.
+- Link: Cadastro › Processos › Titularidade.
 
-### Detalhes técnicos
+### 8 — Novo associado assina o contrato
+(reposicionar o foco no novo titular) — pelo link público o novo dono finaliza a assinatura biométrica do contrato dele. Caso ele ainda não tenha assinado no passo 6, esta é a etapa final dele antes da aprovação. Cobertura segue suspensa.
+- Dica: assinatura é facial obrigatória (PF_FACIAL).
 
-Arquivo: `src/hooks/useAtribuicaoManual.ts`
+> Observação: como o passo 6 já cobre "novo titular escolhe plano, envia documentos e assina", confirmar com o usuário se este passo 8 deve focar na **assinatura do Termo de Cancelamento pelo titular antigo** (mais coerente com a sequência) ou realmente em uma segunda assinatura do novo. Ver pergunta abaixo.
 
-1. Adicionar `origem` na lista de colunas selecionadas em `from('servicos').select(...)` (já existem `tipo`, `status`, etc.).
-2. Ajustar o filtro `servicosFiltrados`:
-   ```ts
-   const servicosFiltrados = (servicos || []).filter((s: any) => {
-     if (s.instalacao_origem_id && instalacoesComLinkAtivo.has(s.instalacao_origem_id)) return false;
-     if (!s.contrato_id) return true;
-     // Vistorias de troca de titularidade têm aprovação independente
-     if (s.origem === 'troca_titularidade') return true;
-     return !!s.contrato?.aprovado_em;
-   });
-   ```
+### 9 — Cadastro aprova
+Com termo assinado pelo antigo e contrato assinado pelo novo, Cadastro aprova a solicitação em Cadastro › Processos › Titularidade. Marca `cadastro_aprovado=true` e libera para Monitoramento.
+- Dica: débitos em aberto no SGA do antigo travam a aprovação.
 
-Nada mais muda — a vistoria já aparece corretamente em todas as outras telas, e o fluxo de atribuição (`useAtribuirServicoManual`) não precisa de alteração.
+### 10 — Monitoramento aprova a vistoria
+A solicitação cai em Monitoramento › Aprovações › Aprovação de Associados. Monitoramento valida documentos/fotos prévias e libera para vistoria de campo.
+- Link: Monitoramento › Aprovações.
 
-## Verificação
+### 11 — Atribuição manual e vistoria do técnico
+Em Monitoramento › Serviços de Campo › **Atribuição Manual**, o serviço (origem "troca de titularidade", encaixe) é atribuído ao técnico. O técnico vai até o veículo e realiza a **vistoria de conferência** (sem instalar — o rastreador já existe). Resultado volta para aprovação final.
+- Dica: vistoria de troca é só fotográfica, sem instalação.
+- Links: Monitoramento › Serviços de Campo, Mapa.
 
-Após a mudança:
-- Login como diretor → `/monitoramento/vistorias-instalacoes-mon` → aba **Atribuição Manual** deve mostrar o card `LTB4J74 · Vistoria de Entrada · 12/05 Manhã · MARCUS VINICIUS`.
-- Confirmar que a fila continua escondendo serviços normais com contrato não aprovado (regressão).
+### 12 — Conclusão e criação de senha pelo novo associado
+Após aprovação da vistoria, edge function `efetivar-troca-titularidade` cancela o contrato antigo, ativa o novo, transfere o veículo, religa cobertura e sincroniza no SGA (Pendente). O **novo associado** vê no link público o convite para **criar a senha de acesso ao app** e, ao definir a senha, a troca de titularidade é considerada **concluída**.
+- Dica: SGA fica Pendente; promoção a Ativo é manual no painel SGA.
+- Link: Cadastro › Associados.
+
+## Arquivo afetado
+
+- `src/data/tutoriais/troca-titularidade.ts` — substitui os 3 últimos itens do array `steps` pelos 6 novos.
+
+## Pergunta antes de implementar
+
+O passo **8** que você descreveu ("passo do associado novo - o associado assina") parece duplicar o passo 6 atual ("Novo titular escolhe plano, envia documentos e assina"). Preciso confirmar a intenção para não criar redundância.
