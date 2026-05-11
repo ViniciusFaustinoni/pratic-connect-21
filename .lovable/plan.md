@@ -1,49 +1,31 @@
-# Bug
+## Objetivo
+Reduzir o repasse do vendedor de R$50,00 para R$25,00 nos cenários cobrados (`cobra_base` e `cobra_rota`). Cenários `isenta_base`/`isenta_rota` continuam sem desconto (regra atual mantida).
 
-Quando o cenário de adesão é **isenta** (`isenta_base` ou `isenta_rota`), o sistema continua descontando o **repasse volante (R$50)** do vendedor — gerando saldo negativo indevido. Não havendo valor de adesão para o vendedor receber, também não deve haver dedução de repasse.
+## Mudanças
 
-## Causa raiz
+### 1. Parâmetro global
+- Atualizar `parametros_comissao` chave `repasse_volante` de `'50.00'` para `'25.00'`.
+- Atualizar `parametros_sistema` chave `taxa_repasse_volante` e `taxa_repasse_volante_externo` de `'50'` para `'25'`.
 
-`public.calcular_comissao_contrato(p_contrato_id)` (função SQL):
+### 2. Função `calcular_comissao_contrato`
+- Manter o guard de isenta (já existente).
+- O fallback hardcoded passa de `50` para `25`:
+  ```sql
+  v_repasse := COALESCE(fn_parametro_comissao('repasse_volante'), 25);
+  ```
+- Demais regras inalteradas.
 
-```sql
-IF v_tipo_atendimento = 'volante' THEN
-  v_repasse := COALESCE(fn_parametro_comissao('repasse_volante'), 50);
-  v_deducoes := v_deducoes || jsonb_build_object('tipo','repasse_volante','valor',v_repasse);
-  v_total_deducoes := v_total_deducoes + v_repasse;
-END IF;
-```
+### 3. Recálculo do histórico
+Para cada `comissoes_deducoes` com `tipo='repasse_volante'` cujo contrato vinculado tenha `cenario_adesao IN ('cobra_base','cobra_rota')` (ou seja, não-isento):
+- `UPDATE comissoes_deducoes SET valor = 25, descricao = descricao || ' (ajustado 50→25)' WHERE valor = 50 AND ...`
+- `UPDATE comissoes` correspondentes: recalcular `valor_deducoes` e `deducoes_detalhes` (substituir entrada `repasse_volante` de 50 para 25).
+- Não mexer em comissões de contratos isenta_* (essas serão tratadas pela regra anterior — fora do escopo desta tarefa).
 
-A condição não considera `contratos.cenario_adesao`. Toda venda volante leva o desconto, mesmo isenta.
+### 4. Comentários/labels
+- Atualizar `COMMENT ON COLUMN contratos.tipo_atendimento` e descrição do parâmetro para refletir R$25.
+- Atualizar memória `mem://logic/commissions/repasse-volante-isenta-adesao` mencionando o novo valor R$25 nos cenários cobrados.
 
-# Correção
-
-## Migration: ajustar `calcular_comissao_contrato`
-
-Adicionar guarda para pular a dedução `repasse_volante` quando:
-
-- `v_contrato.cenario_adesao IN ('isenta_base','isenta_rota')`, **ou**
-- `COALESCE(v_contrato.valor_adesao, 0) = 0` (segurança extra: sem adesão a descontar).
-
-Aplicar a mesma guarda no segundo bloco (`INSERT INTO comissoes_deducoes ...`) para não gravar a linha de dedução.
-
-Pseudo-código:
-
-```sql
-v_isenta_adesao := v_contrato.cenario_adesao IN ('isenta_base','isenta_rota')
-                   OR COALESCE(v_contrato.valor_adesao, 0) = 0;
-
-IF v_tipo_atendimento = 'volante' AND NOT v_isenta_adesao THEN
-  -- aplica repasse_volante
-END IF;
-```
-
-## Detalhes
-
-- A função é `SECURITY DEFINER` — manter `SET search_path = public`.
-- Comissões já calculadas antes deste fix permanecem como estão (não há reprocessamento automático). Se o usuário quiser limpar deduções históricas, pedimos confirmação separada.
-- Não altera `fn_gerar_comissao_plano_nivel` (recorrente) — escopo restrito ao repasse de adesão.
-
-# Arquivos afetados
-
-- Migration nova: `CREATE OR REPLACE FUNCTION public.calcular_comissao_contrato(...)` com a guarda de cenário isento.
+## Detalhes técnicos
+- Tudo via uma única migration (alteração de função + UPDATEs idempotentes nos parâmetros e histórico).
+- A migration usará `WHERE valor = 50` como guard de idempotência para evitar reduzir múltiplas vezes.
+- Sem alteração de UI — o valor é lido dinamicamente do parâmetro/dedução.
