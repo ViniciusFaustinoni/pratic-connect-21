@@ -175,6 +175,29 @@ export function TrocaTitularidadeDialog({
     situacaoPorId[v.id] = { status, loading: !!q?.isLoading };
   });
 
+  // Boletos do veículo selecionado — só dispara DEPOIS que a situação financeira resolver
+  // como INADIMPLENTE. A edge `sga-sync-financeiro-veiculo` (chamada pela query de situação)
+  // já fez upsert em `cobrancas`, então aqui apenas lemos a tabela já atualizada.
+  const situacaoSelecionada = veiculoId ? situacaoPorId[veiculoId] : undefined;
+  const cobrancasHabilitada =
+    open && !!veiculoId && !!situacaoSelecionada && !situacaoSelecionada.loading && situacaoSelecionada.status === 'INADIMPLENTE';
+  const cobrancasQuery = useQuery({
+    queryKey: ['troca-tit-cobrancas', veiculoId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('cobrancas')
+        .select('id, valor, data_vencimento, status, linha_digitavel, boleto_url, nosso_numero')
+        .eq('veiculo_id', veiculoId!)
+        .in('status', ['vencido', 'aguardando_pagamento'])
+        .order('data_vencimento', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: cobrancasHabilitada,
+    staleTime: 60_000,
+  });
+
+
 
   // Auto-seleciona se só houver 1
   useEffect(() => {
@@ -398,9 +421,7 @@ export function TrocaTitularidadeDialog({
             );
           })()}
 
-          {veiculoId && (boletosPorIdLocal[veiculoId]?.length ?? 0) > 0 && (() => {
-            const boletos = boletosPorIdLocal[veiculoId] || [];
-            const total = saldoPorIdLocal[veiculoId] || 0;
+          {veiculoId && situacaoSelecionada && !situacaoSelecionada.loading && situacaoSelecionada.status === 'INADIMPLENTE' && (() => {
             const fmtBRL = (n: number) =>
               new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
             const fmtData = (s: string | null) => {
@@ -416,6 +437,19 @@ export function TrocaTitularidadeDialog({
                 toast.error('Não foi possível copiar');
               }
             };
+            if (cobrancasQuery.isLoading) {
+              return (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Buscando boletos em atraso…
+                </div>
+              );
+            }
+            const boletos = cobrancasQuery.data || [];
+            if (boletos.length === 0) {
+              return <p className="text-xs text-muted-foreground">Nenhum boleto em aberto registrado.</p>;
+            }
+            const total = boletos.reduce((acc, b) => acc + Number(b.valor || 0), 0);
             return (
               <Alert variant="destructive" className="border-destructive/40">
                 <AlertTriangle className="h-4 w-4" />
@@ -426,21 +460,21 @@ export function TrocaTitularidadeDialog({
                   </div>
                   <ul className="space-y-2">
                     {boletos.map((b, i) => {
-                      const vencido = (b.situacao_label || '').toLowerCase().includes('venc');
+                      const vencido = b.status === 'vencido';
                       return (
-                        <li key={`${b.nosso_numero || i}`} className="flex flex-wrap items-center gap-2 rounded border border-border/50 bg-background/40 p-2">
+                        <li key={b.id || `${b.nosso_numero || i}`} className="flex flex-wrap items-center gap-2 rounded border border-border/50 bg-background/40 p-2">
                           <span className="text-xs">Vence {fmtData(b.data_vencimento)}</span>
-                          <span className="text-xs font-medium">{fmtBRL(b.valor)}</span>
+                          <span className="text-xs font-medium">{fmtBRL(Number(b.valor || 0))}</span>
                           <span className={`text-[10px] uppercase rounded px-1.5 py-0.5 ${vencido ? 'bg-destructive text-destructive-foreground' : 'bg-amber-500/20 text-amber-700 dark:text-amber-300'}`}>
-                            {b.situacao_label || (vencido ? 'vencido' : 'pendente')}
+                            {vencido ? 'vencido' : 'pendente'}
                           </span>
                           <div className="ml-auto flex gap-1">
-                            {b.link_boleto && (
+                            {b.boleto_url && (
                               <Button
                                 size="sm"
                                 variant="outline"
                                 className="h-7 px-2"
-                                onClick={() => window.open(b.link_boleto!, '_blank', 'noopener,noreferrer')}
+                                onClick={() => window.open(b.boleto_url!, '_blank', 'noopener,noreferrer')}
                               >
                                 <ExternalLink className="h-3 w-3 mr-1" /> Abrir boleto
                               </Button>
@@ -465,8 +499,12 @@ export function TrocaTitularidadeDialog({
             );
           })()}
 
-          {veiculoId && (boletosPorIdLocal[veiculoId]?.length ?? 0) === 0 && veiculosSgaMapeados.some(v => v.id === veiculoId) && (
+          {veiculoId && situacaoSelecionada && !situacaoSelecionada.loading && situacaoSelecionada.status === 'ADIMPLENTE' && (
             <p className="text-xs text-muted-foreground">Sem boletos pendentes para este veículo.</p>
+          )}
+
+          {veiculoId && situacaoSelecionada && !situacaoSelecionada.loading && situacaoSelecionada.status === 'desconhecido' && (
+            <p className="text-xs text-muted-foreground">Situação financeira indisponível no SGA — boletos não consultados.</p>
           )}
 
           <div className="space-y-2">

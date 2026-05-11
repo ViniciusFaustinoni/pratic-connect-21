@@ -1,39 +1,45 @@
 ## Contexto
 
-Endpoint `GET /buscar/situacao-financeira-veiculo/:codigo_ou_placa` já está integrado:
-- Wrapper: `supabase/functions/_shared/hinova-client.ts` (`fetchSituacaoFinanceiraVeiculo`)
-- Edge function: `sga-sync-financeiro-veiculo` — chama o endpoint, retorna `{ situacao_financeira, boletos... }` e persiste `situacao_financeira_sga` + `situacao_financeira_sga_em` na tabela `veiculos`
-- Já é consumido em `src/components/cadastro/VeiculoFinanceiroSGA.tsx`
+Hoje o modal de Troca de Titularidade carrega ao abrir, em UMA única chamada (`useBoletosSgaPorAssociado` → `sga-listar-boletos-associado`), os veículos do associado E os boletos de cada um. Por isso a lista de boletos pendentes pode aparecer antes/independentemente da consulta de situação financeira.
 
-Falta apenas exibir essa informação no modal `TrocaTitularidadeDialog` (a tela do print).
+A edge function `sga-sync-financeiro-veiculo` já:
+- chama o endpoint `/buscar/situacao-financeira-veiculo/:codigo`
+- baixa os boletos do veículo na Hinova e faz upsert em `cobrancas` (com `link_boleto`, `linha_digitavel`, `data_vencimento`, `valor`, `situacao`)
 
-## O que será feito
+Ou seja, ao terminar a consulta de situação para o veículo selecionado, os boletos correspondentes já estão atualizados em `cobrancas`.
+
+## Mudança
 
 Arquivo: `src/components/associados/TrocaTitularidadeDialog.tsx`
 
-1. Novo hook leve `useSituacaoFinanceiraVeiculos(veiculoIds)`:
-   - Para cada `veiculoId` da lista atual do select, dispara `supabase.functions.invoke('sga-sync-financeiro-veiculo', { body: { veiculo_id } })` em paralelo (com `useQueries`).
-   - `staleTime` ~5 min, `enabled` apenas quando o modal está aberto e há veículos.
-   - Retorna mapa `{ [veiculoId]: 'ADIMPLENTE' | 'INADIMPLENTE' | 'desconhecido', loading }`.
+1. **Remover a exibição imediata** dos boletos vindos de `useBoletosSgaPorAssociado` (parar de usar `boletosPorIdLocal`/`saldoPorIdLocal` para renderizar a UI). A lista de veículos continua vindo desse hook (e o fallback local segue intacto).
 
-2. Atualizar o `<select>` de veículos para acrescentar sufixo na descrição:
-   - `Toyota Corolla 2014 - LTB4J74 — ADIMPLENTE` (ou `INADIMPLENTE`, ou `…` enquanto carrega).
+2. **Gating por situação** — o card "Boletos pendentes do veículo" só aparece **depois que a query de situação financeira do veículo selecionado resolver**, e somente quando `status === 'INADIMPLENTE'`. Enquanto a consulta de situação não terminar para o veículo selecionado, mostrar apenas o estado "Consultando situação financeira…" já existente.
 
-3. Abaixo do select, ao escolher um veículo, mostrar um badge dedicado:
-   - Verde para ADIMPLENTE, vermelho para INADIMPLENTE, neutro para desconhecido.
-   - Texto `Última verificação: dd/mm/yyyy hh:mm` (vindo do retorno da edge function ou do campo persistido).
+3. **Fonte dos boletos = `cobrancas` (pós-sync)** — adicionar uma nova query (`useQuery`) com `queryKey: ['troca-tit-cobrancas', veiculoId]`, **`enabled` apenas quando**:
+   - há `veiculoId` selecionado,
+   - a query de situação para esse veículo terminou com sucesso (`isSuccess`),
+   - e `status === 'INADIMPLENTE'`.
 
-4. Reutilizar a seção existente de "Boletos pendentes" (já renderiza quando há boletos abertos do SGA). Nenhuma mudança nessa parte.
+   A query lê de `cobrancas` filtrando por `veiculo_id`, `status in ('aberto','vencido','pendente')` (status SGA já normalizado), ordenado por `data_vencimento`. Como a `sga-sync-financeiro-veiculo` acabou de rodar, os dados estão frescos.
+
+4. **Render** — usar exatamente o mesmo layout atual (linhas com data, valor, badge vencido/pendente, botões "Abrir boleto" e "Copiar linha digitável"), porém populado com os campos de `cobrancas` (`link_boleto`, `linha_digitavel`, `valor`, `data_vencimento`, `situacao`). Total = soma de `valor`.
+
+5. **Estados auxiliares**:
+   - Situação carregando para o veículo selecionado → "Consultando situação financeira no SGA…" (já existe).
+   - Situação = ADIMPLENTE → manter a linha "Sem boletos pendentes para este veículo." (sem chamar a query de cobranças).
+   - Situação = desconhecido / erro → mostrar aviso curto "Situação financeira indisponível no SGA — boletos não consultados." e não renderizar boletos.
+   - Cobranças carregando → spinner pequeno "Buscando boletos em atraso…".
+   - Cobranças vazias mesmo com INADIMPLENTE → "Nenhum boleto em aberto registrado."
 
 ## Detalhes técnicos
 
-- Não alterar a edge function nem o schema.
-- `useQueries` do `@tanstack/react-query` para paralelizar por veículo, com `queryKey: ['troca-tit-sit-fin', veiculoId]`.
-- Fallback: se a edge function falhar para um veículo, ler `situacao_financeira_sga` da tabela `veiculos` (já está em `veiculosLocais`/fallback) como valor de exibição secundário.
-- Tokens semânticos do design system (`text-success`, `text-destructive`, etc.) — sem cores hardcoded.
+- Não alterar edges; reusar `sga-sync-financeiro-veiculo` (já chamada pela query de situação) e ler de `cobrancas`.
+- `useQuery` para cobranças com `staleTime: 60_000`.
+- Manter os tokens semânticos do design system (sem cores hardcoded novas).
 
 ## Fora de escopo
 
-- Mudanças na edge function `sga-sync-financeiro-veiculo`.
-- Mudanças no schema de `veiculos`.
-- Mudanças na tela de Cadastro (`VeiculoFinanceiroSGA`).
+- Mudanças em `sga-sync-financeiro-veiculo`, `sga-listar-boletos-associado` ou no schema de `cobrancas`.
+- Mudanças no fallback local (`useTrocaTitularidadeFallbackLocal`).
+- Tela de Cadastro (`VeiculoFinanceiroSGA`).
