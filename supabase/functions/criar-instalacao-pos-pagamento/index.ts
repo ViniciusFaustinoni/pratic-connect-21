@@ -285,23 +285,31 @@ serve(async (req) => {
       }
     } else if (tipoVistoria === 'agendada') {
       // VISTORIA PRESENCIAL SIMPLES: Usar campos vistoria_*
+      // FALLBACK: fluxo público (agendar-vistoria-completa) salva em vistoria_completa_*
+      // mesmo quando tipo_vistoria='agendada'. Aceitar ambos para evitar limbo.
       console.log('[CriarInstalacaoPosPagamento] Modo: vistoria agendada (presencial simples)');
-      dataAgendada = cotacao.vistoria_data_agendada;
-      // Priorizar período sobre horário (novo fluxo)
-      periodoAgendado = (cotacao as any).vistoria_periodo || cotacao.vistoria_horario_agendado;
+      dataAgendada = cotacao.vistoria_data_agendada || cotacao.vistoria_completa_data_agendada;
+      periodoAgendado = (cotacao as any).vistoria_periodo
+        || cotacao.vistoria_horario_agendado
+        || (cotacao as any).vistoria_completa_periodo
+        || cotacao.vistoria_completa_horario_agendado;
+      const usarCompleta = !cotacao.vistoria_data_agendada && !!cotacao.vistoria_completa_data_agendada;
       endereco = {
-        cep: cotacao.vistoria_endereco_cep || '',
-        logradouro: cotacao.vistoria_endereco_logradouro || '',
-        numero: cotacao.vistoria_endereco_numero || '',
-        bairro: cotacao.vistoria_endereco_bairro || '',
-        cidade: cotacao.vistoria_endereco_cidade || '',
-        estado: cotacao.vistoria_endereco_estado || '',
+        cep: (usarCompleta ? cotacao.vistoria_completa_endereco_cep : cotacao.vistoria_endereco_cep) || '',
+        logradouro: (usarCompleta ? cotacao.vistoria_completa_endereco_logradouro : cotacao.vistoria_endereco_logradouro) || '',
+        numero: (usarCompleta ? cotacao.vistoria_completa_endereco_numero : cotacao.vistoria_endereco_numero) || '',
+        bairro: (usarCompleta ? cotacao.vistoria_completa_endereco_bairro : cotacao.vistoria_endereco_bairro) || '',
+        cidade: (usarCompleta ? cotacao.vistoria_completa_endereco_cidade : cotacao.vistoria_endereco_cidade) || '',
+        estado: (usarCompleta ? cotacao.vistoria_completa_endereco_estado : cotacao.vistoria_endereco_estado) || '',
         latitude: cotacao.vistoria_endereco_latitude,
         longitude: cotacao.vistoria_endereco_longitude,
       };
-      obsResponsavel = cotacao.vistoria_responsavel_eu_mesmo
+      const respEuMesmo = usarCompleta ? cotacao.vistoria_completa_responsavel_eu_mesmo : cotacao.vistoria_responsavel_eu_mesmo;
+      const respNome = usarCompleta ? cotacao.vistoria_completa_responsavel_nome : cotacao.vistoria_responsavel_nome;
+      const respTel = usarCompleta ? cotacao.vistoria_completa_responsavel_telefone : cotacao.vistoria_responsavel_telefone;
+      obsResponsavel = respEuMesmo
         ? `Responsável: ${cotacao.nome_solicitante} - ${cotacao.telefone1_solicitante}`
-        : `Responsável: ${cotacao.vistoria_responsavel_nome || ''} - ${cotacao.vistoria_responsavel_telefone || ''}`;
+        : `Responsável: ${respNome || ''} - ${respTel || ''}`;
     } else if (tipoVistoria === 'autovistoria') {
       // AUTOVISTORIA: Tentar vistoria_completa_* primeiro, FALLBACK para vistoria_*
       console.log('[CriarInstalacaoPosPagamento] Modo: autovistoria');
