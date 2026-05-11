@@ -513,13 +513,12 @@ export function usePropostasPendentes() {
         })();
         const instalacaoConcluida = mInstConcluida.has(contrato.id);
 
-        // Já sincronizado no SGA Hinova — avaliado por VEÍCULO do contrato
-        // (não pelo associado), porque inclusões de veículo herdam um associado
-        // que já pode estar 'ativo' por contratos anteriores. Usar o status do
-        // associado aqui jogava toda inclusão no limbo (não aparecia em lugar
-        // nenhum). A verdade da proposta é o veículo + instalação dela.
-        const veiculoJaNoSGA =
-          !!(veiculoContrato?.sincronizado_hinova && veiculoContrato?.codigo_hinova);
+        // Veículo sincronizado no SGA NÃO significa fluxo operacional concluído.
+        // No Hinova o cadastro nasce como pendente, então veículos em
+        // `instalacao_pendente` continuam pertencendo a Propostas Pendentes
+        // mesmo com `sincronizado_hinova=true` e `codigo_hinova` preenchido.
+        const veiculoJaConcluidoOperacionalmente =
+          veiculoContrato?.status === 'ativo';
 
         // Saída de Propostas Pendentes por tipo de vistoria:
         // - Autovistoria: sai assim que o Cadastro aprova (vai p/ /cadastro/associados)
@@ -532,7 +531,7 @@ export function usePropostasPendentes() {
 
         const propostaJaConcluida =
           instalacaoConcluida ||
-          veiculoJaNoSGA ||
+          veiculoJaConcluidoOperacionalmente ||
           autovistoriaJaAprovadaPeloCadastro;
         if (propostaJaConcluida) return null;
 
