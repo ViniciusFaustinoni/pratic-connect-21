@@ -16,7 +16,8 @@ const ETAPAS: { key: string; label: string }[] = [
   { key: 'termo', label: 'Termo de cancelamento (titular antigo)' },
   { key: 'cadastro', label: 'Análise do Cadastro' },
   { key: 'monitoramento', label: 'Análise do Monitoramento' },
-  { key: 'assinatura', label: 'Assinatura, vistoria e pagamento' },
+  { key: 'assinatura', label: 'Assinatura e pagamento' },
+  { key: 'vistoria_campo', label: 'Vistoria de campo aprovada' },
   { key: 'efetivada', label: 'Troca efetivada' },
 ];
 
@@ -25,9 +26,9 @@ function statusToStep(status: StatusTroca): number {
     case 'cotacao_em_andamento': return 0;
     case 'aguardando_cadastro': return 3;
     case 'aguardando_monitoramento': return 4;
-    case 'aguardando_vistoria': return 4;
     case 'liberada_para_assinatura': return 5;
-    case 'efetivada': return 6;
+    case 'aguardando_vistoria': return 6;
+    case 'efetivada': return 7;
     default: return -1;
   }
 }
