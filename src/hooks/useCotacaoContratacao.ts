@@ -554,6 +554,7 @@ export function useCotacaoContratacao(token: string | undefined) {
         if (dados.cnh_validade) cnhUpdate.cnh_validade = dados.cnh_validade;
         if (dados.cnh) cnhUpdate.cnh_numero = dados.cnh;
         if (dados.cnh_categoria) cnhUpdate.cnh_categoria = dados.cnh_categoria;
+        if (dados.sexo) cnhUpdate.sexo = dados.sexo;
         if (Object.keys(cnhUpdate).length > 0) {
           await publicSupabase
             .from('associados')
