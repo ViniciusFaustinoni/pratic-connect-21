@@ -165,7 +165,7 @@ export const trocaTitularidade: Tutorial = {
       ],
     },
     {
-      numero: 12,
+      numero: 13,
       titulo: 'Novo associado cria a senha e a troca é concluída',
       descricao:
         'Aprovada a vistoria, a edge function efetivar-troca-titularidade cancela o contrato do antigo, ativa o contrato do novo, transfere o veículo, religa a cobertura e sincroniza no SGA Hinova (situação Pendente). No link público o novo associado vê o convite para criar a senha de acesso ao app — ao definir a senha, a troca de titularidade é considerada concluída.',
