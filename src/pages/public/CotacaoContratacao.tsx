@@ -569,12 +569,30 @@ export default function CotacaoContratacao() {
             transition={{ delay: 0.3, duration: 0.5 }}
           >
             <Card className="p-4 stepper-card-premium">
-              <StepperCotacao
-                steps={STEPS}
-                currentStep={etapaAtual}
-                onStepClick={handleStepClick}
-                maxReachableStep={etapaDoStatus}
-              />
+              {(() => {
+                // Mapeamento entre índice INTERNO (sempre 6 etapas: plano, documentos, contrato, vistoria, pagamento, instalacao)
+                // e o índice VISÍVEL no Stepper (que pode ter "vistoria" omitida).
+                const internalIds = ['plano','documentos','contrato','vistoria','pagamento','instalacao'] as const;
+                const internalToVisible = (i: number) => {
+                  const id = internalIds[i];
+                  const v = STEPS.findIndex((s) => s.id === id);
+                  if (v >= 0) return v;
+                  // Etapa interna "vistoria" não existe no STEPS visível -> aponta para a próxima visível (pagamento)
+                  return STEPS.findIndex((s) => s.id === 'pagamento');
+                };
+                const visibleToInternal = (i: number) => {
+                  const id = STEPS[i]?.id;
+                  return internalIds.indexOf(id as any);
+                };
+                return (
+                  <StepperCotacao
+                    steps={STEPS}
+                    currentStep={internalToVisible(etapaAtual)}
+                    onStepClick={(i) => handleStepClick(visibleToInternal(i))}
+                    maxReachableStep={internalToVisible(etapaDoStatus)}
+                  />
+                );
+              })()}
             </Card>
           </motion.div>
 
