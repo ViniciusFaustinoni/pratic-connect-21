@@ -336,12 +336,19 @@ serve(async (req) => {
                   em_troca_titularidade: true,
                   troca_titularidade_id: solTroca.id,
                   troca_titularidade_iniciada_em: new Date().toISOString(),
+                  // Suspende cobertura do veículo durante a transição: o titular antigo
+                  // já assinou o termo; o novo só recebe cobertura após aprovação do
+                  // serviço de vistoria pelo Monitoramento (ver trigger
+                  // trg_efetivar_troca_pos_vistoria).
+                  cobertura_suspensa: true,
+                  cobertura_suspensa_em: new Date().toISOString(),
+                  cobertura_suspensa_motivo: 'troca_titularidade_em_andamento',
                   updated_at: new Date().toISOString(),
                 })
                 .eq('id', solVeic.veiculo_id);
               console.log(
                 `[autentique-webhook] ✓ Veículo ${solVeic.veiculo_id} marcado como em_troca_titularidade ` +
-                `(antigo titular ${solVeic.associado_antigo_id}, solicitação ${solTroca.id})`
+                `+ cobertura suspensa (antigo titular ${solVeic.associado_antigo_id}, solicitação ${solTroca.id})`
               );
             }
           } catch (vErr) {

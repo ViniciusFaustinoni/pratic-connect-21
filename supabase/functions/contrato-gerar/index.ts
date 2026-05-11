@@ -1283,62 +1283,108 @@ serve(async (req) => {
       numero: contrato.numero,
     }));
 
-    // ── EFETIVAÇÃO DE TROCA DE TITULARIDADE (gancho idempotente, best-effort) ──
-    // Quando a cotação que originou este contrato é uma Troca de Titularidade
-    // (consultor), encerra contrato anterior do antigo, marca a solicitação
-    // como efetivada e vincula o novo associado. Falha aqui NUNCA derruba o
-    // contrato — só registra warning.
+    // ── TROCA DE TITULARIDADE — gancho pós-assinatura do novo titular ──
+    // O novo contrato foi gerado e está aguardando assinatura do novo titular.
+    // NÃO marcamos a solicitação como `efetivada` aqui (isso era o bug que ativava
+    // cobertura antes da aprovação do Monitoramento). Em vez disso:
+    //   1) movemos a solicitação para `aguardando_vistoria`
+    //   2) criamos um `servicos` (tipo='vistoria_entrada') para aparecer em
+    //      Monitoramento › Serviços de Campo / Aprovações de Associados
+    //   3) só quando esse serviço for concluído + aprovado é que o trigger
+    //      `trg_efetivar_troca_pos_vistoria` cancela o contrato antigo, ativa
+    //      o novo, transfere o veículo e religa a cobertura.
     try {
       const dadosExtras = (cotacao as any).dados_extras || {};
       if (tipoEntrada === 'troca_titularidade' && dadosExtras.associado_antigo_id) {
         const { data: solTroca } = await supabase
           .from('solicitacoes_troca_titularidade')
-          .select('id, status, efetivada_em, associado_antigo_id')
+          .select('id, status, efetivada_em, associado_antigo_id, servico_vistoria_id, veiculo_id')
           .eq('cotacao_id', cotacao_id)
           .maybeSingle();
 
         if (solTroca && !solTroca.efetivada_em) {
-          const agora = new Date().toISOString();
+          // 1) Vincular novo associado à solicitação (idempotente)
+          await supabase
+            .from('solicitacoes_troca_titularidade')
+            .update({ novo_associado_id: associadoId })
+            .eq('id', solTroca.id);
 
-          // 1. Encerrar contrato(s) ativos do antigo
-          const { data: contratosAntigos } = await supabase
-            .from('contratos')
-            .select('id, numero')
-            .eq('associado_id', solTroca.associado_antigo_id)
-            .in('status', ['ativo', 'pendente', 'assinado', 'aguardando_instalacao']);
+          // 2) Criar serviço de vistoria de campo para o Monitoramento aprovar.
+          // Idempotente: não cria se já existe servico_vistoria_id ou já existe
+          // um vistoria_entrada para esse veículo+solicitação.
+          let servicoVistoriaId: string | null = solTroca.servico_vistoria_id || null;
+          if (!servicoVistoriaId) {
+            const { data: jaExiste } = await supabase
+              .from('servicos')
+              .select('id')
+              .eq('veiculo_id', solTroca.veiculo_id || veiculoId)
+              .eq('tipo', 'vistoria_entrada')
+              .in('status', ['pendente', 'agendada', 'em_rota', 'em_andamento', 'em_analise', 'reagendada'])
+              .maybeSingle();
+            if (jaExiste?.id) {
+              servicoVistoriaId = jaExiste.id;
+            } else {
+              // Endereço/agendamento: prioriza vistoria_completa_* da cotação;
+              // fallback para endereço do cliente; data padrão = amanhã (manhã).
+              const cot: any = cotacao;
+              const amanha = new Date();
+              amanha.setDate(amanha.getDate() + 1);
+              const dataPadrao = amanha.toISOString().split('T')[0];
+              const dataAg = cot.vistoria_completa_data_agendada || dataPadrao;
+              const periodoAg = (cot.vistoria_completa_periodo as 'manha' | 'tarde' | null) || 'manha';
+              const horaAg = cot.vistoria_completa_horario_agendado || null;
 
-          for (const ca of contratosAntigos || []) {
-            if (ca.id === contrato.id) continue;
-            await supabase
-              .from('contratos')
-              .update({ status: 'cancelado', data_cancelamento: agora, motivo_cancelamento: 'Troca de titularidade' })
-              .eq('id', ca.id);
-            await supabase.from('contratos_historico').insert({
-              contrato_id: ca.id,
-              evento: 'cancelado_troca_titularidade',
-              descricao: `Contrato encerrado por troca de titularidade. Novo contrato: ${contrato.numero}`,
-              dados: { novo_contrato_id: contrato.id, solicitacao_troca_id: solTroca.id },
-            });
+              const { data: novoServ, error: servErr } = await supabase
+                .from('servicos')
+                .insert({
+                  tipo: 'vistoria_entrada',
+                  status: 'pendente',
+                  origem: 'troca_titularidade',
+                  modalidade: 'presencial',
+                  associado_id: associadoId,
+                  veiculo_id: solTroca.veiculo_id || veiculoId,
+                  contrato_id: contrato.id,
+                  cotacao_id: cotacao_id,
+                  data_agendada: dataAg,
+                  periodo: periodoAg,
+                  hora_agendada: horaAg,
+                  cep: cot.vistoria_completa_endereco_cep || cot.cliente_cep || null,
+                  logradouro: cot.vistoria_completa_endereco_logradouro || cot.cliente_logradouro || null,
+                  numero: cot.vistoria_completa_endereco_numero || cot.cliente_numero || null,
+                  bairro: cot.vistoria_completa_endereco_bairro || cot.cliente_bairro || null,
+                  cidade: cot.vistoria_completa_endereco_cidade || cot.cliente_cidade || null,
+                  uf: cot.vistoria_completa_endereco_estado || cot.cliente_uf || null,
+                  observacoes: `Vistoria de campo — troca de titularidade (solicitação ${solTroca.id}). Aprovação obrigatória do Monitoramento antes da efetivação.`,
+                  solicitado_por_modulo: 'troca_titularidade',
+                })
+                .select('id')
+                .single();
+              if (servErr) {
+                console.error('[CONTRATO-GERAR][troca] falha ao criar serviço de vistoria:', servErr);
+              } else if (novoServ) {
+                servicoVistoriaId = novoServ.id;
+                console.log(`[CONTRATO-GERAR][troca] ✓ Serviço vistoria_entrada criado: ${novoServ.id}`);
+              }
+            }
           }
 
-          // 2. Marcar solicitação como efetivada
+          // 3) Mover solicitação para aguardando_vistoria + linkar serviço
           await supabase
             .from('solicitacoes_troca_titularidade')
             .update({
-              status: 'efetivada',
-              efetivada_em: agora,
-              novo_associado_id: associadoId,
+              status: 'aguardando_vistoria',
+              servico_vistoria_id: servicoVistoriaId,
+              updated_at: new Date().toISOString(),
             })
-            .eq('id', solTroca.id)
-            .is('efetivada_em', null);
+            .eq('id', solTroca.id);
 
-          console.log(`[CONTRATO-GERAR] ✅ Troca de titularidade ${solTroca.id} efetivada (contrato novo ${contrato.numero})`);
+          console.log(`[CONTRATO-GERAR] Troca ${solTroca.id} movida para aguardando_vistoria (serviço ${servicoVistoriaId})`);
 
-          // 3. Notificar novo titular (best-effort)
+          // 4) Notificar novo titular (best-effort)
           try {
             const tel = cotacao.telefone1_solicitante;
             if (tel) {
-              const msg = `Olá, ${nomeFinal}! Seu contrato de proteção veicular foi gerado por troca de titularidade. Contrato Nº ${contrato.numero}. Em instantes você receberá o link para assinatura.`;
+              const msg = `Olá, ${nomeFinal}! Seu contrato de troca de titularidade (Nº ${contrato.numero}) foi gerado. Em breve nossa equipe entrará em contato para confirmar a vistoria do veículo. A proteção será ativada após a aprovação final.`;
               await supabase.functions.invoke('whatsapp-send-text', { body: { telefone: tel, mensagem: msg } });
             }
           } catch (waErr) {
@@ -1349,7 +1395,7 @@ serve(async (req) => {
         }
       }
     } catch (trocaErr) {
-      console.error('[CONTRATO-GERAR] gancho efetivação troca falhou (não bloqueante):', trocaErr);
+      console.error('[CONTRATO-GERAR] gancho troca de titularidade falhou (não bloqueante):', trocaErr);
     }
 
     return new Response(
