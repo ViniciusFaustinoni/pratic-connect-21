@@ -174,7 +174,7 @@ export function TrocaTimelineDrawer({ item, open, onOpenChange, onResend, isRese
             </>
           )}
         </div>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
