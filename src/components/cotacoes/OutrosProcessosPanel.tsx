@@ -252,6 +252,7 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
                   <div className="flex items-center gap-2">
                     <Badge className={cn(TONE_CLASS[item.etapa_tone], 'border-0 text-[10px] px-2 py-0.5 rounded-full')}>{item.etapa_label}</Badge>
                     <TermoIcon status={item.termo_status} />
+                    <TermoFiliacaoIcon status={item.termo_filiacao_status} />
                     {item.termo_whatsapp_status && item.tipo === 'troca_titularidade' && (
                       <Tooltip><TooltipTrigger asChild>
                         <MessageCircle className={cn('h-3.5 w-3.5',
