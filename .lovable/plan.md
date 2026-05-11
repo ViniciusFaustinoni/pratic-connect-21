@@ -1,66 +1,72 @@
-# Destravar a placa quando o antigo titular assina o termo de cancelamento
 
-## Problema
+## Problema observado
 
-Hoje, quando o antigo titular assina o termo de cancelamento da troca de titularidade, o webhook do Autentique apenas marca `solicitacoes_troca_titularidade.termo_cancelamento_assinado_em` e enfileira débitos. **O veículo continua vinculado ao antigo associado** até a `efetivar-troca-titularidade` rodar (depois de aprovação de cadastro + monitoramento + vistoria).
+Após o novo titular assinar o contrato e agendar a vistoria pelo link público da troca de titularidade:
 
-Resultado: quando o NOVO titular acessa o link público para gerar o contrato, `contrato-gerar` bate no bloqueio anti-sequestro (`PLACA_DE_OUTRO_ASSOCIADO`, HTTP 409) e trava o fluxo — placa "sequestrada".
+1. **Nenhum serviço de campo apareceu para o Monitoramento** (Aba "Serviços de Campo" / "Aprovações de Associados") — não foi criado registro em `servicos`, `agendamentos_base` nem `vistorias` para o novo contrato.
+2. **A cobertura ficou ativa antes da aprovação final do Monitoramento** — o veículo permaneceu com `cobertura_assistencia=true` e `status='ativo'` o tempo todo, herdado do contrato antigo, sem ser suspensa durante a transição.
 
-## Decisão
+## Causa raiz (verificada nos dados)
 
-Você escolheu "desvincular o veículo já na assinatura do termo". Tecnicamente, `veiculos.associado_id` é **NOT NULL** e existe um trigger que mantém `veiculos.associado_id == contratos.associado_id`. Zerar o FK literalmente quebraria essas invariantes e várias queries (cobrança, SGA, listagens) antes da efetivação real.
+Caso real: `solicitacoes_troca_titularidade` `31330683…`, veículo `LTB4J74`, novo contrato `CTR-20260510232950-BAJR4X` (`status=assinado`, `tipo_entrada=troca_titularidade`).
 
-A solução entrega o efeito desejado (placa liberada para o novo titular) sem quebrar o ecossistema, marcando o veículo como "em troca" e ensinando o bloqueio anti-sequestro a respeitar essa marca.
+- O contrato antigo (`CTR-20260510110501-ZFKTEX`) continua `status=ativo` e o veículo continua `status=ativo, cobertura_assistencia=true`. O hook "best-effort" em `contrato-gerar` que cancela contrato antigo + marca solicitação como `efetivada` rodou (`efetivada_em` está setado) mas a `efetivar-troca-titularidade` real (que faz a transferência completa, ASAAS, históricos, taxa) não foi disparada — então a cobertura jamais foi reciclada.
+- Não existe nenhum `servicos`, `agendamentos_base` ou `vistorias` ligado ao veículo após o agendamento. A função `criar-instalacao-pos-pagamento` só cria serviço quando `contrato.adesao_paga=true && contrato.aprovado_em` — em troca de titularidade `valor_adesao=0` e o `aprovado_em` do contrato novo nunca é setado (a aprovação fica na `solicitacoes_troca_titularidade`, não no contrato).
+- O fluxo de efetivação acontece **antes** do Monitoramento aprovar a vistoria de campo: a aprovação atual da solicitação é só documental. Não há serviço criado para o time de Monitoramento aprovar/recusar in loco.
 
-## O que vai mudar
+## O que vamos fazer
 
-### 1. Schema — marcar veículo como "em troca de titularidade"
-Adicionar em `veiculos`:
-- `em_troca_titularidade boolean NOT NULL DEFAULT false`
-- `troca_titularidade_id uuid` (FK para `solicitacoes_troca_titularidade.id`)
-- `troca_titularidade_iniciada_em timestamptz`
+### 1. Criar o serviço de campo automaticamente para troca de titularidade
 
-Índice parcial em `(placa) WHERE em_troca_titularidade = true` para lookup rápido.
+Acrescentar bloco em `supabase/functions/contrato-gerar/index.ts` (ou logo após a assinatura no `autentique-webhook`) que, quando `tipo_entrada='troca_titularidade'` e o novo contrato é assinado:
 
-### 2. Webhook do Autentique — disparar ao assinar termo de cancelamento
-Em `supabase/functions/autentique-webhook/index.ts` (no bloco já existente do termo de cancelamento de troca, ~linhas 308–369), adicionar:
-- `UPDATE veiculos SET em_troca_titularidade=true, troca_titularidade_id=<sol.id>, troca_titularidade_iniciada_em=now() WHERE id = solTroca.veiculo_id`
-- Log claro: "Veículo X desvinculado logicamente do antigo titular Y para troca Z"
+- Cria 1 `servicos` (`tipo='vistoria'`, `origem='troca_titularidade'`, `status='pendente'`) ligado ao novo `contrato_id` + `veiculo_id` + `associado_id` do novo titular, copiando `data_agendada`/`periodo`/`endereço` da própria cotação (campos `vistoria_completa_*`) ou do agendamento público.
+- Cria 1 `agendamentos_base` espelhado quando o agendamento for em base (idempotente por `cotacao_id`).
+- Marca `solicitacoes_troca_titularidade.servico_vistoria_id` para a UI pública (`TelaAnaliseTrocaTitularidade`/timeline) refletir o status real.
+- Tornar idempotente: não recriar se já existe `servicos` com `(cotacao_id, tipo='vistoria')`.
 
-Idempotente (só executa quando `wasSigned && !termo_cancelamento_assinado_em`).
+Isso faz o serviço aparecer em `Monitoramento › Serviços de Campo` e na fila `Aprovações de Associados`, exatamente como nas demais entradas (adesão, inclusão, substituição).
 
-### 3. `contrato-gerar` — relaxar bloqueio anti-sequestro
-Nas 3 ocorrências do bloqueio (linhas ~533, ~660, ~786), antes de retornar 409 `PLACA_DE_OUTRO_ASSOCIADO`, checar:
-- Se `veiculos.em_troca_titularidade = true` E a `cotacao.id` está vinculada a essa `solicitacoes_troca_titularidade` (via `troca_titularidade_id` ou `dados_extras->>'solicitacao_troca_id'`) → **permitir prosseguir**.
-- Caso contrário → manter o 409 (proteção real).
+### 2. Suspender cobertura do veículo durante a troca
 
-### 4. `efetivar-troca-titularidade` — limpar a flag ao concluir
-No `UPDATE veiculos` que transfere para o novo associado (linha ~317), também zerar:
-- `em_troca_titularidade = false`
-- `troca_titularidade_id = NULL`
-- `troca_titularidade_iniciada_em = NULL`
+No momento em que o termo de cancelamento é assinado (`autentique-webhook`, hoje já marca `em_troca_titularidade=true`), também:
 
-### 5. UI — badge no veículo
-Em listagens/detalhes do veículo do antigo titular, mostrar badge "Em Troca de Titularidade" quando `em_troca_titularidade = true` (não-bloqueante; só sinaliza).
+- Setar no veículo `cobertura_suspensa=true`, `cobertura_suspensa_em=now()`, `cobertura_suspensa_motivo='troca_titularidade_em_andamento'`.
+- Manter `status='ativo'` (não muda) — só a flag de cobertura.
 
-### 6. Memória
-Atualizar `mem://constraints/contracts/no-cross-owner-vehicle-reuse` e `mem://logic/contracts/veiculo-associado-sync-trigger` com a exceção da flag `em_troca_titularidade`.
+Na `efetivar-troca-titularidade`, ao concluir a transferência **e somente após Monitoramento aprovar o serviço de campo** (passo 3 abaixo), reativar:
 
-## O que NÃO muda (intencional)
+- `cobertura_suspensa=false`, demais flags `cobertura_*` recalculadas a partir do plano do novo contrato.
 
-- **Cobertura/SGA do antigo titular continua ativa** até a `efetivar-troca-titularidade` rodar. Isso é correto: ele ainda paga até a efetivação real e não pode ficar sem cobertura no intervalo.
-- O contrato antigo só é encerrado em `efetivar-troca-titularidade` (já hoje).
-- O bloqueio real anti-sequestro continua funcionando para qualquer placa que NÃO esteja em troca legítima.
+### 3. Bloquear efetivação automática até o serviço de campo ser aprovado
 
-## Backfill
+- Remover/condicionar o "gancho best-effort" em `contrato-gerar` (linhas ~1286–1353) para NÃO marcar `solicitacoes_troca_titularidade.status='efetivada'` na hora da geração do contrato. A assinatura do contrato pelo novo titular deve apenas: criar o serviço (passo 1) e mover a solicitação para `aguardando_vistoria` (status já existente).
+- A `efetivar-troca-titularidade` passa a ser disparada por trigger/edge function quando o serviço de vistoria for **aprovado pelo Monitoramento** (status `concluida` + `decisao_instalador='aprovado'`). Antes disso, o veículo continua suspenso e o contrato antigo continua ativo (sem cobrança nova).
 
-Para a solicitação atual em teste (`COT-20260510-0010`), aplicar o `UPDATE veiculos` manualmente na migração para destravar imediatamente.
+### 4. Backfill do caso de teste atual
+
+Migration única para o veículo `LTB4J74` (solicitação `31330683…`):
+- Criar `servicos` de vistoria pendente para o novo contrato com data atual/agendada.
+- Resetar `solicitacoes_troca_titularidade.status='aguardando_vistoria'`, `efetivada_em=null`.
+- Suspender `cobertura_*` do veículo até a aprovação real.
+
+### 5. UI
+
+- `TelaAnaliseTrocaTitularidade`/`TimelineAprovacao`: passar a refletir o novo passo "Serviço de campo aprovado pelo Monitoramento" antes de "Troca efetivada".
+- Badge no veículo (já existe `BadgeCobertura`): mostrar "Em transição (cobertura suspensa)" quando `em_troca_titularidade=true && cobertura_suspensa=true`.
 
 ## Arquivos afetados
 
-- Migration nova: colunas + índice + backfill
-- `supabase/functions/autentique-webhook/index.ts`
-- `supabase/functions/contrato-gerar/index.ts`
-- `supabase/functions/efetivar-troca-titularidade/index.ts`
-- 1 componente de UI (badge)
-- Memórias atualizadas
+- `supabase/functions/contrato-gerar/index.ts` — criar serviço + remover efetivação automática.
+- `supabase/functions/autentique-webhook/index.ts` — suspender cobertura ao assinar termo.
+- `supabase/functions/efetivar-troca-titularidade/index.ts` — disparar só após aprovação do serviço; reativar cobertura no fim.
+- Nova migration:
+  - Trigger (ou hook na edge `aprovar-servico-monitoramento`) para chamar `efetivar-troca-titularidade` quando o serviço de troca for aprovado.
+  - Backfill do veículo `LTB4J74`.
+- `src/components/troca-titularidade/TimelineAprovacao.tsx` — adicionar etapa "Vistoria aprovada pelo Monitoramento".
+
+## Riscos / pontos de atenção
+
+- Idempotência do hook em `contrato-gerar` (não criar 2 serviços se reentrante).
+- Sincronização do veículo enquanto `em_troca_titularidade=true` (trigger `fn_sync_veiculo_associado_from_contrato` já respeita essa flag).
+- Garantir que faturamento do contrato antigo continua até a efetivação real (não cancelar antes da aprovação do Monitoramento).
