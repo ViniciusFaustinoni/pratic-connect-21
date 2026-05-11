@@ -97,7 +97,6 @@ const CRLV_FIELDS: OcrFieldDef[] = [
 
 const COMPROVANTE_RESIDENCIA_FIELDS: OcrFieldDef[] = [
   { key: 'nome_titular', label: 'Nome do titular' },
-  { key: 'cpf_titular', label: 'CPF', mask: 'cpf' },
   { key: 'cep', label: 'CEP', mask: 'cep' },
   { key: 'logradouro', label: 'Logradouro' },
   { key: 'numero', label: 'Número' },
