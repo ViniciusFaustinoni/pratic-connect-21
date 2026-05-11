@@ -516,6 +516,7 @@ export function useCotacaoContratacao(token: string | undefined) {
           cliente_cnh: truncar(dados.cnh, 50),
           cliente_cnh_validade: dados.cnh_validade || null,
           cliente_cnh_categoria: truncar(dados.cnh_categoria, 20),
+          cliente_sexo: dados.sexo || null,
           
           // Dados do veículo extraídos do CRLV via OCR ou preenchidos manualmente
           // (necessários para SGA Hinova e Termo)
