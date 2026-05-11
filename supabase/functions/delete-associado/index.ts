@@ -544,6 +544,10 @@ Deno.serve(async (req) => {
     // 14. Delete auth tokens
     await supabaseAdmin.from("auth_tokens_primeiro_acesso").delete().eq("associado_id", associadoId);
 
+    // 14b. Delete solicitacoes de troca de titularidade (FK em associado_antigo_id e associado_novo_id)
+    await supabaseAdmin.from("solicitacoes_troca_titularidade").delete().eq("associado_antigo_id", associadoId);
+    await supabaseAdmin.from("solicitacoes_troca_titularidade").delete().eq("associado_novo_id", associadoId);
+
     // 15. Finally, delete the associate
     console.log(`[delete-associado] Todas as dependências limpas. Excluindo associado...`);
     
