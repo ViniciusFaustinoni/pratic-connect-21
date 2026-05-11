@@ -35,6 +35,9 @@ export async function resolverAssociadoLocalId(
       `Falha ao importar associado do SGA: ${error.message || 'erro desconhecido'}`,
     );
   }
+  if (data?.not_found || data?.error) {
+    throw new Error(data?.error || 'Associado não encontrado no SGA');
+  }
   const localId = data?.associado_id;
   if (!isUuid(localId)) {
     throw new Error('Importação do SGA não retornou um identificador válido.');
