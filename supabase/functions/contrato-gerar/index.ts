@@ -1385,23 +1385,27 @@ serve(async (req) => {
             }
           }
 
-          // 3) Mover solicitação para aguardando_vistoria + linkar serviço
-          await supabase
-            .from('solicitacoes_troca_titularidade')
-            .update({
-              status: 'aguardando_vistoria',
-              servico_vistoria_id: servicoVistoriaId,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', solTroca.id);
+          // 3) Linkar serviço de vistoria (se foi criado agora) sem alterar
+          //    o status da solicitação. O flip para `aguardando_vistoria`
+          //    acontece só após assinatura + pagamento (trigger pós-pagto)
+          //    OU já estava em `aguardando_vistoria` se o Monitoramento pediu.
+          if (servicoVistoriaId && servicoVistoriaId !== solTroca.servico_vistoria_id) {
+            await supabase
+              .from('solicitacoes_troca_titularidade')
+              .update({
+                servico_vistoria_id: servicoVistoriaId,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', solTroca.id);
+          }
 
-          console.log(`[CONTRATO-GERAR] Troca ${solTroca.id} movida para aguardando_vistoria (serviço ${servicoVistoriaId})`);
+          console.log(`[CONTRATO-GERAR] Troca ${solTroca.id}: contrato gerado (status mantido=${solTroca.status}); vistoria=${servicoVistoriaId || 'pendente pós-pagamento'}`);
 
-          // 4) Notificar novo titular (best-effort)
+          // 4) Notificar novo titular (best-effort) — termo no e-mail
           try {
             const tel = cotacao.telefone1_solicitante;
             if (tel) {
-              const msg = `Olá, ${nomeFinal}! Seu contrato de troca de titularidade (Nº ${contrato.numero}) foi gerado. Em breve nossa equipe entrará em contato para confirmar a vistoria do veículo. A proteção será ativada após a aprovação final.`;
+              const msg = `Olá, ${nomeFinal}! Seu contrato de troca de titularidade (Nº ${contrato.numero}) foi gerado e o termo de filiação foi enviado para o seu e-mail para assinatura. Após assinar e finalizar o pagamento da adesão, agendaremos a vistoria do veículo para concluir a troca.`;
               await supabase.functions.invoke('whatsapp-send-text', { body: { telefone: tel, mensagem: msg } });
             }
           } catch (waErr) {
