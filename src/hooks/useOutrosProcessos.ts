@@ -300,6 +300,15 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
           solicitacao_troca_id: troca?.id ?? null,
           troca_status: troca?.status ?? null,
           termo_status: deriveTermoStatus(troca),
+          termo_filiacao_status: (() => {
+            if (tipo !== 'troca_titularidade' || !troca) return 'nao_aplicavel' as const;
+            const ct = contratoPorTroca.get(troca.id);
+            if (ct?.assinatura_url) return 'assinado' as const;
+            if (ct) return 'enviado' as const;
+            // Sem contrato ainda: só faz sentido depois do cancelamento assinado
+            if (troca.termo_cancelamento_assinado_em) return 'pendente' as const;
+            return 'nao_aplicavel' as const;
+          })(),
           termo_url: troca?.termo_cancelamento_url ?? null,
           termo_enviado_em: troca?.termo_cancelamento_enviado_em ?? null,
           termo_assinado_em: troca?.termo_cancelamento_assinado_em ?? null,
