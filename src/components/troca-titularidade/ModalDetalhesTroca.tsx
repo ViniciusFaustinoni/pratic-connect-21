@@ -126,11 +126,10 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
             {/* (Removido) Alerta de débito pendente do antigo titular */}
 
             <Tabs defaultValue="dados">
-              <TabsList className="grid w-full grid-cols-5">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="dados">Dados</TabsTrigger>
                 <TabsTrigger value="termo">Termo</TabsTrigger>
                 <TabsTrigger value="analise">Análise prévia</TabsTrigger>
-                <TabsTrigger value="financeiro">Financeiro Antigo</TabsTrigger>
                 <TabsTrigger value="timeline">Timeline</TabsTrigger>
               </TabsList>
 
