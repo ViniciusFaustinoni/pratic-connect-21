@@ -701,7 +701,7 @@ export default function CotacaoContratacao() {
                     tokenPublico={token || cotacao.token_publico || ''}
                     clienteNome={cotacao.nome_solicitante || ''}
                     clienteEmail={cotacao.email_solicitante || ''}
-                    onContratoAssinado={() => setEtapaAtual(3)}
+                    onContratoAssinado={() => handleContratoAssinado(3)}
                     readOnly={isEtapaConcluida(2)}
                     contratoInicial={contratoFallback ? {
                       id: contratoFallback.id,
@@ -719,7 +719,7 @@ export default function CotacaoContratacao() {
                     tokenPublico={token || cotacao.token_publico || ''}
                     clienteNome={cotacao.nome_solicitante || ''}
                     clienteEmail={cotacao.email_solicitante || ''}
-                    onContratoAssinado={() => setEtapaAtual(3)}
+                    onContratoAssinado={() => handleContratoAssinado(3)}
                     readOnly={isEtapaConcluida(2)}
                     contratoInicial={contratoFallback ? {
                       id: contratoFallback.id,
