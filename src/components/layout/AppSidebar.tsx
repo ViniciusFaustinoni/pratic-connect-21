@@ -633,6 +633,9 @@ export function AppSidebar() {
         if (item.url === '/cadastro/processos' && processosOpCount > 0) {
           return { ...item, badge: String(processosOpCount) };
         }
+        if (item.url === '/cadastro/propostas' && propostasPendentesCount > 0) {
+          return { ...item, badge: String(propostasPendentesCount) };
+        }
         return item;
       }),
     }));
