@@ -9,11 +9,17 @@ export interface FotoVistoriaVeiculo {
   vistoria_id: string;
   vistoria_status: string | null;
   vistoria_modalidade: string | null;
+  vistoria_tipo?: string | null;
+  vistoria_created_at?: string | null;
 }
 
 /**
- * Hook para buscar todas as fotos de vistoria de um veículo específico
- * Caminho: veiculos -> contratos -> vistorias -> vistoria_fotos
+ * Hook para buscar todas as fotos de vistoria de um veículo específico.
+ *
+ * Caminho canônico: vistorias.veiculo_id (NOT NULL) → vistoria_fotos.
+ * Captura automaticamente vistorias de entrada, saída, sinistro, periódicas
+ * e da troca de titularidade (executadas pelo novo titular pelo link público),
+ * mesmo quando ainda não há contrato vinculado.
  */
 export function useFotosVistoriaPorVeiculo(veiculoId: string | undefined) {
   return useQuery({
@@ -21,30 +27,19 @@ export function useFotosVistoriaPorVeiculo(veiculoId: string | undefined) {
     queryFn: async (): Promise<FotoVistoriaVeiculo[]> => {
       if (!veiculoId) return [];
 
-      // 1. Buscar contratos do veículo
-      const { data: contratos, error: errContratos } = await supabase
-        .from('contratos')
-        .select('id')
-        .eq('veiculo_id', veiculoId);
-
-      if (errContratos) throw errContratos;
-      if (!contratos || contratos.length === 0) return [];
-
-      const contratoIds = contratos.map(c => c.id);
-
-      // 2. Buscar vistorias desses contratos
+      // 1. Buscar vistorias diretamente pelo veículo
       const { data: vistorias, error: errVistorias } = await supabase
         .from('vistorias')
-        .select('id, status, modalidade')
-        .in('contrato_id', contratoIds);
+        .select('id, status, modalidade, tipo, created_at')
+        .eq('veiculo_id', veiculoId);
 
       if (errVistorias) throw errVistorias;
       if (!vistorias || vistorias.length === 0) return [];
 
-      const vistoriaIds = vistorias.map(v => v.id);
-      const vistoriaMap = new Map(vistorias.map(v => [v.id, v]));
+      const vistoriaIds = vistorias.map((v: any) => v.id);
+      const vistoriaMap = new Map(vistorias.map((v: any) => [v.id, v]));
 
-      // 3. Buscar fotos das vistorias
+      // 2. Buscar fotos das vistorias
       const { data: fotos, error: errFotos } = await supabase
         .from('vistoria_fotos')
         .select('id, tipo, arquivo_url, created_at, vistoria_id')
@@ -54,12 +49,14 @@ export function useFotosVistoriaPorVeiculo(veiculoId: string | undefined) {
       if (errFotos) throw errFotos;
 
       // Enriquecer fotos com dados da vistoria
-      return (fotos || []).map(foto => {
-        const vistoria = vistoriaMap.get(foto.vistoria_id);
+      return (fotos || []).map((foto: any) => {
+        const vistoria: any = vistoriaMap.get(foto.vistoria_id);
         return {
           ...foto,
           vistoria_status: vistoria?.status || null,
           vistoria_modalidade: vistoria?.modalidade || null,
+          vistoria_tipo: vistoria?.tipo || null,
+          vistoria_created_at: vistoria?.created_at || null,
         };
       });
     },
