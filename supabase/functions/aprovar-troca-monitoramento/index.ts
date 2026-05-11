@@ -44,8 +44,14 @@ Deno.serve(async (req) => {
       .eq('id', solicitacao_id)
       .maybeSingle();
     if (getErr || !solicitacao) throw new Error('Solicitação não encontrada');
-    if (solicitacao.status !== 'aguardando_monitoramento') {
+    // 'aprovar' aceita tanto a fila inicial (aguardando_monitoramento) quanto
+    // a aprovação final pós-vistoria (aguardando_vistoria, após o novo titular
+    // concluir a vistoria pelo link público). 'solicitar_vistoria' só na fila inicial.
+    if (acao === 'solicitar_vistoria' && solicitacao.status !== 'aguardando_monitoramento') {
       throw new Error('Solicitação não está aguardando monitoramento');
+    }
+    if (acao === 'aprovar' && !['aguardando_monitoramento', 'aguardando_vistoria'].includes(solicitacao.status as string)) {
+      throw new Error(`Solicitação no status "${solicitacao.status}" não pode ser aprovada`);
     }
 
     const baseUpdate = {
