@@ -58,6 +58,10 @@ export function EscolhaLocalVistoria({ onEscolher, tipoInstalacao }: EscolhaLoca
           </CardContent>
         </Card>
         )}
+
+        {/* Opção 2: Cliente vai até a base (oculta quando cenário é Rota) */}
+        {tipoInstalacao !== 'rota' && (
+        <Card 
           className="cursor-pointer hover:border-primary/50 hover:shadow-md transition-all group"
           onClick={() => onEscolher('base')}
         >
