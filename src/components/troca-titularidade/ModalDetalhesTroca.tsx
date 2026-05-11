@@ -45,24 +45,8 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
   const reprovar = useReprovarTroca();
   const enviarTermo = useEnviarTermoCancelamento();
 
-  // Débito pendente do antigo (gate da aprovação do Cadastro)
-  const { data: debitoPendente } = useQuery({
-    queryKey: ['troca-debito-antigo', solicitacao?.associado_antigo_id],
-    queryFn: async () => {
-      if (!solicitacao?.associado_antigo_id) return null;
-      const { data } = await (supabase as any)
-        .from('relacionamento_debitos_pendentes')
-        .select('id, valor_total, quantidade_boletos, status')
-        .eq('associado_id', solicitacao.associado_antigo_id)
-        .eq('status', 'aberto')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      return data;
-    },
-    enabled: open && !!solicitacao?.associado_antigo_id && modo === 'cadastro',
-    refetchInterval: 30000,
-  });
+  // (Removido) Checagem de débito do antigo titular: a troca não exige mais
+  // adimplência. A aprovação do Cadastro depende apenas do termo assinado.
 
   const handleAprovar = async () => {
     if (!solicitacao) return;
