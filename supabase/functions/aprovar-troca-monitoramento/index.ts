@@ -61,26 +61,16 @@ Deno.serve(async (req) => {
         .eq('id', solicitacao_id);
       if (error) throw error;
     } else {
-      // Criar serviço de vistoria_entrada
-      const { data: servico, error: servErr } = await admin
-        .from('servicos')
-        .insert({
-          tipo: 'vistoria_entrada',
-          status: 'pendente',
-          associado_id: solicitacao.associado_antigo_id,
-          veiculo_id: solicitacao.veiculo_id,
-          observacoes: 'Vistoria de troca de titularidade — solicitada pelo monitoramento',
-        })
-        .select('id')
-        .single();
-      if (servErr) throw servErr;
-
+      // Solicitar vistoria: NÃO criar serviço de campo.
+      // A vistoria será executada pelo NOVO titular dentro do link público
+      // (etapa "Vistoria" do fluxo de contratação). O sinal de "vistoria pedida"
+      // é o próprio status `aguardando_vistoria`. O monitoramento aprova depois,
+      // assim que a vistoria for concluída no link público.
       const { error } = await admin
         .from('solicitacoes_troca_titularidade')
         .update({
           ...baseUpdate,
           status: 'aguardando_vistoria',
-          servico_vistoria_id: servico.id,
         })
         .eq('id', solicitacao_id);
       if (error) throw error;
