@@ -272,7 +272,7 @@ export function OutrosProcessosPanel({ className }: OutrosProcessosPanelProps) {
                     </TooltipTrigger><TooltipContent>Ver detalhes / timeline</TooltipContent></Tooltip>
                   )}
 
-                  {item.termo_url && item.termo_status !== 'assinado' && (
+                  {item.termo_url && item.termo_status === 'enviado' && (
                     <Tooltip><TooltipTrigger asChild>
                       <Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); window.open(item.termo_url!, '_blank'); }}>
                         <FileText className="h-4 w-4" />
