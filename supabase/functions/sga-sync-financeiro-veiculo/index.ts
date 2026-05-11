@@ -14,6 +14,7 @@ import {
   parseDataHinova,
   toNumber,
   buscarVeiculoPorPlaca,
+  buscarAssociadoComVeiculosPorCpf,
   HinovaTransientError,
   HinovaNotFoundError,
   calcularProximoRetry,
