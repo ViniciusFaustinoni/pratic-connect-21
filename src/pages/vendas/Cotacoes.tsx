@@ -860,7 +860,7 @@ export default function Cotacoes() {
         // Reset do filtro de Status — ele só existe em "Em Andamento" e fica "fantasma" entre abas
         setStatusFilter('all');
       }} className="space-y-4">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
+        <TabsList className="grid w-full max-w-2xl grid-cols-3">
           <TabsTrigger value="em_andamento" className="gap-2">
             Em Andamento
             <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
@@ -871,6 +871,12 @@ export default function Cotacoes() {
             Finalizadas
             <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
               {cotacoesFinalizadasTotal}
+            </Badge>
+          </TabsTrigger>
+          <TabsTrigger value="outros_processos" className="gap-2">
+            Outros Processos
+            <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+              {outrosCount}
             </Badge>
           </TabsTrigger>
         </TabsList>
