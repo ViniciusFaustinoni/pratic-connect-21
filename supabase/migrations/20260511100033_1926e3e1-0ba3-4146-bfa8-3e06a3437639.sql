@@ -1,0 +1,1 @@
+DELETE FROM solicitacoes_troca_titularidade WHERE associado_antigo_id IN ('a4e62fa5-c217-48c3-acd7-9390f13985eb','1b4ff2ba-3312-4914-a9d2-4035f8b4e137') OR novo_associado_id IN ('a4e62fa5-c217-48c3-acd7-9390f13985eb','1b4ff2ba-3312-4914-a9d2-4035f8b4e137');
