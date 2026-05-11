@@ -53,11 +53,21 @@ export const aprovacaoTrocaTitularidadeCadastro: Tutorial = {
     },
     {
       numero: 5,
+      titulo: 'Analise a solicitação',
+      descricao:
+        'Com o termo de cancelamento assinado, o Cadastro analisa a solicitação: confira na aba "Dados" se os dados do novo titular batem com os documentos enviados (CPF, CNH, comprovante de endereço), revise o veículo e a cotação vinculada, e use a aba "Análise prévia" para checar o snapshot local + SGA Hinova do titular antigo. Essa é a etapa em que você decide se a troca pode seguir para o Monitoramento.',
+      dicas: [
+        'Não é mais necessário verificar adimplência do titular antigo — basta que ele exista no sistema e tenha assinado o termo.',
+        'Documentos suspeitos ou divergentes? Reprove com motivo claro para o novo titular reenviar.',
+      ],
+    },
+    {
+      numero: 6,
       titulo: 'Clique em Aprovar (ou Reprovar)',
       descricao:
-        'Com termo assinado e sem débito pendente, o rodapé do drawer libera os botões "Reprovar" e "Aprovar". Preencha a observação (opcional) e clique em Aprovar — a solicitação migra para "Aguardando Monitoramento" e some da sua fila. Para reprovar, é obrigatório justificar o motivo.',
+        'Com termo assinado e a análise concluída, o rodapé do drawer libera os botões "Reprovar" e "Aprovar". Preencha a observação (opcional) e clique em Aprovar — a solicitação migra para "Aguardando Monitoramento" e some da sua fila. Para reprovar, é obrigatório justificar o motivo.',
       dicas: [
-        'O botão "Aprovar" passa o tooltip do motivo do bloqueio quando ainda não está liberado (assinatura pendente ou débito em aberto).',
+        'O botão "Aprovar" mostra no tooltip o motivo do bloqueio quando ainda não está liberado (ex.: assinatura pendente).',
         'Após aprovar, acompanhe pela aba "Aprovadas" ou pela Timeline da solicitação.',
       ],
     },
