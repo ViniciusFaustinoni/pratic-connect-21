@@ -205,14 +205,25 @@ serve(async (req) => {
       }
 
       await supabase
-        .from("profiles")
+        .from('profiles')
         .update({
           primeiro_acesso: false,
-          ...(emailOrigem === "real" ? { email: loginEmail } : {}),
+          tipo: 'associado',
+          ativo: true,
+          bloqueado: false,
+          ...(emailOrigem === 'real' ? { email: loginEmail } : {}),
         })
-        .eq("user_id", associado.user_id);
+        .eq('user_id', associado.user_id);
 
-      await supabase.from("associados_historico").insert({
+      // Garantir role 'associado' (contas legadas podem não ter)
+      await supabase
+        .from('user_roles')
+        .upsert(
+          { user_id: associado.user_id, role: 'associado' },
+          { onConflict: 'user_id,role' },
+        );
+
+      await supabase.from('associados_historico').insert({
         associado_id: associado.id,
         tipo: "senha_redefinida",
         descricao: `Senha redefinida via link da cotação (login: ${loginEmail})`,
