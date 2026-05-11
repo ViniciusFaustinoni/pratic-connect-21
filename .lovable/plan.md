@@ -1,50 +1,56 @@
-# Forçar PENDENTE no veículo após cadastro no SGA
+## Objetivo
+Fazer a consulta de situação financeira no SGA funcionar de forma confiável no fluxo de Troca de Titularidade, sem exibir falso erro quando o associado/veículo local ainda não tem códigos Hinova reconciliados.
 
-## Situação atual
+## O que vou corrigir
+1. Ajustar o backend `sga-sync-financeiro-veiculo` para distinguir melhor:
+   - ausência real de vínculo/código no SGA
+   - erro transitório de autenticação/token
+   - associado indisponível para consulta por CPF
+   - veículo sem histórico de boletos, mas ainda com situação financeira consultável
+2. Revisar o helper Hinova usado na reconciliação por placa/CPF para reduzir falhas por reautenticação concorrente e normalizar respostas `406` da Hinova.
+3. Corrigir o comportamento do modal `TrocaTitularidadeDialog` para não tratar qualquer `success:false` como “indisponível no SGA”; a UI deve interpretar:
+   - `retry/transitório` → aviso temporário com retry
+   - `not_found` sem código reconciliado → estado de “não foi possível reconciliar no SGA”
+   - `ADIMPLENTE/INADIMPLENTE` → seguir fluxo normal
+4. Testar os endpoints implantados diretamente:
+   - `sga-sync-financeiro-veiculo`
+   - `sga-listar-boletos-associado`
+   - `importar-associado-sga`
+5. Validar no caso real da placa `LTB4J74` e confirmar o resultado final no modal.
 
-- O cadastro de veículo (`sga-hinova-sync` → `cadastrarVeiculoHinova`) já envia `codigo_situacao = 3 (PENDENTE)` no payload, mas **não há uma confirmação explícita** após o cadastro — diferente do que já fazemos para o associado, onde existe `alterarSituacaoAssociadoHinova` (GET `/associado/alterar-situacao-para/:cod_situacao/:cod_associado`) chamado logo após o cadastro para garantir PENDENTE.
-- Existe um helper `alterarSituacaoVeiculoHinova` em `supabase/functions/_shared/hinova-client.ts` (linha 1114), mas ele usa **POST** em vários paths candidatos (`/veiculo/alterar/situacao`, etc.) — não é o endpoint que o Hinova documenta agora.
-- O endpoint correto informado pelo usuário é GET `/veiculo/alterar-situacao-para/:codigo_situacao/:codigo_veiculo` (mesma família de `alterar-situacao-para` já usada para associado).
+## Diagnóstico confirmado
+- A placa `LTB4J74` está localmente sem `veiculos.codigo_hinova`.
+- O associado atual também está sem `associados.codigo_hinova`.
+- O endpoint `sga-sync-financeiro-veiculo` hoje retorna `success:false, not_found:true` com mensagem `Veículo sem codigo_hinova válido após reconciliação`.
+- Nos logs há também 401 por invalidação de token Hinova e 406 na busca por CPF (`Associado não encontrado ou está em alguma situação indisponível para consulta`).
+- O modal atual colapsa esses cenários diferentes em `Situação financeira: indisponível no SGA`, então o usuário não recebe o estado correto.
 
-## O que será feito
+## Arquivos prováveis
+- `supabase/functions/sga-sync-financeiro-veiculo/index.ts`
+- `supabase/functions/sga-listar-boletos-associado/index.ts`
+- `supabase/functions/importar-associado-sga/index.ts`
+- `supabase/functions/_shared/hinova-client.ts`
+- `src/components/associados/TrocaTitularidadeDialog.tsx`
+- possivelmente `src/hooks/useBoletosSgaPorAssociado.ts`
 
-### 1. Novo helper GET no `hinova-client.ts`
+## Resultado esperado
+- O fluxo para de quebrar silenciosamente.
+- Quando o SGA responder corretamente, a situação financeira aparece e os boletos em atraso são carregados.
+- Quando não houver reconciliação suficiente no SGA, a interface mostra uma mensagem precisa e acionável, sem mascarar tudo como erro genérico.
+- Os endpoints ficam testados com retorno validado após a correção.
 
-Adicionar `alterarSituacaoParaVeiculoHinova(supabase, codigo_veiculo, codigo_situacao)` espelhando o helper já existente para associado (linha 1155):
-
+## Detalhes técnicos
+```text
+UI abre modal
+ -> lista veículos via sga-listar-boletos-associado / fallback local
+ -> seleciona veículo
+ -> chama sga-sync-financeiro-veiculo
+    -> tenta reconciliar codigo_veiculo/codigo_associado
+    -> consulta situacao financeira
+    -> se inadimplente, sincroniza cobrancas
+ -> UI interpreta resposta corretamente
+ -> só então lê cobrancas locais para mostrar boletos
 ```
-GET {apiUrl}/veiculo/alterar-situacao-para/{codigo_situacao}/{codigo_veiculo}
-Authorization: Bearer {token}
-```
 
-Retorno padrão `{ ok, status, raw, mensagem, errors }`. O helper antigo (POST) fica marcado como deprecated mas não será removido ainda (para evitar mexer no efetivar-troca-titularidade nesta task — ver "Fora de escopo").
-
-### 2. Disparo automático em `sga-hinova-sync/index.ts`
-
-Logo após `cadastrarVeiculoHinova` retornar `ok` e `codigoVeiculoHinova` (linhas 901–929), chamar:
-
-```
-alterarSituacaoParaVeiculoHinova(supabase, codigoVeiculoHinova, 3)
-```
-
-Comportamento:
-- Sempre executa quando o veículo acabou de ser cadastrado (cenário "veículo novo enviado ao SGA"), independente do `statusDestino`.
-- Loga via `logSync(_vid, _aid, 'alterar_situacao_veiculo', ok ? 'success' : 'warning', { codigo_veiculo, codigo_situacao: 3 }, raw, ok ? null : detalhe)`.
-- **Não interrompe a sync** se falhar — o veículo já foi criado com situação PENDENTE no payload de cadastro; este passo é uma confirmação defensiva (mesma postura que temos para o associado).
-- Não roda quando o veículo já existia no Hinova (`veiculoJaExistiaNoHinova=true`) — coerente com a regra de não reescrever situação de veículos já gerenciados manualmente.
-
-### 3. Atualizar memória
-
-Atualizar o item já existente `mem://logic/operations/sga-renavam-opcional-zero-km`/Core para refletir que **o sistema agora também executa `alterar-situacao-para/3` no veículo** (não só no associado). O Core já diz "Cadastro força PENDENTE (3) via alterar-situacao-para" — vou tornar explícito que isso vale para associado **e** veículo.
-
-## Fora de escopo
-
-- Não vou trocar as duas chamadas existentes de `alterarSituacaoVeiculoHinova` no `efetivar-troca-titularidade` (cancelamento do veículo antigo). Elas usam código de cancelamento, não PENDENTE, e o pedido foi específico para o cadastro. Posso migrar depois em task separada.
-- Não vou remover o helper POST antigo nesta task.
-- Sem mudanças de schema, RLS ou frontend.
-
-## Arquivos afetados
-
-- `supabase/functions/_shared/hinova-client.ts` — novo helper.
-- `supabase/functions/sga-hinova-sync/index.ts` — chamada pós-cadastro + log.
-- `mem://index.md` (Core) — ajuste textual.
+## Observação importante
+Também há uma solicitação de troca anterior em andamento para `LTB4J74`, que continuará bloqueando a criação de nova solicitação até ser cancelada. Isso é separado da correção da situação financeira, mas eu preservarei esse bloqueio porque ele está funcionando corretamente.
