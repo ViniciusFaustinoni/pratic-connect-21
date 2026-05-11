@@ -33,7 +33,7 @@ export function useServicosParaAtribuir() {
         .from('servicos')
         .select(`
           id, tipo, data_agendada, hora_agendada, periodo, bairro, cidade, uf, logradouro, numero,
-          permite_encaixe, status, contrato_id, instalacao_origem_id,
+          permite_encaixe, status, contrato_id, instalacao_origem_id, origem,
           associado:associados!servicos_associado_id_fkey(id, nome, telefone, whatsapp),
           veiculo:veiculos!servicos_veiculo_id_fkey(placa, chassi, marca, modelo),
           contrato:contratos!servicos_contrato_id_fkey(aprovado_em)
@@ -74,6 +74,10 @@ export function useServicosParaAtribuir() {
           return false;
         }
         if (!s.contrato_id) return true;
+        // Vistorias de troca de titularidade têm aprovação independente
+        // (assinatura do termo de cancelamento + aprovação do Cadastro do antigo titular).
+        // O contrato do novo titular só é marcado aprovado_em em efetivar-troca-titularidade.
+        if (s.origem === 'troca_titularidade') return true;
         return !!s.contrato?.aprovado_em;
       });
 
