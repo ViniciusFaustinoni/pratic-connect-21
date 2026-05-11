@@ -26,6 +26,7 @@ import {
   buscarVeiculoPorChassi,
   cadastrarAssociadoHinova,
   cadastrarVeiculoHinova,
+  alterarSituacaoParaVeiculoHinova,
   alterarSituacaoAssociadoHinova,
   cadastrarFotosVeiculoHinova,
   HinovaTransientError,
