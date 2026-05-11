@@ -280,17 +280,23 @@ export default function CotacaoContratacao() {
       if (etapa === 3 && (cotacao.tipo_vistoria || pularEtapaVistoria)) {
         etapa = 4;
       }
+      // Se etapa de pagamento está pulada (troca isenta), salta para conclusão
+      if (etapa === 4 && pularEtapaPagamento) {
+        etapa = 5;
+      }
       
       setEtapaAtual(etapa);
     }
-  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, setEtapaAtual, navegacaoManual, pularEtapaVistoria]);
+  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, setEtapaAtual, navegacaoManual, pularEtapaVistoria, pularEtapaPagamento]);
 
-  // Em navegação manual, se o usuário cair na etapa 3 mas ela está pulada, salta automaticamente.
+  // Em navegação manual, se o usuário cair em uma etapa pulada, salta automaticamente.
   useEffect(() => {
     if (pularEtapaVistoria && etapaAtual === 3) {
-      setEtapaAtual(4);
+      setEtapaAtual(pularEtapaPagamento ? 5 : 4);
+    } else if (pularEtapaPagamento && etapaAtual === 4) {
+      setEtapaAtual(5);
     }
-  }, [pularEtapaVistoria, etapaAtual, setEtapaAtual]);
+  }, [pularEtapaVistoria, pularEtapaPagamento, etapaAtual, setEtapaAtual]);
 
   // Handler para navegação no Stepper
   const handleStepClick = useCallback((step: number) => {
@@ -302,25 +308,27 @@ export default function CotacaoContratacao() {
 
   // Handler para avançar para próxima etapa
   const handleAvancar = useCallback(() => {
-    // Quando vistoria está pulada, salta de 2 → 4
-    const proximo = pularEtapaVistoria && etapaAtual === 2 ? 4 : etapaAtual + 1;
+    let proximo = etapaAtual + 1;
+    if (pularEtapaVistoria && etapaAtual === 2) proximo = pularEtapaPagamento ? 5 : 4;
+    else if (pularEtapaPagamento && etapaAtual === 3) proximo = 5;
     if (etapaAtual < etapaDoStatus) {
       setEtapaAtual(proximo);
     }
     if (proximo >= etapaDoStatus) {
       setNavegacaoManual(false);
     }
-  }, [etapaAtual, etapaDoStatus, setEtapaAtual, pularEtapaVistoria]);
+  }, [etapaAtual, etapaDoStatus, setEtapaAtual, pularEtapaVistoria, pularEtapaPagamento]);
 
   // Handler para voltar para etapa anterior
   const handleVoltar = useCallback(() => {
     if (etapaAtual > 0) {
       setNavegacaoManual(true);
-      // Quando vistoria está pulada, voltar de 4 → 2
-      const anterior = pularEtapaVistoria && etapaAtual === 4 ? 2 : etapaAtual - 1;
+      let anterior = etapaAtual - 1;
+      if (pularEtapaPagamento && etapaAtual === 5) anterior = pularEtapaVistoria ? 2 : 3;
+      else if (pularEtapaVistoria && etapaAtual === 4) anterior = 2;
       setEtapaAtual(anterior);
     }
-  }, [etapaAtual, setEtapaAtual, pularEtapaVistoria]);
+  }, [etapaAtual, setEtapaAtual, pularEtapaVistoria, pularEtapaPagamento]);
 
   // Pré-selecionar plano se já escolhido
   useEffect(() => {
