@@ -1,50 +1,76 @@
-## Situação atual (já implementado)
 
-A busca via SGA no modal **Troca de Titularidade** **já usa exatamente os endpoints solicitados**:
+## Diagnóstico
 
-- **Busca do associado** → `GET /associado/buscar/{cpf}/cpf` (função `buscarAssociadoComVeiculosPorCpf` em `supabase/functions/_shared/hinova-client.ts:751`).
-- **Listagem de boletos por associado/veículo** → `POST /listar/boleto-associado-veiculo` (função `listarBoletosVeiculoJanela` em `_shared/hinova-client.ts:567`, com janelas de 90d).
-- **Autenticação Bearer** já é resolvida por `getHinovaSession()` (token cacheado + refresh).
+Reproduzi o caso do associado `viniciusfaustinoni@gmail.com` (user_id `f8bcd79c…`). Há **dois bugs combinados** que produzem o spinner eterno em `/app/login` depois que ele cria a senha pelo link público da cotação.
 
-O hook `useBoletosSgaPorAssociado` chama a edge `sga-listar-boletos-associado`, que devolve `veiculos[].boletos_abertos[]` com `valor`, `data_vencimento`, `linha_digitavel`, `link_boleto` e `situacao_label` — já filtrando situação **em aberto + vencidos** (`STATUS_ABERTO = {pendente, vencido, aguardando_pagamento}`).
+### Bug 1 — `profile.tipo` ficou como `funcionario` em vez de `associado`
 
-## O que está faltando no modal
+A edge `cotacao-criar-senha` só insere o profile com `tipo: 'associado'` quando o profile **não existe**. Se um trigger do Auth (handle_new_user) já criou o profile com o default `funcionario`, a edge só faz `UPDATE { primeiro_acesso, email }` e **nunca corrige o tipo**.
 
-O `TrocaTitularidadeDialog` recebe os boletos do hook, mas **não renderiza** essa informação. Hoje só lista os veículos no `<select>`. Não há:
-- exibição dos boletos pendentes do veículo selecionado;
-- botão para abrir o `link_boleto` / copiar a `linha_digitavel`;
-- alerta visual quando o titular antigo tem débito.
+Estado real no banco para esse usuário:
+- `profiles.tipo = 'funcionario'`
+- `auth.users.raw_user_meta_data.tipo = 'associado'`
+- `user_roles.role = 'associado'`
+- `associados.user_id` apontando corretamente
 
-## Plano
+Como `AppLogin` só redireciona quando `profile?.tipo === 'associado'`, o usuário fica preso na tela de login.
 
-### 1. Novo bloco "Boletos pendentes" no modal
+### Bug 2 — `loading` nunca volta a `false` no `AuthContext` quando o mesmo usuário re-loga
 
-Em `src/components/associados/TrocaTitularidadeDialog.tsx`, abaixo do `<select>` de veículo (após linha ~329), renderizar:
+Em `AuthContext.tsx`:
+- `signIn()` faz `setLoading(true)` e **não desliga** em caso de sucesso (espera o `onAuthStateChange` chamar `loadUserData`).
+- O listener tem o branch "silencioso" (linhas 242–247): se `currentUserId === newUserId` e `hasLoadedData`, ele só atualiza `session/user` e **retorna sem `setLoading(false)`**.
 
-- Quando `veiculoId` selecionado e o veículo SGA correspondente possui `boletos_abertos.length > 0`:
-  - Card com título "Boletos pendentes do veículo" + total `saldo_devedor` formatado em BRL.
-  - Lista compacta de até N boletos: vencimento, valor, badge da `situacao_label` (vermelho se `vencido`, âmbar se `pendente`).
-  - Para cada boleto com `link_boleto` → botão **"Abrir boleto"** (`<a target="_blank" rel="noopener">`).
-  - Para cada boleto com `linha_digitavel` → botão **"Copiar linha digitável"** (usa `navigator.clipboard` + toast).
-- Quando o veículo não tem pendência → linha discreta "Sem boletos pendentes".
+Cenário do usuário: ele já tinha sessão ativa (last_sign_in há minutos). Ao submeter `/app/login`:
+1. `signIn` → `setLoading(true)`.
+2. Supabase emite `SIGNED_IN` com o mesmo `user.id` → cai no branch silencioso → `loading` fica `true` para sempre.
+3. `AppLogin` tem `if (authLoading) return <Loader />`, daí o spinner infinito visto na tela.
 
-### 2. Mapeamento veículo SGA ↔ veículo local
+O log do console no print confirma: dois eventos `SIGNED_IN` consecutivos seguidos de `Mesmo usuário já carregado, atualizando session silenciosamente`.
 
-O mapa `veiculos[]` já é construído em `veiculosSgaMapeados` (linhas 92-103). Adicionar paralelo um `boletosPorIdLocal: Record<string, BoletoAberto[]>` derivado do mesmo loop, chaveado por `local.id`. O bloco do passo 1 lê `boletosPorIdLocal[veiculoId]`.
+## Correções
 
-### 3. Sem mudança em backend / endpoints / hooks
+### 1. `supabase/functions/cotacao-criar-senha/index.ts`
 
-Nenhuma alteração necessária em edge functions ou hooks — os dados já chegam prontos. Apenas frontend/presentation.
+No bloco que **atualiza** o profile existente (passo 5 e passo 8), forçar também:
+```
+tipo: 'associado',
+ativo: true,
+bloqueado: false,
+```
+para corrigir contas legadas e evitar o desvio para `/dashboard`. Manter o `INSERT` como está.
+
+Também adicionar um upsert de role `associado` (já existe no passo 9 só para o caminho de criação) também no caminho onde `associado.user_id` já existe, garantindo que contas antigas tenham a role correta.
+
+### 2. `src/contexts/AuthContext.tsx`
+
+No branch silencioso do `onAuthStateChange` (linhas 242–247), além de atualizar `session/user`, garantir:
+```
+setLoading(false);
+setInitialized(true);
+```
+Isso resolve o spinner eterno em qualquer fluxo onde o mesmo usuário re-autentica (login após refresh de token, signIn quando já existe sessão, etc.).
+
+### 3. Backfill pontual do usuário afetado
+
+Migration de dados única para corrigir profiles que já estão errados:
+```sql
+UPDATE profiles p
+   SET tipo = 'associado'
+  FROM associados a
+ WHERE a.user_id = p.user_id
+   AND p.tipo <> 'associado';
+```
+(garante que outros associados criados pelo mesmo bug também sejam consertados).
 
 ## Validação
 
-Login como diretor (admin@teste.com), abrir um associado com veículo que tenha boleto em aberto no SGA, abrir "Troca de Titularidade", selecionar o veículo e conferir:
-- card de boletos aparece com vencimento/valor/badge correto;
-- botão "Abrir boleto" abre o PDF da Hinova em nova aba;
-- "Copiar linha digitável" copia e dispara toast.
+1. Logar como diretor (`admin@teste.com`) e abrir o associado `MARCUS VINICIUS` — confirmar `profile.tipo = associado` após o backfill.
+2. Tentar logar em `/app/login` com email/senha do associado — deve redirecionar para `/app/home` sem spinner travado.
+3. Repetir submit estando já autenticado — `loading` deve voltar a `false` rapidamente (regressão do Bug 2).
 
-## Detalhes técnicos
+## Arquivos alterados
 
-Arquivo a editar: `src/components/associados/TrocaTitularidadeDialog.tsx`.
-Tipo `BoletoAbertoSGA` já exportado por `src/hooks/useBuscaSGA.ts`.
-Formatação: `Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })` e `new Date(b.data_vencimento).toLocaleDateString('pt-BR')`.
+- `supabase/functions/cotacao-criar-senha/index.ts` — força `tipo='associado'` no UPDATE; upsert de role no caminho "user_id já existia".
+- `src/contexts/AuthContext.tsx` — `setLoading(false)` no branch silencioso.
+- 1 migration SQL de backfill.
