@@ -318,9 +318,7 @@ export function useOutrosProcessos(options?: UseOutrosProcessosOptions) {
           etapa_tone: etapa.tone,
           pode_editar: (() => {
             if (tipo !== 'troca_titularidade' || !troca) return false;
-            // Bloqueia edição quando termo do antigo já foi assinado
-            if (troca.termo_cancelamento_assinado_em) return false;
-            // Bloqueia se solicitação já está em status terminal/avançado
+            // Bloqueia se solicitação já está em status terminal
             if (['efetivada','reprovada_cadastro','reprovada_monitoramento','cancelada'].includes(troca.status)) return false;
             // Bloqueia se contrato (termo de filiação) já foi gerado/enviado ao novo titular
             const ct = contratoPorTroca.get(troca.id);
