@@ -56,7 +56,6 @@ export function CotacaoDetalheModal({ cotacaoId, open, onOpenChange }: CotacaoDe
   const { hasPerm } = usePermissions();
   const isDiretor = hasPerm('canDeleteCotacao');
 
-  useCotacoesRealtime();
 
   const { data: cotaPercDefault = 6 } = useCotaParticipacaoDefault();
   const { data: cotaMinDefault = 1200 } = useCotaMinimaDefault();
