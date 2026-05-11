@@ -328,7 +328,13 @@ serve(async (req) => {
     } else {
       await supabase
         .from("profiles")
-        .update({ primeiro_acesso: false, email: loginEmail })
+        .update({
+          primeiro_acesso: false,
+          tipo: "associado",
+          ativo: true,
+          bloqueado: false,
+          email: loginEmail,
+        })
         .eq("user_id", userId);
     }
 
