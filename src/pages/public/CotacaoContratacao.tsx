@@ -1189,6 +1189,8 @@ export default function CotacaoContratacao() {
                           </p>
                         </CardContent>
                       </Card>
+                        );
+                      })()
                     ) : isLoadingAgendamento ? (
                       <Card className="border-border/50 bg-card/80 backdrop-blur-xl">
                         <CardContent className="py-12 text-center space-y-4">
