@@ -577,6 +577,7 @@ export function usePropostasPendentes() {
               permite_encaixe: cotacao.vistoria_permite_encaixe || false,
             };
           }
+        }
 
         // Sobrescrever com instalação ATIVA (verdade)
         const instAtiva = mInstAtiva.get(contrato.id);
