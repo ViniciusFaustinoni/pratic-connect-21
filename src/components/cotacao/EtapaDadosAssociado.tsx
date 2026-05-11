@@ -112,10 +112,23 @@ export function EtapaDadosAssociado({
     (!isIndicacao || indicadorId !== '') &&
     !temDebitoSGA;
 
-  const handleSelectIndicador = (associado: AssociadoSearchResult) => {
-    setIndicadorId(associado.id);
-    setIndicadorNome(associado.nome);
-    setBuscaIndicador('');
+  const [isImportandoIndicador, setIsImportandoIndicador] = useState(false);
+
+  const handleSelectIndicador = async (associado: AssociadoSearchResult) => {
+    try {
+      setIsImportandoIndicador(true);
+      if (associado.origem_sga) {
+        toast.info('Importando indicador do SGA...');
+      }
+      const localId = await resolverAssociadoLocalId(associado);
+      setIndicadorId(localId);
+      setIndicadorNome(associado.nome);
+      setBuscaIndicador('');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Não foi possível selecionar este indicador');
+    } finally {
+      setIsImportandoIndicador(false);
+    }
   };
 
   const handleClearIndicador = () => {
