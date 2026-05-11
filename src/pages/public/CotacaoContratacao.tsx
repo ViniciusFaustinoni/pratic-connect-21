@@ -261,14 +261,22 @@ export default function CotacaoContratacao() {
     if (cotacao?.status_contratacao) {
       let etapa = determinarEtapa(cotacao.status_contratacao);
       
-      // Se vistoria já foi escolhida/agendada, avança para pagamento
-      if (etapa === 3 && cotacao.tipo_vistoria) {
+      // Se vistoria já foi escolhida/agendada, OU se a etapa de vistoria foi pulada
+      // (troca sem vistoria solicitada pelo monitoramento), avança para pagamento
+      if (etapa === 3 && (cotacao.tipo_vistoria || pularEtapaVistoria)) {
         etapa = 4;
       }
       
       setEtapaAtual(etapa);
     }
-  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, setEtapaAtual, navegacaoManual]);
+  }, [cotacao?.status_contratacao, cotacao?.tipo_vistoria, determinarEtapa, setEtapaAtual, navegacaoManual, pularEtapaVistoria]);
+
+  // Em navegação manual, se o usuário cair na etapa 3 mas ela está pulada, salta automaticamente.
+  useEffect(() => {
+    if (pularEtapaVistoria && etapaAtual === 3) {
+      setEtapaAtual(4);
+    }
+  }, [pularEtapaVistoria, etapaAtual, setEtapaAtual]);
 
   // Handler para navegação no Stepper
   const handleStepClick = useCallback((step: number) => {
