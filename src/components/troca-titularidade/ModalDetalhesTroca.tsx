@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,11 +10,9 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, Car, User, FileSignature, CheckCircle2, XCircle, Send, ClipboardCheck, ShieldCheck, ExternalLink, AlertTriangle, Search } from 'lucide-react';
 import { useSolicitacaoTroca, useAprovarTrocaCadastro, useAprovarTrocaMonitoramento, useReprovarTroca, useEnviarTermoCancelamento, type StatusTroca } from '@/hooks/useSolicitacoesTroca';
 import { TimelineAprovacao } from './TimelineAprovacao';
-import { RelatorioFinanceiroAntigo } from './RelatorioFinanceiroAntigo';
 import { MiniCardVistoriaTroca } from './MiniCardVistoriaTroca';
 import { VeiculoCompletoCard } from './VeiculoCompletoCard';
 import { Skeleton } from '@/components/ui/skeleton';
-import { supabase } from '@/integrations/supabase/client';
 import { formatCPF, formatPhone } from '@/types/termo-filiacao';
 
 interface Props {
