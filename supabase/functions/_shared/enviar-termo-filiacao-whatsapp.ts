@@ -154,6 +154,8 @@ export async function enviarTermoFiliacaoWhatsApp(
             mensagem: msgVendedor,
             referencia_tipo: 'termo_filiacao_vendedor',
             referencia_id: params.contratoId,
+            // Notificação interna ao vendedor — sem template Meta; vai por Evolution.
+            force_provider: 'evolution',
           },
         });
         console.log(`${tag} notificação enviada ao vendedor`, { telefone: params.vendedorTelefone });
