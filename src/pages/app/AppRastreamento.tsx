@@ -33,7 +33,8 @@ import {
   Signal,
   History,
   ShieldAlert,
-  CreditCard
+  CreditCard,
+  X
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMyVehicleWithTracker, useMyVehicles, useVeiculoPosicao, useMyAssociado } from '@/hooks/useMyData';
