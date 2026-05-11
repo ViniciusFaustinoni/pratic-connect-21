@@ -388,11 +388,29 @@ serve(async (req) => {
     const mensagem = body.mensagem || body.message;
     const instancia_id = body.instancia_id;
     const delay_ms = body.delay_ms;
-    const template_name = body.template_name;
-    const template_params = body.template_params;
-    const template_button_params = body.template_button_params;
+
+    // === Guard defensivo: aceitar aliases legados de template ===
+    // Antes: chamadores usavam `template`, `template_nome`, `params`, `variaveis`
+    // e silenciosamente caíam no caminho de "texto livre" → bloqueado pela Meta.
+    const template_name: string | undefined =
+      body.template_name || body.template || body.template_nome || undefined;
+
+    let template_params: string[] | undefined =
+      body.template_params || body.params || undefined;
+    // `variaveis` pode vir como objeto {"1": "x", "2": "y"} — convertemos para array ordenado
+    if (!template_params && body.variaveis && typeof body.variaveis === 'object') {
+      const keys = Object.keys(body.variaveis).sort((a, b) => Number(a) - Number(b));
+      template_params = keys.map((k) => String((body.variaveis as Record<string, unknown>)[k] ?? ''));
+    }
+
+    const template_button_params = body.template_button_params || body.button_params;
     const allow_text = body.allow_text === true;
     const force_provider = body.force_provider; // 'evolution' | 'meta_oficial' | undefined
+
+    if (template_name && (body.template || body.template_nome)) {
+      console.warn(`[whatsapp-send-text] ⚠️ Caller usando alias legado de template ('${body.template ? 'template' : 'template_nome'}'). Atualize para 'template_name'.`);
+    }
+
 
     if (!telefone || !mensagem) {
       return new Response(

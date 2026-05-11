@@ -1,31 +1,71 @@
-## Diagnóstico
+## Diagnóstico (logs últimas 48h)
 
-Caso real (Marcus Vinicius / LTB4J74, solicitação `6c62b7c0…`):
+Consulta em `whatsapp_mensagens` (saída):
 
-1. `enviar-termo-cancelamento-troca` cria o documento no Autentique → OK.
-2. Tenta extrair o `slugAutentique` (a partir de `signatures[].link.short_link` contendo `assina.ae`) → **vem `null`** no momento da criação (a Autentique nem sempre devolve o short link no mesmo response). Log esperado: *"short_link Autentique não retornado — pulando Meta"*.
-3. Como Meta foi pulada, cai no fallback Evolution (`whatsapp-send-text` com texto livre) → bloqueado pelo gateway: `"Bloqueado: Meta API ativa requer template_name. Texto livre não é entregue fora da janela 24h."` (registrado em `whatsapp_mensagens` → status `erro`).
-4. `waStatus` vai pra `'falhou'` e o modal mostra "WhatsApp: falhou".
+| status | provedor | total |
+|---|---|---|
+| enviada | meta_oficial | 19 |
+| **erro** | **meta_oficial** | **12** |
+| enviada | evolution | 1 |
 
-A configuração Meta (`whatsapp_meta_config`) está OK (token + phone_id presentes), o problema é só a ausência do slug no momento do envio.
+**Todos os 12 erros têm o mesmo `erro_mensagem`:**
+> "Bloqueado: Meta API ativa requer template_name. Texto livre não é entregue fora da janela 24h. Use allow_text=true para respostas na janela 24h."
+
+Origem: o sender unificado `whatsapp-send-text` (linha 247) **bloqueia corretamente** qualquer envio de texto livre quando o provedor ativo é Meta — porque fora da janela 24h Meta exige template aprovado. O bug não está no sender; está nos chamadores que ainda mandam **texto livre sem `template_name`** (ou usam nomes de parâmetros errados que caem no mesmo caminho).
+
+### Chamadores defeituosos identificados
+
+Mapeei todos os `invoke('whatsapp-send-text', ...)` em `supabase/functions/**` e cruzei com a presença de `template_name` / `allow_text` no mesmo bloco. Resultado:
+
+| # | Edge function | Linha | Quem recebe | Problema |
+|---|---|---|---|---|
+| 1 | `notificar-inicio-rota` | 242 | Técnico/Vistoriador (NOVA TAREFA) | Texto livre puro — Meta bloqueia |
+| 2 | `contrato-gerar` | 1409 | Novo titular pós-troca | Texto livre puro — Meta bloqueia |
+| 3 | `_shared/enviar-termo-filiacao-whatsapp.ts` | 151 | Vendedor (confirmação termo enviado) | Texto livre puro — Meta bloqueia |
+| 4 | `create-user` | 251 | Agência recém-cadastrada | Usa params **errados** (`template`, `params`) → cai como texto livre → bloqueado |
+| 5 | `gerar-link-vistoriador-prestador` | 213 | Vistoriador parceiro | Usa `template_nome` (errado, deveria ser `template_name`) → cai no caminho `allow_text=true`, mas fora da janela 24h Meta também rejeita |
+| 6 | `aprovar-troca-cadastro` | 201 | Vendedor | ✅ Já força `force_provider:'evolution'` — OK, não está nos erros |
+| 7 | `notificar-cliente` | 636 | Cliente | ✅ Já injeta `template_name` com fallback `sinistro_atualizado` — OK |
+
+Também existem 4 templates de troca de titularidade ainda **PENDING** no Meta (`troca_titularidade_*`) — fora do escopo (depende da Meta aprovar).
 
 ## Correção
 
-**Arquivo:** `supabase/functions/enviar-termo-cancelamento-troca/index.ts`
+### A. Fix nos 5 chamadores quebrados — usar templates Meta aprovados
 
-1. **Resolver o slug com robustez** (antes de pular Meta):
-   - Se `shortLinkRaw` não veio no response inicial, fazer uma query GraphQL de follow-up `query { document(id: $id) { signatures { public_id link { short_link } } } }` (com 1–2 retries de ~1.5s). Reextrair `short_link` contendo `assina.ae`.
-   - Se ainda assim não vier, usar **`public_id` da signature como slug** (template `assinatura_documento_v2` URL é `https://assina.ae/{{1}}` — `assina.ae/{public_id}` resolve para o mesmo destino).
-   - Só se nem `public_id` existir, marcar como falha.
+| # | Função | Template aprovado a usar | Variáveis (corpo) | Botão? |
+|---|---|---|---|---|
+| 1 | `notificar-inicio-rota` | `servico_atribuido_v1` | `[primeiroNomeTec, "INSTALAÇÃO/VISTORIA — placa LTB4J74", "12/05/2026 Tarde — Cliente XYZ — endereço"]` | — |
+| 2 | `contrato-gerar` (troca) | `force_provider:'evolution'` (texto livre via Evolution; Meta não tem template específico para esse aviso) | — | — |
+| 3 | `enviar-termo-filiacao-whatsapp` (vendedor) | `force_provider:'evolution'` (notificação interna ao vendedor — mesmo padrão do `aprovar-troca-cadastro`) | — | — |
+| 4 | `create-user` (agência) | Renomear `template`→`template_name` e `params`→`template_params`. Template `boas_vindas_agencia_v1` já existe | `[nomeIdentificado, magicLink]` | — |
+| 5 | `gerar-link-vistoriador-prestador` | `tarefa_vistoriador_v2` (já aprovado, 4 params) | `[primeiroNome, nomeAssociado, cidade, dataHora]` | — |
 
-2. **Remover o fallback Evolution texto livre** (linhas ~341-357): com Meta como provedor oficial, esse caminho está garantido a falhar fora da janela 24h e ainda polui `whatsapp_mensagens`. Substituir por: se Meta não pôde enviar (sem slug/sem config), marcar `waStatus = 'falhou'` com erro descritivo no `whatsapp_mensagens` e seguir (Autentique já mandou e-mail).
+### B. Guard defensivo no sender `whatsapp-send-text`
 
-3. **Logging**: incluir motivo específico no `console.warn` e no campo `erro_mensagem` da `whatsapp_mensagens` (`autentique_short_link_indisponivel`, `meta_config_ausente`, ou erro retornado pela Graph API) para facilitar debugging futuro.
+Adicionar tradução automática de aliases legados antes da decisão Meta/free-text, para nunca mais silenciosamente cair no bloqueio por um nome de campo trocado:
 
-4. **Reenvio retroativo**: após o deploy, o usuário pode clicar em "Reenviar termo" no modal — a função vai recriar o doc e disparar a Meta corretamente. Não precisa de backfill manual.
+- `template` → `template_name`
+- `template_nome` → `template_name`
+- `params` / `variaveis` (objeto `{1:..,2:..}` ou array) → `template_params` (array ordenado)
+
+E **logar com warning explícito** o caller (header `x-edge-function-name` quando disponível) toda vez que cair no caminho "texto livre bloqueado", para acelerar futuras detecções.
+
+### C. Verificação pós-deploy
+
+Após deploy, simular um disparo de cada um dos 5 fluxos (técnico, contrato troca, vendedor confirmação, criação de agência, link vistoriador prestador) e checar `whatsapp_mensagens` — todos devem entrar como `status='enviada'`.
 
 ## Fora de escopo
 
-- Mudar provedor padrão / janela 24h.
-- Mexer em outros fluxos que usam `whatsapp-send-text`.
-- UI do modal (a label "falhou" passa a refletir corretamente quando Meta também falhar).
+- Aprovação dos templates `troca_titularidade_*` na Meta (depende da Meta).
+- Reescrita do orquestrador Meta/Evolution.
+- UI/preview de templates.
+
+## Arquivos que serão tocados
+
+1. `supabase/functions/notificar-inicio-rota/index.ts`
+2. `supabase/functions/contrato-gerar/index.ts`
+3. `supabase/functions/_shared/enviar-termo-filiacao-whatsapp.ts`
+4. `supabase/functions/create-user/index.ts`
+5. `supabase/functions/gerar-link-vistoriador-prestador/index.ts`
+6. `supabase/functions/whatsapp-send-text/index.ts` (guard defensivo + log)
