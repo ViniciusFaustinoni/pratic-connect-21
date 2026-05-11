@@ -88,12 +88,35 @@ export const trocaTitularidade: Tutorial = {
     },
     {
       numero: 7,
-      titulo: 'Cadastro envia o Termo de Cancelamento e aprova',
+      titulo: 'Cadastro envia o Termo de Cancelamento ao titular antigo',
       descricao:
-        'O Cadastro abre a solicitação em Cadastro › Processos › Titularidade, dispara o Termo de Cancelamento para o titular antigo (e-mail + biometria), aguarda a assinatura e então aprova. A assinatura do termo já desvincula logicamente o veículo do antigo dono — é o que destrava a placa para a nova titularidade.',
+        'O Cadastro abre a solicitação em Cadastro › Processos › Titularidade e dispara o Termo de Cancelamento para o titular antigo (e-mail + biometria facial via Autentique). A solicitação fica "aguardando assinatura do termo" — nada avança enquanto o antigo dono não assina.',
       dicas: [
-        'Enquanto o termo não é assinado, a aprovação fica bloqueada.',
-        'Débitos em aberto no SGA do antigo dono também travam a aprovação até quitação.',
+        'O termo é enviado por e-mail; a assinatura exige biometria facial (PF_FACIAL).',
+        'Débitos em aberto no SGA do antigo dono travam a etapa seguinte até a quitação.',
+      ],
+      links: [
+        { label: 'Cadastro › Processos › Titularidade', url: '/cadastro/processos?tab=titularidade' },
+      ],
+    },
+    {
+      numero: 8,
+      titulo: 'Titular antigo assina o Termo de Cancelamento',
+      descricao:
+        'O antigo dono recebe o link, faz a biometria facial e assina o Termo de Cancelamento. Essa assinatura desvincula logicamente o veículo do antigo dono (marca em_troca_titularidade=true) e destrava a placa para a nova titularidade.',
+      dicas: [
+        'Assinatura é exclusivamente facial via Autentique — não há desenho manual.',
+        'Sem assinatura do termo, a transferência não pode ser efetivada.',
+      ],
+    },
+    {
+      numero: 9,
+      titulo: 'Cadastro aprova a troca',
+      descricao:
+        'Com o Termo de Cancelamento assinado pelo antigo e o contrato assinado pelo novo titular, o Cadastro aprova a solicitação em Cadastro › Processos › Titularidade. A aprovação marca cadastro_aprovado=true e libera a solicitação para Monitoramento.',
+      dicas: [
+        'A aprovação só fica disponível com termo + contrato assinados.',
+        'Reprovação volta a solicitação ao vendedor com o motivo registrado.',
       ],
       links: [
         { label: 'Tutorial completo do Cadastro', url: '/tutoriais/aprovacao-troca-titularidade-cadastro' },
@@ -101,27 +124,41 @@ export const trocaTitularidade: Tutorial = {
       ],
     },
     {
-      numero: 8,
-      titulo: 'Monitoramento aprova a vistoria de campo',
+      numero: 10,
+      titulo: 'Monitoramento aprova a solicitação',
       descricao:
-        'Ao aprovar no Cadastro, o sistema cria automaticamente um serviço de vistoria (origem "troca de titularidade") em Monitoramento › Serviços de Campo. O técnico fotografa o veículo (sem instalar nada novo) e a fila de Monitoramento › Aprovações › Aprovação de Associados decide. A cobertura segue suspensa até essa decisão.',
+        'A solicitação cai na fila de Monitoramento › Aprovações › Aprovação de Associados. O Monitoramento valida documentos e fotos prévias e libera o serviço de vistoria de campo (origem "troca de titularidade") para a fila de atribuição.',
       dicas: [
-        'A vistoria aqui é só de conferência — não há instalação de rastreador novo, o equipamento existente continua.',
+        'A cobertura segue suspensa até a decisão final do Monitoramento após a vistoria.',
         'Reprovação volta a solicitação ao Cadastro com o motivo registrado.',
       ],
       links: [
-        { label: 'Monitoramento › Serviços de Campo', url: '/monitoramento/servicos-campo' },
-        { label: 'Aprovação de Associados', url: '/monitoramento/aprovacoes' },
+        { label: 'Monitoramento › Aprovações', url: '/monitoramento/aprovacoes' },
       ],
     },
     {
-      numero: 9,
-      titulo: 'Ativação automática do novo associado',
+      numero: 11,
+      titulo: 'Atribuição manual e vistoria do técnico',
       descricao:
-        'Aprovada a vistoria, o sistema executa a efetivação: cancela o contrato do titular antigo, ativa o contrato do novo, transfere o veículo, religa a cobertura e sincroniza tudo no SGA Hinova. O novo titular passa a constar como ativo em Cadastro › Associados, com o histórico de carência preservado.',
+        'Em Monitoramento › Serviços de Campo › Atribuição Manual, o serviço (marcado como encaixe) é atribuído ao técnico. O técnico vai até o veículo e realiza a vistoria de conferência — apenas fotografa, sem instalar nada novo, pois o rastreador já existe. O resultado volta para aprovação final do Monitoramento.',
       dicas: [
-        'Toda essa ativação passa pela edge function única de ativação — não é preciso rodar nada manual.',
-        'No SGA Hinova a situação do novo associado é criada como Pendente; a promoção para Ativo é manual no painel SGA.',
+        'A vistoria de troca de titularidade é só fotográfica — não há instalação de rastreador.',
+        'Como é encaixe, o serviço entra direto na fila do dia, mesmo sem agenda prévia.',
+      ],
+      links: [
+        { label: 'Atribuição Manual', url: '/monitoramento/servicos-campo' },
+        { label: 'Mapa de Monitoramento', url: '/monitoramento/mapa' },
+      ],
+    },
+    {
+      numero: 12,
+      titulo: 'Novo associado cria a senha e a troca é concluída',
+      descricao:
+        'Aprovada a vistoria, a edge function efetivar-troca-titularidade cancela o contrato do antigo, ativa o contrato do novo, transfere o veículo, religa a cobertura e sincroniza no SGA Hinova (situação Pendente). No link público o novo associado vê o convite para criar a senha de acesso ao app — ao definir a senha, a troca de titularidade é considerada concluída.',
+      dicas: [
+        'A ativação passa exclusivamente pela edge function única ativar-associado — não há etapa manual.',
+        'No SGA Hinova o novo associado nasce Pendente; a promoção para Ativo é manual no painel do SGA.',
+        'A carência cumprida pelo titular antigo é integralmente preservada para o novo.',
       ],
       links: [
         { label: 'Cadastro › Associados', url: '/cadastro/associados' },
