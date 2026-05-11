@@ -516,6 +516,7 @@ export function useCotacaoContratacao(token: string | undefined) {
           cliente_cnh: truncar(dados.cnh, 50),
           cliente_cnh_validade: dados.cnh_validade || null,
           cliente_cnh_categoria: truncar(dados.cnh_categoria, 20),
+          cliente_sexo: dados.sexo || null,
           
           // Dados do veículo extraídos do CRLV via OCR ou preenchidos manualmente
           // (necessários para SGA Hinova e Termo)
@@ -553,6 +554,7 @@ export function useCotacaoContratacao(token: string | undefined) {
         if (dados.cnh_validade) cnhUpdate.cnh_validade = dados.cnh_validade;
         if (dados.cnh) cnhUpdate.cnh_numero = dados.cnh;
         if (dados.cnh_categoria) cnhUpdate.cnh_categoria = dados.cnh_categoria;
+        if (dados.sexo) cnhUpdate.sexo = dados.sexo;
         if (Object.keys(cnhUpdate).length > 0) {
           await publicSupabase
             .from('associados')

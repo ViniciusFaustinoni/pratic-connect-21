@@ -398,7 +398,7 @@ const systemPrompt = `Analista de documentos brasileiros. Detecte o tipo e extra
 ## Tipos e campos obrigatórios:
 
 ### CNH
-nome, cpf (XXX.XXX.XXX-XX - PRIORIDADE MÁXIMA), rg, numero_registro (11 dígitos), data_nascimento (YYYY-MM-DD), validade (YYYY-MM-DD), categoria, mrz_registro (string)
+nome, cpf (XXX.XXX.XXX-XX - PRIORIDADE MÁXIMA), rg, numero_registro (11 dígitos), data_nascimento (YYYY-MM-DD), validade (YYYY-MM-DD), categoria, sexo ("M" ou "F" — leia do campo "SEXO" / "Sex"; se ilegível, retorne null), mrz_registro (string)
 
 - MRZ_REGISTRO (campo de validação cruzada — OBRIGATÓRIO em CNH-e digital):
   No RODAPÉ da página há 3 linhas de leitura mecânica (MRZ) impressas em fonte OCR-B (monoespaçada), com 30 caracteres cada e o caractere "<" como preenchimento.
@@ -634,7 +634,7 @@ function tryRepairTruncatedJSON(raw: string): object | null {
       const dados: Record<string, string | null> = {};
       const dadosFields = [
         // pessoais
-        'nome', 'cpf', 'rg', 'data_nascimento', 'numero_registro', 'validade', 'data_expedicao', 'orgao_expedidor', 'categoria', 'variante', 'mrz_registro',
+        'nome', 'cpf', 'rg', 'data_nascimento', 'numero_registro', 'validade', 'data_expedicao', 'orgao_expedidor', 'categoria', 'sexo', 'variante', 'mrz_registro',
         // veículo
         'placa', 'renavam', 'chassi', 'marca', 'modelo', 'cor', 'combustivel', 'motor', 'numero_motor', 'nome_proprietario',
         // comprovante de residência

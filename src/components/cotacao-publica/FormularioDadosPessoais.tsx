@@ -29,6 +29,7 @@ const schema = z.object({
   cnh: z.string().optional(),
   cnh_validade: z.string().optional(),
   cnh_categoria: z.string().optional(),
+  sexo: z.enum(['M', 'F']).optional(),
   // Dados do veículo extraídos do CRLV
   veiculo_chassi: z.string().optional(),
   veiculo_renavam: z.string().optional(),

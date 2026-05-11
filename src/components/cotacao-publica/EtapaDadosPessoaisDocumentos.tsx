@@ -55,6 +55,7 @@ interface DadosExtraidos {
   cnh?: string;
   cnh_validade?: string;
   cnh_categoria?: string;
+  sexo?: 'M' | 'F';
   // Endereço (de Comprovante)
   cep?: string;
   logradouro?: string;
@@ -261,6 +262,13 @@ export function EtapaDadosPessoaisDocumentos({
           
           // Categoria da CNH (A, B, AB, etc.)
           if (dados.categoria) novosDados.cnh_categoria = dados.categoria;
+
+          // Sexo (M/F) — normaliza variantes vindas do OCR
+          if (dados.sexo) {
+            const s = String(dados.sexo).trim().toUpperCase();
+            if (s.startsWith('M')) novosDados.sexo = 'M';
+            else if (s.startsWith('F')) novosDados.sexo = 'F';
+          }
         }
         
         // Órgão emissor do RG (pode vir de CNH ou RG)
@@ -444,6 +452,7 @@ export function EtapaDadosPessoaisDocumentos({
     cnh: dadosExtraidos.cnh || undefined,
     cnh_validade: dadosExtraidos.cnh_validade || undefined,
     cnh_categoria: dadosExtraidos.cnh_categoria || undefined,
+    sexo: dadosExtraidos.sexo || undefined,
     veiculo_placa: dadosExtraidos.veiculo_placa || undefined,
     veiculo_chassi: dadosExtraidos.veiculo_chassi || undefined,
     veiculo_renavam: dadosExtraidos.veiculo_renavam || undefined,

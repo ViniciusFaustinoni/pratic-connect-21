@@ -9737,6 +9737,7 @@ export type Database = {
           cliente_profissao: string | null
           cliente_rg: string | null
           cliente_rg_orgao: string | null
+          cliente_sexo: string | null
           cliente_telefone_secundario: string | null
           cliente_uf: string | null
           codigo_fipe: string | null
@@ -9873,6 +9874,7 @@ export type Database = {
           cliente_profissao?: string | null
           cliente_rg?: string | null
           cliente_rg_orgao?: string | null
+          cliente_sexo?: string | null
           cliente_telefone_secundario?: string | null
           cliente_uf?: string | null
           codigo_fipe?: string | null
@@ -10009,6 +10011,7 @@ export type Database = {
           cliente_profissao?: string | null
           cliente_rg?: string | null
           cliente_rg_orgao?: string | null
+          cliente_sexo?: string | null
           cliente_telefone_secundario?: string | null
           cliente_uf?: string | null
           codigo_fipe?: string | null
