@@ -127,6 +127,7 @@ export default function AppRastreamento() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [veiculoSelecionado, setVeiculoSelecionado] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(true);
+  const [dismissAguardando, setDismissAguardando] = useState(false);
   
   const isLoading = vehiclesLoading || trackerLoading || associadoLoading;
   const vehicle = veiculoSelecionado 
