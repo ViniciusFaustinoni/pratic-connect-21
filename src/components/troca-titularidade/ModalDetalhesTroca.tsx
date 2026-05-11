@@ -294,7 +294,10 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
                     {modo === 'cadastro' && solicitacao.status !== 'cotacao_em_andamento' && solicitacao.status !== 'aguardando_cadastro' && (
                       <>Esta solicitação não está mais sob análise do Cadastro (status atual: <strong>{STATUS_LABELS[solicitacao.status].label}</strong>). Acompanhe pela Timeline.</>
                     )}
-                    {modo === 'monitoramento' && solicitacao.status !== 'aguardando_monitoramento' && (
+                    {modo === 'monitoramento' && solicitacao.status === 'aguardando_vistoria' && !vistoriaClienteConcluida && (
+                      <>Vistoria solicitada — aguardando o <strong>novo titular</strong> concluir a vistoria pelo link público de contratação. O botão <strong>Aprovar</strong> reaparece automaticamente assim que a vistoria for finalizada.</>
+                    )}
+                    {modo === 'monitoramento' && solicitacao.status !== 'aguardando_monitoramento' && solicitacao.status !== 'aguardando_vistoria' && (
                       <>O botão <strong>Aprovar</strong> só aparece quando a solicitação está em <em>Aguardando Monitoramento</em>. Status atual: <strong>{STATUS_LABELS[solicitacao.status].label}</strong>.</>
                     )}
                   </AlertDescription>
