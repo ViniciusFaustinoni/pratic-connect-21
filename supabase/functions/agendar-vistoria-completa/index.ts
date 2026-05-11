@@ -171,8 +171,63 @@ serve(async (req) => {
       longitude: finalLongitude
     });
 
-    // NÃO criar vistoria nem instalação aqui.
-    // A instalação será criada somente após aprovação do Cadastro.
+    // RETOMADA OPERACIONAL — materializar instalação se o contrato já está
+    // assinado e ainda não há registro operacional para essa cotação. Cobre
+    // dois cenários:
+    //  (a) cliente conclui pagamento ANTES de agendar (asaas-webhook chamou
+    //      criar-instalacao-pos-pagamento sem data e pulou a criação);
+    //  (b) aprovar-proposta caiu no guard 'sem_agendamento' e devolveu o
+    //      contrato a Propostas Pendentes — agora o cliente agendou.
+    // Idempotente: criar-instalacao-pos-pagamento checa instalação existente.
+    let instalacaoMaterializadaId: string | null = null;
+    try {
+      const [{ data: instExistente }, { data: vistExistente }] = await Promise.all([
+        supabase
+          .from('instalacoes')
+          .select('id, status')
+          .eq('cotacao_id', cotacaoId)
+          .in('status', ['agendada', 'em_andamento', 'em_analise', 'em_rota', 'concluida'])
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('vistorias')
+          .select('id, status')
+          .eq('cotacao_id', cotacaoId)
+          .in('status', ['pendente', 'agendada', 'em_andamento', 'em_rota', 'em_analise', 'aprovada', 'concluida'])
+          .limit(1)
+          .maybeSingle(),
+      ]);
+
+      if (!instExistente && !vistExistente) {
+        console.log('[AgendarVistoriaCompleta] Sem instalação/vistoria — invocando criar-instalacao-pos-pagamento (skipPaymentCheck)');
+        const { data: instResp, error: instErr } = await supabase.functions.invoke(
+          'criar-instalacao-pos-pagamento',
+          { body: { cotacaoId, skipPaymentCheck: true } }
+        );
+        if (instErr) {
+          console.warn('[AgendarVistoriaCompleta] criar-instalacao-pos-pagamento falhou (não bloqueante):', instErr);
+        } else {
+          instalacaoMaterializadaId = (instResp as any)?.instalacaoId ?? null;
+          console.log('[AgendarVistoriaCompleta] Materialização ok. instalacaoId=', instalacaoMaterializadaId);
+
+          // Se contrato já estava assinado e havia caído no guard sem_agendamento,
+          // gerar link público de vistoria (idempotente).
+          if (instalacaoMaterializadaId) {
+            try {
+              await supabase.functions.invoke('gerar-link-vistoria-publica', {
+                body: { instalacao_id: instalacaoMaterializadaId, cotacao_id: cotacaoId },
+              });
+            } catch (e) {
+              console.warn('[AgendarVistoriaCompleta] gerar-link-vistoria-publica falhou (não bloqueante):', e);
+            }
+          }
+        }
+      } else {
+        console.log('[AgendarVistoriaCompleta] Já há instalação/vistoria — nada a materializar');
+      }
+    } catch (matErr) {
+      console.warn('[AgendarVistoriaCompleta] Retomada operacional falhou (não bloqueante):', matErr);
+    }
 
     // Enviar confirmação WhatsApp imediata se permiteEncaixe = true
     if (permiteEncaixe) {
