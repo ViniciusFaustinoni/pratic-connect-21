@@ -1,69 +1,55 @@
-## Diagnóstico
+# Troca de Titularidade — Etapa pós‑termo de filiação
 
-### 1) Documentos / laudo no modal de aprovação (Monitoramento → Aprovações de Troca)
+## Comportamento desejado
 
-O `ModalDetalhesTroca` já renderiza `VeiculoCompletoCard`, que **já exibe**:
-- Dados completos do veículo + rastreador
-- Fotos da vistoria (com viewer)
-- Documentos do associado (`useDocumentosAssociadoCompleto` une `documentos_associados` + `documentos_cotacao` — inclui `laudo_vistoria`, `cnh`, `crlv`, `comprovante_residencia`)
-- Resumo de eventos (sinistros + assistências)
+Após o **novo associado** assinar o **termo de filiação** no link público da troca de titularidade:
 
-O screenshot anexado confirma que esses blocos estão aparecendo. **Nenhuma alteração necessária aqui** — caso queira ajustes específicos (ex.: separar laudo em destaque, adicionar coluna “última vistoria aprovada”), me avise.
+1. **Cenário com adesão (`cobra_base` / `cobra_rota` / `valor_adesao > 0`)** → exibir a etapa de **Pagamento** normalmente (comportamento atual).
+2. **Cenário sem adesão (`isenta_base` / `isenta_rota` / `valor_adesao = 0`)** → como Cadastro e Monitoramento já aprovaram (e a Vistoria foi concluída ou dispensada), pular a etapa de Pagamento e exibir diretamente o card de **Criação da senha do app** para o novo associado (mesmo card já usado hoje quando `status_contratacao = 'ativo'`, via `EtapaCriacaoSenhaCotacao`).
 
-### 2) Posição do rastreador não retorna (Mapa Monitoramento, Detalhes do Veículo, Modal Troca)
+Critério de "isenta" (aplicar OR):
+- `cotacao.cenario_adesao` começa com `'isenta_'`, **ou**
+- `cotacao.valor_adesao === 0` (fallback de segurança).
 
-**Investigação:**
+## Mudanças
 
-Os 3 locais usam o hook `useRastreadorTempoReal` → edge `rastreador-posicao` (Mapa do app/assistência usa `posicao-veiculo`, mesma família).
+### 1. `src/pages/public/CotacaoContratacao.tsx` (frontend)
 
-Logs reais da `rastreador-posicao`:
-```
-[Softruck] Buscando posição (tentativa 1/3) → 404 {"error":{"message":"Internal Service Error"}}
-[Softruck] Buscando posição (tentativa 2/3) → 404
-[Softruck] Buscando posição (tentativa 3/3) → 404
-Erro posição: API Softruck temporariamente indisponível (404)
-```
+- Adicionar flag `pularEtapaPagamento`:
+  ```
+  const isCenarioIsento =
+    (cotacao.cenario_adesao?.startsWith('isenta_') ?? false) ||
+    (cotacao.valor_adesao ?? 0) === 0;
+  const pularEtapaPagamento =
+    isTrocaTitularidade && trocaLiberada && isCenarioIsento;
+  ```
+- Atualizar `STEPS` (memo) para também filtrar a etapa `'pagamento'` quando `pularEtapaPagamento`.
+- Atualizar `isEtapaConcluida(4)` para retornar `true` quando `pularEtapaPagamento` (etapa pulada conta como concluída, igual ao tratamento da vistoria).
+- Atualizar `etapaDoStatus` e o `useEffect` de sincronização: quando `etapa === 4 && pularEtapaPagamento` → avançar para `5` (conclusão).
+- Atualizar `handleAvancar` / `handleVoltar` para saltar de `3 → 5` (ou de `2 → 5` se também pulando vistoria) e o caminho inverso.
+- Após assinatura do contrato (`onContratoAssinado`):
+  - Se `pularEtapaPagamento`, em vez de `setEtapaAtual(3)`, disparar a ativação chamando a edge function `ativar-associado` (passando `cotacao_id`/`contrato_id` da troca) e em seguida `refetch()` da cotação. Quando a cotação retornar com `status_contratacao = 'ativo'`, o early‑return já existente (linhas 432‑442) renderiza automaticamente `EtapaCriacaoSenhaCotacao`.
+  - Mostrar estado de loading "Ativando contrato…" enquanto a chamada está em andamento.
 
-Testei a mesma URL via `softruck-api` (operation `tracking`):
-- Rastreador A (`89cb309d-…`, IMEI 867689063760369, IDs Softruck `BelkQWv4KqLjERo / ekgzQoWoylQdAr8`): **200 OK** com lat/lng atuais.
-- Rastreador B (`41accc39-…`, IMEI 869412077334305, IDs `7yN6L82l7AZKgM5 / 7yN6L84a0OLKgM5`): **404 “Internal Service Error”** em todos os endpoints.
+### 2. `supabase/functions/ativar-associado/index.ts` (backend — ajuste mínimo)
 
-Conclusão: **a função em si funciona**. O 404 acontece em rastreadores cujos `plataforma_veiculo_id` / `plataforma_device_id` ficaram **stale** na Softruck (provavelmente por reativação/recriação no enterprise correto via `softruck-recriar-veiculos-enterprise-correta`). O código atual só re-resolve IDs quando eles parecem IMEI bruto (`isRawImei`); para hashes inválidos ele desiste e cai no fallback “sem última posição registrada”.
+- Garantir que o caminho aceita ativação de troca de titularidade **sem exigir `pagamento_ok`** quando `cotacao.cenario_adesao` for isenta (ou `valor_adesao = 0`) e o contrato (autentique) já está assinado.
+- Reaproveitar a edge `ativar-associado` (regra "ativação centralizada" do projeto) — não criar caminho paralelo.
 
-Por isso:
-- Rastreadores cujos IDs Softruck ainda batem → posição volta normal.
-- Rastreadores recriados / migrados → 404 permanente até alguém rodar reconciliação manual.
+### 3. Webhook Autentique (verificação)
 
-## Plano
+Confirmar que, quando o termo de filiação da troca é assinado, o webhook autentique chama `ativar-associado` automaticamente; se já chama, a alteração do item 2 cobre o caso isenta sem precisar de ação adicional do frontend (o frontend então apenas faz polling/refetch para detectar `status='ativo'` e renderizar a tela de senha). Se NÃO chama, manter a chamada explícita do frontend descrita no item 1.
 
-### A) `supabase/functions/rastreador-posicao/index.ts` — auto-recuperação de IDs stale
+## Detalhes técnicos
 
-1. Quando `getPosicaoSoftruckComRetry` lançar erro com `404` + `Internal Service Error` (ou regex `Internal Service Error|invalid vehicle|invalid device|not found`), **chamar `resolverSoftruckDeviceId(IMEI)`** uma única vez (mesma rotina já existente no arquivo) e tentar de novo com os IDs frescos.
-2. Se a re-resolução resolver IDs diferentes dos atuais, eles já são persistidos em `rastreadores` (a função já faz isso). Logar `re_resolvido=true` em `rastreadores_logs`.
-3. Se mesmo após re-resolver continuar 404, manter o fallback atual (última posição conhecida + mensagem clara).
-4. Pequena melhoria de mensagem: distinguir “IDs Softruck inválidos — re-resolução falhou” de “API Softruck indisponível (5xx)” no campo `mensagem`.
+- A tela de criação de senha já existe (`EtapaCriacaoSenhaCotacao`) e o gating em `CotacaoContratacao.tsx` já a renderiza quando `status_contratacao === 'ativo'`. Não criar componente novo.
+- Stepper visual: `STEPS_BASE` mantido; só a versão filtrada (sem vistoria e/ou sem pagamento) é passada para o `Stepper` e para o cálculo de `totalEtapas` na `NavegacaoEtapas`.
+- Não tocar em fluxos de cotação normal nem em troca com `cobra_*` — a etapa de Pagamento permanece intacta para esses casos.
+- Não alterar `efetivar-troca-titularidade` (responsável por gerar contrato/transferir veículo) — ele já roda a partir do gatilho de aprovação/vistoria; aqui apenas garantimos que a **ativação final** do novo contrato/associado/veículo dispense o passo de pagamento quando isenta.
 
-### B) `supabase/functions/posicao-veiculo/index.ts` — mesma lógica
+## Critérios de aceitação
 
-Replicar o passo de re-resolução por IMEI (porta o helper `resolverSoftruckDeviceId` da `rastreador-posicao` para um arquivo compartilhado em `_shared/softruck-resolver.ts` para evitar duplicação) e usar dentro do `catch` do bloco Softruck antes de cair no `ultimaPosicaoConhecida`.
-
-### C) Frontend — sem mudança
-
-`useRastreadorTempoReal` e `useChamadoPosicaoTempoReal` já lidam corretamente com:
-- `success:true, tempo_real:true` → posição atual
-- `success:true, tempo_real:false, posicao:{...}` → fallback (banner amarelo)
-- `success:false` sem fallback → erro vermelho “Erro de comunicação”
-
-Após (A) e (B) os 3 locais (Monitoramento → Mapa, Detalhes do Veículo, Modal Troca de Titularidade) voltam a exibir lat/lng atuais nos rastreadores cujos IDs ficaram stale, sem precisar de reconciliação manual.
-
-### D) Reconciliação em massa (opcional / executável já)
-
-Para destravar imediatamente todos os trackers afetados (sem esperar usuários abrirem cada veículo), posso disparar `rastreador-reconciliar-softruck` em background — mas isto fica como passo separado depois que (A)/(B) estiverem no ar.
-
-## Arquivos a editar
-
-- `supabase/functions/rastreador-posicao/index.ts`
-- `supabase/functions/posicao-veiculo/index.ts`
-- `supabase/functions/_shared/softruck-resolver.ts` (novo, extraído da função existente)
-
-Sem migração de banco. Sem mudança de UI/hooks.
+- Troca isenta + monitoramento aprovou sem vistoria → após assinar o termo, link público pula Pagamento e mostra "Criar senha do app".
+- Troca isenta + monitoramento solicitou vistoria → após vistoria concluída e termo assinado, mesmo comportamento (pula pagamento).
+- Troca cobra_* → fluxo atual preservado: assina termo → Pagamento → Conclusão/Senha.
+- Cotação normal (não troca) → nenhum impacto.
