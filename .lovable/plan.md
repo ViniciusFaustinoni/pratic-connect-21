@@ -1,62 +1,47 @@
-## Problema
+# Bug
 
-No modal **Aprovação do Monitoramento → Troca de Titularidade**, dois blocos não puxam dados reais:
+Após o Monitoramento aprovar uma troca de titularidade **sem solicitar vistoria**, o link público do novo titular mostra "Vistoria do veículo solicitada" em vez de continuar o fluxo de assinatura + pagamento (como em uma cotação comum).
 
-- **Aba "Financeiro Antigo"** mostra sempre `0 / 0 / 0` e badge "ADIMPLENTE" mesmo quando o associado tem boletos em aberto no SGA. Hoje o componente `RelatorioFinanceiroAntigo` lê apenas a tabela local `cobrancas` (que normalmente está vazia para associados antigos vindos do SGA).
-- **Bloco "Rastreador"** dentro do `VeiculoCompletoCard` usa `useRastreadorTempoReal(rastreador.id, false)` com `autoRefresh=false`, então só busca posição se o usuário clicar em "Atualizar"; e quando o veículo não tem `rastreadores.veiculo_id` vinculado, ele simplesmente diz "Sem rastreador instalado" mesmo havendo equipamento ativo no SGA/Softtruck.
+## Causa raiz
 
-## Endpoints corretos (já em uso e funcionando em outras telas)
+`supabase/functions/contrato-gerar/index.ts` (linhas 1302-1397) sempre que detecta `tipo_entrada === 'troca_titularidade'`:
+1. Cria um serviço `vistoria_entrada` (mesmo quando o Monitoramento não pediu).
+2. **Flipa a solicitação de `liberada_para_assinatura` para `aguardando_vistoria` imediatamente após gerar o contrato**.
 
-- **Financeiro do associado antigo:** edge function `sga-listar-boletos-associado` via hook `useBoletosSgaPorAssociado(codigoHinova, cpf, enabled)` — é o mesmo que a tela de **criação** da troca usa (`TrocaTitularidadeDialog`) e que já popula veículos + saldo + boletos abertos.
-- **Rastreador em tempo real:** hook `useRastreadorTempoReal(rastreadorId, autoRefresh=true)` (mesmo usado em `MapaRastreador`/drawers de rastreador) — basta habilitar `autoRefresh` quando o modal está aberto.
+Como o `CotacaoContratacao.tsx` só considera `trocaLiberada = status === 'liberada_para_assinatura' || 'efetivada'`, qualquer outro status volta ao `<TelaAnaliseTrocaTitularidade />` que exibe "Vistoria solicitada". Resultado: o novo titular recebe o termo de filiação por e-mail mas a página pública trava na tela de "vistoria pendente".
 
-## Mudanças
+# Correção
 
-### 1. `src/components/troca-titularidade/RelatorioFinanceiroAntigo.tsx`
+## 1. `supabase/functions/contrato-gerar/index.ts`
+- **Não** flipar para `aguardando_vistoria` ao gerar o contrato. Manter `liberada_para_assinatura`.
+- Continuar gravando `novo_associado_id` na solicitação (idempotente).
+- Criar o serviço `vistoria_entrada` apenas quando a solicitação **já estava** em `aguardando_vistoria` (Monitoramento pediu) — caso contrário, deixar a criação para o gatilho pós-pagamento/assinatura.
+- Ajustar a notificação WhatsApp: avisar "contrato gerado, assine por e-mail e finalize o pagamento" em vez de "vistoria em breve".
 
-- Trocar a query local por `useBoletosSgaPorAssociado(codigo_hinova, cpf)` (props expandidas).
-- Calcular contagens diretamente a partir do payload SGA:
-  - **Vencidas** = `veiculos[].boletos_abertos` cujo `data_vencimento < hoje`.
-  - **A vencer** = boletos abertos com vencimento `>= hoje`.
-  - **Total em atraso** = soma dos `valor` das vencidas.
-  - **Adimplente** = `!sgaPayload.tem_debito && vencidas.length === 0`.
-- Estados:
-  - Loading → skeleton.
-  - `erro_transitorio` → alert amarelo "SGA indisponível, tente novamente" + botão `refetch`.
-  - `encontrado=false` → alert "Associado não encontrado no SGA — sincronize antes de prosseguir" (sem inferir adimplência).
-  - Sucesso → cards atuais (Vencidas / A vencer / Pagas) usando dados SGA; "Pagas" deixa de existir (SGA não traz histórico) e é substituído por **Saldo devedor total** do payload (`saldo_devedor_total`).
-- Manter a listagem dos primeiros 10 boletos vencidos com vencimento + valor.
+## 2. Avanço para `aguardando_vistoria` após assinatura + pagamento
+Adicionar lógica (trigger ou edge `aprovar-proposta` / webhook Autentique) que, quando o contrato da troca atinge `assinado` + adesão paga:
+- Se o Monitoramento já tinha pedido vistoria → manter `aguardando_vistoria` (já está).
+- Caso contrário → criar agora o serviço `vistoria_entrada` e mover a solicitação para `aguardando_vistoria`. Esse é o ponto onde a tela pública passa a exibir "Vistoria do veículo solicitada" (correto), pois assinatura/pagamento foram concluídos.
 
-### 2. `src/components/troca-titularidade/ModalDetalhesTroca.tsx`
+Implementação preferencial: trigger SQL `trg_troca_pos_assinatura_pagamento` em `contratos` (AFTER UPDATE quando `status` vira `ativo`/`assinado` e `cotacoes.adesao_paga`), seguindo o padrão de `trg_efetivar_troca_pos_vistoria`.
 
-- Carregar `codigo_hinova` do associado antigo (1 select adicional em `associados` ou expandir o select existente em `useSolicitacaoTroca` — preferimos expandir o hook).
-- Passar `codigoHinova` + `cpf` para `<RelatorioFinanceiroAntigo />`.
+## 3. `src/pages/public/CotacaoContratacao.tsx`
+- Manter o gating atual (`liberada_para_assinatura` libera o fluxo) — nenhuma mudança necessária se a correção #1 for feita.
+- Garantir que o `useSolicitacaoTrocaPublicaPorCotacao` re-fetcha após `contrato-gerar` para refletir o status (ele já mantém `liberada_para_assinatura`).
 
-### 3. `src/hooks/useSolicitacoesTroca.ts`
+## 4. `src/components/troca-titularidade/TelaAnaliseTrocaTitularidade.tsx`
+- Adicionar copy específico para `aguardando_vistoria` quando `aprovado_monitoramento_em` indica que veio do fluxo pós-assinatura (mensagem mais clara: "Contrato assinado. Aguardando vistoria do veículo para efetivar a troca.").
+- Sem mudança estrutural — apenas o texto.
 
-- Em `useSolicitacaoTroca`, incluir `codigo_hinova` no select do `associado_antigo:associados!associado_antigo_id(...)`.
-- Adicionar o campo na interface `SolicitacaoTroca.associado_antigo`.
+# Detalhes técnicos
 
-### 4. `src/components/troca-titularidade/VeiculoCompletoCard.tsx` (bloco Rastreador)
+- O trigger `trg_efetivar_troca_pos_vistoria` continua válido: dispara quando o serviço `vistoria_entrada` é aprovado e então cancela contrato antigo + ativa novo + transfere veículo.
+- Memória `mem://logic/operations/troca-titularidade-desvinculo-logico` permanece respeitada (flag `em_troca_titularidade` segue setada na assinatura do termo de cancelamento).
+- Memória `mem://architecture/activation/single-source-activation`: nenhuma escrita direta de `status='ativo'` é introduzida.
 
-- Trocar `useRastreadorTempoReal(rastreador.id, false)` por `useRastreadorTempoReal(rastreador.id, true)` para auto-buscar posição ao abrir o modal.
-- Quando `posicao` existir, exibir abaixo do grid: `Velocidade`, `Lat/Lng` (mono) e `Endereço` (se vier do payload), iguais ao `MapaRastreador`.
-- Se `useVeiculoCompleto` retornar `rastreador=null` mas houver rastreador vinculado por outro caminho (ex.: `rastreadores.contrato_id`), incluir um fallback no hook: buscar `rastreadores` também por `contrato_id` quando `veiculo_id` for nulo. Isso evita o "Sem rastreador" falso para registros antigos.
+# Arquivos afetados
 
-### 5. (Opcional, baixo risco) `src/hooks/useVeiculoDetalhes.ts → useVeiculoCompleto`
-
-- Melhorar a busca do rastreador: primeiro tentar `eq('veiculo_id', veiculoId)`; se vazio, tentar via `contrato_id` do contrato resolvido. Manter o select atual.
-
-## Arquivos afetados
-
-- `src/components/troca-titularidade/RelatorioFinanceiroAntigo.tsx`
-- `src/components/troca-titularidade/ModalDetalhesTroca.tsx`
-- `src/components/troca-titularidade/VeiculoCompletoCard.tsx`
-- `src/hooks/useSolicitacoesTroca.ts`
-- `src/hooks/useVeiculoDetalhes.ts`
-
-## Resultado esperado
-
-- Aba "Financeiro Antigo" passa a refletir o SGA: contagens corretas, saldo devedor total e badge ADIMPLENTE/INADIMPLENTE coerente com a régua de débito que já trava a aprovação no backend.
-- Bloco "Rastreador" carrega posição em tempo real ao abrir o modal e identifica equipamento mesmo quando o vínculo está só no contrato.
-- Nenhuma duplicação de lógica: tudo passa pelos hooks/edge functions já consagrados nas telas de criação da troca e de monitoramento de rastreadores.
+- `supabase/functions/contrato-gerar/index.ts` (remover flip de status; condicionar criação de vistoria; ajustar mensagem WA)
+- Migração SQL nova: trigger `trg_troca_pos_assinatura_pagamento` em `contratos`
+- `src/components/troca-titularidade/TelaAnaliseTrocaTitularidade.tsx` (texto)
+- (Opcional) `mem://logic/operations/troca-titularidade-desvinculo-logico` para registrar o novo ponto de avanço de status
