@@ -928,6 +928,23 @@ serve(async (req) => {
             return;
           }
           codigoVeiculoHinova = res.codigo;
+
+          // Confirmação defensiva: força PENDENTE (3) via GET /veiculo/alterar-situacao-para
+          // logo após o cadastro. Mesma postura que adotamos para o associado.
+          // Não interrompe a sync se falhar — o payload de cadastro já enviou codigo_situacao=3.
+          try {
+            const sit = await alterarSituacaoParaVeiculoHinova(supabase, codigoVeiculoHinova, 3);
+            const detSit = sit.errors.length > 0
+              ? sit.errors.join('; ')
+              : (sit.mensagem || `HTTP ${sit.status}`);
+            await logSync(_vid, _aid, 'alterar_situacao_veiculo', sit.ok ? 'success' : 'warning',
+              { codigo_veiculo: codigoVeiculoHinova, codigo_situacao: 3 },
+              sit.raw, sit.ok ? null : detSit);
+          } catch (e: any) {
+            await logSync(_vid, _aid, 'alterar_situacao_veiculo', 'warning',
+              { codigo_veiculo: codigoVeiculoHinova, codigo_situacao: 3 },
+              null, String(e?.message || e));
+          }
         } catch (e: any) {
           await logSync(_vid, _aid, 'cadastrar_veiculo', 'error', payloadV, null, String(e?.message || e));
           await setStatusSga(_vid, 'erro_sincronizacao');
