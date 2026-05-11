@@ -12,7 +12,7 @@ export function usePropostasPendentesCount() {
       const { count } = await supabase
         .from('contratos')
         .select('id', { count: 'exact', head: true })
-        .in('status', ['assinado', 'em_analise']);
+        .in('status', ['assinado', 'em_analise'] as any);
       return count || 0;
     },
     staleTime: 30_000,
