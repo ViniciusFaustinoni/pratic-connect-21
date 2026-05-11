@@ -76,7 +76,7 @@ serve(async (req) => {
 
     // Filtro opcional: { rastreadorId } ou { veiculoId } ou { placa }
     const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
-    const { rastreadorId, veiculoId, placa } = body as { rastreadorId?: string; veiculoId?: string; placa?: string };
+    const { rastreadorId, veiculoId, placa, apply } = body as { rastreadorId?: string; veiculoId?: string; placa?: string; apply?: boolean };
 
     let q = supabase
       .from('rastreadores')
