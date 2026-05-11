@@ -7,11 +7,12 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, Car, User, FileSignature, CheckCircle2, XCircle, Send, ClipboardCheck, ShieldCheck, ExternalLink, AlertTriangle, Search } from 'lucide-react';
+import { Loader2, Car, User, FileSignature, CheckCircle2, XCircle, Send, ClipboardCheck, ShieldCheck, ExternalLink, AlertTriangle } from 'lucide-react';
 import { useSolicitacaoTroca, useAprovarTrocaCadastro, useAprovarTrocaMonitoramento, useReprovarTroca, useEnviarTermoCancelamento, type StatusTroca } from '@/hooks/useSolicitacoesTroca';
 import { TimelineAprovacao } from './TimelineAprovacao';
 import { MiniCardVistoriaTroca } from './MiniCardVistoriaTroca';
 import { VeiculoCompletoCard } from './VeiculoCompletoCard';
+import { AnalisePreviaNovoTitularCard } from './AnalisePreviaNovoTitularCard';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCPF, formatPhone } from '@/types/termo-filiacao';
 
@@ -169,32 +170,10 @@ export function ModalDetalhesTroca({ open, onOpenChange, solicitacaoId, modo }: 
               </TabsContent>
 
               <TabsContent value="analise" className="pt-3 space-y-3">
-                <div className="rounded border p-3 space-y-2">
-                  <h4 className="font-semibold flex items-center gap-2"><Search className="h-4 w-4" /> Análise prévia do novo titular</h4>
-                  {!solicitacao.analise_previa_resultado ? (
-                    <p className="text-sm text-muted-foreground">
-                      A análise prévia é gerada automaticamente quando o Cadastro aprova a solicitação (consulta dupla: base local + SGA Hinova). Ainda não há snapshot.
-                    </p>
-                  ) : (
-                    <>
-                      <p className="text-xs text-muted-foreground">
-                        Gerado em {solicitacao.analise_previa_em ? new Date(solicitacao.analise_previa_em).toLocaleString('pt-BR') : '-'}
-                      </p>
-                      <div className="rounded bg-muted/40 p-2">
-                        <p className="text-xs font-medium mb-1">Base local</p>
-                        <pre className="text-[11px] whitespace-pre-wrap break-all max-h-48 overflow-auto">
-                          {JSON.stringify(solicitacao.analise_previa_resultado.base_local, null, 2)}
-                        </pre>
-                      </div>
-                      <div className="rounded bg-muted/40 p-2">
-                        <p className="text-xs font-medium mb-1">SGA Hinova</p>
-                        <pre className="text-[11px] whitespace-pre-wrap break-all max-h-48 overflow-auto">
-                          {JSON.stringify(solicitacao.analise_previa_resultado.sga, null, 2)}
-                        </pre>
-                      </div>
-                    </>
-                  )}
-                </div>
+                <AnalisePreviaNovoTitularCard
+                  solicitacaoId={solicitacao.id}
+                  enabled={open && ['cotacao_em_andamento', 'aguardando_cadastro', 'aguardando_monitoramento', 'aguardando_vistoria'].includes(solicitacao.status)}
+                />
               </TabsContent>
 
               {/* (Removida) Aba "Financeiro Antigo" — checagem financeira não se aplica mais */}

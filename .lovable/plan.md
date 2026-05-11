@@ -1,40 +1,77 @@
-## Problema
+# Análise prévia SGA do novo titular — antes da aprovação do Cadastro
 
-Na troca de titularidade, quando o monitoramento solicita vistoria, o novo titular executa pelo link público. As fotos/vídeo são salvos em `vistoria_fotos`, ligadas a uma `vistoria` cujo `veiculo_id` é o **mesmo veículo sendo transferido** (NOT NULL na tabela). Porém o histórico de mídias do veículo (`useFotosVistoriaPorVeiculo`, exibido em `VeiculoDetalhesModal` → aba "Fotos/Docs") busca por **caminho indireto**:
+## Contexto
 
-```
-veiculos → contratos.veiculo_id → vistorias.contrato_id → vistoria_fotos
-```
+Hoje o sistema só consulta o SGA para o novo titular **depois** que o Cadastro aprova a troca (a chamada roda em background dentro de `aprovar-troca-cadastro`). Ou seja, o Cadastro decide **às cegas**. A aba "Análise prévia" no `ModalDetalhesTroca` já existe mas mostra JSON cru.
 
-Esse caminho perde fotos quando:
-- A vistoria foi criada **antes** do contrato do novo titular existir/ser vinculado.
-- A vistoria está vinculada apenas via `instalacao_id`/`cotacao_id` e `contrato_id` ainda nulo.
-- Em geral, qualquer vistoria sem `contrato_id` populado.
+Vamos inverter: rodar a consulta **assim que o modal abre** em `aguardando_cadastro` (e em `cotacao_em_andamento`, para já estar pronto), exibir um card formatado com dados pessoais + situação financeira (boletos em aberto), e tratar explicitamente o caso "não está na base SGA".
 
-Resultado: as fotos da vistoria de troca de titularidade não aparecem no histórico do veículo.
+Bom: a edge function `sga-buscar-associado-completo` **já retorna tudo o que precisamos** numa única chamada — dados do associado, veículos, boletos em aberto por veículo, saldo devedor agregado e flag `encontrado`. Não há nova edge function a criar nem migração de banco.
 
-## Mudança (1 arquivo, sem schema)
+## O que muda
 
-### `src/hooks/useVeiculoDetalhes.ts` — `useFotosVistoriaPorVeiculo`
+### 1. Edge function `aprovar-troca-cadastro/index.ts`
+- Mantém o snapshot pós-aprovação como fallback/idempotência.
+- Sem mudança funcional obrigatória; apenas garantir que se já existir snapshot recente (< 5min) **não** sobrescreve.
 
-Trocar o caminho indireto por consulta direta à tabela `vistorias` por `veiculo_id` (campo NOT NULL e canônico):
+### 2. Edge function nova: `analisar-novo-titular-troca`
+Endpoint chamado pelo modal ao abrir. Responsabilidades:
+- Receber `solicitacao_id`.
+- Validar que o usuário tem permissão (Cadastro/Monitoramento/Diretor).
+- Carregar `novo_titular_dados.cpf` da solicitação.
+- Consultar `associados` local por CPF (encontrado/não encontrado + status básico).
+- Invocar `sga-buscar-associado-completo` com `{ cpf }`.
+- Gravar resultado em `solicitacoes_troca_titularidade.analise_previa_resultado` + `analise_previa_em` (mesma coluna já usada hoje).
+- Cache: se `analise_previa_em` < 10 minutos atrás, retorna o snapshot existente sem nova chamada SGA (evita sobrecarga ao reabrir o modal).
+- Retorna `{ base_local, sga, gerado_em, do_cache }`.
 
-```
-1) vistorias.select('id, status, modalidade, tipo, created_at').eq('veiculo_id', veiculoId)
-2) vistoria_fotos.select(...).in('vistoria_id', vistoriaIds).order('created_at')
-3) Enriquecer cada foto com vistoria_status / vistoria_modalidade (já feito) +
-   vistoria_tipo (entrada / saida / sinistro) e vistoria_created_at — útil para o agrupamento
-```
+### 3. Hook novo: `useAnalisePreviaSGA(solicitacaoId, enabled)`
+- React Query, `enabled` = modal aberto E status ∈ {`cotacao_em_andamento`, `aguardando_cadastro`, `aguardando_monitoramento`}.
+- `staleTime: 5min`, sem refetch on focus.
+- Chama a edge function nova via `supabase.functions.invoke`.
 
-Isso pega automaticamente:
-- Vistorias originais do contrato vigente.
-- Vistorias da troca de titularidade (executadas pelo novo titular pelo link público).
-- Qualquer vistoria futura (saída, sinistro, periódica) ligada ao veículo.
+### 4. UI: `ModalDetalhesTroca.tsx` — aba "Análise prévia"
+Substituir o `<pre>JSON</pre>` atual por um componente novo `AnalisePreviaNovoTitularCard` com 3 estados:
 
-Manter a interface `FotoVistoriaVeiculo` retro-compatível (apenas adicionar campos opcionais; nada é removido). `VeiculoDetalhesModal` continua funcionando sem alteração — o `agruparFotosVeiculo` agrupa por `tipo` da foto, não da vistoria.
+**Carregando** — Skeleton + texto "Consultando base SGA Hinova…".
+
+**Não encontrado no SGA** (`sga.encontrado === false`):
+- Alert neutro: ⚠️ *"CPF não encontrado na base SGA Hinova. O novo titular não é associado existente — o cadastro será criado do zero ao efetivar a troca."*
+- Mostra apenas `base_local` (se houver associado local com mesmo CPF, exibir como "Cadastro Lovable existente").
+
+**Encontrado no SGA**:
+- Cabeçalho: nome, CPF, código_associado, badge com `descricao_situacao` (verde se ATIVO, âmbar/vermelho caso contrário).
+- Seção **Dados pessoais**: email, telefone, endereço (se vierem), data nascimento, data cadastro.
+- Seção **Situação financeira**:
+  - Card destaque com `saldo_devedor_total` (verde se 0, vermelho se > 0).
+  - Lista de boletos em aberto (placa do veículo, vencimento, valor, situação) — agrupados por veículo.
+  - Se `tem_debito === true`: alerta âmbar "Associado possui pendências financeiras no SGA — avaliar antes de aprovar".
+- Seção **Veículos vinculados**: lista enxuta (placa, modelo, situação).
+- Rodapé: "Atualizado em {gerado_em} · [Atualizar agora]" (botão dispara refetch ignorando cache).
+
+Botão **Aprovar** continua como hoje. Não há nova trava — a decisão é humana, baseada na visualização. (Se o usuário no futuro quiser bloquear aprovação quando `tem_debito === true`, fica para outro pedido.)
+
+### 5. Sem alteração em
+- Banco de dados (coluna `analise_previa_resultado` já existe).
+- Fluxo Autentique (envio do termo ao novo titular continua disparado pelo fluxo público depois da aprovação Cadastro+Monitoramento).
+- Fluxo de aprovação Monitoramento.
 
 ## Fora de escopo
+- Bloquear aprovação automaticamente em caso de débito.
+- Mexer no termo de cancelamento do antigo titular.
+- Buscar histórico de sinistros do SGA.
 
-- Nenhuma mudança em edge functions, RLS, schema ou no fluxo de criação da vistoria.
-- Nenhuma alteração visual no `VeiculoDetalhesModal` (a aba "Fotos/Docs" passa a mostrar mais itens automaticamente).
-- Histórico de **vídeos** (`vistorias.video_360_url`) — atual modal só lista fotos; se desejado posteriormente, podemos expor o vídeo da vistoria como item separado.
+## Detalhes técnicos
+
+**Arquivos:**
+- `supabase/functions/analisar-novo-titular-troca/index.ts` (novo)
+- `src/hooks/useAnalisePreviaSGA.ts` (novo)
+- `src/components/troca-titularidade/AnalisePreviaNovoTitularCard.tsx` (novo)
+- `src/components/troca-titularidade/ModalDetalhesTroca.tsx` (substituir conteúdo da aba `analise`)
+
+**Resposta da `sga-buscar-associado-completo` já contém:**
+`encontrado`, `codigo_associado`, `associado{nome,cpf,email,telefone}`, `veiculos[{placa, marca, modelo, ano, saldo_devedor, boletos_abertos[]}]`, `saldo_devedor_total`, `tem_debito`. Suficiente — não precisamos chamar `sga-listar-boletos-associado`.
+
+**Cache:** snapshot em `analise_previa_resultado` é fonte de verdade; reaberturas em < 10min usam cache. Botão "Atualizar agora" envia `{ force: true }`.
+
+**Tratamento de erro transitório:** quando `sga-buscar-associado-completo` retorna 503 com `erro_transitorio: true`, o card mostra alerta âmbar "SGA indisponível no momento — tente novamente em alguns minutos" e mantém botão de retry.
