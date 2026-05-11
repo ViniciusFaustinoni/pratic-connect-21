@@ -180,7 +180,7 @@ export function useVeiculoCompleto(veiculoId: string | undefined) {
         .maybeSingle();
       rastreador = rastV;
       if (!rastreador && contrato?.id) {
-        const { data: rastC } = await supabase
+        const { data: rastC } = await (supabase as any)
           .from('rastreadores')
           .select('id, codigo, numero_serie, plataforma, status, ultima_comunicacao, imei')
           .eq('contrato_id', contrato.id)
