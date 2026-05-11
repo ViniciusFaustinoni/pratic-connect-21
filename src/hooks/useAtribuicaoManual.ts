@@ -74,6 +74,10 @@ export function useServicosParaAtribuir() {
           return false;
         }
         if (!s.contrato_id) return true;
+        // Vistorias de troca de titularidade têm aprovação independente
+        // (assinatura do termo de cancelamento + aprovação do Cadastro do antigo titular).
+        // O contrato do novo titular só é marcado aprovado_em em efetivar-troca-titularidade.
+        if (s.origem === 'troca_titularidade') return true;
         return !!s.contrato?.aprovado_em;
       });
 
