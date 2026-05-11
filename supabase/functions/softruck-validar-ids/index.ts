@@ -76,7 +76,7 @@ serve(async (req) => {
 
     // Filtro opcional: { rastreadorId } ou { veiculoId } ou { placa }
     const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
-    const { rastreadorId, veiculoId, placa } = body as { rastreadorId?: string; veiculoId?: string; placa?: string };
+    const { rastreadorId, veiculoId, placa, apply } = body as { rastreadorId?: string; veiculoId?: string; placa?: string; apply?: boolean };
 
     let q = supabase
       .from('rastreadores')
@@ -165,7 +165,27 @@ serve(async (req) => {
       total_devices_painel: devicesRaw.length,
     };
 
-    return new Response(JSON.stringify({ success: true, summary, report }), {
+    // Backfill opcional de plataforma_device_id (apenas quando difere e há sugestão por IMEI)
+    let backfill: any = null;
+    if (apply) {
+      const updates = report.filter(r =>
+        r.sugestoes.device_id_correto &&
+        r.ids_locais.device_id !== r.sugestoes.device_id_correto
+      );
+      let updated = 0;
+      const errors: any[] = [];
+      for (const u of updates) {
+        const { error: upErr } = await supabase
+          .from('rastreadores')
+          .update({ plataforma_device_id: u.sugestoes.device_id_correto })
+          .eq('id', u.rastreador_id);
+        if (upErr) errors.push({ id: u.rastreador_id, error: upErr.message });
+        else updated++;
+      }
+      backfill = { tentados: updates.length, atualizados: updated, erros: errors.length, erros_detalhe: errors.slice(0, 20) };
+    }
+
+    return new Response(JSON.stringify({ success: true, summary, backfill, report: apply ? undefined : report }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (e: any) {
