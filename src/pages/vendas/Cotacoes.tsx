@@ -1222,6 +1222,11 @@ export default function Cotacoes() {
           </div>
         </TabsContent>
 
+        {/* Tab Outros Processos (trocas, substituições, inclusões, migrações) */}
+        <TabsContent value="outros_processos">
+          <OutrosProcessosPanel />
+        </TabsContent>
+
         {/* Paginação server-side (50/página) — vale para a aba ativa */}
         {totalPaginaAtual > PAGE_SIZE && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-2 py-3 border-t border-border/40 mt-2">
