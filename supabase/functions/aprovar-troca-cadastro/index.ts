@@ -75,45 +75,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 4) Snapshot de análise prévia (best-effort, não bloqueia aprovação se SGA cair)
-    const novoTitular = (sol.novo_titular_dados || {}) as { nome?: string; cpf?: string };
-    const cpfNovoLimpo = (novoTitular.cpf || '').replace(/\D/g, '');
-    const analisePrevia: Record<string, unknown> = { gerado_em: new Date().toISOString() };
-    try {
-      // base local
-      if (cpfNovoLimpo.length === 11) {
-        const { data: assocLocal } = await admin
-          .from('associados')
-          .select('id, nome, cpf, email, telefone, status, created_at')
-          .eq('cpf', cpfNovoLimpo)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        analisePrevia.base_local = assocLocal
-          ? { encontrado: true, associado: assocLocal }
-          : { encontrado: false };
-
-        // SGA
-        try {
-          const { data: sgaResp, error: sgaErr } = await admin.functions.invoke(
-            'sga-buscar-associado-completo',
-            { body: { cpf: cpfNovoLimpo } },
-          );
-          if (sgaErr) throw sgaErr;
-          analisePrevia.sga = sgaResp ?? { encontrado: false };
-        } catch (sgaCatch) {
-          analisePrevia.sga = { erro: sgaCatch instanceof Error ? sgaCatch.message : 'falha SGA' };
-        }
-      } else {
-        analisePrevia.base_local = { erro: 'CPF do novo titular inválido/ausente' };
-        analisePrevia.sga = { erro: 'CPF do novo titular inválido/ausente' };
-      }
-    } catch (anaErr) {
-      console.warn('[aprovar-troca-cadastro] análise prévia falhou (não bloqueante):', anaErr);
-      analisePrevia.erro = anaErr instanceof Error ? anaErr.message : 'erro';
-    }
-
-    // Resolver profile.id do aprovador (FK aprovado_cadastro_por → profiles.id)
+    // 4) Resolver profile.id do aprovador
     const { data: prof } = await admin
       .from('profiles')
       .select('id')
@@ -121,32 +83,80 @@ Deno.serve(async (req) => {
       .maybeSingle();
     const aprovadorId = prof?.id ?? null;
 
-    const { error } = await admin
+    // 5) COMMIT PRIMEIRO: avançar status com CAS (idempotente)
+    const { data: updated, error: updErr } = await admin
       .from('solicitacoes_troca_titularidade')
       .update({
         status: 'aguardando_monitoramento',
         aprovado_cadastro_por: aprovadorId,
         aprovado_cadastro_em: new Date().toISOString(),
         observacao_cadastro: observacao || null,
-        analise_previa_resultado: analisePrevia,
-        analise_previa_em: new Date().toISOString(),
       })
       .eq('id', solicitacao_id)
-      .eq('status', 'aguardando_cadastro');
+      .eq('status', 'aguardando_cadastro')
+      .select('id');
 
-    if (error) {
-      console.error('[aprovar-troca-cadastro] update error:', error);
-      throw new Error(error.message || 'Falha ao atualizar solicitação');
+    if (updErr) {
+      console.error('[aprovar-troca-cadastro] update error:', updErr);
+      throw new Error(updErr.message || 'Falha ao atualizar solicitação');
     }
 
-    // 5) Marcar cotação como prioritária + atribuir vendedor + notificar (best-effort)
-    let vendedorAtribuido: { profile_id: string; nome: string; telefone: string | null } | null = null;
-    let whatsappStatus: 'enviado' | 'sem_telefone' | 'erro' | 'sem_vendedor' | 'sem_cotacao' = 'sem_cotacao';
-    try {
-      if (sol.cotacao_id) {
-        // Resolver vendedor: 1) criado_por (se for vendedor), 2) vendedor do contrato antigo
-        // Importante: cotacoes.vendedor_id → auth.users(id), enquanto contratos.vendedor_id → profiles(id)
+    if (!updated || updated.length === 0) {
+      return new Response(
+        JSON.stringify({ success: true, already_advanced: true, status: 'aguardando_monitoramento' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // 6) Trabalho pesado em background (snapshot SGA + atribuição vendedor + WhatsApp)
+    const novoTitular = (sol.novo_titular_dados || {}) as { nome?: string; cpf?: string };
+    const cpfNovoLimpo = (novoTitular.cpf || '').replace(/\D/g, '');
+
+    const backgroundWork = async () => {
+      const analisePrevia: Record<string, unknown> = { gerado_em: new Date().toISOString() };
+      try {
+        if (cpfNovoLimpo.length === 11) {
+          const { data: assocLocal } = await admin
+            .from('associados')
+            .select('id, nome, cpf, email, telefone, status, created_at')
+            .eq('cpf', cpfNovoLimpo)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          analisePrevia.base_local = assocLocal
+            ? { encontrado: true, associado: assocLocal }
+            : { encontrado: false };
+
+          try {
+            const { data: sgaResp, error: sgaErr } = await admin.functions.invoke(
+              'sga-buscar-associado-completo',
+              { body: { cpf: cpfNovoLimpo } },
+            );
+            if (sgaErr) throw sgaErr;
+            analisePrevia.sga = sgaResp ?? { encontrado: false };
+          } catch (sgaCatch) {
+            analisePrevia.sga = { erro: sgaCatch instanceof Error ? sgaCatch.message : 'falha SGA' };
+          }
+        } else {
+          analisePrevia.base_local = { erro: 'CPF do novo titular inválido/ausente' };
+          analisePrevia.sga = { erro: 'CPF do novo titular inválido/ausente' };
+        }
+
+        await admin
+          .from('solicitacoes_troca_titularidade')
+          .update({
+            analise_previa_resultado: analisePrevia,
+            analise_previa_em: new Date().toISOString(),
+          })
+          .eq('id', solicitacao_id);
+      } catch (anaErr) {
+        console.warn('[aprovar-troca-cadastro/bg] análise prévia falhou:', anaErr);
+      }
+
+      try {
+        if (!sol.cotacao_id) return;
         let vendedorAuthUserId: string | null = null;
+        let vendedorAtribuido: { profile_id: string; nome: string; telefone: string | null } | null = null;
 
         if (sol.criado_por) {
           const { data: profCriador } = await admin
@@ -182,7 +192,6 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Atualizar a cotação: prioridade alta + flag origem + vendedor (se ainda não tiver)
         const { data: cotAtual } = await admin
           .from('cotacoes')
           .select('id, numero, vendedor_id')
@@ -198,12 +207,7 @@ Deno.serve(async (req) => {
         }
         await admin.from('cotacoes').update(updateCot).eq('id', sol.cotacao_id);
 
-        // Notificar vendedor via WhatsApp (Evolution — texto livre interno)
-        if (!vendedorAtribuido) {
-          whatsappStatus = 'sem_vendedor';
-        } else if (!vendedorAtribuido.telefone) {
-          whatsappStatus = 'sem_telefone';
-        } else {
+        if (vendedorAtribuido?.telefone) {
           const numero = (cotAtual?.numero || sol.cotacao_id.slice(0, 8)).toString();
           const novoNome = ((sol.novo_titular_dados || {}) as { nome?: string }).nome || 'novo titular';
           const mensagem =
@@ -212,32 +216,28 @@ Deno.serve(async (req) => {
             `Novo titular: ${novoNome}\n\n` +
             `A placa já está liberada para fechamento. Acesse o sistema para dar continuidade.`;
           try {
-            const { error: waErr } = await admin.functions.invoke('whatsapp-send-text', {
-              body: {
-                telefone: vendedorAtribuido.telefone,
-                mensagem,
-                force_provider: 'evolution',
-              },
+            await admin.functions.invoke('whatsapp-send-text', {
+              body: { telefone: vendedorAtribuido.telefone, mensagem, force_provider: 'evolution' },
             });
-            whatsappStatus = waErr ? 'erro' : 'enviado';
-            if (waErr) console.warn('[aprovar-troca-cadastro] whatsapp erro:', waErr);
           } catch (waCatch) {
-            whatsappStatus = 'erro';
-            console.warn('[aprovar-troca-cadastro] whatsapp catch:', waCatch);
+            console.warn('[aprovar-troca-cadastro/bg] whatsapp falhou:', waCatch);
           }
         }
+      } catch (notifErr) {
+        console.warn('[aprovar-troca-cadastro/bg] notificação vendedor falhou:', notifErr);
       }
-    } catch (notifErr) {
-      console.warn('[aprovar-troca-cadastro] notificação vendedor falhou (não bloqueante):', notifErr);
+    };
+
+    // @ts-ignore - EdgeRuntime global é disponibilizado pelo Supabase Edge
+    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) {
+      // @ts-ignore
+      EdgeRuntime.waitUntil(backgroundWork());
+    } else {
+      backgroundWork().catch((e) => console.warn('[aprovar-troca-cadastro/bg] erro:', e));
     }
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        analise_previa: analisePrevia,
-        vendedor_notificado: vendedorAtribuido,
-        whatsapp_status: whatsappStatus,
-      }),
+      JSON.stringify({ success: true, status: 'aguardando_monitoramento' }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (e: any) {

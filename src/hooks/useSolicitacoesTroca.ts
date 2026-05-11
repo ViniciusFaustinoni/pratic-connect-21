@@ -137,19 +137,39 @@ export function useCriarSolicitacaoTroca() {
   });
 }
 
+async function statusAvancou(id: string, esperados: StatusTroca[]): Promise<boolean> {
+  try {
+    const { data } = await (supabase as any)
+      .from('solicitacoes_troca_titularidade')
+      .select('status')
+      .eq('id', id)
+      .maybeSingle();
+    return !!data?.status && esperados.includes(data.status as StatusTroca);
+  } catch { return false; }
+}
+
 export function useAprovarTrocaCadastro() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (params: { solicitacao_id: string; observacao?: string }) => {
       const { data, error } = await supabase.functions.invoke('aprovar-troca-cadastro', { body: params });
-      if (error) throw error;
+      if (error) {
+        // Pode ter sido sucesso silencioso (timeout/wrapper). Verifica status real.
+        const ok = await statusAvancou(params.solicitacao_id, [
+          'aguardando_monitoramento', 'aguardando_vistoria', 'liberada_para_assinatura', 'efetivada',
+        ]);
+        if (ok) return { success: true, silent: true };
+        throw error;
+      }
       if (data?.error) throw new Error(data.error);
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
       qc.invalidateQueries({ queryKey: ['solicitacao-troca'] });
-      toast.success('Solicitação aprovada e enviada ao Monitoramento');
+      toast.success(data?.silent
+        ? 'Aprovada — processamento em segundo plano'
+        : 'Solicitação aprovada e enviada ao Monitoramento');
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -160,14 +180,23 @@ export function useAprovarTrocaMonitoramento() {
   return useMutation({
     mutationFn: async (params: { solicitacao_id: string; acao: 'aprovar' | 'solicitar_vistoria'; observacao?: string }) => {
       const { data, error } = await supabase.functions.invoke('aprovar-troca-monitoramento', { body: params });
-      if (error) throw error;
+      if (error) {
+        const esperados: StatusTroca[] = params.acao === 'aprovar'
+          ? ['liberada_para_assinatura', 'efetivada']
+          : ['aguardando_vistoria', 'liberada_para_assinatura', 'efetivada'];
+        const ok = await statusAvancou(params.solicitacao_id, esperados);
+        if (ok) return { success: true, silent: true };
+        throw error;
+      }
       if (data?.error) throw new Error(data.error);
       return data;
     },
-    onSuccess: (_d, vars) => {
+    onSuccess: (data: any, vars) => {
       qc.invalidateQueries({ queryKey: ['solicitacoes-troca'] });
       qc.invalidateQueries({ queryKey: ['solicitacao-troca'] });
-      toast.success(vars.acao === 'aprovar' ? 'Liberado para assinatura' : 'Vistoria solicitada');
+      toast.success(data?.silent
+        ? 'Aprovada — processamento em segundo plano'
+        : (vars.acao === 'aprovar' ? 'Liberado para assinatura' : 'Vistoria solicitada'));
     },
     onError: (e: Error) => toast.error(e.message),
   });
