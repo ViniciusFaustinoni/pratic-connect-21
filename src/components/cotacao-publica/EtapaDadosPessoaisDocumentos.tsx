@@ -262,6 +262,13 @@ export function EtapaDadosPessoaisDocumentos({
           
           // Categoria da CNH (A, B, AB, etc.)
           if (dados.categoria) novosDados.cnh_categoria = dados.categoria;
+
+          // Sexo (M/F) — normaliza variantes vindas do OCR
+          if (dados.sexo) {
+            const s = String(dados.sexo).trim().toUpperCase();
+            if (s.startsWith('M')) novosDados.sexo = 'M';
+            else if (s.startsWith('F')) novosDados.sexo = 'F';
+          }
         }
         
         // Órgão emissor do RG (pode vir de CNH ou RG)
