@@ -103,7 +103,7 @@ export function useSolicitacaoTroca(id: string | undefined) {
           *,
           associado_antigo:associados!associado_antigo_id(id, nome, cpf, email, telefone, status, codigo_hinova),
           veiculo:veiculos!veiculo_id(id, marca, modelo, ano_modelo, ano_fabricacao, placa),
-          cotacao:cotacoes!cotacao_id(id, numero, token_publico, status, valor_total_mensal)
+          cotacao:cotacoes!cotacao_id(id, numero, token_publico, status, valor_total_mensal, tipo_vistoria, vistoria_concluida_em)
         `)
         .eq('id', id)
         .maybeSingle();
