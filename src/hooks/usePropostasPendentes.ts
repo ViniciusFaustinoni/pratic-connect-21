@@ -296,7 +296,7 @@ export function usePropostasPendentes() {
         cotacaoIds.length
           ? supabase
               .from('cotacoes')
-              .select('id, cliente_logradouro, cliente_numero, cliente_bairro, cliente_cidade, cliente_uf, plano_escolhido_id, vistoria_permite_encaixe, vistoria_data_agendada, vistoria_horario_agendado, tipo_vistoria, veiculo_blindado, cenario_adesao')
+              .select('id, cliente_logradouro, cliente_numero, cliente_bairro, cliente_cidade, cliente_uf, plano_escolhido_id, vistoria_permite_encaixe, vistoria_data_agendada, vistoria_horario_agendado, vistoria_periodo, vistoria_completa_data_agendada, vistoria_completa_horario_agendado, vistoria_completa_periodo, tipo_vistoria, veiculo_blindado, cenario_adesao')
               .in('id', cotacaoIds)
           : Promise.resolve({ data: [] as any[] }),
         cotacaoIds.length
