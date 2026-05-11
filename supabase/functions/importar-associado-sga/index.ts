@@ -88,12 +88,14 @@ Deno.serve(async (req) => {
       placasSGA = r.veiculos;
     } catch (e) {
       if (e instanceof HinovaNotFoundError) {
-        return json(404, { error: 'Associado não encontrado no SGA' });
+        // Retorna 200 com flag para não disparar FunctionsHttpError no client
+        // (que era reportado como RUNTIME_ERROR com blank screen).
+        return json(200, { success: false, not_found: true, error: 'Associado não encontrado no SGA' });
       }
       throw e;
     }
     if (!codigoAssociado || placasSGA.length === 0) {
-      return json(404, { error: 'Associado/veículos não encontrados no SGA' });
+      return json(200, { success: false, not_found: true, error: 'Associado/veículos não encontrados no SGA' });
     }
 
     // 2) Busca metadados do associado (best-effort) — reusa a session já obtida
