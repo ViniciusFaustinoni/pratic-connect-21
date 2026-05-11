@@ -1181,6 +1181,40 @@ export async function alterarSituacaoAssociadoHinova(
   };
 }
 
+/**
+ * GET /veiculo/alterar-situacao-para/:codigo_situacao/:codigo_veiculo
+ * Força a situação de um veículo já cadastrado no SGA (ex.: PENDENTE=3 logo após o cadastro).
+ * Espelha o helper alterarSituacaoAssociadoHinova.
+ */
+export async function alterarSituacaoParaVeiculoHinova(
+  supabase: any,
+  codigo_veiculo: number,
+  codigo_situacao: number,
+): Promise<{ ok: boolean; status: number; raw: any; mensagem: string | null; errors: string[] }> {
+  const sessionForUrl = await getHinovaSession(supabase);
+  const apiUrl = sessionForUrl.apiUrl;
+  const { response, bodyText } = await hinovaFetch(
+    supabase,
+    (token) => ({
+      url: `${apiUrl}/veiculo/alterar-situacao-para/${codigo_situacao}/${codigo_veiculo}`,
+      init: {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      },
+    }),
+    'alterarSituacaoParaVeiculo',
+  );
+  let data: any = null;
+  try { data = JSON.parse(bodyText); } catch { /* texto puro */ }
+  return {
+    ok: response.ok,
+    status: response.status,
+    raw: data ?? bodyText.slice(0, 500),
+    mensagem: data?.mensagem ?? null,
+    errors: extractErrors(data),
+  };
+}
+
 /** POST /veiculo/foto/cadastrar — máx 50 fotos por chamada */
 export interface FotoHinovaPayload {
   nome_arquivo: string;

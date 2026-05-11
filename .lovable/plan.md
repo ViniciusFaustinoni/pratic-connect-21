@@ -1,45 +1,50 @@
-## Contexto
+# Forçar PENDENTE no veículo após cadastro no SGA
 
-Hoje o modal de Troca de Titularidade carrega ao abrir, em UMA única chamada (`useBoletosSgaPorAssociado` → `sga-listar-boletos-associado`), os veículos do associado E os boletos de cada um. Por isso a lista de boletos pendentes pode aparecer antes/independentemente da consulta de situação financeira.
+## Situação atual
 
-A edge function `sga-sync-financeiro-veiculo` já:
-- chama o endpoint `/buscar/situacao-financeira-veiculo/:codigo`
-- baixa os boletos do veículo na Hinova e faz upsert em `cobrancas` (com `link_boleto`, `linha_digitavel`, `data_vencimento`, `valor`, `situacao`)
+- O cadastro de veículo (`sga-hinova-sync` → `cadastrarVeiculoHinova`) já envia `codigo_situacao = 3 (PENDENTE)` no payload, mas **não há uma confirmação explícita** após o cadastro — diferente do que já fazemos para o associado, onde existe `alterarSituacaoAssociadoHinova` (GET `/associado/alterar-situacao-para/:cod_situacao/:cod_associado`) chamado logo após o cadastro para garantir PENDENTE.
+- Existe um helper `alterarSituacaoVeiculoHinova` em `supabase/functions/_shared/hinova-client.ts` (linha 1114), mas ele usa **POST** em vários paths candidatos (`/veiculo/alterar/situacao`, etc.) — não é o endpoint que o Hinova documenta agora.
+- O endpoint correto informado pelo usuário é GET `/veiculo/alterar-situacao-para/:codigo_situacao/:codigo_veiculo` (mesma família de `alterar-situacao-para` já usada para associado).
 
-Ou seja, ao terminar a consulta de situação para o veículo selecionado, os boletos correspondentes já estão atualizados em `cobrancas`.
+## O que será feito
 
-## Mudança
+### 1. Novo helper GET no `hinova-client.ts`
 
-Arquivo: `src/components/associados/TrocaTitularidadeDialog.tsx`
+Adicionar `alterarSituacaoParaVeiculoHinova(supabase, codigo_veiculo, codigo_situacao)` espelhando o helper já existente para associado (linha 1155):
 
-1. **Remover a exibição imediata** dos boletos vindos de `useBoletosSgaPorAssociado` (parar de usar `boletosPorIdLocal`/`saldoPorIdLocal` para renderizar a UI). A lista de veículos continua vindo desse hook (e o fallback local segue intacto).
+```
+GET {apiUrl}/veiculo/alterar-situacao-para/{codigo_situacao}/{codigo_veiculo}
+Authorization: Bearer {token}
+```
 
-2. **Gating por situação** — o card "Boletos pendentes do veículo" só aparece **depois que a query de situação financeira do veículo selecionado resolver**, e somente quando `status === 'INADIMPLENTE'`. Enquanto a consulta de situação não terminar para o veículo selecionado, mostrar apenas o estado "Consultando situação financeira…" já existente.
+Retorno padrão `{ ok, status, raw, mensagem, errors }`. O helper antigo (POST) fica marcado como deprecated mas não será removido ainda (para evitar mexer no efetivar-troca-titularidade nesta task — ver "Fora de escopo").
 
-3. **Fonte dos boletos = `cobrancas` (pós-sync)** — adicionar uma nova query (`useQuery`) com `queryKey: ['troca-tit-cobrancas', veiculoId]`, **`enabled` apenas quando**:
-   - há `veiculoId` selecionado,
-   - a query de situação para esse veículo terminou com sucesso (`isSuccess`),
-   - e `status === 'INADIMPLENTE'`.
+### 2. Disparo automático em `sga-hinova-sync/index.ts`
 
-   A query lê de `cobrancas` filtrando por `veiculo_id`, `status in ('aberto','vencido','pendente')` (status SGA já normalizado), ordenado por `data_vencimento`. Como a `sga-sync-financeiro-veiculo` acabou de rodar, os dados estão frescos.
+Logo após `cadastrarVeiculoHinova` retornar `ok` e `codigoVeiculoHinova` (linhas 901–929), chamar:
 
-4. **Render** — usar exatamente o mesmo layout atual (linhas com data, valor, badge vencido/pendente, botões "Abrir boleto" e "Copiar linha digitável"), porém populado com os campos de `cobrancas` (`link_boleto`, `linha_digitavel`, `valor`, `data_vencimento`, `situacao`). Total = soma de `valor`.
+```
+alterarSituacaoParaVeiculoHinova(supabase, codigoVeiculoHinova, 3)
+```
 
-5. **Estados auxiliares**:
-   - Situação carregando para o veículo selecionado → "Consultando situação financeira no SGA…" (já existe).
-   - Situação = ADIMPLENTE → manter a linha "Sem boletos pendentes para este veículo." (sem chamar a query de cobranças).
-   - Situação = desconhecido / erro → mostrar aviso curto "Situação financeira indisponível no SGA — boletos não consultados." e não renderizar boletos.
-   - Cobranças carregando → spinner pequeno "Buscando boletos em atraso…".
-   - Cobranças vazias mesmo com INADIMPLENTE → "Nenhum boleto em aberto registrado."
+Comportamento:
+- Sempre executa quando o veículo acabou de ser cadastrado (cenário "veículo novo enviado ao SGA"), independente do `statusDestino`.
+- Loga via `logSync(_vid, _aid, 'alterar_situacao_veiculo', ok ? 'success' : 'warning', { codigo_veiculo, codigo_situacao: 3 }, raw, ok ? null : detalhe)`.
+- **Não interrompe a sync** se falhar — o veículo já foi criado com situação PENDENTE no payload de cadastro; este passo é uma confirmação defensiva (mesma postura que temos para o associado).
+- Não roda quando o veículo já existia no Hinova (`veiculoJaExistiaNoHinova=true`) — coerente com a regra de não reescrever situação de veículos já gerenciados manualmente.
 
-## Detalhes técnicos
+### 3. Atualizar memória
 
-- Não alterar edges; reusar `sga-sync-financeiro-veiculo` (já chamada pela query de situação) e ler de `cobrancas`.
-- `useQuery` para cobranças com `staleTime: 60_000`.
-- Manter os tokens semânticos do design system (sem cores hardcoded novas).
+Atualizar o item já existente `mem://logic/operations/sga-renavam-opcional-zero-km`/Core para refletir que **o sistema agora também executa `alterar-situacao-para/3` no veículo** (não só no associado). O Core já diz "Cadastro força PENDENTE (3) via alterar-situacao-para" — vou tornar explícito que isso vale para associado **e** veículo.
 
 ## Fora de escopo
 
-- Mudanças em `sga-sync-financeiro-veiculo`, `sga-listar-boletos-associado` ou no schema de `cobrancas`.
-- Mudanças no fallback local (`useTrocaTitularidadeFallbackLocal`).
-- Tela de Cadastro (`VeiculoFinanceiroSGA`).
+- Não vou trocar as duas chamadas existentes de `alterarSituacaoVeiculoHinova` no `efetivar-troca-titularidade` (cancelamento do veículo antigo). Elas usam código de cancelamento, não PENDENTE, e o pedido foi específico para o cadastro. Posso migrar depois em task separada.
+- Não vou remover o helper POST antigo nesta task.
+- Sem mudanças de schema, RLS ou frontend.
+
+## Arquivos afetados
+
+- `supabase/functions/_shared/hinova-client.ts` — novo helper.
+- `supabase/functions/sga-hinova-sync/index.ts` — chamada pós-cadastro + log.
+- `mem://index.md` (Core) — ajuste textual.
