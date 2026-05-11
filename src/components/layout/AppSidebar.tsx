@@ -689,7 +689,7 @@ export function AppSidebar() {
     }
     
     return baseGroups;
-  }, [permissions, visibleModules, fipeMenorAtivo, biometriasPendentesCount, aprovacoesMonCount, processosOpCount]);
+  }, [permissions, visibleModules, fipeMenorAtivo, biometriasPendentesCount, aprovacoesMonCount, processosOpCount, propostasPendentesCount]);
 
   const visibleMainItems = useMemo(() => {
     if (permissions.isSindicanteOnly) {
