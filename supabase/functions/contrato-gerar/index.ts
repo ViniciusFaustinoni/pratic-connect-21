@@ -1299,16 +1299,16 @@ serve(async (req) => {
       numero: contrato.numero,
     }));
 
-    // ── TROCA DE TITULARIDADE — gancho pós-assinatura do novo titular ──
-    // O novo contrato foi gerado e está aguardando assinatura do novo titular.
-    // NÃO marcamos a solicitação como `efetivada` aqui (isso era o bug que ativava
-    // cobertura antes da aprovação do Monitoramento). Em vez disso:
-    //   1) movemos a solicitação para `aguardando_vistoria`
-    //   2) criamos um `servicos` (tipo='vistoria_entrada') para aparecer em
-    //      Monitoramento › Serviços de Campo / Aprovações de Associados
-    //   3) só quando esse serviço for concluído + aprovado é que o trigger
-    //      `trg_efetivar_troca_pos_vistoria` cancela o contrato antigo, ativa
-    //      o novo, transfere o veículo e religa a cobertura.
+    // ── TROCA DE TITULARIDADE — gancho pós-geração do novo contrato ──
+    // O novo contrato foi gerado e o termo de filiação será enviado por e-mail
+    // ao novo titular para assinatura facial. NÃO mexemos no status da
+    // solicitação aqui — mantemos `liberada_para_assinatura` para que a tela
+    // pública continue exibindo o fluxo normal (assinatura → pagamento).
+    //
+    // A criação do serviço de vistoria de campo + flip para `aguardando_vistoria`
+    // é feita pelo trigger `trg_troca_pos_assinatura_pagamento` em `cotacoes`
+    // (quando `adesao_paga` vira true) ou pode ser antecipada aqui se o
+    // Monitoramento já tinha solicitado vistoria explicitamente.
     try {
       const dadosExtras = (cotacao as any).dados_extras || {};
       if (tipoEntrada === 'troca_titularidade' && dadosExtras.associado_antigo_id) {
@@ -1325,11 +1325,12 @@ serve(async (req) => {
             .update({ novo_associado_id: associadoId })
             .eq('id', solTroca.id);
 
-          // 2) Criar serviço de vistoria de campo para o Monitoramento aprovar.
-          // Idempotente: não cria se já existe servico_vistoria_id ou já existe
-          // um vistoria_entrada para esse veículo+solicitação.
+          // 2) Só criar serviço de vistoria AGORA se o Monitoramento já tinha
+          //    pedido vistoria (solicitação já em `aguardando_vistoria`).
+          //    Caso contrário, deixamos para o trigger pós-pagamento.
+          const monitoramentoPediuVistoria = solTroca.status === 'aguardando_vistoria';
           let servicoVistoriaId: string | null = solTroca.servico_vistoria_id || null;
-          if (!servicoVistoriaId) {
+          if (monitoramentoPediuVistoria && !servicoVistoriaId) {
             const { data: jaExiste } = await supabase
               .from('servicos')
               .select('id')
