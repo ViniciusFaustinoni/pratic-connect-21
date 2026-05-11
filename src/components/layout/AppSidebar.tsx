@@ -580,6 +580,7 @@ export function AppSidebar() {
   const { data: biometriasPendentesCount = 0 } = useBiometriasPendentesCount();
   const { data: aprovacoesMonCount = 0 } = useAprovacoesMonitoramentoCount();
   const { data: processosOpCount = 0 } = useProcessosOperacionaisCount();
+  const { data: propostasPendentesCount = 0 } = usePropostasPendentesCount();
 
   const isDataLoading = permissions.isPermissionsLoading || isModuleVisLoading;
 
