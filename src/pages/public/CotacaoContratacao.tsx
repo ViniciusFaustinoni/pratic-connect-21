@@ -232,6 +232,8 @@ export default function CotacaoContratacao() {
       case 2: // Contrato - concluído se status >= contrato_assinado
         return statusConcluidos.contrato.includes(cotacao.status_contratacao);
       case 3: // Vistoria - concluído se tipo_vistoria está preenchido OU status >= vistoria_ok
+        // Em troca de titularidade sem vistoria solicitada, marcamos como concluída (etapa pulada)
+        if (pularEtapaVistoria) return true;
         return !!cotacao.tipo_vistoria || statusConcluidos.vistoria.includes(cotacao.status_contratacao);
       case 4: // Pagamento - concluído se status >= pagamento_ok
         return statusConcluidos.pagamento.includes(cotacao.status_contratacao);
