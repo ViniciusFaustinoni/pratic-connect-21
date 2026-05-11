@@ -232,6 +232,14 @@ function RastreadorBlock({ rastreador }: { rastreador: any }) {
               value={ultimaComunicacao ? formatDateTime(ultimaComunicacao) : (isLoading ? 'Consultando...' : '—')}
             />
           </div>
+          {posicao && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2 border-t">
+              <Field label="Velocidade" value={`${Math.round((posicao as any).velocidade ?? 0)} km/h`} />
+              <Field label="Latitude" value={(posicao as any).latitude?.toFixed?.(6)} mono />
+              <Field label="Longitude" value={(posicao as any).longitude?.toFixed?.(6)} mono />
+              <Field label="Endereço" value={(posicao as any).endereco || '—'} />
+            </div>
+          )}
           {softWarning && (
             <p className="text-xs text-amber-600 dark:text-amber-400">
               {mensagem || 'Tempo real indisponível — exibindo última posição conhecida.'}
