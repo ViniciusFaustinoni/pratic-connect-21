@@ -1149,7 +1149,22 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
         </div>
       </div>
 
-      {/* SELETOR DE MODO */}
+      {/* AVISO MODO EDIÇÃO TROCA */}
+      {isEdicaoTroca && (
+        <Alert className="bg-amber-500/10 border-amber-500/30">
+          <AlertCircle className="h-4 w-4 text-amber-600" />
+          <AlertTitle>Editando cotação de Troca de Titularidade</AlertTitle>
+          <AlertDescription className="text-sm">
+            Os dados do veículo já estão na base e <strong>não podem ser alterados</strong>.
+            Você pode ajustar tipo de uso, região, cenário de adesão e o plano selecionado.
+            A edição é permitida até o novo titular receber o termo de filiação.
+            {edicaoTrocaBloqueada && <p className="mt-2 text-red-600">{edicaoTrocaBloqueada}</p>}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* SELETOR DE MODO — oculto na edição de troca */}
+      {!isEdicaoTroca && (
       <Card className="bg-muted/30">
         <CardContent className="py-4">
           <p className="font-medium text-foreground mb-4">
@@ -1175,7 +1190,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                 Consulta automática FIPE + dados do veículo
               </p>
             </div>
-            
+
             {/* Card Manual */}
             <div
               onClick={() => handleModoChange('manual')}
@@ -1198,7 +1213,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
           </div>
         </CardContent>
       </Card>
-
+      )}
       {/* GRID PRINCIPAL */}
       <div className="grid gap-6 lg:grid-cols-2">
         
