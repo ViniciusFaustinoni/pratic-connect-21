@@ -1,71 +1,56 @@
-## Diagnóstico (logs últimas 48h)
+## Problema
 
-Consulta em `whatsapp_mensagens` (saída):
+No link público do novo titular, a etapa **"Vistoria"** está sempre visível, mesmo quando o Monitoramento já aprovou a troca **sem solicitar vistoria** (status `liberada_para_assinatura` direto). Adicionalmente, hoje, ao clicar "Solicitar vistoria" no modal de monitoramento, a edge function `aprovar-troca-monitoramento` cria um registro em `servicos` (vistoria_entrada) — o usuário pediu que isso NÃO aconteça: a vistoria deve ser executada pelo próprio novo titular dentro do link público.
 
-| status | provedor | total |
-|---|---|---|
-| enviada | meta_oficial | 19 |
-| **erro** | **meta_oficial** | **12** |
-| enviada | evolution | 1 |
+## Comportamento desejado
 
-**Todos os 12 erros têm o mesmo `erro_mensagem`:**
-> "Bloqueado: Meta API ativa requer template_name. Texto livre não é entregue fora da janela 24h. Use allow_text=true para respostas na janela 24h."
+| Ação do Monitoramento | Status da solicitação | Etapa "Vistoria" no link público | Botão "Aprovar" no modal |
+|---|---|---|---|
+| Aprova direto (sem vistoria) | `liberada_para_assinatura` | **Oculta** — pula direto para Pagamento | n/a (já aprovado) |
+| Clica "Solicitar vistoria" | `aguardando_vistoria` | **Visível** — novo titular escolhe autovistoria/agendada/base | **Sumido** até vistoria ser concluída |
+| Vistoria concluída pelo novo titular | continua `aguardando_vistoria` | Marcada como concluída (read-only) | **Reaparece** para liberar assinatura |
+| Monitoramento aprova após vistoria | `liberada_para_assinatura` | Concluída | n/a |
 
-Origem: o sender unificado `whatsapp-send-text` (linha 247) **bloqueia corretamente** qualquer envio de texto livre quando o provedor ativo é Meta — porque fora da janela 24h Meta exige template aprovado. O bug não está no sender; está nos chamadores que ainda mandam **texto livre sem `template_name`** (ou usam nomes de parâmetros errados que caem no mesmo caminho).
+Nenhum registro em `servicos` é criado pela solicitação de vistoria de troca — a execução acontece 100% dentro do fluxo público existente (`EtapaVistoria`).
 
-### Chamadores defeituosos identificados
+## Mudanças
 
-Mapeei todos os `invoke('whatsapp-send-text', ...)` em `supabase/functions/**` e cruzei com a presença de `template_name` / `allow_text` no mesmo bloco. Resultado:
+### 1. Edge `supabase/functions/aprovar-troca-monitoramento/index.ts`
+- No ramo `solicitar_vistoria`: **remover** o `INSERT` em `servicos` e a gravação de `servico_vistoria_id`.
+- Apenas atualiza `status='aguardando_vistoria'` + `aprovado_monitoramento_*` (auditoria de que a etapa foi solicitada). O sinal "vistoria foi pedida" passa a ser o próprio status `aguardando_vistoria`.
 
-| # | Edge function | Linha | Quem recebe | Problema |
-|---|---|---|---|---|
-| 1 | `notificar-inicio-rota` | 242 | Técnico/Vistoriador (NOVA TAREFA) | Texto livre puro — Meta bloqueia |
-| 2 | `contrato-gerar` | 1409 | Novo titular pós-troca | Texto livre puro — Meta bloqueia |
-| 3 | `_shared/enviar-termo-filiacao-whatsapp.ts` | 151 | Vendedor (confirmação termo enviado) | Texto livre puro — Meta bloqueia |
-| 4 | `create-user` | 251 | Agência recém-cadastrada | Usa params **errados** (`template`, `params`) → cai como texto livre → bloqueado |
-| 5 | `gerar-link-vistoriador-prestador` | 213 | Vistoriador parceiro | Usa `template_nome` (errado, deveria ser `template_name`) → cai no caminho `allow_text=true`, mas fora da janela 24h Meta também rejeita |
-| 6 | `aprovar-troca-cadastro` | 201 | Vendedor | ✅ Já força `force_provider:'evolution'` — OK, não está nos erros |
-| 7 | `notificar-cliente` | 636 | Cliente | ✅ Já injeta `template_name` com fallback `sinistro_atualizado` — OK |
+### 2. Hook `src/hooks/useSolicitacaoTrocaPublicaPorCotacao.ts`
+- Já expõe `status`. Manter `servico_vistoria_id` no select para retrocompatibilidade visual mas a lógica de UI passa a olhar apenas o `status`.
 
-Também existem 4 templates de troca de titularidade ainda **PENDING** no Meta (`troca_titularidade_*`) — fora do escopo (depende da Meta aprovar).
+### 3. `src/pages/public/CotacaoContratacao.tsx`
+- Calcular `vistoriaTrocaSolicitada = isTrocaTitularidade && (solicitacaoTroca?.status === 'aguardando_vistoria' || !!cotacao?.tipo_vistoria)`.
+- Ajustar `STEPS` (memo): se `isTrocaTitularidade && !vistoriaTrocaSolicitada`, **remover** o item `{ id: 'vistoria' }` do array. Os índices de Pagamento/Instalação se ajustam pelo `STEPS.length`.
+- Ajustar `etapaDoStatus` e `isEtapaConcluida` para considerar o STEPS dinâmico (mapear por `id`, não por índice fixo). Quando vistoria está oculta e status='liberada_para_assinatura', cair direto em "Pagamento".
+- A renderização condicional dos blocos por `etapaAtual === 3 / 4` passa a usar o índice do step (`STEPS.findIndex(s => s.id === 'vistoria' | 'pagamento')`) para não quebrar quando vistoria é removida.
 
-## Correção
+### 4. `src/components/troca-titularidade/ModalDetalhesTroca.tsx`
+- Quando `modo='monitoramento'` e `status='aguardando_vistoria'`:
+  - Buscar `cotacao.tipo_vistoria` / `vistoria_concluida_em` da cotação vinculada (via novo select no `useSolicitacaoTroca` ou query auxiliar) para saber se o novo titular já fez a vistoria.
+  - **Ocultar** o botão "Aprovar" enquanto vistoria não estiver concluída; manter "Reprovar" disponível.
+  - Mostrar bloco informativo: "Aguardando o novo titular concluir a vistoria pelo link público".
+  - Reabrir botão "Aprovar" assim que `tipo_vistoria` estiver preenchido (autovistoria com fotos aprovadas pelo monitoramento na aba de aprovação de vistorias, OU agendamento presencial concluído).
+- `podeAgir` passa a aceitar também `status === 'aguardando_vistoria'` somente quando vistoria foi concluída.
 
-### A. Fix nos 5 chamadores quebrados — usar templates Meta aprovados
+### 5. `src/hooks/useSolicitacoesTroca.ts`
+- Estender `useSolicitacaoTroca` para retornar também `cotacao:cotacao_id(tipo_vistoria, vistoria_concluida_em)` para alimentar a regra do modal.
 
-| # | Função | Template aprovado a usar | Variáveis (corpo) | Botão? |
-|---|---|---|---|---|
-| 1 | `notificar-inicio-rota` | `servico_atribuido_v1` | `[primeiroNomeTec, "INSTALAÇÃO/VISTORIA — placa LTB4J74", "12/05/2026 Tarde — Cliente XYZ — endereço"]` | — |
-| 2 | `contrato-gerar` (troca) | `force_provider:'evolution'` (texto livre via Evolution; Meta não tem template específico para esse aviso) | — | — |
-| 3 | `enviar-termo-filiacao-whatsapp` (vendedor) | `force_provider:'evolution'` (notificação interna ao vendedor — mesmo padrão do `aprovar-troca-cadastro`) | — | — |
-| 4 | `create-user` (agência) | Renomear `template`→`template_name` e `params`→`template_params`. Template `boas_vindas_agencia_v1` já existe | `[nomeIdentificado, magicLink]` | — |
-| 5 | `gerar-link-vistoriador-prestador` | `tarefa_vistoriador_v2` (já aprovado, 4 params) | `[primeiroNome, nomeAssociado, cidade, dataHora]` | — |
+### 6. (Opcional / cleanup) `MiniCardVistoriaTroca`
+- Hoje recebe `servico_vistoria_id`. Como deixaremos de criar o serviço, este componente passa a renderizar nada quando `servico_vistoria_id` é nulo (o status da vistoria virá do `VistoriaLinkBlock` / `cotacao.tipo_vistoria`). Sem alteração de assinatura.
 
-### B. Guard defensivo no sender `whatsapp-send-text`
+## Detalhes técnicos
 
-Adicionar tradução automática de aliases legados antes da decisão Meta/free-text, para nunca mais silenciosamente cair no bloqueio por um nome de campo trocado:
+- Nenhum migration necessário: o campo `servico_vistoria_id` continua existindo (nullable) — apenas deixa de ser populado em novas solicitações. Solicitações antigas com serviço criado seguem funcionando.
+- Não mexer na lógica de instalação/serviços de campo de outros fluxos (substituição, inclusão).
+- Tutorial `aprovacao-troca-titularidade-monitoramento.ts` precisa de uma pequena nota: ao clicar "Solicitar vistoria", a vistoria é executada pelo cliente no link público — não vai para a fila de Serviços de Campo.
 
-- `template` → `template_name`
-- `template_nome` → `template_name`
-- `params` / `variaveis` (objeto `{1:..,2:..}` ou array) → `template_params` (array ordenado)
-
-E **logar com warning explícito** o caller (header `x-edge-function-name` quando disponível) toda vez que cair no caminho "texto livre bloqueado", para acelerar futuras detecções.
-
-### C. Verificação pós-deploy
-
-Após deploy, simular um disparo de cada um dos 5 fluxos (técnico, contrato troca, vendedor confirmação, criação de agência, link vistoriador prestador) e checar `whatsapp_mensagens` — todos devem entrar como `status='enviada'`.
-
-## Fora de escopo
-
-- Aprovação dos templates `troca_titularidade_*` na Meta (depende da Meta).
-- Reescrita do orquestrador Meta/Evolution.
-- UI/preview de templates.
-
-## Arquivos que serão tocados
-
-1. `supabase/functions/notificar-inicio-rota/index.ts`
-2. `supabase/functions/contrato-gerar/index.ts`
-3. `supabase/functions/_shared/enviar-termo-filiacao-whatsapp.ts`
-4. `supabase/functions/create-user/index.ts`
-5. `supabase/functions/gerar-link-vistoriador-prestador/index.ts`
-6. `supabase/functions/whatsapp-send-text/index.ts` (guard defensivo + log)
+## Arquivos afetados
+- `supabase/functions/aprovar-troca-monitoramento/index.ts`
+- `src/pages/public/CotacaoContratacao.tsx`
+- `src/components/troca-titularidade/ModalDetalhesTroca.tsx`
+- `src/hooks/useSolicitacoesTroca.ts`
+- `src/data/tutoriais/aprovacao-troca-titularidade-monitoramento.ts` (nota)
