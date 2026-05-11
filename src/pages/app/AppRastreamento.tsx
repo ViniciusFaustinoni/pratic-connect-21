@@ -33,7 +33,8 @@ import {
   Signal,
   History,
   ShieldAlert,
-  CreditCard
+  CreditCard,
+  X
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMyVehicleWithTracker, useMyVehicles, useVeiculoPosicao, useMyAssociado } from '@/hooks/useMyData';
@@ -126,6 +127,7 @@ export default function AppRastreamento() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [veiculoSelecionado, setVeiculoSelecionado] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(true);
+  const [dismissAguardando, setDismissAguardando] = useState(false);
   
   const isLoading = vehiclesLoading || trackerLoading || associadoLoading;
   const vehicle = veiculoSelecionado 
@@ -370,23 +372,35 @@ export default function AppRastreamento() {
 
       {/* Map Container */}
       <div className="flex-1 relative">
-        {/* Aguardando Primeira Posição Overlay */}
-        {aguardandoPrimeiraPosicao && (
-          <div className="absolute inset-0 z-[1000] flex flex-col items-center justify-center bg-background/90 backdrop-blur-sm">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-              <Radio className="h-8 w-8 text-primary animate-pulse" />
+        {/* Aguardando Primeira Posição — Banner não-bloqueante */}
+        {aguardandoPrimeiraPosicao && !dismissAguardando && (
+          <div className="absolute top-2 left-2 right-2 z-[1000] bg-primary/90 backdrop-blur-sm text-primary-foreground rounded-lg p-3 shadow-lg">
+            <div className="flex items-center gap-2">
+              <Radio className="h-4 w-4 flex-shrink-0 animate-pulse" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">Rastreador ativado</p>
+                <p className="text-xs opacity-80">Aguardando primeira posição GPS…</p>
+              </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="flex-shrink-0 h-7 text-xs"
+              >
+                <RefreshCw className={cn("h-3 w-3 mr-1", isRefreshing && "animate-spin")} />
+                Verificar
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => setDismissAguardando(true)}
+                className="flex-shrink-0 h-7 w-7 text-primary-foreground hover:bg-primary-foreground/10"
+                aria-label="Fechar aviso"
+              >
+                <X className="h-4 w-4" />
+              </Button>
             </div>
-            <h3 className="mt-4 text-lg font-semibold">Rastreador ativado</h3>
-            <p className="mt-1 text-sm text-muted-foreground text-center px-8">
-              Aguardando primeira posição GPS do dispositivo...
-            </p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Isso pode levar alguns minutos após a instalação
-            </p>
-            <Button className="mt-4" onClick={handleRefresh} disabled={isRefreshing}>
-              <RefreshCw className={cn("h-4 w-4 mr-2", isRefreshing && "animate-spin")} />
-              Verificar agora
-            </Button>
           </div>
         )}
 
